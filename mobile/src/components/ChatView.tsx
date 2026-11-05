@@ -690,8 +690,11 @@ const useStyles = makeStyles((colors) => ({
   content: { paddingHorizontal: space.lg, paddingVertical: space.md },
   // Each cell is drawn upright, so paddingTop is the space between a row and
   // the older one above it: a grouped row (same side, same run) trims it.
-  item: { paddingTop: space.md, paddingBottom: space.xs },
-  itemGrouped: { paddingTop: space['2xs'] },
+  // A new speaker gets clear room; consecutive items from the same speaker
+  // (a change summary, a reply, a file, an approval card) are separate blocks
+  // and still need air between them.
+  item: { paddingTop: space.xl },
+  itemGrouped: { paddingTop: space.md },
   glow: {
     position: 'absolute',
     top: 0,
