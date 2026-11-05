@@ -482,6 +482,17 @@ pub fn reading_moves_to(engine: Engine, id: &str) -> bool {
     .unwrap_or(false)
 }
 
+/// Which account the engine's plan reading (`quota.json`) came from, when
+/// that was recorded (it is from the first reading after wallets).
+pub fn reading_from(engine: Engine) -> Option<String> {
+    let file = {
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        read()
+    };
+    let k = file.quota_from.get(engine_word(engine))?;
+    k.split_once(':').map(|(_, id)| id.to_string())
+}
+
 /* ------------------------------------------------------------ choosing */
 
 /// An account a turn can run on, and whether it is signed in.

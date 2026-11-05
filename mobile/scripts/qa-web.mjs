@@ -427,14 +427,16 @@ async function prePairShots(page, d) {
       await sleep(600);
       await capture(page, `pair-reaching-${theme}`, {
         route: '/pair?d=… (Mac never answers)',
-        check: '“Reaching <Mac>…” with a spinner, the host, “Nothing has been sent to it yet”; never “Allow on your Mac”',
+        check:
+          '“Reaching <Mac>…” with a spinner, the host, “Nothing has been sent to it yet”; never “Allow on your Mac”',
         theme,
       });
       await page.waitFor(`document.body.innerText.includes('Try again')`, 30_000, 'the failure');
       await sleep(600);
       await capture(page, `pair-unreachable-${theme}`, {
         route: '/pair?d=… (Mac never answers)',
-        check: '“Can’t reach <Mac>”, the host, what to check (Tailscale on, same account), Open Tailscale and Try again',
+        check:
+          '“Can’t reach <Mac>”, the host, what to check (Tailscale on, same account), Open Tailscale and Try again',
         theme,
       });
     }
@@ -643,7 +645,8 @@ const LIVE = [
     name: 'import',
     route: '/import',
     ready: 'Import agents',
-    check: 'Import: the three steps, Remote access ticked, the import going on with past conversations counted',
+    check:
+      'Import: the three steps, Remote access ticked, the import going on with past conversations counted',
   },
   {
     name: 'session',
@@ -700,7 +703,8 @@ const LIVE = [
       await page.clickText('Ask for changes');
       await sleep(1500);
     },
-    check: 'Ask for changes in a room opens Designer’s own chat with "Changes to Launch hero" staged',
+    check:
+      'Ask for changes in a room opens Designer’s own chat with "Changes to Launch hero" staged',
     after: async (page) => {
       await page.clickLabel("Don't ask for changes");
       await sleep(800);
@@ -711,6 +715,14 @@ const LIVE = [
     route: '/settings',
     pages: 2,
     check: 'Dates in the one short format ("Nov 5, 2026")',
+  },
+  {
+    name: 'settings-usage',
+    route: '/settings',
+    ready: 'Use it all before reset',
+    act: scrollToText('Spare-capacity list'),
+    check:
+      'Usage: "Use it all before reset" with its line; "Claude 5-hour limit resets … · 62% unused"; "Claude Code: average turn" says it is an estimate; the list "0 waiting" (its one item started); Ollama running with its model, Opencode installed. Read-only.',
   },
   {
     name: 'connection',

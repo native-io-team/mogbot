@@ -1,0 +1,91 @@
+/* Settings → Agents → Usage, and What's in flight's spare-capacity line
+   (AgentsUsage). Readings and estimates only; status colours, never the accent. */
+
+.agents-usage__block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
+
+.agents-usage__heading {
+  font-size: var(--font-size-body-lg);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.agents-usage__muted,
+.agents-usage__state {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agents-usage__list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.agents-usage__line {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.agents-usage__line + .agents-usage__line {
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agents-usage__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* css-ok: matches .settings-row-info's tight label/description pair */
+  flex: 1;
+  min-width: 0;
+}
+
+.agents-usage__name {
+  font-size: var(--font-size-body-md);
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* Near or at a limit is a status, told apart by its words as well. */
+.agents-usage__line[data-tone='warning'] .agents-usage__state,
+.agents-usage__line[data-tone='limited'] .agents-usage__state {
+  color: var(--accent-warning);
+}
+
+.agents-usage__add {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: var(--spacing-sm);
+}
+
+.agents-usage__field {
+  flex: 1;
+  min-width: 0;
+}
+
+/* One quiet line, like the plan's usage beside it. */
+.agents-usage-spare {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agents-team__column > .agents-usage-spare {
+  align-self: center;
+  margin-top: var(--spacing-xs);
+}

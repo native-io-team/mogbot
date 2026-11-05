@@ -1307,6 +1307,14 @@ export function createMockServer(opts: MockOptions = {}) {
     },
     // The ready-made agents, as the Mac serializes them.
     'agents.templates': () => real.agentsTemplates,
+    // Its spare window placed 40 minutes before a reset from now, so the line shows.
+    'agents.usagePlan': () => {
+      const now = Date.now();
+      const plan = structuredClone(real.agentsUsagePlan);
+      for (const s of plan.spare)
+        Object.assign(s, { resetsAt: now + 40 * 60_000, observedAt: now - 10 * 60_000 });
+      return { ...plan, now };
+    },
     // As `agents::defaults::check` does: a ready engine, a model it offers.
     'agents.setDefaults': (p) => {
       const keys = Object.keys(p);
@@ -1335,7 +1343,11 @@ export function createMockServer(opts: MockOptions = {}) {
         const model = p[key];
         if (typeof model !== 'string' || model === '') continue;
         if (!list.find((e) => e.id === id)?.models.some((m) => m.value === model)) {
-          return fail({ type: 'Validation', field: 'model', reason: 'Pick one it offers or Default.' });
+          return fail({
+            type: 'Validation',
+            field: 'model',
+            reason: 'Pick one it offers or Default.',
+          });
         }
       }
       if (p.engine !== undefined) saved.engine = p.engine as 'claude' | 'codex';

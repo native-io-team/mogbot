@@ -1345,8 +1345,10 @@ call's shape was checked with one read-only `gh api notifications` call.
 ## Usage before the wall (`agents/usage.rs`, `agents/quota.rs`)
 
 Grok Bot's bots went silent at the usage limit. Here the limit is said
-before it arrives, and only from what the engines report: nothing is ever
-estimated, and no reading means no line.
+before it arrives, and only from what the engines report: a *reading* is
+never estimated, and no reading means no line. Forecasts are a separate,
+labelled thing (see "Usage awareness" below): they never stand in for a
+reading and are never shown as one.
 
 **Cost, per agent and per routine.** Each turn's `result` (Claude Code:
 `usage`, `total_cost_usd`) or `turn/completed` (Codex: tokens only) is added
@@ -1537,6 +1539,130 @@ Mac's own (`wallet::keep_sessions`), so an agent that last ran on it resumes
 where it was, then deletes its Keychain items and its folder (`accounts::forget_isolated_account`,
 which refuses any id a workspace uses). The phone reads the list read-only
 (`agents.accounts`) in its Settings, once an engine has more than one.
+
+## Usage awareness (`agents/inventory.rs`, `agents/forecast.rs`, `agents/usage_plan.rs`)
+
+Answers: **do the agents know what the user has, and use it the way they
+want?** The agents (the Chief above all) can read what there is to run on,
+forecast what work will cost, and follow the user's chosen usage mode. They
+never slow down for limits unless the user chose that.
+
+**The capacity inventory** (`inventory::read`; the `usage_overview` tool,
+`agents_usage_overview`, the phone's `agents.usagePlan`):
+
+- Every engine (installed, signed in, how many agents run on it, the account
+  its next turn runs on by `wallet::choose`, or that every account is out),
+  and every account in the wallet.
+- **Each account's own reading.** `quota.json` is one picture per engine;
+  each account now also keeps its last reading in `usage-readings.json`
+  (`usage_plan::archive`, from the same `Step::Quota` that records
+  `quota.json`), so the inventory can say what *each* account last reported,
+  with when. The engine-wide reading is given to an account only when the
+  wallet recorded it came from that one (`wallet::reading_from`), or the
+  engine has a single account; otherwise it is nobody's, and that account
+  says "No reading yet". A signed-out failure forgets that account's own
+  reading too. Windows past their reset drop, as in `quota::shown`.
+- **Plan names only when reported**: Codex's snapshot carries `planType`
+  (`Quota::plan`); Claude Code's stream reports none, so no Claude plan is
+  ever shown.
+- **Other compute**, detected, never assumed (`inventory::local_compute`,
+  cached a minute): Opencode's binary; Ollama (binary or app) and LM Studio
+  (`lms` or the app), each asked over loopback for its model list
+  (`127.0.0.1:11434/api/tags`, `127.0.0.1:1234/v1/models`, 800 ms) and said
+  "installed, not running" when it doesn't answer. Agents don't run on these;
+  they are listed so the Chief can say what's there.
+
+**Readings vs estimates.** The rule "only what the engines report, never
+estimated" is about *readings* and stands unchanged. A forecast is an
+estimate and is always said as one: every value carries `estimate: true`
+and how many runs it rests on; tool text heads it "ESTIMATE from this user's
+past runs (not a reading)"; the UI says "About 48k tokens a turn · estimate
+from 212 past runs". With too little history there is no forecast at all,
+never a default.
+
+- **Tokens per run** (`forecast::per_run`) come from the per-day totals
+  already kept for every agent and routine (`AgentUsage::days`, 7 days), so
+  history from before this existed counts at once. At least `MIN_RUNS` (5)
+  runs, else none. A day on which an agent also ran "When…" model checks is
+  left out of its per-turn figure (that day's tokens mix both and can't be
+  split). An agent with too little history is estimated as an average turn on
+  its engine here (`forecast::pooled`), and says so. Low/high are the
+  lightest and heaviest day's averages.
+- **Share of a limit** is learned, because engines report windows in
+  percent, never tokens: each reading is kept as a `forecast::Sample` with
+  the account's running token count (`usage_plan::add_tokens`, from each
+  turn's reported usage). Within one instance of a window (same kind, same
+  reset) the first and last sample give points per token; instances pool
+  (`forecast::rate`). No rate until the reading has moved `MIN_RATE_DELTA`
+  (2) points with tokens in between. Use of the same plan elsewhere (the CLI,
+  the web) moves the percent without our tokens, so the rate errs high: a
+  forecast share is an upper-side estimate. This history starts with this
+  build: until it exists, forecasts give tokens and say the share "isn't known
+  yet".
+
+**Modes** (`usage_plan::Mode`, `usage-plan.json`; Settings → Agents → Usage,
+or the Chief's `set_usage_mode`, which always asks on a card first):
+
+- **Normal** (default): no throttling. Before something big (a fan-out, a long
+  routine, a nightly pipeline) an agent says in one line what it will likely
+  use and which account it runs on, then goes ahead.
+- **Save my limits**: ask before heavy work (`usage_plan::ask_first`: a
+  forecast of a tenth of a window or more, or a fan-out with no forecast),
+  and send light work to agents on lighter models or engines.
+- **Use it all before reset**: the user's standing OK to spend capacity that
+  would otherwise expire. When a window on the account turns would run on
+  next is near its reset (within a fifth of its length, at most a day:
+  `five_hour` → last hour, `seven_day` → last day; Codex's own
+  `windowDurationMins`; a window we can't size is never spare) with at least
+  `SPARE_MIN_PERCENT` (25) points unused, work waits on the spare-capacity
+  list, and the Chief is free, the check-in tick (at most every 3 minutes)
+  wakes the Chief once per window instance (`usage_plan::should_nudge`,
+  `nudged`), with a quiet Note in its chat. The Chief hands items to agents,
+  marks them started (`finish_spare_work`), and may bring a routine forward
+  (`run_routine_now`, only in this mode; its next time doesn't move). It
+  changes no approval: anything that sends, spends, pushes or changes what
+  others see still waits for the user's Allow.
+
+**The spare-capacity list**: users add in Settings; any agent adds with
+`add_spare_work` ("sometime", "when there's spare capacity"). At most 50
+items of 600 characters. A turn answering outside text (a "When…" routine's
+items) can't add to it or run a routine.
+
+**Instructions, for every agent, old or new.** The behaviour lives in the
+app-owned system prompt (`prompts::usage_section`, built every turn by
+`runner::system_prompt_for`) with the user's current mode, so every agent,
+including ones created or imported by older builds, has it on its next turn,
+and nothing in its own `CLAUDE.md` is rewritten (the safest upgrade: there
+is no file text to migrate). The Chief also gets `set_usage_mode` and, when
+`quota.json` shows a window near its reset with capacity left, a
+"Capacity about to expire" section, as reported.
+
+**UI.** Settings → Agents → Usage (⌘K "Usage limits and spare capacity…"):
+the mode, each account's reading or "No reading yet", tags ("Plus plan",
+"Next turns run here"), each engine's average turn (estimate), other
+compute, and the list. What's in flight ends with one muted line when a
+window on the next account is near its reset with capacity left ("Claude
+5-hour limit resets 3:00 PM · 62% unused"). The phone's Settings shows the
+same, read-only (`agents.usagePlan`, additive: an older phone never asks, an
+older Mac doesn't list it in `welcome.methods`). Wording lives once in
+`packages/companion-protocol/src/usage.ts`.
+
+**What can't be done honestly, and isn't:**
+
+- No engine reports limits in tokens, so "how much is left" is only ever a
+  percentage, and any token→share conversion is learned and labelled.
+- Claude Code reports no plan name; neither engine reports a reading for an
+  account no turn has run on. Those accounts say "No reading yet".
+- Opencode and local models aren't agent engines here; they're listed, not
+  used.
+- Choosing *accounts* by reset time isn't done: the wallet's order is the
+  user's, and failover keeps it. Agents choose between *engines* (an agent on
+  Codex vs one on Claude Code) by what resets sooner.
+- "Route light work to cheaper models" is an instruction to the Chief
+  (delegate to agents on lighter models); nothing reclassifies a turn
+  automatically.
+- Not verified against live accounts: a real nudge firing near a real
+  reset, Codex's `planType` on a signed-in account, LM Studio's model list.
 
 ## Apps agents can use (`src-tauri/src/agents/apps.rs`)
 

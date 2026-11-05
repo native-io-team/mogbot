@@ -1,0 +1,197 @@
+/**
+ * How the capacity inventory is said (`agents.usagePlan`,
+ * `agents_usage_overview`), once, for the desk's Settings and What's in
+ * flight and the phone's Settings. Pure.
+ *
+ * Two kinds of figure, never mixed up:
+ * - **Readings**: what an engine reported, with when. Worded as such ("as
+ *   reported"), and "No reading" when there is none.
+ * - **Estimates**: from this user's past runs (`UsageEstimate`). Always
+ *   worded "estimate" and always with how many runs they rest on. None with
+ *   too little history; never a default.
+ */
+
+import type {
+  AgentEngine,
+  LocalCompute,
+  QuotaWindow,
+  SpareWindow,
+  UsageAccountLine,
+  UsageEstimate,
+  UsageInventory,
+  UsageMode,
+} from './model';
+import {
+  QUOTA_STALE_MS,
+  QUOTA_WARN_PERCENT,
+  readDay,
+  readPhrase,
+  resetDay,
+  resetPhrase,
+  windowName,
+} from './quota';
+
+export const USAGE_MODES: readonly UsageMode[] = ['normal', 'save', 'use_it_all'];
+
+export const USAGE_MODE_LABEL: Record<UsageMode, string> = {
+  normal: 'Normal',
+  save: 'Save my limits',
+  use_it_all: 'Use it all before reset',
+};
+
+/** One line each, what it changes. */
+export const USAGE_MODE_DETAIL: Record<UsageMode, string> = {
+  normal:
+    'Agents never slow down for limits. Before something big, they say what it will likely use.',
+  save: 'Agents ask before heavy work and send light work to lighter models or engines.',
+  use_it_all:
+    'Near a reset with capacity left, the Chief starts your spare-capacity list. Allow cards still apply.',
+};
+
+const ENGINE_SHORT: Record<AgentEngine, string> = { claude: 'Claude', codex: 'Codex' };
+
+function compact(n: number): string {
+  if (n < 1000) return String(Math.round(n));
+  if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
+  return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+}
+
+/** "About 41k tokens a turn · estimate from 37 past runs". */
+export function estimateLine(e: UsageEstimate | undefined, unit = 'turn'): string | null {
+  if (!e) return null;
+  return `About ${compact(e.tokens)} tokens a ${unit} · estimate from ${e.runs} past run${e.runs === 1 ? '' : 's'}`;
+}
+
+/** One window of an account, as reported: "5-hour 38% · resets 3:00 PM". */
+export function windowLine(w: QuotaWindow, now = Date.now()): string {
+  const name = windowName(w);
+  const label = name.charAt(0).toUpperCase() + name.slice(1);
+  const full = w.limited || (w.usedPercent ?? 0) >= 100;
+  const used = full
+    ? 'used up'
+    : w.usedPercent === undefined
+      ? 'no figure'
+      : `${Math.max(0, Math.floor(w.usedPercent))}%`;
+  const reset = w.resetsAt ? ` · resets ${resetDay(w.resetsAt, now)}` : '';
+  const age =
+    !full && now - w.observedAt > QUOTA_STALE_MS ? ` · read ${readDay(w.observedAt, now)}` : '';
+  return `${label} ${used}${reset}${age}`;
+}
+
+export type UsageTone = 'calm' | 'warning' | 'limited';
+
+/** An account's state in a few words, only what is known. */
+export function accountUsage(
+  a: UsageAccountLine,
+  now = Date.now()
+): { text: string; tone: UsageTone } {
+  if (!a.signedIn) return { text: 'Not signed in', tone: 'calm' };
+  if (a.out) {
+    return {
+      text: a.outUntil
+        ? `Out of usage until ${resetPhrase(a.outUntil, now)}`
+        : 'Out of usage · reset time not reported',
+      tone: 'limited',
+    };
+  }
+  if (a.windows.length === 0) return { text: 'No reading yet', tone: 'calm' };
+  const warn = a.windows.some((w) => (w.usedPercent ?? 0) >= QUOTA_WARN_PERCENT);
+  return {
+    text: a.windows.map((w) => windowLine(w, now)).join(' · '),
+    tone: warn ? 'warning' : 'calm',
+  };
+}
+
+/** "Plus plan" when the engine said; "Next turns run here" for the next. */
+export function accountTags(a: UsageAccountLine): string[] {
+  const tags: string[] = [];
+  if (a.plan) tags.push(`${a.plan.charAt(0).toUpperCase()}${a.plan.slice(1)} plan`);
+  if (a.next) tags.push('Next turns run here');
+  return tags;
+}
+
+/** "Ollama · running · llama3.2:3b", "Opencode · installed". */
+export function localLine(l: LocalCompute): string {
+  if (l.running === undefined) return `${l.name} · installed`;
+  if (!l.running) return `${l.name} · installed, not running`;
+  if (l.models.length === 0) return `${l.name} · running`;
+  const shown = l.models.slice(0, 3).join(', ');
+  const more = l.models.length > 3 ? ` +${l.models.length - 3}` : '';
+  return `${l.name} · running · ${shown}${more}`;
+}
+
+export interface SpareLine {
+  /** "Claude 5-hour limit resets 3:00 PM · 62% unused". */
+  text: string;
+  /** Where it came from and what happens next. */
+  detail: string;
+}
+
+function spareText(s: SpareWindow, now: number): string {
+  const unused = Math.max(0, Math.floor(100 - s.usedPercent));
+  return `${ENGINE_SHORT[s.engine]} ${windowName(s)} limit resets ${resetDay(s.resetsAt, now)} · ${unused}% unused`;
+}
+
+/**
+ * What's in flight's line, when a window on the account turns run on next
+ * is near its reset with capacity left. Null otherwise: spare capacity on an
+ * account turns don't reach isn't news to act on.
+ */
+export function spareLine(
+  inv: UsageInventory | null | undefined,
+  now = Date.now()
+): SpareLine | null {
+  const s = inv?.spare.find((w) => w.next && w.resetsAt > now);
+  if (!inv || !s) return null;
+  const waiting = inv.backlog.filter((i) => i.state === 'waiting').length;
+  const reported = `On ${s.accountName}, as reported ${readPhrase(s.observedAt, now)}.`;
+  const next =
+    inv.mode === 'use_it_all'
+      ? waiting > 0
+        ? ` The Chief will use it on your spare-capacity list (${waiting} waiting).`
+        : inv.backlog.length === 0
+          ? ' Your spare-capacity list is empty.'
+          : ' Nothing is waiting on your spare-capacity list.'
+      : '';
+  return { text: spareText(s, now), detail: `${reported}${next}` };
+}
+
+/** One row of the phone's read-only Usage section. */
+export interface UsageRow {
+  key: string;
+  label: string;
+  value?: string;
+  detail?: string;
+  warning?: boolean;
+}
+
+/**
+ * The phone's Usage section: the mode, a reset near with capacity left,
+ * each engine's average turn (an estimate, when there's history), the
+ * spare-capacity list's size and other compute. Read-only: the mode and the
+ * list are changed on the Mac, or by asking the Chief.
+ */
+export function usageRows(inv: UsageInventory | null | undefined, now = Date.now()): UsageRow[] {
+  if (!inv) return [];
+  const rows: UsageRow[] = [
+    {
+      key: 'mode',
+      label: USAGE_MODE_LABEL[inv.mode],
+      detail: USAGE_MODE_DETAIL[inv.mode],
+    },
+  ];
+  const spare = spareLine(inv, now);
+  if (spare) rows.push({ key: 'spare', label: spare.text, detail: spare.detail });
+  for (const e of inv.engines) {
+    const est = e.installed ? estimateLine(e.perTurn) : null;
+    if (est) rows.push({ key: `est:${e.id}`, label: `${e.label}: average turn`, detail: est });
+  }
+  const waiting = inv.backlog.filter((i) => i.state === 'waiting').length;
+  rows.push({
+    key: 'backlog',
+    label: 'Spare-capacity list',
+    value: inv.backlog.length === 0 ? 'Empty' : `${waiting} waiting`,
+  });
+  for (const l of inv.local) rows.push({ key: `local:${l.name}`, label: localLine(l) });
+  return rows;
+}

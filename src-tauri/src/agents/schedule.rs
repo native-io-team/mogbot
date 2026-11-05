@@ -1134,6 +1134,8 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
     if changed {
         let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
     }
+    // "Use it all before reset": capacity about to expire wakes the Chief.
+    super::usage_tools::maybe_nudge(app);
     Ok(())
 }
 

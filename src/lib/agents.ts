@@ -939,6 +939,8 @@ export interface QuotaWindow {
 export interface Quota {
   engine: AgentEngine;
   windows: QuotaWindow[];
+  /** The plan's name, only when the engine said it (Codex's `planType`). */
+  plan?: string;
 }
 
 export const AGENT_EVENTS = {
