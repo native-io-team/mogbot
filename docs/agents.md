@@ -794,6 +794,19 @@ Two timeouts shape the design, both observed:
   regardless of `MCP_TOOL_TIMEOUT` (two unanswered cards were both given up at
   exactly 300s, while their buttons still looked live).
 
+**Cards expire** (`agents/expiry.rs`; this supersedes the "stays live" and
+late-Allow behaviour below, which now only reaches a card from before it). A
+card whose turn ended, or that a restart left behind, closes at once as
+"Expired — the agent moved on". A card still blocking a turn closes when the
+wait runs out (240s for Claude Code, bounded by its 300s ceiling; the sweep
+closes anything past `CARD_EXPIRY_SECS`, 10 min): the call is denied with "No
+answer — ask again later if it still matters" and the agent is told to carry
+on without it or say what's left in one line. Sign-ins and secure input close
+after 10 min as "Maybe later". Each becomes a one-line receipt (desk and
+phone), counts in no badge, and the same ask (kind + target) is refused
+without a card for the rest of that task, until the user next writes to the
+agent. A sweep runs at launch and every minute.
+
 So approvals are asynchronous. `approve` waits 240s. If you haven't answered,
 it tells the agent "the user may be away: stop, say what you need, you'll be
 woken if they allow it", and **the card stays live**. A late **Allow** grants

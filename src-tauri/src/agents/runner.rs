@@ -860,6 +860,10 @@ fn tag_room(message: &mut AgentMessage, tag: Tag) {
 
 /// Persist a message, update the agent's sidebar row, and tell the UI.
 pub fn record(app: &AppHandle, message: AgentMessage) -> Result<AgentMessage, CommandError> {
+    // The user wrote: a new task, in which an ask that expired may be raised again.
+    if message.kind == MessageKind::User && !message.agent_id.is_empty() {
+        super::expiry::new_task(&message.agent_id);
+    }
     record_as(app, message, true, Tag::ByKind)
 }
 
@@ -2534,6 +2538,8 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             return;
         }
         clear_mark(&agent_id);
+        // Nothing waits on its cards now: they close, rather than ask on.
+        super::expiry::sweep_agent(&app, &agent_id, super::expiry::Moment::TurnEnded);
         // What the turn changed goes before its failure, so a failed turn still
         // ends on its error line (Retry and the sidebar's failure read the newest line).
         // Then its result card, if it shared one: on the change card when
@@ -4511,6 +4517,7 @@ mod tests {
                 connector: None,
                 login: None,
                 set_aside: None,
+                expiry: None,
                 from_outside: None,
                 front: None,
             });

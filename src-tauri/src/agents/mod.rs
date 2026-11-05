@@ -72,6 +72,7 @@ pub mod decisions;
 pub mod defaults;
 pub mod driver;
 pub mod engine;
+pub mod expiry;
 pub mod failure;
 pub mod files;
 pub mod forecast;

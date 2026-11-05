@@ -421,6 +421,12 @@ export interface Approval {
    * `flow` is its live state. A Mac without the `logins` feature never sends it.
    */
   login?: LoginRequest;
+  /**
+   * Closed by the Mac because nobody answered (status `expired`): the agent
+   * moved on, the wait ran out, or a sign-in became "Maybe later". A
+   * one-line receipt; never counted as waiting. Older Macs never send it.
+   */
+  expiry?: 'moved_on' | 'no_answer' | 'maybe_later';
 }
 
 // Logins: identical to src/lib/agentLogins.ts (desktop `agents/logins.rs`).
