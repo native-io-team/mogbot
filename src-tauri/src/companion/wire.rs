@@ -497,6 +497,11 @@ pub fn phone_overview(mut overview: Value) -> Value {
                 if let Some(status) = fields.get_mut("status").and_then(Value::as_object_mut) {
                     status.remove("work");
                 }
+                // The phone shows that it's driven; the Mac's terminal id is
+                // nothing it can use, so it never leaves the Mac.
+                if let Some(t) = fields.get_mut("takeover").and_then(Value::as_object_mut) {
+                    t.remove("ptySession");
+                }
             }
         }
     }
@@ -517,6 +522,20 @@ pub fn without_live_work(mut event: Event) -> Event {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_phone_sees_a_take_over_but_not_its_terminal() {
+        let overview = serde_json::json!({ "agents": [{
+            "id": "a1",
+            "status": { "state": "idle" },
+            "takeover": { "since": 5, "ptySession": "takeover-1", "cli": "claude-code", "project": "/p" }
+        }]});
+        let shown = phone_overview(overview);
+        assert_eq!(
+            shown["agents"][0]["takeover"],
+            serde_json::json!({ "since": 5, "cli": "claude-code", "project": "/p" })
+        );
+    }
 
     #[test]
     fn negotiation_matches_version_ts() {

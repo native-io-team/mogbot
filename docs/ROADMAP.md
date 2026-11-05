@@ -21,9 +21,9 @@ infrastructure where a good one exists.
    and recordings are not built.
 3. **A git worktree per task** for project-bound agents: no trampling, and
    every task becomes a branch you can PR, merge or discard. *In progress.*
-4. **"Take over" a live session.** From the timeline, open the session or
-   browser tab the agent is working in and continue by hand. Today the only
-   way in is Open project ([agents.md](agents.md), "What it did").
+4. **"Take over" a browser tab.** Driving the agent's own session in a
+   terminal is built ([agents.md](agents.md), "Take over"); stepping into the
+   Chrome tab it drives is not. Codex take-over is unverified on a real thread.
 5. **"When…" routines.** Event-started work (a Linear issue assigned, a
    GitHub mention) via polling routines through the user's own connectors —
    no hosted webhooks.

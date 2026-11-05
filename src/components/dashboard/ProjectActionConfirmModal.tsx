@@ -10,6 +10,8 @@ interface ProjectActionConfirmModalProps {
   confirmLabel: string;
   loadingLabel: string;
   confirmVariant: 'primary' | 'danger';
+  /** The dismiss button; "Cancel" unless the choice is better named. */
+  cancelLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -23,6 +25,7 @@ export function ProjectActionConfirmModal({
   confirmLabel,
   loadingLabel,
   confirmVariant,
+  cancelLabel = 'Cancel',
   onCancel,
   onConfirm,
 }: ProjectActionConfirmModalProps) {
@@ -48,7 +51,7 @@ export function ProjectActionConfirmModal({
         </div>
         <div className="modal-actions">
           <Button variant="secondary" onClick={handleCancel} disabled={loading}>
-            Cancel
+            {cancelLabel}
           </Button>
           <Button variant={confirmVariant} onClick={onConfirm} disabled={loading}>
             {loading ? loadingLabel : confirmLabel}

@@ -15,7 +15,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import { sanitizeMessageHtml } from '../../lib/safeHtml';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   CodeIcon,
@@ -56,7 +56,7 @@ export function InboxDetail({ item, onArchive, onDelete, onFix }: InboxDetailPro
   });
 
   const html = useMemo(
-    () => DOMPurify.sanitize(String(marked.parse(item.bodyMd, { async: false }))),
+    () => sanitizeMessageHtml(String(marked.parse(item.bodyMd, { async: false }))),
     [item.bodyMd]
   );
 
@@ -68,7 +68,7 @@ export function InboxDetail({ item, onArchive, onDelete, onFix }: InboxDetailPro
    * back button to return from. That is bad enough for a link to MDN; this
    * body is written by an agent that has just read a repository, so the link
    * may well have come from something in that repository rather than from the
-   * agent's own knowledge. DOMPurify has already dropped `javascript:` and
+   * agent's own knowledge. sanitizeMessageHtml has already dropped `javascript:` and
    * anything else off its scheme allowlist — this decides where what survives
    * is allowed to open.
    */

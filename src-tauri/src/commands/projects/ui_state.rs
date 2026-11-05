@@ -191,9 +191,10 @@ pub async fn get_terminal_state(
 ) -> Result<Option<TerminalState>, CommandError> {
     let project = validate_project_path(&project_path)?;
     let metadata_path = project.join(".shipstudio").join("project.json");
+    let live = crate::agents::takeover::live_tabs_for(&project_path);
 
     if !metadata_path.exists() {
-        return Ok(None);
+        return Ok(with_live_takeovers(None, &live));
     }
 
     let contents = std::fs::read_to_string(&metadata_path).map_err(|e| {
@@ -202,7 +203,54 @@ pub async fn get_terminal_state(
     let metadata: ProjectMetadata = serde_json::from_str(&contents)
         .map_err(|e| format!("Failed to parse project metadata: {e}"))?;
 
-    Ok(metadata.terminal_state)
+    Ok(with_live_takeovers(metadata.terminal_state, &live))
+}
+
+/// A project's tabs as they are restored: never a take-over's terminal from
+/// disk (one left by a quit, a crash or an old build), and the take-overs
+/// running in it now, which are never saved. `live` is (PTY id, CLI id).
+pub(crate) fn with_live_takeovers(
+    saved: Option<TerminalState>,
+    live: &[(String, &'static str)],
+) -> Option<TerminalState> {
+    let mut state = saved.map(without_takeovers);
+    for (pty, cli) in live {
+        let state = state.get_or_insert_with(|| TerminalState {
+            tabs: Vec::new(),
+            active_tab_index: 0,
+        });
+        if !state.tabs.iter().any(|t| &t.session_id == pty) {
+            state.tabs.push(crate::types::SavedTerminalTab {
+                agent_id: cli.to_string(),
+                session_id: pty.clone(),
+                custom_title: None,
+            });
+        }
+    }
+    state
+}
+
+/// `state` without take-over tabs, its active tab still the same tab
+/// (or, if that was one, the tab before it).
+pub(crate) fn without_takeovers(mut state: TerminalState) -> TerminalState {
+    let is_takeover = |t: &crate::types::SavedTerminalTab| {
+        crate::agents::takeover::is_takeover_pty(&t.session_id)
+    };
+    let active = state.active_tab_index;
+    let before = state
+        .tabs
+        .iter()
+        .take(active)
+        .filter(|t| is_takeover(t))
+        .count();
+    let active_gone = state.tabs.get(active).is_some_and(is_takeover);
+    state.tabs.retain(|t| !is_takeover(t));
+    let mut index = active.saturating_sub(before);
+    if active_gone {
+        index = index.saturating_sub(1);
+    }
+    state.active_tab_index = index.min(state.tabs.len().saturating_sub(1));
+    state
 }
 
 /// Saves the terminal tab state for a project
@@ -225,7 +273,9 @@ pub async fn set_terminal_state(
         ProjectMetadata::default()
     };
 
-    metadata.terminal_state = Some(state);
+    // A take-over's terminal is the agent's, for as long as it runs: it is
+    // never restored from disk, so it is never written there.
+    metadata.terminal_state = Some(without_takeovers(state));
 
     // classify_fs_error routing: TCC/access-denied/read-only failures
     // classify Expected instead of paging telemetry (issue #625).
@@ -441,5 +491,65 @@ mod effective_account_tests {
             DEFAULT_ACCOUNT_ID
         );
         assert_eq!(effective_account_id_in(None, &accounts), DEFAULT_ACCOUNT_ID);
+    }
+}
+
+#[cfg(test)]
+mod takeover_tab_tests {
+    use super::*;
+    use crate::types::SavedTerminalTab;
+
+    fn tab(id: &str) -> SavedTerminalTab {
+        SavedTerminalTab {
+            agent_id: "claude-code".into(),
+            session_id: id.into(),
+            custom_title: None,
+        }
+    }
+
+    fn ids(state: &TerminalState) -> Vec<&str> {
+        state.tabs.iter().map(|t| t.session_id.as_str()).collect()
+    }
+
+    #[test]
+    fn a_take_overs_tab_is_never_saved_and_the_active_tab_stays_put() {
+        let state = TerminalState {
+            tabs: vec![tab("a"), tab("takeover-1"), tab("b")],
+            active_tab_index: 2,
+        };
+        let saved = without_takeovers(state);
+        assert_eq!(ids(&saved), ["a", "b"]);
+        assert_eq!(saved.active_tab_index, 1, "still b");
+
+        let on_it = without_takeovers(TerminalState {
+            tabs: vec![tab("a"), tab("takeover-1"), tab("b")],
+            active_tab_index: 1,
+        });
+        assert_eq!(on_it.active_tab_index, 0, "the tab before it");
+
+        let only = without_takeovers(TerminalState {
+            tabs: vec![tab("takeover-1")],
+            active_tab_index: 0,
+        });
+        assert!(only.tabs.is_empty());
+        assert_eq!(only.active_tab_index, 0);
+    }
+
+    #[test]
+    fn restoring_drops_a_dead_take_over_and_adds_the_live_one() {
+        let saved = Some(TerminalState {
+            tabs: vec![tab("a"), tab("takeover-old")],
+            active_tab_index: 0,
+        });
+        let live = vec![("takeover-now".to_string(), "codex")];
+        let restored = with_live_takeovers(saved, &live).unwrap();
+        assert_eq!(ids(&restored), ["a", "takeover-now"]);
+        assert_eq!(restored.tabs[1].agent_id, "codex");
+        assert_eq!(restored.active_tab_index, 0);
+
+        // Nothing saved yet: the take-over is the project's one tab.
+        let fresh = with_live_takeovers(None, &live).unwrap();
+        assert_eq!(ids(&fresh), ["takeover-now"]);
+        assert!(with_live_takeovers(None, &[]).is_none());
     }
 }

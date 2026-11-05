@@ -1506,6 +1506,13 @@ fn refuse_while_working(agent: &store::Agent) -> Result<(), CommandError> {
             agent.name
         )));
     }
+    // A take-over's terminal runs in the copy: it can't go from under it.
+    if super::runner::driven(&agent.id) {
+        return Err(CommandError::expected(format!(
+            "You're driving {} in a terminal, in this copy. Hand it back first.",
+            agent.name
+        )));
+    }
     Ok(())
 }
 

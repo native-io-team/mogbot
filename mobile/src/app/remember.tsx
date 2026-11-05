@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { Button, T, SheetPage } from '../components/ui';
+import { SheetTitle } from '../components/SheetTitle';
 import { haptic } from '../lib/haptics';
 import { changeMemory, describeError, suggestMemory } from '../lib/session';
 import { useApp } from '../lib/store';
@@ -66,9 +67,7 @@ function Remember() {
   return (
     <SheetPage>
       <View style={styles.root}>
-        <T variant="title" color={colors.textStrong}>
-          Remember this
-        </T>
+        <SheetTitle>Remember this</SheetTitle>
         <TextInput
           autoFocus
           multiline
@@ -78,7 +77,7 @@ function Remember() {
             setText(t);
           }}
           maxLength={2_000}
-          placeholder={summarising ? 'Summarising…' : `What should ${name} remember?`}
+          placeholder={summarising ? 'Summarizing…' : `What should ${name} remember?`}
           placeholderTextColor={colors.textMuted}
           keyboardAppearance={appearance}
           selectionColor={accent.accent}

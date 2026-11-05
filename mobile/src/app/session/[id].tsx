@@ -121,7 +121,7 @@ export default function Session() {
           headerTitle: () => (
             <View style={styles.header}>
               <T variant="headline" color={colors.textStrong} numberOfLines={1}>
-                {title || 'Session'}
+                {title || 'Task'}
               </T>
               <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={chromeScale}>
                 {gone

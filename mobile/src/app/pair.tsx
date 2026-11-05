@@ -163,7 +163,7 @@ export default function Pair() {
         >
           <View style={styles.waitingTitle}>
             <Spinner size={iconSize.body} color={colors.textPrimary} />
-            <T variant="title" color={colors.textStrong}>
+            <T variant="title" color={colors.textStrong} accessibilityRole="header">
               Allow on your Mac
             </T>
           </View>
@@ -303,7 +303,7 @@ function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
   })();
   return (
     <>
-      <T variant="title" color={colors.textStrong}>
+      <T variant="title" color={colors.textStrong} accessibilityRole="header">
         {title}
       </T>
       <T color={colors.textSecondary}>{body}</T>

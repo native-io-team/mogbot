@@ -74,6 +74,7 @@ pub mod secrets;
 pub mod sessions;
 pub mod store;
 pub mod stream;
+pub mod takeover;
 pub mod task;
 pub mod tray;
 pub mod usage;
@@ -123,6 +124,7 @@ fn greet(agent_id: &str) {
         fresh: false,
         result: None,
         revises: None,
+        takeover: false,
     };
     if let Err(e) = store::append_message(&message) {
         tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");

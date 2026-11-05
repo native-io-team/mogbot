@@ -640,6 +640,7 @@ mod tests {
             fresh: false,
             result: None,
             revises: None,
+            takeover: false,
         };
         let request_id = store::new_id();
         card.approval = Some(Approval {

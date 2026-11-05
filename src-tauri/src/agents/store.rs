@@ -332,6 +332,11 @@ pub struct AgentMessage {
     /// On a user message: "Ask for changes" on this result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revises: Option<super::results::ResultRef>,
+    /// On a `note`: a take-over's terminal closed by itself, early or
+    /// failing, with its last lines after a blank line. Not a turn's
+    /// failure: quiet, no Retry. (Older builds wrote it as an `error`.)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub takeover: bool,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -1431,6 +1436,7 @@ mod tests {
                     fresh: false,
                     result: None,
                     revises: None,
+                    takeover: false,
                 })
                 .unwrap();
             }
@@ -1703,6 +1709,7 @@ mod tests {
                 fresh: false,
                 result: None,
                 revises: None,
+                takeover: false,
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -1747,6 +1754,7 @@ mod tests {
             fresh: false,
             result: None,
             revises: None,
+            takeover: false,
         }
     }
 

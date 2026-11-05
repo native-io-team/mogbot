@@ -38,6 +38,13 @@ export interface PendingSend {
   ts: number;
   /** The Mac said no, or it waited too long: shown as "Not sent · Send". */
   failed: boolean;
+  /**
+   * The Mac refused it (a `!command`, an unknown `/command`, a removed
+   * agent): final, so it's never offered to Send again, only to edit or
+   * discard. `reason` is the Mac's own sentence.
+   */
+  refused?: boolean;
+  reason?: string;
   /** Written while the Mac couldn't be reached: sent when it answers (outbox.ts). */
   waiting?: boolean;
   /** Already uploaded; shown from the phone's own copies until the Mac's arrive. */
@@ -256,10 +263,16 @@ export function setPendingFailed(
   agentId: string,
   clientId: string,
   failed: boolean,
-  waiting = false
+  waiting = false,
+  /** The Mac's reason, when it refused the send (a refusal is final). */
+  refusal?: string
 ): SyncState {
-  const list = (s.pending[agentId] ?? []).map((p) =>
-    p.clientId === clientId ? { ...p, failed, waiting } : p
-  );
+  const list = (s.pending[agentId] ?? []).map((p) => {
+    if (p.clientId !== clientId) return p;
+    const { refused: _r, reason: _why, ...rest } = p;
+    return refusal !== undefined && failed
+      ? { ...rest, failed, waiting: false, refused: true, reason: refusal }
+      : { ...rest, failed, waiting };
+  });
   return { ...s, pending: { ...s.pending, [agentId]: list } };
 }

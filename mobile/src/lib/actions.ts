@@ -49,7 +49,8 @@ export function agentActions(agent: Agent, caps: AgentCaps): Action<AgentAction>
       out.push(
         agent.hidden
           ? { id: 'unhide', title: 'Unhide', icon: 'eye' }
-          : { id: 'hide', title: 'Hide', icon: 'eye.slash', destructive: true }
+          : // Not destructive: it's undone in a tap, and the agent keeps working.
+            { id: 'hide', title: 'Hide', icon: 'eye.slash' }
       );
     }
   }

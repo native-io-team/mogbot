@@ -236,6 +236,7 @@ mod tests {
             fresh: false,
             result: None,
             revises: None,
+            takeover: false,
         })
         .unwrap();
         id
@@ -310,6 +311,7 @@ mod tests {
                 fresh: false,
                 result: None,
                 revises: None,
+                takeover: false,
             })
             .unwrap();
             let found = search_in(&store::list().unwrap(), "deploy", 50).unwrap();
@@ -379,6 +381,7 @@ mod tests {
             fresh: false,
             result: None,
             revises: None,
+            takeover: false,
         };
         assert!(match_message(&message, &terms("müller")).is_some());
         assert!(match_message(&message, &terms("müller schmidt")).is_none());

@@ -336,6 +336,14 @@ pub fn interrupted(previous: &str, activity: Option<&str>) -> String {
     )
 }
 
+/// What the first turn after a take-over is told: the user drove this very
+/// conversation in a terminal for `took` ("6 min"), so it is all above.
+pub fn handed_back(took: &str) -> String {
+    format!(
+        "[The user took over this conversation and worked in it directly, in a terminal, for {took}, then handed it back to you. Everything that happened there is in this conversation above: what they asked, what you did, what was decided. Carry on from where it now stands; don't redo what was done there, and don't recap it unless asked. If something from it belongs in your memory, save it.]\n\n"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -43,8 +43,8 @@ function groupHits(hits: SearchHit[]): Group[] {
 const WHO: Partial<Record<SearchHit['kind'], string>> = {
   user: 'You',
   agent: 'Reply',
-  check_in: 'Check-in',
-  session: 'Session',
+  check_in: 'Routine',
+  session: 'Task',
   note: 'Note',
 };
 

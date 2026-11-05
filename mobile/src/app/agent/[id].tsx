@@ -17,13 +17,15 @@ import {
   type UsageSummary,
 } from '@shipstudio/companion-protocol';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, Switch, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
-import { AgentAvatar } from '../../components/agent';
+import { AgentAvatar, Spinner } from '../../components/agent';
+import { announce } from '../../lib/a11y';
 import { useNow } from '../../components/ConnectionPill';
 import { choose } from '../../components/menu';
-import { Button, Icon, Row, T, SheetPage } from '../../components/ui';
+import { Button, Icon, InsetDivider, Row, SectionTitle, SheetPage, T } from '../../components/ui';
+import { SheetTitle } from '../../components/SheetTitle';
 import {
   describeScope,
   engineCantAsk,
@@ -66,7 +68,13 @@ function AgentSheet() {
   const welcome = useApp((s) => s.welcome);
   const engines = useApp((s) => s.overview?.engines);
   const live = useApp((s) => s.link.kind === 'connected');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setErrorText] = useState<string | null>(null);
+  // At the top of the sheet, and said aloud: a toggle that failed at the top
+  // mustn't look like nothing happened while its reason sits a screen below.
+  const setError = useCallback((text: string | null) => {
+    setErrorText(text);
+    if (text) announce(text, true);
+  }, []);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const servesUsage = canCall('agents.usage', welcome);
   useEffect(() => {
@@ -94,9 +102,7 @@ function AgentSheet() {
         <View style={styles.who}>
           <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.sheet} />
           <View style={{ flex: 1, gap: space['2xs'] }}>
-            <T variant="title" color={colors.textStrong} numberOfLines={1}>
-              {agent.name}
-            </T>
+            <SheetTitle numberOfLines={1}>{agent.name}</SheetTitle>
             {!!agent.role && (
               <T variant="small" color={colors.textSecondary} numberOfLines={2}>
                 {agent.role}
@@ -109,6 +115,19 @@ function AgentSheet() {
             )}
           </View>
         </View>
+
+        {error && (
+          <Animated.View entering={FadeIn.duration(150)} style={styles.error}>
+            <Icon
+              name="exclamationmark.circle"
+              size={iconSize.inline}
+              color={colors.accentErrorLight}
+            />
+            <T variant="small" color={colors.accentErrorLight} style={{ flex: 1 }}>
+              {error}
+            </T>
+          </Animated.View>
+        )}
 
         <View style={styles.list}>
           {canCall('agents.instructions', welcome) && (
@@ -188,11 +207,9 @@ function AgentSheet() {
 
         {!!agent.permissions?.length && (
           <>
-            <T variant="caption" color={colors.textMuted} style={styles.sectionTitle}>
-              ALLOWED WITHOUT ASKING
-            </T>
+            <SectionTitle title="Allowed without asking" style={styles.sectionTitle} />
             <View style={styles.list}>
-              {agent.permissions.map((rule, i) => (
+              {agent.permissions.map((rule, i, all) => (
                 <Animated.View
                   key={rule.id}
                   exiting={FadeOut.duration(150)}
@@ -201,7 +218,7 @@ function AgentSheet() {
                   <PermissionRow
                     agent={agent}
                     rule={rule}
-                    first={i === 0}
+                    last={i === all.length - 1}
                     enabled={live && canCall('agents.revokePermission', welcome)}
                     onError={setError}
                   />
@@ -212,9 +229,7 @@ function AgentSheet() {
         )}
 
         <View style={styles.sectionHead}>
-          <T variant="caption" color={colors.textMuted} style={styles.sectionTitle}>
-            CHECK-INS AND ROUTINES
-          </T>
+          <SectionTitle title="Routines" style={styles.sectionTitle} />
           {canSchedule && (
             <Button
               title="Add"
@@ -241,19 +256,15 @@ function AgentSheet() {
                 <CheckInRow
                   agent={agent}
                   checkIn={c}
-                  first={i === 0}
-                  enabled={canSchedule}
+                  last={i === checkIns.length - 1}
+                  // Offline its menu's actions would all fail: it waits for the Mac.
+                  enabled={canSchedule && live}
                   onError={setError}
                 />
               </Animated.View>
             ))
           )}
         </View>
-        {error && (
-          <T variant="small" color={colors.accentErrorLight} style={styles.none}>
-            {error}
-          </T>
-        )}
       </ScrollView>
     </SheetPage>
   );
@@ -262,13 +273,13 @@ function AgentSheet() {
 function CheckInRow({
   agent,
   checkIn: c,
-  first,
+  last,
   enabled,
   onError,
 }: {
   agent: Agent;
   checkIn: CheckIn;
-  first: boolean;
+  last: boolean;
   enabled: boolean;
   onError: (text: string | null) => void;
 }) {
@@ -296,21 +307,17 @@ function CheckInRow({
         run: () => router.push({ pathname: '/schedule', params: { agentId: agent.id, id: c.id } }),
       },
       {
-        label: c.repeat ? 'Cancel routine' : 'Cancel check-in',
+        label: 'Cancel routine',
         destructive: true,
         run: () =>
-          Alert.alert(
-            c.repeat ? 'Cancel this routine?' : 'Cancel this check-in?',
-            `${agent.name} won’t be woken for it again.`,
-            [
-              { text: 'Keep', style: 'cancel' },
-              {
-                text: 'Cancel it',
-                style: 'destructive',
-                onPress: act(() => schedule.cancel(agent.id, c.id)),
-              },
-            ]
-          ),
+          Alert.alert('Cancel this routine?', `${agent.name} won’t be woken for it again.`, [
+            { text: 'Keep', style: 'cancel' },
+            {
+              text: 'Cancel it',
+              style: 'destructive',
+              onPress: act(() => schedule.cancel(agent.id, c.id)),
+            },
+          ]),
       },
     ]);
   return (
@@ -318,12 +325,9 @@ function CheckInRow({
       disabled={!enabled || busy}
       onPress={menu}
       accessibilityRole="button"
-      accessibilityHint="Run now, pause, edit or cancel"
-      style={({ pressed }) => [
-        styles.row,
-        !first && styles.divider,
-        pressed && { backgroundColor: colors.surfaceControl },
-      ]}
+      accessibilityState={{ disabled: !enabled, busy }}
+      accessibilityHint={enabled ? 'Run now, pause, edit or cancel' : undefined}
+      style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surfaceControl }]}
     >
       <Icon
         name={c.repeat ? 'arrow.trianglehead.2.clockwise' : 'clock'}
@@ -338,7 +342,12 @@ function CheckInRow({
           {describeCheckInTime(c, now)}
         </T>
       </View>
-      {busy ? null : <Icon name="ellipsis" size={iconSize.body} color={colors.textMuted} />}
+      {busy ? (
+        <Spinner />
+      ) : (
+        enabled && <Icon name="ellipsis" size={iconSize.body} color={colors.textMuted} />
+      )}
+      {!last && <InsetDivider />}
     </Pressable>
   );
 }
@@ -390,13 +399,13 @@ function Toggle({
 function PermissionRow({
   agent,
   rule,
-  first,
+  last,
   enabled,
   onError,
 }: {
   agent: Agent;
   rule: PermissionRule;
-  first: boolean;
+  last: boolean;
   enabled: boolean;
   onError: (text: string | null) => void;
 }) {
@@ -423,7 +432,7 @@ function PermissionRow({
       },
     ]);
   return (
-    <View style={[styles.row, !first && styles.divider]}>
+    <View style={styles.row}>
       <View style={{ flex: 1, gap: space['2xs'] }}>
         <T variant="mono" color={colors.textStrong} numberOfLines={2}>
           {rule.label}
@@ -440,6 +449,7 @@ function PermissionRow({
         disabled={!enabled}
         onPress={revoke}
       />
+      {!last && <InsetDivider />}
     </View>
   );
 }
@@ -503,7 +513,13 @@ function Conversation({
         {freshable && (
           <Row
             label={busy ? 'Starting fresh…' : 'Start fresh'}
-            leading={<Icon name="arrow.counterclockwise" size={iconSize.body} color={colors.textSecondary} />}
+            leading={
+              <Icon
+                name="arrow.counterclockwise"
+                size={iconSize.body}
+                color={colors.textSecondary}
+              />
+            }
             // Its turn is in the conversation it would leave.
             onPress={busy ? undefined : confirm}
             disabled={!!unavailable}
@@ -527,9 +543,7 @@ function Usage({ usage }: { usage: UsageSummary }) {
   const styles = useStyles();
   return (
     <>
-      <T variant="caption" color={colors.textMuted} style={styles.sectionTitle}>
-        USAGE
-      </T>
+      <SectionTitle title="Usage" style={styles.sectionTitle} />
       <View style={styles.list}>
         {(
           [
@@ -537,13 +551,14 @@ function Usage({ usage }: { usage: UsageSummary }) {
             ['All time', usage.allTime],
           ] as const
         ).map(([label, totals], i) => (
-          <View key={label} style={[styles.row, i > 0 && styles.divider]}>
+          <View key={label} style={styles.row}>
             <View style={{ flex: 1, gap: space['2xs'] }}>
               <T color={colors.textPrimary}>{label}</T>
               <T variant="small" color={colors.textSecondary}>
                 {usageLine(totals)}
               </T>
             </View>
+            {i === 0 && <InsetDivider />}
           </View>
         ))}
       </View>
@@ -560,7 +575,14 @@ const useStyles = makeStyles((colors) => ({
     justifyContent: 'space-between',
     marginTop: space.sm,
   },
-  sectionTitle: { marginLeft: space.lg, letterSpacing: 0.4 },
+  // SectionTitle's own inset; the page's gap does the spacing below it.
+  sectionTitle: { marginBottom: 0 },
+  error: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+  },
   list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
   none: { padding: space.lg },
   note: { marginHorizontal: space.lg },
@@ -571,5 +593,4 @@ const useStyles = makeStyles((colors) => ({
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
   },
-  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
 }));

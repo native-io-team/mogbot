@@ -38,7 +38,7 @@ import {
   type Credentials,
 } from './pairing';
 import { flushCache, forgetCache, loadCache, watchCache } from './cache';
-import { flushDrafts, forgetDrafts, loadDrafts } from './drafts';
+import { flushDrafts, forgetDrafts, loadDrafts, refusedToDraft, setComposer } from './drafts';
 import { outboxPlan, unreached } from './outbox';
 import { loadPrefs } from './prefs';
 import { getApp, setApp, update, useApp } from './store';
@@ -46,6 +46,7 @@ import {
   addPending,
   applyEvent,
   type PendingAttachment,
+  type PendingSend,
   confirmSend,
   emptySync,
   mergePage,
@@ -317,7 +318,9 @@ export async function send(
     });
   } catch (error) {
     const retry = unreached(error);
-    update((s) => setPendingFailed(s, agentId, id, !retry, retry));
+    update((s) =>
+      setPendingFailed(s, agentId, id, !retry, retry, retry ? undefined : describeError(error))
+    );
     if (retry) return;
     throw error;
   }
@@ -352,6 +355,13 @@ export function discardPending(agentId: string, clientId: string) {
       [agentId]: (s.pending[agentId] ?? []).filter((p) => p.clientId !== clientId),
     },
   }));
+}
+
+/** A refused send, back in its chat's composer to change (`refusedToDraft`), and out of the chat. */
+export function editPending(p: PendingSend) {
+  const s = getApp();
+  setComposer(p.agentId, refusedToDraft(p, s.composer[p.agentId], s.overview?.agents ?? []));
+  discardPending(p.agentId, p.clientId);
 }
 
 export const stop = (agentId: string) => call('agents.stop', { agentId });

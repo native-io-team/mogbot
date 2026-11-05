@@ -36,10 +36,14 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   askingLine,
+  DRIVEN_LINE,
   engineLine,
   isQueued,
   needsYou,
+  needsYouHere,
+  ON_MAC_LINE,
   pendingApproval,
+  waitingOnMac,
   workingLine,
 } from '../lib/agents';
 import { messageActions, plainText, type MessageAction } from '../lib/actions';
@@ -139,9 +143,12 @@ export function ChatView({
   at,
   compose = false,
   embedded = false,
+  notice,
 }: {
   id: string;
   at?: string;
+  /** Said once, as the chat opens (what a share couldn't attach). */
+  notice?: string;
   /** Opened to write (the "New message" quick action): the field has the keyboard. */
   compose?: boolean;
   embedded?: boolean;
@@ -174,7 +181,7 @@ export function ChatView({
   const [awayFrom, setAwayFrom] = useState<string | null>(null);
   const [composerHeight, setComposerHeight] = useState(90);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(notice ?? null);
   const [selecting, setSelecting] = useState<AgentMessage | null>(null);
   // A search hit to land on: paged in, scrolled to, and lit up once.
   const [target, setTarget] = useState<string | null>(null);
@@ -193,6 +200,14 @@ export function ChatView({
     setTimeout(() => setToast((t) => (t === text ? null : t)), 4000);
   }, []);
 
+  // Said once on opening (what a share couldn't attach): shown from the first frame.
+  useEffect(() => {
+    if (!notice) return;
+    announce(notice, true);
+    const timer = setTimeout(() => setToast((t) => (t === notice ? null : t)), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
   // First open, or after a snapshot made the cached copy stale.
   useEffect(() => {
     if (connected && agent && !chat?.loaded)
@@ -204,15 +219,13 @@ export function ChatView({
     () => (agent ? chatItems(agent, messages, pending, draft) : []),
     [agent, messages, draft, pending]
   );
+  // In a pane too short for a whole card, the question it's asking stays
+  // pinned at the top, so the answers at the bottom never stand alone. Only
+  // a card this phone can answer: an import's review is answered on the Mac.
+  const card = useMemo(() => pendingApproval(messages), [messages]);
   // The header must agree with the card: an approval in the chat is "needs you",
   // even in the beat before the status event says so.
-  const asking = useMemo(
-    () => messages.some((m) => m.kind === 'approval' && m.approval?.status === 'pending'),
-    [messages]
-  );
-  // In a pane too short for a whole card, the question it's asking stays
-  // pinned at the top, so the answers at the bottom never stand alone.
-  const card = useMemo(() => pendingApproval(messages), [messages]);
+  const asking = !!card;
   // Only the newest change card of the agent's open copy offers Keep / Discard.
   const liveCopyCard = useMemo(() => {
     const id = agent?.copy?.id;
@@ -352,9 +365,10 @@ export function ChatView({
     );
   }
 
-  const header = <Header agent={agent} asking={asking} writing={!!draft?.text} />;
+  const onMac = waitingOnMac(agent, chat?.messages);
+  const header = <Header agent={agent} asking={asking} onMac={onMac} writing={!!draft?.text} />;
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
-  const urgentBelow = away && (needsYou(agent) || asking);
+  const urgentBelow = away && (needsYouHere(agent, chat?.messages) || asking);
 
   return (
     <View style={{ flex: 1 }}>
@@ -373,7 +387,7 @@ export function ChatView({
             headerTitle: () => (
               <Pressable
                 accessibilityRole="button"
-                accessibilityHint="Files, check-ins and routines"
+                accessibilityHint="Instructions, memory, files and routines"
                 onPress={openSheet}
               >
                 {header}
@@ -644,10 +658,13 @@ function Glow() {
 function Header({
   agent,
   asking,
+  onMac,
   writing,
 }: {
   agent: Agent;
   asking: boolean;
+  /** All it's waiting on is answered on the Mac (an import to review). */
+  onMac: boolean;
   /** Its reply is streaming in: the header says so, not the step before it. */
   writing: boolean;
 }) {
@@ -655,14 +672,20 @@ function Header({
   const styles = useStyles();
   const connected = useApp((s) => s.link.kind === 'connected');
   const engine = useApp((s) => engineLine(agent, s.overview?.engines));
-  const line =
-    needsYou(agent) || asking
+  // Driven on the Mac beats everything: the Mac is where it's answered now.
+  const line = agent.takeover
+    ? { text: DRIVEN_LINE, color: colors.textSecondary }
+    : asking
       ? { text: 'Needs your OK', color: colors.accentWarning }
-      : writing
-        ? { text: 'Writing…', color: colors.textSecondary }
-        : agent.status.state === 'working'
-          ? { text: workingLine(agent, true), color: colors.textSecondary }
-          : { text: engine ?? (agent.role || 'Idle'), color: colors.textSecondary };
+      : onMac
+        ? { text: ON_MAC_LINE, color: colors.textSecondary }
+        : needsYou(agent)
+          ? { text: 'Needs your OK', color: colors.accentWarning }
+          : writing
+            ? { text: 'Writing…', color: colors.textSecondary }
+            : agent.status.state === 'working'
+              ? { text: workingLine(agent, true), color: colors.textSecondary }
+              : { text: engine ?? (agent.role || 'Idle'), color: colors.textSecondary };
   return (
     <View style={styles.header}>
       <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.header} />

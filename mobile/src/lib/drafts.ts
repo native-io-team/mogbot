@@ -9,7 +9,7 @@
 import type { AgentRef, ResultRef } from '@shipstudio/companion-protocol';
 import { debounced, readJson, removeJson, writeJson } from './persist';
 import { getApp, setApp, useApp } from './store';
-import type { PendingAttachment } from './sync';
+import type { PendingAttachment, PendingSend } from './sync';
 
 /** An upload the Mac is holding for this draft, and when it took it. */
 export interface DraftFile extends PendingAttachment {
@@ -89,6 +89,32 @@ export function addFile(agentId: string, file: DraftFile) {
 export function removeFiles(agentId: string, blobIds: string[]) {
   const files = getApp().composer[agentId]?.files ?? [];
   setComposer(agentId, { files: files.filter((f) => !blobIds.includes(f.blobId)) });
+}
+
+/**
+ * A send the Mac refused, back in the composer to change: its words ahead of
+ * whatever is typed there now, its @mentions (by the team's current names)
+ * and its files, which keep the time they were uploaded so the hour the Mac
+ * holds them is still counted honestly.
+ */
+export function refusedToDraft(
+  p: PendingSend,
+  current: ComposerDraft | undefined,
+  team: AgentRef[]
+): Partial<ComposerDraft> {
+  const now = current ?? EMPTY_DRAFT;
+  const text = now.text.trim() ? `${p.text}\n${now.text}` : p.text;
+  const named = (p.mentions ?? [])
+    .map((id) => team.find((a) => a.id === id))
+    .filter((a): a is AgentRef => !!a)
+    .filter((a) => !now.mentions.some((m) => m.id === a.id));
+  const files = [
+    ...(now.files ?? []),
+    ...(p.attachments ?? [])
+      .filter((a) => !now.files?.some((f) => f.blobId === a.blobId))
+      .map((a) => ({ ...a, stagedAt: p.ts })),
+  ];
+  return { text, mentions: liveMentions(text, [...now.mentions, ...named]), files };
 }
 
 /** Add a passage to the chat's quotes (the same passage once). */
