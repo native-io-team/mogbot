@@ -51,7 +51,7 @@ export function CodeOverlayEditor({ value, onChange, lang, className, placeholde
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         lang === 'css' ? css() : html(),
         ghDarkExtension,
-        ssEditorTheme,
+        ssEditorTheme(),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
         }),

@@ -138,7 +138,7 @@ export function CodeFileEditor({
         codeLanguageExtension(language),
         ghDarkExtension,
         neutralizeInvalidHighlight,
-        ssEditorTheme,
+        ssEditorTheme(),
         codeTabEditorTheme,
         codeTabSurfaceTheme,
         editableComp.current.of([

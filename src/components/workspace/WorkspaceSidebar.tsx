@@ -76,7 +76,7 @@ import {
   isProjectFolderGoneError,
 } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
-import { setActiveAccountId, type Account } from '../../lib/accounts';
+import { accountDotStyle, setActiveAccountId, type Account } from '../../lib/accounts';
 import { DragSortHandle, DragSortItem, DragSortScope } from '../primitives/DragSort';
 import type { DragSortMove } from '../../lib/drag-sort/types';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
@@ -1483,7 +1483,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                 ) : (
                   <span
                     className="workspace-switcher-dot"
-                    style={{ background: account.color }}
+                    style={accountDotStyle(account.color)}
                     aria-hidden="true"
                   >
                     {workspaceInitial(account.name)}
@@ -1508,7 +1508,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
               aria-label={`Switch to ${account.name}`}
             >
               <span className="workspace-switcher-option-dot" aria-hidden="true">
-                <span className="workspace-switcher-dot" style={{ background: account.color }}>
+                <span className="workspace-switcher-dot" style={accountDotStyle(account.color)}>
                   {workspaceInitial(account.name)}
                 </span>
               </span>
@@ -1530,7 +1530,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
           data-selected="true"
         >
           <span className="workspace-switcher-option-dot" aria-hidden="true">
-            <span className="workspace-switcher-dot" style={{ background: activeAccount.color }}>
+            <span className="workspace-switcher-dot" style={accountDotStyle(activeAccount.color)}>
               {workspaceInitial(activeAccount.name)}
             </span>
           </span>
@@ -1853,7 +1853,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                     icon={
                       <span
                         className="workspace-switcher-dot"
-                        style={{ background: activeAccount.color }}
+                        style={accountDotStyle(activeAccount.color)}
                         aria-hidden="true"
                       >
                         {workspaceInitial(activeAccount.name)}
@@ -1878,7 +1878,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                     <span className="workspace-switcher-summary">
                       <span
                         className="workspace-switcher-dot"
-                        style={{ background: activeAccount.color }}
+                        style={accountDotStyle(activeAccount.color)}
                         aria-hidden="true"
                       >
                         {workspaceInitial(activeAccount.name)}

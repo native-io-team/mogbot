@@ -216,6 +216,17 @@ const light: Palette = {
 
 export const palettes = { dark, light } as const;
 export type Appearance = keyof typeof palettes;
+
+/**
+ * How a primary button looks disabled. null: the whole button fades, as every
+ * other control does. A number: the label keeps the accent and the fill
+ * becomes that much of a tint. Light needs this: white words on a faded fill
+ * fade toward the white page with it (1.8:1); on the tint they keep ~4:1.
+ */
+export const disabledPrimaryTint: Record<Appearance, number | null> = {
+  dark: null,
+  light: 0.12,
+};
 export const APPEARANCES = Object.keys(palettes) as Appearance[];
 
 /**

@@ -565,13 +565,13 @@ body.compact-mode-active html {
 
 .button--variable {
   background: var(--button-variable-surface);
-  color: var(--text-primary);
+  color: var(--button-variable-text);
   border-color: transparent;
 }
 
 .button--variable:hover:not(:disabled) {
   background: var(--button-variable-hover);
-  color: var(--text-inverse);
+  color: var(--button-variable-text);
 }
 
 .button--default:is([aria-pressed='true'], [aria-expanded='true'], [data-selected='true']),

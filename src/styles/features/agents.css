@@ -2241,7 +2241,7 @@
 .agents-search__time {
   flex: 0 0 auto;
   font-size: var(--font-size-body-sm);
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2281,7 +2281,7 @@
 }
 
 .agent-editor__usage dt {
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .agent-editor__usage dd {

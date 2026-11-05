@@ -85,6 +85,8 @@
   --color-ink-800: #2b2b2b;
   --color-ink-700: #3f3f3f;
   --color-ink-600: #555555;
+  --color-ink-550: #5a5a5a;
+  --color-ink-525: #606060;
   --color-ink-500: #6b6b6b;
   --color-ink-450: #6f6f6f;
   --color-ink-400: #8f8f8f;
@@ -100,6 +102,7 @@
   --color-blue-800: #0a63c9;
   --color-purple-800: #6639ba;
   --color-pink-700: #bf3989;
+  --color-pink-800: #a8327c;
 
   /* The code editor's dark syntax palette (github-dark), as primitives. */
   --color-coral-400: #ff7b72;
