@@ -24,8 +24,9 @@ pub struct AgentView {
 #[serde(rename_all = "camelCase")]
 pub struct AgentsOverview {
     pub agents: Vec<AgentView>,
-    /// Whether Claude Code is installed and runs. Without it nothing works,
-    /// and the view says so instead of letting a message fail.
+    /// Whether Claude Code is installed. Kept for the companion protocol,
+    /// which reads it; whether a given agent can be sent a message is its own
+    /// engine's `engines` entry (installed and signed in).
     pub engine_ready: bool,
     /// Every engine an agent can run on: whether it's here and signed in,
     /// and the models it offers.
@@ -55,6 +56,9 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
     let engine_ready = engines
         .iter()
         .any(|e| e.id == Engine::Claude && e.installed);
+    if let Err(e) = put_chief_on_a_ready_engine(&engines) {
+        tracing::warn!(error = %e, "couldn't move the Chief of Staff onto a ready engine");
+    }
     let agents = store::list()?
         .into_iter()
         .map(|agent| {
@@ -70,6 +74,50 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
         engine_ready,
         engines,
     })
+}
+
+/// A Chief of Staff that has never run, on an engine that isn't here, goes
+/// onto one that is: someone with only Codex would otherwise meet a Chief that
+/// can't answer. One that has run keeps its engine (and its conversation); its
+/// chat offers to set that engine up instead.
+fn put_chief_on_a_ready_engine(engines: &[engine::EngineInfo]) -> Result<(), CommandError> {
+    let Some(chief) = store::list()?.into_iter().find(|a| a.is_main) else {
+        return Ok(());
+    };
+    let has_run = chief.session_id.is_some() || chief.new_engine;
+    let ready = |id: Engine| engines.iter().any(|e| e.id == id && e.ready());
+    let target = engine::default_for(engines);
+    if has_run || ready(chief.engine) || !ready(target) || target == chief.engine {
+        return Ok(());
+    }
+    store::update(&chief.id, |a| {
+        a.switch_engine(target);
+        // Nothing to carry over: it has never had a conversation.
+        a.new_engine = false;
+    })?;
+    Ok(())
+}
+
+/// The agents that work in a project, read straight from the registry: no
+/// Chief of Staff created, no engine probed. A project window's sidebar lists
+/// the ones bound to its folder without starting everything Agents mode needs.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_with_projects() -> Result<Vec<AgentView>, CommandError> {
+    blocking(|| {
+        store::list()?
+            .into_iter()
+            .filter(|a| a.project.is_some())
+            .map(|agent| {
+                Ok(AgentView {
+                    status: runner::status_of(&agent.id),
+                    home: store::agent_home(&agent.id)?.display().to_string(),
+                    agent,
+                })
+            })
+            .collect()
+    })
+    .await
 }
 
 #[tauri::command]
@@ -1013,4 +1061,66 @@ pub async fn quick_entry_capture(app: AppHandle) -> Result<Option<String>, Comma
 pub async fn quick_entry_resize(app: AppHandle, height: f64) -> Result<(), CommandError> {
     agents::quick_entry::resize(&app, height);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn engines(claude: bool, codex: bool) -> Vec<engine::EngineInfo> {
+        [(Engine::Claude, claude), (Engine::Codex, codex)]
+            .into_iter()
+            .map(|(id, ready)| engine::EngineInfo {
+                id,
+                label: "",
+                installed: ready,
+                signed_in: ready,
+                asks: true,
+                models: Vec::new(),
+            })
+            .collect()
+    }
+
+    /// Run with a fresh registry holding a new Chief of Staff.
+    fn with_chief<T>(f: impl FnOnce(&str) -> T) -> T {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let chief = agents::ensure_main().unwrap();
+        let out = f(&chief.id);
+        store::set_root_for_tests(None);
+        out
+    }
+
+    #[test]
+    fn a_chief_that_never_ran_moves_onto_the_engine_that_is_here() {
+        with_chief(|id| {
+            put_chief_on_a_ready_engine(&engines(false, true)).unwrap();
+            let chief = store::get(id).unwrap();
+            assert_eq!(chief.engine, Engine::Codex);
+            assert!(
+                !chief.new_engine,
+                "nothing to carry over from a chat that never ran"
+            );
+        });
+    }
+
+    #[test]
+    fn a_chief_stays_put_when_its_engine_is_ready_or_nothing_is() {
+        with_chief(|id| {
+            put_chief_on_a_ready_engine(&engines(true, true)).unwrap();
+            assert_eq!(store::get(id).unwrap().engine, Engine::Claude);
+            put_chief_on_a_ready_engine(&engines(false, false)).unwrap();
+            assert_eq!(store::get(id).unwrap().engine, Engine::Claude);
+        });
+    }
+
+    #[test]
+    fn a_chief_with_a_conversation_keeps_its_engine() {
+        with_chief(|id| {
+            store::update(id, |a| a.session_id = Some("s1".into())).unwrap();
+            put_chief_on_a_ready_engine(&engines(false, true)).unwrap();
+            assert_eq!(store::get(id).unwrap().engine, Engine::Claude);
+        });
+    }
 }

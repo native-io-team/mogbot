@@ -2,7 +2,8 @@
  * The sidebar's door into remote access, and the first place a problem shows
  * up.
  *
- * Always present, so people find the feature: while it's off, a muted grey
+ * Shown only while it is on (the companion app is the phone story; see
+ * PhoneIndicator). Formerly always present; while off, a muted grey
  * "Remote access off" that opens setup. While it's on, a green dot and who
  * last connected. The row turns amber for the one thing that will end remote
  * access on its own — running on battery — and red if the server isn't
@@ -74,7 +75,10 @@ export function RemoteAccessIndicator({ isSidebarHidden }: { isSidebarHidden: bo
   );
 
   const state = brief.data ? indicatorState(brief.data, now) : null;
-  if (!state) return null;
+  // Off, it says nothing: the phone story is the companion app
+  // (PhoneIndicator), and remote access is reached from the Phone panel and
+  // ⌘K. On, it stays, because battery and a stopped server need seeing.
+  if (!state || state.tone === 'off') return null;
 
   return (
     <Button

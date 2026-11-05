@@ -43,6 +43,8 @@ import { BrowserDropdown } from '../preview/BrowserDropdown';
 import { PixelLoaderRings } from './PixelLoaderRings';
 import { SpotifyWidget } from './SpotifyWidget';
 import { RemoteAccessIndicator } from '../remote/RemoteAccessIndicator';
+import { PhoneIndicator } from '../phone/PhoneIndicator';
+import { useProjectAgents } from './useProjectAgents';
 import { UpdateBanner } from '../UpdateBanner';
 import { NewAccountModal } from '../accounts/NewAccountModal';
 import { RenameProjectModal } from '../dashboard/RenameProjectModal';
@@ -102,7 +104,7 @@ export type ToggleProjectPinHandler = (
   shouldPin: boolean
 ) => void | boolean | Promise<void | boolean>;
 
-type SectionId = 'agents' | 'terminals' | 'worktrees' | 'commands';
+type SectionId = 'team' | 'agents' | 'terminals' | 'worktrees' | 'commands';
 type GroupId = 'pinned' | 'projects';
 const WORKSPACE_SWITCHER_MENU_GUTTER = 8;
 const WORKSPACE_SWITCHER_MENU_OFFSET = 4;
@@ -175,6 +177,12 @@ interface Props {
   onGoAgents?: () => void;
   /** Switch back to Projects from Agents mode. Falls back to `onGoHome`. */
   onGoProjects?: () => void;
+  /**
+   * Replaces the Home / Workflows / Inbox buttons beside the sidebar toggle.
+   * Agents mode shows its own (What's in flight) there: those three belong to
+   * the Projects side.
+   */
+  navContent?: ReactNode;
   /** Replaces the palette trigger at the top (Agents mode searches conversations there). */
   searchContent?: ReactNode;
 
@@ -266,7 +274,7 @@ function readCollapsed(): Record<SectionId, boolean> {
   } catch {
     // ignore
   }
-  return { agents: false, terminals: false, worktrees: false, commands: false };
+  return { team: false, agents: false, terminals: false, worktrees: false, commands: false };
 }
 
 function writeCollapsed(state: Record<SectionId, boolean>) {
@@ -412,6 +420,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   onGoAgents,
   onGoProjects,
   searchContent,
+  navContent,
   listContent,
   onGoHome,
   onOpenProjectPicker,
@@ -763,6 +772,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   const filter = '';
   const openPalette = useOpenPalette();
   const [collapsed, setCollapsed] = useState<Record<SectionId, boolean>>(readCollapsed);
+  const projectAgents = useProjectAgents(currentProjectPath, onGoAgents);
   const [projectExpanded, setProjectExpanded] =
     useState<Record<string, boolean>>(readProjectExpanded);
   // Groups default to open at mount — we deliberately don't persist
@@ -1325,19 +1335,32 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                   emptyHint={filter ? 'No matches' : 'No worktrees'}
                 />
               )}
+              {/* Teammates from Agents bound to this project; click to message one. */}
+              {projectAgents.length > 0 && (
+                <SidebarSection
+                  id="team"
+                  label="Agents"
+                  total={projectAgents.length}
+                  collapsed={collapsed.team}
+                  onToggle={() => toggleSection('team')}
+                  items={projectAgents.filter((i) => matchesFilter(i.label))}
+                  emptyHint="No matches"
+                />
+              )}
+              {/* Terminal sessions (Claude Code, Codex…) running in this project. */}
               <SidebarSection
                 id="agents"
-                label="Agents"
+                label="Sessions"
                 total={agentItems.length}
                 collapsed={collapsed.agents}
                 onToggle={() => toggleSection('agents')}
                 addOptions={atMaxTabs ? undefined : AGENT_ADD_OPTIONS}
                 onAdd={atMaxTabs ? undefined : (agentId) => onAddTab(agentId)}
-                addLabel="Add agent tab"
+                addLabel="New session"
                 addShortcut={kbd('mod', 'T')}
-                addFooterLabel={atMaxTabs ? undefined : 'Add new agent'}
+                addFooterLabel={atMaxTabs ? undefined : 'New session'}
                 items={filteredAgents}
-                emptyHint={filter ? 'No matches' : 'No agents running'}
+                emptyHint={filter ? 'No matches' : 'No sessions running'}
               />
               <SidebarSection
                 id="terminals"
@@ -1687,46 +1710,52 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                 data-education-id="toggle-sidebar"
               />
             )}
-            <IconButton
-              variant="ghost"
-              className={`workspace-sidebar-home ${isHomeActive ? 'is-active' : ''}`}
-              icon={<HomeIcon size={12} />}
-              onClick={onGoHome}
-              disabled={isHomeActive}
-              aria-current={isHomeActive ? 'page' : undefined}
-              title="Home"
-              aria-label="Home"
-            />
-            {onGoWorkflows && (
-              <IconButton
-                variant="ghost"
-                className={`workspace-sidebar-home ${activeNav === 'workflows' ? 'is-active' : ''}`}
-                icon={<ActivityIcon size={12} />}
-                onClick={onGoWorkflows}
-                disabled={activeNav === 'workflows'}
-                aria-current={activeNav === 'workflows' ? 'page' : undefined}
-                title="Workflows"
-                aria-label="Workflows"
-              />
-            )}
-            {onGoInbox && (
-              <span className="workspace-sidebar-inbox">
+            {navContent ?? (
+              <>
                 <IconButton
                   variant="ghost"
-                  className={`workspace-sidebar-home ${activeNav === 'inbox' ? 'is-active' : ''}`}
-                  icon={<BellIcon size={12} />}
-                  onClick={onGoInbox}
-                  disabled={activeNav === 'inbox'}
-                  aria-current={activeNav === 'inbox' ? 'page' : undefined}
-                  title="Inbox"
-                  aria-label={inboxUnreadCount > 0 ? `Inbox — ${inboxUnreadCount} unread` : 'Inbox'}
+                  className={`workspace-sidebar-home ${isHomeActive ? 'is-active' : ''}`}
+                  icon={<HomeIcon size={12} />}
+                  onClick={onGoHome}
+                  disabled={isHomeActive}
+                  aria-current={isHomeActive ? 'page' : undefined}
+                  title="Home"
+                  aria-label="Home"
                 />
-                {inboxUnreadCount > 0 && (
-                  <span className="workspace-sidebar-inbox-badge" aria-hidden>
-                    {inboxUnreadCount > 9 ? '9+' : inboxUnreadCount}
+                {onGoWorkflows && (
+                  <IconButton
+                    variant="ghost"
+                    className={`workspace-sidebar-home ${activeNav === 'workflows' ? 'is-active' : ''}`}
+                    icon={<ActivityIcon size={12} />}
+                    onClick={onGoWorkflows}
+                    disabled={activeNav === 'workflows'}
+                    aria-current={activeNav === 'workflows' ? 'page' : undefined}
+                    title="Workflows"
+                    aria-label="Workflows"
+                  />
+                )}
+                {onGoInbox && (
+                  <span className="workspace-sidebar-inbox">
+                    <IconButton
+                      variant="ghost"
+                      className={`workspace-sidebar-home ${activeNav === 'inbox' ? 'is-active' : ''}`}
+                      icon={<BellIcon size={12} />}
+                      onClick={onGoInbox}
+                      disabled={activeNav === 'inbox'}
+                      aria-current={activeNav === 'inbox' ? 'page' : undefined}
+                      title="Inbox"
+                      aria-label={
+                        inboxUnreadCount > 0 ? `Inbox — ${inboxUnreadCount} unread` : 'Inbox'
+                      }
+                    />
+                    {inboxUnreadCount > 0 && (
+                      <span className="workspace-sidebar-inbox-badge" aria-hidden>
+                        {inboxUnreadCount > 9 ? '9+' : inboxUnreadCount}
+                      </span>
+                    )}
                   </span>
                 )}
-              </span>
+              </>
             )}
           </div>
         )}
@@ -1787,6 +1816,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
 
         <div className="workspace-sidebar-footer">
           <UpdateBanner />
+          <PhoneIndicator isSidebarHidden={isSidebarHidden ?? false} />
           <RemoteAccessIndicator isSidebarHidden={isSidebarHidden ?? false} />
           <div
             className={`workspace-sidebar-footer-actions has-settings-drawer${
@@ -2125,12 +2155,12 @@ function InactiveProjectSections({
       )}
       <SidebarSection
         id="agents"
-        label="Agents"
+        label="Sessions"
         total={agents.length}
         collapsed={false}
         onToggle={() => {}}
         items={agents}
-        emptyHint={filterLower ? 'No matches' : 'No agents running'}
+        emptyHint={filterLower ? 'No matches' : 'No sessions running'}
       />
       <SidebarSection
         id="terminals"

@@ -7,6 +7,7 @@
 import type { Scenario } from '../types';
 import { projects, readySetupItems } from './base';
 import { workspaceCommands, WORKSPACE_PROJECT } from './workspace';
+import { messagesFor, overview } from './agents';
 
 const notInstalled = (id: string, friendlyName: string) => ({
   id,
@@ -14,9 +15,80 @@ const notInstalled = (id: string, friendlyName: string) => ({
   status: 'not_installed' as const,
 });
 
+/** A machine with nothing on it. */
+const ONBOARDING_FRESH = {
+  quick_setup_check: { allPresent: false, setupCompleteCached: false },
+  get_full_setup_status: {
+    allReady: false,
+    items: [
+      notInstalled('homebrew', 'Package Manager'),
+      notInstalled('node', 'Node.js'),
+      notInstalled('git', 'Git'),
+      notInstalled('gh', 'GitHub CLI'),
+      notInstalled('gh_auth', 'GitHub Account'),
+      notInstalled('claude', 'Claude Code'),
+      notInstalled('claude_auth', 'Claude Account'),
+      notInstalled('codex', 'Codex'),
+      notInstalled('codex_auth', 'Codex Account'),
+    ],
+    optionalAuths: { githubAuthenticated: false },
+    detectedAgents: [],
+  },
+  get_onboarding_test_mode: { mock: true, forceOnboarding: false },
+  get_default_agent_id: null,
+};
+
+/** Claude Code installed and signed in; no project tools at all. */
+const ENGINE_ONLY_ITEMS = [
+  ...ONBOARDING_FRESH.get_full_setup_status.items.filter(
+    (i) => i.id !== 'claude' && i.id !== 'claude_auth'
+  ),
+  ...readySetupItems.filter((i) => i.id === 'claude' || i.id === 'claude_auth'),
+];
+
+/** Onboarding on a machine where only an engine is set up: straight to the hand-off. */
+const ONBOARDING_ENGINE_ONLY = {
+  quick_setup_check: { allPresent: false, setupCompleteCached: false },
+  get_full_setup_status: {
+    // The engine has just turned ready inside onboarding (the launch check said
+    // not ready, so onboarding is what opened); its own check then finds it.
+    allReady: false,
+    items: ENGINE_ONLY_ITEMS,
+    optionalAuths: { githubAuthenticated: false },
+    detectedAgents: ['claude-code'],
+  },
+  get_onboarding_test_mode: { mock: false, forceOnboarding: false },
+  get_default_agent_id: 'claude-code',
+  set_default_agent_id: null,
+  mark_setup_complete: null,
+};
+
+/** Set up (an engine), but none of what a project needs. */
+const PROJECT_TOOLS_MISSING = {
+  get_full_setup_status: {
+    allReady: true,
+    items: ENGINE_ONLY_ITEMS,
+    optionalAuths: { githubAuthenticated: false },
+    detectedAgents: ['claude-code'],
+  },
+  ensure_agent_workdir: '/Users/harness/ShipStudio',
+};
+
+/** Node and Git are here; only GitHub (optional) isn't. */
+const PROJECT_TOOLS_GITHUB_ONLY = {
+  ...PROJECT_TOOLS_MISSING,
+  get_full_setup_status: {
+    ...PROJECT_TOOLS_MISSING.get_full_setup_status,
+    items: ENGINE_ONLY_ITEMS.map((i) =>
+      i.id === 'gh' || i.id === 'gh_auth' ? i : { ...i, status: 'ready' as const }
+    ),
+  },
+};
+
 export const appScenarios: Scenario[] = [
   {
     id: 'dashboard',
+    startOn: 'projects',
     requires: '.project-card',
     title: 'Dashboard — the normal case',
     looksRightWhen:
@@ -25,6 +97,7 @@ export const appScenarios: Scenario[] = [
   },
   {
     id: 'dashboard-settings-menu',
+    startOn: 'projects',
     title: 'Dashboard — Preferences menu',
     looksRightWhen:
       "The Preferences row opens a compact menu with App Settings, Report Bug, Feature Request, and What's New; the bug row uses the shared BugReportIcon.",
@@ -46,6 +119,7 @@ export const appScenarios: Scenario[] = [
   },
   {
     id: 'dashboard-cards-collapsed',
+    startOn: 'projects',
     requires: '.dashboard-disclosure',
     title: 'Dashboard — the card stack folded away',
     looksRightWhen:
@@ -64,6 +138,7 @@ export const appScenarios: Scenario[] = [
   },
   {
     id: 'dashboard-empty',
+    startOn: 'projects',
     // Without this the scenario photographed the three projects from the base
     // fixture: the dashboard reads `get_dashboard_projects`, and only the two
     // commands beside it were being emptied. `requires` now names the CTA, so
@@ -82,6 +157,7 @@ export const appScenarios: Scenario[] = [
   },
   {
     id: 'dashboard-many',
+    startOn: 'projects',
     // `.project-card` alone was satisfied by the base fixture's three cards, so
     // this claimed to hold at 24 while photographing 3. Requiring the tenth
     // card means the crowd has to actually be there.
@@ -109,6 +185,7 @@ export const appScenarios: Scenario[] = [
   },
   {
     id: 'dashboard-long-names',
+    startOn: 'projects',
     requires: '.project-card',
     title: 'Dashboard — hostile project names',
     looksRightWhen:
@@ -138,6 +215,7 @@ export const appScenarios: Scenario[] = [
   },
   {
     id: 'dashboard-calendar',
+    startOn: 'projects',
     title: 'Dashboard — with the GitHub contributions calendar',
     looksRightWhen:
       'The calendar sits in the dashboard without pushing anything off-screen. Note: it fetches GitHub directly, so under the hermetic capture run it renders its failed/empty state and may differ between runs.',
@@ -147,41 +225,100 @@ export const appScenarios: Scenario[] = [
     id: 'onboarding-fresh',
     title: 'Onboarding — nothing installed',
     looksRightWhen:
-      'The agent-led onboarding opens on a fresh machine and every tool reads as not installed.',
+      'No product wordmark. “Your own team of AI agents”, a large white headline, then one line on how it works (“Talk to your Chief of Staff. It builds a team. Anything risky waits for your OK.”), one line that agents run on this computer with your own AI account, and two cards only — Claude Code (“Claude, by Anthropic”) and Codex (“GPT, by OpenAI”) — each ending “Install & sign in →”. No developer tools, no hosting, no classic-onboarding toggle.',
+    requires: '.agent-pick-grid',
+    commands: ONBOARDING_FRESH,
+  },
+  {
+    id: 'onboarding-codex-prereqs',
+    title: 'Onboarding — Codex on a bare machine',
+    looksRightWhen:
+      'Codex’s setup: a line saying Codex needs the package manager and Node.js first, then four rows in order (Package Manager, Node.js, Codex, Codex Account), the first one starting by itself and the rest waiting their turn. “← Choose a different one” above.',
+    openSelector: '.agent-pick-card:nth-child(2)',
+    requires: '.agent-setup-detail',
+    commands: { ...ONBOARDING_FRESH, mock_mark_setup_item_ready: null },
+  },
+  {
+    id: 'onboarding-auth-only',
+    title: 'Onboarding — installed but signed out',
+    looksRightWhen:
+      'Both cards end “Sign in →”; nothing else (developer tools, hosting) is asked about.',
+    requires: '.agent-pick-grid',
     commands: {
-      quick_setup_check: { allPresent: false, setupCompleteCached: false },
+      quick_setup_check: { allPresent: true, setupCompleteCached: false },
       get_full_setup_status: {
         allReady: false,
         items: [
-          notInstalled('homebrew', 'Homebrew'),
-          notInstalled('node', 'Node.js'),
-          notInstalled('git', 'Git'),
-          notInstalled('gh', 'GitHub CLI'),
-          notInstalled('claude', 'Claude Code'),
+          ...readySetupItems.map((i) =>
+            i.id.endsWith('_auth')
+              ? { ...i, status: 'not_authenticated' as const, username: undefined }
+              : i
+          ),
+          { id: 'codex', friendlyName: 'Codex', status: 'ready' as const, version: '0.166.0' },
+          { id: 'codex_auth', friendlyName: 'Codex Account', status: 'not_authenticated' as const },
         ],
         optionalAuths: { githubAuthenticated: false },
         detectedAgents: [],
       },
       get_onboarding_test_mode: { mock: true, forceOnboarding: false },
-      get_default_agent_id: null,
     },
   },
   {
-    id: 'onboarding-auth-only',
-    title: 'Onboarding — installed but signed out',
-    looksRightWhen: 'Tools show versions, and only the sign-in steps are outstanding.',
+    id: 'onboarding-handoff',
+    title: 'Onboarding — the end: hand-off to the Chief of Staff',
+    looksRightWhen:
+      'Claude Code was already set up on this machine, and nothing else was (no Node, no Git): onboarding goes straight to the hand-off. The Chief’s badge, “You’re all set”, “Claude Code is connected. Your Chief of Staff is waiting for you.” and one button, “Meet your Chief of Staff”. No rocket, no “dev environment”.',
+    requires: '.celebration-screen',
+    commands: ONBOARDING_ENGINE_ONLY,
+  },
+  {
+    id: 'onboarding-end-to-agents',
+    title: 'Onboarding — after the hand-off, Agents with the Chief',
+    looksRightWhen:
+      'Agents mode, not the projects dashboard: the Chief of Staff selected in the sidebar, its chat open on the greeting, with the three starters under it and the composer ready.',
+    steps: [{ click: '.celebration-btn' }],
+    requires: '.agents-mode .agent-chat__messages > .agent-chat__starters',
+    commands: ONBOARDING_ENGINE_ONLY,
+  },
+  {
+    id: 'launch-returning',
+    title: 'Launch — a returning user lands on Agents',
+    looksRightWhen:
+      'A real returning user, with a team and history: the app opens on Agents with the Chief of Staff’s ongoing conversation (not the first-run greeting), the team listed in the sidebar, not on the projects dashboard. The sidebar top row is the toggle and an activity icon (What’s in flight); New agent / Import agents start on the rows’ left edge. Projects is one click away in the toggle.',
+    requires: '.agents-mode .agent-chat .agent-chat__messages',
+    commands: { agents_overview: overview(), agents_messages: messagesFor },
+  },
+  {
+    id: 'project-tools',
+    title: 'Projects — the first new project asks for its tools',
+    looksRightWhen:
+      'Only Claude Code was set up, so New project opens “Set up project tools”: one line on why, a plain list of only what’s required (a package manager, Node.js, Git, in plain words), an “Also connect GitHub — Optional” checkbox with a one-line reason, a line that Claude Code installs them and this computer checks each one, and Cancel / Set them up. The New project button showed a spinner while the check ran.',
+    startOn: 'projects',
+    openSelector: '[data-education-id="new-project-button"]',
+    requires: '.project-tools-modal .project-tools__list',
+    commands: PROJECT_TOOLS_MISSING,
+  },
+  {
+    id: 'project-tools-github-only',
+    title: 'Projects — only GitHub (optional) is missing',
+    looksRightWhen:
+      'Node and Git are here, so New project asks only “Connect GitHub?”: a line saying everything a project needs is here and GitHub is optional, with “Continue without” and “Connect GitHub”.',
+    startOn: 'projects',
+    openSelector: '[data-education-id="new-project-button"]',
+    requires: '.project-tools-modal .project-tools__actions',
+    commands: PROJECT_TOOLS_GITHUB_ONLY,
+  },
+  {
+    id: 'project-tools-running',
+    title: 'Projects — the agent installs the project tools',
+    looksRightWhen:
+      'After Set them up: the dialog widens; the scripted agent session on the left, the checklist on the right (Claude Code ready, the tools still pending), saying the app checks each one itself.',
+    startOn: 'projects',
+    openSelector: '[data-education-id="new-project-button"]',
+    steps: [{ click: '.project-tools__actions .button:last-child' }],
+    requires: '.project-tools-modal.is-running .agent-guided-phase',
     commands: {
-      quick_setup_check: { allPresent: true, setupCompleteCached: false },
-      get_full_setup_status: {
-        allReady: false,
-        items: readySetupItems.map((i) =>
-          i.id.endsWith('_auth')
-            ? { ...i, status: 'not_authenticated' as const, username: undefined }
-            : i
-        ),
-        optionalAuths: { githubAuthenticated: false },
-        detectedAgents: [],
-      },
+      ...PROJECT_TOOLS_MISSING,
       get_onboarding_test_mode: { mock: true, forceOnboarding: false },
     },
   },

@@ -19,6 +19,7 @@ import {
   getDefaultAgentId as fetchDefaultAgentId,
 } from '../lib/setup';
 import { initDefaultAgent } from '../lib/agent';
+import { putChiefOnEngine } from '../lib/agentOnboarding';
 import { getWindowLabel } from '../lib/window';
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../lib/logger';
@@ -50,6 +51,23 @@ const BOOT_PROGRESS = {
   cliStatuses: 90,
   complete: 100,
 } as const;
+
+/**
+ * Where the app lands once setup is known to be done: Agents, except in a
+ * window opened for a project, which goes to the workspace by way of
+ * 'projects' (the auto-open effect watches for that view), and for someone
+ * whose setup is on an agent Agents can't run (Opencode, Cursor, their own):
+ * they land on their projects, and Agents explains what it needs.
+ */
+export function postSetupViewFor(initialProjectPath?: string | null, agentsEngine = true): AppView {
+  if (initialProjectPath) return 'projects';
+  return agentsEngine ? 'agents' : 'projects';
+}
+
+/** An engine Agents runs on is among the agents setup found ready. */
+export function hasAgentsEngine(detectedAgents: string[]): boolean {
+  return detectedAgents.some((id) => id === 'claude-code' || id === 'codex');
+}
 
 export interface UseAppSetupParams {
   view: AppView;
@@ -86,22 +104,21 @@ export function useAppSetup({
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [bootProgress, setBootProgress] = useState<number>(BOOT_PROGRESS.initial);
 
-  // Background verification for optimistic loading
+  // Background verification for optimistic loading. It refreshes what the
+  // app knows and logs what lapsed, but never takes the user out of what
+  // they're doing: an expired sign-in or a missing tool is asked for where it
+  // matters (Agents offers sign-in on the chat, project tools are asked for
+  // when a project needs them), not by bouncing back into onboarding.
   const verifySetupInBackground = async () => {
     try {
-      // Full verification of auth status
       await refreshAllCliStatuses();
-
-      // Check if any auth is now missing
       const setupStatus = await getFullSetupStatus();
       if (!setupStatus.allReady) {
-        // Something is no longer configured - redirect to onboarding
-        const missingItems = setupStatus.items
-          .filter((i) => i.status !== 'ready')
-          .map((i) => i.friendlyName);
-        logger.warn('Background verification found missing setup items', { missingItems });
-        // Redirect to onboarding to fix the issues
-        setView('onboarding');
+        logger.warn('Background verification: no agent engine ready', {
+          missingItems: setupStatus.items
+            .filter((i) => i.status !== 'ready')
+            .map((i) => i.friendlyName),
+        });
       }
     } catch (error) {
       logger.error('Background setup verification failed', { error });
@@ -121,13 +138,10 @@ export function useAppSetup({
       initDefaultAgent(defaultAgent);
       setBootProgress(BOOT_PROGRESS.defaultAgent);
 
-      // Always boot straight into the projects view — and, because the active
-      // account is persisted, into the user's last-used workspace. The picker
-      // is never forced at startup; it's reachable on demand via "Switch
-      // Workspace". This keeps launch identical to the pre-Workspaces flow for
-      // the ~80% of users who only ever have the Default workspace, and gives
-      // multi-workspace users Slack-style "open where you left off" behavior.
-      const postSetupView: AppView = 'projects';
+      // Launch lands on Agents: you open the app and you're talking to your
+      // Chief of Staff. A project window (opened with a project path) is the
+      // exception: it goes through 'projects' because that is where the
+      // auto-open effect below picks the project up and opens its workspace.
 
       // Fast path: if setup was previously completed, try quick check first
       if (!forceFullCheck) {
@@ -138,6 +152,7 @@ export function useAppSetup({
         );
         setBootProgress(BOOT_PROGRESS.setupProbe);
         if (quickCheck.setupCompleteCached && quickCheck.allPresent) {
+          const postSetupView = postSetupViewFor(initialProjectPath, quickCheck.agentsEngine);
           // Setup was completed before and all binaries still exist
           // Show projects/account picker immediately, verify auth in background
           // Use functional update to avoid overwriting HMR recovery's 'workspace' view
@@ -179,6 +194,10 @@ export function useAppSetup({
 
       // Use full setup status to determine if onboarding is needed
       if (setupStatus.allReady) {
+        const postSetupView = postSetupViewFor(
+          initialProjectPath,
+          hasAgentsEngine(setupStatus.detectedAgents)
+        );
         // Persist setup complete for existing users upgrading to this version
         // (they already completed onboarding but don't have the cached state yet)
         void markSetupComplete();
@@ -342,9 +361,20 @@ export function useAppSetup({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [openHelpModal]);
 
+  // Onboarding hands off to the Chief of Staff, on the engine just set up.
+  const handleOnboardingComplete = useCallback(async () => {
+    const defaultAgent = await fetchDefaultAgentId();
+    initDefaultAgent(defaultAgent);
+    await markSetupComplete();
+    await putChiefOnEngine(defaultAgent);
+    await refreshAllCliStatuses();
+    setView(postSetupViewFor(initialProjectPath));
+  }, [refreshAllCliStatuses, initialProjectPath, setView]);
+
   return {
     projectsLoading,
     setProjectsLoading,
     bootProgress,
+    handleOnboardingComplete,
   };
 }

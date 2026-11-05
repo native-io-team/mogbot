@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { mockMarkSetupItemReady, HostChoice } from '../../../lib/agentOnboarding';
+import { mockMarkSetupItemReady } from '../../../lib/agentOnboarding';
 import { logger } from '../../../lib/logger';
 
 interface DemoLine {
@@ -24,7 +24,7 @@ interface DemoLine {
 const SCRIPT: DemoLine[] = [
   {
     kind: 'agent',
-    text: "Hi! I'm your AI agent. I'll get this computer ready for Ship Studio — sit back, I'll explain each step as I go.",
+    text: "Hi! I'm your AI agent. I'll get this computer ready for your first project — sit back, I'll explain each step as I go.",
     delayMs: 600,
   },
   { kind: 'agent', text: 'First, checking what’s already installed…', delayMs: 1600 },
@@ -45,18 +45,28 @@ const SCRIPT: DemoLine[] = [
   { kind: 'ok', text: '✓ Homebrew installed and verified', delayMs: 700, markReady: 'homebrew' },
   {
     kind: 'agent',
-    text: 'Now Node.js, Git and the GitHub CLI — all three in one go.',
+    text: 'Now Node.js and Git, both in one go.',
     delayMs: 1100,
   },
-  { kind: 'cmd', text: '$ brew install node git gh', delayMs: 900 },
-  { kind: 'out', text: '==> Fetching node, git, gh', delayMs: 900 },
-  { kind: 'out', text: '==> Pouring node, git, gh bottles…', delayMs: 1300 },
+  { kind: 'cmd', text: '$ brew install node git', delayMs: 900 },
+  { kind: 'out', text: '==> Fetching node, git', delayMs: 900 },
+  { kind: 'out', text: '==> Pouring node, git bottles…', delayMs: 1300 },
   { kind: 'ok', text: '✓ Node.js v22 installed and verified', delayMs: 1200, markReady: 'node' },
   { kind: 'ok', text: '✓ Git installed and verified', delayMs: 800, markReady: 'git' },
-  { kind: 'ok', text: '✓ GitHub CLI installed and verified', delayMs: 800, markReady: 'gh' },
+];
+
+/** GitHub, when the user asked for it too. */
+const GITHUB_SCRIPT: DemoLine[] = [
   {
     kind: 'agent',
-    text: 'Last step — connecting your GitHub account, which is where your projects are saved online. A browser window will open: sign in, or create a free account, then come back here.',
+    text: 'And GitHub, where your projects are backed up. Installing its command-line tool first.',
+    delayMs: 1100,
+  },
+  { kind: 'cmd', text: '$ brew install gh', delayMs: 900 },
+  { kind: 'ok', text: '✓ GitHub CLI installed and verified', delayMs: 1400, markReady: 'gh' },
+  {
+    kind: 'agent',
+    text: 'Now connecting your account. A browser window will open: sign in, or create a free account, then come back here.',
     delayMs: 1200,
   },
   { kind: 'cmd', text: '$ gh auth login --web --git-protocol https', delayMs: 1000 },
@@ -65,47 +75,24 @@ const SCRIPT: DemoLine[] = [
   { kind: 'ok', text: '✓ GitHub account connected', delayMs: 700, markReady: 'gh_auth' },
 ];
 
-/** Host-specific demo beats, appended before the wrap-up line. */
-const HOST_SCRIPTS: Record<HostChoice, DemoLine[]> = {
-  vercel: [
-    {
-      kind: 'agent',
-      text: 'And your hosting — installing the Vercel CLI and signing you in.',
-      delayMs: 1100,
-    },
-    { kind: 'cmd', text: '$ npm install -g vercel --force && vercel login', delayMs: 900 },
-    { kind: 'ok', text: '✓ Vercel connected', delayMs: 1600, markReady: 'vercel' },
-    { kind: 'ok', text: '✓ Vercel account signed in', delayMs: 700, markReady: 'vercel_auth' },
-  ],
-  cloudflare: [
-    {
-      kind: 'agent',
-      text: 'And your hosting — installing the Cloudflare Wrangler CLI and signing you in.',
-      delayMs: 1100,
-    },
-    { kind: 'cmd', text: '$ npm install -g wrangler --force && wrangler login', delayMs: 900 },
-    { kind: 'ok', text: '✓ Cloudflare connected', delayMs: 1600 },
-  ],
-};
-
 const WRAP_UP: DemoLine = {
   kind: 'agent',
-  text: 'That’s everything! Watch the checklist — Ship Studio is running its own checks, and every item should turn green. You’re ready to ship. 🚢',
+  text: 'That’s everything! Watch the checklist — the app is running its own checks, and every item should turn green.',
   delayMs: 1100,
 };
 
 interface DemoAgentTerminalProps {
-  /** Hosting provider chosen in the hosting step (null = skipped). */
-  hostChoice: HostChoice | null;
+  /** The user asked for GitHub too. */
+  includeGitHub: boolean;
 }
 
-export function DemoAgentTerminal({ hostChoice }: DemoAgentTerminalProps) {
+export function DemoAgentTerminal({ includeGitHub }: DemoAgentTerminalProps) {
   const [visibleCount, setVisibleCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const script = useMemo(
-    () => [...SCRIPT, ...(hostChoice ? HOST_SCRIPTS[hostChoice] : []), WRAP_UP],
-    [hostChoice]
+    () => [...SCRIPT, ...(includeGitHub ? GITHUB_SCRIPT : []), WRAP_UP],
+    [includeGitHub]
   );
 
   useEffect(() => {

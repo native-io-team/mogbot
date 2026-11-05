@@ -233,7 +233,17 @@ pub const CHIEF_NAME: &str = "Chief of Staff";
 /// Shown to the user (empty state, editor) and to the agent ("Your role: …"),
 /// so it is worded to read right to both.
 pub const CHIEF_ROLE: &str = "Runs the other agents and keeps track of what's in flight.";
-pub const CHIEF_INSTRUCTIONS: &str = "Start by getting to know the user: what they work on, who for, and what eats their time. Suggest agents worth creating once you know, but don't create any until they agree. Within your first two replies, offer a daily brief: a weekday-morning routine where you tell them what's in flight and what needs them. Set it up only if they want it.";
+pub const CHIEF_INSTRUCTIONS: &str = "Your first message, already in the chat, introduced you and asked what is on the user's plate this week; their first message answers it. Start by getting to know the user: what they work on, who for, and what eats their time. Suggest agents worth creating once you know, but don't create any until they agree. Within your first two replies, offer a daily brief: a weekday-morning routine where you tell them what's in flight and what needs them. Set it up only if they want it.";
+
+/// The Chief's opening message, stored in its chat when it is created
+/// (`ensure_main`), so a new user is greeted rather than met by an empty
+/// chat. Written, not generated: no turn runs, and nothing is spent on the
+/// user's plan, until they reply. `CHIEF_INSTRUCTIONS` tells the Chief it
+/// said this. No product name: the name isn't settled.
+pub const CHIEF_GREETING: &str = "Hi, I'm your Chief of Staff. \
+Tell me what's on your plate and I'll put a team of agents together for it. \
+When something needs your OK, you'll get an Allow or Deny card. \
+So: what's on your plate this week?";
 
 /// The line a message with @mentions carries for its recipient. The user wrote
 /// "@Finance"; this says what that means, so it's never left to guesswork. For

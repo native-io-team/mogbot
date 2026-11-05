@@ -271,6 +271,21 @@
   color: var(--accent-success);
 }
 
+/* New agent / Import agents start on the rows' column, not centred in space:
+   the icon sits in a badge-wide box so its label lines up with the names. */
+.workspace-sidebar:not(.is-hidden) .agents-list__new,
+.workspace-sidebar:not(.is-hidden) .agents-list__import {
+  justify-content: flex-start;
+  gap: var(--spacing-sm);
+  padding: 0 var(--spacing-md) 0 var(--spacing-sm);
+}
+
+.workspace-sidebar:not(.is-hidden) .agents-list__new > svg,
+.workspace-sidebar:not(.is-hidden) .agents-list__import > svg {
+  box-sizing: content-box;
+  padding: 0 calc((var(--size-sidebar-project-shortcut) - 16px) / 2); /* css-ok: centre a 16px icon in the badge width */
+}
+
 /* "Hidden (2)": a quiet disclosure at the end of the list, not a footer. */
 .agents-list__hidden-toggle {
   display: flex;
@@ -351,6 +366,36 @@
   justify-content: center;
   font-size: var(--font-size-body-lg);
   color: var(--text-muted);
+}
+
+/* No engine at all (an Opencode-, Cursor- or "Other"-only setup). */
+.agents-no-engine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  max-width: 420px; /* css-ok: reading width */
+  padding: 0 var(--spacing-lg);
+  text-align: center;
+}
+
+.agents-no-engine__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-heading);
+}
+
+.agents-no-engine__body {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: var(--line-height-help);
+}
+
+.agents-no-engine__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
 }
 
 /* ---------------------------------------------------------------- chat */
@@ -548,6 +593,28 @@
   color: var(--text-muted);
 }
 
+/* How a new teammate works, in one quiet line under its role. */
+.agent-chat__empty-hint {
+  max-width: 360px;
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+}
+
+/* Under the Chief's greeting the ways in sit with the conversation, at the
+   message column's leading edge, not centred like an empty state. */
+.agent-chat__messages > .agent-chat__starters {
+  justify-content: flex-start;
+  max-width: none;
+  margin-top: var(--spacing-sm);
+}
+
+/* What keeps them going, at the foot of What's in flight. */
+.agents-team__column > .agents-stay-on {
+  margin-top: var(--spacing-xl);
+}
+
 /* Where agents run: a quiet note set apart under the starters. */
 .agents-stay-on {
   display: flex;
@@ -632,8 +699,9 @@
   width: 100%;
 }
 
+/* About 70% of the column: a long message wraps rather than spanning it. */
 .agent-chat__line > .agent-bubble--user {
-  max-width: calc(var(--agents-chat-width) * 0.8);
+  max-width: 70%;
 }
 
 .agent-message__actions {
@@ -1177,25 +1245,48 @@
 }
 
 /* Same column as the messages, same field language as the sidebar search. */
+/* Same column as the messages. One slim row like a messaging app: the
+   paperclip, the text, then [mic] [send], ~44px tall at one line. The text
+   grows to about eight lines, then scrolls; the icons stay on its last line.
+   Quotes, attachments and hints take full-width rows above it. */
 .agent-composer {
+  /* One line of text: 22px, so 6 + 4 + 22 + 4 + 6 + hairlines is 44px. */
+  --agent-composer-line: calc(var(--spacing-xl) - var(--spacing-2xs));
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
   width: calc(100% - (var(--spacing-xl) * 2));
   max-width: var(--agents-chat-width);
   margin: 0 auto var(--spacing-lg);
-  padding: var(--spacing-xs);
+  padding: var(--spacing-tight);
   background: var(--surface-panel);
   border: var(--border-width-default) solid var(--border-default);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-lg);
 }
 
-/* The text spans the full width; under it a slim bar carries the paperclip
-   on the left and [mic] [send] on the right, however many lines are typed. */
+/* Anything above the text row (mention menu, quotes, attachments, hints). */
+.agent-composer > :not(.agent-composer__input):not(.agent-composer__bar) {
+  grid-column: 1 / -1;
+  order: -1;
+}
+
+/* The bar is only a grouping in the markup; its parts sit in the grid. */
 .agent-composer__bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: contents;
+}
+
+.agent-composer__bar > .agent-composer__attach,
+.agent-composer__bar > .agent-composer__listening {
+  grid-column: 1;
+  order: 1;
+}
+
+.agent-composer__bar > .agent-composer__hint {
+  grid-column: 1 / -1;
+  order: 0;
+  justify-self: end;
+  margin: 0 var(--spacing-xs) var(--spacing-2xs);
 }
 
 .agent-composer:focus-within {
@@ -1203,16 +1294,21 @@
 }
 
 .agent-composer .agent-composer__input {
-  min-height: 0;
-  max-height: 180px;
-  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-2xs);
+  grid-column: 2;
+  order: 2;
+  align-self: stretch;
+  min-height: calc(var(--agent-composer-line) + (var(--spacing-xs) * 2));
+  max-height: calc((var(--agent-composer-line) * 8) + (var(--spacing-xs) * 2));
+  padding: var(--spacing-xs) var(--spacing-xs);
   font-size: var(--font-size-subhead);
-  line-height: var(--line-height-help);
+  line-height: var(--agent-composer-line);
   color: var(--text-primary);
   resize: none;
   background: transparent;
   border: none;
+  border-radius: 0;
   box-shadow: none;
+  overflow-y: auto;
   scrollbar-width: thin;
 }
 
@@ -1222,8 +1318,10 @@
   box-shadow: none;
 }
 
-/* [mic] [send] on the right of the bar. */
+/* [mic] [send] on the right of the text's last line. */
 .agent-composer__actions {
+  grid-column: 3;
+  order: 3;
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -1246,6 +1344,7 @@
 
 /* No engine: the composer's slot says why, and offers the fix. */
 .agent-composer--blocked {
+  display: flex;
   flex-direction: row;
   align-items: center;
   padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-xs) var(--spacing-md);
@@ -1421,6 +1520,27 @@
 
 .agent-editor__more {
   align-self: flex-start;
+}
+
+.agent-editor__advanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.agent-editor__more-chevron {
+  transition: transform var(--transition-interaction-fast);
+}
+
+.agent-editor__more-chevron[data-open] {
+  transform: rotate(90deg);
+}
+
+/* Colour, engine, model, project, apps: there when wanted, out of the way. */
+.agent-editor__advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
 }
 
 .agent-editor__briefing {
@@ -2162,4 +2282,11 @@
 /* "What <agent> can do": reads as prose, not figures. */
 .agent-editor__can-do {
   font-variant-numeric: normal;
+}
+
+/* What's in flight's bell: its count is agents waiting on you, which is
+   attention (amber), not an error. */
+.agents-inflight-badge {
+  background: var(--accent-warning);
+  color: var(--text-on-accent);
 }
