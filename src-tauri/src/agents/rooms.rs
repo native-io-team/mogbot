@@ -818,8 +818,9 @@ pub fn send(
 
 /// Files sent into a room: saved into the first member's home, then copied
 /// to every other member's under the same `attachments/<message id>/` path,
-/// so the room shows them through any member and whoever is brought in
-/// later can read them. All or nothing: a failed copy removes every copy.
+/// so the room shows them through any member who was there when they were
+/// sent (one added later gets no copy). All or nothing: a failed copy
+/// removes every copy.
 fn save_attachments(
     members: &[AgentRef],
     message_id: &str,

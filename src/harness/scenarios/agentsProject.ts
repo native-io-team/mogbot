@@ -432,7 +432,7 @@ const ACME_PROMPTS = [
     approval: {
       requestId: 'req-edit-demo',
       title: 'Do you want to make this edit to index.html?',
-      detail: 'Edit file\nindex.html',
+      detail: 'Edit index.html',
       status: 'pending',
       prompt: {
         kind: 'permission',
@@ -442,12 +442,13 @@ const ACME_PROMPTS = [
         question: 'Do you want to make this edit to index.html?',
         options: [
           { label: 'Yes', keys: ['1'], role: 'allow' },
+          // As decisions.rs words them: no key hints, no "session".
           {
-            label: 'Yes, allow all edits during this session (shift+tab)',
+            label: 'Allow all edits until Claude Code is closed',
             keys: ['2'],
             role: 'other',
           },
-          { label: 'No, and tell Claude what to do differently (esc)', keys: ['3'], role: 'deny' },
+          { label: 'No, and say what to do instead', keys: ['3'], role: 'deny' },
         ],
         owner: { id: 'acme', name: 'Acme Site' },
         chats: ['acme'],
@@ -492,7 +493,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-session-prompt-owner',
     title: 'Agents — the session’s own chat: trust answered, an edit to allow',
     looksRightWhen:
-      'Acme Site’s chat: the Chief’s brief, “Started work in demo-site”, the trust card resolved to a quiet “Allowed · Yes, I trust this folder”, then a pending card “Do you want to make this edit to index.html?” with the muted source “Acme Site · in demo-site”, the edit’s text, and the session’s own extra choice “Yes, allow all edits during this session” beside Deny / Allow.',
+      'Acme Site’s chat: the Chief’s brief, “Started work in demo-site”, the trust card collapsed to one quiet line “Let Claude Code work in demo-site? · Allowed · Yes, I trust this folder” with a “Show request” link, then a pending card “Do you want to make this edit to index.html?” with the muted source “Acme Site · in demo-site”, “Edit index.html” as a plain sentence (not code), and the extra choice “Allow all edits until Claude Code is closed” beside Deny / Allow. No key hints, no “session”.',
     requires: '.agent-approval[data-prompt="permission"]',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="acme"]' }],
@@ -520,7 +521,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-copy-ready',
     title: 'Agents — work done on a copy of the project, ready to keep',
     looksRightWhen:
-      'Acme Site’s header chip reads “acme-marketing copy” (“copy” muted). The earlier card is a one-line record: folder icon, “Changed 2 files in a copy of acme-marketing”, “Review changes” on the right, no preview. The newest card: folder icon, “Changes are ready” with “3 files” on the right, the muted line “On a copy of acme-marketing · acme-marketing itself is unchanged”, then, right-aligned: ⋯ (Open a pull request) on the far left, Discard, Preview (globe), a secondary Review changes and a neutral Keep changes last. No branch names, no “merge”, no “worktree” anywhere.',
+      'Acme Site’s header chip reads “acme-marketing · copy” (“· copy” muted, inside the one chip). The earlier card is a one-line record: folder icon, “Changed 2 files in a copy of acme-marketing”, “Review changes” on the right, no preview. The newest card: folder icon, “Changes are ready” with “3 files” on the right, the muted line “On a copy of acme-marketing · acme-marketing itself is unchanged”, then, right-aligned: ⋯ (Open a pull request) on the far left, Discard, Preview (globe), a secondary Review changes and a neutral Keep changes last. No branch names, no “merge”, no “worktree” anywhere.',
     requires: '.agent-changes[data-copy="live"]',
     ...openAcme,
     commands: {
@@ -657,7 +658,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-project-files',
     title: 'Agents — a change card’s files listed',
     looksRightWhen:
-      'The five-file card is expanded: one row per file, path in mono (start truncated if long) with green +n and red −n on the right; the deleted file is struck through; the SVG reads “binary”. Above the files, the branch “feat/pricing-page” with +124 −58. The toggle reads “Hide changes”, after “Open preview”.',
+      'The five-file card is expanded: one row per file by its name only (the full path on hover), with green +n and red −n on the right; the deleted file is struck through; the SVG has no counts and no “binary”. Above the files, +124 −58 and no branch name. The toggle reads “Hide changes”, after “Open preview”.',
     requires: '.agent-changes__files',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-changes__toggle-files' }],
@@ -714,7 +715,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-project-editor',
     title: 'Agents — choosing the project an agent works in',
     looksRightWhen:
-      'Editing Acme Site: under Model, “Works in” with a menu button reading acme-marketing; the menu is open listing No project, a divider, then acme-marketing (checked), portfolio-site and docs-astro. The hint under it says it works on its own copy of the project, the project’s CLAUDE.md and settings apply, and the user’s folder stays as they left it; below it an unchecked “Work directly in the project”.',
+      'Editing Acme Site: under Model, “Works in” with a menu button reading acme-marketing; the menu is open listing No project, a divider, then acme-marketing (checked), portfolio-site and docs-astro. The hint under it says it works on its own copy of the project and follows the project’s own instructions and settings (no “CLAUDE.md”), and the user’s folder stays as they left it; below it an unchecked “Work directly in the project”.',
     requires: '.agent-project-menu',
     openSelector: AGENTS_TAB,
     steps: [

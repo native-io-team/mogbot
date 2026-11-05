@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 /** Where a server is set up, which decides whether this panel may remove it. */
 export type AgentAppSource = 'user' | 'claudeAi' | 'other';
@@ -31,6 +32,12 @@ export interface AgentApps {
   connected: AgentApp[];
   suggestions: AgentAppSuggestion[];
 }
+
+/** Where claude.ai's own connectors (Gmail, Calendar, Slack…) are set up. */
+export const CLAUDE_CONNECTORS_URL = 'https://claude.ai/settings/connectors';
+
+/** Opens claude.ai's connector settings in the browser. */
+export const openClaudeConnectors = () => openUrl(CLAUDE_CONNECTORS_URL);
 
 export const listAgentApps = () => invoke<AgentApps>('agents_apps_list');
 export const addAgentApp = (serverName: string) => invoke<void>('agents_apps_add', { serverName });

@@ -11,6 +11,7 @@ import {
   splitQuotes,
   type Agent,
   type AgentMessage,
+  type ResultRef,
 } from '@shipstudio/companion-protocol';
 import { memo, useState } from 'react';
 import { type LayoutChangeEvent, Pressable, View } from 'react-native';
@@ -48,6 +49,7 @@ export const MessageRow = memo(function MessageRow({
   liveCopy,
   newestResult = true,
   latestFailure = false,
+  onAskForChanges,
   onError,
   onLongPress,
 }: {
@@ -60,6 +62,12 @@ export const MessageRow = memo(function MessageRow({
   newestResult?: boolean;
   /** The failure that ended the agent's last turn, nothing since. */
   latestFailure?: boolean;
+  /**
+   * Where "Ask for changes" goes. By default the request is staged in the
+   * agent's own composer, which is this chat; a room passes its own (the
+   * member's chat opens with it staged, since a room message can't revise).
+   */
+  onAskForChanges?: (agentId: string, ref: ResultRef) => void;
   onError: (text: string) => void;
   /** Copy, Quote, Select Text: words only, so only user and agent messages. */
   onLongPress?: (message: AgentMessage) => void;
@@ -69,8 +77,10 @@ export const MessageRow = memo(function MessageRow({
   const hold = onLongPress && message.text.trim() ? () => onLongPress(message) : undefined;
   const canRevise = useCanRevise();
   const askForChanges = canRevise
-    ? (ref: { id: string; version: number; title: string }) =>
-        setComposer(message.agentId, { revising: ref })
+    ? (ref: ResultRef) =>
+        onAskForChanges
+          ? onAskForChanges(message.agentId, ref)
+          : setComposer(message.agentId, { revising: ref })
     : undefined;
   if (message.result && (message.kind === 'agent' || message.kind === 'changes')) {
     const copy = liveCopy ? message.changes?.copy : undefined;
@@ -109,7 +119,9 @@ export const MessageRow = memo(function MessageRow({
         <View style={styles.userRow}>
           {!!message.attachments?.length && (
             <Attachments
-              agentId={message.agentId}
+              // A room's own line has no agent: its files are in every
+              // member's home, so the member drawing it serves them.
+              agentId={message.agentId || agent.id}
               attachments={message.attachments}
               align="right"
               onError={onError}

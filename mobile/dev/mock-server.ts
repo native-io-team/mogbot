@@ -285,6 +285,17 @@ export function createMockServer(opts: MockOptions = {}) {
   const instructions = new Map<string, string>();
   const createdByClient = new Map<string, Omit<Agent, 'status' | 'home'>>();
   const screens = new Map<string, string>(seedScreens());
+  // What the Mac last typed into each tab (`SessionScreen.sent`), as typed.
+  const sentTo = new Map<string, NonNullable<SessionScreen['sent']>>([
+    [
+      'pty-site-1',
+      {
+        text: 'Tighten the hero spacing below 640px and keep the CTA above the fold.',
+        at: Date.now() - 2 * 60_000,
+        byAgent: false,
+      },
+    ],
+  ]);
   const sessionClientIds = new Map<string, string>();
   const findSession = (id: string) =>
     projects.flatMap((x) => x.sessions).find((x) => x.sessionId === id);
@@ -733,6 +744,34 @@ export function createMockServer(opts: MockOptions = {}) {
           text: 'Pricing table is in on a copy of the site. **3 files** changed; preview looks right at all widths.',
         },
         {
+          // Its open copy's change card: Keep / Discard here, as in its own chat.
+          id: 'rl3c',
+          agentId: 'site',
+          room: 'launch',
+          ts: now - 25 * 60_000 + 1000,
+          kind: 'changes',
+          text: '',
+          changes: {
+            project: '/Users/you/ShipStudio/acme-site',
+            branch: 'acme-site/hero-copy-9f2c',
+            from: 'a1b2c3d',
+            to: 'c7d8e9f',
+            files: [
+              { path: 'src/components/Pricing.tsx', status: 'added', added: 64, removed: 0 },
+              { path: 'src/app/page.tsx', status: 'modified', added: 2, removed: 0 },
+              { path: 'src/styles/pricing.css', status: 'added', added: 31, removed: 0 },
+            ],
+            fileCount: 3,
+            added: 97,
+            removed: 0,
+            copy: {
+              id: 'copy_hero',
+              path: '/Users/you/ShipStudio/.worktrees/acme-site/acme-site-hero-copy-9f2c',
+              branch: 'acme-site/hero-copy-9f2c',
+            },
+          },
+        },
+        {
           id: 'rl4',
           agentId: 'design',
           room: 'launch',
@@ -753,6 +792,15 @@ export function createMockServer(opts: MockOptions = {}) {
           ts: now - 20 * 60_000,
           kind: 'agent',
           text: 'Hero is ready for review. Two variants, light and dark.',
+          // A result card in a room: Ask for changes opens Designer's own chat.
+          result: {
+            id: 'res_launch_hero',
+            version: 1,
+            title: 'Launch hero',
+            summary: 'Two variants of the hero, light and dark, sized for the launch page.',
+            checked: ['Both variants read at 390px and 1440px'],
+            notVerified: ['How the dark variant looks on the live page'],
+          },
         },
       ],
     ],
@@ -1199,6 +1247,7 @@ export function createMockServer(opts: MockOptions = {}) {
         session,
         screen,
         ...(session.state === 'finished' ? { reply: lastReply(screen) } : {}),
+        ...(sentTo.has(id) ? { sent: sentTo.get(id) } : {}),
       } satisfies SessionScreen;
     },
     // The ready-made agents, as the Mac serializes them.
@@ -1314,6 +1363,7 @@ export function createMockServer(opts: MockOptions = {}) {
       if (known) return { sessionId: known };
       sessionClientIds.set(String(p.clientId), session.sessionId);
       screens.set(session.sessionId, `${screens.get(session.sessionId) ?? ''}\n\n> ${text}\n`);
+      sentTo.set(session.sessionId, { text, at: Date.now(), byAgent: false });
       setSession(session.sessionId, { state: 'working', activity: 'Thinking…' });
       setTimeout(() => {
         screens.set(

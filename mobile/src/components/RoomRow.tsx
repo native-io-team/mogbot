@@ -12,15 +12,21 @@ import { Pressable, View } from 'react-native';
 import { formatAgo } from '../lib/agents';
 import { foldLine, membersOf, roomKey, roomLine, workingHere, type RoomFold } from '../lib/rooms';
 import { useApp } from '../lib/store';
-import { avatarSize, chromeScale, iconSize, radius, space } from '../lib/theme';
+import { avatarSize, chromeScale, fonts, iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { Dot, Icon, T, useRipple } from './ui';
 
 const NONE: never[] = [];
+/** The page's ring around each badge: wide enough to keep two apart, thin enough to stay quiet. */
+const RING = 2;
+
 /**
- * Up to three members' badges overlapping in one tile's space, the newest
- * speaker never singled out: a room is nobody's in particular.
+ * Two members' badges and "+N" for the rest, the newest speaker never
+ * singled out: a room is nobody's in particular. Whole badges only: two
+ * tiles share the list's avatar square corner to corner (rings touching,
+ * faces apart), and the header sets them side by side, so no initials are
+ * ever cut. The ring is drawn in the surface it sits on (`on`).
  */
 export function StackedAvatars({
   members,
@@ -29,36 +35,60 @@ export function StackedAvatars({
   members: Agent[];
   size?: 'list' | 'header';
 }) {
+  const colors = useColors();
   const styles = useStyles();
-  const box = size === 'list' ? avatarSize.list : avatarSize.header + 8;
-  const tile = size === 'list' ? avatarSize.header : avatarSize.group;
-  const shown = members.slice(0, 3);
+  const tile = avatarSize.group;
+  const ringed = tile + RING * 2;
+  const shown = members.slice(0, 2);
+  const more = members.length - shown.length;
+  const ring = { borderColor: size === 'header' ? colors.surfacePanel : colors.surfaceApp };
+  const plus = more > 0 && (
+    <T
+      variant="caption"
+      color={colors.textSecondary}
+      maxFontSizeMultiplier={chromeScale}
+      style={size === 'list' ? styles.moreList : undefined}
+    >
+      +{more}
+    </T>
+  );
+  if (size === 'header') {
+    return (
+      <View style={styles.pairRow} accessible={false}>
+        {shown.map((m) => (
+          <View key={m.id} style={[styles.ring, ring, { borderRadius: radius.inner }]}>
+            <AgentAvatar name={m.name} color={m.color} size={tile} />
+          </View>
+        ))}
+        {plus}
+      </View>
+    );
+  }
+  const box = avatarSize.list;
+  // One badge sits centred; two share the square corner to corner.
   const spots =
     shown.length === 1
-      ? [[(box - tile) / 2, (box - tile) / 2]]
-      : shown.length === 2
-        ? [
-            [0, 0],
-            [box - tile, box - tile],
-          ]
-        : [
-            [0, (box - tile) / 2],
-            [box - tile, 0],
-            [box - tile, box - tile],
-          ];
+      ? [[(box - ringed) / 2, (box - ringed) / 2]]
+      : [
+          [0, 0],
+          [box - ringed, box - ringed],
+        ];
   return (
     <View style={{ width: box, height: box }} accessible={false}>
       {shown.map((m, i) => (
         <View
           key={m.id}
           style={[
+            styles.ring,
             styles.stacked,
+            ring,
             { left: spots[i][0], top: spots[i][1], borderRadius: radius.inner },
           ]}
         >
           <AgentAvatar name={m.name} color={m.color} size={tile} />
         </View>
       ))}
+      {plus}
     </View>
   );
 }
@@ -125,14 +155,13 @@ export const RoomRow = memo(function RoomRow({
             numberOfLines={1}
             maxFontSizeMultiplier={2}
             color={asking && live ? colors.accentWarning : colors.textSecondary}
-            style={{ flex: 1 }}
+            style={[{ flex: 1 }, asking && live && { fontFamily: fonts.medium }]}
           >
             {line}
           </T>
+          {/* "Needs your OK" says it once, in words: no dot beside it as well. */}
           <View style={styles.mark}>
-            {asking ? (
-              <Dot color={live ? colors.accentWarning : colors.textMuted} glow={live} />
-            ) : working && live ? (
+            {asking ? null : working && live ? (
               <Spinner />
             ) : room.unread > 0 ? (
               <Dot color={live ? colors.textStrong : colors.textMuted} />
@@ -169,13 +198,12 @@ export function RoomFoldRow({ fold }: { fold: RoomFold }) {
 }
 
 const useStyles = makeStyles((colors) => ({
-  stacked: {
-    position: 'absolute',
-    // A ring of the page around each badge, so overlapping ones stay apart.
-    borderWidth: 2,
-    borderColor: colors.surfaceApp,
-    backgroundColor: colors.surfaceApp,
-  },
+  stacked: { position: 'absolute' },
+  // A ring of the surface around each badge, so touching ones stay apart.
+  ring: { borderWidth: RING, overflow: 'hidden' },
+  pairRow: { flexDirection: 'row', alignItems: 'center', gap: space['2xs'] },
+  // "+N" in the corner the two badges leave free.
+  moreList: { position: 'absolute', left: space['2xs'], bottom: 0 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

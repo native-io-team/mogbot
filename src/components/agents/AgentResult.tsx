@@ -26,7 +26,7 @@ import {
   ExternalLinkIcon,
   FileTextIcon,
   GlobeIcon,
-  WarningIcon,
+  HelpIcon,
 } from '@/components/icons';
 import { IconButton } from '../primitives/IconButton';
 import { AgentCard } from './AgentCard';
@@ -170,7 +170,7 @@ function ResultBody({ agent, card }: ResultBodyProps) {
       {notVerified.length > 0 && (
         <section className="agent-result__unverified" aria-label="Not verified">
           <h4 className="agent-result__unverified-title">
-            <WarningIcon size={14} />
+            <HelpIcon size={14} />
             Not verified
           </h4>
           <ul>

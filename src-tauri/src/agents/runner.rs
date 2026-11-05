@@ -1080,7 +1080,15 @@ pub(crate) fn preview_for(message: &AgentMessage) -> Option<String> {
             .approval
             .as_ref()
             .map(|a| format!("Needs your OK: {}", a.title)),
-        MessageKind::CheckIn => Some("Scheduled routine".to_string()),
+        // A repeating one is a routine; only a one-time one is "Scheduled".
+        MessageKind::CheckIn => Some(
+            if message.check_in.as_ref().is_some_and(|c| c.repeats) {
+                "Routine"
+            } else {
+                "Scheduled"
+            }
+            .to_string(),
+        ),
         MessageKind::Note | MessageKind::Changes | MessageKind::Session => None,
     }
 }

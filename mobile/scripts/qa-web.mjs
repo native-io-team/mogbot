@@ -579,7 +579,62 @@ const LIVE = [
     name: 'session',
     route: '/session/pty-site-1',
     settle: 3500,
-    check: 'A task: its screen, its question, the composer',
+    // The terminal opens by itself while the task has said nothing yet
+    // (taskScreen's `terminalFirst`): close it to see the conversation alone.
+    act: async (page) => {
+      await page.clickText('Hide terminal').catch(() => {});
+      await sleep(800);
+    },
+    check:
+      'A task as a conversation: its state in words, what it was asked, its steps, what it said; no terminal chrome or "esc to interrupt"',
+  },
+  {
+    name: 'session-terminal',
+    route: '/session/pty-site-1',
+    settle: 3500,
+    act: async (page) => {
+      // Already open when the rule above opened it; else open it.
+      await page.clickText('Show terminal').catch(() => {});
+      await sleep(800);
+    },
+    check: 'Show terminal: the raw screen in a sideways-scrolling well with a right-edge fade',
+  },
+  {
+    name: 'room-list',
+    route: '/agents',
+    ready: 'Chief of Staff',
+    act: scrollToText('Launch'),
+    check: 'Rooms: two whole badges (no cut initials) and +N; "Needs your OK" said once, no dot',
+  },
+  {
+    name: 'room-launch',
+    route: '/room/launch',
+    ready: 'Launch',
+    pages: 3,
+    check:
+      'Header pair of badges; Acme Site’s copy card offers Discard / Keep changes; Designer’s result card offers Ask for changes; @mentions tinted; "To everyone"; the intro says agents remember their own chat',
+  },
+  {
+    name: 'room-monthend',
+    route: '/room/monthend',
+    ready: 'Month end',
+    pages: 2,
+    check: 'No lead: the foot line says "Who should answer? @ someone"; names joined with "and"',
+  },
+  {
+    name: 'room-ask',
+    route: '/room/launch',
+    ready: 'Launch',
+    act: async (page) => {
+      await scrollToText('Ask for changes')(page);
+      await page.clickText('Ask for changes');
+      await sleep(1500);
+    },
+    check: 'Ask for changes in a room opens Designer’s own chat with "Changes to Launch hero" staged',
+    after: async (page) => {
+      await page.clickLabel("Don't ask for changes");
+      await sleep(800);
+    },
   },
   {
     name: 'settings',

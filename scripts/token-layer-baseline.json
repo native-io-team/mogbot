@@ -166,12 +166,6 @@
     },
     {
       "path": "src/styles/components/text-button.css",
-      "token": "--info-light",
-      "count": 1,
-      "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
-    },
-    {
-      "path": "src/styles/components/text-button.css",
       "token": "--space-02",
       "count": 2,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."

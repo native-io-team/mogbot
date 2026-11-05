@@ -162,7 +162,7 @@ export function RemoteAccessModal({ isOpen, onClose }: RemoteAccessModalProps) {
               supports MCP connectors. It works on this computer — the same agents, the same
               conversations — so everything is waiting when you’re back.{' '}
               <TextButton
-                variant="accent"
+                variant="strong"
                 onClick={() => {
                   onClose();
                   openModal('phone');

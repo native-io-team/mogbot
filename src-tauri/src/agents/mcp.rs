@@ -237,7 +237,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "schedule_check_in",
-        description: "Have the app wake you later with a note to yourself: use it whenever you tell the user you'll check back, follow up or remind them, so that actually happens. Once (\"tomorrow at 9:00\", \"in 2 hours\", \"friday 14:30\") or as a routine (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\"), in the user's local time. It only fires while the app is open; the answer says exactly when and what happens if it's closed. Tell the user that time.",
+        description: "Have the app wake you later with a note to yourself: use it whenever you tell the user you'll check back, follow up or remind them, so that actually happens. Once (\"tomorrow at 9:00\", \"in 2 hours\", \"friday 14:30\") or as a routine (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\"), in the user's local time. It only fires while the app is open; the answer says exactly when and what happens if it's closed. Tell the user that time. To the user these are routines (a one-time one is \"scheduled\"): never say \"check-in\" or a tool's name.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -470,9 +470,13 @@ pub fn needs_card_in_routine_turn(tool: &str) -> bool {
     )
 }
 
+/// Why a card is asked for while an agent answers what a "When…" routine
+/// found: in the user's words, no "turn" or "outside text".
+const OUTSIDE_WHY: &str = "It’s working on something a “When…” routine found, which came from outside this app, so it asks you first.";
+
 /// The card for one of those, in a turn answering outside text.
 fn outside_card(tool: &str, args: &Value) -> (String, String) {
-    let why = "This turn is working on a “When…” routine's items, which came from outside, so it asks first.";
+    let why = OUTSIDE_WHY;
     let who = arg(args, "agent")
         .or(arg(args, "name"))
         .unwrap_or("an agent");
@@ -541,7 +545,7 @@ pub fn watch_card(
     use super::watch::{describe, Source, DEFAULT_MAX_CHECKS_PER_DAY};
     let app = match source {
         Source::LinearAssigned => "Linear".to_string(),
-        Source::Custom { app, .. } => app.clone(),
+        Source::Custom { app, .. } => super::apps::display_name(app),
         _ => String::new(),
     };
     let when = format!("When {}, {}", describe(source), short_line(note));
@@ -581,7 +585,7 @@ pub fn watch_card(
     (
         format!("Let {agent} check {app} every {every} min?"),
         format!(
-            "{when}.\n\nEach check is one short Claude Code call on Haiku that can only read {app}: up to {per_day} a day. {cost}"
+            "{when}.\n\nEach check uses a little of your Claude usage and can only read {app}: up to {per_day} a day. {cost}"
         ),
     )
 }
@@ -698,7 +702,8 @@ async fn check_ins(
                     on_claude_plan(),
                 );
                 if outside {
-                    detail.push_str("\n\nThis turn is working on a “When…” routine's items, which came from outside, so it asks first.");
+                    detail.push_str("\n\n");
+                    detail.push_str(OUTSIDE_WHY);
                 }
                 let answer = ask_user(app, caller, title, detail, None).await;
                 if let Some(refused) = refused_reply(&answer, "set it up") {
@@ -1725,10 +1730,7 @@ pub(super) async fn decide(
     }
     if permissions::matching(&caller.permissions, tool, input).is_some() {
         // Nothing happens invisibly: each one leaves a quiet line in the chat.
-        let line = format!(
-            "Allowed automatically: {} · Always allowed",
-            one_line(tool, input)
-        );
+        let line = format!("{} · always allowed", one_line(tool, input));
         let _ = runner::record_in_turn(
             app,
             runner::new_message(&caller.id, MessageKind::Note, line),

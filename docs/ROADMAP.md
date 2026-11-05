@@ -27,7 +27,11 @@ infrastructure where a good one exists.
    only apps configured in Claude Code itself), and connector checks are
    not yet verified on a live Linear or Gmail account
    ([agents.md](agents.md), "When… routines").
-6. **Results, the rest.** A PR straight from a non-copy result, and
+6. **Usage wallets.** Several Claude Code and Codex accounts in Settings →
+   Agents, in priority order; when one hits its usage limit the turn
+   switches to the next and carries on, with a line saying so, and ends
+   honestly when every account is out. In progress.
+7. **Results, the rest.** A PR straight from a non-copy result, and
    recordings.
 
 Small wins: save-as-skill, sections in the agent list, duplicate agent,

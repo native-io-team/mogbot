@@ -166,7 +166,7 @@ export function ImportAgentsModal({
                 aside={
                   <p className="agents-import__switch">
                     <TextButton onClick={() => setPasting(false)}>
-                      Talk over the connector instead
+                      Connect your assistant instead
                     </TextButton>
                   </p>
                 }

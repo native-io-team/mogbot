@@ -31,7 +31,7 @@ import {
   type CheckIn,
   type WatchSource,
 } from '../../lib/agents';
-import { listAgentApps } from '../../lib/agentApps';
+import { appTitle, listAgentApps } from '../../lib/agentApps';
 import { refreshAgents } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAsyncState } from '../../hooks/useAsyncState';
@@ -49,23 +49,23 @@ const SOURCES: SourceChoice[] = [
   {
     kind: 'github_mentions',
     label: 'Someone mentions me on GitHub',
-    how: 'Free · checked with the GitHub CLI',
+    how: 'Free · checked from this Mac',
   },
   {
     kind: 'github_assigned',
     label: 'An issue or PR is assigned to me',
-    how: 'Free · checked with the GitHub CLI',
+    how: 'Free · checked from this Mac',
   },
   {
     kind: 'linear_assigned',
     label: 'A Linear issue is assigned to me',
-    how: 'Through your Linear app · a short read-only Claude Code call per check',
+    how: 'Through your Linear app · uses a little of your Claude usage each check',
   },
   { kind: 'new_file', label: 'A new file appears in a folder', how: 'Free · reads the folder' },
   {
     kind: 'custom',
     label: 'Something else…',
-    how: 'You say what, in one app · a short read-only Claude Code call per check',
+    how: 'You say what, in one app · uses a little of your Claude usage each check',
   },
 ];
 
@@ -184,7 +184,7 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
 
   const perDay = Math.min(Math.floor((24 * 60) / Math.max(every, 1)), DEFAULT_MAX_CHECKS_PER_DAY);
   const cost = watchUsesModel(source)
-    ? `Each check is a short read-only Claude Code call on Haiku, up to ${perDay} a day, counted in ${agent.name}’s usage.`
+    ? `Each check uses a little of ${agent.name}’s Claude usage and can only read that app, up to ${perDay} a day.`
     : 'Checks are free.';
 
   return (
@@ -236,13 +236,16 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
                 setApp(v);
                 setError(null);
               }}
-              options={apps.map((name) => ({ value: name, label: name }))}
+              options={apps.map((name) => ({
+                value: name,
+                label: appTitle({ name, source: 'user' }),
+              }))}
             />
           </div>
         ) : (
           <p className="agent-when__cost">
-            Checks go through one app set up in Claude Code (Apps). claude.ai connectors can’t be
-            used here.
+            It checks through one of the apps you’ve added under Apps. Apps connected on claude.ai
+            can’t be used here.
           </p>
         ))}
       <TextField
@@ -281,7 +284,7 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
               : appMissing && check.trim()
                 ? 'Which app should it check?'
                 : 'What should it look out for?'
-            : `When ${describeWatchSource(source)}, ${agent.name} gets a turn.`)}
+            : `When ${describeWatchSource(source)}, ${agent.name} starts on it.`)}
       </p>
       <p className="agent-when__cost">
         {cost} The first check only notes what’s already there, so nothing old starts work.

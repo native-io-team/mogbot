@@ -35,7 +35,8 @@ top of the agent list, shown only while an agent waits on you (a request, or a
 turn that didn't finish; the same set ⌘J visits), and from ⌘K. A usage limit
 is not waiting on you — it resets by itself — so it isn't counted: What's in
 flight lists it under **Paused**, and in a chat it is a quiet centred line
-with "Retry at 4:45 AM", not a tinted box. There is no
+with "Retry at 4:45 AM" (and a quiet "Try anyway", since the limit may have
+lifted early), not a tinted box. There is no
 icon for it: an unlabeled one was three names for one place. Its foot has the Phone row (the companion
 app: pair, or which phone is connected); remote access, for driving the app
 from another assistant, appears there only while it is on and is otherwise
@@ -562,7 +563,9 @@ at once still reads as one product:
   this conversation until it ends, in the reading column directly above the
   composer, in a fixed order: take-over, import, what the engine can't do, a
   key in the draft, dictation blocked. At most two show; the rest fold into
-  "N more". A bar says the state, never repeats the card's question, and
+  "N more". A key in the draft never folds: it guards something the user is
+  about to do and can't take back, so it always shows and the others fold
+  around it. A bar says the state, never repeats the card's question, and
   never points at "the card". Nothing spans the pane under the header.
 
 The **header is identity only** (badge, name, role, project chip). What an
@@ -1815,9 +1818,9 @@ of their own is open.
   dictation, and the send button turns into Stop ("Stop replies here")
   while members are replying and nothing is typed. Files are saved into the
   first member's home and copied to every other member's under the same
-  `attachments/<message id>/` path, so the room shows them through any
-  member and whoever is brought in later can read them; each asked member is
-  told where they are in its own home. The startup sweep keeps those copies
+  `attachments/<message id>/` path, so the room (desk and phone) shows them
+  through any member who was there when they were sent; each asked member is
+  told where they are in its own home. A member added later gets no copy. The startup sweep keeps those copies
   (`rooms::any_log_mentions`), since a member's own log never mentions them.
   A member's @mention of another member is tinted in that member's colour
   (whole names, as `rooms::mentioned_in` matches them). Under your message,

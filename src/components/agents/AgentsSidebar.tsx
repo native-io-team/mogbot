@@ -277,7 +277,7 @@ export function AgentsSidebar({
               onClick={onToggleShowHidden}
             >
               <ChevronRightIcon size={10} className="agents-list__hidden-chevron" />
-              Hidden ({hidden.length})
+              Hidden · {hidden.length}
             </button>
           )}
           {showHidden && hidden.map(row)}
