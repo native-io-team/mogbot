@@ -431,8 +431,7 @@
   background: rgba(var(--accent-warning-rgb), 0.06);
 }
 
-.remote-hero__dot,
-.remote-indicator__dot {
+.remote-hero__dot {
   flex: none;
   width: 10px; /* css-ok: status dot */
   height: 10px; /* css-ok: status dot */
@@ -440,19 +439,13 @@
   background: var(--text-muted);
 }
 
-.remote-hero--live .remote-hero__dot,
-.remote-indicator--ok .remote-indicator__dot {
+.remote-hero--live .remote-hero__dot {
   background: var(--accent-success);
   box-shadow: 0 0 0 4px rgba(var(--accent-success-rgb), 0.18); /* css-ok: status halo */
 }
 
-.remote-hero--down .remote-hero__dot,
-.remote-indicator--warn .remote-indicator__dot {
+.remote-hero--down .remote-hero__dot {
   background: var(--accent-warning);
-}
-
-.remote-indicator--down .remote-indicator__dot {
-  background: var(--accent-error);
 }
 
 .remote-hero__text {
@@ -621,16 +614,38 @@
   color: var(--accent-error);
 }
 
-/* Off: present for discoverability, but quieter than anything that's on. */
-.remote-indicator--off {
-  color: var(--text-muted);
+/* The row's icon and its status dot (FooterRowIcon). It sits in the
+   Button's 16px icon slot, exactly where the Settings gear sits, so the three
+   footer rows share one icon column, size and colour. "On" is a 6px dot on
+   the icon's corner, cut out of the icon by a ring of the sidebar's own
+   surface: status, never accent. */
+.footer-row-icon {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+  height: 100%;
 }
 
-.remote-indicator--off .remote-indicator__dot {
-  background: transparent;
-  border: 1px solid var(--text-muted);
+.footer-row-icon > svg {
+  width: 100%;
+  height: 100%;
 }
 
-.remote-indicator__glyph {
-  flex: none;
+.footer-row-icon__badge {
+  position: absolute;
+  right: calc(-1 * var(--footer-row-badge-offset));
+  bottom: calc(-1 * var(--footer-row-badge-offset));
+  width: var(--footer-row-badge-size);
+  height: var(--footer-row-badge-size);
+  border-radius: var(--radius-pill);
+  background: var(--accent-success);
+  box-shadow: 0 0 0 var(--footer-row-badge-ring) var(--surface-panel);
+}
+
+.footer-row-icon[data-status='warn'] .footer-row-icon__badge {
+  background: var(--accent-warning);
+}
+
+.footer-row-icon[data-status='down'] .footer-row-icon__badge {
+  background: var(--accent-error);
 }

@@ -4,8 +4,9 @@
  *
  * Shown only while it is on (the companion app is the phone story; see
  * PhoneIndicator). Formerly always present; while off, a muted grey
- * "Remote access off" that opens setup. While it's on, a green dot and who
- * last connected. The row turns amber for the one thing that will end remote
+ * "Remote access off" that opens setup. While it's on, the globe (the icon
+ * ⌘K uses for Remote access) with a green status dot, and the assistant that
+ * last connected, named as its MCP client reported itself (`clientInfo.name`). The row turns amber for the one thing that will end remote
  * access on its own — running on battery — and red if the server isn't
  * running at all, because those are exactly what the user needs to see
  * before they walk away.
@@ -16,7 +17,9 @@
  */
 
 import { useState } from 'react';
+import { GlobeIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
+import { FooterRowIcon } from '../workspace/FooterRowIcon';
 import { useOpenModal } from '../../contexts/ModalContext';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { usePolling } from '../../hooks/usePolling';
@@ -91,8 +94,8 @@ export function RemoteAccessIndicator({ isSidebarHidden }: { isSidebarHidden: bo
       title={state.detail}
       aria-label={`${state.line}. ${state.detail}`}
       data-testid="remote-indicator"
+      leftIcon={<FooterRowIcon icon={<GlobeIcon size={14} />} status={state.tone} />}
     >
-      <span className="remote-indicator__dot" aria-hidden />
       {!isSidebarHidden && <span className="remote-indicator__line">{state.line}</span>}
     </Button>
   );

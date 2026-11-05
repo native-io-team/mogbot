@@ -977,6 +977,33 @@
       "consumerCount": 6
     },
     {
+      "name": "--footer-row-badge-size",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 2
+    },
+    {
+      "name": "--footer-row-badge-offset",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 2
+    },
+    {
+      "name": "--footer-row-badge-ring",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
       "name": "--context-menu-min-width",
       "definitionFile": "src/styles/global/tokens-components.css",
       "layer": "components",
@@ -5159,7 +5186,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 261
+      "consumerCount": 262
     },
     {
       "name": "--surface-control",
@@ -5276,7 +5303,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 863
+      "consumerCount": 861
     },
     {
       "name": "--text-faint",
@@ -5483,7 +5510,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 87
+      "consumerCount": 88
     },
     {
       "name": "--accent-warning",
@@ -5492,7 +5519,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 119
+      "consumerCount": 120
     },
     {
       "name": "--accent-error",
@@ -6149,7 +6176,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 61
+      "consumerCount": 62
     },
     {
       "name": "--mask-opaque",
@@ -6518,7 +6545,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 261
+      "consumerCount": 262
     },
     {
       "name": "--surface-control",
@@ -6644,7 +6671,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 863
+      "consumerCount": 861
     },
     {
       "name": "--text-faint",
@@ -6770,7 +6797,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 87
+      "consumerCount": 88
     },
     {
       "name": "--accent-warning",
@@ -6779,7 +6806,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 119
+      "consumerCount": 120
     },
     {
       "name": "--accent-error",

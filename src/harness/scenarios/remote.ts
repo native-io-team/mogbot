@@ -9,6 +9,7 @@
 
 import type { Scenario } from '../types';
 import { BRAND } from '../../lib/brand';
+import { phoneStatus } from './phone';
 
 const DNS = 'studio-mac.tail1234.ts.net';
 const MASKED = `https://${DNS}/${BRAND.slug}/mcp/3f9c••••••••`;
@@ -248,8 +249,9 @@ export const remoteScenarios: Scenario[] = [
     id: 'remote-indicator-off',
     title: 'Sidebar — remote access never set up, no phone paired',
     looksRightWhen:
-      'At the foot of the sidebar, a phone glyph and "Get the phone app" (the companion ' +
-      'app), quieter than everything around it, and no remote access row: remote access shows ' +
+      'At the foot of the sidebar, a phone icon and "Get the phone app" (the companion app), ' +
+      'in the same icon column and colour as the Settings gear, and no remote access row: ' +
+      'remote access shows ' +
       'there only while it is on. Clicking the phone row opens the Phone panel.',
     clipSelector: '.workspace-sidebar-footer',
     requires: '[data-testid="phone-indicator"]',
@@ -259,7 +261,8 @@ export const remoteScenarios: Scenario[] = [
     id: 'remote-indicator-battery',
     title: 'Sidebar — remote access on, running on battery',
     looksRightWhen:
-      'At the foot of the sidebar, an amber dot and "Remote on · battery 37%". Clicking it opens ' +
+      'At the foot of the sidebar, a globe icon with a small amber dot on its corner and ' +
+      '"Remote on · battery 37%" in amber. Clicking it opens ' +
       'Remote access.',
     clipSelector: '.workspace-sidebar-footer',
     requires: '[data-testid="remote-indicator"]',
@@ -269,6 +272,70 @@ export const remoteScenarios: Scenario[] = [
         serverRunning: true,
         keepAwake: true,
         power: { hasBattery: true, onAc: false, batteryPercent: 37, charging: false },
+      }),
+    },
+  },
+  {
+    id: 'sidebar-footer-connected',
+    title: 'Sidebar footer — phone connected, remote access on (Cursor, just now)',
+    looksRightWhen:
+      'Three rows at the foot of the sidebar, each a 14px line icon in the same column and ' +
+      'colour, then its words: a phone and "Julian’s iPhone connected", a globe and ' +
+      '"Remote on · Cursor just now", a gear and "Settings". Phone and globe each carry a small ' +
+      'green dot on the icon’s corner; there is no larger dot or halo. Clicking each row opens ' +
+      'its own panel (Phone, Remote access, the Settings menu).',
+    clipSelector: '.workspace-sidebar-footer',
+    requires: '[data-testid="remote-indicator"]',
+    commands: {
+      companion_status: phoneStatus({
+        enabled: true,
+        running: true,
+        serve: { state: 'on', url: `https://${DNS}:47443` },
+        devices: [
+          {
+            id: 'dev_1',
+            name: 'Julian’s iPhone',
+            platform: 'ios',
+            pairedAt: Date.now() - 3 * 24 * 60 * MIN,
+            lastSeenAt: Date.now() - 10_000,
+            lastRoute: 'tailscale',
+            connected: true,
+          },
+        ],
+      }),
+      get_remote_access_brief: remoteBrief({
+        enabled: true,
+        serverRunning: true,
+        keepAwake: true,
+        activity: { lastRequestMs: Date.now() - 5_000, lastClient: 'Cursor', rejectedRequests: 0 },
+      }),
+    },
+  },
+  {
+    id: 'sidebar-footer-seen',
+    title: 'Sidebar footer — phone paired and away, remote access off',
+    looksRightWhen:
+      'Two rows: a phone icon with no dot and "Phone seen 4 min ago", then a gear and ' +
+      '"Settings", icons in one column. No remote access row while it is off. Clicking the ' +
+      'phone row once opens the Phone panel, not just its tooltip.',
+    clipSelector: '.workspace-sidebar-footer',
+    requires: '[data-testid="phone-indicator"]',
+    commands: {
+      companion_status: phoneStatus({
+        enabled: true,
+        running: true,
+        serve: { state: 'on', url: `https://${DNS}:47443` },
+        devices: [
+          {
+            id: 'dev_1',
+            name: 'Julian’s iPhone',
+            platform: 'ios',
+            pairedAt: Date.now() - 3 * 24 * 60 * MIN,
+            lastSeenAt: Date.now() - 4 * MIN,
+            lastRoute: 'tailscale',
+            connected: false,
+          },
+        ],
       }),
     },
   },
