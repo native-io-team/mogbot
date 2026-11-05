@@ -1966,12 +1966,6 @@
     },
     {
       "path": "src/styles/global/base.css",
-      "token": "--stroke-2",
-      "count": 1,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/global/base.css",
       "token": "--transition",
       "count": 20,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."

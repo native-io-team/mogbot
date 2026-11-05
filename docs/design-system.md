@@ -161,7 +161,7 @@ value, consume a semantic role or an owner-appropriate component token.
 | Surfaces | `--surface-app` / `--surface-panel` / `--surface-control` / `--surface-selected` / `--surface-recessed` | App background → panels → controls → selected rows; recessed wells are used for terminals, log output, and code editors. |
 | Text | `--text-primary` / `--text-secondary` / `--text-muted` / `--text-faint` / `--text-terminal-strong` | Default → supporting labels → muted hints → faint chrome; terminal output has its own readable roles. |
 | Accent | `--accent-active` / `--accent-active-hover` / `--accent-active-strong` / `--accent-active-soft` / `--accent-text` / `--text-on-accent` | The app is monochrome plus ONE accent: the Chief of Staff's colour, set at runtime. Use it for primary actions, selection and "this is on" — never for status. See "The accent" below. |
-| Focus | `--focus-ring` (= `--accent-focus`) | Every focus indication. A fixed blue, deliberately not the accent, so it is visible whatever colour the user picked. |
+| Focus | `--focus-ring` (= `--accent-focus`), `--focus-ring-width`, `--focus-ring-offset` | Every focus indication: a neutral 2px ring of `--text-primary` at 70% with a 2px offset (white-ish on dark, near-black on light), shown only on `:focus-visible`. Never a hue, never the accent. |
 | Fixed status | `--status-info`, `--status-running` | Info severity and in-progress dots. Fixed hues so a red/orange accent never reads as an error. |
 | Overlay | `--accent-overlay` / `--accent-overlay-ink` | Anything drawn on the user's own page (preview overlays, comment pins). Fixed, never the accent. |
 | Status | `--accent-success`, `--accent-warning`, `--accent-error`, `--accent-error-light`, `--accent-error-deep`, `--modified-yellow` | Semantic states. `--accent-success` means healthy/done/connected only — it is not the brand colour, and never stands in for the accent. Error values are retained as reviewed legacy inputs until their Figma mapping is confirmed. |
@@ -223,8 +223,16 @@ agent's colour instead.
   `<AccentScope color>`, from `src/contexts/AccentScopeContext.tsx`):
   `ModalFrame`, `Dropdown` (portalled) and `ContextMenu` put the scope on
   their own root. Tooltips do not carry it — they have no accent surface.
-- **Focus is not the accent.** `--focus-ring` is a fixed blue so it shows
-  whatever colour the user picked, white included.
+- **Focus is neutral.** `--focus-ring` is `--text-primary` at 70% (plain
+  `--text-primary` without `color-mix()`), 2px wide with a 2px offset, so it
+  is visible on every surface in both themes whatever accent the user picked
+  and keeps the app monochrome. Rings draw only on `:focus-visible` (text
+  inputs show a focus border while typing). `ModalFrame` focuses the first
+  control in its body, or the dialog itself — never the header's close
+  button — so opening a dialog paints no ring. `theme.test.ts` holds the
+  ring at ≥ 3:1 against app, panel and control surfaces in both themes.
+  Things drawn on the user's own page keep the fixed overlay blue
+  (`--accent-overlay`).
 - **No flash.** The last app accent is cached in `localStorage` and applied by
   an inline script in `index.html` before the bundle runs; both the script and
   `readCachedAccent` validate every cached value.
@@ -269,7 +277,8 @@ follows a change through the cache's `storage` event.
 - **`--text-white` is the emphasis role**, near-black on light; the name
   predates themes. `--text-inverse` is ink on a coloured fill and stays white.
 - **Fixed in both themes:** anything drawn on the user's page
-  (`--accent-overlay*`, `--page-scrim*`), the focus ring hue, traffic lights.
+  (`--accent-overlay*`, `--page-scrim*`) and the traffic lights. The focus
+  ring follows the theme because it is a neutral, not a hue.
   The live preview iframe is the user's site and is never themed.
 - **Outside CSS:** the xterm palettes (`terminalTheme.ts`, `followAppTheme`
   re-themes live terminals), the contribution calendar's ramp, and the
@@ -403,7 +412,7 @@ attributes, `invalid`, and an optional `suffix`. The primitive owns the followin
 | Code | Add `ss-text-field--code` for commands, paths, and other code-like values. |
 | Invalid | `invalid` adds the stable invalid class and `aria-invalid="true"`; feature validation owns the message text. |
 | Disabled | Native `disabled` behavior remains intact and receives the disabled surface, text, and cursor treatment. |
-| Placeholder / focus | Placeholder uses the secondary text role; focus uses the fixed blue `--focus-ring` (never the accent) and primary text. |
+| Placeholder / focus | Placeholder uses the secondary text role; focus uses the neutral `--focus-ring` (never the accent) and primary text. |
 | Labels / help / messages | Render these in the owning form recipe so TextField does not become a form god component. |
 | Suffix | `suffix` enables the optional shell; suffix content is decorative/supporting UI, not the input label. |
 

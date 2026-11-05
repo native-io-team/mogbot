@@ -270,7 +270,11 @@ function focusInitialElement(
   // intended target cannot use React's prop. Unlike `[autofocus]`, React does
   // render it.
   const marked = content.querySelector<HTMLElement>('[data-autofocus]');
-  const firstFocusable = getFocusableElements(content)[0] ?? null;
+  // Never the header's own chrome (the "×", header actions): a dialog with
+  // nothing else to focus takes focus itself, so opening one never paints a
+  // focus ring (or a tooltip) on its close button.
+  const firstFocusable =
+    getFocusableElements(content).find((el) => !el.closest('.modal-frame-header')) ?? null;
   if (focusElement(marked) || focusElement(firstFocusable)) return;
   content.focus({ preventScroll: true });
 }

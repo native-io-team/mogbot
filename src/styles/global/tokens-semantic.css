@@ -47,14 +47,18 @@
   --border-width-emphasis: var(--stroke-2);
 
   --accent-selected: var(--text-primary);
-  /* Focus is deliberately NOT the accent: the accent is whatever colour the
-     user picked (possibly white, possibly navy), and a focus ring has to be
-     visible on every surface regardless. */
-  --accent-focus: var(--color-blue-500);
+  /* Focus is neutral, never a hue: the app is monochrome plus the user's
+     accent, and the accent can't be the ring (a white accent on white, a red
+     one reading as an error). The primary text colour at 70% — white-ish on
+     dark, near-black on light — clears 3:1 against every surface in both
+     themes (theme.test.ts). Shown only on :focus-visible; dialogs focus
+     themselves rather than their close button, so opening one paints no
+     ring. Plain fallback here; the 70% mix is in the @supports block below. */
+  --accent-focus: var(--text-primary);
   --focus-ring: var(--accent-focus);
 
   --focus-ring-width: var(--stroke-2);
-  --focus-ring-offset: calc(-1 * var(--stroke-1));
+  --focus-ring-offset: var(--stroke-2);
 
   --accent-success: var(--color-green-600);
   --accent-warning: var(--color-orange-600);
@@ -267,8 +271,6 @@
   --border-strong: var(--color-paper-300);
   --border-accent: var(--color-ink-500);
 
-  --accent-focus: var(--color-blue-600);
-
   --accent-success: var(--color-green-900);
   --accent-warning: var(--color-orange-800);
   --accent-error: var(--color-red-700);
@@ -415,6 +417,10 @@
 }
 
 @supports (color: color-mix(in oklch, red, blue)) {
+  :root {
+    --accent-focus: color-mix(in srgb, var(--text-primary) 70%, transparent);
+  }
+
   :root,
   [data-accent-scope] {
     /* Opaque on the control surface, so it reads the same on any parent. */

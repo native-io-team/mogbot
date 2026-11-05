@@ -478,8 +478,8 @@ body.compact-mode-active html {
 
 .button:focus-visible,
 .toolbar-icon-btn:focus-visible {
-  outline: var(--stroke-2) solid var(--accent-focus);
-  outline-offset: -1px;
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .button--default {

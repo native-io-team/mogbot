@@ -5156,7 +5156,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 527
+      "consumerCount": 528
     },
     {
       "name": "--text-secondary",
@@ -5327,7 +5327,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 50
+      "consumerCount": 49
     },
     {
       "name": "--focus-ring",
@@ -5336,7 +5336,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 44
+      "consumerCount": 45
     },
     {
       "name": "--focus-ring-width",
@@ -5345,7 +5345,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 25
+      "consumerCount": 26
     },
     {
       "name": "--focus-ring-offset",
@@ -5354,7 +5354,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 17
+      "consumerCount": 18
     },
     {
       "name": "--accent-success",
@@ -6479,7 +6479,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 527
+      "consumerCount": 528
     },
     {
       "name": "--text-secondary",
@@ -6615,15 +6615,6 @@
       "status": "canonical",
       "pluginStable": false,
       "consumerCount": 0
-    },
-    {
-      "name": "--accent-focus",
-      "definitionFile": "src/styles/global/tokens-semantic.css",
-      "layer": "semantic",
-      "owner": "global/semantic",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 50
     },
     {
       "name": "--accent-success",
@@ -7299,6 +7290,15 @@
       "status": "canonical",
       "pluginStable": true,
       "consumerCount": 28
+    },
+    {
+      "name": "--accent-focus",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 49
     },
     {
       "name": "--accent-active-soft",

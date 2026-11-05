@@ -16,6 +16,7 @@ import {
   ACCENT_SHADE_VARS,
   contrastRatio,
   LIGHT_THEME_WHITE,
+  mixHex,
   mixOklchWithNeutral,
   parseHex,
 } from './accent';
@@ -265,6 +266,25 @@ describe('contrast (WCAG AA) in both themes', () => {
     expect(ratio('--text-on-inverse', '--surface-inverse-hover', theme)).toBeGreaterThanOrEqual(
       AA_TEXT
     );
+  });
+
+  it.each(themes)('keeps the neutral focus ring at ≥ 3:1 on every surface (%s)', (theme) => {
+    // --accent-focus is --text-primary at 70% over whatever it sits on.
+    const ring = resolveHex('--text-primary', theme);
+    for (const bg of [...surfaces, '--surface-control-hover', '--surface-selected']) {
+      const surface = resolveHex(bg, theme);
+      const blended = mixHex(surface, ring, 0.7);
+      expect(contrastRatio(parseHex(blended)!, parseHex(surface)!), bg).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('builds the focus ring from text, not from a hue or the accent', () => {
+    expect(semanticDark.get('--accent-focus')).toBe('var(--text-primary)');
+    expect(semanticLight.has('--accent-focus')).toBe(false);
+    expect(semanticSource).toMatch(
+      /--accent-focus:\s*color-mix\(in srgb, var\(--text-primary\) 70%, transparent\)/
+    );
+    expect(semanticDark.get('--focus-ring-offset')).toBe('var(--stroke-2)');
   });
 
   it('makes the strong (Allow) fill near-black with white ink on light', () => {
