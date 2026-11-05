@@ -1,6 +1,6 @@
-/** The in-app QR scanner. A pairing link goes straight to the pairing screen. */
+/** The in-app QR scanner. A pairing link goes to the pairing screen, which asks before pairing. */
 
-import { parsePairingLink } from '@shipstudio/companion-protocol';
+import { linkProblem, parseLink } from '../lib/pairing';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -18,13 +18,13 @@ export default function Scan() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [permission, request] = useCameraPermissions();
-  const [wrong, setWrong] = useState(false);
+  const [wrong, setWrong] = useState<string | null>(null);
   const done = useRef(false);
 
   const onScan = ({ data }: { data: string }) => {
     if (done.current) return;
-    if (!parsePairingLink(data)) {
-      setWrong(true);
+    if (!parseLink(data)) {
+      setWrong(linkProblem(data));
       return;
     }
     done.current = true;
@@ -71,9 +71,7 @@ export default function Scan() {
         <View pointerEvents="none" style={styles.frameWrap}>
           <View style={styles.frame} />
           <T color={colors.onMedia} style={styles.caption}>
-            {wrong
-              ? 'That isn’t a pairing code'
-              : 'Point at the code in Settings → Phone on your Mac'}
+            {wrong ?? 'Point at the code in Settings → Phone on your Mac'}
           </T>
         </View>
       )}

@@ -11,12 +11,7 @@
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { CopyIcon, MobileIcon, WarningIcon } from '@/components/icons';
-import {
-  deviceLine,
-  expiresIn,
-  type PairRequestDevice,
-  type PairingCode,
-} from '../../lib/companion';
+import { deviceLine, expiresIn, type PairRequestView, type PairingCode } from '../../lib/companion';
 import { PhoneQr } from './PhoneQr';
 import { BRAND } from '../../lib/brand';
 
@@ -83,12 +78,30 @@ export function PairCode({ code, now, busy, onCopy, onCancel }: CodeProps) {
 }
 
 interface ConfirmProps {
-  device: PairRequestDevice;
+  request: PairRequestView;
   busy: string | null;
-  onDecide: (allow: boolean) => void;
+  /** `replace`: the paired phones (by id) to remove on Allow. */
+  onDecide: (allow: boolean, replace: string[]) => void;
 }
 
-export function PairConfirm({ device, busy, onDecide }: ConfirmProps) {
+const timeOf = (ms: number) =>
+  new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+const dayOf = (ms: number) =>
+  new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+/**
+ * Everything the desk can say about the phone asking: the name and model it
+ * gave (cleaned on the Mac), when it asked and the end of the code it used,
+ * so a look-alike sent from somewhere else has something to stand out by.
+ * A phone that looks like one already paired is never replaced unasked.
+ */
+export function PairConfirm({ request, busy, onDecide }: ConfirmProps) {
+  const { device, replaces } = request;
+  const meta = [
+    `Asked at ${timeOf(request.requestedAt)}`,
+    `code ending ${request.codeHint}`,
+    ...(request.login ? [request.login] : []),
+  ].join(' · ');
   return (
     <div className="phone-confirm" role="alertdialog" aria-labelledby="phone-confirm-title">
       <span className="phone-confirm__icon" aria-hidden>
@@ -98,17 +111,49 @@ export function PairConfirm({ device, busy, onDecide }: ConfirmProps) {
         Allow <strong>{device.name}</strong> to use your agents?
       </h3>
       <p className="phone-confirm__device">{deviceLine(device)}</p>
+      <p className="phone-confirm__device" data-testid="phone-confirm-meta">
+        {meta}
+      </p>
+      {replaces.length > 0 && (
+        <p className="phone-confirm__warning" data-testid="phone-confirm-replaces">
+          <WarningIcon size={13} />
+          {replaces.length === 1
+            ? `A phone called ${replaces[0].name} is already paired (since ${dayOf(replaces[0].pairedAt)}). If this is that phone again, replace it. If you don’t recognise this request, deny it.`
+            : `${replaces.length} phones called ${device.name} are already paired. If this is one of them again, replace them. If you don’t recognise this request, deny it.`}
+        </p>
+      )}
       <p className="phone-confirm__warning">
         <WarningIcon size={13} />
-        Only allow a phone you’re holding. It will be able to read and send messages to every agent.
+        Only allow a phone you’re holding, showing the same code ending. It will be able to read and
+        send messages to every agent.
       </p>
       <div className="phone-confirm__actions">
-        <Button variant="secondary" disabled={busy !== null} onClick={() => onDecide(false)}>
+        <Button variant="secondary" disabled={busy !== null} onClick={() => onDecide(false, [])}>
           Deny
         </Button>
-        <Button variant="primary" disabled={busy !== null} onClick={() => onDecide(true)}>
-          Allow
-        </Button>
+        {replaces.length > 0 ? (
+          <>
+            <Button variant="secondary" disabled={busy !== null} onClick={() => onDecide(true, [])}>
+              Allow, keep both
+            </Button>
+            <Button
+              variant="primary"
+              disabled={busy !== null}
+              onClick={() =>
+                onDecide(
+                  true,
+                  replaces.map((d) => d.id)
+                )
+              }
+            >
+              Allow and replace
+            </Button>
+          </>
+        ) : (
+          <Button variant="primary" disabled={busy !== null} onClick={() => onDecide(true, [])}>
+            Allow
+          </Button>
+        )}
       </div>
     </div>
   );

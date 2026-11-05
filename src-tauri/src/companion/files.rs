@@ -21,25 +21,56 @@ use crate::agents::attachments::{mime_for, MAX_FILE_BYTES};
 /// An upload has this long to arrive in full: 25 MB over a slow cellular
 /// link, with room to spare.
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+/// And no gap between pieces of it longer than this, so a body that stops
+/// arriving gives its connection back instead of holding it for ten minutes.
+pub const UPLOAD_IDLE: Duration = Duration::from_secs(30);
 /// Thumbnails are at most this wide (`?w=` above it is clamped).
 pub const MAX_THUMB_WIDTH: u32 = 1024;
 const MIN_THUMB_WIDTH: u32 = 16;
+/// Images bigger than this aren't decoded at all: a 700 KB PNG can say it is
+/// 12000 x 12000 and need over half a gigabyte to open.
+pub const MAX_THUMB_PIXELS: u64 = 40_000_000;
+/// What a decode may allocate, whatever the header said.
+const MAX_THUMB_ALLOC: u64 = 256 * 1024 * 1024;
+/// Thumbnails kept, by file and width (attachments never change).
+const THUMBS_KEPT: usize = 128;
+const THUMB_BYTES_KEPT: usize = 32 * 1024 * 1024;
 
-/// The device behind the request's bearer token, if any.
-fn authorize(c: &Companion, headers: &HeaderMap) -> Option<DeviceRecord> {
-    let value = headers.get(header::AUTHORIZATION)?.to_str().ok()?;
-    let (scheme, token) = value.split_once(' ')?;
-    if !scheme.eq_ignore_ascii_case("bearer") || token.trim().is_empty() {
-        return None;
-    }
-    match c.registry.authenticate(token.trim()) {
-        Auth::Device(d) => {
-            c.registry
-                .touch(&d.id, now_ms() as i64, RouteKind::Tailscale, false);
-            Some(d)
+/// The device behind the request's bearer token, if it may make this
+/// request: a live token, from the tailnet user that paired it (when both
+/// are known), inside the device's per-minute budget, which the socket's
+/// requests share. Otherwise the response to send instead.
+fn authorize(c: &Companion, headers: &HeaderMap) -> Result<DeviceRecord, Box<Response<Body>>> {
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split_once(' '))
+        .filter(|(scheme, token)| scheme.eq_ignore_ascii_case("bearer") && !token.trim().is_empty())
+        .map(|(_, token)| token.trim().to_string());
+    let Some(token) = token else {
+        return Err(Box::new(status_only(StatusCode::UNAUTHORIZED)));
+    };
+    let device = match c.registry.authenticate(&token) {
+        Auth::Device(d) => d,
+        Auth::Revoked | Auth::Unknown => {
+            return Err(Box::new(status_only(StatusCode::UNAUTHORIZED)))
         }
-        Auth::Revoked | Auth::Unknown => None,
+    };
+    if !device.login_matches(super::limits::tailnet_login(headers).as_deref()) {
+        return Err(Box::new(status_only(StatusCode::UNAUTHORIZED)));
     }
+    if !c.allow_request(&device.id, now_ms()) {
+        return Err(Box::new(refusal(
+            StatusCode::TOO_MANY_REQUESTS,
+            WireError::protocol(
+                super::wire::ProtocolCode::RateLimited,
+                "Too many requests. Try again in a minute.",
+            ),
+        )));
+    }
+    c.registry
+        .touch(&device.id, now_ms() as i64, RouteKind::Tailscale, false);
+    Ok(device)
 }
 
 fn refusal(status: StatusCode, e: impl Into<WireError>) -> Response<Body> {
@@ -49,9 +80,26 @@ fn refusal(status: StatusCode, e: impl Into<WireError>) -> Response<Body> {
 }
 
 /// `PUT /v1/blobs`: stage a file for a coming `agents.send`.
+///
+/// The room is held in the device's budget before a byte is read, the
+/// bytes go straight to disk with a running cap (never all in memory), and
+/// a revoke while it arrives stops it and removes what had arrived.
 pub async fn upload(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
-    let Some(device) = authorize(&c, req.headers()) else {
-        return status_only(StatusCode::UNAUTHORIZED);
+    let device = match authorize(&c, req.headers()) {
+        Ok(d) => d,
+        Err(res) => return *res,
+    };
+    let Some(_slot) = c
+        .uploads
+        .try_take(&device.id, super::limits::MAX_UPLOADS_PER_DEVICE)
+    else {
+        return refusal(
+            StatusCode::TOO_MANY_REQUESTS,
+            crate::errors::CommandError::expected(format!(
+                "{} files are already uploading from this phone. Try again when one finishes.",
+                super::limits::MAX_UPLOADS_PER_DEVICE
+            )),
+        );
     };
     let headers = req.headers();
     let declared = headers
@@ -72,60 +120,105 @@ pub async fn upload(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body>
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
-    let bytes = match tokio::time::timeout(UPLOAD_TIMEOUT, read_upload(req.into_body())).await {
+    let reservation =
+        match c
+            .blobs
+            .reserve(&device.id, declared.unwrap_or(MAX_FILE_BYTES), now_ms())
+        {
+            Ok(r) => r,
+            // Over this phone's staging budget: the sentence says what to do.
+            Err(e) => return refusal(StatusCode::TOO_MANY_REQUESTS, e),
+        };
+    let read = tokio::time::timeout(
+        UPLOAD_TIMEOUT,
+        read_upload(
+            &c,
+            &device.id,
+            req.into_body(),
+            &reservation.path,
+            reservation.max,
+        ),
+    )
+    .await;
+    let size = match read {
         Err(_) => return status_only(StatusCode::REQUEST_TIMEOUT),
         Ok(Upload::TooBig) => return status_only(StatusCode::PAYLOAD_TOO_LARGE),
+        Ok(Upload::Stalled) => return status_only(StatusCode::REQUEST_TIMEOUT),
+        Ok(Upload::Revoked) => return status_only(StatusCode::UNAUTHORIZED),
         Ok(Upload::Broken) => return status_only(StatusCode::BAD_REQUEST),
-        Ok(Upload::Done(bytes)) => bytes,
+        Ok(Upload::Done(size)) => size,
     };
-    let staged = tokio::task::spawn_blocking(move || {
-        c.blobs
-            .put(&device.id, &name, mime.as_deref(), &bytes, now_ms())
-    })
-    .await;
-    match staged {
-        Ok(Ok(blob)) => json_response(&blob.as_ref()),
-        // Over this phone's staging budget: the sentence says what to do.
-        Ok(Err(e)) => refusal(StatusCode::TOO_MANY_REQUESTS, e),
-        Err(_) => status_only(StatusCode::INTERNAL_SERVER_ERROR),
+    let clean = crate::agents::attachments::sanitize_name(&name);
+    let mime = super::blobs::upload_mime(mime.as_deref(), &clean);
+    match c.blobs.commit(reservation, &name, mime, size, now_ms()) {
+        Ok(blob) => json_response(&blob.as_ref()),
+        Err(_) if c.registry.get(&device.id).is_none() => status_only(StatusCode::UNAUTHORIZED),
+        Err(e) => refusal(StatusCode::TOO_MANY_REQUESTS, e),
     }
 }
 
 enum Upload {
-    Done(Vec<u8>),
+    Done(u64),
     TooBig,
+    /// Nothing arrived for [`UPLOAD_IDLE`].
+    Stalled,
+    /// The device was removed while its file arrived.
+    Revoked,
     Broken,
 }
 
-/// Read an upload up to the limit. Past it, the rest is read and thrown
-/// away (up to as much again) before the 413, so a phone streaming a body
-/// with no declared length hears "too large" rather than a reset socket.
-async fn read_upload(mut incoming: Incoming) -> Upload {
-    let limit = MAX_FILE_BYTES as usize;
-    let mut kept = Vec::new();
-    let mut seen = 0usize;
-    while let Some(frame) = incoming.frame().await {
-        let Ok(frame) = frame else {
-            return Upload::Broken;
+/// Write an upload to `path`, at most `max` bytes. Past that, the rest is
+/// read and thrown away (up to as much again) before the 413, so a phone
+/// streaming a body with no declared length hears "too large" rather than a
+/// reset socket. The partial file is the reservation's to remove.
+async fn read_upload(
+    c: &Companion,
+    device_id: &str,
+    mut incoming: Incoming,
+    path: &std::path::Path,
+    max: u64,
+) -> Upload {
+    use std::io::Write;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let Ok(mut file) = opts.open(path) else {
+        return Upload::Broken;
+    };
+    let mut seen = 0u64;
+    loop {
+        let frame = match tokio::time::timeout(UPLOAD_IDLE, incoming.frame()).await {
+            Err(_) => return Upload::Stalled,
+            Ok(None) => break,
+            Ok(Some(Err(_))) => return Upload::Broken,
+            Ok(Some(Ok(frame))) => frame,
         };
+        if c.registry.get(device_id).is_none() {
+            return Upload::Revoked;
+        }
         let Some(data) = frame.data_ref() else {
             continue;
         };
-        seen += data.len();
-        if seen <= limit {
-            kept.extend_from_slice(data);
-        } else {
-            kept = Vec::new();
-            if seen > limit * 2 {
-                return Upload::TooBig;
+        seen += data.len() as u64;
+        if seen <= max {
+            if file.write_all(data).is_err() {
+                return Upload::Broken;
             }
+        } else if seen > MAX_FILE_BYTES * 2 || seen > max.saturating_mul(2) {
+            return Upload::TooBig;
         }
     }
-    if seen > limit {
-        Upload::TooBig
-    } else {
-        Upload::Done(kept)
+    if seen > max {
+        return Upload::TooBig;
     }
+    if file.flush().is_err() {
+        return Upload::Broken;
+    }
+    Upload::Done(seen)
 }
 
 /// What a GET resolved to: a file on disk and how to label it.
@@ -191,9 +284,37 @@ fn thumbnailable(mime: &str) -> bool {
     )
 }
 
-/// A JPEG no wider than `width` (never upscaled).
-pub fn thumbnail(path: &std::path::Path, width: u32) -> Option<Vec<u8>> {
-    let img = image::open(path).ok()?;
+/// Why no thumbnail was made.
+#[derive(Debug, PartialEq, Eq)]
+pub enum NoThumb {
+    /// Not an image this crate reads, or not one at all.
+    Unreadable,
+    /// More pixels than [`MAX_THUMB_PIXELS`], by its own header: not opened.
+    TooManyPixels,
+}
+
+/// A JPEG no wider than `width` (never upscaled). The image's size is read
+/// from its header first, and anything over the pixel budget is refused
+/// before a byte of it is decoded; the decode itself is capped too.
+pub fn thumbnail(path: &std::path::Path, width: u32) -> Result<Vec<u8>, NoThumb> {
+    let reader = || {
+        image::ImageReader::open(path)
+            .and_then(|r| r.with_guessed_format())
+            .map_err(|_| NoThumb::Unreadable)
+    };
+    let (w, h) = reader()?
+        .into_dimensions()
+        .map_err(|_| NoThumb::Unreadable)?;
+    if u64::from(w) * u64::from(h) > MAX_THUMB_PIXELS {
+        return Err(NoThumb::TooManyPixels);
+    }
+    let mut r = reader()?;
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(w);
+    limits.max_image_height = Some(h);
+    limits.max_alloc = Some(MAX_THUMB_ALLOC);
+    r.limits(limits);
+    let img = r.decode().map_err(|_| NoThumb::Unreadable)?;
     let img = if img.width() > width {
         img.resize(width, u32::MAX, image::imageops::FilterType::Triangle)
     } else {
@@ -201,8 +322,81 @@ pub fn thumbnail(path: &std::path::Path, width: u32) -> Option<Vec<u8>> {
     };
     let mut out = std::io::Cursor::new(Vec::new());
     let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 80);
-    img.to_rgb8().write_with_encoder(encoder).ok()?;
-    Some(out.into_inner())
+    img.to_rgb8()
+        .write_with_encoder(encoder)
+        .map_err(|_| NoThumb::Unreadable)?;
+    Ok(out.into_inner())
+}
+
+/// Thumbnails being made (a few at a time) and the ones already made.
+pub struct Thumbs {
+    slots: tokio::sync::Semaphore,
+    made: std::sync::Mutex<std::collections::VecDeque<(String, Arc<Vec<u8>>)>>,
+}
+
+impl Default for Thumbs {
+    fn default() -> Self {
+        Thumbs {
+            slots: tokio::sync::Semaphore::new(super::limits::MAX_THUMBNAILS_AT_ONCE),
+            made: std::sync::Mutex::new(std::collections::VecDeque::new()),
+        }
+    }
+}
+
+impl Thumbs {
+    /// The file, as it is now (size and modification time), at this width.
+    fn key(path: &std::path::Path, width: u32) -> Option<String> {
+        let m = std::fs::metadata(path).ok()?;
+        let modified = m
+            .modified()
+            .ok()?
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_nanos();
+        Some(format!("{}|{}|{modified}|{width}", path.display(), m.len()))
+    }
+
+    fn cached(&self, key: &str) -> Option<Arc<Vec<u8>>> {
+        let made = self.made.lock().unwrap_or_else(|e| e.into_inner());
+        made.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone())
+    }
+
+    fn keep(&self, key: String, jpeg: Arc<Vec<u8>>) {
+        let mut made = self.made.lock().unwrap_or_else(|e| e.into_inner());
+        made.retain(|(k, _)| *k != key);
+        made.push_back((key, jpeg));
+        while made.len() > THUMBS_KEPT
+            || made.iter().map(|(_, v)| v.len()).sum::<usize>() > THUMB_BYTES_KEPT
+        {
+            if made.pop_front().is_none() {
+                break;
+            }
+        }
+    }
+
+    /// A thumbnail of `path`: from the cache, or made while holding one of
+    /// the few slots, so a burst of requests queues instead of decoding
+    /// side by side.
+    pub async fn get(&self, path: PathBuf, width: u32) -> Result<Arc<Vec<u8>>, NoThumb> {
+        let key = Self::key(&path, width).ok_or(NoThumb::Unreadable)?;
+        if let Some(hit) = self.cached(&key) {
+            return Ok(hit);
+        }
+        let _slot = self
+            .slots
+            .acquire()
+            .await
+            .map_err(|_| NoThumb::Unreadable)?;
+        if let Some(hit) = self.cached(&key) {
+            return Ok(hit);
+        }
+        let made = tokio::task::spawn_blocking(move || thumbnail(&path, width))
+            .await
+            .map_err(|_| NoThumb::Unreadable)??;
+        let made = Arc::new(made);
+        self.keep(key, made.clone());
+        Ok(made)
+    }
 }
 
 /// A single `bytes=a-b`, `bytes=a-` or `bytes=-n` range within `len`.
@@ -250,8 +444,9 @@ pub fn parse_range(header: Option<&str>, len: u64) -> Result<Option<(u64, u64)>,
 
 /// `GET` (or `HEAD`) a blob or an attachment.
 pub async fn download(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
-    let Some(device) = authorize(&c, req.headers()) else {
-        return status_only(StatusCode::UNAUTHORIZED);
+    let device = match authorize(&c, req.headers()) {
+        Ok(d) => d,
+        Err(res) => return *res,
     };
     let Some(served) = resolve(&c, &device, req.uri().path()) else {
         return status_only(StatusCode::NOT_FOUND);
@@ -264,18 +459,28 @@ pub async fn download(c: Arc<Companion>, req: Request<Incoming>) -> Response<Bod
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
 
-    let read = tokio::task::spawn_blocking(move || -> Result<Read, StatusCode> {
-        if let Some(width) = width {
-            if let Some(jpeg) = thumbnail(&served.path, width) {
-                return Ok(Read {
-                    bytes: jpeg,
-                    mime: "image/jpeg".into(),
-                    range: None,
-                    total: None,
-                    served,
-                });
+    if let Some(width) = width {
+        match c.thumbs.get(served.path.clone(), width).await {
+            Ok(jpeg) => {
+                return respond(
+                    Read {
+                        bytes: jpeg.as_ref().clone(),
+                        mime: "image/jpeg".into(),
+                        range: None,
+                        total: None,
+                        served,
+                    },
+                    head,
+                )
             }
+            // Refused rather than served whole: the original is the thing
+            // too big to open, on the phone as much as here.
+            Err(NoThumb::TooManyPixels) => return status_only(StatusCode::UNPROCESSABLE_ENTITY),
+            // Not something we can read: the file as it is.
+            Err(NoThumb::Unreadable) => {}
         }
+    }
+    let read = tokio::task::spawn_blocking(move || -> Result<Read, StatusCode> {
         let len = std::fs::metadata(&served.path)
             .map_err(|_| StatusCode::NOT_FOUND)?
             .len();

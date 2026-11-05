@@ -16,8 +16,9 @@ use serde_json::{json, Value};
 use super::router::{self, Caller};
 use super::testkit::{self, Stub, AGENT};
 use super::wire::{
-    BuildKind, Cursor, DevicePlatform, Event, PairRefusal, PairResponse, PairingLink, ProtocolCode,
-    RefusedReason, ResumeMode, RouteKind, ServerFrame, ServerInfo, WireError,
+    BuildKind, Cursor, DevicePlatform, Event, IdentityResponse, PairRefusal, PairResponse,
+    PairingLink, ProtocolCode, RefusedReason, ResumeMode, RouteKind, ServerFrame, ServerInfo,
+    WireError,
 };
 use super::DeviceRecord;
 use crate::errors::CommandError;
@@ -50,6 +51,7 @@ fn device(full: bool) -> DeviceRecord {
         token_hash: "never sent".into(),
         public_key: "never sent".into(),
         push: None,
+        tailnet_login: None,
     }
 }
 
@@ -201,8 +203,14 @@ fn frames() -> Vec<ServerFrame> {
         (None, Event::CaughtUp { cursor: cursor(5) }),
     ];
 
-    let mut out = vec![ServerFrame::Welcome {
-        protocol: 1,
+    let mut out = vec![ServerFrame::Identity {
+        protocol: 2,
+        server_id: "srv_0123456789abcdef".into(),
+        hosts: vec![testkit::HOST.into()],
+        identity: proof(),
+    }];
+    out.push(ServerFrame::Welcome {
+        protocol: 2,
         server: ServerInfo {
             id: "srv_0123456789abcdef".into(),
             name: "Julian’s MacBook Pro".into(),
@@ -213,7 +221,7 @@ fn frames() -> Vec<ServerFrame> {
         methods: router::METHODS.to_vec(),
         time_zone: Some("America/New_York".into()),
         features: super::wire::MAC_FEATURES.to_vec(),
-    }];
+    });
     for (reason, message) in [
         (
             RefusedReason::Unauthorized,
@@ -231,6 +239,10 @@ fn frames() -> Vec<ServerFrame> {
         (
             RefusedReason::TooManyConnections,
             "Too many connections from this phone.",
+        ),
+        (
+            RefusedReason::Unavailable,
+            "Your Mac can't read its identity key from the Keychain right now.",
         ),
     ] {
         out.push(ServerFrame::Refused {
@@ -262,6 +274,8 @@ fn pair_responses() -> Vec<PairResponse> {
         token: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
         server_id: "srv_0123456789abcdef".into(),
         server_public_key: String::new(),
+        hosts: vec![testkit::HOST.into()],
+        identity: proof(),
     }];
     for reason in [
         PairRefusal::Expired,
@@ -279,13 +293,46 @@ fn pair_responses() -> Vec<PairResponse> {
     out
 }
 
+fn proof() -> super::identity::IdentityProof {
+    super::identity::IdentityProof {
+        public_key: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo".into(),
+        signature:
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
+                .into(),
+    }
+}
+
+fn identity_responses() -> Vec<IdentityResponse> {
+    let mut out = vec![IdentityResponse::Proven {
+        ok: true,
+        protocol: 2,
+        server_id: "srv_0123456789abcdef".into(),
+        hosts: vec![testkit::HOST.into()],
+        identity: proof(),
+    }];
+    for reason in [
+        RefusedReason::UpdateApp,
+        RefusedReason::UpdateMac,
+        RefusedReason::Unavailable,
+    ] {
+        out.push(IdentityResponse::Refused {
+            ok: false,
+            reason,
+            message: "What happened, for the user.".into(),
+        });
+    }
+    out
+}
+
 fn pairing_link() -> PairingLink {
     PairingLink {
         v: 1,
         code: "K7Q2MZX4A9PL3WRT8NBV6YHC5D".into(),
         server_id: "srv_0123456789abcdef".into(),
         name: "Julian’s MacBook Pro".into(),
-        routes: testkit::routes(),
+        // One route, as the Mac makes them.
+        routes: testkit::routes().into_iter().take(1).collect(),
+        fingerprint: "Zmh6rfhivXdsj8GLjp-OIA".into(),
     }
 }
 
@@ -321,7 +368,7 @@ async fn generate() -> String {
          // actually serializes. Do not edit: rewrite it with UPDATE_FIXTURES=1.\n\
          // `tsc -p packages/companion-protocol` checks every value against the protocol.\n\
          \n\
-         import type { Device, PairingLink, PairResponse, Result, ServerFrame } from './index';\n\n",
+         import type {\n  Device,\n  IdentityResponse,\n  PairingLink,\n  PairResponse,\n  Result,\n  ServerFrame,\n} from './index';\n\n",
     );
     out += &entry(
         "systemStatus",
@@ -535,6 +582,11 @@ async fn generate() -> String {
     out += &entry("frames", "ServerFrame[]", frames());
     out += &entry("pairResponses", "PairResponse[]", pair_responses());
     out += &entry("pairingLink", "PairingLink", pairing_link());
+    out += &entry(
+        "identityResponses",
+        "IdentityResponse[]",
+        identity_responses(),
+    );
     out
 }
 

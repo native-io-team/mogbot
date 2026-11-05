@@ -254,7 +254,6 @@ export const READ_ONLY_METHODS = [
   'agents.messages',
   'agents.instructions',
   'agents.memory',
-  'agents.memorySuggest',
   'agents.usage',
   'agents.files',
   'agents.changeDiff',

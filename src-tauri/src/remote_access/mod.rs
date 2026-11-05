@@ -218,13 +218,57 @@ pub struct AuditEntry {
     pub actor: Option<String>,
 }
 
-/// Keep the log to a size anyone would read: past this it is cut to its
-/// newer half.
+/// Keep each log to a size anyone would read: past this the file is
+/// rotated to `<name>.1` (replacing the older one) and a new one started,
+/// so the last two files are always there and nothing in the newer one is
+/// ever cut. A flood of junk can still push old lines out, but only after
+/// a whole file of it, and the phone's failed connections are folded to a
+/// line a minute (`companion::limits::RefusalLog`) so they can't.
 const AUDIT_MAX_BYTES: u64 = 1024 * 1024;
 const AUDIT_PREVIEW_CHARS: usize = 140;
 
 fn audit_path() -> Option<std::path::PathBuf> {
     config_path().map(|p| p.with_file_name("remote_audit.jsonl"))
+}
+
+/// The phone companion's own log: kept apart from Remote Access's, so
+/// neither can roll the other's record out.
+fn companion_audit_path() -> Option<std::path::PathBuf> {
+    config_path().map(|p| p.with_file_name("companion_audit.jsonl"))
+}
+
+/// `<file>.1`: the rotated, older half of a log.
+fn rotated(path: &std::path::Path) -> std::path::PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".1");
+    path.with_file_name(name)
+}
+
+/// A log's lines, oldest first, across its rotated file and the current one.
+fn read_log(path: &std::path::Path) -> String {
+    let old = std::fs::read_to_string(rotated(path)).unwrap_or_default();
+    let new = std::fs::read_to_string(path).unwrap_or_default();
+    if old.is_empty() {
+        new
+    } else {
+        old + &new
+    }
+}
+
+/// Append one line, rotating first when the file is past `max` bytes.
+fn append_rotating(path: &std::path::Path, line: &str, max: u64) -> std::io::Result<()> {
+    use std::io::Write;
+    if std::fs::metadata(path).is_ok_and(|m| m.len() > max) {
+        std::fs::rename(path, rotated(path))?;
+    }
+    let mut opts = std::fs::OpenOptions::new();
+    opts.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    opts.open(path)?.write_all(line.as_bytes())
 }
 
 static AUDIT_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -251,6 +295,26 @@ pub(crate) fn audit_as(
     detail: String,
     ok: bool,
 ) {
+    if let Some(path) = audit_path() {
+        write_entry(&path, actor, tool, project, detail, ok);
+    }
+}
+
+/// What a paired phone did (`companion`), in the companion's own log.
+pub(crate) fn companion_audit(actor: &str, tool: &str, detail: String, ok: bool) {
+    if let Some(path) = companion_audit_path() {
+        write_entry(&path, Some(actor), tool, None, detail, ok);
+    }
+}
+
+fn write_entry(
+    path: &std::path::Path,
+    actor: Option<&str>,
+    tool: &str,
+    project: Option<&str>,
+    detail: String,
+    ok: bool,
+) {
     let entry = AuditEntry {
         at_ms: now_ms(),
         tool: tool.to_string(),
@@ -260,7 +324,6 @@ pub(crate) fn audit_as(
         ok,
         actor: actor.map(str::to_string),
     };
-    let Some(path) = audit_path() else { return };
     let Ok(_guard) = AUDIT_LOCK.lock() else {
         return;
     };
@@ -268,26 +331,7 @@ pub(crate) fn audit_as(
         return;
     };
     line.push('\n');
-    if std::fs::metadata(&path).is_ok_and(|m| m.len() > AUDIT_MAX_BYTES) {
-        if let Ok(existing) = std::fs::read_to_string(&path) {
-            let lines: Vec<&str> = existing.lines().collect();
-            let keep = lines[lines.len() / 2..].join("\n") + "\n";
-            let _ = write_private(&path, keep.as_bytes());
-        }
-    }
-    let result = {
-        use std::io::Write;
-        let mut opts = std::fs::OpenOptions::new();
-        opts.create(true).append(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600);
-        }
-        opts.open(&path)
-            .and_then(|mut f| f.write_all(line.as_bytes()))
-    };
-    if let Err(e) = result {
+    if let Err(e) = append_rotating(path, &line, AUDIT_MAX_BYTES) {
         tracing::warn!("[Remote] Could not write the audit log: {}", e);
     }
 }
@@ -295,7 +339,7 @@ pub(crate) fn audit_as(
 /// The newest `limit` remote-access entries, newest first. What Ship
 /// Studio's own agents did is in the same file, but isn't remote activity.
 pub fn read_audit(limit: usize) -> Vec<AuditEntry> {
-    let Some(raw) = audit_path().and_then(|p| std::fs::read_to_string(p).ok()) else {
+    let Some(raw) = audit_path().map(|p| read_log(&p)) else {
         return Vec::new();
     };
     raw.lines()
@@ -306,15 +350,15 @@ pub fn read_audit(limit: usize) -> Vec<AuditEntry> {
         .collect()
 }
 
-/// The newest entry for each of `actors`, from the same log, for the Phone
-/// panel's "last activity". `skip` names tools that are presence or pairing
-/// rather than something the phone did.
+/// The newest entry for each of `actors`, from the companion's log, for the
+/// Phone panel's "last activity". `skip` names tools that are presence or
+/// pairing rather than something the phone did.
 pub fn latest_by_actor(
     actors: &[String],
     skip: &[&str],
 ) -> std::collections::HashMap<String, AuditEntry> {
     let mut found = std::collections::HashMap::new();
-    let Some(raw) = audit_path().and_then(|p| std::fs::read_to_string(p).ok()) else {
+    let Some(raw) = companion_audit_path().map(|p| read_log(&p)) else {
         return found;
     };
     latest_in(&raw, actors, skip, &mut found);
@@ -347,6 +391,37 @@ fn latest_in(
 #[cfg(test)]
 mod latest_tests {
     use super::*;
+
+    #[test]
+    fn a_full_log_rotates_instead_of_losing_its_newer_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.jsonl");
+        for i in 0..100 {
+            append_rotating(&path, &format!("line {i}\n"), 200).unwrap();
+        }
+        let all = read_log(&path);
+        let lines: Vec<&str> = all.lines().collect();
+        assert_eq!(lines.last(), Some(&"line 99"), "the newest is always kept");
+        // Two files at most, each a little over the cap.
+        assert!(rotated(&path).exists());
+        assert!(!dir.path().join("a.jsonl.1.1").exists());
+        assert!(
+            lines.len() > 20,
+            "a whole file's worth survives the rotation"
+        );
+        // Every line that survives is in order, with none cut in half.
+        let nums: Vec<u32> = lines
+            .iter()
+            .map(|l| l.strip_prefix("line ").unwrap().parse().unwrap())
+            .collect();
+        assert!(nums.windows(2).all(|w| w[1] == w[0] + 1));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+    }
 
     #[test]
     fn the_newest_real_action_per_actor() {
