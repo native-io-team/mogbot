@@ -46,8 +46,10 @@ pub use desktop::{is_showing, resume_on_launch};
 
 /// The HTTPS port `tailscale serve` publishes on. Deliberately not 443, 8443
 /// or 10000: those are the only ports Funnel can open to the internet, and
-/// Remote Access already funnels 443.
-pub const TAILNET_HTTPS_PORT: u16 = 47443;
+/// Remote Access already funnels 443. Not Ship Studio's 47443 either: one
+/// `tailscale serve` slot per port, so the two apps would take it in turns.
+/// From brand.json (`companion.tailnetPort`), mirrored in companion-protocol.
+pub const TAILNET_HTTPS_PORT: u16 = crate::brand::COMPANION_TAILNET_PORT;
 /// Sockets per device and in total.
 pub const MAX_SOCKETS_PER_DEVICE: usize = 4;
 pub const MAX_SOCKETS: usize = 16;

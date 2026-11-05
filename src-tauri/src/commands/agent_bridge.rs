@@ -79,21 +79,21 @@ pub async fn register_cursor_mcp(url: String) -> Result<bool, CommandError> {
         tracing::warn!("Cursor mcp.json mcpServers is not an object — leaving it untouched");
         return Ok(false);
     };
+    // Our own name: Ship Studio registers `shipstudio-preview` here for its
+    // own bridge, and that entry is not ours to touch.
+    let name = crate::brand::preview_mcp_name();
     let already_current = servers_obj
-        .get("shipstudio-preview")
+        .get(&name)
         .and_then(|s| s.get("url"))
         .and_then(|u| u.as_str())
         == Some(url.as_str());
     if !already_current {
-        servers_obj.insert(
-            "shipstudio-preview".to_string(),
-            serde_json::json!({ "url": url }),
-        );
+        servers_obj.insert(name.clone(), serde_json::json!({ "url": url }));
         let serialized = serde_json::to_string_pretty(&root)
             .map_err(|e| format!("Failed to serialize Cursor mcp.json: {e}"))?;
         std::fs::write(&path, serialized)
             .map_err(|e| crate::utils::classify_fs_error("write Cursor's mcp.json", &path, &e))?;
-        tracing::info!("Registered shipstudio-preview in Cursor's mcp.json");
+        tracing::info!("Registered {name} in Cursor's mcp.json");
     }
     Ok(true)
 }

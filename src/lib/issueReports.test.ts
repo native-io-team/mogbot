@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildBugReportBody,
   buildFeatureRequestBody,
@@ -9,6 +9,12 @@ import {
   type BugReportDraft,
   type FeatureRequestDraft,
 } from './issueReports';
+
+// Features brand.json can switch off are tested switched on.
+vi.mock('./brand', async (importOriginal) => {
+  const { withAllLinks } = await import('../test/brandFixture');
+  return withAllLinks(await importOriginal<typeof import('./brand')>());
+});
 
 const bugDraft: BugReportDraft = {
   title: '[Bug] Toolbar stops updating',

@@ -132,7 +132,7 @@ export async function pair(link: PairingLink, signal?: AbortSignal): Promise<Cre
  * Why a route didn't answer, as far as the phone can tell. A `*.ts.net` name
  * resolves only through Tailscale's own DNS, so "host not found" means this
  * phone isn't on the tailnet; a name that resolves but never answers means
- * the Mac (or Ship Studio on it) isn't there. React Native's fetch hides the
+ * the Mac (or the app on it) isn't there. React Native's fetch hides the
  * difference, so this asks with XMLHttpRequest, which keeps the OS's reason.
  */
 export function diagnose(

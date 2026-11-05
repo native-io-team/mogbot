@@ -314,7 +314,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
             setTimeout(() => setCopied(false), 1500);
           }}
         >
-          <T variant="caption" color={copied ? colors.accentActive : colors.textSecondary}>
+          <T variant="caption" color={copied ? colors.textWhite : colors.textSecondary}>
             {copied ? 'Copied' : 'Copy'}
           </T>
         </Pressable>
@@ -334,7 +334,7 @@ const body = {
   fontFamily: fonts.regular,
   fontSize: type.body,
   lineHeight: lineHeight(type.body, 1.5),
-  color: colors.textPrimary,
+  color: colors.textBody,
 };
 
 const styles = StyleSheet.create({

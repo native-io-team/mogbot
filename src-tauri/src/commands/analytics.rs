@@ -1,10 +1,12 @@
 //! # Analytics Commands
 //!
-//! PostHog analytics integration for Ship Studio.
+//! PostHog analytics integration.
 //! Events are sent to PostHog via the HTTP capture API from the Rust backend,
 //! keeping the API key out of the frontend webview.
 //!
-//! Users can opt out via the `set_analytics_enabled` command.
+//! Off at compile time unless brand.json names a PostHog key of our own
+//! (`telemetry.posthogKey`): with no key, nothing is sent and the setting
+//! reads as off. Users can also opt out via `set_analytics_enabled`.
 
 use crate::commands::setup::{read_app_state, write_app_state};
 use crate::errors::CommandError;
@@ -12,8 +14,16 @@ use std::sync::LazyLock;
 use std::sync::Mutex;
 use tracing::{debug, info, warn};
 
-const POSTHOG_API_KEY: &str = "phc_i1C5azXcz9MsnM8mQBni7qq5shiNS8JVFkcyXBjuBkr";
-const POSTHOG_HOST: &str = "https://us.i.posthog.com";
+const POSTHOG_API_KEY: Option<&str> = crate::brand::telemetry::POSTHOG_KEY;
+const POSTHOG_HOST: &str = match crate::brand::telemetry::POSTHOG_HOST {
+    Some(host) => host,
+    None => "https://us.i.posthog.com",
+};
+
+/// Whether this build can send analytics at all.
+pub fn analytics_configured() -> bool {
+    POSTHOG_API_KEY.is_some()
+}
 
 /// Cached analytics state to avoid reading disk on every event
 struct AnalyticsCache {
@@ -30,6 +40,10 @@ static ANALYTICS: LazyLock<Mutex<Option<AnalyticsCache>>> = LazyLock::new(|| Mut
 /// Initialize the analytics system. Called once at app startup from lib.rs.
 /// Reads or generates a device_id and caches the enabled state.
 pub fn init_analytics() {
+    if !analytics_configured() {
+        info!("Analytics not configured for this build (off)");
+        return;
+    }
     let mut app_state = read_app_state();
 
     // Generate device_id on first launch
@@ -78,6 +92,9 @@ fn send_event(event_name: &str, distinct_id: &str, properties: serde_json::Value
         }
     };
 
+    let Some(api_key) = POSTHOG_API_KEY else {
+        return;
+    };
     if !enabled {
         return;
     }
@@ -91,7 +108,7 @@ fn send_event(event_name: &str, distinct_id: &str, properties: serde_json::Value
     if !props.contains_key("$screen_name") {
         props.insert(
             "$screen_name".to_string(),
-            serde_json::Value::String("Ship Studio".to_string()),
+            serde_json::Value::String(crate::brand::NAME.to_string()),
         );
     }
     props.insert(
@@ -100,7 +117,7 @@ fn send_event(event_name: &str, distinct_id: &str, properties: serde_json::Value
     );
     props.insert(
         "$lib".to_string(),
-        serde_json::Value::String("Ship Studio App".to_string()),
+        serde_json::Value::String(format!("{} App", crate::brand::NAME)),
     );
 
     #[cfg(target_os = "macos")]
@@ -120,7 +137,7 @@ fn send_event(event_name: &str, distinct_id: &str, properties: serde_json::Value
     );
 
     let body = serde_json::json!({
-        "api_key": POSTHOG_API_KEY,
+        "api_key": api_key,
         "event": event_name,
         "distinct_id": distinct_id,
         "properties": serde_json::Value::Object(props),
@@ -282,6 +299,9 @@ pub async fn identify_user(
 #[tauri::command]
 #[tracing::instrument]
 pub fn get_analytics_enabled() -> Result<bool, CommandError> {
+    if !analytics_configured() {
+        return Ok(false);
+    }
     let enabled = ANALYTICS
         .lock()
         .ok()

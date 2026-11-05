@@ -64,6 +64,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Brand identity matches brand.json
+        run: pnpm check:brand
+
       - name: Type check
         run: pnpm typecheck
 

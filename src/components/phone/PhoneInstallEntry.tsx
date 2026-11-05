@@ -9,6 +9,7 @@
 import { Button } from '../primitives/Button';
 import { DownloadIcon } from '@/components/icons';
 import { usePolling } from '../../hooks/usePolling';
+import { BRAND } from '../../lib/brand';
 import {
   expiryLine,
   readInstallRecord,
@@ -40,7 +41,7 @@ export function PhoneInstallEntry({ now, onInstall, onReinstall }: EntryProps) {
             ? record.expiresAt
               ? `${expiryLine(record.expiresAt, now)}. Plug it in to reinstall.`
               : 'Plug it in to reinstall a newer build.'
-            : 'Get the Ship Studio app onto your iPhone or Android phone.'}
+            : `Get the ${BRAND.name} app onto your iPhone or Android phone.`}
         </span>
       </div>
       {record && (

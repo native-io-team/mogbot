@@ -1,29 +1,33 @@
 /**
  * A conversation as the list draws it, newest first (the list is inverted):
  * the reply being written or the working line, your unconfirmed sends, then
- * the messages with a day line where the day changes and a clock under the
- * last message of each run. Pure, so it's tested.
+ * the messages. Time is told the way iMessage and Grok tell it: a centred
+ * line where the day changes or the conversation picks up after a pause, not
+ * a clock under every bubble. Messages from the same side in a run sit closer
+ * together (`grouped`). Pure, so it's tested.
  */
 
 import type { Agent, AgentMessage } from '@shipstudio/companion-protocol';
-import { workingLine } from './agents';
+import { formatClock, workingLine } from './agents';
 import type { PendingSend } from './sync';
 
 export type Item =
-  | { kind: 'message'; key: string; message: AgentMessage; time: boolean }
+  | { kind: 'message'; key: string; message: AgentMessage; grouped: boolean }
   | { kind: 'day'; key: string; label: string }
   | { kind: 'pending'; key: string; pending: PendingSend }
   | { kind: 'draft'; key: string; text: string }
   | { kind: 'working'; key: string; label: string };
 
-/** Messages closer than this, from the same side, are one run with one clock. */
+/** Messages closer than this, from the same side, are one run: drawn close together. */
 const RUN_MS = 5 * 60_000;
+/** A pause this long (same day) gets its own time line. */
+export const GAP_MS = 30 * 60_000;
 const side = (m: AgentMessage) => (m.kind === 'user' ? 'you' : 'them');
 
 /**
  * The list, newest first: the draft or working line, unconfirmed sends, then
- * messages with a day line where the day changes and a clock on the last
- * message of each run.
+ * messages, with a time line above the first message of each day ("Today
+ * 2:40 PM") and above any that follows a pause ("4:12 PM").
  */
 export function chatItems(
   agent: Agent,
@@ -41,18 +45,27 @@ export function chatItems(
   }
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
-    // A draft that became its message keeps its key, so the row never remounts.
-    if (draft && m.id === draft.id) continue;
-    const next = messages[i + 1];
-    const time = !next || side(next) !== side(m) || next.ts - m.ts > RUN_MS;
-    out.push({ kind: 'message', key: m.id, message: m, time });
     const prev = messages[i - 1];
-    const label = dayLabel(m.ts, now);
-    if (!prev || dayLabel(prev.ts, now) !== label) {
-      out.push({ kind: 'day', key: `day:${m.id}`, label });
+    const label = timeLabel(m.ts, prev?.ts, now);
+    // A draft that became its message keeps its key, so the row never remounts.
+    if (!(draft && m.id === draft.id)) {
+      const grouped = !label && !!prev && side(prev) === side(m) && m.ts - prev.ts <= RUN_MS;
+      out.push({ kind: 'message', key: m.id, message: m, grouped });
     }
+    if (label) out.push({ kind: 'day', key: `day:${m.id}`, label });
   }
   return out;
+}
+
+/**
+ * The line above a message, or null for none: the day and time at the first
+ * message of a day, the time alone after a pause of `GAP_MS` or more.
+ */
+export function timeLabel(ts: number, prevTs: number | undefined, now = Date.now()): string | null {
+  const day = dayLabel(ts, now);
+  if (prevTs === undefined || dayLabel(prevTs, now) !== day) return `${day} ${formatClock(ts)}`;
+  if (ts - prevTs >= GAP_MS) return formatClock(ts);
+  return null;
 }
 
 /** "Today", "Yesterday", "Tuesday", "Mon 3 Nov": a day separator. */
@@ -73,3 +86,6 @@ export function dayLabel(ts: number, now = Date.now()): string {
     ...(d.getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}),
   });
 }
+
+/** When a message was sent, in full, for its long-press menu: "Today 2:40 PM". */
+export const sentAt = (ts: number, now = Date.now()) => `${dayLabel(ts, now)} ${formatClock(ts)}`;

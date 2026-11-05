@@ -495,7 +495,10 @@ fn installed_playwright_version(playwright_dir: &std::path::Path) -> Option<(u32
 /// Installs Playwright and Chromium once, reused for all screenshots.
 pub(super) fn get_playwright_env() -> Result<std::path::PathBuf, CommandError> {
     let home = dirs::home_dir().ok_or("Could not determine home directory")?;
-    let playwright_dir = home.join(".ship-studio").join("playwright-env");
+    // Ours (`~/.<slug>/playwright-env`), not Ship Studio's `~/.ship-studio`.
+    let playwright_dir = home
+        .join(format!(".{}", crate::brand::SLUG))
+        .join("playwright-env");
 
     // Check if playwright is already installed
     let node_modules = playwright_dir.join("node_modules").join("playwright");
@@ -549,7 +552,10 @@ pub(super) fn get_playwright_env() -> Result<std::path::PathBuf, CommandError> {
         .map_err(|e| CommandError::from(format!("Failed to create playwright env dir: {e}")))?;
 
     // Write package.json
-    let package_json = r#"{"name": "ship-studio-playwright", "private": true}"#;
+    let package_json = format!(
+        r#"{{"name": "{}-playwright", "private": true}}"#,
+        crate::brand::SLUG
+    );
     std::fs::write(playwright_dir.join("package.json"), package_json)
         .map_err(|e| CommandError::from(format!("Failed to write package.json: {e}")))?;
 

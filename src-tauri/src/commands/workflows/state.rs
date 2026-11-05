@@ -5,6 +5,28 @@
 //! A workflow's *definition* is source and belongs in the tree; its output is
 //! per-machine churn that would otherwise appear in `git status` and in pull
 //! requests within a day of real use.
+//!
+//! ## Shared with Ship Studio, on purpose
+//!
+//! This is the same file, in the same format, that Ship Studio reads and
+//! writes. Both apps scan the same projects and see the same armed workflow
+//! files, and `last_run_at` here is what tells either scheduler that a slot has
+//! already been run. Give each app its own copy and every armed workflow runs
+//! twice — and on this app's first launch, every daily workflow whose hour had
+//! passed would fire at once even though Ship Studio ran it that morning.
+//! Sharing it also means both inboxes show the same findings.
+//!
+//! Two consequences, both accepted:
+//!
+//! - `mutate_state`'s lock is per-process. Two apps finishing a run in the
+//!   same instant can each read, modify and write the file, and the later
+//!   write drops the earlier one's run record and findings. Rare (it needs two
+//!   runs ending within milliseconds) and bounded (one run's results).
+//! - `last_run_at` is written when a run *ends*, so a scheduler that looks
+//!   while the other app's run is still going sees the slot as owed. The
+//!   per-slot claim in [`super::slot_claim`] closes that between two copies of
+//!   this app; Ship Studio doesn't know about claims, so a run it starts can
+//!   still overlap one of ours for the same slot.
 
 use super::Severity;
 use crate::errors::CommandError;
@@ -127,6 +149,9 @@ pub fn state_path() -> Result<PathBuf, CommandError> {
     if let Some(override_path) = std::env::var_os(STATE_PATH_ENV) {
         return Ok(PathBuf::from(override_path));
     }
+    // Deliberately the shared location Ship Studio uses, not our app-support
+    // folder: one `last_run_at` is what stops both apps' schedulers running the
+    // same slot (see the module doc).
     let home = dirs::home_dir()
         .ok_or_else(|| CommandError::expected("Could not find your home directory"))?;
     Ok(home

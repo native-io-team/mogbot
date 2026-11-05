@@ -22,6 +22,8 @@ import { Button, T } from '../components/ui';
 import { describeError, schedule } from '../lib/session';
 import { useApp } from '../lib/store';
 import { WireFailure } from '../lib/transport';
+import { useAccent } from '../lib/accent';
+import { withAgentAccent } from '../lib/accentScreen';
 import { colors, fonts, radius, space, type } from '../lib/theme';
 
 type Reading =
@@ -36,7 +38,10 @@ function previewLine(p: SchedulePreview, now = Date.now()): string {
   return p.repeat ? `${describeRepeat(p.repeat)} · first ${when}` : `Once · ${when}`;
 }
 
-export default function Schedule() {
+export default withAgentAccent(Schedule, 'agentId');
+
+function Schedule() {
+  const accent = useAccent();
   const router = useRouter();
   const { agentId, id } = useLocalSearchParams<{ agentId: string; id?: string }>();
   const agent = useApp((s) => s.overview?.agents.find((a) => a.id === agentId));
@@ -111,7 +116,7 @@ export default function Schedule() {
         placeholder="every weekday 9am: brief me on the launch"
         placeholderTextColor={colors.textMuted}
         style={styles.input}
-        selectionColor={colors.accentActive}
+        selectionColor={accent.accent}
         keyboardAppearance="dark"
         autoCapitalize="none"
         returnKeyType="done"

@@ -1945,6 +1945,7 @@ mod tests {
             "/u/ShipStudio",
             "--add-dir",
             "/ext/site",
+            "--disallowedTools=mcp__shipstudio-preview",
             "--model",
             "opus",
         ]

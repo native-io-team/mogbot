@@ -2,7 +2,7 @@
 //!
 //! The agent never sees a value. It asks; the user types it into a masked card
 //! in its chat; the value goes from the webview straight into the macOS
-//! Keychain, under a service of that agent's own (`ship-studio-agent-<id>`),
+//! Keychain, under a service of that agent's own (`<slug>-agent-<id>`),
 //! one item per environment variable. The agent gets back only a reference
 //! (`secret:finance/stripe_key`) and the variable's name.
 //!
@@ -105,7 +105,7 @@ pub struct Secret {
 /* ---------------------------------------------------------------- vault */
 
 fn service(agent_id: &str) -> String {
-    format!("ship-studio-agent-{agent_id}")
+    format!("{}{agent_id}", crate::brand::keychain_prefix("agent"))
 }
 
 #[cfg(not(test))]
@@ -726,10 +726,10 @@ mod tests {
                 ApprovalStatus::Allowed
             );
             assert_eq!(
-                vault::get(&format!("ship-studio-agent-{}", finance.id), "STRIPE_KEY").as_deref(),
+                vault::get(&service(&finance.id), "STRIPE_KEY").as_deref(),
                 Some("sk_live_scoped_123456")
             );
-            assert!(vault::get(&format!("ship-studio-agent-{}", site.id), "STRIPE_KEY").is_none());
+            assert!(vault::get(&service(&site.id), "STRIPE_KEY").is_none());
 
             // The registry holds the reference, never the value.
             let saved = store::get(&finance.id).unwrap();
@@ -823,7 +823,7 @@ mod tests {
                 save(&finance.id, &request_id, &["ghp_revoke_me_123".into()]).unwrap();
             revoke(&finance.id, &secret.id).unwrap();
             assert!(store::get(&finance.id).unwrap().secrets.is_empty());
-            assert!(vault::get(&format!("ship-studio-agent-{}", finance.id), "GH_TOKEN").is_none());
+            assert!(vault::get(&service(&finance.id), "GH_TOKEN").is_none());
             assert!(env_for(&store::get(&finance.id).unwrap()).is_empty());
             assert!(revoke(&finance.id, &secret.id).is_err());
 
@@ -831,7 +831,7 @@ mod tests {
             let (request_id, _) = ask(&finance, "gh_token", &[]);
             save(&finance.id, &request_id, &["ghp_second_123".into()]).unwrap();
             store::delete(&finance.id).unwrap();
-            assert!(vault::get(&format!("ship-studio-agent-{}", finance.id), "GH_TOKEN").is_none());
+            assert!(vault::get(&service(&finance.id), "GH_TOKEN").is_none());
         });
     }
 
@@ -843,9 +843,7 @@ mod tests {
             store::set_approval_status(&finance.id, &request_id, ApprovalStatus::Denied).unwrap();
             assert!(save(&finance.id, &request_id, &["sk_too_late_1234".into()]).is_err());
             assert!(store::get(&finance.id).unwrap().secrets.is_empty());
-            assert!(
-                vault::get(&format!("ship-studio-agent-{}", finance.id), "STRIPE_KEY").is_none()
-            );
+            assert!(vault::get(&service(&finance.id), "STRIPE_KEY").is_none());
             let told = denied_prompt(&request, None);
             assert!(told.starts_with("[The user declined to give you stripe_key"));
             assert!(told.contains("Don't ask for it again"));

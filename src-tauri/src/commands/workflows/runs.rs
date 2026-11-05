@@ -537,6 +537,8 @@ async fn invoke_agent(
                 "--permission-mode",
                 mode,
             ])
+            // Our preview bridge, not Ship Studio's (see preview_isolation).
+            .arg(crate::preview_isolation::claude_flag())
             .env("PATH", get_extended_path())
             .current_dir(project);
             let output = run_streaming(
@@ -561,13 +563,17 @@ async fn invoke_agent(
                 WorkflowPermission::CanEdit => "workspace-write",
             };
             let output_file = std::env::temp_dir().join(format!(
-                "shipstudio-workflow-{}-{}.txt",
+                "{}-workflow-{}-{}.txt",
+                crate::brand::SLUG,
                 std::process::id(),
                 now_ms()
             ));
             let mut cmd = create_command(&binary);
+            cmd.arg("exec");
+            if let Some(value) = crate::preview_isolation::codex_override(None, Some(project)) {
+                cmd.args(["-c", &value]);
+            }
             cmd.args([
-                "exec",
                 "--skip-git-repo-check",
                 "--color",
                 "never",

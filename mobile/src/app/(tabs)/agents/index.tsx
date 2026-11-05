@@ -18,6 +18,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { AgentRow } from '../../../components/AgentRow';
 import { Spinner } from '../../../components/agent';
 import { ChatView } from '../../../components/ChatView';
+import { AgentAccent } from '../../../lib/accent';
 import { ConnectionNotice, useLinkState, useNow } from '../../../components/ConnectionPill';
 import { Button, Icon, IconButton, ripple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
@@ -48,6 +49,12 @@ type Row =
 
 /** Wide enough for a list and a chat side by side. */
 const SPLIT_AT = 700;
+/**
+ * …and tall enough for an approval card to sit whole in the chat beside it.
+ * A phone in landscape is wide but not tall: there the chat beside the list
+ * was a strip with three buttons and no question, so it stays single-pane.
+ */
+const SPLIT_MIN_HEIGHT = 600;
 
 const UNDO: Partial<Record<AgentAction, [string, AgentAction]>> = {
   hide: ['Hid', 'unhide'],
@@ -56,9 +63,9 @@ const UNDO: Partial<Record<AgentAction, [string, AgentAction]>> = {
 
 export default function Agents() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const split = width >= SPLIT_AT;
+  const split = width >= SPLIT_AT && height >= SPLIT_MIN_HEIGHT;
   const overview = useApp((s) => s.overview);
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const live = useApp((s) => s.link.kind === 'connected');
@@ -251,7 +258,9 @@ export default function Agents() {
           </View>
           <View style={[styles.splitChat, { paddingRight: insets.right }]}>
             {shown ? (
-              <ChatView key={shown} id={shown} embedded />
+              <AgentAccent agentId={shown}>
+                <ChatView key={shown} id={shown} embedded />
+              </AgentAccent>
             ) : (
               <View style={styles.center}>
                 <T color={colors.textSecondary}>Pick an agent to see its chat.</T>
@@ -371,24 +380,36 @@ function Refused() {
   const name = useApp((s) => s.credentials?.name ?? 'Your Mac');
   if (link.kind !== 'refused') return null;
   const removed = link.reason === 'revoked' || link.reason === 'unauthorized';
+  // Not paired any more is a state, not an accusation: the phone can't tell
+  // whether someone removed it or the Mac's pairings were reset, so it says
+  // what's true and both ways it happens, not the Mac's own wording too.
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.refused}>
       <T variant="subhead" color={colors.textWhite}>
         {removed
-          ? `${name} removed this phone`
+          ? `Not paired with ${name} any more`
           : link.reason === 'update_app'
             ? 'Update this app'
-            : `Update Ship Studio on ${name}`}
+            : `Update the app on ${name}`}
       </T>
-      {refusal?.message ? <T color={colors.textSecondary}>{refusal.message}</T> : null}
+      {removed ? (
+        <T color={colors.textSecondary}>
+          That happens when this phone is removed on the Mac, or its pairings are reset. Your agents
+          and their chats are still on the Mac: pair again to pick up where you left off.
+        </T>
+      ) : refusal?.message ? (
+        <T color={colors.textSecondary}>{refusal.message}</T>
+      ) : null}
       {removed && (
         <Button
           title="Pair again"
           variant="primary"
+          icon="qrcode.viewfinder"
           style={{ alignSelf: 'flex-start' }}
           onPress={async () => {
             await unpair();
             router.replace('/pair');
+            router.push('/scan');
           }}
         />
       )}
@@ -406,8 +427,7 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
           No agents yet
         </T>
         <T color={colors.textSecondary} style={styles.centerText}>
-          In Ship Studio on {macName}, open Agents and create one. It shows up here as soon as it
-          exists.
+          On {macName}, open Agents and create one. It shows up here as soon as it exists.
         </T>
         <Button title="Connection details" onPress={() => router.push('/connection')} />
       </Animated.View>

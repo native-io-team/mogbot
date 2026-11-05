@@ -1,8 +1,10 @@
 /**
  * Shared external links.
  *
- * All Slack CTAs in the app must use this single URL — ship.studio/slack
- * redirects to the current Slack invite, so an expired invite only needs
- * fixing on the website, not in a new app release.
+ * Every community CTA in the app uses this single URL, taken from
+ * `links.community` in brand.json. It is null when this build has no
+ * community of its own, and every CTA that would use it hides.
  */
-export const SLACK_INVITE_URL = 'https://ship.studio/slack';
+import { BRAND_LINKS } from './brand';
+
+export const SLACK_INVITE_URL: string | null = BRAND_LINKS.community;

@@ -1024,7 +1024,10 @@ const QUEUED_CHAT = [
  * Start fresh. Acme Site's conversation as its engine last reported it: the
  * latest request carried 174k of a 200k window (87%, past the 85% nudge).
  */
-const ACME_FULL = { status: status('idle'), context: { used: 174_000, window: 200_000, at: now - 19 * MIN } };
+const ACME_FULL = {
+  status: status('idle'),
+  context: { used: 174_000, window: 200_000, at: now - 19 * MIN },
+};
 
 /** The same chat after a fresh start: the history, the divider, then the new conversation. */
 const FRESH_CHAT = [

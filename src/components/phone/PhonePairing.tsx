@@ -18,6 +18,7 @@ import {
   type PairingCode,
 } from '../../lib/companion';
 import { PhoneQr } from './PhoneQr';
+import { BRAND } from '../../lib/brand';
 
 interface OfferProps {
   busy: boolean;
@@ -33,7 +34,7 @@ export function PairOffer({ busy, onPair }: OfferProps) {
       <div className="phone-offer__body">
         <span className="phone-offer__title">Pair a phone</span>
         <span className="phone-offer__detail">
-          Scan a one-time code with the Ship Studio app, then allow the phone here.
+          Scan a one-time code with the {BRAND.name} app, then allow the phone here.
         </span>
       </div>
       <Button variant="primary" disabled={busy} onClick={onPair}>
@@ -58,12 +59,12 @@ export function PairCode({ code, now, busy, onCopy, onCancel }: CodeProps) {
       <PhoneQr
         size={code.qr.size}
         modules={code.qr.modules}
-        label="Pairing code for the Ship Studio phone app"
+        label={`Pairing code for the ${BRAND.name} phone app`}
       />
       <div className="phone-code__side">
-        <span className="phone-code__title">Scan with the Ship Studio app</span>
+        <span className="phone-code__title">Scan with the {BRAND.name} app</span>
         <ol className="phone-code__steps">
-          <li>Open Ship Studio on your phone.</li>
+          <li>Open {BRAND.name} on your phone.</li>
           <li>Tap Pair, then point the camera at this code.</li>
           <li>Allow the phone here when it asks.</li>
         </ol>

@@ -21,10 +21,10 @@
 <plist version="1.0">
 <dict>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Ship Studio uses this to show and control what's playing in Spotify.</string>
+	<string>Used to show and control what's playing in Spotify.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Ship Studio listens only while you dictate a message to an agent.</string>
+	<string>Listens only while you dictate a message to an agent.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ship Studio turns your dictation into text on this Mac.</string>
+	<string>Turns your dictation into text on this Mac.</string>
 </dict>
 </plist>

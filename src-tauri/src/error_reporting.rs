@@ -1,9 +1,9 @@
 //! # Automatic Error Reporting
 //!
-//! Sends error reports to the Ship Studio admin agent
-//! (<https://shipstudio-admin-agent.vercel.app>), which investigates them
-//! against the codebase, files deduplicated GitHub issues, and can open draft
-//! fix PRs. See `docs/error-reporting.md` for the full integration contract.
+//! Sends error reports to the report endpoint named by `links.errorReports`
+//! in brand.json. With no endpoint configured (the default) the whole
+//! pipeline is off: nothing is sent anywhere, whatever the build or consent.
+//! See `docs/error-reporting.md` for the endpoint contract.
 //!
 //! This complements Sentry (aggregation/alerting); the admin agent is the
 //! act-on-it pipeline. Rules enforced here:
@@ -30,7 +30,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-const ENDPOINT: &str = "https://shipstudio-admin-agent.vercel.app/report";
+/// Where reports go. `None` (no `links.errorReports` in brand.json) turns
+/// reporting off entirely.
+const ENDPOINT: Option<&str> = crate::brand::links::ERROR_REPORTS;
 const SEND_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Delivery receipts are separate from `bug-report-throttle.json`: the
@@ -123,6 +125,7 @@ fn reporting_consent_enabled() -> bool {
 }
 
 fn secret() -> Option<&'static str> {
+    ENDPOINT?;
     option_env!("BUG_REPORT_SECRET").filter(|s| !s.is_empty())
 }
 
@@ -184,44 +187,11 @@ struct Throttle {
 }
 
 fn throttle_path() -> Option<PathBuf> {
-    #[cfg(target_os = "macos")]
-    {
-        dirs::home_dir()
-            .map(|h| h.join("Library/Application Support/ShipStudio/bug-report-throttle.json"))
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        dirs::data_local_dir().map(|d| d.join("ShipStudio/bug-report-throttle.json"))
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        dirs::data_local_dir().map(|d| d.join("ship-studio/bug-report-throttle.json"))
-    }
+    Some(crate::brand::app_support_dir().join("bug-report-throttle.json"))
 }
 
 fn receipt_ledger_path() -> Option<PathBuf> {
-    #[cfg(target_os = "macos")]
-    {
-        return dirs::home_dir().map(|h| {
-            h.join("Library/Application Support/ShipStudio")
-                .join(RECEIPTS_FILENAME)
-        });
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        return dirs::data_local_dir().map(|d| d.join("ShipStudio").join(RECEIPTS_FILENAME));
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        return dirs::data_local_dir().map(|d| d.join("ship-studio").join(RECEIPTS_FILENAME));
-    }
-
-    #[allow(unreachable_code)]
-    None
+    Some(crate::brand::app_support_dir().join(RECEIPTS_FILENAME))
 }
 
 fn read_receipts(path: &Path, now: chrono::DateTime<chrono::Utc>) -> Vec<AutomaticReportReceipt> {
@@ -669,7 +639,7 @@ fn parse_accepted_response(status: reqwest::StatusCode, body: &[u8]) -> Option<A
 
 async fn post(secret: &'static str, body: serde_json::Value) -> Option<AcceptedReport> {
     let response = reqwest::Client::new()
-        .post(ENDPOINT)
+        .post(ENDPOINT?)
         .bearer_auth(secret)
         .json(&body)
         .timeout(SEND_TIMEOUT)
@@ -985,13 +955,13 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for AdminAgentLayer {
         }
         let target = meta.target();
         // Only our own code — error logs from dependencies aren't our bugs.
-        if !target.starts_with("ship_studio") {
+        if !target.starts_with("app_lib") {
             return;
         }
         // Frontend logger errors arrive via `logging::log_frontend_event`; the
         // frontend reports those itself with proper stacks (`errorReporting.ts`).
         // Skipping here prevents double reports for the same incident.
-        if target.starts_with("ship_studio_lib::logging") {
+        if target.starts_with("app_lib::logging") {
             return;
         }
 

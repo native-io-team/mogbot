@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { AgentAvatar, Spinner } from '../../../components/agent';
-import { T } from '../../../components/ui';
+import { Icon, T } from '../../../components/ui';
 import { formatAgo } from '../../../lib/agents';
 import { canCall, describeError, search } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
@@ -91,7 +91,7 @@ export default function Search() {
           headerLargeTitle: true,
           headerLargeTitleStyle: { fontFamily: fonts.semibold, color: colors.textWhite },
           headerSearchBarOptions: {
-            placeholder: 'Every conversation',
+            placeholder: 'Search conversations',
             autoCapitalize: 'none',
             hideWhenScrolling: false,
             textColor: colors.textWhite,
@@ -146,24 +146,45 @@ export default function Search() {
         ListEmptyComponent={
           <Animated.View entering={FadeIn.delay(150)} style={styles.empty}>
             {!served ? (
-              <T color={colors.textSecondary}>
-                Update Ship Studio on your Mac to search from here.
-              </T>
+              <EmptyNote
+                title="Search needs an update"
+                body="Update the app on your Mac to search your conversations from here."
+              />
             ) : busy && !hits ? (
               <Spinner />
             ) : error ? (
               <T color={colors.accentErrorLight}>{error}</T>
             ) : hits ? (
-              <T color={colors.textSecondary}>Nothing matches “{q}”.</T>
+              <EmptyNote
+                title={`Nothing matches “${q}”`}
+                body="Every word has to match, so try fewer or shorter ones."
+              />
             ) : (
-              <T color={colors.textMuted}>
-                Every word has to match. Search covers every agent’s conversation on your Mac.
-              </T>
+              <EmptyNote
+                icon
+                title="Find anything that was said"
+                body="Every conversation with every agent, yours and theirs. Try a name, a topic or a phrase."
+              />
             )}
           </Animated.View>
         }
       />
     </>
+  );
+}
+
+/** What the page says when there are no hits to show: a title and one line. */
+function EmptyNote({ title, body, icon }: { title: string; body: string; icon?: boolean }) {
+  return (
+    <View style={styles.emptyNote}>
+      {icon && <Icon name="magnifyingglass" size={28} color={colors.textMuted} />}
+      <T variant="title" color={colors.textWhite} style={styles.centerText}>
+        {title}
+      </T>
+      <T color={colors.textSecondary} style={styles.centerText}>
+        {body}
+      </T>
+    </View>
   );
 }
 
@@ -203,5 +224,7 @@ const styles = StyleSheet.create({
   },
   hit: { paddingHorizontal: space.lg, paddingVertical: space.sm, gap: space['2xs'] },
   hitTop: { flexDirection: 'row', justifyContent: 'space-between' },
-  empty: { padding: space.xl, alignItems: 'center' },
+  empty: { padding: space.xl, paddingTop: space['2xl'] * 2, alignItems: 'center' },
+  emptyNote: { alignItems: 'center', gap: space.sm, maxWidth: 320 },
+  centerText: { textAlign: 'center' },
 });

@@ -22,10 +22,13 @@ use crate::utils::{create_command, get_extended_path};
 
 /// Expo SDK 58 builds with Xcode 26.4 or later (mobile/README.md).
 pub const XCODE_MINIMUM: (u32, u32) = (26, 4);
-/// The Android package of an app built on this Mac. Never the official one,
-/// so a self-build and the official APK can't trip over each other's
-/// signatures.
-pub const ANDROID_PACKAGE: &str = "studio.ship.companion.self";
+/// The Android package of an app built on this Mac: `<brand bundle id>.self`.
+/// Never the official one, so a self-build and the official APK can't trip
+/// over each other's signatures, and never Ship Studio's
+/// (`studio.ship.companion.self`), so installing ours can't replace theirs.
+pub fn android_package() -> String {
+    format!("{}.self", crate::brand::COMPANION_BUNDLE_ID)
+}
 
 const QUICK_SECS: u64 = 15;
 const DEVICECTL_SECS: u64 = 30;
@@ -46,9 +49,7 @@ fn source_dir() -> std::path::PathBuf {
             return repo.canonicalize().unwrap_or(repo);
         }
     }
-    dirs::home_dir()
-        .unwrap_or_default()
-        .join("ShipStudio/.companion-build/mobile")
+    crate::brand::app_support_dir().join("companion-build/mobile")
 }
 
 #[derive(Debug, Serialize)]
@@ -270,12 +271,16 @@ fn parse_subject_ou(subject: &str) -> Option<String> {
         .filter(|ou| !ou.is_empty())
 }
 
-/// `studio.ship.companion.<6 hex of the team id>`: a free team can't take an
-/// id someone else holds, and this one never collides with the official app.
+/// `<brand bundle id>.<6 hex of the team id>`: a free team can't take an id
+/// someone else holds, this one never collides with the official app, and
+/// because it hangs off brand.json's `companion.bundleId` it never equals
+/// Ship Studio's `studio.ship.companion.<hex>` either — the two phone apps
+/// install side by side. `mobile/app.config.ts` builds whatever the desktop
+/// passes as `COMPANION_BUNDLE_ID`.
 pub fn bundle_id_for_team(team_id: &str) -> String {
     let digest = Sha256::digest(team_id.as_bytes());
     let hex: String = digest.iter().take(3).map(|b| format!("{b:02x}")).collect();
-    format!("studio.ship.companion.{hex}")
+    format!("{}.{hex}", crate::brand::COMPANION_BUNDLE_ID)
 }
 
 async fn check_signing() -> Option<Signing> {
@@ -597,7 +602,7 @@ pub async fn companion_install_android_status() -> Result<AndroidInstallStatus, 
             .await
             .map(|v| v.trim().to_string()),
         devices,
-        package: ANDROID_PACKAGE.to_string(),
+        package: android_package(),
         source: check_source(),
     })
 }
@@ -607,15 +612,8 @@ pub async fn companion_install_android_status() -> Result<AndroidInstallStatus, 
 pub async fn companion_install_android_app(serial: String) -> Result<InstalledApp, CommandError> {
     valid_token("serial", &serial)?;
     let mut cmd = adb_command();
-    cmd.args([
-        "-s",
-        &serial,
-        "shell",
-        "pm",
-        "list",
-        "packages",
-        ANDROID_PACKAGE,
-    ]);
+    let package = android_package();
+    cmd.args(["-s", &serial, "shell", "pm", "list", "packages", &package]);
     let out = run_to_stdout(
         tokio::process::Command::from(cmd),
         "adb pm list",
@@ -624,10 +622,7 @@ pub async fn companion_install_android_app(serial: String) -> Result<InstalledAp
     .await
     .ok();
     Ok(InstalledApp {
-        installed: out.map(|o| {
-            o.lines()
-                .any(|l| l.trim() == format!("package:{ANDROID_PACKAGE}"))
-        }),
+        installed: out.map(|o| o.lines().any(|l| l.trim() == format!("package:{package}"))),
         version: None,
         expires_at: None,
     })
@@ -722,8 +717,19 @@ mod tests {
         let a = bundle_id_for_team("H8NN6DM6G6");
         assert_eq!(a, bundle_id_for_team("H8NN6DM6G6"));
         assert_ne!(a, bundle_id_for_team("ABCDE12345"));
-        assert!(a.starts_with("studio.ship.companion."));
-        assert_eq!(a.len(), "studio.ship.companion.".len() + 6);
+        let prefix = format!("{}.", crate::brand::COMPANION_BUNDLE_ID);
+        assert!(a.starts_with(&prefix));
+        assert_eq!(a.len(), prefix.len() + 6);
+    }
+
+    #[test]
+    fn self_builds_never_take_ship_studios_ids() {
+        // Same id on the phone means installing ours replaces Ship Studio's.
+        let ios = bundle_id_for_team("H8NN6DM6G6");
+        assert!(!ios.starts_with("studio.ship."), "{ios}");
+        assert_ne!(android_package(), "studio.ship.companion.self");
+        assert_ne!(ios, crate::brand::COMPANION_BUNDLE_ID);
+        assert_ne!(android_package(), crate::brand::COMPANION_BUNDLE_ID);
     }
 
     #[test]

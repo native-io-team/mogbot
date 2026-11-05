@@ -1,7 +1,8 @@
 /**
- * Welcome and pairing: scan the QR code on the Mac (or paste its link), wait
- * for someone at the desk to allow it, then say once how alerts work.
- * Deep links (`shipstudio-companion://pair?d=…`) land here too.
+ * Welcome and pairing: one Scan button first (with the steps folded under
+ * it), wait for someone at the desk to allow it, then a moment that says
+ * which Mac it's paired with, and asks about alerts once if they're undecided.
+ * Deep links (`…://pair?d=…`) land here too.
  */
 
 import { parsePairingLink, type PairingLink } from '@shipstudio/companion-protocol';
@@ -10,10 +11,11 @@ import * as Notifications from 'expo-notifications';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from '../components/agent';
-import { Button, T } from '../components/ui';
+import { Button, Icon, T } from '../components/ui';
+import { ALERTS_WHILE_OPEN } from '../lib/push';
 import { openTailscale, pair, PairError, type PairFailure } from '../lib/pairing';
 import { adopt, enableAlerts } from '../lib/session';
 import { PAIRING_SCHEME } from '@shipstudio/companion-protocol';
@@ -25,10 +27,10 @@ type Phase =
   | { kind: 'start'; error?: string }
   | { kind: 'waiting'; link: PairingLink }
   | { kind: 'failed'; link: PairingLink; failure: PairFailure }
-  | { kind: 'alerts' };
+  | { kind: 'paired'; mac: string; askAlerts: boolean };
 
-const ALERTS_COPY =
-  'Alerts arrive while Ship Studio is open on your phone. Your Mac still notifies you at the desk.';
+/** How long the success moment stays when there's nothing to decide on it. */
+const PAIRED_MS = 1600;
 
 export default function Pair() {
   const router = useRouter();
@@ -37,35 +39,37 @@ export default function Pair() {
   const [phase, setPhase] = useState<Phase>({ kind: 'start' });
   const abort = useRef<AbortController | null>(null);
 
-  const begin = useCallback(
-    async (link: PairingLink) => {
-      abort.current?.abort();
-      const controller = new AbortController();
-      abort.current = controller;
-      setPhase({ kind: 'waiting', link });
-      try {
-        const credentials = await pair(link, controller.signal);
-        await adopt(credentials);
-        haptic.success();
-        // Say how alerts work once, when there's a decision to make; not on a re-pair.
-        const { status } = await Notifications.getPermissionsAsync();
-        if (status === Notifications.PermissionStatus.UNDETERMINED) setPhase({ kind: 'alerts' });
-        else router.replace('/agents');
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        haptic.error();
-        setPhase({
-          kind: 'failed',
-          link,
-          failure:
-            error instanceof PairError
-              ? error.failure
-              : { kind: 'other', message: error instanceof Error ? error.message : String(error) },
-        });
-      }
-    },
-    [router]
-  );
+  const begin = useCallback(async (link: PairingLink) => {
+    abort.current?.abort();
+    const controller = new AbortController();
+    abort.current = controller;
+    setPhase({ kind: 'waiting', link });
+    try {
+      const credentials = await pair(link, controller.signal);
+      await adopt(credentials);
+      haptic.success();
+      // Say which Mac, always; ask about alerts only when there's a decision to make.
+      const { status } = await Notifications.getPermissionsAsync().catch(() => ({
+        status: Notifications.PermissionStatus.DENIED,
+      }));
+      setPhase({
+        kind: 'paired',
+        mac: credentials.name,
+        askAlerts: status === Notifications.PermissionStatus.UNDETERMINED,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      haptic.error();
+      setPhase({
+        kind: 'failed',
+        link,
+        failure:
+          error instanceof PairError
+            ? error.failure
+            : { kind: 'other', message: error instanceof Error ? error.message : String(error) },
+      });
+    }
+  }, []);
 
   // Arrived with a link (deep link, or the scanner).
   const incoming = params.link ?? (params.d ? `${PAIRING_SCHEME}://pair?d=${params.d}` : null);
@@ -85,7 +89,15 @@ export default function Pair() {
     else setPhase({ kind: 'start', error: notALink });
   };
 
-  const finish = () => router.replace('/agents');
+  const finish = useCallback(() => router.replace('/agents'), [router]);
+
+  // Nothing to decide: the success moment shows, then gives way to your agents.
+  const autoFinish = phase.kind === 'paired' && !phase.askAlerts;
+  useEffect(() => {
+    if (!autoFinish) return;
+    const timer = setTimeout(finish, PAIRED_MS);
+    return () => clearTimeout(timer);
+  }, [autoFinish, finish]);
 
   return (
     <ScrollView
@@ -99,27 +111,15 @@ export default function Pair() {
       <View style={styles.hero}>
         <Image source={icon} style={styles.logo} />
         <T variant="display" color={colors.textWhite}>
-          Ship Studio on your phone
+          Your agents, on your phone
         </T>
         <T color={colors.textSecondary}>
-          Your agents keep working on your Mac. This phone talks to it directly, over your own
-          Tailscale network, with nothing of ours in between.
+          They keep working on your Mac. This phone talks to it directly, over your own Tailscale.
         </T>
       </View>
 
       {phase.kind === 'start' && (
         <Animated.View entering={FadeIn.duration(200)} style={styles.block}>
-          <View style={styles.steps}>
-            <Step n={1} text="On your Mac, open Ship Studio → Settings → Phone → Pair a phone." />
-            <Step
-              n={2}
-              text="Turn on Tailscale on this phone, signed in to the same tailnet as your Mac."
-            />
-            <Step n={3} text="Scan the code. Your Mac asks you to allow this phone." />
-          </View>
-          <T variant="small" color={colors.textMuted}>
-            Your Mac has to stay on, with Ship Studio open, for this phone to reach it.
-          </T>
           {(phase.error ?? (incoming && !incomingLink ? notALink : null)) && (
             <Animated.View entering={FadeInDown.duration(200)}>
               <T variant="small" color={colors.accentErrorLight}>
@@ -128,18 +128,26 @@ export default function Pair() {
             </Animated.View>
           )}
           <Button
-            title="Scan pairing code"
+            title="Scan the code on your Mac"
             variant="primary"
             size="large"
             icon="qrcode.viewfinder"
             onPress={() => router.push('/scan')}
           />
           <Button
-            title="Paste pairing link"
-            size="large"
+            title="Paste a pairing link"
+            variant="ghost"
             icon="doc.on.clipboard"
             onPress={() => void paste()}
           />
+          <View style={styles.steps}>
+            <Step n={1} text="On your Mac: Settings → Phone → Pair a phone." />
+            <Step n={2} text="Tailscale on here, on the same account as your Mac." />
+            <Step n={3} text="Scan, then click Allow on the Mac." />
+          </View>
+          <T variant="small" color={colors.textMuted}>
+            Your Mac has to stay on, with the app open, for this phone to reach it.
+          </T>
         </Animated.View>
       )}
 
@@ -150,7 +158,7 @@ export default function Pair() {
           style={[styles.card, styles.block]}
         >
           <View style={styles.waitingTitle}>
-            <Spinner size={14} color={colors.accentActive} />
+            <Spinner size={14} color={colors.textPrimary} />
             <T variant="title" color={colors.textWhite}>
               Allow on your Mac
             </T>
@@ -189,25 +197,36 @@ export default function Pair() {
         </Animated.View>
       )}
 
-      {phase.kind === 'alerts' && (
+      {phase.kind === 'paired' && (
         <Animated.View entering={FadeInDown.duration(250)} style={[styles.card, styles.block]}>
-          <T variant="title" color={colors.textWhite}>
-            Paired
+          <Animated.View entering={ZoomIn.duration(260).springify()} style={styles.check}>
+            <Icon name="checkmark" size={22} color={colors.accentSuccess} fallback={<T>✓</T>} />
+          </Animated.View>
+          <T variant="title" color={colors.textWhite} accessibilityRole="header">
+            Paired with {phase.mac}
           </T>
-          <T color={colors.textSecondary}>{ALERTS_COPY}</T>
-          <T variant="small" color={colors.textMuted}>
-            With the official app, your Mac can also wake this phone through Ship Studio’s push
-            service. It sends only that an agent needs you or finished, never what it said.
-          </T>
-          <Button
-            title="Turn on alerts"
-            variant="primary"
-            onPress={async () => {
-              await enableAlerts();
-              finish();
-            }}
-          />
-          <Button title="Not now" variant="ghost" onPress={finish} />
+          {phase.askAlerts ? (
+            <>
+              <T color={colors.textSecondary}>
+                Want a tap on the shoulder when an agent needs you or finishes? {ALERTS_WHILE_OPEN}
+              </T>
+              <T variant="small" color={colors.textMuted}>
+                With the official app, your Mac can also wake this phone through the push service.
+                It sends only that an agent needs you or finished, never what it said.
+              </T>
+              <Button
+                title="Turn on alerts"
+                variant="primary"
+                onPress={async () => {
+                  await enableAlerts();
+                  finish();
+                }}
+              />
+              <Button title="Not now" variant="ghost" onPress={finish} />
+            </>
+          ) : (
+            <T color={colors.textSecondary}>Opening your agents…</T>
+          )}
         </Animated.View>
       )}
     </ScrollView>
@@ -215,7 +234,7 @@ export default function Pair() {
 }
 
 const notALink =
-  'That isn’t a Ship Studio pairing link. Make one on your Mac: Settings → Phone → Pair a phone.';
+  'That isn’t a pairing link. Make one on your Mac: Settings → Phone → Pair a phone.';
 
 function Step({ n, text }: { n: number; text: string }) {
   return (
@@ -243,7 +262,7 @@ function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
       case 'mac_unreachable':
         return [
           `Can’t reach ${mac} on your tailnet`,
-          'The Mac didn’t answer. Check that it’s awake, that Tailscale is on there and here, and that Ship Studio is open.',
+          'The Mac didn’t answer. Check that it’s awake, that Tailscale is on there and here, and that the app is open on it.',
         ];
       case 'lan_only':
         return [
@@ -304,4 +323,12 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSubtle,
   },
   waitingTitle: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  check: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceControl,
+  },
 });

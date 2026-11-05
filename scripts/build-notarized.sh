@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build Ship Studio with code signing and .pkg installer generation.
+# Build the app (named in brand.json) with code signing and .pkg installer generation.
+# Run from the repo root.
 #
 # Notarization env vars are optional — if set, Tauri will attempt to notarize.
 # Without them, the script still builds a signed .app and .pkg.
@@ -18,6 +19,10 @@ set -euo pipefail
 #
 # Optional (for .pkg signing — requires Developer ID Installer cert):
 #   export INSTALLER_SIGNING_IDENTITY="Developer ID Installer"
+
+# The app's name and folder name come from brand.json, like everything else.
+APP_NAME="$(node -p "require('./brand.json').name")"
+APP_DIR_NAME="$(node -p "require('./brand.json').appDirName")"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -77,10 +82,10 @@ fi
 echo ""
 
 # Build (allow updater artifact failure if signing key not set)
-echo "Building Ship Studio..."
+echo "Building ${APP_NAME}..."
 pnpm tauri build || {
   # Check if the .app was built despite the error (e.g. updater signing failed)
-  if [ -d "src-tauri/target/release/bundle/macos/Ship Studio.app" ]; then
+  if [ -d "src-tauri/target/release/bundle/macos/${APP_NAME}.app" ]; then
     echo -e "${YELLOW}Build completed with warnings (updater artifacts may have failed — this is OK for local testing).${NC}"
   else
     echo -e "${RED}Build failed.${NC}"
@@ -89,7 +94,7 @@ pnpm tauri build || {
 }
 
 # Find the built .app
-APP_PATH="src-tauri/target/release/bundle/macos/Ship Studio.app"
+APP_PATH="src-tauri/target/release/bundle/macos/${APP_NAME}.app"
 if [ ! -d "$APP_PATH" ]; then
   echo -e "${YELLOW}Could not find app at expected path, searching...${NC}"
   APP_PATH=$(find src-tauri/target/release/bundle/macos -name "*.app" -maxdepth 1 | head -1)
@@ -114,7 +119,7 @@ fi
 echo ""
 
 # Build .pkg installer
-PKG_PATH="src-tauri/target/release/bundle/macos/ShipStudio.pkg"
+PKG_PATH="src-tauri/target/release/bundle/macos/${APP_DIR_NAME}.pkg"
 echo "Creating .pkg installer..."
 
 if [ -n "$INSTALLER_IDENTITY" ]; then

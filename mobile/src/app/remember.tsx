@@ -11,9 +11,14 @@ import { Button, T } from '../components/ui';
 import { haptic } from '../lib/haptics';
 import { changeMemory, describeError, suggestMemory } from '../lib/session';
 import { useApp } from '../lib/store';
+import { useAccent } from '../lib/accent';
+import { withAgentAccent } from '../lib/accentScreen';
 import { colors, fonts, radius, space, type } from '../lib/theme';
 
-export default function Remember() {
+export default withAgentAccent(Remember);
+
+function Remember() {
+  const accent = useAccent();
   const { id, messageId } = useLocalSearchParams<{ id: string; messageId: string }>();
   const router = useRouter();
   const name = useApp((s) => s.overview?.agents.find((a) => a.id === id)?.name ?? 'This agent');
@@ -71,7 +76,7 @@ export default function Remember() {
         placeholder={summarising ? 'Summarising…' : `What should ${name} remember?`}
         placeholderTextColor={colors.textMuted}
         keyboardAppearance="dark"
-        selectionColor={colors.accentActive}
+        selectionColor={accent.accent}
         accessibilityLabel={`What ${name} should remember`}
         style={styles.input}
       />

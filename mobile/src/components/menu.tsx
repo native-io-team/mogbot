@@ -1,8 +1,10 @@
 /**
- * A long-press menu. iOS gets the system action sheet; Android gets a
- * Material bottom sheet with icons and ripples (an Alert there holds three
- * buttons at most). Rows on iOS use the native context menu instead (see
- * the Agents list); this is for everything that isn't a link.
+ * A long-press menu, and every other list of choices (`choose`). iOS gets the
+ * system action sheet; Android gets a Material bottom sheet with icons and
+ * ripples: an Alert there holds three buttons at most and silently drops the
+ * rest, which on an approval's ⋯ would hide an answer. Rows on iOS use the
+ * native context menu instead (see the Agents list); this is for everything
+ * that isn't a link.
  */
 
 import { useSyncExternalStore } from 'react';
@@ -13,10 +15,15 @@ import type { Action } from '../lib/actions';
 import { colors, radius, space } from '../lib/theme';
 import { Icon, ripple, T } from './ui';
 
+type Item = Omit<Action<string>, 'icon'> & { icon?: Action<string>['icon'] };
+
 interface Open {
   title?: string;
-  actions: Action<string>[];
+  message?: string;
+  actions: Item[];
   run: (id: string) => void;
+  /** A "Cancel" row at the end, as the iOS sheet has. */
+  cancel?: boolean;
 }
 
 let open: Open | null = null;
@@ -49,6 +56,38 @@ export function showActions<Id extends string>(
     return;
   }
   set({ title, actions, run: run as (id: string) => void });
+}
+
+export interface Choice {
+  label: string;
+  destructive?: boolean;
+  run: () => void;
+}
+
+/** The system's action sheet on iOS, the app's sheet on Android; every choice shown. Cancel is added. */
+export function choose(title: string | undefined, choices: Choice[], message?: string) {
+  if (!choices.length) return;
+  if (Platform.OS === 'ios') {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title,
+        message,
+        options: [...choices.map((c) => c.label), 'Cancel'],
+        cancelButtonIndex: choices.length,
+        destructiveButtonIndex: choices.flatMap((c, i) => (c.destructive ? [i] : [])),
+        userInterfaceStyle: 'dark',
+      },
+      (i) => choices[i]?.run()
+    );
+    return;
+  }
+  set({
+    title,
+    message,
+    cancel: true,
+    actions: choices.map((c, i) => ({ id: String(i), title: c.label, destructive: c.destructive })),
+    run: (id) => choices[Number(id)]?.run(),
+  });
 }
 
 /** Mounted once at the root; draws the Android sheet when one is open. */
@@ -88,6 +127,11 @@ export function MenuHost() {
                 {current.title}
               </T>
             )}
+            {!!current.message && (
+              <T variant="caption" color={colors.textSecondary} style={styles.message}>
+                {current.message}
+              </T>
+            )}
             {current.actions.map((a) => (
               <Pressable
                 key={a.id}
@@ -99,16 +143,31 @@ export function MenuHost() {
                 }}
                 style={styles.item}
               >
-                <Icon
-                  name={a.icon}
-                  size={20}
-                  color={a.destructive ? colors.accentErrorLight : colors.textSecondary}
-                />
-                <T color={a.destructive ? colors.accentErrorLight : colors.textPrimary}>
+                {a.icon && (
+                  <Icon
+                    name={a.icon}
+                    size={20}
+                    color={a.destructive ? colors.accentErrorLight : colors.textSecondary}
+                  />
+                )}
+                <T
+                  color={a.destructive ? colors.accentErrorLight : colors.textPrimary}
+                  style={{ flexShrink: 1 }}
+                >
                   {a.title}
                 </T>
               </Pressable>
             ))}
+            {current.cancel && (
+              <Pressable
+                accessibilityRole="menuitem"
+                android_ripple={ripple}
+                onPress={() => set(null)}
+                style={styles.item}
+              >
+                <T color={colors.textSecondary}>Cancel</T>
+              </Pressable>
+            )}
           </Animated.View>
         </View>
       )}
@@ -129,6 +188,7 @@ const styles = StyleSheet.create({
     paddingTop: space.sm,
   },
   title: { paddingHorizontal: space.xl, paddingVertical: space.md },
+  message: { paddingHorizontal: space.xl, paddingBottom: space.md, marginTop: -space.sm },
   item: {
     minHeight: 52,
     flexDirection: 'row',

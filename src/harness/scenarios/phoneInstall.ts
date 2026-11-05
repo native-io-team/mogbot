@@ -30,7 +30,7 @@ const THIS_MAC = {
   signing: {
     teamId: 'H8NN6DM6G6',
     identity: 'Apple Development: julian@example.com (5VD2FLB8HU)',
-    bundleId: 'studio.ship.companion.a4c8c6',
+    bundleId: 'io.native.dashbot.companion.a4c8c6',
   },
   source,
 };
@@ -54,7 +54,7 @@ const ANDROID_THIS_MAC = {
   jdk: true,
   node: 'v24.17.0',
   devices: [],
-  package: 'studio.ship.companion.self',
+  package: 'io.native.dashbot.companion.self',
   source,
 };
 

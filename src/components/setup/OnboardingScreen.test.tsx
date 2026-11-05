@@ -25,6 +25,12 @@ import {
   HAS_CLAUDE_NO_GITHUB_STATUS,
 } from '../../test/fixtures/setup';
 
+// Features brand.json can switch off are tested switched on.
+vi.mock('../../lib/brand', async (importOriginal) => {
+  const { withAllLinks } = await import('../../test/brandFixture');
+  return withAllLinks(await importOriginal<typeof import('../../lib/brand')>());
+});
+
 // ============ Shared IPC mock helpers ============
 function mockInvoke(cmd: string, value: unknown) {
   mockInvokeResponse(cmd, value);

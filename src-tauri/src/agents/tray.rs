@@ -126,9 +126,9 @@ impl TrayModel {
             parts.push(format!("{} waiting for a slot", self.queued));
         }
         if parts.is_empty() {
-            return "Ship Studio".into();
+            return crate::brand::NAME.into();
         }
-        format!("Ship Studio · {}", parts.join(", "))
+        format!("{} · {}", crate::brand::NAME, parts.join(", "))
     }
 }
 
@@ -309,7 +309,7 @@ pub fn sync(app: &AppHandle) {
                 .icon(image)
                 .icon_as_template(true)
                 .show_menu_on_left_click(true)
-                .tooltip("Ship Studio")
+                .tooltip(crate::brand::NAME)
                 .on_menu_event(|app, event| on_menu(app, event.id().as_ref()))
                 .build(app);
             if let Err(e) = built {
@@ -391,7 +391,7 @@ fn build_menu(app: &AppHandle, model: &TrayModel) -> tauri::Result<tauri::menu::
     )?;
     menu = section(app, menu, "Working", &model.working, model.working_more)?;
     menu = menu
-        .item(&MenuItemBuilder::with_id("open", "Open Ship Studio").build(app)?)
+        .item(&MenuItemBuilder::with_id("open", format!("Open {}", crate::brand::NAME)).build(app)?)
         .item(&MenuItemBuilder::with_id("quick", "New message to Chief…").build(app)?)
         .separator();
     if let Some(stay) = stay.filter(|s| s.supported) {
@@ -408,7 +408,7 @@ fn build_menu(app: &AppHandle, model: &TrayModel) -> tauri::Result<tauri::menu::
             )
             .separator();
     }
-    menu.item(&MenuItemBuilder::with_id("quit", "Quit Ship Studio").build(app)?)
+    menu.item(&MenuItemBuilder::with_id("quit", format!("Quit {}", crate::brand::NAME)).build(app)?)
         .build()
 }
 
@@ -609,7 +609,10 @@ mod tests {
         let model = menu_model(&team);
         assert_eq!(ids(&model.needs_you), ["a0", "a1", "a2", "a3", "a4"]);
         assert_eq!(model.needs_you_more, 3);
-        assert_eq!(model.tooltip(), "Ship Studio · 8 need you");
+        assert_eq!(
+            model.tooltip(),
+            format!("{} · 8 need you", crate::brand::NAME)
+        );
     }
 
     #[test]
@@ -625,7 +628,7 @@ mod tests {
     fn nothing_happening_lists_nothing() {
         let model = menu_model(&[seen("fin", "idle", None)]);
         assert_eq!(model, TrayModel::default());
-        assert_eq!(model.tooltip(), "Ship Studio");
+        assert_eq!(model.tooltip(), crate::brand::NAME);
     }
 
     #[test]
@@ -660,13 +663,13 @@ mod tests {
         assert_eq!(model.queued, 1);
         assert_eq!(
             model.tooltip(),
-            "Ship Studio · 2 working, 1 waiting for a slot"
+            format!("{} · 2 working, 1 waiting for a slot", crate::brand::NAME)
         );
         let mut only = seen("q", "working", None);
         only.queued = true;
         assert_eq!(
             menu_model(&[only]).tooltip(),
-            "Ship Studio · 1 waiting for a slot"
+            format!("{} · 1 waiting for a slot", crate::brand::NAME)
         );
     }
 

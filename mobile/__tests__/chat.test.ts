@@ -5,7 +5,7 @@ import { CACHED_MESSAGES, fromCache, toCache } from '../src/lib/cache';
 import { EMPTY_DRAFT, liveMentions, putDraft } from '../src/lib/drafts';
 import { OUTBOX_WAIT_MS, outboxPlan, restorePending, unreached } from '../src/lib/outbox';
 import { emptySync, type PendingSend } from '../src/lib/sync';
-import { chatItems, dayLabel } from '../src/lib/timeline';
+import { chatItems, dayLabel, timeLabel } from '../src/lib/timeline';
 import { WireFailure } from '../src/lib/transport';
 import { looksLikePath, splitStable } from '../src/components/Markdown';
 import { mentionQuery, sendMode } from '../src/lib/composer';
@@ -196,18 +196,29 @@ describe('composer', () => {
 describe('timeline', () => {
   const day = 86_400_000;
   const now = new Date(2026, 10, 4, 15, 0).getTime();
-  it('puts a clock on the last message of each run and a line where the day changes', () => {
+  it('tells time with a line per day and per pause, and groups a side’s run', () => {
     const list = [
       msg('y1', now - day, { kind: 'user' }),
+      msg('t0', now - 2 * 3_600_000, { kind: 'user' }),
       msg('t1', now - 60_000, { kind: 'user' }),
       msg('t2', now - 50_000, { kind: 'user' }),
       msg('t3', now - 40_000),
       msg('t4', now - 39_000),
     ];
     const items = chatItems(agent(), list, [], undefined, now);
+    // `+` marks a message drawn close to the one before it (same side, same run).
     expect(
-      items.map((i) => (i.kind === 'message' ? `${i.key}${i.time ? '@' : ''}` : i.key))
-    ).toEqual(['t4@', 't3', 't2@', 't1', 'day:t1', 'y1@', 'day:y1']);
+      items.map((i) => (i.kind === 'message' ? `${i.key}${i.grouped ? '+' : ''}` : i.key))
+    ).toEqual(['t4+', 't3', 't2+', 't1', 'day:t1', 't0', 'day:t0', 'y1', 'day:y1']);
+    const label = (key: string) => {
+      const item = items.find((i) => i.key === key);
+      return item?.kind === 'day' ? item.label : null;
+    };
+    expect(label('day:y1')).toMatch(/^Yesterday \d/);
+    expect(label('day:t0')).toMatch(/^Today \d/);
+    // A pause the same day: the time alone.
+    expect(label('day:t1')).toMatch(/^\d/);
+    expect(timeLabel(now - 50_000, now - 60_000, now)).toBeNull();
     expect(dayLabel(now - 60_000, now)).toBe('Today');
     expect(dayLabel(now - day, now)).toBe('Yesterday');
   });
