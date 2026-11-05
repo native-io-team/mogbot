@@ -13,6 +13,8 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import type { CSSProperties } from 'react';
+import { pickOnAccent } from './accent';
 
 /** A Workspace for isolating Claude/GitHub config and credentials per org/client. */
 export interface Account {
@@ -127,6 +129,15 @@ export const ACCOUNT_COLORS = [
   '#f97316', // orange
   '#06b6d4', // cyan
 ];
+
+/**
+ * A workspace dot that carries an initial: its colour, with whichever ink
+ * (near-black or white) reads on it. White on amber, green or cyan is under
+ * 2.5:1, and the palette is the user's choice, so the ink is computed.
+ */
+export function accountDotStyle(color: string): CSSProperties {
+  return { background: color, color: pickOnAccent(color) };
+}
 
 /**
  * Event fired on the window whenever the set of Workspaces (or the active one)

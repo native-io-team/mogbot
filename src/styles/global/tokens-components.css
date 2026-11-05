@@ -125,6 +125,9 @@
   --size-hosting-url-open: 20px;
 
   --property-surface: var(--color-blue-700);
+  /* Ink on the fixed-hue fills below (the property blue, the variable
+     purple). The fills don't change with the theme, so neither does their ink. */
+  --property-surface-text: var(--text-inverse);
   --property-surface-hover: var(--color-blue-600);
   --property-border: var(--color-blue-700);
   --property-text: var(--syntax-property);
@@ -135,7 +138,6 @@
   --property-label-inherited-surface: color-mix(in srgb, var(--color-orange-500) 15%, transparent);
   --property-label-inherited-text: var(--syntax-class);
 
-  --tag-surface: color-mix(in oklch, var(--color-green-700) 15%);
   --tag-text: var(--syntax-tag);
   --tag-chip-surface: var(--color-green-800);
   --tag-chip-surface-hover: var(--color-green-700);
@@ -188,6 +190,7 @@
   --button-strong-text: var(--text-on-inverse);
   --button-variable-surface: var(--color-purple-700);
   --button-variable-hover: var(--color-purple-600);
+  --button-variable-text: var(--text-inverse);
   --button-warning-surface: var(--surface-warning);
   --button-warning-surface-hover: color-mix(
     in srgb,
@@ -443,4 +446,12 @@
      idle gradient, and opaque: dimming with `opacity` let whatever sat
      behind the button show through it. */
   --button-primary-busy: var(--accent-active-strong);
+}
+
+/* Light values for component roles built from fixed hues (theme.test.ts holds
+   them to AA). Media text and the warning hover sit on light surfaces there,
+   so they take deep shades instead of the dark theme's pale mixes. */
+:root[data-theme='light'] {
+  --media-text: var(--color-pink-800);
+  --button-warning-text-hover: var(--color-orange-900);
 }
