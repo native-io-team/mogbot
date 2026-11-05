@@ -655,7 +655,7 @@ async fn turn_with_children(h: &H, name: &str, tag: u32) -> Result<store::Agent,
 async fn stop_tree(h: &H) -> Check {
     let a = turn_with_children(h, "Sleeper", 47471).await?;
     ensure(
-        cmd::agents_stop(a.id.clone()).await.unwrap_or(false),
+        cmd::agents_stop(h.app.clone(), a.id.clone()).await.unwrap_or(false),
         "stop found nothing to stop",
     )?;
     h.turn(&a.id).await?;
@@ -942,7 +942,7 @@ async fn stop(h: &H) -> Check {
     h.send(&a.id, story).await?;
     mid_reply().await?;
     ensure(
-        cmd::agents_stop(a.id.clone()).await.unwrap_or(false),
+        cmd::agents_stop(h.app.clone(), a.id.clone()).await.unwrap_or(false),
         "stop found nothing to stop",
     )?;
     h.turn(&a.id).await?;
