@@ -668,7 +668,9 @@ still a one-time grant from a late Allow or an Always-allow rule the user
 chose (`mcp::decide`; a test holds it). Read-only commands already don't ask
 under `acceptEdits`, so no relaxation was added. A turn answering outside
 text (a "When…" routine's items, or anything carrying their taint through
-`message_agent` or a room) always runs at Check with me often.
+`message_agent` or a room) never runs at Go hard: it is capped at Use good
+judgement, so unattended routines still finish; the approval wall and the
+taint gate anything consequential.
 
 ## Approvals
 

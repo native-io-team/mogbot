@@ -19,10 +19,12 @@
 //! every level (`mcp::decide` only skips a card for a one-time grant or an
 //! "Always allow" rule the user chose).
 //!
-//! **Outside text is always strict.** A turn answering outside text (a
+//! **Outside text never goes hard.** A turn answering outside text (a
 //! "When…" routine's items, or anything that carried their taint through
-//! `message_agent` or a room) gets `Often`, whatever the user chose
-//! ([`for_turn`]): text from outside never gets "carry on without asking".
+//! `message_agent` or a room) runs at most at `Judgement` ([`for_turn`]):
+//! text from outside never gets "carry on without asking", yet unattended
+//! routines still finish their work; the approval wall and the taint gate
+//! anything consequential.
 //!
 //! Saved beside the agents (`independence.json`); a missing or unreadable
 //! file is the default.
@@ -102,10 +104,13 @@ pub fn prompt_section(level: Level) -> String {
     format!("{HEADING}\n\n{body} {WALL}")
 }
 
-/// The level a turn runs at: the user's, unless it answers outside text.
+/// The level a turn runs at: the user's, but never "Go hard" when it answers
+/// outside text. Unattended routines still do their work at "Use good
+/// judgement" (a plan-and-wait level would leave them unfinished); the
+/// approval wall and the outside-text taint gate everything consequential.
 pub fn for_turn(chosen: Level, outside: bool) -> Level {
-    if outside {
-        Level::Often
+    if outside && chosen == Level::GoHard {
+        Level::Judgement
     } else {
         chosen
     }
@@ -189,9 +194,11 @@ mod tests {
     }
 
     #[test]
-    fn outside_text_is_always_the_strictest_level() {
+    fn outside_text_never_goes_hard() {
+        assert_eq!(for_turn(Level::GoHard, true), Level::Judgement);
+        assert_eq!(for_turn(Level::Judgement, true), Level::Judgement);
+        assert_eq!(for_turn(Level::Often, true), Level::Often);
         for chosen in [Level::Often, Level::Judgement, Level::GoHard] {
-            assert_eq!(for_turn(chosen, true), Level::Often);
             assert_eq!(for_turn(chosen, false), chosen);
         }
     }

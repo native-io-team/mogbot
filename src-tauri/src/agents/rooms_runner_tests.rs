@@ -477,7 +477,7 @@ fn a_message_from_an_outside_turn_taints_the_agent_it_reaches() {
 /// code each turn (so an imported agent gets it with no file touched), and
 /// a turn answering outside text gets the strictest level whatever they chose.
 #[test]
-fn the_independence_level_reaches_every_turn_and_outside_text_is_strict() {
+fn the_independence_level_reaches_every_turn_and_outside_text_never_goes_hard() {
     use crate::agents::independence::{self, Level};
     scratch(|| {
         let home = tempfile::tempdir().unwrap();
@@ -507,7 +507,7 @@ fn the_independence_level_reaches_every_turn_and_outside_text_is_strict() {
         take_batch(&agent.id).unwrap();
         assert!(from_outside(&agent.id));
         let sealed = prompt();
-        assert!(sealed.contains(&independence::prompt_section(Level::Often)));
+        assert!(sealed.contains(&independence::prompt_section(Level::Judgement)));
         assert!(!sealed.contains(&independence::prompt_section(Level::GoHard)));
         RUNTIMES.lock().unwrap().remove(&agent.id);
         assert_eq!(
