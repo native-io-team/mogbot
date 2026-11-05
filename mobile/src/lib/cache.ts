@@ -16,7 +16,7 @@
 import type { AgentMessage, Cursor } from '@shipstudio/companion-protocol';
 import { restorePending } from './outbox';
 import { debounced, readJson, removeJson, writeJson } from './persist';
-import { getApp, setApp, useApp } from './store';
+import { getApp, setApp, useApp, type Served } from './store';
 import type { SyncState } from './sync';
 
 export const CACHED_MESSAGES = 400;
@@ -31,6 +31,8 @@ export interface Cached {
   cursor: Cursor | null;
   syncedAt: number | null;
   chats: Record<string, { messages: AgentMessage[]; more: boolean }>;
+  /** What the Mac last said it serves: offline cards keep their answers, disabled. */
+  served?: Served | null;
   /** Only in copies from before the outbox had its own file. */
   pending?: SyncState['pending'];
 }
@@ -41,10 +43,11 @@ export interface Outbox {
   pending: SyncState['pending'];
 }
 
-export function toCache(s: SyncState, now = Date.now()): Cached {
+export function toCache(s: SyncState & { served?: Served | null }, now = Date.now()): Cached {
   return {
     v: VERSION,
     savedAt: now,
+    served: s.served ?? null,
     overview: s.overview,
     mac: s.mac,
     projects: s.projects,
@@ -72,9 +75,10 @@ export function toOutbox(s: Pick<SyncState, 'pending'>): Outbox {
 }
 
 /** State to start from. Chats are marked unloaded, so each is re-read once connected. */
-export function fromCache(c: Cached): Partial<SyncState> | null {
+export function fromCache(c: Cached): (Partial<SyncState> & { served?: Served | null }) | null {
   if (c.v !== VERSION) return null;
   return {
+    ...(c.served ? { served: c.served } : {}),
     overview: c.overview,
     mac: c.mac,
     projects: c.projects,
@@ -124,6 +128,7 @@ export function watchCache(): () => void {
       s.chats !== prev.chats ||
       s.projects !== prev.projects ||
       s.mac !== prev.mac ||
+      s.served !== prev.served ||
       s.cursor !== prev.cursor
     ) {
       saver.schedule();

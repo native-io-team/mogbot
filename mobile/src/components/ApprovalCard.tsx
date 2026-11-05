@@ -33,8 +33,8 @@ import { useApp } from '../lib/store';
 import { fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
-import { ACTION, Card } from './surfaces';
-import { Button, Icon, T, tap } from './ui';
+import { ACTION, Card, Line, OFFLINE_NOTE } from './surfaces';
+import { Button, Icon, T } from './ui';
 
 /**
  * How long a new card's answers stay inert: the desktop's anti-misclick
@@ -234,7 +234,14 @@ export function ApprovalCard({
   if (!pending) {
     return (
       <Receipt status={approval.status} title={approval.title} outcome={outcome}>
-        {!!approval.detail && <Command text={approval.detail} lines={12} />}
+        {!!approval.detail &&
+          (approval.connector?.kind === 'consent' ? (
+            <T variant="small" color={colors.textSecondary}>
+              {approval.detail}
+            </T>
+          ) : (
+            <Command text={approval.detail} lines={12} />
+          ))}
       </Receipt>
     );
   }
@@ -299,13 +306,19 @@ export function ApprovalCard({
     <Card
       icon={consent ? 'square.and.arrow.down' : 'checkmark.shield'}
       title={approval.title}
+      // Whose and where, as its sibling import card says it.
+      source={
+        consent && approval.connector
+          ? `From ${approval.connector.source} · over Remote access`
+          : undefined
+      }
       // The pin above the chat shows the question while this can't fit whole.
       hideHead={fit.pinned}
       onLayout={fit.onCardLayout}
       onHeadLayout={fit.onHeadLayout}
       note={
         !connected
-          ? 'Answer it once your Mac is back. It stays open until then.'
+          ? OFFLINE_NOTE
           : paused && !fit.pinned && !consent
             ? 'It paused here for you. Allow it and it picks up where it left off.'
             : undefined
@@ -314,7 +327,12 @@ export function ApprovalCard({
     >
       {!!approval.detail && (
         <FittedDetail fit={fit}>
-          <Command text={approval.detail} lines={large ? 6 : 12} />
+          {consent ? (
+            // Consent asks in sentences, not a command: prose that wraps.
+            <T color={colors.textBody}>{approval.detail}</T>
+          ) : (
+            <Command text={approval.detail} lines={large ? 6 : 12} />
+          )}
         </FittedDetail>
       )}
       {noting && (
@@ -402,10 +420,10 @@ export const OUTCOME_GLYPH: Record<Exclude<Approval['status'], 'pending'>, IconN
 };
 
 /**
- * A card once it's answered: one quiet line, "✓ Allowed · what it asked", so
- * a finished request doesn't keep the footprint of a live one (three
- * answered secret cards used to take a screen). Tap for what it was about;
- * with nothing more to show, it's a plain line with no chevron and no press.
+ * A card once it's answered: its outcome as a Line, "✓ Allowed · what it
+ * asked", so a finished request doesn't keep the footprint of a live one
+ * (three answered secret cards used to take a screen). With something more
+ * to show, a tap unfolds what it was about under the line.
  */
 export function Receipt({
   status,
@@ -420,78 +438,32 @@ export function Receipt({
   children?: ReactNode;
 }) {
   const colors = useColors();
-  const cardStyles = useCardStyles();
-  const [open, setOpen] = useState(false);
   const cut = outcome.indexOf(' · ');
   const word = cut < 0 ? outcome : outcome.slice(0, cut);
   const rest = cut < 0 ? '' : outcome.slice(cut + 3);
-  const ok = status === 'allowed';
-  const tint = ok ? colors.accentSuccess : colors.textSecondary;
   const glyph = OUTCOME_GLYPH[status === 'pending' ? 'expired' : status];
   const hasDetail = Children.toArray(children).length > 0 || !!rest;
-  if (!hasDetail) {
-    return (
-      <Animated.View
-        entering={FadeIn.duration(200)}
-        layout={LinearTransition.duration(200)}
-        accessible
-        accessibilityLabel={`${outcome}. ${title}`}
-        style={cardStyles.receipt}
-      >
-        <Icon name={glyph} size={iconSize.inline} color={tint} />
-        <T variant="small" color={colors.textSecondary} numberOfLines={2} style={{ flexShrink: 1 }}>
-          <T variant="small" color={tint} style={{ fontFamily: fonts.medium }}>
-            {word}
-          </T>
-          {' · '}
-          {title}
-        </T>
-      </Animated.View>
-    );
-  }
   return (
     <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.duration(200)}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        accessibilityLabel={`${outcome}. ${title}`}
-        accessibilityHint={open ? 'Hides the detail' : 'Shows what it was about'}
-        hitSlop={{ top: 10, bottom: 10 }}
-        onPress={() => {
-          tap();
-          setOpen((o) => !o);
-        }}
-        style={({ pressed }) => [cardStyles.receipt, pressed && { opacity: 0.6 }]}
-      >
-        <Icon name={glyph} size={iconSize.inline} color={tint} />
-        <T
-          variant="small"
-          color={colors.textSecondary}
-          numberOfLines={open ? undefined : 1}
-          style={{ flexShrink: 1 }}
-        >
-          <T variant="small" color={tint} style={{ fontFamily: fonts.medium }}>
-            {word}
-          </T>
-          {' · '}
-          {title}
-        </T>
-        <Icon
-          name={open ? 'chevron.down' : 'chevron.right'}
-          size={iconSize.inline}
-          color={colors.textMuted}
-        />
-      </Pressable>
-      {open && (
-        <Animated.View entering={FadeIn.duration(150)} style={cardStyles.receiptDetail}>
-          {children}
-          {!!rest && (
-            <T variant="small" color={colors.textMuted}>
-              {rest}
-            </T>
-          )}
-        </Animated.View>
-      )}
+      <Line
+        icon={glyph}
+        tone={status === 'allowed' ? 'success' : undefined}
+        lead={word}
+        text={title}
+        testID="receipt"
+        detail={
+          hasDetail ? (
+            <>
+              {children}
+              {!!rest && (
+                <T variant="small" color={colors.textMuted}>
+                  {rest}
+                </T>
+              )}
+            </>
+          ) : undefined
+        }
+      />
     </Animated.View>
   );
 }
@@ -595,13 +567,4 @@ export const useCardStyles = makeStyles((colors) => ({
     paddingVertical: 0,
     textAlignVertical: 'center',
   },
-  receipt: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.tight,
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-    paddingVertical: space.xs,
-  },
-  receiptDetail: { gap: space.sm, paddingTop: space.sm, paddingLeft: space.lg + space['2xs'] },
 }));

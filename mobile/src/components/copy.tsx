@@ -21,12 +21,12 @@ import { Alert, View } from 'react-native';
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import { describeError, discardCopy, keepCopy } from '../lib/session';
-import { useApp } from '../lib/store';
+import { useApp, useServed } from '../lib/store';
 import { CARD_TITLE_SCALE, space } from '../lib/theme';
 import { useColors } from '../lib/appearance';
 import { folderName } from '../lib/agents';
 import { drivenLine } from '../lib/bars';
-import { ACTION, Card } from './surfaces';
+import { ACTION, Card, OFFLINE_NOTE } from './surfaces';
 import { Button, T } from './ui';
 
 /**
@@ -98,6 +98,8 @@ export interface CopyProps {
   leftOut?: LeftOut[];
   /** Why the copy's changes couldn't be saved this turn. */
   warning?: string;
+  /** What changed ("2 files · +3 −1"), said once, in the card's note. */
+  stats?: ReactNode;
   onError: (text: string) => void;
 }
 
@@ -112,7 +114,8 @@ export interface CopyParts {
 /** The copy's part of a card: its words, its note, its answers. Null when the Mac can't keep. */
 export function useCopyParts(props: CopyProps | null): CopyParts | null {
   const colors = useColors();
-  const served = useApp((s) => !!s.welcome?.methods.includes('agents.keepCopy'));
+  // The Mac's last answer while it's away: offline, Keep / Discard stay, disabled.
+  const served = useServed('agents.keepCopy');
   const connected = useApp((s) => s.link.kind === 'connected');
   const projectPath = props?.project ?? '';
   const project = useApp(
@@ -122,7 +125,7 @@ export function useCopyParts(props: CopyProps | null): CopyParts | null {
   // One at a time: two taps in one frame both see the render before `busy`.
   const once = useInFlight();
   if (!props || !served) return null;
-  const { agent, copy, leftOut, warning, onError } = props;
+  const { agent, copy, leftOut, warning, stats, onError } = props;
   const working = agent.status.state !== 'idle';
   // Driven by hand on the Mac: the copy may be mid-edit in the terminal, and
   // the Mac refuses Keep and Discard until it's handed back.
@@ -194,7 +197,7 @@ export function useCopyParts(props: CopyProps | null): CopyParts | null {
   const wait = driven
     ? `${drivenLine(agent.name)}: hand it back first.`
     : !connected
-      ? 'Keep or discard these once your Mac is back.'
+      ? OFFLINE_NOTE
       : null;
 
   const muted = (text: string) => (
@@ -203,8 +206,9 @@ export function useCopyParts(props: CopyProps | null): CopyParts | null {
     </T>
   );
   const note =
-    said || warning || left || wait ? (
+    stats || said || warning || left || wait ? (
       <View style={{ gap: space.xs }}>
+        {stats}
         {said && (
           <T variant="small" color={colors.textPrimary} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
             {said}

@@ -121,10 +121,20 @@ export function subtitle(agent: Agent): string {
   // A request outranks driving, as on the desk: the row's words and its amber dot agree.
   if (needsYou(agent)) return 'Needs your OK';
   if (agent.takeover) return drivenLine(agent.name);
-  if (agent.status.state === 'working') return workingLine(agent);
+  if (agent.status.state === 'working') return rowLine(workingLine(agent));
   const failure = failedTurn(agent);
   if (failure) return failureLine(failure, agent.preview, engineName(agent));
   return agent.preview ?? agent.role ?? '';
+}
+
+/**
+ * A list row's one line, cut where it can be read: the Mac's "Waiting for a
+ * free slot (4 agents already working)" would be clipped inside its
+ * parenthesis, so a row says "Waiting for a free slot · 4 busy".
+ */
+export function rowLine(line: string): string {
+  const slot = /^(.*?)\s*\((\d+) agents? already working\)\s*$/.exec(line);
+  return slot ? `${slot[1]} · ${slot[2]} busy` : line;
 }
 
 export type LineState = 'waiting' | 'working' | 'failed' | 'limited' | undefined;
@@ -257,7 +267,20 @@ export function formatAgo(ts: number, now = Date.now()): string {
   if (m < 60) return `${m} min ago`;
   const h = Math.round(m / 60);
   if (h < 24) return `${h} h ago`;
-  return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return formatDate(ts, now);
+}
+
+/**
+ * The app's one way to write a date: "Nov 4", and "Nov 4, 2025" when it's
+ * not this year. Everywhere a date is shown (paired, last seen, a chat's day).
+ */
+export function formatDate(ts: number, now = Date.now()): string {
+  const d = new Date(ts);
+  return d.toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    ...(d.getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}),
+  });
 }
 
 /**

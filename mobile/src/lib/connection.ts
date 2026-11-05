@@ -74,13 +74,49 @@ export function engineHealth(s: Pick<Inputs, 'mac' | 'overview'>): EngineHealth[
 const signedOut = (e: EngineHealth) =>
   e.failedSignedOut || (e.installed && e.used > 0 && e.signedIn === 'no');
 
+type RefusedReason = Extract<AppState['link'], { kind: 'refused' }>['reason'];
+
+/**
+ * A refusal in two words, by what actually happened. Only `revoked` and
+ * `unauthorized` mean the Mac let this phone go; an identity that didn't
+ * check out is not a removal, and neither is a Mac that's too old.
+ */
+const REFUSED_LABEL: Record<RefusedReason, string> = {
+  revoked: 'Not paired any more',
+  unauthorized: 'Not paired any more',
+  not_your_mac: 'Not your Mac',
+  mac_reset: 'Pair again',
+  pair_again: 'Pair again',
+  update_app: 'Update needed',
+  update_mac: 'Update needed',
+};
+
+/**
+ * What a screen with nothing to show says under the pill's words, by the
+ * reason: "once it answers" only where it might (a refusal is final until
+ * someone does something). `what` is what's missing ("Your agents").
+ */
+export function problemBody(link: AppState['link'], macName: string, what: string): string {
+  if (link.kind !== 'refused')
+    return `${what} are on ${macName}. Once it answers, they’ll be here.`;
+  switch (link.reason) {
+    case 'not_your_mac':
+      return `${what} are still on ${macName}. The server at this address couldn’t prove it’s that Mac, so nothing private was sent to it.`;
+    case 'mac_reset':
+    case 'pair_again':
+    case 'revoked':
+    case 'unauthorized':
+      return `${what} are still on ${macName}. Pair again to see them here.`;
+    case 'update_app':
+      return `${what} are on ${macName}. Update this app to see them here.`;
+    case 'update_mac':
+      return `${what} are on ${macName}. Update the app there to see them here.`;
+  }
+}
+
 export function pill(s: Inputs, now = Date.now()): Pill {
   const { link } = s;
-  if (link.kind === 'refused') {
-    return link.reason === 'update_app' || link.reason === 'update_mac'
-      ? { tone: 'problem', label: 'Update needed' }
-      : { tone: 'problem', label: 'Removed from Mac' };
-  }
+  if (link.kind === 'refused') return { tone: 'problem', label: REFUSED_LABEL[link.reason] };
   if (link.kind === 'connected') {
     const out = engineHealth(s).find(signedOut);
     return out

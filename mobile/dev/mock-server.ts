@@ -51,13 +51,15 @@ import {
 } from '@shipstudio/companion-protocol';
 import {
   createHash,
+  createPrivateKey,
   generateKeyPairSync,
   randomBytes,
   randomUUID,
   sign as edSign,
   type KeyObject,
 } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import http from 'node:http';
 import https from 'node:https';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -107,6 +109,27 @@ export interface MockOptions {
   serverId?: string;
   /** A Mac from before protocol 2: closes a challenge without a word, no `/v1/identity`. */
   protocolOne?: boolean;
+  /**
+   * Keep the Mac's identity key here (PEM), so a restart is the same Mac and a
+   * paired phone stays paired, as the real Mac's `identity.rs` does.
+   */
+  identityFile?: string;
+  /**
+   * Stack three bars in the Chief's chat (an import, the Mac being driven, an
+   * engine that can't ask), so the "N more" fold is reachable.
+   */
+  bars?: boolean;
+  /** Answer CORS preflights and tag every response, for the web build (dev only). */
+  cors?: boolean;
+}
+
+/** The key in `file`, or a new one written there. */
+function persistentKey(file: string): KeyObject {
+  if (existsSync(file)) return createPrivateKey(readFileSync(file, 'utf8'));
+  const key = generateKeyPairSync('ed25519').privateKey;
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, key.export({ format: 'pem', type: 'pkcs8' }), { mode: 0o600 });
+  return key;
 }
 
 /** An Ed25519 identity, as the Mac's `identity.rs` keeps one. */
@@ -155,7 +178,7 @@ export function createMockServer(opts: MockOptions = {}) {
   /** The hosts it serves on, as it signs them; known once it listens. */
   let hosts: string[] = opts.hosts ?? [];
   // The key the pairing link names; `impostorKey` signs instead when set.
-  const identity = mockIdentity();
+  const identity = mockIdentity(opts.identityFile ? persistentKey(opts.identityFile) : undefined);
   const signer = opts.impostorKey ? mockIdentity(opts.impostorKey) : identity;
   let epoch = randomUUID();
   let seq = 0;
@@ -168,7 +191,10 @@ export function createMockServer(opts: MockOptions = {}) {
       : []
   );
   const saveDevices = () => {
-    if (opts.devicesFile) writeFileSync(opts.devicesFile, JSON.stringify([...devices]));
+    if (!opts.devicesFile) return;
+    // `--http` never made the certificate folder this lives in.
+    mkdirSync(path.dirname(opts.devicesFile), { recursive: true });
+    writeFileSync(opts.devicesFile, JSON.stringify([...devices]));
   };
   const clientIds = new Map<string, AgentMessage>();
   const conns = new Set<Conn>();
@@ -191,6 +217,15 @@ export function createMockServer(opts: MockOptions = {}) {
       // The protocol's `AgentTakeover`, as the Mac sends it (terminal id stripped).
       design.takeover = { since: now - 5 * 60_000, cli: 'claude-code' };
       design.status = { state: 'idle', activity: null, since: null };
+    }
+  }
+  if (opts.bars) {
+    // The Chief already has an import waiting; driving it on the Mac and an
+    // engine that can't ask make three bars, so the fold shows "1 more".
+    const chief = agents.find((a) => a.id === 'chief');
+    if (chief) {
+      chief.takeover = { since: now - 2 * 60_000, cli: 'claude-code' };
+      chief.status = { state: 'idle', activity: null, since: null };
     }
   }
   const messages = new Map<string, AgentMessage[]>(agents.map((a) => [a.id, seedMessages(a, now)]));
@@ -221,7 +256,9 @@ export function createMockServer(opts: MockOptions = {}) {
     routes: [],
   };
   const engines = (): AgentsOverview['engines'] => {
-    const list = structuredClone(real.agentsOverview.engines);
+    const list = structuredClone(real.agentsOverview.engines).map((e) =>
+      opts.bars && e.id === 'claude' ? { ...e, asks: false } : e
+    );
     if (!opts.codexOnly) return list;
     return list.map((e) =>
       e.id === 'claude'
@@ -1319,6 +1356,7 @@ export function createMockServer(opts: MockOptions = {}) {
           resume: canReplay ? 'replay' : 'snapshot',
           // What the real Mac advertises in P1, not what the mock happens to implement.
           methods: realWelcome.methods,
+          features: realWelcome.features,
           // The zone the mock's parser reads times in: this machine's own.
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
@@ -1379,6 +1417,17 @@ export function createMockServer(opts: MockOptions = {}) {
   // ---- HTTP: pairing ---------------------------------------------------------------------
 
   async function onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+    if (opts.cors) {
+      // The web build (`pnpm qa:web`) is another origin; the real Mac never needs this.
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Name');
+      res.setHeader('Access-Control-Max-Age', '600');
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204).end();
+        return;
+      }
+    }
     if (req.method === 'POST' && req.url === HTTP.identity && !opts.protocolOne) {
       const body = JSON.parse(await readBody(req)) as IdentityRequest;
       const n = negotiate(body.protocol, SUPPORTED);
