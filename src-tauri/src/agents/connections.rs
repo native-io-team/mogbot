@@ -1,7 +1,7 @@
 //! Connections: the apps an agent signs in to through a login card
 //! (`agents/logins.rs`), and which agents may use each one.
 //!
-//! A connection is one account at one service ("Linear · julian@acme.com",
+//! A connection is one account at one service ("Linear · sam@acme.com",
 //! "Gmail · work"). There are four kinds, and they keep their sign-in in
 //! different places, which the UI says plainly:
 //!
@@ -88,7 +88,7 @@ pub struct Connection {
     /// "Linear".
     pub title: String,
     /// Which account, as the user named it or the sign-in told us
-    /// ("julian@acme.com", "Work"). Two of one service are told apart by it.
+    /// ("sam@acme.com", "Work"). Two of one service are told apart by it.
     pub account: String,
     pub kind: Kind,
     /// The MCP server name a turn sees it as (`mcp__<serverKey>__<tool>`).
@@ -784,22 +784,22 @@ mod tests {
             let c = add_and_grant(
                 "linear",
                 "Linear",
-                "julian@acme.com",
+                "sam@acme.com",
                 oauth("https://mcp.linear.app/mcp"),
-                "hiring",
+                "recruiter",
                 Access::Read,
             )
             .unwrap();
             assert_eq!(c.server_key, "linear");
-            assert_eq!(granted_to("hiring").len(), 1);
+            assert_eq!(granted_to("recruiter").len(), 1);
             assert!(granted_to("social").is_empty());
             grant(&c.id, "social", Access::Full).unwrap();
             assert_eq!(granted_to("social")[0].1, Access::Full);
             // A second, narrower card never narrows an existing grant.
             grant(&c.id, "social", Access::Read).unwrap();
             assert_eq!(granted_to("social")[0].1, Access::Full);
-            revoke(&c.id, "hiring").unwrap();
-            assert!(granted_to("hiring").is_empty());
+            revoke(&c.id, "recruiter").unwrap();
+            assert!(granted_to("recruiter").is_empty());
             assert_eq!(granted_to("social").len(), 1);
             forget_agent("social");
             assert!(granted_to("social").is_empty());
@@ -868,7 +868,7 @@ mod tests {
                 "Linear",
                 "",
                 oauth("https://mcp.linear.app/mcp"),
-                "hiring",
+                "recruiter",
                 Access::Full,
             )
             .unwrap();
@@ -902,8 +902,8 @@ mod tests {
     #[test]
     fn turns_get_only_their_granted_servers_and_blocks_for_the_rest() {
         with_root(|_| {
-            let mut hiring = store::create(store::NewAgent {
-                name: "Hiring".into(),
+            let mut recruiter = store::create(store::NewAgent {
+                name: "Recruiter".into(),
                 role: String::new(),
                 instructions: String::new(),
                 shape: None,
@@ -925,7 +925,7 @@ mod tests {
                 "Linear",
                 "",
                 oauth("https://mcp.linear.app/mcp"),
-                &hiring.id,
+                &recruiter.id,
                 Access::Read,
             )
             .unwrap();
@@ -941,12 +941,12 @@ mod tests {
                 Access::Full,
             )
             .unwrap();
-            hiring.reach.blocked_apps = vec!["figma".into()];
+            recruiter.reach.blocked_apps = vec!["figma".into()];
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .unwrap();
-            let h = rt.block_on(for_turn(&hiring));
+            let h = rt.block_on(for_turn(&recruiter));
             assert_eq!(h.servers.len(), 1);
             assert_eq!(h.servers[0].token, "lin_turn_token_998877");
             assert!(

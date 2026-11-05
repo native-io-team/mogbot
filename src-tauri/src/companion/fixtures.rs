@@ -562,6 +562,15 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "agentsLoginPhoneBegin",
+        "Result<'agents.loginPhoneBegin'>",
+        call(
+            "agents.loginPhoneBegin",
+            json!({ "agentId": AGENT, "requestId": "q12", "optionId": "oauth" }),
+        )
+        .await,
+    );
+    out += &entry(
         "agentsLoginSaveKey",
         "Result<'agents.loginSaveKey'>",
         call(

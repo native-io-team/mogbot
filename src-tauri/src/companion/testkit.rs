@@ -1085,11 +1085,47 @@ impl Backend for Stub {
         _agent_id: &str,
         request_id: &str,
         option_id: &str,
+        on_phone: bool,
+    ) -> Result<(), CommandError> {
+        let at = if on_phone { " on phone" } else { "" };
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("start {request_id} {option_id}{at}"));
+        Ok(())
+    }
+
+    async fn login_phone_begin(
+        &self,
+        device_id: &str,
+        target: crate::agents::login_relay::Target,
+        option_id: &str,
+    ) -> Result<Value, CommandError> {
+        let what = match target {
+            crate::agents::login_relay::Target::Card { request_id, .. } => request_id,
+            crate::agents::login_relay::Target::Team { key, .. } => key,
+        };
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("sheet {what} {option_id} by {device_id}"));
+        Ok(
+            json!({ "flowId": "flow1", "agentId": AGENT, "requestId": "q12",
+                   "url": "https://auth.linear.app/authorize?client_id=c&code_challenge=x&state=s",
+                   "redirectUri": "dashbot-companion://oauth" }),
+        )
+    }
+
+    async fn login_phone_finish(
+        &self,
+        device_id: &str,
+        flow_id: &str,
+        _callback: &str,
     ) -> Result<(), CommandError> {
         self.logins
             .lock()
             .unwrap()
-            .push(format!("start {request_id} {option_id}"));
+            .push(format!("finish {flow_id} by {device_id}"));
         Ok(())
     }
 
@@ -1144,6 +1180,7 @@ impl Backend for Stub {
         key: &str,
         option_id: &str,
         _skip: Vec<String>,
+        _on_phone: bool,
     ) -> Result<(), CommandError> {
         self.logins
             .lock()
@@ -1574,7 +1611,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
         login: Some(LoginRequest {
             service: "gmail".into(),
             title: "Gmail".into(),
-            asked_as: Some("gmail native".into()),
+            asked_as: Some("gmail work".into()),
             account_hint: Some("work".into()),
             why: "Read invoices that arrive by email".into(),
             abilities: vec![
@@ -1617,6 +1654,9 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
                 message: Some("claude.ai's connectors are open in this Mac's browser.".into()),
                 started_at: 1_762_290_000_000,
                 from_phone: true,
+                on_phone: true,
+                user_code: Some("9985-8448".into()),
+                verification_uri: Some("https://github.com/login/device".into()),
             }),
         }),
     });
@@ -1643,7 +1683,7 @@ pub fn team_fixture() -> Value {
         }],
         state,
         outcome: (state == CardState::Skipped).then(|| "Not needed".to_string()),
-        asked_as: (request == "q20").then(|| "gmail native".to_string()),
+        asked_as: (request == "q20").then(|| "gmail work".to_string()),
         flow: None,
     };
     let login = login_card();
@@ -1663,13 +1703,7 @@ pub fn team_fixture() -> Value {
                 ),
                 cards: vec![
                     card(AGENT, "Finance", "q20", "gmail", CardState::Waiting),
-                    card(
-                        "agent_b",
-                        "Inbox Zero",
-                        "q21",
-                        "gmail",
-                        CardState::Connected,
-                    ),
+                    card("agent_b", "Mailroom", "q21", "gmail", CardState::Connected),
                     card(
                         "agent_c",
                         "Calendar",

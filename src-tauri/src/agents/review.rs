@@ -828,7 +828,7 @@ fn apply_one(
             } else {
                 login.purpose.clone()
             };
-            // A login by name that means an app (gmail_native, linkedin) is
+            // A login by name that means an app (gmail_work, linkedin) is
             // a login card: connect it, never a password. Anything else, a
             // real API key, stays a secure input card.
             let named = format!("{} {}", login.name, login.purpose);

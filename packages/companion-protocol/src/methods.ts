@@ -11,6 +11,7 @@ import type { Cursor } from './frames';
 import type {
   AgentMessage,
   AgentReach,
+  LoginPhoneBegin,
   TeamLogins,
   AgentSecret,
   AgentsOverview,
@@ -133,12 +134,36 @@ export interface Methods {
     result: AgentSecret;
   };
   /**
-   * Logins (Mac feature `logins`). Every way in runs on the Mac: Connect
-   * opens the sign-in in the Mac's browser and the token is made and kept
-   * there; the card's `login.flow` follows it on both devices.
+   * Logins (Mac feature `logins`). The token is always made and kept on
+   * the Mac; the card's `login.flow` follows the sign-in on both devices.
+   * Without `onPhone`, Connect opens the sign-in in the Mac's browser. With
+   * `onPhone` (Mac feature `logins.phone`), the sign-in is on the phone:
+   * claude.ai there, or GitHub's device code shown in `login.flow`.
    */
   'agents.loginStart': {
-    params: { agentId: string; requestId: string; optionId: string };
+    params: { agentId: string; requestId: string; optionId: string; onPhone?: boolean };
+    result: null;
+  };
+  /**
+   * Mac feature `logins.phone`: an `oauth` way in, signed in on the phone's
+   * sign-in sheet. The Mac registers the companion app's redirect and keeps
+   * the PKCE verifier and `state`; the phone gets only the URL to open. One
+   * card, or a team row (`key`, `skip`) whose other cards get the same
+   * connection.
+   */
+  'agents.loginPhoneBegin': {
+    params:
+      | { agentId: string; requestId: string; optionId: string }
+      | { key: string; optionId: string; skip?: string[] };
+    result: LoginPhoneBegin;
+  };
+  /**
+   * The sheet's redirect, as it came back. Accepted once, within ten
+   * minutes, only from the device that began it; exchanged on the Mac, the
+   * token kept in its Keychain. Never logged.
+   */
+  'agents.loginPhoneFinish': {
+    params: { flowId: string; callbackUrl: string };
     result: null;
   };
   'agents.loginCancel': { params: { agentId: string; requestId: string }; result: null };
@@ -161,7 +186,7 @@ export interface Methods {
   'agents.loginsTeam': { params: { since?: number }; result: TeamLogins };
   /** One row's way in, for every agent on it but those in `skip` (agent ids). */
   'agents.loginsConnect': {
-    params: { key: string; optionId: string; skip?: string[] };
+    params: { key: string; optionId: string; skip?: string[]; onPhone?: boolean };
     result: null;
   };
   /** "Not needed": the card is put away and the agent isn't woken. */

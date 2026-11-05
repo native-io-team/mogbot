@@ -1549,7 +1549,7 @@ export const agentsLoginsTeam = {
           ],
           "agentId": "a1",
           "agentName": "Finance",
-          "askedAs": "gmail native",
+          "askedAs": "gmail work",
           "requestId": "q20",
           "service": "gmail",
           "state": "waiting",
@@ -1563,7 +1563,7 @@ export const agentsLoginsTeam = {
             }
           ],
           "agentId": "agent_b",
-          "agentName": "Inbox Zero",
+          "agentName": "Mailroom",
           "requestId": "q21",
           "service": "gmail",
           "state": "connected",
@@ -1655,6 +1655,13 @@ export const agentsLoginsTeam = {
   "total": 2
 } satisfies Result<'agents.loginsTeam'>;
 export const agentsLoginStart = null satisfies Result<'agents.loginStart'>;
+export const agentsLoginPhoneBegin = {
+  "agentId": "a1",
+  "flowId": "flow1",
+  "redirectUri": "dashbot-companion://oauth",
+  "requestId": "q12",
+  "url": "https://auth.linear.app/authorize?client_id=c&code_challenge=x&state=s"
+} satisfies Result<'agents.loginPhoneBegin'>;
 export const agentsLoginSaveKey = {
   "createdAt": 0,
   "fields": [
@@ -2485,6 +2492,8 @@ export const frames = [
       "agents.loginsTeam",
       "agents.loginsConnect",
       "agents.loginDismiss",
+      "agents.loginPhoneBegin",
+      "agents.loginPhoneFinish",
       "agents.focus",
       "agents.markUnread",
       "agents.startFresh",
@@ -2533,7 +2542,8 @@ export const frames = [
       "results.revise",
       "routines.when",
       "rooms",
-      "logins"
+      "logins",
+      "logins.phone"
     ]
   },
   {
@@ -2760,13 +2770,16 @@ export const frames = [
               }
             ],
             "accountHint": "work",
-            "askedAs": "gmail native",
+            "askedAs": "gmail work",
             "flow": {
               "fromPhone": true,
               "message": "claude.ai's connectors are open in this Mac's browser.",
+              "onPhone": true,
               "option": "claude_ai",
               "startedAt": 1762290000000,
-              "state": "waiting"
+              "state": "waiting",
+              "userCode": "9985-8448",
+              "verificationUri": "https://github.com/login/device"
             },
             "key": {
               "fields": [

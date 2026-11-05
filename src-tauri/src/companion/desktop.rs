@@ -521,6 +521,7 @@ impl Backend for DesktopBackend {
         agent_id: &str,
         request_id: &str,
         option_id: &str,
+        on_phone: bool,
     ) -> Result<(), CommandError> {
         cmd::agents_login_start(
             self.app.clone(),
@@ -528,8 +529,27 @@ impl Backend for DesktopBackend {
             request_id.to_string(),
             option_id.to_string(),
             Some(true),
+            Some(on_phone),
         )
         .await
+    }
+
+    async fn login_phone_begin(
+        &self,
+        device_id: &str,
+        target: crate::agents::login_relay::Target,
+        option_id: &str,
+    ) -> Result<Value, CommandError> {
+        json(crate::agents::login_relay::begin(&self.app, device_id, target, option_id).await?)
+    }
+
+    async fn login_phone_finish(
+        &self,
+        device_id: &str,
+        flow_id: &str,
+        callback: &str,
+    ) -> Result<(), CommandError> {
+        crate::agents::login_relay::finish(device_id, flow_id, callback).await
     }
 
     async fn login_cancel(&self, agent_id: &str, request_id: &str) -> Result<(), CommandError> {
@@ -586,6 +606,7 @@ impl Backend for DesktopBackend {
         key: &str,
         option_id: &str,
         skip: Vec<String>,
+        on_phone: bool,
     ) -> Result<(), CommandError> {
         cmd::agents_logins_connect(
             self.app.clone(),
@@ -593,6 +614,7 @@ impl Backend for DesktopBackend {
             option_id.to_string(),
             Some(skip),
             Some(true),
+            Some(on_phone),
         )
         .await
     }

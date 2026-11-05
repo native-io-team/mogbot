@@ -807,7 +807,7 @@ through a chat, and take it back later?**
 An agent calls `request_login {service, account_hint?, scopes?, why}`
 (every agent; the per-turn `## Logins` rules tell every agent, imported ones
 included, to use it and never to ask for a password). One card lands in its
-chat: "Hiring needs your Gmail (work)", what it's for, what it will be able
+chat: "Recruiter needs your Gmail (work)", what it's for, what it will be able
 to do (read; and, when `scopes` asks for more, send/post/change, which
 "asks you on a card each time"), and the ways in, best first:
 
@@ -831,35 +831,88 @@ From each vendor's published, unauthenticated metadata (an `initialize`
 answered 401 with `resource_metadata`, RFC 9728 → RFC 8414). Nothing was
 registered or signed in to while checking.
 
-| Service | What we offer | Why |
-| --- | --- | --- |
-| Linear, Notion, Figma, Stripe, Vercel | our own OAuth | remote MCP server, dynamic client registration, PKCE S256 |
-| Gmail, Google Calendar, Google Drive | claude.ai connector, else browser | Google publishes `gmailmcp.googleapis.com` etc., but registers no clients (an app must be approved by Google first, and Gmail's scopes are restricted) |
-| Slack | claude.ai connector, else browser | `mcp.slack.com` has OAuth but no registration: it signs in only apps registered with Slack |
-| GitHub | the `gh` sign-in | `api.githubcopilot.com/mcp` has no registration; agents already use `gh`, which is signed in on this Mac |
-| LinkedIn | browser only | no connector |
-| X | browser, or an X API token | no connector; its API needs a developer account |
+| Service | What we offer | From the phone, away from the Mac | Why |
+| --- | --- | --- | --- |
+| Linear, Notion, Figma, Stripe, Vercel | our own OAuth | **the sign-in sheet** (a), token in the Mac's Keychain | remote MCP server, dynamic client registration, PKCE S256 |
+| Gmail, Google Calendar, Google Drive | claude.ai connector, else browser | **claude.ai on the phone** (same Claude account); held by claude.ai | Google publishes `gmailmcp.googleapis.com` etc., but registers no clients (an app must be approved by Google first, and Gmail's scopes are restricted) |
+| Slack | claude.ai connector, else browser | **claude.ai on the phone**; held by claude.ai | `mcp.slack.com` has OAuth but no registration: it signs in only apps registered with Slack |
+| GitHub | the `gh` sign-in | **GitHub's device code** (c), through `gh` on the Mac | `api.githubcopilot.com/mcp` has no registration; agents already use `gh` |
+| LinkedIn | browser only | a tap (uses the Mac's Chrome, already signed in) | no connector |
+| X | browser, or an X API token | a tap, or the key typed into the card | no connector; its API needs a developer account |
 
-**Device-code sign-in on the phone** isn't offered. Google and GitHub
-advertise a device endpoint, but neither registers our client (and Google's
-device flow excludes Gmail's scopes); Vercel advertises one with
-registration, the only candidate, and it isn't built or tried. So every
-Connect finishes on the Mac.
+The UI says when there's no connector (`no_connector` on the card), and a
+Codex agent is told what it can't use.
 
-### From the phone
+### From the phone (`agents/login_relay.rs`)
 
-The card shows on the phone (Mac feature `logins`), answerable there.
-Connect calls `agents.loginStart`, which starts the way in **on the Mac**:
-the Mac opens the sign-in in its own browser, the loopback redirect lands on
-the Mac, and the token is created and kept there. The phone says "Finish
-signing in on your Mac — it's open there" with the card's live state
-(`login.flow`: starting / waiting / failed / cancelled), which is laid over
-the card wherever it's read (`logins::apply`) and re-emitted as the card on
-every change, so both devices follow it with no new event. Connected,
-declined and "Not needed" are the card's own answer (`status` + `choice` /
-`note`). A phone from before login cards sees a plain Allow / Deny card:
-its Allow starts the card's first way in on the Mac
-(`allow_from_old_client`), its Deny declines.
+Owner requirement: access can be given **entirely from the phone, away
+from the Mac**, with the credential ending up only in the Mac's Keychain.
+The card shows on the phone (Mac feature `logins`); with Mac feature
+`logins.phone` each way in has a phone path (`phoneWay` in
+`mobile/src/lib/loginState.ts`). The options evaluated, per provider:
+
+- **(a) The sign-in sheet, code relayed to the Mac**: chosen for every
+  OAuth connector of our own. The Mac does discovery, registers a public
+  client with the redirect `<companion scheme>://oauth` (the companion
+  app's own scheme, from brand.json), and makes the PKCE verifier and
+  `state`, which never leave it (`agents.loginPhoneBegin` returns only the
+  authorization URL). The phone opens it in `expo-web-browser`'s
+  `openAuthSessionAsync` (ASWebAuthenticationSession), ephemeral, so no
+  cookie is kept. The sheet comes back with the one-time code; the phone
+  sends the redirect, once, over the paired connection
+  (`agents.loginPhoneFinish`, refused before sending unless the Mac proved
+  its pinned identity, as for a secret). The Mac exchanges it with its
+  verifier and stores the token. Nothing is persisted on the phone.
+- **(b) Redirect to the Mac's tailnet host**: not used. It needs the
+  provider to accept an `https://<mac>.ts.net` redirect registered per
+  Mac, a TLS listener for it, and the phone's browser on the tailnet; (a)
+  gives the same result with nothing listening.
+- **(c) Device code**: used for GitHub, through `gh auth login --web` on
+  the Mac (GitHub's device flow with `gh`'s own client; with no terminal
+  it prints the code and waits, observed on gh 2.95). The code is put on
+  the card (`flow.userCode`, `verificationUri`) for both devices, typed at
+  github.com/login/device anywhere; `gh` keeps the token in its own
+  Keychain item. Not offered for Google: its device flow excludes Gmail's
+  scopes and registers no client of ours.
+- **claude.ai connectors**: added on claude.ai on the phone
+  (`agents.loginStart` with `onPhone`: the Mac doesn't open its browser and
+  watches `claude mcp list`). The sign-in is held by claude.ai, never this
+  Mac or the phone, and the card says so.
+- **No sign-in** (an account already connected, the browser, a key): a
+  tap, or the masked field (as `saveSecret`), from either device.
+- **"Finish on your Mac"** is the fallback: an older Mac (no
+  `logins.phone`), an installed phone build without the sign-in sheet's
+  native module (it predates `expo-web-browser`; the phone checks
+  `requireOptionalNativeModule('ExpoWebBrowser')` and never imports it
+  otherwise), or a provider that refuses to register the app's redirect
+  (the card says so and offers the Mac).
+
+The card's live state (`login.flow`: starting / waiting / failed /
+cancelled, plus `fromPhone`, `onPhone`, `userCode`) is laid over the card
+wherever it's read (`logins::apply`) and re-emitted as the card on every
+change, so both devices follow it with no new event. Connected, declined
+and "Not needed" are the card's own answer (`status` + `choice` / `note`).
+A phone from before login cards sees a plain Allow / Deny card: its Allow
+starts the card's first way in on the Mac (`allow_from_old_client`), its
+Deny declines.
+
+#### The code relay's rules (`login_relay::Table::take`, tested)
+
+- Accepted only from the device id that began it (the paired device the
+  socket authenticated as); another paired device's answer is refused and
+  doesn't spend it.
+- Single use: any answer from its own device spends it, right or wrong.
+- Ten minutes, then it's refused and the card says it took too long.
+- Only on the exact registered redirect (scheme, host and path), only with
+  the `state` this Mac made; `error=access_denied` reads as declined.
+- One phone sign-in per card; Cancel, an answer, or a new one forgets it.
+- Never logged: the audit line is "finished signing in on the phone", the
+  router never echoes the URL, and the refusals carry no part of it.
+- Threat: a stolen code is useless without the verifier, which only this
+  Mac has; another app claiming the scheme doesn't receive it, since the
+  sheet hands its redirect back to the app that opened it; a forged
+  redirect fails `state`. A team row signed in on the phone grants the
+  row's other agents the same connection once it's in (`fan_out`).
 
 ### Grants, read vs send, and turns
 
@@ -935,13 +988,13 @@ more: …" (`retire_stale`).
 ### Upgrading what's already there
 
 - **Pending secret cards** an older build (or the import) raised for
-  something with a connector or a site ("gmail_native", "linkedin_token",
+  something with a connector or a site ("gmail_work", "linkedin_token",
   "x_token") are moved onto login cards at launch (`migrate_pending`,
   idempotent): the old card is marked expired, "Moved to a sign-in card
   for Gmail: no password needed.", and a login card replaces it, `quiet`
   if the old one was (an import's). A second old card for the same service
   folds into the first. A real API key (`stripe_key` as `api_key`) and a
-  name we can't place ("Native OS hiring tools") stay secret cards.
+  name we can't place ("Acme OS recruiting tools") stay secret cards.
 - **Every agent's prompt** gets the new `## Logins` rules and the narrowed
   `## Secrets` rules each turn: they're app-owned per-turn sections, not in
   anyone's CLAUDE.md, so existing agents get them without their
@@ -978,8 +1031,9 @@ more: …" (`retire_stale`).
   random `state` checked on a one-shot 127.0.0.1 listener that ignores
   anything else that knocks; the server as `resource` (RFC 8707) so the
   token is audience-bound; ten-minute limit; Cancel aborts the listener.
-  The app is a public client (no secret). The authorization URL is opened
-  only on the Mac; the phone never sees it, a code, or a token.
+  The app is a public client (no secret). On the phone path the phone sees
+  the authorization URL and the one-time code, never the verifier or a
+  token (see "The code relay's rules").
 - **Who can start a sign-in**: only a paired, Mac-identity-verified phone
   or the desk, on a card an agent raised; `option` must be one of that
   card's. An agent can't connect anything itself: it can only raise the
@@ -998,6 +1052,14 @@ more: …" (`retire_stale`).
 
 ### Not verified
 
+- No phone sign-in has been run end to end: the relay rules, the redirect
+  parser and the mock round trip are tested, not a real sheet on a device,
+  and whether each vendor's registration accepts a custom-scheme redirect
+  is unobserved (if one refuses, the card falls back to the Mac).
+  `gh auth login --web` with no terminal was observed printing its code;
+  a full device sign-in through it wasn't completed. The installed phone
+  build lacks `expo-web-browser` until it's rebuilt, so it offers "Finish
+  on your Mac" for OAuth until then.
 - No Connect has been signed in end to end from this build: the OAuth code
   is tested against RFC vectors, a loopback listener and the vendors' live
   metadata (read-only), not a real authorization. Each vendor's consent

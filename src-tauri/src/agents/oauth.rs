@@ -438,21 +438,30 @@ pub async fn refresh(t: &Tokens) -> Result<Tokens, RefreshError> {
 
 /* ----------------------------------------------------------------- flow */
 
-/// A sign-in that has its browser page ready: open `url`, then `finish`.
-pub struct Pending {
+/// A sign-in with its authorization URL ready, for one redirect: the
+/// verifier and `state` stay here, on this Mac, whoever opens the URL.
+pub struct Prepared {
     pub url: String,
-    listener: tokio::net::TcpListener,
-    state: String,
+    pub(crate) state: String,
     verifier: String,
-    redirect: String,
+    pub(crate) redirect: String,
     client: Client,
     meta: ServerMeta,
     resource: String,
 }
 
-/// Everything up to the browser: discovery, the loopback listener,
-/// registration and the authorization URL.
-pub async fn begin(server_url: &str) -> Result<Pending, CommandError> {
+impl std::fmt::Debug for Prepared {
+    // Never the verifier.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Prepared")
+            .field("redirect", &self.redirect)
+            .field("resource", &self.resource)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Discovery, registration with `redirect`, PKCE and the authorization URL.
+pub async fn prepare(server_url: &str, redirect: &str) -> Result<Prepared, CommandError> {
     let found = discover(server_url).await?;
     if !found.meta.code_challenge_methods_supported.is_empty()
         && !found
@@ -465,12 +474,18 @@ pub async fn begin(server_url: &str) -> Result<Pending, CommandError> {
             "That app's sign-in doesn't support a safe browser sign-in (PKCE), so it isn't used.",
         ));
     }
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
-        .await
-        .map_err(super::err_io)?;
-    let port = listener.local_addr().map_err(super::err_io)?.port();
-    let redirect = format!("http://127.0.0.1:{port}/callback");
-    let client = register(&found.meta, &redirect).await?;
+    url::Url::parse(&found.meta.authorization_endpoint)
+        .map_err(|_| CommandError::expected("That app's sign-in address isn't valid."))?;
+    let client = register(&found.meta, redirect).await?;
+    authorize_url(found, client, server_url, redirect)
+}
+
+fn authorize_url(
+    found: Discovered,
+    client: Client,
+    server_url: &str,
+    redirect: &str,
+) -> Result<Prepared, CommandError> {
     let verifier = random_b64(48);
     let state = random_b64(24);
     let mut url = url::Url::parse(&found.meta.authorization_endpoint)
@@ -479,7 +494,7 @@ pub async fn begin(server_url: &str) -> Result<Pending, CommandError> {
         let mut q = url.query_pairs_mut();
         q.append_pair("response_type", "code")
             .append_pair("client_id", &client.client_id)
-            .append_pair("redirect_uri", &redirect)
+            .append_pair("redirect_uri", redirect)
             .append_pair("code_challenge", &challenge(&verifier))
             .append_pair("code_challenge_method", "S256")
             .append_pair("state", &state)
@@ -488,15 +503,36 @@ pub async fn begin(server_url: &str) -> Result<Pending, CommandError> {
             q.append_pair("scope", &found.scopes.join(" "));
         }
     }
-    Ok(Pending {
+    Ok(Prepared {
         url: url.to_string(),
-        listener,
         state,
         verifier,
-        redirect,
+        redirect: redirect.to_string(),
         client,
         meta: found.meta,
         resource: server_url.to_string(),
+    })
+}
+
+/// A sign-in in this Mac's browser, its redirect on a loopback listener.
+pub struct Pending {
+    pub url: String,
+    listener: tokio::net::TcpListener,
+    prepared: Prepared,
+}
+
+/// Everything up to the browser: the loopback listener, then [`prepare`].
+pub async fn begin(server_url: &str) -> Result<Pending, CommandError> {
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .map_err(super::err_io)?;
+    let port = listener.local_addr().map_err(super::err_io)?.port();
+    let redirect = format!("http://127.0.0.1:{port}/callback");
+    let prepared = prepare(server_url, &redirect).await?;
+    Ok(Pending {
+        url: prepared.url.clone(),
+        listener,
+        prepared,
     })
 }
 
@@ -509,14 +545,24 @@ pub struct Finished {
 
 impl Pending {
     pub async fn finish(self) -> Result<Finished, CommandError> {
-        let code = tokio::time::timeout(SIGN_IN_TIMEOUT, wait_for_code(self.listener, &self.state))
-            .await
-            .map_err(|_| {
-                CommandError::expected("Sign-in took too long, so it was stopped. Try again.")
-            })??;
+        let code = tokio::time::timeout(
+            SIGN_IN_TIMEOUT,
+            wait_for_code(self.listener, &self.prepared.state),
+        )
+        .await
+        .map_err(|_| {
+            CommandError::expected("Sign-in took too long, so it was stopped. Try again.")
+        })??;
+        self.prepared.exchange(&code).await
+    }
+}
+
+impl Prepared {
+    /// The code for tokens, with the verifier only this Mac has.
+    pub async fn exchange(self, code: &str) -> Result<Finished, CommandError> {
         let mut form = vec![
             ("grant_type", "authorization_code"),
-            ("code", code.as_str()),
+            ("code", code),
             ("redirect_uri", self.redirect.as_str()),
             ("client_id", self.client.client_id.as_str()),
             ("code_verifier", self.verifier.as_str()),
@@ -541,6 +587,32 @@ impl Pending {
             },
             email,
         })
+    }
+}
+
+/// A redirect the phone's sign-in sheet came back with, read against the
+/// one this Mac registered: same scheme, host and path, or it's [`Callback::Other`].
+pub fn parse_redirect(url: &str, expected: &str) -> Callback {
+    let (Ok(got), Ok(want)) = (url::Url::parse(url), url::Url::parse(expected)) else {
+        return Callback::Other;
+    };
+    if got.scheme() != want.scheme()
+        || got.host_str() != want.host_str()
+        || got.path().trim_end_matches('/') != want.path().trim_end_matches('/')
+    {
+        return Callback::Other;
+    }
+    let q: std::collections::HashMap<String, String> = got.query_pairs().into_owned().collect();
+    match (q.get("code"), q.get("state"), q.get("error")) {
+        (Some(code), Some(state), _) => Callback::Code {
+            code: code.clone(),
+            state: state.clone(),
+        },
+        (_, state, Some(error)) => Callback::Error {
+            error: error.clone(),
+            state: state.cloned(),
+        },
+        _ => Callback::Other,
     }
 }
 
@@ -646,12 +718,76 @@ mod tests {
     }
 
     #[test]
+    fn a_phone_redirect_is_read_only_against_the_registered_one() {
+        let want = "dashbot-companion://oauth";
+        assert_eq!(
+            parse_redirect("dashbot-companion://oauth?code=c1&state=s1", want),
+            Callback::Code {
+                code: "c1".into(),
+                state: "s1".into()
+            }
+        );
+        assert_eq!(
+            parse_redirect(
+                "dashbot-companion://oauth?error=access_denied&state=s1",
+                want
+            ),
+            Callback::Error {
+                error: "access_denied".into(),
+                state: Some("s1".into())
+            }
+        );
+        // Another scheme, host or path is never read for a code.
+        for other in [
+            "https://evil.test/oauth?code=c1&state=s1",
+            "dashbot-companion://pair?code=c1&state=s1",
+            "dashbot-companion://oauth/elsewhere?code=c1&state=s1",
+            "other-app://oauth?code=c1&state=s1",
+            "not a url",
+        ] {
+            assert_eq!(parse_redirect(other, want), Callback::Other, "{other}");
+        }
+    }
+
+    #[test]
+    fn the_authorization_url_carries_the_challenge_never_the_verifier() {
+        let found = Discovered {
+            meta: ServerMeta {
+                authorization_endpoint: "https://auth.example.com/authorize".into(),
+                token_endpoint: "https://auth.example.com/token".into(),
+                registration_endpoint: None,
+                code_challenge_methods_supported: vec!["S256".into()],
+                scopes_supported: vec![],
+            },
+            scopes: vec!["read".into()],
+        };
+        let client = Client {
+            client_id: "cid".into(),
+            client_secret: None,
+        };
+        let p = authorize_url(
+            found,
+            client,
+            "https://mcp.example.com",
+            "dashbot-companion://oauth",
+        )
+        .unwrap();
+        assert!(!p.url.contains(&p.verifier));
+        assert!(p.url.contains(&challenge(&p.verifier)));
+        assert!(p
+            .url
+            .contains("redirect_uri=dashbot-companion%3A%2F%2Foauth"));
+        assert!(p.url.contains(&format!("state={}", p.state)));
+        assert!(!format!("{p:?}").contains(&p.verifier));
+    }
+
+    #[test]
     fn an_id_tokens_email_names_the_account() {
-        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(br#"{"email":"julian@acme.com"}"#);
+        let payload =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(br#"{"email":"sam@acme.com"}"#);
         assert_eq!(
             id_token_email(&format!("x.{payload}.y")).as_deref(),
-            Some("julian@acme.com")
+            Some("sam@acme.com")
         );
         assert!(id_token_email("garbage").is_none());
     }

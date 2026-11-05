@@ -315,7 +315,7 @@ const TOOLS: &[Tool] = &[
             "type": "object",
             "properties": {
                 "service": { "type": "string", "description": "The app or site, e.g. gmail, google_calendar, slack, linkedin, x, github, linear, notion, figma, stripe, vercel; or its name if it's something else." },
-                "account_hint": { "type": "string", "description": "Optional: which account, when it matters (\"work Gmail\", \"julian@acme.com\")." },
+                "account_hint": { "type": "string", "description": "Optional: which account, when it matters (\"work Gmail\", \"sam@acme.com\")." },
                 "scopes": { "type": "array", "items": { "type": "string" }, "description": "What you need: [\"read\"], or also [\"send\"], [\"post\"], [\"write\"]. Ask for the least that does the job." },
                 "why": { "type": "string", "description": "What you'll use it for, in one line. Shown on the card." }
             },

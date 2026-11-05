@@ -3,7 +3,7 @@
 //!
 //! An agent that needs an account calls `request_login {service,
 //! account_hint, scopes, why}` instead of asking for a password. That puts one
-//! card in its chat ("Hiring needs your Gmail"): which account, what it will
+//! card in its chat ("Recruiter needs your Gmail"): which account, what it will
 //! be able to do (read, or also send), and the ways in, best first:
 //!
 //! 1. **Connect** (tier 1): a connector, scoped and revocable, whose sign-in
@@ -28,7 +28,7 @@
 //! emitted) reaches both devices as the card itself.
 //!
 //! **Upgrading.** Secret cards an older build raised for something that has
-//! a connector or a site (an import's "gmail_native", "linkedin_token") are
+//! a connector or a site (an import's "gmail_work", "linkedin_token") are
 //! moved onto login cards at launch ([`migrate_pending`]): the old card is
 //! marked expired with a line saying where it went, and a login card takes
 //! its place, quiet if the old one was. Nobody re-answers anything.
@@ -217,7 +217,7 @@ pub fn service(id: &str) -> Option<&'static Service> {
     SERVICES.iter().find(|s| s.id == id)
 }
 
-/// The service a free-text name means: "Native Gmail inbox (gmail_native)"
+/// The service a free-text name means: "Work Gmail inbox (gmail_work)"
 /// is Gmail, "linkedin_token" is LinkedIn, "x_api" is X. Whole words only,
 /// so "excel" isn't X and "calendar app" without Google still is Calendar.
 pub fn match_service(text: &str) -> Option<&'static Service> {
@@ -283,10 +283,11 @@ pub struct LoginOption {
     pub connection_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum FlowState {
     /// Getting the sign-in ready (finding the app's sign-in page).
+    #[default]
     Starting,
     /// The sign-in is open in this Mac's browser, waiting for the user.
     Waiting,
@@ -296,7 +297,7 @@ pub enum FlowState {
 
 /// A way in that's under way, as both devices show it. Never stored: it
 /// lives in this process and is laid over the card when it's read.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Flow {
     pub state: FlowState,
@@ -307,6 +308,17 @@ pub struct Flow {
     /// Started from the phone: it says "Finish signing in on your Mac".
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub from_phone: bool,
+    /// The sign-in itself is on the phone (its sign-in sheet, or claude.ai
+    /// there), not in this Mac's browser. Implies `from_phone`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub on_phone: bool,
+    /// A device sign-in's one-time code (GitHub's, through `gh`): typed at
+    /// `verification_uri` on any device. Short-lived and single-use; only
+    /// on the card while it's waiting, never stored or logged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification_uri: Option<String>,
 }
 
 /// What a login card carries (`Approval.login`).
@@ -317,7 +329,7 @@ pub struct LoginRequest {
     pub service: String,
     pub title: String,
     /// What the agent called it, when that's not just the title
-    /// ("Native Gmail inbox (gmail_native)").
+    /// ("Work Gmail inbox (gmail_work)").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub asked_as: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -583,7 +595,7 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
     })
 }
 
-/// The card's own words: "Hiring needs your Gmail".
+/// The card's own words: "Recruiter needs your Gmail".
 pub fn title(agent: &Agent, r: &LoginRequest) -> String {
     match &r.account_hint {
         Some(hint) => format!("{} needs your {} ({hint})", agent.name, r.title),
@@ -636,7 +648,6 @@ password. Sending, posting and paying always ask the user on a card first.";
 /* ---------------------------------------------------------- live state */
 
 struct Live {
-    agent_id: String,
     flow: Flow,
     task: Option<tokio::task::AbortHandle>,
 }
@@ -691,7 +702,6 @@ fn set_flow(
     {
         let mut flows = FLOWS.lock().unwrap_or_else(|e| e.into_inner());
         let entry = flows.entry(request_id.to_string()).or_insert(Live {
-            agent_id: agent_id.to_string(),
             flow: flow.clone(),
             task: None,
         });
@@ -704,6 +714,7 @@ fn set_flow(
 }
 
 fn clear_flow(request_id: &str) {
+    super::login_relay::forget_request(request_id);
     if let Some(live) = FLOWS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -715,7 +726,10 @@ fn clear_flow(request_id: &str) {
     }
 }
 
-fn pending_login(agent_id: &str, request_id: &str) -> Result<LoginRequest, CommandError> {
+pub(crate) fn pending_login(
+    agent_id: &str,
+    request_id: &str,
+) -> Result<LoginRequest, CommandError> {
     let approval = store::find_approval(agent_id, request_id)?
         .ok_or_else(|| CommandError::expected("That card no longer exists."))?;
     if approval.status != ApprovalStatus::Pending {
@@ -788,37 +802,147 @@ fn connected_line(c: &connections::Connection) -> String {
     }
 }
 
-/// Start the way in `option_id` on this Mac. Returns at once; the card
-/// follows it on every device.
+/// Where a way in was started, and where its sign-in happens.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Origin {
+    /// Answered on the phone.
+    pub from_phone: bool,
+    /// The sign-in is on the phone too (its sheet, claude.ai there, a
+    /// device code typed there), so this Mac's browser isn't opened.
+    pub on_phone: bool,
+}
+
+impl Origin {
+    pub const DESK: Origin = Origin {
+        from_phone: false,
+        on_phone: false,
+    };
+    pub fn phone(on_phone: bool) -> Origin {
+        Origin {
+            from_phone: true,
+            on_phone,
+        }
+    }
+}
+
+/// One way in under way, for the card's live state.
+#[derive(Clone)]
+pub(crate) struct Run {
+    pub app: AppHandle,
+    pub agent_id: String,
+    pub request_id: String,
+    pub option: String,
+    pub origin: Origin,
+}
+
+impl Run {
+    pub fn flow(&self, state: FlowState, message: Option<String>) -> Flow {
+        Flow {
+            state,
+            option: self.option.clone(),
+            message,
+            started_at: store::now_ms(),
+            from_phone: self.origin.from_phone,
+            on_phone: self.origin.on_phone,
+            user_code: None,
+            verification_uri: None,
+        }
+    }
+    pub fn set(&self, state: FlowState, message: Option<String>) {
+        self.set_flow(self.flow(state, message), None);
+    }
+    pub fn set_flow(&self, flow: Flow, task: Option<tokio::task::AbortHandle>) {
+        set_flow(&self.app, &self.agent_id, &self.request_id, flow, task);
+    }
+    pub fn fail(&self, message: String) {
+        // A cancel already said so.
+        if matches!(
+            flow_of(&self.request_id),
+            Some(Flow {
+                state: FlowState::Cancelled,
+                ..
+            })
+        ) {
+            return;
+        }
+        self.set(FlowState::Failed, Some(message));
+    }
+    pub fn complete(&self, r: &LoginRequest, c: &connections::Connection, access: Access) {
+        let _ = complete(
+            &self.app,
+            &self.agent_id,
+            &self.request_id,
+            r,
+            connected_line(c),
+            tools_line(c, access),
+        );
+    }
+}
+
+/// A sign-in under way already (starting or waiting) on this card.
+pub(crate) fn busy(request_id: &str) -> bool {
+    matches!(
+        flow_of(request_id),
+        Some(Flow {
+            state: FlowState::Starting | FlowState::Waiting,
+            ..
+        })
+    )
+}
+
+/// A finished OAuth sign-in, from this Mac's browser or the phone's sheet:
+/// the connection, its token in the Keychain, the card answered.
+pub(crate) fn connect_oauth(
+    run: &Run,
+    r: &LoginRequest,
+    server_url: &str,
+    done: super::oauth::Finished,
+) -> Result<connections::Connection, CommandError> {
+    let access = r.access();
+    let account = r.account_hint.clone().or(done.email).unwrap_or_default();
+    let c = connections::add_and_grant(
+        &r.service,
+        &r.title,
+        &account,
+        Kind::Oauth {
+            server_url: server_url.to_string(),
+        },
+        &run.agent_id,
+        access,
+    )?;
+    connections::store_tokens(&c.id, &done.tokens)?;
+    run.complete(r, &c, access);
+    Ok(c)
+}
+
+/// Start the way in `option_id`. Returns at once; the card follows it on
+/// every device. The sign-in runs on this Mac unless `origin.on_phone`.
 pub async fn start(
     app: &AppHandle,
     agent_id: &str,
     request_id: &str,
     option_id: &str,
-    from_phone: bool,
+    origin: Origin,
 ) -> Result<(), CommandError> {
     let r = pending_login(agent_id, request_id)?;
     let option = r
         .option(option_id)
         .cloned()
         .ok_or_else(|| super::err_invalid("option", "That isn't one of this card's choices."))?;
-    if let Some(Flow {
-        state: FlowState::Starting | FlowState::Waiting,
-        ..
-    }) = flow_of(request_id)
-    {
-        return Err(CommandError::expected(
-            "It's already signing in on your Mac.",
-        ));
+    if busy(request_id) {
+        return Err(CommandError::expected(if origin.from_phone {
+            "It's already signing in."
+        } else {
+            "It's already signing in on your Mac."
+        }));
     }
-    let agent = store::get(agent_id)?;
     let access = r.access();
-    let flow = |state, message: Option<String>| Flow {
-        state,
+    let run = Run {
+        app: app.clone(),
+        agent_id: agent_id.to_string(),
+        request_id: request_id.to_string(),
         option: option.id.clone(),
-        message,
-        started_at: store::now_ms(),
-        from_phone,
+        origin,
     };
     match option.method {
         Method::Key => Err(CommandError::expected(
@@ -856,37 +980,49 @@ pub async fn start(
             )
         }
         Method::Gh => {
-            set_flow(
-                app,
-                agent_id,
-                request_id,
-                flow(FlowState::Starting, None),
-                None,
-            );
-            match crate::commands::github::get_github_username(None).await {
-                Ok(login) if !login.trim().is_empty() => {
-                    let c = connections::add_and_grant(
+            run.set(FlowState::Starting, None);
+            if let Some(login) = gh_login().await {
+                let c = connections::add_and_grant(
+                    "github",
+                    "GitHub",
+                    &login,
+                    Kind::Gh,
+                    agent_id,
+                    access,
+                )?;
+                return complete(
+                    app,
+                    agent_id,
+                    request_id,
+                    &r,
+                    connected_line(&c),
+                    tools_line(&c, access),
+                );
+            }
+            // Not signed in yet: GitHub's device sign-in, through gh, so the
+            // code can be typed on the phone as well as here.
+            let (run2, r2) = (run.clone(), r.clone());
+            let task = tokio::spawn(async move {
+                match super::login_relay::gh_device(&run2).await {
+                    Ok(login) => match connections::add_and_grant(
                         "github",
                         "GitHub",
-                        login.trim(),
+                        &login,
                         Kind::Gh,
-                        agent_id,
+                        &run2.agent_id,
                         access,
-                    )?;
-                    complete(
-                        app,
-                        agent_id,
-                        request_id,
-                        &r,
-                        connected_line(&c),
-                        tools_line(&c, access),
-                    )
+                    ) {
+                        Ok(c) => run2.complete(&r2, &c, access),
+                        Err(e) => run2.fail(e.to_string()),
+                    },
+                    Err(e) => run2.fail(e.to_string()),
                 }
-                _ => {
-                    set_flow(app, agent_id, request_id, flow(FlowState::Failed, Some("GitHub isn't signed in on this Mac yet. On your Mac: ⌘K → Connect GitHub account, then try again.".into())), None);
-                    Ok(())
-                }
-            }
+            });
+            run.set_flow(
+                run.flow(FlowState::Starting, None),
+                Some(task.abort_handle()),
+            );
+            Ok(())
         }
         Method::ClaudeAi => {
             let Some(Connector::ClaudeAi(name)) = service(&r.service).map(|s| s.connector) else {
@@ -894,174 +1030,63 @@ pub async fn start(
                     "That app has no claude.ai connector.",
                 ));
             };
-            set_flow(
-                app,
-                agent_id,
-                request_id,
-                flow(FlowState::Starting, None),
-                None,
-            );
-            let (app2, agent_id2, request_id2, r2) = (
-                app.clone(),
-                agent_id.to_string(),
-                request_id.to_string(),
-                r.clone(),
-            );
-            let option_id = option.id.clone();
+            run.set(FlowState::Starting, None);
+            let (run2, r2) = (run.clone(), r.clone());
             let task = tokio::spawn(async move {
-                let result = watch_claude_ai(
-                    &app2,
-                    &agent_id2,
-                    &request_id2,
-                    name,
-                    &option_id,
-                    from_phone,
-                )
-                .await;
-                match result {
-                    Ok(server_name) => {
-                        let added = connections::add_and_grant(
-                            &r2.service,
-                            &r2.title,
-                            r2.account_hint.as_deref().unwrap_or(""),
-                            Kind::ClaudeAi { server_name },
-                            &agent_id2,
-                            access,
-                        );
-                        match added {
-                            Ok(c) => {
-                                let _ = complete(
-                                    &app2,
-                                    &agent_id2,
-                                    &request_id2,
-                                    &r2,
-                                    connected_line(&c),
-                                    tools_line(&c, access),
-                                );
-                            }
-                            Err(e) => fail(
-                                &app2,
-                                &agent_id2,
-                                &request_id2,
-                                &option_id,
-                                from_phone,
-                                e.to_string(),
-                            ),
-                        }
-                    }
-                    Err(e) => fail(
-                        &app2,
-                        &agent_id2,
-                        &request_id2,
-                        &option_id,
-                        from_phone,
-                        e.to_string(),
-                    ),
+                match watch_claude_ai(&run2, name).await {
+                    Ok(server_name) => match connections::add_and_grant(
+                        &r2.service,
+                        &r2.title,
+                        r2.account_hint.as_deref().unwrap_or(""),
+                        Kind::ClaudeAi { server_name },
+                        &run2.agent_id,
+                        access,
+                    ) {
+                        Ok(c) => run2.complete(&r2, &c, access),
+                        Err(e) => run2.fail(e.to_string()),
+                    },
+                    Err(e) => run2.fail(e.to_string()),
                 }
             });
-            set_flow(
-                app,
-                agent_id,
-                request_id,
-                flow(FlowState::Starting, None),
+            run.set_flow(
+                run.flow(FlowState::Starting, None),
                 Some(task.abort_handle()),
             );
-            let _ = agent;
             Ok(())
         }
         Method::Oauth => {
             let Some(Connector::Oauth(url)) = service(&r.service).map(|s| s.connector) else {
                 return Err(CommandError::expected("That app has no connector."));
             };
-            set_flow(
-                app,
-                agent_id,
-                request_id,
-                flow(FlowState::Starting, None),
-                None,
-            );
-            let (app2, agent_id2, request_id2, r2) = (
-                app.clone(),
-                agent_id.to_string(),
-                request_id.to_string(),
-                r.clone(),
-            );
-            let option_id = option.id.clone();
+            if origin.on_phone {
+                return Err(CommandError::expected(
+                    "Signing in on the phone goes through its sign-in sheet.",
+                ));
+            }
+            run.set(FlowState::Starting, None);
+            let (run2, r2) = (run.clone(), r.clone());
             let task = tokio::spawn(async move {
                 let outcome = async {
                     let pending = super::oauth::begin(url).await?;
                     tauri_plugin_opener::open_url(&pending.url, None::<&str>)
                         .map_err(|_| CommandError::expected("Couldn't open this Mac's browser."))?;
-                    set_flow(
-                        &app2,
-                        &agent_id2,
-                        &request_id2,
-                        Flow {
-                            state: FlowState::Waiting,
-                            option: option_id.clone(),
-                            message: Some(format!(
-                                "{}'s sign-in is open in this Mac's browser.",
-                                r2.title
-                            )),
-                            started_at: store::now_ms(),
-                            from_phone,
-                        },
-                        None,
+                    run2.set(
+                        FlowState::Waiting,
+                        Some(format!(
+                            "{}'s sign-in is open in this Mac's browser.",
+                            r2.title
+                        )),
                     );
                     pending.finish().await
                 }
                 .await;
-                match outcome {
-                    Ok(done) => {
-                        let account = r2.account_hint.clone().or(done.email).unwrap_or_default();
-                        let kind = Kind::Oauth {
-                            server_url: url.to_string(),
-                        };
-                        match connections::add_and_grant(
-                            &r2.service,
-                            &r2.title,
-                            &account,
-                            kind,
-                            &agent_id2,
-                            access,
-                        )
-                        .and_then(|c| connections::store_tokens(&c.id, &done.tokens).map(|_| c))
-                        {
-                            Ok(c) => {
-                                let _ = complete(
-                                    &app2,
-                                    &agent_id2,
-                                    &request_id2,
-                                    &r2,
-                                    connected_line(&c),
-                                    tools_line(&c, access),
-                                );
-                            }
-                            Err(e) => fail(
-                                &app2,
-                                &agent_id2,
-                                &request_id2,
-                                &option_id,
-                                from_phone,
-                                e.to_string(),
-                            ),
-                        }
-                    }
-                    Err(e) => fail(
-                        &app2,
-                        &agent_id2,
-                        &request_id2,
-                        &option_id,
-                        from_phone,
-                        e.to_string(),
-                    ),
+                match outcome.and_then(|done| connect_oauth(&run2, &r2, url, done)) {
+                    Ok(_) => {}
+                    Err(e) => run2.fail(e.to_string()),
                 }
             });
-            set_flow(
-                app,
-                agent_id,
-                request_id,
-                flow(FlowState::Starting, None),
+            run.set_flow(
+                run.flow(FlowState::Starting, None),
                 Some(task.abort_handle()),
             );
             Ok(())
@@ -1069,50 +1094,20 @@ pub async fn start(
     }
 }
 
-fn fail(
-    app: &AppHandle,
-    agent_id: &str,
-    request_id: &str,
-    option: &str,
-    from_phone: bool,
-    message: String,
-) {
-    // A cancel already said so.
-    if matches!(
-        flow_of(request_id),
-        Some(Flow {
-            state: FlowState::Cancelled,
-            ..
-        })
-    ) {
-        return;
-    }
-    set_flow(
-        app,
-        agent_id,
-        request_id,
-        Flow {
-            state: FlowState::Failed,
-            option: option.to_string(),
-            message: Some(message),
-            started_at: store::now_ms(),
-            from_phone,
-        },
-        None,
-    );
+/// The GitHub account `gh` is signed in to on this Mac, if it is.
+async fn gh_login() -> Option<String> {
+    crate::commands::github::get_github_username(None)
+        .await
+        .ok()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
 }
 
 /// The claude.ai connector named `name` is connected in Claude Code: at
-/// once, or after the user adds it on claude.ai (opened in this Mac's
-/// browser), checked every 20 seconds for up to ten minutes.
-async fn watch_claude_ai(
-    app: &AppHandle,
-    agent_id: &str,
-    request_id: &str,
-    name: &str,
-    option: &str,
-    from_phone: bool,
-) -> Result<String, CommandError> {
+/// once, or after the user adds it on claude.ai (in this Mac's browser, or
+/// on the phone when the sign-in is there), checked every 20 seconds for
+/// up to ten minutes.
+async fn watch_claude_ai(run: &Run, name: &str) -> Result<String, CommandError> {
     let wanted = format!("claude.ai {name}");
     let connected = || async {
         super::apps::list().await.ok().and_then(|apps| {
@@ -1125,15 +1120,14 @@ async fn watch_claude_ai(
     if let Some(found) = connected().await {
         return Ok(found);
     }
-    tauri_plugin_opener::open_url("https://claude.ai/settings/connectors", None::<&str>)
-        .map_err(|_| CommandError::expected("Couldn't open this Mac's browser."))?;
-    set_flow(app, agent_id, request_id, Flow {
-        state: FlowState::Waiting,
-        option: option.to_string(),
-        message: Some(format!("claude.ai's connectors are open in this Mac's browser. Add {name} there; this card notices when it's connected.")),
-        started_at: store::now_ms(),
-        from_phone,
-    }, None);
+    let message = if run.origin.on_phone {
+        format!("Add {name} on claude.ai on your phone, signed in to the same Claude account as this Mac; this card notices when it's connected.")
+    } else {
+        tauri_plugin_opener::open_url(CLAUDE_AI_CONNECTORS, None::<&str>)
+            .map_err(|_| CommandError::expected("Couldn't open this Mac's browser."))?;
+        format!("claude.ai's connectors are open in this Mac's browser. Add {name} there; this card notices when it's connected.")
+    };
+    run.set(FlowState::Waiting, Some(message));
     let until = std::time::Instant::now() + super::oauth::SIGN_IN_TIMEOUT;
     while std::time::Instant::now() < until {
         tokio::time::sleep(std::time::Duration::from_secs(20)).await;
@@ -1143,6 +1137,9 @@ async fn watch_claude_ai(
     }
     Err(CommandError::expected(format!("{name} didn't show up as connected within ten minutes. Try again once it's added on claude.ai.")))
 }
+
+/// Where claude.ai's connectors are added (opened on the Mac, or the phone).
+pub const CLAUDE_AI_CONNECTORS: &str = "https://claude.ai/settings/connectors";
 
 /// Stop a sign-in under way. The card stays, to try again or decline.
 pub fn cancel(app: &AppHandle, agent_id: &str, request_id: &str) -> Result<(), CommandError> {
@@ -1156,6 +1153,8 @@ pub fn cancel(app: &AppHandle, agent_id: &str, request_id: &str) -> Result<(), C
             task.abort();
         }
     }
+    // A phone sign-in waiting for its code can't finish any more.
+    super::login_relay::forget_request(request_id);
     set_flow(
         app,
         agent_id,
@@ -1163,9 +1162,8 @@ pub fn cancel(app: &AppHandle, agent_id: &str, request_id: &str) -> Result<(), C
         Flow {
             state: FlowState::Cancelled,
             option,
-            message: None,
             started_at: store::now_ms(),
-            from_phone: false,
+            ..Flow::default()
         },
         None,
     );
@@ -1248,7 +1246,16 @@ pub async fn allow_from_old_client(
 ) -> Result<(), CommandError> {
     let r = pending_login(agent_id, request_id)?;
     match r.options.iter().find(|o| o.method != Method::Key) {
-        Some(o) => start(app, agent_id, request_id, &o.id.clone(), true).await,
+        Some(o) => {
+            start(
+                app,
+                agent_id,
+                request_id,
+                &o.id.clone(),
+                Origin::phone(false),
+            )
+            .await
+        }
         None => Err(CommandError::expected(
             "This card needs a key typed in. Open it on your Mac, or update the app on your phone.",
         )),
@@ -1666,7 +1673,7 @@ pub async fn connect_need(
     key: &str,
     option_id: &str,
     skip: &[String],
-    from_phone: bool,
+    origin: Origin,
 ) -> Result<(), CommandError> {
     let need = team(None)
         .needs
@@ -1690,7 +1697,7 @@ pub async fn connect_need(
             if pending_login(&card.agent_id, &card.request_id)
                 .is_ok_and(|r| r.option("browser").is_some())
             {
-                let _ = start(app, &card.agent_id, &card.request_id, "browser", from_phone).await;
+                let _ = start(app, &card.agent_id, &card.request_id, "browser", origin).await;
             }
         }
         return Ok(());
@@ -1716,14 +1723,7 @@ pub async fn connect_need(
         else {
             continue;
         };
-        start(
-            app,
-            &first.agent_id,
-            &first.request_id,
-            &option.id,
-            from_phone,
-        )
-        .await?;
+        start(app, &first.agent_id, &first.request_id, &option.id, origin).await?;
         let rest: Vec<TeamCard> = cards
             .into_iter()
             .filter(|c| c.request_id != first.request_id)
@@ -1731,57 +1731,66 @@ pub async fn connect_need(
         if rest.is_empty() {
             continue;
         }
-        let (app, service_id) = (app.clone(), service_id.clone());
-        tokio::spawn(async move {
-            // Once the first card is connected, the others use its connection.
-            for _ in 0..(11 * 60) {
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                let state = store::find_approval(&first.agent_id, &first.request_id)
-                    .ok()
-                    .flatten()
-                    .map(|a| a.status);
-                match state {
-                    Some(ApprovalStatus::Pending) => {
-                        if matches!(
-                            flow_of(&first.request_id),
-                            Some(Flow {
-                                state: FlowState::Failed | FlowState::Cancelled,
-                                ..
-                            })
-                        ) {
-                            return;
-                        }
-                        continue;
-                    }
-                    Some(ApprovalStatus::Allowed) => {}
-                    _ => return,
-                }
-                let Some(c) = connections::for_service(&service_id)
-                    .into_iter()
-                    .find(|c| c.grant_for(&first.agent_id).is_some())
-                else {
-                    return;
-                };
-                for card in &rest {
-                    let Ok(r) = pending_login(&card.agent_id, &card.request_id) else {
-                        continue;
-                    };
-                    if let Ok(c) = connections::grant(&c.id, &card.agent_id, r.access()) {
-                        let _ = complete(
-                            &app,
-                            &card.agent_id,
-                            &card.request_id,
-                            &r,
-                            connected_line(&c),
-                            tools_line(&c, r.access()),
-                        );
-                    }
-                }
-                return;
-            }
-        });
+        fan_out(app, service_id, first, rest);
     }
     Ok(())
+}
+
+/// Once `first`'s card is connected, `rest` (the same service's other
+/// waiting cards on a team row) are granted the same connection.
+pub(crate) fn fan_out(app: &AppHandle, service_id: &str, first: TeamCard, rest: Vec<TeamCard>) {
+    if rest.is_empty() {
+        return;
+    }
+    let (app, service_id) = (app.clone(), service_id.to_string());
+    tokio::spawn(async move {
+        // Once the first card is connected, the others use its connection.
+        for _ in 0..(11 * 60) {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            let state = store::find_approval(&first.agent_id, &first.request_id)
+                .ok()
+                .flatten()
+                .map(|a| a.status);
+            match state {
+                Some(ApprovalStatus::Pending) => {
+                    if matches!(
+                        flow_of(&first.request_id),
+                        Some(Flow {
+                            state: FlowState::Failed | FlowState::Cancelled,
+                            ..
+                        })
+                    ) {
+                        return;
+                    }
+                    continue;
+                }
+                Some(ApprovalStatus::Allowed) => {}
+                _ => return,
+            }
+            let Some(c) = connections::for_service(&service_id)
+                .into_iter()
+                .find(|c| c.grant_for(&first.agent_id).is_some())
+            else {
+                return;
+            };
+            for card in &rest {
+                let Ok(r) = pending_login(&card.agent_id, &card.request_id) else {
+                    continue;
+                };
+                if let Ok(c) = connections::grant(&c.id, &card.agent_id, r.access()) {
+                    let _ = complete(
+                        &app,
+                        &card.agent_id,
+                        &card.request_id,
+                        &r,
+                        connected_line(&c),
+                        tools_line(&c, r.access()),
+                    );
+                }
+            }
+            return;
+        }
+    });
 }
 
 /// "Not needed": the card is put away without connecting anything, and the
@@ -2018,15 +2027,15 @@ mod tests {
     #[test]
     fn free_text_names_find_their_service() {
         let id = |t: &str| match_service(t).map(|s| s.id);
-        assert_eq!(id("Native Gmail inbox (gmail_native)"), Some("gmail"));
-        assert_eq!(id("gmail_native"), Some("gmail"));
+        assert_eq!(id("Work Gmail inbox (gmail_work)"), Some("gmail"));
+        assert_eq!(id("gmail_work"), Some("gmail"));
         assert_eq!(id("linkedin_token"), Some("linkedin"));
         assert_eq!(id("x_api_token"), Some("x"));
         assert_eq!(id("Twitter login"), Some("x"));
         assert_eq!(id("Slack workspace"), Some("slack"));
         assert_eq!(id("google_calendar"), Some("google_calendar"));
-        assert_eq!(id("Ship Studio Community Slack"), Some("slack"));
-        assert_eq!(id("Native OS hiring tools"), None);
+        assert_eq!(id("Acme Community Slack"), Some("slack"));
+        assert_eq!(id("Acme OS recruiting tools"), None);
         assert_eq!(id("excel exports"), None, "whole words only");
         assert_eq!(id("GitHub token"), Some("github"));
     }
@@ -2034,19 +2043,19 @@ mod tests {
     #[test]
     fn the_card_puts_the_best_way_first_and_never_a_password() {
         with_root(|| {
-            let hiring = agent("Hiring", Engine::Claude);
-            let gmail = build(&hiring, &ask("gmail", &["read", "send"])).unwrap();
+            let recruiter = agent("Recruiter", Engine::Claude);
+            let gmail = build(&recruiter, &ask("gmail", &["read", "send"])).unwrap();
             assert_eq!(gmail.options[0].method, Method::ClaudeAi);
             assert_eq!(gmail.options[1].method, Method::Browser);
             assert!(gmail.key.is_none(), "no password field for Gmail");
             assert_eq!(gmail.access(), Access::Full);
             assert!(gmail.abilities[1].label.contains("asks you"));
 
-            let linear = build(&hiring, &ask("linear", &[])).unwrap();
+            let linear = build(&recruiter, &ask("linear", &[])).unwrap();
             assert_eq!(linear.options[0].method, Method::Oauth);
             assert_eq!(linear.access(), Access::Read);
 
-            let linkedin = build(&hiring, &ask("LinkedIn", &["post"])).unwrap();
+            let linkedin = build(&recruiter, &ask("LinkedIn", &["post"])).unwrap();
             assert_eq!(linkedin.options[0].method, Method::Browser);
             assert!(linkedin
                 .no_connector
@@ -2054,14 +2063,14 @@ mod tests {
                 .unwrap()
                 .contains("no connector"));
 
-            let x = build(&hiring, &ask("x", &["post"])).unwrap();
+            let x = build(&recruiter, &ask("x", &["post"])).unwrap();
             assert_eq!(
                 x.options.iter().map(|o| o.method).collect::<Vec<_>>(),
                 vec![Method::Browser, Method::Key]
             );
             assert_eq!(x.key.as_ref().unwrap().kind, secrets::Kind::ApiKey);
 
-            let unknown = build(&hiring, &ask("Native OS hiring tools", &[])).unwrap();
+            let unknown = build(&recruiter, &ask("Acme OS recruiting tools", &[])).unwrap();
             assert_eq!(unknown.service, "other");
             assert_eq!(
                 unknown.options.iter().map(|o| o.method).collect::<Vec<_>>(),
@@ -2070,7 +2079,7 @@ mod tests {
             assert!(unknown.no_connector.is_some());
 
             assert!(build(
-                &hiring,
+                &recruiter,
                 &Ask {
                     why: " ".into(),
                     ..ask("gmail", &[])
@@ -2100,7 +2109,7 @@ mod tests {
     #[test]
     fn an_account_connected_for_another_agent_is_one_click() {
         with_root(|| {
-            let hiring = agent("Hiring", Engine::Claude);
+            let recruiter = agent("Recruiter", Engine::Claude);
             let social = agent("Social", Engine::Claude);
             connections::add_and_grant(
                 "gmail",
@@ -2109,7 +2118,7 @@ mod tests {
                 Kind::ClaudeAi {
                     server_name: "claude.ai Gmail".into(),
                 },
-                &hiring.id,
+                &recruiter.id,
                 Access::Read,
             )
             .unwrap();
@@ -2117,7 +2126,7 @@ mod tests {
             assert_eq!(card.options[0].method, Method::Existing);
             assert_eq!(card.options[0].label, "Use work@acme.com");
             // The agent it's already granted to isn't offered it again.
-            let again = build(&hiring, &ask("gmail", &[])).unwrap();
+            let again = build(&recruiter, &ask("gmail", &[])).unwrap();
             assert!(again.options.iter().all(|o| o.method != Method::Existing));
         });
     }
@@ -2160,20 +2169,20 @@ mod tests {
     #[test]
     fn pending_secret_cards_from_an_older_build_become_login_cards_once() {
         with_root(|| {
-            let hiring = agent("Hiring", Engine::Claude);
-            let social = agent("Social Posts", Engine::Claude);
+            let recruiter = agent("Recruiter", Engine::Claude);
+            let social = agent("Publicist", Engine::Claude);
             let finance = agent("Finance", Engine::Claude);
             let gmail = old_secret_card(
-                &hiring,
-                "gmail_native",
-                "Native Gmail inbox (gmail_native)",
+                &recruiter,
+                "gmail_work",
+                "Work Gmail inbox (gmail_work)",
                 "token",
                 true,
             );
             let os = old_secret_card(
-                &hiring,
-                "native_os",
-                "Native OS hiring tools",
+                &recruiter,
+                "acme_os",
+                "Acme OS recruiting tools",
                 "password",
                 true,
             );
@@ -2202,7 +2211,7 @@ mod tests {
             assert_eq!(migrate_pending(None), 3);
             assert_eq!(migrate_pending(None), 0, "idempotent");
 
-            let open = store::pending_approvals(&hiring.id).unwrap();
+            let open = store::pending_approvals(&recruiter.id).unwrap();
             let login = open
                 .iter()
                 .find_map(|a| a.login.clone())
@@ -2210,12 +2219,14 @@ mod tests {
             assert_eq!(login.service, "gmail");
             assert_eq!(login.replaces.as_deref(), Some(gmail.as_str()));
             assert!(login.quiet, "an import's card stays quiet");
-            assert_eq!(login.asked_as.as_deref(), Some("gmail native"));
-            let old = store::find_approval(&hiring.id, &gmail).unwrap().unwrap();
+            assert_eq!(login.asked_as.as_deref(), Some("gmail work"));
+            let old = store::find_approval(&recruiter.id, &gmail)
+                .unwrap()
+                .unwrap();
             assert_eq!(old.status, ApprovalStatus::Expired);
             // Not a service: stays a secret card.
             assert_eq!(
-                store::find_approval(&hiring.id, &os)
+                store::find_approval(&recruiter.id, &os)
                     .unwrap()
                     .unwrap()
                     .status,
@@ -2254,7 +2265,7 @@ mod tests {
                 ApprovalStatus::Expired
             );
             assert_eq!(store::pending_approvals(&social.id).unwrap().len(), 1);
-            assert_eq!(store::get(&hiring.id).unwrap().pending_approvals, 2);
+            assert_eq!(store::get(&recruiter.id).unwrap().pending_approvals, 2);
 
             // "What your team needs" sees one row per service.
             let t = team(None);
@@ -2269,8 +2280,8 @@ mod tests {
     #[test]
     fn a_login_card_round_trips_and_old_data_loads() {
         with_root(|| {
-            let hiring = agent("Hiring", Engine::Claude);
-            let r = build(&hiring, &ask("linear", &["write"])).unwrap();
+            let recruiter = agent("Recruiter", Engine::Claude);
+            let r = build(&recruiter, &ask("linear", &["write"])).unwrap();
             let v = serde_json::to_value(&r).unwrap();
             assert_eq!(v["options"][0]["method"], "oauth");
             assert!(v.get("flow").is_none(), "live state is never stored");
@@ -2289,7 +2300,7 @@ mod tests {
     #[test]
     fn what_it_can_reach_lists_and_removes_each_thing() {
         with_root(|| {
-            let hiring = agent("Hiring", Engine::Claude);
+            let recruiter = agent("Recruiter", Engine::Claude);
             let c = connections::add_and_grant(
                 "linear",
                 "Linear",
@@ -2297,29 +2308,29 @@ mod tests {
                 Kind::Oauth {
                     server_url: "https://mcp.linear.app/mcp".into(),
                 },
-                &hiring.id,
+                &recruiter.id,
                 Access::Read,
             )
             .unwrap();
-            store::update(&hiring.id, |a| {
+            store::update(&recruiter.id, |a| {
                 a.reach.browser_sites.push("www.linkedin.com".into())
             })
             .unwrap();
-            let r = reach(&store::get(&hiring.id).unwrap());
+            let r = reach(&store::get(&recruiter.id).unwrap());
             assert_eq!(r.connections.len(), 1);
             assert!(r.browser.as_ref().unwrap().on);
             let r = remove(
-                &hiring.id,
+                &recruiter.id,
                 &Removal::Connection {
                     connection_id: c.id.clone(),
                 },
             )
             .unwrap();
             assert!(r.connections.is_empty());
-            let r = remove(&hiring.id, &Removal::Browser).unwrap();
+            let r = remove(&recruiter.id, &Removal::Browser).unwrap();
             assert!(!r.browser.unwrap().on);
             let r = remove(
-                &hiring.id,
+                &recruiter.id,
                 &Removal::BlockApp {
                     name: "claude.ai Gmail".into(),
                 },
@@ -2380,14 +2391,14 @@ mod tests {
     #[test]
     fn the_team_list_is_one_row_per_service_with_every_agent_on_it() {
         with_root(|| {
-            let hiring = agent("Hiring", Engine::Claude);
-            let inbox = agent("Inbox Zero", Engine::Claude);
+            let recruiter = agent("Recruiter", Engine::Claude);
+            let inbox = agent("Mailroom", Engine::Claude);
             let cal = agent("Calendar", Engine::Claude);
             let devs: Vec<Agent> = ["Site", "Docs", "Release"]
                 .iter()
                 .map(|n| agent(n, Engine::Claude))
                 .collect();
-            raise_quiet(&hiring, "gmail");
+            raise_quiet(&recruiter, "gmail");
             raise_quiet(&inbox, "gmail");
             let dropped = raise_quiet(&cal, "google_calendar");
             for d in &devs {
@@ -2403,7 +2414,7 @@ mod tests {
                     .iter()
                     .map(|c| c.agent_name.as_str())
                     .collect::<Vec<_>>(),
-                vec!["Hiring", "Inbox Zero", "Calendar"]
+                vec!["Recruiter", "Mailroom", "Calendar"]
             );
             assert_eq!(google.options[0].method, Method::ClaudeAi);
             let gh = t.needs.iter().find(|n| n.key == "github").unwrap();
@@ -2453,7 +2464,7 @@ mod tests {
     #[test]
     fn getting_a_service_one_way_retires_its_other_asks() {
         with_root(|| {
-            let social = agent("Social Posts", Engine::Claude);
+            let social = agent("Publicist", Engine::Claude);
             let token = old_secret_card(&social, "x_api_token", "Post to X", "api_key", false);
             let keep = raise_quiet(&social, "x");
             let retired = retire_stale(&social.id, "x", &keep, "uses your browser");

@@ -166,6 +166,13 @@ export const MAC_FEATURES = {
   rooms: 'rooms',
   /** Login cards (`approval.login`) and the `agents.login*` / `agents.reach` methods. */
   logins: 'logins',
+  /**
+   * Signing in on the phone itself: `agents.loginPhoneBegin|loginPhoneFinish`
+   * (a provider's sign-in sheet, the code relayed to the Mac) and `onPhone`
+   * on `agents.loginStart|loginsConnect` (claude.ai on the phone, GitHub's
+   * device code).
+   */
+  loginsPhone: 'logins.phone',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

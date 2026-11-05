@@ -775,15 +775,24 @@ pub async fn agents_login_start(
     request_id: String,
     option_id: String,
     from_phone: Option<bool>,
+    on_phone: Option<bool>,
 ) -> Result<(), CommandError> {
     agents::logins::start(
         &app,
         &agent_id,
         &request_id,
         &option_id,
-        from_phone.unwrap_or(false),
+        origin(from_phone, on_phone),
     )
     .await
+}
+
+fn origin(from_phone: Option<bool>, on_phone: Option<bool>) -> agents::logins::Origin {
+    match (from_phone.unwrap_or(false), on_phone.unwrap_or(false)) {
+        (_, true) => agents::logins::Origin::phone(true),
+        (true, false) => agents::logins::Origin::phone(false),
+        _ => agents::logins::Origin::DESK,
+    }
 }
 
 /// Stop a sign-in under way; the card stays.
@@ -843,13 +852,14 @@ pub async fn agents_logins_connect(
     option_id: String,
     skip: Option<Vec<String>>,
     from_phone: Option<bool>,
+    on_phone: Option<bool>,
 ) -> Result<(), CommandError> {
     agents::logins::connect_need(
         &app,
         &key,
         &option_id,
         &skip.unwrap_or_default(),
-        from_phone.unwrap_or(false),
+        origin(from_phone, on_phone),
     )
     .await
 }

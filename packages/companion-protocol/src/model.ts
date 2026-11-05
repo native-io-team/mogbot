@@ -429,13 +429,18 @@ export interface LoginFlow {
   startedAt: number;
   /** Started from a phone: "Finish signing in on your Mac". */
   fromPhone?: boolean;
+  /** The sign-in is on the phone (its sheet, claude.ai there, a device code), not the Mac's browser. */
+  onPhone?: boolean;
+  /** A device sign-in's one-time code (GitHub), typed at `verificationUri` on either device. */
+  userCode?: string;
+  verificationUri?: string;
 }
 
 export interface LoginRequest {
   /** The catalogue's id ("gmail", "linkedin"), or `other`. */
   service: string;
   title: string;
-  /** What the agent called it, when that differs ("gmail native"). */
+  /** What the agent called it, when that differs ("gmail work"). */
   askedAs?: string;
   accountHint?: string;
   why: string;
@@ -449,6 +454,18 @@ export interface LoginRequest {
   /** The secret card an older Mac build raised, which this replaced. */
   replaces?: string;
   flow?: LoginFlow;
+}
+
+/** `agents.loginPhoneBegin`: what the phone opens. No secret: the PKCE verifier stays on the Mac. */
+export interface LoginPhoneBegin {
+  flowId: string;
+  /** The card it signs in for (a team row's first), for `agents.loginCancel`. */
+  agentId: string;
+  requestId: string;
+  /** The provider's authorization URL, for the system sign-in sheet. */
+  url: string;
+  /** The companion app's own redirect, which the sheet hands back. */
+  redirectUri: string;
 }
 
 export type TeamCardState = 'waiting' | 'connected' | 'skipped' | 'covered';

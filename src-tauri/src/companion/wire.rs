@@ -339,12 +339,17 @@ pub const MAC_FEATURE_ROOMS: &str = "rooms";
 /// and `agents.reach` methods (`agents/logins.rs`).
 pub const MAC_FEATURE_LOGINS: &str = "logins";
 
+/// `welcome.features`: signing in on the phone itself
+/// (`agents.loginPhoneBegin|loginPhoneFinish`, `onPhone`; `agents/login_relay.rs`).
+pub const MAC_FEATURE_LOGINS_PHONE: &str = "logins.phone";
+
 /// Everything `welcome.features` lists.
 pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_REVISE_RESULTS,
     MAC_FEATURE_WHEN_ROUTINES,
     MAC_FEATURE_ROOMS,
     MAC_FEATURE_LOGINS,
+    MAC_FEATURE_LOGINS_PHONE,
 ];
 
 /// What one connected app said it shows (`hello.features`).
