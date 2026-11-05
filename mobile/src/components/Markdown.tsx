@@ -19,7 +19,18 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { haptic } from '../lib/haptics';
 import { splitMentions } from '../lib/rooms';
 import { makeStyles, useColors } from '../lib/appearance';
-import { alpha, fonts, lineHeight, radius, space, type, type Palette, PRESSED } from '../lib/theme';
+import {
+  alpha,
+  fonts,
+  lineHeight,
+  radius,
+  READ_LINE,
+  READ_MAX_SCALE,
+  space,
+  type,
+  type Palette,
+  PRESSED,
+} from '../lib/theme';
 import { T } from './ui';
 
 /** Opens a path written in a reply; absent where paths can't be opened. */
@@ -147,9 +158,10 @@ function block(t: Token, key: number, styles: Styles): ReactNode {
       return null;
     case 'heading': {
       const h = t as Tokens.Heading;
-      const size = h.depth <= 1 ? type.title : h.depth === 2 ? type.subhead : type.body;
+      const size = h.depth <= 1 ? type.heading : h.depth === 2 ? type.title : type.read;
       return (
         <Text
+          maxFontSizeMultiplier={READ_MAX_SCALE}
           key={key}
           style={[styles.p, styles.heading, { fontSize: size, lineHeight: lineHeight(size, 1.35) }]}
         >
@@ -159,14 +171,14 @@ function block(t: Token, key: number, styles: Styles): ReactNode {
     }
     case 'paragraph':
       return (
-        <Text key={key} style={styles.p}>
+        <Text maxFontSizeMultiplier={READ_MAX_SCALE} key={key} style={styles.p}>
           {inline((t as Tokens.Paragraph).tokens, styles)}
         </Text>
       );
     case 'text': {
       const tt = t as Tokens.Text;
       return (
-        <Text key={key} style={styles.p}>
+        <Text maxFontSizeMultiplier={READ_MAX_SCALE} key={key} style={styles.p}>
           {tt.tokens ? inline(tt.tokens, styles) : tt.text}
         </Text>
       );
@@ -187,13 +199,13 @@ function block(t: Token, key: number, styles: Styles): ReactNode {
       return <View key={key} style={styles.hr} />;
     case 'html':
       return (
-        <Text key={key} style={styles.p}>
+        <Text maxFontSizeMultiplier={READ_MAX_SCALE} key={key} style={styles.p}>
           {(t as Tokens.HTML).text.trim()}
         </Text>
       );
     default:
       return 'raw' in t ? (
-        <Text key={key} style={styles.p}>
+        <Text maxFontSizeMultiplier={READ_MAX_SCALE} key={key} style={styles.p}>
           {t.raw}
         </Text>
       ) : null;
@@ -293,7 +305,7 @@ function List({ list, depth = 0 }: { list: Tokens.List; depth?: number }) {
     <View style={styles.list}>
       {list.items.map((item, i) => (
         <View key={i} style={styles.item}>
-          <Text style={[styles.p, styles.bullet]}>
+          <Text maxFontSizeMultiplier={READ_MAX_SCALE} style={[styles.p, styles.bullet]}>
             {item.task
               ? item.checked
                 ? '☑'
@@ -337,7 +349,12 @@ function Table({ table }: { table: Tokens.Table }) {
             c === cells.length - 1 ? { minWidth: widths[c], flexGrow: 1 } : { width: widths[c] },
           ]}
         >
-          <Text style={[styles.cell, header && styles.strong]}>{inline(cell.tokens, styles)}</Text>
+          <Text
+            maxFontSizeMultiplier={READ_MAX_SCALE}
+            style={[styles.cell, header && styles.strong]}
+          >
+            {inline(cell.tokens, styles)}
+          </Text>
         </View>
       ))}
     </View>
@@ -393,7 +410,9 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.codeBody}
       >
-        <Text style={styles.codeText}>{code}</Text>
+        <Text maxFontSizeMultiplier={READ_MAX_SCALE} style={styles.codeText}>
+          {code}
+        </Text>
       </ScrollView>
     </View>
   );
@@ -401,21 +420,22 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
 
 const bodyOf = (colors: Palette) => ({
   fontFamily: fonts.regular,
-  fontSize: type.body,
-  lineHeight: lineHeight(type.body, 1.5),
+  fontSize: type.read,
+  lineHeight: lineHeight(type.read, READ_LINE),
   color: colors.textBody,
 });
 
 const useStyles = makeStyles((colors) => ({
-  root: { gap: space.md },
+  // A paragraph apart: a blank line's worth of air between blocks, as Grok sets a reply.
+  root: { gap: space.lg },
   p: bodyOf(colors),
-  heading: { fontFamily: fonts.semibold, color: colors.textStrong, marginTop: space.sm },
+  heading: { fontFamily: fonts.semibold, color: colors.textStrong, marginTop: space.md },
   strong: { fontFamily: fonts.semibold, color: colors.textStrong },
   em: { fontStyle: 'italic' },
   del: { textDecorationLine: 'line-through', color: colors.textSecondary },
   codespan: {
     fontFamily: fonts.mono,
-    fontSize: type.small,
+    fontSize: type.body,
     color: colors.textStrong,
     backgroundColor: colors.surfaceControl,
   },
@@ -427,11 +447,11 @@ const useStyles = makeStyles((colors) => ({
     paddingLeft: space.md,
     gap: space.sm,
   },
-  list: { gap: space.xs },
-  item: { flexDirection: 'row', gap: space.tight },
+  list: { gap: space.sm },
+  item: { flexDirection: 'row', gap: space.sm },
   // Wide enough for "10." so a long list's numbers line up with its first.
   bullet: { color: colors.textMuted, minWidth: 18 },
-  itemBody: { flex: 1, gap: space.xs },
+  itemBody: { flex: 1, gap: space.sm },
   hr: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderStrong,

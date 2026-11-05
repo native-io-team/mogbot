@@ -75,10 +75,10 @@ describe('Setting up your team', () => {
   it('opens on the first open step, with Skip and the logins to add', async () => {
     await show(view());
     expect(openStep(fixture)).toBe('logins');
-    // Named by the app, never the raw key; whose it is under it.
+    // Named by the app, never the raw key; who uses it under it, quieter.
     expect(screen.getByText('Wise')).toBeTruthy();
     expect(screen.queryByText(/\bwise\b/)).toBeNull();
-    expect(screen.getByText('Finance')).toBeTruthy();
+    expect(screen.getByText('Used by Finance')).toBeTruthy();
     expect(screen.getByText('Add')).toBeTruthy();
     await fireEvent.press(screen.getByText('Skip'));
     expect(calls).toEqual([['step', 'logins', 'skipped']]);

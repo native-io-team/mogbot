@@ -27,6 +27,8 @@ import {
   iconSize,
   lineHeight,
   radius,
+  READ_LINE,
+  READ_MAX_SCALE,
   space,
   type,
   type Palette,
@@ -64,9 +66,19 @@ function strongerOf(colors: Palette): Record<string, string> {
  * `headline` (16 semibold) over a `small` secondary line, and metadata is a
  * muted `caption`. One coloured element per row at most, never a whole line.
  */
-type Variant = 'body' | 'small' | 'caption' | 'subhead' | 'headline' | 'title' | 'display' | 'mono';
+type Variant =
+  | 'body'
+  | 'read'
+  | 'small'
+  | 'caption'
+  | 'subhead'
+  | 'headline'
+  | 'title'
+  | 'display'
+  | 'mono';
 
-const variants = StyleSheet.create({
+/** Built through makeStyles, so a change of Settings → Text size rebuilds them at the new sizes. */
+const useVariants = makeStyles(() => ({
   body: { fontFamily: fonts.regular, fontSize: type.body, lineHeight: lineHeight(type.body, 1.5) },
   small: { fontFamily: fonts.regular, fontSize: type.small, lineHeight: lineHeight(type.small) },
   caption: {
@@ -96,7 +108,12 @@ const variants = StyleSheet.create({
     letterSpacing: -0.4,
   },
   mono: { fontFamily: fonts.mono, fontSize: type.small, lineHeight: lineHeight(type.small, 1.5) },
-});
+  read: {
+    fontFamily: fonts.regular,
+    fontSize: type.read,
+    lineHeight: lineHeight(type.read, READ_LINE),
+  },
+}));
 
 export function T({
   variant = 'body',
@@ -105,10 +122,13 @@ export function T({
   ...rest
 }: TextProps & { variant?: Variant; color?: string }) {
   const colors = useColors();
+  const variants = useVariants();
   const high = useApp((s) => s.highContrast);
   const ink = color ?? colors.textPrimary;
   return (
     <Text
+      // Words reflow with Dynamic Type, up to the reading clamp; chrome passes its own, lower.
+      maxFontSizeMultiplier={READ_MAX_SCALE}
       {...rest}
       style={[variants[variant], { color: (high && strongerOf(colors)[ink]) || ink }, style]}
     />
