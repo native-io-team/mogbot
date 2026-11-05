@@ -37,7 +37,7 @@
 }
 
 .settings-tab-panel {
-  border-top: var(--border-width-default) solid var(--border-default);
+  border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
 .settings-section {

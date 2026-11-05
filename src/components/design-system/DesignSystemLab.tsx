@@ -93,14 +93,14 @@ export function DesignSystemLab() {
       className="ss-design-system-lab"
       data-lab-theme={theme}
       data-lab-density={density}
-      aria-label="Ship Studio development design-system lab"
+      aria-label="Development design-system lab"
     >
       <header className="ss-design-system-lab__header">
         <div>
           <p className="ss-design-system-lab__eyebrow">Development only</p>
           <h1 className="ss-design-system-lab__title">Primitive lab</h1>
           <p className="ss-design-system-lab__intro">
-            Real Ship Studio primitives, tokens, states, and accessibility contracts.
+            Real app primitives, tokens, states, and accessibility contracts.
           </p>
         </div>
         <Button

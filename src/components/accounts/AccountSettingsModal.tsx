@@ -340,19 +340,19 @@ export function AccountSettingsModal({
                             )}
                             <div className="account-cred-actions">
                               <Button
+                                variant="ghost"
+                                size="compact"
+                                onClick={() => setEditingCred(null)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
                                 variant="primary"
                                 size="compact"
                                 onClick={() => void handleSaveCred()}
                                 disabled={!editingCred.value.trim() || isSavingCred}
                               >
                                 {isSavingCred ? <Spinner size="sm" /> : 'Save'}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="compact"
-                                onClick={() => setEditingCred(null)}
-                              >
-                                Cancel
                               </Button>
                             </div>
                           </div>

@@ -398,3 +398,23 @@ export function cardOutcome(approval: Approval): string {
   if (approval.choice && approval.status !== 'expired') return `${label} · ${approval.choice}`;
   return label;
 }
+
+/** Whether its next message would continue a conversation (one there is to leave). */
+export const canStartFresh = (agent: Pick<Agent, 'sessionId' | 'newEngine'>) =>
+  Boolean(agent.sessionId || agent.newEngine);
+
+/** From this full, the agent sheet suggests starting fresh. Matches the desk. */
+export const CONTEXT_SUGGEST_AT = 85;
+
+/** How full its conversation is, 0-100, or null when its engine didn't say. */
+export function contextPercent(agent: Pick<Agent, 'context'>): number | null {
+  const fill = agent.context;
+  if (!fill || fill.window <= 0) return null;
+  return Math.min(100, Math.round((fill.used / fill.window) * 100));
+}
+
+/** "72% full", from its engine's own numbers; null when it didn't report them. */
+export function contextLine(agent: Pick<Agent, 'context'>): string | null {
+  const percent = contextPercent(agent);
+  return percent === null ? null : `${percent < 1 ? '<1' : percent}% full`;
+}

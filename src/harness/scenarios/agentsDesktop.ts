@@ -62,9 +62,9 @@ export const agentsDesktopScenarios: Scenario[] = [
   },
   {
     id: 'agents-quit-plain',
-    title: 'Quit — nothing working (unchanged)',
+    title: 'Quit — nothing working',
     looksRightWhen:
-      'Exactly the old confirmation: “Are you sure you want to quit Ship Studio?” with Cancel and Quit side by side, Quit focused. No agent wording.',
+      'A one-word question, “Quit?”, with Cancel and a neutral (not green) Quit side by side, Quit focused. No agent wording and no app name.',
     command: 'app.quit',
     requires: '.quit-confirm-modal:not(.quit-confirm-modal--guard)',
     commands: {},

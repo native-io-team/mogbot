@@ -67,6 +67,7 @@ import {
   CheckInLine,
   ConnectorBubble,
   ErrorLine,
+  FreshHint,
   NoteLine,
   PeerGroup,
   UserBubble,
@@ -1043,6 +1044,9 @@ export function AgentChat({
               under it until the user says something. */}
             {greetingOnly && engineReady && (
               <ChiefStarters onStart={sendStarter} onImport={compact ? onImport : undefined} />
+            )}
+            {items.length > 0 && (
+              <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
             )}
             {items.length === 0 && indicator.mounted && (
               <WorkingIndicator

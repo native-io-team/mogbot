@@ -1,6 +1,6 @@
 /**
  * The install checklist, and what the panel says once the app is on the
- * phone. Every row is decided by Ship Studio's own checks.
+ * phone. Every row is decided by the app's own checks.
  *
  * @module components/phone/PhoneInstallSteps
  */
@@ -83,15 +83,15 @@ export function InstallDone({
       <span className="phone-install-done__icon" aria-hidden>
         <SuccessIcon size={22} />
       </span>
-      <h3 className="phone-install-done__title">Ship Studio is on {deviceName}</h3>
+      <h3 className="phone-install-done__title">The app is on {deviceName}</h3>
       {platform === 'ios' ? (
         <>
           <p className="phone-install-done__line">
             {expiresAt === null
               ? `With a free Apple ID, it stops opening after ${FREE_TEAM_DAYS} days. `
               : `${expiryLine(expiresAt, now)}. `}
-            Reinstall from this panel takes a few minutes and needs no agent, and Ship Studio
-            reminds you the day before.
+            Reinstall from this panel takes a few minutes and needs no agent, and you’re reminded
+            the day before.
           </p>
           <p className="phone-install-done__hint">
             If the phone says “Untrusted Developer”: Settings → General → VPN &amp; Device

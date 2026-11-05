@@ -236,7 +236,7 @@ async fn hide_to_background(window: &tauri::WebviewWindow) -> Result<(), Command
     window
         .hide()
         .map_err(|e| format!("Failed to hide window: {e}"))?;
-    tracing::info!("Window {} hidden; Ship Studio keeps running", label);
+    tracing::info!("Window {} hidden; app keeps running", label);
     Ok(())
 }
 

@@ -218,7 +218,7 @@ fn claude(args: &[&str]) -> Result<tokio::process::Command, CommandError> {
     let binary = crate::commands::claude::find_validated_binary("claude", "--version")
         .ok_or_else(|| {
             CommandError::expected(
-                "Claude Code isn't installed, or Ship Studio can't find it. Install it from Settings → Agents.",
+                "Claude Code isn't installed, or the app can't find it. Install it from Settings → Agents.",
             )
         })?;
     let mut cmd = crate::utils::create_command(&binary);

@@ -36,6 +36,7 @@ import { logger } from '../../lib/logger';
 import { createPollFailureGate } from '../../lib/pollFailureGate';
 import { getSpotifyState, spotifyControl, type SpotifyState } from '../../lib/spotify';
 import { getSpotifyWidgetEnabled, SPOTIFY_WIDGET_ENABLED_CHANGED_EVENT } from '../../lib/settings';
+import { BRAND } from '../../lib/brand';
 
 /** Poll roughly every second while a track is actually playing. */
 const PLAYING_INTERVAL_MS = 1000;
@@ -281,7 +282,7 @@ export function SpotifyWidget({ isSidebarHidden }: SpotifyWidgetProps) {
         <AlertIcon size={12} className="spotify-widget-permission-icon" />
         <div className="spotify-widget-permission-body">
           <span className="spotify-widget-permission-text">
-            macOS blocked Ship Studio from controlling Spotify.
+            macOS blocked {BRAND.name} from controlling Spotify.
           </span>
           <Button variant="secondary" size="compact" onClick={handleOpenAutomationSettings}>
             Open Privacy Settings

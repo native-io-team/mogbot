@@ -13,6 +13,7 @@
 //! - [`claude`]: Claude Code's command line for a turn
 //! - [`codex`]: Codex's command line and JSONL, mapped onto the same turn steps
 //! - [`codex_app`]: Codex's app-server: streaming, approval cards, interrupt
+//! - [`context`]: how full a conversation is, only as its engine reports it
 //! - [`mcp`]: the tools agents get (team, projects, management, approvals)
 //! - [`permissions`]: "Always allow" rules and how narrowly they match
 //! - [`notify`]: macOS notifications and the Dock badge
@@ -43,6 +44,7 @@ pub mod claude;
 pub mod codex;
 pub mod codex_app;
 pub mod connector;
+pub mod context;
 pub mod decisions;
 pub mod driver;
 pub mod engine;
@@ -110,6 +112,7 @@ fn greet(agent_id: &str) {
         changes: None,
         session: None,
         client_id: None,
+        fresh: false,
     };
     if let Err(e) = store::append_message(&message) {
         tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");

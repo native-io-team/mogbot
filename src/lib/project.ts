@@ -416,7 +416,7 @@ export async function startDevServer(
           { projectPath }
         );
         onOutput?.(
-          '[Ship Studio] package.json has an unresolved merge conflict — resolve it (Branches → Resolve conflicts) and restart the dev server.\r\n'
+          'package.json has an unresolved merge conflict — resolve it (Branches → Resolve conflicts) and restart the dev server.\r\n'
         );
       } else {
         const pkg = JSON.parse(file.content) as { scripts?: { dev?: string } };

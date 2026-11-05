@@ -43,7 +43,7 @@ mockIPC((command) => {
   throw new Error(`[color-picker harness] Unexpected Tauri command: ${command}`);
 });
 
-document.title = 'Ship Studio color picker harness';
+document.title = 'Color picker harness';
 document.documentElement.setAttribute('data-harness-freeze', '');
 
 function ColorPickerHarness() {

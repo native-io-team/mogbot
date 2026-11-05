@@ -9,17 +9,21 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Spinner } from '../components/agent';
-import { Button, T } from '../components/ui';
+import { Button, T, SheetPage } from '../components/ui';
 import { haptic } from '../lib/haptics';
 import { describeError, readInstructions, setInstructions } from '../lib/session';
 import { useApp } from '../lib/store';
 import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
-import { colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 
 export default withAgentAccent(Instructions);
 
 function Instructions() {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const accent = useAccent();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -60,84 +64,86 @@ function Instructions() {
 
   const Scroll = editing ? KeyboardAwareScrollView : ScrollView;
   return (
-    <Scroll contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <View style={styles.head}>
-        <T variant="title" color={colors.textWhite} style={{ flex: 1 }}>
-          Instructions
-        </T>
-        {saved !== null &&
-          (editing ? (
-            <>
-              <Button
-                title="Cancel"
-                size="compact"
-                variant="ghost"
-                onPress={() => {
-                  setText(saved);
-                  setEditing(false);
-                }}
-              />
-              <Button
-                title="Save"
-                size="compact"
-                variant="primary"
-                busy={busy}
-                disabled={!connected || text === saved}
-                onPress={save}
-              />
-            </>
-          ) : (
-            <Button
-              title="Edit"
-              size="compact"
-              disabled={!connected}
-              onPress={() => setEditing(true)}
-            />
-          ))}
-      </View>
-      <T variant="small" color={colors.textSecondary}>
-        {name} reads these at the start of every conversation.
-      </T>
-      {error && (
-        <T variant="small" color={colors.accentErrorLight}>
-          {error}
-        </T>
-      )}
-      {saved === null ? (
-        !error && (
-          <View style={styles.center}>
-            {connected ? (
-              <Spinner />
+    <SheetPage>
+      <Scroll contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.head}>
+          <T variant="title" color={colors.textStrong} style={{ flex: 1 }}>
+            Instructions
+          </T>
+          {saved !== null &&
+            (editing ? (
+              <>
+                <Button
+                  title="Cancel"
+                  size="compact"
+                  variant="ghost"
+                  onPress={() => {
+                    setText(saved);
+                    setEditing(false);
+                  }}
+                />
+                <Button
+                  title="Save"
+                  size="compact"
+                  variant="primary"
+                  busy={busy}
+                  disabled={!connected || text === saved}
+                  onPress={save}
+                />
+              </>
             ) : (
-              <T color={colors.textSecondary}>Reading them needs your Mac.</T>
-            )}
-          </View>
-        )
-      ) : editing ? (
-        <TextInput
-          autoFocus
-          multiline
-          value={text}
-          onChangeText={setText}
-          maxLength={20_000}
-          style={[styles.body, styles.input]}
-          keyboardAppearance="dark"
-          selectionColor={accent.accent}
-          accessibilityLabel={`${name}’s instructions`}
-        />
-      ) : (
-        <T selectable style={styles.body} color={saved ? colors.textPrimary : colors.textMuted}>
-          {saved || 'No instructions yet.'}
+              <Button
+                title="Edit"
+                size="compact"
+                disabled={!connected}
+                onPress={() => setEditing(true)}
+              />
+            ))}
+        </View>
+        <T variant="small" color={colors.textSecondary}>
+          {name} reads these at the start of every conversation.
         </T>
-      )}
-      {!editing && saved !== null && (
-        <Button title="Done" variant="ghost" onPress={() => router.back()} />
-      )}
-    </Scroll>
+        {error && (
+          <T variant="small" color={colors.accentErrorLight}>
+            {error}
+          </T>
+        )}
+        {saved === null ? (
+          !error && (
+            <View style={styles.center}>
+              {connected ? (
+                <Spinner />
+              ) : (
+                <T color={colors.textSecondary}>Reading them needs your Mac.</T>
+              )}
+            </View>
+          )
+        ) : editing ? (
+          <TextInput
+            autoFocus
+            multiline
+            value={text}
+            onChangeText={setText}
+            maxLength={20_000}
+            style={[styles.body, styles.input]}
+            keyboardAppearance={appearance}
+            selectionColor={accent.accent}
+            accessibilityLabel={`${name}’s instructions`}
+          />
+        ) : (
+          <T selectable style={styles.body} color={saved ? colors.textPrimary : colors.textMuted}>
+            {saved || 'No instructions yet.'}
+          </T>
+        )}
+        {!editing && saved !== null && (
+          <Button title="Done" variant="ghost" onPress={() => router.back()} />
+        )}
+      </Scroll>
+    </SheetPage>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   center: { paddingVertical: space.xl, alignItems: 'center' },
@@ -146,9 +152,16 @@ const styles = StyleSheet.create({
     fontSize: type.small,
     lineHeight: lineHeight(type.small, 1.5),
     padding: space.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceApp,
+    borderRadius: radius.card,
+    backgroundColor: colors.surfaceGroup,
     overflow: 'hidden',
   },
-  input: { color: colors.textPrimary, minHeight: 240, textAlignVertical: 'top' },
-});
+  input: {
+    color: colors.textBody,
+    minHeight: 240,
+    textAlignVertical: 'top',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.inputBorder,
+    backgroundColor: colors.inputFill,
+  },
+}));

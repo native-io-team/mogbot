@@ -91,8 +91,7 @@ impl ImportSummary {
                 .collect();
             parts.push(format!("Routines set ({}).", set.join("; ")));
         }
-        let brand = crate::brand::NAME;
-        let mut next = format!("NEXT: Tell the user their agents are in {brand} → Agents, each with its instructions and memory. They don't start working until the user messages them, except for their routines, which run only while {brand} is open on this Mac.");
+        let mut next = String::from("NEXT: Tell the user their agents are in Agents on this computer, each with its instructions and memory. They don't start working until the user messages them, except for their routines, which run only while the app is open on this Mac.");
         if !self.routines_refused.is_empty() {
             let refused: Vec<String> = self
                 .routines_refused
@@ -100,11 +99,11 @@ impl ImportSummary {
                 .map(|r| format!("{}: \"{}\" ({})", r.agent, r.when, r.detail))
                 .collect();
             parts.push(format!("Routines NOT set: {}.", refused.join("; ")));
-            next.push_str(&format!(" List every routine that was NOT set, word for word, and offer to resend it with a time {brand} understands (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\", \"friday at 14:30\"); importing again is safe."));
+            next.push_str(" List every routine that was NOT set, word for word, and offer to resend it with a time the schedule understands (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\", \"friday at 14:30\"); importing again is safe.");
         }
-        next.push_str(&format!(" Connections your platform had (email, calendar and so on) don't come across: in {brand}, agents use whatever this computer and Claude Code are connected to."));
+        next.push_str(" Connections your platform had (email, calendar and so on) don't come across: here, agents use whatever this computer and Claude Code are connected to.");
         format!(
-            "Imported from {source} into {brand} Agents. {}\n\n{next}",
+            "Imported from {source} into Agents. {}\n\n{next}",
             parts.join(" ")
         )
     }
@@ -310,13 +309,12 @@ pub fn import_and_notify(
 }
 
 /// The one message the user sends their other assistant to start an import:
-/// a conversation with the Chief of Staff over the connector
-/// (`agents::connector`), which the other assistant drives because MCP only
-/// goes from it to us.
+/// a conversation over the connector (`agents::connector`), which the other
+/// assistant drives because MCP only goes from it to us. Name-free: the
+/// assistant knows the connector it was just given.
 pub fn import_prompt(chief: &str) -> String {
-    let brand = crate::brand::NAME;
     format!(
-        "Move my agents to {brand}. Use the {brand} connector's import_conversation tool to talk to my {chief} there, and answer its questions about each agent you run for me until it says the import is done. Don't send passwords, API keys or card numbers: {brand} asks me for those itself."
+        "Move my agents to the app I just connected you to. Use its import_conversation tool to talk to my {chief} there, and answer its questions about each agent you run for me until it says the import is ready for me to review. Don't send passwords, API keys or card numbers: the app asks me for those itself."
     )
 }
 
@@ -494,7 +492,7 @@ mod tests {
     fn the_message_to_send_names_the_conversation_tool() {
         let prompt = import_prompt("Chief of Staff");
         assert!(prompt.contains("import_conversation"));
-        assert!(prompt.contains(crate::brand::NAME));
+        assert!(!prompt.contains(crate::brand::NAME));
         assert!(prompt.contains("Chief of Staff"));
     }
 }

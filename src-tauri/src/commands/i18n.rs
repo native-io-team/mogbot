@@ -548,7 +548,7 @@ fn replace_locales_in(
 ) -> Result<String, String> {
     let loc_idx = find_key_value(src, "locales", Some(1))
         .filter(|i| src.as_bytes().get(*i) == Some(&b'['))
-        .ok_or("The existing config has no `locales` array Ship Studio can update.")?;
+        .ok_or("The existing config has no `locales` array the app can update.")?;
     let loc_end = match_delim(src, loc_idx)
         .ok_or("Couldn't parse the `locales` array (unbalanced brackets).")?;
 
@@ -558,19 +558,19 @@ fn replace_locales_in(
     let (_, has_non_string) = extract_string_items(&src[loc_idx + 1..loc_end]);
     if has_non_string {
         return Err(
-            "Some locales use advanced configuration (custom paths or codes) that Ship Studio \
+            "Some locales use advanced configuration (custom paths or codes) that the app \
              can't rewrite safely — edit the locales array in the config file directly."
                 .to_string(),
         );
     }
 
     let def_idx = find_key_value(src, "defaultLocale", Some(1))
-        .ok_or("The existing config has no `defaultLocale` Ship Studio can update.")?;
+        .ok_or("The existing config has no `defaultLocale` the app can update.")?;
     let def_quote = *src
         .as_bytes()
         .get(def_idx)
         .filter(|q| **q == b'"' || **q == b'\'')
-        .ok_or("`defaultLocale` isn't a plain string Ship Studio can update.")?;
+        .ok_or("`defaultLocale` isn't a plain string the app can update.")?;
     let def_end = src[def_idx + 1..]
         .find(def_quote as char)
         .map(|i| i + def_idx + 1)
@@ -603,7 +603,7 @@ fn apply_i18n_to_content(
     if let Some(val_idx) = find_key_value(content, "i18n", Some(1)) {
         if content.as_bytes().get(val_idx) != Some(&b'{') {
             return Err(
-                "An `i18n` key exists in the config but isn't a plain object Ship Studio can update."
+                "An `i18n` key exists in the config but isn't a plain object the app can update."
                     .to_string(),
             );
         }
@@ -617,7 +617,7 @@ fn apply_i18n_to_content(
         Ok(out)
     } else {
         let insert_at = find_exported_object_open(content)
-            .ok_or("Ship Studio couldn't find where to add i18n settings in this config file.")?;
+            .ok_or("The app couldn't find where to add i18n settings in this config file.")?;
         let snippet = build_i18n_snippet(locales, default_locale);
         let text = if content[insert_at..].starts_with('\n') {
             format!("\n{snippet}")
@@ -760,7 +760,7 @@ fn compute_app_router_status(workspace: &Path) -> I18nStatus {
         let mut status = unsupported_status(
             I18nFramework::NextjsApp,
             "This Next.js project uses the App Router, which has no built-in i18n. \
-             Ship Studio can set it up with next-intl — the standard library for \
+             The app can set it up with next-intl — the standard library for \
              App Router projects.",
         );
         status.agent_setup_available = true;
@@ -787,9 +787,8 @@ fn compute_app_router_status(workspace: &Path) -> I18nStatus {
     status.locales = locales;
     status.default_locale = parse_default_locale(&content);
     if has_non_string || status.locales.is_empty() {
-        status.parse_warning = Some(
-            "A next-intl config exists but Ship Studio couldn't read its locales.".to_string(),
-        );
+        status.parse_warning =
+            Some("A next-intl config exists but the app couldn't read its locales.".to_string());
     }
     status
 }
@@ -882,9 +881,8 @@ fn compute_status(workspace: &Path) -> I18nStatus {
                     .to_string(),
             );
         } else if status.locales.is_empty() {
-            status.parse_warning = Some(
-                "An i18n config exists but Ship Studio couldn't read its locales.".to_string(),
-            );
+            status.parse_warning =
+                Some("An i18n config exists but the app couldn't read its locales.".to_string());
         }
     }
 

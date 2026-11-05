@@ -61,17 +61,17 @@ pub const TOOLS: &[Tool] = &[
     Tool {
         name: "project_list",
         remote: "list_projects",
-        description: "The user's Ship Studio projects: name, path, git branch, uncommitted changes, and each project's sessions (agent tabs) with whether they're working, finished or waiting on the user. Anything waiting on the user is at the top.",
+        description: "The user's projects: name, path, git branch, uncommitted changes, and each project's sessions (agent tabs) with whether they're working, finished or waiting on the user. Anything waiting on the user is at the top.",
     },
     Tool {
         name: "project_create",
         remote: "create_project",
-        description: "Create a new Ship Studio project from a starter, when the user asks for a new project or site. It appears in their Projects straight away. Takes a minute or two (download, then install). Then start a session in it to build what they asked for.",
+        description: "Create a new project from a starter, when the user asks for a new project or site. It appears in their Projects straight away. Takes a minute or two (download, then install). Then start a session in it to build what they asked for.",
     },
     Tool {
         name: "project_open",
         remote: "open_project",
-        description: "Switch the user's Ship Studio window to a project and start its preview. Nothing else moves their window: sessions run and screenshots are taken in the background. Call it only when the user asks to see a project.",
+        description: "Switch the user's app window to a project and start its preview. Nothing else moves their window: sessions run and screenshots are taken in the background. Call it only when the user asks to see a project.",
     },
     Tool {
         name: "session_message",
@@ -96,7 +96,7 @@ pub const TOOLS: &[Tool] = &[
     Tool {
         name: "session_key",
         remote: "press_key",
-        description: "Press one key in a session that isn't asking anything (escape interrupts it). A question a session asks (STATUS: needs_decision) is the user's to answer on the card Ship Studio shows them; this tool refuses while one is up.",
+        description: "Press one key in a session that isn't asking anything (escape interrupts it). A question a session asks (STATUS: needs_decision) is the user's to answer on the card the app shows them; this tool refuses while one is up.",
     },
     Tool {
         name: "session_close",
@@ -555,7 +555,7 @@ pub fn push_card_detail(remote: &str, branch: &str, commits: &str, uncommitted: 
     detail
 }
 
-const PUSH_COMMIT_MESSAGE: &str = "Update from Ship Studio Agents";
+const PUSH_COMMIT_MESSAGE: &str = "Save changes from an agent";
 
 async fn push(app: &AppHandle, caller: &store::Agent, project: &str) -> Value {
     let name = shared::project_name(project).to_string();

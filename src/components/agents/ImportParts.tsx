@@ -12,7 +12,6 @@ import { Button } from '../primitives/Button';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useAgentsList } from '../../lib/agentsStore';
 import type { ImportSummary, PasteImportAgent, PasteImportPreview } from '../../lib/agents';
-import { BRAND } from '../../lib/brand';
 import { AgentAvatar } from './AgentAvatar';
 
 export const plural = (n: number, word: string) =>
@@ -387,7 +386,7 @@ export function ImportDone({ summary, agents, extra }: ImportDoneProps) {
       {extra}
       <p className="agents-import-done__next">
         <strong>Say hi to your team.</strong> They start when you message them; routines run while
-        {` ${BRAND.name}`} is open.
+        the app is open.
       </p>
     </div>
   );

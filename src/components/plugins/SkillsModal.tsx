@@ -14,6 +14,7 @@ import { VercelIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
+import { SegmentedControl } from '../primitives/SegmentedControl';
 import { TextButton } from '../primitives/TextButton';
 import {
   type AgentSkill,
@@ -279,17 +280,17 @@ export function SkillsModal({
                       autoCapitalize="off"
                       spellCheck={false}
                     />
-                    <Tabs
+                    <SegmentedControl
                       value={scopeFilter}
-                      mode="navigation"
-                      onValueChange={(next) => setScopeFilter(next as ScopeFilter)}
-                    >
-                      <TabsList aria-label="Filter skills by scope">
-                        <TabsTab value="all">All</TabsTab>
-                        <TabsTab value="user">User</TabsTab>
-                        <TabsTab value="project">Project</TabsTab>
-                      </TabsList>
-                    </Tabs>
+                      onValueChange={setScopeFilter}
+                      aria-label="Filter skills by scope"
+                      className="segmented-control--stretch"
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'user', label: 'User' },
+                        { value: 'project', label: 'Project' },
+                      ]}
+                    />
                   </div>
 
                   {isLoadingSkills && skills.length === 0 && (
@@ -379,18 +380,15 @@ export function SkillsModal({
                         </div>
                         <div className="skills-scope-toggle">
                           <span className="skills-scope-toggle-label">Install to:</span>
-                          <Tabs
+                          <SegmentedControl
                             value={installScope}
-                            mode="navigation"
-                            onValueChange={(next) => setInstallScope(next as InstallScope)}
-                          >
-                            <TabsList aria-label="Skill install scope">
-                              <TabsTab value="user">User</TabsTab>
-                              <TabsTab value="project" disabled={!projectPath}>
-                                Project
-                              </TabsTab>
-                            </TabsList>
-                          </Tabs>
+                            onValueChange={setInstallScope}
+                            aria-label="Skill install scope"
+                            options={[
+                              { value: 'user', label: 'User' },
+                              { value: 'project', label: 'Project', disabled: !projectPath },
+                            ]}
+                          />
                         </div>
                       </div>
 

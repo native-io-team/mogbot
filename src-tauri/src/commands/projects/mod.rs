@@ -453,7 +453,8 @@ fn read_projects_dir(dir: &std::path::Path) -> Result<std::fs::ReadDir, CommandE
     std::fs::read_dir(dir).map_err(|e| {
         if cfg!(target_os = "macos") && e.raw_os_error() == Some(1) {
             CommandError::expected(format!(
-                "Ship Studio isn't allowed to read your projects folder ({}). Grant access in System Settings → Privacy & Security → Files & Folders (or Full Disk Access), then reload the dashboard.",
+                "{} isn't allowed to read your projects folder ({}). Grant access in System Settings → Privacy & Security → Files & Folders (or Full Disk Access), then reload the dashboard.",
+                crate::brand::NAME,
                 dir.display()
             ))
         } else {
@@ -1165,7 +1166,7 @@ pub async fn delete_project(path: String) -> Result<(), CommandError> {
     // telemetry (issue #699).
     if crate::commands::external_projects::is_registered_external_path(&canonical)? {
         return Err(CommandError::expected(
-            "Cannot delete external projects. Use 'Remove from Ship Studio' instead.",
+            "Cannot delete external projects. Use 'Remove from list' instead.",
         ));
     }
 
@@ -1270,11 +1271,9 @@ pub async fn remove_project_from_app(path: String) -> Result<(), CommandError> {
         .iter()
         .any(|root| canonical.starts_with(root))
     {
-        return Err(
-            "Can only remove projects that live in a Ship Studio projects folder."
-                .to_string()
-                .into(),
-        );
+        return Err("Can only remove projects that live in a projects folder."
+            .to_string()
+            .into());
     }
 
     mark_project_removed(&canonical)?;

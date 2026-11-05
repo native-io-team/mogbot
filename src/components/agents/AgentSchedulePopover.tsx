@@ -185,7 +185,7 @@ function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
   const reason = when && typeof preview === 'string' ? preview : null;
   const problem = error ?? reason;
   const invalid = problem !== null;
-  let readback = 'A time, a colon, then what to do. Return adds it.';
+  let readback = 'Say when, then what to do. Return adds it.';
   if (problem) readback = problem;
   else if (parsed && !note) readback = `${readBack(parsed)} · then a colon and what to do`;
   else if (parsed) readback = readBack(parsed);
@@ -246,8 +246,8 @@ function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
           'Return saves the change; Esc leaves it as it was.'
         ) : (
           <>
-            Runs only while Ship Studio is running and this Mac is awake; a missed check-in runs
-            once when it’s back.
+            Runs only while the app is open and this Mac is awake; a missed check-in runs once when
+            it’s back.
             <KeepAwakeLink />
           </>
         )}

@@ -495,7 +495,7 @@ export function buildAiSetupPrompt(status: I18nStatus): string {
   return (
     `Please set up internationalized routing for this project by adding or fixing the i18n ` +
     `configuration (a literal locales array + defaultLocale string) in ${file}. ` +
-    `Ship Studio couldn't edit the config automatically, so review its current structure first ` +
+    `The app couldn't edit the config automatically, so review its current structure first ` +
     `and make the change in the appropriate place. Wait for my confirmation before installing anything.`
   );
 }
@@ -541,7 +541,7 @@ export function buildAppRouterSetupPrompt(locales: string[], defaultLocale: stri
 
 Languages: ${localeList}. Default: ${defaultLocale}.
 
-Complete ALL steps without stopping to ask — installing next-intl is approved. Important: Ship Studio reads and updates the files below, so keep the exact paths, the literal locales array in routing.ts, and the messages/<locale>.json layout.
+Complete ALL steps without stopping to ask — installing next-intl is approved. Important: the app reads and updates the files below, so keep the exact paths, the literal locales array in routing.ts, and the messages/<locale>.json layout.
 
 1. Install next-intl using this project's package manager (check the lockfile).
 

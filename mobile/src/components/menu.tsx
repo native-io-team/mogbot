@@ -12,8 +12,9 @@ import { ActionSheetIOS, Modal, Platform, Pressable, StyleSheet, View } from 're
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Action } from '../lib/actions';
-import { colors, radius, space } from '../lib/theme';
-import { Icon, ripple, T } from './ui';
+import { iconSize, radius, space } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
+import { Icon, useRipple, T } from './ui';
 
 type Item = Omit<Action<string>, 'icon'> & { icon?: Action<string>['icon'] };
 
@@ -46,7 +47,6 @@ export function showActions<Id extends string>(
         options: [...actions.map((a) => a.title), 'Cancel'],
         cancelButtonIndex: actions.length,
         destructiveButtonIndex: actions.flatMap((a, i) => (a.destructive ? [i] : [])),
-        userInterfaceStyle: 'dark',
       },
       (i) => {
         const a = actions[i];
@@ -75,7 +75,6 @@ export function choose(title: string | undefined, choices: Choice[], message?: s
         options: [...choices.map((c) => c.label), 'Cancel'],
         cancelButtonIndex: choices.length,
         destructiveButtonIndex: choices.flatMap((c, i) => (c.destructive ? [i] : [])),
-        userInterfaceStyle: 'dark',
       },
       (i) => choices[i]?.run()
     );
@@ -92,6 +91,9 @@ export function choose(title: string | undefined, choices: Choice[], message?: s
 
 /** Mounted once at the root; draws the Android sheet when one is open. */
 export function MenuHost() {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   const insets = useSafeAreaInsets();
   const current = useSyncExternalStore(
     (l) => {
@@ -146,12 +148,12 @@ export function MenuHost() {
                 {a.icon && (
                   <Icon
                     name={a.icon}
-                    size={20}
+                    size={iconSize.button}
                     color={a.destructive ? colors.accentErrorLight : colors.textSecondary}
                   />
                 )}
                 <T
-                  color={a.destructive ? colors.accentErrorLight : colors.textPrimary}
+                  color={a.destructive ? colors.accentErrorLight : colors.textBody}
                   style={{ flexShrink: 1 }}
                 >
                   {a.title}
@@ -175,7 +177,7 @@ export function MenuHost() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   scrim: { backgroundColor: colors.scrim },
   sheet: {
     position: 'absolute',
@@ -183,12 +185,12 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: colors.surfacePanel,
-    borderTopLeftRadius: radius.lg + 8,
-    borderTopRightRadius: radius.lg + 8,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     paddingTop: space.sm,
   },
-  title: { paddingHorizontal: space.xl, paddingVertical: space.md },
-  message: { paddingHorizontal: space.xl, paddingBottom: space.md, marginTop: -space.sm },
+  title: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.sm },
+  message: { paddingHorizontal: space.xl, paddingBottom: space.md },
   item: {
     minHeight: 52,
     flexDirection: 'row',
@@ -196,4 +198,4 @@ const styles = StyleSheet.create({
     gap: space.lg,
     paddingHorizontal: space.xl,
   },
-});
+}));

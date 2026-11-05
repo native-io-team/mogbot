@@ -20,17 +20,27 @@ import { agentActions, type AgentAction, type AgentCaps } from '../lib/actions';
 import { formatAgo, lineState, needsLine, needsYou, subtitle } from '../lib/agents';
 import { useApp } from '../lib/store';
 import { haptic } from '../lib/haptics';
-import { chromeScale, colors, radius, space } from '../lib/theme';
+import {
+  avatarSize,
+  chromeScale,
+  fonts,
+  iconSize,
+  radius,
+  space,
+  type Palette,
+} from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, StatusMark } from './agent';
 import { showActions } from './menu';
-import { Icon, ripple, T } from './ui';
+import { Icon, useRipple, T } from './ui';
 
-const lineColor = {
-  waiting: colors.accentWarning,
-  failed: colors.accentErrorLight,
-  working: colors.textSecondary,
-  limited: colors.textSecondary,
-} as const;
+const lineColor = (colors: Palette) =>
+  ({
+    waiting: colors.accentWarning,
+    failed: colors.accentErrorLight,
+    working: colors.textSecondary,
+    limited: colors.textSecondary,
+  }) as const;
 
 /** How far a row's words follow Dynamic Type: past this they'd outgrow the title above them. */
 const NAME_SCALE = 2;
@@ -57,6 +67,8 @@ export const AgentRow = memo(function AgentRow({
   onPress?: () => void;
   onAction: (agent: Agent, action: AgentAction) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const swipe = useRef<SwipeableMethods>(null);
   const actions = agentActions(agent, caps);
   const canToggle = live && caps.update;
@@ -168,6 +180,8 @@ function SwipeAction({
   color: string;
   onPress: () => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   // Nothing is drawn while closed: the row lifts out for its context menu,
   // and these mustn't show through the gap it leaves.
   const fill = useAnimatedStyle(() => ({
@@ -193,8 +207,8 @@ function SwipeAction({
         ]}
       />
       <Animated.View style={[styles.actionInner, style]}>
-        <Icon name={icon} size={18} color={colors.textWhite} />
-        <T variant="caption" color={colors.textWhite} maxFontSizeMultiplier={chromeScale}>
+        <Icon name={icon} size={iconSize.button} color={colors.textStrong} />
+        <T variant="caption" color={colors.textStrong} maxFontSizeMultiplier={chromeScale}>
           {label}
         </T>
       </Animated.View>
@@ -216,6 +230,9 @@ function RowBody({
   onPress?: () => void;
   onLongPress?: () => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   const { fontScale } = useWindowDimensions();
   // At the largest sizes the time moves under the subtitle so the name keeps its room.
   const stacked = fontScale >= 1.6;
@@ -224,10 +241,14 @@ function RowBody({
   const line = useApp((s) =>
     needsYou(agent) ? needsLine(agent, s.chats[agent.id]?.messages) : subtitle(agent)
   );
+  const tinted = !!state && live && (state === 'waiting' || state === 'failed');
+  const cut = line.indexOf(' · ');
+  const head = cut < 0 ? line : line.slice(0, cut);
+  const tail = cut < 0 ? '' : line.slice(cut);
   const time = (
     <T
       variant="caption"
-      color={colors.textSecondary}
+      color={colors.textMuted}
       numberOfLines={1}
       maxFontSizeMultiplier={chromeScale}
       style={styles.time}
@@ -255,12 +276,12 @@ function RowBody({
       }`}
       accessibilityHint="Hold for Pin, Mute and Hide"
     >
-      <AgentAvatar name={agent.name} color={agent.color} size={44} />
+      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.list} />
       <View style={styles.text}>
         <View style={styles.nameLine}>
           <T
-            variant="subhead"
-            color={colors.textWhite}
+            variant="headline"
+            color={colors.textStrong}
             numberOfLines={1}
             // Names stop growing at twice the size, under Home's large title.
             maxFontSizeMultiplier={NAME_SCALE}
@@ -268,8 +289,10 @@ function RowBody({
           >
             {agent.name}
           </T>
-          {agent.pinned && <Icon name="pin.fill" size={10} color={colors.textMuted} />}
-          {agent.muted && <Icon name="bell.slash.fill" size={10} color={colors.textMuted} />}
+          {agent.pinned && <Icon name="pin.fill" size={iconSize.inline} color={colors.textMuted} />}
+          {agent.muted && (
+            <Icon name="bell.slash.fill" size={iconSize.inline} color={colors.textMuted} />
+          )}
           {!stacked && time}
         </View>
         <View style={styles.nameLine}>
@@ -277,10 +300,27 @@ function RowBody({
             variant="small"
             numberOfLines={stacked ? 3 : 1}
             maxFontSizeMultiplier={NAME_SCALE}
-            color={state && live ? lineColor[state] : colors.textSecondary}
+            color={colors.textSecondary}
             style={{ flex: 1 }}
           >
-            {line}
+            {/*
+              Only the state word takes the colour ("Needs your OK"), never
+              the whole line: three amber lines would shout down the list.
+            */}
+            {tinted ? (
+              <>
+                <T
+                  variant="small"
+                  color={lineColor(colors)[state]}
+                  style={{ fontFamily: fonts.medium }}
+                >
+                  {head}
+                </T>
+                {tail}
+              </>
+            ) : (
+              line
+            )}
           </T>
           <View style={styles.mark}>
             <StatusMark agent={agent} live={live} />
@@ -292,14 +332,14 @@ function RowBody({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
-    minHeight: 68,
+    minHeight: 72,
     backgroundColor: colors.surfaceApp,
   },
   selected: { backgroundColor: colors.surfaceControl },
@@ -311,6 +351,6 @@ const styles = StyleSheet.create({
   mark: { width: 14, alignItems: 'flex-end' },
   actions: { flexDirection: 'row' },
   action: { width: ACTION_W, alignItems: 'center', justifyContent: 'center' },
-  actionLeft: { borderTopRightRadius: radius.card, borderBottomRightRadius: radius.card },
+  actionLeft: { borderTopRightRadius: radius.inner, borderBottomRightRadius: radius.inner },
   actionInner: { alignItems: 'center', gap: space.xs },
-});
+}));

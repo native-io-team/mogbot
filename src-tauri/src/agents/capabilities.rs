@@ -92,7 +92,7 @@ pub fn lines(engine: Engine, tools: &[&str], servers: &[Server]) -> Vec<Line> {
 
     if ours("session_start") {
         push(
-            "Ship Studio projects",
+            "Projects",
             "Create projects, start and continue sessions in them, screenshot their previews, check git, push with your OK, and check deploys.".into(),
         );
     }
@@ -236,7 +236,7 @@ mod tests {
         assert_eq!(
             what,
             [
-                "Ship Studio projects",
+                "Projects",
                 "The team",
                 "Chrome",
                 "On this Mac",

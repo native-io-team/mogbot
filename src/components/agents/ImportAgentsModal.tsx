@@ -145,8 +145,12 @@ export function ImportAgentsModal({
         <Tabs value={path} onValueChange={(v) => setPath(v as 'otherApp' | 'assistant')}>
           {otherApp && (
             <TabsList className="agents-import__tabs" aria-label="Where from">
-              <TabsTab value="otherApp">From {otherApp.appName}</TabsTab>
-              <TabsTab value="assistant">From another assistant</TabsTab>
+              <TabsTab value="otherApp" width="fill">
+                From {otherApp.appName}
+              </TabsTab>
+              <TabsTab value="assistant" width="fill">
+                From another assistant
+              </TabsTab>
             </TabsList>
           )}
           {otherApp && (

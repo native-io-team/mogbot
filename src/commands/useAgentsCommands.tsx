@@ -82,7 +82,7 @@ const STAY_ON_COMMANDS: { id: string; title: string; change: StayOnChange; done:
     id: 'awakeOn',
     title: 'Keep this Mac awake for agents',
     change: { keepAwake: true },
-    done: 'This Mac stays awake while Ship Studio is running',
+    done: 'This Mac stays awake while the app is open',
   },
   {
     id: 'awakeOff',
@@ -100,13 +100,13 @@ const STAY_ON_COMMANDS: { id: string; title: string; change: StayOnChange; done:
     id: 'runningOff',
     title: 'Quit when the window closes',
     change: { keepRunning: false },
-    done: 'Closing the window quits Ship Studio again',
+    done: 'Closing the window quits the app again',
   },
   {
     id: 'loginOn',
-    title: 'Open Ship Studio at login',
+    title: 'Open at login',
     change: { openAtLogin: true },
-    done: 'Ship Studio opens when you log in',
+    done: 'Opens when you log in',
   },
 ];
 

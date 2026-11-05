@@ -29,6 +29,7 @@ import {
   createAgent,
   ENGINE_LABEL,
   defaultEngine,
+  formatContext,
   formatUsage,
   getAgentInstructions,
   getAgentUsage,
@@ -45,17 +46,31 @@ import { useAgentsSelector } from '../../lib/agentsStore';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { AccentScope } from '../../contexts/AccentScopeContext';
 
-/** This week and all time, as Claude Code reported them; nothing before any turn. */
-function UsageLines({ usage }: { usage: UsageSummary | null }) {
+/**
+ * This week and all time, as its engine reported them; nothing before any
+ * turn. Then how full its conversation is, only when the engine said.
+ */
+function UsageLines({ usage, agent }: { usage: UsageSummary | null; agent: Agent | null }) {
   const week = usage && formatUsage(usage.week);
   const allTime = usage && formatUsage(usage.allTime);
-  if (!allTime) return null;
+  const context = agent && formatContext(agent);
+  if (!allTime && !context) return null;
   return (
     <dl className="agent-editor__usage">
-      <dt>This week</dt>
-      <dd>{week ?? 'No turns'}</dd>
-      <dt>All time</dt>
-      <dd>{allTime}</dd>
+      {allTime && (
+        <>
+          <dt>This week</dt>
+          <dd>{week ?? 'No turns'}</dd>
+          <dt>All time</dt>
+          <dd>{allTime}</dd>
+        </>
+      )}
+      {context && (
+        <>
+          <dt>Conversation</dt>
+          <dd>{context}</dd>
+        </>
+      )}
     </dl>
   );
 }
@@ -399,7 +414,7 @@ export function AgentEditorModal({
 
       {agent && (
         <div className="agent-editor__briefing">
-          <UsageLines usage={usage} />
+          <UsageLines usage={usage} agent={agent} />
           <CanDo agent={agent} />
           <Permissions agent={agent} />
           <AgentSecrets agent={agent} />
@@ -443,9 +458,13 @@ export function AgentEditorModal({
       >
         {agent ? (
           <Tabs value={tab} onValueChange={(v) => setTab(v as EditorTab)}>
-            <TabsList className="agent-editor__tabs" appearance="underline" aria-label="Edit">
-              <TabsTab value="agent">Agent</TabsTab>
-              <TabsTab value="memory">Memory</TabsTab>
+            <TabsList className="agent-editor__tabs" aria-label="Edit">
+              <TabsTab value="agent" width="fill">
+                Agent
+              </TabsTab>
+              <TabsTab value="memory" width="fill">
+                Memory
+              </TabsTab>
             </TabsList>
             <TabsPanel value="agent">{form}</TabsPanel>
             <TabsPanel value="memory">

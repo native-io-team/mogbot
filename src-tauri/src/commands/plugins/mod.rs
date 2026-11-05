@@ -139,7 +139,7 @@ pub(crate) fn check_min_app_version(
 
     if app_ver < min_ver {
         return Err(format!(
-            "Plugin '{}' requires Ship Studio v{} or later (current: v{}). Please update Ship Studio.",
+            "Plugin '{}' requires app version {} or later (current: v{}). Please update the app.",
             manifest.name, min_ver, app_ver
         ));
     }

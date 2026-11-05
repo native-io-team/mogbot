@@ -138,7 +138,7 @@ export function ProjectCardMenu({
         <DropdownDivider />
         {onRemove && (
           <DropdownItem icon={<CloseIcon size={14} />} onSelect={onRemove}>
-            <span>Remove from Ship Studio</span>
+            <span>Remove from projects</span>
           </DropdownItem>
         )}
         {!isExternal && (

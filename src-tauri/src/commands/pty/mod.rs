@@ -84,7 +84,7 @@ pub(super) fn kill_process(pid: u32) {
     if !is_signalable_pid(pid) {
         tracing::error!(
             pid,
-            "Refusing to kill PID {pid}: signalling it would hit Ship Studio's own \
+            "Refusing to kill PID {pid}: signalling it would hit this app's own \
              process group (0) or launchd (1), not a child process"
         );
         return;
@@ -297,7 +297,7 @@ mod pid_guard_tests {
     fn pid_zero_is_never_signalable() {
         assert!(
             !is_signalable_pid(0),
-            "PID 0 is the caller's own process group — signalling it kills Ship Studio"
+            "PID 0 is the caller's own process group — signalling it kills the app"
         );
     }
 

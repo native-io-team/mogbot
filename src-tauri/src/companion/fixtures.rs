@@ -221,7 +221,7 @@ fn frames() -> Vec<ServerFrame> {
         ),
         (
             RefusedReason::UpdateMac,
-            "Update Ship Studio on Julian’s MacBook Pro.",
+            "Update the app on Julian’s MacBook Pro.",
         ),
         (
             RefusedReason::TooManyConnections,
@@ -499,6 +499,11 @@ async fn generate() -> String {
             json!({ "agentId": AGENT, "input": { "muted": true } }),
         )
         .await,
+    );
+    out += &entry(
+        "agentsStartFresh",
+        "Result<'agents.startFresh'>",
+        call("agents.startFresh", json!({ "agentId": AGENT })).await,
     );
     out += &entry(
         "sessionsSend",

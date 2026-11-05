@@ -320,7 +320,7 @@ fn resent_note(queued: &[Inbound]) -> String {
         n => format!("{n} messages"),
     };
     format!(
-        "Sent {what} still waiting when Ship Studio closed: {}",
+        "Sent {what} still waiting when the app closed: {}",
         quoted.join(", ")
     )
 }
@@ -345,7 +345,7 @@ pub async fn recover_after_restart(app: &AppHandle) {
             if let (Some(project), Some(tree)) = (mark.project, mark.tree) {
                 record_changes(app, &agent.id, project.into(), tree).await;
             }
-            let text = "Ship Studio closed while this agent was working, so that turn didn't finish. Retry to send it again.";
+            let text = "The app closed while this agent was working, so that turn didn't finish. Retry to send it again.";
             let mut line = new_message(&agent.id, MessageKind::Error, text);
             line.failure = Some(super::failure::Failure::OTHER);
             let _ = record(app, line);
@@ -431,6 +431,16 @@ fn record_as(
         unsaved(app, &message, &e);
         return Err(e);
     }
+    announce(app, message, alert)
+}
+
+/// The rest of `record`, for a message already in the log: the sidebar row,
+/// the UI, and a notification if it wants the user.
+fn announce(
+    app: &AppHandle,
+    message: AgentMessage,
+    alert: bool,
+) -> Result<AgentMessage, CommandError> {
     // Anything the agent says (or a check-in firing) while it isn't on screen
     // notifies. Approvals aren't unread: they're counted as pending until answered.
     let wants_user = message.kind.wants_user() && !notify::on_screen(app, &message.agent_id);
@@ -497,7 +507,7 @@ fn unsaved(app: &AppHandle, message: &AgentMessage, error: &CommandError) {
     let warning = new_message(
         &message.agent_id,
         MessageKind::Error,
-        "Couldn't save this conversation to disk, so what's shown here will be gone after Ship Studio restarts. Check that the disk isn't full.",
+        "Couldn't save this conversation to disk, so what's shown here will be gone after the app restarts. Check that the disk isn't full.",
     );
     let _ = app.emit(EVENT_MESSAGE, &warning);
 }
@@ -569,6 +579,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         changes: None,
         session: None,
         client_id: None,
+        fresh: false,
     }
 }
 
@@ -684,6 +695,80 @@ pub fn stop(agent_id: &str) -> bool {
         }
         None => false,
     }
+}
+
+/// The divider a fresh start leaves in the chat.
+pub const FRESH_LINE: &str = "Started fresh · memory kept";
+
+/// Start the agent's next turn in a new conversation on the same engine,
+/// with its instructions and memory and no recap (`Agent::start_fresh`). The
+/// chat stays, with a divider where the new conversation begins.
+pub fn start_fresh(app: &AppHandle, agent_id: &str) -> Result<store::Agent, CommandError> {
+    let (agent, line) = begin_fresh(agent_id)?;
+    announce(app, line, false)?;
+    Ok(agent)
+}
+
+/// `start_fresh` up to telling the UI: the refusals, the reset and the
+/// divider in the log, all while no turn can start. The inbox lock is held
+/// from the busy check to the divider, so a message sent meanwhile either
+/// started first (and this is refused) or starts after, in the new
+/// conversation: never a turn that read the old session and writes it back
+/// under a divider saying it's gone. Two at once record one divider.
+fn begin_fresh(agent_id: &str) -> Result<(store::Agent, AgentMessage), CommandError> {
+    let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let name = store::get(agent_id)?.name;
+    let mine = runtimes.get(agent_id);
+    // A running or waiting turn is in the old conversation, and would record
+    // it again when its session is confirmed.
+    if mine.is_some_and(|r| r.running || r.queued) {
+        return Err(CommandError::expected(format!(
+            "{name} is working. Start fresh once it's done, or stop it first."
+        )));
+    }
+    // A card still waiting belongs to a turn in the old conversation.
+    if !store::pending_approvals(agent_id)?.is_empty() {
+        return Err(CommandError::expected(format!(
+            "{name} is waiting on your answer to a request. Answer it first, then start fresh."
+        )));
+    }
+    // Another agent working on its request answers into the conversation
+    // that asked: starting fresh now, the answer would arrive out of nowhere.
+    if let Some(peer) = owes_reply(&runtimes, agent_id) {
+        let peer = store::get(&peer).map_or_else(|_| "Another agent".to_string(), |p| p.name);
+        return Err(CommandError::expected(format!(
+            "{peer} is still working on something {name} asked for. Start fresh once it has answered."
+        )));
+    }
+    let mut had = true;
+    let agent = store::update(agent_id, |a| {
+        had = a.has_conversation();
+        if had {
+            a.start_fresh();
+        }
+    })?;
+    if !had {
+        return Err(CommandError::expected(format!(
+            "{name}'s next message already starts a new conversation."
+        )));
+    }
+    let mut line = new_message(agent_id, MessageKind::Note, FRESH_LINE);
+    line.fresh = true;
+    store::append_message(&line)?;
+    drop(runtimes);
+    Ok((agent, line))
+}
+
+/// Another agent with a request from `agent_id` it hasn't answered yet:
+/// working on it (owed), or not started on it (queued).
+fn owes_reply(runtimes: &HashMap<String, Runtime>, agent_id: &str) -> Option<String> {
+    runtimes.iter().find_map(|(id, r)| {
+        let asked = r.owed.iter().any(|a| a.id == agent_id)
+            || r.queue.iter().any(|m| {
+                !m.reply && matches!(&m.from, From::Agent { sender, .. } if sender.id == agent_id)
+            });
+        (id != agent_id && asked).then(|| id.clone())
+    })
 }
 
 /// Stop the turn in progress so what's queued runs now, as the next turn.
@@ -1082,7 +1167,25 @@ fn with_recap(agent_id: &str, prompt: &str) -> String {
     let Ok(log) = store::messages(agent_id, 24) else {
         return prompt.to_string();
     };
-    let lines: Vec<String> = log
+    let lines = recap_lines(&log);
+    if lines.is_empty() {
+        return prompt.to_string();
+    }
+    format!(
+        "[Your previous working session was lost, so here is the recent conversation for context. Don't mention this unless asked.]\n\n{}\n\n[New message]\n\n{prompt}",
+        lines.join("\n")
+    )
+}
+
+/// The recap's lines: the visible conversation since the last fresh start.
+/// What came before it the user chose to leave behind, so a new session
+/// (an engine switch, a session that vanished) is never handed it again.
+fn recap_lines(log: &[store::AgentMessage]) -> Vec<String> {
+    let since = log
+        .iter()
+        .rposition(|m| m.fresh && m.kind == MessageKind::Note)
+        .map_or(0, |i| i + 1);
+    log[since..]
         .iter()
         .filter_map(|m| {
             let who = match m.kind {
@@ -1096,14 +1199,7 @@ fn with_recap(agent_id: &str, prompt: &str) -> String {
             let text: String = m.text.chars().take(400).collect();
             Some(format!("{who}: {text}"))
         })
-        .collect();
-    if lines.is_empty() {
-        return prompt.to_string();
-    }
-    format!(
-        "[Your previous working session was lost, so here is the recent conversation for context. Don't mention this unless asked.]\n\n{}\n\n[New message]\n\n{prompt}",
-        lines.join("\n")
-    )
+        .collect()
 }
 
 /// `--resume` / `exec resume` refusing a session it has no file for (the
@@ -1339,7 +1435,7 @@ async fn run_turn(
     let home = store::agent_home(agent_id)?;
     std::fs::create_dir_all(&home).map_err(super::err_io)?;
     let binary = super::engine::binary(engine).await.ok_or_else(|| {
-        CommandError::expected(format!("{} isn't installed, or Ship Studio can't find it. Install it, or move this agent to another engine in Edit agent, then send this again.", engine.label()))
+        CommandError::expected(format!("{} isn't installed, or the app can't find it. Install it, or move this agent to another engine in Edit agent, then send this again.", engine.label()))
     })?;
     // How this turn runs it (Codex speaks app-server when it can).
     let driver = Driver::pick(engine, &binary).await;
@@ -1522,6 +1618,21 @@ async fn run_turn(
     // What the engine said along the way, for a turn that ends without a result.
     let mut last_detail: Option<String> = None;
     let mut session_confirmed = false;
+    // The session this turn is in, once known: a context reading is kept only
+    // while the agent is still on it (not after a fresh start).
+    let mut this_session = resuming.then(|| session_id.clone());
+    let mut claude_context = super::context::ClaudeContext::default();
+    // A turn on the agent's own model replaces the reading, or clears it if it
+    // gives none (stopped, timed out, an engine that doesn't say): the
+    // conversation grew, so the last number is no longer its size. A routine
+    // on another model leaves the conversation's reading alone: that model's
+    // window isn't the one the conversation runs against.
+    let mut reading = ReadingWatch {
+        app: app.clone(),
+        agent_id: agent_id.to_string(),
+        armed: model == agent.model.as_deref(),
+        read: false,
+    };
     let deadline = tokio::time::sleep(std::time::Duration::from_secs(TURN_TIMEOUT_SECS));
     tokio::pin!(deadline);
     // None: ran to the end. Some(None): the user pressed Stop. Some(Some(note)): we stopped it.
@@ -1571,7 +1682,11 @@ async fn run_turn(
                         drafts.on_stream_event(&value, store::new_id);
                         continue;
                     }
-                    Driver::ClaudePrint => stream::claude_steps(&value, &line, store::now_ms()),
+                    Driver::ClaudePrint => {
+                        let mut steps = stream::claude_steps(&value, &line, store::now_ms());
+                        steps.extend(claude_context.observe(&value, store::now_ms()).map(Step::Context));
+                        steps
+                    }
                     Driver::CodexExec => super::codex::steps(&value),
                     Driver::CodexApp => match conversation.as_mut() {
                         Some(conversation) => {
@@ -1603,6 +1718,7 @@ async fn run_turn(
                         Step::Session(sid) if !session_confirmed => {
                             timing.mark_boot();
                             session_confirmed = true;
+                            this_session = Some(sid.clone());
                             let id = agent_id.to_string();
                             let _ = tokio::task::spawn_blocking(move || store::update(&id, |a| {
                                 a.session_id = Some(sid);
@@ -1640,6 +1756,24 @@ async fn run_turn(
                             let id = agent_id.to_string();
                             let _ = tokio::task::spawn_blocking(move || store::update(&id, |a| a.usage.record(&turn, today))).await;
                         }
+                        Step::Context(fill) if reading.armed => {
+                            let (id, on) = (agent_id.to_string(), this_session.clone());
+                            let turn_model = model.map(str::to_string);
+                            let kept = tokio::task::spawn_blocking(move || {
+                                let mut kept = false;
+                                let _ = store::update(&id, |a| {
+                                    kept = keep_reading(a, on.as_deref(), turn_model.as_deref(), fill);
+                                });
+                                kept
+                            })
+                            .await
+                            .unwrap_or(false);
+                            if kept {
+                                reading.read = true;
+                                let _ = app.emit(EVENT_REGISTRY, ());
+                            }
+                        }
+                        Step::Context(_) => {}
                         Step::Failed(text) => result_error = Some(text),
                         Step::Detail(text) => last_detail = Some(text),
                         Step::Done => {
@@ -1754,7 +1888,12 @@ async fn run_turn(
         is_missing_session(&stderr_text) || result_error.as_deref().is_some_and(is_missing_session);
     if retry_fresh && resuming && missing_session {
         tracing::warn!("[Agents] Session {session_id} for {agent_id} is gone; starting a new one");
-        let _ = store::update(agent_id, |a| a.session_id = None);
+        // The reading was the lost session's; the retry takes its own.
+        reading.armed = false;
+        let _ = store::update(agent_id, |a| {
+            a.session_id = None;
+            a.context = None;
+        });
         // The new session starts blank. Hand it the conversation the user
         // can see, so the agent doesn't greet them like a stranger.
         let prompt = with_recap(agent_id, &prompt);
@@ -1782,6 +1921,47 @@ async fn run_turn(
         tracing::debug!("[Agents] {agent_id} finished a turn without a reply");
     }
     Ok(Ended::Finished)
+}
+
+/// Whether a turn's reading describes the agent's conversation as it is
+/// now, and if so, keep it: the agent is still on the session the turn ran
+/// in (not started fresh or moved since) and on the model the turn ran on.
+fn keep_reading(
+    agent: &mut store::Agent,
+    session: Option<&str>,
+    turn_model: Option<&str>,
+    fill: super::context::ContextFill,
+) -> bool {
+    let current = session.is_some()
+        && agent.session_id.as_deref() == session
+        && agent.model.as_deref() == turn_model;
+    if current {
+        agent.context = Some(fill);
+    }
+    current
+}
+
+/// Clears the agent's reading when its turn ends without having replaced
+/// it, however it ends (a result, an error, a Stop, the timeout).
+struct ReadingWatch {
+    app: AppHandle,
+    agent_id: String,
+    /// The turn's readings are the conversation's (it runs on the agent's model).
+    armed: bool,
+    /// It replaced the reading at least once.
+    read: bool,
+}
+
+impl Drop for ReadingWatch {
+    fn drop(&mut self) {
+        if self.armed && !self.read {
+            let mut had = false;
+            let _ = store::update(&self.agent_id, |a| had = a.context.take().is_some());
+            if had {
+                let _ = self.app.emit(EVENT_REGISTRY, ());
+            }
+        }
+    }
 }
 
 /// A Ship Studio launched from inside a Claude Code session (a terminal
@@ -2036,7 +2216,7 @@ mod tests {
         assert!(take_inbox("a1").is_empty(), "taken twice");
         assert_eq!(
             resent_note(&taken),
-            "Sent 2 messages still waiting when Ship Studio closed: “Also check the footer”, Finance's “Receipts filed.”"
+            "Sent 2 messages still waiting when the app closed: “Also check the footer”, Finance's “Receipts filed.”"
         );
         save_inbox("a1", &VecDeque::new());
         assert!(!store::agent_home("a1").unwrap().join("inbox.json").exists());
@@ -2049,5 +2229,241 @@ mod tests {
             "Error: No conversation found with session ID: abc"
         ));
         assert!(!is_missing_session("rate limited"));
+    }
+
+    /// An agent in a scratch store, already in a conversation.
+    fn conversing(name: &str) -> store::Agent {
+        let a = store::create(store::NewAgent {
+            name: name.into(),
+            role: "Does things".into(),
+            instructions: "Be brief.".into(),
+            shape: None,
+            color: None,
+            is_main: false,
+        })
+        .unwrap();
+        store::update(&a.id, |a| {
+            a.session_id = Some("s1".into());
+            a.context = Some(fill(9));
+        })
+        .unwrap()
+    }
+
+    fn fill(used: u64) -> super::super::context::ContextFill {
+        super::super::context::ContextFill {
+            used,
+            window: 10,
+            at: 1,
+            model: None,
+        }
+    }
+
+    fn in_scratch_store(f: impl FnOnce()) {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        f();
+        store::set_root_for_tests(None);
+    }
+
+    fn dividers(agent_id: &str) -> usize {
+        store::messages(agent_id, 100)
+            .unwrap()
+            .iter()
+            .filter(|m| m.fresh && m.kind == MessageKind::Note && m.text == FRESH_LINE)
+            .count()
+    }
+
+    #[test]
+    fn starting_fresh_leaves_the_session_and_records_one_divider() {
+        in_scratch_store(|| {
+            let blank = store::create(store::NewAgent {
+                name: "Blank".into(),
+                role: String::new(),
+                instructions: String::new(),
+                shape: None,
+                color: None,
+                is_main: false,
+            })
+            .unwrap();
+            let err = begin_fresh(&blank.id).unwrap_err().to_string();
+            assert!(err.contains("already starts a new conversation"), "{err}");
+            assert_eq!(dividers(&blank.id), 0);
+
+            let a = conversing("Finance");
+            let (after, line) = begin_fresh(&a.id).unwrap();
+            assert_eq!((after.session_id, after.context), (None, None));
+            assert!(line.fresh && line.kind == MessageKind::Note);
+            assert_eq!(dividers(&a.id), 1);
+            // Its next turn would start a new session, so a second is refused.
+            assert!(begin_fresh(&a.id).is_err());
+            assert_eq!(dividers(&a.id), 1);
+        });
+    }
+
+    #[test]
+    fn starting_fresh_is_refused_while_a_turn_runs_or_waits() {
+        in_scratch_store(|| {
+            let a = conversing("Finance");
+            for (running, queued) in [(true, false), (false, true)] {
+                {
+                    let mut runtimes = RUNTIMES.lock().unwrap();
+                    let r = runtimes.entry(a.id.clone()).or_default();
+                    r.running = running;
+                    r.queued = queued;
+                }
+                let err = begin_fresh(&a.id).unwrap_err().to_string();
+                assert!(err.contains("is working"), "{err}");
+            }
+            RUNTIMES.lock().unwrap().remove(&a.id);
+            assert_eq!(store::get(&a.id).unwrap().session_id.as_deref(), Some("s1"));
+            assert_eq!(dividers(&a.id), 0);
+        });
+    }
+
+    #[test]
+    fn starting_fresh_waits_for_a_card_or_a_delegated_answer() {
+        in_scratch_store(|| {
+            let a = conversing("Chief");
+            let b = conversing("Designer");
+            let me = AgentRef {
+                id: a.id.clone(),
+                name: a.name.clone(),
+            };
+            // Designer is working on the Chief's request.
+            RUNTIMES
+                .lock()
+                .unwrap()
+                .entry(b.id.clone())
+                .or_default()
+                .owed = vec![me.clone()];
+            let err = begin_fresh(&a.id).unwrap_err().to_string();
+            assert!(err.contains("Designer is still working"), "{err}");
+            // Not started on it yet: still owed.
+            {
+                let mut runtimes = RUNTIMES.lock().unwrap();
+                let r = runtimes.get_mut(&b.id).unwrap();
+                r.owed.clear();
+                r.queue.push_back(Inbound {
+                    text: "Draw the logo".into(),
+                    from: From::Agent {
+                        sender: me.clone(),
+                        hop: 1,
+                    },
+                    reply: false,
+                    routine: false,
+                    connector: false,
+                });
+            }
+            assert!(begin_fresh(&a.id).is_err());
+            // An answer the Chief sent Designer owes the Chief nothing.
+            {
+                let mut runtimes = RUNTIMES.lock().unwrap();
+                runtimes.get_mut(&b.id).unwrap().queue[0].reply = true;
+            }
+            // A card waiting in its chat belongs to the old conversation.
+            let mut card = new_message(&a.id, MessageKind::Approval, "");
+            card.approval = Some(store::Approval {
+                request_id: "r1".into(),
+                title: "Run a command".into(),
+                detail: "ls".into(),
+                status: store::ApprovalStatus::Pending,
+                tool: None,
+                input: None,
+                always: None,
+                always_allowed: false,
+                note: None,
+                prompt: None,
+                choice: None,
+                secret: None,
+            });
+            store::append_message(&card).unwrap();
+            let err = begin_fresh(&a.id).unwrap_err().to_string();
+            assert!(err.contains("waiting on your answer"), "{err}");
+            store::set_approval_status(&a.id, "r1", store::ApprovalStatus::Allowed).unwrap();
+            assert!(begin_fresh(&a.id).is_ok());
+            RUNTIMES.lock().unwrap().remove(&b.id);
+        });
+    }
+
+    #[test]
+    fn two_fresh_starts_at_once_record_one_divider() {
+        in_scratch_store(|| {
+            let a = conversing("Finance");
+            let calls: Vec<_> = (0..2)
+                .map(|_| {
+                    let id = a.id.clone();
+                    std::thread::spawn(move || begin_fresh(&id).is_ok())
+                })
+                .collect();
+            let ok = calls
+                .into_iter()
+                .filter_map(|c| c.join().unwrap().then_some(()))
+                .count();
+            assert_eq!(ok, 1);
+            assert_eq!(dividers(&a.id), 1);
+        });
+    }
+
+    #[test]
+    fn a_message_racing_a_fresh_start_never_resumes_the_old_session() {
+        in_scratch_store(|| {
+            for i in 0..20 {
+                let a = conversing(&format!("Finance {i}"));
+                let id = a.id.clone();
+                let fresh = std::thread::spawn(move || begin_fresh(&id).is_ok());
+                // What `push` and the turn do: claim the inbox, then read the session.
+                let id = a.id.clone();
+                let send = std::thread::spawn(move || {
+                    let claimed = {
+                        let mut runtimes = RUNTIMES.lock().unwrap();
+                        let r = runtimes.entry(id.clone()).or_default();
+                        !std::mem::replace(&mut r.running, true)
+                    };
+                    assert!(claimed);
+                    store::get(&id).unwrap().session_id
+                });
+                let started_fresh = fresh.join().unwrap();
+                let resumed = send.join().unwrap();
+                if started_fresh {
+                    assert_eq!(resumed, None, "a divider, then the old session");
+                } else {
+                    assert_eq!(resumed.as_deref(), Some("s1"));
+                    assert_eq!(dividers(&a.id), 0);
+                }
+                RUNTIMES.lock().unwrap().remove(&a.id);
+            }
+        });
+    }
+
+    #[test]
+    fn a_reading_is_kept_only_for_the_session_and_model_it_was_taken_on() {
+        let mut a = test_agent(Some("opus"));
+        a.session_id = Some("s1".into());
+        // Started fresh mid-turn: the turn's reading isn't this conversation's.
+        assert!(!keep_reading(&mut a, Some("s0"), Some("opus"), fill(3)));
+        // A turn that never confirmed a session has nothing to say about one.
+        assert!(!keep_reading(&mut a, None, Some("opus"), fill(3)));
+        // The model changed since (or a routine ran on another one).
+        assert!(!keep_reading(&mut a, Some("s1"), Some("haiku"), fill(3)));
+        assert!(a.context.is_none());
+        assert!(keep_reading(&mut a, Some("s1"), Some("opus"), fill(3)));
+        assert_eq!(a.context.map(|f| f.used), Some(3));
+    }
+
+    #[test]
+    fn the_recap_starts_after_the_last_fresh_start() {
+        let said = |kind, text: &str| new_message("a", kind, text);
+        let mut divider = said(MessageKind::Note, FRESH_LINE);
+        divider.fresh = true;
+        let log = vec![
+            said(MessageKind::User, "The old budget is secret"),
+            said(MessageKind::Agent, "Noted"),
+            divider,
+            said(MessageKind::User, "New topic"),
+            said(MessageKind::Agent, "Sure"),
+        ];
+        assert_eq!(recap_lines(&log), vec!["User: New topic", "You: Sure"]);
+        assert_eq!(recap_lines(&log[..2]).len(), 2, "no divider: all of it");
     }
 }

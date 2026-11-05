@@ -19,23 +19,50 @@ import {
   type TextProps,
   type ViewStyle,
 } from 'react-native';
-import { alpha, chromeScale, colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import {
+  alpha,
+  chromeScale,
+  fonts,
+  iconSize,
+  lineHeight,
+  radius,
+  space,
+  type,
+  type Palette,
+} from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 import type { Tone } from '../lib/connection';
-import { ANSWER, useAccent } from '../lib/accent';
+import { useAccent, useAnswerAccent } from '../lib/accent';
 import { haptic } from '../lib/haptics';
 import { useApp } from '../lib/store';
 
 /** Ripple for Android presses; iOS uses its pressed tints. */
-export const ripple = { color: alpha(colors.textWhite, 0.08) };
+export function useRipple() {
+  const colors = useColors();
+  return { color: alpha(colors.textStrong, 0.08) };
+}
 
-/** Increase Contrast: each step of grey reads one step brighter. */
-const brighter: Record<string, string> = {
-  [colors.textMuted]: colors.textSecondary,
-  [colors.textSecondary]: colors.textPrimary,
-  [colors.textPrimary]: colors.textWhite,
-};
+/** Increase Contrast: each step of grey reads one step stronger (brighter in dark, darker in light). */
+const stronger = new Map<Palette, Record<string, string>>();
+function strongerOf(colors: Palette): Record<string, string> {
+  let map = stronger.get(colors);
+  if (!map) {
+    map = {
+      [colors.textMuted]: colors.textSecondary,
+      [colors.textSecondary]: colors.textPrimary,
+      [colors.textPrimary]: colors.textStrong,
+    };
+    stronger.set(colors, map);
+  }
+  return map;
+}
 
-type Variant = 'body' | 'small' | 'caption' | 'subhead' | 'title' | 'display' | 'mono';
+/**
+ * Hierarchy is carried by weight, not colour: a name or a card's title is
+ * `headline` (16 semibold) over a `small` secondary line, and metadata is a
+ * muted `caption`. One coloured element per row at most, never a whole line.
+ */
+type Variant = 'body' | 'small' | 'caption' | 'subhead' | 'headline' | 'title' | 'display' | 'mono';
 
 const variants = StyleSheet.create({
   body: { fontFamily: fonts.regular, fontSize: type.body, lineHeight: lineHeight(type.body, 1.5) },
@@ -49,6 +76,11 @@ const variants = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: type.subhead,
     lineHeight: lineHeight(type.subhead, 1.3),
+  },
+  headline: {
+    fontFamily: fonts.semibold,
+    fontSize: type.subhead,
+    lineHeight: lineHeight(type.subhead, 1.375),
   },
   title: {
     fontFamily: fonts.semibold,
@@ -66,15 +98,17 @@ const variants = StyleSheet.create({
 
 export function T({
   variant = 'body',
-  color = colors.textPrimary,
+  color,
   style,
   ...rest
 }: TextProps & { variant?: Variant; color?: string }) {
+  const colors = useColors();
   const high = useApp((s) => s.highContrast);
+  const ink = color ?? colors.textPrimary;
   return (
     <Text
       {...rest}
-      style={[variants[variant], { color: (high && brighter[color]) || color }, style]}
+      style={[variants[variant], { color: (high && strongerOf(colors)[ink]) || ink }, style]}
     />
   );
 }
@@ -84,19 +118,23 @@ export const tap = haptic.select;
 
 /**
  * `answer` is an approval's Allow: filled like a primary, but always the
- * neutral near-white (`ANSWER`), never the agent's colour.
+ * neutral accent (`answerAccent`: near-white in dark, near-black in light),
+ * never the agent's colour.
  */
 type ButtonVariant = 'primary' | 'answer' | 'secondary' | 'ghost' | 'danger';
 
 type ButtonColors = { bg: string; pressed: string; fg: string; border?: string };
 
 /** Primary takes the accent in scope (lib/accent.tsx); the rest are the palette's. */
-const buttonColors: Record<Exclude<ButtonVariant, 'primary' | 'answer'>, ButtonColors> = {
+const buttonColorsOf = (
+  colors: Palette
+): Record<Exclude<ButtonVariant, 'primary' | 'answer'>, ButtonColors> => ({
+  // Filled neutral, not outlined: beside a filled Allow it reads as the same
+  // family of control, as Grok's pair does.
   secondary: {
-    bg: 'transparent',
-    pressed: colors.surfaceControl,
-    fg: colors.textPrimary,
-    border: colors.borderStrong,
+    bg: colors.surfaceControl,
+    pressed: colors.surfaceControlHover,
+    fg: colors.textStrong,
   },
   ghost: { bg: 'transparent', pressed: colors.surfaceControl, fg: colors.textSecondary },
   danger: {
@@ -104,7 +142,7 @@ const buttonColors: Record<Exclude<ButtonVariant, 'primary' | 'answer'>, ButtonC
     pressed: alpha(colors.accentError, 0.2),
     fg: colors.accentErrorLight,
   },
-};
+});
 
 export function Button({
   title,
@@ -127,9 +165,13 @@ export function Button({
   /** A choice someone must read in full (a session's options) wraps instead of truncating. */
   lines?: number;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   const accent = useAccent();
+  const answer = useAnswerAccent();
   const filled = variant === 'primary' || variant === 'answer';
-  const a = variant === 'answer' ? ANSWER : accent;
+  const a = variant === 'answer' ? answer : accent;
   const off = !!disabled && !busy;
   // A disabled primary is a plain grey control, not a faded accent: a
   // half-transparent colour reads as muddy, and as almost-on.
@@ -137,7 +179,7 @@ export function Button({
     ? off
       ? { bg: colors.surfaceControl, pressed: colors.surfaceControl, fg: colors.textMuted }
       : { bg: a.accent, pressed: a.pressed, fg: a.onAccent }
-    : buttonColors[variant];
+    : buttonColorsOf(colors)[variant];
   const height = size === 'large' ? 50 : size === 'compact' ? 32 : 44;
   return (
     <Pressable
@@ -166,7 +208,7 @@ export function Button({
         <ActivityIndicator size="small" color={c.fg} />
       ) : (
         <>
-          {icon && <Icon name={icon} size={16} color={c.fg} />}
+          {icon && <Icon name={icon} size={iconSize.body} color={c.fg} />}
           <T
             variant={size === 'compact' ? 'small' : 'subhead'}
             color={c.fg}
@@ -183,6 +225,9 @@ export function Button({
 }
 
 type SFName = Extract<SymbolViewProps['name'], string>;
+
+/** Only the sizes in `iconSize`: a 13 or a 15 is a typo in the system, so the type refuses it. */
+type IconSize = (typeof iconSize)[keyof typeof iconSize];
 
 /**
  * Each SF Symbol the app draws, as the Material Symbol Android draws in its
@@ -237,13 +282,30 @@ const MATERIAL: Partial<Record<SFName, string>> = {
 /** An SF Symbol on iOS, its Material Symbol on Android; `fallback` if neither exists. */
 export function Icon({
   name,
-  size = 18,
-  color = colors.textSecondary,
+  size = iconSize.body,
+  color,
   fallback,
 }: {
   name: SFName;
-  size?: number;
+  size?: IconSize;
   color?: string;
+  fallback?: ReactNode;
+}) {
+  const colors = useColors();
+  return (
+    <Glyph name={name} size={size} color={color ?? colors.textSecondary} fallback={fallback} />
+  );
+}
+
+function Glyph({
+  name,
+  size,
+  color,
+  fallback,
+}: {
+  name: SFName;
+  size: number;
+  color: string;
   fallback?: ReactNode;
 }) {
   if (Platform.OS === 'ios') {
@@ -265,17 +327,21 @@ export function IconButton({
   name,
   label,
   onPress,
-  color = colors.textSecondary,
-  size = 18,
+  color: tint,
+  size = iconSize.button,
   fallback,
 }: {
   name: SFName;
   label: string;
   onPress: () => void;
   color?: string;
-  size?: number;
+  size?: IconSize;
   fallback?: string;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
+  const color = tint ?? colors.textSecondary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -293,12 +359,16 @@ export function IconButton({
   );
 }
 
-export const toneColor: Record<Tone, string> = {
-  ok: colors.accentSuccess,
-  problem: colors.accentError,
-  unknown: colors.textMuted,
-  busy: colors.accentWarning,
-};
+/** A connection tone's colour in the palette in force. */
+export function useToneColor(): Record<Tone, string> {
+  const colors = useColors();
+  return {
+    ok: colors.accentSuccess,
+    problem: colors.accentError,
+    unknown: colors.textMuted,
+    busy: colors.accentWarning,
+  };
+}
 
 export function Dot({
   color,
@@ -339,6 +409,8 @@ export function Section({
   children: ReactNode;
   footer?: string;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.section}>
       {title && (
@@ -362,6 +434,8 @@ export function Section({
   );
 }
 
+const LONG_VALUE = 18;
+
 export function Row({
   label,
   value,
@@ -371,6 +445,8 @@ export function Row({
   destructive,
   trailing,
   detail,
+  disabled,
+  selected,
 }: {
   label: string;
   /** A line under the label saying what it does. */
@@ -380,45 +456,99 @@ export function Row({
   onPress?: () => void;
   last?: boolean;
   destructive?: boolean;
+  /** A choice in a list of them (a check in `trailing`): said to VoiceOver too. */
+  selected?: boolean;
   /** A control in place of the chevron, such as a Switch. */
   trailing?: ReactNode;
+  /**
+   * An action that can't be taken right now: dimmed, not tappable, still
+   * announced as a button. Say why in `detail`.
+   */
+  disabled?: boolean;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
+  const action = !!onPress && !disabled;
+  const labelColor = disabled
+    ? colors.textMuted
+    : destructive
+      ? colors.accentErrorLight
+      : colors.textBody;
+  // A value too long to sit beside its label goes under it, rather than
+  // squeezing the label onto two lines.
+  const long = value != null && value.length > LONG_VALUE;
   return (
     <Pressable
-      disabled={!onPress}
+      disabled={!action}
       onPress={onPress}
-      accessibilityRole={onPress ? 'button' : undefined}
-      android_ripple={onPress ? ripple : undefined}
+      accessibilityRole={action || disabled ? 'button' : undefined}
+      accessibilityState={
+        disabled ? { disabled: true } : selected != null ? { selected } : undefined
+      }
+      android_ripple={action ? ripple : undefined}
       style={({ pressed }) => [
         styles.row,
-        !last && styles.rowDivider,
-        pressed && { backgroundColor: colors.surfaceControl },
+        pressed && { backgroundColor: colors.surfaceGroupPressed },
       ]}
     >
-      {leading}
-      {detail ? (
-        <View style={{ flex: 1, gap: space['2xs'] }}>
-          <T color={destructive ? colors.accentErrorLight : colors.textPrimary}>{label}</T>
-          <T variant="small" color={colors.textSecondary}>
-            {detail}
-          </T>
+      {disabled ? <View style={{ opacity: 0.4 }}>{leading}</View> : leading}
+      {detail || long ? (
+        <View style={styles.rowText}>
+          <T color={labelColor}>{label}</T>
+          {!!detail && (
+            <T variant="small" color={colors.textMuted}>
+              {detail}
+            </T>
+          )}
+          {long && (
+            <T variant="small" color={colors.textSecondary}>
+              {value}
+            </T>
+          )}
         </View>
       ) : (
-        <T color={destructive ? colors.accentErrorLight : colors.textPrimary} style={{ flex: 1 }}>
+        <T color={labelColor} style={{ flex: 1 }}>
           {label}
         </T>
       )}
-      {value != null && (
+      {value != null && !long && (
         <T color={colors.textSecondary} numberOfLines={1} style={styles.rowValue}>
           {value}
         </T>
       )}
       {trailing}
-      {onPress && !destructive && !trailing && (
-        <Icon name="chevron.right" size={12} color={colors.textMuted} />
+      {action && !destructive && !trailing && (
+        <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
       )}
+      {/* Inset from the leading edge, as iOS draws a group's dividers. */}
+      {!last && <View style={styles.rowDivider} />}
     </Pressable>
   );
+}
+
+/**
+ * A sheet's page. Its colour reaches past the bottom of the view, under the
+ * home indicator and into the display's rounded corners, so no strip of the
+ * native sheet's own background can show below the content as a square band.
+ */
+export function SheetPage({ children }: { children: ReactNode }) {
+  const styles = useStyles();
+  return (
+    <View style={styles.sheetPage}>
+      <View pointerEvents="none" style={styles.sheetBleed} />
+      {children}
+    </View>
+  );
+}
+
+/** How far a sheet's colour runs past its view: more than any home indicator's inset. */
+const SHEET_BLEED = 160;
+
+/** A group's divider, inset from the leading edge as iOS draws it. Put it last in a row. */
+export function InsetDivider() {
+  const styles = useStyles();
+  return <View style={styles.rowDivider} />;
 }
 
 /** Mutually exclusive filters, as the desktop's SegmentedControl. */
@@ -431,6 +561,8 @@ export function Segmented<V extends string>({
   options: { value: V; label: string }[];
   onChange: (v: V) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.segmented} accessibilityRole="tablist">
       {options.map((o) => {
@@ -444,9 +576,10 @@ export function Segmented<V extends string>({
               if (!on) tap();
               onChange(o.value);
             }}
+            hitSlop={4}
             style={[styles.segment, on && styles.segmentOn]}
           >
-            <T variant="small" color={on ? colors.textWhite : colors.textSecondary}>
+            <T variant="small" color={on ? colors.textStrong : colors.textSecondary}>
               {o.label}
             </T>
           </Pressable>
@@ -456,22 +589,20 @@ export function Segmented<V extends string>({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   segmented: {
     flexDirection: 'row',
     padding: space['2xs'],
     gap: space['2xs'],
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfacePanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderRadius: radius.control,
+    backgroundColor: colors.surfaceControl,
   },
   segment: {
     flex: 1,
-    minHeight: 32,
+    minHeight: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.lg - 2,
+    borderRadius: radius.inner,
   },
   segmentOn: { backgroundColor: colors.surfaceSelected },
   button: {
@@ -479,7 +610,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     borderWidth: StyleSheet.hairlineWidth * 2,
     paddingVertical: space.xs,
     overflow: 'hidden',
@@ -492,12 +623,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   section: { marginBottom: space.xl },
-  sectionTitle: { marginLeft: space.lg, marginBottom: space.tight, letterSpacing: 0.4 },
+  sectionTitle: { marginLeft: space.lg, marginBottom: space.sm, letterSpacing: 0.4 },
+  // Groups sit on a sheet or a grouped screen (surfacePanel): fill, no line.
   sectionBody: {
-    backgroundColor: colors.surfacePanel,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    backgroundColor: colors.surfaceGroup,
+    borderRadius: radius.card,
     overflow: 'hidden',
   },
   sectionFooter: { marginHorizontal: space.lg, marginTop: space.sm },
@@ -509,9 +639,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.md,
   },
-  rowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
+  rowText: { flex: 1, gap: space['2xs'] },
+  sheetPage: { flex: 1, backgroundColor: colors.surfacePanel },
+  sheetBleed: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: -SHEET_BLEED,
+    backgroundColor: colors.surfacePanel,
   },
-  rowValue: { maxWidth: '55%', textAlign: 'right' },
-});
+  rowDivider: {
+    position: 'absolute',
+    left: space.lg,
+    right: 0,
+    bottom: 0,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderDefault,
+  },
+  rowValue: { maxWidth: '45%', textAlign: 'right' },
+}));

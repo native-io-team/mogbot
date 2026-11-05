@@ -179,13 +179,7 @@ export function ProjectList({
   const changelogModal = useModal('changelog');
   const bugReportModal = useModal('bugReport');
   const featureRequestModal = useModal('featureRequest');
-  const {
-    slackCtaHidden,
-    hideSlackCta,
-    setDashboardHeaderHidden,
-    setCalendarHidden,
-    setSlackCtaHidden,
-  } = useDashboardVisibility();
+  const { slackCtaHidden, hideSlackCta, setSlackCtaHidden } = useDashboardVisibility();
 
   // Search and sort state
   // NOTE: search filtering now flows through the Cmd+K palette; this is kept
@@ -787,8 +781,6 @@ export function ProjectList({
         <SettingsModal
           isOpen={showSettings}
           onClose={() => setShowSettings(false)}
-          onDashboardHeaderHiddenChange={setDashboardHeaderHidden}
-          onCalendarHiddenChange={setCalendarHidden}
           onSlackCtaHiddenChange={setSlackCtaHidden}
           onProjectsRootChanged={() => void loadProjects()}
         />

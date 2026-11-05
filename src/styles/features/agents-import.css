@@ -41,15 +41,12 @@
   color: var(--text-secondary);
 }
 
-/* From <the other app> / From another assistant: a segmented pair under the
-   title, inset like the body, so the two read as one choice of source. */
+/* Paste a reply / Connected assistant: two views of one small dialog, so a segmented
+   pair (Tabs' default appearance) with equal halves, set into the body with
+   the same inset as its content — not an underline strip on the header. */
 .agents-import__tabs {
   display: flex;
-  margin: var(--spacing-md) var(--spacing-xl) 0;
-}
-
-.agents-import__tabs > * {
-  flex: 1;
+  margin: var(--spacing-lg) var(--spacing-xl) 0;
 }
 
 /* The way back from the fallback path, under the lede. */
