@@ -3,7 +3,6 @@ import { Button } from './primitives/Button';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { getRemoteAccessBrief } from '../lib/remoteAccess';
 import { quitPrompt, type QuitCheck } from '../lib/agentsDesktop';
-import { BRAND } from '../lib/brand';
 
 interface QuitConfirmModalProps {
   onCancel: () => void;
@@ -86,7 +85,7 @@ export function QuitConfirmModal({
     <ModalFrame
       isOpen
       onClose={onCancel}
-      title={`Quit ${BRAND.name}?`}
+      title="Quit now?"
       showCloseButton={false}
       className="quit-confirm-plain"
     >
