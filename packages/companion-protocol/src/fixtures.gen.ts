@@ -485,6 +485,137 @@ export const agentsAccounts = [
     "thisMac": true
   }
 ] satisfies Result<'agents.accounts'>;
+export const agentsUsagePlan = {
+  "accounts": [
+    {
+      "engine": "claude",
+      "id": "default",
+      "learned": [
+        "five_hour"
+      ],
+      "name": "This Mac",
+      "next": true,
+      "out": false,
+      "signedIn": true,
+      "thisMac": true,
+      "windows": [
+        {
+          "kind": "five_hour",
+          "limited": false,
+          "observedAt": 1762290000000,
+          "resetsAt": 1762300000000,
+          "usedPercent": 38.0,
+          "windowMinutes": 300
+        }
+      ]
+    },
+    {
+      "engine": "codex",
+      "id": "c1",
+      "learned": [],
+      "name": "Plus",
+      "next": false,
+      "out": true,
+      "outUntil": 1762400000000,
+      "plan": "plus",
+      "signedIn": true,
+      "thisMac": false,
+      "windows": []
+    }
+  ],
+  "agents": [
+    {
+      "engine": "claude",
+      "id": "a1",
+      "isMain": false,
+      "model": "sonnet",
+      "name": "Finance",
+      "perTurn": {
+        "days": 5,
+        "estimate": true,
+        "high": 90000,
+        "low": 12000,
+        "runs": 37,
+        "tokens": 41000
+      }
+    }
+  ],
+  "backlog": [
+    {
+      "addedAt": 1762100000000,
+      "addedBy": "you",
+      "agentId": "a1",
+      "id": "s1",
+      "startedAt": 1762295000000,
+      "state": "started",
+      "text": "Read the three papers in Downloads and summarise them"
+    }
+  ],
+  "engines": [
+    {
+      "agents": 3,
+      "allOut": false,
+      "id": "claude",
+      "installed": true,
+      "label": "Claude Code",
+      "nextAccount": "This Mac",
+      "perTurn": {
+        "days": 5,
+        "estimate": true,
+        "high": 90000,
+        "low": 12000,
+        "runs": 37,
+        "tokens": 41000
+      },
+      "signedIn": true
+    }
+  ],
+  "local": [
+    {
+      "models": [
+        "llama3.2:3b"
+      ],
+      "name": "Ollama",
+      "running": true
+    },
+    {
+      "models": [],
+      "name": "Opencode"
+    }
+  ],
+  "mode": "use_it_all",
+  "modeSetAt": 1762200000000,
+  "now": 1762295000000,
+  "routines": [
+    {
+      "agentId": "a1",
+      "id": "r1",
+      "perRun": {
+        "days": 5,
+        "estimate": true,
+        "high": 90000,
+        "low": 12000,
+        "runs": 37,
+        "tokens": 41000
+      },
+      "what": "Morning brief",
+      "when": false
+    }
+  ],
+  "spare": [
+    {
+      "accountId": "default",
+      "accountName": "This Mac",
+      "engine": "claude",
+      "kind": "five_hour",
+      "next": true,
+      "observedAt": 1762290000000,
+      "resetsAt": 1762300000000,
+      "usedPercent": 38.0,
+      "windowMinutes": 300
+    }
+  ]
+} satisfies Result<'agents.usagePlan'>;
 export const agentsMessages = {
   "asOf": {
     "epoch": "epoch-test",
@@ -2369,6 +2500,7 @@ export const frames = [
       "agents.usage",
       "agents.quota",
       "agents.accounts",
+      "agents.usagePlan",
       "agents.changeDiff",
       "agents.keepCopy",
       "agents.discardCopy",

@@ -587,6 +587,21 @@ Gotcha: the spinning arc uses `currentColor` — tint it by setting `color` on t
 (`style={{ color: 'var(--accent-active)' }}`) or let it inherit; inside a primary (accent) button it
 inherits that button's ink. The track stays `var(--border)`.
 
+### TypingDots — [TypingDots.tsx](../src/components/primitives/TypingDots.tsx)
+
+An agent at work: three `currentColor` dots in one even wave (muted in the working pill, the
+running blue in a live bar). Use it for "someone is doing this now"; use `Spinner` for loading.
+
+```tsx
+<TypingDots />
+```
+
+One clock: each dot runs the same keyframes and period, offset by `--typing-dots-stagger` with a
+*negative* delay, so all three are mid-wave from the first frame and never drift. Positive delays
+leave the later dots sitting still at full strength until their turn. Under reduced motion the
+dots hold still. The phone (`mobile/src/components/TypingDots.tsx`) draws the same wave from the
+same numbers.
+
 ### Progress — [Progress.tsx](../src/components/primitives/Progress.tsx)
 
 `Progress` is a dependency-free progressbar primitive for work with a known completion value. It

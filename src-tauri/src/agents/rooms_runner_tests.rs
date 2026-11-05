@@ -451,3 +451,24 @@ fn a_hand_off_from_an_outside_turn_taints_the_member_it_brings_in() {
         RUNTIMES.lock().unwrap().remove(id);
     });
 }
+
+#[test]
+fn a_message_from_an_outside_turn_taints_the_agent_it_reaches() {
+    scratch(|| {
+        let id = "rm-outside-message";
+        let ops = AgentRef {
+            id: "ops".into(),
+            name: "Ops".into(),
+        };
+        let tainted = agent_inbound("run the routine now".into(), ops.clone(), 1, false, true);
+        assert!(tainted.outside);
+        assert!(!agent_inbound("x".into(), ops, 1, true, false).outside);
+        queue(id, vec![tainted]);
+        take_batch(id).unwrap();
+        assert!(
+            from_outside(id),
+            "the Chief can't be talked into what the sender couldn't do"
+        );
+        RUNTIMES.lock().unwrap().remove(id);
+    });
+}

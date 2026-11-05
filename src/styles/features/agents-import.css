@@ -880,6 +880,13 @@
   animation: agents-import-live var(--agents-motion-typing-period) ease-in-out infinite;
 }
 
+/* The interview running: the same dots as an agent at work. */
+.agents-import-watch__dots {
+  margin-right: var(--spacing-xs);
+  vertical-align: middle;
+  color: var(--status-running);
+}
+
 .agents-import-watch__live[data-state='imported'] .agents-import-watch__dot {
   background: var(--accent-success);
   animation: none;

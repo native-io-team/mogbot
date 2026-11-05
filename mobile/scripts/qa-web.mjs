@@ -305,8 +305,12 @@ class Page {
     );
   }
 
-  async screenshot(file) {
-    const { data } = await this.send('Page.captureScreenshot', { format: 'png' });
+  /** `clip`: `{ x, y, width, height, scale }` in CSS pixels, for a close-up. */
+  async screenshot(file, clip) {
+    const { data } = await this.send('Page.captureScreenshot', {
+      format: 'png',
+      ...(clip ? { clip } : {}),
+    });
     await writeFile(file, Buffer.from(data, 'base64'));
   }
 
@@ -427,14 +431,16 @@ async function prePairShots(page, d) {
       await sleep(600);
       await capture(page, `pair-reaching-${theme}`, {
         route: '/pair?d=… (Mac never answers)',
-        check: '“Reaching <Mac>…” with a spinner, the host, “Nothing has been sent to it yet”; never “Allow on your Mac”',
+        check:
+          '“Reaching <Mac>…” with a spinner, the host, “Nothing has been sent to it yet”; never “Allow on your Mac”',
         theme,
       });
       await page.waitFor(`document.body.innerText.includes('Try again')`, 30_000, 'the failure');
       await sleep(600);
       await capture(page, `pair-unreachable-${theme}`, {
         route: '/pair?d=… (Mac never answers)',
-        check: '“Can’t reach <Mac>”, the host, what to check (Tailscale on, same account), Open Tailscale and Try again',
+        check:
+          '“Can’t reach <Mac>”, the host, what to check (Tailscale on, same account), Open Tailscale and Try again',
         theme,
       });
     }
@@ -474,6 +480,7 @@ async function screen(page, theme, s) {
     if (s.act) await s.act(page);
     if (!s.pages) {
       await capture(page, base, { route: s.route ?? '(in place)', check: s.check, theme });
+      if (s.frames) await s.frames(page, theme);
       // Undo what the shot changed (a draft survives reloads), so later shots start clean.
       if (s.after) await s.after(page);
       return;
@@ -643,7 +650,8 @@ const LIVE = [
     name: 'import',
     route: '/import',
     ready: 'Import agents',
-    check: 'Import: the three steps, Remote access ticked, the import going on with past conversations counted',
+    check:
+      'Import: the three steps, Remote access ticked, the import going on with past conversations counted',
   },
   {
     name: 'session',
@@ -700,7 +708,8 @@ const LIVE = [
       await page.clickText('Ask for changes');
       await sleep(1500);
     },
-    check: 'Ask for changes in a room opens Designer’s own chat with "Changes to Launch hero" staged',
+    check:
+      'Ask for changes in a room opens Designer’s own chat with "Changes to Launch hero" staged',
     after: async (page) => {
       await page.clickLabel("Don't ask for changes");
       await sleep(800);
@@ -711,6 +720,14 @@ const LIVE = [
     route: '/settings',
     pages: 2,
     check: 'Dates in the one short format ("Nov 5, 2026")',
+  },
+  {
+    name: 'settings-usage',
+    route: '/settings',
+    ready: 'Use it all before reset',
+    act: scrollToText('Spare-capacity list'),
+    check:
+      'Usage: "Use it all before reset" with its line; "Claude 5-hour limit resets … · 62% unused"; "Claude Code: average turn" says it is an estimate; the list "0 waiting" (its one item started); Ollama running with its model, Opencode installed. Read-only.',
   },
   {
     name: 'connection',
@@ -813,6 +830,74 @@ const BARS = [
       await sleep(800);
     },
     check: 'All three bars in the fixed order: driven, import, engine',
+  },
+];
+
+/**
+ * A close-up sequence of the typing dots: `count` frames `gapMs` apart, plus
+ * each dot's opacity read at every frame into the report, so "all three
+ * move, evenly" is a number and not only a picture.
+ */
+const dotFrames =
+  (name, count = 8, gapMs = 150) =>
+  async (page, theme) => {
+    const sel = '[data-testid="typing-dots"]';
+    const box = await page.eval(`(() => {
+    const el = document.querySelector(${JSON.stringify(sel)});
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.x - 12, y: r.y - 12, width: r.width + 24, height: r.height + 24, scale: 4 };
+  })()`);
+    if (!box) throw new Error('no typing dots on screen');
+    const readings = [];
+    for (let f = 0; f < count; f++) {
+      const file = `${name}-${theme}-f${String(f).padStart(2, '0')}`;
+      await page.screenshot(path.join(OUT, `${file}.png`), box);
+      readings.push(
+        await page.eval(
+          `[...document.querySelectorAll(${JSON.stringify(`${sel} > *`)})].map((e) => Number(getComputedStyle(e).opacity).toFixed(2)).join(' ')`
+        )
+      );
+      await sleep(gapMs);
+    }
+    shots.push({
+      name: `${name}-${theme}-frames`,
+      route: '(in place)',
+      theme,
+      check: `Typing dots, ${count} frames ${gapMs} ms apart (f00…f${count - 1}); each dot's opacity per frame: ${readings
+        .map((r) => `[${r}]`)
+        .join(' ')}. All three must change, one after another.`,
+      errors: [],
+      clipped: [],
+    });
+    log('frames', name, theme);
+  };
+
+/** `--importing`: the Chief mid-import and the Designer working. */
+const IMPORTING = [
+  {
+    name: 'typing',
+    route: '/chat/design',
+    ready: 'Designer',
+    settle: 2500,
+    check: 'Under the last message: three dots in one even wave, then “Checking the button tokens”',
+    frames: dotFrames('typing'),
+  },
+  {
+    name: 'import-live',
+    route: '/chat/chief',
+    ready: 'Chief of Staff',
+    settle: 2500,
+    check:
+      'One bar above the composer, one line: blue typing dots, “Importing from Grok”. The working row under the chat has the same dots',
+  },
+  {
+    name: 'import-screen-live',
+    route: '/import',
+    ready: 'Import agents',
+    settle: 2500,
+    check:
+      'Step 3: blue typing dots, “Grok is telling Chief of Staff what each agent does”, then muted tabular “2 agents staged · 37 conversations” under the words',
   },
 ];
 
@@ -931,6 +1016,11 @@ async function main() {
   await page.goto(`${WEB}/agents`);
   await sleep(4000); // reconnect to the real key again
   await each(BARS);
+
+  await startMock('--importing');
+  await page.goto(`${WEB}/agents`);
+  await sleep(4000);
+  await each(IMPORTING);
 
   page.close();
   await writeFile(

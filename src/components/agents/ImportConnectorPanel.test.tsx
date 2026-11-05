@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ModalProvider } from '../../contexts/ModalContext';
 import type { ImportGate, ImportTalk } from '../../lib/agents';
 import { ImportConnectorPanel, talkLine } from './ImportConnectorPanel';
-import { barLines, ImportTalkBar } from './ImportTalkBar';
+import { barLines, importCounts, ImportTalkBar } from './ImportTalkBar';
 
 let gate: ImportGate = { armed: false, talk: null };
 const stopImportTalk = vi.fn(() => Promise.resolve(true));
@@ -120,31 +120,40 @@ describe('talkLine', () => {
 });
 
 describe('ImportTalkBar', () => {
-  it('shows while an import is going, says the interview is separate, and stops it', async () => {
+  it('shows while an import is going, in one line of real counts, and stops it', async () => {
     stopImportTalk.mockClear();
-    gate = { armed: false, talk: TALK };
-    render(<ImportTalkBar chief="Ada" />);
-    expect(
-      await screen.findByText('Importing from Grok · Finance and Travel staged for review')
-    ).toBeInTheDocument();
-    expect(screen.getByText(/what you type here stays between you and Ada/)).toBeInTheDocument();
+    gate = { armed: false, talk: { ...TALK, conversations: 37 } };
+    render(<ImportTalkBar />);
+    expect(await screen.findByText('Importing from Grok')).toBeInTheDocument();
+    expect(screen.getByText('2 agents staged · 37 conversations')).toBeInTheDocument();
+    // The separate-conversation note is in the chat; the bar doesn't repeat it.
+    expect(screen.queryByText(/can.t see your chats/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(stopImportTalk).toHaveBeenCalled();
   });
 
   it('is gone once it has ended', async () => {
     gate = { armed: false, talk: { ...TALK, state: 'imported' } };
-    const { container } = render(<ImportTalkBar chief="Ada" />);
+    const { container } = render(<ImportTalkBar />);
     await Promise.resolve();
     expect(container).toBeEmptyDOMElement();
   });
 
   it('words each live state', () => {
-    expect(barLines({ ...TALK, state: 'awaiting_consent' }, 'Ada').detail).toMatch(
+    expect(barLines({ ...TALK, state: 'awaiting_consent' }).detail).toMatch(
       /Nothing has been shared/
     );
-    expect(barLines({ ...TALK, state: 'review' }, 'Ada').detail).toMatch(
+    expect(barLines({ ...TALK, state: 'review' }).detail).toMatch(
       /Nothing is created until you import/
+    );
+  });
+
+  it('counts only what it has, never names or a percentage', () => {
+    expect(importCounts({ ...TALK, staged: [] })).toBeNull();
+    expect(importCounts({ ...TALK, staged: ['Finance'] })).toBe('1 agent staged');
+    expect(importCounts({ ...TALK, staged: [], conversations: 1 })).toBe('1 conversation');
+    expect(importCounts({ ...TALK, conversations: 1200 })).toBe(
+      '2 agents staged · 1,200 conversations'
     );
   });
 });

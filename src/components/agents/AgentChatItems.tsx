@@ -36,6 +36,7 @@ import {
 import { Button } from '../primitives/Button';
 import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
+import { TypingDots } from '../primitives/TypingDots';
 import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
 import { Tooltip } from '../primitives/Tooltip';
@@ -1401,11 +1402,8 @@ export function WorkingIndicator({
       {live.list}
       <div className="agent-working__line">
         <div className="agent-working">
-          <span className="agent-working__dots" aria-hidden>
-            <span />
-            <span />
-            <span />
-          </span>
+          <TypingDots />
+
           {place && <span className="agent-working__place">{place}</span>}
           {shown && (
             <span

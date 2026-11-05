@@ -618,7 +618,7 @@ at once still reads as one product:
   Answered, a card becomes its outcome line.
 - **Bar** (`ConversationBar`, stacked by `ConversationBars`) — the state of
   this conversation until it ends, in the reading column directly above the
-  composer, in a fixed order: take-over, import, what the engine can't do, a
+  composer, in a fixed order: take-over, import, other agents' requests, what the engine can't do, a
   key in the draft, dictation blocked. At most two show; the rest fold into
   "N more". A key in the draft never folds: it guards something the user is
   about to do and can't take back, so it always shows and the others fold
@@ -629,10 +629,11 @@ The **header is identity only** (badge, name, role, project chip). What an
 agent is doing is said once in its sidebar row and once in the conversation
 (a bar or the working line) — never a third time up there.
 
-Another agent's request shows in a chat one way: the "Review <name>'s
-request" chip at the foot, which opens the same card in place. A session's
-question reaches every chat its work touched; in a chat that isn't its
-owner's it is left out of the conversation and offered by that chip instead.
+Another agent's request shows in a chat one way: the requests bar above the
+composer ("Lead Gen needs your OK", "16 agents need your OK"), whose Review
+panel opens the same cards in place. A session's question reaches every chat
+its work touched; in a chat that isn't its owner's it is left out of the
+conversation and offered by that bar instead.
 
 Vocabulary, one word per idea: a **request** (answered with **Allow /
 Deny**; "Needs your OK" wherever something waits on you — sidebar row, What's
@@ -705,12 +706,32 @@ tool and input are stored on the card. The app's own confirmations (delete
 an agent) do expire, since they only mean something while asked. The sidebar
 shows "Needs your OK" while any card is open (`pendingApprovals`).
 
-**Answered where you are** (`AgentInlineRequests`). Another agent's open card
-is offered at the foot of the chat you're in, as a quiet "Review Lead Gen's
-request" chip that opens the same card in place: in the Chief's chat for every
-agent, elsewhere for the agents that chat has worked with. Answering it there
-answers it everywhere (one request id). A card already in the chat (a
-session's question) isn't offered twice. A run of the same request from one
+**Answered where you are** (`AgentRequests.tsx`, counts in
+`lib/agentRequests.ts`). Other agents' open cards are offered in the chat
+you're in by one bar above the composer, in the Chief's chat for every
+agent, elsewhere for the agents that chat has worked with: "Lead Gen needs
+your OK" (one or two agents are named), "16 agents need your OK" past that,
+with what they are ("41 logins to add", "3 requests", "2 requests, 1 of them
+a login": a login is a secure input card) and **Review**. The bar has one
+height and one place, so the conversation never moves for it; it replaced a
+chip per agent at the foot of the chat, which after an import stacked sixteen
+deep under every message. Review opens one panel rising from the bar across
+the reading column: "Needs your OK · 16 agents · 41 logins", the agents in
+name order (so the list holds still as you answer it), each a row with its
+line ("4 logins: Slack bot token, Slack user token…", or the one request's
+title) that opens to its cards, answerable in place, and **Open chat**. With
+one or two agents every row starts open; past that, all start folded, so
+the whole list is in view before you pick. ↑ ↓ Home End
+move between agents, Esc or Done closes and returns focus to Review, a click
+elsewhere closes it where you clicked. An answered card stays, resolved, until
+the panel closes, and focus moves to the next Allow. Counts come only from the
+cards in each agent's loaded lines plus the registry's `pendingApprovals` for
+older ones ("2 more are further back in its chat"); nothing is estimated, and
+cards that were waiting before the bar existed show as they are. Answering it
+there answers it everywhere (one request id). A card already in the chat (a
+session's question) isn't offered twice. The phone has no such stack: its
+Chief chat shows only the Chief's own cards, and the agent list's "Needs you"
+section is where other agents' requests are. A run of the same request from one
 agent with nothing of yours between says "2 of 3 similar requests" on each
 card, counted from the cards that have arrived, never from how many might
 follow (`approvalSeries`).
@@ -1271,6 +1292,40 @@ the full threat model in docs/remote-access.md):
    offer to set each up as a "When…" routine. Routines arrive paused, as
    before.
 
+**Where you are now** (`agents/arrival.rs`). An imported agent's
+instructions were written for the other assistant's sandbox ("research lives
+at /workspace/canada-west-move/", "use confirm_push"). Taken at their word
+here, a turn runs `ls /workspace/…`, which doesn't exist on a Mac, and every
+try raises an Allow card. So:
+
+- Every agent imported from another assistant (the review card, `import_agents`
+  and Paste) gets a `## Where you are now` section in its CLAUDE.md, written by
+  the app, above `## Instructions`: its home folder, that paths from the other
+  assistant don't exist here (naming the ones its own text mentions) and to use
+  the same name in its home instead, whether anything came over into
+  `imported/<source>/`, that projects are reached with `project_list` and their
+  sessions, that logins are `request_secret` cards or a connection (never a
+  password in chat), that it runs on Claude Code or Codex on this Mac, and the
+  nearest tool here for each foreign tool its text names (Grok's `x_*` search
+  isn't available; `confirm_push` is `push`; `wait_for_agent` is
+  `session_wait`…). It is the app's, not the user's: `store::instructions_of`
+  doesn't include it (so the editor, the Replace diff and the phone never show
+  it) and `store::write_instructions` keeps it in place.
+- At import, the first mention of each foreign path in each field (under
+  `/workspace`, `/mnt/data`, `/mnt/user-data`, `/home/user`, `/home/oai`,
+  `/sandbox`, and only when it doesn't exist on this Mac) gets
+  "(from Grok Bot — not on this Mac)" after it. The path stays as written and
+  nothing else changes. The review card shows the marked text and lists each
+  path it marked and each tool it translated. Nothing maps a path into
+  `imported/`: only past conversations come across (`import_file` isn't built).
+- Agents imported before this (found by the `### Imported from <source>` block
+  in their memory; not the Chief, not Ship Studio imports) get the section once
+  at launch (`arrival::upgrade_all`), by `upgrade_chief`'s rule: only the app's
+  section is added, the user's instructions and memory are byte for byte as
+  they were (their paths aren't marked; the section names them instead), an
+  agent that already has the section is left alone, and one with a turn
+  running or taken over waits for the next launch.
+
 **Past conversations** (`import_history`, `harvest::stage`). Once an agent is
 staged, the other assistant may send its past conversations with the
 `import_history` Remote Access tool, a few per call: `{source, agent,
@@ -1484,7 +1539,9 @@ neutralised inside, so a title can't close it and pass for us (as the import
 interview's `<from_assistant>`). The turn that answers them (or replaces one
 that did: `runner::from_outside`) needs an Allow card for `create_agent`,
 `update_agent`, `delete_agent`, `watch_for` and `schedule_check_in`
-(`mcp::needs_card_in_routine_turn`), and can't write its own CLAUDE.md: on
+(`mcp::needs_card_in_routine_turn`), passes the taint on with what it says to
+another agent (`message_agent`, and its answer to one that asked), and
+can't write its own CLAUDE.md: on
 Claude Code its edit tools are denied for that file (`--disallowedTools
 Edit(//<home>/CLAUDE.md),…`), and for any engine a change to it is put back
 when the turn ends, with a note in the chat, unless the app itself wrote it
@@ -1561,8 +1618,10 @@ call's shape was checked with one read-only `gh api notifications` call.
 ## Usage before the wall (`agents/usage.rs`, `agents/quota.rs`)
 
 Grok Bot's bots went silent at the usage limit. Here the limit is said
-before it arrives, and only from what the engines report: nothing is ever
-estimated, and no reading means no line.
+before it arrives, and only from what the engines report: a *reading* is
+never estimated, and no reading means no line. Forecasts are a separate,
+labelled thing (see "Usage awareness" below): they never stand in for a
+reading and are never shown as one.
 
 **Cost, per agent and per routine.** Each turn's `result` (Claude Code:
 `usage`, `total_cost_usd`) or `turn/completed` (Codex: tokens only) is added
@@ -1753,6 +1812,139 @@ Mac's own (`wallet::keep_sessions`), so an agent that last ran on it resumes
 where it was, then deletes its Keychain items and its folder (`accounts::forget_isolated_account`,
 which refuses any id a workspace uses). The phone reads the list read-only
 (`agents.accounts`) in its Settings, once an engine has more than one.
+
+## Usage awareness (`agents/inventory.rs`, `agents/forecast.rs`, `agents/usage_plan.rs`)
+
+Answers: **do the agents know what the user has, and use it the way they
+want?** The agents (the Chief above all) can read what there is to run on,
+forecast what work will cost, and follow the user's chosen usage mode. They
+never slow down for limits unless the user chose that.
+
+**The capacity inventory** (`inventory::read`; the `usage_overview` tool,
+`agents_usage_overview`, the phone's `agents.usagePlan`):
+
+- Every engine (installed, signed in, how many agents run on it, the account
+  its next turn runs on by `wallet::choose`, or that every account is out),
+  and every account in the wallet.
+- **Each account's own reading.** `quota.json` is one picture per engine;
+  each account now also keeps its last reading in `usage-readings.json`
+  (`usage_plan::archive`, from the same `Step::Quota` that records
+  `quota.json`), so the inventory can say what *each* account last reported,
+  with when. The engine-wide reading is given to an account only when the
+  wallet recorded it came from that one (`wallet::reading_from`), or the
+  engine has a single account; otherwise it is nobody's, and that account
+  says "No reading yet". A signed-out failure forgets that account's own
+  reading too. Windows past their reset drop, as in `quota::shown`.
+- **Plan names only when reported**: Codex's snapshot carries `planType`
+  (`Quota::plan`); Claude Code's stream reports none, so no Claude plan is
+  ever shown.
+- **Other compute**, detected, never assumed (`inventory::local_compute`,
+  cached a minute): Opencode's binary; Ollama (binary or app) and LM Studio
+  (`lms` or the app), each asked over loopback for its model list
+  (`127.0.0.1:11434/api/tags`, `127.0.0.1:1234/v1/models`, 800 ms, no proxy,
+  no redirects, so nothing leaves this Mac) and said
+  "installed, not running" when it doesn't answer. Agents don't run on these;
+  they are listed so the Chief can say what's there.
+
+**Readings vs estimates.** The rule "only what the engines report, never
+estimated" is about *readings* and stands unchanged. A forecast is an
+estimate and is always said as one: every value carries `estimate: true`
+and how many runs it rests on; tool text heads it "ESTIMATE from this user's
+past runs (not a reading)"; the UI says "About 48k tokens a turn · estimate
+from 212 past runs". With too little history there is no forecast at all,
+never a default.
+
+- **Tokens per run** (`forecast::per_run`) come from the per-day totals
+  already kept for every agent and routine (`AgentUsage::days`, 7 days), so
+  history from before this existed counts at once. At least `MIN_RUNS` (5)
+  runs, else none. A day on which an agent also ran "When…" model checks is
+  left out of its per-turn figure (that day's tokens mix both and can't be
+  split). An agent with too little history is estimated as an average turn on
+  its engine here (`forecast::pooled`), and says so. Low/high are the
+  lightest and heaviest day's averages.
+- **Share of a limit** is learned, because engines report windows in
+  percent, never tokens: each reading is kept as a `forecast::Sample` with
+  the account's running token count (`usage_plan::add_tokens`, from each
+  turn's reported usage). Within one instance of a window (same kind, same
+  reset) the first and last sample give points per token; instances pool
+  (`forecast::rate`). No rate until the reading has moved `MIN_RATE_DELTA`
+  (2) points with tokens in between. Use of the same plan elsewhere (the CLI,
+  the web) moves the percent without our tokens, so the rate errs high: a
+  forecast share is an upper-side estimate. This history starts with this
+  build: until it exists, forecasts give tokens and say the share "isn't known
+  yet".
+
+**Modes** (`usage_plan::Mode`, `usage-plan.json`; Settings → Agents → Usage,
+or the Chief's `set_usage_mode`, which always asks on a card first):
+
+- **Normal** (default): no throttling. Before something big (a fan-out, a long
+  routine, a nightly pipeline) an agent says in one line what it will likely
+  use and which account it runs on, then goes ahead.
+- **Save my limits**: ask before heavy work (`usage_plan::ask_first`: a
+  forecast of a tenth of a window or more, or a fan-out with no forecast),
+  and send light work to agents on lighter models or engines.
+- **Use it all before reset**: the user's standing OK to spend capacity that
+  would otherwise expire. When a window on the account turns would run on
+  next is near its reset (within a fifth of its length, at most a day:
+  `five_hour` → last hour, `seven_day` → last day; Codex's own
+  `windowDurationMins`; a window we can't size is never spare) with at least
+  `SPARE_MIN_PERCENT` (25) points unused, work waits on the spare-capacity
+  list, and the Chief is free, the check-in tick (at most every 3 minutes)
+  wakes the Chief once per window instance (`usage_plan::should_nudge`,
+  `nudged`), with a quiet Note in its chat. The Chief hands items to agents,
+  marks them started (`finish_spare_work`), and may bring a routine forward
+  (`run_routine_now`, only in this mode; its next time doesn't move). It
+  changes no approval: anything that sends, spends, pushes or changes what
+  others see still waits for the user's Allow.
+
+**The spare-capacity list**: users add in Settings; any agent adds with
+`add_spare_work` ("sometime", "when there's spare capacity"). At most 50
+items of 600 characters. A turn answering outside text (a "When…" routine's
+items) can't add to it, take items off it or run a routine; and what such a
+turn sends with `message_agent` (or answers back to whoever asked it)
+carries the taint, so it can't ask the Chief to do it instead. A wake
+already recorded for a window (`nudged`, on disk before the Chief is woken,
+so a restart doesn't wake it again) also covers a later reading that puts
+the same reset up to 30 minutes off.
+
+**Instructions, for every agent, old or new.** The behaviour lives in the
+app-owned system prompt (`prompts::usage_section`, built every turn by
+`runner::system_prompt_for`) with the user's current mode, so every agent,
+including ones created or imported by older builds, has it on its next turn,
+and nothing in its own `CLAUDE.md` is rewritten (the safest upgrade: there
+is no file text to migrate). The Chief also gets a line on `set_usage_mode`.
+It is kept short (it is on every turn) and changes only with the mode:
+nothing time-dependent goes in it, since a system prompt that changes every
+turn costs the engine's prompt cache on the whole conversation. Spare
+capacity reaches the Chief through the nudge, and the user through What's
+in flight.
+
+**UI.** Settings → Agents → Usage (⌘K "Usage limits and spare capacity…"):
+the mode, each account's reading or "No reading yet", tags ("Plus plan",
+"Next turns run here"), each engine's average turn (estimate), other
+compute, and the list. What's in flight ends with one muted line when a
+window on the next account is near its reset with capacity left ("Claude
+5-hour limit resets 3:00 PM · 62% unused"). The phone's Settings shows the
+same, read-only (`agents.usagePlan`, additive: an older phone never asks, an
+older Mac doesn't list it in `welcome.methods`). Wording lives once in
+`packages/companion-protocol/src/usage.ts`.
+
+**What can't be done honestly, and isn't:**
+
+- No engine reports limits in tokens, so "how much is left" is only ever a
+  percentage, and any token→share conversion is learned and labelled.
+- Claude Code reports no plan name; neither engine reports a reading for an
+  account no turn has run on. Those accounts say "No reading yet".
+- Opencode and local models aren't agent engines here; they're listed, not
+  used.
+- Choosing *accounts* by reset time isn't done: the wallet's order is the
+  user's, and failover keeps it. Agents choose between *engines* (an agent on
+  Codex vs one on Claude Code) by what resets sooner.
+- "Route light work to cheaper models" is an instruction to the Chief
+  (delegate to agents on lighter models); nothing reclassifies a turn
+  automatically.
+- Not verified against live accounts: a real nudge firing near a real
+  reset, Codex's `planType` on a signed-in account, LM Studio's model list.
 
 ## Apps agents can use (`src-tauri/src/agents/apps.rs`)
 

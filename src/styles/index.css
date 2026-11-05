@@ -22,6 +22,7 @@
 @import './components/dropdown.css';
 @import './components/context-menu.css';
 @import './components/spinner.css';
+@import './components/typing-dots.css';
 @import './components/progress.css';
 @import './components/pixel-loader.css';
 @import './components/text-field.css';
@@ -151,6 +152,7 @@
 @import './features/agents-rooms.css';
 @import './features/agents-takeover.css';
 @import './features/agents-quota.css';
+@import './features/agents-usage.css';
 @import './features/agents-import.css';
 @import './features/agents-ideas.css';
 @import './features/agents-surfaces.css';

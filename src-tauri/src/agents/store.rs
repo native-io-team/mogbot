@@ -886,12 +886,19 @@ pub fn write_instructions(
     instructions: &str,
 ) -> Result<(), CommandError> {
     let path = home.join("CLAUDE.md");
-    let memory = std::fs::read_to_string(&path)
-        .ok()
+    let existing = std::fs::read_to_string(&path).ok();
+    let memory = existing
+        .as_deref()
         .and_then(|existing| {
-            super::memory::section_start(&existing).map(|i| existing[i..].to_string())
+            super::memory::section_start(existing).map(|i| existing[i..].to_string())
         })
         .unwrap_or_else(|| format!("{}\n\n{}\n", super::memory::HEADING, super::memory::INTRO));
+    // An imported agent's "Where you are now" is the app's, not part of its
+    // instructions: it stays above them, as it was.
+    let arrival = existing
+        .as_deref()
+        .and_then(super::arrival::section_text)
+        .unwrap_or_default();
     let role = if agent.role.is_empty() {
         String::new()
     } else {
@@ -903,7 +910,7 @@ pub fn write_instructions(
     } else {
         format!("## Instructions\n\n{body}\n\n")
     };
-    let content = format!("# {}\n\n{role}{instructions}{memory}", agent.name);
+    let content = format!("# {}\n\n{role}{arrival}{instructions}{memory}", agent.name);
     note_claude_md_write(&path);
     write_atomic(&path, content.as_bytes())
 }

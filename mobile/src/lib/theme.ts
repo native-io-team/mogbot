@@ -320,6 +320,13 @@ export const squircle = (size: number) => Math.round(size * 0.28);
 export const iconSize = { micro: 10, inline: 12, body: 16, button: 20, hero: 28 } as const;
 
 /**
+ * The typing dots (`components/TypingDots.tsx`), the desktop's
+ * `--typing-dots-*`: 5pt dots 4 apart (three of them span about an inline
+ * icon and a half), lifting 1.5pt at the crest.
+ */
+export const typingDot = { size: 5, gap: space.xs, lift: 1.5 } as const;
+
+/**
  * The message field, iMessage's geometry: one line is a 36pt pill, and the
  * corner stays 18 as it grows, so several lines read as a rounded rectangle
  * rather than a blob. The + is a 36pt circle (as tall as one line); send is

@@ -10,6 +10,7 @@ import { NewAgentDefaults } from '../components/NewAgentDefaults';
 import { formatDate } from '../lib/agents';
 import { useQuotaLines } from '../lib/quota';
 import { useAccountLines } from '../lib/accounts';
+import { useUsageRows } from '../lib/usagePlan';
 import { appInfo } from '../lib/pairing';
 import { setPref } from '../lib/prefs';
 import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
@@ -28,6 +29,9 @@ const APPEARANCE: { value: AppearancePref; label: string }[] = [
 ];
 
 /** Accounts are added and signed in on the Mac; here they are only shown. */
+const USAGE_FOOTER =
+  'Change it on the Mac in Settings → Agents → Usage, or ask your Chief of Staff. Estimates come from your past runs.';
+
 const ACCOUNTS_FOOTER =
   'When one runs out of usage, agents carry on with the next. Add or reorder them on the Mac.';
 
@@ -113,6 +117,7 @@ export default function Settings() {
 
   const quota = useQuotaLines();
   const accounts = useAccountLines();
+  const usage = useUsageRows();
   const { version, build } = appInfo();
   const updateLabel =
     update.kind === 'checking'
@@ -148,6 +153,21 @@ export default function Settings() {
               // Amber from 90% and at the limit, as on the agents list.
               warning={line.tone !== 'calm'}
               last={i === quota.length - 1}
+            />
+          ))}
+        </Section>
+      )}
+
+      {usage.length > 0 && (
+        <Section title="Usage" footer={USAGE_FOOTER}>
+          {usage.map((row, i) => (
+            <Row
+              key={row.key}
+              label={row.label}
+              value={row.value}
+              detail={row.detail}
+              warning={row.warning}
+              last={i === usage.length - 1}
             />
           ))}
         </Section>

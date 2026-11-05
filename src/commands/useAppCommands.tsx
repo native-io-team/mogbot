@@ -392,6 +392,29 @@ export function useAppCommands({
         },
       },
       {
+        id: 'agents.usage',
+        title: 'Usage limits and spare capacity…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: [
+          'usage',
+          'limits',
+          'reset',
+          'forecast',
+          'save my limits',
+          'use it all',
+          'spare capacity',
+          'backlog',
+          'opencode',
+          'ollama',
+        ],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-usage');
+          openModal('settings');
+        },
+      },
+      {
         id: 'agents.addClaudeAccount',
         title: 'Add a Claude Code account…',
         icon: <SettingsIcon size={14} />,

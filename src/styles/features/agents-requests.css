@@ -3,65 +3,188 @@
 
 /* ------------------------------------------------- other agents' requests */
 
-/* "● Review Lead Gen's request ›" at the foot of a chat; opens the card in place. */
+/* One bar above the composer ("16 agents need your OK · 41 logins to add"),
+   and the panel Review opens, rising from it across the reading column. */
 .agent-requests {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-lg);
+  position: relative;
 }
 
-.agent-requests__group {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
+/* One height whatever the count: the title and detail never wrap. */
+.agent-requests .agent-bar__title,
+.agent-requests .agent-bar__detail {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.agent-requests__chip {
-  display: inline-flex;
+.agent-requests-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--spacing-xs));
+  left: 0;
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  max-height: min(560px, calc(100vh - var(--spacing-2xl) * 4));
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-window);
+  animation: agents-motion-swap-in var(--agents-motion-enter) backwards;
+}
+
+.agent-requests-panel:focus {
+  outline: none;
+}
+
+.agent-requests-panel__head {
+  display: flex;
+  flex: none;
   align-items: center;
   gap: var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-md);
-  font: inherit;
-  font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-compact);
-  color: var(--text-secondary);
-  background: var(--surface-panel);
-  border: var(--border-width-default) solid var(--border-subtle);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  transition:
-    color var(--transition-interaction),
-    background var(--transition-interaction);
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-md);
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
 }
 
-.agent-requests__chip:hover {
+.agent-requests-panel__heading {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.agent-requests-panel__title {
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
   color: var(--text-primary);
-  background: var(--surface-control-hover);
 }
 
-.agent-requests__chip:focus-visible {
-  outline: var(--border-width-emphasis) solid var(--accent-focus);
-  outline-offset: var(--spacing-2xs);
-}
-
-.agent-requests__chevron {
-  transition: transform var(--transition-interaction-fast);
-}
-
-.agent-requests__chip[aria-expanded='true'] .agent-requests__chevron {
-  transform: rotate(90deg);
-}
-
-.agent-requests__group > .agent-chat__row {
-  width: 100%;
-}
-
-.agent-requests__loading {
+.agent-requests-panel__counts {
   margin: 0;
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
+}
+
+.agent-requests-panel__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--spacing-xs);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.agent-requests-panel__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.agent-requests-panel__toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  min-height: var(--size-sidebar-project-row);
+  padding: var(--spacing-sm);
+  font: inherit;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-radius: var(--radius-control);
+}
+
+.agent-requests-panel__toggle:hover {
+  background: var(--tint-subtle);
+}
+
+.agent-requests-panel__toggle:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 var(--border-width-emphasis) var(--focus-ring);
+}
+
+.agent-requests-panel__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  min-width: 0;
+}
+
+.agent-requests-panel__name {
+  overflow: hidden;
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-compact);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-requests-panel__line {
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* What it's asking for, in quiet words: the bar's amber dot already says
+   "needs you", and sixteen amber lines would shout it. */
+.agent-requests-panel__line[data-state='waiting'] {
+  color: var(--text-secondary);
+}
+
+.agent-requests-panel__chevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform var(--transition-interaction-fast);
+}
+
+.agent-requests-panel__toggle[aria-expanded='true'] .agent-requests-panel__chevron {
+  transform: rotate(90deg);
+}
+
+.text-button.button.agent-requests-panel__open {
+  flex: none;
+  margin-right: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* An agent's cards, spanning its row's text column, as in What's in flight. */
+.agent-requests-panel__cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-2xs) var(--spacing-sm) var(--spacing-md)
+    calc(var(--size-sidebar-project-shortcut) + var(--spacing-sm) * 2);
+}
+
+.agent-requests-panel__cards .agent-approval {
+  flex: 1;
+  width: auto;
+  max-width: none;
+}
+
+.agent-requests-panel__cards .agent-message__actions {
+  display: none;
+}
+
+.agent-requests-panel__older {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-requests-panel {
+    animation: none;
+  }
 }
 
 /* ------------------------------------------------ import over the connector */
@@ -122,62 +245,30 @@
   border-style: dashed;
 }
 
-/* Above the Chief's composer while an import conversation is going. */
-.agent-import-talk {
+/* The import bar's one line while the interview runs (ImportTalkBar, inside
+   a ConversationBar): who, then the counts. One line however long the source's
+   name, so the bar never changes height; the counts are tabular so a number
+   ticking up doesn't shift what follows it. */
+.agent-import-talk__line {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--spacing-sm);
-  width: calc(100% - (var(--spacing-xl) * 2));
-  max-width: var(--agents-chat-width);
-  margin: 0 auto var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-md);
-  font-size: var(--font-size-body-md);
-  color: var(--text-secondary);
-  background: var(--surface-recessed);
-  border-radius: var(--radius-card);
-}
-
-.agent-import-talk__dot {
-  flex: none;
-  width: var(--spacing-xs);
-  height: var(--spacing-xs);
-  border-radius: var(--radius-pill);
-  background: var(--status-running);
-  animation: agent-import-talk-live var(--agents-motion-typing-period) ease-in-out infinite;
-}
-
-.agent-import-talk__text {
-  flex: 1;
   min-width: 0;
+  white-space: nowrap;
 }
 
-.agent-import-talk__text strong {
-  display: block;
-  font-weight: var(--font-weight-label);
-  color: var(--text-primary);
+.agent-import-talk__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.agent-import-talk__detail {
-  display: block;
+.agent-import-talk__counts {
+  flex: none;
   font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-body);
+  font-variant-numeric: tabular-nums;
   color: var(--text-muted);
-}
-
-.agent-import-talk[data-state='awaiting_consent'] .agent-import-talk__dot,
-.agent-import-talk[data-state='review'] .agent-import-talk__dot {
-  background: var(--accent-warning);
-}
-
-@keyframes agent-import-talk-live {
-  50% {
-    opacity: 0.35;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .agent-import-talk__dot {
-    animation: none;
-  }
 }
 
 /* Another assistant asking to start an import: what it means, in prose. */

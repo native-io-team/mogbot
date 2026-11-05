@@ -9,6 +9,7 @@
 
 import type { Agent, AgentMessage } from '@shipstudio/companion-protocol';
 import { formatClock, formatDate, workingLine } from './agents';
+import { isImportInterview } from './bars';
 import { foldRoomLines, type RoomFold } from './rooms';
 import type { PendingSend } from './sync';
 
@@ -45,7 +46,12 @@ export function chatItems(
   if (agent.status.room) draft = undefined;
   if (draft) out.push({ kind: 'draft', key: draft.id, text: draft.text });
   else if (agent.status.state === 'working')
-    out.push({ kind: 'working', key: 'working', label: workingLine(agent) });
+    out.push({
+      kind: 'working',
+      key: 'working',
+      // Mid-import the bar above the composer says it; the row keeps its dots.
+      label: isImportInterview(agent.status.activity) ? '' : workingLine(agent),
+    });
   for (let i = pending.length - 1; i >= 0; i--) {
     out.push({ kind: 'pending', key: `pending:${pending[i].clientId}`, pending: pending[i] });
   }

@@ -133,6 +133,13 @@ pub struct Proposal {
     /// An agent here already has this name: what it is now, for the diff.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clash: Option<Clash>,
+    /// Paths from the other assistant's sandbox its text names that aren't
+    /// on this Mac, each marked where it first appears (`arrival`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub foreign_paths: Vec<String>,
+    /// The other assistant's tools its text names, and what is nearest here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub foreign_tools: Vec<super::arrival::ToolNote>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -577,6 +584,8 @@ pub fn proposal(key: String, args: &serde_json::Value, chief: &str) -> Result<Pr
         context: clean_text(s("context"), MAX_FIELD_CHARS),
         history: None,
         clash: None,
+        foreign_paths: Vec::new(),
+        foreign_tools: Vec::new(),
     };
     if let Some(what) = secret_in(&p) {
         return Err(format!(
@@ -593,6 +602,15 @@ pub fn with_clashes(mut review: Review) -> Review {
         p.clash = by_name(&p.name)
             .filter(|a| !a.is_main)
             .map(|a| Clash::of(&a));
+    }
+    review
+}
+
+/// The review with each proposal's foreign paths marked and its foreign
+/// tools noted (`arrival`), so the card shows exactly what Import writes.
+pub fn with_arrival(mut review: Review, source: &str) -> Review {
+    for p in &mut review.proposals {
+        super::arrival::annotate_proposal(p, source);
     }
     review
 }
@@ -672,8 +690,10 @@ pub fn apply(
         .review
         .clone()
         .ok_or_else(|| CommandError::expected("That card has nothing to import."))?;
-    let review = with_clashes(review);
     let source = card.source.as_str();
+    // A card put up before paths were marked gets them marked now, as the
+    // card shows it (`current`); marking twice changes nothing.
+    let review = with_arrival(with_clashes(review), source);
     let mut out = Applied::default();
     let mut chosen: Vec<(&Proposal, Option<&Pick>)> = Vec::new();
     for pick in &picks.agents {
@@ -799,6 +819,8 @@ fn apply_one(
         source,
     )?;
     import::add_routines(&agent, &routines, true, &mut summary);
+    // Last, so it names what is now in its home.
+    super::arrival::arrive(&agent.id, source)?;
     if let Some(app) = app {
         for login in &p.logins {
             let purpose = if login.purpose.is_empty() {
@@ -891,11 +913,13 @@ pub fn find_card(
 pub fn current(chief_id: &str, request_id: &str) -> Result<Review, CommandError> {
     let approval = store::find_approval(chief_id, request_id)?
         .ok_or_else(|| CommandError::expected("That card no longer exists."))?;
-    let review = approval
+    let card = approval
         .connector
-        .and_then(|c| c.review)
         .ok_or_else(|| CommandError::expected("That isn't an import card."))?;
-    Ok(with_clashes(review))
+    let review = card
+        .review
+        .ok_or_else(|| CommandError::expected("That isn't an import card."))?;
+    Ok(with_arrival(with_clashes(review), &card.source))
 }
 
 /// One Import at a time, from the card's check to its answer: two answers

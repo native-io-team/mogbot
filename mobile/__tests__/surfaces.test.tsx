@@ -16,7 +16,7 @@ import { SecretCard } from '../src/components/SecretCard';
 import { BarStack, barTint, Card, stackBars, type BarSpec } from '../src/components/surfaces';
 import { Button, T } from '../src/components/ui';
 import { answerAccent } from '../src/lib/accent';
-import { BAR_ORDER, importBar, MAX_BARS } from '../src/lib/bars';
+import { BAR_ORDER, importBar, isImportInterview, MAX_BARS } from '../src/lib/bars';
 import { useApp } from '../src/lib/store';
 import { agentTints, APPEARANCES, palettes } from '../src/lib/theme';
 import { agent, msg } from './helpers';
@@ -397,6 +397,12 @@ describe('bars above the composer', () => {
       []
     )!;
     expect(going.title).toBe('Importing from Grok');
+    // One line, led by the typing dots; the chat's note says the rest.
+    expect(going.live).toBe(true);
+    expect(going.detail).toBeUndefined();
+    // …and the working row doesn't say it a second time.
+    expect(isImportInterview('Bringing in agents from Grok')).toBe(true);
+    expect(isImportInterview('Checking the button tokens')).toBe(false);
     expect(importBar(agent(), [])).toBeNull();
   });
 });

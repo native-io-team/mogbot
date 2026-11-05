@@ -367,6 +367,12 @@ fn tools_list(caller: &store::Agent) -> Value {
         .filter(|t| !t.main_only || caller.is_main)
         .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() }))
         .collect();
+    tools.extend(
+        super::usage_tools::TOOLS
+            .iter()
+            .filter(|t| !t.main_only || caller.is_main)
+            .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() })),
+    );
     // Every agent works on projects the same way.
     tools.extend(super::sessions::definitions());
     json!({ "tools": tools })
@@ -407,6 +413,9 @@ pub async fn handle_rpc(
             if let Some(tool) = super::sessions::find(name) {
                 return ok(super::sessions::call(app, &caller, tool, &args).await);
             }
+            if let Some(tool) = super::usage_tools::find(name) {
+                return ok(usage_tool(app, &caller, turn, tool, &args).await);
+            }
             let Some(tool) = TOOLS.iter().find(|t| t.name == name) else {
                 return fail(-32602, &format!("Unknown tool: {name}"));
             };
@@ -443,6 +452,46 @@ pub async fn handle_rpc(
             ok(call(app, &caller, turn, name, &args).await)
         }
         _ => fail(-32601, &format!("Method not found: {method}")),
+    }
+}
+
+/// The usage tools (`usage_tools`). Read-only ones answer anyone; a turn
+/// answering outside text can't add work or run a routine, and a mode
+/// change is always the user's, on a card.
+async fn usage_tool(
+    app: &AppHandle,
+    caller: &store::Agent,
+    turn: Option<u64>,
+    tool: &super::usage_tools::Def,
+    args: &Value,
+) -> Value {
+    use super::usage_tools as u;
+    if tool.main_only && !caller.is_main {
+        return error("Only the Chief of Staff can do that. Ask it with message_agent.");
+    }
+    let outside = runner::from_outside(&caller.id) && super::broker::is_live(&caller.id, turn);
+    match tool.name {
+        "usage_overview" => u::overview().await,
+        "forecast_usage" => u::forecast(args).await,
+        "add_spare_work" | "finish_spare_work" | "run_routine_now" if outside => error(
+            "Not while answering what a “When…” routine found: that text came from outside this app. Tell the user instead.",
+        ),
+        "add_spare_work" => u::add(caller, args),
+        "finish_spare_work" => u::finish(args),
+        "run_routine_now" => u::run_routine(app, args),
+        "set_usage_mode" => {
+            let mode = match super::usage_plan::Mode::parse(arg(args, "mode").unwrap_or("")) {
+                Ok(m) => m,
+                Err(e) => return error(e.to_string()),
+            };
+            let (title, detail) = u::mode_card(mode);
+            let answer = ask_user(app, caller, title, detail, None).await;
+            if let Some(refused) = refused_reply(&answer, "change it") {
+                return error(refused);
+            }
+            u::set_mode(app, mode)
+        }
+        _ => error("Unknown tool"),
     }
 }
 
@@ -855,18 +904,27 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
     let mut received = runner::new_message(&target.id, MessageKind::FromAgent, body);
     received.peer = Some(peer(caller));
     let _ = runner::record(app, received);
+    // Sent from a turn answering outside text: the taint goes with it, so
+    // the recipient can't be talked into what the sender couldn't do.
+    let outside = runner::from_outside(&caller.id);
     if answer {
-        runner::enqueue_reply(app, &target.id, body.to_string(), peer(caller), hop);
+        runner::enqueue_reply_from(
+            app,
+            &target.id,
+            body.to_string(),
+            peer(caller),
+            hop,
+            outside,
+        );
         return text(format!("Delivered to {}.", target.name));
     }
-    runner::enqueue(
+    runner::enqueue_request(
         app,
         &target.id,
         body.to_string(),
-        From::Agent {
-            sender: peer(caller),
-            hop,
-        },
+        peer(caller),
+        hop,
+        outside,
     );
     text(format!(
         "Delivered to {}. Their answer comes back to you as a new message when they're done; don't wait for it.",

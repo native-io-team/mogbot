@@ -472,6 +472,10 @@ impl Backend for DesktopBackend {
         json(cmd::agents_accounts().await?)
     }
 
+    async fn usage_plan(&self) -> Result<Value, CommandError> {
+        json(crate::commands::agents_usage::agents_usage_overview().await?)
+    }
+
     async fn import_status(&self) -> Result<Value, CommandError> {
         import_status_now().await
     }

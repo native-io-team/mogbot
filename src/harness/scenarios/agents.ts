@@ -1734,7 +1734,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-team',
     title: 'Agents — a working team, Chief of Staff open',
     looksRightWhen:
-      'Agent list under the Agents | Projects toggle and conversation search: an amber “Needs your OK · 1” row first, then the agents (pinned first, then most recent) with up to two-line previews; pin marks small and faint. The Chief of Staff conversation with its name and role centred in the header band, no engine control. “4 messages with Acme Site · working on the pricing table” sits centred, no empty slot after the dot. The chat ends with a quiet “Review Lead Gen’s request” chip. New agent / Import agents are short rows in secondary text, with no gap between them.',
+      'Agent list under the Agents | Projects toggle and conversation search: an amber “Needs your OK · 1” row first, then the agents (pinned first, then most recent) with up to two-line previews; pin marks small and faint. The Chief of Staff conversation with its name and role centred in the header band, no engine control. “4 messages with Acme Site · working on the pricing table” sits centred, no empty slot after the dot. Above the composer, one bar: an amber dot, “Lead Gen needs your OK”, “1 request”, Review. New agent / Import agents are short rows in secondary text, with no gap between them.',
     command: 'agents.open',
     requires: '.agent-chat .agent-bubble--agent',
     commands: {
@@ -1749,10 +1749,10 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-inline-request',
     title: 'Agents — answering Lead Gen’s request from the Chief’s chat',
     looksRightWhen:
-      'In the Chief of Staff chat, the “Review Lead Gen’s request” chip is open (chevron turned) and under it is Lead Gen’s own Allow / Deny card, compact, showing the email; Deny is one click, a … beside it holds “Deny with a note…”.',
+      'In the Chief of Staff chat, the requests bar’s panel is open above the composer: Lead Gen’s row expanded (chevron turned) to its own Allow / Deny card, compact, showing the email; Deny is one click, a … beside it holds “Deny with a note…”.',
     command: 'agents.open',
-    requires: '.agent-requests .agent-approval',
-    steps: [{ click: '.agent-requests__chip' }],
+    requires: '.agent-requests-panel .agent-approval',
+    steps: [{ click: '.agent-requests__review' }],
     commands: {
       agents_overview: liveOverview,
       agents_messages: messagesFor,
@@ -2784,12 +2784,12 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-talk',
     title: 'Agents — the sealed import interview, live in the Chief’s chat',
     looksRightWhen:
-      'The Chief’s chat. The answered consent card (“Allowed”), then a quiet note that Grok is talking to a separate conversation that can’t see your chats, not this one. Grok’s lines sit on the left labelled “From Grok” over outlined recessed bubbles, in plain text exactly as sent; replies to Grok are indented, labelled “To Grok · from the import conversation” over dashed bubbles. The Chief’s row reads “Bringing in agents from Grok”. Above the composer one bar with a live accent dot: “Importing from Grok · Finance staged for review”, a muted line that what you type here stays between you and Chief of Staff, and a secondary Stop.',
+      'The Chief’s chat. The answered consent card (“Allowed”), then a quiet note that Grok is talking to a separate conversation that can’t see your chats, not this one. Grok’s lines sit on the left labelled “From Grok” over outlined recessed bubbles, in plain text exactly as sent; replies to Grok are indented, labelled “To Grok · from the import conversation” over dashed bubbles. The working pill under the last message is the three dots alone, in one even wave (all three move, in turn, on one clock), with no words: the bar says it. The pill’s ⋯ is hidden until the row is hovered. Above the composer one single-line bar, the same three dots in the running blue: “Importing from Grok”, then muted tabular “1 agent staged”, and a secondary Stop. No second line.',
     command: 'agents.open',
     requires: '[data-testid="agent-import-talk"][data-state="interviewing"]',
     commands: {
       agents_overview: overview([
-        { ...TEAM[0], status: status('working', 'Talking to Grok') },
+        { ...TEAM[0], status: status('working', 'Bringing in agents from Grok') },
         TEAM.find((a) => a.id === 'finance') ?? TEAM[1],
       ]),
       agents_messages: (args: Record<string, unknown>) =>
@@ -2801,12 +2801,12 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-receiving',
     title: 'Agents — import, past conversations arriving',
     looksRightWhen:
-      'As agents-import-talk, but the bar above the composer reads “Importing from Grok · Finance and Travel staged for review · 37 past conversations”, with the same muted line and a secondary Stop. Nothing about the counts is in accent colour.',
+      'As agents-import-talk, but the bar above the composer reads “Importing from Grok” then muted “2 agents staged · 37 conversations”, still one line, the same height as agents-import-talk, with a secondary Stop. Nothing about the counts is in accent colour.',
     command: 'agents.open',
     requires: '[data-testid="agent-import-talk"][data-state="interviewing"]',
     commands: {
       agents_overview: overview([
-        { ...TEAM[0], status: status('working', 'Talking to Grok') },
+        { ...TEAM[0], status: status('working', 'Bringing in agents from Grok') },
         TEAM.find((a) => a.id === 'finance') ?? TEAM[1],
       ]),
       agents_messages: (args: Record<string, unknown>) =>

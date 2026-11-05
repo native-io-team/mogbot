@@ -23,6 +23,7 @@
 //! - [`failure`]: a failed turn in Agents' own words (usage limit, signed out)
 //! - [`files`]: files an agent shares back, the Files list, paths in prose
 //! - [`import`]: bring an existing setup over from another assistant
+//! - [`arrival`]: an imported agent told where it is now (its home, foreign paths, tools)
 //! - [`other_app`]: a one-time, read-only copy of the team from the app this grew out of
 //! - [`schedule`]: check-ins and routines that wake an agent on time
 //! - [`project`]: binding an agent to a project, and what its turns changed there
@@ -43,6 +44,7 @@
 //! Full design: docs/agents.md.
 
 pub mod apps;
+pub mod arrival;
 pub mod attachments;
 pub mod broker;
 pub mod capabilities;
@@ -59,9 +61,11 @@ pub mod driver;
 pub mod engine;
 pub mod failure;
 pub mod files;
+pub mod forecast;
 pub mod harvest;
 pub mod import;
 pub mod interview;
+pub mod inventory;
 pub mod logins;
 pub mod mcp;
 pub mod memory;
@@ -92,6 +96,8 @@ pub mod task;
 pub mod templates;
 pub mod tray;
 pub mod usage;
+pub mod usage_plan;
+pub mod usage_tools;
 pub mod wallet;
 pub mod watch;
 pub mod watch_seal;
