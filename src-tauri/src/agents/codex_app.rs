@@ -25,6 +25,10 @@
 //! - `turn/interrupt` ends the turn as `turn/completed {status: interrupted}`.
 //! - Usage arrives as `thread/tokenUsage/updated`, once per model request;
 //!   `last` is that request's.
+//! - The plan's limits: `account/rateLimits/read` is asked once per turn and
+//!   `account/rateLimits/updated` arrives unprompted (`super::quota`). The
+//!   read's shape is from 0.166's schema; with no signed-in account here it
+//!   was only seen failing ("authentication required"), which is ignored.
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -42,6 +46,10 @@ const INITIALIZE: u64 = 1;
 const START: u64 = 2;
 const TURN: u64 = 3;
 const INTERRUPT: u64 = 4;
+/// `account/rateLimits/read`: the plan's windows, as Codex reports them
+/// (`super::quota`). Refused for authentication (an API-key login) clears
+/// the reading; any other error (an older Codex) is ignored.
+const RATE_LIMITS: u64 = 5;
 
 /// Every method this needs from the installed Codex, by the schema file
 /// that has to list it.
@@ -306,6 +314,14 @@ impl Conversation {
         if let Some(message) = str_at(msg, "/error/message") {
             return match id {
                 INITIALIZE | START | TURN => self.end([Step::Failed(message.to_string())]),
+                // Refused for authentication (an API-key login): there is no
+                // plan to read, so any reading kept from another login goes.
+                // Any other refusal (an older Codex) says nothing either way.
+                RATE_LIMITS if message.to_lowercase().contains("authentication") => {
+                    vec![Out::Step(Step::Quota(super::quota::none(
+                        super::engine::Engine::Codex,
+                    )))]
+                }
                 _ => Vec::new(),
             };
         }
@@ -313,7 +329,18 @@ impl Conversation {
             INITIALIZE => vec![
                 Out::Send(json!({ "jsonrpc": "2.0", "method": "initialized", "params": {} })),
                 Out::Send(self.start.clone()),
+                Out::Send(request(
+                    RATE_LIMITS,
+                    "account/rateLimits/read",
+                    json!({ "excludeResetCreditDetails": true }),
+                )),
             ],
+            RATE_LIMITS => {
+                super::quota::from_codex(&msg["result"]["rateLimits"], super::store::now_ms())
+                    .map(|q| Out::Step(Step::Quota(q)))
+                    .into_iter()
+                    .collect()
+            }
             START => {
                 let Some(thread) = str_at(msg, "/result/thread/id") else {
                     return self.end([Step::Failed("Codex started no conversation.".into())]);
@@ -348,6 +375,13 @@ impl Conversation {
     }
 
     fn on_notification(&mut self, method: &str, params: &Value) -> Vec<Out> {
+        // The account's, not a thread's: it names no thread.
+        if method == "account/rateLimits/updated" {
+            return super::quota::from_codex(&params["rateLimits"], super::store::now_ms())
+                .map(|q| Out::Step(Step::Quota(q)))
+                .into_iter()
+                .collect();
+        }
         if !self.ours(params) {
             return Vec::new();
         }
@@ -853,6 +887,38 @@ mod tests {
             start["params"]["config"]["sandbox_workspace_write.network_access"],
             false
         );
+    }
+
+    #[test]
+    fn the_plans_limits_are_asked_once_and_read_whenever_they_come() {
+        let (mut c, _) = conversation(None);
+        let out = c.on_message(&json!({ "id": 1, "result": {} }));
+        assert!(matches!(&out[2], Out::Send(v) if v["method"] == "account/rateLimits/read"));
+        // Signed in with an API key (seen live on 0.166): refused, and the turn goes on.
+        // That says there is no plan here: a reading kept from another login is cleared.
+        let refused = c.on_message(&json!({ "id": RATE_LIMITS, "error": { "code": -32600, "message": "codex account authentication required to read rate limits" } }));
+        assert!(
+            matches!(&refused[..], [Out::Step(Step::Quota(q))] if q.engine == super::super::engine::Engine::Codex && q.windows.is_empty())
+        );
+        assert!(!c.over());
+        // Any other refusal (an older Codex without the method) says nothing.
+        let older = c.on_message(&json!({ "id": RATE_LIMITS, "error": { "code": -32601, "message": "method not found" } }));
+        assert!(older.is_empty());
+        // The read's answer and the unprompted update, neither naming a thread.
+        let snap = json!({ "primary": { "usedPercent": 91, "windowDurationMins": 300, "resetsAt": 1793880000 }, "secondary": null });
+        let read = c.on_message(&json!({ "id": RATE_LIMITS, "result": { "rateLimits": snap } }));
+        assert!(
+            matches!(&read[..], [Out::Step(Step::Quota(q))] if q.windows[0].used_percent == Some(91.0))
+        );
+        let update = c.on_message(
+            &json!({ "method": "account/rateLimits/updated", "params": { "rateLimits": snap } }),
+        );
+        assert!(matches!(&update[..], [Out::Step(Step::Quota(_))]));
+        // The real all-null update from a scripted run says nothing.
+        let samples = replay(include_str!("testdata/codex-app-server.jsonl"));
+        assert!(!samples
+            .iter()
+            .any(|o| matches!(o, Out::Step(Step::Quota(_)))));
     }
 
     #[test]

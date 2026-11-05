@@ -97,6 +97,10 @@ pub struct CheckIn {
     /// A failed run waiting to be tried again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub retry: Option<runs::Retry>,
+    /// What its runs cost, as the engine reported it: only turns that ran
+    /// nothing but this routine (`runs::turn_ended`).
+    #[serde(default, skip_serializing_if = "super::usage::AgentUsage::is_empty")]
+    pub usage: super::usage::AgentUsage,
     /// Fields a newer Ship Studio wrote that this build doesn't know: kept
     /// and written back as they were, so running an older build never
     /// strips what a newer one saved.
@@ -808,6 +812,7 @@ where
         paused_on_import: false,
         runs: Vec::new(),
         retry: None,
+        usage: Default::default(),
         extra: Default::default(),
     };
     let mut refused: Option<Refused> = None;
@@ -1495,6 +1500,7 @@ mod tests {
             paused_on_import: false,
             runs: Vec::new(),
             retry: None,
+            usage: Default::default(),
             extra: Default::default(),
         }
     }

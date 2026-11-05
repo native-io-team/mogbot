@@ -25,6 +25,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { AgentRow } from '../../../components/AgentRow';
 import { Spinner } from '../../../components/agent';
 import { ChatView } from '../../../components/ChatView';
+import { QuotaLines } from '../../../components/QuotaLines';
+import { useQuotaLines } from '../../../lib/quota';
 import { AgentAccent } from '../../../lib/accent';
 import { ConnectionNotice, useLinkState, useNow } from '../../../components/ConnectionPill';
 import { Button, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
@@ -189,6 +191,7 @@ export default function Agents() {
         null)
       : null;
 
+  const quota = useQuotaLines();
   const list = (
     <Animated.FlatList
       data={rows}
@@ -212,6 +215,7 @@ export default function Agents() {
           {live && !removed && (
             <Summary onOpen={split ? (agentId) => setSelected(agentId) : undefined} />
           )}
+          {!removed && <QuotaLines lines={quota} style={styles.quota} />}
         </>
       }
       ListEmptyComponent={
@@ -531,6 +535,7 @@ const useStyles = makeStyles((colors) => ({
     letterSpacing: 0.4,
   },
   sectionNext: { paddingTop: space.xl },
+  quota: { paddingHorizontal: space.lg, paddingTop: space.md },
   headerButtons: { flexDirection: 'row', alignItems: 'center' },
   hiddenToggle: {
     flexDirection: 'row',

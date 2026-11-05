@@ -9,6 +9,11 @@
  * leaving its next time alone. Changes apply at once and the list follows
  * the agent registry.
  *
+ * A routine that ran on its own this week says what it cost, as its engine
+ * reported it: dollars "at API prices" when every run was priced and Claude
+ * reported no plan, else tokens (on a Pro or Max plan the price isn't the
+ * bill), else nothing.
+ *
  * @module components/agents/AgentSchedulePopover
  */
 
@@ -28,14 +33,18 @@ import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
 import {
   cancelCheckIn,
+  COST_BASIS_NOTE,
   createCheckIn,
   describeCheckInTime,
   describeRepeat,
   describeRun,
   describeRunDetail,
   formatWhen,
+  getAgentUsage,
+  onClaudePlan,
   pauseCheckIn,
   previewSchedule,
+  routineWeekLine,
   runCheckInNow,
   scheduleWhenPhrase,
   sortCheckIns,
@@ -45,8 +54,10 @@ import {
   type CheckIn,
   type CheckInRun,
   type SchedulePreview,
+  type UsageSummary,
 } from '../../lib/agents';
 import { KeepAwakeLink } from './AgentsStayOn';
+import { useQuotaLines } from './AgentsQuota';
 import { refreshAgents } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAsyncState } from '../../hooks/useAsyncState';
@@ -138,6 +149,10 @@ function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
     };
   }, [when]);
 
+  // Each routine's week, read once per opening (it moves only when a run ends).
+  const usage = useAsyncState<UsageSummary>(() => getAgentUsage(agent.id), { immediate: true });
+  const weekOf = (id: string) => usage.data?.routines?.find((r) => r.id === id)?.week;
+  const onPlan = onClaudePlan(useQuotaLines());
   const { execute: run, isLoading: busy } = useAsyncState(async (change: () => Promise<void>) => {
     setError(null);
     try {
@@ -200,6 +215,8 @@ function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
             <ScheduleRow
               key={c.id}
               item={c}
+              spent={routineWeekLine(weekOf(c.id), onPlan)}
+              priced={!onPlan && (weekOf(c.id)?.pricedTurns ?? 0) > 0}
               busy={busy}
               editing={editing?.id === c.id}
               onRunNow={() =>
@@ -259,6 +276,8 @@ function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
 
 function ScheduleRow({
   item,
+  spent,
+  priced,
   busy,
   editing,
   onRunNow,
@@ -267,6 +286,10 @@ function ScheduleRow({
   onCancel,
 }: {
   item: CheckIn;
+  /** "$0.84 at API prices this week" or "96k tokens this week", when it ran on its own this week. */
+  spent: string | null;
+  /** `spent` is a price (Claude Code's), not a token count. */
+  priced: boolean;
   busy: boolean;
   editing: boolean;
   onRunNow: () => void;
@@ -288,6 +311,11 @@ function ScheduleRow({
         <span className="agent-schedule__when" data-retrying={item.retry ? '' : undefined}>
           {describeCheckInTime(item)}
         </span>
+        {spent && (
+          <span className="agent-schedule__spent" title={priced ? COST_BASIS_NOTE : undefined}>
+            {spent}
+          </span>
+        )}
         {runs.length > 0 && (
           <TextButton
             tabIndex={0}

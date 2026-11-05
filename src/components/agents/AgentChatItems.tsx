@@ -63,6 +63,7 @@ import {
   errorRemedy,
   folderName,
   formatClock,
+  retryPhrase,
   formatDivider,
   formatExactTime,
   formatWhen,
@@ -550,7 +551,7 @@ export const ErrorLine = memo(function ErrorLine({
             (retryScheduled ? (
               <span className="agent-bubble__scheduled">
                 <HistoryIcon size={12} />
-                Retries at {formatClock(retryAt)}
+                Retries {retryPhrase(retryAt)}
               </span>
             ) : (
               <TextButton
@@ -560,7 +561,7 @@ export const ErrorLine = memo(function ErrorLine({
                 aria-busy={scheduling || undefined}
                 onClick={() => scheduleRetry(retryAt)}
               >
-                {scheduling ? 'Scheduling…' : `Retry at ${formatClock(retryAt)}`}
+                {scheduling ? 'Scheduling…' : `Retry ${retryPhrase(retryAt)}`}
               </TextButton>
             ))}
           {onRetry && (

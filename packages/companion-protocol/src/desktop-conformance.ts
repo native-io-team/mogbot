@@ -46,6 +46,7 @@ export type Conformance = [
   Assert<Same<Wire.UpdateAgentInput, Desktop.UpdateAgentInput>>,
   Assert<Same<Wire.SearchHit, Desktop.SearchHit>>,
   Assert<Same<Wire.UsageSummary, Desktop.UsageSummary>>,
+  Assert<Same<Wire.Quota, Desktop.Quota>>,
   Assert<Same<Wire.PasteImportPreview, Desktop.PasteImportPreview>>,
   Assert<Same<Wire.ImportSummary, Desktop.ImportSummary>>,
   Assert<Same<Wire.FileDiff, DesktopFileDiff>>,

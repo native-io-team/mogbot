@@ -32,6 +32,7 @@ import type {
   NewAgentInput,
   UpdateAgentInput,
   UsageSummary,
+  Quota,
 } from './model';
 
 /** A file uploaded with `PUT /v1/blobs`, referenced by id. Replaces a desktop path. */
@@ -167,6 +168,12 @@ export interface Methods {
   'agents.delete': { params: { agentId: string }; result: null };
   'agents.instructions': { params: { agentId: string }; result: string };
   'agents.usage': { params: { agentId: string }; result: UsageSummary };
+  /**
+   * Each engine's plan as it last reported it (Claude Code's
+   * `rate_limit_event`, Codex's `account/rateLimits`), windows already past
+   * their reset left out. Empty when no engine has said. Newer Macs only.
+   */
+  'agents.quota': { params: Record<string, never>; result: Quota[] };
   'agents.files': { params: { agentId: string }; result: SharedFile[] };
   'agents.changeDiff': {
     params: { agentId: string; messageId: string; path: string };
@@ -255,6 +262,7 @@ export const READ_ONLY_METHODS = [
   'agents.instructions',
   'agents.memory',
   'agents.usage',
+  'agents.quota',
   'agents.files',
   'agents.changeDiff',
   'agents.search',

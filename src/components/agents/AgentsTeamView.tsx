@@ -50,6 +50,7 @@ import { refreshAgents, upsertMessage, useAgentsSelector } from '../../lib/agent
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { AgentsStayOnNote } from './AgentsStayOn';
+import { AgentsQuota } from './AgentsQuota';
 import { kbd } from '../../lib/shortcuts';
 
 /** Lines read per chat: enough for its latest reply. A chat with a card open reads a page. */
@@ -486,6 +487,9 @@ export function AgentsTeamView({
 
           {/* What keeps them going, said once there is something to keep going. */}
           {(team.working.length > 0 || team.scheduled.length > 0) && <AgentsStayOnNote />}
+
+          {/* The plan's usage, when an engine reported it: before the wall, not at it. */}
+          <AgentsQuota place="team" />
         </div>
       </div>
     </section>

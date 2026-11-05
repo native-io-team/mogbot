@@ -1,0 +1,46 @@
+/* Usage before the wall: the plan's usage line (AgentsQuota) and what a
+   routine cost this week (the schedule popover). Only engine-reported figures. */
+
+/* One quiet line per engine that reported its plan. Amber from 90%, and at
+   the limit itself. */
+.agents-quota {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+}
+
+.agents-quota--sidebar {
+  /* Above the sidebar footer's fade, like the phone row beside it. */
+  position: relative;
+  z-index: var(--z-workspace-header);
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.agents-team__column > .agents-quota--team {
+  align-items: center;
+  margin-top: var(--spacing-xl);
+}
+
+.agents-quota__line {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.agents-quota__line[data-tone='warning'],
+.agents-quota__line[data-tone='limited'] {
+  color: var(--accent-warning);
+}
+
+/* What a routine cost this week, as its engine reported it: quieter than its time. */
+.agent-schedule__spent {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}

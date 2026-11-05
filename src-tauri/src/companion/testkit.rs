@@ -796,7 +796,52 @@ impl Backend for Stub {
                 "costUsd": cost, "pricedTurns": turns, "durationMs": turns * 40_000
             })
         };
-        Ok(json!({ "week": totals(3, 0.42), "allTime": totals(41, 6.18) }))
+        Ok(json!({
+            "week": totals(3, 0.42),
+            "allTime": totals(41, 6.18),
+            "routines": [{ "id": "ck1", "week": totals(2, 0.3) }]
+        }))
+    }
+
+    async fn quota(&self) -> Result<Value, CommandError> {
+        use crate::agents::engine::Engine;
+        use crate::agents::quota::{Quota, QuotaWindow};
+        let window =
+            |kind: &str, used: Option<f64>, resets: Option<i64>, minutes, limited| QuotaWindow {
+                kind: kind.into(),
+                used_percent: used,
+                resets_at: resets,
+                window_minutes: minutes,
+                limited,
+                observed_at: 1_762_290_000_000,
+            };
+        // Every field set (Codex's window length), and a used-up window with no figure.
+        let quotas = vec![
+            Quota {
+                engine: Engine::Claude,
+                windows: vec![window(
+                    "seven_day",
+                    Some(85.0),
+                    Some(1_762_400_000_000),
+                    None,
+                    false,
+                )],
+            },
+            Quota {
+                engine: Engine::Codex,
+                windows: vec![
+                    window(
+                        "primary",
+                        Some(100.0),
+                        Some(1_762_300_000_000),
+                        Some(300),
+                        true,
+                    ),
+                    window("secondary", None, None, None, false),
+                ],
+            },
+        ];
+        serde_json::to_value(quotas).map_err(|e| CommandError::expected(e.to_string()))
     }
 
     async fn revoke_permission(&self, _agent_id: &str, rule_id: &str) -> Result<(), CommandError> {
@@ -909,6 +954,7 @@ impl Backend for Stub {
                     paused_on_import: false,
                     runs: Vec::new(),
                     retry: None,
+                    usage: Default::default(),
                     extra: Default::default(),
                 })
                 .unwrap()

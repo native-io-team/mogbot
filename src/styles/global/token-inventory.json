@@ -2816,7 +2816,7 @@
       "owner": "GlobalOverlay",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 16
+      "consumerCount": 17
     },
     {
       "name": "--z-preview-fullscreen",
@@ -5183,7 +5183,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 823
+      "consumerCount": 825
     },
     {
       "name": "--text-faint",
@@ -5399,7 +5399,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 120
+      "consumerCount": 121
     },
     {
       "name": "--accent-error",
@@ -5642,7 +5642,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 413
+      "consumerCount": 415
     },
     {
       "name": "--font-size-control",
@@ -5804,7 +5804,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 85
+      "consumerCount": 86
     },
     {
       "name": "--line-height-reading",
@@ -5948,7 +5948,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 252
+      "consumerCount": 253
     },
     {
       "name": "--spacing-xs",
@@ -5957,7 +5957,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 598
+      "consumerCount": 599
     },
     {
       "name": "--spacing-sm",
@@ -5966,7 +5966,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 733
+      "consumerCount": 734
     },
     {
       "name": "--spacing-md",
@@ -5993,7 +5993,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 136
+      "consumerCount": 137
     },
     {
       "name": "--spacing-2xl",
@@ -6542,7 +6542,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 823
+      "consumerCount": 825
     },
     {
       "name": "--text-faint",
@@ -6677,7 +6677,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 120
+      "consumerCount": 121
     },
     {
       "name": "--accent-error",

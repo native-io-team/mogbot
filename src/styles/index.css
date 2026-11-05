@@ -141,6 +141,7 @@
 @import './features/agents-work.css';
 @import './features/agents-results.css';
 @import './features/agents-takeover.css';
+@import './features/agents-quota.css';
 @import './features/agents-import.css';
 @import './features/agents-surfaces.css';
 @import './features/agents-quick-entry.css';

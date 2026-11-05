@@ -239,6 +239,8 @@ export const baseCommands: CommandMap = {
       durationMs: 0,
     },
   },
+  // No engine has reported its plan: no usage line anywhere (agents::quota).
+  agents_quota: [],
   agents_focus: null,
   agents_mark_unread: null,
   // From import::import_prompt in src-tauri/src/agents/import.rs, for a Chief called Chief of Staff.

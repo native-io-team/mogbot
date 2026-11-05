@@ -552,6 +552,12 @@ pub fn phone_overview(mut overview: Value) -> Value {
         for agent in agents {
             if let Some(fields) = agent.as_object_mut() {
                 fields.remove("usage");
+                // Each routine's daily rows too: `agents.usage` has its week.
+                if let Some(check_ins) = fields.get_mut("checkIns").and_then(Value::as_array_mut) {
+                    for c in check_ins.iter_mut().filter_map(Value::as_object_mut) {
+                        c.remove("usage");
+                    }
+                }
                 if let Some(status) = fields.get_mut("status").and_then(Value::as_object_mut) {
                     status.remove("work");
                 }

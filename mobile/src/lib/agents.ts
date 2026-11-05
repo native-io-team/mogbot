@@ -15,6 +15,7 @@ import type {
   SessionMark,
   UsageTotals,
 } from '@shipstudio/companion-protocol';
+import { apiPrice, resetPhrase, tokenCount } from '@shipstudio/companion-protocol';
 import { diffLineKind } from './diff';
 
 /** Pinned first, then most recently active. */
@@ -42,7 +43,7 @@ export const needsAttention = (agent: Agent) => needsYou(agent) || failedTurn(ag
 export function failureLine(failure: Failure, preview: string | null, engine?: string): string {
   if (failure.kind === 'usage_limit') {
     return failure.resetsAt
-      ? `Usage limit · resets ${formatClock(failure.resetsAt)}`
+      ? `Usage limit · resets ${resetPhrase(failure.resetsAt)}`
       : 'Usage limit reached';
   }
   if (failure.kind === 'signed_out') return `${engine ?? 'Its engine'} is signed out`;
@@ -204,13 +205,16 @@ export function describeScope(scope: PermissionScope, agentName: string, revocab
 
 /**
  * Messages it worked on and their cost, as the Mac counts them: in a
- * person's words, not turns and tokens. Cost only for the ones it could price.
+ * person's words, not turns. Cost only for the ones it could price, said as
+ * a list price ("at API prices"); on a Claude plan (`onPlan`) that price
+ * isn't the bill, so its tokens instead.
  */
-export function usageLine(t: UsageTotals): string {
+export function usageLine(t: UsageTotals, onPlan = false): string {
   if (!t.turns) return 'Nothing yet';
-  const cost =
-    t.pricedTurns > 0
-      ? `$${t.costUsd.toFixed(2)}${t.pricedTurns < t.turns ? ` for ${t.pricedTurns} of them` : ''}`
+  const cost = onPlan
+    ? tokenCount(t)
+    : t.pricedTurns > 0
+      ? `${apiPrice(t.costUsd)}${t.pricedTurns < t.turns ? ` for ${t.pricedTurns} of them` : ''}`
       : null;
   return [`${t.turns} message${t.turns === 1 ? '' : 's'}`, cost].filter(Boolean).join(' · ');
 }

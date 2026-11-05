@@ -285,6 +285,75 @@ export const agentsOverview = {
     }
   ]
 } satisfies Result<'agents.overview'>;
+export const agentsUsage = {
+  "allTime": {
+    "cacheReadTokens": 369000,
+    "cacheWriteTokens": 32800,
+    "costUsd": 6.18,
+    "durationMs": 1640000,
+    "inputTokens": 49200,
+    "outputTokens": 12300,
+    "pricedTurns": 41,
+    "turns": 41
+  },
+  "routines": [
+    {
+      "id": "ck1",
+      "week": {
+        "cacheReadTokens": 18000,
+        "cacheWriteTokens": 1600,
+        "costUsd": 0.3,
+        "durationMs": 80000,
+        "inputTokens": 2400,
+        "outputTokens": 600,
+        "pricedTurns": 2,
+        "turns": 2
+      }
+    }
+  ],
+  "week": {
+    "cacheReadTokens": 27000,
+    "cacheWriteTokens": 2400,
+    "costUsd": 0.42,
+    "durationMs": 120000,
+    "inputTokens": 3600,
+    "outputTokens": 900,
+    "pricedTurns": 3,
+    "turns": 3
+  }
+} satisfies Result<'agents.usage'>;
+export const agentsQuota = [
+  {
+    "engine": "claude",
+    "windows": [
+      {
+        "kind": "seven_day",
+        "limited": false,
+        "observedAt": 1762290000000,
+        "resetsAt": 1762400000000,
+        "usedPercent": 85.0
+      }
+    ]
+  },
+  {
+    "engine": "codex",
+    "windows": [
+      {
+        "kind": "primary",
+        "limited": true,
+        "observedAt": 1762290000000,
+        "resetsAt": 1762300000000,
+        "usedPercent": 100.0,
+        "windowMinutes": 300
+      },
+      {
+        "kind": "secondary",
+        "limited": false,
+        "observedAt": 1762290000000
+      }
+    ]
+  }
+] satisfies Result<'agents.quota'>;
 export const agentsMessages = {
   "asOf": {
     "epoch": "epoch-test",
@@ -1720,6 +1789,7 @@ export const frames = [
       "agents.memoryChange",
       "agents.memorySuggest",
       "agents.usage",
+      "agents.quota",
       "agents.changeDiff",
       "agents.keepCopy",
       "agents.discardCopy",

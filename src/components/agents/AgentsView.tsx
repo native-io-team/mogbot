@@ -84,6 +84,7 @@ import {
   TerminalIcon,
 } from '@/components/icons';
 import { useAgentProjects } from './AgentProject';
+import { AgentsQuota } from './AgentsQuota';
 import { kbd } from '../../lib/shortcuts';
 
 const SELECTED_KEY = 'shipstudio.agents.selected';
@@ -648,6 +649,9 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
                 collapsed={sidebarProps.isSidebarHidden}
                 onOpen={focusSearch}
               />
+            }
+            footerContent={
+              sidebarProps.isSidebarHidden ? undefined : <AgentsQuota place="sidebar" />
             }
             listContent={
               <AgentsSidebar
