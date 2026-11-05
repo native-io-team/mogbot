@@ -36,7 +36,7 @@ import {
   templateColor,
 } from '../lib/newAgent';
 import { call, canCall, createAgent, describeError } from '../lib/session';
-import { useApp } from '../lib/store';
+import { useApp, useServed } from '../lib/store';
 import { avatarSize, fonts, lineHeight, radius, space, type } from '../lib/theme';
 
 export default function NewAgent() {
@@ -50,11 +50,12 @@ export default function NewAgent() {
   const connected = useApp((s) => s.link.kind === 'connected');
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const canCreate = useApp((s) => canCall('agents.create', s.welcome));
-  const servesTemplates = useApp((s) => canCall('agents.templates', s.welcome));
+  // The Mac's last answer while it's away; they're fetched once it's back.
+  const servesTemplates = useServed('agents.templates');
   const [templates, setTemplates] = useState<RoleTemplateSummary[]>([]);
   const [template, setTemplate] = useState<RoleTemplateSummary | null>(null);
   useEffect(() => {
-    if (!servesTemplates) return;
+    if (!servesTemplates || !connected) return;
     let live = true;
     call('agents.templates', {})
       .then((list) => live && setTemplates(list))
@@ -62,7 +63,7 @@ export default function NewAgent() {
     return () => {
       live = false;
     };
-  }, [servesTemplates]);
+  }, [servesTemplates, connected]);
   const chief = chiefOf(agents);
   const taken = useMemo(() => (agents ?? []).map((a) => a.name), [agents]);
   const [role, setRole] = useState('');
