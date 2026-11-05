@@ -120,6 +120,11 @@
     border-color var(--transition);
 }
 
+/* The 40% warning edge disappears into the amber banner on light. */
+:root[data-theme='light'] .main-branch-banner-checkbox input[type='checkbox'] {
+  border-color: var(--accent-warning);
+}
+
 .main-branch-banner-checkbox input[type='checkbox']:hover {
   border-color: rgba(var(--accent-warning-rgb), 0.6);
   background: rgba(var(--accent-warning-rgb), 0.1);

@@ -269,12 +269,24 @@ describe('contrast (WCAG AA) in both themes', () => {
   });
 
   it.each(themes)('keeps the neutral focus ring at ≥ 3:1 on every surface (%s)', (theme) => {
-    // --accent-focus is --text-primary at 70% over whatever it sits on.
+    // --accent-focus is --text-primary at --focus-ring-strength over whatever it sits on.
+    const strength =
+      parseFloat(
+        (theme === 'light' && semanticLight.get('--focus-ring-strength')) ||
+          semanticDark.get('--focus-ring-strength')!
+      ) / 100;
+    expect(strength).toBeLessThanOrEqual(0.6);
     const ring = resolveHex('--text-primary', theme);
     for (const bg of [...surfaces, '--surface-control-hover', '--surface-selected']) {
       const surface = resolveHex(bg, theme);
-      const blended = mixHex(surface, ring, 0.7);
+      const blended = mixHex(surface, ring, strength);
       expect(contrastRatio(parseHex(blended)!, parseHex(surface)!), bg).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('keeps checkbox edges at ≥ 3:1 on every light surface', () => {
+    for (const bg of [...surfaces, '--surface-control-hover', '--surface-selected']) {
+      expect(ratio('--border-control', bg, 'light'), bg).toBeGreaterThanOrEqual(3);
     }
   });
 
@@ -282,9 +294,10 @@ describe('contrast (WCAG AA) in both themes', () => {
     expect(semanticDark.get('--accent-focus')).toBe('var(--text-primary)');
     expect(semanticLight.has('--accent-focus')).toBe(false);
     expect(semanticSource).toMatch(
-      /--accent-focus:\s*color-mix\(in srgb, var\(--text-primary\) 70%, transparent\)/
+      /--accent-focus:\s*color-mix\(in srgb, var\(--text-primary\) var\(--focus-ring-strength\), transparent\)/
     );
     expect(semanticDark.get('--focus-ring-offset')).toBe('var(--stroke-2)');
+    expect(semanticDark.get('--focus-ring-width')).toBe('var(--stroke-1-5)');
   });
 
   it('makes the strong (Allow) fill near-black with white ink on light', () => {

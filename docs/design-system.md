@@ -161,7 +161,7 @@ value, consume a semantic role or an owner-appropriate component token.
 | Surfaces | `--surface-app` / `--surface-panel` / `--surface-control` / `--surface-selected` / `--surface-recessed` | App background → panels → controls → selected rows; recessed wells are used for terminals, log output, and code editors. |
 | Text | `--text-primary` / `--text-secondary` / `--text-muted` / `--text-faint` / `--text-terminal-strong` | Default → supporting labels → muted hints → faint chrome; terminal output has its own readable roles. |
 | Accent | `--accent-active` / `--accent-active-hover` / `--accent-active-strong` / `--accent-active-soft` / `--accent-text` / `--text-on-accent` | The app is monochrome plus ONE accent: the Chief of Staff's colour, set at runtime. Use it for primary actions, selection and "this is on" — never for status. See "The accent" below. |
-| Focus | `--focus-ring` (= `--accent-focus`), `--focus-ring-width`, `--focus-ring-offset` | Every focus indication: a neutral 2px ring of `--text-primary` at 70% with a 2px offset (white-ish on dark, near-black on light), shown only on `:focus-visible`. Never a hue, never the accent. |
+| Focus | `--focus-ring` (= `--accent-focus`), `--focus-ring-width`, `--focus-ring-offset` | Every focus indication: a neutral 1.5px ring of `--text-primary` at `--focus-ring-strength` (58% dark, 50% light) with a 2px offset (white-ish on dark, near-black on light), shown only on `:focus-visible`. Never a hue, never the accent. |
 | Fixed status | `--status-info`, `--status-running` | Info severity and in-progress dots. Fixed hues so a red/orange accent never reads as an error. |
 | Overlay | `--accent-overlay` / `--accent-overlay-ink` | Anything drawn on the user's own page (preview overlays, comment pins). Fixed, never the accent. |
 | Status | `--accent-success`, `--accent-warning`, `--accent-error`, `--accent-error-light`, `--accent-error-deep`, `--modified-yellow` | Semantic states. `--accent-success` means healthy/done/connected only — it is not the brand colour, and never stands in for the accent. Error values are retained as reviewed legacy inputs until their Figma mapping is confirmed. |
@@ -223,15 +223,19 @@ agent's colour instead.
   `<AccentScope color>`, from `src/contexts/AccentScopeContext.tsx`):
   `ModalFrame`, `Dropdown` (portalled) and `ContextMenu` put the scope on
   their own root. Tooltips do not carry it — they have no accent surface.
-- **Focus is neutral.** `--focus-ring` is `--text-primary` at 70% (plain
-  `--text-primary` without `color-mix()`), 2px wide with a 2px offset, so it
-  is visible on every surface in both themes whatever accent the user picked
-  and keeps the app monochrome. Rings draw only on `:focus-visible` (text
-  inputs show a focus border while typing). `ModalFrame` focuses the first
-  control in its body, or the dialog itself — never the header's close
-  button — so opening a dialog paints no ring. `theme.test.ts` holds the
-  ring at ≥ 3:1 against app, panel and control surfaces in both themes.
-  Things drawn on the user's own page keep the fixed overlay blue
+- **Focus is neutral.** `--focus-ring` is `--text-primary` at
+  `--focus-ring-strength` (plain `--text-primary` without `color-mix()`),
+  1.5px wide with a 2px offset. The strength is the lightest that still
+  clears 3:1 on each theme's hardest surface — 58% on dark (selected rows),
+  50% on light (the app background) — so the ring reads as focus rather than
+  a border or a selection box, and keeps the app monochrome whatever accent
+  the user picked. Rings draw only on `:focus-visible` (text inputs show a
+  focus border while typing). `ModalFrame` focuses the first control in its
+  body — never the header's close button — or the dialog itself; a dialog
+  whose body opens on tabs (Settings) focuses itself, so a ⌘K open paints no
+  ring on the selected tab. `theme.test.ts` holds the ring at
+  ≥ 3:1 against app, panel, control, hover and selected surfaces in both
+  themes. Things drawn on the user's own page keep the fixed overlay blue
   (`--accent-overlay`).
 - **No flash.** The last app accent is cached in `localStorage` and applied by
   an inline script in `index.html` before the bundle runs; both the script and
@@ -281,8 +285,8 @@ follows a change through the cache's `storage` event.
   ring follows the theme because it is a neutral, not a hue.
   The live preview iframe is the user's site and is never themed.
 - **Outside CSS:** the xterm palettes (`terminalTheme.ts`, `followAppTheme`
-  re-themes live terminals), the contribution calendar's ramp, and the
-  wordmark (`ship_studio_full_light.svg`) follow the theme explicitly.
+  re-themes live terminals) and the contribution calendar's ramp follow the
+  theme explicitly.
 - **Tests.** `theme.test.ts` holds the light block complete (every
   colour-bearing role has a light value), checks text/surface, status, syntax
   and accent-text contrast against WCAG AA in both themes, the light accent

@@ -1934,7 +1934,7 @@
       "owner": "Button",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 7
+      "consumerCount": 6
     },
     {
       "name": "--button-height",
@@ -1997,7 +1997,7 @@
       "owner": "Button",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 11
+      "consumerCount": 10
     },
     {
       "name": "--button-active-scale",
@@ -2006,7 +2006,7 @@
       "owner": "Button",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 10
+      "consumerCount": 9
     },
     {
       "name": "--button-success-border",
@@ -4619,6 +4619,15 @@
       "consumerCount": 84
     },
     {
+      "name": "--stroke-1-5",
+      "definitionFile": "src/styles/global/tokens-core.css",
+      "layer": "core",
+      "owner": "global/core",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
       "name": "--stroke-2",
       "definitionFile": "src/styles/global/tokens-core.css",
       "layer": "core",
@@ -5147,7 +5156,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 23
+      "consumerCount": 22
     },
     {
       "name": "--text-primary",
@@ -5156,7 +5165,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 529
+      "consumerCount": 528
     },
     {
       "name": "--text-secondary",
@@ -5165,7 +5174,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 480
+      "consumerCount": 479
     },
     {
       "name": "--text-muted",
@@ -5264,7 +5273,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 453
+      "consumerCount": 452
     },
     {
       "name": "--border-subtle",
@@ -5282,7 +5291,16 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 43
+      "consumerCount": 42
+    },
+    {
+      "name": "--border-control",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 2
     },
     {
       "name": "--border-accent",
@@ -5300,7 +5318,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 228
+      "consumerCount": 227
     },
     {
       "name": "--border-width-emphasis",
@@ -5327,7 +5345,16 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 48
+      "consumerCount": 47
+    },
+    {
+      "name": "--focus-ring-strength",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
     },
     {
       "name": "--focus-ring",
@@ -5345,7 +5372,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 26
+      "consumerCount": 25
     },
     {
       "name": "--focus-ring-offset",
@@ -5372,7 +5399,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 110
+      "consumerCount": 111
     },
     {
       "name": "--accent-error",
@@ -5615,7 +5642,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 386
+      "consumerCount": 385
     },
     {
       "name": "--font-size-control",
@@ -5768,7 +5795,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 71
+      "consumerCount": 70
     },
     {
       "name": "--line-height-help",
@@ -5804,7 +5831,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 81
+      "consumerCount": 79
     },
     {
       "name": "--transition-interaction-slow",
@@ -5921,7 +5948,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 233
+      "consumerCount": 232
     },
     {
       "name": "--spacing-xs",
@@ -5930,7 +5957,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 563
+      "consumerCount": 561
     },
     {
       "name": "--spacing-sm",
@@ -5939,7 +5966,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 678
+      "consumerCount": 677
     },
     {
       "name": "--spacing-md",
@@ -5957,7 +5984,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 201
+      "consumerCount": 197
     },
     {
       "name": "--spacing-xl",
@@ -5975,7 +6002,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 54
+      "consumerCount": 51
     },
     {
       "name": "--spacing-tight",
@@ -6002,7 +6029,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 191
+      "consumerCount": 189
     },
     {
       "name": "--radius-sm",
@@ -6029,7 +6056,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 56
+      "consumerCount": 55
     },
     {
       "name": "--mask-opaque",
@@ -6365,6 +6392,15 @@
       "consumerCount": 19
     },
     {
+      "name": "--focus-ring-strength",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
       "name": "--surface-app",
       "definitionFile": "src/styles/global/tokens-semantic.css",
       "layer": "semantic",
@@ -6470,7 +6506,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 23
+      "consumerCount": 22
     },
     {
       "name": "--text-primary",
@@ -6479,7 +6515,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 529
+      "consumerCount": 528
     },
     {
       "name": "--text-secondary",
@@ -6488,7 +6524,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 480
+      "consumerCount": 479
     },
     {
       "name": "--text-quiet",
@@ -6587,7 +6623,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 453
+      "consumerCount": 452
     },
     {
       "name": "--border-subtle",
@@ -6605,7 +6641,16 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 43
+      "consumerCount": 42
+    },
+    {
+      "name": "--border-control",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 2
     },
     {
       "name": "--border-accent",
@@ -6632,7 +6677,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 110
+      "consumerCount": 111
     },
     {
       "name": "--accent-error",
@@ -7244,7 +7289,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 165
+      "consumerCount": 164
     },
     {
       "name": "--accent-active-hover",
@@ -7298,7 +7343,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 48
+      "consumerCount": 47
     },
     {
       "name": "--accent-active-soft",

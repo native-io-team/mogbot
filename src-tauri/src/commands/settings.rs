@@ -147,14 +147,71 @@ pub fn saved_native_theme() -> Option<tauri::Theme> {
     native_theme_for(normalized_app_theme(read_app_state().app_theme.as_deref()))
 }
 
-/// The window background painted before the webview's first frame, matched to
-/// the saved theme so a light window doesn't open on a dark flash. `system`
-/// keeps the dark default: which appearance the OS will pick isn't known here.
-pub fn saved_window_background() -> tauri::utils::config::Color {
-    match saved_native_theme() {
-        Some(tauri::Theme::Light) => tauri::utils::config::Color(245, 245, 245, 255),
-        _ => tauri::utils::config::Color(45, 45, 45, 255),
+const LIGHT_WINDOW_BACKGROUND: tauri::utils::config::Color =
+    tauri::utils::config::Color(245, 245, 245, 255);
+const DARK_WINDOW_BACKGROUND: tauri::utils::config::Color =
+    tauri::utils::config::Color(45, 45, 45, 255);
+
+/// Whether macOS's global `AppleInterfaceStyle` value means dark. The key is
+/// absent in light mode and `"Dark"` in dark mode (Auto updates it as it flips).
+fn interface_style_is_dark(style: Option<&str>) -> bool {
+    style.is_some_and(|value| value.eq_ignore_ascii_case("dark"))
+}
+
+/// Which theme a window will actually be drawn in: the explicit preference, or
+/// for `system` (`None`) whatever the OS reports. `None` from the OS means it
+/// couldn't say, which keeps the historical dark default.
+fn effective_theme(
+    preference: Option<tauri::Theme>,
+    system: Option<tauri::Theme>,
+) -> tauri::Theme {
+    preference.or(system).unwrap_or(tauri::Theme::Dark)
+}
+
+fn window_background_for(theme: tauri::Theme) -> tauri::utils::config::Color {
+    match theme {
+        tauri::Theme::Light => LIGHT_WINDOW_BACKGROUND,
+        _ => DARK_WINDOW_BACKGROUND,
     }
+}
+
+/// The OS appearance right now. On macOS this reads the global
+/// `AppleInterfaceStyle` default (what `defaults read -g AppleInterfaceStyle`
+/// prints) through `NSUserDefaults`: in-process, thread-safe, no subprocess.
+#[cfg(target_os = "macos")]
+fn system_theme() -> Option<tauri::Theme> {
+    use objc2::rc::Id;
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send, msg_send_id};
+    use objc2_foundation::NSString;
+
+    let key = NSString::from_str("AppleInterfaceStyle");
+    let defaults: *mut AnyObject = unsafe { msg_send![class!(NSUserDefaults), standardUserDefaults] };
+    if defaults.is_null() {
+        return None;
+    }
+    let style: Option<Id<NSString>> =
+        unsafe { msg_send_id![&*defaults, stringForKey: &*key] };
+    let style = style.map(|value| value.to_string());
+    Some(if interface_style_is_dark(style.as_deref()) {
+        tauri::Theme::Dark
+    } else {
+        tauri::Theme::Light
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn system_theme() -> Option<tauri::Theme> {
+    None
+}
+
+/// The window background painted before the webview's first frame, matched to
+/// the theme the window will actually use, so a light window doesn't open on
+/// a dark flash. For `system` the OS appearance is resolved here.
+pub fn saved_window_background() -> tauri::utils::config::Color {
+    let preference = saved_native_theme();
+    let system = if preference.is_none() { system_theme() } else { None };
+    window_background_for(effective_theme(preference, system))
 }
 
 /// Apply a theme preference to every open window's native appearance.
@@ -183,9 +240,8 @@ pub fn set_app_theme(app: AppHandle, theme: String) -> Result<(), CommandError> 
     validate_app_theme(&theme)?;
     apply_app_theme(&app, &theme);
     let mut state = read_app_state();
-    state.app_theme = Some(theme.clone());
+    state.app_theme = Some(theme);
     write_app_state(&state).map_err(CommandError::from)?;
-    let _ = app.emit("app-theme-changed", theme);
     Ok(())
 }
 
@@ -527,7 +583,40 @@ pub async fn pick_projects_root(app: AppHandle) -> Result<Option<String>, Comman
 
 #[cfg(test)]
 mod tests {
-    use super::{normalized_app_icon, normalized_app_theme, validate_app_icon, validate_app_theme};
+    use super::{
+        effective_theme, interface_style_is_dark, normalized_app_icon, normalized_app_theme,
+        validate_app_icon, validate_app_theme, window_background_for, DARK_WINDOW_BACKGROUND,
+        LIGHT_WINDOW_BACKGROUND,
+    };
+    use tauri::Theme;
+
+    #[test]
+    fn reads_the_macos_interface_style() {
+        assert!(interface_style_is_dark(Some("Dark")));
+        assert!(interface_style_is_dark(Some("dark")));
+        assert!(!interface_style_is_dark(None));
+        assert!(!interface_style_is_dark(Some("Light")));
+        assert!(!interface_style_is_dark(Some("")));
+    }
+
+    #[test]
+    fn an_explicit_preference_beats_the_system() {
+        assert_eq!(effective_theme(Some(Theme::Light), Some(Theme::Dark)), Theme::Light);
+        assert_eq!(effective_theme(Some(Theme::Dark), Some(Theme::Light)), Theme::Dark);
+    }
+
+    #[test]
+    fn system_follows_the_os_and_falls_back_to_dark() {
+        assert_eq!(effective_theme(None, Some(Theme::Light)), Theme::Light);
+        assert_eq!(effective_theme(None, Some(Theme::Dark)), Theme::Dark);
+        assert_eq!(effective_theme(None, None), Theme::Dark);
+    }
+
+    #[test]
+    fn window_background_matches_the_theme() {
+        assert_eq!(window_background_for(Theme::Light), LIGHT_WINDOW_BACKGROUND);
+        assert_eq!(window_background_for(Theme::Dark), DARK_WINDOW_BACKGROUND);
+    }
 
     #[test]
     fn accepts_the_three_theme_preferences() {

@@ -25,10 +25,6 @@ import {
   type DashboardVisibilityChangedDetail,
   getSlackCtaHidden,
   setSlackCtaHidden,
-  APP_ICON_OPTIONS,
-  type AppIcon,
-  getAppIcon,
-  setAppIcon,
   getTerminalGpuEnabled,
   setTerminalGpuEnabled,
   getCompactWorkspaceToolbarEnabled,
@@ -98,7 +94,6 @@ export function SettingsModal({
 
   const [analyticsEnabled, setLocalAnalyticsEnabled] = useState(true);
   const [slackCtaVisible, setLocalSlackCtaVisible] = useState(true);
-  const [appIcon, setLocalAppIcon] = useState<AppIcon>('brand');
   const [terminalGpuEnabled, setLocalTerminalGpuEnabled] = useState(true);
   const [compactWorkspaceToolbarEnabled, setLocalCompactWorkspaceToolbarEnabled] = useState(false);
   const [elementBreadcrumbEnabled, setLocalElementBreadcrumbEnabled] = useState(true);
@@ -108,7 +103,6 @@ export function SettingsModal({
   const [spotifyWidgetEnabled, setLocalSpotifyWidgetEnabled] = useState(false);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('general');
   const [loading, setLoading] = useState(true);
-  const [savingAppIcon, setSavingAppIcon] = useState(false);
 
   const [projectsRoot, setLocalProjectsRoot] = useState('');
   const [customRoot, setCustomRoot] = useState(false);
@@ -123,7 +117,6 @@ export function SettingsModal({
       const [
         enabled,
         slackHidden,
-        selectedAppIcon,
         gpuEnabled,
         compactToolbarEnabled,
         breadcrumbEnabled,
@@ -136,7 +129,6 @@ export function SettingsModal({
       ] = await Promise.all([
         getAnalyticsEnabled(),
         getSlackCtaHidden(),
-        getAppIcon(),
         getTerminalGpuEnabled(),
         getCompactWorkspaceToolbarEnabled(),
         getElementBreadcrumbEnabled(),
@@ -150,7 +142,6 @@ export function SettingsModal({
       if (!cancelled) {
         setLocalAnalyticsEnabled(enabled);
         setLocalSlackCtaVisible(!slackHidden);
-        setLocalAppIcon(selectedAppIcon);
         setLocalTerminalGpuEnabled(gpuEnabled);
         setLocalCompactWorkspaceToolbarEnabled(compactToolbarEnabled);
         setLocalElementBreadcrumbEnabled(breadcrumbEnabled);
@@ -250,24 +241,6 @@ export function SettingsModal({
     void setSlackCtaHidden(!newVisible);
     onSlackCtaHiddenChange?.(!newVisible);
   }, [slackCtaVisible, onSlackCtaHiddenChange]);
-
-  const handleAppIconChange = useCallback(
-    async (nextIcon: AppIcon) => {
-      if (nextIcon === appIcon || savingAppIcon) return;
-      const previousIcon = appIcon;
-      setLocalAppIcon(nextIcon);
-      setSavingAppIcon(true);
-      try {
-        await setAppIcon(nextIcon);
-      } catch (err) {
-        setLocalAppIcon(previousIcon);
-        showToast(errMsg(err), 'error');
-      } finally {
-        setSavingAppIcon(false);
-      }
-    },
-    [appIcon, savingAppIcon, showToast]
-  );
 
   const handleTerminalGpuToggle = useCallback(() => {
     const newEnabled = !terminalGpuEnabled;
@@ -745,36 +718,6 @@ export function SettingsModal({
                       <span className="settings-toggle-thumb" />
                     </span>
                   </button>
-                </div>
-                <div className="settings-row settings-row--stacked">
-                  <div className="settings-row-info">
-                    <span className="settings-row-label">Dock icon</span>
-                    <span className="settings-row-description">
-                      Choose the Ship Studio icon shown in your macOS Dock. Changes apply
-                      immediately.
-                    </span>
-                  </div>
-                  <div className="settings-icon-options" role="group" aria-label="Dock icon">
-                    {APP_ICON_OPTIONS.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        className={`settings-icon-option${appIcon === option.id ? ' is-selected' : ''}`}
-                        onClick={() => void handleAppIconChange(option.id)}
-                        disabled={loading || savingAppIcon}
-                        aria-label={`${option.label} Dock icon`}
-                        aria-pressed={appIcon === option.id}
-                      >
-                        <img
-                          src={option.src}
-                          alt=""
-                          aria-hidden="true"
-                          className="settings-icon-option-image"
-                        />
-                        <span className="settings-icon-option-label">{option.label}</span>
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
             </div>

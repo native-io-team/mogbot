@@ -41,6 +41,9 @@
   --border-default: var(--color-gray-850);
   --border-subtle: var(--color-gray-800);
   --border-strong: var(--color-gray-750);
+  /* The edge of an unchecked checkbox or similar control: its only visible
+     boundary, so on light it must clear 3:1 (WCAG 1.4.11), unlike a divider. */
+  --border-control: var(--border-strong);
   --border-accent: var(--color-gray-200);
 
   --border-width-default: var(--stroke-1);
@@ -49,15 +52,19 @@
   --accent-selected: var(--text-primary);
   /* Focus is neutral, never a hue: the app is monochrome plus the user's
      accent, and the accent can't be the ring (a white accent on white, a red
-     one reading as an error). The primary text colour at 70% — white-ish on
-     dark, near-black on light — clears 3:1 against every surface in both
-     themes (theme.test.ts). Shown only on :focus-visible; dialogs focus
-     themselves rather than their close button, so opening one paints no
-     ring. Plain fallback here; the 70% mix is in the @supports block below. */
+     one reading as an error). The primary text colour at
+     --focus-ring-strength — white-ish on dark, near-black on light — 1.5px
+     with a 2px offset: the lightest strength that still clears 3:1 on the
+     hardest surface of each theme (selected rows on dark, the app background
+     on light; theme.test.ts), so it reads as focus, not a border or a
+     selection. Shown only on :focus-visible; dialogs focus their first body
+     control, or themselves when they open on tabs, never the close button.
+     Plain fallback here; the mix is in the @supports block below. */
   --accent-focus: var(--text-primary);
+  --focus-ring-strength: 58%;
   --focus-ring: var(--accent-focus);
 
-  --focus-ring-width: var(--stroke-2);
+  --focus-ring-width: var(--stroke-1-5);
   --focus-ring-offset: var(--stroke-2);
 
   --accent-success: var(--color-green-600);
@@ -236,6 +243,7 @@
  * ============================================================================
  */
 :root[data-theme='light'] {
+  --focus-ring-strength: 50%;
   --surface-app: var(--color-paper-100);
   --surface-panel: var(--color-paper-0);
   --surface-control: var(--color-paper-150);
@@ -269,6 +277,7 @@
   --border-default: var(--color-paper-250);
   --border-subtle: var(--color-paper-200);
   --border-strong: var(--color-paper-300);
+  --border-control: var(--color-ink-500);
   --border-accent: var(--color-ink-500);
 
   --accent-success: var(--color-green-900);
@@ -418,7 +427,7 @@
 
 @supports (color: color-mix(in oklch, red, blue)) {
   :root {
-    --accent-focus: color-mix(in srgb, var(--text-primary) 70%, transparent);
+    --accent-focus: color-mix(in srgb, var(--text-primary) var(--focus-ring-strength), transparent);
   }
 
   :root,
