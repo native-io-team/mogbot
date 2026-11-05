@@ -33,12 +33,43 @@
 }
 
 /* Rings: the supplied rings loader's centre-out pulse. Unlike the other
- * variants, unlit pixels disappear completely between pulses. */
+ * variants, unlit pixels disappear completely between pulses.
+ *
+ * Every pixel of a ring pulses in step, so the pulse runs once per ring, on a
+ * layer holding that ring's pixels (`.ss-pixel-loader__ring`, the same grid
+ * laid over the loader). Rings is on every working agent's row; animated per
+ * pixel, six of them were 150 running animations, and each was restyled
+ * whenever anything else on the page changed. */
+.ss-pixel-loader--rings {
+  position: relative;
+}
+
+.ss-pixel-loader__ring {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--pixel-loader-grid-size, 5), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--pixel-loader-grid-size, 5), minmax(0, 1fr));
+  gap: var(--pixel-loader-gap);
+}
+
 .ss-pixel-loader--rings .ss-pixel-loader__pixel {
-  animation: ss-pixel-loader-rings-pulse var(--pixel-loader-duration-ripple)
-    var(--pixel-loader-easing) infinite;
-  animation-delay: calc(var(--pixel-loader-ring) * var(--pixel-loader-delay-step));
+  animation: none;
   opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ss-pixel-loader--rings .ss-pixel-loader__ring {
+    animation: ss-pixel-loader-rings-pulse var(--pixel-loader-duration-ripple)
+      var(--pixel-loader-easing) infinite;
+    animation-delay: calc(var(--pixel-loader-ring) * var(--pixel-loader-delay-step));
+    animation-direction: var(--pixel-loader-direction);
+    opacity: 0;
+  }
+
+  .ss-pixel-loader--rings .ss-pixel-loader__pixel {
+    opacity: 1;
+  }
 }
 
 /* Ripple: the centre, inner ring, then outer ring brighten in sequence. */

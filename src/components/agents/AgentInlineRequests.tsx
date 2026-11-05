@@ -32,7 +32,6 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 interface AgentInlineRequestsProps {
   /** The chat this sits in. */
   agent: Agent;
-  agentsById: Map<string, Agent>;
   /** Agents this chat has messaged or heard from. */
   peerIds: Set<string>;
   /** Agents whose requests reached this chat (a session's question): offered here too. */
@@ -41,9 +40,11 @@ interface AgentInlineRequestsProps {
   shownRequestIds: Set<string>;
 }
 
+const sameAgents = (a: Agent[], b: Agent[]) =>
+  a.length === b.length && a.every((agent, i) => agent === b[i]);
+
 export function AgentInlineRequests({
   agent,
-  agentsById,
   peerIds,
   askers,
   shownRequestIds,
@@ -51,16 +52,18 @@ export function AgentInlineRequests({
   // Opened here: kept on screen after its last card is answered, so you see
   // what you did rather than have it vanish under the pointer.
   const [opened, setOpened] = useState<Set<string>>(() => new Set());
-  const asking = useMemo(
-    () =>
-      [...agentsById.values()].filter(
+  // Read from the store here, so the chat around it doesn't re-render for
+  // every other agent's status; this re-renders only when who's asking changes.
+  const asking = useAgentsSelector(
+    (s) =>
+      s.agents.filter(
         (a) =>
           a.id !== agent.id &&
           !a.hidden &&
           (agent.isMain || peerIds.has(a.id) || askers?.has(a.id)) &&
           (needsYou(a) || opened.has(a.id))
       ),
-    [agentsById, agent.id, agent.isMain, peerIds, askers, opened]
+    sameAgents
   );
   if (asking.length === 0) return null;
   return (

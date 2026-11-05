@@ -40,7 +40,7 @@
 }
 
 .assets-search:focus-within {
-  border-color: var(--info);
+  border-color: var(--focus-ring);
 }
 
 .assets-search svg {
@@ -222,7 +222,7 @@
 
 .assets-new-folder input:focus {
   outline: none;
-  border-color: var(--info);
+  border-color: var(--focus-ring);
 }
 
 .assets-new-folder input::placeholder {
@@ -444,7 +444,7 @@
 
 .assets-rename-input:focus {
   outline: none;
-  border-color: var(--info);
+  border-color: var(--focus-ring);
 }
 
 /* Item actions */

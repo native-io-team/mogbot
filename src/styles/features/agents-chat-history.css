@@ -1,0 +1,21 @@
+/*
+ * A long conversation's history costs only what's on screen.
+ *
+ * A line once mounted stays in the DOM (search jumps, ⌘F and the scroll
+ * position all depend on it), but a line out of view is skipped: no style, layout or
+ * paint until it's near the viewport. Without this, a 2,000-line chat restyled
+ * and re-laid-out every line whenever anything in it changed.
+ *
+ * `auto` in the intrinsic size is the line's last real height, once it has
+ * been drawn; until then it is estimated, and the estimate only moves the
+ * scrollbar. The newest lines, where the chat opens, are drawn at once.
+ */
+:root {
+  /* A line's height before it has ever been drawn: about a reply's. */
+  --agents-chat-row-estimate: 120px;
+}
+
+.agent-chat__messages > :is(.agent-chat__row, .agent-peer, .agent-chat__divider) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--agents-chat-row-estimate);
+}

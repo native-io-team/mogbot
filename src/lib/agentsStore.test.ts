@@ -6,6 +6,7 @@ import {
   loadMessages,
   loadOlderMessages,
   MESSAGE_PAGE,
+  sameJson,
   updateDraft,
   upsertMessage,
 } from './agentsStore';
@@ -89,5 +90,33 @@ describe('paged history', () => {
     await Promise.all([loadOlderMessages('a', 'm5'), loadOlderMessages('a', 'm5')]);
     expect(ids()[0]).toBe('m5');
     expect(calls).toHaveLength(2);
+  });
+});
+
+describe('sameJson', () => {
+  it('agrees with comparing JSON.stringify', () => {
+    const cases: [unknown, unknown][] = [
+      [
+        { a: 1, b: [1, { c: 'x' }] },
+        { a: 1, b: [1, { c: 'x' }] },
+      ],
+      [
+        { a: 1, b: 2 },
+        { b: 2, a: 1 },
+      ],
+      [{ a: 1, b: undefined }, { a: 1 }],
+      [
+        [1, undefined],
+        [1, null],
+      ],
+      [{ a: NaN }, { a: null }],
+      [{ a: [1, 2] }, { a: [1, 2, 3] }],
+      [{ a: { b: 1 } }, { a: { b: '1' } }],
+      [null, {}],
+      [[], {}],
+    ];
+    for (const [a, b] of cases) {
+      expect(sameJson(a, b)).toBe(JSON.stringify(a) === JSON.stringify(b));
+    }
   });
 });

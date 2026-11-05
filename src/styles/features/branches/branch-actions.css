@@ -159,7 +159,7 @@
 }
 
 .branch-create-input:focus {
-  border-color: var(--info);
+  border-color: var(--focus-ring);
 }
 
 .branch-create-input::placeholder {
@@ -198,7 +198,7 @@
 .publish-branch-modal {
   position: fixed;
   inset: 0;
-  background: var(--overlay-60);
+  background: var(--scrim-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -321,7 +321,7 @@
 .post-merge-modal {
   position: fixed;
   inset: 0;
-  background: var(--overlay-60);
+  background: var(--scrim-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -574,7 +574,7 @@
 .submit-review-modal {
   position: fixed;
   inset: 0;
-  background: var(--overlay-60);
+  background: var(--scrim-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -734,7 +734,7 @@ select.submit-review-input {
 }
 
 .submit-review-input:focus {
-  border-color: var(--info);
+  border-color: var(--focus-ring);
 }
 
 .submit-review-textarea {
@@ -753,7 +753,7 @@ select.submit-review-input {
 }
 
 .submit-review-textarea:focus {
-  border-color: var(--info);
+  border-color: var(--focus-ring);
 }
 
 /* Plain-language "here's what happens" line above the submit button. */

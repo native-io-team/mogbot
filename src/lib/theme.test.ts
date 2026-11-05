@@ -19,6 +19,7 @@ import {
   mixHex,
   mixOklchWithNeutral,
   parseHex,
+  relativeLuminance,
 } from './accent';
 import { AGENT_COLORS } from './agents';
 
@@ -236,6 +237,28 @@ describe('contrast (WCAG AA) in both themes', () => {
     }
   });
 
+  it('muted and quiet text clear AA on every light surface they sit on', () => {
+    const lightSurfaces = [
+      '--surface-app',
+      '--surface-panel',
+      '--surface-control',
+      '--surface-control-hover',
+      '--surface-selected',
+      '--surface-selected-strong',
+    ];
+    for (const fg of ['--text-muted', '--text-quiet']) {
+      for (const bg of lightSurfaces) {
+        expect(ratio(fg, bg, 'light'), `${fg} on ${bg}`).toBeGreaterThanOrEqual(AA_TEXT);
+      }
+    }
+  });
+
+  it('keeps secondary, quiet and muted distinct steps in light', () => {
+    const lum = (name: string) => relativeLuminance(parseHex(resolveHex(name, 'light'))!);
+    expect(lum('--text-secondary')).toBeLessThan(lum('--text-quiet'));
+    expect(lum('--text-quiet')).toBeLessThan(lum('--text-muted'));
+  });
+
   it.each(themes)('muted text stays readable (≥ 3:1) on app and panel (%s)', (theme) => {
     for (const bg of ['--surface-app', '--surface-panel']) {
       expect(ratio('--text-muted', bg, theme), bg).toBeGreaterThanOrEqual(3);
@@ -369,5 +392,70 @@ describe('terminal palette', () => {
     ] as const) {
       expect(contrastRatio(parseHex(t[key]!)!, bg), key).toBeGreaterThanOrEqual(AA_TEXT);
     }
+  });
+});
+
+describe('component roles on fixed hues and light surfaces', () => {
+  const componentSource = css('tokens-components.css');
+  const componentDark = declarations(componentSource, isRoot);
+  const componentLight = declarations(componentSource, isLight);
+  const resolveComponent = (name: string, theme: 'dark' | 'light') => {
+    const value = (theme === 'light' && componentLight.get(name)) || componentDark.get(name) || '';
+    const ref = /^var\((--[\w-]+)\)$/.exec(value);
+    if (!ref) throw new Error(`${name} (${theme}) is not a plain var(): ${value}`);
+    return resolveHex(ref[1], theme);
+  };
+  const contrast = (a: string, b: string) => contrastRatio(parseHex(a)!, parseHex(b)!);
+
+  it.each(['dark', 'light'] as const)(
+    'ink on the property and variable fills clears AA (%s)',
+    (theme) => {
+      // Hover fills are a step lighter and only under the pointer: blue-600
+      // carries white at 4.4:1 (as the cascade chips always have), so they get
+      // a floor just under AA rather than none.
+      for (const [fg, bg, floor] of [
+        ['--property-surface-text', '--property-surface', AA_TEXT],
+        ['--property-surface-text', '--property-surface-hover', 4.3],
+        ['--button-variable-text', '--button-variable-surface', AA_TEXT],
+        ['--button-variable-text', '--button-variable-hover', 4.3],
+      ] as const) {
+        expect(
+          contrast(resolveComponent(fg, theme), resolveComponent(bg, theme)),
+          `${fg} on ${bg}`
+        ).toBeGreaterThanOrEqual(floor);
+      }
+    }
+  );
+
+  it('media text and the warning hover read on light surfaces', () => {
+    for (const fg of ['--media-text', '--button-warning-text-hover']) {
+      for (const bg of ['--surface-app', '--surface-panel', '--surface-control']) {
+        expect(
+          contrast(resolveComponent(fg, 'light'), resolveHex(bg, 'light')),
+          `${fg} on ${bg}`
+        ).toBeGreaterThanOrEqual(AA_TEXT);
+      }
+    }
+  });
+});
+
+describe('scrims', () => {
+  const alphaOf = (value: string | undefined) =>
+    Number(/rgba\(0, 0, 0, ([\d.]+)\)/.exec(value ?? '')?.[1]);
+  const steps = ['30', '40', '50', '60', '70', '80'].map((n) => `--overlay-${n}`);
+
+  it.each(['dark', 'light'] as const)('the overlay ramp only ever gets darker (%s)', (theme) => {
+    const decls = theme === 'light' ? semanticLight : semanticDark;
+    const alphas = steps.map((name) => alphaOf(decls.get(name)));
+    alphas.forEach((a, i) => {
+      expect(a, steps[i]).not.toBeNaN();
+      if (i > 0) expect(a, steps[i]).toBeGreaterThan(alphas[i - 1]);
+    });
+  });
+
+  it('dims a light window under a dialog without blacking it out', () => {
+    const modal = alphaOf(semanticLight.get('--scrim-modal'));
+    expect(modal).toBeGreaterThan(alphaOf(semanticLight.get('--overlay-80')));
+    expect(modal).toBeLessThanOrEqual(0.32);
   });
 });

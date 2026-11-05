@@ -40,17 +40,45 @@
 .sidebar-row-dot {
   --sidebar-row-dot-color: var(--text-muted);
 
+  position: relative;
   width: var(--size-sidebar-status-indicator);
   height: var(--size-sidebar-status-indicator);
   border-radius: var(--radius-full);
   flex-shrink: 0;
   background: var(--sidebar-row-dot-color);
+  animation: sidebar-row-dot-pulse var(--duration-sidebar-server-glow) ease-in-out infinite;
+}
+
+/* The glow breathes between its resting and its full halo. Each halo is its
+ * own layer and only their opacity moves: an animated box-shadow repaints on
+ * the main thread every frame, for as long as anything needs you, while
+ * opacity is the compositor's. */
+.sidebar-row-dot::before,
+.sidebar-row-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.sidebar-row-dot::before {
   box-shadow:
     0 0 var(--size-sidebar-server-glow-rest-inner-radius)
       color-mix(in srgb, var(--sidebar-row-dot-color) 35%, transparent),
     0 0 var(--size-sidebar-server-glow-rest-outer-radius)
       color-mix(in srgb, var(--sidebar-row-dot-color) 15%, transparent);
-  animation: sidebar-row-dot-glow var(--duration-sidebar-server-glow) ease-in-out infinite;
+  animation: sidebar-row-dot-fade-out var(--duration-sidebar-server-glow) ease-in-out infinite;
+}
+
+.sidebar-row-dot::after {
+  opacity: 0;
+  box-shadow:
+    0 0 var(--size-sidebar-server-glow-current-inner-radius)
+      color-mix(in srgb, var(--sidebar-row-dot-color) 85%, transparent),
+    0 0 var(--size-sidebar-server-glow-current-outer-radius)
+      color-mix(in srgb, var(--sidebar-row-dot-color) 55%, transparent);
+  animation: sidebar-row-dot-fade-in var(--duration-sidebar-server-glow) ease-in-out infinite;
 }
 
 /* Both the ordinary dot and the pixel loader share this fixed status slot, so
@@ -112,39 +140,61 @@
   --sidebar-row-dot-color: var(--border-default);
 }
 
-.sidebar-project.is-current .sidebar-row-dot {
-  opacity: 1;
-  box-shadow:
-    0 0 var(--size-sidebar-server-glow-current-inner-radius)
-      color-mix(in srgb, var(--sidebar-row-dot-color) 85%, transparent),
-    0 0 var(--size-sidebar-server-glow-current-outer-radius)
-      color-mix(in srgb, var(--sidebar-row-dot-color) 55%, transparent);
+.sidebar-project.is-current .sidebar-row-dot,
+.sidebar-project.is-current .sidebar-row-dot::before,
+.sidebar-project.is-current .sidebar-row-dot::after {
   animation: none;
 }
 
-@keyframes sidebar-row-dot-glow {
+.sidebar-project.is-current .sidebar-row-dot {
+  opacity: 1;
+}
+
+.sidebar-project.is-current .sidebar-row-dot::before {
+  opacity: 0;
+}
+
+.sidebar-project.is-current .sidebar-row-dot::after {
+  opacity: 1;
+}
+
+@keyframes sidebar-row-dot-pulse {
   0%,
   100% {
     opacity: 0.55;
-    box-shadow:
-      0 0 var(--size-sidebar-server-glow-rest-inner-radius)
-        color-mix(in srgb, var(--sidebar-row-dot-color) 35%, transparent),
-      0 0 var(--size-sidebar-server-glow-rest-outer-radius)
-        color-mix(in srgb, var(--sidebar-row-dot-color) 15%, transparent);
   }
 
   50% {
     opacity: 1;
-    box-shadow:
-      0 0 var(--size-sidebar-server-glow-current-inner-radius)
-        color-mix(in srgb, var(--sidebar-row-dot-color) 85%, transparent),
-      0 0 var(--size-sidebar-server-glow-current-outer-radius)
-        color-mix(in srgb, var(--sidebar-row-dot-color) 55%, transparent);
+  }
+}
+
+@keyframes sidebar-row-dot-fade-out {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes sidebar-row-dot-fade-in {
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sidebar-row-dot {
+  .sidebar-row-dot,
+  .sidebar-row-dot::before,
+  .sidebar-row-dot::after {
     animation: none;
   }
 }

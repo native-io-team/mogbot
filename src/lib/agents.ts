@@ -1742,7 +1742,13 @@ export function sortAgents(agents: Agent[]): Agent[] {
  * A message of yours the agent hasn't read yet: sent after the turn in
  * progress began, so it is queued for the next one.
  */
-export function isQueued(message: AgentMessage, agent: Agent): boolean {
+/** What `isQueued` and `drivingBriefId` read of an agent: its turn, not what it's doing. */
+export interface AgentTurn {
+  status: Pick<AgentStatus, 'state' | 'since'>;
+  takeover?: Pick<AgentTakeover, 'since'>;
+}
+
+export function isQueued(message: AgentMessage, agent: AgentTurn): boolean {
   if (message.kind !== 'user') return false;
   // While you drive it, what you send in the chat waits for the hand-back.
   if (agent.takeover) return message.ts > agent.takeover.since;
@@ -1884,7 +1890,7 @@ export function lastOutcome(messages: AgentMessage[] | undefined): AgentMessage 
  * agent-to-agent group that arrived before the turn began, if nothing of
  * yours came after it. Its first line's id, or null.
  */
-export function drivingBriefId(items: ChatItem[], agent: Agent): string | null {
+export function drivingBriefId(items: ChatItem[], agent: AgentTurn): string | null {
   const { state, since } = agent.status;
   if (state === 'idle' || since == null) return null;
   for (let i = items.length - 1; i >= 0; i--) {
@@ -1978,7 +1984,6 @@ const isPeerLine = (m: AgentMessage) => m.kind === 'sent_to_agent' || m.kind ===
  */
 const DIVIDER_GAP_MS = 3 * 60 * 60 * 1000;
 
-const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString();
 
 /** How an agent's own chat folds what its members said in rooms. */
 export interface ChatFolding {
@@ -1991,15 +1996,28 @@ export interface ChatFolding {
 export function buildChatItems(messages: AgentMessage[], folding: ChatFolding = {}): ChatItem[] {
   const items: ChatItem[] = [];
   let lastTs = 0;
+  // The local day `lastTs` falls in, as [start, end): "same day" is a range
+  // check, and a Date is made only when a message crosses midnight, not two
+  // per message as comparing date strings did.
+  let dayStart = 0;
+  let dayEnd = 0;
   for (const message of messages) {
     if (
       items.length === 0 ||
       message.ts - lastTs > DIVIDER_GAP_MS ||
-      !sameDay(message.ts, lastTs)
+      message.ts < dayStart ||
+      message.ts >= dayEnd
     ) {
       items.push({ type: 'day', ts: message.ts });
     }
     lastTs = message.ts;
+    if (lastTs < dayStart || lastTs >= dayEnd) {
+      const day = new Date(lastTs);
+      day.setHours(0, 0, 0, 0);
+      dayStart = day.getTime();
+      day.setDate(day.getDate() + 1);
+      dayEnd = day.getTime();
+    }
     const previous = items[items.length - 1];
     // Said in a room: the room's thread shows it; here it's one line. A card
     // still waiting on you stays a card, so nothing waits out of sight.

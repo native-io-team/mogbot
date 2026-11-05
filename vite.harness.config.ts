@@ -66,10 +66,32 @@ function migrationFixturesPlugin(): Plugin {
           next();
           return;
         }
-        res.setHeader(
-          'Content-Type',
-          file.endsWith('.json') ? 'application/json' : 'image/png'
-        );
+        res.setHeader('Content-Type', file.endsWith('.json') ? 'application/json' : 'image/png');
+        res.end(fs.readFileSync(file));
+      });
+    },
+  };
+}
+
+/**
+ * `vite preview` of a perf build has no repo root to serve from, so the
+ * agents' demo home (attachment images) is mounted explicitly. The dev server
+ * serves it from the checkout as-is.
+ */
+function agentsDemoPreviewPlugin(): Plugin {
+  const dir = path.resolve(__dirname, './harness/agents-demo');
+
+  return {
+    name: 'shipstudio-harness-agents-demo-preview',
+    configurePreviewServer(server) {
+      server.middlewares.use('/harness/agents-demo', (req, res, next) => {
+        const rel = decodeURIComponent((req.url ?? '/').split('?')[0]);
+        const file = path.join(dir, rel);
+        if (!file.startsWith(dir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+          next();
+          return;
+        }
+        res.setHeader('Content-Type', file.endsWith('.png') ? 'image/png' : 'image/jpeg');
         res.end(fs.readFileSync(file));
       });
     },
@@ -89,7 +111,7 @@ export default defineConfig(async (env) => {
   )) as UserConfig;
 
   return mergeConfig(resolved, {
-    plugins: [identityPlugin(), migrationFixturesPlugin()],
+    plugins: [identityPlugin(), migrationFixturesPlugin(), agentsDemoPreviewPlugin()],
     resolve: {
       alias: {
         'tauri-pty': path.resolve(__dirname, './src/harness/stubs/tauri-pty.ts'),
@@ -101,6 +123,16 @@ export default defineConfig(async (env) => {
       },
     },
     server: { port: PORT, strictPort: true, host: '127.0.0.1' },
+    preview: { port: PORT, strictPort: true, host: '127.0.0.1' },
+    // `vite build --config vite.harness.config.ts` is the perf build that
+    // `scripts/perf-agents.mjs` measures: production React, the harness entry,
+    // and unminified so CPU profiles keep function names. Never shipped.
+    build: {
+      outDir: 'harness/perf-build',
+      emptyOutDir: true,
+      minify: false,
+      rollupOptions: { input: path.resolve(__dirname, 'harness.html') },
+    },
     // Own dependency cache: the harness aliases Tauri modules to stubs, so a
     // shared `node_modules/.vite` let it overwrite the dev server's pre-bundles
     // and the real app failed to load main.tsx (504 "outdated optimize dep").
