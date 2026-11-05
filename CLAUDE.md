@@ -1,5 +1,8 @@
 # Dashbot Development Guidelines
 
+> **Setting this up for a user?** Follow [docs/INSTALL.md](docs/INSTALL.md) step by step: every
+> step has a command, a check and what to tell the human. Don't improvise the setup.
+
 > **Start with [docs/MISSION.md](docs/MISSION.md), then [docs/ROADMAP.md](docs/ROADMAP.md).**
 > Dashbot is the working name (it lives only in `brand.json`; see "Brand and identity"). It is
 > the evolution of Ship Studio: an open-source app for running your own team of AI agents, on

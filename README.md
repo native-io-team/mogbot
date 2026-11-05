@@ -6,6 +6,18 @@
 Your own team of AI agents, on your own computer, on the accounts you already
 pay for.
 
+## Try it
+
+There's no download yet: you build it on your Mac. Easiest: open this folder in
+Claude Code or Codex and say *"Set this up on my Mac and phone. Follow
+docs/INSTALL.md."* It installs the tools, builds the app, and tells you the few
+things only you can do (sign in, install Tailscale and Expo Go on your phone,
+scan a code).
+
+You need a Mac, a paid Claude (Pro/Max) or ChatGPT plan, and for the phone a
+free Tailscale account. Step by step, with checks and troubleshooting:
+**[docs/INSTALL.md](docs/INSTALL.md)**.
+
 You open the app and you're talking to your **Chief of Staff**. It sets up
 named agents for the work you hand it, briefs them, delegates, and comes back
 with results. Each agent remembers you, keeps its own instructions and

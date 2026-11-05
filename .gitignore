@@ -24,6 +24,11 @@ dist-ssr
 *.cer
 *.key
 *.pem
+*.p8
+*.mobileprovision
+*.provisionprofile
+mobile/credentials/
+mobile/credentials.json
 
 # Editor directories and files
 .vscode/*

@@ -145,7 +145,7 @@ The owner does this once. Nothing here has been run.
 2. `npx wrangler d1 create shipstudio-push`, and copy the printed
    `database_id` into `wrangler.jsonc`.
 3. In `wrangler.jsonc`, set `vars.APNS_TOPIC` to the bundle id. It must match
-   `SHIPSTUDIO_BUNDLE_ID` in `mobile/app.config.ts`.
+   `COMPANION_BUNDLE_ID` in `mobile/app.config.ts`.
 4. `npx wrangler d1 migrations apply shipstudio-push --remote`.
 5. Set the secrets. Each command prompts for the value:
    - `npx wrangler secret put APNS_KEY`: paste the whole `.p8` file, including

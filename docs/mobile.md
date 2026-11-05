@@ -777,7 +777,7 @@ one-click **Reinstall**, and a reminder fires 24 h before. Android self-builds
 'fingerprint' }` (a JS update reaches only binaries that can run it), applied
 on the next cold start, with **Restart to update** in Settings. Drafts and the
 outbox are on disk, so a restart loses nothing. `app.config.ts` reads
-`SHIPSTUDIO_BUNDLE_ID`, `EAS_PROJECT_ID`, `UPDATES_URL` and `APPLE_TEAM_ID`;
+`COMPANION_BUNDLE_ID`, `EAS_PROJECT_ID`, `UPDATES_URL` and `APPLE_TEAM_ID`;
 with no `EAS_PROJECT_ID` updates are off, so an official update can never land
 on a fork's binary. For self-builders, Reinstall is the update.
 

@@ -22,7 +22,7 @@ $BrandReleases   = ''
 # --- end brand ---
 
 if (-not $BrandReleases) {
-  throw "$BrandName has no published releases to install yet. Build it from source instead: see docs/INSTALLATION.md in its repository."
+  throw "$BrandName has no published releases to install yet. Build it from source instead: see docs/INSTALL.md in its repository."
 }
 
 $asset = "${BrandAppDirName}_windows-x86_64-setup.exe"
