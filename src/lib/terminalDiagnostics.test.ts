@@ -237,14 +237,14 @@ describe('detectAlreadyLoggedIn', () => {
   });
 
   it('captures the identity from the gh "account" phrasing', () => {
-    expect(
-      detectAlreadyLoggedIn('✓ Logged in to github.com account juliangalluzzo (keyring)\n')
-    ).toEqual({ identity: 'juliangalluzzo' });
+    expect(detectAlreadyLoggedIn('✓ Logged in to github.com account samlee (keyring)\n')).toEqual({
+      identity: 'samlee',
+    });
   });
 
   it('captures the identity from the older gh "as" phrasing', () => {
-    expect(detectAlreadyLoggedIn('Logged in to github.com as juliangalluzzo\n')).toEqual({
-      identity: 'juliangalluzzo',
+    expect(detectAlreadyLoggedIn('Logged in to github.com as samlee\n')).toEqual({
+      identity: 'samlee',
     });
   });
 

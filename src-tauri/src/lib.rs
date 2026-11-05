@@ -200,15 +200,15 @@ pub fn run() {
                 // older build or an agent's own CLI left.
                 let _ =
                     tauri::async_runtime::spawn_blocking(agents::store::harden_permissions).await;
-                // Browser cards this build doesn't ask about any more: allowed
-                // before the launch sweep would close them as stale.
+                // Nothing that asked before the restart is still waiting:
+                // every such card closes ("the agent moved on", sign-ins and
+                // old secure inputs "Maybe later"), and the counts, badge and
+                // bars drop with them.
                 let sweep_app = badge_app.clone();
                 let _ = tauri::async_runtime::spawn_blocking(move || {
-                    agents::mcp::allow_open_browser_cards(&sweep_app)
+                    agents::expiry::sweep_all(&sweep_app, agents::expiry::Moment::Launch)
                 })
                 .await;
-                let _ = tauri::async_runtime::spawn_blocking(agents::store::expire_stale_approvals)
-                    .await;
                 // Then every card nobody can answer usefully any more closes,
                 // and stays closed (`agents/expiry.rs`).
                 agents::expiry::start(badge_app.clone());

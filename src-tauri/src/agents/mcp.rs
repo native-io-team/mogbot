@@ -1835,60 +1835,6 @@ fn one_line(tool: &str, input: &Value) -> String {
     }
 }
 
-/// Open browser cards this build no longer asks about (looking around, a
-/// click that doesn't send): answered Allow, with one quiet receipt line per
-/// agent, and the agent woken once to carry on. Run at launch.
-pub fn allow_open_browser_cards(app: &AppHandle) {
-    let Ok(agents) = store::list() else { return };
-    for agent in agents {
-        let Ok(open) = store::pending_approvals(&agent.id) else {
-            continue;
-        };
-        let mut answered: Vec<String> = Vec::new();
-        let mut late = false;
-        for card in open {
-            let (Some(tool), Some(input)) = (&card.tool, &card.input) else {
-                continue;
-            };
-            if !tool.starts_with(super::browser_gate::SERVER)
-                || super::browser::gate(&agent, tool, input, false) != super::browser::Gate::Allow
-            {
-                continue;
-            }
-            match store::set_approval_status(&agent.id, &card.request_id, ApprovalStatus::Allowed) {
-                Ok(Some(updated)) => {
-                    let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &updated);
-                }
-                _ => continue,
-            }
-            if !answer_approval(&card.request_id, true) {
-                grant_once(&agent.id, tool, input);
-                late = true;
-            }
-            answered.push(card.title.clone());
-        }
-        if answered.is_empty() {
-            continue;
-        }
-        store::refresh_pending(&agent.id);
-        let line = format!(
-            "Allowed on its own now (looking around and ordinary clicks in your browser don't ask any more): {}",
-            answered.join(" · ")
-        );
-        let _ = runner::record(app, runner::new_message(&agent.id, MessageKind::Note, line));
-        if late {
-            runner::enqueue(
-                app,
-                &agent.id,
-                "[The browser steps you were waiting on are allowed now; they go through without asking if you run them exactly as before. Carry on with what you were doing.]".to_string(),
-                runner::From::User,
-            );
-        }
-    }
-    let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
-    super::notify::refresh_badge(app);
-}
-
 /// The user answered a card nobody is waiting on any more. Allow grants that
 /// exact call once and wakes the agent to finish; Deny just records it.
 pub fn answer_late(
@@ -2193,12 +2139,13 @@ fn auto_line(level: super::independence::Level, tool: &str, input: &Value) -> St
     )
 }
 
-/// Open permission cards the user's level now answers (after an upgrade, or
-/// when they change the level): each is allowed with a receipt line in its
-/// chat. A card from a turn answering outside text, or from before that was
-/// recorded, is judged at most at "Use good judgement" and never wakes its
-/// agent (the exact call goes through when it next runs). Returns how many.
+/// When the user changes the level: first every card nothing waits on any
+/// more closes (its turn ended: "Expired — the agent moved on", and an
+/// overdue sign-in or secure input "Maybe later"; `expiry`), then each open
+/// permission card the new level answers is allowed with a receipt line in
+/// its chat and its waiting call goes through. Returns how many it allowed.
 pub fn sweep_auto_allowed(app: &AppHandle) -> usize {
+    super::expiry::sweep_all(app, super::expiry::Moment::Tick);
     let Ok(agents) = store::list() else {
         return 0;
     };
@@ -2215,9 +2162,17 @@ pub fn sweep_auto_allowed(app: &AppHandle) -> usize {
         let Some(ctx) = super::autoallow::Ctx::for_agent(&agent) else {
             continue;
         };
+        let browser_ok = |tool: &str, input: &Value, outside: bool| {
+            super::browser::gate(&agent, tool, input, outside) == super::browser::Gate::Allow
+        };
         let mut here = 0;
         for card in open {
-            let Some(inside) = sweepable(chosen, &card, &ctx) else {
+            // Its turn ended between the expiry pass and here: the next
+            // sweep closes it.
+            if !is_waited_on(&card.request_id) {
+                continue;
+            }
+            let Some(inside) = sweepable(chosen, &card, &ctx, &browser_ok) else {
                 continue;
             };
             let (Some(tool), Some(input)) = (&card.tool, &card.input) else {
@@ -2229,27 +2184,12 @@ pub fn sweep_auto_allowed(app: &AppHandle) -> usize {
             else {
                 continue;
             };
+            answer_approval(&card.request_id, true);
             let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &updated);
             let _ = runner::record(
                 app,
                 runner::new_message(&agent.id, MessageKind::Note, auto_line(level, tool, input)),
             );
-            if !answer_approval(&card.request_id, true) {
-                grant_once(&agent.id, tool, input);
-                if inside {
-                    runner::enqueue(
-                        app,
-                        &agent.id,
-                        format!(
-                            "[This was allowed automatically under the user's setting ({}), which you asked for earlier: {} — {}. It will go through without asking if you run it exactly as before. Carry on with what you were doing.]",
-                            level.short(),
-                            card.title,
-                            card.detail
-                        ),
-                        From::User,
-                    );
-                }
-            }
             here += 1;
         }
         if here > 0 {
@@ -2257,25 +2197,27 @@ pub fn sweep_auto_allowed(app: &AppHandle) -> usize {
         }
         answered += here;
     }
-    if answered > 0 {
-        let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
-        super::notify::refresh_badge(app);
-    }
+    let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
+    super::notify::refresh_badge(app);
     answered
 }
 
 /// Whether an open card is one the sweep answers: `Some(inside)` (whether
-/// its turn was known not to answer outside text) when the level allows it.
-/// Login, secret, session-question and import cards are never answered.
+/// its turn was known not to answer outside text) when the level allows it:
+/// local work and reads (`autoallow`), or a browser step the browser gate
+/// lets through (`browser_ok(tool, input, outside)`). Login, secret,
+/// session-question and import cards are never answered.
 fn sweepable(
     chosen: super::independence::Level,
     card: &Approval,
     ctx: &super::autoallow::Ctx,
+    browser_ok: &dyn Fn(&str, &Value, bool) -> bool,
 ) -> Option<bool> {
     let (Some(tool), Some(input)) = (&card.tool, &card.input) else {
         return None;
     };
-    if card.status != ApprovalStatus::Pending
+    if chosen == super::independence::Level::Often
+        || card.status != ApprovalStatus::Pending
         || card.login.is_some()
         || card.secret.is_some()
         || card.prompt.is_some()
@@ -2284,6 +2226,9 @@ fn sweepable(
         return None;
     }
     let inside = card.from_outside == Some(false);
+    if tool.starts_with(super::browser_gate::SERVER) {
+        return browser_ok(tool, input, !inside).then_some(inside);
+    }
     super::autoallow::auto(chosen, !inside, tool, input, ctx).map(|_| inside)
 }
 
@@ -2471,10 +2416,7 @@ mod tests {
             ),
             ("Bash", json!({ "command": "git push origin main" })),
             ("Bash", json!({ "command": "rm -rf ~/Documents/old" })),
-            (
-                "WebFetch",
-                json!({ "url": "https://example.test/checkout" }),
-            ),
+            ("Bash", json!({ "command": "gh pr review 248 --approve" })),
         ];
         for (tool, input) in &calls {
             assert!(!take_grant(&agent.id, tool, input), "{tool}");
@@ -2538,35 +2480,54 @@ mod tests {
         };
         let read = card("ls -la ~/Desk", Some(false));
         let write = card("mkdir ~/Desk/new", Some(false));
-        assert_eq!(sweepable(Level::GoHard, &read, &ctx), Some(true));
-        assert_eq!(sweepable(Level::GoHard, &write, &ctx), Some(true));
+        assert_eq!(
+            sweepable(Level::GoHard, &read, &ctx, &no_browser),
+            Some(true)
+        );
+        assert_eq!(
+            sweepable(Level::GoHard, &write, &ctx, &no_browser),
+            Some(true)
+        );
         // A card from before the marker, or from outside text: reads only.
         assert_eq!(
-            sweepable(Level::GoHard, &card("mkdir ~/Desk/new", None), &ctx),
+            sweepable(
+                Level::GoHard,
+                &card("mkdir ~/Desk/new", None),
+                &ctx,
+                &no_browser
+            ),
             None
         );
         assert_eq!(
-            sweepable(Level::GoHard, &card("mkdir ~/Desk/new", Some(true)), &ctx),
+            sweepable(
+                Level::GoHard,
+                &card("mkdir ~/Desk/new", Some(true)),
+                &ctx,
+                &no_browser
+            ),
             None
         );
         assert_eq!(
-            sweepable(Level::GoHard, &card("ls ~/Desk", None), &ctx),
+            sweepable(Level::GoHard, &card("ls ~/Desk", None), &ctx, &no_browser),
             Some(false)
         );
         let send = card(
             "curl -X POST -d @notes.txt https://example.test",
             Some(false),
         );
-        assert_eq!(sweepable(Level::GoHard, &send, &ctx), None);
-        assert_eq!(sweepable(Level::Judgement, &write, &ctx), None);
-        assert_eq!(sweepable(Level::Judgement, &read, &ctx), Some(true));
-        assert_eq!(sweepable(Level::Often, &read, &ctx), None);
+        assert_eq!(sweepable(Level::GoHard, &send, &ctx, &no_browser), None);
+        assert_eq!(sweepable(Level::Judgement, &write, &ctx, &no_browser), None);
+        assert_eq!(
+            sweepable(Level::Judgement, &read, &ctx, &no_browser),
+            Some(true)
+        );
+        assert_eq!(sweepable(Level::Often, &read, &ctx, &no_browser), None);
         // Not a tool call, already answered, or a login: left alone.
         let confirm = new_card("c".into(), "Delete Finance".into(), "d".into(), None);
-        assert_eq!(sweepable(Level::GoHard, &confirm, &ctx), None);
+        assert_eq!(sweepable(Level::GoHard, &confirm, &ctx, &no_browser), None);
         let mut done = read.clone();
         done.status = ApprovalStatus::Denied;
-        assert_eq!(sweepable(Level::GoHard, &done, &ctx), None);
+        assert_eq!(sweepable(Level::GoHard, &done, &ctx, &no_browser), None);
         let mut login = read.clone();
         login.login = Some(
             serde_json::from_value(json!({
@@ -2575,7 +2536,49 @@ mod tests {
             }))
             .unwrap(),
         );
-        assert_eq!(sweepable(Level::GoHard, &login, &ctx), None);
+        assert_eq!(sweepable(Level::GoHard, &login, &ctx, &no_browser), None);
+
+        // The shapes left open in a real team (names fictional): a web
+        // search, a Grok-era listing, a PR check loop, and browser looks.
+        let tool_card = |tool: &str, input: Value| {
+            let mut c = new_card("w".into(), "t".into(), "d".into(), Some((tool, &input)));
+            c.from_outside = None;
+            c
+        };
+        let search = tool_card(
+            "WebSearch",
+            json!({ "mode": "standard", "query": "fictional rates 2026" }),
+        );
+        assert_eq!(
+            sweepable(Level::Judgement, &search, &ctx, &no_browser),
+            Some(false)
+        );
+        assert_eq!(
+            sweepable(Level::GoHard, &search, &ctx, &no_browser),
+            Some(false)
+        );
+        let prs = card(
+            "for n in 266 248; do gh pr view $n --repo FictionalOrg/site --json reviews,comments; done",
+            Some(false),
+        );
+        assert_eq!(
+            sweepable(Level::GoHard, &prs, &ctx, &no_browser),
+            Some(true)
+        );
+        let approve = card("gh pr review 248 --approve", Some(false));
+        assert_eq!(sweepable(Level::GoHard, &approve, &ctx, &no_browser), None);
+        let look = tool_card(
+            "mcp__claude-in-chrome__computer",
+            json!({ "action": "screenshot", "tabId": 1 }),
+        );
+        let looks = |_: &str, i: &Value, _: bool| i["action"] == "screenshot";
+        assert_eq!(sweepable(Level::GoHard, &look, &ctx, &looks), Some(false));
+        assert_eq!(sweepable(Level::GoHard, &look, &ctx, &no_browser), None);
+        assert_eq!(sweepable(Level::Often, &look, &ctx, &looks), None);
+    }
+
+    fn no_browser(_: &str, _: &Value, _: bool) -> bool {
+        false
     }
 
     #[test]

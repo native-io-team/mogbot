@@ -261,7 +261,7 @@ export const agentsLoginsScenarios: Scenario[] = [
   recruiterScenario(
     'agents-login-card',
     'Agents — a login card (Gmail: Connect, or use my browser)',
-    'Recruiter’s chat: a lock card “Recruiter needs your Gmail (work)”, a muted “Asked for as “gmail work””, the reason, then two bullet lines: “Read and search your email” and “Draft and send email — it asks you on a card each time”. A muted line saying it uses claude.ai’s Gmail connector and Recruiter never sees a password. Under a hairline, “Use my browser” as a quiet text action with its explanation (every click, post, send or payment asks first). Right-aligned: secondary “Not now”, neutral (not accent) “Connect Gmail”. No password field anywhere.',
+    'Recruiter’s chat: a lock card “Recruiter needs your Gmail (work)”, a muted “Asked for “Gmail work””, the reason, then two bullet lines: “Read and search your email” and “Draft and send email — it asks you on a card each time”. A muted line saying it uses claude.ai’s Gmail connector and Recruiter never sees a password. Under a hairline, “Use my browser” as a quiet text action with its explanation (every click, post, send or payment asks first). Right-aligned: secondary “Not now”, neutral (not accent) “Connect Gmail”. No password field anywhere.',
     loginCard('hiring', 'Recruiter needs your Gmail (work)', GMAIL_LOGIN)
   ),
   recruiterScenario(

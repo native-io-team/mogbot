@@ -160,21 +160,26 @@ impl Ctx {
     }
 
     fn writable(&self, p: &Path) -> bool {
-        both(p, |p| {
-            p.starts_with(&self.home)
-                && !self.bookkeeping(p)
-                && !self.is_secret(p)
-                && !self.write_protected().iter().any(|d| p.starts_with(d))
-                && !p
-                    .components()
-                    .any(|c| matches!(c, Component::Normal(n) if n == ".git" || n == ".shipstudio"))
-        })
+        nowhere(p)
+            || both(p, in_temp)
+            || both(p, |p| {
+                p.starts_with(&self.home)
+                    && !self.bookkeeping(p)
+                    && !self.is_secret(p)
+                    && !self.write_protected().iter().any(|d| p.starts_with(d))
+                    && !p.components().any(
+                        |c| matches!(c, Component::Normal(n) if n == ".git" || n == ".shipstudio"),
+                    )
+            })
     }
 
     /// Deleting without a card is only for folders the project's tools
     /// rebuild (`REGENERABLE`), inside the agent's own home or its copy of a
     /// project. Every other delete asks, even there.
     fn deletable(&self, p: &Path) -> bool {
+        if nowhere(p) || both(p, in_temp) {
+            return true;
+        }
         self.writable(p)
             && both(p, |p| {
                 self.scratch.iter().any(|s| {
@@ -186,6 +191,37 @@ impl Ctx {
                     })
                 })
             })
+    }
+}
+
+/// A path on a top-level folder this Mac doesn't have (`/workspace/…`, the
+/// Grok sandbox an imported agent remembers) where this account can't make
+/// one: whatever a command does there fails at once and changes nothing, and
+/// the agent learns from the error and its "Where you are now" section.
+fn nowhere(p: &Path) -> bool {
+    let mut parts = p.components();
+    if parts.next() != Some(Component::RootDir) {
+        return false;
+    }
+    let Some(Component::Normal(top)) = parts.next() else {
+        return false;
+    };
+    if std::fs::symlink_metadata(Path::new("/").join(top)).is_ok() {
+        return false;
+    }
+    !root_writable()
+}
+
+/// Whether this account can make folders at `/` (only root can on macOS).
+fn root_writable() -> bool {
+    #[cfg(unix)]
+    {
+        // SAFETY: a NUL-terminated literal that `access` only reads.
+        unsafe { libc::access(c"/".as_ptr(), libc::W_OK) == 0 }
+    }
+    #[cfg(not(unix))]
+    {
+        true
     }
 }
 
@@ -369,7 +405,11 @@ pub fn classify(tool: &str, input: &Value, ctx: &Ctx) -> Class {
             Some(p) if ctx.writable(&p) => Class::Change,
             _ => Class::Ask,
         },
-        // Web pages and searches, connectors, payments, anything else.
+        // Searching the web and fetching a page are reads (Claude Code's
+        // tools, and Codex's own web search). A turn reading outside text
+        // keeps its outside-text cap (`independence::for_turn`).
+        "WebSearch" | "WebFetch" | "web_search" => Class::Read,
+        // Connectors, payments, anything else.
         _ => Class::Ask,
     }
 }
@@ -652,7 +692,9 @@ fn lex_expansion(
         Some('{') => {
             let end = chars[i + 2..].iter().position(|&c| c == '}')? + i + 2;
             let name: String = chars[i + 2..end].iter().collect();
-            if name == "HOME" {
+            if let Some(tmp) = (name == "TMPDIR").then(known_tmpdir).flatten() {
+                w.text.push_str(&tmp);
+            } else if name == "HOME" {
                 w.text.push_str(home);
             } else {
                 w.dynamic = true;
@@ -673,7 +715,9 @@ fn lex_expansion(
                 return Some((i + 2).min(chars.len()));
             }
             let name: String = chars[i + 1..end].iter().collect();
-            if name == "HOME" {
+            if let Some(tmp) = (name == "TMPDIR").then(known_tmpdir).flatten() {
+                w.text.push_str(&tmp);
+            } else if name == "HOME" {
                 w.text.push_str(home);
             } else {
                 w.dynamic = true;
@@ -896,6 +940,51 @@ impl Eval<'_> {
         for (how, target) in &redirects {
             self.touch(target, *how);
         }
+        // Loop and branch words: the commands inside are judged on their own
+        // (`for n in 1 2; do gh pr view $n; done`, `if test -f x; then …; fi`).
+        while words.first().is_some_and(|w| {
+            !w.dynamic
+                && !w.glob
+                && matches!(
+                    w.text.as_str(),
+                    "do" | "then" | "else" | "if" | "elif" | "while" | "until" | "!"
+                )
+        }) {
+            words.remove(0);
+        }
+        if let [w] = words.as_slice() {
+            if !w.dynamic && matches!(w.text.as_str(), "done" | "fi") {
+                return;
+            }
+        }
+        if words.first().is_some_and(|w| w.text == "for" && !w.dynamic) {
+            // `for NAME in WORDS`: names a variable; `$(…)` in the list is
+            // judged as a command of its own.
+            let named = words.get(1).is_some_and(|w| {
+                !w.dynamic
+                    && !w.glob
+                    && is_assignment(&Word {
+                        text: format!("{}=", w.text),
+                        ..Word::default()
+                    })
+                    && shell_variable(&w.text)
+            });
+            if !named || words.get(2).is_none_or(|w| w.text != "in" || w.dynamic) {
+                return self.ask();
+            }
+            return self.bump(Class::Read);
+        }
+        // A line of only `NAME=value` sets shell variables for the lines
+        // after it: fine unless the name changes how programs run.
+        if !words.is_empty() && words.iter().all(is_assignment) {
+            for w in &words {
+                let name = w.text.split('=').next().unwrap_or("");
+                if !shell_variable(name) {
+                    return self.ask();
+                }
+            }
+            return self.bump(Class::Read);
+        }
         // Leading `NAME=value` assignments: only harmless names.
         while words.first().is_some_and(is_assignment) {
             let w = words.remove(0);
@@ -1099,7 +1188,9 @@ impl Eval<'_> {
                 _ => self.ask(),
             },
             "git" => self.git(args),
-            "gh" => self.gh(&texts),
+            "gh" => self.gh(&texts, args),
+            "curl" => self.curl(args),
+            "wget" => self.wget(args),
             "xargs" => {
                 // What it runs gets words nobody has seen: only listing.
                 let rest = skip_xargs_flags(args);
@@ -1184,10 +1275,12 @@ impl Eval<'_> {
                     self.bump(Class::Change)
                 }
                 Some(&("tree" | "metadata")) => self.bump(Class::Read),
+                Some(&("add" | "install" | "fetch" | "update")) => self.install(&texts[1..]),
                 _ => self.ask(),
             },
             "go" => match texts.first() {
                 Some(&("build" | "test" | "vet" | "fmt")) => self.bump(Class::Change),
+                Some(&("get" | "install" | "mod")) => self.install(&texts[1..]),
                 Some(&("env" | "list")) => self.bump(Class::Read),
                 _ => self.ask(),
             },
@@ -1213,12 +1306,30 @@ impl Eval<'_> {
                 Some(&("list" | "info" | "--prefix" | "config" | "doctor" | "outdated")) => {
                     self.bump(Class::Read)
                 }
+                // Homebrew installs into its own prefix, as this account.
+                Some(&("install" | "upgrade" | "reinstall")) => self.install(&texts[1..]),
                 _ => self.ask(),
             },
             "pip" | "pip3" => match texts.first() {
                 Some(&("list" | "show" | "freeze")) => self.bump(Class::Read),
+                Some(&"install") => self.install(&texts[1..]),
                 _ => self.ask(),
             },
+            "pipx" => match texts.first() {
+                Some(&("install" | "upgrade")) => self.install(&texts[1..]),
+                Some(&"list") => self.bump(Class::Read),
+                _ => self.ask(),
+            },
+            "uv" => match texts.as_slice() {
+                ["pip", "install", rest @ ..] | ["tool", "install", rest @ ..] => {
+                    self.install(rest)
+                }
+                ["add", rest @ ..] => self.install(rest),
+                ["sync" | "lock" | "venv", ..] => self.bump(Class::Change),
+                ["pip", "list" | "show" | "freeze", ..] | ["tree", ..] => self.bump(Class::Read),
+                _ => self.ask(),
+            },
+            "uvx" => self.install(&texts),
             "sh" | "bash" | "zsh" | "dash" => self.shell(args),
             "python" | "python3" | "node" | "ruby" | "perl" | "deno" | "tsx" | "ts-node" => {
                 self.interpreter(name, args)
@@ -1352,6 +1463,41 @@ impl Eval<'_> {
             "diff" => !more
                 .iter()
                 .any(|t| t.starts_with("--output") || t.starts_with("--ext")),
+            "branch" if more.iter().any(|t| BRANCH_FILTERS.contains(t)) => {
+                // `git branch -r --contains <sha>`: each filter takes one value.
+                let mut it = more.iter();
+                let mut ok = true;
+                while let Some(t) = it.next() {
+                    if BRANCH_FILTERS.contains(t) {
+                        ok &= it.next().is_some_and(|v| !v.starts_with('-'));
+                    } else {
+                        ok &= matches!(
+                            *t,
+                            "-a" | "-r" | "-v" | "-vv" | "--list" | "-l" | "--all" | "--remotes"
+                        ) || t.starts_with("--format")
+                            || t.starts_with("--sort");
+                    }
+                }
+                ok
+            }
+            // Fetching and pulling reach the network and update `.git`, but
+            // send nothing: local work ("Go hard"). Never a helper program
+            // (`--upload-pack`) or a remote-helper URL (`ext::…`).
+            "fetch" | "pull" => {
+                let safe = more.iter().all(|t| {
+                    !t.contains("::")
+                        && !t.starts_with("--upload-pack")
+                        && !t.starts_with("--exec")
+                        && !t.starts_with("--recurse-submodules")
+                        && !matches!(*t, "-u")
+                }) && words.iter().all(|w| !w.dynamic);
+                self.cwd = saved;
+                return if safe {
+                    self.bump(Class::Change)
+                } else {
+                    self.ask()
+                };
+            }
             "branch" => {
                 only_flags
                     && more.iter().all(|t| {
@@ -1396,20 +1542,37 @@ impl Eval<'_> {
         }
     }
 
-    fn gh(&mut self, texts: &[&str]) {
+    fn gh(&mut self, texts: &[&str], args: &[&Word]) {
         let read = match texts {
             ["auth", "status", ..] => true,
+            // A GET: no method but GET, and fields only when the method is
+            // said to be GET (`gh api` turns fields into a POST otherwise).
+            // A word known only when it runs could be a method: it asks.
             ["api", rest @ ..] => {
-                !rest.iter().any(|t| {
-                    matches!(
-                        *t,
-                        "-f" | "-F" | "--field" | "--raw-field" | "--input" | "-X" | "--method"
-                    ) || t.starts_with("--method=")
-                        || t.starts_with("-X")
+                let mut method: Option<String> = None;
+                let mut fields = false;
+                let mut it = rest.iter();
+                while let Some(t) = it.next() {
+                    if let Some(m) = t.strip_prefix("--method=") {
+                        method = Some(m.to_string());
+                    } else if let Some(m) = t.strip_prefix("-X").filter(|m| !m.is_empty()) {
+                        method = Some(m.to_string());
+                    } else if matches!(*t, "-X" | "--method") {
+                        method = Some(it.next().map(|m| m.to_string()).unwrap_or_default());
+                    } else if matches!(*t, "-f" | "-F" | "--field" | "--raw-field")
                         || t.starts_with("--field=")
                         || t.starts_with("--raw-field=")
-                        || t.starts_with("--input=")
-                }) && rest.first() != Some(&"graphql")
+                    {
+                        fields = true;
+                    } else if *t == "--input" || t.starts_with("--input=") {
+                        method = Some("INPUT".into());
+                    }
+                }
+                let get = match method.as_deref() {
+                    None => !fields,
+                    Some(m) => m.eq_ignore_ascii_case("GET"),
+                };
+                get && rest.first() != Some(&"graphql") && args.iter().all(|w| !w.dynamic)
             }
             [group, verb, ..] => {
                 (matches!(
@@ -1430,6 +1593,165 @@ impl Eval<'_> {
         };
         if read && !texts.iter().any(|t| *t == "--web" || *t == "-w") {
             self.bump(Class::Read)
+        } else {
+            self.ask()
+        }
+    }
+
+    /// `curl` that only fetches: an http(s) GET (or HEAD) that sends no
+    /// body, form, upload or config file. Reaching the network is local work
+    /// ("Go hard"); the files it saves are writes like any other.
+    fn curl(&mut self, args: &[&Word]) {
+        // Short flags whose value is the next word (or the rest of the group).
+        const VALUED: &str = "HAebcDmuxwryYzEQCtPKoTdFX";
+        let mut fetched = false;
+        let mut it = args.iter().copied();
+        while let Some(w) = it.next() {
+            if w.dynamic {
+                return self.ask();
+            }
+            let t = w.text.as_str();
+            if let Some(long) = t.strip_prefix("--") {
+                let (name, inline) = match long.split_once('=') {
+                    Some((n, v)) => (n, Some(v.to_string())),
+                    None => (long, None),
+                };
+                let value = |it: &mut dyn Iterator<Item = &Word>| {
+                    inline.clone().or_else(|| it.next().map(|v| v.text.clone()))
+                };
+                match name {
+                    "request" => {
+                        let m = value(&mut it).unwrap_or_default();
+                        if !matches!(m.as_str(), "GET" | "HEAD") {
+                            return self.ask();
+                        }
+                    }
+                    "output" | "cookie-jar" | "dump-header" | "trace" | "trace-ascii"
+                    | "stderr" | "libcurl" | "etag-save" | "hsts" | "alt-svc" => {
+                        let Some(target) = value(&mut it) else {
+                            return self.ask();
+                        };
+                        self.touch(&plain_word(target), Use::Write);
+                    }
+                    "remote-name" | "remote-name-all" | "remote-header-name" => {
+                        self.touch_cwd(Use::Write)
+                    }
+                    n if n.starts_with("data")
+                        || n.starts_with("form")
+                        || n.starts_with("upload")
+                        || n.starts_with("mail")
+                        || n.starts_with("ftp")
+                        || matches!(n, "json" | "config" | "post301" | "post302" | "post303") =>
+                    {
+                        return self.ask()
+                    }
+                    "header" | "user-agent" | "referer" | "cookie" | "user" | "proxy"
+                    | "write-out" | "max-time" | "connect-timeout" | "retry" | "range"
+                    | "url-query" | "cacert" | "resolve" | "max-filesize" | "retry-delay"
+                    | "retry-max-time" | "limit-rate" | "oauth2-bearer" | "url" => {
+                        let v = value(&mut it);
+                        if name == "url" && !v.as_deref().is_some_and(web_url) {
+                            return self.ask();
+                        }
+                        fetched |= name == "url";
+                    }
+                    _ => {}
+                }
+            } else if let Some(group) = t.strip_prefix('-').filter(|g| !g.is_empty()) {
+                for (i, c) in group.char_indices() {
+                    if !VALUED.contains(c) {
+                        continue;
+                    }
+                    let rest = &group[i + c.len_utf8()..];
+                    let value = if rest.is_empty() {
+                        it.next().map(|v| v.text.clone())
+                    } else {
+                        Some(rest.to_string())
+                    };
+                    match c {
+                        'X' => {
+                            if !matches!(value.as_deref(), Some("GET" | "HEAD")) {
+                                return self.ask();
+                            }
+                        }
+                        'd' | 'F' | 'T' | 'K' => return self.ask(),
+                        'o' | 'c' | 'D' => {
+                            let Some(target) = value else {
+                                return self.ask();
+                            };
+                            self.touch(&plain_word(target), Use::Write);
+                        }
+                        _ => {}
+                    }
+                    break;
+                }
+                if group.contains('O') && !group.contains(|c: char| VALUED.contains(c)) {
+                    self.touch_cwd(Use::Write);
+                }
+            } else if web_url(t) {
+                fetched = true;
+            } else {
+                return self.ask();
+            }
+        }
+        if fetched {
+            self.bump(Class::Change)
+        } else {
+            self.ask()
+        }
+    }
+
+    /// `wget` that only downloads: GET, no posted body, no commands.
+    fn wget(&mut self, args: &[&Word]) {
+        let mut saved_to: Option<String> = None;
+        let mut fetched = false;
+        let mut it = args.iter().copied();
+        while let Some(w) = it.next() {
+            if w.dynamic {
+                return self.ask();
+            }
+            let t = w.text.as_str();
+            let (name, inline) = match t.split_once('=') {
+                Some((n, v)) if t.starts_with("--") => (n, Some(v.to_string())),
+                _ => (t, None),
+            };
+            let mut value = || inline.clone().or_else(|| it.next().map(|v| v.text.clone()));
+            match name {
+                "--post-data" | "--post-file" | "--body-data" | "--body-file" | "-e"
+                | "--execute" | "--config" | "-i" | "--input-file" | "--use-askpass" => {
+                    return self.ask()
+                }
+                "--method" => {
+                    if !matches!(value().as_deref(), Some("GET" | "HEAD")) {
+                        return self.ask();
+                    }
+                }
+                "-O" | "--output-document" => saved_to = Some(value().unwrap_or_default()),
+                "-P" | "--directory-prefix" | "-o" | "--output-file" | "-a" | "--append-output" => {
+                    let Some(target) = value() else {
+                        return self.ask();
+                    };
+                    self.touch(&plain_word(target), Use::Write);
+                }
+                "-q" | "--quiet" | "-nv" | "--no-verbose" | "-c" | "--continue" | "-S"
+                | "--server-response" | "--spider" | "-N" | "--timestamping" => {}
+                n if n.starts_with("--header")
+                    || n.starts_with("--user-agent")
+                    || n.starts_with("--timeout")
+                    || n.starts_with("--tries") => {}
+                n if n.starts_with('-') => return self.ask(),
+                n if web_url(n) => fetched = true,
+                _ => return self.ask(),
+            }
+        }
+        match saved_to.as_deref() {
+            Some("-") => {}
+            Some("") => return self.ask(),
+            Some(file) => self.touch(&plain_word(file.to_string()), Use::Write),
+            None => self.touch_cwd(Use::Write),
+        }
+        if fetched {
+            self.bump(Class::Change)
         } else {
             self.ask()
         }
@@ -1552,7 +1874,50 @@ impl Eval<'_> {
         }
     }
 
+    /// Installing named packages for the agent's work: local work ("Go
+    /// hard"). Never from a raw address (`https://…`, `git+…`), never global
+    /// (`-g`), and `sudo` already asks before this is reached.
+    fn install(&mut self, rest: &[&str]) {
+        let raw = |t: &str| {
+            let l = t.to_ascii_lowercase();
+            l.contains("://")
+                || l.starts_with("git+")
+                || l.starts_with("git@")
+                || l.starts_with("github:")
+                || l.starts_with("gitlab:")
+                || l.starts_with("bitbucket:")
+                || l.ends_with(".tgz")
+                || l.ends_with(".whl") && l.contains('/')
+        };
+        let global = |t: &str| {
+            matches!(
+                t,
+                "-g" | "--global"
+                    | "--location=global"
+                    | "--system"
+                    | "--break-system-packages"
+                    | "--root"
+                    | "--prefix"
+                    | "--target"
+            ) || t.starts_with("--prefix=")
+                || t.starts_with("--root=")
+                || t.starts_with("--target=")
+        };
+        if rest.iter().any(|t| t.is_empty() || raw(t) || global(t)) {
+            return self.ask();
+        }
+        self.bump(Class::Change)
+    }
+
     fn package_manager(&mut self, name: &str, texts: &[&str]) {
+        match texts {
+            ["install" | "i" | "add" | "ci" | "update" | "up" | "upgrade" | "remove" | "rm"
+            | "uninstall", rest @ ..] => return self.install(rest),
+            [] if name != "npm" => return self.install(&[]),
+            ["dlx" | "x", rest @ ..] if name != "npm" => return self.install(rest),
+            ["exec", rest @ ..] if name == "npm" => return self.install(rest),
+            _ => {}
+        }
         let script = match texts {
             ["test" | "t", ..] => Some("test"),
             ["run" | "run-script", script, ..] => Some(*script),
@@ -1577,15 +1942,14 @@ impl Eval<'_> {
         }
     }
 
+    /// `npx <named package>`: fetching and running a published package is
+    /// local work at "Go hard", like installing it. A raw address asks.
     fn npx(&mut self, texts: &[&str]) {
         let tool = texts.iter().find(|t| !t.starts_with('-')).copied();
         match tool {
-            Some(t)
-                if SAFE_NPX.contains(&t) && !texts.contains(&"--yes") && !texts.contains(&"-y") =>
-            {
-                self.bump(Class::Change)
-            }
-            _ => self.ask(),
+            Some(t) if SAFE_NPX.contains(&t) => self.bump(Class::Change),
+            Some(_) => self.install(texts),
+            None => self.ask(),
         }
     }
 
@@ -1840,6 +2204,107 @@ fn plain_sed(script: &str) -> bool {
     })
 }
 
+/// A word as the shell would read it unquoted (`~/x` is the home).
+fn plain_word(text: String) -> Word {
+    Word {
+        tilde: text.starts_with('~'),
+        text,
+        ..Word::default()
+    }
+}
+
+/// An `http://` or `https://` address (never `file://`, which reads files).
+fn web_url(t: &str) -> bool {
+    let lower = t.to_ascii_lowercase();
+    lower.starts_with("https://") || lower.starts_with("http://")
+}
+
+/// The temporary folders: `/tmp` (`/private/tmp`) and this account's `$TMPDIR`.
+fn temp_roots() -> Vec<PathBuf> {
+    let mut roots = vec![PathBuf::from("/tmp"), PathBuf::from("/private/tmp")];
+    // `$TMPDIR` only where macOS puts it: a `TMPDIR` pointed at the home
+    // doesn't make the home a temporary folder.
+    let tmp = std::env::temp_dir();
+    let real = std::fs::canonicalize(&tmp).unwrap_or_else(|_| tmp.clone());
+    if real.starts_with("/private/var/folders") && real.components().count() > 4 {
+        roots.push(real);
+        roots.push(tmp);
+    }
+    roots
+}
+
+/// `$TMPDIR` as agents' shells see it (they inherit this process's), when
+/// it is a temporary folder macOS made.
+fn known_tmpdir() -> Option<String> {
+    let tmp = std::env::var("TMPDIR").ok()?;
+    let trimmed = tmp.trim_end_matches('/').to_string();
+    (temp_roots().len() > 2 && !trimmed.is_empty()).then_some(trimmed)
+}
+
+/// Inside a temporary folder (not the folder itself).
+fn in_temp(p: &Path) -> bool {
+    temp_roots().iter().any(|r| p.starts_with(r) && p != r)
+}
+
+/// `git branch` filters that take a commit.
+const BRANCH_FILTERS: &[&str] = &[
+    "--contains",
+    "--no-contains",
+    "--merged",
+    "--no-merged",
+    "--points-at",
+];
+
+/// A name a script may set for itself (`RID=…`): not one that changes how
+/// the programs after it run (`PATH`, `IFS`, `DYLD_*`…), and not one already
+/// handed to programs (an exported name would reach them).
+fn shell_variable(name: &str) -> bool {
+    const NEVER: &[&str] = &[
+        "PATH",
+        "IFS",
+        "CDPATH",
+        "ENV",
+        "BASH_ENV",
+        "PS4",
+        "PROMPT_COMMAND",
+        "HOME",
+        "ZDOTDIR",
+        "SHELLOPTS",
+        "BASHOPTS",
+        "GLOBIGNORE",
+        "FPATH",
+        "PAGER",
+        "EDITOR",
+        "VISUAL",
+        "SHELL",
+        "TMPDIR",
+    ];
+    const PREFIXES: &[&str] = &[
+        "LD_",
+        "DYLD_",
+        "GIT_",
+        "GH_",
+        "NODE_",
+        "NPM_",
+        "PYTHON",
+        "PERL",
+        "RUBY",
+        "BASH_",
+        "ZSH",
+        "CURL",
+        "SSH_",
+        "HTTP",
+        "HTTPS",
+        "ALL_PROXY",
+        "NO_PROXY",
+    ];
+    let upper = name.to_ascii_uppercase();
+    !NEVER.contains(&upper.as_str())
+        && !PREFIXES.iter().any(|p| upper.starts_with(p))
+        && !upper.ends_with("_PROXY")
+        && std::env::var_os(name).is_none()
+}
+
 fn is_assignment(w: &Word) -> bool {
     let Some((name, _)) = w.text.split_once('=') else {
         return false;
@@ -2041,8 +2506,6 @@ pub const ALWAYS_ASK: &[&str] = &[
     "gawk",
     "nawk",
     // The network.
-    "curl",
-    "wget",
     "http",
     "https",
     "xh",
@@ -2134,11 +2597,13 @@ pub const ALWAYS_ASK: &[&str] = &[
     "srm",
     "mas",
     "port",
-    "uv",
-    "pipx",
     "rustup",
 ];
 
 #[cfg(test)]
 #[path = "autoallow_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "autoallow_gaps_tests.rs"]
+mod gaps_tests;

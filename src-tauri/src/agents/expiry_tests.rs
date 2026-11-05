@@ -191,3 +191,84 @@ fn verdicts() {
         Some(Expiry::MovedOn)
     );
 }
+
+/// What an import left in a real team (names fictional): old-style secure
+/// inputs (`quiet`, before sign-in cards), Grok-era commands and a web
+/// search, all still "pending". At launch every one closes, the young
+/// secure inputs too, and nothing counts as needing the user any more.
+#[test]
+fn an_imports_leftover_cards_all_close_at_launch() {
+    with_root(|| {
+        let a = agent();
+        let now = store::now_ms();
+        let old_secret: Approval = serde_json::from_value(json!({
+            "requestId": "s-old",
+            "title": "Secure input · fictional_workspace",
+            "detail": "Company syncs",
+            "status": "pending",
+            "secret": {
+                "fields": [{ "env": "FICTIONAL_WORKSPACE", "label": "Value" }],
+                "kind": "other",
+                "name": "fictional_workspace",
+                "purpose": "Company syncs",
+                "quiet": true,
+                "reference": "secret:researcher/fictional_workspace"
+            }
+        }))
+        .unwrap();
+        post(&a.id, old_secret, now - MIN);
+        post(
+            &a.id,
+            bash_card("grok", "cd /workspace/fictional-outreach 2>&1 && ls -la"),
+            now - MIN,
+        );
+        let search: Approval = serde_json::from_value(json!({
+            "requestId": "web",
+            "title": "Search the web",
+            "detail": "fictional rates 2026",
+            "status": "pending",
+            "tool": "WebSearch",
+            "input": { "mode": "standard", "query": "fictional rates 2026" },
+            "always": { "kind": "tool", "label": "web searches", "value": "WebSearch" }
+        }))
+        .unwrap();
+        post(&a.id, search, now - MIN);
+        assert_eq!(store::get(&a.id).unwrap().pending_approvals, 3);
+        store::expire_stale_approvals();
+        assert_eq!(
+            status(&a.id, "s-old"),
+            (ApprovalStatus::Expired, Some(Expiry::MaybeLater))
+        );
+        assert_eq!(
+            status(&a.id, "grok"),
+            (ApprovalStatus::Expired, Some(Expiry::MovedOn))
+        );
+        assert_eq!(
+            status(&a.id, "web"),
+            (ApprovalStatus::Expired, Some(Expiry::MovedOn))
+        );
+        assert_eq!(store::get(&a.id).unwrap().pending_approvals, 0);
+        assert!(store::pending_approvals(&a.id).unwrap().is_empty());
+    });
+}
+
+/// A young secure input an agent asks for now still waits for its answer;
+/// an import's old-style one closes on any look.
+#[test]
+fn only_old_style_secure_inputs_close_young() {
+    let mut card = bash_card("s", "x");
+    card.tool = None;
+    card.input = None;
+    card.secret = Some(
+        serde_json::from_value(json!({
+            "fields": [], "kind": "other", "name": "n", "purpose": "p", "reference": "r"
+        }))
+        .unwrap(),
+    );
+    assert_eq!(verdict(&card, 0, false, Moment::Tick), None);
+    assert_eq!(verdict(&card, 0, false, Moment::Launch), None);
+    card.secret.as_mut().unwrap().quiet = true;
+    for moment in [Moment::Tick, Moment::Launch, Moment::TurnEnded] {
+        assert_eq!(verdict(&card, 0, false, moment), Some(Expiry::MaybeLater));
+    }
+}

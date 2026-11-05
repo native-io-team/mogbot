@@ -55,8 +55,11 @@ import {
   failureLine,
   needsYou,
   type Agent,
+  type AgentMessage,
   type SearchHit,
 } from '../../lib/agents';
+import { groupLine, groupRequests } from '../../lib/agentRequests';
+import { secretTitle } from '../../lib/agentSecrets';
 import { kbd } from '../../lib/shortcuts';
 
 interface AgentsSidebarProps {
@@ -91,8 +94,9 @@ interface AgentsSidebarProps {
 
 function subtitle(agent: Agent): ReactNode {
   // A request outranks driving: the row's words and its amber dot agree.
-  // With a dozen agents waiting the label alone repeats down the list; how
-  // many it holds is what tells one waiting row from the next.
+  // With a dozen agents waiting the label alone repeats down the list; what
+  // it's asking (`askingLine`, beside this) or how many it holds is what
+  // tells one waiting row from the next.
   if (needsYou(agent)) {
     const n = agent.pendingApprovals ?? 0;
     return n > 1 ? `Needs your OK · ${n}` : 'Needs your OK';
@@ -104,6 +108,27 @@ function subtitle(agent: Agent): ReactNode {
   if (failure) return failureLine(failure, agent.preview);
   return agent.preview ?? agent.role ?? '';
 }
+
+/**
+ * What a waiting agent is asking, from its loaded lines only: the one
+ * request's own words ("Push to GitHub"), or its logins by name ("3 logins:
+ * Slack bot token…"). Null when its chat isn't loaded or the count says more
+ * than the words would (as the requests panel words it: `groupLine`).
+ */
+function askingLine(agent: Agent, lines: readonly AgentMessage[] | undefined): string | null {
+  if (!lines) return null;
+  const group = groupRequests([agent], { [agent.id]: [...lines] }, NONE_SHOWN).groups[0];
+  if (!group || group.older > 0 || group.pending === 0) return null;
+  if (group.pending > 1 && group.logins !== group.pending) return null;
+  // One login says its name alone ("CRM API key"), not "1 login: CRM API key".
+  if (group.pending === 1 && group.logins === 1) {
+    const a = group.cards.find((m) => m.approval?.status === 'pending')?.approval;
+    if (a?.login) return a.login.title;
+    if (a?.secret) return secretTitle(a.secret.name);
+  }
+  return groupLine(group);
+}
+const NONE_SHOWN: ReadonlySet<string> = new Set();
 
 /** The row's second line takes the colour of its state. */
 function lineState(agent: Agent): string | undefined {
@@ -354,6 +379,9 @@ const AgentRow = memo(function AgentRow({
   onSelect: (agentId: string) => void;
   actions: AgentActions;
 }) {
+  // Its loaded lines, only while it's waiting: the row says what it's asking.
+  const lines = useAgentsSelector((s) => (needsYou(agent) ? s.messages[agent.id] : undefined));
+  const asking = needsYou(agent) ? askingLine(agent, lines) : null;
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -387,7 +415,15 @@ const AgentRow = memo(function AgentRow({
               <AgentEngineBadge engine={agent.engine} />
             </span>
             <span className="agents-list__preview" data-state={lineState(agent)}>
-              {subtitle(agent)}
+              {asking ? (
+                <>
+                  Needs your OK
+                  {/* What it's asking reads as words, not as more amber. */}
+                  <span className="agents-list__asking"> · {asking}</span>
+                </>
+              ) : (
+                subtitle(agent)
+              )}
             </span>
           </span>
           <span className="agents-list__status">

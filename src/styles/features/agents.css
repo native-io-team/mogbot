@@ -277,6 +277,11 @@
   color: var(--accent-warning);
 }
 
+/* …and what it's asking, after the label, in the row's ordinary ink. */
+.agents-list__row .agents-list__asking {
+  color: var(--text-secondary);
+}
+
 /* A turn that didn't finish shows where it happened. A usage limit heals on
    its own, so it stays quiet: no colour and no dot, only its words (when it
    resets). Amber is kept for what needs you. */

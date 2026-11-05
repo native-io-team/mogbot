@@ -29,9 +29,9 @@ const THIS_MAC = {
   node: 'v24.17.0',
   devices: [],
   signing: {
-    teamId: 'H8NN6DM6G6',
-    identity: 'Apple Development: julian@example.com (5VD2FLB8HU)',
-    bundleId: 'io.native.dashbot.companion.a4c8c6',
+    teamId: 'TEAM000001',
+    identity: 'Apple Development: julian@example.com (CERT000001)',
+    bundleId: 'io.native.dashbot.companion.87be70',
   },
   source,
 };
@@ -269,7 +269,7 @@ export const phoneInstallScenarios: Scenario[] = [
           platform: 'ios',
           deviceName: 'Sam’s iPhone',
           deviceId: IPHONE.udid,
-          teamId: 'H8NN6DM6G6',
+          teamId: 'TEAM000001',
           installedAt: Date.now() - 2 * DAY,
           expiresAt: Date.now() + 5 * DAY,
         }),

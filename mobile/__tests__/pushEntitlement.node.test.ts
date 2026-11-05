@@ -16,7 +16,7 @@ const notificationsOptions = () => {
 describe('push entitlement', () => {
   it('is left out of a self-build, which a personal team could not sign', () => {
     expect(pushEntitlement({})).toBe(false);
-    expect(pushEntitlement({ APPLE_TEAM_ID: 'H8NN6DM6G6', COMPANION_BUNDLE_ID: 'x.y' })).toBe(
+    expect(pushEntitlement({ APPLE_TEAM_ID: 'TEAM000001', COMPANION_BUNDLE_ID: 'x.y' })).toBe(
       false
     );
     expect(pushEntitlement({ COMPANION_PUSH_ENTITLEMENT: '0' })).toBe(false);
