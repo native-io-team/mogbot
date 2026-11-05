@@ -50,6 +50,7 @@ import {
 import { AgentCard, AgentLine } from './AgentCard';
 import { AgentAvatar } from './AgentAvatar';
 import { ApprovalCard } from './AgentChatItems';
+import { SetupReach } from './TeamSetupReach';
 import { TeamLogins } from './TeamLogins';
 
 interface TeamSetupCardProps {
@@ -212,8 +213,14 @@ function StepBody({
     case 'logins':
       return (
         <>
-          <p className="team-setup__detail">{words.detail}</p>
-          <SetupLogins logins={step.logins ?? []} onOpenAgent={onOpenAgent} />
+          {(step.later ?? []).length > 0 ? (
+            <SetupReach step={step} onOpenAgent={onOpenAgent} />
+          ) : (
+            <p className="team-setup__detail">{words.detail}</p>
+          )}
+          {((step.later ?? []).length === 0 || (step.logins ?? []).length > 0) && (
+            <SetupLogins logins={step.logins ?? []} onOpenAgent={onOpenAgent} />
+          )}
           {footer()}
         </>
       );

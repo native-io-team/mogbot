@@ -96,8 +96,14 @@ const TABLE: &[(&str, Class)] = &[
     ("pnpm test:run", Change),
     ("cargo test", Change),
     ("npx tsc --noEmit", Change),
-    ("rm -rf ./scratch", Change),
-    ("rm ~/Projects/.worktrees/site-task/tmp.txt", Change),
+    // Deleting what the project's tools rebuild, in its own home or copy.
+    ("rm -rf ./node_modules", Change),
+    ("rm -rf ~/Projects/.worktrees/site-task/.next", Change),
+    (
+        "rm -rf ~/Projects/.worktrees/site-task/target/debug",
+        Change,
+    ),
+    ("rm -rf ./dist/*", Change),
     ("chmod +x ~/Projects/site/scripts/build.sh", Change),
     ("ln -s ~/Projects/site/README.md ~/Desktop/readme", Change),
     ("cd ~/Projects/site && npm run lint", Change),
@@ -145,6 +151,13 @@ const TABLE: &[(&str, Class)] = &[
     ("rm ~/Desktop/report.pdf", Ask),
     ("trash ~/Downloads/thing", Ask),
     ("rm -rf .", Ask),
+    // Other deletes ask, even in its own home or copy.
+    ("rm -rf ./scratch", Ask),
+    ("rm ~/Projects/.worktrees/site-task/tmp.txt", Ask),
+    ("rm -rf ~/Projects/.worktrees/site-task/src", Ask),
+    ("rm -rf ~/Projects/.worktrees/site-task/*", Ask),
+    ("rm -rf ~/Projects/site/node_modules", Ask),
+    ("rm -rf ~/Documents/node_modules", Ask),
     ("find ~ -name '*.log' -delete", Ask),
     ("xargs rm", Ask),
     (

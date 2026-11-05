@@ -27,6 +27,7 @@ import * as Clipboard from 'expo-clipboard';
 import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, TextInput, View } from 'react-native';
 import { haptic } from '../lib/haptics';
+import { alsoForLine } from '../lib/teamSetup';
 import { useInFlight } from '../lib/once';
 import {
   CLAUDE_AI_CONNECTORS,
@@ -177,6 +178,12 @@ export function LoginCard({
           {a.label}
         </T>
       ))}
+      {/* Others who asked for the same joined this card: answering it answers them. */}
+      {!!alsoForLine(login.alsoFor) && (
+        <T variant="caption" color={colors.textMuted} testID="login-also-for">
+          {alsoForLine(login.alsoFor)}
+        </T>
+      )}
     </View>
   );
   const errorLine = error ? (

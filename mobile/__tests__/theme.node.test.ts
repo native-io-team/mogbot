@@ -236,7 +236,7 @@ describe('the scale', () => {
       new RegExp(`^radius\\.(${Object.keys(radius).join('|')})$`),
       /^[\w.]+ \/ 2$/,
       /^squircle\([\w.]+\)$/,
-      /^composer\.corner$/,
+      /^composer\.(corner|fieldCorner)$/,
     ];
     const found: string[] = [];
     for (const { at, line } of sourceLines()) {

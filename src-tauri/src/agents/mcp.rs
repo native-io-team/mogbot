@@ -321,7 +321,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "request_login",
-        description: "Ask the user to connect an app or account you need (Gmail, Google Calendar, Slack, LinkedIn, X, GitHub, Linear, Notion…). One card appears in this chat, on their phone too: it says which account and what you'll be able to do, and connects it the safest way there is: the app's own sign-in in their Mac's browser (you never see a password; the token stays in the Mac's Keychain), or their own signed-in browser for a site with no connector, where every post, send or payment asks them first. Never ask for a password or a login in chat. It returns at once: stop and tell the user in one line what it's for; you're woken when they connect it, with the tools to use, or decline.",
+        description: "Get access to an app or account you're blocked on for the user's task (Gmail, Google Calendar, Slack, LinkedIn, X, GitHub, Linear, Notion, Figma…). Try first: your own tools for it, then the user's signed-in browser (mcp__claude-in-chrome__*) if you have it. This checks the same on the Mac before asking: it may answer that you can reach it already (and how), that the user already answered, or that someone else's card for it is waiting and you're on it. Only otherwise does one card appear in this chat, on their phone too, with a sign-in button (the app's own sign-in in their Mac's browser; you never see a password). Never ask for a password or a login in chat, never up front, one at a time. When a card was raised, stop and tell the user in one line what it's for; you're woken when they answer.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -329,9 +329,38 @@ const TOOLS: &[Tool] = &[
                 "service": { "type": "string", "description": "The app or site, e.g. gmail, google_calendar, slack, linkedin, x, github, linear, notion, figma, stripe, vercel; or its name if it's something else." },
                 "account_hint": { "type": "string", "description": "Optional: which account, when it matters (\"work Gmail\", \"sam@acme.com\")." },
                 "scopes": { "type": "array", "items": { "type": "string" }, "description": "What you need: [\"read\"], or also [\"send\"], [\"post\"], [\"write\"]. Ask for the least that does the job." },
-                "why": { "type": "string", "description": "What you'll use it for, in one line. Shown on the card." }
+                "why": { "type": "string", "description": "What you'll use it for, in one line. Shown on the card." },
+                "signed_out": { "type": "boolean", "description": "true when you opened it in the user's browser and the page asked you to sign in." }
             },
             "required": ["service", "why"]
+        }),
+    },
+    Tool {
+        name: "remember_browser_account",
+        description: "After you checked, on the page itself, which account one of your sites is signed in as in the user's Chrome: remember which Chrome profile (browser) that was, so next time starts there. Only for your own sites; never a guess.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "site": { "type": "string", "description": "The site, as you were given it (e.g. www.figma.com)." },
+                "browser": { "type": "string", "description": "The browser's name from list_connected_browsers (e.g. \"Browser 1\")." },
+                "account": { "type": "string", "description": "The account the page showed (an email or a username)." }
+            },
+            "required": ["site", "browser"]
+        }),
+    },
+    Tool {
+        name: "ask_bring_browser_to_front",
+        description: "The account a task needs isn't in any connected Chrome profile you've looked in, and no other profile is connected: ask the user, once, to bring the right Chrome window to the front. One plain card (Check again / Not now), never a login. If another profile is connected that you haven't looked in, it says so instead. When a card was raised, stop; you're woken when they answer.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "site": { "type": "string", "description": "The site, as you were given it." },
+                "account": { "type": "string", "description": "The account you need (\"sam@work.example\"), when you know it." },
+                "looked_in": { "type": "array", "items": { "type": "string" }, "description": "The browsers you already opened it in and found the wrong account." }
+            },
+            "required": ["site"]
         }),
     },
     Tool {
@@ -547,7 +576,21 @@ async fn call(
             check_ins(app, caller, turn, name, args).await
         }
         "request_secret" => request_secret(app, caller, args),
-        "request_login" => request_login(app, caller, args),
+        "request_login" => request_login(app, caller, args).await,
+        "remember_browser_account" => {
+            match super::browser_profiles::remember(caller, args, runner::from_outside(&caller.id))
+            {
+                Ok(t) => text(t),
+                Err(e) => error(e),
+            }
+        }
+        "ask_bring_browser_to_front" => {
+            let outside = runner::from_outside(&caller.id);
+            match super::browser_profiles::bring_to_front(app, caller, args, outside).await {
+                Ok(t) => text(t),
+                Err(e) => error(e),
+            }
+        }
         _ => error("Unknown tool"),
     }
 }
@@ -1472,20 +1515,13 @@ async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
 
 /// A login card (`agents/logins.rs`). Nothing waits on it: connecting or
 /// declining wakes the agent.
-fn request_login(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+/// The access chain first (`access_chain`): a card only when nothing on
+/// this Mac reaches it and nobody asked already.
+async fn request_login(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
     let ask = super::logins::Ask::from_args(args);
-    match super::logins::raise(app, caller, &ask) {
-        Ok(reply) => text(reply),
-        Err(e) => error(e.to_string()),
-    }
-}
-
-/// A login card for an agent the import brought in: answering it doesn't
-/// wake the agent.
-pub(crate) fn request_login_quiet(app: &AppHandle, agent: &store::Agent, args: &Value) -> Value {
-    let mut ask = super::logins::Ask::from_args(args);
-    ask.quiet = true;
-    match super::logins::raise(app, agent, &ask) {
+    let tried = super::access_chain::Tried::from_args(args);
+    let outside = runner::from_outside(&caller.id);
+    match super::access_chain::request(app, caller, &ask, &tried, outside).await {
         Ok(reply) => text(reply),
         Err(e) => error(e.to_string()),
     }
@@ -1496,12 +1532,6 @@ pub(crate) fn request_login_quiet(app: &AppHandle, agent: &store::Agent, args: &
 /// tomorrow works as well as one answered now.
 fn request_secret(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
     request_secret_as(app, caller, args, false)
-}
-
-/// A secure input card for an agent the import connector brought in: saving
-/// or declining it doesn't wake the agent (`secrets::Request::quiet`).
-pub(crate) fn request_secret_quiet(app: &AppHandle, agent: &store::Agent, args: &Value) -> Value {
-    request_secret_as(app, agent, args, true)
 }
 
 fn request_secret_as(app: &AppHandle, caller: &store::Agent, args: &Value, quiet: bool) -> Value {
@@ -1696,6 +1726,7 @@ pub(super) fn new_card(
         login: None,
         set_aside: None,
         from_outside: None,
+        front: None,
     }
 }
 
@@ -1917,6 +1948,10 @@ pub(super) async fn decide(
     why: Option<&str>,
 ) -> Decision {
     let decision = decide_inner(app, caller, tool, input, why).await;
+    // Where its browser is now, for the next card's "on <site>, as …".
+    if decision == Decision::Allow {
+        super::browser::note_opened(&caller.id, tool, input);
+    }
     // The connection relay lets an allowed call through once, so it doesn't
     // ask again (`conn_relay`).
     if decision == Decision::Allow && super::connections::is_connection_tool(tool) {
@@ -1959,6 +1994,13 @@ async fn decide_inner(
         super::connections::Gate::Refuse(why) => return Decision::Deny(why),
         super::connections::Gate::Ask => {}
     }
+    // The user's browser: reads on the sites it was given go through; any
+    // other site, and every click, keystroke or form, asks (`browser::gate`).
+    match super::browser::gate(caller, tool, input, outside) {
+        super::browser::Gate::Allow => return Decision::Allow,
+        super::browser::Gate::Refuse(why) => return Decision::Deny(why),
+        super::browser::Gate::Ask | super::browser::Gate::NotBrowser => {}
+    }
     if always_allowed(caller, tool, input) {
         // Nothing happens invisibly: each one leaves a quiet line in the chat.
         let line = format!("{} · always allowed", one_line(tool, input));
@@ -1979,7 +2021,9 @@ async fn decide_inner(
         );
         return Decision::Allow;
     }
-    let (title, mut detail) = describe_request(tool, input);
+    // A browser action says exactly what it does, where, and as whom.
+    let (title, mut detail) = super::browser::card(&caller.id, tool, input)
+        .unwrap_or_else(|| describe_request(tool, input));
     if let Some(why) = why.map(str::trim).filter(|w| !w.is_empty()) {
         detail = format!("{detail}\n\n{why}");
     }

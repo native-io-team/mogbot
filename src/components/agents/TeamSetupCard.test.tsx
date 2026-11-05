@@ -113,7 +113,7 @@ describe('TeamSetupCard', () => {
       screen.getByText(/agents from Grok Bot are here, quiet until you say hi/)
     ).toBeInTheDocument();
     // Done reads as its outcome; routines (the first open step) is expanded.
-    expect(screen.getByText('Logins added')).toBeInTheDocument();
+    expect(screen.getByText('Logins sorted')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Switch on routines/ })).toHaveAttribute(
       'aria-expanded',
       'true'
@@ -172,7 +172,7 @@ describe('TeamSetupCard', () => {
     render(<TeamSetupCard view={view([logins, hello(['quiet'])])} chief="Chief of Staff" />);
     expect(screen.getByText('Bankline')).toBeInTheDocument();
     expect(screen.getByText('Bookkeeper')).toBeInTheDocument();
-    expect(screen.getByText(/Keychain, never the chat/)).toBeInTheDocument();
+    expect(screen.getByText(/Checked against this Mac first/)).toBeInTheDocument();
   });
 
   it('finished, it is one line that can be hidden', async () => {

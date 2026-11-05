@@ -237,6 +237,17 @@ pub fn run() {
                     })
                     .await;
                 }
+                // Login cards an import raised before the checklist checked
+                // first become its "Maybe later" rows (`agents/team_setup.rs`).
+                match tauri::async_runtime::spawn_blocking(agents::team_setup::fold_cards).await {
+                    Ok(Ok(n)) if n > 0 => {
+                        tracing::info!("[Agents] Moved {n} import login cards onto setting up the team");
+                        agents::team_setup::emit(&badge_app);
+                        let _ = tauri::Emitter::emit(&badge_app, agents::runner::EVENT_REGISTRY, ());
+                    }
+                    Ok(Err(e)) => tracing::warn!("[Agents] Couldn't move import login cards: {e}"),
+                    _ => {}
+                }
                 // A turn the last run quit in the middle of: stop its process, say so.
                 agents::runner::recover_after_restart(&badge_app).await;
                 // Cards raised before the independence level answered local
@@ -706,6 +717,12 @@ pub fn run() {
             commands::agents::agents_team_setup_hello,
             commands::agents::agents_team_setup_missing,
             commands::agents::agents_team_setup_dismiss,
+            commands::agents::agents_browser_status,
+            commands::agents::agents_browser_enable,
+            commands::agents::agents_browser_disable,
+            commands::agents::agents_browser_open_install,
+            commands::agents::agents_access_check,
+            commands::agents::agents_team_setup_later,
             commands::agents::agents_team_setup_reopen,
             commands::agent_rooms::agents_rooms,
             commands::agent_rooms::agents_room_create,

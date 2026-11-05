@@ -297,6 +297,7 @@ pub(crate) fn card(
         login: None,
         set_aside: None,
         from_outside: None,
+        front: None,
     }
 }
 

@@ -140,6 +140,13 @@ these without updating that doc.
 - **Agents never hold an app's token.** A connection made on a login card is reached through the
   bridge's relay (`agents/conn_relay.rs`), which adds the Keychain token and enforces the grant
   for every engine ([docs/agents.md](docs/agents.md), "Grants, read vs send, and turns")
+- **Just try, then one ask.** `request_login` runs the access chain first (a connection, this
+  Mac's sign-in, the user's browser), dedupes asks team-wide and allows one at a time; imports ask
+  for nothing up front ([docs/agents.md](docs/agents.md), "Just try first", "Checking what your
+  team can already reach")
+- **The browser is the user.** Claude in Chrome only after the guided setup verified it, per
+  agent, never for outside-text turns; reads on the agent's own sites are free, anything else asks
+  ([docs/agents.md](docs/agents.md), "Your browser")
 - **Outside text is sealed.** Connector imports and "When…" checks run in a sealed headless call
   (no shell, no files, no web; read-only app tools only), and a turn answering outside text can't
   write its own memory or change the team without a card ([docs/agents.md](docs/agents.md),
