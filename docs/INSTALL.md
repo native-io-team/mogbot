@@ -203,7 +203,8 @@ Step 4. Network errors: run `pnpm install` again; it resumes.
 
 ### Step 8. Build the desktop app
 
-**Run** (10–25 minutes the first time, a few minutes after that)
+**Run** (about 8 minutes on a recent Apple Silicon Mac the first time, up to
+25 on older ones; a few minutes after that)
 
 ```bash
 CI=true pnpm tauri build --bundles app
@@ -212,33 +213,40 @@ CI=true pnpm tauri build --bundles app
 `CI=true` stops the build trying to arrange a Finder window. `--bundles app`
 builds just the `.app`; leave it off to also get a `.dmg` (only needed to
 give the app to someone else; see [Sharing the build](#sharing-the-build)).
+Rust warnings during the build are expected.
 
 **Check**
 
 ```bash
-ls -d src-tauri/target/release/bundle/macos/Dashbot.app && codesign -dv src-tauri/target/release/bundle/macos/Dashbot.app 2>&1 | grep -E 'Identifier|Signature'
+ls -d src-tauri/target/release/bundle/macos/Dashbot.app && plutil -extract CFBundleIdentifier raw src-tauri/target/release/bundle/macos/Dashbot.app/Contents/Info.plist
 ```
 
-Expected: the path, `Identifier=io.native.dashbot`, and `Signature=adhoc`.
-The name comes from `brand.json`. If it has changed, look in
-`src-tauri/target/release/bundle/macos/` for the one `.app` there. If
-`CARGO_TARGET_DIR` is set, the bundle is under `$CARGO_TARGET_DIR/release/bundle/`
-instead.
+Expected: the path, then `io.native.dashbot`. The name comes from
+`brand.json`. If it has changed, look in `src-tauri/target/release/bundle/macos/`
+for the one `.app` there. If `CARGO_TARGET_DIR` is set, the bundle is under
+`$CARGO_TARGET_DIR/release/bundle/` instead.
 
 **If it fails:**
 
 - `linker 'cc' not found` or `xcrun: error`: go back to Step 2.
 - `Port 1420 is already in use`: that only affects `pnpm tauri dev`, not this
   build. See [Troubleshooting](#troubleshooting).
-- Out of disk space: the build needs about 10 GB in `src-tauri/target/`.
+- Out of disk space: the build needs about 3 GB in `src-tauri/target/`, plus
+  Rust's and pnpm's caches.
 
 ### Step 9. Install and open the app
 
 **Run**
 
 ```bash
-rm -rf /Applications/Dashbot.app && cp -R src-tauri/target/release/bundle/macos/Dashbot.app /Applications/ && open /Applications/Dashbot.app
+osascript -e 'quit app "Dashbot"' 2>/dev/null; rm -rf /Applications/Dashbot.app && cp -R src-tauri/target/release/bundle/macos/Dashbot.app /Applications/ && codesign --force --deep --sign - /Applications/Dashbot.app && codesign --verify --deep --strict /Applications/Dashbot.app && echo SIGNATURE_OK && open /Applications/Dashbot.app
 ```
+
+The build signs only the program inside the bundle, so `codesign --verify`
+reports *"code has no resources but signature indicates they must be
+present"* on it as built. Re-signing ad hoc (`--sign -`) gives the whole
+bundle a consistent signature, so macOS (and the Keychain, which the app uses
+for its phone key and secrets) sees one app. Expected: `SIGNATURE_OK`.
 
 **Check**
 
@@ -450,26 +458,57 @@ No Metro, a real Home Screen app, dictation and quick actions work. Needs
 **full Xcode** from the App Store (Expo SDK 58 needs Xcode 26.4 or later), a
 free Apple ID, and the iPhone plugged in by cable.
 
-The desktop app does this for you: **Phone → Get the phone app** opens a
-checklist, and your agent runs the build beside it while the app checks each
-step (docs/mobile.md, "Installing the app"). HUMAN steps in it: install Xcode,
-plug in and trust the phone, turn on Developer Mode (Settings → Privacy &
-Security → Developer Mode), sign in to Xcode with your Apple ID, and on the
-phone trust the developer (Settings → General → VPN & Device Management).
+**From the desktop app** (Phone → **Get the phone app**): a checklist, with
+your agent running the build beside it while the app checks each step
+(docs/mobile.md, "Installing the app"). **This is only offered when the app
+runs from source (`pnpm tauri dev`).** A `.app` from `pnpm tauri build` hides
+it, because `links.companionSource` in `brand.json` is null, so it has no
+repository to fetch the phone app's source from. From a built `.app`, do it
+by hand:
 
-By hand:
+HUMAN steps first: *"Please install Xcode from the App Store (it's large, so
+it takes a while), open it once, and sign in under Xcode → Settings →
+Accounts with your Apple ID. Then plug your iPhone into the Mac, tap Trust on
+the phone, and turn on Settings → Privacy & Security → Developer Mode (the
+phone restarts). Tell me when that's done."*
+
+**Check**
 
 ```bash
-cd mobile && pnpm install
-npx expo prebuild --platform ios
-npx expo run:ios --device --configuration Release
+xcodebuild -version | head -1
+security find-identity -v -p codesigning | grep "Apple Development"
+xcrun devicectl list devices
 ```
 
-**A free Apple ID's build stops opening after 7 days.** Rebuild (Phone panel →
-Reinstall) to renew it. A paid Apple Developer account makes it last a year.
+Expected: `Xcode 26.4` or later, at least one `Apple Development` identity,
+and the iPhone listed as `available (paired)`. No identity yet? Build once
+from Xcode or let the Run step create it (automatic signing).
+
+**Run.** Use your team id: the `OU=` field of your Apple Development
+certificate, not the id in brackets.
+
+```bash
+TEAM=$(security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject | sed -n 's/.*OU *= *\([A-Z0-9]*\).*/\1/p')
+echo "$TEAM"
+cd mobile && pnpm install
+COMPANION_BUNDLE_ID=io.native.dashbot.companion.$(printf %s "$TEAM" | shasum -a 256 | cut -c1-6) APPLE_TEAM_ID=$TEAM npx expo prebuild -p ios --clean
+COMPANION_BUNDLE_ID=io.native.dashbot.companion.$(printf %s "$TEAM" | shasum -a 256 | cut -c1-6) APPLE_TEAM_ID=$TEAM npx expo run:ios --device --configuration Release
+```
+
+(The bundle id is the one the desktop app looks for: `companion.bundleId` from
+`brand.json`, plus six hex characters of the team id's SHA-256.)
+
+**HUMAN** after it installs: *"On the iPhone, open Settings → General → VPN &
+Device Management, tap your Apple ID under Developer App, and tap Trust. Then
+open Dashbot and pair it as before (Step 14). In this build, the Camera app can
+open the pairing code too."*
+
+**A free Apple ID's build stops opening after 7 days.** Run the same two
+commands again to renew it (or Phone panel → Reinstall when running from
+source). A paid Apple Developer account makes it last a year.
 Push still doesn't work (no push entitlement on a self-build).
 
-Android: `npx expo run:android --variant release` with a phone on adb. It
+Android: `COMPANION_BUNDLE_ID=io.native.dashbot.companion.self npx expo prebuild -p android --clean`, then the same with `npx expo run:android --variant release`, with a phone on adb. It
 doesn't expire. Not verified on Android hardware.
 
 ### Developer: run from source with hot reload
@@ -558,6 +597,14 @@ The engine isn't installed or signed in. Run the Step 10 checks. Sign in again
 with `claude` or `codex login`, then quit and reopen the app. If the human's only
 agent CLI is something else (Opencode, Cursor), Agents shows a "no engine"
 panel: install Claude Code or Codex.
+
+### "Dashbot wants to use your confidential information stored in … keychain"
+
+The app keeps its phone-pairing key and agent secrets in the Keychain. A
+locally built app has no developer signature, so after each rebuild macOS asks
+again. **HUMAN:** *"macOS is asking whether Dashbot can use the Keychain.
+Please type your Mac password and click Always Allow."* If you click Deny, the
+Phone panel won't offer a pairing code ("unlock your Mac").
 
 ### Agents stop when I close the lid
 

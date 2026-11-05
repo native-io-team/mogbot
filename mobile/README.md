@@ -82,7 +82,7 @@ See docs/mobile.md, "Phone screens without a simulator".
 
 | Variable | Default | |
 | --- | --- | --- |
-| `SHIPSTUDIO_BUNDLE_ID` | `com.shipstudio.companion` | **Placeholder** until the App Store Connect record exists |
+| `COMPANION_BUNDLE_ID` | `companion.bundleId` in `brand.json` | **Placeholder** until the App Store Connect record exists |
 | `EAS_PROJECT_ID` | none | Without it, OTA updates are off, so an official update can never reach a fork |
 | `UPDATES_URL` | `https://u.expo.dev/<project id>` | |
 
