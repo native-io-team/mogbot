@@ -461,6 +461,7 @@ export const agentsTeamSetup = {
   "dismissed": false,
   "done": 2,
   "id": "setup1",
+  "postedAt": 1700000000000,
   "setAside": 2,
   "source": "Grok",
   "steps": [

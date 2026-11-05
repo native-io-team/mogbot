@@ -1191,7 +1191,15 @@ chats.
   Chief carries one line on where it stands.
 - **One checklist, one card** in the Chief's chat (`TeamSetupCard`, and on
   the phone), updating in place, with a bar above the composer ("A few things
-  to finish setting up your team · 2 of 4 done", **Continue**). Steps, in
+  to finish setting up your team · 2 of 4 done", **Continue**). The card is
+  an item in the conversation like a message, at the point it was posted
+  (`postedAt`: the import's end, or under the upgrade's line; a setup kept
+  by an earlier build reads it once from the Chief's chat; from an older
+  Mac, after the import's review card and its line), and scrolls up with the history as you talk:
+  what you send next is the newest thing, never the card. **Continue** goes
+  to it (mounting or paging back to it first) and flashes it; the bar goes
+  once it's done (`setupItemIndex` on the desk, `withSetupCard` on the
+  phone). Steps, in
   order, each skippable and reopenable ("Open again"): **Add logins** (one
   row per service with the agents that need it; Add opens their secure
   cards in place), **Switch on routines** (each with when and what, a
@@ -1200,7 +1208,8 @@ chats.
   Chief answers what it can and asks the rest in one batch), **Say hi to
   your team** (one at a time: Say hi sends a short hello as the user's
   message; others wait while one replies). Progress counts steps, never
-  requests. Finished, it becomes one line, "Your team is set up." (Hide).
+  requests. Finished, it becomes one line where it was, "Done · Your team
+  is set up." (Hide).
   Put away, ⌘K "Continue setting up your team" and a row at the top of
   What's in flight bring it back.
 - **Only choices are kept** (`<agents root>/team-setup.json`: agents, who was

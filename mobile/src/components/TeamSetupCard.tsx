@@ -1,7 +1,9 @@
 /**
- * "Setting up your team": one card at the foot of the Chief's chat after an
- * import, the phone's copy of the desk's (`TeamSetupCard` there, desktop
- * `agents/team_setup.rs`). Steps in a fixed order: logins, routines to switch
+ * "Setting up your team": one card in the Chief's chat after an import,
+ * a row in the conversation where it was posted (`withSetupCard`), never
+ * pinned under the newest message; the bar above the composer brings you
+ * back to it. The phone's copy of the desk's (`TeamSetupCard` there,
+ * desktop `agents/team_setup.rs`). Steps in a fixed order: logins, routines to switch
  * on, what the agents said they're missing, then saying hi to each. The
  * first open step is unfolded; done and skipped ones are a ticked row that
  * opens again on a tap. Finished, it's one quiet line.
@@ -48,13 +50,8 @@ export function TeamSetupCard({
 }) {
   const view = useApp((s) => s.teamSetup);
   const connected = useApp((s) => s.link.kind === 'connected');
-  const styles = useStyles();
   if (!shows(view)) return null;
-  return (
-    <View style={styles.foot}>
-      <TeamSetup view={view} chief={chief} connected={connected} onError={onError} />
-    </View>
-  );
+  return <TeamSetup view={view} chief={chief} connected={connected} onError={onError} />;
 }
 
 /** The card for a view: split out so tests can draw any state. */
@@ -401,7 +398,6 @@ function RoutineRow({
 
 const useStyles = makeStyles((colors) => ({
   // Under the newest message, apart from it like a new speaker.
-  foot: { paddingTop: space.lg },
   step: {
     gap: space.sm,
     paddingTop: space.sm,

@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { engineCantAskBar } from '../lib/agents';
 import { drivenBar, importBar, revisingBar } from '../lib/bars';
+import { setupBar } from '../lib/teamSetup';
 import { pill } from '../lib/connection';
 import { useApp } from '../lib/store';
 import { BANNER_GRACE_MS, useLinkState, useNow } from './ConnectionPill';
@@ -50,11 +51,16 @@ export function ConversationBars({
   agent,
   revising,
   onStopRevising,
+  onOpenSetup,
 }: {
   agent: Agent;
   revising?: ResultRef;
   onStopRevising: () => void;
+  /** Go to "Setting up your team" where it sits in the chat. */
+  onOpenSetup?: () => void;
 }) {
+  const teamSetup = useApp((s) => (agent.isMain ? s.teamSetup : null));
+  const setup = setupBar(teamSetup);
   const messages = useApp((s) => s.chats[agent.id]?.messages);
   const reviewHere = useApp((s) => !!s.welcome?.methods.includes('agents.import.review'));
   const engines = useApp((s) => s.overview?.engines);
@@ -74,6 +80,15 @@ export function ConversationBars({
   }
   const importing = importBar(agent, messages, reviewHere);
   if (importing) bars.push({ id: 'import', ...importing, icon: 'square.and.arrow.down' });
+  // What's left of setting up the team: the card itself stays in the chat
+  // where it was posted, and this brings you to it.
+  if (setup) {
+    bars.push({
+      id: 'setup',
+      ...setup,
+      ...(onOpenSetup ? { action: { label: 'Continue', onPress: onOpenSetup } } : {}),
+    });
+  }
   const changes = revisingBar(revising);
   if (changes) {
     bars.push({

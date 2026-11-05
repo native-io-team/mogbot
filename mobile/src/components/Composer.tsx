@@ -94,6 +94,7 @@ export function Composer({
   macName,
   onError,
   onSent,
+  onOpenSetup,
   onHeight,
   side = { left: 0, right: 0 },
 }: {
@@ -103,6 +104,8 @@ export function Composer({
   macName: string;
   onError: (text: string) => void;
   onSent: () => void;
+  /** The setup bar's Continue: go to "Setting up your team" in the chat. */
+  onOpenSetup?: () => void;
   onHeight?: (h: number) => void;
   /** Kept clear at each side: a phone in landscape has its notch there. */
   side?: { left: number; right: number };
@@ -320,6 +323,7 @@ export function Composer({
         agent={agent}
         revising={draft.revising}
         onStopRevising={() => setComposer(agent.id, { revising: undefined })}
+        onOpenSetup={onOpenSetup}
       />
       {suggestions.length > 0 && (
         <Animated.View entering={FadeIn.duration(120)} exiting={FadeOut.duration(100)}>

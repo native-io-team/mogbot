@@ -13,7 +13,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { AGENT_EVENTS, type AgentMessage } from './agents';
+import { AGENT_EVENTS, type AgentMessage, type ChatItem } from './agents';
 
 export type SetupStepId = 'logins' | 'routines' | 'missing' | 'hello';
 export type SetupStepState = 'open' | 'done' | 'skipped';
@@ -62,6 +62,11 @@ export interface SetupStep {
 export interface TeamSetupView {
   id: string;
   source: string;
+  /**
+   * When it was posted (the import's end): its place in the Chief's
+   * conversation, like a message's. Older Macs don't say.
+   */
+  postedAt?: number;
   steps: SetupStep[];
   done: number;
   total: number;
@@ -178,6 +183,7 @@ export function useResumableTeamSetup(): TeamSetupView | null {
 export async function resumeTeamSetup(): Promise<void> {
   await reopenTeamSetup();
   await refreshTeamSetup();
+  showTeamSetup();
 }
 
 /** Tests: forget what was read. */
@@ -185,6 +191,7 @@ export function resetTeamSetupForTests() {
   stop?.();
   current = null;
   loaded = false;
+  revealPending = false;
 }
 
 /* ------------------------------------------------------------- the words */
@@ -193,11 +200,92 @@ export const SETUP_TITLE = 'Setting up your team';
 /** The bar above the Chief's composer while there's some left. */
 export const SETUP_BAR_TITLE = 'A few things to finish setting up your team';
 
-/** Bring the card into view (the bar's Continue). */
+/*
+ * Bringing the card into view (the bar's Continue, ⌘K, What's in flight).
+ * The card sits where it was posted, so it may be scrolled far up, or above
+ * the lines loaded so far: the Chief's chat does the finding
+ * (`useTeamSetupReveal`). Asked before that chat is open, the ask waits for it.
+ */
+let revealCount = 0;
+let revealPending = false;
+const revealers = new Set<(n: number) => void>();
+
+/** Bring the card into view and flash it. */
 export function showTeamSetup() {
-  document
-    .querySelector('[data-testid="team-setup"]')
-    ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  revealCount += 1;
+  revealPending = true;
+  if (revealers.size > 0) revealers.forEach((f) => f(revealCount));
+  else
+    document
+      .querySelector('[data-testid="team-setup"]')
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+/**
+ * For the Chief's chat: a number that changes each time the card is asked
+ * for (0 until it is), and `done` once it's been shown.
+ */
+export function useTeamSetupReveal(enabled: boolean): { ask: number; done: () => void } {
+  const [ask, setAsk] = useState(() => (enabled && revealPending ? revealCount : 0));
+  useEffect(() => {
+    if (!enabled) return;
+    revealers.add(setAsk);
+    if (revealPending) setAsk(revealCount);
+    return () => {
+      revealers.delete(setAsk);
+    };
+  }, [enabled]);
+  return { ask, done: revealDone };
+}
+
+function revealDone() {
+  revealPending = false;
+}
+
+/**
+ * Where the card was posted, as a time: what the Mac says, else (an older
+ * Mac) the import's end — its review card and the line after it. `null`
+ * when neither is known.
+ */
+export function setupAnchorTs(
+  view: Pick<TeamSetupView, 'postedAt'>,
+  messages: readonly AgentMessage[]
+): number | null {
+  if (view.postedAt) return view.postedAt;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].approval?.connector?.kind !== 'review') continue;
+    let ts = messages[i].ts;
+    for (let j = i + 1; j < messages.length && messages[j].kind === 'note'; j++)
+      ts = messages[j].ts;
+    return ts;
+  }
+  return null;
+}
+
+const itemTs = (item: ChatItem): number | null =>
+  item.type === 'day' ? null : item.type === 'message' ? item.message.ts : item.messages[0].ts;
+
+/**
+ * The card's place among a chat's items (oldest first): after everything
+ * said up to when it was posted, before what came after — and before the
+ * time divider that opens what came after. `-1` when that place is above the
+ * lines loaded so far (`hasOlder`). With no time known, it goes last.
+ */
+export function setupItemIndex(
+  items: readonly ChatItem[],
+  anchor: number | null,
+  hasOlder = false
+): number {
+  if (anchor === null) return items.length;
+  let at = items.findIndex((item) => {
+    const ts = itemTs(item);
+    return ts !== null && ts > anchor;
+  });
+  if (at < 0) return items.length;
+  const firstLoaded = items.findIndex((item) => itemTs(item) !== null);
+  if (at === firstLoaded && hasOlder) return -1;
+  while (at > 0 && items[at - 1].type === 'day') at--;
+  return at;
 }
 
 /** "2 of 4 done": steps, never requests. */
