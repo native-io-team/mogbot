@@ -27,6 +27,8 @@ import { Tooltip } from '../primitives/Tooltip';
 import { Checkbox } from '../primitives/Checkbox';
 import { DiffModal } from '../branches/DiffModal';
 import { CopyActions, copyLine } from './AgentCopy';
+import { ResultCardView } from './AgentResult';
+import { WorkTimeline } from './AgentWork';
 import { listProjects } from '../../lib/project';
 import {
   folderName,
@@ -35,6 +37,7 @@ import {
   type Agent,
   type AgentMessage,
   type ChangedFile,
+  type ResultRef,
 } from '../../lib/agents';
 
 interface ProjectEntry {
@@ -220,6 +223,9 @@ export const ChangeCard = memo(function ChangeCard({
   arrived,
   agent,
   live,
+  owner,
+  newestResult = true,
+  onAskForChanges,
 }: {
   message: AgentMessage;
   arrived?: boolean;
@@ -227,6 +233,11 @@ export const ChangeCard = memo(function ChangeCard({
   agent?: Agent;
   /** The newest card of the agent's open copy. */
   live?: boolean;
+  /** Whose home the result's files live in (a result card needs it). */
+  owner?: Agent;
+  /** This card carries the newest version of its result. */
+  newestResult?: boolean;
+  onAskForChanges?: (ref: ResultRef) => void;
 }) {
   const ctx = useAgentProjects();
   const changes = message.changes;
@@ -253,11 +264,14 @@ export const ChangeCard = memo(function ChangeCard({
     : copy
       ? `Changed ${count} in a copy of ${project}`
       : `Changed ${count} in ${project}`;
-  return (
+  const result = message.result;
+  const inResult = Boolean(result && owner);
+  const body = (
     <div
       className="agent-changes"
-      data-arrived={arrived || undefined}
-      data-message-ids={message.id}
+      data-in-result={inResult || undefined}
+      data-arrived={inResult ? undefined : arrived || undefined}
+      data-message-ids={inResult ? undefined : message.id}
       data-copy={copy ? (offering ? 'live' : 'past') : undefined}
     >
       {/* What changed, in a line; the receipt (branch, line counts, files) is
@@ -332,6 +346,12 @@ export const ChangeCard = memo(function ChangeCard({
             project={project}
             onReview={changes.files.length > 0 ? () => setViewing(changes.files[0]) : undefined}
             onPreview={ctx?.openProject}
+            onAskForChanges={
+              result && newestResult && onAskForChanges
+                ? () =>
+                    onAskForChanges({ id: result.id, version: result.version, title: result.title })
+                : undefined
+            }
           />
         </>
       )}
@@ -371,5 +391,26 @@ export const ChangeCard = memo(function ChangeCard({
         />
       )}
     </div>
+  );
+  if (!result || !owner) return body;
+  // One card: the result, with what the turn changed (and the copy's
+  // Keep / Discard) inside it, and the turn's timeline under it.
+  return (
+    <ResultCardView
+      message={message}
+      card={result}
+      agent={owner}
+      // The open copy's live card stays whole even after a newer version,
+      // or Keep / Discard would fold away with it.
+      newest={newestResult || offering}
+      onAskForChanges={newestResult ? onAskForChanges : undefined}
+      actionsInside={offering}
+      arrived={arrived}
+      footer={message.work && <WorkTimeline work={message.work} agent={owner} />}
+    >
+      {/* Always passed: a superseded version folds as a whole (ResultCardView),
+          and opening it shows its change receipt too. */}
+      {body}
+    </ResultCardView>
   );
 });

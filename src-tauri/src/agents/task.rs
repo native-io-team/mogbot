@@ -368,7 +368,7 @@ fn is_dependency(path: &str) -> bool {
 }
 
 /// A `.env*` file (or folder), except the examples people commit on purpose.
-fn is_env_file(path: &str) -> bool {
+pub(crate) fn is_env_file(path: &str) -> bool {
     let name = path
         .trim_end_matches('/')
         .rsplit('/')

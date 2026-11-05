@@ -65,6 +65,7 @@ pub mod project;
 pub mod prompts;
 pub mod quick_entry;
 pub mod quota;
+pub mod results;
 pub mod review;
 pub mod runner;
 pub mod runs;
@@ -122,6 +123,8 @@ fn greet(agent_id: &str) {
         client_id: None,
         work: None,
         fresh: false,
+        result: None,
+        revises: None,
         takeover: false,
     };
     if let Err(e) = store::append_message(&message) {
@@ -178,3 +181,6 @@ mod tests {
         assert_eq!(log[0].text, prompts::CHIEF_GREETING);
     }
 }
+
+#[cfg(test)]
+mod audit_tests;

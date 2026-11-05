@@ -212,6 +212,7 @@ fn frames() -> Vec<ServerFrame> {
         resume: ResumeMode::Replay,
         methods: router::METHODS.to_vec(),
         time_zone: Some("America/New_York".into()),
+        features: super::wire::MAC_FEATURES.to_vec(),
     }];
     for (reason, message) in [
         (

@@ -3,10 +3,12 @@
 //!
 //! A check-in or routine firing is a wake like any other (`schedule::wake`);
 //! the turn that answers it may be shared with other messages. So a firing
-//! leaves a [`Ticket`] holding the exact prompt it queued, and when a turn
-//! ends (`runner::drain` → [`turn_ended`]) the tickets whose prompt that turn
-//! carried are settled by how it ended: its newest chat line is a failed
-//! turn's error, or it isn't.
+//! leaves a [`Ticket`] whose id rides on the queued wake, and when a turn
+//! ends (`runner::drain` → [`turn_ended`]) the tickets that turn carried are
+//! settled by id, by how it ended: stopped (by the user, or dropped by a
+//! Stop before it started) is a failure, "Stopped"; otherwise its newest
+//! chat line is a failed turn's error, or it isn't. An interrupted turn's
+//! tickets carry over to the turn that replaces it.
 //!
 //! - **Temporary failures are retried** (`failure::is_temporary`: the usage
 //!   limit, Anthropic overloaded or erroring, the network): with backoff for
@@ -151,6 +153,9 @@ pub fn next_retry(
 /// A firing waiting for the turn that answers it.
 #[derive(Debug, Clone)]
 pub struct Ticket {
+    /// Rides on the queued wake (`runner::Inbound::ticket`), so the turn
+    /// that answers it settles it by id, however that turn ends.
+    pub id: String,
     pub agent_id: String,
     /// The wake prompt it queued, verbatim.
     pub prompt: String,
@@ -299,11 +304,11 @@ pub fn issue(ticket: Ticket) {
     tickets.push(ticket);
 }
 
-fn take(agent_id: &str, prompt: &str) -> Vec<Ticket> {
+fn take(agent_id: &str, ids: &[String]) -> Vec<Ticket> {
     let mut tickets = TICKETS.lock().unwrap_or_else(|e| e.into_inner());
     let (mine, rest): (Vec<Ticket>, Vec<Ticket>) = tickets
         .drain(..)
-        .partition(|t| t.agent_id == agent_id && prompt.contains(&t.prompt));
+        .partition(|t| t.agent_id == agent_id && ids.contains(&t.id));
     *tickets = rest;
     mine
 }
@@ -311,20 +316,30 @@ fn take(agent_id: &str, prompt: &str) -> Vec<Ticket> {
 /// The routine a turn's cost belongs to: the one thing it ran. A turn that
 /// answered two routines' firings (or a routine and anything else, which
 /// `spent` being `None` says) is charged to neither, because there is no
-/// honest way to split one turn's reported cost between them.
+/// honest way to split one turn's reported cost between them. Every
+/// check-in a ticket names counts, not just its first.
 pub fn charged_to(tickets: &[Ticket], spent: Option<&UsageTotals>) -> Option<String> {
     spent.filter(|s| s.turns > 0)?;
     let mut ids = tickets
         .iter()
-        .filter_map(|t| t.check_ins.first().map(|c| c.id.as_str()));
+        .flat_map(|t| t.check_ins.iter().map(|c| c.id.as_str()));
     let first = ids.next()?;
     ids.all(|id| id == first).then(|| first.to_string())
 }
 
-/// A turn ended. Settle the scheduled runs it answered. `spent`: what the
-/// turn cost, when everything it answered was a routine firing.
-pub fn turn_ended(app: &AppHandle, agent_id: &str, prompt: &str, spent: Option<&UsageTotals>) {
-    let mine = take(agent_id, prompt);
+/// A turn ended, or the wakes it would have answered were dropped. Settle
+/// the scheduled runs `ids` it answered. `stopped`: it was stopped (or
+/// never started), so they failed with these words; otherwise a failure is
+/// the turn's newest line, when that's an error after it fired. `spent`:
+/// what the turn cost, when it finished having run nothing but routines.
+pub fn turn_ended(
+    app: &AppHandle,
+    agent_id: &str,
+    ids: &[String],
+    stopped: Option<&str>,
+    spent: Option<&UsageTotals>,
+) {
+    let mine = take(agent_id, ids);
     let Some(since) = mine.iter().map(|t| t.fired_at).min() else {
         return;
     };
@@ -337,16 +352,17 @@ pub fn turn_ended(app: &AppHandle, agent_id: &str, prompt: &str, spent: Option<&
         });
     }
     let now = store::now_ms();
-    // The turn's failure is its newest line, when that's an error after it fired.
-    let newest = store::messages(agent_id, 1)
-        .ok()
-        .and_then(|m| m.into_iter().last());
-    let failed = newest
-        .filter(|m| m.kind == MessageKind::Error && m.ts >= since)
-        .map(|m| {
-            let failure = m.failure.clone().unwrap_or(Failure::OTHER);
-            (m.text, failure)
-        });
+    let failed = match stopped {
+        Some(why) => Some((why.to_string(), Failure::OTHER)),
+        None => store::messages(agent_id, 1)
+            .ok()
+            .and_then(|m| m.into_iter().last())
+            .filter(|m| m.kind == MessageKind::Error && m.ts >= since)
+            .map(|m| {
+                let failure = m.failure.clone().unwrap_or(Failure::OTHER);
+                (m.text, failure)
+            }),
+    };
     let sign_in = super::broker::needs_sign_in(agent_id);
     let tz = chrono::Local;
     for ticket in mine {
@@ -576,6 +592,7 @@ mod tests {
 
     fn ticket(attempt: u32) -> Ticket {
         Ticket {
+            id: "t1".into(),
             agent_id: "a".into(),
             prompt: "[Scheduled check-in you set: brief]".into(),
             check_ins: vec![check_in("Brief me on Acme", true)],

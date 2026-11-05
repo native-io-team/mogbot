@@ -202,6 +202,38 @@ pub fn messages() -> Vec<AgentMessage> {
                               { "at": at(22), "kind": "web", "label": "Browsed acme.com" },
                               { "at": at(22), "kind": "tool", "label": "Searched Google Drive" }
                           ] } }),
+        // A result card (`share_result`), "Ask for changes" on it, and its
+        // second version riding on the turn's change card.
+        json!({ "id": "m26", "agentId": AGENT, "ts": at(26), "kind": "agent", "text": "One page with every October invoice, grouped by client.",
+                "attachments": [{ "name": "october-invoices.pdf", "path": "attachments/m26/october-invoices.pdf", "mime": "application/pdf", "size": 48_211 }],
+                "result": { "id": "res-oct", "version": 1, "title": "October invoice summary",
+                            "summary": "One page with every October invoice, grouped by client.",
+                            "items": [
+                                { "kind": "file", "file": { "name": "october-invoices.pdf", "path": "attachments/m26/october-invoices.pdf", "mime": "application/pdf", "size": 48_211 }, "label": "Summary" },
+                                { "kind": "link", "url": "https://docs.example.com/sheets/october", "label": "Source sheet" }
+                            ],
+                            "checked": ["Totals match the bank export"],
+                            "notVerified": ["Two EUR invoices use today's rate, not the invoice date's"] } }),
+        json!({ "id": "m27", "agentId": AGENT, "ts": at(27), "kind": "user", "text": "Use the rate on each invoice's date",
+                "revises": { "id": "res-oct", "version": 1, "title": "October invoice summary" } }),
+        json!({ "id": "m28", "agentId": AGENT, "ts": at(28), "kind": "changes", "text": "Changed 1 file in a copy of site",
+                "changes": { "project": "/Users/julian/ShipStudio/site", "from": "abc123", "to": "fed321",
+                             "files": [{ "path": "src/invoices.ts", "status": "modified", "added": 4, "removed": 2 }],
+                             "fileCount": 1, "added": 4, "removed": 2,
+                             "copy": { "id": "copy-1", "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12",
+                                       "branch": "finance/invoice-totals-ab12" } },
+                "attachments": [
+                    { "name": "before.png", "path": "attachments/m28/before.png", "mime": "image/png", "size": 9_000 },
+                    { "name": "after.png", "path": "attachments/m28/after.png", "mime": "image/png", "size": 9_100 }
+                ],
+                "result": { "id": "res-oct", "version": 2, "title": "October invoice summary",
+                            "summary": "EUR invoices now use the rate on each invoice's date.",
+                            "items": [
+                                { "kind": "file", "file": { "name": "before.png", "path": "attachments/m28/before.png", "mime": "image/png", "size": 9_000 }, "role": "before" },
+                                { "kind": "file", "file": { "name": "after.png", "path": "attachments/m28/after.png", "mime": "image/png", "size": 9_100 }, "role": "after" }
+                            ],
+                            "checked": ["Recomputed both EUR totals"],
+                            "changes": "EUR invoices use the rate on each invoice's date" } }),
     ];
     list.into_iter().map(|m| round_trip(m, &[])).collect()
 }

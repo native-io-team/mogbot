@@ -157,6 +157,7 @@ pub async fn agents_send(
     attachments: Option<Vec<attachments::OutgoingAttachment>>,
     mentions: Option<Vec<String>>,
     client_id: Option<String>,
+    revises: Option<String>,
 ) -> Result<store::AgentMessage, CommandError> {
     let text = text.trim().to_string();
     let incoming = attachments.unwrap_or_default();
@@ -166,6 +167,20 @@ pub async fn agents_send(
     let recipient = store::get(&agent_id)?;
     let home = store::agent_home(&agent_id)?;
     let mut message = runner::new_message(&agent_id, store::MessageKind::User, text.clone());
+    // "Ask for changes": pinned to the result as the log has it, never as
+    // the client named it, and refused if it isn't in this conversation.
+    if let Some(id) = revises.filter(|r| !r.trim().is_empty()) {
+        let log_of = agent_id.clone();
+        let log = tokio::task::spawn_blocking(move || store::messages(&log_of, usize::MAX))
+            .await
+            .map_err(agents::err_other)??;
+        message.revises = Some(agents::results::reference(&log, id.trim()).ok_or_else(|| {
+            agents::err_invalid(
+                "revises",
+                "That result isn't in this conversation any more.",
+            )
+        })?);
+    }
     // A phone's send id, echoed so its optimistic bubble reconciles by id.
     message.client_id = client_id.filter(|c| !c.is_empty());
     // Only real agents, other than the recipient, once each; anything else is dropped.
@@ -188,11 +203,21 @@ pub async fn agents_send(
     // The log keeps what the user typed; the agent also gets where the files are.
     let block = attachments::prompt_block(&store::agent_home(&agent_id)?, &message.attachments);
     let names: Vec<String> = message.mentions.iter().map(|m| m.name.clone()).collect();
-    let prompt = [text, prompts::mentions(&names, recipient.is_main), block]
-        .into_iter()
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n");
+    let revising = message
+        .revises
+        .as_ref()
+        .map(agents::results::revising_prompt)
+        .unwrap_or_default();
+    let prompt = [
+        revising,
+        text,
+        prompts::mentions(&names, recipient.is_main),
+        block,
+    ]
+    .into_iter()
+    .filter(|part| !part.is_empty())
+    .collect::<Vec<_>>()
+    .join("\n\n");
     let message = runner::record(&app, message)?;
     runner::enqueue(&app, &agent_id, prompt, runner::From::User);
     agents::tray::mark_used(&app);
@@ -604,7 +629,7 @@ pub async fn agents_busy() -> Result<usize, CommandError> {
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_stop(app: AppHandle, agent_id: String) -> Result<bool, CommandError> {
-    let stopped = runner::stop(&agent_id);
+    let stopped = runner::stop(&app, &agent_id);
     // The Chief's Stop (here and on the phone) also stops an import it's
     // running; only the import's own messages go, never the user's.
     let import = store::get(&agent_id).is_ok_and(|a| a.is_main) && agents::connector::stop(&app);
@@ -625,7 +650,7 @@ pub async fn agents_take_over(
     stop_first: Option<bool>,
 ) -> Result<takeover::View, CommandError> {
     if stop_first.unwrap_or(false) && takeover::view(&agent_id).is_none() {
-        runner::stop(&agent_id);
+        runner::stop(&app, &agent_id);
         // The turn's process tree gets ~1.5s to go, then its exit is waited
         // on for at most 10s (`runner::finish`); wait that out.
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);

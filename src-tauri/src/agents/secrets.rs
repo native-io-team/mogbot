@@ -638,6 +638,8 @@ mod tests {
             client_id: None,
             work: None,
             fresh: false,
+            result: None,
+            revises: None,
             takeover: false,
         };
         let request_id = store::new_id();
