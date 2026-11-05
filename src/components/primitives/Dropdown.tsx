@@ -14,6 +14,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useClickOutside } from '../../hooks/useClickOutside';
+import { usePortalAccentScope } from '../../contexts/AccentScopeContext';
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"]';
 const TYPEAHEAD_TIMEOUT_MS = 500;
@@ -129,6 +130,10 @@ export function Dropdown({
   const [internalOpen, setInternalOpen] = useState(false);
   const isOpen = controlledOpen ?? internalOpen;
   const [portalPos, setPortalPos] = useState<CSSProperties | null>(null);
+  // A portalled menu leaves the DOM scope it was opened from; carry it over.
+  const accentScope = usePortalAccentScope(
+    portalPos ?? { position: 'fixed', visibility: 'hidden' }
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -426,7 +431,8 @@ export function Dropdown({
       ]
         .filter(Boolean)
         .join(' ')}
-      style={portal ? (portalPos ?? { position: 'fixed', visibility: 'hidden' }) : undefined}
+      data-accent-scope={portal ? accentScope['data-accent-scope'] : undefined}
+      style={portal ? accentScope.style : undefined}
       role={presentation === 'menu' ? 'menu' : 'dialog'}
       aria-label={presentation === 'popover' ? ariaLabel : undefined}
       tabIndex={-1}
