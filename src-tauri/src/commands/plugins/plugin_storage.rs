@@ -234,7 +234,8 @@ pub fn plugin_fs_read_text(
 ///
 /// Security: validates project_path, uses extended PATH, enforces configurable timeout (default 120s).
 #[tauri::command]
-#[tracing::instrument(fields(project = %project_path))]
+// `args` can carry a token (`vercel --token …`): the command name is enough.
+#[tracing::instrument(skip(args), fields(project = %project_path))]
 pub async fn exec_plugin_shell(
     plugin_id: String,
     project_path: String,

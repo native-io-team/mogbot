@@ -130,14 +130,71 @@ mod log_hygiene_tests {
         "content",
         "prompt",
         "draft",
+        // A command line can carry a token (`exec_plugin_shell`'s args).
+        "args",
+        "env",
     ];
+
+    /// Any argument whose name *contains* one of these is sensitive too:
+    /// `access_token`, `api_key`, `credentials`, `pkcs8_b64`, `new_password`…
+    const SENSITIVE_PARTS: &[&str] = &[
+        "token",
+        "secret",
+        "password",
+        "passwd",
+        "api_key",
+        "apikey",
+        "credential",
+        "pkcs8",
+        "private_key",
+    ];
+
+    fn is_sensitive(name: &str) -> bool {
+        let lower = name.to_ascii_lowercase();
+        SENSITIVE.contains(&lower.as_str()) || SENSITIVE_PARTS.iter().any(|p| lower.contains(p))
+    }
+
+    /// An instrumented function: (attribute args, name, parameters).
+    fn instrumented_fn() -> regex::Regex {
+        // Every instrumented function, public or not.
+        regex::Regex::new(
+            r"#\[tracing::instrument(\((?s:.*?)\))?\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\(((?s:.*?))\)\s*(?:->|\{)",
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn private_and_restricted_functions_are_scanned_too() {
+        let re = instrumented_fn();
+        for src in [
+            "#[tracing::instrument]\nfn a(token: String) {}",
+            "#[tracing::instrument]\npub(super) async fn b(api_key: String) -> u8 {}",
+            "#[tracing::instrument(skip(x))]\n#[allow(dead_code)]\npub fn c(secret: &str) {}",
+        ] {
+            assert!(re.is_match(src), "{src}");
+        }
+    }
+
+    #[test]
+    fn names_are_matched_whole_or_by_their_sensitive_part() {
+        for name in [
+            "token",
+            "access_token",
+            "api_key",
+            "credentials",
+            "pkcs8_b64",
+            "args",
+        ] {
+            assert!(is_sensitive(name), "{name}");
+        }
+        for name in ["project_path", "plugin_id", "port"] {
+            assert!(!is_sensitive(name), "{name}");
+        }
+    }
 
     #[test]
     fn commands_never_log_credentials_instructions_or_notes() {
-        let re = regex::Regex::new(
-            r"#\[tracing::instrument(\((?s:.*?)\))?\]\s*(?:#\[[^\]]*\]\s*)*pub(?:\(crate\))?\s+(?:async\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\(((?s:.*?))\)\s*(?:->|\{)",
-        )
-        .unwrap();
+        let re = instrumented_fn();
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut offenders = Vec::new();
         for entry in walkdir::WalkDir::new(&root).into_iter().flatten() {
@@ -175,7 +232,7 @@ mod log_hygiene_tests {
                                 r.starts_with(|c: char| c.is_ascii_digit()) || r.starts_with("size")
                             })
                         });
-                    if !scalar && SENSITIVE.contains(&name) && !skipped.contains(&name) {
+                    if !scalar && is_sensitive(name) && !skipped.contains(&name) {
                         offenders.push(format!(
                             "{}: {}({name})",
                             entry.path().strip_prefix(&root).unwrap().display(),
