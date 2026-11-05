@@ -436,6 +436,7 @@ function AppContents({ initialProjectPath }: AppProps) {
     autoAcceptMode,
     showCreateModal,
     setShowCreateModal,
+    createInitialTab,
     importView,
     setImportView,
     pendingMonorepoPick,
@@ -501,12 +502,16 @@ function AppContents({ initialProjectPath }: AppProps) {
   });
 
   // A project's tools (Node, Git, …) are asked for when one first starts.
-  const { handleCreateProject, handleImportProject, handleImportLocalFolder } =
-    useGatedProjectStarts({
-      createProject: createProjectNow,
-      importProject: importProjectNow,
-      importLocalFolder: importLocalFolderNow,
-    });
+  const {
+    handleCreateProject,
+    handleCreateProjectFromUrl,
+    handleImportProject,
+    handleImportLocalFolder,
+  } = useGatedProjectStarts({
+    createProject: createProjectNow,
+    importProject: importProjectNow,
+    importLocalFolder: importLocalFolderNow,
+  });
 
   useDevServerRetention({
     keepDevServersRunning,
@@ -610,6 +615,7 @@ function AppContents({ initialProjectPath }: AppProps) {
     handleSelectProject,
     handleBackToProjects,
     handleCreateProject,
+    handleCreateProjectFromUrl,
     handleImportProject,
     handleImportLocalFolder,
     handleGitHubConnect: handleGitHubConnectFromOverlay,
@@ -1247,6 +1253,7 @@ function AppContents({ initialProjectPath }: AppProps) {
     isAuthCheckDone: isInitialCheckDone,
     onGitHubConnect: handleGitHubConnectFromOverlay,
     showCreateModal,
+    createInitialTab,
     onCloseCreateModal: handleCloseCreateModal,
     onProjectCreated: (path: string) => void handleProjectCreated(path),
     importView,

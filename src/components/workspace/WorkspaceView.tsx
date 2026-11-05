@@ -918,6 +918,7 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
               {(currentBranch === 'main' || currentBranch === 'master') && (
                 <MainBranchBanner
                   projectPath={currentProject.path}
+                  branchName={currentBranch}
                   onCreateBranch={() => {
                     setIsPreviewHidden(false);
                     setWorkspaceTab('branches');

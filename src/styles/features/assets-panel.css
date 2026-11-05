@@ -468,7 +468,7 @@
 .assets-drag-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(var(--accent-success-rgb), 0.1);
+  background: var(--accent-active-soft);
   border: 2px dashed var(--accent-active);
   border-radius: var(--radius-card);
   display: flex;

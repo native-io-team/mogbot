@@ -529,6 +529,9 @@ body.compact-mode-active html {
   background: rgba(var(--accent-error-light-rgb), 0.1);
 }
 
+/* Plugin compatibility only: `button--*` is plugin-facing CSS, so an installed
+   plugin may still use it. The React `Button` no longer offers `success` —
+   actions in the app are monochrome and green is a status colour. */
 .button--success {
   background: transparent;
   color: var(--button-success-text);

@@ -59,7 +59,7 @@ export function QuitConfirmModal({
         {remoteLine}
         <div className="quit-confirm-actions quit-confirm-actions--stacked">
           {prompt.offerBackground && (
-            <Button variant="primary" width="fill" onClick={onKeepRunning} autoFocus>
+            <Button variant="strong" data-allow width="fill" onClick={onKeepRunning} autoFocus>
               Keep running in background
             </Button>
           )}

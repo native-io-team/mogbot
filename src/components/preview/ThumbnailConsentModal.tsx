@@ -51,7 +51,7 @@ export function ThumbnailConsentModal({
           <Button variant="ghost" onClick={onDeny}>
             No thumbnails
           </Button>
-          <Button variant="primary" onClick={onAllow}>
+          <Button variant="strong" data-allow onClick={onAllow}>
             Allow thumbnails
           </Button>
         </div>

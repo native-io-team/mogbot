@@ -213,7 +213,7 @@ export function TeamPanel({
                     {snapshot.updates.length} {snapshot.updates.length === 1 ? 'update' : 'updates'}
                   </span>
                   {unseen.length > 0 && (
-                    <span className="team-status team-status--merged">{unseen.length} new</span>
+                    <span className="team-status team-status--label">{unseen.length} new</span>
                   )}
                 </div>
                 {unseen.length > 0 && (

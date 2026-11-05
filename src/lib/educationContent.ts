@@ -96,7 +96,7 @@ export const educationContent: Record<string, EducationItem> = {
       'GitHub stores all your project files online and keeps a history of every change. Connect to back up your work and collaborate with others.',
   },
   'env-button': {
-    title: 'Environment Variables',
+    title: 'Environment variables',
     description:
       'Set values like API keys and configuration options that your app can read at runtime. These are stored in a .env file in your project.',
   },
@@ -219,7 +219,7 @@ export const educationContent: Record<string, EducationItem> = {
   },
   // Terminal header buttons
   'notification-settings': {
-    title: 'Notification Sounds',
+    title: 'Notification sounds',
     description:
       'Turn sound alerts on or off. Get notified when your agent finishes a task or needs your attention.',
   },

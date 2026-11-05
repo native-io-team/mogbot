@@ -51,6 +51,8 @@ export interface UseAppCommandsParams {
   handleSelectProject: (project: Project) => void | Promise<void>;
   handleBackToProjects: () => void;
   handleCreateProject: () => void;
+  /** New Project, opened on its From a URL tab. */
+  handleCreateProjectFromUrl: () => void;
   handleImportProject: () => void;
   handleImportLocalFolder: () => void | Promise<void>;
   handleGitHubConnect: () => void | Promise<void>;
@@ -75,6 +77,7 @@ export function useAppCommands({
   handleSelectProject,
   handleBackToProjects,
   handleCreateProject,
+  handleCreateProjectFromUrl,
   handleImportProject,
   handleImportLocalFolder,
   handleGitHubConnect,
@@ -90,7 +93,7 @@ export function useAppCommands({
 }: UseAppCommandsParams) {
   const openModal = useOpenModal();
 
-  useMigrationCommands();
+  useMigrationCommands({ openCreateFromUrl: handleCreateProjectFromUrl });
   useIssueReportCommands();
   useThemeCommands();
 

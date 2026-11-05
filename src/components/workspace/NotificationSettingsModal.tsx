@@ -73,7 +73,7 @@ export function NotificationSettingsModal({
     <ModalFrame
       isOpen
       onClose={onClose}
-      title="Notification Sounds"
+      title="Notification sounds"
       className="notification-settings-content"
     >
       <>

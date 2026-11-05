@@ -343,14 +343,14 @@ export function PullRequestsTab({
           isOpen
           onClose={() => setConfirmMergePr(null)}
           dismissable={!mergingPr}
-          title="Merge Pull Request?"
+          title="Merge pull request?"
           className="post-merge-content"
         >
           <div className="post-merge-body">
             <p>
               This will merge <strong>{confirmMergePr.headRef}</strong> into{' '}
-              <strong>{confirmMergePr.baseRef}</strong>. The changes will go live, but can be rolled
-              back if needed.
+              <strong>{confirmMergePr.baseRef}</strong>. If your site deploys from{' '}
+              <strong>{confirmMergePr.baseRef}</strong>, this publishes the changes.
             </p>
           </div>
           <div className="post-merge-footer">
@@ -418,7 +418,7 @@ export function PullRequestsTab({
           isOpen
           onClose={() => setConfirmClosePr(null)}
           dismissable={!closingPr}
-          title="Close Pull Request?"
+          title="Close pull request?"
           className="post-merge-content"
         >
           <div className="post-merge-body">

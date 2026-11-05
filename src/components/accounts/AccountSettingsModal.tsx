@@ -172,7 +172,7 @@ export function AccountSettingsModal({
       <ModalFrame
         isOpen={isOpen}
         onClose={onClose}
-        title="Workspace Settings"
+        title="Workspace settings"
         className="account-modal-frame"
       >
         <div className="account-detail">

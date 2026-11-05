@@ -7,7 +7,6 @@ export type ButtonVariant =
   | 'strong'
   | 'secondary'
   | 'danger'
-  | 'success'
   | 'ghost'
   | 'warning'
   | 'variable';
@@ -54,7 +53,8 @@ export function buttonClassNames({
  *   Staff's colour, or the scoped agent's), `strong` = the neutral emphasis
  *   (near-white fill, dark ink) for answers that must never look like a
  *   colour choice — Allow on an approval card is one, `danger` =
- *   red-tinted destructive action, `success` = green-tinted positive action,
+ *   red-tinted destructive action (there is no green "success" button: the
+ *   look keeps actions monochrome, and green is a status colour only),
  *   `ghost` = borderless low-emphasis action, `warning` = amber warning action,
  *   and `variable` = purple variable action.
  * - `size` — `default` (30px), `compact` for dense rows and toolbars, or

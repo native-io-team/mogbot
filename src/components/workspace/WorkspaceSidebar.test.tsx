@@ -307,6 +307,23 @@ describe('WorkspaceSidebar project activity indicator', () => {
     expect(screen.queryByText('No active projects yet.')).not.toBeInTheDocument();
   });
 
+  it('offers "Search projects" on Home, like Agents offers "Search conversations"', async () => {
+    sessionRegistry._resetForTests();
+    render(
+      <WorkspaceSidebar
+        {...sidebarProps()}
+        isHomeActive
+        projects={[]}
+        currentProjectPath={null}
+        currentProjectName={null}
+        terminalTabs={[]}
+      />,
+      { wrapper: Providers }
+    );
+    const search = await screen.findByRole('button', { name: 'Search projects' });
+    expect(search).toHaveTextContent('⌘O');
+  });
+
   it('renders with no projects when projects can move between groups', async () => {
     sessionRegistry._resetForTests();
 
