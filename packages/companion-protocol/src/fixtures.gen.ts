@@ -2794,6 +2794,7 @@ export const frames = [
       "agents.changeDiff",
       "agents.keepCopy",
       "agents.discardCopy",
+      "agents.watchLive",
       "agents.files",
       "agents.fetchPath",
       "agents.search",

@@ -21,7 +21,7 @@ fn saved_port(path: &str) -> Option<u16> {
         .and_then(|p| u16::try_from(p).ok())
 }
 
-async fn target_for(agent_id: &str, message_id: &str) -> Result<PreviewTarget, CommandError> {
+pub(crate) async fn target_for(agent_id: &str, message_id: &str) -> Result<PreviewTarget, CommandError> {
     let agent = store::get(agent_id)?;
     let (log_of, wanted) = (agent_id.to_string(), message_id.to_string());
     let message = tokio::task::spawn_blocking(move || {

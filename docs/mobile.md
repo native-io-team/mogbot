@@ -862,6 +862,48 @@ Haptics only for send, stop, approvals (after the Mac confirms), failures and
 toggles, and can be turned off. Android gets Material symbols, ripples and
 predictive back.
 
+### A tested card, and Watch live
+
+When the desk's **Test it** has run (docs/agents.md), the result card's new
+version carries `test`. The phone shows it in the card: the outcome in one
+line (a warning icon only when something is broken), the agent's summary and
+its list of what's broken, "N console errors" (the preview's own capture), and
+the screenshots as a sideways-paging strip, each captioned "2 of 3 · <step>"
+with the app's own step label. Tapping a picture opens the usual viewer. The
+"Changes since v1" line is left off a tested card: the test section says it.
+
+**Watch live** (a text action, like Ask for changes; shown when the Mac serves
+`agents.watchLive` and the card names a project or is a copy's card) opens the
+card's running site in the in-app browser, read-only:
+
+- The phone asks over its paired socket; the Mac resolves the folder from the
+  card exactly as the desk's Preview does (`preview_test::resolve`) and needs a
+  dev server already up for it (`proxy::dev_server_port_for`). None: "Open
+  Preview on the Mac first — the site isn't running there." The phone can't
+  start one.
+- The answer is a one-time link: `https://<mac>.ts.net:<companion port + 1>/__<slug>-watch/<ticket>`.
+  The ticket is 256 bits, kept only as a hash, bound to that phone and that
+  port, and good for a minute. Opening it trades it for an HttpOnly, Secure,
+  SameSite=Strict cookie good for 30 minutes (`companion/watch.rs`).
+- **Tailnet only**: the proxy binds loopback and is published with `tailscale
+  serve` on its own port, never Funnel (the port is never 443/8443/10000, and
+  a request Tailscale marks `Tailscale-Funnel-Request` is refused). Started on
+  the first Watch live, stopped with the phone server.
+- **Read-only**: GET and HEAD only; forms that post and WebSockets are
+  refused, so there's no live reload (reload the page). Every request re-checks
+  the phone is still paired: removing it on the Mac ends its sessions.
+- Passed through untouched: no script injection; our cookie and Tailscale's
+  identity headers are stripped, Host is the dev server's own.
+
+Verified: `cargo test --lib companion` (the decision function: one-use and
+expired tickets, revoked phones, cookie per port, Funnel and non-loopback
+refused, every write method refused, upgrades refused, cookie stripping;
+`agents.watchLive` served and audited), `mobile/__tests__/resultTest.test.tsx`,
+and the `result-tested` qa:web shot in both themes. **Not verified**:
+`tailscale serve` on the second port against a real tailnet, and a real dev
+server (Next, Vite) rendering through the proxy on a phone; with HMR refused,
+some dev clients may log reconnect attempts.
+
 ## Notifications
 
 `lib/notify.ts` keeps them honest: one per alert, grouped per agent

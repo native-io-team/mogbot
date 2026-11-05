@@ -62,6 +62,7 @@ pub const METHODS: &[&str] = &[
     "agents.changeDiff",
     "agents.keepCopy",
     "agents.discardCopy",
+    "agents.watchLive",
     "agents.files",
     "agents.fetchPath",
     "agents.search",
@@ -617,6 +618,11 @@ pub trait Backend: Send + Sync + 'static {
     /// The project's live preview as a JPEG, captured for the phone alone.
     async fn preview_screenshot(&self, project: &str, phone: bool)
         -> Result<Vec<u8>, CommandError>;
+    /// "Watch live": the port of the running dev server a card previews
+    /// (`preview_test::resolve`), refused when nothing is serving it.
+    async fn watch_port(&self, agent_id: &str, message_id: &str) -> Result<u16, CommandError>;
+    /// Publish the watch proxy on the tailnet (lazily, once): its base URL.
+    async fn watch_publish(&self) -> Result<String, CommandError>;
     /// An attachment's file: `attachments::resolve` under the agent's home.
     fn attachment_file(
         &self,
@@ -924,6 +930,13 @@ struct DiffParams {
     agent_id: String,
     message_id: String,
     path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WatchParams {
+    agent_id: String,
+    message_id: String,
 }
 
 #[derive(Deserialize)]
@@ -1759,6 +1772,20 @@ async fn run(
             let p: CopyParams = parse(params)?;
             b.discard_copy(&p.agent_id, &p.copy_id).await?;
             Ok(Value::Null)
+        }
+        "agents.watchLive" => {
+            let p: WatchParams = parse(params)?;
+            let port = b.watch_port(&p.agent_id, &p.message_id).await?;
+            let base = b.watch_publish().await?;
+            let (ticket, expires_at) = c.watch.mint(&caller.device_id, port, now_ms());
+            Ok(json!({
+                "url": format!(
+                    "{}{}{ticket}",
+                    base.trim_end_matches('/'),
+                    super::watch::ticket_prefix()
+                ),
+                "expiresAt": expires_at,
+            }))
         }
         "agents.fetchPath" => {
             let p: PathParams = parse(params)?;
@@ -2809,6 +2836,42 @@ mod tests {
         let audit = stub.audited();
         assert!(audit.iter().any(|a| a.1 == "agents.keepCopy"));
         assert!(audit.iter().any(|a| a.1 == "agents.discardCopy"));
+    }
+
+    #[tokio::test]
+    async fn watch_live_hands_a_one_time_tailnet_link_and_is_audited() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        assert!(METHODS.contains(&"agents.watchLive"));
+        assert!(!READ_ONLY_METHODS.contains(&"agents.watchLive"));
+        let link = dispatch(
+            &c,
+            &me,
+            "agents.watchLive",
+            json!({ "agentId": AGENT, "messageId": "m-result" }),
+        )
+        .await
+        .unwrap();
+        let url = link["url"].as_str().unwrap();
+        let prefix = format!(
+            "https://mac.example.ts.net:{}{}",
+            super::super::watch::WATCH_TAILNET_PORT,
+            super::super::watch::ticket_prefix()
+        );
+        assert!(url.starts_with(&prefix), "{url}");
+        assert!(link["expiresAt"].as_u64().unwrap() > 0);
+        // Nothing running for that card: an honest refusal, no link.
+        let refused = dispatch(
+            &c,
+            &me,
+            "agents.watchLive",
+            json!({ "agentId": AGENT, "messageId": "m-not-running" }),
+        )
+        .await
+        .unwrap_err();
+        assert!(format!("{refused:?}").contains("Open Preview on the Mac first"));
+        assert!(stub.audited().iter().any(|a| a.1 == "agents.watchLive"));
     }
 
     #[tokio::test]

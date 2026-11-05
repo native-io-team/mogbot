@@ -317,6 +317,16 @@ export interface Methods {
   /** "Discard" on a change card: the copy and everything in it, gone. */
   'agents.discardCopy': { params: { agentId: string; copyId: string }; result: null };
   /**
+   * "Watch live" on a card with a project: a one-time link (valid a minute)
+   * to that card's running dev server, read-only, served on this Mac's own
+   * tailnet only (`companion/watch.rs`). Refused when the site isn't running
+   * on the Mac (its Preview starts it).
+   */
+  'agents.watchLive': {
+    params: { agentId: string; messageId: string };
+    result: { url: string; expiresAt: number };
+  };
+  /**
    * The phone's stand-in for `agents_open_path` (which opens Finder on the
    * Mac): a path written in an agent's reply, made downloadable. Only paths
    * `files::shareable` accepts for that agent; folders and apps are refused.

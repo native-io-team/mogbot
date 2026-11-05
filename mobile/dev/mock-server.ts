@@ -731,6 +731,9 @@ export function createMockServer(opts: MockOptions = {}) {
     const project = '/Users/you/ShipStudio/acme-site';
     const id = (n: number) => `site_p2_${n}`;
     const shot = attach('site', id(4), 'Phone.png', 'image/png', siteScreenshot());
+    const tested = [1, 2, 3].map((n) =>
+      attach('site', id(9), `step-${n}.png`, 'image/png', siteScreenshot())
+    );
     const report = attach(
       'site',
       id(6),
@@ -816,6 +819,39 @@ export function createMockServer(opts: MockOptions = {}) {
         kind: 'agent',
         text: 'Hero copy is updated on staging. Lighthouse is attached.',
         attachments: [report],
+      },
+      {
+        // "Test it" on the desk: the hero card's next version, with what the
+        // agent found clicking through the preview and its screenshots.
+        id: id(9),
+        agentId: 'site',
+        ts: at - 2 * 60_000 - 30_000,
+        kind: 'agent',
+        text: 'Clicked through the home, pricing and sign-up pages.',
+        attachments: tested,
+        result: {
+          id: 'res_site_hero',
+          version: 2,
+          title: 'Phone hero',
+          summary: 'Hero padding is 24px on phones and the CTA sits above the fold at 390×844.',
+          changes: 'Tested it in the preview: 1 thing is broken',
+          project,
+          test: {
+            outcome: 'broken',
+            summary: 'Home and pricing work. Sign up shows an error after sending the form.',
+            broken: ['Sign up: “Something went wrong” after sending the form'],
+            consoleErrors: ['POST /api/signup 500 (Internal Server Error)'],
+            steps: [
+              { kind: 'open', label: 'Opened /', ok: true, ts: at - 3 * 60_000 },
+              { kind: 'shot', label: 'Home page', ok: true, shot: tested[0], ts: at - 3 * 60_000 },
+              { kind: 'click', label: 'Clicked “Pricing”', ok: true, ts: at - 3 * 60_000 + 4000 },
+              { kind: 'shot', label: 'Pricing page', ok: true, shot: tested[1], ts: at - 3 * 60_000 + 6000 },
+              { kind: 'type', label: 'Filled in “Email” and sent it', ok: true, ts: at - 3 * 60_000 + 9000 },
+              { kind: 'note', label: 'The form showed an error', ok: false, ts: at - 3 * 60_000 + 11000 },
+              { kind: 'shot', label: 'Sign-up error', ok: true, shot: tested[2], ts: at - 3 * 60_000 + 12000 },
+            ],
+          },
+        },
       },
       {
         // A question the session can't answer itself: the desk's decision card.
@@ -2430,6 +2466,19 @@ export function createMockServer(opts: MockOptions = {}) {
       a.permissions = (a.permissions ?? []).filter((r) => r.id !== p.ruleId);
       emit({ type: 'agents.registry', overview: overview() });
       return null;
+    },
+    'agents.watchLive': (p) => {
+      // A card whose site isn't running on the "Mac" answers as the Mac would.
+      if (p.messageId !== 'site_p2_9')
+        return fail({
+          type: 'Other',
+          message: "Open Preview on the Mac first — the site isn't running there.",
+          expected: true,
+        });
+      return {
+        url: `https://mac.example.ts.net:47464/__dashbot-watch/${'0'.repeat(64)}`,
+        expiresAt: Date.now() + 60_000,
+      };
     },
     'agents.keepCopy': (p) => {
       const a = agent(String(p.agentId));
