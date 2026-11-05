@@ -21,7 +21,7 @@
 //! costs one string comparison.
 
 /// Bump when SKILL.md changes so installed copies are refreshed.
-const SKILL_VERSION: &str = "4";
+const SKILL_VERSION: &str = "5";
 
 /// The skill body.
 ///
@@ -50,9 +50,9 @@ metadata:
   shipstudio-skill-version: "{SKILL_VERSION}"
 ---
 
-# Ship Studio team
+# Team
 
-Ship Studio shows a team what everyone is doing, built from the git repository
+The app shows a team what everyone is doing, built from the git repository
 rather than a server. It reads two things:
 
 1. **Your commit messages and pull requests** — for what changed and why.
@@ -64,11 +64,11 @@ The first needs no special format. The second does, and is described below.
 ## Which projects this applies to
 
 Any project with a **`.shipstudio/`** directory in its root. If there is no
-`.shipstudio/` directory, this is not a Ship Studio project: ignore all of this.
+`.shipstudio/` directory, this is not one of the app's projects: ignore all of this.
 
 ## 1. The commit body is the feed
 
-Ship Studio's feed shows your commit subject as the headline and **your commit
+The app's team feed shows your commit subject as the headline and **your commit
 body as the reason**. There is no separate record to write, nothing to file, and
 no id to carry — writing a good commit message *is* how the team finds out what
 you did.
@@ -106,11 +106,11 @@ changed, why, and anything a reviewer needs to know. Do not restate the diff.
 
 These are the part with no equivalent in git or GitHub. A comment is pinned to
 an element on a page at a specific viewport — GitHub has no concept of that, so
-Ship Studio keeps its own records for it.
+the app keeps its own records for it.
 
 **If you have `team_open_comments` and `team_resolve_comment` tools, use them.**
 They are one call each, they validate what you give them, and they tell you when
-something is wrong. You get them automatically inside Ship Studio's terminal.
+something is wrong. You get them automatically inside the app's terminal.
 
 Without them, write the files by hand:
 
@@ -171,7 +171,7 @@ random. They sort chronologically, which is what orders the feed.
 **`at` is milliseconds**, not seconds.
 
 **Do not commit `.shipstudio-team/threads/`.** Comment records travel on their
-own git ref, which Ship Studio manages. They are excluded from your working tree
+own git ref, which the app manages. They are excluded from your working tree
 already — leave them out of your commits.
 "#
     )

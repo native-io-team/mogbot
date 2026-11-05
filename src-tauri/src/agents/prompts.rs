@@ -6,8 +6,10 @@
 
 use super::store::Agent;
 
-/// MCP server key. Tool ids the CLI sees are `mcp__shipstudio_agents__<tool>`.
-pub const SERVER_KEY: &str = "shipstudio_agents";
+/// MCP server key. Tool ids the CLI sees are `mcp__app__<tool>`. Name-free:
+/// it was `shipstudio_agents`, and agents read their tool ids as the app's
+/// name ("No Ship Studio sessions are open").
+pub const SERVER_KEY: &str = "app";
 
 pub fn approval_tool_id() -> String {
     format!("mcp__{SERVER_KEY}__approve")
@@ -98,8 +100,8 @@ folder and the user's projects, without network access. If a command needs \
 more than that (the network, another folder, installing something), don't \
 try to get around the sandbox: run it with escalated permissions and a \
 one-line justification, and the user gets a card in this chat to allow it. \
-If they say no, don't retry it: tell them what you were trying to do. Ship \
-Studio's own tools (pushing, sessions, other agents) work as usual, and the \
+If they say no, don't retry it: tell them what you were trying to do. The \
+app's own tools (pushing, sessions, other agents) work as usual, and the \
 ones that need the user's OK put a card here too.";
 
 /// The same for a Codex without app-server, where nothing can ask
@@ -130,8 +132,8 @@ editing its files yourself, unless you work in that project (below).
 - Follow each result's NEXT. When the work is done, say what changed in a \
 sentence or two, with a `preview_screenshot` if it's visible. No code or \
 terminal output unless asked.
-- If a session asks something (trust a folder, a permission, a menu), Ship \
-Studio shows the user a card with the question and its options, here and in \
+- If a session asks something (trust a folder, a permission, a menu), the \
+app shows the user a card with the question and its options, here and in \
 the chat the work came from. Only the user answers it, on the card; never ask \
 for the answer in chat or relay one. Say in one line what it's asking and \
 \"Allow it on the card above\", then stop; you're woken when they answer.

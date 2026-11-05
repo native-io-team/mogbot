@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use tracing::{debug, warn};
 
 /// Bump when SKILL.md changes so installed copies are refreshed.
-const SKILL_VERSION: &str = "1";
+const SKILL_VERSION: &str = "2";
 
 /// `<slug>-workflows`: ours, beside Ship Studio's own `shipstudio-workflows`.
 fn skill_dir_name() -> String {
@@ -54,15 +54,15 @@ metadata:
   shipstudio-skill-version: "{SKILL_VERSION}"
 ---
 
-# Ship Studio workflows
+# Workflows
 
-A **workflow** is a saved instruction that Ship Studio runs against this project
+A **workflow** is a saved instruction that the app runs against this project
 with a headless agent CLI, on demand or on a schedule. Whatever it reports goes
-to the user's Ship Studio inbox.
+to the user's inbox in the app.
 
 A workflow is one markdown file in `.shipstudio/workflows/<slug>.md` in the
 project root. There is no API and no service: writing the file *is* creating
-the workflow, and Ship Studio picks it up immediately.
+the workflow, and the app picks it up immediately.
 
 ## When to offer one
 
@@ -70,7 +70,7 @@ If the user describes wanting something checked more than once — on a cadence,
 before a recurring event, or "every time X happens" — offer to save it as a
 workflow. Keep the offer to one sentence, and only make it once per topic.
 
-> That's a good candidate for a Ship Studio workflow — I can save it so it runs
+> That's a good candidate for a workflow — I can save it so it runs
 > every morning and files anything it finds to your inbox. Want me to?
 
 Do **not** offer a workflow for one-off work, for something the user is asking
@@ -111,11 +111,11 @@ back to `manual`, so the workflow still works — it just won't be scheduled.
 
 ### Say what a schedule actually promises
 
-Scheduled workflows run **only while Ship Studio is open**. There is no server
+Scheduled workflows run **only while the app is open**. There is no server
 and no background daemon: a `daily at 09:00` workflow runs at the first check
 after 09:00 that the app is running for, and if the app was closed all morning
 it simply runs late, once — never once per missed day. `on push` and `on pr`
-fire when Ship Studio itself performs those actions.
+fire when the app itself performs those actions.
 
 Tell the user this when you set a schedule up. "It'll run every morning" is the
 one sentence here that can turn out to be false, and they will find out on the
@@ -124,7 +124,7 @@ morning they were relying on it.
 ### The body is the instruction
 
 Everything after the frontmatter is the prompt handed to the agent on each run.
-Write it as a direct instruction. Ship Studio automatically prepends what
+Write it as a direct instruction. The app automatically prepends what
 changed since the workflow last ran, the findings it has already filed, and the
 reporting format — so do **not** write any of that into the body yourself.
 
@@ -147,7 +147,7 @@ reporting format — so do **not** write any of that into the body yourself.
 
 1. Write the file to `.shipstudio/workflows/<slug>.md` (kebab-case slug from the
    name). Create the directory if it doesn't exist.
-2. Tell the user it's saved, and that it's in **Workflows** in Ship Studio's
+2. Tell the user it's saved, and that it's in **Workflows** in the app's
    sidebar where they can press Run to try it immediately. Suggest they do —
    a workflow nobody has watched run once is a schedule nobody trusts.
 
@@ -244,7 +244,7 @@ mod tests {
         // promise would be made. Every other surface says this plainly.
         let body = skill_markdown();
         assert!(
-            body.contains("only while Ship Studio is open"),
+            body.contains("only while the app is open"),
             "the skill must not let an agent promise a clock the app cannot keep"
         );
         assert!(body.contains("runs late, once"));

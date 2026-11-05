@@ -204,9 +204,9 @@ was busy becomes **one** next turn. A turn is one process:
 claude --print --output-format stream-json --verbose --include-partial-messages
        --session-id <uuid> | --resume <uuid>
        --permission-mode acceptEdits
-       --permission-prompt-tool mcp__shipstudio_agents__approve
+       --permission-prompt-tool mcp__app__approve
        --mcp-config <app support>/agent-bridge/mcp-<random>.json   (0600; see below)
-       --allowedTools mcp__shipstudio_agents
+       --allowedTools mcp__app
        --append-system-prompt <voice + role + team rules>
        --add-dir <projects root> --add-dir <each external project>
        --disallowedTools 'Edit(**/.git/**)' 'Edit(**/.shipstudio/**)'
@@ -1767,7 +1767,7 @@ the agent has a conversation on its engine (`sessionId`, not `newEngine`).
     `--print`, `--output-format`, `--verbose`, `--include-partial-messages`,
     `--permission-prompt-tool` (it asks in the terminal, to you): `--chrome
     --resume <session> --permission-mode acceptEdits --mcp-config …
-    --allowedTools mcp__shipstudio_agents --append-system-prompt … --add-dir …`.
+    --allowedTools mcp__app --append-system-prompt … --add-dir …`.
     Its secret is granted with no turn (and revoked at hand-back), so anything
     that reaches `approve` is refused; the agent's other tools (message an
     agent, share a file) work.
@@ -2947,7 +2947,7 @@ codex app-server
        workspace_roots={<home or project dirs>=true},
        filesystem={<each existing .git / .shipstudio in them>="read"}}
   -c default_permissions="shipstudio_agent"
-  -c mcp_servers.shipstudio_agents={url=…/mcp/agent,bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",
+  -c mcp_servers.app={url=…/mcp/agent,bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",
        tool_timeout_sec=300,default_tools_approval_mode="approve"}
   -c project_doc_fallback_filenames=["CLAUDE.md"]
 → initialize, initialized
