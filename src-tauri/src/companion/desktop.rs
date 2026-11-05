@@ -380,14 +380,9 @@ impl Backend for DesktopBackend {
     }
 
     async fn create_agent(&self, input: PhoneNewAgent) -> Result<Value, CommandError> {
-        use crate::agents::engine::{self, Engine};
-        // The desk's editor sends the engine it shows (`defaultEngine`), so a
-        // phone-made agent goes where a desk-made one would: Claude Code when
-        // it's ready, else the first engine that is.
-        let engine = match engine::default_for(&engine::overview().await) {
-            Engine::Claude => "claude",
-            Engine::Codex => "codex",
-        };
+        // No engine and no model: `agents_create` puts it where a desk-made
+        // one would start, the user's defaults for new agents (Settings →
+        // Agents) when that engine can run, else the first engine that can.
         let color = match input.color {
             Some(c) => c,
             None => {
@@ -406,7 +401,7 @@ impl Backend for DesktopBackend {
             color: Some(color),
             role: input.role,
             instructions: template.map(|t| t.instructions()).unwrap_or_default(),
-            engine: Some(engine.to_string()),
+            engine: None,
             model: None,
             project: None,
             template: template.map(|t| t.id.clone()),
@@ -451,6 +446,13 @@ impl Backend for DesktopBackend {
 
     async fn quota(&self) -> Result<Value, CommandError> {
         json(cmd::agents_quota().await?)
+    }
+
+    async fn set_defaults(
+        &self,
+        change: crate::agents::defaults::Change,
+    ) -> Result<Value, CommandError> {
+        json(cmd::agents_set_defaults(self.app.clone(), change).await?)
     }
 
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError> {

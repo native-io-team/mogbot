@@ -283,11 +283,35 @@ export interface EngineInfo {
   models: EngineModel[];
 }
 
+/**
+ * Mirrors `defaults::View`: what a new agent starts on when nobody picked
+ * (Settings → Agents). Existing agents keep their own engine and model.
+ */
+export interface NewAgentDefaults {
+  /** The engine the user chose; null when they never have (the rule decides). */
+  engine: AgentEngine | null;
+  /** Each engine's chosen model while it still offers it; null is the engine's own default. */
+  models: { claude: string | null; codex: string | null };
+  /** Where a new agent starts now: the chosen engine when it's ready, else the first that is. */
+  startsOn: AgentEngine;
+  /** The model it starts on there; null is that engine's default. */
+  model: string | null;
+}
+
+/** A change to `NewAgentDefaults`: a field left out stays; an empty model is the engine's own. */
+export interface NewAgentDefaultsChange {
+  engine?: AgentEngine;
+  claudeModel?: string;
+  codexModel?: string;
+}
+
 export interface AgentsOverview {
   agents: Agent[];
   /** Claude Code is installed. Per-agent readiness is `engineIsReady` over `engines`. */
   engineReady: boolean;
   engines: EngineInfo[];
+  /** What new agents start on. Optional for the phone's older Macs (see the protocol). */
+  defaults?: NewAgentDefaults;
 }
 
 export type MessageKind =
@@ -735,6 +759,31 @@ export function defaultEngine(engines: EngineInfo[]): AgentEngine {
   return ready[0]?.id ?? 'claude';
 }
 
+/**
+ * Where a new agent starts when nobody picked: the user's default
+ * (`defaults.startsOn`, already checked against the engines on the Mac), or
+ * before the overview says, the rule (`defaultEngine`).
+ */
+export function newAgentEngine(
+  defaults: NewAgentDefaults | null,
+  engines: EngineInfo[]
+): AgentEngine {
+  return defaults?.startsOn ?? defaultEngine(engines);
+}
+
+/**
+ * The model a new agent on `engine` starts on: the default chosen for that
+ * engine while it's still one of `choices`, else the engine's own ('').
+ */
+export function newAgentModel(
+  defaults: NewAgentDefaults | null,
+  engine: AgentEngine,
+  choices: readonly ModelChoice[]
+): string {
+  const chosen = defaults?.models[engine] ?? '';
+  return choices.some((m) => m.value === chosen) ? chosen : '';
+}
+
 /** What an engine needs before it can take an agent, or null when it can. */
 export function engineUnavailable(info: EngineInfo): 'install' | 'sign-in' | null {
   if (!info.installed) return 'install';
@@ -986,6 +1035,13 @@ export type FilesFilter = 'all' | 'user' | 'agent';
 export const filterFiles = (files: SharedFile[], filter: FilesFilter) =>
   filter === 'all' ? files : files.filter((f) => f.from === filter);
 
+/**
+ * Change what new agents start on. Refused, with nothing saved, for an engine
+ * that isn't installed and signed in or a model its engine doesn't offer. The
+ * overview carries the result, so the store picks it up on its own.
+ */
+export const setNewAgentDefaults = (change: NewAgentDefaultsChange) =>
+  invoke<NewAgentDefaults>('agents_set_defaults', { change });
 export const createAgent = (input: NewAgentInput) =>
   invoke<Omit<Agent, 'status' | 'home'>>('agents_create', { input });
 export const updateAgent = (agentId: string, input: UpdateAgentInput) =>

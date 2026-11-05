@@ -303,6 +303,35 @@
   font-size: var(--font-size-body-sm);
 }
 
+/* Settings → Agents → Engines and models: what new agents start on. The
+   model menus show what each choice is for, the engine's own name small
+   beside it, as Edit agent does. */
+.agent-defaults-trigger {
+  flex-shrink: 0;
+  gap: var(--spacing-sm);
+}
+
+.agent-defaults-trigger__label,
+.agent-defaults-menu__label {
+  color: var(--text-primary);
+}
+
+.agent-defaults-trigger__detail,
+.agent-defaults-menu__detail {
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+}
+
+.agent-defaults-menu .ss-dropdown__item {
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+}
+
+.agent-defaults-problem {
+  color: var(--accent-error);
+  font-size: var(--font-size-body-sm);
+}
+
 /* Settings → Agents: a few quiet groups, each a small heading over its rows. */
 .agents-settings {
   display: flex;

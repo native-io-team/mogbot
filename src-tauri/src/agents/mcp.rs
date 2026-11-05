@@ -159,7 +159,7 @@ const TOOLS: &[Tool] = &[
                 "instructions": { "type": "string", "description": "A briefing, as if for a new hire: context, standing rules, who's who, where things live. Required unless you use a template; with one, what you know about the user, added to its briefing." },
                 "color": { "type": "string", "enum": store::COLORS },
                 "project": { "type": "string", "description": "Optional: bind it to one of the user's projects (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
-                "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on Claude Code, or on Codex when Claude Code isn't set up. Only when the user asks for it; it must be installed and signed in." },
+                "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on the user's default engine and model for new agents (Settings → Agents), or on whichever engine is set up when that one isn't. Only when the user asks for it; it must be installed and signed in." },
                 "first_task": { "type": "string", "description": "Optional message to start it on right away." }
             },
             "required": ["name"]
@@ -1107,18 +1107,19 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         },
         None => None,
     };
+    // Unpicked: the user's default (Settings → Agents) when it can run here,
+    // else one that can (Codex, when that's all there is), on the model the
+    // user chose for that engine.
+    let defaults = super::defaults::view().await;
     let engine = match arg(args, "engine").map(Engine::parse) {
         Some(Ok(engine)) => match super::engine::require_ready(engine).await {
-            Ok(()) => Some(engine),
+            Ok(()) => engine,
             Err(e) => return error(e.to_string()),
         },
         Some(Err(e)) => return error(e.to_string()),
-        // Unpicked: one that can run here (Codex, when that's all there is).
-        None => match super::engine::default_for(&super::engine::overview().await) {
-            Engine::Claude => None,
-            other => Some(other),
-        },
+        None => defaults.starts_on,
     };
+    let model = defaults.model_for(engine);
     let created = store::create(store::NewAgent {
         name: name.to_string(),
         role,
@@ -1127,11 +1128,13 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         color,
         is_main: false,
     });
-    let created = created.and_then(|agent| match (&project, engine, template) {
-        (None, None, None) => Ok(agent),
+    let plain = project.is_none() && engine == Engine::default() && model.is_none();
+    let created = created.and_then(|agent| match (plain, template) {
+        (true, None) => Ok(agent),
         _ => store::update(&agent.id, |a| {
             a.project = project.as_ref().map(|p| p.path.clone());
-            a.engine = engine.unwrap_or_default();
+            a.engine = engine;
+            a.model = model;
             a.template = template.map(|t| t.id.clone());
         }),
     });

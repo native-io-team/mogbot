@@ -923,6 +923,12 @@ pub struct AppState {
     /// The quick-entry shortcut (`Alt+Space` when unset); see `agents::quick_entry`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quick_entry_shortcut: Option<String>,
+    /// What a new agent starts on when nobody picked (Settings → Agents):
+    /// an engine, and a model per engine. `None` follows the rule (Claude
+    /// Code when ready, else the first engine that is) on the engine's own
+    /// model; see `agents::defaults`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_defaults: Option<crate::agents::defaults::Saved>,
     /// Whether the dashboard home header is hidden
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dashboard_header_hidden: Option<bool>,
