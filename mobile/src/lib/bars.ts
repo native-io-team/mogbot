@@ -33,6 +33,8 @@ export interface BarText {
   tone: BarTone;
   title: string;
   detail?: string;
+  /** Going on now: the bar leads with the typing dots. */
+  live?: boolean;
 }
 
 /** Driven by hand on the Mac (desktop Take over): the row's words, and the bar's. */
@@ -86,11 +88,9 @@ export function importBar(
   }
   const going = agent.status.state !== 'idle' && IMPORTING.exec(agent.status.activity ?? '');
   if (!going) return null;
-  return {
-    tone: 'active',
-    title: `Importing from ${going[1]}`,
-    detail: `${going[1]} talks to a separate conversation that can’t see your chats: what you type here stays between you and ${agent.name}.`,
-  };
+  // One line, as on the desk. That the interview is a separate conversation
+  // which can't see your chats is said once, by the note in the chat.
+  return { tone: 'active', title: `Importing from ${going[1]}`, live: true };
 }
 
 /** The message being written asks to change a result: "Changes to Brief (v2)". */

@@ -121,6 +121,12 @@ export interface MockOptions {
    * engine that can't ask), so the "N more" fold is reachable.
    */
   bars?: boolean;
+  /**
+   * Things going on: the Chief mid-import (its interview running, the consent
+   * already answered, so the chat shows the live import bar) and the Designer
+   * working, so the typing dots are on screen in both chats.
+   */
+  importing?: boolean;
   /** Answer CORS preflights and tag every response, for the web build (dev only). */
   cors?: boolean;
   /**
@@ -236,6 +242,25 @@ export function createMockServer(opts: MockOptions = {}) {
     }
   }
   const messages = new Map<string, AgentMessage[]>(agents.map((a) => [a.id, seedMessages(a, now)]));
+  if (opts.importing) {
+    const chief = agents.find((a) => a.id === 'chief');
+    if (chief) {
+      // What `connector::interview_status` reports while the interview runs.
+      chief.status = { state: 'working', activity: 'Bringing in agents from Grok', since: now };
+      chief.pendingApprovals = 0;
+      for (const m of messages.get('chief') ?? []) {
+        if (m.approval?.connector && m.approval.status === 'pending') m.approval.status = 'allowed';
+      }
+    }
+    const design = agents.find((a) => a.id === 'design');
+    if (design) {
+      design.status = { state: 'working', activity: 'Checking the button tokens', since: now };
+      design.pendingApprovals = 0;
+      for (const m of messages.get('design') ?? []) {
+        if (m.approval?.status === 'pending') m.approval.status = 'allowed';
+      }
+    }
+  }
   // Every message kind exactly as the Mac serialises it, under one agent.
   const sample = structuredClone(real.agentsOverview.agents[0]) as Agent;
   agents.push({
@@ -1335,7 +1360,11 @@ export function createMockServer(opts: MockOptions = {}) {
         const model = p[key];
         if (typeof model !== 'string' || model === '') continue;
         if (!list.find((e) => e.id === id)?.models.some((m) => m.value === model)) {
-          return fail({ type: 'Validation', field: 'model', reason: 'Pick one it offers or Default.' });
+          return fail({
+            type: 'Validation',
+            field: 'model',
+            reason: 'Pick one it offers or Default.',
+          });
         }
       }
       if (p.engine !== undefined) saved.engine = p.engine as 'claude' | 'codex';

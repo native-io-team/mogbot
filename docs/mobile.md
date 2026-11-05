@@ -890,7 +890,10 @@ confirm screen, then walks the states only a Mac can cause by restarting or
 stopping the mock: a deep-linked chat offline with nothing saved, every screen
 live (rooms and a task with its terminal shown included), the same chats
 offline from the saved copy, "This isn't your Mac"
-(`--impostor`), and the bar fold (`--bars`). Out: `mobile/qa-shots/` (PNGs and
+(`--impostor`), the bar fold (`--bars`), and things going on (`--importing`: the
+Chief mid-import with its live bar, the Designer working, the Import screen's
+counts, and an 8-frame close-up of the typing dots 150 ms apart with each dot's
+opacity per frame in the report). Out: `mobile/qa-shots/` (PNGs and
 `report.md`, which lists each shot's route, what to check, console errors and
 any text cut off with an ellipsis). It exits non-zero when a screen failed or threw.
 

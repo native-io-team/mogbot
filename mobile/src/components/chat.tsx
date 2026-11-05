@@ -29,7 +29,8 @@ import { useReveal } from '../lib/reveal';
 import { Markdown } from './Markdown';
 import { Card, Line, TextAction } from './surfaces';
 import { Button, Icon, T } from './ui';
-import { AgentAvatar, Spinner } from './agent';
+import { AgentAvatar } from './agent';
+import { TypingDots } from './TypingDots';
 import { ApprovalCard, PhoneReviewCard, PlaybackCard, ReviewOnMacCard } from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
@@ -724,7 +725,7 @@ export function WorkingRow({
   return (
     <Animated.View entering={FadeIn.duration(250)} style={styles.working}>
       <View style={styles.workingRow}>
-        <Spinner />
+        <TypingDots />
         <T variant="small" color={colors.textSecondary} numberOfLines={1}>
           {label}
         </T>

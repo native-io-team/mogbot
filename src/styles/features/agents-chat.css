@@ -788,11 +788,13 @@
   text-align: start;
 }
 
-/* Typing dots + what it's doing (the dots' motion is in agents-motion.css). */
+/* Typing dots (primitives/TypingDots) + what it's doing. */
 .agent-working {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-sm);
+  /* The dots take it (currentColor). */
+  color: var(--text-muted);
   /* The cap is on the line (whose parent is the full row): a percentage
      here resolved against the shrink-to-fit line and cut every status. */
   min-width: 0;
@@ -800,18 +802,6 @@
   padding: 0 var(--spacing-md);
   background: var(--surface-control);
   border-radius: var(--radius-lg);
-}
-
-.agent-working__dots {
-  display: inline-flex;
-  gap: var(--spacing-xs);
-}
-
-.agent-working__dots span {
-  width: 5px; /* css-ok: typing-dot geometry */
-  height: 5px; /* css-ok: typing-dot geometry */
-  background: var(--text-muted);
-  border-radius: var(--radius-pill);
 }
 
 .agent-working__place {

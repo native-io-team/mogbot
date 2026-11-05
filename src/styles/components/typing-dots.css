@@ -1,0 +1,58 @@
+/* ===== Primitive: TypingDots ===== */
+/* Three dots in one even wave (components/primitives/TypingDots.tsx).
+
+   One clock: every dot runs the same keyframes on the same period, and each
+   is offset by an equal fraction of it with a NEGATIVE delay. A negative
+   delay starts the dot part-way through its cycle on the first frame, so the
+   three are in phase from the moment they mount and can never drift. (The old
+   dots used positive delays: until its delay ran out a dot sat still at full
+   strength, so on every mount the later dots looked dead.)
+
+   The wave takes the first half of the period, one dot after another, then
+   all three rest: a breath, not a chase. The phone uses the same numbers
+   (mobile/src/lib/typingDots.ts). */
+.ss-typing-dots {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--typing-dots-gap);
+  height: var(--typing-dots-size);
+}
+
+.ss-typing-dots__dot {
+  width: var(--typing-dots-size);
+  height: var(--typing-dots-size);
+  background: currentColor;
+  border-radius: var(--radius-pill);
+  /* Where a still dot rests (reduced motion, a frozen capture). */
+  opacity: var(--typing-dots-still-opacity);
+  animation: typing-dots-wave var(--typing-dots-period) var(--typing-dots-easing) infinite;
+  animation-delay: calc(0s - var(--typing-dots-period));
+}
+
+.ss-typing-dots__dot:nth-child(2) {
+  animation-delay: calc(var(--typing-dots-stagger) - var(--typing-dots-period));
+}
+
+.ss-typing-dots__dot:nth-child(3) {
+  animation-delay: calc(var(--typing-dots-stagger) * 2 - var(--typing-dots-period));
+}
+
+@keyframes typing-dots-wave {
+  0%,
+  50%,
+  100% {
+    opacity: var(--typing-dots-rest-opacity);
+    transform: none;
+  }
+  25% {
+    opacity: 1;
+    transform: translateY(var(--typing-dots-lift));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ss-typing-dots__dot {
+    animation: none;
+  }
+}

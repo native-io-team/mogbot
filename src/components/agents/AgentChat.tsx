@@ -1584,7 +1584,7 @@ export const AgentChat = memo(function AgentChat({
                   />
                 ),
               },
-              { id: 'import', node: agent.isMain && <ImportTalkBar chief={agent.name} /> },
+              { id: 'import', node: agent.isMain && <ImportTalkBar /> },
               {
                 id: 'engine',
                 node: engineReady && cantAsk && (

@@ -28,23 +28,22 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { call, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
-import { space } from '../lib/theme';
+import { space, typingDot } from '../lib/theme';
+import { TypingDots } from '../components/TypingDots';
 
 /** How often the screen asks the Mac where the import has got to. */
 const POLL_MS = 3000;
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 
 /** Where an import has got to, in one line (the desk's `talkLine`). */
 export function phoneTalkLine(talk: ImportTalk, chief: string): string {
   switch (talk.state) {
     case 'awaiting_consent':
       return `${talk.source} is asking to start: allow it in ${chief}’s chat`;
-    case 'interviewing': {
-      const staged = talk.staged.length ? ` · ${talk.staged.join(', ')} staged` : '';
-      const got = talk.conversations ? ` · ${plural(talk.conversations, 'past conversation')}` : '';
-      return `${talk.source} is telling ${chief} what each agent does${staged}${got}`;
-    }
+    case 'interviewing':
+      // The counts go on their own line (`importCounts`), so this one never grows.
+      return `${talk.source} is telling ${chief} what each agent does`;
     case 'playback':
       return `${chief} is playing back the plan: tell it what’s missing`;
     case 'review':
@@ -58,6 +57,19 @@ export function phoneTalkLine(talk: ImportTalk, chief: string): string {
     default:
       return `The import from ${talk.source} stopped. Nothing was created`;
   }
+}
+
+/**
+ * The interview's progress in real counts (the desk's `importCounts`), or
+ * null before there are any. Counts, not names, so the line holds still as
+ * agents arrive; never a percentage, since nothing knows how many are to come.
+ */
+export function importCounts(talk: ImportTalk): string | null {
+  const parts = [
+    talk.staged.length ? `${plural(talk.staged.length, 'agent')} staged` : null,
+    talk.conversations ? plural(talk.conversations, 'conversation') : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
 }
 
 const live = (t: ImportTalk | null) =>
@@ -198,11 +210,28 @@ export default function ImportScreen() {
           <T variant="headline" color={colors.textStrong}>
             3. Allow it, check the plan, import
           </T>
-          <T variant="small" color={going ? colors.textBody : colors.textSecondary}>
-            {talk
-              ? phoneTalkLine(talk, chiefName)
-              : `${chiefName} asks you first, then tells you what each agent will do and asks what’s missing. You answer here or on ${macName}.`}
-          </T>
+          {talk?.state === 'interviewing' ? (
+            // Going on now: the typing dots, one line of what, one of how far.
+            <View style={styles.live} accessible accessibilityLiveRegion="polite">
+              <View style={styles.liveRow}>
+                <TypingDots color={colors.statusRunning} />
+                <T variant="small" color={colors.textBody} style={styles.flex}>
+                  {phoneTalkLine(talk, chiefName)}
+                </T>
+              </View>
+              {importCounts(talk) && (
+                <T variant="caption" color={colors.textSecondary} style={styles.counts}>
+                  {importCounts(talk)}
+                </T>
+              )}
+            </View>
+          ) : (
+            <T variant="small" color={going ? colors.textBody : colors.textSecondary}>
+              {talk
+                ? phoneTalkLine(talk, chiefName)
+                : `${chiefName} asks you first, then tells you what each agent will do and asks what’s missing. You answer here or on ${macName}.`}
+            </T>
+          )}
           {(chief || status?.chiefId) && (
             <Button title={`Open ${chiefName}`} variant="outline" onPress={openChief} />
           )}
@@ -230,4 +259,12 @@ export default function ImportScreen() {
 const useStyles = makeStyles(() => ({
   root: { padding: space.lg, paddingTop: space.xl, gap: space.lg, paddingBottom: space['2xl'] },
   step: { gap: space.sm },
+  live: { gap: space['2xs'] },
+  liveRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  flex: { flex: 1 },
+  // Lines up under the words, past the dots; numbers don't shift as they tick.
+  counts: {
+    fontVariant: ['tabular-nums'],
+    paddingLeft: typingDot.size * 3 + typingDot.gap * 2 + space.sm,
+  },
 }));

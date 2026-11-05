@@ -397,6 +397,9 @@ describe('bars above the composer', () => {
       []
     )!;
     expect(going.title).toBe('Importing from Grok');
+    // One line, led by the typing dots; the chat's note says the rest.
+    expect(going.live).toBe(true);
+    expect(going.detail).toBeUndefined();
     expect(importBar(agent(), [])).toBeNull();
   });
 });

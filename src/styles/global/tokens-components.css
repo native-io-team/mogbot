@@ -97,6 +97,17 @@
   --progress-indeterminate-duration: var(--duration-loader-standard);
   --progress-indeterminate-easing: var(--ease-standard);
 
+  /* Typing dots (primitives/TypingDots, components/typing-dots.css): one
+     wave on one clock. The phone mirrors these in mobile/src/lib/typingDots.ts. */
+  --typing-dots-size: 5px;
+  --typing-dots-gap: var(--spacing-xs);
+  --typing-dots-period: var(--duration-loader-standard);
+  --typing-dots-stagger: calc(var(--typing-dots-period) / 6);
+  --typing-dots-easing: var(--pixel-loader-easing);
+  --typing-dots-lift: calc(var(--spacing-3xs) * -1.5);
+  --typing-dots-rest-opacity: 0.3;
+  --typing-dots-still-opacity: 0.6;
+
   --size-icon-gallery-width: 480px;
   --size-icon-gallery-column: 120px;
 
@@ -335,7 +346,6 @@
   --agents-motion-settle: var(--drag-sort-settle-transition);
   --agents-motion-typing-period: var(--duration-loader-standard);
   --agents-motion-typing-easing: var(--pixel-loader-easing);
-  --agents-motion-typing-stagger: var(--duration-standard);
   /* The beat between parts of one arrival (the import's done state). */
   --agents-motion-stagger: var(--duration-fast);
   /* The working pill's height (agents-chat.css, .agent-working). A reply's first
