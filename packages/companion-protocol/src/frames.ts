@@ -124,7 +124,16 @@ export interface WelcomeFrame {
    * `agents.schedule.update` has an empty `when` (a note-only edit).
    */
   timeZone?: string;
+  /** What this Mac does beyond its methods (`MAC_FEATURES`). Older Macs send none. */
+  features?: MacFeature[];
 }
+
+/** Optional things a Mac can say it does (`welcome.features`). */
+export const MAC_FEATURES = {
+  /** `agents.send` takes `revises`: a result card's "Ask for changes". */
+  reviseResults: 'results.revise',
+} as const;
+export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 
 export interface RefusedFrame {
   t: 'refused';

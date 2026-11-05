@@ -1,0 +1,325 @@
+/* Result cards (`share_result`): the one card an agent ends a piece of work
+   on (components/agents/AgentResult.tsx). The same surface as the approval
+   and copy cards; "Not verified" is the only tinted part, so it is the part
+   the eye lands on. */
+
+:root {
+  --agents-result-shot-height: 180px; /* css-ok: a before/after thumbnail */
+}
+
+/* The card, then the folded "what it did" line under it. */
+.agent-chat__row--result {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-2xs);
+}
+
+.agent-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  width: var(--agents-bubble-max);
+  padding: var(--spacing-md);
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+  background: var(--surface-control);
+  border-radius: var(--radius-lg);
+}
+
+.agent-result__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.agent-result__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--font-size-subhead);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-compact);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.agent-result__version {
+  flex: 0 0 auto;
+  padding: 0 var(--spacing-xs);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.agent-result__changes {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-result__summary {
+  margin: 0;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* What the agent says it didn't verify: up front, tinted, never folded. */
+.agent-result__unverified {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--surface-warning);
+  border-radius: var(--radius-card);
+}
+
+.agent-result__unverified-title,
+.agent-result__checked-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0 0 var(--spacing-2xs);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-compact);
+}
+
+.agent-result__unverified-title {
+  color: var(--text-primary);
+}
+
+.agent-result__unverified-title svg {
+  color: var(--accent-warning);
+}
+
+.agent-result__unverified ul,
+.agent-result__checked ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-result__unverified ul,
+.agent-result__checked ul {
+  padding-left: var(--spacing-xl);
+  list-style: disc;
+}
+
+.agent-result__unverified li {
+  color: var(--text-primary);
+  user-select: text;
+}
+
+.agent-result__checked-title {
+  color: var(--text-muted);
+}
+
+.agent-result__checked li {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+  user-select: text;
+}
+
+.agent-result__checked li::marker {
+  color: var(--text-muted);
+}
+
+/* Before and after, side by side. */
+.agent-result__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-sm);
+}
+
+.agent-result__shot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  min-width: 0;
+  margin: 0;
+}
+
+.agent-result__shot figcaption {
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-result__shot-image {
+  display: block;
+  width: 100%;
+  height: var(--agents-result-shot-height);
+  padding: 0;
+  overflow: hidden;
+  cursor: zoom-in;
+  background: var(--surface-recessed);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.agent-result__shot-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.agent-result__shot-image:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Files and links: each row opens. */
+.agent-result__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-result__item[data-kind='image'] .agent-result__shot-image {
+  height: auto;
+  max-height: var(--agents-result-shot-height);
+}
+
+.agent-result__open {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  min-width: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font: inherit;
+  text-align: left;
+  color: var(--text-primary);
+  cursor: pointer;
+  background: var(--surface-recessed);
+  border: none;
+  border-radius: var(--radius-card);
+  transition: background var(--transition-interaction);
+}
+
+.agent-result__open:hover {
+  background: var(--surface-control-hover);
+}
+
+.agent-result__open:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.agent-result__glyph {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.agent-result__item-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.agent-result__item-name,
+.agent-result__item-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-result__item-meta {
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
+.agent-result__open-word {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--spacing-2xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-result__open:hover .agent-result__open-word {
+  color: var(--text-primary);
+}
+
+.agent-result__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+/* A project copy's change card, inside the result: no second surface. */
+.agent-changes[data-in-result] {
+  align-self: stretch;
+  width: auto;
+  padding: var(--spacing-sm) 0 0;
+  background: none;
+  border-top: var(--border-width-default) solid var(--border-subtle);
+  border-radius: 0;
+}
+
+/* An older version, folded to one line that points at the newer one. */
+.agent-result-past {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  align-self: flex-start;
+  max-width: 100%;
+  padding: var(--spacing-2xs) 0;
+  font: inherit;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+.agent-result-past:hover {
+  color: var(--text-secondary);
+}
+
+.agent-result-past__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-result[data-past] {
+  opacity: 0.85;
+}
+
+/* "Ask for changes": above the composer, and on the message it sent. */
+.agent-composer__revising {
+  display: flex;
+  padding: var(--spacing-2xs) var(--spacing-2xs) var(--spacing-xs);
+}
+
+.agent-result-chip {
+  align-items: center;
+  max-width: 100%;
+  color: var(--text-secondary);
+}
+
+.agent-bubble__revises {
+  display: block;
+}
+
+.agent-bubble__revises + .agent-bubble__text,
+.agent-bubble__revises + .agent-bubble__quote {
+  margin-top: var(--spacing-xs);
+}

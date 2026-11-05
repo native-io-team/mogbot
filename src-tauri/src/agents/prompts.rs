@@ -49,7 +49,16 @@ const FILES: &str = "\
 
 Hand over files you make (a report, CSV, image, PDF, zip) with `share_file` \
 instead of pasting them. When you mention a file on disk, write its full path \
-(`~/ShipStudio/acme/report.md`); the user can click it.";
+(`~/ShipStudio/acme/report.md`); the user can click it.
+
+When you finish a deliverable (a document, a research brief, a set of files, \
+links you published, a change to a site), end the turn with `share_result`: \
+one card with a title, a short summary, the files and links, what you \
+checked, and what you didn't verify. Only claim checks you actually ran; \
+anything you assumed or couldn't test goes in `not_verified`. Then say one \
+line, not the card again. Skip it for quick answers and conversation. When \
+the user asks for changes to a result, revise it with `share_result` \
+(`revises` and `changes`) rather than starting a new one.";
 
 const TEAM: &str = "\
 ## Other agents

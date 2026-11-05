@@ -458,6 +458,13 @@ export interface AgentMessage {
   work?: TurnWork;
   /** On a `note`: the conversation started fresh here; drawn as a divider. */
   fresh?: boolean;
+  /**
+   * A result card (`share_result`, `agents/results.rs`): on an `agent`
+   * message of its own, or on the turn's `changes` card.
+   */
+  result?: ResultCard;
+  /** On a user message: "Ask for changes" on this result. */
+  revises?: ResultRef;
   /** On a `note` (an `error` in older logs): a take-over's terminal closed by itself, its last lines after a blank line; not a turn's failure, so no Retry. */
   takeover?: boolean;
 }
@@ -855,19 +862,26 @@ export const sendAgentMessage = (
   agentId: string,
   text: string,
   attachments: OutgoingAttachment[] = [],
-  mentions: string[] = []
+  mentions: string[] = [],
+  /** "Ask for changes": the id of the result this message revises. */
+  revises?: string
 ) =>
   invoke<AgentMessage>('agents_send', {
     agentId,
     text,
     attachments: attachments.length ? attachments : undefined,
     mentions: mentions.length ? mentions : undefined,
+    revises,
   });
 export const inspectFiles = (paths: string[]) =>
   invoke<FileInfo[]>('agents_inspect_files', { paths });
 /** Open an attachment in its default app, or with `reveal`, show it in Finder. */
+/** What was done: off the open allowlist, a file is only shown in Finder. */
 export const openAttachment = (agentId: string, path: string, reveal = false) =>
-  invoke<void>('agents_open_attachment', { agentId, path, reveal });
+  invoke<'open' | 'reveal'>('agents_open_attachment', { agentId, path, reveal });
+
+/** The toast when Open could only show the file in Finder. */
+export const REVEALED_INSTEAD = 'Shown in Finder — this kind of file isn’t opened directly';
 
 /** One row of a conversation's Files list; mirrors `files::SharedFile`. */
 export interface SharedFile extends Attachment {
@@ -1808,6 +1822,24 @@ export {
   type BubblePart,
 } from '../../packages/companion-protocol/src/quotes';
 
+import type { ResultCard, ResultRef } from '../../packages/companion-protocol/src/results';
+export type {
+  ResultCard,
+  ResultItem,
+  ResultRef,
+  ShotRole,
+} from '../../packages/companion-protocol/src/results';
+export {
+  beforeAfter,
+  CHECKED_HEADING,
+  changesLine,
+  itemName,
+  listedItems,
+  newestResults,
+  revisingLabel,
+  supersededLine,
+} from '../../packages/companion-protocol/src/results';
+
 /** "9:24 AM": a message's time, on hover. */
 export function formatClock(ts: number): string {
   return CLOCK.format(ts);
@@ -1853,6 +1885,22 @@ export function retrySourceFor(messages: AgentMessage[]): AgentMessage | null {
   const last = messages[messages.length - 1];
   if (last?.kind !== 'error' || last.takeover) return null;
   return lastUserMessage(messages, messages.length - 1);
+}
+
+/**
+ * What Retry sends again with the failed ask's words: its mentions, its files
+ * (by path, already in the agent's home) and, for an "Ask for changes", the
+ * result it revises, so the retried ask still updates the same card.
+ */
+export function retryExtras(
+  agent: Agent,
+  source: AgentMessage
+): { mentions: AgentRef[]; resend: OutgoingAttachment[]; revises?: ResultRef } {
+  return {
+    mentions: source.mentions ?? [],
+    resend: resendable(agent, source),
+    ...(source.revises ? { revises: source.revises } : {}),
+  };
 }
 
 /** A message's files as `agents_send` takes them: copied again from the agent's home. */

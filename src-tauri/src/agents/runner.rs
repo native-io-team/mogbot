@@ -447,6 +447,24 @@ pub async fn recover_after_restart(app: &AppHandle) {
     // Copies whose folder went, or that no agent holds any more.
     super::task::sweep().await;
     let Ok(agents) = store::list() else { return };
+    // Folders copied for a result card that was staged when the app went
+    // (staging is in memory). Two minutes' grace: a send racing this sweep
+    // has its files copied before its message is written.
+    let older_than = std::time::SystemTime::now() - std::time::Duration::from_secs(120);
+    for agent in &agents {
+        let Ok(home) = store::agent_home(&agent.id) else {
+            continue;
+        };
+        if let Ok(log) = std::fs::read_to_string(home.join("messages.jsonl")) {
+            let removed = super::attachments::sweep_unreferenced(&home, &log, older_than);
+            if removed > 0 {
+                tracing::info!(
+                    "[Agents] removed {removed} unreferenced attachment folder(s) for {}",
+                    agent.id
+                );
+            }
+        }
+    }
     for agent in agents {
         // A take-over's terminal the last run left behind, first: it is in
         // the session the queue below resumes.
@@ -462,7 +480,7 @@ pub async fn recover_after_restart(app: &AppHandle) {
             // Same order as a turn that ends: its changes, then its error line,
             // which tags the agent as needing you (Retry re-sends).
             if let (Some(project), Some(tree)) = (mark.project, mark.tree) {
-                record_changes(app, &agent.id, project.into(), tree).await;
+                record_changes(app, &agent.id, project.into(), tree, None).await;
             }
             let text = "The app closed while this agent was working, so that turn didn't finish. Retry to send it again.";
             let mut line = new_message(&agent.id, MessageKind::Error, text);
@@ -708,6 +726,8 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         client_id: None,
         work: None,
         fresh: false,
+        result: None,
+        revises: None,
         takeover: false,
     }
 }
@@ -1194,6 +1214,7 @@ async fn drain(app: AppHandle, agent_id: String) {
         );
         let since = store::now_ms();
         super::work::begin(&agent_id, since);
+        super::results::discard(&agent_id);
         if let Some(copy) = &made {
             let label = format!(
                 "Started a copy of {}",
@@ -1212,8 +1233,15 @@ async fn drain(app: AppHandle, agent_id: String) {
         clear_mark(&agent_id);
         // What the turn changed goes before its failure, so a failed turn still
         // ends on its error line (Retry and the sidebar's failure read the newest line).
+        // Then its result card, if it shared one: on the change card when
+        // there is one (one card, not two), otherwise as its own message.
+        let mut shared = super::results::take(&agent_id);
         if let Some((project, from)) = start {
-            record_changes(&app, &agent_id, project, from).await;
+            shared = record_changes(&app, &agent_id, project, from, shared).await;
+        }
+        if let Some(mut card) = shared {
+            card.ts = store::now_ms();
+            let _ = record(&app, card);
         }
         // A copy made for a turn that changed nothing (a question) goes again.
         if let Some(copy) = &made {
@@ -1316,12 +1344,17 @@ async fn turn_start(agent_id: &str) -> Option<(std::path::PathBuf, String)> {
 
 /// After the turn: if it changed files in the project, one card saying which.
 /// Runs however the turn ended; edits made before a Stop are still made.
+///
+/// `result`: the turn's staged result card. It rides on the change card (with
+/// the staged message's id, which its copied files are filed under) and
+/// `None` comes back; with no change card it comes back to be recorded alone.
 async fn record_changes(
     app: &AppHandle,
     agent_id: &str,
     project: std::path::PathBuf,
     from: String,
-) {
+    result: Option<AgentMessage>,
+) -> Option<AgentMessage> {
     // In a copy, the card lists everything in the copy so far.
     let copy = store::get(agent_id)
         .ok()
@@ -1332,7 +1365,7 @@ async fn record_changes(
         None => super::project::summary(&project, &from).await,
     };
     let Some(summary) = summary else {
-        return;
+        return result;
     };
     let files = match summary.file_count {
         1 => "1 file".to_string(),
@@ -1345,7 +1378,11 @@ async fn record_changes(
     };
     let mut message = new_message(agent_id, MessageKind::Changes, text);
     message.changes = Some(summary);
+    if let Some(card) = result {
+        message = super::results::ride_on(message, card);
+    }
     let _ = record(app, message);
+    None
 }
 
 fn compose(batch: &[Inbound]) -> String {
