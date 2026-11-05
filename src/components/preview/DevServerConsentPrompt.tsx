@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../primitives/Button';
 import {
   approveDevServer,
+  consentFiles,
   consentLines,
   devServerConsentStore,
   getDevServerConsent,
@@ -23,6 +24,7 @@ export function DevServerConsentPrompt({ projectPath, pending }: Props) {
   const [error, setError] = useState<string | null>(null);
   const { consent } = pending;
   const lines = consentLines(consent.surface);
+  const files = consentFiles(consent.surface);
   const changed = consent.state === 'changed';
 
   const start = async () => {
@@ -46,14 +48,18 @@ export function DevServerConsentPrompt({ projectPath, pending }: Props) {
 
   return (
     <div className="preview-install-prompt dev-consent" role="region" aria-label="Dev server">
-      <h3>
-        {changed ? 'package.json scripts changed — Start dev server?' : 'Start the dev server?'}
-      </h3>
+      <h3>{changed ? 'This project changed — Start dev server?' : 'Start the dev server?'}</h3>
       <p className="text-style-hint">
         {changed
-          ? 'These commands changed since you last started this project. Starting it runs them on your computer.'
+          ? 'Its commands or config changed since you last started it. Starting it runs them on your computer.'
           : 'Starting it runs this project’s own commands on your computer. Only start projects you trust.'}
       </p>
+      {consent.installScriptsPending && (
+        <p className="text-style-hint">
+          Its dependencies were installed without their install scripts. Starting it runs those
+          first.
+        </p>
+      )}
       {lines.length > 0 ? (
         <ul className="dev-consent-scripts" aria-label="Commands that can run">
           {lines.map((l) => (
@@ -65,6 +71,11 @@ export function DevServerConsentPrompt({ projectPath, pending }: Props) {
         </ul>
       ) : (
         <p className="text-style-hint">This project defines no scripts.</p>
+      )}
+      {files.length > 0 && (
+        <p className="text-style-hint dev-consent-files">
+          Also part of what you’re approving: <code>{files.join(', ')}</code>
+        </p>
       )}
       {error && (
         <p className="dev-consent-error" role="alert">

@@ -21,12 +21,56 @@ export interface DevCommandSurface {
   workspaceScripts: Record<string, string> | null;
   workspaceSubpath: string | null;
   customCommand: string | null;
+  /** Every other declared workspace's scripts, by folder. */
+  workspaces: Record<string, Record<string, string>>;
+  /** Config and rc files that run code or change what runs → SHA-256. */
+  files: Record<string, string>;
 }
 
 export interface DevServerConsent {
   state: DevServerConsentState;
   fingerprint: string;
   surface: DevCommandSurface;
+  /** Dependencies were installed without lifecycle scripts; they run on approval. */
+  installScriptsPending: boolean;
+}
+
+/**
+ * Env key that marks a PTY spawn as `root`'s dev server. The PTY layer
+ * removes it and refuses the spawn unless that project is approved
+ * (`tauri-plugin-pty`, `dev_consent::guard_dev_server_spawn`).
+ */
+export const DEV_SERVER_ROOT_ENV = '__SHIPSTUDIO_DEV_SERVER_ROOT';
+
+/** How an install runs, decided by the backend from the project's approval. */
+export interface InstallPlan {
+  args: string[];
+  /** Lifecycle scripts run (only once the project is approved). */
+  runsScripts: boolean;
+}
+
+/** Install with scripts if approved; otherwise without, and they're owed. */
+export function planPackageInstall(
+  projectPath: string,
+  packageManager: string
+): Promise<InstallPlan> {
+  return invoke<InstallPlan>('plan_package_install', { projectPath, packageManager });
+}
+
+/** The scripts a scripts-free install skipped, once approved (else null). */
+export function planPendingInstallScripts(
+  projectPath: string,
+  packageManager: string
+): Promise<InstallPlan | null> {
+  return invoke<InstallPlan | null>('plan_pending_install_scripts', {
+    projectPath,
+    packageManager,
+  });
+}
+
+/** An install with scripts succeeded: nothing is owed any more. */
+export function markInstallScriptsRan(projectPath: string): Promise<void> {
+  return invoke<void>('mark_install_scripts_ran', { projectPath });
 }
 
 export function getDevServerConsent(projectPath: string): Promise<DevServerConsent> {
@@ -106,5 +150,15 @@ export function consentLines(surface: DevCommandSurface): { label: string; comma
       lines.push({ label: `${prefix}${name}`, command });
     }
   }
+  for (const [dir, scripts] of Object.entries(surface.workspaces ?? {})) {
+    for (const [name, command] of Object.entries(scripts)) {
+      lines.push({ label: `${dir} › ${name}`, command });
+    }
+  }
   return lines;
+}
+
+/** The config and rc files that are part of what was approved, by path. */
+export function consentFiles(surface: DevCommandSurface): string[] {
+  return Object.keys(surface.files ?? {});
 }

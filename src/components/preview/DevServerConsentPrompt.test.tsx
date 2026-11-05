@@ -19,7 +19,10 @@ function consent(state: DevServerConsent['state'], fingerprint = 'f1'): DevServe
       workspaceScripts: null,
       workspaceSubpath: null,
       customCommand: null,
+      workspaces: {},
+      files: { 'next.config.mjs': 'abc' },
     },
+    installScriptsPending: false,
   };
 }
 
@@ -57,10 +60,19 @@ describe('DevServerConsentPrompt', () => {
     expect(screen.getByText('node scripts/setup.js')).toBeTruthy();
   });
 
+  it('names the config files that are part of the approval, and owed install scripts', () => {
+    const c = { ...consent('new'), installScriptsPending: true };
+    render(
+      <DevServerConsentPrompt projectPath={PROJECT} pending={{ consent: c, resume: vi.fn() }} />
+    );
+    expect(screen.getByText('next.config.mjs')).toBeTruthy();
+    expect(screen.getByText(/installed without their install scripts/)).toBeTruthy();
+  });
+
   it('says the scripts changed when they did', () => {
     const pending: PendingDevServerConsent = { consent: consent('changed'), resume: vi.fn() };
     render(<DevServerConsentPrompt projectPath={PROJECT} pending={pending} />);
-    expect(screen.getByText('package.json scripts changed — Start dev server?')).toBeTruthy();
+    expect(screen.getByText('This project changed — Start dev server?')).toBeTruthy();
   });
 
   it('approves exactly what was shown, then starts the server', async () => {

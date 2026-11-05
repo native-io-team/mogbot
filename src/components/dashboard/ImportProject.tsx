@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { markInstallScriptsRan, planPackageInstall } from '../../lib/devServerConsent';
 import { trackError } from '../../lib/analytics';
 import {
   getGitHubUsername,
@@ -137,14 +138,23 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       );
     }
 
-    logger.info('[ImportProject] phase: install', { projectPath, packageManager });
+    // A just-cloned repo isn't approved yet, so its lifecycle scripts (and
+    // its dependencies') don't run here: the backend plans the install with
+    // `--ignore-scripts` and runs them once the user approves the project.
+    const plan = await planPackageInstall(projectPath, packageManager);
+    logger.info('[ImportProject] phase: install', {
+      projectPath,
+      packageManager,
+      runsScripts: plan.runsScripts,
+    });
     await runPtyToExit({
       cwd: projectPath,
       command: packageManager,
-      args: ['install'],
+      args: plan.args,
       rows: 10,
       cols: 80,
     });
+    if (plan.runsScripts) await markInstallScriptsRan(projectPath);
   };
 
   /** Retry just the install step (project already cloned) */

@@ -71,7 +71,10 @@ const APPROVED = {
     workspaceScripts: null,
     workspaceSubpath: null,
     customCommand: null,
+    workspaces: {},
+    files: {},
   },
+  installScriptsPending: false,
 };
 
 describe('useDevServer', () => {

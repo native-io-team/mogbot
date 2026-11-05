@@ -23,7 +23,12 @@ import {
 } from './errors';
 import { trackError } from './analytics';
 import { isWindows } from './setup';
-import { assertDevServerApproved } from './devServerConsent';
+import {
+  assertDevServerApproved,
+  DEV_SERVER_ROOT_ENV,
+  markInstallScriptsRan,
+  planPendingInstallScripts,
+} from './devServerConsent';
 import { detectPackageManager } from './github';
 import {
   PackageManager,
@@ -338,6 +343,37 @@ export function hasMergeConflictMarkers(content: string): boolean {
 export type DevServerSpawnConsent = { root: string } | 'app-defined';
 
 /**
+ * Run the lifecycle scripts a scripts-free install skipped (an imported
+ * project installs with `--ignore-scripts` until it is approved), once the
+ * project is approved. A failure is reported in the dev server's output and
+ * left owed, so the next start tries again; it never blocks the start.
+ */
+async function runPendingInstallScripts(
+  root: string,
+  onOutput?: (data: string) => void
+): Promise<void> {
+  try {
+    const pm = normalizePackageManager(await detectPackageManager(root));
+    const plan = await planPendingInstallScripts(root, pm);
+    if (!plan) return;
+    onOutput?.(
+      `\r\nRunning the install scripts skipped before approval: ${pm} ${plan.args.join(' ')}\r\n`
+    );
+    const { runPtyToExit } = await import('./ptyRun');
+    await runPtyToExit({ cwd: root, command: pm, args: plan.args, rows: 10, cols: 80 });
+    await markInstallScriptsRan(root);
+  } catch (e) {
+    logger.warn('[DevServer] Skipped install scripts did not run', {
+      root,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    onOutput?.(
+      '\r\nThe skipped install scripts failed; starting anyway. Run an install to retry.\r\n'
+    );
+  }
+}
+
+/**
  * Start the development server for a project.
  * Intelligently handles different frameworks (Vite, Next.js, etc.)
  * by parsing the dev script and ensuring the correct port is used.
@@ -362,6 +398,8 @@ export async function startDevServer(
   // called this (see lib/devServerConsent.ts). Shopify's `shopify theme dev`
   // is the app's command, not the project's.
   if (consent !== 'app-defined') await assertDevServerApproved(consent.root);
+  // Approved: anything a scripts-free install skipped runs now, once.
+  if (consent !== 'app-defined') await runPendingInstallScripts(consent.root, onOutput);
 
   const decoder = new TextDecoder();
 
@@ -550,6 +588,11 @@ export async function startDevServer(
   // the remote development theme. Pin both to the real working directory.
   env.INIT_CWD = projectPath;
   env.PNPM_SCRIPT_SRC_DIR = projectPath;
+  // Names the project whose approval this spawn needs. The PTY layer strips
+  // it, checks the approval in Rust and refuses the spawn without it, so the
+  // check above isn't the only one (dev_consent::guard_dev_server_spawn).
+  const devServerRoot = consent === 'app-defined' ? null : consent.root;
+  if (devServerRoot) env[DEV_SERVER_ROOT_ENV] = devServerRoot;
 
   // On Windows, commands like npm/npx are .cmd batch scripts that CreateProcessW
   // cannot execute directly (os error 193). Wrap through cmd.exe to resolve them.
@@ -568,7 +611,15 @@ export async function startDevServer(
   // Use the backend spawn_pty (Command::new with pipes) which works on Windows.
   // Pass original command/args since backend spawn_pty already wraps with cmd.exe /C.
   if (isWindows()) {
-    return startDevServerWindows(command, args, projectPath, port, windowLabel, onOutput);
+    return startDevServerWindows(
+      command,
+      args,
+      projectPath,
+      port,
+      windowLabel,
+      onOutput,
+      devServerRoot
+    );
   }
 
   const pty = spawn(spawnCmd, spawnArgs, {
@@ -748,7 +799,8 @@ async function startDevServerWindows(
   projectPath: string,
   port: number,
   windowLabel: string,
-  onOutput?: (data: string) => void
+  onOutput?: (data: string) => void,
+  devServerRoot: string | null = null
 ): Promise<DevServerHandle> {
   // Spawn via backend spawn_pty (uses Command::new with piped stdout/stderr)
   const ptyId = await invoke<number>('spawn_pty', {
@@ -758,6 +810,7 @@ async function startDevServerWindows(
       args,
       rows: 24,
       cols: 80,
+      ...(devServerRoot ? { devServerRoot } : {}),
     },
     windowLabel,
     projectPath,

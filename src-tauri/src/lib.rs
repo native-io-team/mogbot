@@ -140,6 +140,10 @@ pub fn run() {
     // Initialize PostHog analytics (generates device_id on first launch)
     commands::analytics::init_analytics();
 
+    // A dev-server spawn through the PTY plugin is refused unless the
+    // project's commands are approved as they are now (dev_consent).
+    tauri_plugin_pty::set_dev_server_guard(commands::projects::guard_dev_server_spawn);
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(navigation_guard::init())
@@ -747,6 +751,9 @@ pub fn run() {
             commands::projects::get_custom_dev_command,
             commands::projects::get_dev_server_consent,
             commands::projects::approve_dev_server,
+            commands::projects::plan_package_install,
+            commands::projects::plan_pending_install_scripts,
+            commands::projects::mark_install_scripts_ran,
             commands::projects::set_custom_dev_command,
             commands::projects::get_dev_server_port,
             commands::projects::set_dev_server_port,

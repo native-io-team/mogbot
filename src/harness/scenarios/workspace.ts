@@ -28,6 +28,8 @@ export const DEV_CONSENT_SURFACE = {
   workspaceScripts: null,
   workspaceSubpath: null,
   customCommand: null,
+  workspaces: {},
+  files: { 'next.config.mjs': 'a1b2', '.npmrc': 'c3d4' },
 };
 
 /**
@@ -94,8 +96,13 @@ export const workspaceCommands: CommandMap = {
     state: 'approved',
     fingerprint: 'harness',
     surface: DEV_CONSENT_SURFACE,
+    installScriptsPending: false,
   },
   approve_dev_server: null,
+  // Shape: `InstallPlan` (camelCase); nothing owed in the approved default.
+  plan_package_install: { args: ['install'], runsScripts: true },
+  plan_pending_install_scripts: null,
+  mark_install_scripts_ran: null,
 
   // Asked for on every workspace open. Unmocked it badged every workspace
   // capture incomplete, which by this harness's own rule means none of their
