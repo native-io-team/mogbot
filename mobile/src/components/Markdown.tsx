@@ -17,7 +17,8 @@ import { Lexer, type Token, type Tokens } from 'marked';
 import { createContext, memo, useContext, useMemo, useState, type ReactNode } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { haptic } from '../lib/haptics';
-import { alpha, colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
+import { alpha, fonts, lineHeight, radius, space, type, type Palette } from '../lib/theme';
 import { T } from './ui';
 
 /** Opens a path written in a reply; absent where paths can't be opened. */
@@ -51,6 +52,7 @@ export const Markdown = memo(function Markdown({
   text: string;
   streaming?: boolean;
 }) {
+  const styles = useStyles();
   if (!streaming) return <Blocks text={text} />;
   const [done, tail] = splitStable(text);
   return (
@@ -62,12 +64,16 @@ export const Markdown = memo(function Markdown({
 });
 
 const Blocks = memo(function Blocks({ text }: { text: string }) {
+  const styles = useStyles();
   const tokens = useMemo(() => Lexer.lex(text, { gfm: true, breaks: true }), [text]);
-  return <View style={styles.root}>{blocks(tokens)}</View>;
+  return <View style={styles.root}>{blocks(tokens, styles)}</View>;
 });
 
-function blocks(tokens: Token[]): ReactNode[] {
-  return tokens.map((t, i) => block(t, i)).filter(Boolean);
+/** The stylesheet in force, handed down the render functions (they aren't components). */
+type Styles = ReturnType<typeof useStyles>;
+
+function blocks(tokens: Token[], styles: Styles): ReactNode[] {
+  return tokens.map((t, i) => block(t, i, styles)).filter(Boolean);
 }
 
 /** Extensions a bare name (no folder) must have to read as a file rather than code. */
@@ -83,6 +89,7 @@ export function looksLikePath(s: string): boolean {
 }
 
 function PathText({ path, children }: { path: string; children: ReactNode }) {
+  const styles = useStyles();
   const open = useContext(PathContext);
   if (!open) return <>{children}</>;
   return (
@@ -97,7 +104,7 @@ function PathText({ path, children }: { path: string; children: ReactNode }) {
   );
 }
 
-function block(t: Token, key: number): ReactNode {
+function block(t: Token, key: number, styles: Styles): ReactNode {
   switch (t.type) {
     case 'space':
       return null;
@@ -109,21 +116,21 @@ function block(t: Token, key: number): ReactNode {
           key={key}
           style={[styles.p, styles.heading, { fontSize: size, lineHeight: lineHeight(size, 1.35) }]}
         >
-          {inline(h.tokens)}
+          {inline(h.tokens, styles)}
         </Text>
       );
     }
     case 'paragraph':
       return (
         <Text key={key} style={styles.p}>
-          {inline((t as Tokens.Paragraph).tokens)}
+          {inline((t as Tokens.Paragraph).tokens, styles)}
         </Text>
       );
     case 'text': {
       const tt = t as Tokens.Text;
       return (
         <Text key={key} style={styles.p}>
-          {tt.tokens ? inline(tt.tokens) : tt.text}
+          {tt.tokens ? inline(tt.tokens, styles) : tt.text}
         </Text>
       );
     }
@@ -132,7 +139,7 @@ function block(t: Token, key: number): ReactNode {
     case 'blockquote':
       return (
         <View key={key} style={styles.quote}>
-          {blocks((t as Tokens.Blockquote).tokens)}
+          {blocks((t as Tokens.Blockquote).tokens, styles)}
         </View>
       );
     case 'list':
@@ -156,26 +163,26 @@ function block(t: Token, key: number): ReactNode {
   }
 }
 
-function inline(tokens: Token[] | undefined): ReactNode[] {
+function inline(tokens: Token[] | undefined, styles: Styles): ReactNode[] {
   if (!tokens) return [];
   return tokens.map((t, i) => {
     switch (t.type) {
       case 'strong':
         return (
           <Text key={i} style={styles.strong}>
-            {inline((t as Tokens.Strong).tokens)}
+            {inline((t as Tokens.Strong).tokens, styles)}
           </Text>
         );
       case 'em':
         return (
           <Text key={i} style={styles.em}>
-            {inline((t as Tokens.Em).tokens)}
+            {inline((t as Tokens.Em).tokens, styles)}
           </Text>
         );
       case 'del':
         return (
           <Text key={i} style={styles.del}>
-            {inline((t as Tokens.Del).tokens)}
+            {inline((t as Tokens.Del).tokens, styles)}
           </Text>
         );
       case 'codespan': {
@@ -198,7 +205,7 @@ function inline(tokens: Token[] | undefined): ReactNode[] {
         if (looksLikePath(l.href)) {
           return (
             <PathText key={i} path={l.href}>
-              {inline(l.tokens)}
+              {inline(l.tokens, styles)}
             </PathText>
           );
         }
@@ -209,7 +216,7 @@ function inline(tokens: Token[] | undefined): ReactNode[] {
             style={safe ? styles.link : undefined}
             onPress={safe ? () => void Linking.openURL(l.href) : undefined}
           >
-            {inline(l.tokens)}
+            {inline(l.tokens, styles)}
           </Text>
         );
       }
@@ -219,7 +226,7 @@ function inline(tokens: Token[] | undefined): ReactNode[] {
         return '\n';
       case 'text': {
         const tt = t as Tokens.Text;
-        return tt.tokens ? <Text key={i}>{inline(tt.tokens)}</Text> : decode(tt.text);
+        return tt.tokens ? <Text key={i}>{inline(tt.tokens, styles)}</Text> : decode(tt.text);
       }
       case 'escape':
         return (t as Tokens.Escape).text;
@@ -239,6 +246,7 @@ const decode = (s: string) =>
     .replace(/&amp;/g, '&');
 
 function List({ list, depth = 0 }: { list: Tokens.List; depth?: number }) {
+  const styles = useStyles();
   const start = typeof list.start === 'number' ? list.start : 1;
   return (
     <View style={styles.list}>
@@ -260,7 +268,7 @@ function List({ list, depth = 0 }: { list: Tokens.List; depth?: number }) {
               t.type === 'list' ? (
                 <List key={j} list={t as Tokens.List} depth={depth + 1} />
               ) : (
-                block(t, j)
+                block(t, j, styles)
               )
             )}
           </View>
@@ -271,6 +279,7 @@ function List({ list, depth = 0 }: { list: Tokens.List; depth?: number }) {
 }
 
 function Table({ table }: { table: Tokens.Table }) {
+  const styles = useStyles();
   // Columns sized from their longest cell, so every row lines up.
   const widths = table.header.map((h, c) => {
     const longest = Math.max(h.text.length, ...table.rows.map((r) => r[c]?.text.length ?? 0));
@@ -280,7 +289,7 @@ function Table({ table }: { table: Tokens.Table }) {
     <View key={key} style={[styles.tr, header && styles.th]}>
       {cells.map((cell, c) => (
         <View key={c} style={[styles.td, { width: widths[c] }]}>
-          <Text style={[styles.cell, header && styles.strong]}>{inline(cell.tokens)}</Text>
+          <Text style={[styles.cell, header && styles.strong]}>{inline(cell.tokens, styles)}</Text>
         </View>
       ))}
     </View>
@@ -296,6 +305,8 @@ function Table({ table }: { table: Tokens.Table }) {
 }
 
 function CodeBlock({ code, lang }: { code: string; lang?: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   const [copied, setCopied] = useState(false);
   return (
     <View style={styles.code}>
@@ -314,7 +325,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
             setTimeout(() => setCopied(false), 1500);
           }}
         >
-          <T variant="caption" color={copied ? colors.textWhite : colors.textSecondary}>
+          <T variant="caption" color={copied ? colors.textStrong : colors.textSecondary}>
             {copied ? 'Copied' : 'Copy'}
           </T>
         </Pressable>
@@ -330,24 +341,24 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   );
 }
 
-const body = {
+const bodyOf = (colors: Palette) => ({
   fontFamily: fonts.regular,
   fontSize: type.body,
   lineHeight: lineHeight(type.body, 1.5),
   color: colors.textBody,
-};
+});
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { gap: space.sm },
-  p: body,
-  heading: { fontFamily: fonts.semibold, color: colors.textWhite, marginTop: space.xs },
-  strong: { fontFamily: fonts.semibold, color: colors.textWhite },
+  p: bodyOf(colors),
+  heading: { fontFamily: fonts.semibold, color: colors.textStrong, marginTop: space.xs },
+  strong: { fontFamily: fonts.semibold, color: colors.textStrong },
   em: { fontStyle: 'italic' },
   del: { textDecorationLine: 'line-through', color: colors.textSecondary },
   codespan: {
     fontFamily: fonts.mono,
     fontSize: type.small,
-    color: colors.textWhite,
+    color: colors.textStrong,
     backgroundColor: colors.surfaceControl,
   },
   link: { color: colors.accentFocus, textDecorationLine: 'underline' },
@@ -402,7 +413,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
   },
-  th: { backgroundColor: alpha(colors.textWhite, 0.03) },
+  th: { backgroundColor: alpha(colors.textStrong, 0.03) },
   td: { paddingHorizontal: space.md, paddingVertical: space.sm },
-  cell: { ...body, fontSize: type.small, lineHeight: lineHeight(type.small, 1.45) },
-});
+  cell: { ...bodyOf(colors), fontSize: type.small, lineHeight: lineHeight(type.small, 1.45) },
+}));

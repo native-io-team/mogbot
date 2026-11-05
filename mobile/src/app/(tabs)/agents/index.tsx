@@ -20,7 +20,7 @@ import { Spinner } from '../../../components/agent';
 import { ChatView } from '../../../components/ChatView';
 import { AgentAccent } from '../../../lib/accent';
 import { ConnectionNotice, useLinkState, useNow } from '../../../components/ConnectionPill';
-import { Button, Icon, IconButton, ripple, T, tap } from '../../../components/ui';
+import { Button, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
 import {
   attentionCounts,
@@ -40,7 +40,8 @@ import {
   unpair,
 } from '../../../lib/session';
 import { setApp, useApp } from '../../../lib/store';
-import { alpha, chromeScale, colors, radius, space } from '../../../lib/theme';
+import { alpha, chromeScale, radius, space } from '../../../lib/theme';
+import { makeStyles, useColors } from '../../../lib/appearance';
 
 type Row =
   | { kind: 'header'; key: string; title: string }
@@ -62,6 +63,9 @@ const UNDO: Partial<Record<AgentAction, [string, AgentAction]>> = {
 };
 
 export default function Agents() {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -240,7 +244,7 @@ export default function Agents() {
           headerLargeTitle: true,
           headerLargeTitleShadowVisible: false,
           headerLargeStyle: { backgroundColor: colors.surfaceApp },
-          headerLargeTitleStyle: { color: colors.textWhite },
+          headerLargeTitleStyle: { color: colors.textStrong },
           headerRight: () => (
             <IconButton
               name="gearshape"
@@ -278,7 +282,7 @@ export default function Agents() {
           style={styles.toast}
           accessibilityLiveRegion="polite"
         >
-          <T variant="small" color={colors.textWhite} style={{ flex: 1 }}>
+          <T variant="small" color={colors.textStrong} style={{ flex: 1 }}>
             {error ?? undo?.text}
           </T>
           {!error && undo && (
@@ -304,6 +308,8 @@ export default function Agents() {
  * Mac is answering: offline the rows already say what was last known.
  */
 function Summary({ onOpen }: { onOpen?: (agentId: string) => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const counts = useApp(useShallow((s) => attentionCounts(s.overview?.agents ?? [])));
   if (!counts.needYou && !counts.working) return null;
@@ -335,7 +341,7 @@ function Summary({ onOpen }: { onOpen?: (agentId: string) => void }) {
       )}
       <T
         variant="subhead"
-        color={counts.needYou ? colors.textWhite : colors.textSecondary}
+        color={counts.needYou ? colors.textStrong : colors.textSecondary}
         style={{ flex: 1 }}
         maxFontSizeMultiplier={2}
       >
@@ -356,6 +362,8 @@ function Summary({ onOpen }: { onOpen?: (agentId: string) => void }) {
 
 /** "NEEDS YOU", or "AGENTS · AS OF 4 MIN AGO" when the Mac isn't answering. */
 function SectionHeader({ title, live }: { title: string; live: boolean }) {
+  const colors = useColors();
+  const styles = useStyles();
   useNow(30_000); // re-render to keep "as of" current
   const asOf = useApp((s) => (s.link.kind === 'reconnecting' ? s.link.lastSeenAt : s.syncedAt));
   const label = live || !asOf ? title : `${title} · as of ${formatAgo(asOf)}`;
@@ -374,6 +382,8 @@ function SectionHeader({ title, live }: { title: string; live: boolean }) {
 
 /** The Mac said no for good: removed, or one side needs updating. */
 function Refused() {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const link = useApp((s) => s.link);
   const refusal = useApp((s) => s.refusal);
@@ -385,7 +395,7 @@ function Refused() {
   // what's true and both ways it happens, not the Mac's own wording too.
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.refused}>
-      <T variant="subhead" color={colors.textWhite}>
+      <T variant="subhead" color={colors.textStrong}>
         {removed
           ? `Not paired with ${name} any more`
           : link.reason === 'update_app'
@@ -418,12 +428,14 @@ function Refused() {
 }
 
 function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const p = pill(useLinkState());
   if (hasOverview) {
     return (
       <Animated.View entering={FadeIn.duration(200)} style={styles.emptyCentered}>
-        <T variant="title" color={colors.textWhite} style={styles.centerText}>
+        <T variant="title" color={colors.textStrong} style={styles.centerText}>
           No agents yet
         </T>
         <T color={colors.textSecondary} style={styles.centerText}>
@@ -437,7 +449,7 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
     <Animated.View entering={FadeIn.delay(300)} style={styles.emptyCentered}>
       {p.tone === 'problem' ? (
         <>
-          <T variant="title" color={colors.textWhite} style={styles.centerText}>
+          <T variant="title" color={colors.textStrong} style={styles.centerText}>
             {p.label}
           </T>
           <T color={colors.textSecondary} style={styles.centerText}>
@@ -455,7 +467,7 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   section: {
     paddingHorizontal: space.lg,
     paddingTop: space.lg,
@@ -528,4 +540,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceSelected,
   },
-});
+}));

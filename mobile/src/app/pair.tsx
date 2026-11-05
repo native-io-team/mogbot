@@ -20,7 +20,8 @@ import { openTailscale, pair, PairError, type PairFailure } from '../lib/pairing
 import { adopt, enableAlerts } from '../lib/session';
 import { PAIRING_SCHEME } from '@shipstudio/companion-protocol';
 import { haptic } from '../lib/haptics';
-import { colors, radius, space } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 import icon from '../../assets/icon.png';
 
 type Phase =
@@ -33,6 +34,8 @@ type Phase =
 const PAIRED_MS = 1600;
 
 export default function Pair() {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ d?: string; link?: string }>();
@@ -110,7 +113,7 @@ export default function Pair() {
     >
       <View style={styles.hero}>
         <Image source={icon} style={styles.logo} />
-        <T variant="display" color={colors.textWhite}>
+        <T variant="display" color={colors.textStrong}>
           Your agents, on your phone
         </T>
         <T color={colors.textSecondary}>
@@ -159,7 +162,7 @@ export default function Pair() {
         >
           <View style={styles.waitingTitle}>
             <Spinner size={14} color={colors.textPrimary} />
-            <T variant="title" color={colors.textWhite}>
+            <T variant="title" color={colors.textStrong}>
               Allow on your Mac
             </T>
           </View>
@@ -202,7 +205,7 @@ export default function Pair() {
           <Animated.View entering={ZoomIn.duration(260).springify()} style={styles.check}>
             <Icon name="checkmark" size={22} color={colors.accentSuccess} fallback={<T>✓</T>} />
           </Animated.View>
-          <T variant="title" color={colors.textWhite} accessibilityRole="header">
+          <T variant="title" color={colors.textStrong} accessibilityRole="header">
             Paired with {phase.mac}
           </T>
           {phase.askAlerts ? (
@@ -237,6 +240,8 @@ const notALink =
   'That isn’t a pairing link. Make one on your Mac: Settings → Phone → Pair a phone.';
 
 function Step({ n, text }: { n: number; text: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.step}>
       <View style={styles.stepN}>
@@ -252,6 +257,7 @@ function Step({ n, text }: { n: number; text: string }) {
 }
 
 function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
+  const colors = useColors();
   const [title, body] = ((): [string, string] => {
     switch (failure.kind) {
       case 'tailscale_off':
@@ -291,7 +297,7 @@ function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
   })();
   return (
     <>
-      <T variant="title" color={colors.textWhite}>
+      <T variant="title" color={colors.textStrong}>
         {title}
       </T>
       <T color={colors.textSecondary}>{body}</T>
@@ -299,7 +305,7 @@ function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   page: { paddingHorizontal: space.xl, gap: space['2xl'], flexGrow: 1 },
   hero: { gap: space.md },
   logo: { width: 56, height: 56, borderRadius: 13, marginBottom: space.sm },
@@ -331,4 +337,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.surfaceControl,
   },
-});
+}));

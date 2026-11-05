@@ -24,7 +24,8 @@ import { useApp } from '../lib/store';
 import { WireFailure } from '../lib/transport';
 import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
-import { colors, fonts, radius, space, type } from '../lib/theme';
+import { fonts, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 
 type Reading =
   | { kind: 'empty' }
@@ -41,6 +42,9 @@ function previewLine(p: SchedulePreview, now = Date.now()): string {
 export default withAgentAccent(Schedule, 'agentId');
 
 function Schedule() {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const accent = useAccent();
   const router = useRouter();
   const { agentId, id } = useLocalSearchParams<{ agentId: string; id?: string }>();
@@ -102,7 +106,7 @@ function Schedule() {
   const ready = reading.kind === 'ok' && note.length > 0;
   return (
     <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
-      <T variant="title" color={colors.textWhite}>
+      <T variant="title" color={colors.textStrong}>
         {editing
           ? editing.repeat
             ? 'Edit routine'
@@ -117,7 +121,7 @@ function Schedule() {
         placeholderTextColor={colors.textMuted}
         style={styles.input}
         selectionColor={accent.accent}
-        keyboardAppearance="dark"
+        keyboardAppearance={appearance}
         autoCapitalize="none"
         returnKeyType="done"
         multiline
@@ -170,6 +174,8 @@ function Schedule() {
 
 /** Its last runs, newest first: when, and what came of it, in the desk's words. */
 function RunHistory({ runs }: { runs: CheckInRun[] }) {
+  const colors = useColors();
+  const styles = useStyles();
   const now = useNow(30_000);
   return (
     <View style={{ gap: space.xs, marginTop: space.sm }}>
@@ -207,12 +213,12 @@ function RunHistory({ runs }: { runs: CheckInRun[] }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   input: {
     fontFamily: fonts.regular,
     fontSize: type.body,
-    color: colors.textWhite,
+    color: colors.textStrong,
     backgroundColor: colors.surfaceApp,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
@@ -234,4 +240,4 @@ const styles = StyleSheet.create({
   },
   run: { paddingHorizontal: space.lg, paddingVertical: space.sm + 2, gap: space['2xs'] },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
-});
+}));

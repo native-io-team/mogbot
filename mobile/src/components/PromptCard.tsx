@@ -15,10 +15,11 @@ import { diffLineKind } from '../lib/diff';
 import { haptic } from '../lib/haptics';
 import { answerApproval, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
-import { colors, space } from '../lib/theme';
+import { space } from '../lib/theme';
+import { useColors } from '../lib/appearance';
 import {
   ARM_MS,
-  cardStyles,
+  useCardStyles,
   Command,
   Eyebrow,
   FittedDetail,
@@ -46,6 +47,8 @@ export function PromptCard({
   agent: Agent;
   onError: (text: string) => void;
 }) {
+  const cardStyles = useCardStyles();
+  const colors = useColors();
   const [busy, setBusy] = useState<number | null>(null);
   const pending = approval.status === 'pending';
   const fit = useFitDetail(pending, message.id);
@@ -104,7 +107,7 @@ export function PromptCard({
         // The pin above the chat shows the question while this can't fit whole.
         <View onLayout={fit.onHeadLayout} style={{ gap: space.md }}>
           {pending && <Eyebrow />}
-          <T variant="subhead" color={colors.textWhite} maxFontSizeMultiplier={2}>
+          <T variant="subhead" color={colors.textStrong} maxFontSizeMultiplier={2}>
             {approval.title}
           </T>
         </View>

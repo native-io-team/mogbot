@@ -15,13 +15,16 @@ import { Icon, T } from '../components/ui';
 import { folderName } from '../lib/agents';
 import { changeDiff, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
-import { colors, radius, space } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 
 type Loaded = { diff: FileDiff } | { error: string } | 'loading';
 
 const STATUS = { added: 'New', modified: 'Changed', deleted: 'Deleted' } as const;
 
 export default function Diff() {
+  const colors = useColors();
+  const styles = useStyles();
   const { agentId, messageId } = useLocalSearchParams<{ agentId: string; messageId: string }>();
   const changes = useApp(
     (s) => s.chats[agentId]?.messages.find((m) => m.id === messageId)?.changes
@@ -53,7 +56,7 @@ export default function Diff() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <View style={{ gap: space['2xs'] }}>
-        <T variant="title" color={colors.textWhite}>
+        <T variant="title" color={colors.textStrong}>
           {changes.fileCount} file{changes.fileCount === 1 ? '' : 's'} changed
         </T>
         <T variant="small" color={colors.textSecondary}>
@@ -78,7 +81,7 @@ export default function Diff() {
                 size={11}
                 color={colors.textSecondary}
               />
-              <T variant="small" color={colors.textWhite} numberOfLines={1} style={{ flex: 1 }}>
+              <T variant="small" color={colors.textStrong} numberOfLines={1} style={{ flex: 1 }}>
                 {f.path}
               </T>
               <T variant="caption" color={colors.textSecondary}>
@@ -121,7 +124,7 @@ export default function Diff() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   note: { padding: space.xl, textAlign: 'center' },
   file: {
@@ -140,4 +143,4 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   pad: { paddingHorizontal: space.md, paddingBottom: space.md },
-});
+}));

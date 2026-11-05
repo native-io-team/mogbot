@@ -42,15 +42,18 @@ import {
   setAgentToggles,
 } from '../../lib/session';
 import { useApp } from '../../lib/store';
-import { switchColors, useAccent } from '../../lib/accent';
+import { useSwitchColors } from '../../lib/accent';
 import { withAgentAccent } from '../../lib/accentScreen';
-import { colors, radius, space } from '../../lib/theme';
+import { radius, space } from '../../lib/theme';
+import { makeStyles, useColors } from '../../lib/appearance';
 
 // Its colour, which is also its chat's accent, is set at the desk: the Mac
 // doesn't take a colour change from a phone (`AgentToggles` in companion/router.rs).
 export default withAgentAccent(AgentSheet);
 
 function AgentSheet() {
+  const colors = useColors();
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const agent = useApp((s) => s.overview?.agents.find((a) => a.id === id));
@@ -84,7 +87,7 @@ function AgentSheet() {
       <View style={styles.who}>
         <AgentAvatar name={agent.name} color={agent.color} size={52} />
         <View style={{ flex: 1, gap: space['2xs'] }}>
-          <T variant="title" color={colors.textWhite} numberOfLines={1}>
+          <T variant="title" color={colors.textStrong} numberOfLines={1}>
             {agent.name}
           </T>
           {!!agent.role && (
@@ -252,6 +255,8 @@ function CheckInRow({
   enabled: boolean;
   onError: (text: string | null) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const now = useNow(30_000);
   const [busy, setBusy] = useState(false);
@@ -309,7 +314,7 @@ function CheckInRow({
         color={c.paused ? colors.textMuted : colors.textSecondary}
       />
       <View style={{ flex: 1, gap: space['2xs'] }}>
-        <T color={c.paused ? colors.textMuted : colors.textWhite} numberOfLines={2}>
+        <T color={c.paused ? colors.textMuted : colors.textStrong} numberOfLines={2}>
           {c.note}
         </T>
         <T variant="caption" color={colors.textSecondary}>
@@ -339,7 +344,7 @@ function Toggle({
   onError: (text: string | null) => void;
   last?: boolean;
 }) {
-  const accent = useAccent();
+  const switchProps = useSwitchColors(agent[field]);
   return (
     <Row
       label={label}
@@ -348,7 +353,7 @@ function Toggle({
       trailing={
         <Switch
           value={agent[field]}
-          {...switchColors(accent, agent[field])}
+          {...switchProps}
           disabled={!enabled}
           accessibilityLabel={label}
           onValueChange={(on) => {
@@ -378,6 +383,8 @@ function PermissionRow({
   enabled: boolean;
   onError: (text: string | null) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const [busy, setBusy] = useState(false);
   const revoke = () =>
     Alert.alert(`Revoke “${rule.label}”?`, `${agent.name} asks again before it does this.`, [
@@ -401,7 +408,7 @@ function PermissionRow({
   return (
     <View style={[styles.row, !first && styles.divider]}>
       <View style={{ flex: 1, gap: space['2xs'] }}>
-        <T variant="mono" color={colors.textWhite} numberOfLines={2}>
+        <T variant="mono" color={colors.textStrong} numberOfLines={2}>
           {rule.label}
         </T>
         <T variant="caption" color={colors.textSecondary}>
@@ -421,6 +428,8 @@ function PermissionRow({
 }
 
 function Usage({ usage }: { usage: UsageSummary }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <>
       <T variant="caption" color={colors.textMuted} style={styles.sectionTitle}>
@@ -447,7 +456,7 @@ function Usage({ usage }: { usage: UsageSummary }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   who: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.sm },
   sectionHead: {
@@ -474,4 +483,4 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
   },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
-});
+}));

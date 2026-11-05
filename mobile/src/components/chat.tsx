@@ -13,11 +13,12 @@ import { failureLine, folderName, formatClock, sessionLabel } from '../lib/agent
 import { haptic } from '../lib/haptics';
 import { discardPending, send } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
-import { alpha, chromeScale, colors, radius, space } from '../lib/theme';
+import { alpha, chromeScale, radius, space } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 import { Attachments } from './attachments';
 import { useReveal } from '../lib/reveal';
 import { Markdown } from './Markdown';
-import { Icon, ripple, T } from './ui';
+import { Icon, useRipple, T } from './ui';
 import { Spinner } from './agent';
 import { ApprovalCard } from './ApprovalCard';
 import { PromptCard } from './PromptCard';
@@ -40,6 +41,8 @@ export const MessageRow = memo(function MessageRow({
   /** Copy, Quote, Select Text: words only, so only user and agent messages. */
   onLongPress?: (message: AgentMessage) => void;
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   const hold = onLongPress && message.text.trim() ? () => onLongPress(message) : undefined;
   switch (message.kind) {
     case 'user':
@@ -142,6 +145,8 @@ export const MessageRow = memo(function MessageRow({
 
 /** Your words, with any quoted passages set off above them. */
 function Bubble({ text }: { text: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   const parts = splitQuotes(text);
   if (parts.length === 1 && parts[0].kind === 'text') return <T color={colors.textBody}>{text}</T>;
   return (
@@ -165,6 +170,8 @@ function Bubble({ text }: { text: string }) {
 
 /** "Today 2:40 PM", centred: where the day changes or the talk picks up after a pause. */
 export function DaySeparator({ label }: { label: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.day} accessibilityRole="header">
       <T
@@ -191,6 +198,8 @@ function SessionCard({
   message: AgentMessage;
   onError: (text: string) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const mark = message.session!;
   const project = useApp(
@@ -280,6 +289,8 @@ function SessionCard({
 
 /** Notes, check-ins, delegation and session lines: one muted line each. A change opens its diff. */
 function SystemLine({ message }: { message: AgentMessage }) {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const canDiff = useApp((s) => !!s.welcome?.methods.includes('agents.changeDiff'));
   const text =
@@ -323,6 +334,8 @@ function SystemLine({ message }: { message: AgentMessage }) {
 }
 
 export function PendingRow({ pending }: { pending: PendingSend }) {
+  const colors = useColors();
+  const styles = useStyles();
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const dim = pending.failed || pending.waiting;
   return (
@@ -391,6 +404,8 @@ function LineButton({
   onPress: () => void;
   muted?: boolean;
 }) {
+  const colors = useColors();
+  const ripple = useRipple();
   return (
     <Pressable
       accessibilityRole="button"
@@ -399,7 +414,7 @@ function LineButton({
       android_ripple={{ ...ripple, borderless: true }}
       onPress={onPress}
     >
-      <T variant="caption" color={muted ? colors.textSecondary : colors.textWhite}>
+      <T variant="caption" color={muted ? colors.textSecondary : colors.textStrong}>
         {label}
       </T>
     </Pressable>
@@ -416,6 +431,7 @@ export function DraftRow({
   text: string;
   onHeight?: (height: number) => void;
 }) {
+  const styles = useStyles();
   return (
     <View
       style={styles.agentRow}
@@ -441,6 +457,8 @@ function Prose({ id, text, streaming = false }: { id: string; text: string; stre
 }
 
 export function WorkingRow({ label }: { label: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <Animated.View entering={FadeIn.duration(250)} style={styles.workingRow}>
       <Spinner size={12} />
@@ -451,7 +469,7 @@ export function WorkingRow({ label }: { label: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   userRow: { alignItems: 'flex-end', gap: space.xs, paddingLeft: '18%' },
   userBubble: {
     backgroundColor: colors.surfaceSelected,
@@ -517,4 +535,4 @@ const styles = StyleSheet.create({
     gap: space.xs,
     alignSelf: 'flex-start',
   },
-});
+}));

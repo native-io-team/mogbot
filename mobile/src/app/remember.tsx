@@ -13,11 +13,15 @@ import { changeMemory, describeError, suggestMemory } from '../lib/session';
 import { useApp } from '../lib/store';
 import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
-import { colors, fonts, radius, space, type } from '../lib/theme';
+import { fonts, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 
 export default withAgentAccent(Remember);
 
 function Remember() {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const accent = useAccent();
   const { id, messageId } = useLocalSearchParams<{ id: string; messageId: string }>();
   const router = useRouter();
@@ -61,7 +65,7 @@ function Remember() {
 
   return (
     <View style={styles.root}>
-      <T variant="title" color={colors.textWhite}>
+      <T variant="title" color={colors.textStrong}>
         Remember this
       </T>
       <TextInput
@@ -75,7 +79,7 @@ function Remember() {
         maxLength={2_000}
         placeholder={summarising ? 'Summarising…' : `What should ${name} remember?`}
         placeholderTextColor={colors.textMuted}
-        keyboardAppearance="dark"
+        keyboardAppearance={appearance}
         selectionColor={accent.accent}
         accessibilityLabel={`What ${name} should remember`}
         style={styles.input}
@@ -104,12 +108,12 @@ function Remember() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { padding: space.lg, paddingTop: space.xl, gap: space.md },
   input: {
     fontFamily: fonts.regular,
     fontSize: type.body,
-    color: colors.textWhite,
+    color: colors.textStrong,
     backgroundColor: colors.surfaceApp,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
@@ -119,4 +123,4 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   actions: { flexDirection: 'row', gap: space.sm },
-});
+}));

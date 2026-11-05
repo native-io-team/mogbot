@@ -8,14 +8,18 @@ import { PROTOCOL_VERSION } from '@shipstudio/companion-protocol';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useLinkState, useNow } from '../components/ConnectionPill';
-import { Button, Dot, Section, T, toneColor } from '../components/ui';
+import { Button, Dot, Section, T, useToneColor } from '../components/ui';
 import { formatAgo } from '../lib/agents';
 import { layers, pill } from '../lib/connection';
 import { appInfo, openTailscale } from '../lib/pairing';
 import { currentTransport, deviceSelf } from '../lib/session';
-import { colors, space } from '../lib/theme';
+import { space } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 
 export default function Connection() {
+  const colors = useColors();
+  const styles = useStyles();
+  const toneColor = useToneColor();
   const now = useNow(5_000);
   const state = useLinkState();
   const [device, setDevice] = useState<Device | null>(null);
@@ -36,7 +40,7 @@ export default function Connection() {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <View style={styles.head}>
-        <T variant="title" color={colors.textWhite}>
+        <T variant="title" color={colors.textStrong}>
           {state.credentials?.name ?? 'Your Mac'}
         </T>
         <View style={styles.headLine}>
@@ -115,6 +119,8 @@ export default function Connection() {
 }
 
 function Info({ label, value, last }: { label: string; value: string; last?: boolean }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={[styles.info, !last && styles.divider]}>
       <T color={colors.textPrimary}>{label}</T>
@@ -125,7 +131,7 @@ function Info({ label, value, last }: { label: string; value: string; last?: boo
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   page: { padding: space.lg, paddingTop: space.xl, gap: space.xs },
   head: { gap: space.tight, marginBottom: space.lg, paddingHorizontal: space.xs },
   headLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
@@ -133,4 +139,4 @@ const styles = StyleSheet.create({
   dot: { paddingTop: 6 },
   divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle },
   info: { flexDirection: 'row', justifyContent: 'space-between', gap: space.md, padding: space.lg },
-});
+}));

@@ -6,7 +6,7 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Spinner } from '../components/agent';
 import { Button, T } from '../components/ui';
@@ -15,11 +15,15 @@ import { describeError, readInstructions, setInstructions } from '../lib/session
 import { useApp } from '../lib/store';
 import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
-import { colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 
 export default withAgentAccent(Instructions);
 
 function Instructions() {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const accent = useAccent();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -62,7 +66,7 @@ function Instructions() {
   return (
     <Scroll contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.head}>
-        <T variant="title" color={colors.textWhite} style={{ flex: 1 }}>
+        <T variant="title" color={colors.textStrong} style={{ flex: 1 }}>
           Instructions
         </T>
         {saved !== null &&
@@ -121,7 +125,7 @@ function Instructions() {
           onChangeText={setText}
           maxLength={20_000}
           style={[styles.body, styles.input]}
-          keyboardAppearance="dark"
+          keyboardAppearance={appearance}
           selectionColor={accent.accent}
           accessibilityLabel={`${name}’s instructions`}
         />
@@ -137,7 +141,7 @@ function Instructions() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   center: { paddingVertical: space.xl, alignItems: 'center' },
@@ -151,4 +155,4 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   input: { color: colors.textPrimary, minHeight: 240, textAlignVertical: 'top' },
-});
+}));

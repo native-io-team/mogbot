@@ -57,11 +57,12 @@ import { haptic } from '../lib/haptics';
 import { OUTBOX_WAIT_MS } from '../lib/outbox';
 import { canCall, describeError, send, stop, upload } from '../lib/session';
 import { useApp } from '../lib/store';
-import { chromeScale, colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { chromeScale, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AgentAvatar } from './agent';
 import { StagedTile, type Staged } from './attachments';
 import { choose } from './menu';
-import { Icon, ripple, T } from './ui';
+import { Icon, useRipple, T } from './ui';
 
 const NONE: Agent[] = [];
 
@@ -85,6 +86,10 @@ export function Composer({
   /** Kept clear at each side: a phone in landscape has its notch there. */
   side?: { left: number; right: number };
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
+  const ripple = useRipple();
   const accent = useAccent();
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
@@ -281,7 +286,7 @@ export function Composer({
               hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
               style={({ pressed }) => [styles.nowChip, pressed && styles.pressed]}
             >
-              <T variant="caption" color={colors.textWhite} maxFontSizeMultiplier={chromeScale}>
+              <T variant="caption" color={colors.textStrong} maxFontSizeMultiplier={chromeScale}>
                 Send now
               </T>
             </Pressable>
@@ -390,7 +395,7 @@ export function Composer({
             multiline
             style={styles.input}
             selectionColor={accent.accent}
-            keyboardAppearance="dark"
+            keyboardAppearance={appearance}
             accessibilityLabel={`Message ${agent.name}`}
           />
           {mode === 'queue' && !waitingOnYou && (
@@ -480,6 +485,8 @@ function RoundButton({
   tone: 'accent' | 'quiet' | 'off';
   children: ReactNode;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const accent = useAccent();
   return (
     <Animated.View entering={ZoomIn.duration(160)}>
@@ -510,7 +517,7 @@ function RoundButton({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   wrap: {
     paddingHorizontal: space.md,
     paddingTop: space.sm,
@@ -604,4 +611,4 @@ const styles = StyleSheet.create({
     borderRadius: 17,
   },
   stopSquare: { width: 11, height: 11, borderRadius: 2, backgroundColor: colors.textPrimary },
-});
+}));

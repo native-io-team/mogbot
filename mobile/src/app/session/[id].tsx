@@ -24,7 +24,7 @@ import { Spinner } from '../../components/agent';
 import { DiffLines } from '../../components/diff';
 import { useNow } from '../../components/ConnectionPill';
 import { SessionState, tabName } from '../../components/session';
-import { Button, Icon, ripple, T } from '../../components/ui';
+import { Button, Icon, useRipple, T } from '../../components/ui';
 import { useAccent } from '../../lib/accent';
 import { formatAgo } from '../../lib/agents';
 import { questionContext } from '../../lib/diff';
@@ -38,18 +38,14 @@ import {
 } from '../../lib/session';
 import { useApp } from '../../lib/store';
 import { usePolling } from '../../lib/usePolling';
-import {
-  alpha,
-  chromeScale,
-  colors,
-  fonts,
-  lineHeight,
-  radius,
-  space,
-  type,
-} from '../../lib/theme';
+import { alpha, chromeScale, fonts, lineHeight, radius, space, type } from '../../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../../lib/appearance';
 
 export default function Session() {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
+  const ripple = useRipple();
   const accent = useAccent();
   const { id, project, path, tab, reply } = useLocalSearchParams<{
     id: string;
@@ -131,7 +127,7 @@ export default function Session() {
         options={{
           headerTitle: () => (
             <View style={styles.header}>
-              <T variant="subhead" color={colors.textWhite} numberOfLines={1}>
+              <T variant="subhead" color={colors.textStrong} numberOfLines={1}>
                 {title || 'Session'}
               </T>
               <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={chromeScale}>
@@ -166,7 +162,7 @@ export default function Session() {
         >
           {gone && (
             <Animated.View entering={FadeIn} style={styles.card}>
-              <T variant="subhead" color={colors.textWhite}>
+              <T variant="subhead" color={colors.textStrong}>
                 This session isn’t open on your Mac any more
               </T>
               <T variant="small" color={colors.textSecondary}>
@@ -188,7 +184,7 @@ export default function Session() {
               )}
               {question && (
                 <Animated.View entering={FadeIn} style={[styles.card, styles.asking]}>
-                  <T variant="subhead" color={colors.textWhite}>
+                  <T variant="subhead" color={colors.textStrong}>
                     {question.question}
                   </T>
                   {!!question.action && (
@@ -228,7 +224,7 @@ export default function Session() {
                           <T
                             key={o.key}
                             variant="small"
-                            color={o.highlighted ? colors.textWhite : colors.textSecondary}
+                            color={o.highlighted ? colors.textStrong : colors.textSecondary}
                           >
                             {o.highlighted ? '❯ ' : '   '}
                             {o.key}. {o.label}
@@ -256,7 +252,7 @@ export default function Session() {
           style={[styles.toast, { bottom: (canType ? 88 : space.lg) + insets.bottom }]}
           accessibilityLiveRegion="polite"
         >
-          <T variant="small" color={colors.textWhite} style={{ flex: 1 }}>
+          <T variant="small" color={colors.textStrong} style={{ flex: 1 }}>
             {error}
           </T>
           <Pressable accessibilityLabel="Dismiss" hitSlop={14} onPress={() => setError(null)}>
@@ -277,7 +273,7 @@ export default function Session() {
                   question ? 'Answer the question above first' : `Message ${tabName(data.session)}`
                 }
                 placeholderTextColor={colors.textMuted}
-                keyboardAppearance="dark"
+                keyboardAppearance={appearance}
                 selectionColor={accent.accent}
                 style={styles.input}
                 accessibilityLabel={`Message ${tabName(data.session)}`}
@@ -324,7 +320,7 @@ export default function Session() {
 /** Claude Code's ⏺ and friends, as text: iOS would otherwise draw them as emoji. */
 const textGlyphs = (screen: string) => screen.replace(/([⏺⏸⏹✻✳])(?!\uFE0E)/g, '$1\uFE0E');
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { alignItems: 'center', maxWidth: 260 },
   content: { padding: space.lg, gap: space.md, paddingBottom: space['2xl'] },
@@ -396,4 +392,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfacePanel,
     overflow: 'hidden',
   },
-});
+}));

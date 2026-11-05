@@ -25,7 +25,8 @@ import { changeMemory, describeError, readMemory } from '../lib/session';
 import { useApp } from '../lib/store';
 import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
-import { colors, fonts, radius, space, type } from '../lib/theme';
+import { fonts, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 
 const MAX = 2_000;
 const clip = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}…` : s);
@@ -33,6 +34,9 @@ const clip = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}…` : s);
 export default withAgentAccent(Memory);
 
 function Memory() {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const accent = useAccent();
   const { id } = useLocalSearchParams<{ id: string }>();
   const name = useApp((s) => s.overview?.agents.find((a) => a.id === id)?.name ?? 'This agent');
@@ -130,7 +134,7 @@ function Memory() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
-      <T variant="title" color={colors.textWhite}>
+      <T variant="title" color={colors.textStrong}>
         Memory
       </T>
       <T variant="small" color={colors.textSecondary}>
@@ -200,7 +204,7 @@ function Memory() {
                           onChangeText={setDraft}
                           maxLength={MAX}
                           editable={!busy}
-                          keyboardAppearance="dark"
+                          keyboardAppearance={appearance}
                           selectionColor={accent.accent}
                           accessibilityLabel="Edit memory"
                           style={styles.input}
@@ -256,7 +260,7 @@ function Memory() {
             placeholder={`Something ${name} should remember`}
             placeholderTextColor={colors.textMuted}
             editable={connected && !busy}
-            keyboardAppearance="dark"
+            keyboardAppearance={appearance}
             selectionColor={accent.accent}
             returnKeyType="done"
             onSubmitEditing={() => void add()}
@@ -275,7 +279,7 @@ function Memory() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   center: { paddingVertical: space.xl, alignItems: 'center' },
   heading: { marginLeft: space.lg, letterSpacing: 0.4 },
@@ -309,4 +313,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm + 2,
   },
-});
+}));

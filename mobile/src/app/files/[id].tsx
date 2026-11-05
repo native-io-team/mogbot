@@ -18,13 +18,16 @@ import { extensionOf, formatSize, isPreviewableImage, share } from '../../lib/fi
 import { attachmentSource, describeError, download, listFiles } from '../../lib/session';
 import { useApp } from '../../lib/store';
 import { withAgentAccent } from '../../lib/accentScreen';
-import { colors, radius, space } from '../../lib/theme';
+import { radius, space } from '../../lib/theme';
+import { makeStyles, useColors } from '../../lib/appearance';
 
 type Filter = 'all' | 'user' | 'agent';
 
 export default withAgentAccent(Files);
 
 function Files() {
+  const colors = useColors();
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const agentName = useApp((s) => s.overview?.agents.find((a) => a.id === id)?.name ?? 'Agent');
@@ -166,7 +169,7 @@ function Files() {
             )}
           </View>
           <View style={{ flex: 1, gap: space['2xs'] }}>
-            <T color={colors.textWhite} numberOfLines={1}>
+            <T color={colors.textStrong} numberOfLines={1}>
               {item.name}
             </T>
             <T variant="caption" color={colors.textMuted}>
@@ -180,7 +183,7 @@ function Files() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   head: { padding: space.lg, gap: space.md },
   empty: { padding: space.xl, alignItems: 'center' },
   row: {
@@ -201,4 +204,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceControl,
   },
   ext: { fontSize: 10, letterSpacing: 0.4 },
-});
+}));

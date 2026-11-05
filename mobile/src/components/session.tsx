@@ -6,7 +6,8 @@
 
 import type { SessionSummary } from '@shipstudio/companion-protocol';
 import { StyleSheet, View } from 'react-native';
-import { colors, space } from '../lib/theme';
+import { space } from '../lib/theme';
+import { useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { Dot, T } from './ui';
 
@@ -34,6 +35,7 @@ export function sessionStateText(s: SessionSummary): string {
 }
 
 export function SessionState({ session }: { session: SessionSummary }) {
+  const colors = useColors();
   const tone =
     session.state === 'needs_decision'
       ? colors.accentWarning

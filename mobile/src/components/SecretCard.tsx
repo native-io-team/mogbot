@@ -10,7 +10,7 @@
 
 import type { Agent, AgentMessage, Approval, SecretRequest } from '@shipstudio/companion-protocol';
 import { type ComponentRef, useEffect, useRef, useState } from 'react';
-import { AppState, StyleSheet, TextInput, View } from 'react-native';
+import { AppState, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { haptic } from '../lib/haptics';
 import {
@@ -21,8 +21,9 @@ import {
   secretRouteProblem,
 } from '../lib/session';
 import { useApp } from '../lib/store';
-import { colors, fonts, radius, space, type } from '../lib/theme';
-import { ARM_MS, cardStyles, useArmed } from './ApprovalCard';
+import { fonts, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { ARM_MS, useCardStyles, useArmed } from './ApprovalCard';
 import { Button, Icon, T } from './ui';
 
 /** `$STRIPE_KEY`, or `$BANK_USERNAME, $BANK_PASSWORD`: what the agent gets. */
@@ -42,6 +43,10 @@ export function SecretCard({
   agent: Agent;
   onError: (text: string) => void;
 }) {
+  const cardStyles = useCardStyles();
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const pending = approval.status === 'pending';
   const armed = useArmed(pending);
   const link = useApp((s) => s.link);
@@ -116,7 +121,7 @@ export function SecretCard({
         <Icon name="lock.fill" size={13} color={colors.textSecondary} />
         <T
           variant="subhead"
-          color={colors.textWhite}
+          color={colors.textStrong}
           maxFontSizeMultiplier={2}
           style={{ flexShrink: 1 }}
         >
@@ -163,7 +168,7 @@ export function SecretCard({
                   autoCapitalize="none"
                   spellCheck={false}
                   editable={!busy}
-                  keyboardAppearance="dark"
+                  keyboardAppearance={appearance}
                   accessibilityLabel={field.label}
                   onChangeText={(v) => {
                     values.current[i] = v;
@@ -221,7 +226,7 @@ export function SecretCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   title: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   input: {
     fontFamily: fonts.mono,
@@ -232,4 +237,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm + 2,
   },
-});
+}));

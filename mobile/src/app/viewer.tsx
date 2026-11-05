@@ -6,6 +6,7 @@
  */
 
 import { Image } from 'expo-image';
+import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -14,9 +15,12 @@ import { Spinner } from '../components/agent';
 import { T } from '../components/ui';
 import { share } from '../lib/files';
 import { attachmentSource, describeError, download } from '../lib/session';
-import { colors, radius, space } from '../lib/theme';
+import { alpha, radius, space } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 
 export default function Viewer() {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -69,6 +73,8 @@ export default function Viewer() {
           accessibilityLabel={name}
         />
       </ScrollView>
+      {/* A photo sits on black in either appearance, so the clock is white over it. */}
+      <StatusBar style="light" />
       <View style={[styles.bar, { paddingTop: insets.top + space.xs }]} pointerEvents="box-none">
         <Pressable
           onPress={() => router.back()}
@@ -76,12 +82,12 @@ export default function Viewer() {
           accessibilityRole="button"
           style={styles.pill}
         >
-          <T variant="subhead" color={colors.textWhite}>
+          <T variant="subhead" color={colors.onMedia}>
             Done
           </T>
         </Pressable>
         <View style={styles.nameWrap}>
-          <T variant="small" color={colors.textWhite} numberOfLines={1} style={styles.name}>
+          <T variant="small" color={colors.onMedia} numberOfLines={1} style={styles.name}>
             {name}
           </T>
         </View>
@@ -94,9 +100,9 @@ export default function Viewer() {
           style={styles.pill}
         >
           {sharing ? (
-            <Spinner size={14} />
+            <Spinner size={14} color={colors.onMedia} />
           ) : (
-            <T variant="subhead" color={colors.textWhite}>
+            <T variant="subhead" color={colors.onMedia}>
               Share
             </T>
           )}
@@ -107,7 +113,7 @@ export default function Viewer() {
           onPress={() => setError(null)}
           style={[styles.error, { bottom: insets.bottom + space.lg }]}
         >
-          <T variant="small" color={colors.textWhite}>
+          <T variant="small" color={colors.onMedia}>
             {error}
           </T>
         </Pressable>
@@ -116,7 +122,7 @@ export default function Viewer() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.black },
   bar: {
     position: 'absolute',
@@ -134,7 +140,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.tight,
     borderRadius: radius.pill,
     overflow: 'hidden',
-    backgroundColor: colors.scrim,
+    backgroundColor: colors.mediaScrim,
   },
   pill: {
     minWidth: 64,
@@ -143,7 +149,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.scrim,
+    backgroundColor: colors.mediaScrim,
   },
   error: {
     position: 'absolute',
@@ -151,6 +157,8 @@ const styles = StyleSheet.create({
     right: space.lg,
     padding: space.md,
     borderRadius: radius.lg,
-    backgroundColor: colors.surfaceSelected,
+    backgroundColor: colors.mediaScrim,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: alpha(colors.onMedia, 0.2),
   },
-});
+}));

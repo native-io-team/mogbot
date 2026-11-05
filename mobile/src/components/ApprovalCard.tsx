@@ -20,7 +20,8 @@ import { cardOutcome, describeScope } from '../lib/agents';
 import { haptic } from '../lib/haptics';
 import { answerApproval, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
-import { alpha, chromeScale, colors, fonts, radius, space, type } from '../lib/theme';
+import { alpha, chromeScale, fonts, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
 import { Button, Icon, T } from './ui';
 
@@ -143,6 +144,7 @@ export function FittedDetail({
   fit: ReturnType<typeof useFitDetail>;
   children: ReactNode;
 }) {
+  const appearance = useAppearance();
   return (
     <ScrollView
       style={{ maxHeight: fit.maxHeight, flexGrow: 0 }}
@@ -150,7 +152,7 @@ export function FittedDetail({
       nestedScrollEnabled
       scrollEnabled={fit.maxHeight !== undefined}
       showsVerticalScrollIndicator
-      indicatorStyle="white"
+      indicatorStyle={appearance === 'light' ? 'black' : 'white'}
     >
       {children}
     </ScrollView>
@@ -171,6 +173,9 @@ export function ApprovalCard({
   agent: Agent;
   onError: (text: string) => void;
 }) {
+  const cardStyles = useCardStyles();
+  const colors = useColors();
+  const appearance = useAppearance();
   const [busy, setBusy] = useState<null | 'allow' | 'deny' | 'always'>(null);
   const [noting, setNoting] = useState(false);
   const [note, setNote] = useState('');
@@ -221,7 +226,7 @@ export function ApprovalCard({
         // The pin above the chat shows the question while this can't fit whole.
         <View onLayout={fit.onHeadLayout} style={{ gap: space.md }}>
           {pending && <Eyebrow />}
-          <T variant="subhead" color={colors.textWhite} maxFontSizeMultiplier={2}>
+          <T variant="subhead" color={colors.textStrong} maxFontSizeMultiplier={2}>
             {approval.title}
           </T>
         </View>
@@ -257,7 +262,7 @@ export function ApprovalCard({
             placeholderTextColor={colors.textMuted}
             style={cardStyles.noteInput}
             returnKeyType="send"
-            keyboardAppearance="dark"
+            keyboardAppearance={appearance}
             // Return denies with the note, and only once there is one.
             onSubmitEditing={() => note.trim() && void answer(false, false, note)}
           />
@@ -341,6 +346,8 @@ export function ApprovalCard({
 
 /** The "⋯" beside Deny | Allow on a compact card: the other answers, in a sheet. */
 export function MoreAnswers({ disabled, onPress }: { disabled: boolean; onPress: () => void }) {
+  const cardStyles = useCardStyles();
+  const colors = useColors();
   return (
     <Pressable
       accessibilityRole="button"
@@ -361,6 +368,8 @@ export function MoreAnswers({ disabled, onPress }: { disabled: boolean; onPress:
 
 /** The pending card's label. */
 export function Eyebrow({ text = 'NEEDS YOUR OK' }: { text?: string }) {
+  const cardStyles = useCardStyles();
+  const colors = useColors();
   return (
     <View style={cardStyles.eyebrow}>
       <Icon name="exclamationmark.triangle.fill" size={12} color={colors.accentWarning} />
@@ -382,6 +391,8 @@ export function Eyebrow({ text = 'NEEDS YOUR OK' }: { text?: string }) {
  * is selected and copied is the command itself, character for character.
  */
 export function Command({ text, lines }: { text: string; lines: number }) {
+  const cardStyles = useCardStyles();
+  const colors = useColors();
   return (
     <View style={cardStyles.cardDetail}>
       <ScrollView
@@ -403,7 +414,7 @@ export function Command({ text, lines }: { text: string; lines: number }) {
   );
 }
 
-export const cardStyles = StyleSheet.create({
+export const useCardStyles = makeStyles((colors) => ({
   card: {
     gap: space.md,
     padding: space.lg,
@@ -440,4 +451,4 @@ export const cardStyles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm + 2,
   },
-});
+}));

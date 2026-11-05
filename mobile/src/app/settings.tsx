@@ -4,16 +4,24 @@ import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch } from 'react-native';
-import { Row, Section, T } from '../components/ui';
+import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Icon, Row, Section, T, tap } from '../components/ui';
 import { appInfo } from '../lib/pairing';
 import { setPref } from '../lib/prefs';
 import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
 import { enableAlerts, unpair } from '../lib/session';
-import { useApp } from '../lib/store';
-import { switchColors, useAccent } from '../lib/accent';
+import { useApp, type AppearancePref } from '../lib/store';
+import { useAccent, useSwitchColors } from '../lib/accent';
 import { brand } from '../lib/brand';
-import { colors, space } from '../lib/theme';
+import { useColors } from '../lib/appearance';
+import { space } from '../lib/theme';
+
+/** The phone's own appearance, or the system's. Named as people say it, not "System". */
+const APPEARANCE: { value: AppearancePref; label: string }[] = [
+  { value: 'system', label: 'Match this phone' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
 
 type UpdateState =
   | { kind: 'idle' }
@@ -24,10 +32,13 @@ type UpdateState =
 
 export default function Settings() {
   const accent = useAccent();
+  const colors = useColors();
   const router = useRouter();
   const credentials = useApp((s) => s.credentials);
   const connected = useApp((s) => s.link.kind === 'connected');
   const haptics = useApp((s) => s.prefs.haptics);
+  const appearance = useApp((s) => s.prefs.appearance);
+  const hapticsSwitch = useSwitchColors(haptics);
   const push = useApp((s) => s.push);
   const pushInfo = pushLine(push, isOfficialBuild());
   const [alerts, setAlerts] = useState<Notifications.PermissionStatus | null>(null);
@@ -142,6 +153,32 @@ export default function Settings() {
         )}
       </Section>
 
+      <Section title="Appearance">
+        {APPEARANCE.map((o, i) => {
+          const on = o.value === appearance;
+          return (
+            <Row
+              key={o.value}
+              label={o.label}
+              selected={on}
+              onPress={() => {
+                if (on) return;
+                tap();
+                setPref('appearance', o.value);
+              }}
+              trailing={
+                on ? (
+                  <Icon name="checkmark" size={16} color={accent.accent} />
+                ) : (
+                  <View style={styles.check} />
+                )
+              }
+              last={i === APPEARANCE.length - 1}
+            />
+          );
+        })}
+      </Section>
+
       <Section
         title="Feel"
         footer="A tap when you send, stop, answer an approval, or something fails. Never for just moving around."
@@ -152,7 +189,7 @@ export default function Settings() {
             <Switch
               value={haptics}
               onValueChange={(on) => setPref('haptics', on)}
-              {...switchColors(accent, haptics)}
+              {...hapticsSwitch}
               accessibilityLabel="Haptics"
             />
           }
@@ -207,5 +244,6 @@ export default function Settings() {
 
 const styles = StyleSheet.create({
   page: { padding: space.lg },
+  check: { width: 16 },
   error: { marginHorizontal: space.lg, marginTop: -space.md, marginBottom: space.lg },
 });

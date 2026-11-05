@@ -21,7 +21,8 @@ import {
 } from '../lib/files';
 import { attachmentSource, describeError, download } from '../lib/session';
 import type { PendingAttachment } from '../lib/sync';
-import { alpha, colors, radius, space } from '../lib/theme';
+import { alpha, radius, space } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { choose } from './menu';
 import { Icon, T } from './ui';
@@ -46,6 +47,7 @@ export function Attachments({
   width?: number;
   onError?: (text: string) => void;
 }) {
+  const styles = useStyles();
   const images = attachments.filter((a) => isPreviewableImage(a.mime));
   const others = attachments.filter((a) => !isPreviewableImage(a.mime));
   const end = align === 'right' ? 'flex-end' : 'flex-start';
@@ -78,6 +80,7 @@ function Thumb({
   width: number;
   square?: boolean;
 }) {
+  const styles = useStyles();
   const router = useRouter();
   // Until it loads its shape is unknown; then it keeps its own, within reason.
   const [ratio, setRatio] = useState(square ? 1 : 4 / 3);
@@ -132,6 +135,8 @@ export function FileChip({
   file: Shown;
   onError?: (text: string) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const [busy, setBusy] = useState(false);
   const run = async (action: 'open' | 'share') => {
     if (file.localUri || busy) return;
@@ -168,7 +173,7 @@ export function FileChip({
         )}
       </View>
       <View style={{ flexShrink: 1 }}>
-        <T variant="small" color={colors.textWhite} numberOfLines={1}>
+        <T variant="small" color={colors.textStrong} numberOfLines={1}>
           {file.name}
         </T>
         <T variant="caption" color={colors.textMuted}>
@@ -197,6 +202,8 @@ export function StagedTile({
   onRemove: () => void;
   onRetry: () => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { file, progress, blob, error } = item;
   return (
     <View style={styles.tile}>
@@ -226,7 +233,12 @@ export function StagedTile({
         {!blob && (
           <View style={[StyleSheet.absoluteFill, styles.tileVeil]}>
             {error ? (
-              <Icon name="arrow.clockwise" size={16} color={colors.textWhite} fallback={<T>↻</T>} />
+              <Icon
+                name="arrow.clockwise"
+                size={16}
+                color={colors.textStrong}
+                fallback={<T>↻</T>}
+              />
             ) : (
               <View style={styles.progressTrack}>
                 <View style={[styles.progressFill, { width: `${Math.max(6, progress * 100)}%` }]} />
@@ -245,7 +257,7 @@ export function StagedTile({
         <Icon
           name="xmark"
           size={9}
-          color={colors.textWhite}
+          color={colors.textStrong}
           fallback={<T variant="caption">×</T>}
         />
       </Pressable>
@@ -253,7 +265,7 @@ export function StagedTile({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -312,9 +324,9 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     overflow: 'hidden',
-    backgroundColor: alpha(colors.textWhite, 0.25),
+    backgroundColor: alpha(colors.textStrong, 0.25),
   },
-  progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.textWhite },
+  progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.textStrong },
   remove: {
     position: 'absolute',
     top: -6,
@@ -328,4 +340,4 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.surfaceApp,
   },
-});
+}));

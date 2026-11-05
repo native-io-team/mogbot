@@ -30,7 +30,7 @@ export default (): ExpoConfig => ({
   // Landscape and iPad: the Agents list and a chat sit side by side when there's room.
   orientation: 'default',
   icon: './assets/icon.png',
-  userInterfaceStyle: 'dark',
+  userInterfaceStyle: 'automatic',
   backgroundColor: SURFACE_APP,
   runtimeVersion: { policy: 'fingerprint' },
   updates: projectId

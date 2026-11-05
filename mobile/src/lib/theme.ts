@@ -5,16 +5,17 @@
  *
  * Two layers, as MISSION asks ("black and white, plus one accent"):
  *
- * - The **palette** here is fixed: greys, and the semantic colours whose
- *   meaning never changes (success, warning, error, focus). It has no accent.
+ * - The **palette** here is fixed per appearance: greys, and the semantic
+ *   colours whose meaning never changes (success, warning, error, focus). It
+ *   has no accent.
  * - The **accent** is derived at runtime from an agent's colour
  *   (lib/accent.tsx): the Chief of Staff's across the app, each agent's
  *   inside its own chat, as Grok Bot does.
  *
  * Every colour a screen draws comes from one of the two; there are no colour
- * literals outside this file. The palette is keyed by appearance, so a light
- * one drops in as a second entry of `palettes` (the `Palette` type makes a
- * missing role an error). Dark only for now.
+ * literals outside this file (a test holds that). Screens never import a
+ * palette: they read the one in use from `useColors()` / `makeStyles()`
+ * (lib/appearance.tsx), which follows the system, or the phone's own setting.
  */
 
 export interface Palette {
@@ -23,14 +24,15 @@ export interface Palette {
   surfaceControl: string;
   surfaceControlHover: string;
   surfaceSelected: string;
-  textWhite: string;
-  /** What people read: message bodies, a step brighter than the chrome. */
+  /** The strongest text: titles, names, what must be read first. White in dark, near-black in light. */
+  textStrong: string;
+  /** What people read: message bodies, a step stronger than the chrome. */
   textBody: string;
   textPrimary: string;
   textSecondary: string;
   textMuted: string;
   textFaint: string;
-  /** Ink on a light fill (a light accent, the warning pill). */
+  /** Ink on a light fill (a light accent). */
   inkDark: string;
   /** Ink on a dark fill (a dark accent). */
   inkLight: string;
@@ -40,14 +42,36 @@ export interface Palette {
   /** Outcomes only ("Allowed", a diff's additions, "Finished"). Never an action. */
   accentSuccess: string;
   accentWarning: string;
+  /** Words on a warning fill (the "Needs your OK" pill): dark on dark's bright amber, white on light's deep one. */
+  onWarning: string;
   accentError: string;
+  /** Error as words and glyphs (a destructive row, a failed line). */
   accentErrorLight: string;
   accentFocus: string;
-  /** The scanner's viewfinder, over the camera. */
-  overlayFrame: string;
+  /** The neutral accent: what an agent coloured "white" (and the Chief, by default) takes. */
+  accentNeutral: string;
+  /** A diff's added and removed lines: ink, and the band behind the line. */
+  diffAdd: string;
+  diffAddBg: string;
+  diffDel: string;
+  diffDelBg: string;
+  /** Behind a menu or a dialog, over the app. */
   scrim: string;
+  /** On a photo or the camera, in either appearance: white words, a dark scrim, the viewfinder. */
+  onMedia: string;
+  mediaScrim: string;
+  overlayFrame: string;
+  /** Behind a photo, as the system viewer has it, in either appearance. */
   black: string;
 }
+
+/** Shared by both: what sits on a photo or the camera doesn't change with the app around it. */
+const media = {
+  onMedia: '#ffffff',
+  mediaScrim: 'rgba(0, 0, 0, 0.75)', // --color-black-o75
+  overlayFrame: 'rgba(255, 255, 255, 0.85)', // --color-white-o85
+  black: '#000000', // --color-black
+} as const;
 
 const dark: Palette = {
   surfaceApp: '#141414', // --surface-app (gray-950)
@@ -55,7 +79,7 @@ const dark: Palette = {
   surfaceControl: '#282828', // --surface-control (gray-850)
   surfaceControlHover: '#303030', // --surface-control-hover (gray-800)
   surfaceSelected: '#393939', // --surface-selected (gray-750)
-  textWhite: '#ffffff',
+  textStrong: '#ffffff',
   // Between --color-gray-100 and -200: a whole reply in #bcbcbc read dim next
   // to Grok's and iMessage's near-white bodies. Chrome keeps textPrimary.
   textBody: '#e6e6e6',
@@ -74,36 +98,100 @@ const dark: Palette = {
   borderStrong: '#393939', // --border-strong
   accentSuccess: '#35d35d', // --accent-success (green-600)
   accentWarning: '#e89a1c', // --accent-warning (orange-600)
+  onWarning: '#141414',
   accentError: '#f44747', // --accent-error
   accentErrorLight: '#ef4444', // --accent-error-light
   accentFocus: '#2792ff', // --accent-focus (blue-500)
-  overlayFrame: 'rgba(255, 255, 255, 0.85)', // --color-white-o85
+  accentNeutral: '#e6e6e6', // --agents-tint-white
+  diffAdd: '#35d35d',
+  diffAddBg: 'rgba(53, 211, 93, 0.1)',
+  diffDel: '#ef4444',
+  diffDelBg: 'rgba(244, 71, 71, 0.1)',
   scrim: 'rgba(0, 0, 0, 0.75)', // --color-black-o75
-  black: '#000000', // --color-black: behind a photo, as the system viewer has it
+  ...media,
 };
 
-export const palettes = { dark } as const;
-export type Appearance = keyof typeof palettes;
+/**
+ * Light is drawn for light, not inverted from dark. Paper-white for the app
+ * and its chats (what's read most sits on the brightest surface), and each
+ * step of layering a few percent darker: panels and cards recess rather than
+ * glow. Words are near-black, never pure black, and every grey that carries
+ * words passes 4.5:1 on app, panel and control. Hairlines are a touch firmer
+ * than dark's, because on white a 1px line is all that separates two greys.
+ * The semantic colours are their deeper shades (green-700, amber-700, red-700
+ * and so on): the bright ones the dark palette uses wash out on white.
+ */
+const light: Palette = {
+  surfaceApp: '#ffffff',
+  surfacePanel: '#f5f5f5',
+  surfaceControl: '#ebebeb',
+  surfaceControlHover: '#e3e3e3',
+  surfaceSelected: '#dcdcdc',
+  textStrong: '#0f0f0f',
+  textBody: '#1c1c1c',
+  textPrimary: '#383838',
+  textSecondary: '#5c5c5c',
+  // 4.47:1 on a control, 4.89 on a panel, 5.3 on the app.
+  textMuted: '#6b6b6b',
+  // Decoration only, as in dark.
+  textFaint: '#c2c2c2',
+  inkDark: '#0f0f0f',
+  inkLight: '#ffffff',
+  borderDefault: '#e6e6e6',
+  borderSubtle: '#e0e0e0',
+  borderStrong: '#cfcfcf',
+  accentSuccess: '#15803d', // green-700
+  accentWarning: '#b45309', // amber-700
+  onWarning: '#ffffff',
+  accentError: '#d42a20',
+  accentErrorLight: '#c4261c',
+  accentFocus: '#0b6bdc',
+  // The neutral accent in light is ink: a white Chief on a white app would be invisible.
+  accentNeutral: '#171717',
+  diffAdd: '#11672f',
+  diffAddBg: 'rgba(21, 128, 61, 0.1)',
+  diffDel: '#b0221a',
+  diffDelBg: 'rgba(212, 42, 32, 0.08)',
+  scrim: 'rgba(0, 0, 0, 0.22)',
+  ...media,
+};
 
-/** The palette in use. A light mode makes this follow the appearance. */
-export const colors: Palette = palettes.dark;
+export const palettes = { dark, light } as const;
+export type Appearance = keyof typeof palettes;
+export const APPEARANCES = Object.keys(palettes) as Appearance[];
 
 /**
- * `--agents-tint-*` in src/styles/features/agents.css, keyed like `Agent.color`.
- * Each is also an accent (lib/accent.tsx).
+ * `--agents-tint-*` in src/styles/features/agents.css, keyed like
+ * `Agent.color`, per appearance. Each is also an accent (lib/accent.tsx).
+ * "white" isn't here: it is the palette's `accentNeutral`, one rule in
+ * accent.tsx. Light takes each hue's deeper shade, so it reads as words
+ * (4.5:1 on the app and a panel) and carries white ink as a fill.
  */
-export const agentTints: Record<string, string> = {
-  white: '#e6e6e6',
-  brown: '#b08560',
-  red: '#ef5b50',
-  orange: '#f07c3c',
-  amber: '#e9a83a',
-  green: '#3fbf6a',
-  teal: '#2fb3a1',
-  blue: '#4d8ff5',
-  purple: '#9471f5',
-  pink: '#e45a9f',
-  gray: '#8a8a8a',
+export const agentTints: Record<Appearance, Record<string, string>> = {
+  dark: {
+    brown: '#b08560',
+    red: '#ef5b50',
+    orange: '#f07c3c',
+    amber: '#e9a83a',
+    green: '#3fbf6a',
+    teal: '#2fb3a1',
+    blue: '#4d8ff5',
+    purple: '#9471f5',
+    pink: '#e45a9f',
+    gray: '#8a8a8a',
+  },
+  light: {
+    brown: '#8a5a33',
+    red: '#c4342a',
+    orange: '#b64a0c',
+    amber: '#9c6200',
+    green: '#187d41',
+    teal: '#0e7a6d',
+    blue: '#2563d6',
+    purple: '#6d45dc',
+    pink: '#bf3580',
+    gray: '#6b6b6b',
+  },
 };
 
 /** `--spacing-*`. */

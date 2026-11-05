@@ -19,21 +19,42 @@ import {
   type TextProps,
   type ViewStyle,
 } from 'react-native';
-import { alpha, chromeScale, colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import {
+  alpha,
+  chromeScale,
+  fonts,
+  lineHeight,
+  radius,
+  space,
+  type,
+  type Palette,
+} from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 import type { Tone } from '../lib/connection';
-import { ANSWER, useAccent } from '../lib/accent';
+import { useAccent, useAnswerAccent } from '../lib/accent';
 import { haptic } from '../lib/haptics';
 import { useApp } from '../lib/store';
 
 /** Ripple for Android presses; iOS uses its pressed tints. */
-export const ripple = { color: alpha(colors.textWhite, 0.08) };
+export function useRipple() {
+  const colors = useColors();
+  return { color: alpha(colors.textStrong, 0.08) };
+}
 
-/** Increase Contrast: each step of grey reads one step brighter. */
-const brighter: Record<string, string> = {
-  [colors.textMuted]: colors.textSecondary,
-  [colors.textSecondary]: colors.textPrimary,
-  [colors.textPrimary]: colors.textWhite,
-};
+/** Increase Contrast: each step of grey reads one step stronger (brighter in dark, darker in light). */
+const stronger = new Map<Palette, Record<string, string>>();
+function strongerOf(colors: Palette): Record<string, string> {
+  let map = stronger.get(colors);
+  if (!map) {
+    map = {
+      [colors.textMuted]: colors.textSecondary,
+      [colors.textSecondary]: colors.textPrimary,
+      [colors.textPrimary]: colors.textStrong,
+    };
+    stronger.set(colors, map);
+  }
+  return map;
+}
 
 type Variant = 'body' | 'small' | 'caption' | 'subhead' | 'title' | 'display' | 'mono';
 
@@ -66,15 +87,17 @@ const variants = StyleSheet.create({
 
 export function T({
   variant = 'body',
-  color = colors.textPrimary,
+  color,
   style,
   ...rest
 }: TextProps & { variant?: Variant; color?: string }) {
+  const colors = useColors();
   const high = useApp((s) => s.highContrast);
+  const ink = color ?? colors.textPrimary;
   return (
     <Text
       {...rest}
-      style={[variants[variant], { color: (high && brighter[color]) || color }, style]}
+      style={[variants[variant], { color: (high && strongerOf(colors)[ink]) || ink }, style]}
     />
   );
 }
@@ -84,14 +107,17 @@ export const tap = haptic.select;
 
 /**
  * `answer` is an approval's Allow: filled like a primary, but always the
- * neutral near-white (`ANSWER`), never the agent's colour.
+ * neutral accent (`answerAccent`: near-white in dark, near-black in light),
+ * never the agent's colour.
  */
 type ButtonVariant = 'primary' | 'answer' | 'secondary' | 'ghost' | 'danger';
 
 type ButtonColors = { bg: string; pressed: string; fg: string; border?: string };
 
 /** Primary takes the accent in scope (lib/accent.tsx); the rest are the palette's. */
-const buttonColors: Record<Exclude<ButtonVariant, 'primary' | 'answer'>, ButtonColors> = {
+const buttonColorsOf = (
+  colors: Palette
+): Record<Exclude<ButtonVariant, 'primary' | 'answer'>, ButtonColors> => ({
   secondary: {
     bg: 'transparent',
     pressed: colors.surfaceControl,
@@ -104,7 +130,7 @@ const buttonColors: Record<Exclude<ButtonVariant, 'primary' | 'answer'>, ButtonC
     pressed: alpha(colors.accentError, 0.2),
     fg: colors.accentErrorLight,
   },
-};
+});
 
 export function Button({
   title,
@@ -127,9 +153,13 @@ export function Button({
   /** A choice someone must read in full (a session's options) wraps instead of truncating. */
   lines?: number;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   const accent = useAccent();
+  const answer = useAnswerAccent();
   const filled = variant === 'primary' || variant === 'answer';
-  const a = variant === 'answer' ? ANSWER : accent;
+  const a = variant === 'answer' ? answer : accent;
   const off = !!disabled && !busy;
   // A disabled primary is a plain grey control, not a faded accent: a
   // half-transparent colour reads as muddy, and as almost-on.
@@ -137,7 +167,7 @@ export function Button({
     ? off
       ? { bg: colors.surfaceControl, pressed: colors.surfaceControl, fg: colors.textMuted }
       : { bg: a.accent, pressed: a.pressed, fg: a.onAccent }
-    : buttonColors[variant];
+    : buttonColorsOf(colors)[variant];
   const height = size === 'large' ? 50 : size === 'compact' ? 32 : 44;
   return (
     <Pressable
@@ -238,12 +268,29 @@ const MATERIAL: Partial<Record<SFName, string>> = {
 export function Icon({
   name,
   size = 18,
-  color = colors.textSecondary,
+  color,
   fallback,
 }: {
   name: SFName;
   size?: number;
   color?: string;
+  fallback?: ReactNode;
+}) {
+  const colors = useColors();
+  return (
+    <Glyph name={name} size={size} color={color ?? colors.textSecondary} fallback={fallback} />
+  );
+}
+
+function Glyph({
+  name,
+  size,
+  color,
+  fallback,
+}: {
+  name: SFName;
+  size: number;
+  color: string;
   fallback?: ReactNode;
 }) {
   if (Platform.OS === 'ios') {
@@ -265,7 +312,7 @@ export function IconButton({
   name,
   label,
   onPress,
-  color = colors.textSecondary,
+  color: tint,
   size = 18,
   fallback,
 }: {
@@ -276,6 +323,10 @@ export function IconButton({
   size?: number;
   fallback?: string;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
+  const color = tint ?? colors.textSecondary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -293,12 +344,16 @@ export function IconButton({
   );
 }
 
-export const toneColor: Record<Tone, string> = {
-  ok: colors.accentSuccess,
-  problem: colors.accentError,
-  unknown: colors.textMuted,
-  busy: colors.accentWarning,
-};
+/** A connection tone's colour in the palette in force. */
+export function useToneColor(): Record<Tone, string> {
+  const colors = useColors();
+  return {
+    ok: colors.accentSuccess,
+    problem: colors.accentError,
+    unknown: colors.textMuted,
+    busy: colors.accentWarning,
+  };
+}
 
 export function Dot({
   color,
@@ -339,6 +394,8 @@ export function Section({
   children: ReactNode;
   footer?: string;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.section}>
       {title && (
@@ -371,6 +428,7 @@ export function Row({
   destructive,
   trailing,
   detail,
+  selected,
 }: {
   label: string;
   /** A line under the label saying what it does. */
@@ -380,14 +438,20 @@ export function Row({
   onPress?: () => void;
   last?: boolean;
   destructive?: boolean;
+  /** A choice in a list of them (a check in `trailing`): said to VoiceOver too. */
+  selected?: boolean;
   /** A control in place of the chevron, such as a Switch. */
   trailing?: ReactNode;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   return (
     <Pressable
       disabled={!onPress}
       onPress={onPress}
       accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityState={selected != null ? { selected } : undefined}
       android_ripple={onPress ? ripple : undefined}
       style={({ pressed }) => [
         styles.row,
@@ -431,6 +495,8 @@ export function Segmented<V extends string>({
   options: { value: V; label: string }[];
   onChange: (v: V) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.segmented} accessibilityRole="tablist">
       {options.map((o) => {
@@ -446,7 +512,7 @@ export function Segmented<V extends string>({
             }}
             style={[styles.segment, on && styles.segmentOn]}
           >
-            <T variant="small" color={on ? colors.textWhite : colors.textSecondary}>
+            <T variant="small" color={on ? colors.textStrong : colors.textSecondary}>
               {o.label}
             </T>
           </Pressable>
@@ -456,7 +522,7 @@ export function Segmented<V extends string>({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   segmented: {
     flexDirection: 'row',
     padding: space['2xs'],
@@ -514,4 +580,4 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderSubtle,
   },
   rowValue: { maxWidth: '55%', textAlign: 'right' },
-});
+}));

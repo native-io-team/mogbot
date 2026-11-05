@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
-import { stackOptions } from '../../../lib/navigation';
+import { useStackOptions } from '../../../lib/navigation';
 
 export default function TabStack() {
-  return <Stack screenOptions={stackOptions} />;
+  return <Stack screenOptions={useStackOptions()} />;
 }

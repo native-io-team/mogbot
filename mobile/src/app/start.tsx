@@ -6,15 +6,19 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { Button, T } from '../components/ui';
 import { haptic } from '../lib/haptics';
 import { describeError, startSession } from '../lib/session';
 import { useApp } from '../lib/store';
 import { useAccent } from '../lib/accent';
-import { colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 
 export default function Start() {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const accent = useAccent();
   const { project, name } = useLocalSearchParams<{ project: string; name: string }>();
   const router = useRouter();
@@ -47,7 +51,7 @@ export default function Start() {
 
   return (
     <View style={styles.content}>
-      <T variant="title" color={colors.textWhite}>
+      <T variant="title" color={colors.textStrong}>
         New task in {name}
       </T>
       <T variant="small" color={colors.textSecondary}>
@@ -62,7 +66,7 @@ export default function Start() {
         placeholder="What should it do?"
         placeholderTextColor={colors.textMuted}
         style={styles.input}
-        keyboardAppearance="dark"
+        keyboardAppearance={appearance}
         selectionColor={accent.accent}
         accessibilityLabel="What the new task should do"
       />
@@ -87,7 +91,7 @@ export default function Start() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md },
   input: {
     fontFamily: fonts.regular,
@@ -100,4 +104,4 @@ const styles = StyleSheet.create({
     minHeight: 120,
     textAlignVertical: 'top',
   },
-});
+}));

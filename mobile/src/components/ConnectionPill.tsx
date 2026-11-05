@@ -11,8 +11,9 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { useShallow } from 'zustand/react/shallow';
 import { pill } from '../lib/connection';
 import { useApp } from '../lib/store';
-import { chromeScale, colors, radius, space } from '../lib/theme';
-import { Dot, T, toneColor } from './ui';
+import { chromeScale, radius, space } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
+import { Dot, T, useToneColor } from './ui';
 
 /** Re-render every `ms` while mounted, for "last seen 2 min ago". */
 export function useNow(ms = 15_000) {
@@ -40,6 +41,9 @@ export function useLinkState() {
 }
 
 function ConnectionPill() {
+  const colors = useColors();
+  const styles = useStyles();
+  const toneColor = useToneColor();
   const router = useRouter();
   const p = pill(useLinkState(), useNow());
   return (
@@ -72,6 +76,7 @@ function ConnectionPill() {
 
 /** Only when something is wrong: the state, and a tap to the reasons. */
 export function ConnectionNotice() {
+  const styles = useStyles();
   const state = useLinkState();
   const p = pill(state, useNow());
   if (p.tone === 'ok' || state.link.kind === 'refused') return null;
@@ -88,6 +93,8 @@ export function ConnectionNotice() {
 
 /** In a chat, only when something is wrong: a slim line under the header. */
 export function LinkBanner() {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const state = useLinkState();
   const now = useNow(10_000);
@@ -113,7 +120,7 @@ export function LinkBanner() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   notice: { paddingHorizontal: space.lg, paddingBottom: space.sm, alignItems: 'flex-start' },
   pill: {
     flexDirection: 'row',
@@ -135,4 +142,4 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
   },
-});
+}));

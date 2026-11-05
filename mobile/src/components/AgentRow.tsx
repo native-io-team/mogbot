@@ -20,17 +20,19 @@ import { agentActions, type AgentAction, type AgentCaps } from '../lib/actions';
 import { formatAgo, lineState, needsLine, needsYou, subtitle } from '../lib/agents';
 import { useApp } from '../lib/store';
 import { haptic } from '../lib/haptics';
-import { chromeScale, colors, radius, space } from '../lib/theme';
+import { chromeScale, radius, space, type Palette } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, StatusMark } from './agent';
 import { showActions } from './menu';
-import { Icon, ripple, T } from './ui';
+import { Icon, useRipple, T } from './ui';
 
-const lineColor = {
-  waiting: colors.accentWarning,
-  failed: colors.accentErrorLight,
-  working: colors.textSecondary,
-  limited: colors.textSecondary,
-} as const;
+const lineColor = (colors: Palette) =>
+  ({
+    waiting: colors.accentWarning,
+    failed: colors.accentErrorLight,
+    working: colors.textSecondary,
+    limited: colors.textSecondary,
+  }) as const;
 
 /** How far a row's words follow Dynamic Type: past this they'd outgrow the title above them. */
 const NAME_SCALE = 2;
@@ -57,6 +59,8 @@ export const AgentRow = memo(function AgentRow({
   onPress?: () => void;
   onAction: (agent: Agent, action: AgentAction) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const swipe = useRef<SwipeableMethods>(null);
   const actions = agentActions(agent, caps);
   const canToggle = live && caps.update;
@@ -168,6 +172,8 @@ function SwipeAction({
   color: string;
   onPress: () => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   // Nothing is drawn while closed: the row lifts out for its context menu,
   // and these mustn't show through the gap it leaves.
   const fill = useAnimatedStyle(() => ({
@@ -193,8 +199,8 @@ function SwipeAction({
         ]}
       />
       <Animated.View style={[styles.actionInner, style]}>
-        <Icon name={icon} size={18} color={colors.textWhite} />
-        <T variant="caption" color={colors.textWhite} maxFontSizeMultiplier={chromeScale}>
+        <Icon name={icon} size={18} color={colors.textStrong} />
+        <T variant="caption" color={colors.textStrong} maxFontSizeMultiplier={chromeScale}>
           {label}
         </T>
       </Animated.View>
@@ -216,6 +222,9 @@ function RowBody({
   onPress?: () => void;
   onLongPress?: () => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   const { fontScale } = useWindowDimensions();
   // At the largest sizes the time moves under the subtitle so the name keeps its room.
   const stacked = fontScale >= 1.6;
@@ -260,7 +269,7 @@ function RowBody({
         <View style={styles.nameLine}>
           <T
             variant="subhead"
-            color={colors.textWhite}
+            color={colors.textStrong}
             numberOfLines={1}
             // Names stop growing at twice the size, under Home's large title.
             maxFontSizeMultiplier={NAME_SCALE}
@@ -277,7 +286,7 @@ function RowBody({
             variant="small"
             numberOfLines={stacked ? 3 : 1}
             maxFontSizeMultiplier={NAME_SCALE}
-            color={state && live ? lineColor[state] : colors.textSecondary}
+            color={state && live ? lineColor(colors)[state] : colors.textSecondary}
             style={{ flex: 1 }}
           >
             {line}
@@ -292,7 +301,7 @@ function RowBody({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -313,4 +322,4 @@ const styles = StyleSheet.create({
   action: { width: ACTION_W, alignItems: 'center', justifyContent: 'center' },
   actionLeft: { borderTopRightRadius: radius.card, borderBottomRightRadius: radius.card },
   actionInner: { alignItems: 'center', gap: space.xs },
-});
+}));

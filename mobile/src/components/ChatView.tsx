@@ -59,7 +59,8 @@ import {
 import { useAccent } from '../lib/accent';
 import { useApp } from '../lib/store';
 import { chatItems, sentAt, type Item } from '../lib/timeline';
-import { alpha, chromeScale, colors, radius, space } from '../lib/theme';
+import { alpha, chromeScale, radius, space } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
 import { Composer } from './Composer';
@@ -68,7 +69,7 @@ import { PathContext } from './Markdown';
 import { PaneContext, type Pane } from './ApprovalCard';
 import { showActions } from './menu';
 import { SelectSheet } from './SelectSheet';
-import { Button, Icon, IconButton, ripple, T } from './ui';
+import { Button, Icon, IconButton, useRipple, T } from './ui';
 
 const NONE: never[] = [];
 
@@ -96,6 +97,9 @@ function PinnedQuestion({
   inset: { left: number; right: number };
   onPress: () => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   return (
     <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)}>
       <Pressable
@@ -111,7 +115,7 @@ function PinnedQuestion({
       >
         <Icon name="exclamationmark.triangle.fill" size={13} color={colors.accentWarning} />
         <View style={{ flex: 1 }}>
-          <T variant="small" color={colors.textWhite} numberOfLines={1}>
+          <T variant="small" color={colors.textStrong} numberOfLines={1}>
             {title}
           </T>
           {line !== title && (
@@ -138,6 +142,9 @@ export function ChatView({
   compose?: boolean;
   embedded?: boolean;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const accent = useAccent();
@@ -489,7 +496,7 @@ export function ChatView({
             {(urgentBelow || newReply) && (
               <T
                 variant="small"
-                color={urgentBelow ? colors.inkDark : colors.textPrimary}
+                color={urgentBelow ? colors.onWarning : colors.textPrimary}
                 maxFontSizeMultiplier={chromeScale}
                 style={{ marginLeft: space.xs }}
               >
@@ -499,7 +506,7 @@ export function ChatView({
             <Icon
               name="arrow.down"
               size={15}
-              color={urgentBelow ? colors.inkDark : colors.textPrimary}
+              color={urgentBelow ? colors.onWarning : colors.textPrimary}
               fallback={<T>↓</T>}
             />
           </Pressable>
@@ -519,7 +526,7 @@ export function ChatView({
           ]}
           accessibilityLiveRegion="polite"
         >
-          <T variant="small" color={colors.textWhite}>
+          <T variant="small" color={colors.textStrong}>
             {toast}
           </T>
         </Animated.View>
@@ -563,6 +570,7 @@ function ItemView({
   onDraftHeight: (height: number) => void;
   lit?: boolean;
 }) {
+  const styles = useStyles();
   const body =
     item.kind === 'message' ? (
       <MessageRow
@@ -593,6 +601,7 @@ function ItemView({
 
 /** The row a search hit opened on: lit, then fading back. */
 function Glow() {
+  const styles = useStyles();
   const opacity = useSharedValue(1);
   useEffect(() => {
     opacity.set(withDelay(900, withTiming(0, { duration: 900 })));
@@ -611,6 +620,8 @@ function Header({
   /** Its reply is streaming in: the header says so, not the step before it. */
   writing: boolean;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const connected = useApp((s) => s.link.kind === 'connected');
   const engine = useApp((s) => engineLine(agent, s.overview?.engines));
   const line =
@@ -627,7 +638,7 @@ function Header({
       <View style={{ flexShrink: 1 }}>
         <T
           variant="subhead"
-          color={colors.textWhite}
+          color={colors.textStrong}
           numberOfLines={1}
           maxFontSizeMultiplier={chromeScale}
         >
@@ -658,10 +669,12 @@ function Gone({
   macName: string;
   onBack: () => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.gone}>
       {!embedded && <Stack.Screen options={{ title: '' }} />}
-      <T variant="title" color={colors.textWhite} style={{ textAlign: 'center' }}>
+      <T variant="title" color={colors.textStrong} style={{ textAlign: 'center' }}>
         This agent was removed
       </T>
       <T color={colors.textSecondary} style={{ textAlign: 'center' }}>
@@ -672,7 +685,7 @@ function Gone({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: space.lg, paddingVertical: space.md },
   // Each cell is drawn upright, so paddingTop is the space between a row and
@@ -739,4 +752,4 @@ const styles = StyleSheet.create({
     padding: space.xl,
     gap: space.md,
   },
-});
+}));

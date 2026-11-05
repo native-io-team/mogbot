@@ -19,12 +19,13 @@ import { Spinner } from '../../../components/agent';
 import { ConnectionNotice, useNow } from '../../../components/ConnectionPill';
 import { SessionState, tabName } from '../../../components/session';
 import { choose } from '../../../components/menu';
-import { Button, Icon, ripple, T } from '../../../components/ui';
+import { Button, Icon, useRipple, T } from '../../../components/ui';
 import { formatAgo } from '../../../lib/agents';
 import { haptic } from '../../../lib/haptics';
 import { canCall, describeError, previewScreenshot, refreshProjects } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
-import { colors, radius, space } from '../../../lib/theme';
+import { radius, space } from '../../../lib/theme';
+import { makeStyles, useColors } from '../../../lib/appearance';
 
 /** Waiting on you first, then the most recently active. */
 function order(projects: ProjectSummary[]): ProjectSummary[] {
@@ -37,6 +38,8 @@ function order(projects: ProjectSummary[]): ProjectSummary[] {
 }
 
 export default function Projects() {
+  const colors = useColors();
+  const styles = useStyles();
   const projects = useApp((s) => s.projects);
   const served = useApp((s) => canCall('projects.list', s.welcome));
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
@@ -61,7 +64,7 @@ export default function Projects() {
           headerLargeTitle: true,
           headerLargeTitleShadowVisible: false,
           headerLargeStyle: { backgroundColor: colors.surfaceApp },
-          headerLargeTitleStyle: { color: colors.textWhite },
+          headerLargeTitleStyle: { color: colors.textStrong },
         }}
       />
       <ScrollView
@@ -111,6 +114,8 @@ function ProjectCard({
   project: ProjectSummary;
   onError: (text: string | null) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const live = useApp((s) => s.link.kind === 'connected');
   const canStart = useApp((s) => canCall('sessions.start', s.welcome));
@@ -148,7 +153,7 @@ function ProjectCard({
     <Animated.View layout={LinearTransition.springify().damping(20)} style={styles.card}>
       <View style={styles.cardHead}>
         <Icon name="folder.fill" size={14} color={colors.textSecondary} />
-        <T variant="subhead" color={colors.textWhite} numberOfLines={1} style={{ flexShrink: 1 }}>
+        <T variant="subhead" color={colors.textStrong} numberOfLines={1} style={{ flexShrink: 1 }}>
           {project.name}
         </T>
         <View style={{ flex: 1 }} />
@@ -210,6 +215,9 @@ function SessionRow({
   project: ProjectSummary;
   first: boolean;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   const router = useRouter();
   const now = useNow(15_000);
   return (
@@ -251,7 +259,7 @@ function SessionRow({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   content: { paddingBottom: space['2xl'], gap: space.md },
   note: { paddingHorizontal: space.lg, paddingVertical: space.md },
   card: {
@@ -291,4 +299,4 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle,
   },
-});
+}));
