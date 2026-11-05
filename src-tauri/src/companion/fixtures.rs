@@ -501,6 +501,11 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "agentsStartFresh",
+        "Result<'agents.startFresh'>",
+        call("agents.startFresh", json!({ "agentId": AGENT })).await,
+    );
+    out += &entry(
         "sessionsSend",
         "Result<'sessions.send'>",
         call(

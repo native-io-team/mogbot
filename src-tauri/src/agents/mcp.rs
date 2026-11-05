@@ -1456,6 +1456,7 @@ mod tests {
             engine: Default::default(),
             model: None,
             new_engine: false,
+            context: None,
             routine_model: None,
             muted: false,
             check_ins: Vec::new(),

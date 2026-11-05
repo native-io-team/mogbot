@@ -41,8 +41,11 @@ export function ProjectActionConfirmModal({
       dismissable={!loading}
     >
       <div style={{ padding: 'var(--spacing-xl)' }}>
-        <p>{body}</p>
-        <p className="text-style-hint">{hint}</p>
+        {/* `body` may bring its own <p>: a div, so it never nests in one. */}
+        <div className="confirm-modal-text">
+          <div>{body}</div>
+          <p className="text-style-hint">{hint}</p>
+        </div>
         <div className="modal-actions">
           <Button variant="secondary" onClick={handleCancel} disabled={loading}>
             Cancel

@@ -1021,6 +1021,35 @@ const QUEUED_CHAT = [
   msg('user', 'Also check the footer links once that’s done.', 0.5, { agentId: 'acme' }),
 ];
 
+/**
+ * Start fresh. Acme Site's conversation as its engine last reported it: the
+ * latest request carried 174k of a 200k window (87%, past the 85% nudge).
+ */
+const ACME_FULL = {
+  status: status('idle'),
+  context: { used: 174_000, window: 200_000, at: now - 19 * MIN },
+};
+
+/** The same chat after a fresh start: the history, the divider, then the new conversation. */
+const FRESH_CHAT = [
+  ...ACME_CHAT,
+  msg('note', 'Started fresh · memory kept', 12, { agentId: 'acme', fresh: true }),
+  msg('user', 'New one: the client wants a dark mode toggle in the header.', 11, {
+    agentId: 'acme',
+  }),
+  msg(
+    'agent',
+    'On it. I’ll use the brand’s dark palette from the guidelines and keep the 24px mobile gutters.',
+    10,
+    { agentId: 'acme' }
+  ),
+];
+const ACME_FRESH = {
+  status: status('idle'),
+  sessionId: 'session-2',
+  context: { used: 21_400, window: 200_000, at: now - 10 * MIN },
+};
+
 const acmeWith = (over: Record<string, unknown>) =>
   overview(TEAM.map((a) => (a.id === 'acme' ? { ...a, ...over } : a)));
 
@@ -2085,6 +2114,87 @@ export const agentsScenarios: Scenario[] = [
       agents_messages: (args: Record<string, unknown>) =>
         args.agentId === 'acme' ? QUEUED_CHAT : messagesFor(args),
       agents_interrupt: true,
+    },
+  },
+  {
+    id: 'agents-fresh-suggested',
+    title: 'Agents — a nearly full conversation suggests starting fresh',
+    looksRightWhen:
+      'Acme Site is idle. Under its last reply, one quiet centred line: “This conversation is getting long — Acme Site may lose track of early details. Start fresh (memory is kept)”, the last part an underlined, brighter link. Nothing else changed in the chat.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-fresh-hint',
+    steps: [{ click: '[data-agent-id="acme"]' }],
+    commands: {
+      agents_overview: acmeWith(ACME_FULL),
+      agents_messages: messagesFor,
+    },
+  },
+  {
+    id: 'agents-fresh-menu',
+    title: 'Agents — Start fresh in the agent’s … menu',
+    looksRightWhen:
+      'The header’s … menu is open. After “Edit agent…” comes “Start fresh (87% full)…” with a reload icon, then the divider, Hide from sidebar and Delete…',
+    openSelector: AGENTS_TAB,
+    requires: '.ss-dropdown__item',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__menu [aria-label^="Actions for"]' },
+    ],
+    commands: {
+      agents_overview: acmeWith(ACME_FULL),
+      agents_messages: messagesFor,
+    },
+  },
+  {
+    id: 'agents-fresh-confirm',
+    title: 'Agents — confirming a fresh start',
+    looksRightWhen:
+      'A small dialog: “Start Acme Site fresh?”, then that its next message starts a new conversation, its instructions and memory carry over, and anything it only knew from this conversation doesn’t. The hint says the chat stays. Cancel and a primary (not red) “Start fresh”.',
+    openSelector: AGENTS_TAB,
+    requires: '.modal-frame-content',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__menu [aria-label^="Actions for"]' },
+      { click: '[role="menuitem"]:nth-child(7)' },
+    ],
+    commands: {
+      agents_overview: acmeWith(ACME_FULL),
+      agents_messages: messagesFor,
+    },
+  },
+  {
+    id: 'agents-fresh-divider',
+    title: 'Agents — the chat after starting fresh',
+    looksRightWhen:
+      'Acme Site’s earlier conversation is all still there. Below it, a calm full-width divider: a hairline either side of “Started fresh · memory kept”. Under it the new conversation (the dark mode request and its reply). No “% full” nudge: the new conversation is small.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-fresh',
+    steps: [{ click: '[data-agent-id="acme"]' }],
+    commands: {
+      agents_overview: acmeWith(ACME_FRESH),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? FRESH_CHAT : messagesFor(args),
+    },
+  },
+  {
+    id: 'agents-fresh-meter',
+    title: 'Agents — how full the conversation is, in the editor',
+    looksRightWhen:
+      'Editing Acme Site: under This week / All time, a third quiet line “Conversation · 11% full · 21k of 200k tokens”. It is there only because the engine reported both numbers.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-editor__usage',
+    clipSelector: '.agent-editor__usage',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__menu [aria-label^="Actions for"]' },
+      { click: '[role="menuitem"]:nth-child(6)' },
+    ],
+    commands: {
+      agents_overview: acmeWith(ACME_FRESH),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? FRESH_CHAT : messagesFor(args),
+      agents_instructions: 'Own the Acme marketing site. Ask before anything ships.',
+      agents_usage: { week: totals(6, 120_000, 1.2, 9), allTime: totals(40, 900_000, 9.4, 70) },
     },
   },
   {

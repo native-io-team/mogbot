@@ -198,6 +198,8 @@ pub struct Conversation {
     /// MCP calls in progress: (server, tool, arguments).
     mcp_calls: Vec<(String, String, Value)>,
     usage: UsageTotals,
+    /// The model the thread runs on, as `thread/start` / `thread/resume` said.
+    model: Option<String>,
     over: bool,
 }
 
@@ -255,6 +257,7 @@ impl Conversation {
             file_changes: HashMap::new(),
             mcp_calls: Vec::new(),
             usage: UsageTotals::default(),
+            model: None,
             over: false,
         };
         (conversation, first)
@@ -316,6 +319,7 @@ impl Conversation {
                     return self.end([Step::Failed("Codex started no conversation.".into())]);
                 };
                 self.thread = Some(thread.to_string());
+                self.model = str_at(msg, "/result/model").map(str::to_string);
                 vec![
                     Out::Step(Step::Session(thread.to_string())),
                     Out::Send(request(
@@ -421,7 +425,14 @@ impl Conversation {
                 self.usage.output_tokens += n("outputTokens");
                 self.usage.cache_read_tokens += cached;
                 self.usage.cache_write_tokens += n("cacheWriteInputTokens");
-                Vec::new()
+                super::context::from_codex_app(
+                    params,
+                    self.model.as_deref(),
+                    super::store::now_ms(),
+                )
+                .map(|fill| Out::Step(Step::Context(fill)))
+                .into_iter()
+                .collect()
             }
             "error" => {
                 let message = str_at(params, "/error/message").unwrap_or("").to_string();

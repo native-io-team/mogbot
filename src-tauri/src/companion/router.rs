@@ -32,6 +32,7 @@ pub const METHODS: &[&str] = &[
     "agents.saveSecret",
     "agents.focus",
     "agents.markUnread",
+    "agents.startFresh",
     "agents.update",
     "agents.revokePermission",
     "agents.instructions",
@@ -189,6 +190,9 @@ pub trait Backend: Send + Sync + 'static {
     /// `agents_focus` for a socket instead of a window.
     async fn focus(&self, label: &str, agent_id: Option<String>) -> Result<(), CommandError>;
     async fn mark_unread(&self, agent_id: &str) -> Result<(), CommandError>;
+    /// `agents_start_fresh`: a new conversation, memory kept. Returns the
+    /// stored agent.
+    async fn start_fresh(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_update` with only the toggles set; returns the stored agent.
     async fn update_agent(
         &self,
@@ -782,6 +786,15 @@ async fn run(
             let p: AgentParam = parse(params)?;
             b.mark_unread(&p.agent_id).await?;
             Ok(Value::Null)
+        }
+        "agents.startFresh" => {
+            let p: AgentParam = parse(params)?;
+            // A `StoredAgent`, without lifetime usage, as `agents.update` returns.
+            let mut stored = b.start_fresh(&p.agent_id).await?;
+            if let Some(fields) = stored.as_object_mut() {
+                fields.remove("usage");
+            }
+            Ok(stored)
         }
         "agents.update" => {
             let p: UpdateParams = parse(params).map_err(|_| {
@@ -1382,6 +1395,25 @@ mod tests {
         assert_eq!(
             audit.last().unwrap().2,
             format!("edit instructions (18 chars) {AGENT}")
+        );
+    }
+
+    #[tokio::test]
+    async fn the_phone_can_start_an_agent_fresh() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let done = dispatch(&c, &me, "agents.startFresh", json!({ "agentId": AGENT }))
+            .await
+            .unwrap();
+        assert_eq!(done["sessionId"], Value::Null);
+        assert!(done.get("context").is_none());
+        assert_eq!(*stub.fresh.lock().unwrap(), vec![AGENT.to_string()]);
+        assert!(stub.audited().iter().any(|a| a.1 == "agents.startFresh"));
+        assert!(
+            dispatch(&c, &me, "agents.startFresh", json!({ "agentId": "nobody" }))
+                .await
+                .is_err()
         );
     }
 

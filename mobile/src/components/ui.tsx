@@ -371,6 +371,7 @@ export function Row({
   destructive,
   trailing,
   detail,
+  disabled,
 }: {
   label: string;
   /** A line under the label saying what it does. */
@@ -382,29 +383,41 @@ export function Row({
   destructive?: boolean;
   /** A control in place of the chevron, such as a Switch. */
   trailing?: ReactNode;
+  /**
+   * An action that can't be taken right now: dimmed, not tappable, still
+   * announced as a button. Say why in `detail`.
+   */
+  disabled?: boolean;
 }) {
+  const action = !!onPress && !disabled;
+  const labelColor = disabled
+    ? colors.textMuted
+    : destructive
+      ? colors.accentErrorLight
+      : colors.textPrimary;
   return (
     <Pressable
-      disabled={!onPress}
+      disabled={!action}
       onPress={onPress}
-      accessibilityRole={onPress ? 'button' : undefined}
-      android_ripple={onPress ? ripple : undefined}
+      accessibilityRole={action || disabled ? 'button' : undefined}
+      accessibilityState={disabled ? { disabled: true } : undefined}
+      android_ripple={action ? ripple : undefined}
       style={({ pressed }) => [
         styles.row,
         !last && styles.rowDivider,
         pressed && { backgroundColor: colors.surfaceControl },
       ]}
     >
-      {leading}
+      {disabled ? <View style={{ opacity: 0.4 }}>{leading}</View> : leading}
       {detail ? (
         <View style={{ flex: 1, gap: space['2xs'] }}>
-          <T color={destructive ? colors.accentErrorLight : colors.textPrimary}>{label}</T>
-          <T variant="small" color={colors.textSecondary}>
+          <T color={labelColor}>{label}</T>
+          <T variant="small" color={disabled ? colors.textMuted : colors.textSecondary}>
             {detail}
           </T>
         </View>
       ) : (
-        <T color={destructive ? colors.accentErrorLight : colors.textPrimary} style={{ flex: 1 }}>
+        <T color={labelColor} style={{ flex: 1 }}>
           {label}
         </T>
       )}
@@ -414,7 +427,7 @@ export function Row({
         </T>
       )}
       {trailing}
-      {onPress && !destructive && !trailing && (
+      {action && !destructive && !trailing && (
         <Icon name="chevron.right" size={12} color={colors.textMuted} />
       )}
     </Pressable>

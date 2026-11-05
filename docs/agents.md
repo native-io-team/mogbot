@@ -102,6 +102,39 @@ A vanished session (`--resume` → "No conversation found") is replaced once wit
 a fresh one. **Stop** ends the turn and drops the queue; it leaves a quiet
 "Stopped" note (your doing, not a failure). A turn is capped at 3 hours.
 
+**Start fresh, keep memory.** The agent menu, ⌘K and the phone's agent sheet
+offer "Start fresh" (`agents_start_fresh` / `agents.startFresh`): the next
+message begins a new conversation on the same engine, through the same path an
+engine switch takes. Instructions and `## Memory` carry over; the session
+doesn't, and nothing is recapped into the new one. The chat stays, with a
+"Started fresh · memory kept" note (`fresh: true`) drawn as a divider. It's
+refused while the agent is working, while a card in its chat waits on an
+answer, while another agent still owes it the answer to something it delegated
+(that answer would land in a conversation that never asked), and when its next
+message already starts a new conversation. The check and the reset happen under
+the inbox lock, so a message sent at the same moment either starts first (and
+the fresh start is refused) or starts in the new conversation; two at once
+record one divider. Any later recap (an engine switch, a vanished session) only
+carries what came after the last divider. The prompts tell agents this can
+happen, so anything they'll need later belongs in memory.
+
+**Context meter.** `agents/context.rs` stores one reading per agent
+(`Agent.context`: `used`, `window`, the engine's `model` id) from the engine's
+own numbers: Claude Code's last `assistant` `message.usage` against the
+`result` event's `modelUsage[*].contextWindow`, and Codex app-server's
+`thread/tokenUsage/updated` (`last` against `modelContextWindow`, less
+`reasoningOutputTokens`, which the next request doesn't carry — as Codex's own
+`tokens_in_context_window` counts it; Codex's "% left" also sets aside a fixed
+allowance, so it can read a point or two lower). `codex exec`
+reports no window, so it gives no reading, and the UI shows nothing; nothing is
+ever estimated. The editor shows "72% full · 144k of 200k tokens"; from 85% the
+chat suggests starting fresh. A turn on the agent's own model replaces the
+reading, or clears it when it gives none (stopped, timed out, an old Claude Code
+without `modelUsage`, a `codex exec` fallback, a vanished-session retry); a
+routine on another model (check-ins default to Haiku) leaves it alone, since
+that model's window isn't the conversation's. A fresh start, an engine switch
+or a model change clears it.
+
 **Process trees.** Each turn's `claude` leads its own process group
 (`agents::procs`). Stop, interrupt, the timeout and quitting walk its process
 tree first (a backgrounded child that called `setsid` has left the group but

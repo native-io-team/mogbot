@@ -407,3 +407,36 @@
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }
+
+/* "Started fresh · memory kept": where a new conversation began. A divider
+   with hairlines, calmer than a card: everything above it stays readable. */
+.agent-fresh {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.agent-fresh::before,
+.agent-fresh::after {
+  flex: 1;
+  border-top: var(--border-width-default) solid var(--border-subtle);
+  content: '';
+}
+
+/* The nudge wraps: it is a sentence with a link in it, not a label. */
+.agent-note.agent-fresh-hint {
+  white-space: normal;
+}
+
+/* Its action reads as one: in the agent's colour and underlined, not only on hover. */
+.agent-fresh-hint .text-button.agent-fresh-hint__action {
+  font-weight: var(--font-weight-label);
+  text-decoration: underline;
+  text-underline-offset: var(--spacing-2xs);
+}

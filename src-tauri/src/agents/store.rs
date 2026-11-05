@@ -78,6 +78,10 @@ pub struct Agent {
     /// turn starts a new session and is handed the recent conversation.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub new_engine: bool,
+    /// How full its current conversation is, as its engine last reported it.
+    /// `None` when the engine doesn't say, or since a fresh start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<super::context::ContextFill>,
     /// No OS notifications for this agent. Unread and the Dock badge still count it.
     #[serde(default)]
     pub muted: bool,
@@ -132,6 +136,31 @@ impl Agent {
         self.session_id = None;
         self.new_engine = true;
         self.capabilities = None;
+        self.context = None;
+    }
+
+    /// Whether its next turn would continue a conversation: there is one to
+    /// leave, or one it would be handed the recap of.
+    pub fn has_conversation(&self) -> bool {
+        self.session_id.is_some() || self.new_engine
+    }
+
+    /// Change the model its turns run on. A reading taken on another model
+    /// is against that model's window, so it goes with the change.
+    pub fn set_model(&mut self, model: Option<String>) {
+        if self.model != model {
+            self.context = None;
+        }
+        self.model = model;
+    }
+
+    /// Its next turn starts a new conversation on the same engine, with its
+    /// instructions and memory (CLAUDE.md) and nothing else: no recap. The
+    /// chat log is the user's and stays as it is.
+    pub fn start_fresh(&mut self) {
+        self.session_id = None;
+        self.new_engine = false;
+        self.context = None;
     }
 }
 
@@ -272,6 +301,10 @@ pub struct AgentMessage {
     /// phone swaps its optimistic bubble by id. Absent everywhere else.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
+    /// On a `note`: the conversation started fresh here (memory kept), drawn
+    /// as a divider. Older builds show it as the plain note it also is.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fresh: bool,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -623,6 +656,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         engine: Default::default(),
         model: None,
         new_engine: false,
+        context: None,
         routine_model: None,
         muted: false,
         check_ins: Vec::new(),
@@ -1232,6 +1266,7 @@ mod tests {
                         cli: Some("claude".into()),
                     }),
                     client_id: None,
+                    fresh: false,
                 })
                 .unwrap();
             }
@@ -1410,6 +1445,62 @@ mod tests {
     }
 
     #[test]
+    fn a_fresh_start_leaves_the_conversation_and_keeps_the_rest() {
+        with_root(|| {
+            let a = create(new("Finance")).unwrap();
+            assert!(
+                !a.has_conversation(),
+                "nothing to leave before its first turn"
+            );
+            let fill = super::super::context::ContextFill {
+                used: 9,
+                window: 10,
+                at: 1,
+                model: None,
+            };
+            let before = update(&a.id, |a| {
+                a.session_id = Some("s1".into());
+                a.context = Some(fill.clone());
+                a.model = Some("opus".into());
+            })
+            .unwrap();
+            assert!(before.has_conversation());
+            let home = agent_home(&a.id).unwrap();
+            let claude_md = std::fs::read_to_string(home.join("CLAUDE.md")).unwrap();
+
+            let after = update(&a.id, Agent::start_fresh).unwrap();
+            assert_eq!(
+                (after.session_id.clone(), after.context.clone()),
+                (None, None)
+            );
+            assert!(!after.new_engine, "a fresh start is handed no recap");
+            assert_eq!(after.model.as_deref(), Some("opus"));
+            assert_eq!(after.engine, before.engine);
+            assert_eq!(
+                std::fs::read_to_string(home.join("CLAUDE.md")).unwrap(),
+                claude_md,
+                "instructions and memory are untouched"
+            );
+            assert!(!after.has_conversation());
+
+            // After an engine switch it skips the recap the switch would hand over.
+            let mut switched = after.clone();
+            switched.context = Some(fill);
+            switched.switch_engine(super::super::engine::Engine::Codex);
+            assert!(switched.context.is_none() && switched.has_conversation());
+            switched.start_fresh();
+            assert!(!switched.has_conversation());
+
+            // A new model has a different window: the old reading goes.
+            let mut a = before.clone();
+            a.set_model(Some("opus".into()));
+            assert!(a.context.is_some(), "the same model keeps it");
+            a.set_model(Some("haiku".into()));
+            assert!(a.context.is_none());
+        });
+    }
+
+    #[test]
     fn approvals_resolve_once_and_stale_ones_expire() {
         with_root(|| {
             let a = create(new("Finance")).unwrap();
@@ -1442,6 +1533,7 @@ mod tests {
                 changes: None,
                 session: None,
                 client_id: None,
+                fresh: false,
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -1482,6 +1574,7 @@ mod tests {
             failure: None,
             session: None,
             client_id: None,
+            fresh: false,
         }
     }
 

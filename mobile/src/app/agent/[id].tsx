@@ -2,7 +2,8 @@
  * The agent sheet: who it is; its instructions, Files and usage; Pin, Mute
  * and Hide without a gesture; what it may do without asking (each "Always
  * allow" revocable); and its check-ins and routines, each one a tap from
- * Run now, Pause, Edit or Cancel, the same four the desktop offers. The
+ * Run now, Pause, Edit or Cancel, the same four the desktop offers; how full
+ * its conversation is (when its engine says) and Start fresh. The
  * lists are the Mac's, live: whatever changes them, here or at the desk,
  * arrives with the next registry event.
  */
@@ -27,6 +28,10 @@ import {
   describeScope,
   engineCantAsk,
   engineLine,
+  canStartFresh,
+  contextLine,
+  contextPercent,
+  CONTEXT_SUGGEST_AT,
   engineName,
   folderName,
   modelName,
@@ -40,6 +45,7 @@ import {
   revokePermission,
   schedule,
   setAgentToggles,
+  startFresh,
 } from '../../lib/session';
 import { useApp } from '../../lib/store';
 import { switchColors, useAccent } from '../../lib/accent';
@@ -164,6 +170,13 @@ function AgentSheet() {
           {cantAsk}
         </T>
       )}
+
+      <Conversation
+        agent={agent}
+        canFresh={canCall('agents.startFresh', welcome)}
+        live={live}
+        onError={setError}
+      />
 
       {usage && <Usage usage={usage} />}
 
@@ -417,6 +430,82 @@ function PermissionRow({
         onPress={revoke}
       />
     </View>
+  );
+}
+
+/**
+ * How full its conversation is (only from its engine's own numbers) and
+ * Start fresh: a new conversation from its next message, memory kept. Older
+ * Macs don't serve it, and then only the reading shows, if any.
+ */
+function Conversation({
+  agent,
+  canFresh,
+  live,
+  onError,
+}: {
+  agent: Agent;
+  canFresh: boolean;
+  live: boolean;
+  onError: (text: string | null) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const context = contextLine(agent);
+  const percent = contextPercent(agent);
+  const freshable = canFresh && canStartFresh(agent);
+  if (!context && !freshable) return null;
+  const idle = agent.status.state === 'idle';
+  // Why it can't be tapped right now, in one line; nothing when it can.
+  const unavailable = !idle
+    ? `Available once ${agent.name} is done`
+    : !live
+      ? 'Available once your Mac is connected'
+      : undefined;
+  const confirm = () =>
+    Alert.alert(
+      `Start ${agent.name} fresh?`,
+      'Its next message starts a new conversation. Its instructions and memory carry over; this chat stays here.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start Fresh',
+          onPress: () => {
+            setBusy(true);
+            onError(null);
+            startFresh(agent.id)
+              .then(() => haptic.success())
+              .catch((e: unknown) => {
+                haptic.error();
+                onError(describeError(e));
+              })
+              .finally(() => setBusy(false));
+          },
+        },
+      ]
+    );
+  return (
+    <>
+      <View style={styles.list}>
+        {!!context && <Row label="Conversation" value={context} last={!freshable} />}
+        {freshable && (
+          <Row
+            label={busy ? 'Starting fresh…' : 'Start fresh'}
+            leading={<Icon name="arrow.counterclockwise" size={15} color={colors.textSecondary} />}
+            // Its turn is in the conversation it would leave.
+            onPress={busy ? undefined : confirm}
+            disabled={!!unavailable}
+            detail={unavailable}
+            last
+          />
+        )}
+      </View>
+      {freshable && percent !== null && percent >= CONTEXT_SUGGEST_AT && (
+        <T variant="small" color={colors.textMuted} style={styles.note}>
+          This conversation is getting long — {agent.name} may lose track of early details. Start
+          fresh to give it a new one; its memory is kept.
+        </T>
+      )}
+    </>
   );
 }
 

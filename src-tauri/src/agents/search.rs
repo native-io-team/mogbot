@@ -232,6 +232,7 @@ mod tests {
             changes: None,
             session: None,
             client_id: None,
+            fresh: false,
         })
         .unwrap();
         id
@@ -302,6 +303,7 @@ mod tests {
                 changes: None,
                 session: None,
                 client_id: None,
+                fresh: false,
             })
             .unwrap();
             let found = search_in(&store::list().unwrap(), "deploy", 50).unwrap();
@@ -367,6 +369,7 @@ mod tests {
             changes: None,
             session: None,
             client_id: None,
+            fresh: false,
         };
         assert!(match_message(&message, &terms("müller")).is_some());
         assert!(match_message(&message, &terms("müller schmidt")).is_none());

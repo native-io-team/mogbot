@@ -38,7 +38,11 @@ Your working directory is your home. Its CLAUDE.md holds your instructions and \
 a `## Memory` section that is loaded at the start of every conversation. When \
 you learn something durable (a preference, a standing rule, who someone is, \
 where something lives), add one line to that section. When it changes, edit \
-the line. Don't log events there; it is memory, not a diary.";
+the line. Don't log events there; it is memory, not a diary.
+
+The user can start you fresh at any time: only your instructions and memory \
+carry over, so keep anything you'll need later there. If this conversation has \
+grown so long that you're losing track of it, you may suggest starting fresh.";
 
 const FILES: &str = "\
 ## Files
@@ -168,6 +172,9 @@ in this chat after each turn.",
 something durable (a preference, a standing rule, who someone is, where something \
 lives), add one line to that section of `{home}/CLAUDE.md`. When it changes, edit \
 the line. Don't log events there; it is memory, not a diary.\n\n\
+The user can start you fresh at any time: only your instructions and memory \
+carry over, so keep anything you'll need later there. If this conversation has \
+grown so long that you're losing track of it, you may suggest starting fresh.\n\n\
 ### {home}/CLAUDE.md\n\n{identity}",
             home = b.home,
             identity = b.identity.trim()
