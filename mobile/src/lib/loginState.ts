@@ -50,16 +50,74 @@ export const otherOptions = (login: LoginRequest): LoginOption[] => {
 export const keyOption = (login: LoginRequest): LoginOption | undefined =>
   login.options.find((o) => o.method === 'key');
 
-/** "Hiring needs your Gmail", as the Mac titles it, or built when it didn't. */
+/** "Recruiter needs your Gmail", as the Mac titles it, or built when it didn't. */
 export const loginTitle = (approval: Approval, login: LoginRequest, agentName: string) =>
   approval.title ||
   `${agentName} needs your ${login.title}${login.accountHint ? ` (${login.accountHint})` : ''}`;
 
-/** What a sign-in under way says on the phone: it's on the Mac, and how it's going. */
+/** What a sign-in under way says on the phone: where it is, and how it's going. */
 export function onMacLine(login: LoginRequest): string {
   const live = login.flow?.message;
+  if (login.flow?.onPhone) return live ?? `Signing in to ${login.title} here.`;
   const lead = 'Finish signing in on your Mac — it’s open there.';
   return live ? `${lead} ${live}` : lead;
+}
+
+/** The Mac lets this phone do the sign-in itself (`logins.phone`). */
+export const servesPhoneSignIn = (
+  welcome: Pick<WelcomeFrame, 'methods' | 'features'> | null | undefined
+) =>
+  !!welcome?.features?.includes(MAC_FEATURES.loginsPhone) &&
+  (welcome.methods as string[]).includes('agents.loginPhoneBegin');
+
+/**
+ * How a way in is done from this phone (docs/agents.md, "From the phone"):
+ * - `sheet`: the provider's own sign-in in the system sign-in sheet; the
+ *   code goes to the Mac, which makes and keeps the token (our OAuth)
+ * - `device`: a one-time code typed at the provider's page, here or
+ *   anywhere; the Mac's `gh` keeps the sign-in (GitHub)
+ * - `web`: claude.ai opened here to add the connector to the same Claude
+ *   account; claude.ai holds that sign-in (Gmail, Calendar, Drive, Slack)
+ * - `tap`: nothing to sign in to (an account already connected, the browser)
+ * - `key`: the masked field
+ * - `mac`: only on the Mac (an older Mac, or no sign-in sheet in this build)
+ */
+export type PhoneWay = 'sheet' | 'device' | 'web' | 'tap' | 'key' | 'mac';
+
+export function phoneWay(
+  option: Pick<LoginOption, 'method'>,
+  macLetsPhoneSignIn: boolean,
+  hasSheet: boolean
+): PhoneWay {
+  switch (option.method) {
+    case 'existing':
+    case 'browser':
+      return 'tap';
+    case 'key':
+      return 'key';
+    case 'oauth':
+      return macLetsPhoneSignIn && hasSheet ? 'sheet' : 'mac';
+    case 'gh':
+      return macLetsPhoneSignIn ? 'device' : 'mac';
+    case 'claude_ai':
+      return macLetsPhoneSignIn ? 'web' : 'mac';
+  }
+}
+
+/** What a way in means when it's done from this phone, honestly. */
+export function phoneDetail(option: LoginOption, way: PhoneWay, title: string): string {
+  switch (way) {
+    case 'sheet':
+      return `Signs in to ${title} here, on its own page. Your Mac makes the token and keeps it in its Keychain; this phone keeps nothing.`;
+    case 'device':
+      return 'Shows a one-time code to type at github.com/login/device, here or anywhere. GitHub’s sign-in stays on your Mac.';
+    case 'web':
+      return `Opens claude.ai here to add ${title} to your Claude account (the one your Mac uses). claude.ai holds that sign-in, not your Mac.`;
+    case 'mac':
+      return `${option.detail} Finish on your Mac.`;
+    default:
+      return option.detail;
+  }
 }
 
 /** A finished card's receipt line: its first part leads (`Receipt`). */
@@ -87,7 +145,7 @@ export function teamProgress(team: Pick<TeamLogins, 'done' | 'total'>): string {
   return `${team.done} of ${team.total} connected`;
 }
 
-/** The agents on a row, by name: "Hiring, Inbox Zero and Calendar". */
+/** The agents on a row, by name: "Recruiter, Mailroom and Calendar". */
 export function agentList(names: string[]): string {
   if (names.length <= 1) return names[0] ?? '';
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
@@ -146,7 +204,8 @@ export function teamCardLine(c: TeamCard): string {
     case 'covered':
       return `${c.agentName} · Covered`;
     default:
-      if (signingIn(c)) return `${c.agentName} · Signing in on your Mac…`;
+      if (signingIn(c))
+        return `${c.agentName} · ${c.flow?.onPhone ? 'Signing in on your phone…' : 'Signing in on your Mac…'}`;
       if (c.flow?.state === 'failed') return `${c.agentName} · ${c.flow.message ?? 'Didn’t finish'}`;
       return `${c.agentName} · to ${wants} ${c.title}`;
   }

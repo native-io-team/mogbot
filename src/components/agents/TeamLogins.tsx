@@ -1,6 +1,6 @@
 /**
  * "What your team needs": every login card the team has waiting, one row per
- * service, not per agent. "Google · Gmail + Calendar — Hiring, Inbox Zero and
+ * service, not per agent. "Google · Gmail + Calendar — Recruiter, Mailroom and
  * Calendar · Connect" is one sign-in for all three; three agents asking for
  * GitHub is one "Use GitHub on this Mac". Each agent on a row can be unticked
  * (left waiting in its own chat) or put away with "Not needed"; a progress

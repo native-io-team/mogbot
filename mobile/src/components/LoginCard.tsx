@@ -1,12 +1,13 @@
 /**
- * A login card (`request_login`, desktop `agents/logins.rs`): "Hiring needs
+ * A login card (`request_login`, desktop `agents/logins.rs`): "Recruiter needs
  * your Gmail", which account, what it will be able to do, and the ways in,
- * best first. Every way in runs on the Mac: Connect asks the Mac to start it
- * (`agents.loginStart`), the sign-in opens in the Mac's browser and its token
- * stays in the Mac's Keychain, so while it runs this card says "Finish
- * signing in on your Mac — it's open there" with the Mac's live line, and a
- * Cancel. The card's `login.flow` arrives with every change, from either
- * device.
+ * best first. The token always ends up in the Mac's Keychain. With a Mac
+ * that lets the phone sign in (`logins.phone`), the sign-in itself is done
+ * here (`phoneWay`): the provider's page in the system sign-in sheet,
+ * GitHub's one-time code, or claude.ai opened here. With an older Mac (or a
+ * build without the sheet), Connect asks the Mac to start it and the card
+ * says "Finish signing in on your Mac — it's open there". The card's
+ * `login.flow` arrives with every change, from either device.
  *
  * A password is never asked for. The only field is the key option's, for an
  * API key made for programs, under a secret card's rules: in a ref, wiped on
@@ -14,13 +15,27 @@
  * Tailscale to a Mac that proved its identity.
  */
 
-import type { Agent, AgentMessage, Approval, LoginOption, LoginRequest } from '@shipstudio/companion-protocol';
+import {
+  MAC_FEATURES,
+  type Agent,
+  type AgentMessage,
+  type Approval,
+  type LoginOption,
+  type LoginRequest,
+} from '@shipstudio/companion-protocol';
+import * as Clipboard from 'expo-clipboard';
 import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, TextInput, View } from 'react-native';
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import {
+  CLAUDE_AI_CONNECTORS,
+  hasSignInSheet,
   keyOption,
+  openHere,
+  phoneDetail,
+  phoneWay,
+  signInWithSheet,
   loginCancel,
   loginDecline,
   loginOutcome,
@@ -33,8 +48,8 @@ import {
   saveLoginKey,
 } from '../lib/logins';
 import { currentTransport, describeError, secretRouteProblem } from '../lib/session';
-import { useApp } from '../lib/store';
-import { CARD_TITLE_SCALE, fonts, space } from '../lib/theme';
+import { useApp, useServed } from '../lib/store';
+import { CARD_TITLE_SCALE, fonts, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { Receipt, useArmed, useCardStyles } from './ApprovalCard';
 import { ACTION, Card, CardActions, OFFLINE_NOTE } from './surfaces';
@@ -69,6 +84,8 @@ export function LoginCard({
   const value = useRef('');
   const input = useRef<ComponentRef<typeof TextInput> | null>(null);
   const title = loginTitle(approval, login, agent.name);
+  const phoneSignIn = useServed('agents.loginPhoneBegin', MAC_FEATURES.loginsPhone);
+  const way = (o: LoginOption) => phoneWay(o, phoneSignIn, hasSignInSheet());
 
   const wipe = () => {
     value.current = '';
@@ -100,8 +117,26 @@ export function LoginCard({
         setBusy(null);
       }
     });
-  const start = (o: LoginOption) =>
-    run(o.id, () => loginStart(message.agentId, approval.requestId, o.id), haptic.select);
+  const start = (o: LoginOption) => {
+    const ids = { agentId: message.agentId, requestId: approval.requestId };
+    switch (way(o)) {
+      case 'sheet':
+        return run(o.id, () => signInWithSheet(ids, o.id), haptic.select);
+      case 'web':
+        return run(
+          o.id,
+          async () => {
+            await loginStart(ids.agentId, ids.requestId, o.id, true);
+            await openHere(CLAUDE_AI_CONNECTORS);
+          },
+          haptic.select
+        );
+      case 'device':
+        return run(o.id, () => loginStart(ids.agentId, ids.requestId, o.id, true), haptic.select);
+      default:
+        return run(o.id, () => loginStart(ids.agentId, ids.requestId, o.id), haptic.select);
+    }
+  };
   const decline = () =>
     run('decline', () => loginDecline(message.agentId, approval.requestId), () => {
       wipe();
@@ -150,7 +185,9 @@ export function LoginCard({
     </T>
   ) : null;
 
-  // Signing in on the Mac: nothing to do here but wait, or stop it.
+  // Signing in (on the Mac, or here with a code or claude.ai): wait, finish it, or stop it.
+  const flow = login.flow;
+  const flowOption = flow ? login.options.find((o) => o.id === flow.option) : undefined;
   if (phase === 'onMac') {
     return (
       <Card icon="puzzlepiece" title={title} source={source} testID="login-card">
@@ -160,11 +197,50 @@ export function LoginCard({
             {onMacLine(login)}
           </T>
         </View>
+        {!!flow?.userCode && (
+          <View style={styles.code} testID="login-device-code">
+            <T variant="caption" color={colors.textMuted}>
+              Your code
+            </T>
+            <T selectable style={styles.codeValue} color={colors.textPrimary}>
+              {flow.userCode}
+            </T>
+          </View>
+        )}
         <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          The sign-in and its token stay on your Mac. This card updates when it’s done.
+          {flow?.onPhone
+            ? 'Your Mac keeps the sign-in; this phone keeps nothing. This card updates when it’s done.'
+            : 'The sign-in and its token stay on your Mac. This card updates when it’s done.'}
         </T>
         {errorLine}
         <CardActions>
+          {!!flow?.userCode && (
+            <Button
+              title="Copy code"
+              variant="outline"
+              onPress={() => {
+                void Clipboard.setStringAsync(flow.userCode ?? '');
+                haptic.select();
+              }}
+              style={ACTION}
+            />
+          )}
+          {!!flow?.onPhone && !!flow.verificationUri && (
+            <Button
+              title="Open GitHub"
+              variant="answer"
+              onPress={() => void openHere(flow.verificationUri!).catch((e) => setError(describeError(e)))}
+              style={ACTION}
+            />
+          )}
+          {!!flow?.onPhone && flowOption?.method === 'claude_ai' && (
+            <Button
+              title="Open claude.ai"
+              variant="answer"
+              onPress={() => void openHere(CLAUDE_AI_CONNECTORS).catch((e) => setError(describeError(e)))}
+              style={ACTION}
+            />
+          )}
           <Button
             title="Cancel"
             variant="outline"
@@ -210,7 +286,7 @@ export function LoginCard({
       )}
       {first && first.method !== 'key' && (
         <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          {first.detail}
+          {phoneDetail(first, way(first), login.title)}
         </T>
       )}
       {errorLine}
@@ -245,7 +321,7 @@ export function LoginCard({
             onPress={() => void start(o)}
           />
           <T variant="caption" color={colors.textMuted}>
-            {o.detail}
+            {phoneDetail(o, way(o), login.title)}
           </T>
         </View>
       ))}
@@ -333,4 +409,6 @@ const useStyles = makeStyles(() => ({
   onMac: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   other: { gap: space.tight },
   secret: { fontFamily: fonts.mono },
+  code: { gap: space.tight },
+  codeValue: { fontFamily: fonts.mono, fontSize: type.title },
 }));

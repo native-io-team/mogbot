@@ -10,7 +10,7 @@ import { loginCardView } from '../../lib/agentLogins';
 const GMAIL: LoginRequest = {
   service: 'gmail',
   title: 'Gmail',
-  askedAs: 'gmail native',
+  askedAs: 'gmail work',
   why: 'Screen applications',
   abilities: [
     { id: 'read', label: 'Read and search your email' },
@@ -42,13 +42,13 @@ const X: LoginRequest = {
 
 const card = (login: LoginRequest, over: Partial<Approval> = {}): AgentMessage => ({
   id: 'm1',
-  agentId: 'hiring',
+  agentId: 'recruiter',
   ts: Date.now(),
   kind: 'approval',
   text: '',
   approval: {
     requestId: 'r1',
-    title: 'Hiring needs your Gmail',
+    title: 'Recruiter needs your Gmail',
     detail: login.why,
     status: 'pending',
     login,
@@ -57,7 +57,7 @@ const card = (login: LoginRequest, over: Partial<Approval> = {}): AgentMessage =
 });
 
 const renderCard = (m: AgentMessage, onAnswer = vi.fn()) =>
-  render(<ApprovalCard message={m} agentName="Hiring" paused={false} onAnswer={onAnswer} />);
+  render(<ApprovalCard message={m} agentName="Recruiter" paused={false} onAnswer={onAnswer} />);
 
 afterEach(() => {
   clearMocks();
@@ -67,27 +67,27 @@ afterEach(() => {
 describe('loginCardView', () => {
   const pending = { status: 'pending' as const, login: GMAIL };
   it('reads each phase from the status and the live flow', () => {
-    expect(loginCardView(pending, 'Hiring').phase).toBe('choose');
-    expect(loginCardView(pending, 'Hiring').primary?.id).toBe('claude_ai');
+    expect(loginCardView(pending, 'Recruiter').phase).toBe('choose');
+    expect(loginCardView(pending, 'Recruiter').primary?.id).toBe('claude_ai');
     const flow = (state: 'starting' | 'waiting' | 'failed' | 'cancelled') => ({
       ...pending,
       login: { ...GMAIL, flow: { state, option: 'claude_ai', startedAt: 0, message: 'Boom' } },
     });
-    expect(loginCardView(flow('waiting'), 'Hiring').phase).toBe('signing-in');
-    expect(loginCardView(flow('starting'), 'Hiring').phase).toBe('signing-in');
-    expect(loginCardView(flow('failed'), 'Hiring')).toMatchObject({
+    expect(loginCardView(flow('waiting'), 'Recruiter').phase).toBe('signing-in');
+    expect(loginCardView(flow('starting'), 'Recruiter').phase).toBe('signing-in');
+    expect(loginCardView(flow('failed'), 'Recruiter')).toMatchObject({
       phase: 'failed',
       flowLine: 'Boom',
     });
-    expect(loginCardView(flow('cancelled'), 'Hiring').phase).toBe('cancelled');
+    expect(loginCardView(flow('cancelled'), 'Recruiter').phase).toBe('cancelled');
     expect(
-      loginCardView({ status: 'allowed', choice: 'Connected · Gmail', login: GMAIL }, 'Hiring')
+      loginCardView({ status: 'allowed', choice: 'Connected · Gmail', login: GMAIL }, 'Recruiter')
     ).toMatchObject({ phase: 'connected', outcome: 'Connected · Gmail' });
     expect(
-      loginCardView({ status: 'denied', note: 'Not needed', login: GMAIL }, 'Hiring').outcome
+      loginCardView({ status: 'denied', note: 'Not needed', login: GMAIL }, 'Recruiter').outcome
     ).toBe('Not needed');
     expect(
-      loginCardView({ status: 'expired', note: 'Moved', login: GMAIL }, 'Hiring')
+      loginCardView({ status: 'expired', note: 'Moved', login: GMAIL }, 'Recruiter')
     ).toMatchObject({
       phase: 'covered',
       outcome: 'Moved',
@@ -122,7 +122,7 @@ describe('LoginCard', () => {
       await Promise.resolve();
     });
     expect(calls).toEqual([
-      ['agents_login_start', { agentId: 'hiring', requestId: 'r1', optionId: 'claude_ai' }],
+      ['agents_login_start', { agentId: 'recruiter', requestId: 'r1', optionId: 'claude_ai' }],
     ]);
   });
 
@@ -175,13 +175,13 @@ describe('LoginCard', () => {
       await Promise.resolve();
     });
     expect(calls).toEqual([
-      ['agents_login_save_key', { agentId: 'hiring', requestId: 'r1', value: 'xkey-123456789' }],
+      ['agents_login_save_key', { agentId: 'recruiter', requestId: 'r1', value: 'xkey-123456789' }],
     ]);
   });
 
   it('a card nothing here can answer says why and offers only Not now', () => {
-    renderCard(card({ ...GMAIL, options: [], noConnector: 'Hiring runs on Codex.' }));
-    expect(screen.getByText('Hiring runs on Codex.')).toBeInTheDocument();
+    renderCard(card({ ...GMAIL, options: [], noConnector: 'Recruiter runs on Codex.' }));
+    expect(screen.getByText('Recruiter runs on Codex.')).toBeInTheDocument();
     expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Not now']);
   });
 

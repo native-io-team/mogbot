@@ -161,6 +161,19 @@ const LOGIN_OPTIONS: Record<string, LoginOption> = {
     detail:
       'Works in your own Chrome on your Mac, where you’re already signed in, through Claude in Chrome. It asks you before every click, post, send or payment; it never sees your password.',
   },
+  linear: {
+    id: 'oauth',
+    method: 'oauth',
+    label: 'Connect Linear',
+    detail:
+      'Opens Linear’s own sign-in in this Mac’s browser. The token stays in this Mac’s Keychain; it never sees a password, and you can disconnect it any time.',
+  },
+  github: {
+    id: 'gh',
+    method: 'gh',
+    label: 'Use GitHub on this Mac',
+    detail: 'Uses the GitHub CLI’s sign-in on this Mac. Anything that changes GitHub asks you first.',
+  },
   calendar: {
     id: 'claude_ai',
     method: 'claude_ai',
@@ -172,7 +185,7 @@ const LOGIN_OPTIONS: Record<string, LoginOption> = {
 /** A login card as `request_login` raises it. */
 export function loginCard(
   agentName: string,
-  service: 'gmail' | 'linkedin' | 'google_calendar',
+  service: 'gmail' | 'linkedin' | 'google_calendar' | 'linear' | 'github',
   extra: Partial<LoginRequest> = {}
 ): LoginRequest {
   const base: Record<string, LoginRequest> = {
@@ -197,6 +210,23 @@ export function loginCard(
       options: [LOGIN_OPTIONS.browser],
       noConnector: 'LinkedIn has no connector agents can sign in to.',
     },
+    linear: {
+      service: 'linear',
+      title: 'Linear',
+      why: 'File the icon bugs the review found',
+      abilities: [
+        { id: 'read', label: 'Read issues and projects' },
+        { id: 'write', label: 'Create and update issues — it asks you on a card each time' },
+      ],
+      options: [LOGIN_OPTIONS.linear, LOGIN_OPTIONS.browser],
+    },
+    github: {
+      service: 'github',
+      title: 'GitHub',
+      why: 'Open a pull request with the new icons',
+      abilities: [{ id: 'read', label: 'Read repositories, issues and pull requests' }],
+      options: [LOGIN_OPTIONS.github, LOGIN_OPTIONS.browser],
+    },
     google_calendar: {
       service: 'google_calendar',
       title: 'Google Calendar',
@@ -210,6 +240,8 @@ export function loginCard(
 }
 
 const LOGIN_TITLES: Record<string, string> = {
+  linear: 'Linear',
+  github: 'GitHub',
   gmail: 'Gmail',
   google_calendar: 'Google Calendar',
   linkedin: 'LinkedIn',
@@ -1049,6 +1081,7 @@ export function createMockServer(opts: MockOptions = {}) {
   }
 
   const loginTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const phoneFlows = new Map<string, { agentId: string; requestId: string; state: string }>();
   const loginCardOf = (agentId: string, requestId: string) =>
     (messages.get(agentId) ?? []).find((m) => m.approval?.requestId === requestId && m.approval.login);
 
@@ -1403,6 +1436,10 @@ export function createMockServer(opts: MockOptions = {}) {
         completeLogin(agentId, card.approval.requestId, option);
         return null;
       }
+      if (option.method === 'oauth' && p.onPhone) {
+        return fail({ type: 'Other', message: 'Signing in on the phone goes through its sign-in sheet.' });
+      }
+      const onPhone = p.onPhone === true;
       putMessage({
         ...card,
         approval: {
@@ -1412,15 +1449,81 @@ export function createMockServer(opts: MockOptions = {}) {
             flow: {
               state: 'waiting',
               option: option.id,
-              message: `${login.title}’s sign-in is open in your Mac’s browser.`,
+              message: !onPhone
+                ? `${login.title}’s sign-in is open in your Mac’s browser.`
+                : option.method === 'gh'
+                  ? 'Type this code at github.com/login/device, on this phone or anywhere.'
+                  : `Add ${login.title} on claude.ai on your phone, signed in to the same Claude account as this Mac; this card notices when it’s connected.`,
               startedAt: Date.now(),
               fromPhone: true,
+              ...(onPhone ? { onPhone } : {}),
+              ...(onPhone && option.method === 'gh'
+                ? { userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device' }
+                : {}),
             },
           },
         },
       });
       const timer = setTimeout(() => completeLogin(agentId, card.approval!.requestId, option), opts.loginAfterMs ?? 4000);
       loginTimers.set(card.approval.requestId, timer);
+      return null;
+    },
+    // A phone sign-in sheet: the "Mac" keeps the verifier; the code comes
+    // back once, from this connection, on the companion redirect.
+    'agents.loginPhoneBegin': (p) => {
+      let agentId = typeof p.agentId === 'string' ? p.agentId : '';
+      let requestId = typeof p.requestId === 'string' ? p.requestId : '';
+      if (typeof p.key === 'string') {
+        const first = teamLogins()
+          .needs.find((n) => n.key === p.key)
+          ?.cards.find((c) => c.state === 'waiting');
+        agentId = first?.agentId ?? '';
+        requestId = first?.requestId ?? '';
+      }
+      const card = loginCardOf(agentId, requestId);
+      const login = card?.approval?.login;
+      const option = login?.options.find((o) => o.id === p.optionId);
+      if (!card?.approval || !login || card.approval.status !== 'pending' || option?.method !== 'oauth') {
+        return fail({ type: 'Other', message: 'That way in doesn’t use a sign-in sheet.' });
+      }
+      const flowId = `flow_${randomUUID().slice(0, 8)}`;
+      phoneFlows.set(flowId, { agentId, requestId, state: randomUUID() });
+      putMessage({
+        ...card,
+        approval: {
+          ...card.approval,
+          login: {
+            ...login,
+            flow: {
+              state: 'waiting',
+              option: option.id,
+              message: `${login.title}’s sign-in is open on your phone.`,
+              startedAt: Date.now(),
+              fromPhone: true,
+              onPhone: true,
+            },
+          },
+        },
+      });
+      return {
+        flowId,
+        agentId,
+        requestId,
+        url: `https://linear.app/oauth/authorize?state=${phoneFlows.get(flowId)!.state}`,
+        redirectUri: 'dashbot-companion://oauth',
+      };
+    },
+    'agents.loginPhoneFinish': (p) => {
+      const flow = phoneFlows.get(String(p.flowId));
+      phoneFlows.delete(String(p.flowId));
+      if (!flow) return fail({ type: 'Other', message: 'That sign-in has finished or expired. Start again from the card.' });
+      const url = typeof p.callbackUrl === 'string' ? p.callbackUrl : '';
+      if (!url.startsWith('dashbot-companion://oauth?') || !url.includes(`state=${flow.state}`)) {
+        return fail({ type: 'Other', message: 'That isn’t this sign-in’s answer, so it was stopped. Try again.' });
+      }
+      const card = loginCardOf(flow.agentId, flow.requestId);
+      const option = card?.approval?.login?.options.find((o) => o.method === 'oauth');
+      if (option) completeLogin(flow.agentId, flow.requestId, option);
       return null;
     },
     'agents.loginCancel': (p) => {
@@ -1470,7 +1573,7 @@ export function createMockServer(opts: MockOptions = {}) {
         if (c.state !== 'waiting' || skip.includes(c.agentId)) continue;
         const card = loginCardOf(c.agentId, c.requestId);
         if (!card?.approval?.login?.options.some((o) => o.id === p.optionId)) continue;
-        methods['agents.loginStart']!({ agentId: c.agentId, requestId: c.requestId, optionId: p.optionId }, null as never);
+        methods['agents.loginStart']!({ agentId: c.agentId, requestId: c.requestId, optionId: p.optionId, onPhone: p.onPhone }, null as never);
       }
       return null;
     },
@@ -2701,6 +2804,43 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
         },
       },
     });
+    // A connector of our own (signed in on the phone's sheet), and GitHub's
+    // device code shown here while `gh` on the Mac waits for it.
+    add({
+      ts: now - 25 * 60_000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_login_linear',
+        title: 'Design needs your Linear',
+        detail: 'File the icon bugs the review found',
+        status: 'pending',
+        login: loginCard(a.name, 'linear'),
+      },
+    });
+    add({
+      ts: now - 24 * 60_000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_login_github',
+        title: 'Design needs your GitHub',
+        detail: 'Open a pull request with the new icons',
+        status: 'pending',
+        login: loginCard(a.name, 'github', {
+          flow: {
+            state: 'waiting',
+            option: 'gh',
+            message: 'Type this code at github.com/login/device, on this phone or anywhere.',
+            startedAt: now - 60_000,
+            fromPhone: true,
+            onPhone: true,
+            userCode: 'WDJB-MJHT',
+            verificationUri: 'https://github.com/login/device',
+          },
+        }),
+      },
+    });
   } else if (a.id === 'fin') {
     add({ ts: now - 3 * 3_600_000, kind: 'user', text: 'Summarise October spend.' });
     add({
@@ -2737,7 +2877,7 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
         title: 'Finance needs your Gmail',
         detail: 'Read the invoices that arrive by email',
         status: 'pending',
-        login: loginCard(a.name, 'gmail', { askedAs: 'gmail native' }),
+        login: loginCard(a.name, 'gmail', { askedAs: 'gmail work' }),
       },
     });
   } else {

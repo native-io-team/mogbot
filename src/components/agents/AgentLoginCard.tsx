@@ -1,5 +1,5 @@
 /**
- * The login card an agent's `request_login` leaves in its chat ("Hiring
+ * The login card an agent's `request_login` leaves in its chat ("Recruiter
  * needs your Gmail"): which account, what it will be able to do (reading, and
  * sending only if it asked, which asks each time), and the ways in, best
  * first. Connect signs in on this Mac (its browser opens there; the token is
@@ -13,6 +13,7 @@
  */
 
 import { memo, useState } from 'react';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
@@ -166,9 +167,13 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
                 <span>{view.flowLine}</span>
               </p>
             )}
+            {signingIn && login.flow?.userCode && (
+              <DeviceCode code={login.flow.userCode} uri={login.flow.verificationUri} />
+            )}
             {signingIn && login.flow?.fromPhone && (
               <p className="agent-login__from-phone">
-                <MobileIcon size={12} /> Started from your phone
+                <MobileIcon size={12} />{' '}
+                {login.flow.onPhone ? 'Signing in on your phone' : 'Started from your phone'}
               </p>
             )}
             {(view.phase === 'failed' || view.phase === 'cancelled') && (
@@ -228,3 +233,26 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
     </div>
   );
 });
+
+/**
+ * A device sign-in's one-time code (GitHub's, through `gh` on this Mac):
+ * typed at the address on this Mac or the phone. Short-lived; never stored.
+ */
+function DeviceCode({ code, uri }: { code: string; uri?: string }) {
+  const { copy, isCopied } = useCopyToClipboard();
+  const where = uri?.replace(/^https:\/\//, '');
+  return (
+    <div className="agent-login__code" data-testid="login-device-code">
+      <span className="agent-login__code-label">Your code</span>
+      <code className="agent-login__code-value">{code}</code>
+      <TextButton tabIndex={0} onClick={() => void copy(code)}>
+        {isCopied ? 'Copied' : 'Copy'}
+      </TextButton>
+      {uri && where && (
+        <a className="agent-login__code-link" href={uri} target="_blank" rel="noreferrer">
+          {where}
+        </a>
+      )}
+    </div>
+  );
+}

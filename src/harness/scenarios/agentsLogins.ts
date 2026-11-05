@@ -8,16 +8,33 @@
  */
 
 import type { Scenario } from '../types';
-import { AGENTS_TAB, MIN, TEAM, messagesFor, msg, now, overview, status } from './agents';
+import {
+  AGENTS_TAB,
+  MIN,
+  TEAM as BASE_TEAM,
+  messagesFor,
+  msg,
+  now,
+  overview,
+  status,
+} from './agents';
+
+/** The shared team, with fictional names for the agents these cards are about. */
+const RENAMED: Record<string, string> = {
+  hiring: 'Recruiter',
+  leadgen: 'Prospector',
+  social: 'Publicist',
+};
+const TEAM = BASE_TEAM.map((a) => (RENAMED[a.id] ? { ...a, name: RENAMED[a.id] } : a));
 
 const CLAUDE_AI = {
   id: 'claude_ai',
   method: 'claude_ai',
   label: 'Connect Gmail',
   detail:
-    'Uses claude.ai’s Gmail connector, which keeps the sign-in with your Claude account. If it isn’t added yet, claude.ai opens in this Mac’s browser to add it. Hiring never sees a password.',
+    'Uses claude.ai’s Gmail connector, which keeps the sign-in with your Claude account. If it isn’t added yet, claude.ai opens in this Mac’s browser to add it. Recruiter never sees a password.',
 };
-const BROWSER = (site: string, name = 'Hiring') => ({
+const BROWSER = (site: string, name = 'Recruiter') => ({
   id: 'browser',
   method: 'browser',
   label: 'Use my browser',
@@ -34,9 +51,9 @@ const GH = {
 const GMAIL_LOGIN = {
   service: 'gmail',
   title: 'Gmail',
-  askedAs: 'gmail native',
+  askedAs: 'gmail work',
   accountHint: 'work',
-  why: 'Screen new applications that arrive in the hiring inbox.',
+  why: 'Screen new applications that arrive in the recruiter inbox.',
   abilities: [
     { id: 'read', label: 'Read and search your email' },
     { id: 'write', label: 'Draft and send email — it asks you on a card each time' },
@@ -63,7 +80,7 @@ const loginCard = (
     },
   });
 
-const hiringWith = (pending: number) =>
+const recruiterWith = (pending: number) =>
   overview(
     TEAM.map((a) =>
       a.id === 'hiring'
@@ -72,7 +89,7 @@ const hiringWith = (pending: number) =>
             pendingApprovals: pending,
             status: status('idle'),
             preview: (pending
-              ? 'Needs your OK: Hiring needs your Gmail (work)'
+              ? 'Needs your OK: Recruiter needs your Gmail (work)'
               : a.preview) as null,
           }
         : a
@@ -89,7 +106,7 @@ const COMMANDS = {
   agents_login_save_key: null,
 };
 
-const hiringScenario = (
+const recruiterScenario = (
   id: string,
   title: string,
   looksRightWhen: string,
@@ -103,7 +120,7 @@ const hiringScenario = (
   openSelector: AGENTS_TAB,
   steps: [{ click: '[data-agent-id="hiring"]' }],
   commands: {
-    agents_overview: hiringWith(pending),
+    agents_overview: recruiterWith(pending),
     agents_messages: chatFor('hiring', [
       msg('user', 'Go through this week’s applications and shortlist five.', 5, {
         agentId: 'hiring',
@@ -166,7 +183,7 @@ const TEAM_NEEDS = (connectedGithub: boolean) => {
         'github',
         'GitHub',
         connectedGithub ? 'connected' : 'waiting',
-        connectedGithub ? { outcome: 'Connected · GitHub (julian)' } : {}
+        connectedGithub ? { outcome: 'Connected · GitHub (sam-acme)' } : {}
       );
     }),
     done: connectedGithub,
@@ -183,8 +200,8 @@ const TEAM_NEEDS = (connectedGithub: boolean) => {
       noConnector:
         'Google only lets apps it has approved use Gmail’s own connector, so Gmail comes through claude.ai’s connector or your browser.',
       cards: [
-        card('hiring', 'Hiring', 'gmail', 'Gmail', 'waiting', { askedAs: 'gmail native' }),
-        card('leadgen', 'Lead Gen', 'gmail', 'Gmail', 'waiting'),
+        card('hiring', 'Recruiter', 'gmail', 'Gmail', 'waiting', { askedAs: 'gmail work' }),
+        card('leadgen', 'Prospector', 'gmail', 'Gmail', 'waiting'),
         card('finance', 'Finance', 'google_calendar', 'Google Calendar', 'skipped', {
           outcome: 'Not needed',
         }),
@@ -195,10 +212,10 @@ const TEAM_NEEDS = (connectedGithub: boolean) => {
       key: 'linkedin',
       title: 'LinkedIn',
       services: ['linkedin'],
-      options: [BROWSER('www.linkedin.com', 'Social Posts')],
+      options: [BROWSER('www.linkedin.com', 'Publicist')],
       noConnector: 'LinkedIn has no connector agents can sign in to.',
       cards: [
-        card('social', 'Social Posts', 'linkedin', 'LinkedIn', 'waiting', {
+        card('social', 'Publicist', 'linkedin', 'LinkedIn', 'waiting', {
           abilities: [
             { id: 'read', label: 'Read your feed, profile and messages' },
             { id: 'write', label: 'Post and send messages — it asks you on a card each time' },
@@ -241,17 +258,17 @@ const teamScenario = (
 });
 
 export const agentsLoginsScenarios: Scenario[] = [
-  hiringScenario(
+  recruiterScenario(
     'agents-login-card',
     'Agents — a login card (Gmail: Connect, or use my browser)',
-    'Hiring’s chat: a lock card “Hiring needs your Gmail (work)”, a muted “Asked for as “gmail native””, the reason, then two bullet lines: “Read and search your email” and “Draft and send email — it asks you on a card each time”. A muted line saying it uses claude.ai’s Gmail connector and Hiring never sees a password. Under a hairline, “Use my browser” as a quiet text action with its explanation (every click, post, send or payment asks first). Right-aligned: secondary “Not now”, neutral (not accent) “Connect Gmail”. No password field anywhere.',
-    loginCard('hiring', 'Hiring needs your Gmail (work)', GMAIL_LOGIN)
+    'Recruiter’s chat: a lock card “Recruiter needs your Gmail (work)”, a muted “Asked for as “gmail work””, the reason, then two bullet lines: “Read and search your email” and “Draft and send email — it asks you on a card each time”. A muted line saying it uses claude.ai’s Gmail connector and Recruiter never sees a password. Under a hairline, “Use my browser” as a quiet text action with its explanation (every click, post, send or payment asks first). Right-aligned: secondary “Not now”, neutral (not accent) “Connect Gmail”. No password field anywhere.',
+    loginCard('hiring', 'Recruiter needs your Gmail (work)', GMAIL_LOGIN)
   ),
-  hiringScenario(
+  recruiterScenario(
     'agents-login-from-phone',
     'Agents — a login started from the phone, signing in on this Mac',
     'The same card mid sign-in: a small spinner and “claude.ai’s connectors are open in this Mac’s browser. Add Gmail there; this card notices when it’s connected.”, a muted phone icon with “Started from your phone”. No other ways in; only a secondary Cancel on the right.',
-    loginCard('hiring', 'Hiring needs your Gmail (work)', {
+    loginCard('hiring', 'Recruiter needs your Gmail (work)', {
       ...GMAIL_LOGIN,
       flow: {
         state: 'waiting',
@@ -263,11 +280,61 @@ export const agentsLoginsScenarios: Scenario[] = [
       },
     })
   ),
-  hiringScenario(
+  recruiterScenario(
+    'agents-login-device-code',
+    'Agents — GitHub signing in on the phone with a one-time code',
+    'A “Recruiter needs your GitHub” card mid sign-in: spinner and “Type this code at github.com/login/device, on this phone or anywhere.”, then a bordered box “Your code WDJB-MJHT” in mono with a quiet Copy and the link github.com/login/device under it, then a muted phone icon with “Signing in on your phone”. Only a secondary Cancel.',
+    loginCard('hiring', 'Recruiter needs your GitHub', {
+      service: 'github',
+      title: 'GitHub',
+      why: 'Open pull requests for the careers page fixes.',
+      abilities: [{ id: 'read', label: 'Read repositories, issues and pull requests' }],
+      options: [GH, BROWSER('github.com')],
+      flow: {
+        state: 'waiting',
+        option: 'gh',
+        message: 'Type this code at github.com/login/device, on this phone or anywhere.',
+        startedAt: now - MIN,
+        fromPhone: true,
+        onPhone: true,
+        userCode: 'WDJB-MJHT',
+        verificationUri: 'https://github.com/login/device',
+      },
+    })
+  ),
+  recruiterScenario(
+    'agents-login-phone-sheet',
+    'Agents — Linear signing in on the phone’s sign-in sheet',
+    'A “Recruiter needs your Linear” card mid sign-in: spinner and “Linear’s sign-in is open on your phone.”, a muted phone icon with “Signing in on your phone”, only a secondary Cancel. No code box.',
+    loginCard('hiring', 'Recruiter needs your Linear', {
+      service: 'linear',
+      title: 'Linear',
+      why: 'File the bugs from the interview feedback.',
+      abilities: [{ id: 'read', label: 'Read issues and projects' }],
+      options: [
+        {
+          id: 'oauth',
+          method: 'oauth',
+          label: 'Connect Linear',
+          detail:
+            'Opens Linear’s own sign-in in this Mac’s browser. The token stays in this Mac’s Keychain; Recruiter never sees a password, and you can disconnect it any time.',
+        },
+      ],
+      flow: {
+        state: 'waiting',
+        option: 'oauth',
+        message: 'Linear’s sign-in is open on your phone.',
+        startedAt: now - MIN,
+        fromPhone: true,
+        onPhone: true,
+      },
+    })
+  ),
+  recruiterScenario(
     'agents-login-failed',
     'Agents — a login that didn’t connect',
     'The card with a red error line “Gmail didn’t show up as connected within ten minutes. Try again once it’s added on claude.ai.”, the other way in still offered, and a neutral “Try again” beside “Not now”.',
-    loginCard('hiring', 'Hiring needs your Gmail (work)', {
+    loginCard('hiring', 'Recruiter needs your Gmail (work)', {
       ...GMAIL_LOGIN,
       flow: {
         state: 'failed',
@@ -278,11 +345,11 @@ export const agentsLoginsScenarios: Scenario[] = [
       },
     })
   ),
-  hiringScenario(
+  recruiterScenario(
     'agents-login-connected',
     'Agents — a login card once connected',
     'The card folded to its outcome in the done tone: “Connected · Gmail (work@acme.com)”. No buttons, no field.',
-    loginCard('hiring', 'Hiring needs your Gmail (work)', GMAIL_LOGIN, {
+    loginCard('hiring', 'Recruiter needs your Gmail (work)', GMAIL_LOGIN, {
       status: 'allowed',
       choice: 'Connected · Gmail (work@acme.com)',
     }),
@@ -292,14 +359,14 @@ export const agentsLoginsScenarios: Scenario[] = [
     id: 'agents-login-linkedin',
     title: 'Agents — LinkedIn: no connector, so the browser',
     looksRightWhen:
-      'Social Posts’ chat: “Social Posts needs your LinkedIn”, the reason, read and post lines (posting asks each time), a muted honest line “LinkedIn has no connector agents can sign in to.”, then the browser explanation, and a neutral “Use my browser” beside “Not now”. No password field.',
+      'Publicist’s chat: “Publicist needs your LinkedIn”, the reason, read and post lines (posting asks each time), a muted honest line “LinkedIn has no connector agents can sign in to.”, then the browser explanation, and a neutral “Use my browser” beside “Not now”. No password field.',
     requires: '.agent-login',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="social"]' }],
     commands: {
       agents_overview: overview(),
       agents_messages: chatFor('social', [
-        loginCard('social', 'Social Posts needs your LinkedIn', {
+        loginCard('social', 'Publicist needs your LinkedIn', {
           service: 'linkedin',
           title: 'LinkedIn',
           why: 'Post the weekly update to your LinkedIn.',
@@ -307,7 +374,7 @@ export const agentsLoginsScenarios: Scenario[] = [
             { id: 'read', label: 'Read your feed, profile and messages' },
             { id: 'write', label: 'Post and send messages — it asks you on a card each time' },
           ],
-          options: [BROWSER('www.linkedin.com', 'Social Posts')],
+          options: [BROWSER('www.linkedin.com', 'Publicist')],
           noConnector: 'LinkedIn has no connector agents can sign in to.',
         }),
       ]),
@@ -318,7 +385,7 @@ export const agentsLoginsScenarios: Scenario[] = [
     id: 'agents-login-codex',
     title: 'Agents — a Codex agent asking for Gmail: nothing here can',
     looksRightWhen:
-      'Lead Gen’s chat: “Lead Gen needs your Gmail” with the read line, and a muted honest line that Gmail comes through a claude.ai connector, which only agents on Claude Code can use, and Lead Gen runs on Codex. Only “Not now”; no Connect, no password field.',
+      'Prospector’s chat: “Prospector needs your Gmail” with the read line, and a muted honest line that Gmail comes through a claude.ai connector, which only agents on Claude Code can use, and Prospector runs on Codex. Only “Not now”; no Connect, no password field.',
     requires: '.agent-login',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="leadgen"]' }],
@@ -327,14 +394,14 @@ export const agentsLoginsScenarios: Scenario[] = [
         TEAM.map((a) => (a.id === 'leadgen' ? { ...a, engine: 'codex' as const } : a))
       ),
       agents_messages: chatFor('leadgen', [
-        loginCard('leadgen', 'Lead Gen needs your Gmail', {
+        loginCard('leadgen', 'Prospector needs your Gmail', {
           service: 'gmail',
           title: 'Gmail',
           why: 'Find replies from the leads it wrote to.',
           abilities: [{ id: 'read', label: 'Read and search your email' }],
           options: [],
           noConnector:
-            'Gmail comes through a claude.ai connector, which only agents on Claude Code can use. Lead Gen runs on Codex. Using your browser needs Claude Code, and Lead Gen runs on Codex.',
+            'Gmail comes through a claude.ai connector, which only agents on Claude Code can use. Prospector runs on Codex. Using your browser needs Claude Code, and Prospector runs on Codex.',
         }),
       ]),
       ...COMMANDS,
@@ -343,7 +410,7 @@ export const agentsLoginsScenarios: Scenario[] = [
   teamScenario(
     'agents-team-logins',
     'Agents — What your team needs (one row per app)',
-    'A dialog “What your team needs”: a lede that connecting signs in on this Mac and no agent sees a password; “0 of 3 connected”. Rows, each a bordered panel: “GitHub — Used by Acme Site, Native App and Client Sites QA” with three ticked agents and a neutral “Use GitHub on this Mac for 3”; “Google · Gmail + Calendar — Used by Hiring, Lead Gen and Finance”, Hiring and Lead Gen ticked with “Not needed” beside each, Finance muted “Not needed”, the honest Google line, a secondary “Use my browser” and neutral “Connect Google for 2”; “LinkedIn” for Social Posts with only “Use my browser”.',
+    'A dialog “What your team needs”: a lede that connecting signs in on this Mac and no agent sees a password; “0 of 3 connected”. Rows, each a bordered panel: “GitHub — Used by Acme Site, Native App and Client Sites QA” with three ticked agents and a neutral “Use GitHub on this Mac for 3”; “Google · Gmail + Calendar — Used by Recruiter, Prospector and Finance”, Recruiter and Prospector ticked with “Not needed” beside each, Finance muted “Not needed”, the honest Google line, a secondary “Use my browser” and neutral “Connect Google for 2”; “LinkedIn” for Publicist with only “Use my browser”.',
     false
   ),
   teamScenario(
@@ -356,7 +423,7 @@ export const agentsLoginsScenarios: Scenario[] = [
     id: 'agents-reach-editor',
     title: 'Agents — What it can reach, in Edit agent',
     looksRightWhen:
-      'Editing Hiring, below Permissions: “What it can reach” with “Apps”: “Gmail · work@acme.com — Can read; asks before it sends or changes anything · Connected on claude.ai; the sign-in is held there · used 2 hours ago” and “Linear” with an amber “Needs signing in again” line; “Your browser”: Chrome through Claude in Chrome, for www.linkedin.com, every click asks; “Keys in your Keychain”: one key; each row with a quiet Remove.',
+      'Editing Recruiter, below Permissions: “What it can reach” with “Apps”: “Gmail · work@acme.com — Can read; asks before it sends or changes anything · Connected on claude.ai; the sign-in is held there · used 2 hours ago” and “Linear” with an amber “Needs signing in again” line; “Your browser”: Chrome through Claude in Chrome, for www.linkedin.com, every click asks; “Keys in your Keychain”: one key; each row with a quiet Remove.',
     openSelector: AGENTS_TAB,
     requires: '.agent-reach__section',
     clipSelector: '.agent-editor [role="group"][aria-label="What it can reach"]',

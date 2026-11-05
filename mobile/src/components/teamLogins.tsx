@@ -2,22 +2,38 @@
  * "What your team needs" (desktop `agents_logins_team`): every login card
  * waiting, one row per service, not per agent. Gmail and Calendar are one
  * Google row; three agents asking for GitHub are one GitHub row. One Connect
- * signs in once, on the Mac, and every agent on the row gets its own
- * permission; "Not needed" puts one agent's ask away without waking it.
+ * signs in once (here, when the Mac lets the phone: `phoneWay`; else on the
+ * Mac), the token is kept on the Mac, and every agent on the row gets its
+ * own permission; "Not needed" puts one agent's ask away without waking it.
  *
  * Exported as a list so another screen (an onboarding checklist) can embed
  * it; `app/logins.tsx` is the screen around it.
  */
 
-import type { TeamCard, TeamLogins, TeamNeed } from '@shipstudio/companion-protocol';
+import { MAC_FEATURES, type LoginOption, type TeamCard, type TeamLogins, type TeamNeed } from '@shipstudio/companion-protocol';
+import * as Clipboard from 'expo-clipboard';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
-import { agentList, connectNeed, loginDismiss, readTeam, signingIn, teamCardLine, teamProgress } from '../lib/logins';
+import {
+  CLAUDE_AI_CONNECTORS,
+  agentList,
+  connectNeed,
+  hasSignInSheet,
+  loginDismiss,
+  openHere,
+  phoneDetail,
+  phoneWay,
+  readTeam,
+  signInWithSheet,
+  signingIn,
+  teamCardLine,
+  teamProgress,
+} from '../lib/logins';
 import { describeError } from '../lib/session';
-import { useApp } from '../lib/store';
-import { space } from '../lib/theme';
+import { useApp, useServed } from '../lib/store';
+import { fonts, space, type } from '../lib/theme';
 import { ACTION_ROW, Card, CardActions, Line, TextAction } from './surfaces';
 import { Button, T } from './ui';
 
@@ -43,6 +59,11 @@ export function TeamLoginsList({
   const [team, setTeam] = useState<TeamLogins | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const phoneSignIn = useServed('agents.loginPhoneBegin', MAC_FEATURES.loginsPhone);
+  const way = useCallback(
+    (o: LoginOption) => phoneWay(o, phoneSignIn, hasSignInSheet()),
+    [phoneSignIn]
+  );
 
   const load = useCallback(() => {
     readTeam(opened).then(
@@ -105,7 +126,22 @@ export function TeamLoginsList({
           need={n}
           live={live}
           busy={busy}
-          onConnect={(optionId) => void act(`${n.key}:${optionId}`, () => connectNeed(n.key, optionId, []))}
+          way={way}
+          onConnect={(o) =>
+            void act(`${n.key}:${o.id}`, async () => {
+              switch (way(o)) {
+                case 'sheet':
+                  return signInWithSheet({ key: n.key }, o.id);
+                case 'web':
+                  await connectNeed(n.key, o.id, [], true);
+                  return openHere(CLAUDE_AI_CONNECTORS);
+                case 'device':
+                  return connectNeed(n.key, o.id, [], true);
+                default:
+                  return connectNeed(n.key, o.id, []);
+              }
+            })
+          }
           onDismiss={(c) => void act(c.requestId, () => loginDismiss(c.agentId, c.requestId))}
         />
       ))}
@@ -122,13 +158,15 @@ function Need({
   need,
   live,
   busy,
+  way,
   onConnect,
   onDismiss,
 }: {
   need: TeamNeed;
   live: boolean;
   busy: string | null;
-  onConnect: (optionId: string) => void;
+  way: (o: LoginOption) => ReturnType<typeof phoneWay>;
+  onConnect: (option: LoginOption) => void;
   onDismiss: (card: TeamCard) => void;
 }) {
   const colors = useColors();
@@ -171,9 +209,7 @@ function Need({
         ))}
       </View>
       {running ? (
-        <T variant="small" color={colors.textBody} testID="need-on-mac">
-          Finish signing in on your Mac — it’s open there. Everyone on this row gets it when it’s done.
-        </T>
+        <RunningLine card={waiting.find(onMac)} />
       ) : (
         <>
           {!!need.noConnector && (
@@ -183,7 +219,7 @@ function Need({
           )}
           {first && (
             <T variant="small" color={colors.textMuted}>
-              {first.detail}
+              {phoneDetail(first, way(first), need.title)}
             </T>
           )}
         </>
@@ -195,7 +231,7 @@ function Need({
             variant="answer"
             busy={busy === `${need.key}:${first.id}`}
             disabled={off}
-            onPress={() => onConnect(first.id)}
+            onPress={() => onConnect(first)}
             style={ACTION_ROW}
           />
           {rest.map((o) => (
@@ -205,7 +241,7 @@ function Need({
               variant="outline"
               busy={busy === `${need.key}:${o.id}`}
               disabled={off}
-              onPress={() => onConnect(o.id)}
+              onPress={() => onConnect(o)}
               style={ACTION_ROW}
             />
           ))}
@@ -220,7 +256,61 @@ function Need({
   );
 }
 
+/** A row signing in: on the Mac, or here (GitHub's code, claude.ai). */
+function RunningLine({ card }: { card?: TeamCard }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const flow = card?.flow;
+  if (!flow?.onPhone) {
+    return (
+      <T variant="small" color={colors.textBody} testID="need-on-mac">
+        Finish signing in on your Mac — it’s open there. Everyone on this row gets it when it’s done.
+      </T>
+    );
+  }
+  return (
+    <View style={styles.running} testID="need-on-phone">
+      <T variant="small" color={colors.textBody}>
+        {flow.message ?? 'Signing in here.'} Everyone on this row gets it when it’s done.
+      </T>
+      {!!flow.userCode && (
+        <T selectable style={styles.code} color={colors.textPrimary} testID="need-device-code">
+          {flow.userCode}
+        </T>
+      )}
+      <CardActions>
+        {!!flow.userCode && (
+          <Button
+            title="Copy code"
+            variant="outline"
+            onPress={() => void Clipboard.setStringAsync(flow.userCode ?? '')}
+            style={ACTION_ROW}
+          />
+        )}
+        {!!flow.verificationUri && (
+          <Button
+            title="Open GitHub"
+            variant="answer"
+            onPress={() => void openHere(flow.verificationUri!)}
+            style={ACTION_ROW}
+          />
+        )}
+        {flow.option === 'claude_ai' && (
+          <Button
+            title="Open claude.ai"
+            variant="answer"
+            onPress={() => void openHere(CLAUDE_AI_CONNECTORS)}
+            style={ACTION_ROW}
+          />
+        )}
+      </CardActions>
+    </View>
+  );
+}
+
 const useStyles = makeStyles((colors) => ({
+  running: { gap: space.sm },
+  code: { fontFamily: fonts.mono, fontSize: type.title },
   root: { gap: space.md },
   // On a sheet the page is the card's own colour: the grouped surface sets it apart.
   card: { backgroundColor: colors.surfaceGroup },

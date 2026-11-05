@@ -25,7 +25,7 @@ export interface RequestGroup {
    * are further back in its chat). Answered there, never guessed at here.
    */
   older: number;
-  /** Pending login (secure input) cards. */
+  /** Pending login cards (and secure input cards from before them). */
   logins: number;
 }
 
@@ -40,7 +40,8 @@ export interface RequestsSummary {
 }
 
 const isPending = (m: AgentMessage) => m.approval?.status === 'pending';
-const isLogin = (m: AgentMessage) => Boolean(m.approval?.secret);
+/** A login: a login card (`request_login`), or a secure input card from before them. */
+const isLogin = (m: AgentMessage) => Boolean(m.approval?.login || m.approval?.secret);
 
 /**
  * Group the asking agents' cards. `keep` holds card ids to keep showing once
@@ -132,7 +133,9 @@ export function groupLine(group: RequestGroup): string {
   if (open === 0) return 'Answered';
   const pendingCards = group.cards.filter(isPending);
   if (group.older === 0 && group.logins === open) {
-    const names = pendingCards.map((m) => secretTitle(m.approval!.secret!.name));
+    const names = pendingCards.map((m) =>
+      m.approval!.login ? m.approval!.login.title : secretTitle(m.approval!.secret!.name)
+    );
     return `${count(open, 'login')}: ${list(names)}`;
   }
   if (open === 1 && pendingCards.length === 1) {

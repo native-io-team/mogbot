@@ -31,7 +31,7 @@ const TEAM: Team = {
       title: 'Google · Gmail + Calendar',
       services: ['gmail', 'google_calendar'],
       options: [],
-      cards: [card('hiring', 'Hiring', 'connected')],
+      cards: [card('recruiter', 'Recruiter', 'connected')],
       done: true,
     },
   ],
@@ -74,7 +74,7 @@ describe('TeamLogins', () => {
       { key: 'github', optionId: 'gh', skip: ['docs'] },
     ]);
     // A done row is folded at the end.
-    expect(screen.queryByText('Hiring')).toBeNull();
+    expect(screen.queryByText('Recruiter')).toBeNull();
   });
 
   it('Not needed puts one agent’s card away', async () => {
@@ -120,7 +120,7 @@ describe('AgentReach', () => {
       if (cmd === 'agents_reach') return reach;
       return { ...reach, connections: [] };
     });
-    render(<AgentReach agent={{ id: 'hiring', name: 'Hiring' } as Agent} />);
+    render(<AgentReach agent={{ id: 'recruiter', name: 'Recruiter' } as Agent} />);
     await screen.findByText('Gmail · work@acme.com');
     expect(screen.getByText(/extension isn’t set up/)).toBeInTheDocument();
     await act(async () => {
@@ -129,7 +129,7 @@ describe('AgentReach', () => {
     });
     expect(calls).toContainEqual([
       'agents_reach_remove',
-      { agentId: 'hiring', removal: { kind: 'connection', connectionId: 'c1' } },
+      { agentId: 'recruiter', removal: { kind: 'connection', connectionId: 'c1' } },
     ]);
     await waitFor(() => expect(screen.queryByText('Gmail · work@acme.com')).toBeNull());
   });

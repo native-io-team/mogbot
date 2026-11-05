@@ -43,6 +43,11 @@ export interface LoginFlow {
   startedAt: number;
   /** Started from the phone. */
   fromPhone?: boolean;
+  /** The sign-in is on the phone (its sheet, claude.ai there, a device code), not the Mac's browser. */
+  onPhone?: boolean;
+  /** A device sign-in's one-time code (GitHub), typed at `verificationUri` on either device. */
+  userCode?: string;
+  verificationUri?: string;
 }
 
 /** What a login card carries (`approval.login`). */
@@ -258,15 +263,23 @@ export function loginCardView(approval: ApprovalLike, agentName: string): LoginC
 
 /** "Gmail's sign-in is open in this Mac's browser." */
 export function flowLine(flow: LoginFlow, title: string): string {
-  if (flow.state === 'starting') return `Getting ${title}’s sign-in ready on this Mac…`;
-  return flow.message ?? `${title}’s sign-in is open in this Mac’s browser.`;
+  if (flow.state === 'starting')
+    return flow.onPhone
+      ? `Getting ${title}’s sign-in ready for your phone…`
+      : `Getting ${title}’s sign-in ready on this Mac…`;
+  return (
+    flow.message ??
+    (flow.onPhone
+      ? `Signing in to ${title} on your phone.`
+      : `${title}’s sign-in is open in this Mac’s browser.`)
+  );
 }
 
 /** The ability that sends or changes anything, if it asked for one. */
 export const writes = (login: Pick<LoginRequest, 'abilities'>) =>
   login.abilities.some((a) => a.id === 'write');
 
-/** "Hiring, Inbox Zero and Calendar". */
+/** "Recruiter, Mailroom and Calendar". */
 export function listNames(names: string[]): string {
   if (names.length <= 1) return names[0] ?? '';
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
@@ -300,7 +313,7 @@ export function teamCardLine(card: TeamCard): string {
       return card.outcome ?? 'Covered';
     default:
       if (card.flow?.state === 'waiting' || card.flow?.state === 'starting')
-        return 'Signing in on this Mac…';
+        return card.flow.onPhone ? 'Signing in on your phone…' : 'Signing in on this Mac…';
       if (card.flow?.state === 'failed') return card.flow.message ?? 'Didn’t connect';
       return card.abilities.map((a) => a.label).join(' · ');
   }
