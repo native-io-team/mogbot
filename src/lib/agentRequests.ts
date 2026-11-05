@@ -157,6 +157,27 @@ export function groupLine(group: RequestGroup): string {
 }
 
 /**
+ * One agent's cards as a group, for a list that already holds them (What's
+ * in flight): so its folded row says what the review panel's would.
+ */
+export function cardsGroup(agent: Agent, cards: AgentMessage[]): RequestGroup {
+  const pending = cards.filter(isPending);
+  return {
+    agent,
+    cards,
+    pending: pending.length,
+    older: Math.max(0, (agent.pendingApprovals ?? 0) - pending.length),
+    logins: pending.filter(isLogin).length,
+  };
+}
+
+/** When the newest of a group's open cards arrived; none open, undefined. */
+export function newestCardAt(cards: AgentMessage[]): number | undefined {
+  const open = cards.filter(isPending);
+  return open.length > 0 ? Math.max(...open.map((m) => m.ts)) : undefined;
+}
+
+/**
  * The cards "Allow all" answers: pending Allow cards. Never a login or a
  * secure input (they need you to sign in or type), a session's question
  * (its answer is a choice), or an import's own cards.

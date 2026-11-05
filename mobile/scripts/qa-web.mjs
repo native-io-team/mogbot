@@ -612,6 +612,14 @@ const LIVE = [
       'Every message kind: receipts, failure cards, diff tints span the box, To/From Ops, folded result line wraps',
   },
   {
+    name: 'chat-table',
+    route: '/chat/chief',
+    ready: 'Chief of Staff',
+    act: scrollToText('Lighthouse'),
+    check:
+      'The launch table: Check and Owner start-aligned; Score (98%, 100%, —, 1,204.5) right-aligned with its digits lined up, header too',
+  },
+  {
     name: 'result-ask',
     route: '/chat/fixtures',
     ready: 'Fixtures',

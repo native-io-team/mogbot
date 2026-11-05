@@ -23,3 +23,4 @@ export * from './independence';
 export * from './policy';
 export * from './secretName';
 export * from './attention';
+export * from './tables';

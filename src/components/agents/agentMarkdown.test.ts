@@ -80,3 +80,32 @@ describe('createStreamingSegments', () => {
     expect(html).toContain('&lt;img');
   });
 });
+
+describe('tables', () => {
+  const table = [
+    '| Client | Due | Amount |',
+    '| --- | --- | --- |',
+    '| Acme | 2026-01-05 | $2,100 |',
+    '| Lumen | 2026-01-12 | $3,250 |',
+  ].join('\n');
+
+  it('right-aligns a column of figures, header too, and leaves words and dates alone', () => {
+    const [segment] = toSegments(table);
+    const html = segment.type === 'html' ? segment.html : '';
+    expect(html).toContain('<th align="right">Amount</th>');
+    expect(html).toContain('<td align="right">$2,100</td>');
+    expect(html).toContain('<th>Client</th>');
+    expect(html).toContain('<td>2026-01-05</td>');
+  });
+
+  it('keeps an alignment the author wrote', () => {
+    const [segment] = toSegments(table.replace('| --- | --- | --- |', '| --- | --- | :-: |'));
+    expect(segment.type === 'html' && segment.html).toContain('<td align="center">$2,100</td>');
+  });
+
+  it('aligns the same while streaming', () => {
+    const stream = createStreamingSegments();
+    stream(table.slice(0, 40));
+    expect(stream(`${table}\n\nDone.`)).toEqual(toSegments(`${table}\n\nDone.`));
+  });
+});

@@ -33,8 +33,10 @@
   );
   --agents-chat-width: 720px;
   --agents-bubble-max: 80%;
-  /* Agent prose sits on the canvas at a reading measure, not in a bubble. */
-  --agents-prose-measure: 38em; /* ≈70 characters of body text */
+  /* Agent prose sits on the canvas, not in a bubble, across the same column
+     as the composer under it: one edge on both sides at every window size.
+     (A 38em measure left the replies narrower than the composer at 1100px.) */
+  --agents-prose-measure: var(--agents-chat-width);
   /* A card (approval, result, copy): one step forward of the canvas. Dark
      gets that from the control fill; light from a white panel ringed by a
      hairline shadow, or the Allow card reads as a faint smudge. */
