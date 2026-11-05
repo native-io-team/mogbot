@@ -18,6 +18,7 @@ import { CollaboratorsIcon } from '@/components/icons';
 import { CompactModeToggle } from '../workspace/ModeToggle';
 import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
 import { AgentAvatar } from './AgentAvatar';
+import { AgentEngineBadge } from './AgentEngine';
 import { ApprovalCard, ErrorLine } from './AgentChatItems';
 import { AgentMark, AgentSwitcher } from './AgentSwitcher';
 import { useHeightReveal } from './useAgentMotion';
@@ -123,7 +124,10 @@ function Row({ agent, line, meta, state, onOpen }: RowProps) {
     <button type="button" tabIndex={0} className="agents-team__row" onClick={onOpen}>
       <AgentAvatar name={agent.name} color={agent.color} />
       <span className="agents-team__text">
-        <span className="agents-team__name">{agent.name}</span>
+        <span className="agents-team__name">
+          <span className="agents-team__name-text">{agent.name}</span>
+          <AgentEngineBadge engine={agent.engine} />
+        </span>
         <span className="agents-team__line" data-state={state}>
           {line}
         </span>

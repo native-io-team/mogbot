@@ -34,7 +34,10 @@ import {
   modelLabel,
   modelChoices,
   engineIsReady,
-  engineOptions,
+  defaultEngine,
+  engineCantAsk,
+  engineProtections,
+  engineUnavailable,
   type EngineInfo,
   peerGroupLabel,
   sortAgents,
@@ -307,14 +310,22 @@ describe('formatUsage', () => {
     expect(modelLabel('claude-x')).toBe('claude-x');
   });
 
-  it('offers each engine its own models and only engines that can run', () => {
+  it('offers each engine its own models', () => {
     const engines: EngineInfo[] = [
-      { id: 'claude', label: 'Claude Code', installed: true, signedIn: true, models: [] },
+      {
+        id: 'claude',
+        label: 'Claude Code',
+        installed: true,
+        signedIn: true,
+        asks: true,
+        models: [],
+      },
       {
         id: 'codex',
         label: 'Codex',
         installed: true,
         signedIn: false,
+        asks: true,
         models: [{ value: 'gpt-5.5', label: 'GPT-5.5' }],
       },
     ];
@@ -328,8 +339,71 @@ describe('formatUsage', () => {
     expect(modelLabel('gpt-5.5', modelChoices('codex', engines))).toBe('GPT-5.5');
     expect(engineIsReady('codex', engines, true)).toBe(false);
     expect(engineIsReady('claude', engines, true)).toBe(true);
-    expect(engineOptions(engines, 'claude').map((e) => e.id)).toEqual(['claude']);
-    expect(engineOptions(engines, 'codex').map((e) => e.id)).toEqual(['claude', 'codex']);
+  });
+
+  it('says what an engine needs, and only claims protection the engine enforces', () => {
+    const codex: EngineInfo = {
+      id: 'codex',
+      label: 'Codex',
+      installed: false,
+      signedIn: false,
+      asks: false,
+      models: [],
+    };
+    expect(engineUnavailable(codex)).toBe('install');
+    expect(engineUnavailable({ ...codex, installed: true })).toBe('sign-in');
+    expect(engineUnavailable({ ...codex, installed: true, signedIn: true })).toBeNull();
+    expect(engineProtections('claude')).toMatch(/asks you first, unless you've already allowed it/);
+    const app = engineProtections('codex', { ...codex, installed: true, asks: true });
+    expect(app).toMatch(/can't reach the internet/);
+    expect(app).toMatch(/asks you first/);
+    expect(app).toMatch(/connected to Codex aren't limited/);
+    // An old Codex can't ask: the line must not say it does, and says so plainly.
+    const old = engineProtections('codex', { ...codex, installed: true, asks: false });
+    expect(old).toMatch(/can't stop to ask you/);
+    expect(old).not.toMatch(/asks you first/);
+    // No jargon: these are read by people who don't run terminals.
+    for (const line of [engineProtections('claude'), app, old]) {
+      expect(line).not.toMatch(/sandbox|app-server|exec\b|MCP/i);
+    }
+  });
+
+  it('says an engine cannot ask only when it is installed and says so', () => {
+    const codex: EngineInfo = {
+      id: 'codex',
+      label: 'Codex',
+      installed: true,
+      signedIn: true,
+      asks: false,
+      models: [],
+    };
+    expect(engineCantAsk('codex', [codex])).toMatch(/needs your OK is refused/);
+    expect(engineCantAsk('codex', [{ ...codex, asks: true }])).toBeNull();
+    // A computer that doesn't say, or a Codex that isn't here: nothing claimed.
+    expect(engineCantAsk('codex', [{ ...codex, asks: undefined }])).toBeNull();
+    expect(engineCantAsk('codex', [{ ...codex, installed: false }])).toBeNull();
+    expect(engineCantAsk('claude', [codex])).toBeNull();
+  });
+
+  it('starts a new agent on the first engine that can take it', () => {
+    const claude: EngineInfo = {
+      id: 'claude',
+      label: 'Claude Code',
+      installed: true,
+      signedIn: true,
+      asks: true,
+      models: [],
+    };
+    const codex: EngineInfo = { ...claude, id: 'codex', label: 'Codex' };
+    expect(defaultEngine([claude, codex])).toBe('claude');
+    expect(defaultEngine([{ ...claude, installed: false, signedIn: false }, codex])).toBe('codex');
+    expect(
+      defaultEngine([
+        { ...claude, installed: false },
+        { ...codex, signedIn: false },
+      ])
+    ).toBe('claude');
+    expect(defaultEngine([])).toBe('claude');
   });
 });
 

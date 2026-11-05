@@ -83,6 +83,18 @@ export function engineLine(agent: Agent, engines: EngineInfo[] | undefined): str
   return `${agent.engine === 'codex' ? 'Codex' : 'Claude'} · ${modelName(agent, engines)}`;
 }
 
+/**
+ * When the agent's engine can't stop to ask, anything that would need your
+ * OK is refused instead, and nothing on the phone would otherwise say so.
+ * Null when it can ask, or when the Mac doesn't say. Copied from
+ * `engineCantAsk` in src/lib/agents.ts.
+ */
+export function engineCantAsk(agent: Agent, engines: EngineInfo[] | undefined): string | null {
+  const info = engines?.find((e) => e.id === agent.engine);
+  if (!info?.installed || info.asks !== false) return null;
+  return `${info.label} can't stop to ask you here, so anything that needs your OK is refused. Updating ${info.label} fixes this.`;
+}
+
 /** The row's second line, as the sidebar writes it. */
 export function subtitle(agent: Agent): string {
   if (needsYou(agent)) return 'Needs your OK';
