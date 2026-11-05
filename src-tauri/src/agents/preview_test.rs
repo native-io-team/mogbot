@@ -800,7 +800,7 @@ pub fn find(name: &str) -> Option<&'static Tool> {
 
 /// The tools, listed only to an agent with an open run.
 pub fn definitions(agent_id: &str) -> Vec<Value> {
-    if !is_open(agent_id) {
+    if !is_open(agent_id) || super::runner::from_outside(agent_id) {
         return Vec::new();
     }
     TOOLS
@@ -882,6 +882,11 @@ fn record_step(app: &AppHandle, run: &Run, kind: StepKind, label: String, ok: bo
 
 /// Run one test tool for `caller`.
 pub async fn call(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, tool: &Tool, args: &Value) -> Value {
+    // A turn answering outside text (a "When…" routine's items) never drives
+    // the user's preview, even while a run they started is open.
+    if super::runner::from_outside(&caller.id) {
+        return error("Not while answering what a “When…” routine found: that text came from outside this app. The test runs in its own turn.");
+    }
     let Some(run) = run_of(&caller.id).filter(|r| r.state == RunState::Running) else {
         return error("There's no test running: these tools work only after the user presses Test it.");
     };

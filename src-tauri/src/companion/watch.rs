@@ -58,6 +58,9 @@ pub fn cookie_name() -> String {
 struct Grant {
     hash: String,
     device_id: String,
+    /// The folder whose dev server this is: the port is only good while the
+    /// app still serves that folder on it.
+    path: String,
     port: u16,
     expires_at: u64,
 }
@@ -81,8 +84,8 @@ fn find(list: &[Grant], secret: &str) -> Option<usize> {
 }
 
 impl Watch {
-    /// A one-time ticket for `device_id` to watch the server on `port`.
-    pub fn mint(&self, device_id: &str, port: u16, now: u64) -> (String, u64) {
+    /// A one-time ticket for `device_id` to watch `path`'s server on `port`.
+    pub fn mint(&self, device_id: &str, path: &str, port: u16, now: u64) -> (String, u64) {
         let secret = crate::agents::broker::new_secret();
         let expires_at = now + TICKET_TTL_MS;
         let mut t = self.tickets.lock().unwrap_or_else(|e| e.into_inner());
@@ -90,6 +93,7 @@ impl Watch {
         t.push(Grant {
             hash: hash_token(&secret),
             device_id: device_id.to_string(),
+            path: path.to_string(),
             port,
             expires_at,
         });
@@ -143,9 +147,10 @@ pub enum Verdict {
     Redeem {
         cookie: String,
     },
-    /// Pass it to the dev server on `port`.
+    /// Pass it to the dev server on `port`, while it still serves `path`.
     Forward {
         port: u16,
+        path: String,
     },
     Refuse(StatusCode, &'static str),
 }
@@ -198,7 +203,10 @@ pub fn decide(
         return Verdict::Refuse(StatusCode::UNAUTHORIZED, SIGNED_OUT);
     };
     match watch.session(&secret, now) {
-        Some(g) if alive(&g.device_id) => Verdict::Forward { port: g.port },
+        Some(g) if alive(&g.device_id) => Verdict::Forward {
+            port: g.port,
+            path: g.path,
+        },
         Some(_) => {
             // Its phone was removed: nothing it held is good any more.
             Verdict::Refuse(StatusCode::UNAUTHORIZED, SIGNED_OUT)
@@ -327,7 +335,17 @@ pub async fn handle(c: Arc<Companion>, peer: SocketAddr, req: Request<Incoming>)
             .header(header::CACHE_CONTROL, "no-store")
             .body(Full::new(Bytes::new()).map_err(|n| match n {}).boxed())
             .unwrap_or_else(|_| plain(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't open it.")),
-        Verdict::Forward { port } => forward(req, port).await,
+        // The port alone isn't the card's site: once the app stops serving
+        // that folder there, whatever binds the port next isn't shown.
+        Verdict::Forward { port, path }
+            if crate::proxy::dev_server_port_for(&path) == Some(port) =>
+        {
+            forward(req, port).await
+        }
+        Verdict::Forward { .. } => plain(
+            StatusCode::BAD_GATEWAY,
+            "The site isn't running on the Mac any more.",
+        ),
     }
 }
 
@@ -379,7 +397,7 @@ mod tests {
     }
 
     fn open(w: &Watch, device: &str, port: u16) -> String {
-        let (ticket, _) = w.mint(device, port, 1_000);
+        let (ticket, _) = w.mint(device, "/p", port, 1_000);
         match get(w, &format!("{}{ticket}", ticket_prefix()), &h(&[]), 1_001) {
             Verdict::Redeem { cookie } => cookie,
             other => panic!("expected a redeem, got {other:?}"),
@@ -399,7 +417,7 @@ mod tests {
     #[test]
     fn a_ticket_opens_once_then_the_cookie_reaches_its_port() {
         let w = Watch::default();
-        let (ticket, expires) = w.mint("phone-1", 4123, 1_000);
+        let (ticket, expires) = w.mint("phone-1", "/p", 4123, 1_000);
         assert_eq!(expires, 1_000 + TICKET_TTL_MS);
         assert_eq!(ticket.len(), 64);
         let path = format!("{}{ticket}", ticket_prefix());
@@ -413,7 +431,10 @@ mod tests {
         );
         assert_eq!(
             get(&w, "/pricing", &with_cookie(&cookie), 2_000),
-            Verdict::Forward { port: 4123 }
+            Verdict::Forward {
+                port: 4123,
+                path: "/p".into()
+            }
         );
         // Only hashes are kept.
         assert!(w.sessions.lock().unwrap().iter().all(|g| g.hash != cookie));
@@ -423,7 +444,7 @@ mod tests {
     #[test]
     fn a_ticket_or_session_past_its_time_is_refused() {
         let w = Watch::default();
-        let (ticket, _) = w.mint("phone-1", 4123, 1_000);
+        let (ticket, _) = w.mint("phone-1", "/p", 4123, 1_000);
         let late = 1_000 + TICKET_TTL_MS;
         assert_eq!(
             get(&w, &format!("{}{ticket}", ticket_prefix()), &h(&[]), late),
@@ -453,7 +474,7 @@ mod tests {
             ),
             Verdict::Refuse(StatusCode::UNAUTHORIZED, SIGNED_OUT)
         );
-        let (ticket, _) = w.mint("phone-1", 4123, 1_000);
+        let (ticket, _) = w.mint("phone-1", "/p", 4123, 1_000);
         assert_eq!(
             decide(
                 &w,
@@ -480,11 +501,17 @@ mod tests {
         let b = open(&w, "phone-2", 4555);
         assert_eq!(
             get(&w, "/", &with_cookie(&a), 2_000),
-            Verdict::Forward { port: 4123 }
+            Verdict::Forward {
+                port: 4123,
+                path: "/p".into()
+            }
         );
         assert_eq!(
             get(&w, "/", &with_cookie(&b), 2_000),
-            Verdict::Forward { port: 4555 }
+            Verdict::Forward {
+                port: 4555,
+                path: "/p".into()
+            }
         );
         assert_eq!(
             get(&w, "/", &with_cookie("not-a-session"), 2_000),
@@ -549,7 +576,10 @@ mod tests {
                 |_| true,
                 2_000
             ),
-            Verdict::Forward { port: 4123 }
+            Verdict::Forward {
+                port: 4123,
+                path: "/p".into()
+            }
         );
         let mut ws = with_cookie(&cookie);
         ws.insert(header::UPGRADE, HeaderValue::from_static("websocket"));

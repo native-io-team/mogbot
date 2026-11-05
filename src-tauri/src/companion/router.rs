@@ -620,7 +620,11 @@ pub trait Backend: Send + Sync + 'static {
         -> Result<Vec<u8>, CommandError>;
     /// "Watch live": the port of the running dev server a card previews
     /// (`preview_test::resolve`), refused when nothing is serving it.
-    async fn watch_port(&self, agent_id: &str, message_id: &str) -> Result<u16, CommandError>;
+    async fn watch_port(
+        &self,
+        agent_id: &str,
+        message_id: &str,
+    ) -> Result<(String, u16), CommandError>;
     /// Publish the watch proxy on the tailnet (lazily, once): its base URL.
     async fn watch_publish(&self) -> Result<String, CommandError>;
     /// An attachment's file: `attachments::resolve` under the agent's home.
@@ -1775,9 +1779,9 @@ async fn run(
         }
         "agents.watchLive" => {
             let p: WatchParams = parse(params)?;
-            let port = b.watch_port(&p.agent_id, &p.message_id).await?;
+            let (path, port) = b.watch_port(&p.agent_id, &p.message_id).await?;
             let base = b.watch_publish().await?;
-            let (ticket, expires_at) = c.watch.mint(&caller.device_id, port, now_ms());
+            let (ticket, expires_at) = c.watch.mint(&caller.device_id, &path, port, now_ms());
             Ok(json!({
                 "url": format!(
                     "{}{}{ticket}",

@@ -865,11 +865,16 @@ impl Backend for DesktopBackend {
             .map_err(CommandError::expected)
     }
 
-    async fn watch_port(&self, agent_id: &str, message_id: &str) -> Result<u16, CommandError> {
+    async fn watch_port(
+        &self,
+        agent_id: &str,
+        message_id: &str,
+    ) -> Result<(String, u16), CommandError> {
         let target = crate::commands::agents_preview::target_for(agent_id, message_id).await?;
-        crate::proxy::dev_server_port_for(&target.path).ok_or_else(|| {
+        let port = crate::proxy::dev_server_port_for(&target.path).ok_or_else(|| {
             CommandError::expected("Open Preview on the Mac first — the site isn't running there.")
-        })
+        })?;
+        Ok((target.path, port))
     }
 
     async fn watch_publish(&self) -> Result<String, CommandError> {

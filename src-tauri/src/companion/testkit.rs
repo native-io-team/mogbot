@@ -1546,9 +1546,13 @@ impl Backend for Stub {
         Ok(json!({ "outcome": "kept", "files": 2, "branch": into.unwrap_or("main") }))
     }
 
-    async fn watch_port(&self, agent_id: &str, message_id: &str) -> Result<u16, CommandError> {
+    async fn watch_port(
+        &self,
+        agent_id: &str,
+        message_id: &str,
+    ) -> Result<(String, u16), CommandError> {
         if agent_id == AGENT && message_id == "m-result" {
-            Ok(4123)
+            Ok(("/Users/test/ShipStudio/site".into(), 4123))
         } else {
             Err(CommandError::expected(
                 "Open Preview on the Mac first — the site isn't running there.",

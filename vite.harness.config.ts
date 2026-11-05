@@ -112,10 +112,21 @@ function previewSitePlugin(port: number): Plugin {
     name: 'shipstudio-harness-preview-site',
     configureServer(server) {
       const handle: http.RequestListener = (req, res) => {
-        const raw = decodeURIComponent((req.url ?? '/').split('?')[0]);
-        const rel = raw === '/' ? '/index.html' : path.extname(raw) ? raw : `${raw}.html`;
+        let raw: string | null = null;
+        try {
+          raw = decodeURIComponent((req.url ?? '/').split('?')[0]);
+        } catch {
+          // A malformed escape is a missing page, not a crashed harness.
+        }
+        const rel =
+          raw === null ? '' : raw === '/' ? '/index.html' : path.extname(raw) ? raw : `${raw}.html`;
         const file = path.join(dir, rel);
-        if (!file.startsWith(dir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+        if (
+          !rel ||
+          !file.startsWith(dir + path.sep) ||
+          !fs.existsSync(file) ||
+          fs.statSync(file).isDirectory()
+        ) {
           res.statusCode = 404;
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
           res.end('<!doctype html><title>Not found</title><p>This page doesn’t exist yet.</p>');
