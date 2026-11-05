@@ -1734,7 +1734,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-team',
     title: 'Agents — a working team, Chief of Staff open',
     looksRightWhen:
-      'Agent list under the Agents | Projects toggle and conversation search: an amber “Needs your OK · 1” row first, then the agents (pinned first, then most recent) with up to two-line previews; pin marks small and faint. The Chief of Staff conversation with its name and role centred in the header band, no engine control. “4 messages with Acme Site · working on the pricing table” sits centred, no empty slot after the dot. The chat ends with a quiet “Review Lead Gen’s request” chip. New agent / Import agents are short rows in secondary text, with no gap between them.',
+      'Agent list under the Agents | Projects toggle and conversation search: an amber “Needs your OK · 1” row first, then the agents (pinned first, then most recent) with up to two-line previews; pin marks small and faint. The Chief of Staff conversation with its name and role centred in the header band, no engine control. “4 messages with Acme Site · working on the pricing table” sits centred, no empty slot after the dot. Above the composer, one bar: an amber dot, “Lead Gen needs your OK”, “1 request”, Review. New agent / Import agents are short rows in secondary text, with no gap between them.',
     command: 'agents.open',
     requires: '.agent-chat .agent-bubble--agent',
     commands: {
@@ -1749,10 +1749,10 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-inline-request',
     title: 'Agents — answering Lead Gen’s request from the Chief’s chat',
     looksRightWhen:
-      'In the Chief of Staff chat, the “Review Lead Gen’s request” chip is open (chevron turned) and under it is Lead Gen’s own Allow / Deny card, compact, showing the email; Deny is one click, a … beside it holds “Deny with a note…”.',
+      'In the Chief of Staff chat, the requests bar’s panel is open above the composer: Lead Gen’s row expanded (chevron turned) to its own Allow / Deny card, compact, showing the email; Deny is one click, a … beside it holds “Deny with a note…”.',
     command: 'agents.open',
-    requires: '.agent-requests .agent-approval',
-    steps: [{ click: '.agent-requests__chip' }],
+    requires: '.agent-requests-panel .agent-approval',
+    steps: [{ click: '.agent-requests__review' }],
     commands: {
       agents_overview: liveOverview,
       agents_messages: messagesFor,

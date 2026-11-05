@@ -1,0 +1,402 @@
+/**
+ * Other agents' requests, answered where you are. One bar above the
+ * composer says who is waiting and on how much ("16 agents need your OK ·
+ * 41 logins to add"); Review opens one panel rising from it, the agents in
+ * name order, each opening to its own cards, answerable in place. Answering
+ * here answers it there (one request id, one answer), so the card in that
+ * agent's own chat resolves too; "Open chat" goes to it.
+ *
+ * It replaced a chip per agent at the foot of the conversation, which after
+ * an import stacked sixteen deep and followed every message. A bar is the
+ * state of this conversation until it ends (docs/agents.md, "Lines, cards and
+ * bars"): one place, one height, and the conversation never moves for it.
+ * With one or two agents the bar names them, and the panel opens them both.
+ *
+ * In the Chief's chat it offers every agent with a card open; in any other
+ * chat, only the agents this one has worked with. A session's question that
+ * reached this chat (it goes to every chat the work touched) is left out of
+ * the conversation and offered here instead (`AgentChat`).
+ *
+ * It reads the cards already in each agent's chat, so requests that were
+ * waiting before this existed show here as they are.
+ *
+ * @module components/agents/AgentRequests
+ */
+
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
+import { ChevronRightIcon, CloseIcon } from '@/components/icons';
+import { Button } from '../primitives/Button';
+import { IconButton } from '../primitives/IconButton';
+import { TextButton } from '../primitives/TextButton';
+import { AgentAvatar } from './AgentAvatar';
+import { ConversationBar } from './AgentCard';
+import { ApprovalCard } from './AgentChatItems';
+import {
+  answerApproval,
+  needsYou,
+  promptAnswer,
+  type Agent,
+  type AgentMessage,
+} from '../../lib/agents';
+import {
+  groupLine,
+  groupRequests,
+  requestsCounts,
+  requestsDetail,
+  requestsTitle,
+  type RequestGroup,
+} from '../../lib/agentRequests';
+import { loadMessages, useAgentsSelector } from '../../lib/agentsStore';
+import { useClickOutside } from '../../hooks/useClickOutside';
+import { asCommandError, formatCommandError } from '../../lib/errors';
+import { useOptionalToast } from '../../contexts/ToastContext';
+
+interface AgentRequestsBarProps {
+  /** The chat this sits in. */
+  agent: Agent;
+  /** Agents this chat has messaged or heard from. */
+  peerIds: Set<string>;
+  /** Agents whose requests reached this chat (a session's question): offered here too. */
+  askers?: Set<string>;
+  /** Request ids whose cards are already in this chat. */
+  shownRequestIds: Set<string>;
+  /** Open another agent's chat. */
+  onOpenAgent: (agentId: string) => void;
+}
+
+/** With this many agents or fewer, the panel opens with every one expanded. */
+const OPEN_ALL_UP_TO = 2;
+
+const sameAgents = (a: Agent[], b: Agent[]) =>
+  a.length === b.length && a.every((agent, i) => agent === b[i]);
+
+const TOGGLE = '.agent-requests-panel__toggle';
+
+export function AgentRequestsBar({
+  agent,
+  peerIds,
+  askers,
+  shownRequestIds,
+  onOpenAgent,
+}: AgentRequestsBarProps) {
+  const { showToast } = useOptionalToast();
+  const [open, setOpen] = useState(false);
+  // Cards on screen while the panel is open: kept after they're answered, so
+  // you see what you did rather than have it vanish under the pointer.
+  const [keep, setKeep] = useState<Set<string>>(() => new Set());
+  const [keepAgents, setKeepAgents] = useState<Set<string>>(() => new Set());
+  // Answered here, before the store's line catches up.
+  const [answered, setAnswered] = useState<Map<string, AgentMessage>>(() => new Map());
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const rootRef = useRef<HTMLDivElement>(null);
+  const reviewRef = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+
+  // Read from the store here, so the chat around it doesn't re-render for
+  // every other agent's status; this re-renders only when who's asking changes.
+  const asking = useAgentsSelector(
+    (s) =>
+      s.agents.filter(
+        (a) =>
+          a.id !== agent.id &&
+          !a.hidden &&
+          (agent.isMain || peerIds.has(a.id) || askers?.has(a.id)) &&
+          (needsYou(a) || keepAgents.has(a.id))
+      ),
+    sameAgents
+  );
+  const messages = useAgentsSelector((s) => s.messages);
+  // Their cards are in their own chats: read each once.
+  const unloaded = asking
+    .filter((a) => !messages[a.id])
+    .map((a) => a.id)
+    .join(' ');
+  useEffect(() => {
+    for (const id of unloaded.split(' ').filter(Boolean)) void loadMessages(id);
+  }, [unloaded]);
+
+  const lines = useMemo(() => {
+    if (answered.size === 0) return messages;
+    const out: Record<string, AgentMessage[] | undefined> = {};
+    for (const a of asking) {
+      out[a.id] = messages[a.id]?.map((m) => answered.get(m.id) ?? m);
+    }
+    return out;
+  }, [messages, answered, asking]);
+  const summary = useMemo(
+    () => groupRequests(asking, lines, shownRequestIds, keep),
+    [asking, lines, shownRequestIds, keep]
+  );
+
+  const close = useCallback((restoreFocus: boolean) => {
+    setOpen(false);
+    setKeep(new Set());
+    setKeepAgents(new Set());
+    setAnswered(new Map());
+    if (restoreFocus) reviewRef.current?.focus();
+  }, []);
+
+  const openedByPointer = useRef(false);
+  const toggle = (e: MouseEvent<HTMLButtonElement>) => {
+    if (open) {
+      close(true);
+      return;
+    }
+    // Two agents open at once; more start folded, so the whole list is in
+    // view first and you pick who to answer.
+    const groups = summary.groups;
+    setExpanded(new Set(groups.length <= OPEN_ALL_UP_TO ? groups.map((g) => g.agent.id) : []));
+    // What shows now is kept until the panel closes, so a card answered here
+    // (a login saved, too) stays to say what it resolved to.
+    setKeep(new Set(groups.flatMap((g) => g.cards.map((m) => m.id))));
+    setKeepAgents(new Set(groups.map((g) => g.agent.id)));
+    openedByPointer.current = e.detail > 0;
+    setOpen(true);
+  };
+
+  // A click anywhere else closes it without pulling focus back (you've put
+  // it where you clicked). A card's own menus are portalled; they're inside.
+  useClickOutside(rootRef, () => close(false), open, '.ss-dropdown__menu, .ss-context-menu');
+
+  // Focus moves into the panel when it opens: from the keyboard, to the first
+  // agent; from a click, to the panel itself, so nothing looks chosen yet.
+  const panelRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    if (openedByPointer.current) panelRef.current?.focus();
+    else rootRef.current?.querySelector<HTMLElement>(TOGGLE)?.focus();
+  }, [open]);
+
+  const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key === 'Escape' && !e.defaultPrevented) {
+      e.preventDefault();
+      e.stopPropagation();
+      close(true);
+      return;
+    }
+    const target = e.target as HTMLElement;
+    if (!target.matches(TOGGLE)) return;
+    const toggles = Array.from(rootRef.current?.querySelectorAll<HTMLElement>(TOGGLE) ?? []);
+    const i = toggles.indexOf(target);
+    const to =
+      e.key === 'ArrowDown'
+        ? toggles[i + 1]
+        : e.key === 'ArrowUp'
+          ? toggles[i - 1]
+          : e.key === 'Home'
+            ? toggles[0]
+            : e.key === 'End'
+              ? toggles[toggles.length - 1]
+              : undefined;
+    if (to) {
+      e.preventDefault();
+      to.focus();
+    }
+  };
+
+  /** After answering, focus moves to the next Allow, else the next agent. */
+  const focusNext = (from: Element | null) => {
+    const root = rootRef.current;
+    if (!root) return;
+    const targets = Array.from(
+      root.querySelectorAll<HTMLElement>(`[data-allow]:not(:disabled), ${TOGGLE}`)
+    );
+    const after = from
+      ? targets.find((t) => from.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING)
+      : undefined;
+    (after ?? reviewRef.current)?.focus({ preventScroll: false });
+  };
+
+  const answer = async (
+    asker: Agent,
+    m: AgentMessage,
+    allow: boolean,
+    always?: boolean,
+    note?: string,
+    choice?: number
+  ) => {
+    const approval = m.approval!;
+    const card = rootRef.current?.querySelector(`[data-message-ids~="${CSS.escape(m.id)}"]`);
+    try {
+      await answerApproval(asker.id, approval.requestId, allow, always, note, choice);
+    } catch (error) {
+      showToast(formatCommandError(asCommandError(error)), 'error');
+      return;
+    }
+    setAnswered((current) =>
+      new Map(current).set(m.id, {
+        ...m,
+        approval: {
+          ...approval,
+          status: allow ? 'allowed' : 'denied',
+          alwaysAllowed: always && allow ? true : approval.alwaysAllowed,
+          note: allow ? undefined : note?.trim() || undefined,
+          ...(approval.prompt && promptAnswer(approval.prompt, allow, choice)),
+        },
+      })
+    );
+    requestAnimationFrame(() => focusNext(card ?? null));
+  };
+
+  if (!open && summary.requests === 0) return null;
+  return (
+    <div className="agent-requests" ref={rootRef} onKeyDown={open ? onKeyDown : undefined}>
+      {open && (
+        <section
+          id={panelId}
+          ref={panelRef}
+          tabIndex={-1}
+          className="agent-requests-panel"
+          role="region"
+          aria-label="Requests from other agents"
+        >
+          <header className="agent-requests-panel__head">
+            <div className="agent-requests-panel__heading">
+              <h3 className="agent-requests-panel__title">Needs your OK</h3>
+              {summary.requests > 0 && (
+                <p className="agent-requests-panel__counts">{requestsCounts(summary)}</p>
+              )}
+            </div>
+            <IconButton
+              tabIndex={0}
+              variant="ghost"
+              size="compact"
+              icon={<CloseIcon size={12} />}
+              aria-label="Close"
+              title="Close"
+              onClick={() => close(true)}
+            />
+          </header>
+          <div className="agent-requests-panel__list">
+            {summary.groups.map((group) => (
+              <Group
+                key={group.agent.id}
+                group={group}
+                expanded={expanded.has(group.agent.id)}
+                onToggle={() =>
+                  setExpanded((current) => {
+                    const next = new Set(current);
+                    if (next.has(group.agent.id)) next.delete(group.agent.id);
+                    else next.add(group.agent.id);
+                    return next;
+                  })
+                }
+                onOpenChat={() => {
+                  close(false);
+                  onOpenAgent(group.agent.id);
+                }}
+                onAnswer={(m, allow, always, note, choice) =>
+                  answer(group.agent, m, allow, always, note, choice)
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )}
+      <ConversationBar
+        state={summary.requests > 0 ? 'waiting' : 'info'}
+        data-testid="agent-requests-bar"
+        title={requestsTitle(summary)}
+        detail={requestsDetail(summary)}
+        actions={
+          <Button
+            ref={reviewRef}
+            tabIndex={0}
+            size="compact"
+            variant="secondary"
+            className="agent-requests__review"
+            aria-expanded={open}
+            aria-controls={open ? panelId : undefined}
+            onClick={toggle}
+          >
+            {open ? 'Done' : 'Review'}
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
+function Group({
+  group,
+  expanded,
+  onToggle,
+  onOpenChat,
+  onAnswer,
+}: {
+  group: RequestGroup;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpenChat: () => void;
+  onAnswer: (
+    m: AgentMessage,
+    allow: boolean,
+    always?: boolean,
+    note?: string,
+    choice?: number
+  ) => Promise<void>;
+}) {
+  const { agent, cards, older } = group;
+  const cardsId = useId();
+  const waiting = group.pending + older > 0;
+  return (
+    <div className="agent-requests-panel__group" data-color={agent.color}>
+      <div className="agent-requests-panel__row">
+        <button
+          type="button"
+          tabIndex={0}
+          className="agent-requests-panel__toggle"
+          aria-expanded={expanded}
+          aria-controls={expanded ? cardsId : undefined}
+          onClick={onToggle}
+        >
+          <AgentAvatar name={agent.name} color={agent.color} />
+          <span className="agent-requests-panel__text">
+            <span className="agent-requests-panel__name">{agent.name}</span>
+            <span className="agent-requests-panel__line" data-state={waiting ? 'waiting' : 'done'}>
+              {groupLine(group)}
+            </span>
+          </span>
+          <ChevronRightIcon size={12} className="agent-requests-panel__chevron" />
+        </button>
+        <TextButton tabIndex={0} className="agent-requests-panel__open" onClick={onOpenChat}>
+          Open chat
+        </TextButton>
+      </div>
+      {expanded && (
+        <div id={cardsId} className="agent-requests-panel__cards">
+          {cards.map((m) => (
+            <ApprovalCard
+              key={m.id}
+              message={m}
+              agentName={agent.name}
+              paused={agent.status.state === 'idle'}
+              compact
+              arrived={false}
+              onAnswer={(_requestId, allow, always, note, choice) =>
+                onAnswer(m, allow, always, note, choice)
+              }
+            />
+          ))}
+          {older > 0 && (
+            <p className="agent-requests-panel__older">
+              {older === 1
+                ? '1 more is further back in its chat.'
+                : `${older} more are further back in its chat.`}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

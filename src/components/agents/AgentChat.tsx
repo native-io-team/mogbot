@@ -41,7 +41,7 @@ import { CompactModeToggle } from '../workspace/ModeToggle';
 import { TextButton } from '../primitives/TextButton';
 import { AgentSecretHint } from './AgentSecretHint';
 import { AgentModelItems } from './AgentModelMenu';
-import { AgentInlineRequests } from './AgentInlineRequests';
+import { AgentRequestsBar } from './AgentRequests';
 import { TextArea } from '../primitives/TextField';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
@@ -1536,14 +1536,6 @@ export const AgentChat = memo(function AgentChat({
             {/* A ready-made agent the Chief just made: only "Created by" so
               far, so its own starters sit under it until the user speaks. */}
             {templateFirstOpen && engineReady && templateStarters}
-            {engineReady && (
-              <AgentInlineRequests
-                agent={agent}
-                peerIds={peerIds}
-                askers={foreignOwners}
-                shownRequestIds={shownRequestIds}
-              />
-            )}
             {items.length > 0 && (
               <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
             )}
@@ -1591,6 +1583,18 @@ export const AgentChat = memo(function AgentChat({
                 ),
               },
               { id: 'import', node: agent.isMain && <ImportTalkBar /> },
+              {
+                id: 'requests',
+                node: engineReady && (
+                  <AgentRequestsBar
+                    agent={agent}
+                    peerIds={peerIds}
+                    askers={foreignOwners}
+                    shownRequestIds={shownRequestIds}
+                    onOpenAgent={onOpenAgent}
+                  />
+                ),
+              },
               {
                 id: 'engine',
                 node: engineReady && cantAsk && (

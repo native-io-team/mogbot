@@ -617,7 +617,7 @@ at once still reads as one product:
   Answered, a card becomes its outcome line.
 - **Bar** (`ConversationBar`, stacked by `ConversationBars`) — the state of
   this conversation until it ends, in the reading column directly above the
-  composer, in a fixed order: take-over, import, what the engine can't do, a
+  composer, in a fixed order: take-over, import, other agents' requests, what the engine can't do, a
   key in the draft, dictation blocked. At most two show; the rest fold into
   "N more". A key in the draft never folds: it guards something the user is
   about to do and can't take back, so it always shows and the others fold
@@ -628,10 +628,11 @@ The **header is identity only** (badge, name, role, project chip). What an
 agent is doing is said once in its sidebar row and once in the conversation
 (a bar or the working line) — never a third time up there.
 
-Another agent's request shows in a chat one way: the "Review <name>'s
-request" chip at the foot, which opens the same card in place. A session's
-question reaches every chat its work touched; in a chat that isn't its
-owner's it is left out of the conversation and offered by that chip instead.
+Another agent's request shows in a chat one way: the requests bar above the
+composer ("Lead Gen needs your OK", "16 agents need your OK"), whose Review
+panel opens the same cards in place. A session's question reaches every chat
+its work touched; in a chat that isn't its owner's it is left out of the
+conversation and offered by that bar instead.
 
 Vocabulary, one word per idea: a **request** (answered with **Allow /
 Deny**; "Needs your OK" wherever something waits on you — sidebar row, What's
@@ -704,12 +705,32 @@ tool and input are stored on the card. The app's own confirmations (delete
 an agent) do expire, since they only mean something while asked. The sidebar
 shows "Needs your OK" while any card is open (`pendingApprovals`).
 
-**Answered where you are** (`AgentInlineRequests`). Another agent's open card
-is offered at the foot of the chat you're in, as a quiet "Review Lead Gen's
-request" chip that opens the same card in place: in the Chief's chat for every
-agent, elsewhere for the agents that chat has worked with. Answering it there
-answers it everywhere (one request id). A card already in the chat (a
-session's question) isn't offered twice. A run of the same request from one
+**Answered where you are** (`AgentRequests.tsx`, counts in
+`lib/agentRequests.ts`). Other agents' open cards are offered in the chat
+you're in by one bar above the composer, in the Chief's chat for every
+agent, elsewhere for the agents that chat has worked with: "Lead Gen needs
+your OK" (one or two agents are named), "16 agents need your OK" past that,
+with what they are ("41 logins to add", "3 requests", "2 requests, 1 of them
+a login": a login is a secure input card) and **Review**. The bar has one
+height and one place, so the conversation never moves for it; it replaced a
+chip per agent at the foot of the chat, which after an import stacked sixteen
+deep under every message. Review opens one panel rising from the bar across
+the reading column: "Needs your OK · 16 agents · 41 logins", the agents in
+name order (so the list holds still as you answer it), each a row with its
+line ("4 logins: Slack bot token, Slack user token…", or the one request's
+title) that opens to its cards, answerable in place, and **Open chat**. With
+one or two agents every row starts open; past that, all start folded, so
+the whole list is in view before you pick. ↑ ↓ Home End
+move between agents, Esc or Done closes and returns focus to Review, a click
+elsewhere closes it where you clicked. An answered card stays, resolved, until
+the panel closes, and focus moves to the next Allow. Counts come only from the
+cards in each agent's loaded lines plus the registry's `pendingApprovals` for
+older ones ("2 more are further back in its chat"); nothing is estimated, and
+cards that were waiting before the bar existed show as they are. Answering it
+there answers it everywhere (one request id). A card already in the chat (a
+session's question) isn't offered twice. The phone has no such stack: its
+Chief chat shows only the Chief's own cards, and the agent list's "Needs you"
+section is where other agents' requests are. A run of the same request from one
 agent with nothing of yours between says "2 of 3 similar requests" on each
 card, counted from the cards that have arrived, never from how many might
 follow (`approvalSeries`).
