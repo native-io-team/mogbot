@@ -250,6 +250,15 @@ pub fn run() {
                 }
                 // A turn the last run quit in the middle of: stop its process, say so.
                 agents::runner::recover_after_restart(&badge_app).await;
+                // Cards raised before the independence level answered local
+                // work: the ones it answers now are allowed, with a receipt.
+                {
+                    let app = badge_app.clone();
+                    let _ = tauri::async_runtime::spawn_blocking(move || {
+                        agents::mcp::sweep_auto_allowed(&app)
+                    })
+                    .await;
+                }
                 agents::notify::refresh_badge(&badge_app);
             });
             // Agents' check-ins and routines: one tick a minute, only while open.

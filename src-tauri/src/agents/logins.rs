@@ -1469,6 +1469,7 @@ fn record_card(app: &AppHandle, agent: &Agent, r: LoginRequest) -> Result<String
         connector: None,
         login: Some(r),
         set_aside: None,
+        from_outside: None,
         front: None,
     });
     runner::record_own(app, card)?;
@@ -1583,6 +1584,7 @@ pub fn migrate_pending(app: Option<&AppHandle>) -> usize {
                 connector: None,
                 login: Some(login),
                 set_aside: None,
+                from_outside: None,
                 front: None,
             });
             let new = match app {
@@ -2345,6 +2347,7 @@ mod tests {
             connector: None,
             login: None,
             set_aside: None,
+            from_outside: None,
             front: None,
         });
         // Written the way an older build wrote it: no `login` key at all.
@@ -2586,6 +2589,7 @@ mod tests {
             connector: None,
             login: Some(r),
             set_aside: None,
+            from_outside: None,
             front: None,
         });
         store::append_message(&card).unwrap();

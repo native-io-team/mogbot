@@ -667,22 +667,83 @@ independent your agents are…", and the phone's Settings
 (`agents.setIndependence`, audited; read from the overview's `independence`).
 Saved in `agents/independence.json`.
 
-It changes words, never the wall. The level is one short app-owned section of
-every agent's system prompt, built from code each turn (so existing and
-imported agents get it on their next turn, nothing in their CLAUDE.md is
-touched) and fixed per level (the prompt cache only breaks when the user
-changes it). Go hard tells an agent to finish what it was asked and, before
-asking the user to do anything, check whether they already asked for it and
-whether it has tried every way it has; it stops only for money, identity,
-sending or publishing as them, or deleting their data. No approval reads the
-level: every card appears at every level, and the only ways past one are
-still a one-time grant from a late Allow or an Always-allow rule the user
-chose (`mcp::decide`; a test holds it). Read-only commands already don't ask
-under `acceptEdits`, so no relaxation was added. A turn answering outside
-text (a "When…" routine's items, or anything carrying their taint through
-`message_agent` or a room) never runs at Go hard: it is capped at Use good
-judgement, so unattended routines still finish; the approval wall and the
-taint gate anything consequential.
+The level is one short app-owned section of every agent's system prompt,
+built from code each turn (so existing and imported agents get it on their
+next turn, nothing in their CLAUDE.md is touched) and fixed per level (the
+prompt cache only breaks when the user changes it). Go hard tells an agent to
+finish what it was asked and, before asking the user to do anything, check
+whether they already asked for it and whether it has tried every way it has;
+it stops only for money, identity, sending or publishing as them, or deleting
+their data.
+
+**Which cards it answers** (`agents/autoallow.rs`). `acceptEdits` still asks
+for a plain `ls -la ~/SomeFolder` outside the agent's folders, so a card per
+look was the norm even when the user had said "go hard". The level now also
+decides local cards, in `mcp::decide`, after a one-time grant and an Always
+allow rule and before a card, for Claude Code's permission prompt and Codex's
+approval requests alike (both arrive as the same `Bash` / `Edit` / `Read`
+calls):
+
+| Level | Answered without a card |
+|---|---|
+| Check with me often | nothing (as before) |
+| Use good judgement | reads |
+| Go hard | reads and local work |
+
+- **Reads**: read-only commands and file reads anywhere the user's account
+  can read (`ls`, `cat`, `grep -r`, `rg`, `find` without `-delete`/`-exec`,
+  `git status/log/diff/show…`, `gh pr/issue/repo … view/list/status`, `gh api`
+  GETs, `jq`, `defaults read`…), except credentials and private stores:
+  `~/Library/Keychains`, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`,
+  `~/.codex`, `~/.claude`, shell profiles, browser profiles, Mail, Messages,
+  the app's own data (every agent's home but this one's) and `~/.<slug>`, and
+  any `.env`, key, `*credential*`, `*secret*`, `*token*` or `*password*` file.
+  A recursive read of a folder that holds one of those (`grep -r x ~`) asks.
+- **Local work** (Go hard only): creating, editing, moving, copying, linking,
+  `chmod` (no setuid) and unpacking inside the home, never into a shell
+  profile, `~/Library/LaunchAgents`, `~/Library/Preferences`, a PATH folder,
+  a protected place above, the agent's own log files, or any `.git` /
+  `.shipstudio` folder; deleting only folders the tools rebuild
+  (`node_modules`, `dist`, `build`, `.next`, `target`, `.cache`, and what is
+  inside them) in the agent's own home or its copy of a project — every other
+  delete asks, even there; the project's build, check and test
+  tools (`npm test`, `pnpm run build`, `cargo test`, `npx tsc`, `make test`…);
+  and scripts in the home whose text is read first: a shell script line by
+  line through the same classifier, other languages refused on sight of
+  anything that spawns, reaches the network, deletes or names a protected
+  place. That last check reads only the script, not what it imports (not
+  verified beyond that).
+- **Always a card, at every level** (`autoallow::ALWAYS_ASK` plus everything
+  unrecognised): `git push` and every other git write, `gh` writes, `curl`,
+  `wget` and any network transfer, mail/Slack/hosting/cloud CLIs, `npm
+  publish` and every install (`brew`, `npm install`, `pip install`…), `rm` /
+  `trash` of the user's files, `sudo`, `chown`, `chmod` on system paths,
+  launch agents and shell profiles, `security`, `osascript`, `open`, `kill`,
+  connector tools, web pages and searches, payments, and Codex's "Allow more
+  access" cards.
+- **Compound commands** are split into every command they run (`&&`, `||`,
+  `;`, `|`, `&`, line breaks, `$(…)`, backticks, `bash -c '…'`) and take the
+  class of the most dangerous part. Variables other than `$HOME`,
+  here-documents, subshells, `eval`, unknown programs and anything that
+  doesn't parse ask. Paths are judged as written and where they really are
+  (a symlink out of the home asks). When in doubt, a card.
+
+Each one answered this way leaves a step in the turn's "What it did"
+("Allowed automatically — Go hard · ls -la ~/SomeFolder"). A turn answering
+outside text (a "When…" routine's items, or anything carrying their taint
+through `message_agent` or a room) never runs at Go hard: it is capped at Use
+good judgement, so its reads go through and nothing it would write does
+without a card; unattended routines still finish, and the approval wall and
+the taint gate anything consequential.
+
+**Cards already open.** On launch and whenever the level changes,
+`mcp::sweep_auto_allowed` answers open permission cards the level now covers,
+with a receipt line in the chat ("Allowed automatically — Go hard · …"),
+through the same path as a late Allow (a waiter is woken; otherwise the exact
+call is granted once). Each new card records whether its turn answered
+outside text (`Approval.fromOutside`); a card without that record, or from
+such a turn, is judged at Use good judgement and doesn't wake its agent.
+Logins, secure input, session questions and import cards are never answered.
 
 ## Approvals
 
@@ -691,7 +752,8 @@ without asking. Anything else Claude Code would prompt for (a shell command
 that isn't read-only, a web fetch, an MCP tool like sending email, a file
 outside those folders) goes to `approve`, which puts a card in that agent's
 chat showing the exact command, file, URL or tool input, and waits for
-**Allow** or **Deny**. While it waits, the agent's row says "Needs your OK".
+**Allow** or **Deny**, unless the independence level answers it (local reads
+and, at Go hard, local work; see "How much agents do on their own"). While it waits, the agent's row says "Needs your OK".
 
 **What the broker trusts** (`agents/broker.rs`). Each turn gets an id, named
 by its secret, open until `run_turn` returns. An `approve` call with no
@@ -775,6 +837,17 @@ section is where other agents' requests are. A run of the same request from one
 agent with nothing of yours between says "2 of 3 similar requests" on each
 card, counted from the cards that have arrived, never from how many might
 follow (`approvalSeries`).
+
+**Allow all.** With more than one Allow card shown, the panel's head offers
+**Allow all**, and an agent's row with more than one offers its own. Either
+asks first on one confirm line with the counts by kind ("Allow 7 requests? 4
+commands, 2 file changes, Send an email · Gmail", or "Lead Gen: Allow 3
+requests? …"), then answers each card shown with Allow, one after another,
+through the same command as a single Allow (`allowAllCards` /
+`allowAllLine` in `lib/agentRequests.ts`). Login and secure input cards,
+session questions and import cards are never included, and cards further
+back in a chat (not shown) aren't answered. A card that fails stays waiting
+and the count is toasted. Desk only; the phone answers one card at a time.
 
 **Always allow** (`agents/permissions.rs`). A permission card can offer a
 quiet "Always allow …" beside Deny / Allow, scoped when the card is made and
