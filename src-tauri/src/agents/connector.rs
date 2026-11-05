@@ -997,7 +997,12 @@ pub fn apply_review(
     // One checklist in this chat for what the team needs, instead of a
     // request in every agent's.
     match super::team_setup::start(&card.source, std::mem::take(&mut applied.made)) {
-        Ok(Some(_)) => super::team_setup::emit(app),
+        Ok(Some(_)) => {
+            super::team_setup::emit(app);
+            // What the new agents mentioned, checked against this Mac before
+            // anyone is asked (`access_check`).
+            super::access_check::spawn(app);
+        }
         Ok(None) => {}
         Err(e) => tracing::warn!("[Agents] Couldn't start setting up the team: {e}"),
     }

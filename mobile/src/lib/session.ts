@@ -332,6 +332,11 @@ export const teamSetup = {
   hello: (agentId: string) => teamSetupThen(call('agents.teamSetup.hello', { agentId })),
   missing: () => teamSetupThen(call('agents.teamSetup.missing', {})),
   dismiss: () => teamSetupThen(call('agents.teamSetup.dismiss', {})),
+  /** A row nothing reached: one sign-in card started on the Mac, or put away. */
+  later: (key: string, action: 'connect' | 'not_needed', onPhone = true) =>
+    teamSetupThen(call('agents.teamSetup.later', { key, action, onPhone })),
+  /** Check again what the team can already reach. */
+  check: () => teamSetupThen(call('agents.teamSetup.check', {})),
 };
 
 /** The newest page. Concurrent calls for one chat share the request. */

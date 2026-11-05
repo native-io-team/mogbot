@@ -352,6 +352,11 @@ pub struct LoginRequest {
     pub replaces: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flow: Option<Flow>,
+    /// Other agents that asked for the same thing and joined this card
+    /// (`access_chain`): answering it answers them too. Live, by name;
+    /// never stored on the card.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub also_for: Vec<String>,
 }
 
 impl LoginRequest {
@@ -592,6 +597,7 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
         quiet: ask.quiet,
         replaces: None,
         flow: None,
+        also_for: Vec::new(),
     })
 }
 
@@ -634,16 +640,35 @@ pub fn declined_prompt(r: &LoginRequest, note: Option<&str>) -> String {
 }
 
 pub const RULES: &str = "\
-## Logins
+## Getting access
 
-When you need access to an app or account (email, calendar, Slack, LinkedIn, \
-X, GitHub, Linear…), ask with `request_login`: the user connects it on a card \
-here, signed in on their own Mac, and you're woken with how to use it. Say \
-which account if it matters (`account_hint`) and whether you only need to \
-read or also to send or change things (`scopes`). Never ask for a password, \
-and never ask the user to paste a login, token or code in chat. Use \
-`request_secret` only for an API key made for programs, never for a \
-password. Sending, posting and paying always ask the user on a card first.";
+Just try first, and ask only when you're blocked on what the user asked \
+for, at that moment. Never ask up front, never for a list of things, and \
+never for what nobody asked you to do yet. For a task in an app or site, in \
+this order:
+
+1. A connected app: your own tools (`mcp__<app>__*`, a claude.ai connector), \
+or the app's command on this Mac (`gh` for GitHub). Use it.
+2. The user's own browser, where they're already signed in: the Claude in \
+Chrome tools (`mcp__claude-in-chrome__*`), when you have them. Open the site \
+in a new tab, and tell the user in one line which account you're in, from \
+what the page shows (\"I'm in Figma as …\"); never guess one. Reading \
+there is free; every click, post, send, share, payment or delete asks the \
+user on a card. Never type a password; if a page asks you to sign in, stop \
+using it. The user may have Chrome in more than one profile, each signed in \
+as someone else: if the page shows the wrong account, `select_browser` / \
+`switch_browser` to another connected one (`list_connected_browsers`); if \
+none is, `ask_bring_browser_to_front` once, never `request_login`. Once \
+it's right, `remember_browser_account`.
+3. Only if neither works: `request_login`, once, for that one app (with \
+`signed_out: true` if the browser showed a sign-in page). It may answer \
+that you can reach it already, or that someone already asked: do what it \
+says. One ask at a time; never repeat one that's waiting or was answered.
+
+Never ask for a password, and never ask the user to paste a login, token or \
+code in chat. `request_secret` is only for an API key made for programs, \
+when the service has no sign-in at all. Sending, posting and paying always \
+ask the user on a card first.";
 
 /* ---------------------------------------------------------- live state */
 
@@ -664,10 +689,23 @@ fn flow_of(request_id: &str) -> Option<Flow> {
 
 /// Lay each login card's live state over it, for a page being read.
 pub fn apply(page: &mut [AgentMessage]) {
-    let flows = FLOWS.lock().unwrap_or_else(|e| e.into_inner());
-    if flows.is_empty() {
+    let has_login = page
+        .iter()
+        .any(|m| m.approval.as_ref().is_some_and(|a| a.login.is_some()));
+    if !has_login {
         return;
     }
+    let waiters = super::access_chain::load_waiters();
+    let names: HashMap<String, String> = if waiters.cards.is_empty() {
+        HashMap::new()
+    } else {
+        store::list()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|a| (a.id, a.name))
+            .collect()
+    };
+    let flows = FLOWS.lock().unwrap_or_else(|e| e.into_inner());
     for m in page.iter_mut() {
         if let Some(login) = m.approval.as_mut().and_then(|a| {
             let pending = a.status == ApprovalStatus::Pending;
@@ -679,6 +717,19 @@ pub fn apply(page: &mut [AgentMessage]) {
                 flows.get(&id).map(|f| f.flow.clone())
             } else {
                 None
+            };
+            l.also_for = if pending {
+                waiters
+                    .cards
+                    .get(&id)
+                    .map(|(_, w)| {
+                        w.iter()
+                            .filter_map(|w| names.get(&w.agent_id).cloned())
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
             };
         }
     }
@@ -763,6 +814,25 @@ fn complete(
     store::refresh_pending(agent_id);
     super::notify::refresh_badge(app);
     let _ = app.emit(runner::EVENT_REGISTRY, ());
+    // Everyone who joined this card gets the same answer (`access_chain`).
+    let granted = connections::for_service(&r.service)
+        .into_iter()
+        .find(|c| c.grant_for(agent_id).is_some());
+    match (&granted, service(&r.service).and_then(|s| s.site)) {
+        (Some(c), _) => super::access_chain::answer_waiters(
+            app,
+            request_id,
+            r,
+            super::access_chain::Answered::Connection(c),
+        ),
+        (None, Some(site)) => super::access_chain::answer_waiters(
+            app,
+            request_id,
+            r,
+            super::access_chain::Answered::Browser(site),
+        ),
+        (None, None) => {}
+    }
     if r.quiet {
         let _ = runner::record(
             app,
@@ -964,6 +1034,19 @@ pub async fn start(
             let site = service(&r.service)
                 .and_then(|s| s.site)
                 .unwrap_or("the site");
+            // The team's browser is switched on only once the app has seen
+            // Chrome answer (`browser::enable`); choosing it here is that
+            // consent, so it's set up now if it can be.
+            if !super::browser::team_enabled() {
+                run.set(FlowState::Starting, Some("Checking your browser…".into()));
+                if let Err(e) = super::browser::enable(app).await {
+                    run.set(
+                        FlowState::Failed,
+                        Some(format!("{e} Set it up from ⌘K \"Let agents use your browser\", then try again.")),
+                    );
+                    return Ok(());
+                }
+            }
             store::update(agent_id, |a| {
                 a.reach.browser_off = false;
                 if !a.reach.browser_sites.iter().any(|s| s == site) {
@@ -1189,6 +1272,12 @@ pub fn decline(
     store::refresh_pending(agent_id);
     super::notify::refresh_badge(app);
     let _ = app.emit(runner::EVENT_REGISTRY, ());
+    super::access_chain::answer_waiters(
+        app,
+        request_id,
+        &r,
+        super::access_chain::Answered::Declined(note),
+    );
     if !r.quiet {
         runner::enqueue(app, agent_id, declined_prompt(&r, note), runner::From::User);
     }
@@ -1301,10 +1390,29 @@ pub fn raise(app: &AppHandle, agent: &Agent, ask: &Ask) -> Result<String, Comman
     Ok(reply)
 }
 
-fn record_card(app: &AppHandle, agent: &Agent, r: LoginRequest) -> Result<(), CommandError> {
+/// A card for `ask`, raised by the app itself (a "Connect" on the setup
+/// checklist): its request id. Never two for the same service in one chat.
+pub fn raise_card(app: &AppHandle, agent: &Agent, ask: &Ask) -> Result<String, CommandError> {
+    let r = build(agent, ask)?;
+    if let Some(open) = store::pending_approvals(&agent.id)
+        .unwrap_or_default()
+        .into_iter()
+        .find(|a| {
+            a.login
+                .as_ref()
+                .is_some_and(|l| l.service == r.service && l.title == r.title)
+        })
+    {
+        return Ok(open.request_id);
+    }
+    record_card(app, agent, r)
+}
+
+fn record_card(app: &AppHandle, agent: &Agent, r: LoginRequest) -> Result<String, CommandError> {
+    let request_id = store::new_id();
     let mut card = runner::new_message(&agent.id, MessageKind::Approval, "");
     card.approval = Some(Approval {
-        request_id: store::new_id(),
+        request_id: request_id.clone(),
         title: title(agent, &r),
         detail: r.why.clone(),
         summary: None,
@@ -1320,12 +1428,13 @@ fn record_card(app: &AppHandle, agent: &Agent, r: LoginRequest) -> Result<(), Co
         connector: None,
         login: Some(r),
         set_aside: None,
+        front: None,
     });
     runner::record_own(app, card)?;
     store::refresh_pending(&agent.id);
     super::notify::refresh_badge(app);
     let _ = app.emit(runner::EVENT_REGISTRY, ());
-    Ok(())
+    Ok(request_id)
 }
 
 /// A secret request an older build (or an import) would have raised, as a
@@ -1433,6 +1542,7 @@ pub fn migrate_pending(app: Option<&AppHandle>) -> usize {
                 connector: None,
                 login: Some(login),
                 set_aside: None,
+                front: None,
             });
             let new = match app {
                 Some(app) => runner::record_own(app, card).map(|_| ()),
@@ -1802,6 +1912,8 @@ pub(crate) fn fan_out(app: &AppHandle, service_id: &str, first: TeamCard, rest: 
 pub fn dismiss(app: &AppHandle, agent_id: &str, request_id: &str) -> Result<(), CommandError> {
     pending_login(agent_id, request_id)?;
     clear_flow(request_id);
+    // Nobody is woken by "Not needed"; whoever joined the card is let go too.
+    let _ = super::access_chain::take_waiters(request_id);
     if let Some(m) = store::deny_with_note(agent_id, request_id, NOT_NEEDED)? {
         let _ = app.emit(runner::EVENT_MESSAGE, &m);
     }
@@ -1869,9 +1981,17 @@ pub struct ReachConnection {
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ReachBrowser {
-    /// Claude in Chrome is offered to its turns (Claude Code only).
+    /// Claude in Chrome is offered to its turns (Claude Code only): the
+    /// team's browser is on and this agent's wasn't taken away. Never in a
+    /// turn answering outside text, whatever this says.
     pub on: bool,
+    /// The team's browser is set up and switched on.
+    pub team_on: bool,
+    /// The user took it away from this agent.
+    pub own_off: bool,
     pub sites: Vec<String>,
+    /// The Chrome profile and account each of its sites was found in.
+    pub accounts: Vec<super::browser_profiles::ReachAccount>,
     pub helper_installed: bool,
 }
 
@@ -1915,8 +2035,11 @@ pub fn reach(agent: &Agent) -> Reach {
             })
             .collect(),
         browser: (agent.engine == Engine::Claude).then(|| ReachBrowser {
-            on: !agent.reach.browser_off,
+            on: !agent.reach.browser_off && super::browser::team_enabled(),
+            team_on: super::browser::team_enabled(),
+            own_off: agent.reach.browser_off,
             sites: agent.reach.browser_sites.clone(),
+            accounts: super::browser_profiles::for_reach(agent),
             helper_installed: browser_helper_installed(),
         }),
         secrets: agent
@@ -1943,8 +2066,15 @@ pub enum Removal {
         connection_id: String,
     },
     Browser,
+    /// Give it back (the team's browser stays as it is).
+    BrowserOn,
     #[serde(rename_all = "camelCase")]
     BrowserSite {
+        site: String,
+    },
+    /// Forget which Chrome profile a site was found in (for everyone).
+    #[serde(rename_all = "camelCase")]
+    BrowserAccount {
         site: String,
     },
     #[serde(rename_all = "camelCase")]
@@ -1971,9 +2101,13 @@ pub fn remove(agent_id: &str, removal: &Removal) -> Result<Reach, CommandError> 
                 a.reach.browser_sites.clear();
             })?;
         }
+        Removal::BrowserOn => {
+            store::update(agent_id, |a| a.reach.browser_off = false)?;
+        }
         Removal::BrowserSite { site } => {
             store::update(agent_id, |a| a.reach.browser_sites.retain(|s| s != site))?;
         }
+        Removal::BrowserAccount { site } => super::browser_profiles::forget(site)?,
         Removal::Secret { secret_id } => secrets::revoke(agent_id, secret_id)?,
         Removal::BlockApp { name } => {
             let name = name.trim().chars().take(120).collect::<String>();
@@ -2163,6 +2297,7 @@ mod tests {
             connector: None,
             login: None,
             set_aside: None,
+            front: None,
         });
         // Written the way an older build wrote it: no `login` key at all.
         let line = serde_json::to_string(&card).unwrap();
@@ -2403,6 +2538,7 @@ mod tests {
             connector: None,
             login: Some(r),
             set_aside: None,
+            front: None,
         });
         store::append_message(&card).unwrap();
         store::refresh_pending(&a.id);

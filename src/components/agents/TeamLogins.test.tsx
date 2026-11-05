@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { TeamLogins } from './TeamLogins';
+import { ModalProvider } from '../../contexts/ModalContext';
 import { AgentReach } from './AgentReach';
 import { progressLine, waitingCards, type TeamLogins as Team } from '../../lib/agentLogins';
 import type { Agent } from '../../lib/agents';
@@ -111,7 +112,13 @@ describe('AgentReach', () => {
           needsSignIn: false,
         },
       ],
-      browser: { on: true, sites: ['www.linkedin.com'], helperInstalled: false },
+      browser: {
+        on: true,
+        teamOn: true,
+        ownOff: false,
+        sites: ['www.linkedin.com'],
+        helperInstalled: false,
+      },
       secrets: [],
       blockedApps: [],
     };
@@ -120,7 +127,11 @@ describe('AgentReach', () => {
       if (cmd === 'agents_reach') return reach;
       return { ...reach, connections: [] };
     });
-    render(<AgentReach agent={{ id: 'recruiter', name: 'Recruiter' } as Agent} />);
+    render(
+      <ModalProvider>
+        <AgentReach agent={{ id: 'recruiter', name: 'Recruiter' } as Agent} />
+      </ModalProvider>
+    );
     await screen.findByText('Gmail · work@acme.com');
     expect(screen.getByText(/extension isn’t set up/)).toBeInTheDocument();
     await act(async () => {

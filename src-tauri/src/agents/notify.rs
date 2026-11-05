@@ -406,6 +406,7 @@ mod tests {
             connector: None,
             login: None,
             set_aside: None,
+            front: None,
         });
         message
     }

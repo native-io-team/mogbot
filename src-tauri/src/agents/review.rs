@@ -729,6 +729,18 @@ pub fn apply(
         match apply_one(app, p, replace, source, &card.talk_id) {
             Ok((name, replaced, refused, agent_id)) => {
                 out.made.push(super::team_setup::Arrived {
+                    later: p
+                        .logins
+                        .iter()
+                        .map(|l| {
+                            let purpose = if l.purpose.is_empty() {
+                                format!("A login {name} used with {source}")
+                            } else {
+                                l.purpose.clone()
+                            };
+                            super::access_check::later_from(&agent_id, &l.name, &purpose, &l.kind)
+                        })
+                        .collect(),
                     agent_id,
                     gaps: plan
                         .iter()
@@ -835,48 +847,10 @@ fn apply_one(
     // Last, so it names what is now in its home.
     super::arrival::arrive(&agent.id, source)?;
     if let Some(app) = app {
-        for login in &p.logins {
-            let purpose = if login.purpose.is_empty() {
-                format!("A login {} used with {source}", agent.name)
-            } else {
-                login.purpose.clone()
-            };
-            // A login by name that means an app (gmail_work, linkedin) is
-            // a login card: connect it, never a password. Anything else, a
-            // real API key, stays a secure input card.
-            // By its name only: the purpose says where work goes, not what
-            // the credential is (`logins::from_secret`).
-            match super::logins::match_service(&login.name)
-                .filter(|s| !(s.key.is_some() && login.kind == "api_key"))
-            {
-                Some(service) => {
-                    let wants = if login
-                        .purpose
-                        .to_ascii_lowercase()
-                        .split_whitespace()
-                        .any(|w| {
-                            [
-                                "send", "post", "reply", "publish", "tweet", "message", "schedule",
-                            ]
-                            .contains(&w)
-                        }) {
-                        vec!["read", "write"]
-                    } else {
-                        vec!["read"]
-                    };
-                    let args = serde_json::json!({
-                        "service": service.id, "why": purpose, "scopes": wants,
-                    });
-                    super::mcp::request_login_quiet(app, &agent, &args);
-                }
-                None => {
-                    let args = serde_json::json!({
-                        "name": login.name, "purpose": purpose, "kind": login.kind,
-                    });
-                    super::mcp::request_secret_quiet(app, &agent, &args);
-                }
-            }
-        }
+        // Its logins aren't asked for here: they go on the "Setting up your
+        // team" checklist for later (`team_setup::Arrived::later`), where
+        // the app checks what this Mac can already reach before anyone is
+        // asked (`access_check`).
         let note = if replaced {
             format!(
                 "Replaced from {source}: new instructions and a fresh conversation (memory kept). Its routines are paused, it's no longer bound to a project, and its Always-allow rules{} were removed.",
