@@ -809,13 +809,35 @@ uses its own checkout, and `SHIPSTUDIO_COMPANION_SOURCE` overrides both.
 
 | iOS step | Who | The app's check |
 | --- | --- | --- |
-| Full Xcode (outdated or missing disables Start) | User, from the App Store | `xcode-select -p` inside an `.app`, `xcodebuild -version` |
-| License and first launch | Agent (`sudo xcodebuild -runFirstLaunch`) | `xcodebuild -checkFirstLaunchStatus` |
+| Full Xcode (outdated or missing disables Start) | User, from the App Store | `xcode-select -p` inside an `.app`, `xcodebuild -version` (or the `.app`'s `version.plist` when xcodebuild won't run) |
+| License, after every install or update (git and builds fail until then) | Agent (`sudo xcodebuild -license accept`) | `xcodebuild -license check` |
+| First-launch components | Agent (`sudo xcodebuild -runFirstLaunch`) | `xcodebuild -checkFirstLaunchStatus` |
 | CocoaPods, Node | Agent | `pod --version`, the node check |
-| Phone plugged in and trusted, Developer Mode | User | `xcrun devicectl list devices` |
+| Phone plugged in and trusted, Developer Mode | User | `xcrun devicectl list devices` (physical only; Xcode 27 lists simulators there too, as `simulated`) |
 | Signing | User, guided | An "Apple Development" identity; the team id comes from it |
-| Build and install (Release, so no Metro) | Agent: `expo prebuild`, `expo run:ios --device … --configuration Release` | `devicectl device info apps` lists the bundle id |
-| Trust the developer, pair | User | The device appears in the registry |
+| Build and install (Release, so no Metro) | Agent: `expo prebuild`, then `xcodebuild … -destination id=<hardware UDID> -allowProvisioningUpdates DEVELOPMENT_TEAM=<team> CODE_SIGN_STYLE=Automatic build`, then `devicectl device install app` (`iosBuildSteps`) | `devicectl device info apps` lists the bundle id |
+| Trust the developer, pair | User (Settings → General → VPN & Device Management) | The device appears in the registry |
+
+**A free Apple ID (personal team)** trips over four things, and the build
+handles or explains each:
+
+- **The device id.** `xcodebuild -destination id=` takes the phone's hardware
+  UDID (`00008140-…`, `hardwareProperties.udid` in devicectl's JSON, or the
+  bracket in `xcrun xctrace list devices`), not devicectl's CoreDevice
+  identifier. The status keeps both (`udid` for devicectl, `hardwareUdid` for
+  the build); with no hardware UDID there is no Reinstall, and the prompt
+  tells the agent to read it from xctrace.
+- **Push.** A personal team can't sign the Push Notifications capability,
+  which expo-notifications adds as `aps-environment` by default.
+  `app.config.ts` passes `enableRemoteNotifications: pushEntitlement()`: on
+  only with `EAS_PROJECT_ID` (official builds) or
+  `COMPANION_PUSH_ENTITLEMENT=1`, so a self-build leaves it out with nothing
+  set. The app already copes (`src/lib/push.ts`, "Needs the official build").
+- **Provisioning.** `expo run:ios` doesn't pass `-allowProvisioningUpdates`,
+  so a first build can't make its profile. Hence xcodebuild directly.
+- **An old Xcode.** Below what the Expo SDK needs, the build fails in
+  `expo-modules-jsi` with a Swift "sending 'slot' risks causing data races"
+  error; the prompt reads that as "update Xcode", not a code problem.
 
 The bundle id is `<companion.bundleId>.<6 hex of the team id's sha256>` (from `brand.json`): a
 free team can't take an id someone else holds, and it never collides with
