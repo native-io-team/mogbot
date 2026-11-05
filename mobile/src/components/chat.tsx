@@ -1,7 +1,9 @@
 /**
  * The rows of a conversation. Yours are neutral bubbles on the right; the
  * agent's replies are prose on the left with no bubble (as on the desktop);
- * everything else is a quiet line or a card.
+ * everything else is a Line or a Card (`surfaces.tsx`): one quiet centred
+ * sentence for what happened, one card anatomy for what wants a decision or
+ * holds a result.
  */
 
 import {
@@ -11,32 +13,27 @@ import {
   type AgentMessage,
 } from '@shipstudio/companion-protocol';
 import { memo } from 'react';
-import { type LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import { type LayoutChangeEvent, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import {
-  DRIVEN_LINE,
-  engineName,
-  failureLine,
-  folderName,
-  formatClock,
-  sessionLabel,
-} from '../lib/agents';
+import { engineName, failureLine, folderName, formatClock, sessionLabel } from '../lib/agents';
+import { drivenWait } from '../lib/bars';
 import { haptic } from '../lib/haptics';
 import { discardPending, editPending, send } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
-import { alpha, chromeScale, composer, fonts, iconSize, radius, space, type } from '../lib/theme';
+import { composer, iconSize, space, type } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Attachments } from './attachments';
 import { useReveal } from '../lib/reveal';
 import { Markdown } from './Markdown';
-import { Icon, useRipple, T } from './ui';
+import { Card, Line, TextAction } from './surfaces';
+import { Button, Icon, T } from './ui';
 import { Spinner } from './agent';
 import { ApprovalCard, ReviewOnMacCard } from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
 import { LiveWork, WorkLine } from './work';
-import { CopyActions } from './copy';
+import { CopyCard } from './copy';
 import { ResultCardView, useCanRevise } from './result';
 import { setComposer } from '../lib/drafts';
 import { useApp } from '../lib/store';
@@ -81,19 +78,21 @@ export const MessageRow = memo(function MessageRow({
           agent={agent}
           newest={newestResult || !!copy}
           onAskForChanges={newestResult ? askForChanges : undefined}
+          copy={
+            copy && message.changes
+              ? {
+                  agent,
+                  copy,
+                  project: message.changes.project,
+                  leftOut: message.changes.leftOut,
+                  warning: message.changes.warning,
+                  onError,
+                }
+              : undefined
+          }
           onError={onError}
         >
           {message.changes && (newestResult || copy) && <SystemLine message={message} />}
-          {copy && message.changes && (
-            <CopyActions
-              agent={agent}
-              copy={copy}
-              project={message.changes.project}
-              leftOut={message.changes.leftOut}
-              warning={message.changes.warning}
-              onError={onError}
-            />
-          )}
         </ResultCardView>
         {message.work && <WorkLine message={message} work={message.work} onError={onError} />}
       </View>
@@ -131,7 +130,7 @@ export const MessageRow = memo(function MessageRow({
           {queued && (
             <T variant="caption" color={colors.textSecondary} style={styles.meta}>
               {agent.takeover
-                ? `Queued · ${DRIVEN_LINE}`
+                ? `Queued · ${drivenWait(agent.name)}`
                 : `Queued · ${agent.name} reads it when this turn ends`}
             </T>
           )}
@@ -196,24 +195,21 @@ export const MessageRow = memo(function MessageRow({
         />
       ) : null;
     case 'error': {
-      const line = (
-        <View style={styles.errorRow}>
-          <Icon
-            name="exclamationmark.circle"
-            size={iconSize.inline}
-            color={colors.accentErrorLight}
-          />
-          <T variant="small" color={colors.accentErrorLight} style={{ flex: 1 }}>
-            {message.failure
-              ? failureLine(message.failure, message.text, engineName(agent))
-              : message.text}
-          </T>
-        </View>
+      // A usage limit isn't an error (it resets by itself): a line. A real
+      // failure is a card, with the error mark.
+      const limited = message.failure?.kind === 'usage_limit';
+      const words = message.failure
+        ? failureLine(message.failure, message.text, engineName(agent))
+        : message.text;
+      const row = limited ? (
+        <Line text={words} icon="clock" />
+      ) : (
+        <Card icon="exclamationmark.circle" tone="error" title={words} />
       );
-      if (!message.work) return line;
+      if (!message.work) return row;
       return (
         <View style={styles.agentRow}>
-          {line}
+          {row}
           <WorkLine message={message} work={message.work} onError={onError} />
         </View>
       );
@@ -221,18 +217,25 @@ export const MessageRow = memo(function MessageRow({
     case 'session':
       return message.session ? <SessionCard message={message} onError={onError} /> : null;
     case 'note':
-      // "Started fresh · memory kept": where a new conversation began.
-      return message.fresh ? (
-        <DaySeparator label={message.text} />
-      ) : (
-        <SystemLine message={message} />
+      // "Started fresh · memory kept", a take-over that closed: something that happened.
+      return <Line text={message.text} />;
+    case 'check_in':
+      if (!message.work)
+        return (
+          <Line text={`${message.checkIn?.manual ? 'Ran now' : 'Routine'} · ${message.text}`} />
+        );
+      return (
+        <View style={styles.agentRow}>
+          <Line text={`${message.checkIn?.manual ? 'Ran now' : 'Routine'} · ${message.text}`} />
+          <WorkLine message={message} work={message.work} onError={onError} />
+        </View>
       );
     default:
       if (liveCopy && message.changes?.copy) {
         return (
           <View style={styles.agentRow}>
             <SystemLine message={message} />
-            <CopyActions
+            <CopyCard
               agent={agent}
               copy={message.changes.copy}
               project={message.changes.project}
@@ -287,28 +290,15 @@ function Bubble({ text }: { text: string }) {
   );
 }
 
-/** "Today 2:40 PM", centred: where the day changes or the talk picks up after a pause. */
+/** "Today 2:40 PM": where the day changes or the talk picks up after a pause. A Line. */
 export function DaySeparator({ label }: { label: string }) {
-  const colors = useColors();
-  const styles = useStyles();
-  return (
-    <View style={styles.day} accessibilityRole="header">
-      <T
-        variant="caption"
-        color={colors.textMuted}
-        maxFontSizeMultiplier={chromeScale}
-        style={styles.dayText}
-      >
-        {label}
-      </T>
-    </View>
-  );
+  return <Line text={label} header />;
 }
 
 /**
- * What an agent did in a project's session, as the desktop shows it: a line
- * for "started" and "sent", a card with the session's reply, and preview
- * screenshots inline. A session that still exists opens read-only.
+ * What an agent did in one of a project's tasks, as the desktop shows it: a
+ * line for "started" and "sent", a card with the task's reply, and preview
+ * screenshots inline. A task that still exists opens read-only.
  */
 function SessionCard({
   message,
@@ -352,31 +342,23 @@ function SessionCard({
         <T variant="small" color={colors.textSecondary} numberOfLines={1} style={{ flexShrink: 1 }}>
           {mark.event === 'started'
             ? `Started a task in ${project}`
-            : `Sent to ${project} · ${tab}`}
+            : `Sent to a task in ${project}`}
         </T>
         {open && <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />}
       </Pressable>
     );
   }
 
+  const reply = mark.event === 'reply';
   return (
-    <View style={styles.sessionCard}>
-      <View style={styles.sessionHead}>
-        <Icon
-          name={mark.event === 'reply' ? 'terminal' : 'photo'}
-          size={iconSize.inline}
-          color={colors.textMuted}
-        />
-        <T variant="caption" color={colors.textSecondary} numberOfLines={1} style={{ flex: 1 }}>
-          {mark.event === 'reply'
-            ? `${project} · ${tab}`
-            : `${project} · ${message.text || 'Preview'}`}
-        </T>
-        <T variant="caption" color={colors.textMuted}>
-          {formatClock(message.ts)}
-        </T>
-      </View>
-      {mark.event === 'reply' ? (
+    <Card
+      icon={reply ? 'terminal' : 'photo'}
+      title={reply ? `${tab} in ${project}` : message.text || 'Preview'}
+      meta={formatClock(message.ts)}
+      source={reply ? undefined : `In ${project}`}
+      actions={open && <Button title={`Open in ${project}`} variant="outline" onPress={open} />}
+    >
+      {reply ? (
         <T color={colors.textBody} numberOfLines={8}>
           {message.text}
         </T>
@@ -390,20 +372,7 @@ function SessionCard({
           />
         )
       )}
-      {open && (
-        <Pressable
-          onPress={open}
-          hitSlop={12}
-          style={styles.sessionOpen}
-          accessibilityRole="button"
-        >
-          <T variant="small" color={colors.textStrong} style={{ fontFamily: fonts.medium }}>
-            Open task
-          </T>
-          <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
-        </Pressable>
-      )}
-    </View>
+    </Card>
   );
 }
 
@@ -422,9 +391,7 @@ function SystemLine({ message }: { message: AgentMessage }) {
       ? `To ${message.peer.name}: ${message.text}`
       : message.kind === 'from_agent' && message.peer
         ? `From ${message.peer.name}: ${message.text}`
-        : message.kind === 'check_in'
-          ? `${message.checkIn?.manual ? 'Ran now' : 'Routine'} · ${message.text}`
-          : message.text;
+        : message.text;
   const opens = !!changes && canDiff;
   // No clock of its own: the chat's time lines say when (and the long-press menu, exactly).
   const line = (
@@ -451,6 +418,7 @@ function SystemLine({ message }: { message: AgentMessage }) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={`${text}. Review changes`}
       accessibilityHint="Shows what changed in each file"
       onPress={() =>
         router.push({
@@ -504,7 +472,7 @@ export function PendingRow({ pending }: { pending: PendingSend }) {
           </T>
           {pending.refused ? (
             // A refusal is final: sending it again is refused again. Edit puts it back.
-            <LineButton
+            <TextAction
               label="Edit"
               onPress={() => {
                 haptic.light();
@@ -513,7 +481,7 @@ export function PendingRow({ pending }: { pending: PendingSend }) {
             />
           ) : (
             pending.failed && (
-              <LineButton
+              <TextAction
                 label="Send"
                 onPress={() => {
                   haptic.light();
@@ -529,7 +497,7 @@ export function PendingRow({ pending }: { pending: PendingSend }) {
               />
             )
           )}
-          <LineButton
+          <TextAction
             label="Discard"
             muted
             onPress={() => discardPending(pending.agentId, pending.clientId)}
@@ -541,33 +509,6 @@ export function PendingRow({ pending }: { pending: PendingSend }) {
         </T>
       )}
     </Animated.View>
-  );
-}
-
-/** A word you can tap in a status line: small to see, 44pt to hit. */
-function LineButton({
-  label,
-  onPress,
-  muted,
-}: {
-  label: string;
-  onPress: () => void;
-  muted?: boolean;
-}) {
-  const colors = useColors();
-  const ripple = useRipple();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
-      android_ripple={{ ...ripple, borderless: true }}
-      onPress={onPress}
-    >
-      <T variant="caption" color={muted ? colors.textSecondary : colors.textStrong}>
-        {label}
-      </T>
-    </Pressable>
   );
 }
 
@@ -666,16 +607,6 @@ const useStyles = makeStyles((colors) => ({
     marginRight: space.xs,
   },
   agentRow: { gap: space.sm },
-  day: { alignItems: 'center', paddingVertical: space.xs },
-  dayText: { letterSpacing: 0.2 },
-  errorRow: {
-    flexDirection: 'row',
-    gap: space.sm,
-    alignItems: 'flex-start',
-    padding: space.md,
-    borderRadius: radius.inner,
-    backgroundColor: alpha(colors.accentError, 0.08),
-  },
   systemRow: {
     flexDirection: 'row',
     gap: space.tight,
@@ -695,21 +626,5 @@ const useStyles = makeStyles((colors) => ({
     gap: space.tight,
     alignSelf: 'flex-start',
     paddingVertical: space['2xs'],
-  },
-  sessionCard: {
-    gap: space.sm,
-    padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: colors.surfacePanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.cardBorder,
-  },
-  sessionHead: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
-  sessionOpen: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    alignSelf: 'flex-start',
-    marginTop: space.xs,
   },
 }));

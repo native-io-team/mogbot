@@ -9,7 +9,8 @@ import { chatItems, dayLabel, timeLabel } from '../src/lib/timeline';
 import { WireFailure } from '../src/lib/transport';
 import { looksLikePath, splitStable } from '../src/components/Markdown';
 import { mentionQuery, sendMode } from '../src/lib/composer';
-import { DRIVEN_LINE, drivenHint, subtitle } from '../src/lib/agents';
+import { subtitle } from '../src/lib/agents';
+import { drivenBar, drivenLine, drivenWait } from '../src/lib/bars';
 import { agent, msg } from './helpers';
 
 const pend = (clientId: string, ts: number, extra: Partial<PendingSend> = {}): PendingSend => ({
@@ -268,9 +269,15 @@ describe('driven on the Mac', () => {
     expect(sendMode(driven(), true)).toBe('queue');
   });
 
-  it('says it one way everywhere: the row, the header, the composer', () => {
-    expect(DRIVEN_LINE).toBe('Being driven on your Mac');
-    expect(subtitle(driven())).toBe(DRIVEN_LINE);
-    expect(drivenHint()).toBe('Being driven on your Mac · what you send waits');
+  it('says it one way everywhere: the row and the bar, in the desk’s words', () => {
+    const a = driven();
+    expect(drivenLine(a.name)).toBe(`You’re driving ${a.name} on your Mac`);
+    expect(subtitle(a)).toBe(drivenLine(a.name));
+    expect(drivenBar(a)?.title).toBe(drivenLine(a.name));
+    expect(drivenWait(a.name)).toBe(`sends when you hand ${a.name} back`);
+  });
+
+  it('a request outranks driving in the row, as on the desk', () => {
+    expect(subtitle({ ...driven(), pendingApprovals: 1 })).toBe('Needs your OK');
   });
 });

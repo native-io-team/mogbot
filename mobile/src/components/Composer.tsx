@@ -47,8 +47,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccent } from '../lib/accent';
-import { DRIVEN_LINE, drivenHint, needsYou, waitingOnMac } from '../lib/agents';
-import { RevisingChip } from './result';
+import { needsYou } from '../lib/agents';
+import { drivenWait } from '../lib/bars';
+import { ConversationBars } from './ConversationBars';
 import { mentionQuery, sendMode, takeDraft } from '../lib/composer';
 import {
   addFile,
@@ -176,8 +177,6 @@ export function Composer({
   const mode = sendMode(agent, hasContent);
   const busy = agent.status.state !== 'idle';
   const waitingOnYou = needsYou(agent);
-  // What it waits on is answered on the Mac (an import to review), not above.
-  const onMac = useApp((s) => waitingOnMac(agent, s.chats[agent.id]?.messages));
   // Offline, Send still works: it waits for the Mac in the outbox.
   const canSend = hasContent && !blocked;
   // Driven on the Mac: it waits for the hand-back there, and nothing here interrupts it.
@@ -283,25 +282,22 @@ export function Composer({
     });
   };
 
+  // Driven on the Mac, an import, the link down: the bars above say those, once.
   const hint = listening
     ? 'Listening on this phone · tap the mic when you’re done'
     : micHint
       ? micHint
-      : driven
-        ? drivenHint()
-        : !connected
-          ? hasContent
-            ? `Not connected · Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
-            : 'Not connected · what you type stays here'
-          : uploading
-            ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
-            : onMac
-              ? `Review the import on your Mac. ${agent.name} carries on after`
-              : mode === 'queue'
-                ? waitingOnYou
-                  ? `${agent.name} reads it after you answer above`
-                  : `${agent.name} reads it when this turn ends`
-                : null;
+      : !connected
+        ? hasContent
+          ? `Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
+          : 'What you type stays here'
+        : uploading
+          ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
+          : mode === 'queue' && !driven
+            ? waitingOnYou
+              ? `${agent.name} reads it after you answer above`
+              : `${agent.name} reads it when this turn ends`
+            : null;
 
   return (
     <View
@@ -315,6 +311,11 @@ export function Composer({
       ]}
       onLayout={(e: LayoutChangeEvent) => onHeight?.(e.nativeEvent.layout.height)}
     >
+      <ConversationBars
+        agent={agent}
+        revising={draft.revising}
+        onStopRevising={() => setComposer(agent.id, { revising: undefined })}
+      />
       {suggestions.length > 0 && (
         <Animated.View entering={FadeIn.duration(120)} exiting={FadeOut.duration(100)}>
           <ScrollView
@@ -367,12 +368,6 @@ export function Composer({
             </Pressable>
           )}
         </Animated.View>
-      )}
-      {draft.revising && (
-        <RevisingChip
-          revising={draft.revising}
-          onRemove={() => setComposer(agent.id, { revising: undefined })}
-        />
       )}
       {draft.quotes.length > 0 && (
         <View style={styles.quotes}>
@@ -518,7 +513,7 @@ export function Composer({
               // Sending while it works queues: the hint above says so, so the button stays an arrow.
               label={
                 driven
-                  ? `Queue · ${DRIVEN_LINE}`
+                  ? `Queue · ${drivenWait(agent.name)}`
                   : mode === 'queue'
                     ? `Queue: ${agent.name} reads it when this turn ends`
                     : connected

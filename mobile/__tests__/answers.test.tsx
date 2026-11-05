@@ -13,7 +13,7 @@ import { readBrand } from '../src/lib/brand';
 import { agentTints, APPEARANCES, contrast, luminance, palettes } from '../src/lib/theme';
 import { PromptCard } from '../src/components/PromptCard';
 import { ARM_MS, Receipt, ReviewOnMacCard, useArmed } from '../src/components/ApprovalCard';
-import { CopyActions, keptLine } from '../src/components/copy';
+import { CopyCard, keptLine } from '../src/components/copy';
 import { inFlight } from '../src/lib/once';
 import { useApp } from '../src/lib/store';
 import * as session from '../src/lib/session';
@@ -172,7 +172,7 @@ describe('prompt answers', () => {
     expect(BROADER.test('Yes, and don’t ask again for npm test')).toBe(true);
     expect(BROADER.test('Yes')).toBe(false);
     expect(broaderCaption('Yes, allow all edits during this session')).toBe(
-      'Lets it make edits without asking for the rest of this session.'
+      'Lets it make edits without asking for the rest of this task.'
     );
     expect(broaderCaption("Yes, and don't ask again for npm test")).toBe(
       'Lets it do this without asking again, not just this once.'
@@ -253,7 +253,7 @@ describe('PromptCard', () => {
     approval,
   } as AgentMessage;
 
-  it('shows Deny | Allow in that order, and keeps the broader answer behind ⋯', async () => {
+  it('shows ⋯ · Deny · Allow, the neutral Allow last, and keeps the broader answer behind ⋯', async () => {
     await render(
       <PromptCard
         message={message}
@@ -265,7 +265,10 @@ describe('PromptCard', () => {
     );
     await act(() => jest.advanceTimersByTime(ARM_MS + 50));
     const answers = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel as string);
-    expect(answers).toEqual(['Deny', 'Allow', 'More answers']);
+    expect(answers).toEqual(['More answers', 'Deny', 'Allow']);
+    // Whose task and where, never the tab's engine and number.
+    expect(screen.getByText(`${agent().name} · in acme-site`)).toBeTruthy();
+    expect(screen.queryByText(/Claude Code \d/)).toBeNull();
     expect(screen.queryByText('Yes, allow all edits during this session')).toBeNull();
   });
 });
@@ -307,8 +310,8 @@ describe('an import review card', () => {
     await render(<ReviewOnMacCard approval={approval} />);
     expect(screen.getByText('Finance · Money')).toBeTruthy();
     expect(screen.getByText('Travel · Trips · replaces your Trips')).toBeTruthy();
-    expect(screen.getByText('ON YOUR MAC')).toBeTruthy();
-    // Once: the eyebrow says where, the body says why, never the desktop's sentence twice.
+    expect(screen.getByText('From Grok · on your Mac')).toBeTruthy();
+    // Once: the source says where, the note says why, never the desktop's sentence twice.
     expect(screen.queryByText(/Review on your Mac/)).toBeNull();
     expect(screen.queryAllByRole('button')).toHaveLength(0);
     expect(screen.queryByText('Allow')).toBeNull();
@@ -372,7 +375,7 @@ describe('useArmed', () => {
   });
 });
 
-describe('CopyActions: Keep / Discard on the phone', () => {
+describe('CopyCard: Keep / Discard on the phone', () => {
   const PROJECT = '/Users/me/ShipStudio/acme-site';
   const COPY = { id: 'copy-1', path: '/Users/me/ShipStudio/.worktrees/acme-site/x', branch: 'a/x' };
   const withCopy = (stuck?: object) =>
@@ -400,9 +403,7 @@ describe('CopyActions: Keep / Discard on the phone', () => {
   });
 
   it('is a card: the project by its own name, Discard then the neutral Keep', async () => {
-    await render(
-      <CopyActions agent={withCopy()} copy={COPY} project={PROJECT} onError={() => {}} />
-    );
+    await render(<CopyCard agent={withCopy()} copy={COPY} project={PROJECT} onError={() => {}} />);
     expect(screen.getByText('Changes are ready')).toBeTruthy();
     expect(screen.getByText('On a copy of Acme Site · Acme Site itself is unchanged')).toBeTruthy();
     const answers = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel as string);
@@ -412,30 +413,32 @@ describe('CopyActions: Keep / Discard on the phone', () => {
   it('shows what stopped the last Keep from the agent’s copy, so a remount keeps it', async () => {
     const stuck = { outcome: 'conflict', files: ['style.css'] };
     const view = await render(
-      <CopyActions agent={withCopy(stuck)} copy={COPY} project={PROJECT} onError={() => {}} />
+      <CopyCard agent={withCopy(stuck)} copy={COPY} project={PROJECT} onError={() => {}} />
     );
     const line = keptLine('Acme Site', agent().name, stuck as never);
     expect(screen.getByText(line)).toBeTruthy();
     await view.unmount();
     await render(
-      <CopyActions agent={withCopy(stuck)} copy={COPY} project={PROJECT} onError={() => {}} />
+      <CopyCard agent={withCopy(stuck)} copy={COPY} project={PROJECT} onError={() => {}} />
     );
     expect(screen.getByText(line)).toBeTruthy();
   });
 
   it('on another branch, the button names it and keeps there only when pressed', async () => {
     await render(
-      <CopyActions
+      <CopyCard
         agent={withCopy({ outcome: 'otherBranch', current: 'feature', base: 'main' })}
         copy={COPY}
         project={PROJECT}
         onError={() => {}}
       />
     );
-    expect(screen.getByText(/on feature now, but these changes were made from main/)).toBeTruthy();
+    // No version (branch) names on the card: the desk's words.
+    expect(screen.getByText(/has moved on to another version since/)).toBeTruthy();
+    expect(screen.queryByText(/feature|main/)).toBeNull();
     const keepButton = screen
       .getAllByRole('button')
-      .find((b) => b.props.accessibilityLabel === 'Keep into feature');
+      .find((b) => b.props.accessibilityLabel === 'Keep there too');
     await fireEvent.press(keepButton!);
     expect(session.keepCopy).toHaveBeenCalledWith(agent().id, 'copy-1', 'feature');
   });
@@ -443,9 +446,7 @@ describe('CopyActions: Keep / Discard on the phone', () => {
   it('a double-tap on Keep asks the Mac once', async () => {
     let settle: (v: unknown) => void = () => {};
     (session.keepCopy as jest.Mock).mockReturnValue(new Promise((r) => (settle = r)));
-    await render(
-      <CopyActions agent={withCopy()} copy={COPY} project={PROJECT} onError={() => {}} />
-    );
+    await render(<CopyCard agent={withCopy()} copy={COPY} project={PROJECT} onError={() => {}} />);
     const keepButton = screen
       .getAllByRole('button')
       .find((b) => b.props.accessibilityLabel === 'Keep changes')!;
