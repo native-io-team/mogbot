@@ -1,9 +1,10 @@
 import * as Sentry from '@sentry/react';
+import { BRAND } from './lib/brand';
 
 declare const __APP_VERSION__: string;
 
-const DSN =
-  'https://ca46a435b1b22d7b60f2a83817395fb6@o4511226863353856.ingest.us.sentry.io/4511226875412480';
+// Crash reporting is off unless brand.json names a Sentry DSN of our own.
+const DSN = BRAND.telemetry.sentryDsn;
 
 // Paths, project names, and branch names appear in error messages, breadcrumbs,
 // and `tracing` spans. Strip anything that looks like a home dir so we don't
@@ -34,11 +35,11 @@ const forceEnabled = import.meta.env.VITE_SENTRY_FORCE === '1';
 // throw here means a black window (#173) — crash reporting must never be the
 // thing that crashes the app.
 try {
-  if (import.meta.env.PROD || forceEnabled) {
+  if (DSN && (import.meta.env.PROD || forceEnabled)) {
     Sentry.init({
       dsn: DSN,
       environment: import.meta.env.PROD ? 'production' : 'development',
-      release: `ship-studio@${__APP_VERSION__}`,
+      release: `${BRAND.slug}@${__APP_VERSION__}`,
 
       sendDefaultPii: false,
 
@@ -55,5 +56,5 @@ try {
     });
   }
 } catch (err) {
-  console.error('[Ship Studio] Sentry init failed', err);
+  console.error('[instrument] Sentry init failed', err);
 }

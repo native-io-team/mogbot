@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import {
   androidSteps,
   buildIosInstallPrompt,
@@ -13,6 +13,12 @@ import {
   type AndroidInstallStatus,
   type IosInstallStatus,
 } from './companionInstall';
+
+// Features brand.json can switch off are tested switched on.
+vi.mock('./brand', async (importOriginal) => {
+  const { withAllLinks } = await import('../test/brandFixture');
+  return withAllLinks(await importOriginal<typeof import('./brand')>());
+});
 
 const source = {
   path: '/Users/me/ShipStudio/.companion-build/mobile',

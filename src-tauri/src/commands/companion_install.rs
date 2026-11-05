@@ -46,9 +46,7 @@ fn source_dir() -> std::path::PathBuf {
             return repo.canonicalize().unwrap_or(repo);
         }
     }
-    dirs::home_dir()
-        .unwrap_or_default()
-        .join("ShipStudio/.companion-build/mobile")
+    crate::brand::app_support_dir().join("companion-build/mobile")
 }
 
 #[derive(Debug, Serialize)]

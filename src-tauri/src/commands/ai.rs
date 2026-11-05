@@ -91,7 +91,8 @@ fn headless_invocation(agent: &AgentConfig, prompt: &str) -> Option<HeadlessInvo
     }
     if agent.id == "codex" {
         let output_file = std::env::temp_dir().join(format!(
-            "shipstudio-ai-{}-{}.txt",
+            "{}-ai-{}-{}.txt",
+            crate::brand::SLUG,
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

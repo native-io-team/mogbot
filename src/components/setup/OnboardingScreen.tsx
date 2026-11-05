@@ -781,16 +781,21 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
           </div>
         )}
 
-        <div className="onboarding-slack-cta">
-          <SlackIcon size={18} />
-          <span>
-            <strong>Having problems getting set up?</strong> Join the Slack channel and we'll help
-            you out!
-          </span>
-          <Button variant="variable" onClick={() => void openUrl(SLACK_INVITE_URL)}>
-            Join Slack
-          </Button>
-        </div>
+        {SLACK_INVITE_URL && (
+          <div className="onboarding-slack-cta">
+            <SlackIcon size={18} />
+            <span>
+              <strong>Having problems getting set up?</strong> Join the Slack channel and we'll help
+              you out!
+            </span>
+            <Button
+              variant="variable"
+              onClick={() => SLACK_INVITE_URL && void openUrl(SLACK_INVITE_URL)}
+            >
+              Join Slack
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

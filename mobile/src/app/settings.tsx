@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch } from 'react-native';
+import { SOURCE_URL } from '@shipstudio/companion-protocol';
 import { Row, Section, T } from '../components/ui';
 import { appInfo } from '../lib/pairing';
 import { setPref } from '../lib/prefs';
@@ -188,14 +189,16 @@ export default function Settings() {
         </T>
       )}
 
-      <Section title="About">
-        <Row
-          label="Source code"
-          value="GitHub"
-          onPress={() => void Linking.openURL('https://github.com/ship-studio/ship-studio')}
-          last
-        />
-      </Section>
+      {SOURCE_URL && (
+        <Section title="About">
+          <Row
+            label="Source code"
+            value="GitHub"
+            onPress={() => void Linking.openURL(SOURCE_URL ?? '')}
+            last
+          />
+        </Section>
+      )}
     </ScrollView>
   );
 }

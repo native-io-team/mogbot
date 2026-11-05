@@ -1,17 +1,14 @@
 {
-  "name": "ship-studio",
+  "name": "dashbot",
   "private": true,
   "version": "1.7.0",
   "packageManager": "pnpm@9.15.9",
-  "description": "Ship Studio — a desktop app for shipping web projects with AI coding agents.",
+  "description": "A desktop app for running your own team of AI agents.",
   "license": "MIT",
-  "homepage": "https://github.com/ship-studio/ship-studio#readme",
+  "homepage": "https://github.com/native-io-team/dashbot#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ship-studio/ship-studio.git"
-  },
-  "bugs": {
-    "url": "https://github.com/ship-studio/ship-studio/issues"
+    "url": "https://github.com/native-io-team/dashbot.git"
   },
   "type": "module",
   "scripts": {
@@ -52,8 +49,9 @@
     "rust:clippy": "cd src-tauri && cargo clippy -- -A clippy::uninlined_format_args",
     "rust:clippy:strict": "cd src-tauri && cargo clippy -- -D warnings",
     "rust:test": "cd src-tauri && cargo test",
-    "check:all": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm rust:fmt:check && pnpm rust:clippy && pnpm test:scripts && pnpm docs:check && pnpm check:patterns && pnpm check:loc && pnpm check:ui-baseline",
+    "check:all": "pnpm check:brand && pnpm typecheck && pnpm lint && pnpm format:check && pnpm rust:fmt:check && pnpm rust:clippy && pnpm test:scripts && pnpm docs:check && pnpm check:patterns && pnpm check:loc && pnpm check:ui-baseline",
     "check:patterns": "bash scripts/check-patterns.sh",
+    "check:brand": "node scripts/check-brand.mjs",
     "check:loc": "bash scripts/check-loc-limits.sh",
     "check:ui-baseline": "bash scripts/check-ui-baseline.sh",
     "prepare": "husky"

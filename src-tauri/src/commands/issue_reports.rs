@@ -1,6 +1,8 @@
-//! Guided public GitHub issue submission for Ship Studio.
+//! Guided public GitHub issue submission.
 //!
-//! Issues always go to the canonical upstream repository. The selected
+//! Issues always go to the canonical upstream repository named by
+//! `links.issueRepo` in brand.json (`owner/repo`). With none configured the
+//! feature is off: the UI hides it and submission refuses. The selected
 //! project's remote is never consulted; only its workspace-scoped GitHub
 //! credential is used when a project path is present.
 
@@ -14,8 +16,8 @@ use serde::Serialize;
 use serde_json::Value;
 use std::process::Command;
 
-const UPSTREAM_ISSUE_ENDPOINT: &str = "repos/ship-studio/ship-studio/issues";
-const UPSTREAM_ISSUE_LIST_URL: &str = "https://github.com/ship-studio/ship-studio/issues";
+/// `owner/repo` issues are filed against, or `None` (feature off).
+const UPSTREAM_ISSUE_REPO: Option<&str> = crate::brand::links::ISSUE_REPO;
 const GH_TIMEOUT_SECS: u64 = 30;
 const MAX_TITLE_CHARS: usize = 256;
 const MAX_BODY_CHARS: usize = 65_536;
@@ -87,6 +89,12 @@ pub async fn submit_github_issue(
     project_path: Option<String>,
     expected_login: String,
 ) -> Result<SubmitGitHubIssueResult, CommandError> {
+    let Some(repo) = UPSTREAM_ISSUE_REPO else {
+        return Err(CommandError::expected(
+            "Issue reporting isn't available in this build.",
+        ));
+    };
+    let issue_endpoint = format!("repos/{repo}/issues");
     let label = issue_label(&kind)?;
     let title = normalized_title(&kind, &title)?;
     validate_issue_body(&body)?;
@@ -115,7 +123,7 @@ pub async fn submit_github_issue(
             return Err(error);
         }
         return Err(CommandError::expected(format!(
-            "Couldn't confirm which GitHub account Ship Studio will use. {}",
+            "Couldn't confirm which GitHub account will be used. {}",
             truncate_output(&stderr)
         )));
     }
@@ -142,14 +150,7 @@ pub async fn submit_github_issue(
     })?;
 
     let mut gh = gh_command_for_project(project_path.as_deref())?;
-    gh.args([
-        "api",
-        "--method",
-        "POST",
-        UPSTREAM_ISSUE_ENDPOINT,
-        "--input",
-        "-",
-    ]);
+    gh.args(["api", "--method", "POST", &issue_endpoint, "--input", "-"]);
 
     let output = match run_with_timeout_stdin(
         tokio::process::Command::from(gh),
@@ -164,7 +165,7 @@ pub async fn submit_github_issue(
         // (e.g. gh is missing), before any POST can be sent. Other errors may
         // happen after the request was written, so the user must check first.
         Err(error @ CommandError::Expected { .. }) => return Err(error),
-        Err(_) => return Ok(uncertain_result(login)),
+        Err(_) => return Ok(uncertain_result(login, repo)),
     };
 
     if !output.status.success() {
@@ -182,15 +183,15 @@ pub async fn submit_github_issue(
         // A connection can close after GitHub accepted the POST. Keep the
         // draft and avoid suggesting a blind retry for every unrecognized
         // response shape.
-        return Ok(uncertain_result(login));
+        return Ok(uncertain_result(login, repo));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    match parse_created_issue(&stdout, &login) {
+    match parse_created_issue(&stdout, &login, repo) {
         Some(created) => Ok(created),
         // Exit status zero without a complete, verified API response does not
         // prove whether the issue was created.
-        None => Ok(uncertain_result(login)),
+        None => Ok(uncertain_result(login, repo)),
     }
 }
 
@@ -263,14 +264,14 @@ fn validate_issue_body(body: &str) -> Result<(), CommandError> {
     Ok(())
 }
 
-fn parse_created_issue(stdout: &str, login: &str) -> Option<SubmitGitHubIssueResult> {
+fn parse_created_issue(stdout: &str, login: &str, repo: &str) -> Option<SubmitGitHubIssueResult> {
     let issue: Value = serde_json::from_str(stdout).ok()?;
     let number = issue.get("number")?.as_u64()?;
     if number == 0 {
         return None;
     }
     let issue_url = issue.get("html_url")?.as_str()?;
-    let canonical_path = format!("https://github.com/ship-studio/ship-studio/issues/{number}");
+    let canonical_path = format!("https://github.com/{repo}/issues/{number}");
     if issue_url != canonical_path {
         return None;
     }
@@ -299,11 +300,11 @@ fn issue_auth_error(stderr: &str) -> Option<CommandError> {
     gh_auth_error(stderr)
 }
 
-fn uncertain_result(login: String) -> SubmitGitHubIssueResult {
+fn uncertain_result(login: String, repo: &str) -> SubmitGitHubIssueResult {
     SubmitGitHubIssueResult::Uncertain {
         login,
         message: "GitHub didn't confirm whether it created this issue. Check the issue list before retrying. Your draft is still here.".to_string(),
-        issue_list_url: UPSTREAM_ISSUE_LIST_URL.to_string(),
+        issue_list_url: format!("https://github.com/{repo}/issues"),
     }
 }
 
@@ -343,25 +344,27 @@ mod tests {
 
     #[test]
     fn only_the_actual_canonical_issue_response_is_a_success() {
+        let repo = "example-org/example-app";
         let created = parse_created_issue(
-            r#"{"number":42,"html_url":"https://github.com/ship-studio/ship-studio/issues/42"}"#,
+            r#"{"number":42,"html_url":"https://github.com/example-org/example-app/issues/42"}"#,
             "ship-user",
+            repo,
         );
         assert!(matches!(
             created,
             Some(SubmitGitHubIssueResult::Created { number: 42, .. })
         ));
         for untrusted_url in [
-            "https://github.com:443/ship-studio/ship-studio/issues/42",
-            "https://github.com:444/ship-studio/ship-studio/issues/42",
-            "https://user@github.com/ship-studio/ship-studio/issues/42",
-            "https://github.com/ship-studio/ship-studio/issues/42?redirect=1",
-            "https://github.com/another-fork/ship-studio/issues/42",
+            "https://github.com:443/example-org/example-app/issues/42",
+            "https://github.com:444/example-org/example-app/issues/42",
+            "https://user@github.com/example-org/example-app/issues/42",
+            "https://github.com/example-org/example-app/issues/42?redirect=1",
+            "https://github.com/another-fork/example-app/issues/42",
         ] {
             let response = format!(r#"{{"number":42,"html_url":"{untrusted_url}"}}"#);
-            assert!(parse_created_issue(&response, "ship-user").is_none());
+            assert!(parse_created_issue(&response, "ship-user", repo).is_none());
         }
-        assert!(parse_created_issue("not json", "ship-user").is_none());
+        assert!(parse_created_issue("not json", "ship-user", repo).is_none());
     }
 
     #[test]

@@ -1,4 +1,15 @@
 import { invoke } from '@tauri-apps/api/core';
+import { BRAND_LINKS } from './brand';
+
+/** `owner/repo` public issues are filed against (`links.issueRepo` in brand.json). */
+export const ISSUE_REPO: string | null = BRAND_LINKS.issueRepo;
+
+/**
+ * Whether in-app issue reporting exists in this build. Off when brand.json
+ * names no issue repo: every entry point (palette, settings menu) hides, and
+ * the backend refuses to submit.
+ */
+export const ISSUE_REPORTS_ENABLED = ISSUE_REPO !== null;
 
 export type IssueKind = 'bug' | 'feature';
 
@@ -157,7 +168,7 @@ export function issueHandoffUrl(
   body: string,
   includeBody = true
 ): string {
-  const url = new URL('https://github.com/ship-studio/ship-studio/issues/new');
+  const url = new URL(`https://github.com/${ISSUE_REPO ?? ''}/issues/new`);
   url.searchParams.set('title', issueTitle(kind, title));
   if (includeBody) url.searchParams.set('body', body);
   url.searchParams.set('template', kind === 'bug' ? 'bug_report.md' : 'feature_request.md');

@@ -8,6 +8,7 @@ export * from './methods';
 export * from './events';
 export * from './frames';
 export * from './pairing';
+export { APP_NAME, SOURCE_URL, TAILNET_HTTPS_PORT } from './brand.gen';
 export * from './transport';
 export * from './version';
 export * from './schedule';

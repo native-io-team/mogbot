@@ -92,9 +92,9 @@ pub fn attribution_enabled() -> bool {
 pub fn agent_label(agent: Option<&str>) -> String {
     match agent {
         Some(agent) if !agent.trim().is_empty() => {
-            format!("{} in Ship Studio", agent.trim())
+            format!("{} in {}", agent.trim(), crate::brand::NAME)
         }
-        _ => "Ship Studio".to_string(),
+        _ => crate::brand::NAME.to_string(),
     }
 }
 
@@ -130,14 +130,35 @@ pub fn with_trailers(repo: &std::path::Path, message: &str, agent: Option<&str>)
 /// Deliberately says nothing the reader has to act on. A PR description is read
 /// by people deciding whether to approve a change, and an advertisement above
 /// the fold is a tax on every one of those readings.
+///
+/// Only when brand.json names a website (`links.website`) to credit: with
+/// none, PRs carry no footer at all.
 pub fn pr_footer(agent: Option<&str>) -> Option<String> {
+    pr_footer_for(crate::brand::links::WEBSITE, agent)
+}
+
+fn pr_footer_for(website: Option<&str>, agent: Option<&str>) -> Option<String> {
+    let link = pr_footer_link(website)?;
     attribution_enabled().then(|| match agent {
-        Some(agent) if !agent.trim().is_empty() => format!(
-            "---\n\n*Opened from [Ship Studio](https://shipstudio.dev), described by {}.*",
-            agent.trim()
+        Some(agent) if !agent.trim().is_empty() => {
+            format!(
+                "---
+
+*Opened from {link}, described by {}.*",
+                agent.trim()
+            )
+        }
+        _ => format!(
+            "---
+
+*Opened from {link}.*"
         ),
-        _ => "---\n\n*Opened from [Ship Studio](https://shipstudio.dev).*".to_string(),
     })
+}
+
+/// `[Name](website)`: the stable half of the footer sentence.
+fn pr_footer_link(website: Option<&str>) -> Option<String> {
+    website.map(|site| format!("[{}]({site})", crate::brand::NAME))
 }
 
 /// A pull request description with the footer on it.
@@ -145,19 +166,27 @@ pub fn pr_footer(agent: Option<&str>) -> Option<String> {
 /// Never appended twice: reopening or editing a PR whose body already carries
 /// the line must not stack them.
 pub fn with_pr_footer(body: &str, agent: Option<&str>) -> String {
-    let Some(footer) = pr_footer(agent) else {
+    with_pr_footer_for(crate::brand::links::WEBSITE, body, agent)
+}
+
+fn with_pr_footer_for(website: Option<&str>, body: &str, agent: Option<&str>) -> String {
+    let Some(footer) = pr_footer_for(website, agent) else {
         return body.to_string();
     };
     // Match on the stable half of the sentence, so a body carrying the
     // no-agent variant is not given the with-agent one on a later edit.
-    if body.contains("[Ship Studio](https://shipstudio.dev)") {
+    if pr_footer_link(website).is_some_and(|link| body.contains(&link)) {
         return body.to_string();
     }
     let trimmed = body.trim_end();
     if trimmed.is_empty() {
         return footer;
     }
-    format!("{trimmed}\n\n{footer}")
+    format!(
+        "{trimmed}
+
+{footer}"
+    )
 }
 
 /// Hand the message to `git interpret-trailers` and read it back.
@@ -229,13 +258,16 @@ mod tests {
     fn names_the_agent_when_one_did_the_work_and_does_not_when_none_did() {
         assert_eq!(
             agent_label(Some("Claude Code")),
-            "Claude Code in Ship Studio"
+            format!("Claude Code in {}", crate::brand::NAME)
         );
-        assert_eq!(agent_label(Some("  Codex  ")), "Codex in Ship Studio");
+        assert_eq!(
+            agent_label(Some("  Codex  ")),
+            format!("Codex in {}", crate::brand::NAME)
+        );
         // A snapshot or a conflict resolution has no agent behind it, and
         // crediting one that was not there is the invention this rule forbids.
-        assert_eq!(agent_label(None), "Ship Studio");
-        assert_eq!(agent_label(Some("   ")), "Ship Studio");
+        assert_eq!(agent_label(None), crate::brand::NAME);
+        assert_eq!(agent_label(Some("   ")), crate::brand::NAME);
     }
 
     #[test]
@@ -387,8 +419,25 @@ mod tests {
                 subject, "Rebuild the pricing tiers as a CSS grid",
                 "`git log --oneline` must read exactly as it did before"
             );
-            assert_eq!(made_with.trim(), "Claude Code in Ship Studio");
+            assert_eq!(
+                made_with.trim(),
+                format!("Claude Code in {}", crate::brand::NAME)
+            );
             let _ = std::fs::remove_dir_all(&dir);
+        });
+    }
+
+    const SITE: Option<&str> = Some("https://example.com");
+
+    fn with_pr_footer(body: &str, agent: Option<&str>) -> String {
+        with_pr_footer_for(SITE, body, agent)
+    }
+
+    #[test]
+    fn no_website_means_no_pr_footer() {
+        with_test_attribution_enabled(true, || {
+            let body = "The pricing grid.";
+            assert_eq!(with_pr_footer_for(None, body, Some("Claude Code")), body);
         });
     }
 
@@ -412,7 +461,10 @@ mod tests {
         // commit trailer refuses to make.
         with_test_attribution_enabled(true, || {
             let body = with_pr_footer("Bare description.", None);
-            assert!(body.ends_with("*Opened from [Ship Studio](https://shipstudio.dev).*"));
+            assert!(body.ends_with(&format!(
+                "*Opened from [{}](https://example.com).*",
+                crate::brand::NAME
+            )));
             assert!(!body.contains("described by"));
         });
     }
@@ -434,12 +486,7 @@ mod tests {
             // Including across the two variants — a body carrying the no-agent
             // line must not later collect the with-agent one as well.
             let mixed = with_pr_footer(&with_pr_footer("x", None), Some("Codex"));
-            assert_eq!(
-                mixed
-                    .matches("Ship Studio](https://shipstudio.dev)")
-                    .count(),
-                1
-            );
+            assert_eq!(mixed.matches("](https://example.com)").count(), 1);
         });
     }
 

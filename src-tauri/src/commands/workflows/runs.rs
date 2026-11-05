@@ -561,7 +561,8 @@ async fn invoke_agent(
                 WorkflowPermission::CanEdit => "workspace-write",
             };
             let output_file = std::env::temp_dir().join(format!(
-                "shipstudio-workflow-{}-{}.txt",
+                "{}-workflow-{}-{}.txt",
+                crate::brand::SLUG,
                 std::process::id(),
                 now_ms()
             ));

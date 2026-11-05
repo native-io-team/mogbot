@@ -16,6 +16,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { agentPromptArgs } from './agent';
 import type { TerminalCommand } from './setup';
+import { BRAND_LINKS } from './brand';
 
 export type InstallPlatform = 'ios' | 'android';
 
@@ -323,7 +324,16 @@ export function androidSteps(s: AndroidInstallStatus, app: InstalledApp | null):
 
 const sh = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
-const REPO = 'https://github.com/ship-studio/ship-studio.git';
+/**
+ * The git repo the phone app is built from (`links.companionSource` in
+ * brand.json) — this app's own, never Ship Studio's, or the phone would get
+ * Ship Studio's companion. Null: release builds can't fetch the source, so
+ * the install flow is hidden. Dev builds build from this checkout's mobile/.
+ */
+const REPO = BRAND_LINKS.companionSource;
+
+/** Whether "Install on my phone" is offered in this build. */
+export const COMPANION_INSTALL_ENABLED: boolean = REPO !== null || import.meta.env.DEV;
 
 /** Get the source to `path` (its parent is the checkout) if it isn't there. */
 function sourceInstruction(src: SourceCheck): string {
@@ -333,8 +343,11 @@ function sourceInstruction(src: SourceCheck): string {
       : `The app's source is at ${src.path}; install its dependencies there with \`pnpm install\` (if pnpm is missing, \`npm install -g pnpm\` first).`;
   }
   const root = src.path.replace(/\/mobile\/?$/, '');
+  if (!REPO) {
+    return `The app's source isn't at ${src.path}, and this build names no repository to fetch it from. Stop and tell the user the phone app can't be built from this build.`;
+  }
   return (
-    `First fetch the app's source, matching this Ship Studio version: ` +
+    `First fetch the app's source, matching this desktop app's version: ` +
     `\`git clone --depth 1 --filter=blob:none --sparse --branch v${src.desktopVersion} ${REPO} ${sh(root)} && cd ${sh(root)} && git sparse-checkout set mobile packages/companion-protocol\`, ` +
     `then in ${src.path} run \`pnpm install\` (if pnpm is missing, \`npm install -g pnpm\` first).`
   );

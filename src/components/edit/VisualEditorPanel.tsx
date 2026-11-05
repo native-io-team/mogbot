@@ -711,16 +711,18 @@ export function VisualEditorPanel({
           <strong>Visual editor is in beta.</strong> Hit a bug or have feedback? We'd genuinely
           appreciate hearing about it.
         </p>
-        <Button
-          variant="default"
-          width="fill"
-          leftIcon={<SlackIcon size={12} />}
-          className="ss-edit-panel__slack"
-          onClick={() => void openUrl(SLACK_INVITE_URL)}
-          title="Join the Ship Studio community on Slack"
-        >
-          Join the Slack
-        </Button>
+        {SLACK_INVITE_URL && (
+          <Button
+            variant="default"
+            width="fill"
+            leftIcon={<SlackIcon size={12} />}
+            className="ss-edit-panel__slack"
+            onClick={() => SLACK_INVITE_URL && void openUrl(SLACK_INVITE_URL)}
+            title="Join the community on Slack"
+          >
+            Join the Slack
+          </Button>
+        )}
       </div>
 
       {controlsVisible && (

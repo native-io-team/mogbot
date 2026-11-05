@@ -1,10 +1,12 @@
 //! # Template Gallery Commands
 //!
-//! Fetches community templates from the Ship Studio API and downloads template zips.
+//! Fetches community templates from the template API named by
+//! `links.templateApi` in brand.json, and downloads template zips. With no
+//! API configured the gallery is off (the UI hides it).
 
 use crate::errors::CommandError;
 
-const TEMPLATES_API_URL: &str = "https://www.ship.studio/api/v1/templates";
+const TEMPLATES_API_URL: Option<&str> = crate::brand::links::TEMPLATE_API;
 
 /// Render a reqwest error with its full source chain. reqwest's `Display` only
 /// prints the top-level context ("error sending request for url (...)"), while
@@ -22,7 +24,7 @@ fn describe_reqwest_error(e: &reqwest::Error) -> String {
 
 /// Wrap a network failure as `Expected`.
 ///
-/// A timeout or a dropped connection talking to ship.studio is the user's
+/// A timeout or a dropped connection talking to the template API is the user's
 /// network (or our API being briefly unreachable), not an app malfunction —
 /// `Expected` keeps it out of telemetry while still carrying the underlying
 /// cause for the UI to show (issue #754).
@@ -30,7 +32,7 @@ fn network_failure(context: &str, e: &reqwest::Error) -> CommandError {
     CommandError::expected(format!("{context}: {}", describe_reqwest_error(e)))
 }
 
-/// Fetch community templates from the Ship Studio API.
+/// Fetch community templates from the template API.
 /// Accepts optional query parameters that map to the API spec.
 /// Returns the raw JSON string so the frontend can parse it.
 #[tauri::command]
@@ -43,13 +45,17 @@ pub async fn fetch_community_templates(
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<String, CommandError> {
+    let Some(api_url) = TEMPLATES_API_URL else {
+        return Err(CommandError::expected(
+            "The template gallery isn't available in this build.",
+        ));
+    };
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
-    let mut url =
-        reqwest::Url::parse(TEMPLATES_API_URL).map_err(|e| format!("Invalid URL: {e}"))?;
+    let mut url = reqwest::Url::parse(api_url).map_err(|e| format!("Invalid URL: {e}"))?;
 
     {
         let mut params = url.query_pairs_mut();
@@ -122,7 +128,7 @@ pub async fn download_template_zip(url: String) -> Result<String, CommandError> 
         .await
         .map_err(|e| network_failure("Failed to read download", &e))?;
 
-    let tmp_dir = std::env::temp_dir().join("shipstudio-templates");
+    let tmp_dir = std::env::temp_dir().join(crate::brand::scoped("templates"));
     std::fs::create_dir_all(&tmp_dir).map_err(|e| format!("Failed to create temp dir: {e}"))?;
 
     let file_name = format!("{}.zip", uuid::Uuid::new_v4());

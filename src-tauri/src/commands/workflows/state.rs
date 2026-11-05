@@ -1,7 +1,8 @@
 //! Run history and filed findings.
 //!
-//! Stored at `~/ShipStudio/.shipstudio/workflows-state.json`, next to
-//! `folders.json` and `attached-libraries.json` — **not** in the project repo.
+//! Stored in this app's own support folder ([`crate::brand::app_support_dir`])
+//! — **not** in the project repo, and not in the shared `~/ShipStudio`, where
+//! Ship Studio's scheduler would run the same workflows a second time.
 //! A workflow's *definition* is source and belongs in the tree; its output is
 //! per-machine churn that would otherwise appear in `git status` and in pull
 //! requests within a day of real use.
@@ -127,12 +128,10 @@ pub fn state_path() -> Result<PathBuf, CommandError> {
     if let Some(override_path) = std::env::var_os(STATE_PATH_ENV) {
         return Ok(PathBuf::from(override_path));
     }
-    let home = dirs::home_dir()
-        .ok_or_else(|| CommandError::expected("Could not find your home directory"))?;
-    Ok(home
-        .join("ShipStudio")
-        .join(".shipstudio")
-        .join("workflows-state.json"))
+    // Our own app-support folder: Ship Studio's scheduler reads the shared
+    // `~/ShipStudio/.shipstudio/workflows-state.json`, and two schedulers on
+    // one state file would both run every armed workflow.
+    Ok(crate::brand::app_support_dir().join("workflows-state.json"))
 }
 
 /// Read the state file. A missing or corrupt file reads as empty rather than

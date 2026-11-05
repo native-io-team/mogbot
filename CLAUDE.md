@@ -46,6 +46,28 @@ Ship Studio is a desktop app for web developers that provides:
   set explicitly by the user; a link is never inferred from a folder merely existing
 - Only trust data that was explicitly saved - don't infer state from file existence alone
 
+### Brand and identity (`brand.json`)
+- The app's name, slug, bundle id, URL schemes, app-support folder name and every external link
+  live only in the repo-root `brand.json`. Frontend: `src/lib/brand.ts`. Rust: `src-tauri/build.rs`
+  generates `src-tauri/src/brand.rs`'s constants (`brand::NAME`, `brand::app_support_dir()`,
+  `brand::logs_dir()`, `brand::keychain_prefix()`, `brand::scoped()`, `brand::links::*`). Never
+  hardcode the name; never make it prominent in the UI
+- Every link is nullable. Null turns the feature off and the UI hides it (issue reporting, plugin
+  library, template gallery, community CTAs, updates, version rewind, phone install, PR footer,
+  telemetry). Telemetry keys/DSN are compile-time: null means nothing is sent
+- **Ours** (derived from the brand, so this app and Ship Studio run side by side): app-support dir
+  (app state, pins, agents, workflows state, companion build, remote access, bridge token), logs,
+  keychain prefixes, `~/.<slug>/` account homes, deep-link + pairing schemes, companion tailnet
+  port, Funnel mount path, MCP server names, bundled skill folder names, temp names
+- **Shared compat** (deliberately unchanged, so the two apps open each other's projects and
+  plugins): `~/ShipStudio`, in-project `.shipstudio/`, `.shipstudio-team/` + the `shipstudio-team`
+  branch, `folders.json` / `external-projects.json` / `attached-libraries.json` in
+  `~/ShipStudio/.shipstudio/`, and the plugin ABI (`__SHIPSTUDIO_*`, `@shipstudio/plugin-sdk`,
+  `os-theme-shipstudio`)
+- Files that can't import brand.json carry checked copies: `pnpm check:brand` (CI) verifies
+  tauri.conf.json / Cargo.toml / package.json identity and regenerates
+  `packages/companion-protocol/src/brand.gen.ts` and `index.html` with `--write`
+
 ## Architecture
 
 ### Backend (Rust/Tauri)
@@ -54,7 +76,7 @@ Ship Studio is a desktop app for web developers that provides:
 - Commands validate paths to ensure they're within `~/ShipStudio` directory
 - Git operations use the `git` CLI with TTL-based caching (`src-tauri/src/cache.rs`)
 - Vercel operations use the `vercel` CLI
-- Structured logging via `tracing` crate, logs stored at `~/Library/Logs/ShipStudio/`
+- Structured logging via `tracing` crate, logs stored at `~/Library/Logs/<appDirName>/` (from `brand.json`)
 
 #### Command Modules
 Command modules in `src-tauri/src/commands/`. Domains with submodules are directories:
