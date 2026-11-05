@@ -9,7 +9,7 @@ import { memo } from 'react';
 import { type LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { failureLine, folderName, formatClock, sessionLabel } from '../lib/agents';
+import { DRIVEN_LINE, failureLine, folderName, formatClock, sessionLabel } from '../lib/agents';
 import { haptic } from '../lib/haptics';
 import { discardPending, send } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
@@ -70,7 +70,7 @@ export const MessageRow = memo(function MessageRow({
           {queued && (
             <T variant="caption" color={colors.textSecondary} style={styles.meta}>
               {agent.takeover
-                ? `Waiting · sends when ${agent.name} is handed back on your Mac`
+                ? `Queued · ${DRIVEN_LINE}`
                 : `Queued · ${agent.name} reads it when this turn ends`}
             </T>
           )}

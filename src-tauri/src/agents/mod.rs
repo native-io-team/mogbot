@@ -114,6 +114,7 @@ fn greet(agent_id: &str) {
         client_id: None,
         work: None,
         fresh: false,
+        takeover: false,
     };
     if let Err(e) = store::append_message(&message) {
         tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");

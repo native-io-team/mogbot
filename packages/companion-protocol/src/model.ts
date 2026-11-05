@@ -123,16 +123,20 @@ export interface Agent {
   takeover?: AgentTakeover;
 }
 
-/** Mirrors `takeover::View`. The phone shows the state; it can't take over. */
+/**
+ * Mirrors `takeover::View` without the Mac's terminal id, which the Mac
+ * strips before it is sent (`wire::phone_overview`). The phone shows the
+ * state; it can't take over.
+ */
 export interface AgentTakeover {
   /** When it began (epoch ms). */
   since: number;
-  /** The Mac's PTY session the terminal shows. */
-  ptySession: string;
   /** A bound agent's project: the terminal is a tab in its workspace. */
   project?: string;
   /** The workspace's id for the CLI, for that tab. */
   cli: 'claude-code' | 'codex';
+  /** Claude Code will ask whether to trust the folder first; omitted otherwise. */
+  trustPrompt?: boolean;
 }
 
 /** Mirrors `context::ContextFill`: two numbers the engine reported, never estimated. */
@@ -363,6 +367,8 @@ export interface AgentMessage {
   work?: TurnWork;
   /** On a `note`: the conversation started fresh here (memory kept); a divider. */
   fresh?: boolean;
+  /** On an `error`: a take-over's terminal closed by itself; not a turn's failure. */
+  takeover?: boolean;
 }
 
 export interface ChangedFile {

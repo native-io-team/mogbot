@@ -632,6 +632,7 @@ mod tests {
             client_id: None,
             work: None,
             fresh: false,
+            takeover: false,
         };
         let request_id = store::new_id();
         card.approval = Some(Approval {

@@ -31,7 +31,7 @@ import { logger } from '../lib/logger';
 import { basename } from '../lib/paths';
 import type { Project } from '../lib/project';
 import {
-  adoptInBackground,
+  adoptTakeover,
   closeInBackground,
   startInBackground,
   type BackgroundResult,
@@ -191,7 +191,7 @@ export function useRemoteAgentControl(
     focusListeners.add(enqueue);
     const adopt = ({ projectPath, sessionId, agentId }: TakeoverTab) => {
       logger.info('[Remote] Showing a taken-over agent session', { projectPath });
-      const run = adoptInBackground(live, projectPath, sessionId, agentId);
+      const run = Promise.resolve(adoptTakeover(live, projectPath, sessionId, agentId));
       report('start', projectPath, run);
       void run.then((result) => {
         if (result.ok) enqueue({ kind: 'focus', projectPath, sessionId, receivedAt: Date.now() });

@@ -83,7 +83,7 @@ import {
   newestPeerGroups,
   interruptAgent,
   isQueued,
-  lastUserMessage,
+  retrySourceFor,
   resendable,
   retryNote,
   whenAt,
@@ -213,7 +213,7 @@ interface AgentChatProps extends AgentActions {
 const unsentText = new Map<string, string>();
 
 function statusLabel(agent: Agent): string | null {
-  if (agent.takeover) return 'You’re driving';
+  if (agent.takeover) return `You’re driving ${agent.name}`;
   if (needsYou(agent)) return 'Needs your OK';
   // Queued behind the cap on concurrent turns: working, but not started (no `since`).
   if (agent.status.state === 'working') {
@@ -445,10 +445,7 @@ export function AgentChat({
   const drivingId = useMemo(() => drivingBriefId(items, agent), [items, agent]);
   // Retry belongs to the newest failure only, and only if nothing was said
   // since. It sends that message again whole: its words and its files.
-  const retrySource = useMemo(() => {
-    const last = shown[shown.length - 1];
-    return last?.kind === 'error' ? lastUserMessage(shown, shown.length - 1) : null;
-  }, [shown]);
+  const retrySource = useMemo(() => retrySourceFor(shown), [shown]);
   const retryId = retrySource ? shown[shown.length - 1].id : null;
   // Mid-turn, what you send waits for the next turn. The newest waiting
   // message says so and offers to interrupt instead.

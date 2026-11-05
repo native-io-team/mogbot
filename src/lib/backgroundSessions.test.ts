@@ -20,6 +20,7 @@ vi.mock('./agent', () => ({
 }));
 
 import {
+  adoptTakeover,
   BACKGROUND_COLS,
   closeInBackground,
   savedWithoutTab,
@@ -146,5 +147,31 @@ describe('closeInBackground', () => {
     await closeInBackground(terminals(null), '/p', 'b');
     expect(calls.setState).toHaveBeenCalledWith('/p', saved(['a'], 0));
     expect(calls.kill).toHaveBeenCalledWith('b');
+  });
+});
+
+describe('a take-over tab', () => {
+  it('joins a tracked workspace, and never the saved list', () => {
+    const tracked = terminals([{ id: 1, sessionId: 'a' }]);
+    expect(adoptTakeover(tracked, '/p', 'takeover-1', 'claude-code')).toEqual({ ok: true });
+    expect(tracked.adoptTerminalTab).toHaveBeenCalledWith('/p', {
+      agentId: 'claude-code',
+      sessionId: 'takeover-1',
+    });
+    // Untracked: opening the project restores it (get_terminal_state adds it).
+    expect(adoptTakeover(terminals(null), '/p', 'takeover-1', 'codex')).toEqual({ ok: true });
+    expect(calls.getState).not.toHaveBeenCalled();
+    expect(calls.setState).not.toHaveBeenCalled();
+  });
+
+  it('a tracked workspace with no room says so', () => {
+    const full: BackgroundTabs = {
+      ...terminals([{ id: 1, sessionId: 'a' }]),
+      adoptTerminalTab: vi.fn(() => false),
+    };
+    expect(adoptTakeover(full, '/p', 'takeover-1', 'codex')).toEqual({
+      ok: false,
+      reason: 'no_room',
+    });
   });
 });

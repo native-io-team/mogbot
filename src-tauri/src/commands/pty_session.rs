@@ -517,6 +517,13 @@ pub async fn pty_session_open(
     project_path: Option<String>,
     agent_id: Option<String>,
 ) -> Result<OpenSessionResult, CommandError> {
+    // An agent's take-over terminal is spawned by the backend only. A tab
+    // showing one may attach to it while it runs, but never respawn it: a
+    // plain CLI under that id would look like the take-over still going.
+    if crate::agents::takeover::is_takeover_pty(&session_id) {
+        return live_session(&session_id)
+            .ok_or_else(|| CommandError::expected("That take-over has ended. Close this tab."));
+    }
     open_session(
         app,
         OpenSpec {
@@ -556,6 +563,20 @@ pub struct OpenSpec {
     /// dirs. Off for a process that must see exactly what an agent's turn
     /// sees, which never gets them.
     pub account_env: bool,
+}
+
+/// The live session registered under `session_id`, as an open of it returns.
+fn live_session(session_id: &str) -> Option<OpenSessionResult> {
+    let map = REGISTRY.lock().ok()?;
+    let existing = map.get(session_id)?;
+    existing
+        .alive
+        .load(Ordering::Relaxed)
+        .then(|| OpenSessionResult {
+            session_id: session_id.to_string(),
+            pid: existing.pid,
+            spawned: false,
+        })
 }
 
 /// [`pty_session_open`], callable from Rust.
@@ -1171,6 +1192,10 @@ pub struct SessionSnapshot {
     pub cols: u16,
     pub alive: bool,
     pub last_output_ms: u64,
+    /// The process this session runs (or ran).
+    pub pid: u32,
+    /// Its exit code, once it has exited and been reaped.
+    pub exit_code: Option<i32>,
 }
 
 pub fn session_snapshot(session_id: &str) -> Option<SessionSnapshot> {
@@ -1184,6 +1209,8 @@ pub fn session_snapshot(session_id: &str) -> Option<SessionSnapshot> {
         cols,
         alive: session.alive.load(Ordering::Relaxed),
         last_output_ms: session.last_output_ms.load(Ordering::Relaxed),
+        pid: session.pid,
+        exit_code: session.exit_code.lock().ok().and_then(|c| *c),
     })
 }
 

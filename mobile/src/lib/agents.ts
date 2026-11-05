@@ -132,9 +132,9 @@ export function isQueued(message: Pick<AgentMessage, 'kind' | 'ts'>, agent: Agen
  */
 export const DRIVEN_LINE = 'Being driven on your Mac';
 
-/** The composer's line while it's driven on the Mac. */
-export function drivenHint(name: string): string {
-  return `You’re driving ${name} on your Mac · what you send waits until it’s handed back`;
+/** The composer's line while it's driven on the Mac: the same words as the row. */
+export function drivenHint(): string {
+  return `${DRIVEN_LINE} · what you send waits`;
 }
 
 /** "Chief of Staff" → "CS", "Agent 3" → "A3", "Finance" → "FI". */

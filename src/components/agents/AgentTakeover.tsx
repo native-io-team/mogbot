@@ -10,6 +10,8 @@
  *   sent to it waits.
  * - **Mid-turn.** The session is in use, so you choose: stop it and take
  *   over, or wait.
+ * - **Handing back** while the terminal is printing asks first: it is likely
+ *   mid-response, and anything typed but not sent is dropped.
  *
  * The terminal only attaches: the backend spawned the process, with an MCP
  * URL and the agent's secrets the webview never sees.
@@ -17,7 +19,15 @@
  * @module components/agents/AgentTakeover
  */
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { TerminalIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
@@ -30,7 +40,9 @@ import {
   canTakeOver,
   handBackAgent,
   takeOverAgent,
+  takeoverPolicy,
   takeoverWhere,
+  TRUST_HINT,
   type Agent,
   type AgentTakeover,
 } from '../../lib/agents';
@@ -44,7 +56,10 @@ const START_ROWS = 30;
 interface TakeoverActions {
   /** Take over (asking first when it's working), or show the one in progress. */
   takeOver: (agent: Agent) => void;
+  /** Hand back (asking first while the terminal is printing). */
   handBack: (agent: Agent) => void;
+  /** The agent being handed back right now, while its terminal closes. */
+  handingBack: string | null;
 }
 
 const TakeoverContext = createContext<TakeoverActions | null>(null);
@@ -66,6 +81,10 @@ export function TakeoverProvider({ children }: { children: ReactNode }) {
   const { showToast } = useOptionalToast();
   const [asking, setAsking] = useState<Agent | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmBack, setConfirmBack] = useState<Agent | null>(null);
+  const [handingBack, setHandingBack] = useState<string | null>(null);
+  // Take-overs being opened: a second click meanwhile is the same request.
+  const opening = useRef(new Set<string>());
 
   const fail = useCallback(
     (err: unknown) => showToast(formatCommandError(asCommandError(err)), 'error'),
@@ -74,10 +93,16 @@ export function TakeoverProvider({ children }: { children: ReactNode }) {
 
   const begin = useCallback(
     async (agent: Agent, stopFirst: boolean) => {
-      const view = await takeOverAgent(agent.id, START_COLS, START_ROWS, stopFirst);
-      await refreshAgents();
-      if (!showInWorkspace(view)) {
-        showToast(`${agent.name}’s session is open. Open its project to see it.`, 'info');
+      if (opening.current.has(agent.id)) return;
+      opening.current.add(agent.id);
+      try {
+        const view = await takeOverAgent(agent.id, START_COLS, START_ROWS, stopFirst);
+        await refreshAgents();
+        if (!showInWorkspace(view)) {
+          showToast(`${agent.name}’s session is open. Open its project to see it.`, 'info');
+        }
+      } finally {
+        opening.current.delete(agent.id);
       }
     },
     [showToast]
@@ -100,14 +125,35 @@ export function TakeoverProvider({ children }: { children: ReactNode }) {
     [begin, fail]
   );
 
-  const handBack = useCallback(
-    (agent: Agent) => {
-      handBackAgent(agent.id)
-        .then(() => refreshAgents())
-        .catch(fail);
+  const finishHandBack = useCallback(
+    async (agent: Agent, force: boolean) => {
+      setHandingBack(agent.id);
+      try {
+        const result = await handBackAgent(agent.id, force);
+        if (result === 'busy') {
+          setConfirmBack(agent);
+          return;
+        }
+        await refreshAgents();
+      } catch (err) {
+        fail(err);
+      } finally {
+        setHandingBack((id) => (id === agent.id ? null : id));
+      }
     },
     [fail]
   );
+
+  const handBack = useCallback(
+    (agent: Agent) => void finishHandBack(agent, false),
+    [finishHandBack]
+  );
+
+  const confirmHandBack = () => {
+    const agent = confirmBack;
+    setConfirmBack(null);
+    if (agent) void finishHandBack(agent, true);
+  };
 
   const confirmStop = async () => {
     if (!asking) return;
@@ -123,7 +169,10 @@ export function TakeoverProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const value = useMemo(() => ({ takeOver, handBack }), [takeOver, handBack]);
+  const value = useMemo(
+    () => ({ takeOver, handBack, handingBack }),
+    [takeOver, handBack, handingBack]
+  );
   return (
     <TakeoverContext.Provider value={value}>
       {children}
@@ -144,6 +193,25 @@ export function TakeoverProvider({ children }: { children: ReactNode }) {
           cancelLabel="Wait"
           onCancel={() => setAsking(null)}
           onConfirm={() => void confirmStop()}
+        />
+      )}
+      {confirmBack && (
+        <ProjectActionConfirmModal
+          title={`Hand ${confirmBack.name} back?`}
+          body={
+            <p>
+              {confirmBack.name} is in the middle of something in the terminal. Handing back now
+              stops it there.
+            </p>
+          }
+          hint="Anything typed in the terminal but not sent is dropped."
+          loading={false}
+          confirmLabel="Hand back anyway"
+          loadingLabel="Handing back…"
+          confirmVariant="danger"
+          cancelLabel="Keep driving"
+          onCancel={() => setConfirmBack(null)}
+          onConfirm={confirmHandBack}
         />
       )}
     </TakeoverContext.Provider>
@@ -188,28 +256,40 @@ export function TakeoverBanner({
   const projectName = takeover.project
     ? projects?.projects?.find((p) => p.path === takeover.project)?.name
     : undefined;
+  const where = takeoverWhere(takeover, projectName);
+  const handing = actions?.handingBack === agent.id;
   return (
     <div className="agent-takeover" role="status">
-      <span className="agent-takeover__icon" aria-hidden>
-        <TerminalIcon size={12} />
-      </span>
-      <span className="agent-takeover__text">
-        You’re driving {agent.name} {takeoverWhere(takeover, projectName)}
-      </span>
-      <span className="agent-takeover__actions">
-        {takeover.project ? (
-          <TextButton tabIndex={0} onClick={() => actions?.takeOver(agent)}>
-            Open
-          </TextButton>
-        ) : (
-          <TextButton tabIndex={0} onClick={onToggleTerminal} aria-pressed={terminalShown}>
-            {terminalShown ? 'Show chat' : 'Show terminal'}
-          </TextButton>
-        )}
-        <Button size="compact" variant="secondary" onClick={() => actions?.handBack(agent)}>
-          Hand back
-        </Button>
-      </span>
+      <div className="agent-takeover__row">
+        <span className="agent-takeover__icon" aria-hidden>
+          <TerminalIcon size={12} />
+        </span>
+        {/* Said once, here: what driving it means for edits. */}
+        <span className="agent-takeover__text" title={takeoverPolicy(takeover, agent.name)}>
+          You’re driving {agent.name} {where}
+        </span>
+        <span className="agent-takeover__actions">
+          {takeover.project ? (
+            <TextButton tabIndex={0} onClick={() => actions?.takeOver(agent)}>
+              Open {where}
+            </TextButton>
+          ) : (
+            <TextButton tabIndex={0} onClick={onToggleTerminal} aria-pressed={terminalShown}>
+              {terminalShown ? 'Show chat' : 'Show terminal'}
+            </TextButton>
+          )}
+          <Button
+            size="compact"
+            variant="secondary"
+            disabled={handing}
+            aria-busy={handing || undefined}
+            onClick={() => actions?.handBack(agent)}
+          >
+            {handing ? 'Handing back…' : 'Hand back'}
+          </Button>
+        </span>
+      </div>
+      {takeover.trustPrompt && <p className="agent-takeover__hint">{TRUST_HINT}</p>}
     </div>
   );
 }

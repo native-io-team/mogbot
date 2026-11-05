@@ -376,12 +376,10 @@ pub async fn agents_update(
     let engine = match input.engine.as_deref().map(Engine::parse).transpose()? {
         Some(engine) if engine != current.engine => {
             // The terminal is in this engine's session; switching would
-            // leave it, and the agent, in two conversations.
+            // leave it, and the agent, in two conversations. Checked again,
+            // atomically, by `update_settings` below.
             if runner::driven(&agent_id) {
-                return Err(CommandError::expected(format!(
-                    "You're driving {} in a terminal. Hand it back first, then change what it runs on.",
-                    current.name
-                )));
+                return Err(runner::driven_refusal(&current.name));
             }
             engine::require_ready(engine).await?;
             Some(engine)
@@ -402,7 +400,13 @@ pub async fn agents_update(
         Some(p) => Some(project::resolve(p).await?.map(|p| p.path)),
         None => None,
     };
-    let updated = store::update(&agent_id, |a| {
+    // A new engine, or a new folder to work in, would leave the session the
+    // user may be driving.
+    let moves_session = engine.is_some()
+        || project
+            .as_ref()
+            .is_some_and(|p: &Option<String>| *p != current.project);
+    let updated = runner::update_settings(&agent_id, moves_session, |a| {
         if let Some(n) = name {
             a.name = n;
         }
@@ -518,9 +522,7 @@ pub async fn agents_memory_suggest(text: String) -> Result<String, CommandError>
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_delete(app: AppHandle, agent_id: String) -> Result<(), CommandError> {
-    takeover::abandon(&app, &agent_id).await;
-    runner::stop(&agent_id);
-    store::delete(&agent_id)?;
+    takeover::delete_agent(&app, &agent_id).await?;
     emit_registry(&app);
     notify::refresh_badge(&app);
     Ok(())
@@ -565,11 +567,16 @@ pub async fn agents_take_over(
 }
 
 /// Give the session back: the terminal's process ends, the agent resumes,
-/// and its next turn continues the same session. False if nobody was driving.
+/// and its next turn continues the same session. Without `force`, refused
+/// (`busy`) while the terminal is printing, so the UI can ask first.
 #[tauri::command]
 #[tracing::instrument(skip(app))]
-pub async fn agents_hand_back(app: AppHandle, agent_id: String) -> Result<bool, CommandError> {
-    Ok(takeover::hand_back(&app, &agent_id).await)
+pub async fn agents_hand_back(
+    app: AppHandle,
+    agent_id: String,
+    force: Option<bool>,
+) -> Result<takeover::HandBack, CommandError> {
+    Ok(takeover::hand_back(&app, &agent_id, force.unwrap_or(false)).await)
 }
 
 /// Start the agent's next message in a new conversation: its instructions

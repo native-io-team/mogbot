@@ -41,6 +41,22 @@ describe('ApprovalCard', () => {
 });
 
 describe('ErrorLine', () => {
+  it('quotes a take-over terminal’s last lines as the screen showed them', () => {
+    const message = {
+      id: 'e2',
+      agentId: 'acme',
+      ts: 1,
+      kind: 'error',
+      takeover: true,
+      text: 'Claude Code closed after 2 seconds. The last thing it showed:\n\nTrust it?\n❯ 2. No, exit',
+    } as AgentMessage;
+    const { container } = render(<ErrorLine message={message} />);
+    expect(
+      screen.getByText('Claude Code closed after 2 seconds. The last thing it showed:')
+    ).toBeInTheDocument();
+    expect(container.querySelector('pre')?.textContent).toBe('Trust it?\n❯ 2. No, exit');
+  });
+
   it('schedules one retry at the reset however fast the second click comes', async () => {
     let finish = () => {};
     const onRetryAt = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));

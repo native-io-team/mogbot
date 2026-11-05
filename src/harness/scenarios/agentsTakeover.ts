@@ -14,8 +14,18 @@ import { workCommands } from './agentsWork';
 const ACME_PATH = `${HARNESS_ROOT}/acme-marketing`;
 const SINCE = now - 6 * MIN;
 
-const unbound = { since: SINCE, ptySession: 'pty-finance', cli: 'claude-code' };
-const bound = { since: SINCE, ptySession: 'pty-acme', project: ACME_PATH, cli: 'claude-code' };
+const unbound = {
+  since: SINCE,
+  ptySession: 'takeover-finance',
+  cli: 'claude-code',
+  trustPrompt: true,
+};
+const bound = {
+  since: SINCE,
+  ptySession: 'takeover-acme',
+  project: ACME_PATH,
+  cli: 'claude-code',
+};
 
 /** Finance (or Acme Site, bound to acme-marketing) being driven. */
 const drivenTeam = (id: 'finance' | 'acme') =>
@@ -84,7 +94,7 @@ export const agentsTakeoverScenarios: Scenario[] = [
     id: 'agents-takeover-terminal',
     title: 'Agents — you’re driving Finance in a terminal',
     looksRightWhen:
-      'Under Finance’s header, one quiet line: a small terminal icon in Finance’s colour, “You’re driving Finance in a terminal”, then “Show chat” and a secondary “Hand back” button at the trailing edge. Below it the conversation’s place is taken by a terminal in the app’s own background (the fixture’s resumed Claude Code screen: the earlier question, a Write step, a reply, an empty prompt). No composer. In the sidebar Finance’s row reads “You’re driving”; the header status says the same.',
+      'Under Finance’s header, one quiet line: a small terminal icon in Finance’s colour, “You’re driving Finance in a terminal” (hovering it says edits are accepted automatically, Shift-Tab changes it), then “Show chat” and a secondary “Hand back” button at the trailing edge. Under that line, wrapping, the trust hint: “Claude Code will ask whether to trust this folder — choose “Yes, proceed”. Choosing No ends the take-over.” Below it the conversation’s place is taken by a terminal in the app’s own background (the fixture’s resumed Claude Code screen: the earlier question, a Write step, a reply, an empty prompt), with a focus ring around it because the keys go there. No composer. In the sidebar Finance’s row reads “You’re driving Finance”; the header status says the same.',
     openSelector: AGENTS_TAB,
     steps: [openFinance],
     requires: '.agent-chat[data-takeover-terminal] .agent-takeover-terminal .xterm',
@@ -113,7 +123,7 @@ export const agentsTakeoverScenarios: Scenario[] = [
     id: 'agents-takeover-project',
     title: 'Agents — driving Acme Site in its project',
     looksRightWhen:
-      'Acme Site works in acme-marketing, so its session is a tab in that project’s workspace, not here. The chat stays as it was, with one line under the header: “You’re driving Acme Site in acme-marketing”, “Open”, and “Hand back”.',
+      'Acme Site works in acme-marketing, so its session is a tab in that project’s workspace, not here. The chat stays as it was, with one line under the header: “You’re driving Acme Site in acme-marketing”, “Open in acme-marketing”, and “Hand back”. No trust hint (the fixture’s folder is trusted).',
     openSelector: AGENTS_TAB,
     steps: [openAcme],
     requires: '.agent-takeover',
@@ -121,6 +131,46 @@ export const agentsTakeoverScenarios: Scenario[] = [
       agents_overview: drivenTeam('acme'),
       agents_messages: messagesFor,
       ...pty,
+    },
+  },
+  {
+    id: 'agents-takeover-handback-busy',
+    title: 'Agents — Hand back while the terminal is printing',
+    looksRightWhen:
+      'A dialog over Finance’s terminal: “Hand Finance back?”, “Finance is in the middle of something in the terminal. Handing back now stops it there.”, the hint “Anything typed in the terminal but not sent is dropped.”, then “Keep driving” and a red “Hand back anyway”.',
+    openSelector: AGENTS_TAB,
+    steps: [openFinance, { click: '.agent-takeover__actions > button:last-child' }],
+    requires: '[aria-modal="true"]',
+    commands: {
+      agents_overview: drivenTeam('finance'),
+      agents_messages: messagesFor,
+      agents_hand_back: 'busy',
+      ...pty,
+    },
+  },
+  {
+    id: 'agents-takeover-ended',
+    title: 'Agents — a take-over that ended by itself, explained',
+    looksRightWhen:
+      'Finance’s chat, nobody driving. The newest line is an error: “Claude Code closed after 2 seconds (exit code 1), so the take-over ended and Finance has its session back. The last thing it showed:” and below it, in a mono block keeping its line breaks, the trust question with “2. No, exit” chosen. No Retry button on it. Above it, an earlier hand-back note: “You handed Finance back after 6 min”.',
+    openSelector: AGENTS_TAB,
+    steps: [openFinance],
+    requires: '.agent-chat__messages',
+    commands: {
+      agents_overview: overview(),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'finance'
+          ? [
+              ...messagesFor(args),
+              msg('note', 'You handed Finance back after 6 min', 30, { agentId: 'finance' }),
+              msg(
+                'error',
+                'Claude Code closed after 2 seconds (exit code 1), so the take-over ended and Finance has its session back. The last thing it showed:\n\nDo you trust the files in this folder?\n\n  1. Yes, proceed\n❯ 2. No, exit',
+                1,
+                { agentId: 'finance', takeover: true }
+              ),
+            ]
+          : messagesFor(args),
     },
   },
   {

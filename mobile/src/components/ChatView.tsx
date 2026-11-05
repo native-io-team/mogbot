@@ -36,6 +36,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   askingLine,
+  DRIVEN_LINE,
   engineLine,
   isQueued,
   needsYou,
@@ -635,8 +636,9 @@ function Header({
   const styles = useStyles();
   const connected = useApp((s) => s.link.kind === 'connected');
   const engine = useApp((s) => engineLine(agent, s.overview?.engines));
-  const line =
-    needsYou(agent) || asking
+  const line = agent.takeover
+    ? { text: DRIVEN_LINE, color: colors.textSecondary }
+    : needsYou(agent) || asking
       ? { text: 'Needs your OK', color: colors.accentWarning }
       : writing
         ? { text: 'Writing…', color: colors.textSecondary }

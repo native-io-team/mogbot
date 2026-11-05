@@ -533,7 +533,7 @@ export const ErrorLine = memo(function ErrorLine({
         data-failure={message.failure?.kind}
         role={message.failure?.kind === 'usage_limit' ? 'status' : 'alert'}
       >
-        <p className="agent-bubble__text">{message.text}</p>
+        <ErrorText message={message} />
         {(signIn || onRetry) && (
           <div className="agent-bubble__remedy">
             {signIn && (
@@ -577,6 +577,22 @@ export const ErrorLine = memo(function ErrorLine({
     </div>
   );
 });
+
+/**
+ * An error's words. A take-over's terminal that closed by itself quotes its
+ * last lines after a blank line (`takeover::early_exit_line`): those keep
+ * their line breaks, as the terminal showed them.
+ */
+function ErrorText({ message }: { message: AgentMessage }) {
+  const at = message.takeover ? message.text.indexOf('\n\n') : -1;
+  if (at < 0) return <p className="agent-bubble__text">{message.text}</p>;
+  return (
+    <>
+      <p className="agent-bubble__text">{message.text.slice(0, at)}</p>
+      <pre className="agent-bubble__screen">{message.text.slice(at + 2)}</pre>
+    </>
+  );
+}
 
 /**
  * "Scheduled check-in", centred like the agent-to-agent lines, with the note

@@ -549,7 +549,12 @@ the agent has a conversation on its engine (`sessionId`, not `newEngine`).
   a routine coming due is skipped, moved to its next time, recorded as a
   `skipped` run, with a note ("Skipped “Morning brief” · you were driving
   Finance"). `list_agents` tells other agents their messages wait. Start
-  fresh and an engine switch are refused until hand-back.
+  fresh, and a change of engine or project, are refused until hand-back —
+  for the editor and the Chief's `update_agent` alike, through one helper
+  (`runner::update_settings`) that checks under the same lock the claim is
+  made under. Deleting (`takeover::delete_agent`, used by both the command
+  and the Chief's `delete_agent`) stops the turn first, then ends the
+  take-over dropping its queue, so nothing starts a turn on the way out.
 - **Mid-turn** the session is in use, so take-over is refused and the UI asks:
   **Stop and take over** (Stop, as ever dropping the queue; then waits for the
   turn to end, ≤15s) or **Wait**.
@@ -568,30 +573,61 @@ the agent has a conversation on its engine (`sessionId`, not `newEngine`).
     The MCP URL carries no `?turn=`, so anything that reaches `approve` is
     refused; the agent's other tools (message an agent, share a file) work.
   - Codex: `codex resume -c sandbox_mode="workspace-write" -c
-    approval_policy="on-request" <every turn's -c> [-m model] -C <cwd>
-    <thread>`. Built from `codex resume --help` on 0.166; not run against a
-    real thread (no signed-in account on the build machine).
+    approval_policy="on-request" -c developer_instructions=… <every turn's
+    -c> [-m model] -C <cwd> <thread>`. `developer_instructions` is the
+    agent's identity plus its secrets section, as a `codex exec` turn passes
+    it. Built from `codex resume --help` on 0.166; not run against a real
+    thread (no signed-in account on the build machine).
   The PTY has no project in its metadata, so remote access and other agents'
-  `session_*` tools can't see or type into it.
+  `session_*` tools can't see or type into it, and the phone is never sent
+  its id. Its id starts `takeover-`: a tab's `pty_session_open` may attach to
+  it while it runs but never respawns it, and the take-over's watcher also
+  checks the pid, so a respawn can't pass for the take-over.
+- **Edits are auto-accepted while you drive**, as they are for the agent
+  (Claude Code's `acceptEdits`, Codex's `workspace-write`), in its projects
+  too. Bash still asks. The banner's tooltip says so once; Shift-Tab changes
+  it in Claude Code.
+- **Trust.** If Claude Code hasn't recorded the folder as trusted
+  (`hasTrustDialogAccepted` on it or a folder above, in `.claude.json` under
+  `CLAUDE_CONFIG_DIR` or home — read, never written), the banner adds:
+  "Claude Code will ask whether to trust this folder — choose “Yes,
+  proceed”. Choosing No ends the take-over." Codex's trust prompt isn't
+  checked.
 - **Where.** A bound agent's session becomes a tab in its project's workspace
-  (`adoptInBackground` + focus, through `useRemoteAgentControl`), which opens.
+  (`adoptTakeover` + focus, through `useRemoteAgentControl`), which opens. The
+  tab is never saved: `set_terminal_state` drops `takeover-` tabs, and
+  `get_terminal_state` drops any on disk and adds the ones running now, so
+  a quit, crash or hand-back leaves no ghost tab to respawn.
   Any other agent's shows in its chat in place of the conversation
   (`AttachedTerminal`, attach-only), with "Show chat" to see the conversation
   and composer. Either way one line under the header says "You're driving
-  Finance in a terminal · Hand back"; the sidebar row reads "You're driving";
+  Finance in a terminal · Hand back"; the sidebar row and chat header read "You're driving Finance";
   a message you send waits ("Waiting, sends when you hand Finance back").
 - **Hand back** (the button, ⌘K, or the process exiting, noticed within
-  0.5s): Ctrl-C twice (how both CLIs quit), then the process tree is
-  stopped and its exit waited for; only then is `driven` released, so a turn
-  and the terminal never share the session. A note says "You took over for 6
-  min"; the next turn starts with `prompts::handed_back`, continuing the
-  same session, so it has what you did. A bound agent's tab is closed
-  (`remote-close-agent`). Deleting the agent ends a take-over without a note.
-- **Phone:** the overview carries `takeover`; the phone shows "Being driven on
-  your Mac" on the row and in the composer, and queued messages wait. It
-  can't take over.
-- **Not persisted.** Quitting kills the PTY; what waited is sent at the next
-  launch like any interrupted queue.
+  0.5s). If the terminal printed in the last 2s it is likely mid-response,
+  so the button asks first ("Hand back anyway?"); anything typed but not sent
+  is dropped. Ctrl-C three times, 300ms apart (Claude Code's first clears the
+  prompt, its second arms "press again"), then up to 5s for it to exit; only
+  a process still alive with the session on its command line is killed
+  (pids get reused). Only then is `driven` released, so a turn and the
+  terminal never share the session. A note says "You handed Finance back after 6 min";
+  if the session's transcript grew, the next turn starts with
+  `prompts::handed_back`. Start fresh and an engine switch clear that
+  preamble. A bound agent's tab is closed (`remote-close-agent`). Deleting
+  the agent ends a take-over without a note.
+- **Closed by itself early** (within 10s, or with a non-zero exit — the
+  trust question answered No, a rejected flag, a crash): an error line in the
+  chat says so plainly with the terminal's last lines
+  (`remote_access::screen::render_tail`), no preamble, and no Retry.
+- **Phone:** the overview carries `takeover` (without the PTY id); the phone
+  says "Being driven on your Mac" on the row, the chat header, the composer
+  and a queued message, the only phrasing it uses for this, offers no Stop,
+  and queued messages wait. It can't take over.
+- **One mark on disk.** `<home>/takeover.json` (pid, session) from open to
+  hand-back. At the next launch a leftover mark means the app quit or crashed
+  mid-take-over: the CLI is stopped if it outlived the app (only while it is
+  still that CLI), and the chat says the take-over ended. What waited is sent
+  like any interrupted queue.
 
 Verified for Claude Code 2.1.318 with a throwaway folder on Haiku (about two
 cents): `--print --session-id`, then interactive `--resume` in a PTY (a new

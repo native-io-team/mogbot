@@ -163,3 +163,21 @@ export async function closeInBackground(
   await killPtySession(sessionId);
   return { ok: true };
 }
+
+/**
+ * Show an agent's take-over terminal as one of `projectPath`'s tabs. Unlike
+ * {@link adoptInBackground} it never writes the saved tab list: a take-over
+ * is the agent's for as long as it runs, so `get_terminal_state` adds it to
+ * the project's restored tabs while it runs and drops it after, and
+ * `set_terminal_state` never saves it.
+ */
+export function adoptTakeover(
+  terminals: BackgroundTabs,
+  projectPath: string,
+  sessionId: string,
+  agentId: string
+): BackgroundResult {
+  if (terminals.adoptTerminalTab(projectPath, { agentId, sessionId })) return { ok: true };
+  // Tracked here but full; untracked, opening the project restores it.
+  return terminals.tabsForProject(projectPath) ? { ok: false, reason: 'no_room' } : { ok: true };
+}

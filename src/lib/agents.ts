@@ -154,6 +154,8 @@ export interface AgentTakeover {
   project?: string;
   /** The workspace's id for the CLI, for that tab. */
   cli: 'claude-code' | 'codex';
+  /** Claude Code will ask whether to trust the folder first; omitted otherwise. */
+  trustPrompt?: boolean;
 }
 
 /** Mirrors `context::ContextFill`: two numbers the engine reported, never estimated. */
@@ -438,6 +440,8 @@ export interface AgentMessage {
   work?: TurnWork;
   /** On a `note`: the conversation started fresh here; drawn as a divider. */
   fresh?: boolean;
+  /** On an `error`: a take-over's terminal closed by itself; not a turn's failure, so no Retry. */
+  takeover?: boolean;
 }
 
 /** Mirrors `project::ChangedFile`: line counts are absent for a binary file. */
@@ -861,8 +865,22 @@ export const takeOverAgent = (agentId: string, cols: number, rows: number, stopF
     rows: Math.max(2, Math.round(rows)),
     stopFirst: stopFirst || undefined,
   });
-/** End the terminal and give the session back; false if nobody was driving. */
-export const handBackAgent = (agentId: string) => invoke<boolean>('agents_hand_back', { agentId });
+/** Mirrors `takeover::HandBack`. `busy`: the terminal is printing, so ask, then `force`. */
+export type HandBackResult = 'handedBack' | 'notDriving' | 'busy';
+
+/** End the terminal and give the session back. Without `force`, refused while it's printing. */
+export const handBackAgent = (agentId: string, force = false) =>
+  invoke<HandBackResult>('agents_hand_back', { agentId, force: force || undefined });
+
+/** "Claude Code will ask…": the one thing to know before the terminal opens. */
+export const TRUST_HINT =
+  'Claude Code will ask whether to trust this folder — choose “Yes, proceed”. Choosing No ends the take-over.';
+
+/** What driving it means for edits, said once, on the banner. */
+export function takeoverPolicy(takeover: AgentTakeover, name: string): string {
+  const edits = `Edits in its projects are accepted automatically while you drive, as they are for ${name}`;
+  return takeover.cli === 'claude-code' ? `${edits}. Shift-Tab changes it.` : `${edits}.`;
+}
 
 /** There is a session to step into: it has had a conversation on this engine. */
 export const canTakeOver = (agent: Pick<Agent, 'sessionId' | 'newEngine'>) =>
@@ -1366,6 +1384,17 @@ export function lastUserMessage(messages: AgentMessage[], index: number): AgentM
     return m.text.trim() || m.attachments?.length ? m : null;
   }
   return null;
+}
+
+/**
+ * What Retry sends again: the user's message before the newest line, when
+ * that line is a turn's error. A take-over's terminal that closed by itself
+ * isn't a turn, so it offers none.
+ */
+export function retrySourceFor(messages: AgentMessage[]): AgentMessage | null {
+  const last = messages[messages.length - 1];
+  if (last?.kind !== 'error' || last.takeover) return null;
+  return lastUserMessage(messages, messages.length - 1);
 }
 
 /** A message's files as `agents_send` takes them: copied again from the agent's home. */

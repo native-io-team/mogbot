@@ -6,13 +6,29 @@
 .agent-takeover {
   display: flex;
   flex: 0 0 auto;
-  align-items: center;
-  gap: var(--spacing-sm);
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--spacing-2xs);
   min-height: var(--agents-header-height);
   padding: var(--spacing-xs) var(--spacing-lg);
   border-bottom: var(--border-width-default) solid var(--border-subtle);
   background: var(--surface-panel);
   font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agent-takeover__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+/* What Claude Code will ask first, under the line; it wraps. */
+.agent-takeover__hint {
+  margin: 0;
+  /* Under the text, past the 12px icon. */
+  padding-left: calc(var(--spacing-md) + var(--spacing-sm));
   color: var(--text-secondary);
 }
 
@@ -58,6 +74,13 @@
   min-height: 0;
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--surface-app);
+  /* Where the keys go: a ring when the terminal has them. */
+  border: var(--focus-ring-width) solid transparent;
+  transition: border-color var(--transition-interaction);
+}
+
+.agent-takeover-terminal:focus-within {
+  border-color: var(--focus-ring);
 }
 
 .agent-takeover-terminal__xterm {
@@ -75,4 +98,18 @@
 
 .text-button.button.agent-working__takeover:hover:not(:disabled) {
   color: var(--text-secondary);
+}
+
+/* The last lines of a take-over's terminal that closed by itself, in the
+   error bubble: as the terminal showed them. */
+.agent-bubble__screen {
+  margin: var(--spacing-sm) 0 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  background: var(--surface-app);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body-md);
+  white-space: pre;
 }

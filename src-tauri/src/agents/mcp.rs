@@ -759,7 +759,9 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if engine.is_some() {
         fields.push("engine");
     }
-    let updated = store::update(&agent.id, |a| {
+    // The same guard as the editor's: not out of a session the user drives.
+    let moves_session = engine.is_some() || fields.contains(&"project");
+    let updated = runner::update_settings(&agent.id, moves_session, |a| {
         if let Some(n) = new_name {
             a.name = n;
         }
@@ -815,8 +817,7 @@ async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if let Some(refused) = refused_reply(&answer, "delete it") {
         return error(refused);
     }
-    runner::stop(&agent.id);
-    match store::delete(&agent.id) {
+    match super::takeover::delete_agent(app, &agent.id).await {
         Ok(_) => {
             let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
             // No link: there's nothing left to open.

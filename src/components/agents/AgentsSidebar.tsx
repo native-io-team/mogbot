@@ -64,7 +64,7 @@ interface AgentsSidebarProps {
 }
 
 function subtitle(agent: Agent): string {
-  if (agent.takeover) return 'You’re driving';
+  if (agent.takeover) return `You’re driving ${agent.name}`;
   if (needsYou(agent)) return 'Needs your OK';
   if (agent.status.state === 'working') return agent.status.activity ?? 'Working…';
   const failure = failedTurn(agent);

@@ -284,18 +284,18 @@ export function Composer({
     : micHint
       ? micHint
       : driven
-        ? drivenHint(agent.name)
+        ? drivenHint()
         : !connected
-        ? hasContent
-          ? `Not connected · Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
-          : 'Not connected · what you type stays here'
-        : uploading
-          ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
-          : mode === 'queue'
-            ? waitingOnYou
-              ? `${agent.name} reads it after you answer above`
-              : `${agent.name} reads it when this turn ends`
-            : null;
+          ? hasContent
+            ? `Not connected · Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
+            : 'Not connected · what you type stays here'
+          : uploading
+            ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
+            : mode === 'queue'
+              ? waitingOnYou
+                ? `${agent.name} reads it after you answer above`
+                : `${agent.name} reads it when this turn ends`
+              : null;
 
   return (
     <View
@@ -485,7 +485,7 @@ export function Composer({
               fallback={<T color={colors.textSecondary}>●</T>}
             />
           </RoundButton>
-          {mode === 'queue' && !waitingOnYou && (
+          {mode === 'queue' && !waitingOnYou && !driven && (
             <RoundButton
               label={`Stop ${agent.name}`}
               disabled={!connected}

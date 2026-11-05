@@ -187,9 +187,15 @@ impl Runtime {
 
     /// The user handed the session back. `told` opens the next turn's prompt
     /// (after anything already waiting there). True when what queued up
-    /// meanwhile needs a worker started.
-    fn release(&mut self, told: Option<String>) -> bool {
+    /// meanwhile needs a worker started. `drop_queue` (the agent is being
+    /// deleted) clears what waited instead, in the same step, so no turn can
+    /// start between the release and the delete.
+    fn release(&mut self, told: Option<String>, drop_queue: bool) -> bool {
         if !std::mem::take(&mut self.driven) {
+            return false;
+        }
+        if drop_queue {
+            self.queue.clear();
             return false;
         }
         if let Some(told) = told {
@@ -396,6 +402,9 @@ fn resent_note(queued: &[Inbound]) -> String {
 pub async fn recover_after_restart(app: &AppHandle) {
     let Ok(agents) = store::list() else { return };
     for agent in agents {
+        // A take-over's terminal the last run left behind, first: it is in
+        // the session the queue below resumes.
+        super::takeover::recover_after_restart(app, &agent).await;
         if let Some(path) = mark_path(&agent.id).filter(|p| p.exists()) {
             let mark = read_mark(&agent.id).unwrap_or_default();
             if let Some(pid) = mark.pid {
@@ -433,7 +442,7 @@ pub async fn recover_after_restart(app: &AppHandle) {
 
 /// Stop `pid` only if it is still that turn's process: pids get reused, and
 /// the session id on its command line is what identifies it.
-async fn stop_orphan(pid: u32, session: &str) {
+pub(super) async fn stop_orphan(pid: u32, session: &str) {
     if cfg!(windows) {
         return;
     }
@@ -652,6 +661,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         client_id: None,
         work: None,
         fresh: false,
+        takeover: false,
     }
 }
 
@@ -751,15 +761,61 @@ pub fn driven(agent_id: &str) -> bool {
 
 /// The session is the agent's again: what waited runs now, its turn told
 /// `told` first. Only once the terminal's process is gone (`takeover`).
-pub fn release_takeover(app: &AppHandle, agent_id: &str, told: Option<String>) {
-    let start = RUNTIMES
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get_mut(agent_id)
-        .is_some_and(|r| r.release(told));
+/// `drop_queue`: the agent is being deleted, so what waited goes too.
+pub fn release_takeover(app: &AppHandle, agent_id: &str, told: Option<String>, drop_queue: bool) {
+    let start = {
+        let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+        match runtimes.get_mut(agent_id) {
+            Some(r) => {
+                let had = !r.queue.is_empty();
+                let start = r.release(told, drop_queue);
+                if drop_queue && had {
+                    save_inbox(agent_id, &r.queue);
+                }
+                start
+            }
+            None => false,
+        }
+    };
     if start {
         start_worker(app, agent_id);
     }
+}
+
+/// The refusal for a change that would move the agent out of the session
+/// the user is driving (its engine, or its project's folder).
+pub fn driven_refusal(name: &str) -> CommandError {
+    CommandError::expected(format!(
+        "You're driving {name} in a terminal. Hand it back first, then change what it runs on or where it works."
+    ))
+}
+
+/// Change an agent's settings, for the editor and the Chief's
+/// `update_agent` alike. `moves_session` (a new engine or project) is
+/// refused while the user drives it, and checked under the inbox lock a
+/// take-over is claimed under, so the two can't interleave. An engine
+/// switch also drops a preamble left for the old conversation.
+pub fn update_settings<F: FnOnce(&mut store::Agent)>(
+    agent_id: &str,
+    moves_session: bool,
+    change: F,
+) -> Result<store::Agent, CommandError> {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    if moves_session && runtimes.get(agent_id).is_some_and(|r| r.driven) {
+        return Err(driven_refusal(&store::get(agent_id)?.name));
+    }
+    let mut switched = false;
+    let updated = store::update(agent_id, |a| {
+        let before = a.engine;
+        change(a);
+        switched = a.engine != before;
+    })?;
+    if switched {
+        if let Some(r) = runtimes.get_mut(agent_id) {
+            r.interrupted = None;
+        }
+    }
+    Ok(updated)
 }
 
 /// Stop the turn in progress and drop anything queued behind it.
@@ -799,7 +855,7 @@ pub fn start_fresh(app: &AppHandle, agent_id: &str) -> Result<store::Agent, Comm
 /// conversation: never a turn that read the old session and writes it back
 /// under a divider saying it's gone. Two at once record one divider.
 fn begin_fresh(agent_id: &str) -> Result<(store::Agent, AgentMessage), CommandError> {
-    let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     let name = store::get(agent_id)?.name;
     let mine = runtimes.get(agent_id);
     if mine.is_some_and(|r| r.driven) {
@@ -839,6 +895,11 @@ fn begin_fresh(agent_id: &str) -> Result<(store::Agent, AgentMessage), CommandEr
         return Err(CommandError::expected(format!(
             "{name}'s next message already starts a new conversation."
         )));
+    }
+    // Whatever the next turn was to be told first (an interruption, a
+    // hand-back) was about the conversation just left.
+    if let Some(r) = runtimes.get_mut(agent_id) {
+        r.interrupted = None;
     }
     let mut line = new_message(agent_id, MessageKind::Note, FRESH_LINE);
     line.fresh = true;
@@ -2041,16 +2102,28 @@ impl Drop for ReadingWatch {
 /// every agent lost its memory between turns. Every `claude` we run for
 /// Agents goes through this.
 pub fn strip_session_env(cmd: &mut std::process::Command) {
-    for (key, _) in std::env::vars_os() {
-        let key = key.to_string_lossy();
-        if key == "CLAUDECODE"
-            || key == "CLAUDE_PID"
-            || key == "CLAUDE_EFFORT"
-            || key.starts_with("CLAUDE_CODE_")
-        {
-            cmd.env_remove(key.as_ref());
-        }
+    for key in inherited_session_vars() {
+        cmd.env_remove(key);
     }
+}
+
+/// The variables of this app's own environment that [`strip_session_env`]
+/// removes: one list for every process Agents runs (a turn's, and a
+/// take-over's terminal).
+pub fn inherited_session_vars() -> Vec<String> {
+    session_vars(std::env::vars_os().map(|(k, _)| k.to_string_lossy().into_owned()))
+}
+
+/// Which of `names` mark a nested Claude Code session.
+pub fn session_vars(names: impl IntoIterator<Item = String>) -> Vec<String> {
+    names.into_iter().filter(|k| is_session_var(k)).collect()
+}
+
+fn is_session_var(key: &str) -> bool {
+    key == "CLAUDECODE"
+        || key == "CLAUDE_PID"
+        || key == "CLAUDE_EFFORT"
+        || key.starts_with("CLAUDE_CODE_")
 }
 
 #[cfg(test)]
@@ -2117,7 +2190,7 @@ mod tests {
         r.claim().unwrap();
         r.admit(from_user("while you drove"));
         assert!(
-            r.release(Some("[handed back]".into())),
+            r.release(Some("[handed back]".into()), false),
             "a worker starts for the queue"
         );
         assert!(!r.driven);
@@ -2127,7 +2200,7 @@ mod tests {
         // Nothing waiting: no worker, but the next turn is still told.
         let mut quiet = Runtime::default();
         quiet.claim().unwrap();
-        assert!(!quiet.release(Some("[handed back]".into())));
+        assert!(!quiet.release(Some("[handed back]".into()), false));
         assert_eq!(quiet.interrupted.as_deref(), Some("[handed back]"));
         assert!(
             quiet.admit(from_user("later")),
@@ -2136,7 +2209,7 @@ mod tests {
 
         // A hand-back of an agent nobody drove changes nothing.
         let mut never = Runtime::default();
-        assert!(!never.release(Some("x".into())));
+        assert!(!never.release(Some("x".into()), false));
         assert_eq!(never.interrupted, None);
     }
 
@@ -2144,7 +2217,7 @@ mod tests {
     fn a_take_over_that_failed_to_open_leaves_no_trace() {
         let mut r = Runtime::default();
         r.claim().unwrap();
-        assert!(!r.release(None));
+        assert!(!r.release(None, false));
         assert_eq!(r.interrupted, None);
         assert!(!r.driven);
     }
@@ -2541,6 +2614,88 @@ mod tests {
             assert!(begin_fresh(&a.id).is_ok());
             RUNTIMES.lock().unwrap().remove(&b.id);
         });
+    }
+
+    #[test]
+    fn a_fresh_start_or_an_engine_switch_drops_the_preamble_for_the_old_conversation() {
+        in_scratch_store(|| {
+            let a = conversing("Finance");
+            let told = || {
+                RUNTIMES
+                    .lock()
+                    .unwrap()
+                    .get(&a.id)
+                    .and_then(|r| r.interrupted.clone())
+            };
+            let leave = |text: &str| {
+                RUNTIMES
+                    .lock()
+                    .unwrap()
+                    .entry(a.id.clone())
+                    .or_default()
+                    .interrupted = Some(text.into());
+            };
+            leave("[handed back]");
+            begin_fresh(&a.id).unwrap();
+            assert_eq!(told(), None, "a new conversation was never handed back");
+
+            leave("[handed back]");
+            // A change that keeps the engine keeps it.
+            update_settings(&a.id, false, |a| a.role = "Counts".into()).unwrap();
+            assert_eq!(told().as_deref(), Some("[handed back]"));
+            update_settings(&a.id, true, |a| a.switch_engine(Engine::Codex)).unwrap();
+            assert_eq!(told(), None);
+            RUNTIMES.lock().unwrap().remove(&a.id);
+        });
+    }
+
+    #[test]
+    fn moving_a_driven_agent_out_of_its_session_is_refused_for_every_caller() {
+        in_scratch_store(|| {
+            let a = conversing("Finance");
+            claim_for_takeover(&a.id).unwrap();
+            let err = update_settings(&a.id, true, |a| a.switch_engine(Engine::Codex))
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("You're driving Finance"), "{err}");
+            assert_eq!(store::get(&a.id).unwrap().engine, Engine::Claude);
+            // What doesn't move the session is fine meanwhile.
+            let renamed = update_settings(&a.id, false, |a| a.role = "Counts".into()).unwrap();
+            assert_eq!(renamed.role, "Counts");
+            RUNTIMES.lock().unwrap().remove(&a.id);
+        });
+    }
+
+    #[test]
+    fn releasing_a_deleted_agents_take_over_drops_what_waited_and_starts_nothing() {
+        let mut r = Runtime::default();
+        r.claim().unwrap();
+        r.admit(from_user("while you drove"));
+        assert!(!r.release(Some("[handed back]".into()), true));
+        assert!(r.queue.is_empty());
+        assert!(!r.running && !r.driven);
+        assert_eq!(r.interrupted, None);
+    }
+
+    #[test]
+    fn one_list_of_session_variables_for_turns_and_terminals() {
+        let names = [
+            "HOME",
+            "CLAUDECODE",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_PID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_CONFIG_DIR",
+        ];
+        assert_eq!(
+            session_vars(names.iter().map(|s| s.to_string())),
+            [
+                "CLAUDECODE",
+                "CLAUDE_CODE_ENTRYPOINT",
+                "CLAUDE_PID",
+                "CLAUDE_EFFORT"
+            ]
+        );
     }
 
     #[test]
