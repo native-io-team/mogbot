@@ -55,6 +55,7 @@ import { ImportPlaybackCard } from './ImportPlaybackCard';
 import { useLiveWork, WorkTimeline } from './AgentWork';
 import { RevisesBar } from './AgentResult';
 import { WorkMenu } from './AgentTakeover';
+import { useLiveStep } from './AgentLiveStep';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
@@ -1436,10 +1437,11 @@ export function WorkingIndicator({
   // Only a change of activity crossfades; the first one is just there.
   const [first] = useState(activity);
   const live = useLiveWork({ work, agent, activity, leaving });
+  const step = useLiveStep({ agent, work, activity, leaving });
   return (
     <div
       className="agent-chat__row agent-chat__row--agent agent-chat__row--working"
-      data-work={live.toggle ? true : undefined}
+      data-work={live.toggle || step.details ? true : undefined}
       data-open={live.open || undefined}
       data-entering={entering || undefined}
       data-leaving={leaving || undefined}
@@ -1454,20 +1456,22 @@ export function WorkingIndicator({
           <TypingDots />
 
           {place && <span className="agent-working__place">{place}</span>}
-          {shown && (
-            <span
-              key={shown}
-              className="agent-working__activity"
-              data-changed={shown !== first || undefined}
-            >
-              {shown}
-            </span>
-          )}
+          {step.line ??
+            (shown && (
+              <span
+                key={shown}
+                className="agent-working__activity"
+                data-changed={shown !== first || undefined}
+              >
+                {shown}
+              </span>
+            ))}
         </div>
         {live.toggle}
         {/* Its project and its session, one ⋯ away: not a row under every turn. */}
         {!leaving && agent && <WorkMenu agent={agent} />}
       </div>
+      {step.details}
     </div>
   );
 }

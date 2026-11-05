@@ -97,7 +97,10 @@ describe('live step words', () => {
     expect(
       workingRowLine('Running the Cypress tests', work({ current: call() }), 0, 332_000)
     ).toEqual({ text: 'Running the Cypress tests', elapsed: '5m' });
-    expect(workingRowLine(null, undefined, 0, 12_000)).toEqual({ text: 'Thinking', elapsed: '12s' });
+    expect(workingRowLine(null, undefined, 0, 12_000)).toEqual({
+      text: 'Thinking',
+      elapsed: '12s',
+    });
     expect(workingRowLine('Thinking', work({ quietSince: 0 }), 0, 300_000)).toEqual({
       text: 'No progress for 5 min',
       elapsed: null,

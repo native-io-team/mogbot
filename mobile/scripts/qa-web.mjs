@@ -15,7 +15,7 @@
  *
  *   pnpm qa:web                          # everything, into qa-shots/
  *   pnpm qa:web --only chat-             # shots whose name starts with chat-
- *   pnpm qa:web --phases heavy           # only these phases (fresh,live,cached,impostor,bars,heavy,importing)
+ *   pnpm qa:web --phases heavy           # only these phases (fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work)
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --out /tmp/shots
  *   pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681
@@ -49,7 +49,7 @@ const VERBOSE = args.includes('--verbose');
 const PHASES = opt(
   '--phases',
   'QA_PHASES',
-  'fresh,live,cached,impostor,bars,heavy,importing,team-setup'
+  'fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work'
 ).split(',');
 const phase = (name) => PHASES.includes(name);
 // Ports other tools in this repo own: the desktop app, its harness, the phone's Metro.
@@ -659,7 +659,8 @@ const LIVE = [
       await page.clickLabel('Dictate');
       await sleep(900);
     },
-    check: 'Permission refused: the plain line over the field and an Open Settings chip; the mic still there',
+    check:
+      'Permission refused: the plain line over the field and an Open Settings chip; the mic still there',
     after: async (page) => {
       await page.eval(`globalThis.__qaDictation = {}`);
     },
@@ -738,7 +739,8 @@ const LIVE = [
     route: '/agent/qa',
     ready: 'QA 2',
     act: scrollToText('WHAT IT CAN REACH'),
-    check: 'What it can reach: Google Calendar connection, your browser, read-only with "Change this on your Mac."',
+    check:
+      'What it can reach: Google Calendar connection, your browser, read-only with "Change this on your Mac."',
   },
   {
     name: 'policy',
@@ -845,7 +847,8 @@ const LIVE = [
     route: '/settings',
     ready: 'Largest',
     act: scrollToText('Largest'),
-    check: 'Text size: Smaller / Default / Larger / Largest, each "Aa" drawn at its own size, Default ticked',
+    check:
+      'Text size: Smaller / Default / Larger / Largest, each "Aa" drawn at its own size, Default ticked',
   },
   ...['smaller', 'larger', 'largest'].map((size) => ({
     name: `text-${size}-chat`,
@@ -1019,6 +1022,73 @@ const dotFrames =
     });
     log('frames', name, theme);
   };
+
+/** `--live-work`: what agents are doing, live (QA 2 on Cypress, Finance gone quiet). */
+const LIVE_WORK = [
+  {
+    name: 'live-agents',
+    route: '/agents',
+    ready: 'QA 2',
+    settle: 2500,
+    check:
+      'QA 2: a slowly breathing ring in its colour around the avatar, “Running the Cypress tests · 5m”; Finance: ring, “No progress for 5 min”; no spinner beside either',
+  },
+  {
+    name: 'live-step',
+    route: '/chat/qa',
+    ready: 'QA 2',
+    settle: 2500,
+    check:
+      'Working row: dots, “Running the Cypress tests”, a muted 5:3x timer; under it “Test runs usually take a few minutes”, then a folded “Show output”',
+  },
+  {
+    name: 'live-output',
+    route: '/chat/qa',
+    ready: 'QA 2',
+    settle: 2500,
+    act: async (page) => {
+      await page.clickText('Show output');
+      await sleep(600);
+      await page.clickText('Running the Cypress tests');
+      await sleep(600);
+    },
+    check:
+      'The last lines Cypress printed in mono on a quiet panel; “Last activity … · using the CPU” revealed under the hint',
+  },
+  {
+    name: 'live-finished',
+    route: '/chat/qa',
+    ready: 'QA 2',
+    settle: 2500,
+    act: async (page) => {
+      await page.clickText('Worked 8 min · 3 steps');
+      await sleep(600);
+      await page.clickText('Show output');
+      await sleep(600);
+    },
+    check:
+      'Finished timeline: “Tried to run the Cypress tests · 6m 12s · 42 passed, 3 failed”, its last output lines open under it',
+  },
+  {
+    name: 'live-stalled',
+    route: '/chat/fin',
+    ready: 'Finance',
+    settle: 2500,
+    check:
+      'The working line reads “No progress for 5 min” with a still clock (no dots), then neutral “Check on it” and outlined “Stop”',
+  },
+  {
+    name: 'live-check',
+    route: '/chat/fin',
+    ready: 'Finance',
+    settle: 2500,
+    act: async (page) => {
+      await page.clickText('Check on it');
+      await sleep(900);
+    },
+    check: 'What the Mac saw, one quiet line under the buttons',
+  },
+];
 
 /** `--importing`: the Chief mid-import and the Designer working. */
 const IMPORTING = [
@@ -1339,6 +1409,13 @@ async function main() {
     await each(HEAVY);
     await stopMock();
     await each(HEAVY_OFFLINE);
+  }
+
+  if (phase('live-work')) {
+    await startMock('--live-work');
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await each(LIVE_WORK);
   }
 
   if (phase('importing')) {

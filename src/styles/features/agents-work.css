@@ -173,3 +173,111 @@
     transition: none;
   }
 }
+
+/* ------------------------------------------- the step it's on right now */
+
+/* components/agents/AgentLiveStep.tsx: the step and its timer in the
+   working line, and under it the quiet hint, "Show output", "Stop this
+   step" and what a check found. Metadata size, muted, the line's left
+   edge (past the dots). */
+
+/* The line's words are a button (it opens "Last activity …") that reads as text. */
+.text-button.button.agent-live__step {
+  gap: var(--spacing-xs);
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+}
+
+.text-button.button.agent-live__step:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.agent-live__timer {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.agent-live__quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.text-button.button.agent-live__action {
+  flex-shrink: 0;
+  font-size: var(--font-size-body-sm);
+}
+
+.agent-live {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  width: 100%;
+  max-width: min(var(--agents-bubble-max), 100%);
+  /* Past the typing dots, under the words. */
+  padding-left: calc(var(--spacing-lg) + var(--spacing-sm));
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
+  color: var(--text-muted);
+}
+
+.agent-live__life,
+.agent-live__hint,
+.agent-live__said,
+.agent-live__note {
+  margin: 0;
+}
+
+.agent-live__said {
+  color: var(--text-secondary);
+}
+
+.agent-live__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs) var(--spacing-md);
+}
+
+.agent-live__peek {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+.agent-live__peek[data-open] {
+  flex: 1 0 100%;
+}
+
+.agent-live__output {
+  max-height: 240px; /* css-ok: about twenty lines of output */
+  margin: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+  white-space: pre;
+  background: var(--surface-recessed);
+  border-radius: var(--radius-card);
+  user-select: text;
+}
+
+.agent-work__output {
+  grid-column: 2 / -1;
+  margin-top: var(--spacing-2xs);
+}
+
+/* A step with its time and counts wraps rather than cutting "3 failed" off. */
+.agent-work__step[data-detail] .agent-work__label {
+  white-space: normal;
+}
+
+.agent-work__output {
+  min-width: 0;
+}

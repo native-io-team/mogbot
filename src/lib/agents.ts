@@ -1195,6 +1195,10 @@ export const answerApproval = (
   });
 /** Stop the turn in progress so what's queued sends now. */
 export const interruptAgent = (agentId: string) => invoke<boolean>('agents_interrupt', { agentId });
+/** "Stop this step": end the command the agent is running; its turn carries on. Says what it did. */
+export const stopAgentStep = (agentId: string) => invoke<string>('agents_stop_step', { agentId });
+/** "Check on it": what the app can see of the turn now, in one line. Never interrupts it. */
+export const checkOnAgent = (agentId: string) => invoke<string>('agents_check_on', { agentId });
 export const revokePermission = (agentId: string, ruleId: string) =>
   invoke<void>('agents_revoke_permission', { agentId, ruleId });
 export const focusAgent = (agentId: string | null) => invoke<void>('agents_focus', { agentId });
@@ -2011,6 +2015,9 @@ export function plainActivity(activity: string | null | undefined): string | nul
     case 'Searching for':
       return 'Looking through the files';
     case 'Fetching': {
+      // An older build's "Fetching https://…"; the Mac's own plain words
+      // ("Fetching localhost:3268") are already what to say.
+      if (!/^https?:\/\//.test(rest)) return text;
       const host = /^https?:\/\/([^/\s]+)/.exec(rest)?.[1];
       return host ? `Reading ${host.replace(/^www\./, '')}` : 'Reading a web page';
     }

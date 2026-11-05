@@ -17,16 +17,23 @@ pub const LINE_CHARS: usize = 160;
 /// Raw output held for a running call (its newest part), before it's cut into lines.
 const BUFFER_BYTES: usize = 16 * 1024;
 
-static ANSI: LazyLock<Regex> = LazyLock::new(|| {
+static ANSI: LazyLock<Option<Regex>> = LazyLock::new(|| {
     // CSI sequences, OSC sequences (titles, links), and lone two-byte escapes.
-    Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]")
-        .unwrap()
+    Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]").ok()
 });
+
+/// Terminal escapes removed.
+fn strip(text: &str) -> std::borrow::Cow<'_, str> {
+    match ANSI.as_ref() {
+        Some(re) => re.replace_all(text, ""),
+        None => std::borrow::Cow::Borrowed(text),
+    }
+}
 
 /// One line as shown: escapes and controls gone, a progress bar's redraws
 /// (`\r`) reduced to what it says last, then redacted, scrubbed and clipped.
 pub fn clean_line(raw: &str) -> String {
-    let no_escapes = ANSI.replace_all(raw, "");
+    let no_escapes = strip(raw);
     let last = no_escapes
         .rsplit('\r')
         .find(|s| !s.trim().is_empty())
@@ -87,20 +94,20 @@ impl Buffer {
     }
 }
 
-static COUNT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\b(\d{1,6})\s+(passed|passing|failed|failing|skipped|pending)\b").unwrap()
+static COUNT: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(r"(?i)\b(\d{1,6})\s+(passed|passing|failed|failing|skipped|pending)\b").ok()
 });
 /// Cypress's run table: "✖  3 of 12 failed (25%)  06:12  45  42  3  -  -"
 /// (tests, passing, failing, pending, skipped) or "✔  All specs passed!  …".
-static CYPRESS: LazyLock<Regex> = LazyLock::new(|| {
+static CYPRESS: LazyLock<Option<Regex>> = LazyLock::new(|| {
     Regex::new(
         r"(?:All specs passed!|\d+ of \d+ failed \(\d+%\))\s+(?:\d+:\d+(?::\d+)?|\d+ms|[\d.]+s)\s+(\d+|-)\s+(\d+|-)\s+(\d+|-)",
     )
-    .unwrap()
+    .ok()
 });
 /// cargo's "test result: FAILED. 42 passed; 3 failed; 0 ignored", once per test binary.
-static CARGO: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"test result: \w+\. (\d+) passed; (\d+) failed").unwrap());
+static CARGO: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"test result: \w+\. (\d+) passed; (\d+) failed").ok());
 
 /// What a test run says it came to: "42 passed, 3 failed". Only counts the
 /// runner printed; `None` when it printed none we can read.
@@ -109,12 +116,12 @@ pub fn test_summary(text: &str) -> Option<String> {
         .lines()
         .rev()
         .take(120)
-        .map(|l| ANSI.replace_all(l, "").into_owned())
+        .map(|l| strip(l).into_owned())
         .collect();
     let num = |s: &str| s.parse::<u64>().ok();
     // Cypress's table, newest first.
     for line in &clean {
-        if let Some(c) = CYPRESS.captures(line) {
+        if let Some(c) = CYPRESS.as_ref().and_then(|re| re.captures(line)) {
             let passed = num(&c[2]).unwrap_or(0);
             let failed = num(&c[3]).unwrap_or(0);
             return Some(words(Some(passed), Some(failed)));
@@ -124,7 +131,7 @@ pub fn test_summary(text: &str) -> Option<String> {
     let cargo: Vec<(u64, u64)> = clean
         .iter()
         .filter_map(|l| {
-            let c = CARGO.captures(l)?;
+            let c = CARGO.as_ref()?.captures(l)?;
             Some((num(&c[1])?, num(&c[2])?))
         })
         .collect();
@@ -136,7 +143,7 @@ pub fn test_summary(text: &str) -> Option<String> {
     let mut passed = None;
     let mut failed = None;
     for line in &clean {
-        for c in COUNT.captures_iter(line) {
+        for c in COUNT.iter().flat_map(|re| re.captures_iter(line)) {
             let n = num(&c[1]);
             match c[2].to_ascii_lowercase().as_str() {
                 "passed" | "passing" if passed.is_none() => passed = n,
