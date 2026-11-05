@@ -228,6 +228,16 @@ export function ChatView({
   }, [messages, agent?.copy?.id]);
   // Each result's newest version is drawn in full; older ones fold.
   const newestResult = useMemo(() => new Set(newestResults(messages).values()), [messages]);
+  // The failure that ended the last turn, with nothing said since: only it
+  // says "send a message to try again".
+  const latestFailure = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const kind = messages[i].kind;
+      if (kind === 'error') return messages[i].id;
+      if (kind === 'user' || kind === 'agent' || kind === 'check_in') return null;
+    }
+    return null;
+  }, [messages]);
   const pinQuestion = !!card?.approval && pinFor === card.id;
   const reportPin = useCallback(
     (cardId: string, needsPin: boolean) =>
@@ -436,6 +446,7 @@ export function ChatView({
                   agent={agent}
                   liveCopyCard={liveCopyCard}
                   newestResult={newestResult}
+                  latestFailure={latestFailure}
                   onError={showError}
                   onLongPress={onMessageAction}
                   onDraftHeight={setDraftHeight}
@@ -592,6 +603,7 @@ function ItemView({
   agent,
   liveCopyCard,
   newestResult,
+  latestFailure,
   onError,
   onLongPress,
   onDraftHeight,
@@ -603,6 +615,7 @@ function ItemView({
   agent: Agent;
   liveCopyCard?: string | null;
   newestResult?: Set<string>;
+  latestFailure?: string | null;
   onError: (t: string) => void;
   onLongPress: (m: AgentMessage) => void;
   onDraftHeight: (height: number) => void;
@@ -617,6 +630,7 @@ function ItemView({
         queued={isQueued(item.message, agent)}
         liveCopy={item.message.id === liveCopyCard}
         newestResult={!item.message.result || !!newestResult?.has(item.message.id)}
+        latestFailure={item.message.id === latestFailure}
         onError={onError}
         onLongPress={onLongPress}
       />

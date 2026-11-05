@@ -36,7 +36,7 @@ import { LiveWork, WorkLine } from './work';
 import { CopyCard } from './copy';
 import { ResultCardView, useCanRevise } from './result';
 import { setComposer } from '../lib/drafts';
-import { useApp } from '../lib/store';
+import { useApp, useServed } from '../lib/store';
 
 const enter = FadeInDown.duration(220).springify().damping(18);
 
@@ -46,6 +46,7 @@ export const MessageRow = memo(function MessageRow({
   queued,
   liveCopy,
   newestResult = true,
+  latestFailure = false,
   onError,
   onLongPress,
 }: {
@@ -56,6 +57,8 @@ export const MessageRow = memo(function MessageRow({
   liveCopy?: boolean;
   /** This message carries the newest version of its result card. */
   newestResult?: boolean;
+  /** The failure that ended the agent's last turn, nothing since. */
+  latestFailure?: boolean;
   onError: (text: string) => void;
   /** Copy, Quote, Select Text: words only, so only user and agent messages. */
   onLongPress?: (message: AgentMessage) => void;
@@ -205,7 +208,7 @@ export const MessageRow = memo(function MessageRow({
       const row = limited ? (
         <Line text={words} icon="clock" />
       ) : (
-        <FailureCard message={message} agent={agent} title={words} />
+        <FailureCard message={message} agent={agent} title={words} latest={latestFailure} />
       );
       if (!message.work) return row;
       return (
@@ -383,7 +386,9 @@ function SystemLine({ message }: { message: AgentMessage }) {
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
-  const canDiff = useApp((s) => !!s.welcome?.methods.includes('agents.changeDiff'));
+  // The Mac's last answer while it's away: offline it stays, disabled.
+  const canDiff = useServed('agents.changeDiff');
+  const online = useApp((s) => !!s.welcome);
   const changes = message.kind === 'changes' ? message.changes : undefined;
   const text = changes
     ? `Changed ${changes.fileCount} file${changes.fileCount === 1 ? '' : 's'} in ${
@@ -394,7 +399,7 @@ function SystemLine({ message }: { message: AgentMessage }) {
       : message.kind === 'from_agent' && message.peer
         ? `From ${message.peer.name}: ${message.text}`
         : message.text;
-  const opens = !!changes && canDiff;
+  const opens = !!changes && canDiff && online;
   // No clock of its own: the chat's time lines say when (and the long-press menu, exactly).
   return (
     <Line
@@ -435,7 +440,9 @@ export function ChangeStats({ message }: { message: AgentMessage }) {
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
-  const canDiff = useApp((s) => !!s.welcome?.methods.includes('agents.changeDiff'));
+  // The Mac's last answer while it's away: offline it stays, disabled.
+  const canDiff = useServed('agents.changeDiff');
+  const online = useApp((s) => !!s.welcome);
   const changes = message.changes;
   if (!changes) return null;
   return (
@@ -452,6 +459,7 @@ export function ChangeStats({ message }: { message: AgentMessage }) {
       {canDiff && (
         <TextAction
           label="Review changes"
+          disabled={!online}
           onPress={() =>
             router.push({
               pathname: '/diff',
@@ -472,10 +480,13 @@ function FailureCard({
   message,
   agent,
   title,
+  latest,
 }: {
   message: AgentMessage;
   agent: Agent;
   title: string;
+  /** The agent's last turn: only then is "send a message" the way forward. */
+  latest: boolean;
 }) {
   const colors = useColors();
   const router = useRouter();
@@ -491,11 +502,15 @@ function FailureCard({
       tone="error"
       title={title}
       meta={formatClock(message.ts)}
-      source={project ? `${engine} · in ${project}` : engine}
+      // The message doesn't record what it ran on, and the agent may have
+      // switched engines since: only where, which doesn't change.
+      source={project ? `in ${project}` : undefined}
       note={
-        signedOut
-          ? `Sign in to ${engine} on your Mac, then send it again.`
-          : 'Send a message to try again.'
+        !latest
+          ? undefined
+          : signedOut
+            ? `Sign in to ${engine} on your Mac, then send it again.`
+            : 'Send a message to try again.'
       }
       actions={
         signedOut ? (

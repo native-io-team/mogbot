@@ -262,17 +262,28 @@ describe('errors in the chat', () => {
     expect(screen.getByText('Didn’t finish: The tool crashed')).toBeTruthy();
   });
 
-  it('a real failure says what it ran on and what to do', async () => {
+  it('a real failure says where it ran and, if it ended the last turn, what to do', async () => {
     const m = {
       ...msg('e3', 1),
       kind: 'error',
       text: '',
       failure: { kind: 'signed_out' },
     } as AgentMessage;
-    await render(<MessageRow message={m} agent={agent()} queued={false} onError={() => {}} />);
-    expect(screen.getByTestId('card-source').props.children).toBe('Claude Code · in site');
+    await render(
+      <MessageRow message={m} agent={agent()} queued={false} latestFailure onError={() => {}} />
+    );
+    // Not the engine: the message doesn't record it, and the agent may have switched.
+    expect(screen.getByTestId('card-source').props.children).toBe('in site');
     expect(screen.getByTestId('card-note')).toBeTruthy();
     expect(screen.getByLabelText('Connection details')).toBeTruthy();
+  });
+
+  it('an older failure doesn\'t tell you to try again', async () => {
+    const m = { ...msg('e4', 1), kind: 'error', text: 'Crashed', failure: { kind: 'other' } };
+    await render(
+      <MessageRow message={m as AgentMessage} agent={agent()} queued={false} onError={() => {}} />
+    );
+    expect(screen.queryByTestId('card-note')).toBeNull();
   });
 
   it('one agent writing to another is set off from the reply, not a line of prose', async () => {

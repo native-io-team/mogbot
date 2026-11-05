@@ -45,7 +45,7 @@ import {
   type,
 } from '../lib/theme';
 import type { SFName } from '../lib/icons';
-import { Dot, Icon, T, useRipple } from './ui';
+import { Dot, Icon, T, tap, useRipple } from './ui';
 
 /** What the card's icon is tinted with: muted by default, warning only for real risk. */
 export type CardTone = 'warning' | 'error';
@@ -235,7 +235,12 @@ export function Line({
   const mark =
     tone === 'success' ? colors.accentSuccess : tone === 'warning' ? colors.accentWarning : ink;
   const label = lead ? `${lead}. ${text}` : text;
-  const press = detail ? () => setOpen((o) => !o) : onPress;
+  const press = detail
+    ? () => {
+        tap();
+        setOpen((o) => !o);
+      }
+    : onPress;
   const chevron = detail
     ? open
       ? 'chevron.down'
