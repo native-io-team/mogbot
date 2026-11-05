@@ -361,7 +361,8 @@ export type SettingsSectionRequest =
   | 'agent-defaults'
   | 'agent-usage'
   | 'agent-independence'
-  | 'agent-admins';
+  | 'agent-admins'
+  | 'agent-policy';
 let settingsSectionOnOpen: SettingsSectionRequest | null = null;
 
 export function requestSettingsSectionOnOpen(section: SettingsSectionRequest) {

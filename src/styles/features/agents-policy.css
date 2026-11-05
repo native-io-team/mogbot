@@ -1,0 +1,190 @@
+/* What each agent can do (agents/policy.rs): the agent editor's "What it can
+   do" (AgentPolicy.tsx), Settings → Agents → What agents can do
+   (AgentTeamPolicySettings.tsx), and the body of a "Change … settings?" card
+   (AgentSettingsChange.tsx). Semantic tokens only: both themes. A chosen
+   preset is neutral (a stronger border), never the accent. */
+
+/* ------------------------------------------------ the editor's section */
+
+.agent-policy__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.agent-policy__lines {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-policy__line {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) auto; /* css-ok: label column */
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-body);
+}
+
+.agent-policy__line + .agent-policy__line {
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-policy__label {
+  color: var(--text-secondary);
+}
+
+.agent-policy__value {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  min-width: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.agent-policy__meta {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------ Settings → Agents */
+
+.agent-team-policy__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.agent-team-policy__lead {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-team-policy__presets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.agent-team-policy__preset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: var(--border-width-default) solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--transition-interaction),
+    border-color var(--transition-interaction);
+}
+
+.agent-team-policy__preset:hover:not(:disabled) {
+  background: var(--tint-subtle);
+}
+
+.agent-team-policy__preset:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.agent-team-policy__preset[aria-checked='true'] {
+  border-color: var(--border-strong);
+  background: var(--tint-subtle);
+  color: var(--text-primary);
+}
+
+.agent-team-policy__preset:disabled {
+  cursor: default;
+  opacity: var(--button-disabled-opacity);
+}
+
+.agent-team-policy__preset-label {
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+}
+
+.agent-team-policy__preset-detail {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-team-policy__lines {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.agent-team-policy__line {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); /* css-ok: label column */
+  gap: var(--spacing-sm);
+  padding: var(--spacing-3xs) 0;
+  font-size: var(--font-size-body-md);
+}
+
+.agent-team-policy__line dt {
+  color: var(--text-secondary);
+}
+
+.agent-team-policy__line dd {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.agent-team-policy__meta {
+  color: var(--text-muted);
+}
+
+.agent-team-policy__reset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+/* ------------------------------------------------ the settings card */
+
+.agent-settings-change {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.agent-settings-change__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.agent-settings-change__who {
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agent-settings-change__lines {
+  margin: 0;
+  padding-left: var(--spacing-lg);
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+}
+
+.agent-settings-change__why,
+.agent-settings-change__note {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}

@@ -13,6 +13,7 @@
 import { remoteBrief, remoteStatus } from './remote';
 import { phoneStatus } from './phone';
 import type { CommandMap } from '../types';
+import { BALANCED_TEAM, BALANCED_VIEW } from '../fixtures/policy';
 
 export const HARNESS_ROOT = '/Users/harness/ShipStudio';
 
@@ -226,6 +227,14 @@ export const baseCommands: CommandMap = {
     blockedApps: [],
   },
   agents_logins_team: { needs: [], done: 0, total: 0 },
+  // Edit agent's "What it can do", and Settings → Agents → What agents can
+  // do (`agents/policy.rs`): a Balanced team, as `fixtures.gen.ts` has it.
+  agents_policy: (args: Record<string, unknown>) => ({
+    ...BALANCED_VIEW,
+    agentId: String(args.agentId ?? ''),
+  }),
+  agents_policy_team: BALANCED_TEAM,
+  agents_policy_set: null,
   agents_usage: {
     week: {
       turns: 0,

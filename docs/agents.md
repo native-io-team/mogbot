@@ -2885,6 +2885,58 @@ time. The e2e Codex scenarios run on the account when one is signed in.
   that reports no cost adds tokens only, and a period containing one shows no
   dollar figure at all. The editor shows "This week" and "All time".
 
+## What each agent can do (`agents/policy.rs`, `agents/policy_card.rs`)
+
+One policy per agent, inheriting from a team default (`access.json` beside
+the agents; the team's independence stays in `independence.json`). Each
+dimension is the team's unless the agent has its own; rules add up (team's,
+then its own).
+
+| Dimension | Values | Enforced by |
+| --- | --- | --- |
+| Projects | all / listed / none; how in the one it's set to work in: read-only, its own copy, directly; other projects: read or change | the app: `--add-dir` / Codex writable roots carry only writable projects; `Edit(/<project>/**)` deny rules (Codex: read-only paths) for a read-only working folder or a copy's original; the broker refuses edits outside them and reads of projects out of scope (`policy::verdict` in `mcp::decide`); project tools refuse sessions/push where it may only look (`sessions::call`); copies follow `how` (mirrored to `work_directly`) |
+| Folders | paths, read or read-and-change | writable ones are added to the turn; reads in the others pass the broker without a card, writes are refused |
+| Apps | all / only some / none | the broker refuses `mcp__<app>__*` calls; the relay refuses a connection (`Connection::grant_for` reads the policy) |
+| Browser | yes / no | `--no-chrome` (mirrored to `reach.browser_off`, which the access chain's browser reads) and the broker |
+| Independence | team's or its own level | prompt only (`policy::independence_for`; outside text still never goes hard) |
+| Admin | may propose for others (Chief by default) | `propose_settings_change` |
+| Rules | free text | prompt only, and every UI line and card says so |
+
+**Presets.** "I trust my agents" (direct, every app, browser, Go hard),
+**Balanced** (exactly the old behaviour, the default), "Locked down" (read
+projects only, no apps, no browser, Check with me often). "Reset everyone to
+…" sets the team and clears every agent's own settings (admin role kept);
+"everyone" with one field clears only that field. "Make X like Y" copies Y's
+own settings (not its admin role).
+
+**Upgrade, no widening.** The first load writes `access.json` from what the
+app did: Balanced team, each "Work directly" and each removed browser as that
+agent's own setting.
+
+**Chat first.** `propose_settings_change {agents, changes, why}` (any agent
+for itself; admins for others and the team) puts "Change Hiring's settings?"
+in the proposer's chat: one group of plain sentences per set of agents
+changed the same way. Nothing changes until Allow (`policy_card::answer_card`,
+desk or phone); the card keeps the policy's version, so a stale card applies
+nothing. Changes that would strand an open copy or the project an agent works
+in are refused up front. A turn answering outside text can't propose. Every
+agent's prompt carries "What you may do", its rules, and "never tell the user
+to go to Settings".
+
+**UI.** Edit agent → "What it can do" (lines with Team default / Its own /
+instructions, quick menus, "Change in chat"); Settings → Agents → "What agents
+can do" (presets, Reset everyone, ⌘K "What agents can do…"); phone: read-only
+"What it can do" (`agents.policy`) with "Change in chat", and the card.
+
+**Residuals (not enforced).** Shell commands still go through the usual card,
+and an "Always allow" rule for one (e.g. `npm run build`) can write into a
+read-only project; Claude Code reading outside its folders without asking is
+not verified here, so read-scope is only as strong as that prompt; on Codex,
+reads aren't limited and apps are limited only for connections served here;
+take-over ignores the policy (the person at the keyboard answers). Seams: the
+Admin work should set/read `policy::is_admin`; Go-hard auto-allow should read
+`policy::independence_for`.
+
 ## Access
 
 An agent can do what your user account can do: it runs as you, with your files,

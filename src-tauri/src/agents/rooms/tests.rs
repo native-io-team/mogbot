@@ -199,6 +199,7 @@ fn the_thread_reads_back_with_each_members_card_answers() {
             expiry: None,
             from_outside: None,
             front: None,
+            settings: None,
             summary: None,
         });
         // The member's own log has the card, the room a copy.

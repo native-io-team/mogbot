@@ -1093,6 +1093,8 @@ pub async fn start(
                     a.reach.browser_sites.push(site.to_string());
                 }
             })?;
+            // A login card the user answered gives it the browser in its settings too.
+            super::policy::set_browser(agent_id, true)?;
             complete(
                 app,
                 agent_id,
@@ -1476,6 +1478,7 @@ fn record_card(app: &AppHandle, agent: &Agent, r: LoginRequest) -> Result<String
         expiry: None,
         from_outside: None,
         front: None,
+        settings: None,
     });
     runner::record_own(app, card)?;
     store::refresh_pending(&agent.id);
@@ -1592,6 +1595,7 @@ pub fn migrate_pending(app: Option<&AppHandle>) -> usize {
                 expiry: None,
                 from_outside: None,
                 front: None,
+                settings: None,
             });
             let new = match app {
                 Some(app) => runner::record_own(app, card).map(|_| ()),
@@ -2153,6 +2157,7 @@ pub fn remove(agent_id: &str, removal: &Removal) -> Result<Reach, CommandError> 
                 a.reach.browser_off = true;
                 a.reach.browser_sites.clear();
             })?;
+            super::policy::set_browser(agent_id, false)?;
         }
         Removal::BrowserOn => {
             store::update(agent_id, |a| a.reach.browser_off = false)?;
@@ -2358,6 +2363,7 @@ mod tests {
             expiry: None,
             from_outside: None,
             front: None,
+            settings: None,
         });
         // Written the way an older build wrote it: no `login` key at all.
         let line = serde_json::to_string(&card).unwrap();
@@ -2601,6 +2607,7 @@ mod tests {
             expiry: None,
             from_outside: None,
             front: None,
+            settings: None,
         });
         store::append_message(&card).unwrap();
         store::refresh_pending(&a.id);

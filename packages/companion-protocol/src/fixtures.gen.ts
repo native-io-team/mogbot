@@ -1728,6 +1728,91 @@ export const agentsReach = {
     }
   ]
 } satisfies Result<'agents.reach'>;
+export const agentsPolicy = {
+  "agentId": "a1",
+  "effective": {
+    "admin": false,
+    "apps": {
+      "mode": "all"
+    },
+    "browser": false,
+    "folders": [
+      {
+        "path": "/u/me/Invoices",
+        "write": false
+      }
+    ],
+    "independence": "judgement",
+    "own": [
+      "folders",
+      "browser",
+      "rules"
+    ],
+    "ownRules": [
+      "Only touch the marketing site"
+    ],
+    "projects": {
+      "elsewhere": "change",
+      "how": "copy",
+      "scope": "all"
+    },
+    "teamRules": [
+      "Never email clients"
+    ]
+  },
+  "lines": [
+    {
+      "enforced": "app",
+      "key": "projects",
+      "label": "Projects",
+      "team": true,
+      "value": "Every project · its own copy in client-site; changes the others directly"
+    },
+    {
+      "enforced": "app",
+      "key": "folders",
+      "label": "Folders on this Mac",
+      "team": false,
+      "value": "/u/me/Invoices (read)"
+    },
+    {
+      "enforced": "app",
+      "key": "apps",
+      "label": "Apps",
+      "team": true,
+      "value": "Every app you've connected"
+    },
+    {
+      "enforced": "app",
+      "key": "browser",
+      "label": "Your browser",
+      "team": false,
+      "value": "No"
+    },
+    {
+      "enforced": "prompt",
+      "key": "independence",
+      "label": "Independence",
+      "team": true,
+      "value": "Use good judgement"
+    },
+    {
+      "enforced": "app",
+      "key": "admin",
+      "label": "Admin",
+      "team": true,
+      "value": "No"
+    },
+    {
+      "enforced": "prompt",
+      "key": "rules",
+      "label": "Rules",
+      "team": false,
+      "value": "“Never email clients” · “Only touch the marketing site”"
+    }
+  ],
+  "sameAsTeam": false
+} satisfies Result<'agents.policy'>;
 export const agentsLoginsTeam = {
   "done": 1,
   "needs": [
@@ -2682,6 +2767,7 @@ export const frames = [
       "agents.loginDecline",
       "agents.loginSaveKey",
       "agents.reach",
+      "agents.policy",
       "agents.loginsTeam",
       "agents.loginsConnect",
       "agents.loginDismiss",
@@ -3053,6 +3139,56 @@ export const frames = [
         "kind": "approval",
         "text": "",
         "ts": 1762290000000
+      }
+    }
+  },
+  {
+    "t": "evt",
+    "seq": 1,
+    "event": {
+      "type": "agents.message",
+      "message": {
+        "agentId": "a1",
+        "approval": {
+          "detail": "Hiring: Can now work in client-site (its own copy). Can no longer use your browser.",
+          "requestId": "q13",
+          "settings": {
+            "change": {
+              "addProjects": [
+                "/u/Projects/client-site"
+              ],
+              "browser": false
+            },
+            "groups": [
+              {
+                "agentIds": [
+                  "hiring"
+                ],
+                "changes": [
+                  "Can now work in client-site (its own copy)",
+                  "Can no longer use your browser"
+                ],
+                "who": "Hiring"
+              }
+            ],
+            "hasRules": true,
+            "targets": [
+              {
+                "agentId": "hiring",
+                "kind": "agent"
+              }
+            ],
+            "version": 3,
+            "why": "You asked for Hiring to help on the client's site"
+          },
+          "status": "pending",
+          "summary": "Hiring: Can now work in client-site (its own copy). Can no longer use your browser.",
+          "title": "Change Hiring's settings?"
+        },
+        "id": "m41",
+        "kind": "approval",
+        "text": "",
+        "ts": 1762290100000
       }
     }
   },

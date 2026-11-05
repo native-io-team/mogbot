@@ -409,6 +409,7 @@ mod tests {
             expiry: None,
             from_outside: None,
             front: None,
+            settings: None,
         });
         message
     }
