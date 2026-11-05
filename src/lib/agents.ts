@@ -74,6 +74,36 @@ export interface WorkStep {
   outcome?: WorkStepOutcome;
   /** A screenshot this step produced. */
   image?: Attachment;
+  /** When what it ran came back. Absent while it runs, and in older timelines. */
+  endedAt?: number;
+  /** What a test run printed it came to ("42 passed, 3 failed"). */
+  summary?: string;
+  /** The last lines a long or failed command printed (finished timelines only). */
+  output?: string[];
+}
+
+/** A tool known to take a while (`agents::describe::Slow`); a newer Mac may send another. */
+export type WorkSlow = 'tests' | 'build' | 'install' | 'deploy' | 'other';
+
+/**
+ * The call running right now (`agents::work::LiveCall`): its plain words,
+ * when it started, and what it printed so far where the engine streams it.
+ */
+export interface LiveCall {
+  kind: WorkStepKind;
+  /** Its working-line words ("Running the Cypress tests"). */
+  label: string;
+  startedAt: number;
+  /** Known to take a while: "This usually takes a few minutes". */
+  slow?: WorkSlow;
+  /** Its newest lines of output so far. */
+  output?: string[];
+  /** The engine streams this call's output; when false it appears only once it finishes. */
+  streams: boolean;
+  /** Its process was using the CPU at the last look; absent when not found. */
+  busy?: boolean;
+  /** "Stop this step" can find its process. */
+  canStop: boolean;
 }
 
 /** `agents::work::StepOutcome`. */
@@ -101,6 +131,12 @@ export interface TurnWork {
    * working line *is* that step.
    */
   doing?: string;
+  /** While it runs: the call running now, in full. */
+  current?: LiveCall;
+  /** While it runs: its last sign of life (any engine output, its command's output or CPU). */
+  lastSignAt?: number;
+  /** While it runs, once it has made no progress for too long: when it last did. */
+  quietSince?: number;
 }
 
 export interface Agent {

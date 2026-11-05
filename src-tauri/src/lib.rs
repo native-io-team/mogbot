@@ -773,6 +773,8 @@ pub fn run() {
             commands::agents::quick_entry_resize,
             commands::agents::agents_answer_approval,
             commands::agents::agents_interrupt,
+            commands::agents::agents_stop_step,
+            commands::agents::agents_check_on,
             commands::agents::agents_revoke_permission,
             commands::agents::agents_save_secret,
             commands::agents::agents_login_start,

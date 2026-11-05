@@ -184,9 +184,101 @@ fn parse_table(raw: &str) -> Vec<(u32, u32)> {
         .collect()
 }
 
+/// The engine process running this agent's turn, if one is.
+pub fn pid_of(agent_id: &str) -> Option<u32> {
+    LIVE.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .copied()
+}
+
+/// One process, as `ps` shows it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcRow {
+    pub pid: u32,
+    pub ppid: u32,
+    /// Percent of one core (`ps`'s recent average).
+    pub cpu: f32,
+    /// Exited, not yet reaped.
+    pub zombie: bool,
+    /// Its command line. Matched against, never shown or kept.
+    pub command: String,
+}
+
+/// Every process, from one `ps` snapshot. Blocking; call it from
+/// `spawn_blocking`.
+#[cfg(unix)]
+pub fn snapshot() -> Option<Vec<ProcRow>> {
+    let mut ps = crate::utils::create_command("ps");
+    ps.args(["-axww", "-o", "pid=,ppid=,pcpu=,stat=,command="])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[allow(clippy::disallowed_methods)]
+    let out = ps.output().ok()?;
+    Some(parse_rows(&String::from_utf8_lossy(&out.stdout)))
+}
+
+#[cfg(not(unix))]
+pub fn snapshot() -> Option<Vec<ProcRow>> {
+    None
+}
+
+pub fn parse_rows(raw: &str) -> Vec<ProcRow> {
+    raw.lines()
+        .filter_map(|line| {
+            let mut parts = line.split_whitespace();
+            let pid = parts.next()?.parse().ok()?;
+            let ppid = parts.next()?.parse().ok()?;
+            let cpu = parts.next()?.replace(',', ".").parse().ok()?;
+            let stat = parts.next()?;
+            let command = parts.collect::<Vec<_>>().join(" ");
+            Some(ProcRow {
+                pid,
+                ppid,
+                cpu,
+                zombie: stat.contains('Z'),
+                command,
+            })
+        })
+        .collect()
+}
+
+/// Everything under `root` in a snapshot, not `root` itself.
+pub fn descendants(rows: &[ProcRow], root: u32) -> Vec<&ProcRow> {
+    let mut out: Vec<&ProcRow> = Vec::new();
+    let mut parents = vec![root];
+    let mut seen: HashSet<u32> = HashSet::from([root]);
+    while let Some(parent) = parents.pop() {
+        for row in rows.iter().filter(|r| r.ppid == parent) {
+            if seen.insert(row.pid) {
+                out.push(row);
+                parents.push(row.pid);
+            }
+        }
+    }
+    out
+}
+
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_ps_rows_with_cpu_state_and_command() {
+        let rows = parse_rows(
+            "  10  1  0.0 Ss  claude --print
+  11 10 87.5 R+ /bin/zsh -c npm test
+ 12 11 0,0 Z (node)
+bad
+",
+        );
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[1].cpu, 87.5);
+        assert_eq!(rows[1].command, "/bin/zsh -c npm test");
+        assert!(rows[2].zombie && !rows[1].zombie);
+        let under: Vec<u32> = descendants(&rows, 10).iter().map(|r| r.pid).collect();
+        assert_eq!(under, [11, 12]);
+    }
 
     #[test]
     fn parses_ps_output() {
