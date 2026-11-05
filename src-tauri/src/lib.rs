@@ -191,6 +191,10 @@ pub fn run() {
             agents::reach::sweep();
             let badge_app = _app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                // Agents' folders owner-only (0700 / 0600), whatever an
+                // older build or an agent's own CLI left.
+                let _ =
+                    tauri::async_runtime::spawn_blocking(agents::store::harden_permissions).await;
                 let _ = tauri::async_runtime::spawn_blocking(agents::store::expire_stale_approvals)
                     .await;
                 // Agents' secrets, known to redaction before any turn runs.

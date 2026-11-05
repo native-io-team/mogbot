@@ -406,7 +406,7 @@ fn read_mark(agent_id: &str) -> Option<TurnMark> {
 
 fn write_mark(agent_id: &str, mark: TurnMark) {
     if let (Some(path), Ok(json)) = (mark_path(agent_id), serde_json::to_vec(&mark)) {
-        let _ = std::fs::write(path, json);
+        let _ = super::store::write_private(&path, &json);
     }
 }
 
@@ -436,7 +436,7 @@ fn save_inbox(agent_id: &str, queue: &VecDeque<Inbound>) {
         super::secrets::redact_value(&mut v);
         serde_json::to_vec(&v)
     }) {
-        if let Err(e) = std::fs::write(&path, json) {
+        if let Err(e) = super::store::write_private(&path, &json) {
             tracing::warn!("[Agents] couldn't save {agent_id}'s queue: {e}");
         }
     }
