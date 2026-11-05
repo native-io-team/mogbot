@@ -44,7 +44,6 @@ import {
   getFolder,
   moveProjectToFolder,
 } from '../../lib/folders';
-import { DashboardHeader } from './DashboardHeader';
 import { DashboardSearch } from './DashboardSearch';
 import { AgentsPanel } from './AgentsPanel';
 import { MachineToolsPanel } from './MachineToolsPanel';
@@ -64,7 +63,6 @@ import { ProjectBulkActionConfirm } from './ProjectBulkActionConfirm';
 import { DashboardPreferencesCard } from './DashboardPreferencesCard';
 import { DashboardCommunityBanner } from './DashboardCommunityBanner';
 import { SLACK_INVITE_URL } from '../../lib/links';
-import { GitHubCalendar } from './GitHubCalendar';
 import { useModal } from '../../contexts/ModalContext';
 import { useDashboardVisibility } from '../../hooks/useDashboardVisibility';
 import { moveProjectToAccount, getProjectAccountId } from '../../lib/accounts';
@@ -128,8 +126,6 @@ export function ProjectList({
   onImportProject,
   isGitHubAuthenticated = true,
   onGitHubConnectForImport,
-  githubUsername,
-  isAuthCheckDone = false,
   onLoadingChange,
   cleanupStatus,
   pinnedSet,
@@ -184,11 +180,7 @@ export function ProjectList({
   const bugReportModal = useModal('bugReport');
   const featureRequestModal = useModal('featureRequest');
   const {
-    dashboardHeaderHidden,
-    calendarHidden,
     slackCtaHidden,
-    hideDashboardHeader,
-    hideCalendar,
     hideSlackCta,
     setDashboardHeaderHidden,
     setCalendarHidden,
@@ -572,18 +564,7 @@ export function ProjectList({
         onDoubleClick={handleDashboardDoubleClick}
       />
       <div className="project-list dashboard">
-        {!dashboardHeaderHidden && <DashboardHeader onHide={hideDashboardHeader} />}
-
         {SLACK_INVITE_URL && !slackCtaHidden && <DashboardCommunityBanner onHide={hideSlackCta} />}
-
-        {!calendarHidden && (
-          <GitHubCalendar
-            username={githubUsername}
-            isAuthenticated={isGitHubAuthenticated}
-            isAuthCheckDone={isAuthCheckDone}
-            onHide={hideCalendar}
-          />
-        )}
 
         <DashboardSearch />
 

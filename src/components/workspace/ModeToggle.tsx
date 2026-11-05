@@ -1,5 +1,5 @@
 /**
- * Projects | Agents: the switch between the app's two modes, at the top of
+ * Agents | Projects: the switch between the app's two modes, at the top of
  * the sidebar on every screen that has one (and in the compact headers that
  * stand in for it). Built on the navigation Tabs primitive in its segmented
  * look, since it switches a top-level view rather than filtering in place.
@@ -79,16 +79,6 @@ export function ModeToggle({
       >
         {/* The app's tooltip, not a native `title`: WKWebView draws native
             tooltips at the window's top-left, under the traffic lights. */}
-        <Tooltip content={`Projects (${MODE_TOGGLE_SHORTCUT})`}>
-          <TabsTab
-            value="projects"
-            className={tabClass}
-            aria-label="Projects"
-            leftIcon={iconOnly ? <FolderOpenIcon size={12} /> : undefined}
-          >
-            {iconOnly ? undefined : 'Projects'}
-          </TabsTab>
-        </Tooltip>
         <Tooltip content={`${(showDot && attention) || 'Agents'} (${MODE_TOGGLE_SHORTCUT})`}>
           <TabsTab
             value="agents"
@@ -98,6 +88,16 @@ export function ModeToggle({
           >
             {iconOnly ? undefined : 'Agents'}
             {showDot && <span className="sidebar-row-dot dot-attention mode-toggle__dot" />}
+          </TabsTab>
+        </Tooltip>
+        <Tooltip content={`Projects (${MODE_TOGGLE_SHORTCUT})`}>
+          <TabsTab
+            value="projects"
+            className={tabClass}
+            aria-label="Projects"
+            leftIcon={iconOnly ? <FolderOpenIcon size={12} /> : undefined}
+          >
+            {iconOnly ? undefined : 'Projects'}
           </TabsTab>
         </Tooltip>
       </TabsList>

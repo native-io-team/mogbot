@@ -19,13 +19,11 @@ import { PlusIcon, ActivityIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { EmptyState } from '../primitives/EmptyState';
 import { Spinner } from '../primitives/Spinner';
-import { DashboardHeader } from '../dashboard/DashboardHeader';
 import { DashboardSearch } from '../dashboard/DashboardSearch';
 import { WorkflowRow } from './WorkflowRow';
 import { WorkflowEditorModal, type WorkflowProjectOption } from './WorkflowEditorModal';
 import { RunHistoryModal } from './RunHistoryModal';
 import { useOptionalToast } from '../../contexts/ToastContext';
-import { useDashboardVisibility } from '../../hooks/useDashboardVisibility';
 import { listProjects } from '../../lib/project';
 import { trackEvent } from '../../lib/analytics';
 import { logger } from '../../lib/logger';
@@ -57,7 +55,6 @@ interface WorkflowsViewProps {
 export function WorkflowsView({ currentProjectPath }: WorkflowsViewProps) {
   const { workflows, progress, loaded, error } = useSyncExternalStore(subscribe, getSnapshot);
   const { showToast } = useOptionalToast();
-  const { dashboardHeaderHidden, hideDashboardHeader } = useDashboardVisibility();
 
   const [editing, setEditing] = useState<Workflow | 'new' | null>(null);
   const [historyFor, setHistoryFor] = useState<Workflow | null>(null);
@@ -182,10 +179,6 @@ export function WorkflowsView({ currentProjectPath }: WorkflowsViewProps) {
     <div className="dashboard-with-changelog">
       <div className="dashboard-scroll-container">
         <div className="dashboard-column">
-          {!dashboardHeaderHidden && (
-            <DashboardHeader title="What should run today?" onHide={hideDashboardHeader} />
-          )}
-
           <DashboardSearch />
 
           <section className="dashboard-panel">

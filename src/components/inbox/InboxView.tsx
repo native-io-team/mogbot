@@ -20,11 +20,9 @@ import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { EmptyState } from '../primitives/EmptyState';
 import { MenuButton } from '../primitives/MenuButton';
 import { SegmentedControl } from '../primitives/SegmentedControl';
-import { DashboardHeader } from '../dashboard/DashboardHeader';
 import { DashboardSearch } from '../dashboard/DashboardSearch';
 import { InboxDetail } from './InboxDetail';
 import { useOptionalToast } from '../../contexts/ToastContext';
-import { useDashboardVisibility } from '../../hooks/useDashboardVisibility';
 import { trackEvent } from '../../lib/analytics';
 import { formatAge, type InboxItem, type Severity } from '../../lib/workflows';
 import {
@@ -61,7 +59,6 @@ interface InboxViewProps {
 export function InboxView({ onOpenProject }: InboxViewProps) {
   const { inbox } = useSyncExternalStore(subscribe, getSnapshot);
   const { showToast } = useOptionalToast();
-  const { dashboardHeaderHidden, hideDashboardHeader } = useDashboardVisibility();
 
   const [filter, setFilter] = useState<InboxFilter>('unread');
   const [project, setProject] = useState<string>('all');
@@ -214,10 +211,6 @@ export function InboxView({ onOpenProject }: InboxViewProps) {
     <div className="dashboard-with-changelog">
       <div className="dashboard-scroll-container">
         <div className="dashboard-column">
-          {!dashboardHeaderHidden && (
-            <DashboardHeader title="What did your workflows find?" onHide={hideDashboardHeader} />
-          )}
-
           <DashboardSearch />
 
           <section className="dashboard-panel inbox-panel">
