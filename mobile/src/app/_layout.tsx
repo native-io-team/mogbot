@@ -23,6 +23,7 @@ import { useApp } from '../lib/store';
 import { sheet, useStackOptions } from '../lib/navigation';
 import { RootAccent, useAccent } from '../lib/accent';
 import { AppearanceProvider, useTheme } from '../lib/appearance';
+import { ShareIntentBridge } from '../lib/shareIntent';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -69,7 +70,9 @@ function Screens() {
               <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false }} />
               <Stack.Screen name="chat/[id]" options={{ title: '' }} />
               <Stack.Screen name="agent/[id]" options={sheet(colors, [0.62, 1])} />
-              <Stack.Screen name="schedule" options={sheet(colors, [0.5, 0.9])} />
+              <Stack.Screen name="schedule" options={sheet(colors, [0.75, 1])} />
+              <Stack.Screen name="new-agent" options={sheet(colors, [0.75, 1])} />
+              <Stack.Screen name="share" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="files/[id]" options={{ title: 'Files' }} />
               <Stack.Screen name="diff" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="start" options={sheet(colors, [0.6, 0.9])} />
@@ -98,6 +101,7 @@ function Screens() {
               />
             </Stack>
             <MenuHost />
+            <ShareIntentBridge />
           </NavigationTheme>
         </RootAccent>
       </KeyboardProvider>

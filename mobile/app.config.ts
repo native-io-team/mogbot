@@ -30,6 +30,26 @@ const SURFACE_APP = '#141414'; // --surface-app
 const SURFACE_APP_LIGHT = '#ffffff'; // the light palette's surfaceApp (src/lib/theme.ts)
 const CAMERA =
   'Used to scan the pairing code on your Mac, and to take photos you send to your agents.';
+/**
+ * iOS has one microphone string for the whole app, and expo-camera,
+ * expo-image-picker and expo-speech-recognition each write it, so it says
+ * only what the mic is for. Where the words are recognised is the speech
+ * string's claim (iOS-only, and iOS enforces it: `requiresOnDeviceRecognition`).
+ * Android shows neither; its mic stays off where recognition isn't on the
+ * phone (src/lib/dictation.ts, `dictationSupport`).
+ */
+const MICROPHONE = 'Used when you dictate a message to your agents.';
+const SPEECH =
+  'Turns what you dictate into text on this phone, for you to read before you send it.';
+/**
+ * "Send to agent…" in the share sheet is a native extension with an App
+ * Group, which needs an Apple team that can sign one. Off unless asked for,
+ * so `expo prebuild` for a free-team self-build is unchanged
+ * (docs/mobile.md, "Send to agent…"). The flag also reaches the app as
+ * `extra.shareExtension`: autolinking still links the package's native
+ * module into every build, so the app gates on this, not on the module.
+ */
+const shareExtension = process.env.SHIPSTUDIO_SHARE_EXTENSION === '1';
 
 export default (): ExpoConfig => ({
   name: brand.name,
@@ -82,8 +102,10 @@ export default (): ExpoConfig => ({
       'expo-camera',
       {
         cameraPermission: CAMERA,
-        microphonePermission: false,
-        recordAudioAndroid: false,
+        // Not false: that removes the key and blocks RECORD_AUDIO, which dictation needs.
+        // The app never records video; this is dictation's string (see MICROPHONE).
+        microphonePermission: MICROPHONE,
+        recordAudioAndroid: true,
       },
     ],
     // Placeholder art (assets/*.png are generated, neutral, unbranded) until real branding lands.
@@ -93,17 +115,43 @@ export default (): ExpoConfig => ({
       {
         photosPermission: 'Sends the photos you pick to your agent on your Mac.',
         cameraPermission: CAMERA,
-        microphonePermission: false,
+        microphonePermission: MICROPHONE,
       },
     ],
     'expo-document-picker',
     'expo-image',
     'expo-sharing',
+    [
+      'expo-speech-recognition',
+      { microphonePermission: MICROPHONE, speechRecognitionPermission: SPEECH },
+    ],
+    '@react-native-community/datetimepicker',
+    ...(shareExtension
+      ? [
+          [
+            'expo-share-intent',
+            {
+              iosActivationRules: {
+                NSExtensionActivationSupportsText: true,
+                NSExtensionActivationSupportsWebURLWithMaxCount: 1,
+                NSExtensionActivationSupportsWebPageWithMaxCount: 1,
+                NSExtensionActivationSupportsImageWithMaxCount: 10,
+                NSExtensionActivationSupportsFileWithMaxCount: 10,
+              },
+              iosShareExtensionName: `Send to ${brand.name}`,
+              androidIntentFilters: ['text/*', 'image/*', '*/*'],
+              androidMultiIntentFilters: ['image/*', '*/*'],
+            },
+          ] as [string, Record<string, unknown>],
+        ]
+      : []),
   ],
   experiments: { typedRoutes: true },
   extra: {
     brand,
     official: Boolean(projectId),
+    // Read by src/lib/shareIntent.tsx: only a build with the extension runs its hook.
+    shareExtension,
     ...(projectId ? { eas: { projectId } } : {}),
   },
 });

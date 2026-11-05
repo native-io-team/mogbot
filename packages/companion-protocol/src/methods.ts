@@ -139,7 +139,19 @@ export interface Methods {
    * only: check `welcome.methods`.
    */
   'agents.startFresh': { params: { agentId: string }; result: StoredAgent };
-  'agents.create': { params: { input: NewAgentInput }; result: StoredAgent };
+  /**
+   * `agents_create`, from the phone: a name (at most 40 characters), what it
+   * should do (one line, at most 500) and a colour; any other field is
+   * refused with `bad_params`. It goes on the engine the desk would pick
+   * (Claude Code when ready, else the first engine that is) with that
+   * engine's own model, and on the first free colour when none is given.
+   * `clientId` makes a retry return the agent the first try made. Newer
+   * Macs only: check `welcome.methods`.
+   */
+  'agents.create': {
+    params: { input: Pick<NewAgentInput, 'name' | 'role' | 'color'>; clientId?: string };
+    result: StoredAgent;
+  };
   /**
    * From the phone, only the row's toggles (`pinned`, `muted`, `hidden`)
    * and `instructions` (at most 20,000 characters); any other field is
@@ -177,6 +189,10 @@ export interface Methods {
     result: CheckIn;
   };
   'agents.schedule.update': {
+    /**
+     * An empty `when` keeps the schedule and changes only the note, on a Mac
+     * whose welcome has `timeZone`; an older one refuses it.
+     */
     params: { agentId: string; id: string; when: string; note: string };
     result: CheckIn;
   };

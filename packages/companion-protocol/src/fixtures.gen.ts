@@ -1486,6 +1486,25 @@ export const agentsStartFresh = {
   "unread": 2,
   "workDirectly": true
 } satisfies Result<'agents.startFresh'>;
+export const agentsCreate = {
+  "color": "teal",
+  "createdAt": 1762200000000,
+  "engine": "claude",
+  "hidden": false,
+  "id": "a9",
+  "isMain": false,
+  "lastActivityAt": 1762290000000,
+  "model": null,
+  "muted": false,
+  "name": "Inbox",
+  "pendingApprovals": 0,
+  "pinned": false,
+  "preview": null,
+  "role": "Keeps my inbox down to what matters",
+  "sessionId": null,
+  "shape": 2,
+  "unread": 0
+} satisfies Result<'agents.create'>;
 export const sessionsSend = {
   "sessionId": "pty-1"
 } satisfies Result<'sessions.send'>;
@@ -1515,6 +1534,7 @@ export const frames = [
       "agents.focus",
       "agents.markUnread",
       "agents.startFresh",
+      "agents.create",
       "agents.update",
       "agents.revokePermission",
       "agents.instructions",
@@ -1540,7 +1560,8 @@ export const frames = [
       "sessions.key",
       "sessions.start",
       "preview.screenshot"
-    ]
+    ],
+    "timeZone": "America/New_York"
   },
   {
     "t": "refused",

@@ -55,9 +55,36 @@ pub const MAX_SOCKETS_PER_DEVICE: usize = 4;
 pub const MAX_SOCKETS: usize = 16;
 /// Requests per rolling minute per device.
 pub const MAX_REQUESTS_PER_MINUTE: usize = 600;
+/// Agents a device may create per rolling minute: far more than anyone sets
+/// up by hand, far fewer than a stolen token could fill the team (and the
+/// Chief of Staff's prompt) with.
+pub const MAX_AGENTS_CREATED_PER_MINUTE: usize = 10;
 /// Revoked token hashes remembered, so a removed phone hears "removed"
 /// rather than "unknown".
 const REVOKED_KEPT: usize = 64;
+
+/// A rolling one-minute window per device: counts `now` and says yes while
+/// under `max`.
+fn within_minute(
+    windows: &Mutex<HashMap<String, VecDeque<u64>>>,
+    device_id: &str,
+    now: u64,
+    max: usize,
+) -> bool {
+    let mut all = windows.lock().unwrap_or_else(|e| e.into_inner());
+    let window = all.entry(device_id.to_string()).or_default();
+    while window
+        .front()
+        .is_some_and(|t| now.saturating_sub(*t) >= 60_000)
+    {
+        window.pop_front();
+    }
+    if window.len() >= max {
+        return false;
+    }
+    window.push_back(now);
+    true
+}
 
 pub(crate) fn now_ms() -> u64 {
     crate::remote_access::now_ms()
@@ -339,6 +366,7 @@ pub struct Companion {
     conns: Mutex<HashMap<u64, Conn>>,
     next_conn: AtomicU64,
     requests: Mutex<HashMap<String, VecDeque<u64>>>,
+    creates: Mutex<HashMap<String, VecDeque<u64>>>,
     last_status: Mutex<Option<wire::MacStatus>>,
 }
 
@@ -370,6 +398,7 @@ impl Companion {
             conns: Mutex::new(HashMap::new()),
             next_conn: AtomicU64::new(1),
             requests: Mutex::new(HashMap::new()),
+            creates: Mutex::new(HashMap::new()),
             last_status: Mutex::new(None),
         }
     }
@@ -471,19 +500,13 @@ impl Companion {
 
     /// Sliding-minute rate limit per device.
     pub fn allow_request(&self, device_id: &str, now: u64) -> bool {
-        let mut all = self.requests.lock().unwrap_or_else(|e| e.into_inner());
-        let window = all.entry(device_id.to_string()).or_default();
-        while window
-            .front()
-            .is_some_and(|t| now.saturating_sub(*t) >= 60_000)
-        {
-            window.pop_front();
-        }
-        if window.len() >= MAX_REQUESTS_PER_MINUTE {
-            return false;
-        }
-        window.push_back(now);
-        true
+        within_minute(&self.requests, device_id, now, MAX_REQUESTS_PER_MINUTE)
+    }
+
+    /// One more agent created from `device_id`, if it's under
+    /// `MAX_AGENTS_CREATED_PER_MINUTE` in the last minute.
+    pub fn allow_create(&self, device_id: &str, now: u64) -> bool {
+        within_minute(&self.creates, device_id, now, MAX_AGENTS_CREATED_PER_MINUTE)
     }
 
     /// Revoke at the Mac: the token stops working and its sockets close now.

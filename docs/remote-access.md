@@ -1,7 +1,9 @@
 # Remote access
 
-Keep your agents going from your phone. Any AI assistant that can add a custom
-MCP connector (Grok, Claude, ChatGPT, Cursor, …) drives the Ship Studio
+Drive your agents from another assistant. (For your phone, the answer is the
+companion app, [mobile.md](mobile.md); this answers a different question.) Any
+AI assistant that can add a custom MCP connector (Grok, Claude, ChatGPT,
+Cursor, …) drives the app
 running on your own Mac — it's a standard MCP server, nothing assistant-specific. It reads
 what an agent tab is showing, answers it, starts new agents, screenshots the
 preview, and can push behind a PIN only you know. When you sit back down, the
@@ -21,7 +23,7 @@ it was already happening.
 
 Chat assistants don't SSH; they call tools. Even where one could (Grok Bot's
 cloud computer has a terminal), a shell would start a second session alongside
-the one in Ship Studio, and the conversation would live in that shell instead
+the one in the app, and the conversation would live in that shell instead
 of in the tab you come back to. It would also hand a third party's cloud
 machine a key to your whole computer. The MCP server drives the existing agent
 tabs and nothing else.
@@ -29,7 +31,7 @@ tabs and nothing else.
 ## The constraint: the computer has to be on
 
 Everything stops if the Mac sleeps, shuts down, loses its connection, or
-Ship Studio quits, and nothing can wake it from a phone. So the feature says
+the app quits, and nothing can wake it from a phone. So the feature says
 this first, before any setup, and makes it as unlikely as possible.
 
 | Way it stops | What we do | What we can't do |
@@ -37,7 +39,7 @@ this first, before any setup, and makes it as unlikely as possible.
 | Idle sleep | `caffeinate -i -s -m -w <our pid>` while remote access is on. No privileges, and it's released if we crash (verified). | `-s` only holds on mains power. |
 | Lid closed (laptops) | **Lid-closed mode**: `pmset -a disablesleep 1` behind the admin password prompt. `caffeinate` cannot do this — macOS sleeps on lid close regardless. Offered ticked-by-default beside **Turn on remote access** on laptops, with the cost spelled out (plug in, uses battery, not in a bag). Read back from `pmset -g` every time. When Remote access turned it on (`lid_mode_by_us`), turning remote access off switches it back — a second password prompt; macOS allows no other way without a privileged helper. | It outlives the app if the app quits while it's on; the checklist keeps showing it. |
 | Battery | The checklist shows "On battery (64%)", and the sidebar indicator turns amber. `computer_status` warns the assistant, loudly below 20%. | Charge it. |
-| Restart | **Reopen after a restart**: a LaunchAgent (`studio.ship.reopen-at-login`) runs `open -g` on the bundle at login, and remote access resumes on launch if it was on. | With FileVault, someone still has to log in once. The copy says so. |
+| Restart | **Reopen after a restart**: a LaunchAgent (`<identifier>.reopen-at-login`, from `brand.json`) runs `open -g` on the bundle at login, and remote access resumes on launch if it was on. | With FileVault, someone still has to log in once. The copy says so. |
 | Quitting | The quit confirmation says remote access is on and what quitting does. | — |
 | Offline or asleep anyway | The server's `instructions` tell the assistant that a connection failure means exactly this, so it tells the user instead of retrying. | Nothing answers, so the assistant only has what it read at `initialize`. |
 
@@ -146,13 +148,13 @@ previews of what was typed, never a PIN. Pure reads are left out so they
 don't bury the actions.
 
 **Liability.** The tunnel is Tailscale Funnel on the user's own account.
-Traffic never passes through anything Ship Studio runs, and there's nothing of
+Traffic never passes through anything we run, and there's nothing of
 ours to breach.
 
 ## How it fits together
 
 ```
-Grok Bot ──HTTPS──▶ Tailscale ──▶ tailscaled Funnel (/shipstudio, TLS ends on the Mac)
+Grok Bot ──HTTPS──▶ Tailscale ──▶ tailscaled Funnel (/<slug>, TLS ends on the Mac)
                                           │
                                           ▼
                          127.0.0.1:<port>  remote_access::server (MCP)
@@ -177,7 +179,8 @@ Grok Bot ──HTTPS──▶ Tailscale ──▶ tailscaled Funnel (/shipstudio
   Inbox's spawn-not-paste rule — and the project's tab list adopts it without
   the window changing. Rust reports success only once a new agent PTY
   actually exists.
-- **Tailscale.** Mounted at `/shipstudio` so nothing else the user serves is
+- **Tailscale.** Mounted at `/<slug>` (`brand::FUNNEL_MOUNT_PATH`; Ship Studio
+  mounts `/shipstudio`, so both can be on) so nothing else the user serves is
   touched. "On" means the serve config shows our mount proxying to our port
   with funnel allowed. First use needs the tailnet owner's approval: the CLI
   prints a link and waits, so we read its output as it arrives and surface the
@@ -204,7 +207,7 @@ Grok Bot ──HTTPS──▶ Tailscale ──▶ tailscaled Funnel (/shipstudio
 `close_agent`, `show_progress`, `preview_screenshot`, `git_status`,
 `prepare_push`, `confirm_push`, `deploy_status`.
 
-Ship Studio's own agents get the same project tools from the same handlers
+The app's own agents get the same project tools from the same handlers
 (`agents/sessions.rs`, see docs/agents.md), with a chat card instead of the
 PIN for pushing.
 
@@ -278,7 +281,7 @@ the build log's likeliest error line. `confirm_push` ends with NEXT: call it.
   `remote-show-project` (`useRemoteAgentControl` → the same open as a click),
   wait for the preview to attach to the agent bridge, and wait out a dev
   server that is still starting (up to 90 s) — advice to "switch over" would
-  be for someone who isn't there. Ship Studio's own agents never take that
+  be for someone who isn't there. The app's own agents never take that
   fallback. `open_project` does the switch on its own.
 - **`create_project`** scaffolds a web starter the way the New Project form
   does (clone with `--depth 1`, drop the starter's history, gitignore
@@ -308,7 +311,7 @@ the build log's likeliest error line. `confirm_push` ends with NEXT: call it.
   at 2× desktop (2560×1600) or 3× phone (1170×2532) through the preview's own
   Playwright capture and re-encoded as JPEG.
 - **Screenshot links.** Each image is also served at
-  `…/shipstudio/shot/<id>.jpg` so the assistant can show it in chat. The id is
+  `…/<slug>/shot/<id>.jpg` so the assistant can show it in chat. The id is
   a fresh 256-bit random value per image — the link opens that one picture and
   never contains the connector token. In memory only, 40 newest, 24 hours, and
   all of them cleared when the link is replaced or remote access is turned off. Definitions are in `src-tauri/src/remote_access/tools.rs`; the

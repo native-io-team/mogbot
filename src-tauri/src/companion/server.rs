@@ -456,6 +456,21 @@ enum Ended {
     SendFailed,
 }
 
+/// The zone `chrono::Local` (the schedule grammar's) reads times in. chrono
+/// honours `TZ` first, so a `TZ` that names a zone is the answer, and one
+/// that doesn't (a POSIX rule) is no answer at all rather than a wrong one.
+fn local_time_zone() -> Option<String> {
+    match std::env::var("TZ") {
+        Ok(tz) if !tz.trim().is_empty() => {
+            // ":America/New_York", or a path into the zone database.
+            let tz = tz.trim().trim_start_matches(':');
+            let tz = tz.rsplit("zoneinfo/").next().unwrap_or(tz);
+            (!tz.starts_with('/') && (tz.contains('/') || tz == "UTC")).then(|| tz.to_string())
+        }
+        _ => iana_time_zone::get_timezone().ok(),
+    }
+}
+
 async fn connected<S>(
     c: &Arc<Companion>,
     ws: &mut S,
@@ -483,6 +498,7 @@ where
             Resume::Snapshot { .. } => ResumeMode::Snapshot,
         },
         methods: router::METHODS.to_vec(),
+        time_zone: local_time_zone(),
     };
     if !send(ws, &welcome).await {
         return Ended::SendFailed;

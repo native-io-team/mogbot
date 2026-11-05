@@ -409,6 +409,24 @@ export async function setAgentToggles(
   }
 }
 
+/**
+ * A new agent, made on the Mac by the desk's own create path. Resolves once
+ * the overview has it, read back from the Mac rather than assumed, so its
+ * chat opens on the agent as the Mac stores it. `clientId` is the screen's
+ * own: tapping Create again after a dropped connection returns the agent
+ * the first tap made instead of a second one.
+ */
+export async function createAgent(
+  input: { name: string; role: string; color?: string },
+  clientId: string = Crypto.randomUUID()
+) {
+  const stored = await call('agents.create', { input, clientId });
+  if (!getApp().overview?.agents.some((a) => a.id === stored.id)) {
+    setApp({ overview: await call('agents.overview', {}) });
+  }
+  return stored;
+}
+
 /** A new conversation from its next message; memory kept. The registry event redraws the sheet. */
 export async function startFresh(agentId: string) {
   await call('agents.startFresh', { agentId });

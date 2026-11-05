@@ -164,6 +164,7 @@ export function createMockServer(opts: MockOptions = {}) {
 
   const projects: ProjectSummary[] = seedProjects(now);
   const instructions = new Map<string, string>();
+  const createdByClient = new Map<string, Omit<Agent, 'status' | 'home'>>();
   const screens = new Map<string, string>(seedScreens());
   const sessionClientIds = new Map<string, string>();
   const findSession = (id: string) =>
@@ -816,6 +817,15 @@ export function createMockServer(opts: MockOptions = {}) {
     },
     'agents.schedule.update': (p) => {
       const ci = checkIn(p);
+      // An empty `when` keeps the schedule (the Mac's `schedule::edit_in`).
+      if (typeof p.when !== 'string' || !p.when.trim()) {
+        if (!String(p.note).trim()) {
+          return fail({ type: 'Validation', field: 'note', reason: 'Say what to do then.' });
+        }
+        ci.note = String(p.note).trim();
+        emit({ type: 'agents.registry', overview: overview() });
+        return ci;
+      }
       const parsed = parseWhen(String(p.when), Date.now());
       if ('error' in parsed)
         return fail({ type: 'Validation', field: 'when', reason: parsed.error });
@@ -865,6 +875,63 @@ export function createMockServer(opts: MockOptions = {}) {
         screen,
         ...(session.state === 'finished' ? { reply: lastReply(screen) } : {}),
       } satisfies SessionScreen;
+    },
+    // The router's rules (router.rs `check_new_agent`): a name, a role and a colour only.
+    'agents.create': (p, c) => {
+      const input = (p.input ?? {}) as Record<string, unknown>;
+      if (Object.keys(input).some((k) => !['name', 'role', 'color'].includes(k))) {
+        return fail({
+          type: 'Protocol',
+          code: 'bad_params',
+          message: 'From the phone, a new agent takes a name, what it should do and a colour.',
+        });
+      }
+      const text = (v: unknown) =>
+        (typeof v === 'string' ? v : '').split(/\s+/).filter(Boolean).join(' ');
+      const clientId = text(p.clientId);
+      const key = `${c.deviceId}:create:${clientId}`;
+      const known = clientId ? createdByClient.get(key) : undefined;
+      if (known) return known;
+      const name = text(input.name);
+      const role = text(input.role);
+      if (!name)
+        return fail({ type: 'Protocol', code: 'bad_params', message: 'Give the agent a name.' });
+      if (agents.some((a) => a.name.toLowerCase() === name.toLowerCase())) {
+        return fail({
+          type: 'Validation',
+          field: 'name',
+          reason: `There's already an agent called ${name}.`,
+        });
+      }
+      const id = `a_${randomUUID().slice(0, 8)}`;
+      const at = Date.now();
+      const made: Agent = {
+        id,
+        name,
+        role,
+        shape: agents.length % 14,
+        color: typeof input.color === 'string' && input.color ? input.color : 'orange',
+        isMain: false,
+        pinned: false,
+        hidden: false,
+        sessionId: null,
+        createdAt: at,
+        lastActivityAt: at,
+        preview: null,
+        unread: 0,
+        pendingApprovals: 0,
+        engine: 'claude',
+        model: null,
+        muted: false,
+        status: { state: 'idle', activity: null, since: null },
+        home: `/Users/you/ShipStudio/.agents/${id}`,
+      };
+      agents.push(made);
+      messages.set(id, []);
+      emit({ type: 'agents.registry', overview: overview() });
+      const { status: _status, home: _home, ...stored } = made;
+      if (clientId) createdByClient.set(key, stored);
+      return stored;
     },
     'agents.update': (p) => {
       const a = agent(String(p.agentId));
@@ -1146,6 +1213,8 @@ export function createMockServer(opts: MockOptions = {}) {
           resume: canReplay ? 'replay' : 'snapshot',
           // What the real Mac advertises in P1, not what the mock happens to implement.
           methods: realWelcome.methods,
+          // The zone the mock's parser reads times in: this machine's own.
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
         if (canReplay) {
           for (const e of compact(journal.filter((j) => j.seq > resume.seq))) {
@@ -1791,7 +1860,11 @@ function parseWhen(
     if (minutes < 15) return fail('Routines can repeat every 15 minutes at most.');
     return { nextAt: now + minutes * 60_000, repeat: { kind: 'every', minutes } };
   }
-  m = /^every (day|weekday|weekend day|[a-z]+day)s? (?:at )?(.+)$/.exec(s);
+  // "every monday and thursday at 08:30", as the picker writes several days.
+  m =
+    /^every (day|weekday|weekend day|[a-z]+days?(?:(?:,| and|, and) [a-z]+days?)*) (?:at )?(.+)$/.exec(
+      s
+    );
   if (m) {
     const t = clock(m[2]);
     if (!t) return fail(`I can't read "${m[2]}" as a time.`);
@@ -1802,12 +1875,20 @@ function parseWhen(
           ? [1, 2, 3, 4, 5]
           : m[1] === 'weekend day'
             ? [0, 6]
-            : [DAYS.indexOf(m[1])];
-    if (days[0] === -1) return fail(`"${m[1]}" isn't a day I know.`);
+            : m[1].split(/,? and |, /).map((d) => DAYS.indexOf(d.replace(/s$/, '')));
+    const unknown = days.indexOf(-1);
+    if (unknown !== -1) return fail(`"${m[1]}" has a day I don't know.`);
     return {
       nextAt: nextDaily(days, t[0], t[1], now),
       repeat: { kind: 'days', days, hour: t[0], minute: t[1] },
     };
+  }
+  // "2026-11-20 09:00", local: a once on a date, as the picker writes it.
+  m = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})$/.exec(s);
+  if (m) {
+    const at = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+    if (at <= now) return fail('That time has passed.');
+    return { nextAt: at };
   }
   m = /^in (\d+) (minute|min|hour|day)s?$/.exec(s);
   if (m) {
