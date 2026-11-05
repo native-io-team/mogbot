@@ -695,12 +695,15 @@ export interface UpdateAgentInput {
   workDirectly?: boolean;
 }
 
+/** The model choice that passes no model: whatever the engine itself defaults to. */
+export const ENGINE_DEFAULT_LABEL = 'Engine’s default';
+
 /**
  * The models an agent can run on: Claude Code's own `--model` aliases, which
  * always mean the current model of that family. Must match `MODELS` in store.rs.
  */
 export const AGENT_MODELS: readonly ModelChoice[] = [
-  { value: '', label: 'Default' },
+  { value: '', label: ENGINE_DEFAULT_LABEL },
   { value: 'opus', label: 'Most capable', detail: 'Opus' },
   { value: 'sonnet', label: 'Balanced', detail: 'Sonnet' },
   { value: 'haiku', label: 'Fastest', detail: 'Haiku' },
@@ -708,7 +711,7 @@ export const AGENT_MODELS: readonly ModelChoice[] = [
 
 export const ENGINE_LABEL: Record<AgentEngine, string> = { claude: 'Claude Code', codex: 'Codex' };
 
-/** Default first, then the engine's own models (Claude Code's aliases until the overview says). */
+/** Engine's default first, then the engine's own models (Claude Code's aliases until the overview says). */
 export function modelChoices(engine: AgentEngine, engines: EngineInfo[]): readonly ModelChoice[] {
   const listed = engines.find((e) => e.id === engine)?.models;
   if (engine === 'claude' && !listed?.length) return AGENT_MODELS;
@@ -725,7 +728,7 @@ export function modelLabel(
   model: string | null,
   choices: readonly ModelChoice[] = AGENT_MODELS
 ): string {
-  return choices.find((m) => m.value === (model ?? ''))?.label ?? model ?? 'Default';
+  return choices.find((m) => m.value === (model ?? ''))?.label ?? model ?? ENGINE_DEFAULT_LABEL;
 }
 
 /**
@@ -782,6 +785,19 @@ export function newAgentModel(
 ): string {
   const chosen = defaults?.models[engine] ?? '';
   return choices.some((m) => m.value === chosen) ? chosen : '';
+}
+
+/**
+ * The line under "New agents start on" when the chosen engine can't take new
+ * agents and they start on another for now (`startsOn`), or null when they
+ * start where chosen. `verb` is how the control is used: "Pick" on the desk,
+ * "Tap" on the phone (mobile/src/lib/newAgentDefaults.ts says the same).
+ */
+export function startsOnFallback(defaults: NewAgentDefaults, verb: 'Pick' | 'Tap'): string | null {
+  const { engine, startsOn } = defaults;
+  if (!engine || engine === startsOn) return null;
+  const on = ENGINE_LABEL[startsOn];
+  return `${ENGINE_LABEL[engine]} isn’t ready, so new agents start on ${on} for now. ${verb} ${on} to keep them there.`;
 }
 
 /** What an engine needs before it can take an agent, or null when it can. */

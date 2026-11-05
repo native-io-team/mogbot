@@ -311,9 +311,20 @@
   gap: var(--spacing-sm);
 }
 
-.agent-defaults-trigger__label,
-.agent-defaults-menu__label {
+.agent-defaults-trigger__label {
   color: var(--text-primary);
+}
+
+/* Every row keeps the tick's room, so the labels line up whichever is current. */
+.agent-defaults-menu__check {
+  display: inline-flex;
+  width: var(--size-icon-sm);
+  flex-shrink: 0;
+}
+
+.agent-defaults-menu__label {
+  margin-right: auto;
+  padding-right: var(--spacing-lg);
 }
 
 .agent-defaults-trigger__detail,
@@ -323,8 +334,7 @@
 }
 
 .agent-defaults-menu .ss-dropdown__item {
-  justify-content: space-between;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-sm);
 }
 
 .agent-defaults-problem {

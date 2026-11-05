@@ -927,7 +927,13 @@ pub struct AppState {
     /// an engine, and a model per engine. `None` follows the rule (Claude
     /// Code when ready, else the first engine that is) on the engine's own
     /// model; see `agents::defaults`.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Read leniently: anything unreadable is `None`, never a failed parse
+    /// of the whole state (which the next write would save over).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::agents::defaults::lenient"
+    )]
     pub agent_defaults: Option<crate::agents::defaults::Saved>,
     /// Whether the dashboard home header is hidden
     #[serde(skip_serializing_if = "Option::is_none")]

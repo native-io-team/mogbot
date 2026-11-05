@@ -5,13 +5,14 @@
  * Settings. On a Mac that doesn't serve it, the choice is shown, not offered.
  */
 
-import type { AgentEngine, NewAgentDefaultsChange } from '@shipstudio/companion-protocol';
+import type { NewAgentDefaultsChange } from '@shipstudio/companion-protocol';
 import { useState } from 'react';
 import { Alert, View, StyleSheet } from 'react-native';
 import { Icon, Row, Section, tap } from './ui';
 import { useAccent } from '../lib/accent';
 import { haptic } from '../lib/haptics';
 import {
+  canChooseEngine,
   chosenModel,
   engineChoices,
   modelChange,
@@ -52,7 +53,7 @@ export function NewAgentDefaults() {
       <View style={styles.check} />
     );
   const choices = engineChoices(engines);
-  const installed = engines.filter((e) => e.installed).map((e) => e.id as AgentEngine);
+  const installed = engines.filter((e) => e.installed).map((e) => e.id);
 
   return (
     <>
@@ -66,7 +67,11 @@ export function NewAgentDefaults() {
               detail={e.why ?? undefined}
               selected={on}
               disabled={!e.ready}
-              onPress={canSet && !on && e.ready ? () => void change({ engine: e.id }) : undefined}
+              onPress={
+                canSet && canChooseEngine(defaults, e)
+                  ? () => void change({ engine: e.id })
+                  : undefined
+              }
               trailing={check(on)}
               last={i === choices.length - 1}
             />

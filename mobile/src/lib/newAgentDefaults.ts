@@ -64,14 +64,38 @@ export function modelOptions(engine: AgentEngine, engines: EngineInfo[]): ModelO
 export const chosenModel = (defaults: NewAgentDefaults, engine: AgentEngine) =>
   defaults.models[engine] ?? '';
 
+/**
+ * Why new agents start somewhere other than the engine chosen, the desk's
+ * words (`startsOnFallback` in src/lib/agents.ts), or null when they don't.
+ */
+export function startsOnFallback(defaults: NewAgentDefaults): string | null {
+  const why = notChosenBecause(defaults);
+  if (!why) return null;
+  const on = ENGINE_NAME[defaults.startsOn];
+  return `${why}, so new agents start on ${on} for now. Tap ${on} to keep them there.`;
+}
+
+/** "Codex isn’t ready" while the chosen engine isn't where new agents start, else null. */
+export function notChosenBecause(defaults: NewAgentDefaults): string | null {
+  const { engine, startsOn } = defaults;
+  return engine && engine !== startsOn ? `${ENGINE_NAME[engine]} isn’t ready` : null;
+}
+
 /** The footer under "New agents": where they start, and why when it isn't the choice. */
 export function startsOnLine(defaults: NewAgentDefaults): string {
-  const on = ENGINE_NAME[defaults.startsOn];
-  if (defaults.engine && defaults.engine !== defaults.startsOn) {
-    return `${ENGINE_NAME[defaults.engine]} isn’t ready, so new agents start on ${on} for now. Agents you already have keep theirs.`;
-  }
-  return 'For new agents only: agents you already have keep theirs.';
+  const fallback = startsOnFallback(defaults);
+  return fallback
+    ? `${fallback} Agents you already have keep theirs.`
+    : 'For new agents only: agents you already have keep theirs.';
 }
+
+/**
+ * Whether tapping an engine's row saves it: a ready engine that isn't already
+ * the saved choice. That includes the one new agents start on for now, while
+ * the chosen engine isn't ready, so it can be made the choice.
+ */
+export const canChooseEngine = (defaults: NewAgentDefaults, choice: EngineChoice) =>
+  choice.ready && choice.id !== defaults.engine;
 
 /** The change a tap on a model row makes. */
 export const modelChange = (engine: AgentEngine, value: string): NewAgentDefaultsChange =>

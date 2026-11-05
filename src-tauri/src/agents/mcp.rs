@@ -959,8 +959,10 @@ fn audit_note(agent_id: &str, text: String, peer: Option<AgentRef>) -> store::Ag
     note
 }
 
-/// The lines a create leaves: in the Chief's chat, and the new agent's first.
-fn create_notes(caller: &store::Agent, agent: &store::Agent) -> Vec<store::AgentMessage> {
+/// The lines a create leaves: in the Chief's chat, and the new agent's first,
+/// which says the engine it started on (`on`, see `View::started_on`): the
+/// header's badge leaves Claude Code unsaid, and a fallback needs its reason.
+fn create_notes(caller: &store::Agent, agent: &store::Agent, on: &str) -> Vec<store::AgentMessage> {
     vec![
         audit_note(
             &caller.id,
@@ -969,7 +971,7 @@ fn create_notes(caller: &store::Agent, agent: &store::Agent) -> Vec<store::Agent
         ),
         audit_note(
             &agent.id,
-            format!("Created by {}", caller.name),
+            format!("Created by {} {on}", caller.name),
             Some(peer(caller)),
         ),
     ]
@@ -1111,6 +1113,7 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     // else one that can (Codex, when that's all there is), on the model the
     // user chose for that engine.
     let defaults = super::defaults::view().await;
+    let picked = arg(args, "engine").is_some();
     let engine = match arg(args, "engine").map(Engine::parse) {
         Some(Ok(engine)) => match super::engine::require_ready(engine).await {
             Ok(()) => engine,
@@ -1141,7 +1144,8 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     match created {
         Ok(agent) => {
             let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
-            for note in create_notes(caller, &agent) {
+            let on = defaults.started_on(agent.engine, picked);
+            for note in create_notes(caller, &agent, &on) {
                 let _ = runner::record(app, note);
             }
             let mut started = String::new();
@@ -1173,7 +1177,7 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
                     " and started it on its first task; its answer comes back to you".to_string();
             }
             text(format!(
-                "Created {}{started}. It's in the user's sidebar now.",
+                "Created {} {on}{started}. It's in the user's sidebar now.",
                 agent.name
             ))
         }
@@ -1807,14 +1811,17 @@ mod tests {
     fn chief_actions_leave_linked_notes_in_both_chats() {
         let chief = named("chief", "Chief of Staff");
         let finance = named("fin", "Finance");
-        let notes = create_notes(&chief, &finance);
+        let notes = create_notes(&chief, &finance, "on Claude Code — Codex isn't signed in");
         assert_eq!(notes.len(), 2);
         assert!(notes.iter().all(|n| n.kind == MessageKind::Note));
         assert_eq!(notes[0].agent_id, "chief");
         assert_eq!(notes[0].text, "Created Finance · Invoices and the books");
         assert_eq!(notes[0].peer.as_ref().unwrap().id, "fin");
         assert_eq!(notes[1].agent_id, "fin");
-        assert_eq!(notes[1].text, "Created by Chief of Staff");
+        assert_eq!(
+            notes[1].text,
+            "Created by Chief of Staff on Claude Code — Codex isn't signed in"
+        );
         assert_eq!(notes[1].peer.as_ref().unwrap().id, "chief");
 
         let notes = update_notes(&chief, &finance, &finance, &["instructions"]);

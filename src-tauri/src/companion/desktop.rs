@@ -406,7 +406,18 @@ impl Backend for DesktopBackend {
             project: None,
             template: template.map(|t| t.id.clone()),
         };
-        json(cmd::agents_create(self.app.clone(), input).await?)
+        // Read before, as `agents_create` reads it, so its first line can say
+        // where it went and, on a fallback, why: the header's badge leaves
+        // Claude Code unsaid.
+        let defaults = crate::agents::defaults::view().await;
+        let agent = cmd::agents_create(self.app.clone(), input).await?;
+        let note = runner::new_message(
+            &agent.id,
+            store::MessageKind::Note,
+            phone_created_line(&defaults.started_on(agent.engine, false)),
+        );
+        let _ = runner::record(&self.app, note);
+        json(agent)
     }
 
     async fn update_agent(
@@ -971,4 +982,48 @@ pub(crate) fn refuse_watch_from_phone(agent_id: &str, id: &str) -> Result<(), Co
         ));
     }
     Ok(())
+}
+
+/// A phone-made agent's first line: "Created on your phone on Claude Code —
+/// Codex isn't signed in" (`on` from `View::started_on`).
+fn phone_created_line(on: &str) -> String {
+    format!("Created on your phone {on}")
+}
+
+#[cfg(test)]
+mod created_line_tests {
+    use super::*;
+    use crate::agents::defaults::{view_of, Saved};
+    use crate::agents::engine::{Engine, EngineInfo};
+
+    fn info(id: Engine, ready: bool) -> EngineInfo {
+        EngineInfo {
+            id,
+            label: id.label(),
+            installed: true,
+            signed_in: ready,
+            asks: true,
+            models: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_phone_made_agent_says_its_engine_and_why_on_a_fallback() {
+        let saved = Saved {
+            engine: Some(Engine::Codex),
+            ..Saved::default()
+        };
+        let engines = [info(Engine::Claude, true), info(Engine::Codex, false)];
+        let view = view_of(&saved, &engines);
+        assert_eq!(
+            phone_created_line(&view.started_on(Engine::Claude, false)),
+            "Created on your phone on Claude Code — Codex isn't signed in"
+        );
+        let engines = [info(Engine::Claude, true), info(Engine::Codex, true)];
+        let view = view_of(&saved, &engines);
+        assert_eq!(
+            phone_created_line(&view.started_on(Engine::Codex, false)),
+            "Created on your phone on Codex"
+        );
+    }
 }

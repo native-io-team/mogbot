@@ -18,12 +18,26 @@ use crate::errors::CommandError;
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Saved {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// An engine name this build doesn't know (a newer app's, a hand edit)
+    /// reads as unset, the rule, rather than failing the whole app state.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient")]
     pub engine: Option<Engine>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub claude_model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub codex_model: Option<String>,
+}
+
+/// Anything that doesn't parse as `T` is `None`: one bad value in the app's
+/// settings must never fail `AppState` as a whole, since the next write would
+/// then save defaults over every other field (`commands::setup`).
+pub fn lenient<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).ok())
 }
 
 impl Saved {
@@ -64,6 +78,11 @@ pub struct View {
     pub starts_on: Engine,
     /// The model it starts on there; `None` is that engine's default.
     pub model: Option<String>,
+    /// Why the chosen engine isn't `starts_on`, in words ("Codex isn't
+    /// signed in"); `None` when it is, or nothing was chosen. Said where an
+    /// agent is created, not sent: the phone and Settings word it themselves.
+    #[serde(skip)]
+    pub fallback: Option<String>,
 }
 
 /// A saved model, only while the engine still offers it.
@@ -91,6 +110,16 @@ pub fn view_of(saved: &Saved, engines: &[EngineInfo]) -> View {
         },
         starts_on,
         model: offered(saved, find(starts_on), starts_on),
+        fallback: saved
+            .engine
+            .filter(|chosen| *chosen != starts_on)
+            .map(|chosen| {
+                let state = match find(chosen) {
+                    Some(info) if info.installed => "isn't signed in",
+                    _ => "isn't installed",
+                };
+                format!("{} {state}", chosen.label())
+            }),
     }
 }
 
@@ -100,6 +129,19 @@ impl View {
         match engine {
             Engine::Claude => self.models.claude.clone(),
             Engine::Codex => self.models.codex.clone(),
+        }
+    }
+
+    /// Where a new agent went, as its creation says it: "on Codex", and when
+    /// it went there because the chosen engine couldn't take it, why: "on
+    /// Claude Code — Codex isn't signed in". `picked` is an engine somebody
+    /// named for this one agent, which is never a fallback.
+    pub fn started_on(&self, engine: Engine, picked: bool) -> String {
+        match &self.fallback {
+            Some(why) if !picked && engine == self.starts_on => {
+                format!("on {} — {why}", engine.label())
+            }
+            _ => format!("on {}", engine.label()),
         }
     }
 }
@@ -277,6 +319,67 @@ mod tests {
         let state: crate::types::AppState =
             serde_json::from_str(r#"{"agentDefaults":{"engine":"codex"}}"#).unwrap();
         assert_eq!(state.agent_defaults.unwrap().engine, Some(Engine::Codex));
+    }
+
+    #[test]
+    fn a_creation_names_its_engine_and_says_why_on_a_fallback() {
+        let saved = Saved {
+            engine: Some(Engine::Codex),
+            ..Saved::default()
+        };
+        let mut signed_out = both(true);
+        signed_out[1].signed_in = false;
+        let view = view_of(&saved, &signed_out);
+        assert_eq!(
+            view.started_on(Engine::Claude, false),
+            "on Claude Code — Codex isn't signed in"
+        );
+        // Named for this agent: where it was asked to go, no excuse needed.
+        assert_eq!(view.started_on(Engine::Claude, true), "on Claude Code");
+        for missing in [
+            view_of(&saved, &both(false)),
+            view_of(&saved, &both(true)[..1]),
+        ] {
+            assert_eq!(
+                missing.started_on(Engine::Claude, false),
+                "on Claude Code — Codex isn't installed"
+            );
+        }
+        // The choice holds: just the engine.
+        let view = view_of(&saved, &both(true));
+        assert_eq!(view.fallback, None);
+        assert_eq!(view.started_on(Engine::Codex, false), "on Codex");
+        assert_eq!(
+            view_of(&Saved::default(), &both(true)).started_on(Engine::Claude, false),
+            "on Claude Code"
+        );
+    }
+
+    #[test]
+    fn one_bad_value_never_fails_the_app_state() {
+        let raw = r#"{
+            "accounts": [],
+            "activeAccountId": "work",
+            "quickEntryShortcut": "Alt+K",
+            "agentDefaults": {"engine": "gemini", "claudeModel": "opus"}
+        }"#;
+        let state: crate::types::AppState = serde_json::from_str(raw).unwrap();
+        assert_eq!(state.active_account_id.as_deref(), Some("work"));
+        assert_eq!(state.quick_entry_shortcut.as_deref(), Some("Alt+K"));
+        // The engine it can't read is the rule; the model it can is kept.
+        let saved = state.agent_defaults.unwrap();
+        assert_eq!(saved.engine, None);
+        assert_eq!(saved.claude_model.as_deref(), Some("opus"));
+        // Nothing of it readable at all: unset, and the rest still loads.
+        for bad in [
+            r#"{"agentDefaults":"codex","quickEntry":true}"#,
+            r#"{"agentDefaults":{"claudeModel":7},"quickEntry":true}"#,
+            r#"{"agentDefaults":{"engine":null},"quickEntry":true}"#,
+        ] {
+            let state: crate::types::AppState = serde_json::from_str(bad).unwrap();
+            assert_eq!(state.quick_entry, Some(true), "{bad}");
+            assert!(state.agent_defaults.unwrap_or_default().engine.is_none());
+        }
     }
 
     #[tokio::test]

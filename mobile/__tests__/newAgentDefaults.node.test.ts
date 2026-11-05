@@ -16,10 +16,12 @@ import { createMockServer } from '../dev/mock-server';
 import { until, provenBy } from './helpers';
 import {
   ENGINE_DEFAULT,
+  canChooseEngine,
   chosenModel,
   engineChoices,
   modelChange,
   modelOptions,
+  notChosenBecause,
   startsOnLine,
 } from '../src/lib/newAgentDefaults';
 import { applyEvent, emptySync } from '../src/lib/sync';
@@ -67,12 +69,25 @@ describe('new agents’ defaults, as Settings shows them', () => {
   it('says when the choice isn’t where new agents start', () => {
     expect(startsOnLine(NONE)).toMatch(/keep theirs/);
     expect(startsOnLine({ ...NONE, engine: 'codex' })).toBe(
-      'Codex isn’t ready, so new agents start on Claude Code for now. Agents you already have keep theirs.'
+      'Codex isn’t ready, so new agents start on Claude Code for now. Tap Claude Code to keep them there. Agents you already have keep theirs.'
     );
     expect(chosenModel({ ...NONE, models: { claude: 'opus', codex: null } }, 'claude')).toBe(
       'opus'
     );
     expect(modelChange('codex', '')).toEqual({ codexModel: '' });
+  });
+
+  it('lets the engine new agents start on for now become the choice', () => {
+    const [claude, codex] = engineChoices(ENGINES);
+    const fallback = { ...NONE, engine: 'codex' as const };
+    // Shown as where they start (startsOn), and still tappable to keep it.
+    expect(canChooseEngine(fallback, claude)).toBe(true);
+    expect(canChooseEngine(fallback, codex)).toBe(false);
+    // Already the saved choice: nothing to do.
+    expect(canChooseEngine({ ...NONE, engine: 'claude' }, claude)).toBe(false);
+    // New agent says it beside the engine it names.
+    expect(notChosenBecause(fallback)).toBe('Codex isn’t ready');
+    expect(notChosenBecause(NONE)).toBeNull();
   });
 });
 

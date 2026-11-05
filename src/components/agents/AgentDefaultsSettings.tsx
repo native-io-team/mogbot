@@ -5,8 +5,10 @@
  *
  * - **New agents start on**: Claude Code or Codex, only engines `agents::engine`
  *   runs; one that isn't installed and signed in can't be chosen. A choice
- *   that stops being ready (signed out) isn't lost: the line says where new
- *   agents start meanwhile, as the backend decides it (`startsOn`).
+ *   that stops being ready (signed out) isn't lost: the control shows where
+ *   new agents start meanwhile, as the backend decides it (`startsOn`), and
+ *   the line says why; picking that engine makes it the choice. The phone
+ *   shows the same.
  * - **A model per installed engine**: "Engine's default" plus only the models
  *   that engine reports (Claude Code's aliases, Codex's own list). An engine
  *   that lists none offers nothing to pick, and says so.
@@ -19,7 +21,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronIcon } from '@/components/icons';
+import { CheckIcon, ChevronIcon } from '@/components/icons';
 import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
 import { SegmentedControl } from '../primitives/SegmentedControl';
@@ -30,15 +32,13 @@ import {
   modelChoices,
   newAgentModel,
   setNewAgentDefaults,
+  startsOnFallback,
   type AgentEngine,
   type EngineInfo,
   type NewAgentDefaultsChange,
 } from '../../lib/agents';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { takeSettingsSectionRequest } from '../../lib/settings';
-
-/** The model choice that passes no model: whatever the engine itself defaults to. */
-export const ENGINE_DEFAULT_LABEL = 'Engine’s default';
 
 function Row({
   label,
@@ -71,13 +71,6 @@ const engineState = (e: EngineInfo) => {
 
 const selectEngines = (s: { engines: EngineInfo[] }) => s.engines;
 
-/** The engine's models as Settings names them: "Engine's default", then its own. */
-function choicesFor(engine: AgentEngine, engines: EngineInfo[]) {
-  return modelChoices(engine, engines).map((m) =>
-    m.value === '' ? { ...m, label: ENGINE_DEFAULT_LABEL, detail: undefined } : m
-  );
-}
-
 function ModelRow({
   engine,
   engines,
@@ -89,7 +82,7 @@ function ModelRow({
   value: string;
   onChange: (model: string) => void;
 }) {
-  const choices = choicesFor(engine, engines);
+  const choices = modelChoices(engine, engines);
   const name = ENGINE_LABEL[engine];
   // Only "Engine's default": nothing reported, so nothing to pick.
   if (choices.length < 2) {
@@ -129,16 +122,25 @@ function ModelRow({
           </MenuButton>
         )}
       >
-        {choices.map((m) => (
-          <DropdownItem
-            key={m.value || 'default'}
-            active={m.value === current.value}
-            onSelect={() => onChange(m.value)}
-          >
-            <span className="agent-defaults-menu__label">{m.label}</span>
-            {m.detail && <span className="agent-defaults-menu__detail">{m.detail}</span>}
-          </DropdownItem>
-        ))}
+        {choices.map((m) => {
+          const on = m.value === current.value;
+          return (
+            <DropdownItem
+              key={m.value || 'default'}
+              active={on}
+              icon={
+                // The current one is ticked; the rest keep its place so labels line up.
+                <span className="agent-defaults-menu__check" aria-hidden="true">
+                  {on && <CheckIcon size={14} />}
+                </span>
+              }
+              onSelect={() => onChange(m.value)}
+            >
+              <span className="agent-defaults-menu__label">{m.label}</span>
+              {m.detail && <span className="agent-defaults-menu__detail">{m.detail}</span>}
+            </DropdownItem>
+          );
+        })}
       </Dropdown>
     </Row>
   );
@@ -174,7 +176,7 @@ export function AgentDefaultsSettings() {
   };
 
   const chosen = defaults.engine;
-  const fallback = chosen !== null && chosen !== defaults.startsOn;
+  const fallback = startsOnFallback(defaults, 'Pick');
   const states = engines
     .map((e) => `${ENGINE_LABEL[e.id] ?? e.label} ${engineState(e)}`)
     .join(' · ');
@@ -186,17 +188,12 @@ export function AgentDefaultsSettings() {
       className="settings-section agent-defaults-settings"
       aria-busy={saving || undefined}
     >
-      <Row
-        label="New agents start on"
-        description={
-          fallback
-            ? `${ENGINE_LABEL[chosen]} isn’t ready, so new agents start on ${ENGINE_LABEL[defaults.startsOn]} for now.`
-            : states
-        }
-      >
+      <Row label="New agents start on" description={fallback ?? states}>
         <SegmentedControl<AgentEngine>
           aria-label="New agents start on"
-          value={chosen ?? defaults.startsOn}
+          // Where new agents start now, as the phone shows it; on a fallback,
+          // picking the shown engine makes it the saved choice.
+          value={defaults.startsOn}
           options={engines.map((e) => ({
             value: e.id,
             label: ENGINE_LABEL[e.id] ?? e.label,
@@ -216,7 +213,7 @@ export function AgentDefaultsSettings() {
           key={e.id}
           engine={e.id}
           engines={engines}
-          value={newAgentModel(defaults, e.id, choicesFor(e.id, engines))}
+          value={newAgentModel(defaults, e.id, modelChoices(e.id, engines))}
           onChange={(model) =>
             void change(e.id === 'claude' ? { claudeModel: model } : { codexModel: model })
           }

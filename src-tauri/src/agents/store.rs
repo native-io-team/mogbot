@@ -748,7 +748,7 @@ pub fn normalize_model(model: &str) -> Result<Option<String>, CommandError> {
     if !MODELS.contains(&model) {
         return Err(super::err_invalid(
             "model",
-            "Pick Opus, Sonnet, Haiku or Default.",
+            "Pick Opus, Sonnet, Haiku or Engine's default (no model).",
         ));
     }
     Ok(Some(model.to_string()))
