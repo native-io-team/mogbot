@@ -299,6 +299,7 @@ pub(crate) fn card(
         expiry: None,
         from_outside: None,
         front: None,
+        settings: None,
     }
 }
 

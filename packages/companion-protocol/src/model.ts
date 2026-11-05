@@ -15,6 +15,7 @@
 // ============================================================================
 
 import type { ResultCard, ResultRef } from './results';
+import type { SettingsProposal } from './policy';
 
 export interface AgentStatus {
   state: 'idle' | 'working' | 'waiting';
@@ -410,6 +411,8 @@ export interface Approval {
    * after an import. Nothing it asked for ran.
    */
   setAside?: string;
+  /** "Change this agent's settings?" (`propose_settings_change`): who, and what changes in plain words. Allow applies it. A Mac without it never sends it. */
+  settings?: SettingsProposal;
   /**
    * "Bring your work Chrome window to the front so I can use it": Allow means
    * Check again, Deny means Not now. Never a login.

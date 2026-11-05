@@ -6,6 +6,11 @@
  * Mac), the token is kept on the Mac, and every agent on the row gets its
  * own permission; "Not needed" puts one agent's ask away without waking it.
  *
+ * Every row has one anatomy (`NeedRow`), shared with the setup card's Logins
+ * step: the service as the title, who uses it as a quieter line under it,
+ * one answer at the right, and anything else ("Not needed", another way in)
+ * as quiet words beside it.
+ *
  * Exported as a list so another screen (an onboarding checklist) can embed
  * it; `app/logins.tsx` is the screen around it.
  */
@@ -18,8 +23,8 @@ import {
   type TeamNeed,
 } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import {
@@ -40,8 +45,8 @@ import {
 } from '../lib/logins';
 import { describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
-import { fonts, space, type } from '../lib/theme';
-import { ACTION_ROW, Card, CardActions, Line, TextAction } from './surfaces';
+import { CARD_TITLE_SCALE, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { ACTION_ROW, CardActions, Line, TextAction } from './surfaces';
 import { Button, T } from './ui';
 
 /** How often the list is read again while a sign-in runs on the Mac. */
@@ -60,7 +65,7 @@ export function TeamLoginsList({
   onProgress?: (team: TeamLogins) => void;
   /** Only these agents' asks (the setup card's); a Connect skips the rest. */
   agentIds?: ReadonlySet<string>;
-  /** Inside another card: no "nothing waiting" line of its own. */
+  /** Inside another card: no "nothing waiting" line of its own, and no group around the rows. */
   embedded?: boolean;
 }) {
   const colors = useColors();
@@ -134,33 +139,38 @@ export function TeamLoginsList({
       {team.total === 0 && !embedded && (
         <Line text="Nothing waiting. When an agent needs an app, it shows here and in its chat." />
       )}
-      {team.needs.map((n) => (
-        <Need
-          key={n.key}
-          need={n}
-          live={live}
-          busy={busy}
-          way={way}
-          onConnect={(o) =>
-            void act(`${n.key}:${o.id}`, async () => {
-              // Agents this list leaves off (`agentIds`) are skipped too.
-              const skip = (n as TeamNeed & { hidden?: string[] }).hidden ?? [];
-              switch (way(o)) {
-                case 'sheet':
-                  return signInWithSheet({ key: n.key, skip }, o.id);
-                case 'web':
-                  await connectNeed(n.key, o.id, skip, true);
-                  return openHere(CLAUDE_AI_CONNECTORS);
-                case 'device':
-                  return connectNeed(n.key, o.id, skip, true);
-                default:
-                  return connectNeed(n.key, o.id, skip);
+      {team.needs.length > 0 && (
+        <View style={!embedded && styles.group}>
+          {team.needs.map((n, i) => (
+            <Need
+              key={n.key}
+              need={n}
+              last={i === team.needs.length - 1}
+              live={live}
+              busy={busy}
+              way={way}
+              onConnect={(o) =>
+                void act(`${n.key}:${o.id}`, async () => {
+                  // Agents this list leaves off (`agentIds`) are skipped too.
+                  const skip = (n as TeamNeed & { hidden?: string[] }).hidden ?? [];
+                  switch (way(o)) {
+                    case 'sheet':
+                      return signInWithSheet({ key: n.key, skip }, o.id);
+                    case 'web':
+                      await connectNeed(n.key, o.id, skip, true);
+                      return openHere(CLAUDE_AI_CONNECTORS);
+                    case 'device':
+                      return connectNeed(n.key, o.id, skip, true);
+                    default:
+                      return connectNeed(n.key, o.id, skip);
+                  }
+                })
               }
-            })
-          }
-          onDismiss={(c) => void act(c.requestId, () => loginDismiss(c.agentId, c.requestId))}
-        />
-      ))}
+              onDismiss={(c) => void act(c.requestId, () => loginDismiss(c.agentId, c.requestId))}
+            />
+          ))}
+        </View>
+      )}
       {error && (
         <T variant="small" color={colors.accentErrorLight}>
           {error}
@@ -172,6 +182,7 @@ export function TeamLoginsList({
 
 function Need({
   need,
+  last,
   live,
   busy,
   way,
@@ -179,6 +190,7 @@ function Need({
   onDismiss,
 }: {
   need: TeamNeed;
+  last: boolean;
   live: boolean;
   busy: string | null;
   way: (o: LoginOption) => ReturnType<typeof phoneWay>;
@@ -190,85 +202,176 @@ function Need({
   const waiting = need.cards.filter((c) => c.state === 'waiting');
   const names = agentList(need.cards.map((c) => c.agentName));
   if (need.done) {
-    return <Line icon="checkmark" tone="success" lead="Done" text={`${need.title} · ${names}`} />;
+    return (
+      <View style={[styles.doneRow, !last && styles.divided]} testID={`need-${need.key}`}>
+        <Line icon="checkmark" tone="success" lead="Done" text={`${need.title} · ${names}`} />
+      </View>
+    );
   }
   const [first, ...rest] = need.options.filter((o) => o.method !== 'key');
   const running = waiting.some(onMac);
   const off = !live || !!busy || running;
+  // One agent on the row: its "Not needed" sits beside the answer. Several:
+  // each agent's line carries its own, so one can be put away and not the rest.
+  const single = need.cards.length === 1 && waiting.length === 1 ? waiting[0] : null;
+  const dismiss = (c: TeamCard): RowWord => ({
+    label: 'Not needed',
+    muted: true,
+    hint: `Puts ${c.agentName}’s ask away without waking it`,
+    disabled: !live || !!busy,
+    onPress: () => onDismiss(c),
+  });
   return (
-    <Card
-      icon="puzzlepiece"
+    <NeedRow
+      last={last}
       title={need.title}
-      source={`Used by ${names}`}
+      subtitle={`Used by ${names}`}
       testID={`need-${need.key}`}
-      style={styles.card}
-    >
-      <View style={styles.cards}>
-        {need.cards.map((c) => (
-          <View key={c.requestId} style={styles.cardRow}>
+      detail={
+        running ? (
+          <RunningLine card={waiting.find(onMac)} />
+        ) : (
+          <>
+            {!single && (
+              <View style={styles.cards}>
+                {need.cards.map((c) => (
+                  <View key={c.requestId} style={styles.cardRow}>
+                    <T
+                      variant="small"
+                      color={c.state === 'waiting' ? colors.textBody : colors.textMuted}
+                      style={{ flex: 1 }}
+                    >
+                      {teamCardLine(c)}
+                    </T>
+                    {c.state === 'waiting' && !onMac(c) && <TextAction {...dismiss(c)} />}
+                  </View>
+                ))}
+              </View>
+            )}
+            {!!need.noConnector && (
+              <T variant="small" color={colors.textMuted}>
+                {need.noConnector}
+              </T>
+            )}
+            <T variant="small" color={colors.textMuted}>
+              {first
+                ? phoneDetail(first, way(first), need.title)
+                : 'Nothing on your Mac can connect this. Open each agent’s card to enter a key, or mark it Not needed.'}
+            </T>
+          </>
+        )
+      }
+      primary={
+        running || !first
+          ? undefined
+          : {
+              title: `${first.label}${waiting.length > 1 ? ` for ${waiting.length}` : ''}`,
+              busy: busy === `${need.key}:${first.id}`,
+              disabled: off,
+              onPress: () => onConnect(first),
+            }
+      }
+      secondary={
+        running
+          ? []
+          : [
+              ...rest.map((o) => ({
+                label: o.label,
+                disabled: off,
+                onPress: () => onConnect(o),
+              })),
+              ...(single && !onMac(single) ? [dismiss(single)] : []),
+            ]
+      }
+    />
+  );
+}
+
+/** A quiet word beside a row's answer: "Not needed", another way in. */
+export interface RowWord {
+  label: string;
+  onPress: () => void;
+  hint?: string;
+  muted?: boolean;
+  disabled?: boolean;
+}
+
+/**
+ * The row every login and key shares, here and in the setup card's Logins
+ * step: the service as the title (17 semibold), who uses it under it,
+ * quieter, then any detail; under that one line with the quiet words first
+ * and the single answer last, at the right. At least 56pt tall, divided from
+ * the next by a hairline.
+ */
+export function NeedRow({
+  title,
+  subtitle,
+  detail,
+  primary,
+  secondary = [],
+  last = false,
+  testID,
+}: {
+  title: string;
+  subtitle?: string;
+  detail?: ReactNode;
+  primary?: {
+    title: string;
+    onPress: () => void;
+    busy?: boolean;
+    disabled?: boolean;
+    hint?: string;
+  };
+  secondary?: RowWord[];
+  /** The last row of its list draws no divider under it. */
+  last?: boolean;
+  testID?: string;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View style={[styles.row, !last && styles.divided]} testID={testID}>
+      <View style={styles.top}>
+        <View style={styles.head}>
+          <T
+            color={colors.textStrong}
+            style={styles.title}
+            maxFontSizeMultiplier={CARD_TITLE_SCALE}
+            accessibilityRole="header"
+          >
+            {title}
+          </T>
+          {!!subtitle && (
             <T
               variant="small"
-              color={c.state === 'waiting' ? colors.textBody : colors.textMuted}
-              style={{ flex: 1 }}
+              color={colors.textSecondary}
+              maxFontSizeMultiplier={CARD_TITLE_SCALE}
             >
-              {teamCardLine(c)}
-            </T>
-            {c.state === 'waiting' && !onMac(c) && (
-              <TextAction
-                label="Not needed"
-                muted
-                disabled={!live || !!busy}
-                onPress={() => onDismiss(c)}
-              />
-            )}
-          </View>
-        ))}
-      </View>
-      {running ? (
-        <RunningLine card={waiting.find(onMac)} />
-      ) : (
-        <>
-          {!!need.noConnector && (
-            <T variant="small" color={colors.textMuted}>
-              {need.noConnector}
+              {subtitle}
             </T>
           )}
-          {first && (
-            <T variant="small" color={colors.textMuted}>
-              {phoneDetail(first, way(first), need.title)}
-            </T>
-          )}
-        </>
-      )}
-      {running ? null : first ? (
-        <CardActions>
+        </View>
+        {primary && (
           <Button
-            title={`${first.label}${waiting.length > 1 ? ` for ${waiting.length}` : ''}`}
+            title={primary.title}
             variant="answer"
-            busy={busy === `${need.key}:${first.id}`}
-            disabled={off}
-            onPress={() => onConnect(first)}
-            style={ACTION_ROW}
+            busy={primary.busy}
+            disabled={primary.disabled}
+            accessibilityHint={primary.hint}
+            onPress={primary.onPress}
+            testID="need-answer"
           />
-          {rest.map((o) => (
-            <Button
-              key={o.id}
-              title={o.label}
-              variant="outline"
-              busy={busy === `${need.key}:${o.id}`}
-              disabled={off}
-              onPress={() => onConnect(o)}
-              style={ACTION_ROW}
-            />
+        )}
+      </View>
+      {detail}
+      {secondary.length > 0 && (
+        <View style={styles.words} testID="need-words">
+          {secondary.map((w) => (
+            <TextAction key={w.label} {...w} />
           ))}
-        </CardActions>
-      ) : (
-        <T variant="small" color={colors.textMuted}>
-          Nothing on your Mac can connect this. Open each agent’s card to enter a key, or mark it
-          Not needed.
-        </T>
+        </View>
       )}
-    </Card>
+    </View>
   );
 }
 
@@ -329,9 +432,37 @@ const useStyles = makeStyles((colors) => ({
   running: { gap: space.sm },
   code: { fontFamily: fonts.mono, fontSize: type.title },
   root: { gap: space.md },
-  // On a sheet the page is the card's own colour: the grouped surface sets it apart.
-  card: { backgroundColor: colors.surfaceGroup },
+  // On a sheet the rows are one grouped surface, divided, as Settings is.
+  group: {
+    backgroundColor: colors.surfaceGroup,
+    borderRadius: radius.card,
+    paddingHorizontal: space.lg,
+    overflow: 'hidden',
+  },
   loading: { padding: space.xl, alignItems: 'center' },
-  cards: { gap: space.tight },
-  cardRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  cards: { gap: space['2xs'] },
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 44 },
+  row: { minHeight: 56, paddingVertical: space.md, gap: space.sm },
+  // The name and who uses it, and the one answer beside them.
+  top: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 44 },
+  divided: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderDefault,
+  },
+  doneRow: { minHeight: 56, justifyContent: 'center', paddingVertical: space.sm },
+  head: { flex: 1, gap: space['2xs'] },
+  title: {
+    fontFamily: fonts.semibold,
+    fontSize: type.read,
+    lineHeight: lineHeight(type.read, 1.3),
+  },
+  // The quiet words under it, well apart, each a 44pt target with its hit slop.
+  words: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: space.xl,
+    rowGap: space.md,
+    minHeight: 32,
+  },
 }));

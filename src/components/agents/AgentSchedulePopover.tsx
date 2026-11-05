@@ -130,9 +130,14 @@ export function AgentSchedulePopover({
             variant="ghost"
             className="agent-chat__scheduled"
             leftIcon={<HistoryIcon size={12} />}
-            title="Scheduled routines"
+            title={`${count} scheduled ${count === 1 ? 'routine' : 'routines'}`}
+            // Narrow, the word is hidden; the name keeps it.
+            aria-label={`${count} scheduled`}
           >
-            {count} scheduled
+            <span>
+              {count}
+              <span className="agent-chat__scheduled-word"> scheduled</span>
+            </span>
           </Button>
         ) : (
           <IconButton

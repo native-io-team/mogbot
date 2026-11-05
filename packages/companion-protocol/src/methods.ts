@@ -8,6 +8,7 @@
  */
 
 import type { Cursor } from './frames';
+import type { AgentPolicyView } from './policy';
 import type {
   AgentMessage,
   AgentReach,
@@ -182,6 +183,8 @@ export interface Methods {
   };
   /** What an agent can reach: connections, browser, secrets. Read-only. */
   'agents.reach': { params: { agentId: string }; result: AgentReach };
+  /** "What it can do" (`agents/policy.rs`): its settings in plain words. Read-only; changed in chat. */
+  'agents.policy': { params: { agentId: string }; result: AgentPolicyView };
   /**
    * "What your team needs": every login card waiting, one row per service
    * (Gmail + Calendar as one Google row), with each agent on it; `since`
@@ -459,6 +462,7 @@ export const READ_ONLY_METHODS = [
   'agents.instructions',
   'agents.memory',
   'agents.reach',
+  'agents.policy',
   'agents.loginsTeam',
   'agents.usage',
   'agents.quota',

@@ -513,6 +513,9 @@ export const useCardStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,
+    // Nothing inside draws past the corner: a pressed row, a well or an
+    // image at the edge is cut to the card's own curve, never squared off.
+    overflow: 'hidden',
   },
   head: { gap: space['2xs'] },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.tight },
@@ -562,6 +565,7 @@ const useBarStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,
+    overflow: 'hidden',
   },
   barRow: {
     flex: 1,

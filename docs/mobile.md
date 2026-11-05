@@ -440,10 +440,26 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   Chief of Staff".
 - **Chat.** An inverted list: newest on the composer, older pages loaded on
   scroll. Replies stream one display frame at a time (`lib/reveal.ts`) and the
-  finished message carries on from where its draft got to. What you're
-  reading holds still while you're scrolled up or a long reply grows, and the
-  jump button says "New reply" when one finished below. Hold a message to
-  copy, quote or select text; paths in a reply open through `agents.fetchPath`.
+  finished message carries on from where its draft got to. **Following**
+  (`lib/follow.ts`): at the newest line the chat is pinned, so your message
+  glides in on the composer and a reply grows up from it, its newest words
+  always in view, however long it gets. Only your own finger lets go: scroll
+  back and the rows on screen hold still (`maintainVisibleContentPosition`)
+  while the reply carries on below, and a "↓ New" pill rides the keyboard
+  ("Needs your OK" first, a bare arrow when far back with nothing new). The
+  keyboard, a card unfolding or a page of older messages never unpin it.
+  Distances count from the keyboard-lifted end (`-inset`), so Send and the
+  pill land on the newest line with the keyboard up; scrolling to offset 0
+  left it behind the keyboard. Checked natively on the iOS 26.1 simulator
+  (send, a streamed reply, scrolling back mid-stream, the keyboard). Where the
+  list meets the composer and the header the words fade into the background
+  over 28pt (`chatFade`, bands of the surface colour, no native module), and
+  the list keeps that room at both ends so nothing rests under a fade. With
+  the keyboard up the composer sits `composer.keyboardGap` (10pt) above the
+  keys: the sticky view, the list's lift and the pill share one offset
+  (`lift`), so they move with the keyboard frame for frame. Hold a
+  message to copy, quote or select text; paths in a reply open through
+  `agents.fetchPath`.
 - **Lines, cards and bars** (`components/surfaces.tsx`, the desk's
   `AgentCard.tsx`; docs/agents.md "Lines, cards and bars"). Everything in a
   chat that isn't something someone said is one of three. A **Line** is one
@@ -829,10 +845,18 @@ that waits. A refusal is final. Forgetting a Mac wipes its files.
 
 ### Feel and access
 
-Body 16, secondary 14; `textMuted` meets 4.5:1 on panels and Increase
-Contrast brightens each grey a step. Chrome is clamped at 1.3× Dynamic Type,
-message bodies aren't, and at accessibility sizes the approval card folds its
-explanation so the answers stay on screen. VoiceOver and TalkBack hear
+A conversation reads at 17 on a 26 line (`type.read`, `READ_LINE`), with a
+paragraph's air between blocks and list items, 14×10 inside your bubble and
+28 between speakers; chrome is body 16, secondary 14, and times and meta stay
+quiet captions. `textMuted` meets 4.5:1 on panels and Increase
+Contrast brightens each grey a step. Every Text scales with Dynamic Type:
+chrome clamped at 1.3×, card titles at 1.5×, words at 2× (`READ_MAX_SCALE`,
+so a reply still sets a sentence a line at AX3), and at accessibility sizes
+the approval card folds its explanation so the answers stay on screen.
+**Settings → Text size** (Smaller 0.88×, Default, Larger 1.12×, Largest
+1.25×) multiplies the whole type scale on top of Dynamic Type, saved in
+`prefs.json`: `type` reads the size in force and `makeStyles` rebuilds each
+sheet per appearance and size, so anything sized from `type` follows it. VoiceOver and TalkBack hear
 replies, approvals, failures and toasts (`lib/a11y.ts`, not during replay).
 Haptics only for send, stop, approvals (after the Mac confirms), failures and
 toggles, and can be turned off. Android gets Material symbols, ripples and

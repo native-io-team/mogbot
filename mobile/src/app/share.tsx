@@ -262,6 +262,7 @@ const useStyles = makeStyles((colors) => ({
     padding: space.md,
     borderRadius: radius.card,
     backgroundColor: colors.surfaceGroup,
+    overflow: 'hidden',
   },
   empty: { padding: space.lg },
   row: {

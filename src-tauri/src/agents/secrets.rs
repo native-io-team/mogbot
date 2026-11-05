@@ -683,6 +683,7 @@ mod tests {
             expiry: None,
             from_outside: None,
             front: None,
+            settings: None,
         });
         store::append_message(&card).unwrap();
         (request_id, request)

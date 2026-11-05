@@ -337,6 +337,12 @@ pub struct Approval {
     /// Status is `expired`; the card reads as a one-line receipt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expiry: Option<super::expiry::Expiry>,
+    /// "Change this agent's settings?" (`propose_settings_change`,
+    /// `agents/policy_card.rs`): who, what, before and after in plain words.
+    /// Nothing changes until the user allows it; the card's own text
+    /// (`summary`, `detail`) says the same for clients that don't know it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<super::policy_card::Proposal>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1015,6 +1021,7 @@ pub fn delete(id: &str) -> Result<Agent, CommandError> {
     super::rooms::forget_agent(&removed.id);
     super::secrets::forget_all(&removed);
     super::connections::forget_agent(&removed.id);
+    super::policy::forget(&removed.id);
     super::work::forget_agent(&removed.id);
     if let Ok(log) = log_path(&removed.id) {
         forget_pending(&log);
@@ -2156,6 +2163,7 @@ mod tests {
                         expiry: None,
                         from_outside: None,
                         front: None,
+                        settings: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2363,6 +2371,7 @@ mod tests {
                     expiry: None,
                     from_outside: None,
                     front: None,
+                    settings: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2477,6 +2486,7 @@ mod tests {
                 expiry: None,
                 from_outside: None,
                 front: None,
+                settings: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

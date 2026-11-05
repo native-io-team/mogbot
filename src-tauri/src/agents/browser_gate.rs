@@ -631,7 +631,7 @@ pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
     if !tool.starts_with(SERVER) {
         return Gate::NotBrowser;
     }
-    let level = super::independence::for_turn(super::independence::level(), outside);
+    let level = super::independence::for_turn(super::policy::chosen_level(agent), outside);
     gate_with(
         team_enabled(),
         level,

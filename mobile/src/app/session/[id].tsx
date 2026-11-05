@@ -534,6 +534,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,
+    overflow: 'hidden',
   },
   // A choice reads as a menu, left-aligned, not as a centred button that wrapped.
   option: { justifyContent: 'flex-start', paddingHorizontal: space.lg },
@@ -586,6 +587,7 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,
+    overflow: 'hidden',
   },
   steps: { gap: space.xs },
   step: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
