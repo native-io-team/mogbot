@@ -436,6 +436,9 @@ fn list_agents(caller: &store::Agent) -> Value {
                 .map(|p| format!(" (works in {p})"))
                 .unwrap_or_default();
             let busy = match status.state {
+                _ if runner::driven(&a.id) => {
+                    " — the user is working in its session directly; messages wait until they hand it back"
+                }
                 "working" => " — busy",
                 "waiting" => " — waiting on the user",
                 _ => "",

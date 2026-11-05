@@ -146,6 +146,64 @@ struct Runtime {
     owed: Vec<AgentRef>,
     /// Waiting for a free slot (or memory) before its turn can start.
     queued: bool,
+    /// The user is driving the agent's session in a terminal (`takeover`):
+    /// no turn starts, and what arrives waits in the queue until hand-back.
+    driven: bool,
+}
+
+/// Why a take-over can't start now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Claim {
+    /// A turn is running, or waiting for a slot: it is in the session.
+    Busy,
+    /// Someone is already driving it.
+    Driven,
+}
+
+impl Runtime {
+    /// Queue `inbound`. True when a worker must be started to drain it:
+    /// nothing is draining yet, and nobody is driving the session.
+    fn admit(&mut self, inbound: Inbound) -> bool {
+        self.queue.push_back(inbound);
+        if self.running || self.driven {
+            return false;
+        }
+        self.running = true;
+        true
+    }
+
+    /// Hand the session to the user. Only while no turn is in it, so there
+    /// is never a turn and a terminal on one session at once.
+    fn claim(&mut self) -> Result<(), Claim> {
+        if self.driven {
+            return Err(Claim::Driven);
+        }
+        if self.running || self.queued {
+            return Err(Claim::Busy);
+        }
+        self.driven = true;
+        Ok(())
+    }
+
+    /// The user handed the session back. `told` opens the next turn's prompt
+    /// (after anything already waiting there). True when what queued up
+    /// meanwhile needs a worker started.
+    fn release(&mut self, told: Option<String>) -> bool {
+        if !std::mem::take(&mut self.driven) {
+            return false;
+        }
+        if let Some(told) = told {
+            self.interrupted = Some(match self.interrupted.take() {
+                Some(earlier) => format!("{earlier}{told}"),
+                None => told,
+            });
+        }
+        if self.running || self.queue.is_empty() {
+            return false;
+        }
+        self.running = true;
+        true
+    }
 }
 
 static RUNTIMES: LazyLock<Mutex<HashMap<String, Runtime>>> =
@@ -657,19 +715,50 @@ fn push(app: &AppHandle, agent_id: &str, inbound: Inbound) {
     let start = {
         let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
         let runtime = runtimes.entry(agent_id.to_string()).or_default();
-        runtime.queue.push_back(inbound);
+        let start = runtime.admit(inbound);
         save_inbox(agent_id, &runtime.queue);
-        if runtime.running {
-            false
-        } else {
-            runtime.running = true;
-            true
-        }
+        start
     };
     if start {
-        let app = app.clone();
-        let agent_id = agent_id.to_string();
-        tauri::async_runtime::spawn(async move { drain(app, agent_id).await });
+        start_worker(app, agent_id);
+    }
+}
+
+fn start_worker(app: &AppHandle, agent_id: &str) {
+    let app = app.clone();
+    let agent_id = agent_id.to_string();
+    tauri::async_runtime::spawn(async move { drain(app, agent_id).await });
+}
+
+/// Pause the agent for the user to drive its session (see `takeover`).
+pub fn claim_for_takeover(agent_id: &str) -> Result<(), Claim> {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(agent_id.to_string())
+        .or_default()
+        .claim()
+}
+
+/// Whether the user is driving this agent's session.
+pub fn driven(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.driven)
+}
+
+/// The session is the agent's again: what waited runs now, its turn told
+/// `told` first. Only once the terminal's process is gone (`takeover`).
+pub fn release_takeover(app: &AppHandle, agent_id: &str, told: Option<String>) {
+    let start = RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get_mut(agent_id)
+        .is_some_and(|r| r.release(told));
+    if start {
+        start_worker(app, agent_id);
     }
 }
 
@@ -713,6 +802,11 @@ fn begin_fresh(agent_id: &str) -> Result<(store::Agent, AgentMessage), CommandEr
     let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     let name = store::get(agent_id)?.name;
     let mine = runtimes.get(agent_id);
+    if mine.is_some_and(|r| r.driven) {
+        return Err(CommandError::expected(format!(
+            "You're driving {name} in a terminal. Hand it back first, then start fresh."
+        )));
+    }
     // A running or waiting turn is in the old conversation, and would record
     // it again when its session is confirmed.
     if mine.is_some_and(|r| r.running || r.queued) {
@@ -1214,7 +1308,7 @@ fn is_missing_session(detail: &str) -> bool {
 }
 
 /// Folders an agent may work in without asking: every Ship Studio project.
-fn work_dirs() -> Vec<String> {
+pub(super) fn work_dirs() -> Vec<String> {
     let mut dirs = Vec::new();
     if let Ok(root) = crate::utils::projects_root() {
         dirs.push(root.to_string_lossy().to_string());
@@ -1234,7 +1328,7 @@ pub fn describe_activity(line: &str) -> Option<String> {
 
 /// The system prompt for a turn. A bound agent's own CLAUDE.md is carried
 /// in it, because its working directory is the project, not its home.
-fn system_prompt_for(
+pub(super) fn system_prompt_for(
     agent: &store::Agent,
     home: &std::path::Path,
     layout: &super::project::Layout,
@@ -1962,6 +2056,92 @@ pub fn strip_session_env(cmd: &mut std::process::Command) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn from_user(text: &str) -> Inbound {
+        Inbound {
+            text: text.into(),
+            from: From::User,
+            reply: false,
+            routine: false,
+        }
+    }
+
+    #[test]
+    fn a_take_over_waits_for_the_session_to_be_free_and_holds_it() {
+        let mut r = Runtime::default();
+        // Idle: the user can take it.
+        assert_eq!(r.claim(), Ok(()));
+        assert!(r.driven);
+        // Never twice.
+        assert_eq!(r.claim(), Err(Claim::Driven));
+
+        // A turn running, or waiting for a slot, is in the session.
+        let mut busy = Runtime {
+            running: true,
+            ..Default::default()
+        };
+        assert_eq!(busy.claim(), Err(Claim::Busy));
+        assert!(!busy.driven);
+        let mut waiting = Runtime {
+            queued: true,
+            ..Default::default()
+        };
+        assert_eq!(waiting.claim(), Err(Claim::Busy));
+    }
+
+    #[test]
+    fn while_driven_nothing_starts_and_everything_waits_in_order() {
+        let mut r = Runtime::default();
+        r.claim().unwrap();
+        assert!(!r.admit(from_user("one")));
+        assert!(!r.admit(Inbound {
+            text: "from Finance".into(),
+            from: From::Agent {
+                sender: AgentRef {
+                    id: "f".into(),
+                    name: "Finance".into(),
+                },
+                hop: 1,
+            },
+            reply: false,
+            routine: false,
+        }));
+        assert!(!r.running, "no worker may start on a driven session");
+        let texts: Vec<_> = r.queue.iter().map(|m| m.text.as_str()).collect();
+        assert_eq!(texts, ["one", "from Finance"]);
+    }
+
+    #[test]
+    fn handing_back_resumes_with_what_waited_and_tells_the_next_turn() {
+        let mut r = Runtime::default();
+        r.claim().unwrap();
+        r.admit(from_user("while you drove"));
+        assert!(r.release(Some("[handed back]".into())), "a worker starts for the queue");
+        assert!(!r.driven);
+        assert!(r.running);
+        assert_eq!(r.interrupted.as_deref(), Some("[handed back]"));
+
+        // Nothing waiting: no worker, but the next turn is still told.
+        let mut quiet = Runtime::default();
+        quiet.claim().unwrap();
+        assert!(!quiet.release(Some("[handed back]".into())));
+        assert_eq!(quiet.interrupted.as_deref(), Some("[handed back]"));
+        assert!(quiet.admit(from_user("later")), "an ordinary message starts a turn again");
+
+        // A hand-back of an agent nobody drove changes nothing.
+        let mut never = Runtime::default();
+        assert!(!never.release(Some("x".into())));
+        assert_eq!(never.interrupted, None);
+    }
+
+    #[test]
+    fn a_take_over_that_failed_to_open_leaves_no_trace() {
+        let mut r = Runtime::default();
+        r.claim().unwrap();
+        assert!(!r.release(None));
+        assert_eq!(r.interrupted, None);
+        assert!(!r.driven);
+    }
 
     #[test]
     fn messaging_back_the_agent_that_asked_settles_its_request_once() {

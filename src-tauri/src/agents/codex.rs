@@ -186,6 +186,36 @@ pub fn args(
     args
 }
 
+/// The command line for the user taking over a Codex agent's thread
+/// (`takeover`): Codex's own interactive `codex resume <thread>`, with the
+/// overrides every turn gets (where it may write, no network, our MCP
+/// server, CLAUDE.md as the project doc) and the app-server turn's sandbox
+/// and approval policy, so it asks the person at the keyboard whatever a
+/// turn would have put on a card. The thread keeps its own developer
+/// instructions. Checked against `codex resume --help` on 0.166.
+pub fn interactive_args(
+    model: Option<&str>,
+    thread: &str,
+    url: &str,
+    writable: &[String],
+    cwd: &str,
+) -> Vec<String> {
+    let mut args: Vec<String> = vec!["resume".into()];
+    let config = [
+        "sandbox_mode=\"workspace-write\"".to_string(),
+        "approval_policy=\"on-request\"".to_string(),
+    ];
+    for value in config.into_iter().chain(shared_config(url, writable)) {
+        args.extend(["-c".into(), value]);
+    }
+    if let Some(model) = model {
+        args.extend(["-m".into(), model.to_string()]);
+    }
+    args.extend(["-C".into(), cwd.to_string()]);
+    args.push(thread.to_string());
+    args
+}
+
 /// `/bin/zsh -lc 'npm test'` → `npm test`: the command, as the agent wrote it.
 pub(super) fn unwrap_shell(command: &str) -> &str {
     let inner = command

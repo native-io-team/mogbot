@@ -67,6 +67,7 @@ pub mod secrets;
 pub mod sessions;
 pub mod store;
 pub mod stream;
+pub mod takeover;
 pub mod tray;
 pub mod usage;
 pub mod work;

@@ -285,6 +285,7 @@ pub fn overview() -> Value {
         agent: stored_agent(),
         status,
         home: "/Users/julian/Library/Application Support/ShipStudio/agents/a1".into(),
+        takeover: None,
     };
     super::wire::phone_overview(
         serde_json::to_value(crate::commands::agents::AgentsOverview {

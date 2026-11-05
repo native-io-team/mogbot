@@ -517,6 +517,62 @@ pub async fn pty_session_open(
     project_path: Option<String>,
     agent_id: Option<String>,
 ) -> Result<OpenSessionResult, CommandError> {
+    open_session(
+        app,
+        OpenSpec {
+            session_id,
+            command,
+            args,
+            cwd,
+            env,
+            env_remove: Vec::new(),
+            cols,
+            rows,
+            project_path,
+            agent_id,
+            account_env: true,
+        },
+    )
+    .await
+}
+
+/// Everything a backend PTY session is opened with. The tab command fills
+/// it from the webview; Rust callers (an agent's take-over) build it
+/// themselves, so what they pass (an MCP URL, an agent's secrets) never
+/// crosses into the webview.
+pub struct OpenSpec {
+    pub session_id: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub cwd: Option<String>,
+    pub env: BTreeMap<String, String>,
+    /// Variables of the app's own environment the child must not inherit.
+    pub env_remove: Vec<String>,
+    pub cols: u16,
+    pub rows: u16,
+    pub project_path: Option<String>,
+    pub agent_id: Option<String>,
+    /// Inject the project's (or active) workspace credentials and config
+    /// dirs. Off for a process that must see exactly what an agent's turn
+    /// sees, which never gets them.
+    pub account_env: bool,
+}
+
+/// [`pty_session_open`], callable from Rust.
+pub async fn open_session(app: AppHandle, spec: OpenSpec) -> Result<OpenSessionResult, CommandError> {
+    let OpenSpec {
+        session_id,
+        command,
+        args,
+        cwd,
+        env,
+        env_remove,
+        cols,
+        rows,
+        project_path,
+        agent_id,
+        account_env,
+    } = spec;
     // Idempotent: if a live session already exists for this id, return it.
     // If an exited session exists under this id (e.g. resume-failed retry
     // respawns the same tab), evict it so we can spawn fresh.
@@ -568,9 +624,12 @@ pub async fn pty_session_open(
         .try_clone_reader()
         .map_err(|e| format!("clone_reader: {e}"))?;
 
-    let account_env = match project_path.as_deref() {
-        Some(p) => crate::commands::accounts::get_env_vars_for_project(std::path::Path::new(p)),
-        None => crate::commands::accounts::get_env_vars_for_active_account(),
+    let account_env = match (account_env, project_path.as_deref()) {
+        (false, _) => Default::default(),
+        (true, Some(p)) => {
+            crate::commands::accounts::get_env_vars_for_project(std::path::Path::new(p))
+        }
+        (true, None) => crate::commands::accounts::get_env_vars_for_active_account(),
     };
 
     // Hide Ship Studio's preview bridge from the agent we're starting, so it
@@ -596,6 +655,9 @@ pub async fn pty_session_open(
     cmd.args(&args);
     if let Some(ref c) = cwd {
         cmd.cwd(std::ffi::OsString::from(c));
+    }
+    for key in &env_remove {
+        cmd.env_remove(std::ffi::OsString::from(key));
     }
     for (k, v) in env.iter() {
         cmd.env(std::ffi::OsString::from(k), std::ffi::OsString::from(v));
