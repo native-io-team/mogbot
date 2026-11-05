@@ -34,6 +34,7 @@ import { useNow } from '../../components/ConnectionPill';
 import { choose } from '../../components/menu';
 import { TextAction } from '../../components/surfaces';
 import { WhatItCanReach } from '../../components/reach';
+import { WhatItCanDo } from '../../components/policy';
 import { Button, Icon, InsetDivider, Row, SectionTitle, SheetPage, T } from '../../components/ui';
 import { SheetTitle } from '../../components/SheetTitle';
 import {
@@ -250,6 +251,8 @@ function AgentSheet() {
             </View>
           </>
         )}
+
+        <WhatItCanDo agentId={agent.id} name={agent.name} />
 
         <WhatItCanReach agentId={agent.id} />
 

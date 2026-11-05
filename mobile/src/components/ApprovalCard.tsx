@@ -33,6 +33,7 @@ import { useApp } from '../lib/store';
 import { fonts, iconSize, radius, space, type, PRESSED } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
+import { SettingsChange } from './settingsChange';
 import { ACTION, Card, Line, OFFLINE_NOTE } from './surfaces';
 import { Button, Icon, T } from './ui';
 
@@ -308,7 +309,9 @@ export function ApprovalCard({
 
   return (
     <Card
-      icon={consent ? 'square.and.arrow.down' : 'checkmark.shield'}
+      icon={
+        consent ? 'square.and.arrow.down' : approval.settings ? 'slider.horizontal.3' : 'checkmark.shield'
+      }
       title={approval.title}
       // Whose and where, as its sibling import card says it.
       source={
@@ -323,7 +326,7 @@ export function ApprovalCard({
       note={
         !connected
           ? OFFLINE_NOTE
-          : paused && !fit.pinned && !consent
+          : paused && !fit.pinned && !consent && !approval.settings
             ? 'It paused here for you. Allow it and it picks up where it left off.'
             : undefined
       }
@@ -864,6 +867,7 @@ function Summarized({ approval, lines }: { approval: Approval; lines: number }) 
 function Detail({ approval, lines }: { approval: Approval; lines: number }) {
   const cardStyles = useCardStyles();
   const colors = useColors();
+  if (approval.settings) return <SettingsChange proposal={approval.settings} />;
   const fields = approvalFields(approval.tool, approval.input);
   if (!fields) return <Command text={approval.detail} lines={lines} />;
   return (

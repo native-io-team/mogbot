@@ -403,6 +403,16 @@ pub async fn call(app: &AppHandle, caller: &store::Agent, tool: &Tool, args: &Va
     let projects = all_projects().await;
     let wanted = args.get("project").and_then(Value::as_str);
     let project = shared::resolve_project(&projects, wanted).ok();
+    // Its settings (`policy`): a project it may not work in, or may only
+    // look at, refuses the tools that would change it.
+    let policy = super::policy::effective(caller);
+    if let Some(refusal) =
+        super::policy::session_refusal(&policy, caller, tool.name, project.as_deref())
+    {
+        let result = mcp_error(refusal);
+        audit(caller, tool, project.as_deref(), args, &result);
+        return result;
+    }
     let result = if tool.name == "push" {
         match &project {
             Some(p) => push(app, caller, p).await,

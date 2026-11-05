@@ -345,6 +345,12 @@ const TOOLS: &[Tool] = &[
         }),
     },
     Tool {
+        name: super::policy_card::TOOL,
+        description: super::policy_card::DESCRIPTION,
+        main_only: false,
+        schema: super::policy_card::schema,
+    },
+    Tool {
         name: "remember_browser_account",
         description: "After you checked, on the page itself, which account one of your sites is signed in as in the user's Chrome: remember which Chrome profile (browser) that was, so next time starts there. Only for your own sites; never a guess.",
         main_only: false,
@@ -633,6 +639,7 @@ async fn call(
                 Err(e) => error(e),
             }
         }
+        super::policy_card::TOOL => super::policy_card::propose(app, caller, turn, args).await,
         _ => error("Unknown tool"),
     }
 }
@@ -1771,6 +1778,7 @@ pub(super) fn new_card(
         expiry: None,
         from_outside: None,
         front: None,
+        settings: None,
     }
 }
 
@@ -2087,6 +2095,15 @@ async fn decide_inner(
     if take_grant(&caller.id, tool, input) {
         return Decision::Allow;
     }
+    // What the agent's settings allow (`policy`): a project or folder it
+    // may not use, an app or the browser it was kept from, is refused
+    // without a card; reading where it may read needs none.
+    let eff = super::policy::effective(caller);
+    match super::policy::verdict(&eff, caller, &super::policy::Places::current(), tool, input) {
+        Some(super::policy::Verdict::Allow) => return Decision::Allow,
+        Some(super::policy::Verdict::Deny(why)) => return Decision::Deny(why),
+        None => {}
+    }
     // A connection the user granted on a login card: reads go through
     // (except in a turn answering outside text), a read-only grant refuses
     // the rest (`connections::gate`).
@@ -2160,7 +2177,8 @@ fn auto_allowed(
     input: &Value,
     outside: bool,
 ) -> Option<super::independence::Level> {
-    let chosen = super::independence::level();
+    // Its own level when its settings give it one (`policy`).
+    let chosen = super::policy::chosen_level(caller);
     let ctx = super::autoallow::Ctx::for_agent(caller)?;
     super::autoallow::auto(chosen, outside, tool, input, &ctx)
         .map(|_| super::independence::for_turn(chosen, outside))
@@ -2181,15 +2199,16 @@ fn auto_line(level: super::independence::Level, tool: &str, input: &Value) -> St
 /// recorded, is judged at most at "Use good judgement" and never wakes its
 /// agent (the exact call goes through when it next runs). Returns how many.
 pub fn sweep_auto_allowed(app: &AppHandle) -> usize {
-    let chosen = super::independence::level();
-    if chosen == super::independence::Level::Often {
-        return 0;
-    }
     let Ok(agents) = store::list() else {
         return 0;
     };
     let mut answered = 0;
     for agent in agents {
+        // Each agent at its own level (`policy`): the team's unless it has one.
+        let chosen = super::policy::chosen_level(&agent);
+        if chosen == super::independence::Level::Often {
+            continue;
+        }
         let Ok(open) = store::pending_approvals(&agent.id) else {
             continue;
         };

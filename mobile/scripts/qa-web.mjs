@@ -740,6 +740,22 @@ const LIVE = [
     act: scrollToText('WHAT IT CAN REACH'),
     check: 'What it can reach: Google Calendar connection, your browser, read-only with "Change this on your Mac."',
   },
+  {
+    name: 'policy',
+    route: '/agent/qa',
+    ready: 'QA 2',
+    act: scrollToText('WHAT IT CAN DO'),
+    check:
+      'What it can do: one row per setting with “Team default” or “Its own” (and “instructions” for independence and rules), the enforcement note, and “Change in chat”; never “go to Settings”.',
+  },
+  {
+    name: 'settings-card',
+    route: '/chat/fixtures',
+    ready: 'Fixtures',
+    act: scrollToText("Change Hiring's settings?"),
+    check:
+      'A “Change Hiring’s settings?” card with a sliders icon: “Hiring” over bulleted plain lines, a muted Why and the rules note; Deny outlined, Allow the neutral answer.',
+  },
   { name: 'memory', route: '/memory?id=site', ready: 'Memory', check: 'Placeholder not clipped' },
   { name: 'instructions', route: '/instructions?id=site', check: 'Instructions editor' },
   { name: 'files', route: '/files/site', check: 'Files list' },
