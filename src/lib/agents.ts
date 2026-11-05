@@ -159,7 +159,7 @@ export interface EngineInfo {
 
 export interface AgentsOverview {
   agents: Agent[];
-  /** Claude Code is installed (the default engine). */
+  /** Claude Code is installed. Per-agent readiness is `engineIsReady` over `engines`. */
   engineReady: boolean;
   engines: EngineInfo[];
 }
@@ -475,18 +475,34 @@ export function modelLabel(
 }
 
 /**
- * Whether an agent on this engine can be sent a message. Claude Code counts
- * once installed (a signed-out turn says so in the chat); Codex once its own
- * `login status` says it's signed in too.
+ * Whether an agent on this engine can be sent a message: its engine is
+ * installed and signed in, by that engine's own check (`engines`). Before the
+ * engines have loaded, Claude Code counts as `claudeInstalled` says.
  */
 export function engineIsReady(
   engine: AgentEngine,
   engines: EngineInfo[],
   claudeInstalled: boolean
 ): boolean {
-  if (engine === 'claude') return claudeInstalled;
   const info = engines.find((e) => e.id === engine);
-  return Boolean(info?.installed && info.signedIn);
+  if (info) return info.installed && info.signedIn;
+  return engine === 'claude' && claudeInstalled;
+}
+
+/** No engine Agents runs on is installed at all (Opencode-, Cursor- or "Other"-only). */
+export function noEngineInstalled(engines: EngineInfo[]): boolean {
+  return engines.length > 0 && engines.every((e) => !e.installed);
+}
+
+/**
+ * The engine a new agent goes on when nobody picked one: Claude Code when
+ * it's ready, else the first that is, else Claude Code. Mirrors
+ * `engine::default_for`.
+ */
+export function defaultEngine(engines: EngineInfo[]): AgentEngine {
+  const ready = engines.filter((e) => e.installed && e.signedIn);
+  if (ready.some((e) => e.id === 'claude')) return 'claude';
+  return ready[0]?.id ?? 'claude';
 }
 
 /** The engines that can take an agent right now, plus the one it's already on. */
@@ -569,6 +585,11 @@ export const AGENT_EVENTS = {
 } as const;
 
 export const getAgentsOverview = () => invoke<AgentsOverview>('agents_overview');
+/**
+ * The agents bound to a project folder, straight from the registry: unlike
+ * the overview, this creates no Chief of Staff and probes no engine.
+ */
+export const getAgentsWithProjects = () => invoke<Agent[]>('agents_with_projects');
 /**
  * The newest `limit` lines, oldest first. `before`: only lines older than that
  * one (the next page up). `through`: reach back at least to that line.

@@ -240,12 +240,9 @@ pub const CHIEF_INSTRUCTIONS: &str = "Your first message, already in the chat, i
 /// chat. Written, not generated: no turn runs, and nothing is spent on the
 /// user's plan, until they reply. `CHIEF_INSTRUCTIONS` tells the Chief it
 /// said this. No product name: the name isn't settled.
-pub const CHIEF_GREETING: &str = "Hi, I'm your Chief of Staff.\n\n\
-Tell me what you're working on and what eats your time, and I'll put a team together for it.\n\n\
-- **Agents for the work.** I create agents for the things you hand off, brief them, and check what comes back. Each one remembers you.\n\
-- **You stay in charge.** Before anyone sends, spends, deletes or runs something on this computer, you get an Allow or Deny card.\n\
-- **Projects when it gets real.** When the work becomes a site or an app, it gets its own project you can open and go deep in.\n\
-- **On your phone too.** Pair the companion app and pick this conversation up from anywhere.\n\n\
+pub const CHIEF_GREETING: &str = "Hi, I'm your Chief of Staff. \
+Tell me what's on your plate and I'll put a team of agents together for it. \
+When something needs your OK, you'll get an Allow or Deny card. \
 So: what's on your plate this week?";
 
 /// The line a message with @mentions carries for its recipient. The user wrote

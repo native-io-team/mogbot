@@ -26,6 +26,7 @@ import {
   type AgentEngine,
   createAgent,
   ENGINE_LABEL,
+  defaultEngine,
   engineOptions,
   formatUsage,
   getAgentInstructions,
@@ -175,7 +176,7 @@ export function AgentEditorModal({
   const [role, setRole] = useState(agent?.role ?? '');
   const [instructions, setInstructions] = useState('');
   const engines = useAgentsSelector((s) => s.engines);
-  const [engine, setEngine] = useState<AgentEngine>(agent?.engine ?? 'claude');
+  const [engine, setEngine] = useState<AgentEngine>(() => agent?.engine ?? defaultEngine(engines));
   const [model, setModel] = useState(agent?.model ?? '');
   const runsOn = engineOptions(engines, engine);
   const switching = Boolean(agent && agent.engine !== engine);

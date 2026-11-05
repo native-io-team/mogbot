@@ -12,10 +12,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
 import { AgentAvatar } from '../agents/AgentAvatar';
+import { useAgentsSelector } from '../../lib/agentsStore';
+import type { Agent } from '../../lib/agents';
 
-/** The Chief's name and colour as `agents::ensure_main` creates it. */
-const CHIEF_NAME = 'Chief of Staff';
-const CHIEF_COLOR = 'white';
+/**
+ * Shown for the beat before the store has loaded. The avatar takes the real
+ * Chief's name and colour the moment it arrives (the user may have renamed or
+ * recoloured it, and its default colour is the brand's to change).
+ */
+const CHIEF_FALLBACK = { name: 'Chief of Staff', color: 'white' };
+const selectChief = (s: { agents: Agent[] }) => s.agents.find((a) => a.isMain) ?? null;
 
 interface CelebrationScreenProps {
   /** Called when user clicks to continue */
@@ -31,6 +37,7 @@ export function CelebrationScreen({ onContinue, engineName }: CelebrationScreenP
   const [showContent, setShowContent] = useState(false);
   const [isContinuing, setIsContinuing] = useState(false);
   const firedRef = useRef(false);
+  const chief = useAgentsSelector(selectChief) ?? CHIEF_FALLBACK;
 
   const fireContinue = useCallback(() => {
     if (firedRef.current) return;
@@ -51,7 +58,7 @@ export function CelebrationScreen({ onContinue, engineName }: CelebrationScreenP
     <div className={`celebration-screen ${showContent ? 'visible' : ''}`}>
       <div className="celebration-content">
         <div className="celebration-icon">
-          <AgentAvatar name={CHIEF_NAME} color={CHIEF_COLOR} size="hero" selected />
+          <AgentAvatar name={chief.name} color={chief.color} size="hero" selected />
         </div>
         <h1 className="celebration-title">You're all set</h1>
         <p className="celebration-subtitle">

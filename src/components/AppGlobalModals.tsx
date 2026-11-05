@@ -6,6 +6,7 @@ import { MigrationModals } from './migration/MigrationModals';
 import { RemoteAccessModal } from './remote/RemoteAccessModal';
 import { PhoneModal } from './phone/PhoneModal';
 import { ProjectToolsModal } from './setup/ProjectToolsModal';
+import { useProjectToolsNeededListener } from '../lib/projectTools';
 import { useCompanionInstallReminder } from './phone/PhoneInstallEntry';
 import { ToastList } from './primitives/ToastList';
 import { useModal } from '../contexts/ModalContext';
@@ -38,6 +39,8 @@ export function AppGlobalModals() {
 
 function GlobalModalsBody() {
   const ctx = usePaletteContext();
+  // An agent asked for a project and this computer can't make one yet.
+  useProjectToolsNeededListener();
   const changelog = useModal('changelog');
   const attachedLibraries = useModal('attachedLibraries');
   const settings = useModal('settings');

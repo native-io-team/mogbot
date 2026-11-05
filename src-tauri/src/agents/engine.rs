@@ -65,9 +65,8 @@ pub struct EngineInfo {
     pub id: Engine,
     pub label: &'static str,
     pub installed: bool,
-    /// Codex: `codex login status` says so. Claude Code: taken as signed in
-    /// once installed (its sign-in lives in the keychain; a signed-out turn
-    /// says so in the chat, with a way to sign in).
+    /// Codex: `codex login status` says so. Claude Code: `claude auth
+    /// status` (setup's own check), so a lapsed sign-in shows before a turn.
     pub signed_in: bool,
     /// The engine's own models, without "Default" (no `--model` at all).
     pub models: Vec<ModelChoice>,
@@ -127,9 +126,8 @@ pub async fn signed_in(engine: Engine) -> bool {
     let Some(binary) = binary(engine).await else {
         return false;
     };
-    // Claude Code's sign-in is checked by its turns. The e2e suite's
-    // scripted model needs no account (debug builds only).
-    if engine == Engine::Claude || super::codex::scripted() {
+    // The e2e suite's scripted model needs no account (debug builds only).
+    if super::codex::scripted() {
         return true;
     }
     if let Some((yes, _, at)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(&engine) {
@@ -138,12 +136,23 @@ pub async fn signed_in(engine: Engine) -> bool {
             return *yes;
         }
     }
-    let mut cmd = tokio::process::Command::new(binary);
-    cmd.args(["login", "status"])
-        .env("PATH", crate::utils::get_extended_path());
-    let yes = crate::external_command::run_with_timeout(cmd, "codex login status", 15)
-        .await
-        .is_ok_and(|out| out.status.success());
+    let yes = match engine {
+        // The same answer setup gives (`claude auth status`, then its files),
+        // so the chat says "signed out" before a message fails on it.
+        Engine::Claude => {
+            let account = crate::commands::accounts::get_active_account_id()
+                .unwrap_or_else(|_| crate::commands::accounts::DEFAULT_ACCOUNT_ID.to_string());
+            crate::commands::setup::claude_auth_truth(&account).await
+        }
+        Engine::Codex => {
+            let mut cmd = tokio::process::Command::new(binary);
+            cmd.args(["login", "status"])
+                .env("PATH", crate::utils::get_extended_path());
+            crate::external_command::run_with_timeout(cmd, "codex login status", 15)
+                .await
+                .is_ok_and(|out| out.status.success())
+        }
+    };
     CACHE
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -165,6 +174,20 @@ pub async fn info(engine: Engine) -> EngineInfo {
 pub async fn overview() -> Vec<EngineInfo> {
     let (claude, codex) = tokio::join!(info(Engine::Claude), info(Engine::Codex));
     vec![claude, codex]
+}
+
+/// The engine a new agent goes on when nobody picked one: Claude Code when
+/// it's ready, else the first that is, else Claude Code (whose chat then
+/// offers to set it up).
+pub fn default_for(engines: &[EngineInfo]) -> Engine {
+    if engines.iter().any(|e| e.id == Engine::Claude && e.ready()) {
+        return Engine::Claude;
+    }
+    engines
+        .iter()
+        .find(|e| e.ready())
+        .map(|e| e.id)
+        .unwrap_or_default()
 }
 
 /// Refuse to put an agent on an engine that can't run it, in words.
@@ -229,6 +252,43 @@ pub fn normalize_model(engine: Engine, model: &str) -> Result<Option<String>, Co
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn engine(id: Engine, installed: bool, signed_in: bool) -> EngineInfo {
+        EngineInfo {
+            id,
+            label: "",
+            installed,
+            signed_in,
+            models: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_new_agent_goes_on_claude_when_ready_else_the_first_ready_engine() {
+        let both = [
+            engine(Engine::Claude, true, true),
+            engine(Engine::Codex, true, true),
+        ];
+        assert_eq!(default_for(&both), Engine::Claude);
+        let codex_only = [
+            engine(Engine::Claude, false, false),
+            engine(Engine::Codex, true, true),
+        ];
+        assert_eq!(default_for(&codex_only), Engine::Codex);
+        // Claude signed out counts as not ready.
+        let claude_out = [
+            engine(Engine::Claude, true, false),
+            engine(Engine::Codex, true, true),
+        ];
+        assert_eq!(default_for(&claude_out), Engine::Codex);
+        // Nothing ready: Claude Code, whose chat offers to set it up.
+        let none = [
+            engine(Engine::Claude, false, false),
+            engine(Engine::Codex, true, false),
+        ];
+        assert_eq!(default_for(&none), Engine::Claude);
+        assert_eq!(default_for(&[]), Engine::Claude);
+    }
 
     #[test]
     fn engines_are_stored_as_plain_words_and_read_leniently() {

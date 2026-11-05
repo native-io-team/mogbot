@@ -257,6 +257,21 @@
   color: var(--accent-success);
 }
 
+/* New agent / Import agents start on the rows' column, not centred in space:
+   the icon sits in a badge-wide box so its label lines up with the names. */
+.workspace-sidebar:not(.is-hidden) .agents-list__new,
+.workspace-sidebar:not(.is-hidden) .agents-list__import {
+  justify-content: flex-start;
+  gap: var(--spacing-sm);
+  padding: 0 var(--spacing-md) 0 var(--spacing-sm);
+}
+
+.workspace-sidebar:not(.is-hidden) .agents-list__new > svg,
+.workspace-sidebar:not(.is-hidden) .agents-list__import > svg {
+  box-sizing: content-box;
+  padding: 0 calc((var(--size-sidebar-project-shortcut) - 16px) / 2); /* css-ok: centre a 16px icon in the badge width */
+}
+
 /* "Hidden (2)": a quiet disclosure at the end of the list, not a footer. */
 .agents-list__hidden-toggle {
   display: flex;
@@ -337,6 +352,36 @@
   justify-content: center;
   font-size: var(--font-size-body-lg);
   color: var(--text-muted);
+}
+
+/* No engine at all (an Opencode-, Cursor- or "Other"-only setup). */
+.agents-no-engine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  max-width: 420px; /* css-ok: reading width */
+  padding: 0 var(--spacing-lg);
+  text-align: center;
+}
+
+.agents-no-engine__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-heading);
+}
+
+.agents-no-engine__body {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: var(--line-height-help);
+}
+
+.agents-no-engine__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
 }
 
 /* ---------------------------------------------------------------- chat */

@@ -598,13 +598,14 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'workspace-project-agents',
     title: 'Workspace — the agents that work in this project, above its sessions',
     looksRightWhen:
-      'In the acme-marketing project’s sidebar body: an “Agents” section listing Acme Site (the agent bound to this folder, with “message” muted at the right), then “Sessions” (the terminal tabs, formerly headed Agents) with “New session ⌘T” at its foot. Clicking Acme Site opens its chat in Agents.',
+      'In the acme-marketing project’s sidebar body: an “Agents” section listing Acme Site (the agent bound to this folder, idle, so nothing at its right), then “Sessions” (the terminal tabs, formerly headed Agents) with “New session ⌘T” at its foot. Clicking Acme Site opens its chat in Agents.',
     project: ACME_PATH,
     requires: '#sidebar-section-team',
     clipSelector: '.workspace-sidebar',
     commands: {
       ...workspaceCommands,
       agents_overview: overview(boundTeam()),
+      agents_with_projects: boundTeam().filter((a) => a.project),
       agents_messages: messagesFor,
     },
   },

@@ -840,6 +840,10 @@ pub struct QuickSetupCheck {
     pub all_present: bool,
     /// Whether we have a cached setup_complete state
     pub setup_complete_cached: bool,
+    /// Whether an engine Agents runs on (Claude Code, Codex) is present.
+    /// Without one, setup can still be complete (an older setup on another
+    /// agent), and the app opens on Projects instead of Agents.
+    pub agents_engine: bool,
 }
 
 /// Persisted app-level state (stored in app data directory)

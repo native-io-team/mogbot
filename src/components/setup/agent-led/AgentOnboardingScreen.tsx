@@ -62,12 +62,9 @@ const DETAIL_ICONS: Record<AgentCardKey, ReactNode> = {
   codex: <CodexIcon size={28} />,
 };
 
-/** How it works, in the three things a person does. */
-const HOW_IT_WORKS = [
-  'You talk to your Chief of Staff, like a person.',
-  'It puts together agents for your work and hands things off.',
-  'Anything risky waits for your Allow.',
-];
+/** How it works, in one line: the three things a person does. */
+const HOW_IT_WORKS =
+  'Talk to your Chief of Staff. It builds a team. Anything risky waits for your OK.';
 
 interface AgentOnboardingScreenProps {
   /** Called when setup is complete and the user continues. */
@@ -211,19 +208,10 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
         {!detailAgent && (
           <div className="onboarding-header">
             <h1>Your own team of AI agents</h1>
-            <ol className="onboarding-how">
-              {HOW_IT_WORKS.map((line, index) => (
-                <li key={line}>
-                  <span className="onboarding-how-step" aria-hidden>
-                    {index + 1}
-                  </span>
-                  {line}
-                </li>
-              ))}
-            </ol>
+            <p className="onboarding-how">{HOW_IT_WORKS}</p>
             <p className="onboarding-reassurance">
-              Your agents run on this computer, with an AI account of your own. Which one would you
-              like to use? You can add the other later.
+              Your agents run on this computer, on an AI account of your own. Pick one to start; you
+              can add the other later.
             </p>
           </div>
         )}

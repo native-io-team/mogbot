@@ -246,14 +246,16 @@ Onboarding is critical — it's the first thing every new user sees, and it ends
 
 The app verifies; nothing self-certifies: an engine counts when `get_full_setup_status` says it is installed and signed in. Backend `allReady` means exactly that (`has_agents_engine` in `commands/setup/status.rs`), and the background check after launch only logs — it never sends a user back to onboarding.
 
-**Project tools are asked for in context.** Homebrew/winget, Node, Git, GitHub CLI and a GitHub sign-in are needed only when work becomes a project. Creating or importing one goes through `useGatedProjectStarts` (`src/lib/projectTools.ts`); if anything is missing, the Project tools dialog (`ProjectToolsModal`) lists it in plain words and runs the guided phase: the user's own agent installs the tools in a terminal (`buildGuidedSetupPrompt`) while the checklist ticks green from the app's own checks, then the project flow carries on. Hosting stays in a project's Push popover.
+**Project tools are asked for in context.** Only Node and Git (plus Homebrew/winget to install them) are *required*, and only when work becomes a project. The GitHub CLI and sign-in are offered alongside as optional, with "Continue without" (remembered). Creating or importing one goes through `useGatedProjectStarts` (`src/lib/projectTools.ts`); a passing check is cached for the session, and the clicked button shows a spinner while the first one runs. If anything is missing, the Project tools dialog (`ProjectToolsModal`) lists it in plain words and runs the guided phase: the user's own agent installs the tools in a terminal (`buildGuidedSetupPrompt`) while the checklist ticks green from the app's own checks, then the project flow carries on. The same rule holds in Rust: the agent and Remote Access `create_project` tools check Node/Git first (`missing_project_tools`), answer the Chief with "ask the user to set up project tools", and emit `project-tools-needed`, which opens the dialog. Hosting stays in a project's Push popover.
+
+Someone whose only agent CLI is one Agents can't run (Opencode, Cursor, "Other") counts as set up (`brought_own_agent`), rather than being looped through onboarding: `postSetupViewFor` lands them on their projects, and Agents shows a "no engine" panel offering Claude Code or Codex.
 
 The classic step-by-step wizard and its "Try classic onboarding" toggle were removed: it gated the app on developer tools onboarding no longer asks for.
 
 #### Looking at it
 
 - `pnpm harness` scenarios: `onboarding-fresh`, `onboarding-codex-prereqs`, `onboarding-handoff` (celebration → Agents with the Chief), `launch-returning` (launch lands on Agents), `project-tools` and `project-tools-running`.
-- `SHIPSTUDIO_FORCE_SETUP=fresh pnpm tauri dev` — mock backend; install/connect buttons flip mock state after a visible beat, and the Project tools dialog plays the scripted `DemoAgentTerminal`. Nothing touches the host machine. Also `auth-only`, `codex-only`, `both-agents` (fast path to the hand-off).
+- `SHIPSTUDIO_FORCE_SETUP=fresh pnpm tauri dev` — mock backend; install/connect buttons flip mock state after a visible beat, and the Project tools dialog plays the scripted `DemoAgentTerminal`. Nothing touches the host machine. Also `auth-only` (engines installed, none signed in). Note that `both-agents`, `codex-only` and `almost-done` have a ready engine, so mock `allReady` is true and launch **skips onboarding entirely** (straight to Agents); use them to look at the post-setup app, not the hand-off.
 - `SHIPSTUDIO_FORCE_ONBOARDING=1 pnpm tauri dev` — real checks, onboarding forced open, the pick phase always shown even on a set-up machine; `mark_setup_complete` is in-memory only.
 
 #### Testing on a Fresh Machine (Real End-to-End)

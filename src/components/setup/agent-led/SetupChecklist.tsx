@@ -6,7 +6,6 @@
  */
 
 import { SetupItem, SETUP_FRIENDLY_NAMES } from '../../../lib/setup';
-import { PROJECT_TOOL_ITEM_IDS, HostChoice } from '../../../lib/agentOnboarding';
 import { SuccessIcon } from '@/components/icons';
 
 interface ChecklistRow {
@@ -21,15 +20,15 @@ interface SetupChecklistProps {
   agentBinaryId: string | null;
   /** Display name of the chosen agent. */
   agentDisplayName: string;
-  /** Hosting provider chosen in the hosting step (null = skipped). */
-  hostChoice: HostChoice | null;
+  /** The items this run sets up, in install order. */
+  toolIds: readonly string[];
 }
 
 export function SetupChecklist({
   items,
   agentBinaryId,
   agentDisplayName,
-  hostChoice,
+  toolIds,
 }: SetupChecklistProps) {
   const rows: ChecklistRow[] = [
     // "Other" agents aren’t managed by the app, so there's no row to
@@ -47,26 +46,14 @@ export function SetupChecklist({
       : []),
     // Required items, in install order. Absent items (e.g. npm_fix once
     // permissions are fine) simply don't get a row.
-    ...PROJECT_TOOL_ITEM_IDS.map((id) => items.find((i) => i.id === id))
+    ...toolIds
+      .map((id) => items.find((i) => i.id === id))
       .filter((item): item is SetupItem => item !== undefined)
       .map((item) => ({
         id: item.id,
         label: SETUP_FRIENDLY_NAMES[item.id] ?? item.friendlyName,
         ready: item.status === 'ready',
       })),
-    // Vercel has real backend detection, so its row is verifiable. Cloudflare
-    // doesn't yet — it gets an honest footnote below instead of a fake row.
-    ...(hostChoice === 'vercel'
-      ? [
-          {
-            id: 'vercel-pair',
-            label: 'Vercel hosting',
-            ready:
-              items.find((i) => i.id === 'vercel')?.status === 'ready' &&
-              items.find((i) => i.id === 'vercel_auth')?.status === 'ready',
-          },
-        ]
-      : []),
   ];
 
   return (
@@ -95,12 +82,6 @@ export function SetupChecklist({
           </li>
         ))}
       </ul>
-      {hostChoice === 'cloudflare' && (
-        <p className="agent-setup-checklist-footnote">
-          Cloudflare is set up by your agent in the terminal — the app can’t verify it yet, so check
-          the terminal output.
-        </p>
-      )}
     </div>
   );
 }

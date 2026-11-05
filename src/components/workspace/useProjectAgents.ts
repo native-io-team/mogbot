@@ -9,9 +9,16 @@
  * @module components/workspace/useProjectAgents
  */
 
-import { useMemo } from 'react';
-import { needsYou, type Agent } from '../../lib/agents';
-import { useAgentsList } from '../../lib/agentsStore';
+import { useEffect, useMemo, useState } from 'react';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import {
+  AGENT_EVENTS,
+  getAgentsWithProjects,
+  needsYou,
+  type Agent,
+  type AgentStatus,
+} from '../../lib/agents';
+import { logger } from '../../lib/logger';
 import { requestAgentsIntent } from '../../commands/useAgentsCommands';
 
 export interface ProjectAgentRow {
@@ -39,9 +46,40 @@ export function projectAgentRows(
       key: `agent-${a.id}`,
       label: a.name,
       dotState: needsYou(a) ? 'waiting' : a.status.state === 'working' ? 'thinking' : 'idle',
-      meta: needsYou(a) ? 'needs you' : a.status.state === 'working' ? 'working' : 'message',
+      // Only a state worth reading; an idle row says nothing (it's a link).
+      meta: needsYou(a) ? 'needs you' : a.status.state === 'working' ? 'working' : undefined,
       onSelect: () => openAgent(a.id),
     }));
+}
+
+/**
+ * The registry's project-bound agents, kept current from Agents' own events.
+ * Deliberately not the Agents store: that one creates the Chief of Staff and
+ * probes every engine, which a project window has no reason to do.
+ */
+function useAgentsWithProjects(enabled: boolean): Agent[] {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const refetch = () =>
+      getAgentsWithProjects()
+        .then((list) => alive && setAgents(list))
+        .catch((e) => logger.warn('[Agents] project agents failed', { error: String(e) }));
+    void refetch();
+    const unlistens: Promise<UnlistenFn>[] = [
+      listen(AGENT_EVENTS.registry, () => void refetch()),
+      listen<{ agentId: string; status: AgentStatus }>(AGENT_EVENTS.status, (e) => {
+        const { agentId, status } = e.payload;
+        setAgents((list) => list.map((a) => (a.id === agentId ? { ...a, status } : a)));
+      }),
+    ];
+    return () => {
+      alive = false;
+      for (const u of unlistens) void u.then((off) => off()).catch(() => undefined);
+    };
+  }, [enabled]);
+  return agents;
 }
 
 /** Rows for the project open in this window; empty when no agent works here. */
@@ -49,7 +87,7 @@ export function useProjectAgents(
   projectPath: string | null,
   onGoAgents: (() => void) | undefined
 ): ProjectAgentRow[] {
-  const agents = useAgentsList();
+  const agents = useAgentsWithProjects(Boolean(onGoAgents && projectPath));
   return useMemo(
     () =>
       onGoAgents

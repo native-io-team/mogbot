@@ -1,8 +1,9 @@
 /**
  * The engine picker: one card per engine Agents can run on (Claude Code,
  * Codex). Clicking a card enters that engine's install → sign-in flow. Cards
- * surface what's already detected on the machine ("Ready" / "Sign-in
- * needed") so returning users see they're one click away.
+ * say what clicking does next, from what's already detected on the machine
+ * ("Ready →", "Sign in →", "Install & sign in →"), so every card reads as
+ * something to press rather than a status to worry about.
  *
  * Only engines that can run Agents are offered: picking one that can't
  * (Cursor, Opencode, a bare terminal) used to finish onboarding into an app
@@ -47,9 +48,9 @@ function detectionState(items: SetupItem[], key: AgentCardKey): 'ready' | 'insta
 }
 
 const STATUS_LABELS: Record<'ready' | 'installed' | 'missing', string> = {
-  ready: '✓ Ready',
-  installed: 'Sign-in needed',
-  missing: 'Not installed',
+  ready: 'Ready →',
+  installed: 'Sign in →',
+  missing: 'Install & sign in →',
 };
 
 interface AgentPickGridProps {

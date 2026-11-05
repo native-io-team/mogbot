@@ -26,7 +26,6 @@ import {
   guidedAgentSpawn,
   areProjectToolsReady,
   otherAgentShellSpawn,
-  HostChoice,
 } from '../../../lib/agentOnboarding';
 import { logger } from '../../../lib/logger';
 import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard';
@@ -39,8 +38,8 @@ interface GuidedSetupPhaseProps {
   agentDisplayName: string;
   /** Live setup items — the owner polls these while this phase is mounted. */
   items: SetupItem[];
-  /** Hosting provider chosen in the hosting step (null = skipped). */
-  hostChoice: HostChoice | null;
+  /** The setup items this run installs and checks, in install order. */
+  toolIds: string[];
   /** Mock mode: play the scripted demo instead of spawning a real agent. */
   demoMode: boolean;
   /** Called when the user clicks Continue after everything is verified. */
@@ -51,7 +50,7 @@ export function GuidedSetupPhase({
   agentBinaryId,
   agentDisplayName,
   items,
-  hostChoice,
+  toolIds,
   demoMode,
   onVerified,
 }: GuidedSetupPhaseProps) {
@@ -59,9 +58,9 @@ export function GuidedSetupPhase({
   // as it stood when the session started. A restart recomputes it, so an
   // agent relaunched after partial progress only gets the remaining items.
   const missingRef = useRef<SetupItem[] | null>(null);
-  missingRef.current ??= getMissingProjectTools(items);
+  missingRef.current ??= getMissingProjectTools(items, toolIds);
   const readyRef = useRef<SetupItem[] | null>(null);
-  readyRef.current ??= getReadyProjectTools(items);
+  readyRef.current ??= getReadyProjectTools(items, toolIds);
   const [session, setSession] = useState(0);
   const [agentExit, setAgentExit] = useState<number | null>(null);
   const { copy, isCopied } = useCopyToClipboard();
@@ -85,12 +84,12 @@ export function GuidedSetupPhase({
   }, []);
 
   const isOther = agentBinaryId === null;
-  const complete = areProjectToolsReady(items, agentBinaryId);
+  const complete = areProjectToolsReady(items, agentBinaryId, toolIds);
 
   const prompt = useMemo(
-    () => buildGuidedSetupPrompt(missingRef.current ?? [], hostChoice, readyRef.current ?? []),
+    () => buildGuidedSetupPrompt(missingRef.current ?? [], readyRef.current ?? [], toolIds),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session, hostChoice]
+    [session, toolIds]
   );
   const spawn = useMemo(
     () => (isOther ? otherAgentShellSpawn() : guidedAgentSpawn(agentBinaryId, prompt)),
@@ -140,7 +139,7 @@ export function GuidedSetupPhase({
       <div className="agent-guided-layout">
         <div className="agent-guided-terminal">
           {demoMode ? (
-            <DemoAgentTerminal hostChoice={hostChoice} />
+            <DemoAgentTerminal includeGitHub={toolIds.includes('gh_auth')} />
           ) : workdir !== null ? (
             <OnboardingTerminal
               key={session}
@@ -169,7 +168,7 @@ export function GuidedSetupPhase({
             items={items}
             agentBinaryId={agentBinaryId}
             agentDisplayName={agentDisplayName}
-            hostChoice={hostChoice}
+            toolIds={toolIds}
           />
           {complete && (
             <div className="agent-guided-complete">

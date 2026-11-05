@@ -1997,16 +1997,47 @@ export const agentsScenarios: Scenario[] = [
   },
   {
     id: 'agents-no-engine',
-    title: 'Agents — Claude Code not installed',
+    title: 'Agents — the Chief’s engine (Claude Code) isn’t installed',
     looksRightWhen:
-      'The composer’s slot says agents need Claude Code and offers to set it up; the header band is undisturbed and there is no send button.',
+      'Codex is here but Claude Code isn’t, and this Chief has a conversation on Claude Code. The composer’s slot says “Chief of Staff runs on Claude Code, which isn’t installed on this Mac yet.” with “Set up Claude Code”; the header band is undisturbed and there is no send button.',
     command: 'agents.open',
     requires: '.agent-composer--blocked',
     commands: {
-      // A fresh Mac: the Chief has no history, so its row has no preview either.
       agents_overview: {
         ...overview([{ ...TEAM[0], preview: null }]),
         engineReady: false,
+        engines: ENGINES.map((e) =>
+          e.id === 'claude' ? { ...e, installed: false, signedIn: false } : e
+        ),
+      },
+    },
+  },
+  {
+    id: 'agents-claude-signed-out',
+    title: 'Agents — Claude Code signed out',
+    looksRightWhen:
+      'Claude Code is installed but its sign-in lapsed: before anything is typed, the composer’s slot says “Chief of Staff runs on Claude Code, which is signed out on this Mac.” with a “Sign in” button. No send button.',
+    command: 'agents.open',
+    requires: '.agent-composer--blocked',
+    commands: {
+      agents_overview: {
+        ...overview([{ ...TEAM[0], preview: null }]),
+        engines: ENGINES.map((e) => (e.id === 'claude' ? { ...e, signedIn: false } : e)),
+      },
+    },
+  },
+  {
+    id: 'agents-no-engine-at-all',
+    title: 'Agents — set up on another agent CLI (no Claude Code or Codex)',
+    looksRightWhen:
+      'Someone set up on Opencode, Cursor or their own agent: Agents explains in one panel that agents run on Claude Code or Codex, with “Set up Claude Code” (primary) and “Set up Codex”, and a quiet link back to their projects. No chat, no composer.',
+    command: 'agents.open',
+    requires: '.agents-no-engine',
+    commands: {
+      agents_overview: {
+        ...overview([{ ...TEAM[0], preview: null }]),
+        engineReady: false,
+        engines: ENGINES.map((e) => ({ ...e, installed: false, signedIn: false })),
       },
     },
   },

@@ -7,6 +7,7 @@
 import type { Scenario } from '../types';
 import { projects, readySetupItems } from './base';
 import { workspaceCommands, WORKSPACE_PROJECT } from './workspace';
+import { messagesFor, overview } from './agents';
 
 const notInstalled = (id: string, friendlyName: string) => ({
   id,
@@ -71,6 +72,17 @@ const PROJECT_TOOLS_MISSING = {
     detectedAgents: ['claude-code'],
   },
   ensure_agent_workdir: '/Users/harness/ShipStudio',
+};
+
+/** Node and Git are here; only GitHub (optional) isn't. */
+const PROJECT_TOOLS_GITHUB_ONLY = {
+  ...PROJECT_TOOLS_MISSING,
+  get_full_setup_status: {
+    ...PROJECT_TOOLS_MISSING.get_full_setup_status,
+    items: ENGINE_ONLY_ITEMS.map((i) =>
+      i.id === 'gh' || i.id === 'gh_auth' ? i : { ...i, status: 'ready' as const }
+    ),
+  },
 };
 
 export const appScenarios: Scenario[] = [
@@ -213,7 +225,7 @@ export const appScenarios: Scenario[] = [
     id: 'onboarding-fresh',
     title: 'Onboarding — nothing installed',
     looksRightWhen:
-      'No product wordmark. “Your own team of AI agents”, three numbered lines on how it works (talk to your Chief of Staff; it puts agents together; risky things wait for your Allow), one line that agents run on this computer with your own AI account, and two cards only — Claude Code (“Claude, by Anthropic”) and Codex (“GPT, by OpenAI”) — each “Not installed”. No developer tools, no hosting, no classic-onboarding toggle.',
+      'No product wordmark. “Your own team of AI agents”, a large white headline, then one line on how it works (“Talk to your Chief of Staff. It builds a team. Anything risky waits for your OK.”), one line that agents run on this computer with your own AI account, and two cards only — Claude Code (“Claude, by Anthropic”) and Codex (“GPT, by OpenAI”) — each ending “Install & sign in →”. No developer tools, no hosting, no classic-onboarding toggle.',
     requires: '.agent-pick-grid',
     commands: ONBOARDING_FRESH,
   },
@@ -230,7 +242,7 @@ export const appScenarios: Scenario[] = [
     id: 'onboarding-auth-only',
     title: 'Onboarding — installed but signed out',
     looksRightWhen:
-      'Both cards read “Sign-in needed”; nothing else (developer tools, hosting) is asked about.',
+      'Both cards end “Sign in →”; nothing else (developer tools, hosting) is asked about.',
     requires: '.agent-pick-grid',
     commands: {
       quick_setup_check: { allPresent: true, setupCompleteCached: false },
@@ -272,19 +284,29 @@ export const appScenarios: Scenario[] = [
     id: 'launch-returning',
     title: 'Launch — a returning user lands on Agents',
     looksRightWhen:
-      'Setup done before: the app opens on Agents with the Chief of Staff’s conversation, not on the projects dashboard. The sidebar top row is the toggle and a bell (What’s in flight); its foot has the Phone row (“Put it on your phone”) and no Remote access row. Projects is one click away in the toggle.',
-    requires: '.agents-mode .agent-chat',
-    commands: {},
+      'A real returning user, with a team and history: the app opens on Agents with the Chief of Staff’s ongoing conversation (not the first-run greeting), the team listed in the sidebar, not on the projects dashboard. The sidebar top row is the toggle and an activity icon (What’s in flight); New agent / Import agents start on the rows’ left edge. Projects is one click away in the toggle.',
+    requires: '.agents-mode .agent-chat .agent-chat__messages',
+    commands: { agents_overview: overview(), agents_messages: messagesFor },
   },
   {
     id: 'project-tools',
     title: 'Projects — the first new project asks for its tools',
     looksRightWhen:
-      'Only Claude Code was set up, so New project opens “Before your first project”: one line on why, a plain list of what’s missing (a package manager, Node.js, Git, GitHub’s tool, a GitHub sign-in, each said in plain words), a line that Claude Code installs them and this computer checks each one, and Not now / Set them up.',
+      'Only Claude Code was set up, so New project opens “Set up project tools”: one line on why, a plain list of only what’s required (a package manager, Node.js, Git, in plain words), an “Also connect GitHub — Optional” checkbox with a one-line reason, a line that Claude Code installs them and this computer checks each one, and Cancel / Set them up. The New project button showed a spinner while the check ran.',
     startOn: 'projects',
     openSelector: '[data-education-id="new-project-button"]',
     requires: '.project-tools-modal .project-tools__list',
     commands: PROJECT_TOOLS_MISSING,
+  },
+  {
+    id: 'project-tools-github-only',
+    title: 'Projects — only GitHub (optional) is missing',
+    looksRightWhen:
+      'Node and Git are here, so New project asks only “Connect GitHub?”: a line saying everything a project needs is here and GitHub is optional, with “Continue without” and “Connect GitHub”.',
+    startOn: 'projects',
+    openSelector: '[data-education-id="new-project-button"]',
+    requires: '.project-tools-modal .project-tools__actions',
+    commands: PROJECT_TOOLS_GITHUB_ONLY,
   },
   {
     id: 'project-tools-running',

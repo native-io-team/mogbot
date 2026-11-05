@@ -235,6 +235,10 @@ export function AgentChat({
   const engineReady = useAgentsSelector((s) =>
     engineIsReady(agent.engine, s.engines, s.engineReady)
   );
+  /** Installed but signed out: the blocked composer offers sign-in, not an install. */
+  const engineInstalled = useAgentsSelector(
+    (s) => s.engines.find((e) => e.id === agent.engine)?.installed ?? false
+  );
   const hasOlder = useAgentsSelector((s) => s.older[agent.id] ?? false);
   // Whitespace that hasn't become words yet isn't worth a bubble.
   const draftText = rawDraft?.text.trimStart() ?? '';
@@ -1206,12 +1210,12 @@ export function AgentChat({
           <div className="agent-composer agent-composer--blocked" role="status">
             <WarningIcon size={14} className="agent-composer__blocked-icon" />
             <span className="agent-composer__blocked-text">
-              {agent.engine === 'codex'
-                ? `${agent.name} runs on Codex, which isn’t installed and signed in on this Mac.`
-                : 'Agents run on Claude Code, which isn’t installed on this Mac yet.'}
+              {engineInstalled
+                ? `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which is signed out on this Mac.`
+                : `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which isn’t installed on this Mac yet.`}
             </span>
             <Button tabIndex={0} variant="primary" onClick={onSetUpEngine}>
-              Set up {ENGINE_LABEL[agent.engine]}
+              {engineInstalled ? 'Sign in' : `Set up ${ENGINE_LABEL[agent.engine]}`}
             </Button>
           </div>
         )}

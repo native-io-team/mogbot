@@ -27,38 +27,20 @@
 
 /* ============ How it works ============ */
 
-/* Three numbered lines under the heading: what a person actually does. */
+/* The pick screen's headline: bigger and full white, with air under it. */
+.agent-onboarding-content .onboarding-header h1 {
+  font-size: var(--font-size-h1);
+  line-height: var(--line-height-compact);
+  color: var(--text-white);
+  letter-spacing: -0.02em; /* css-ok: display tracking */
+  margin-bottom: var(--spacing-lg);
+}
+
+/* One line under the heading: what a person actually does. */
 .onboarding-how {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-  margin: var(--spacing-lg) auto var(--spacing-lg);
-  padding: 0;
-  list-style: none;
-  text-align: left;
-  width: fit-content;
-}
-
-.onboarding-how li {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
+  margin: 0 auto;
   color: var(--text-primary);
-  font-size: var(--font-size-subhead);
-}
-
-.onboarding-how-step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: var(--spacing-xl);
-  height: var(--spacing-xl);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-default);
-  color: var(--text-secondary);
-  font-size: var(--font-size-badge);
-  font-variant-numeric: tabular-nums;
+  font-size: var(--font-size-subhead-lg);
 }
 
 /* ============ Engine pick grid ============ */
@@ -96,9 +78,10 @@
   transition: all var(--transition-interaction);
 }
 
-.agent-pick-card:hover:not(:disabled) {
+.agent-pick-card:hover:not(:disabled),
+.agent-pick-card:focus-visible {
   background: var(--surface-control);
-  border-color: var(--accent-active);
+  border-color: var(--text-white);
   color: var(--text-white);
   transform: translateY(-1px); /* css-ok: hover lift, not spacing */
 }
@@ -109,7 +92,7 @@
 }
 
 .agent-pick-card.detected-ready {
-  border-color: rgba(var(--accent-active-rgb), 0.5);
+  border-color: var(--border-strong);
 }
 
 .agent-pick-card-icon {
@@ -139,19 +122,19 @@
   color: var(--text-secondary);
 }
 
-/* Detection state, as a quiet caption under the description — no pill. */
+/* What pressing the card does next, as its call to action — no pill. */
 .agent-pick-card-status {
-  font-size: var(--font-size-badge);
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
   color: var(--text-secondary);
   white-space: nowrap;
   transition: color var(--transition-interaction);
 }
-.agent-pick-card:hover .agent-pick-card-status {
-  color: var(--text-primary);
-}
-
+.agent-pick-card:hover .agent-pick-card-status,
+.agent-pick-card:focus-visible .agent-pick-card-status,
 .agent-pick-card-status.ready {
-  color: var(--accent-active);
+  color: var(--text-white);
 }
 
 /* ============ Agent setup detail (Phase 0, after a card click) ============ */
@@ -447,6 +430,36 @@
   padding-left: var(--spacing-lg);
   color: var(--text-primary);
   font-size: var(--font-size-body-lg);
+}
+
+/* GitHub: offered with the rest, never required. */
+.project-tools__option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  color: var(--text-primary);
+  font-size: var(--font-size-body-lg);
+  cursor: pointer;
+}
+
+.project-tools__option > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+}
+
+.project-tools__optional {
+  margin-left: var(--spacing-xs);
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+}
+
+.project-tools__hint {
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-md);
 }
 
 .project-tools__actions {

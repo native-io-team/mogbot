@@ -31,6 +31,8 @@ import { ImportAgentsModal } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
 import { ProjectActionConfirmModal } from '../dashboard/ProjectActionConfirmModal';
 import { Spinner } from '../primitives/Spinner';
+import { Button } from '../primitives/Button';
+import { TextButton } from '../primitives/TextButton';
 import {
   answerApproval,
   deleteAgent,
@@ -38,6 +40,7 @@ import {
   markAgentUnread,
   needsAttention,
   needsYou,
+  noEngineInstalled,
   sortAgents,
   stopAgent,
   TEAM_ID,
@@ -57,7 +60,13 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { useAgentsIntents } from '../../commands/useAgentsCommands';
 import { useCommands } from '../../commands/useCommands';
-import { AgentsModeIcon, BellIcon, CheckIcon, CloseIcon, EditFieldIcon } from '@/components/icons';
+import {
+  ActivityIcon,
+  AgentsModeIcon,
+  CheckIcon,
+  CloseIcon,
+  EditFieldIcon,
+} from '@/components/icons';
 import { IconButton } from '../primitives/IconButton';
 import { kbd } from '../../lib/shortcuts';
 
@@ -498,6 +507,11 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
           )}
           {error && !loaded ? (
             <div className="agents-main__state">{error}</div>
+          ) : loaded && noEngineInstalled(engines) ? (
+            <NoEngine
+              onSetUp={(engine) => setEngineSetup({ engine, step: 'install' })}
+              onGoProjects={sidebarProps.onGoProjects}
+            />
           ) : teamOpen ? (
             <AgentsTeamView
               onOpenAgent={openAgent}
@@ -611,9 +625,10 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
 }
 
 /**
- * The bell beside the sidebar toggle: What's in flight, the overview of every
- * agent, with how many are waiting on you. On the Projects side the bell is
- * the Workflows inbox; here it is about agents.
+ * Beside the sidebar toggle: What's in flight, the overview of every agent,
+ * with how many are waiting on you. Its own icon (activity, not the bell): on
+ * the Projects side the bell is the Workflows inbox, and one icon meaning two
+ * things would send people to the wrong place.
  */
 function InFlightButton({
   active,
@@ -631,7 +646,7 @@ function InFlightButton({
       <IconButton
         variant="ghost"
         className={`workspace-sidebar-home ${active ? 'is-active' : ''}`}
-        icon={<BellIcon size={12} />}
+        icon={<ActivityIcon size={12} />}
         onClick={onOpen}
         disabled={active}
         aria-current={active ? 'page' : undefined}
@@ -644,5 +659,38 @@ function InFlightButton({
         </span>
       )}
     </span>
+  );
+}
+
+/**
+ * Neither engine is on this computer: someone set up on Opencode, Cursor or
+ * their own agent. Their projects work as before; agents need one of these.
+ */
+function NoEngine({
+  onSetUp,
+  onGoProjects,
+}: {
+  onSetUp: (engine: AgentEngine) => void;
+  onGoProjects: () => void;
+}) {
+  return (
+    <div className="agents-main__state">
+      <div className="agents-no-engine">
+        <h2 className="agents-no-engine__title">Agents run on Claude Code or Codex</h2>
+        <p className="agents-no-engine__body">
+          Each agent is a Claude Code or Codex session on this computer, on your own account. Set
+          one up and your Chief of Staff is ready to talk.
+        </p>
+        <div className="agents-no-engine__actions">
+          <Button variant="primary" onClick={() => onSetUp('claude')}>
+            Set up Claude Code
+          </Button>
+          <Button variant="secondary" onClick={() => onSetUp('codex')}>
+            Set up Codex
+          </Button>
+        </div>
+        <TextButton onClick={onGoProjects}>Your projects are where you left them</TextButton>
+      </div>
+    </div>
   );
 }

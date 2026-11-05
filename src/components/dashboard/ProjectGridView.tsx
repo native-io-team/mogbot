@@ -10,6 +10,8 @@ import { ProjectCard } from './ProjectCard';
 import { ProjectTableView } from './ProjectTableView';
 import { EmptyState } from '../primitives/EmptyState';
 import { Button } from '../primitives/Button';
+import { Spinner } from '../primitives/Spinner';
+import { useProjectToolsChecking } from '../../lib/projectTools';
 import { PlusIcon } from '@/components/icons';
 import type { DashboardProject } from '../../lib/project';
 import type { FolderInfo } from '../../lib/folders';
@@ -91,6 +93,7 @@ export function ProjectGridView({
   onTogglePin,
   onCreateProject,
 }: ProjectGridViewProps) {
+  const checking = useProjectToolsChecking();
   if (totalCount === 0) {
     return (
       <div className="project-list-empty">
@@ -110,7 +113,8 @@ export function ProjectGridView({
                 <Button
                   variant="primary"
                   onClick={onCreateProject}
-                  leftIcon={<PlusIcon size={16} />}
+                  leftIcon={checking === 'create' ? <Spinner size="sm" /> : <PlusIcon size={16} />}
+                  aria-busy={checking === 'create' || undefined}
                 >
                   Create your first project
                 </Button>

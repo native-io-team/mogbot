@@ -6,6 +6,8 @@
  */
 
 import { Button } from '../primitives/Button';
+import { Spinner } from '../primitives/Spinner';
+import { useProjectToolsChecking } from '../../lib/projectTools';
 import { IconButton } from '../primitives/IconButton';
 import { Tabs, TabsList, TabsTab } from '../primitives/Tabs';
 import { Dropdown, DropdownItem } from '../primitives/Dropdown';
@@ -65,6 +67,8 @@ export function SearchAndSort({
   onGitHubConnectForImport,
   titleAccessory,
 }: SearchAndSortProps) {
+  // A project start checks this computer's tools first; the button says so.
+  const checking = useProjectToolsChecking();
   return (
     <div className="dashboard-section-header">
       <div className="dashboard-section-heading">
@@ -85,7 +89,8 @@ export function SearchAndSort({
             size="default"
             width="hug"
             className="dashboard-action-button text-style-control-semibold"
-            leftIcon={<PlusIcon size={14} />}
+            leftIcon={checking === 'create' ? <Spinner size="sm" /> : <PlusIcon size={14} />}
+            aria-busy={checking === 'create' || undefined}
             data-education-id="new-project-button"
             onClick={onCreateProject}
           >
@@ -98,7 +103,8 @@ export function SearchAndSort({
               size="default"
               width="hug"
               className="dashboard-action-button text-style-control-semibold"
-              leftIcon={<PullIcon size={14} />}
+              leftIcon={checking === 'import' ? <Spinner size="sm" /> : <PullIcon size={14} />}
+              aria-busy={checking === 'import' || undefined}
               data-education-id="import-button"
               onClick={() => {
                 if (isGitHubAuthenticated) {

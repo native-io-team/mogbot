@@ -13,18 +13,26 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
+import { Checkbox } from '../primitives/Checkbox';
 import { Spinner } from '../primitives/Spinner';
 import { GuidedSetupPhase } from './agent-led/GuidedSetupPhase';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { usePolling } from '../../hooks/usePolling';
 import { getFullSetupStatus, SETUP_FRIENDLY_NAMES, type FullSetupStatus } from '../../lib/setup';
 import {
-  areProjectToolsReady,
-  getMissingProjectTools,
+  getMissingOptionalTools,
+  getMissingRequiredTools,
   getOnboardingTestMode,
+  projectToolIds,
   readyAgentsEngine,
 } from '../../lib/agentOnboarding';
-import { clearPendingProjectAction, takePendingProjectAction } from '../../lib/projectTools';
+import {
+  clearPendingProjectAction,
+  declineGitHub,
+  forgetProjectToolsCheck,
+  hasPendingProjectAction,
+  takePendingProjectAction,
+} from '../../lib/projectTools';
 import { getAgentById } from '../../lib/agent';
 
 /** Plain names for the list; the checklist keeps the tools' own names. */
@@ -33,8 +41,6 @@ const PLAIN_NAMES: Record<string, string> = {
   node: 'Node.js, which most sites and apps run on',
   npm_fix: 'A permissions fix for Node.js',
   git: 'Git, which keeps every version of your work',
-  gh: 'GitHub’s command-line tool',
-  gh_auth: 'A GitHub sign-in, where your projects are kept',
 };
 
 interface ProjectToolsModalProps {
@@ -45,7 +51,9 @@ interface ProjectToolsModalProps {
 export function ProjectToolsModal({ isOpen, onClose }: ProjectToolsModalProps) {
   const status = useAsyncState<FullSetupStatus>(getFullSetupStatus);
   const testMode = useAsyncState(getOnboardingTestMode);
-  const [started, setStarted] = useState(false);
+  /** The items this run sets up and checks, fixed when it starts. */
+  const [running, setRunning] = useState<string[] | null>(null);
+  const [withGitHub, setWithGitHub] = useState(true);
   const { execute: loadStatus } = status;
   const { execute: loadTestMode } = testMode;
 
@@ -57,94 +65,146 @@ export function ProjectToolsModal({ isOpen, onClose }: ProjectToolsModalProps) {
 
   const items = status.data?.items ?? [];
   const engine = readyAgentsEngine(items);
-  const ready = items.length > 0 && areProjectToolsReady(items, engine);
   usePolling(loadStatus, {
     intervalMs: 3000,
-    enabled: isOpen && started && !ready,
+    enabled: isOpen && running !== null,
     name: 'projectToolsStatus',
   });
 
+  // Opened by an agent's create_project there's nothing to carry on with,
+  // so closing loses nothing; opened by a project start, closing cancels it.
+  const waiting = isOpen && hasPendingProjectAction();
+
   const close = useCallback(() => {
     clearPendingProjectAction();
-    setStarted(false);
+    setRunning(null);
     onClose();
   }, [onClose]);
 
   const finish = useCallback(() => {
     const action = takePendingProjectAction();
-    setStarted(false);
+    setRunning(null);
     onClose();
     action?.();
   }, [onClose]);
 
+  const continueWithout = useCallback(() => {
+    declineGitHub();
+    finish();
+  }, [finish]);
+
   const engineName = engine
     ? getAgentById(engine === 'claude' ? 'claude-code' : engine).displayName
     : null;
-  const missing = getMissingProjectTools(items);
+  const required = getMissingRequiredTools(items);
+  const optional = getMissingOptionalTools(items);
+  const start = (includeGitHub: boolean) => {
+    forgetProjectToolsCheck();
+    setRunning(projectToolIds(items, includeGitHub));
+  };
 
   return (
     <ModalFrame
       isOpen={isOpen}
       onClose={close}
-      title="Before your first project"
-      className={`project-tools-modal${started ? ' is-running' : ''}`}
+      title={
+        required.length === 0 && optional.length > 0 ? 'Connect GitHub?' : 'Set up project tools'
+      }
+      className={`project-tools-modal${running ? ' is-running' : ''}`}
     >
       <div className="settings-modal-body project-tools">
         {!status.data ? (
           <div className="project-tools__loading">
             {status.error ? <p>Couldn’t check this computer. Close and try again.</p> : <Spinner />}
           </div>
-        ) : started && engine ? (
+        ) : running && engine ? (
           <GuidedSetupPhase
             agentBinaryId={engine}
             agentDisplayName={engineName ?? 'Your agent'}
             items={items}
-            hostChoice={null}
+            toolIds={running}
             demoMode={testMode.data?.mock ?? false}
             onVerified={finish}
           />
-        ) : (
+        ) : required.length > 0 ? (
           <>
             <p className="project-tools__lede">
-              Projects (a site, an app) are built on this computer, so it needs a few tools the
-              first time. Nothing else needed them until now.
+              Projects (a site, an app) are built on this computer. It needs these first:
             </p>
-            {missing.length > 0 ? (
-              <ul className="project-tools__list">
-                {missing.map((item) => (
-                  <li key={item.id}>{PLAIN_NAMES[item.id] ?? SETUP_FRIENDLY_NAMES[item.id]}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="project-tools__lede">Everything is already here.</p>
+            <ul className="project-tools__list">
+              {required.map((item) => (
+                <li key={item.id}>{PLAIN_NAMES[item.id] ?? SETUP_FRIENDLY_NAMES[item.id]}</li>
+              ))}
+            </ul>
+            {optional.length > 0 && (
+              <label className="project-tools__option">
+                <Checkbox
+                  checked={withGitHub}
+                  onChange={setWithGitHub}
+                  label="Also connect GitHub"
+                />
+                <span>
+                  Also connect GitHub <span className="project-tools__optional">Optional</span>
+                  <span className="project-tools__hint">
+                    Where projects are backed up and shared for review.
+                  </span>
+                </span>
+              </label>
             )}
-            {engine ? (
-              <p className="project-tools__note">
-                {engineName} installs them in a terminal and explains each step. This computer
-                checks each one itself, and you carry on when they’re all there.
-              </p>
-            ) : (
-              <p className="project-tools__note">
-                Set up Claude Code or Codex in Agents first; it does the installing.
-              </p>
-            )}
+            <EngineNote engineName={engineName} />
             <div className="project-tools__actions">
               <Button variant="ghost" onClick={close}>
-                Not now
+                {waiting ? 'Cancel' : 'Not now'}
               </Button>
-              {missing.length === 0 ? (
-                <Button variant="primary" onClick={finish}>
-                  Continue
-                </Button>
-              ) : (
-                <Button variant="primary" disabled={!engine} onClick={() => setStarted(true)}>
-                  Set them up
-                </Button>
-              )}
+              <Button
+                variant="primary"
+                disabled={!engine}
+                onClick={() => start(optional.length > 0 && withGitHub)}
+              >
+                Set them up
+              </Button>
+            </div>
+          </>
+        ) : optional.length > 0 ? (
+          <>
+            <p className="project-tools__lede">
+              Everything a project needs is here. GitHub is optional: it’s where projects are backed
+              up and shared for review, and you can connect it any time.
+            </p>
+            <EngineNote engineName={engineName} />
+            <div className="project-tools__actions">
+              <Button variant="ghost" onClick={waiting ? continueWithout : close}>
+                {waiting ? 'Continue without' : 'Not now'}
+              </Button>
+              <Button variant="primary" disabled={!engine} onClick={() => start(true)}>
+                Connect GitHub
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="project-tools__lede">Everything a project needs is already here.</p>
+            <div className="project-tools__actions">
+              <Button variant="primary" onClick={finish}>
+                {waiting ? 'Continue' : 'Done'}
+              </Button>
             </div>
           </>
         )}
       </div>
     </ModalFrame>
+  );
+}
+
+function EngineNote({ engineName }: { engineName: string | null }) {
+  return engineName ? (
+    <p className="project-tools__note">
+      {engineName} installs them in a terminal and explains each step. This computer checks each one
+      itself, and you carry on when they’re all there.
+    </p>
+  ) : (
+    <p className="project-tools__note">
+      Set up Claude Code or Codex in Agents first; it does the installing.
+    </p>
   );
 }

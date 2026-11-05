@@ -107,6 +107,13 @@ fn has_agents_engine(detected_agents: &[String]) -> bool {
         .any(|id| AGENTS_ENGINE_IDS.contains(&id.as_str()))
 }
 
+/// Set up before Agents existed, on an agent Agents can't run: the "Other"
+/// opt-in, or a finished setup with Opencode or Cursor ready. They keep
+/// getting into their projects; Agents explains what it needs.
+fn brought_own_agent(state: &crate::types::AppState, detected_agents: &[String]) -> bool {
+    state.external_agent.unwrap_or(false) || (state.setup_complete && !detected_agents.is_empty())
+}
+
 #[tauri::command]
 #[tracing::instrument]
 pub async fn get_full_setup_status() -> FullSetupStatus {
@@ -210,7 +217,8 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
     #[cfg(not(windows))]
     let pkg_mgr_path = get_brew_command();
     let node_path = find_executable("node");
-    let git_path = find_executable("git");
+    // Never the Mac's git stub: probing it opens Apple's developer-tools dialog.
+    let git_path = crate::utils::usable_git();
     let gh_path = find_executable("gh");
     let vercel_path = find_executable("vercel");
     let agent_paths: Vec<Option<std::path::PathBuf>> = ALL_AGENTS
@@ -624,7 +632,10 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
     // Codex) is installed and signed in. The package manager, Node, version
     // control and hosting are project tools: they are asked for when work
     // first becomes a project, never as a gate in front of the app.
-    let all_ready = has_agents_engine(&detected_agents);
+    // Someone who set up earlier on an agent Agents can't run (Opencode,
+    // Cursor, or their own via "Other") still gets to their projects.
+    let all_ready = has_agents_engine(&detected_agents)
+        || brought_own_agent(&read_app_state(), &detected_agents);
 
     // Track optional auth status separately
     let github_authenticated = items
@@ -661,6 +672,7 @@ pub async fn quick_setup_check() -> crate::types::QuickSetupCheck {
         return crate::types::QuickSetupCheck {
             all_present: false,
             setup_complete_cached: false,
+            agents_engine: false,
         };
     }
 
@@ -669,6 +681,7 @@ pub async fn quick_setup_check() -> crate::types::QuickSetupCheck {
         return crate::types::QuickSetupCheck {
             all_present: false,
             setup_complete_cached: false,
+            agents_engine: false,
         };
     }
 
@@ -679,6 +692,7 @@ pub async fn quick_setup_check() -> crate::types::QuickSetupCheck {
         return crate::types::QuickSetupCheck {
             all_present: false,
             setup_complete_cached: false,
+            agents_engine: false,
         };
     }
 
@@ -688,10 +702,9 @@ pub async fn quick_setup_check() -> crate::types::QuickSetupCheck {
         .active_account_id
         .clone()
         .unwrap_or_else(|| crate::commands::accounts::DEFAULT_ACCOUNT_ID.to_string());
-    let at_least_one_agent = ALL_AGENTS
+    let present: Vec<&str> = ALL_AGENTS
         .iter()
-        .filter(|agent| AGENTS_ENGINE_IDS.contains(&agent.id))
-        .any(|agent| {
+        .filter(|agent| {
             let binary_present = find_binary_by_name(agent.binary_name).is_some();
             if !binary_present {
                 return false;
@@ -704,22 +717,58 @@ pub async fn quick_setup_check() -> crate::types::QuickSetupCheck {
                 .auth_indicators
                 .iter()
                 .any(|indicator| agent_dir.join(indicator).exists())
-        });
-
-    // For gh_auth, we trust the cached state since checking requires subprocess
-    // It will be verified in the background after showing projects
-
-    let all_present = at_least_one_agent;
+        })
+        .map(|agent| agent.id)
+        .collect();
+    let agents_engine = present.iter().any(|id| AGENTS_ENGINE_IDS.contains(id));
+    let present: Vec<String> = present.into_iter().map(str::to_string).collect();
 
     crate::types::QuickSetupCheck {
-        all_present,
+        all_present: agents_engine || brought_own_agent(&app_state, &present),
         setup_complete_cached: true,
+        agents_engine,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn setup_is_done_with_an_engine_agents_runs_on() {
+        assert!(has_agents_engine(&["codex".into()]));
+        assert!(has_agents_engine(&[
+            "opencode".into(),
+            "claude-code".into()
+        ]));
+        assert!(!has_agents_engine(&["opencode".into(), "cursor".into()]));
+        assert!(!has_agents_engine(&[]));
+    }
+
+    #[test]
+    fn someone_set_up_on_their_own_agent_is_not_sent_back_to_onboarding() {
+        let opted_in = crate::types::AppState {
+            external_agent: Some(true),
+            ..Default::default()
+        };
+        assert!(brought_own_agent(&opted_in, &[]));
+
+        let finished_on_opencode = crate::types::AppState {
+            setup_complete: true,
+            ..Default::default()
+        };
+        assert!(brought_own_agent(
+            &finished_on_opencode,
+            &["opencode".into()]
+        ));
+        // Finished before, but no agent CLI left at all: not set up.
+        assert!(!brought_own_agent(&finished_on_opencode, &[]));
+        // A fresh machine with Opencode never finished setup: onboarding.
+        assert!(!brought_own_agent(
+            &crate::types::AppState::default(),
+            &["opencode".into()]
+        ));
+    }
 
     #[cfg(unix)]
     #[tokio::test]

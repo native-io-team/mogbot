@@ -18,12 +18,9 @@ export const HARNESS_ROOT = '/Users/harness/ShipStudio';
 
 /** `prompts::CHIEF_GREETING`, verbatim: what a new Chief's chat opens on. */
 export const CHIEF_GREETING_TEXT =
-  "Hi, I'm your Chief of Staff.\n\n" +
-  "Tell me what you're working on and what eats your time, and I'll put a team together for it.\n\n" +
-  '- **Agents for the work.** I create agents for the things you hand off, brief them, and check what comes back. Each one remembers you.\n' +
-  '- **You stay in charge.** Before anyone sends, spends, deletes or runs something on this computer, you get an Allow or Deny card.\n' +
-  '- **Projects when it gets real.** When the work becomes a site or an app, it gets its own project you can open and go deep in.\n' +
-  '- **On your phone too.** Pair the companion app and pick this conversation up from anywhere.\n\n' +
+  "Hi, I'm your Chief of Staff. " +
+  "Tell me what's on your plate and I'll put a team of agents together for it. " +
+  "When something needs your OK, you'll get an Allow or Deny card. " +
   "So: what's on your plate this week?";
 
 /** The greeting as `agents_messages` returns it. */
@@ -172,6 +169,8 @@ export const baseCommands: CommandMap = {
   // ---- agents -------------------------------------------------------------
   // Base layer: the nav badge subscribes to the agents store on every screen.
   agents_busy: 0,
+  // A project window's sidebar lists only the agents bound to folders.
+  agents_with_projects: [],
   agents_overview: {
     engineReady: true,
     agents: [

@@ -55,10 +55,18 @@ const BOOT_PROGRESS = {
 /**
  * Where the app lands once setup is known to be done: Agents, except in a
  * window opened for a project, which goes to the workspace by way of
- * 'projects' (the auto-open effect watches for that view).
+ * 'projects' (the auto-open effect watches for that view), and for someone
+ * whose setup is on an agent Agents can't run (Opencode, Cursor, their own):
+ * they land on their projects, and Agents explains what it needs.
  */
-export function postSetupViewFor(initialProjectPath?: string | null): AppView {
-  return initialProjectPath ? 'projects' : 'agents';
+export function postSetupViewFor(initialProjectPath?: string | null, agentsEngine = true): AppView {
+  if (initialProjectPath) return 'projects';
+  return agentsEngine ? 'agents' : 'projects';
+}
+
+/** An engine Agents runs on is among the agents setup found ready. */
+export function hasAgentsEngine(detectedAgents: string[]): boolean {
+  return detectedAgents.some((id) => id === 'claude-code' || id === 'codex');
 }
 
 export interface UseAppSetupParams {
@@ -134,7 +142,6 @@ export function useAppSetup({
       // Chief of Staff. A project window (opened with a project path) is the
       // exception: it goes through 'projects' because that is where the
       // auto-open effect below picks the project up and opens its workspace.
-      const postSetupView = postSetupViewFor(initialProjectPath);
 
       // Fast path: if setup was previously completed, try quick check first
       if (!forceFullCheck) {
@@ -145,6 +152,7 @@ export function useAppSetup({
         );
         setBootProgress(BOOT_PROGRESS.setupProbe);
         if (quickCheck.setupCompleteCached && quickCheck.allPresent) {
+          const postSetupView = postSetupViewFor(initialProjectPath, quickCheck.agentsEngine);
           // Setup was completed before and all binaries still exist
           // Show projects/account picker immediately, verify auth in background
           // Use functional update to avoid overwriting HMR recovery's 'workspace' view
@@ -186,6 +194,10 @@ export function useAppSetup({
 
       // Use full setup status to determine if onboarding is needed
       if (setupStatus.allReady) {
+        const postSetupView = postSetupViewFor(
+          initialProjectPath,
+          hasAgentsEngine(setupStatus.detectedAgents)
+        );
         // Persist setup complete for existing users upgrading to this version
         // (they already completed onboarding but don't have the cached state yet)
         void markSetupComplete();
