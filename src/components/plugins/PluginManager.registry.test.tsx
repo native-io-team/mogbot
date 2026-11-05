@@ -32,6 +32,12 @@ import { PluginManager } from './PluginManager';
 import { listPlugins, fetchPluginRegistry } from '../../lib/plugins';
 import { logger } from '../../lib/logger';
 
+// Features brand.json can switch off are tested switched on.
+vi.mock('../../lib/brand', async (importOriginal) => {
+  const { withAllLinks } = await import('../../test/brandFixture');
+  return withAllLinks(await importOriginal<typeof import('../../lib/brand')>());
+});
+
 async function openLibraryTab() {
   // The installed-plugins fetch and the registry fetch both settle after the
   // first paint — flush them inside act so React's warning stays off the output.

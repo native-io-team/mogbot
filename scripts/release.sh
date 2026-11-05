@@ -99,7 +99,7 @@ sed -i '' "s/\"version\": \"${CURRENT_VERSION}\"/\"version\": \"${NEW_VERSION}\"
 
 # Update Cargo.lock
 echo "Updating Cargo.lock..."
-(cd src-tauri && cargo update -p ship-studio 2>/dev/null || true)
+(cd src-tauri && cargo update -p "$(node -p "require('../brand.json').slug")" 2>/dev/null || true)
 
 echo ""
 

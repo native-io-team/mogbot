@@ -63,6 +63,7 @@ import { ProjectBulkActionsBar } from './ProjectBulkActionsBar';
 import { ProjectBulkActionConfirm } from './ProjectBulkActionConfirm';
 import { DashboardPreferencesCard } from './DashboardPreferencesCard';
 import { DashboardCommunityBanner } from './DashboardCommunityBanner';
+import { SLACK_INVITE_URL } from '../../lib/links';
 import { GitHubCalendar } from './GitHubCalendar';
 import { useModal } from '../../contexts/ModalContext';
 import { useDashboardVisibility } from '../../hooks/useDashboardVisibility';
@@ -573,7 +574,7 @@ export function ProjectList({
       <div className="project-list dashboard">
         {!dashboardHeaderHidden && <DashboardHeader onHide={hideDashboardHeader} />}
 
-        {!slackCtaHidden && <DashboardCommunityBanner onHide={hideSlackCta} />}
+        {SLACK_INVITE_URL && !slackCtaHidden && <DashboardCommunityBanner onHide={hideSlackCta} />}
 
         {!calendarHidden && (
           <GitHubCalendar

@@ -568,6 +568,30 @@ pub async fn pty_session_open(
         .try_clone_reader()
         .map_err(|e| format!("clone_reader: {e}"))?;
 
+    let account_env = match project_path.as_deref() {
+        Some(p) => crate::commands::accounts::get_env_vars_for_project(std::path::Path::new(p)),
+        None => crate::commands::accounts::get_env_vars_for_active_account(),
+    };
+
+    // Hide Ship Studio's preview bridge from the agent we're starting, so it
+    // drives our preview and not theirs (see `preview_isolation`). The Codex
+    // config it checks is the one this process will read: the workspace's
+    // CODEX_HOME when one is injected.
+    let mut args = args;
+    if let Some(agent) = agent_id.as_deref() {
+        let codex_home = account_env
+            .get("CODEX_HOME")
+            .or_else(|| env.get("CODEX_HOME"))
+            .cloned()
+            .map(std::path::PathBuf::from);
+        let extra = crate::preview_isolation::spawn_args(
+            agent,
+            codex_home.as_deref(),
+            project_path.as_deref().map(std::path::Path::new),
+        );
+        crate::preview_isolation::insert_front(&mut args, extra);
+    }
+
     let mut cmd = CommandBuilder::new(&command);
     cmd.args(&args);
     if let Some(ref c) = cwd {
@@ -595,11 +619,8 @@ pub async fn pty_session_open(
     // secret token values (Vercel/Figma/OpenAI/Anthropic-base-url) never have to
     // cross the IPC boundary into the webview's JS. The backend wins over any
     // frontend-supplied values for these keys. Falls back to the active
-    // Workspace when the PTY isn't tied to a project.
-    let account_env = match project_path.as_deref() {
-        Some(p) => crate::commands::accounts::get_env_vars_for_project(std::path::Path::new(p)),
-        None => crate::commands::accounts::get_env_vars_for_active_account(),
-    };
+    // Workspace when the PTY isn't tied to a project. (Computed above, before
+    // the argv, because the preview isolation reads its CODEX_HOME.)
     for (k, v) in account_env {
         cmd.env(std::ffi::OsString::from(&k), std::ffi::OsString::from(&v));
     }

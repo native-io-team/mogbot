@@ -280,8 +280,8 @@ pub fn initialize_result(params: Option<&Value>) -> Value {
     json!({
         "protocolVersion": requested,
         "capabilities": { "tools": {} },
-        "serverInfo": { "name": "shipstudio-agents", "version": env!("CARGO_PKG_VERSION") },
-        "instructions": "Ship Studio: the user's projects, which you work on through their sessions (project_* and session_* tools), other agents you can message, and (for the Chief of Staff) creating and managing agents."
+        "serverInfo": { "name": crate::brand::scoped("agents"), "version": env!("CARGO_PKG_VERSION") },
+        "instructions": format!("{}: the user's projects, which you work on through their sessions (project_* and session_* tools), other agents you can message, and (for the Chief of Staff) creating and managing agents.", crate::brand::NAME)
     })
 }
 

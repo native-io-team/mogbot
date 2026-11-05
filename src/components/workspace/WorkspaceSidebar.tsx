@@ -36,6 +36,7 @@ import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { MenuButton } from '../primitives/MenuButton';
 import { SettingsMenu } from '../SettingsMenu';
+import { SLACK_INVITE_URL } from '../../lib/links';
 import { PanelResizeHandle } from '../primitives/PanelResizeHandle';
 import { Spinner } from '../primitives/Spinner';
 import { BrowserDropdown } from '../preview/BrowserDropdown';
@@ -257,8 +258,6 @@ interface Props {
 
 const SECTION_STORAGE_KEY = 'ship-studio:workspace-sidebar:collapsed';
 const PROJECT_EXPAND_STORAGE_KEY = 'ship-studio:workspace-sidebar:expanded-projects';
-const SLACK_INVITE_URL =
-  'https://join.slack.com/t/shipstudiocommunity/shared_invite/zt-41vbyaoo0-_pZWNPyMdvMoF6neuDYw7g';
 
 function readCollapsed(): Record<SectionId, boolean> {
   try {
@@ -1878,14 +1877,14 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                   document.body
                 )
               : null}
-            {labeledFooterActions ? (
+            {!SLACK_INVITE_URL ? null : labeledFooterActions ? (
               <Button
                 variant="default"
                 width="fill"
                 className="workspace-sidebar-support"
                 leftIcon={<SlackIcon size={12} />}
-                onClick={() => void openUrl(SLACK_INVITE_URL)}
-                title="Join the Ship Studio community on Slack"
+                onClick={() => SLACK_INVITE_URL && void openUrl(SLACK_INVITE_URL)}
+                title="Join the community on Slack"
                 data-education-id="support-button"
               >
                 Slack
@@ -1895,8 +1894,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                 variant="default"
                 className="workspace-sidebar-support"
                 icon={<SlackIcon size={12} />}
-                onClick={() => void openUrl(SLACK_INVITE_URL)}
-                title="Join the Ship Studio community on Slack"
+                onClick={() => SLACK_INVITE_URL && void openUrl(SLACK_INVITE_URL)}
+                title="Join the community on Slack"
                 aria-label="Support"
                 data-education-id="support-button"
               />

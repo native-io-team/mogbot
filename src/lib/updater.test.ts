@@ -8,6 +8,12 @@ import {
   isPlatformMissingFromManifest,
 } from './updater';
 
+// Features brand.json can switch off are tested switched on.
+vi.mock('./brand', async (importOriginal) => {
+  const { withAllLinks } = await import('../test/brandFixture');
+  return withAllLinks(await importOriginal<typeof import('./brand')>());
+});
+
 vi.mock('@tauri-apps/api/app', () => ({
   getVersion: vi.fn(),
 }));

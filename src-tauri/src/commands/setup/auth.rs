@@ -135,6 +135,13 @@ pub fn cleanup_auth_processes_sync() -> u32 {
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn install_version(app: tauri::AppHandle, version: String) -> Result<(), CommandError> {
+    // Off unless brand.json names a releases page of our own: the inherited
+    // URL downloaded Ship Studio's build and swapped it in for this app.
+    let Some(releases) = crate::brand::links::RELEASES else {
+        return Err(CommandError::expected(
+            "Installing a specific version isn't available in this build.",
+        ));
+    };
     if cfg!(debug_assertions) {
         return Err(("Version rewind is only available in production builds.".to_string()).into());
     }
@@ -145,11 +152,11 @@ pub async fn install_version(app: tauri::AppHandle, version: String) -> Result<(
     );
 
     // Create temp directory
-    let temp_dir = std::env::temp_dir().join("shipstudio-rewind");
+    let temp_dir = std::env::temp_dir().join(crate::brand::scoped("rewind"));
     let _ = std::fs::remove_dir_all(&temp_dir);
     std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Cannot create temp dir: {e}"))?;
 
-    let result = install_version_platform(&app, &version, &temp_dir).await;
+    let result = install_version_platform(&app, releases, &version, &temp_dir).await;
 
     // Always cleanup temp dir
     let _ = std::fs::remove_dir_all(&temp_dir);
@@ -190,6 +197,7 @@ async fn download_release_artifact(url: &str, dest: &std::path::Path) -> Result<
 #[cfg(target_os = "macos")]
 async fn install_version_platform(
     app: &tauri::AppHandle,
+    releases: &str,
     version: &str,
     temp_dir: &std::path::Path,
 ) -> Result<(), CommandError> {
@@ -201,7 +209,9 @@ async fn install_version_platform(
     };
 
     let url = format!(
-        "https://github.com/ship-studio/releases/releases/download/v{version}/ShipStudio_darwin-{arch_suffix}.app.tar.gz"
+        "{}/download/v{version}/{}_darwin-{arch_suffix}.app.tar.gz",
+        releases.trim_end_matches('/'),
+        crate::brand::APP_DIR_NAME
     );
 
     // Find current app bundle path (e.g., /Applications/Ship Studio.app)
@@ -247,7 +257,7 @@ async fn install_version_platform(
     }
 
     // Find the extracted .app bundle
-    let extracted_app = extract_dir.join("Ship Studio.app");
+    let extracted_app = extract_dir.join(format!("{}.app", crate::brand::NAME));
     if !extracted_app.exists() {
         return Err(("Extracted app bundle not found".to_string()).into());
     }
@@ -281,12 +291,14 @@ async fn install_version_platform(
 #[cfg(target_os = "windows")]
 async fn install_version_platform(
     app: &tauri::AppHandle,
+    releases: &str,
     version: &str,
     temp_dir: &std::path::Path,
 ) -> Result<(), CommandError> {
     let url = format!(
-        "https://github.com/ship-studio/releases/releases/download/v{}/ShipStudio_windows-x86_64.nsis.zip",
-        version
+        "{}/download/v{version}/{}_windows-x86_64.nsis.zip",
+        releases.trim_end_matches('/'),
+        crate::brand::APP_DIR_NAME
     );
 
     // Download the NSIS zip
@@ -356,6 +368,7 @@ fn find_setup_exe(dir: &std::path::Path) -> Result<std::path::PathBuf, CommandEr
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 async fn install_version_platform(
     _app: &tauri::AppHandle,
+    _releases: &str,
     _version: &str,
     _temp_dir: &std::path::Path,
 ) -> Result<(), CommandError> {

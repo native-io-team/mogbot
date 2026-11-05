@@ -19,13 +19,16 @@ static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
 // Hold the Sentry guard for the lifetime of the process so events get flushed on exit.
 static SENTRY_GUARD: OnceLock<sentry::ClientInitGuard> = OnceLock::new();
 
-const SENTRY_DSN: &str =
-    "https://ca46a435b1b22d7b60f2a83817395fb6@o4511226863353856.ingest.us.sentry.io/4511226875412480";
+/// Crash reporting is off unless brand.json names a Sentry DSN of our own.
+const SENTRY_DSN: Option<&str> = crate::brand::telemetry::SENTRY_DSN;
 
 /// Initialize Sentry. Must be called before `init_logging()` so the
 /// `sentry_tracing` layer can forward events. Skipped in debug builds unless
 /// the `SENTRY_FORCE=1` env var is set.
 pub fn init_sentry() {
+    let Some(dsn) = SENTRY_DSN else {
+        return;
+    };
     let force = std::env::var("SENTRY_FORCE").ok().as_deref() == Some("1");
     let enabled = !cfg!(debug_assertions) || force;
     if !enabled {
@@ -54,7 +57,7 @@ pub fn init_sentry() {
         }
         Some(breadcrumb)
     }));
-    let guard = sentry::init((SENTRY_DSN, options));
+    let guard = sentry::init((dsn, options));
     let _ = SENTRY_GUARD.set(guard);
 }
 
@@ -101,27 +104,7 @@ fn scrub_event(event: &mut sentry::protocol::Event<'static>) {
 
 /// Get the log directory path
 pub(crate) fn get_log_dir() -> PathBuf {
-    // Use platform-specific log directories
-    #[cfg(target_os = "macos")]
-    {
-        dirs::home_dir()
-            .map(|h| h.join("Library/Logs/ShipStudio"))
-            .unwrap_or_else(|| PathBuf::from("/tmp/ship-studio-logs"))
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        dirs::data_local_dir()
-            .map(|d| d.join("ShipStudio/logs"))
-            .unwrap_or_else(|| PathBuf::from("C:/temp/ship-studio-logs"))
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        dirs::data_local_dir()
-            .map(|d| d.join("ship-studio/logs"))
-            .unwrap_or_else(|| PathBuf::from("/tmp/ship-studio-logs"))
-    }
+    crate::brand::logs_dir()
 }
 
 /// Initialize the logging system
@@ -143,7 +126,7 @@ pub fn init_logging() -> Result<(), String> {
     let file_writer = match std::fs::create_dir_all(&log_dir).and_then(|()| {
         tracing_appender::rolling::Builder::new()
             .rotation(tracing_appender::rolling::Rotation::DAILY)
-            .filename_prefix("ship-studio.log")
+            .filename_prefix(crate::brand::log_file_prefix())
             // Uncapped rotation was an unbounded-disk-growth bug: daily files
             // were never deleted, so the log directory grew forever (measured
             // at ~45MB/day per running instance before the span-close noise
@@ -163,7 +146,8 @@ pub fn init_logging() -> Result<(), String> {
         }
         Err(e) => {
             eprintln!(
-                "Ship Studio: file logging disabled ({}): {e}",
+                "{}: file logging disabled ({}): {e}",
+                crate::brand::NAME,
                 log_dir.display()
             );
             None
@@ -199,8 +183,8 @@ pub fn init_logging() -> Result<(), String> {
 
     // Create environment filter
     // Default to info level, can be overridden with RUST_LOG env var
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("ship_studio_lib=info,warn"));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("app_lib=info,warn"));
 
     // Build the subscriber
     let subscriber = tracing_subscriber::registry().with(filter).with(file_layer);
@@ -223,7 +207,7 @@ pub fn init_logging() -> Result<(), String> {
     tracing::info!(
         log_dir = %log_dir.display(),
         version = env!("CARGO_PKG_VERSION"),
-        "Ship Studio logging initialized"
+        "Logging initialized"
     );
 
     Ok(())

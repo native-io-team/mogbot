@@ -1,6 +1,7 @@
-//! # Ship Studio Backend
+//! # Backend
 //!
-//! This module contains all Tauri commands for the Ship Studio desktop app.
+//! This module contains all Tauri commands for the desktop app. Its name and
+//! identity come from `brand.json` via [`brand`].
 //! Commands are organized into these categories:
 //!
 //! - **Project Management**: Create, list, delete projects in ~/ShipStudio
@@ -13,6 +14,7 @@
 pub mod agent;
 pub mod agent_bridge;
 pub mod agents;
+pub mod brand;
 pub mod cache;
 pub mod commands;
 pub mod companion;
@@ -20,6 +22,7 @@ pub mod error_reporting;
 pub mod errors;
 pub mod external_command;
 pub mod logging;
+pub mod preview_isolation;
 pub mod proxy;
 pub mod remote_access;
 pub mod state;
@@ -114,7 +117,7 @@ pub fn run() {
         eprintln!("Failed to initialize logging: {e}");
     }
 
-    tracing::info!("Ship Studio starting up");
+    tracing::info!("{} starting up", brand::NAME);
 
     // Clean up any orphaned agent processes from previous crashed sessions
     cleanup_agent_processes();
@@ -141,7 +144,6 @@ pub fn run() {
         .plugin(tauri_plugin_pty::init())
         .plugin(tauri_plugin_screenshots::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
@@ -154,6 +156,15 @@ pub fn run() {
                 .build(),
         )
         .setup(|_app| {
+            // Auto-update only when brand.json names an update feed of our own
+            // (`links.updates`), which also needs `plugins.updater` (endpoints
+            // + our signing pubkey) in tauri.conf.json. Without it the plugin
+            // isn't registered and the frontend's check reports "no update".
+            if brand::links::UPDATES.is_some() {
+                _app.handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
+
             // Teach the user's own agent about workflows, and start the tick
             // that fires the armed ones. The skill install is the discovery
             // path for the whole feature (see commands::workflows::skill); it
@@ -243,7 +254,7 @@ pub fn run() {
                         tauri::WebviewUrl::App("index.html".into())
                     }),
                 )
-                .title("Ship Studio")
+                .title(brand::NAME)
                 .inner_size(1400.0, 900.0)
                 .min_inner_size(400.0, 300.0)
                 .resizable(true)
@@ -288,6 +299,20 @@ pub fn run() {
             // (which would let any main-frame script read ~/.ssh, ~/.aws, etc.).
             commands::external_projects::grant_asset_scope_for_registered(_app.handle());
 
+            // Agents live in this app's own support folder (not the shared
+            // ~/ShipStudio), outside the static scope; their chats show the
+            // images attached in their homes.
+            {
+                use tauri::Manager;
+                if let Ok(root) = agents::store::agents_root() {
+                    if let Err(e) = _app.asset_protocol_scope().allow_directory(&root, true) {
+                        tracing::warn!(
+                            "[Agents] could not allow the agents folder for images: {e}"
+                        );
+                    }
+                }
+            }
+
             // Build a custom menu on macOS that replaces Cmd+W (Close Window)
             // with a custom "Close Tab" action that emits an event to the frontend
             #[cfg(target_os = "macos")]
@@ -297,9 +322,10 @@ pub fn run() {
                     .accelerator("CmdOrCtrl+W")
                     .build(app)?;
 
-                let quit_item = MenuItemBuilder::with_id("confirm_quit", "Quit Ship Studio")
-                    .accelerator("CmdOrCtrl+Q")
-                    .build(app)?;
+                let quit_item =
+                    MenuItemBuilder::with_id("confirm_quit", format!("Quit {}", brand::NAME))
+                        .accelerator("CmdOrCtrl+Q")
+                        .build(app)?;
 
                 // Hidden menu items to register native accelerators for screenshot shortcuts.
                 // Native accelerators work even when the preview iframe has keyboard focus.
@@ -376,7 +402,7 @@ pub fn run() {
                         .accelerator("CmdOrCtrl+I")
                         .build(app)?;
 
-                let app_menu = SubmenuBuilder::new(app, "Ship Studio")
+                let app_menu = SubmenuBuilder::new(app, brand::NAME)
                     .about(None)
                     .separator()
                     .services()

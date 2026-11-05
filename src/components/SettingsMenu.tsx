@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { BugReportIcon, HistoryIcon, PlusIcon, SettingsIcon } from '@/components/icons';
 import { Dropdown, DropdownItem } from './primitives/Dropdown';
 import type { DropdownTriggerProps } from './primitives/Dropdown';
+import { ISSUE_REPORTS_ENABLED } from '../lib/issueReports';
+import { HAS_CHANGELOG } from './dashboard/Changelog';
 
 interface SettingsMenuProps {
   onOpenSettings: () => void;
@@ -38,15 +40,21 @@ export function SettingsMenu({
       <DropdownItem icon={<SettingsIcon size={14} />} onSelect={onOpenSettings}>
         <span data-settings-item="app-settings">App Settings</span>
       </DropdownItem>
-      <DropdownItem icon={<BugReportIcon size={14} />} onSelect={onOpenBugReports}>
-        <span data-settings-item="bug-reports">Report Bug</span>
-      </DropdownItem>
-      <DropdownItem icon={<PlusIcon size={14} />} onSelect={onOpenFeatureRequest}>
-        <span data-settings-item="feature-request">Feature Request</span>
-      </DropdownItem>
-      <DropdownItem icon={<HistoryIcon size={14} />} onSelect={onOpenChangelog}>
-        <span data-settings-item="whats-new">What's New</span>
-      </DropdownItem>
+      {ISSUE_REPORTS_ENABLED && (
+        <DropdownItem icon={<BugReportIcon size={14} />} onSelect={onOpenBugReports}>
+          <span data-settings-item="bug-reports">Report Bug</span>
+        </DropdownItem>
+      )}
+      {ISSUE_REPORTS_ENABLED && (
+        <DropdownItem icon={<PlusIcon size={14} />} onSelect={onOpenFeatureRequest}>
+          <span data-settings-item="feature-request">Feature Request</span>
+        </DropdownItem>
+      )}
+      {HAS_CHANGELOG && (
+        <DropdownItem icon={<HistoryIcon size={14} />} onSelect={onOpenChangelog}>
+          <span data-settings-item="whats-new">What's New</span>
+        </DropdownItem>
+      )}
     </Dropdown>
   );
 }

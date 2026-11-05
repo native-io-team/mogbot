@@ -16,6 +16,7 @@ import { Button } from './primitives/Button';
 import { Progress } from './primitives/Progress';
 import { logger } from '../lib/logger';
 import { asCommandError, formatCommandError } from '../lib/errors';
+import { BRAND } from '../lib/brand';
 
 /** How long the loading view may spin before we assume boot is wedged. */
 export const BOOT_WATCHDOG_MS = 25_000;
@@ -63,8 +64,7 @@ export function BootLoadingScreen({ progress = 0 }: BootLoadingScreenProps) {
             Restart Ship Studio
           </Button>
           <p className="boot-watchdog-hint">
-            If this keeps happening, check the logs at ~/Library/Logs/ShipStudio/ and reach out on
-            Slack.
+            If this keeps happening, check the logs at ~/Library/Logs/{BRAND.appDirName}/.
           </p>
         </div>
       ) : (

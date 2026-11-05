@@ -157,7 +157,9 @@ pub struct Device {
 
 // ---- Pairing ----------------------------------------------------------------
 
-pub const PAIRING_SCHEME: &str = "shipstudio-companion";
+/// From brand.json (`companion.scheme`); the phone reads the same value from
+/// `@shipstudio/companion-protocol`'s generated brand file.
+pub const PAIRING_SCHEME: &str = crate::brand::COMPANION_SCHEME;
 
 /// What the pairing QR code carries. No long-lived secret.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -171,7 +173,7 @@ pub struct PairingLink {
 }
 
 impl PairingLink {
-    /// `formatPairingLink` in pairing.ts: `shipstudio-companion://pair?d=<base64url(JSON)>`.
+    /// `formatPairingLink` in pairing.ts: `<PAIRING_SCHEME>://pair?d=<base64url(JSON)>`.
     pub fn format(&self) -> String {
         use base64::Engine;
         let json = serde_json::to_string(self).unwrap_or_default();
@@ -498,7 +500,9 @@ mod tests {
             }],
         };
         let text = link.format();
-        let d = text.strip_prefix("shipstudio-companion://pair?d=").unwrap();
+        let d = text
+            .strip_prefix(&format!("{PAIRING_SCHEME}://pair?d="))
+            .unwrap();
         assert!(d
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));

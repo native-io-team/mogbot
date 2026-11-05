@@ -141,7 +141,7 @@ pub struct QrMatrix {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingCode {
-    /// `shipstudio-companion://pair?d=…`: what the QR code says, for pasting.
+    /// `<PAIRING_SCHEME>://pair?d=…`: what the QR code says, for pasting.
     pub link: String,
     pub qr: QrMatrix,
     pub expires_at: u64,

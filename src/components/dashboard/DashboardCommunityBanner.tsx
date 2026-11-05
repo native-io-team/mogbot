@@ -32,7 +32,7 @@ export function DashboardCommunityBanner({ onHide }: DashboardCommunityBannerPro
         <Button
           variant="secondary"
           className="slack-cta-join text-style-control-semibold"
-          onClick={() => void openUrl(SLACK_INVITE_URL)}
+          onClick={() => SLACK_INVITE_URL && void openUrl(SLACK_INVITE_URL)}
         >
           Join Slack
         </Button>

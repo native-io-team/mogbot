@@ -6,6 +6,12 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// Features brand.json can switch off are tested switched on.
+vi.mock('./brand', async (importOriginal) => {
+  const { withAllLinks } = await import('../test/brandFixture');
+  return withAllLinks(await importOriginal<typeof import('./brand')>());
+});
+
 type PluginsModule = typeof import('./plugins');
 
 /** Fresh module instance per test — `fetchPluginRegistry` memoizes globally. */
