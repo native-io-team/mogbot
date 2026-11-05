@@ -137,6 +137,14 @@ import {
 } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { ImportTalkBar } from './ImportTalkBar';
+import { TeamSetupCard } from './TeamSetupCard';
+import {
+  progressLine,
+  quietAgentIds,
+  SETUP_BAR_TITLE,
+  showTeamSetup,
+  useTeamSetup,
+} from '../../lib/teamSetup';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
@@ -746,9 +754,27 @@ export const AgentChat = memo(function AgentChat({
     }
     return ids;
   }, [items]);
-  const shownRequestIds = useMemo(
-    () => new Set(listed.flatMap((m) => (m.approval ? [m.approval.requestId] : []))),
-    [listed]
+  // "Setting up your team", in the Chief's chat after an import. Its logins
+  // are answered on it, so they aren't offered again as "Review X's request".
+  const teamSetup = useTeamSetup();
+  const setupHere = agent.isMain ? teamSetup : null;
+  const shownRequestIds = useMemo(() => {
+    const ids = new Set(listed.flatMap((m) => (m.approval ? [m.approval.requestId] : [])));
+    if (setupHere && !setupHere.complete) {
+      for (const step of setupHere.steps) {
+        for (const l of step.logins ?? []) ids.add(l.requestId);
+      }
+    }
+    return ids;
+  }, [listed, setupHere]);
+  // The agents still being set up: their requests open the checklist, not
+  // the requests panel.
+  const setupBarTarget = useMemo(
+    () =>
+      setupHere && !setupHere.complete
+        ? { agentIds: quietAgentIds(setupHere), onOpen: showTeamSetup }
+        : undefined,
+    [setupHere]
   );
   // These read only the turn's state and start, and a take-over's: not the
   // activity line that changes with every step.
@@ -1536,6 +1562,9 @@ export const AgentChat = memo(function AgentChat({
             {/* A ready-made agent the Chief just made: only "Created by" so
               far, so its own starters sit under it until the user speaks. */}
             {templateFirstOpen && engineReady && templateStarters}
+            {setupHere && (
+              <TeamSetupCard view={setupHere} chief={agent.name} onOpenAgent={onOpenAgent} />
+            )}
             {items.length > 0 && (
               <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
             )}
@@ -1584,6 +1613,25 @@ export const AgentChat = memo(function AgentChat({
               },
               { id: 'import', node: agent.isMain && <ImportTalkBar /> },
               {
+                // What the import left to do opens its checklist, not the
+                // requests panel: those logins are on the card (and left out
+                // of the requests bar's counts through `shownRequestIds`).
+                id: 'setup',
+                node: setupHere && !setupHere.complete && (
+                  <ConversationBar
+                    state="waiting"
+                    data-testid="team-setup-bar"
+                    title={SETUP_BAR_TITLE}
+                    detail={progressLine(setupHere)}
+                    actions={
+                      <Button size="compact" variant="secondary" onClick={showTeamSetup}>
+                        Continue
+                      </Button>
+                    }
+                  />
+                ),
+              },
+              {
                 id: 'requests',
                 node: engineReady && (
                   <AgentRequestsBar
@@ -1592,6 +1640,7 @@ export const AgentChat = memo(function AgentChat({
                     askers={foreignOwners}
                     shownRequestIds={shownRequestIds}
                     onOpenAgent={onOpenAgent}
+                    setup={setupBarTarget}
                   />
                 ),
               },

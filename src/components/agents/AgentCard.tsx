@@ -227,6 +227,7 @@ export interface BarSpec {
 export const BAR_ORDER = [
   'takeover',
   'import',
+  'setup',
   'requests',
   'engine',
   'secret',

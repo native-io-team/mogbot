@@ -14,6 +14,7 @@ import { agentsStressScenarios } from './agentsStress';
 import { agentsRequestsScenarios } from './agentsRequests';
 import { agentsUsageScenarios } from './agentsUsage';
 import { agentsHeavyScenarios } from './agentsHeavy';
+import { agentsTeamSetupScenarios } from './agentsTeamSetup';
 import { appScenarios } from './app';
 import { featureScenarios } from './features';
 import { hostingScenarios } from './hosting';
@@ -41,6 +42,7 @@ export const scenarios: Scenario[] = [
   ...agentsRequestsScenarios,
   ...agentsUsageScenarios,
   ...agentsHeavyScenarios,
+  ...agentsTeamSetupScenarios,
   ...appScenarios,
   ...featureScenarios,
   ...hostingScenarios,

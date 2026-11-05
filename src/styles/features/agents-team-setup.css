@@ -1,0 +1,195 @@
+/* Agents mode: "Setting up your team", the one checklist in the Chief's
+ * chat after an import (components/agents/TeamSetupCard.tsx). */
+
+.team-setup__steps {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.team-setup__step {
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+}
+
+.team-setup__step:last-child {
+  border-bottom: none;
+}
+
+.team-setup__step-head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm) 0;
+  font: inherit;
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.team-setup__step-head:focus-visible {
+  outline: var(--border-width-emphasis) solid var(--focus-ring);
+  outline-offset: var(--spacing-2xs);
+  border-radius: var(--radius-sm);
+}
+
+/* An empty ring while open; a tick once done; a dash when skipped. */
+.team-setup__mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--spacing-lg);
+  height: var(--spacing-lg);
+  color: var(--text-primary);
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-pill);
+}
+
+.team-setup__step[data-state='done'] .team-setup__mark {
+  color: var(--surface-panel);
+  background: var(--text-secondary);
+  border-color: var(--text-secondary);
+}
+
+.team-setup__step[data-state='skipped'] .team-setup__mark {
+  border-style: dashed;
+}
+
+.team-setup__step[data-state='done'] .team-setup__step-title,
+.team-setup__step[data-state='skipped'] .team-setup__step-title {
+  color: var(--text-secondary);
+}
+
+.team-setup__step[data-state='open'] .team-setup__step-title {
+  font-weight: var(--font-weight-label);
+}
+
+.team-setup__step-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-setup__step-status {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.team-setup__chevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform var(--transition-interaction-fast);
+}
+
+.team-setup__step-head[aria-expanded='true'] .team-setup__chevron {
+  transform: rotate(90deg);
+}
+
+.team-setup__step-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: 0 0 var(--spacing-md) calc(var(--spacing-lg) + var(--spacing-sm));
+}
+
+.team-setup__detail,
+.team-setup__empty {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+}
+
+.team-setup__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-setup__item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: var(--spacing-2xl);
+}
+
+.team-setup__item-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.team-setup__item[data-hello] .team-setup__item-title {
+  flex: 1;
+}
+
+.team-setup__item-title {
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.team-setup__item-detail {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.team-setup__item-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.team-setup__login {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.team-setup__login > .agent-chat__row {
+  width: 100%;
+}
+
+.team-setup__gaps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.team-setup__gap-name {
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.team-setup__gap ul {
+  margin: var(--spacing-3xs) 0 0;
+  padding-left: var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.team-setup__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-xs);
+}

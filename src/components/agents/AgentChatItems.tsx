@@ -892,6 +892,9 @@ export const PeerGroup = memo(function PeerGroup({
   );
 });
 
+/** A request the app closed for the user (`Approval.setAside`); the why is its note. */
+export const SET_ASIDE_OUTCOME = 'Set aside · nothing ran';
+
 const STATUS_LABEL = {
   allowed: 'Allowed',
   denied: 'Declined',
@@ -966,6 +969,9 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
   }
   if (approval.status === 'denied' && approval.note) {
     return <>Declined · “{approval.note}”</>;
+  }
+  if (approval.status === 'expired' && approval.setAside) {
+    return SET_ASIDE_OUTCOME;
   }
   if (approval.choice && approval.status !== 'expired') {
     return `${STATUS_LABEL[approval.status as 'allowed' | 'denied']} · ${approval.choice}`;
@@ -1074,7 +1080,9 @@ export const ApprovalCard = memo(function ApprovalCard({
         note={
           pending && paused && !plainDeny
             ? 'It paused here for you. Allow it and it picks up where it left off.'
-            : undefined
+            : approval.status === 'expired'
+              ? approval.setAside
+              : undefined
         }
         actions={
           pending && !noting ? (

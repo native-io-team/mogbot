@@ -413,6 +413,12 @@ export interface Approval {
   choice?: string;
   /** An import connector card: another assistant asking to start, or its staged agents. */
   connector?: ConnectorCard;
+  /**
+   * Closed by the app, not answered (status `expired`): the line saying why,
+   * e.g. a request from the check-in "Setting up your team" replaced.
+   * Nothing it asked for ran.
+   */
+  setAside?: string;
 }
 
 /**

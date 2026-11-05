@@ -59,6 +59,12 @@ import { AgentsStayOnNote } from './AgentsStayOn';
 import { AgentsQuota } from './AgentsQuota';
 import { AgentsSpareNote } from './AgentsUsage';
 import { kbd } from '../../lib/shortcuts';
+import {
+  progressLine,
+  resumeTeamSetup,
+  SETUP_TITLE,
+  useResumableTeamSetup,
+} from '../../lib/teamSetup';
 
 /** Lines read per chat: enough for its latest reply. A chat with a card open reads a page. */
 const RECENT_LINES = 20;
@@ -360,10 +366,28 @@ export function AgentsTeamView({
     }
   };
 
+  // "Setting up your team": one row for it, and its logins aren't listed
+  // again agent by agent under Needs your OK.
+  const setup = useResumableTeamSetup();
+  const setupLogins = useMemo(
+    () => new Set((setup?.steps ?? []).flatMap((s) => (s.logins ?? []).map((l) => l.requestId))),
+    [setup]
+  );
+  const chief = agents.find((a) => a.isMain);
+
   // Needs you, with the cards waiting in rooms and those just answered here
   // still in their places.
   const groups = useMemo(() => {
-    const byAgent = new Map(team.needsYou.map((g) => [g.agent.id, { ...g }]));
+    const byAgent = new Map(
+      team.needsYou.flatMap((g) => {
+        const approvals = g.approvals.filter(
+          (m) => !m.approval || !setupLogins.has(m.approval.requestId)
+        );
+        // Only logins the checklist holds: the agent isn't listed here.
+        if (approvals.length === 0 && g.approvals.length > 0 && !g.failure) return [];
+        return [[g.agent.id, { ...g, approvals }] as [string, typeof g]];
+      })
+    );
     for (const [agentId, cards] of roomCards) {
       const group = byAgent.get(agentId);
       if (!group) continue;
@@ -382,7 +406,7 @@ export function AgentsTeamView({
       byAgent.set(agent.id, group);
     }
     return [...byAgent.values()];
-  }, [team.needsYou, held, agents, roomCards]);
+  }, [team.needsYou, held, agents, roomCards, setupLogins]);
 
   const title = (
     <>
@@ -419,6 +443,29 @@ export function AgentsTeamView({
 
       <div className="agent-chat__scroll">
         <div className="agents-team__column" ref={columnRef}>
+          {setup && chief && (
+            <button
+              type="button"
+              tabIndex={0}
+              className="agents-team__row agents-team__setup"
+              data-testid="agents-team-setup"
+              onClick={() => {
+                resumeTeamSetup()
+                  .then(() => onOpenAgent(chief.id))
+                  .catch(toastError);
+              }}
+            >
+              <AgentAvatar name={chief.name} color={chief.color} />
+              <span className="agents-team__text">
+                <span className="agents-team__name">
+                  <span className="agents-team__name-text">{SETUP_TITLE}</span>
+                </span>
+                <span className="agents-team__line">
+                  {progressLine(setup)} · in {chief.name}’s chat
+                </span>
+              </span>
+            </button>
+          )}
           <Section
             title="Needs your OK"
             hint={

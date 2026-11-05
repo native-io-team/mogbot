@@ -322,6 +322,12 @@ export const baseCommands: CommandMap = {
     "Move my agents to the app I just connected you to. Use its import_conversation tool to talk to my Chief of Staff there, and answer its questions about each agent you run for me until it says the import is ready for me to review. Don't send passwords, API keys or card numbers: the app asks me for those itself.",
   // connector::Gate: nothing armed, no import going.
   agents_import_talk: { armed: false, talk: null },
+  // team_setup::view(): no import to finish setting up (`./agentsTeamSetup`).
+  agents_team_setup: null,
+  agents_team_setup_step: null,
+  agents_team_setup_routine: null,
+  agents_team_setup_dismiss: null,
+  agents_team_setup_reopen: null,
   agents_import_talk_arm: { armed: true, talk: null },
   agents_import_talk_stop: false,
   // review::Applied for one new agent.
