@@ -25,7 +25,7 @@ import { invoke } from '@tauri-apps/api/core';
 export type TailscaleState =
   | { state: 'notInstalled' }
   | { state: 'needsLogin' }
-  | { state: 'connected'; dnsName: string }
+  | { state: 'connected'; dnsName: string; login?: string }
   | { state: 'unknown'; detail: string };
 
 export interface PowerStatus {

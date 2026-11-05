@@ -288,6 +288,11 @@ async fn identity(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
     let Some(proof) = key.prove_mac(&request.challenge, &server_id, &hosts) else {
         return status_only(StatusCode::BAD_REQUEST);
     };
+    // A phone asks this just before it sends the code: the panel can say a
+    // device got through, once per code (`note_reached`).
+    if c.pairing.note_reached(now_ms()) {
+        c.backend.changed();
+    }
     json_response(&IdentityResponse::Proven {
         ok: true,
         protocol,

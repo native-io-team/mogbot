@@ -94,12 +94,14 @@ export const phoneScenarios: Scenario[] = [
   phone(
     'phone-off',
     'Phone — off, nothing paired: install comes first',
-    'Titled “Your phone”. One line on what the phone is for, then three short numbered steps, ' +
-      'one sentence each: “Get the app” with a primary “Get the app…” and a secondary “I already ' +
-      'have it”; “Tailscale, once” saying it is how the phone reaches this Mac, with a “Get ' +
-      'Tailscale ↗” link; and a muted “Pair”. No Xcode, Apple ID, cable or USB debugging on this ' +
-      'screen, no “Turn on phone access” button and no QR.',
-    {}
+    'Titled “Your phone”. One line on what the phone is for, then three short numbered steps: ' +
+      '“Get the app” with a primary “Get the app…” and a secondary “I already have it”; ' +
+      '“Tailscale, on this Mac and your phone” saying a scan never gets here without it, a green ' +
+      'tick on “This Mac: set up.”, and “Your phone: Install Tailscale on your phone and sign in ' +
+      'as julian@example.com.” with “App Store ↗” and “Google Play ↗” links; and a muted “Pair”. ' +
+      'No Xcode, Apple ID, cable or USB debugging on this screen, no “Turn on phone access” ' +
+      'button and no QR.',
+    { tailscale: { state: 'connected', dnsName: DNS, login: 'julian@example.com' } }
   ),
   phone(
     'phone-install-tailscale',
@@ -166,11 +168,45 @@ export const phoneScenarios: Scenario[] = [
     'phone-code',
     'Phone — a pairing code on screen',
     'A crisp black-on-white QR code on the left (it scans to a shipstudio-companion:// link), ' +
-      'three numbered steps on the right, "Works once, for 5:00" (or just under) and "Copy link ' +
-      'instead" / "Cancel".',
-    { ...ON, devices: [devices[1]], pairing: { active: true, expiresAt: Date.now() + 5 * MIN } },
+      'four numbered steps on the right, the first in bold: “Install Tailscale on your phone and ' +
+      'sign in as julian@example.com.”, why, and “App Store ↗” / “Google Play ↗” links under it. ' +
+      'Then open the app, tap Pair, Allow here. "Works once, for 5:00" (or just under) and ' +
+      '"Copy link instead" / "Cancel". No “A device reached this Mac” line yet.',
+    {
+      ...ON,
+      tailscale: { state: 'connected', dnsName: DNS, login: 'julian@example.com' },
+      devices: [devices[1]],
+      pairing: { active: true, expiresAt: Date.now() + 5 * MIN },
+    },
     {
       // "Pair a phone" in Cmd+K opens the panel straight onto a code.
+      command: 'companion.pair',
+      commands: {
+        companion_pair_start: {
+          link: PHONE_PAIRING_LINK,
+          qr: PHONE_QR,
+          expiresAt: Date.now() + 5 * MIN,
+        },
+      },
+    }
+  ),
+  phone(
+    'phone-code-reached',
+    'Phone — a code on screen, and a device has reached this Mac',
+    'As phone-code, but Tailscale reports no account for this Mac, so the first step says ' +
+      '“sign in with the same account as this Mac” (no address invented). Under the steps, a ' +
+      'quiet line with a small spinner: “A device reached this Mac at <time>. Waiting for it to ' +
+      'send the code…”. Neutral, not green or amber.',
+    {
+      ...ON,
+      devices: [devices[1]],
+      pairing: {
+        active: true,
+        expiresAt: Date.now() + 5 * MIN,
+        reachedAt: Date.now() - 4_000,
+      },
+    },
+    {
       command: 'companion.pair',
       commands: {
         companion_pair_start: {

@@ -65,13 +65,13 @@ async fn build_status() -> RemoteAccessStatus {
     let ts = tailscale::status().await;
     let port = remote_access::running_port();
     let funnel_on = match (&ts, port) {
-        (tailscale::TailscaleState::Connected { dns_name }, Some(port)) => {
+        (tailscale::TailscaleState::Connected { dns_name, .. }, Some(port)) => {
             tailscale::funnel_active(dns_name, port).await
         }
         _ => false,
     };
     let (link_masked, reachability) = match &ts {
-        tailscale::TailscaleState::Connected { dns_name } if funnel_on && config.enabled => (
+        tailscale::TailscaleState::Connected { dns_name, .. } if funnel_on && config.enabled => (
             Some(mask(dns_name, &config.token)),
             Some(tailscale::public_reachability(dns_name, &config.token).await),
         ),
@@ -120,7 +120,7 @@ const CLIPBOARD_CLEAR_SECS: u64 = 90;
 #[tracing::instrument]
 pub async fn copy_remote_link() -> Result<(), CommandError> {
     let config = remote_access::read_config();
-    let tailscale::TailscaleState::Connected { dns_name } = tailscale::status().await else {
+    let tailscale::TailscaleState::Connected { dns_name, .. } = tailscale::status().await else {
         return Err(CommandError::expected("Tailscale isn't connected."));
     };
     let live = match remote_access::running_port() {

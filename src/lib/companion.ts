@@ -19,7 +19,8 @@ export const COMPANION_CHANGED_EVENT = 'companion://changed';
 export type TailscaleState =
   | { state: 'notInstalled' }
   | { state: 'needsLogin' }
-  | { state: 'connected'; dnsName: string }
+  /** `login`: the account this Mac is signed in as, when Tailscale names one. */
+  | { state: 'connected'; dnsName: string; login?: string }
   | { state: 'unknown'; detail: string };
 
 /** The tailnet route, as read back from Tailscale (`desktop::ServeState`). */
@@ -55,6 +56,12 @@ export interface PairRequestView {
 export interface PairingView {
   active: boolean;
   expiresAt?: number;
+  /**
+   * While the code is out: when something on the tailnet first asked this
+   * Mac to prove itself, which a phone does just before sending the code.
+   * Unauthenticated, so it's "a device", never "your phone".
+   */
+  reachedAt?: number;
   request?: PairRequestView;
 }
 
@@ -208,6 +215,26 @@ export function expiresIn(expiresAt: number, now: number): string | null {
   const left = Math.ceil((expiresAt - now) / 1000);
   if (left <= 0) return null;
   return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+}
+
+/** Tailscale's own store pages: the phone reaches this Mac only through it. */
+export const TAILSCALE_IOS_URL = 'https://apps.apple.com/app/tailscale/id1470499037';
+export const TAILSCALE_ANDROID_URL =
+  'https://play.google.com/store/apps/details?id=com.tailscale.ipn';
+
+/**
+ * How the phone signs in to Tailscale: as the account this Mac reports, or
+ * "with the same account as this Mac" when it reports none. Never guessed.
+ */
+export function phoneTailscaleSignIn(t: TailscaleState | null): string {
+  return t?.state === 'connected' && t.login
+    ? `sign in as ${t.login}`
+    : 'sign in with the same account as this Mac';
+}
+
+/** "Install Tailscale on your phone and sign in as julian@…." */
+export function phoneTailscaleText(t: TailscaleState | null): string {
+  return `Install Tailscale on your phone and ${phoneTailscaleSignIn(t)}.`;
 }
 
 /** The address without the scheme, for showing. */

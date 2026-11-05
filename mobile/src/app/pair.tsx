@@ -1,7 +1,9 @@
 /**
- * Welcome and pairing: one Scan button first (with the steps folded under
- * it), then a confirm screen that says which Mac and where, wait for someone
- * at the desk to allow it, then a moment that says which Mac it's paired
+ * Welcome and pairing: "Before you scan" (Tailscale on, same account as the
+ * Mac), one Scan button (with the steps folded under it), then a confirm
+ * screen that says which Mac and where, "Reaching <Mac>…" while it proves
+ * itself, wait for someone at the desk to allow it (said only once the code
+ * has really gone), then a moment that says which Mac it's paired
  * with, and asks about alerts once if they're undecided. Deep links
  * (`…://pair?d=…`) land here too, and never pair without the confirm: any
  * web page or message can open one.
@@ -16,6 +18,7 @@ import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from '../components/agent';
+import { Card } from '../components/surfaces';
 import { Button, Icon, T } from '../components/ui';
 import { ALERTS_WHILE_OPEN } from '../lib/push';
 import {
@@ -27,6 +30,7 @@ import {
   linkProblem,
   pairPlan,
   parseLink,
+  tailscaleInstalled,
   type PairFailure,
   type PairPlan,
 } from '../lib/pairing';
@@ -43,6 +47,9 @@ type Phase =
   | { kind: 'start'; error?: string }
   /** Say which Mac, where, and what it replaces; nothing is sent until Pair. */
   | { kind: 'confirm'; link: PairingLink; plan: PairPlan }
+  /** Asking the Mac to prove itself: nothing has reached the desk yet. */
+  | { kind: 'reaching'; link: PairingLink }
+  /** The Mac proved itself and has the code: the desk is asking now. */
   | { kind: 'waiting'; link: PairingLink }
   | { kind: 'failed'; link: PairingLink; failure: PairFailure }
   | { kind: 'paired'; mac: string; askAlerts: boolean };
@@ -64,9 +71,12 @@ export default function Pair() {
     abort.current?.abort();
     const controller = new AbortController();
     abort.current = controller;
-    setPhase({ kind: 'waiting', link });
+    setPhase({ kind: 'reaching', link });
     try {
-      const credentials = await pair(link, controller.signal);
+      const credentials = await pair(link, controller.signal, (step) => {
+        if (!controller.signal.aborted)
+          setPhase({ kind: step === 'asking' ? 'waiting' : 'reaching', link });
+      });
       await adopt(credentials);
       haptic.success();
       // Say which Mac, always; ask about alerts only when there's a decision to make.
@@ -157,6 +167,7 @@ export default function Pair() {
               </T>
             </Animated.View>
           )}
+          <BeforeYouScan />
           <Button
             title="Scan the code on your Mac"
             variant="primary"
@@ -172,8 +183,7 @@ export default function Pair() {
           />
           <View style={styles.steps}>
             <Step n={1} text="On your Mac: Settings → Phone → Pair a phone." />
-            <Step n={2} text="Tailscale on here, on the same account as your Mac." />
-            <Step n={3} text="Scan, then click Allow on the Mac." />
+            <Step n={2} text="Scan, then click Allow on the Mac." />
           </View>
           <T variant="small" color={colors.textMuted}>
             Your Mac has to stay on, with the app open, for this phone to reach it.
@@ -191,6 +201,34 @@ export default function Pair() {
             setPhase({ kind: 'start' });
           }}
         />
+      )}
+
+      {phase.kind === 'reaching' && (
+        <Animated.View
+          entering={FadeInDown.duration(250)}
+          exiting={FadeOut.duration(150)}
+          style={[styles.card, styles.block]}
+          testID="pair-reaching"
+        >
+          <View style={styles.waitingTitle}>
+            <Spinner size={iconSize.body} color={colors.textPrimary} />
+            <T variant="title" color={colors.textStrong} accessibilityRole="header">
+              Reaching {cleanName(phase.link.name)}…
+            </T>
+          </View>
+          <T color={colors.textSecondary}>
+            Looking for it at {linkHost(phase.link)} over Tailscale, and checking it’s the Mac this
+            code came from. Nothing has been sent to it yet.
+          </T>
+          <Button
+            title="Cancel"
+            variant="ghost"
+            onPress={() => {
+              abort.current?.abort();
+              setPhase({ kind: 'start' });
+            }}
+          />
+        </Animated.View>
       )}
 
       {phase.kind === 'waiting' && (
@@ -223,12 +261,17 @@ export default function Pair() {
 
       {phase.kind === 'failed' && (
         <Animated.View entering={FadeInDown.duration(250)} style={[styles.card, styles.block]}>
-          <FailureCopy failure={phase.failure} mac={cleanName(phase.link.name)} />
+          <FailureCopy
+            failure={phase.failure}
+            mac={cleanName(phase.link.name)}
+            host={linkHost(phase.link)}
+          />
           {(phase.failure.kind === 'tailscale_off' || phase.failure.kind === 'mac_unreachable') && (
             <Button title="Open Tailscale" icon="network" onPress={() => void openTailscale()} />
           )}
           {phase.failure.kind === 'expired' ||
           phase.failure.kind === 'refused' ||
+          phase.failure.kind === 'no_answer' ||
           phase.failure.kind === 'not_your_mac' ? (
             <Button
               title="Scan a new code"
@@ -371,19 +414,75 @@ function Step({ n, text }: { n: number; text: string }) {
   );
 }
 
-function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
+/**
+ * What has to be true before a scan can work, said before the scan rather
+ * than after a spinner that never ends: the phone reaches the Mac only over
+ * Tailscale, on the same account.
+ */
+function BeforeYouScan() {
+  const colors = useColors();
+  const styles = useStyles();
+  // "Open" only when the OS says the app is there; otherwise "Get".
+  const [installed, setInstalled] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    void tailscaleInstalled().then((v) => live && setInstalled(v));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return (
+    <Card
+      icon="network"
+      title="Before you scan"
+      testID="pair-before-scan"
+      note="This phone reaches your Mac only through Tailscale. Without it, the Mac never sees the request."
+      actions={
+        <Button
+          title={installed ? 'Open Tailscale' : 'Get Tailscale'}
+          variant="outline"
+          icon="network"
+          onPress={() => void openTailscale()}
+          style={{ flexGrow: 1 }}
+        />
+      }
+    >
+      <View style={styles.checks}>
+        {[
+          'Tailscale installed on this phone',
+          'Connected: the switch is on in the Tailscale app',
+          'Signed in to the same account as your Mac',
+        ].map((line) => (
+          <View key={line} style={styles.checkLine}>
+            <Icon name="checkmark" size={iconSize.inline} color={colors.textMuted} />
+            <T color={colors.textPrimary} style={{ flex: 1 }}>
+              {line}
+            </T>
+          </View>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
+function FailureCopy({ failure, mac, host }: { failure: PairFailure; mac: string; host: string }) {
   const colors = useColors();
   const [title, body] = ((): [string, string] => {
     switch (failure.kind) {
       case 'tailscale_off':
         return [
-          'Tailscale isn’t running on this phone',
-          `This phone can’t find ${mac} on your tailnet, which usually means Tailscale is off here or signed in to a different tailnet. Turn it on in the Tailscale app, then try again.`,
+          'This phone isn’t on your Mac’s tailnet',
+          `It couldn’t find ${host}, which only resolves through Tailscale. On this phone, open Tailscale: make sure it’s connected and signed in to the same account as ${mac}. Then try again.`,
         ];
       case 'mac_unreachable':
         return [
-          `Can’t reach ${mac} on your tailnet`,
-          'The Mac didn’t answer. Check that it’s awake, that Tailscale is on there and here, and that the app is open on it.',
+          `Can’t reach ${mac}`,
+          `Nothing answered at ${host}. Check that Tailscale is connected on this phone and signed in to the same account as ${mac}, that the Mac is awake with Tailscale on, and that the app is open on it. Then try again.`,
+        ];
+      case 'no_answer':
+        return [
+          `No answer from ${mac}`,
+          'The Mac had the request, but nothing came back within two minutes. If you clicked Allow, check Settings → Phone on the Mac; otherwise make a new code there and scan it.',
         ];
       case 'not_your_mac':
         return [
@@ -456,6 +555,8 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.cardBorder,
   },
   waitingTitle: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  checks: { gap: space.sm },
+  checkLine: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
   mono: { fontVariant: ['tabular-nums'], letterSpacing: 1 },
   check: {
     width: 44,

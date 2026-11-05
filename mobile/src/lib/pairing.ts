@@ -13,7 +13,7 @@ import {
   type PairingLink,
   type Route,
 } from '@shipstudio/companion-protocol';
-import { pairWith, PairError, type PairFailure } from './pairFlow';
+import { pairWith, PairError, type PairFailure, type PairStep } from './pairFlow';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
@@ -40,7 +40,7 @@ export interface Credentials {
   fingerprint?: string;
 }
 
-export { PairError, type PairFailure };
+export { PairError, type PairFailure, type PairStep };
 
 /**
  * A pairing link from a scan, a paste or another app, or null. Tailscale
@@ -152,11 +152,15 @@ export const appInfo = () => ({
 
 /**
  * Ask the Mac to pair: it proves itself first, then the code goes, and the
- * answer is checked before its token is kept. The request stays open while
- * someone at the desk decides (up to 120 s), so the caller shows "Allow on
- * your Mac…" meanwhile.
+ * answer is checked before its token is kept. `onStep` says when each step
+ * starts: "Reaching your Mac…" first, and "Allow on your Mac" only once the
+ * Mac has proved itself and the code has gone (up to 120 s at the desk).
  */
-export async function pair(link: PairingLink, signal?: AbortSignal): Promise<Credentials> {
+export async function pair(
+  link: PairingLink,
+  signal?: AbortSignal,
+  onStep?: (step: PairStep) => void
+): Promise<Credentials> {
   const secret = Crypto.getRandomBytes(32);
   const paired = await pairWith(link, {
     // Bound: called as `deps.fetch`, a bare browser fetch throws "Illegal invocation".
@@ -172,6 +176,7 @@ export async function pair(link: PairingLink, signal?: AbortSignal): Promise<Cre
     publicKey: toBase64Url(x25519.getPublicKey(secret)),
     signal,
     diagnose,
+    onStep,
   });
   return {
     fingerprint: paired.fingerprint,
@@ -220,6 +225,15 @@ const TAILSCALE_STORE =
   Platform.OS === 'android'
     ? 'https://play.google.com/store/apps/details?id=com.tailscale.ipn'
     : 'https://apps.apple.com/app/tailscale/id1470499037';
+
+/** Whether the Tailscale app is on this phone; `null` when the OS won't say. */
+export async function tailscaleInstalled(): Promise<boolean | null> {
+  try {
+    return await Linking.canOpenURL('tailscale://');
+  } catch {
+    return null;
+  }
+}
 
 /** The Tailscale app if it's installed, otherwise its store page. */
 export async function openTailscale() {

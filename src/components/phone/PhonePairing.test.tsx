@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { PairConfirm } from './PhonePairing';
+import { PairCode, PairConfirm } from './PhonePairing';
 import type { Device, PairRequestView } from '../../lib/companion';
 
 const device = {
@@ -56,5 +56,48 @@ describe('PairConfirm', () => {
     expect(onDecide).toHaveBeenLastCalledWith(true, ['dev_old']);
     fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
     expect(onDecide).toHaveBeenLastCalledWith(false, []);
+  });
+});
+
+describe('PairCode', () => {
+  const code = {
+    link: 'x://pair?d=1',
+    qr: { size: 1, modules: '1' },
+    expiresAt: Date.now() + 60_000,
+  };
+  const tailscale = {
+    state: 'connected',
+    dnsName: 'm.ts.net',
+    login: 'julian@example.com',
+  } as const;
+  const show = (reachedAt?: number) =>
+    render(
+      <PairCode
+        code={code}
+        now={Date.now()}
+        busy={false}
+        tailscale={tailscale}
+        reachedAt={reachedAt}
+        onCopy={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+  it('puts Tailscale on the phone first, with the Mac’s account and the store links', () => {
+    show();
+    const first = screen.getAllByRole('listitem')[0];
+    expect(first.textContent).toMatch(
+      /^Install Tailscale on your phone and sign in as julian@example\.com\./
+    );
+    expect(screen.getByRole('button', { name: /App Store/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Google Play/ })).toBeTruthy();
+    expect(screen.queryByTestId('phone-code-reached')).toBeNull();
+  });
+
+  it('says a device reached this Mac, not that a phone did', () => {
+    show(Date.now());
+    expect(screen.getByTestId('phone-code-reached').textContent).toMatch(
+      /^A device reached this Mac at .+\. Waiting for it to send the code…$/
+    );
   });
 });

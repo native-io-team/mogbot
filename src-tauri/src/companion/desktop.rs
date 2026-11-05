@@ -877,7 +877,7 @@ async fn start_server(c: Arc<Companion>) -> Result<u16, CommandError> {
 /// Publish the server on the tailnet. Each outcome is kept for the panel.
 async fn publish(port: u16) {
     let state = match tailscale::status().await {
-        tailscale::TailscaleState::Connected { dns_name } => {
+        tailscale::TailscaleState::Connected { dns_name, .. } => {
             match tailscale::enable_serve(TAILNET_HTTPS_PORT, port, &dns_name).await {
                 tailscale::FunnelOutcome::On => ServeState::On {
                     url: format!("https://{dns_name}:{TAILNET_HTTPS_PORT}"),

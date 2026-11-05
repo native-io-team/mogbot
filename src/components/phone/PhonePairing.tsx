@@ -9,10 +9,19 @@
  */
 
 import { Button } from '../primitives/Button';
+import { Spinner } from '../primitives/Spinner';
 import { TextButton } from '../primitives/TextButton';
 import { CopyIcon, MobileIcon, WarningIcon } from '@/components/icons';
-import { deviceLine, expiresIn, type PairRequestView, type PairingCode } from '../../lib/companion';
+import {
+  deviceLine,
+  expiresIn,
+  phoneTailscaleText,
+  type PairRequestView,
+  type PairingCode,
+  type TailscaleState,
+} from '../../lib/companion';
 import { PhoneQr } from './PhoneQr';
+import { TailscaleStoreLinks } from './PhoneTailscale';
 import { BRAND } from '../../lib/brand';
 
 interface OfferProps {
@@ -43,11 +52,15 @@ interface CodeProps {
   code: PairingCode;
   now: number;
   busy: boolean;
+  /** This Mac's Tailscale: who the phone signs in as. */
+  tailscale: TailscaleState;
+  /** When a device on the tailnet first reached this Mac with the code out. */
+  reachedAt?: number;
   onCopy: () => void;
   onCancel: () => void;
 }
 
-export function PairCode({ code, now, busy, onCopy, onCancel }: CodeProps) {
+export function PairCode({ code, now, busy, tailscale, reachedAt, onCopy, onCancel }: CodeProps) {
   const left = expiresIn(code.expiresAt, now);
   return (
     <div className="phone-code" data-testid="phone-pair-code">
@@ -59,10 +72,21 @@ export function PairCode({ code, now, busy, onCopy, onCancel }: CodeProps) {
       <div className="phone-code__side">
         <span className="phone-code__title">Scan with the {BRAND.name} app</span>
         <ol className="phone-code__steps">
+          <li data-tailscale>
+            <span className="phone-code__step-strong">{phoneTailscaleText(tailscale)}</span> It’s
+            how the phone reaches this Mac; turn it on before you scan.
+            <TailscaleStoreLinks />
+          </li>
           <li>Open {BRAND.name} on your phone.</li>
           <li>Tap Pair, then point the camera at this code.</li>
           <li>Allow the phone here when it asks.</li>
         </ol>
+        {reachedAt !== undefined && (
+          <span className="phone-code__reached" role="status" data-testid="phone-code-reached">
+            <Spinner size="sm" />A device reached this Mac at {timeOf(reachedAt)}. Waiting for it to
+            send the code…
+          </span>
+        )}
         <span className="phone-code__expiry">{left ? `Works once, for ${left}` : 'Expired'}</span>
         <div className="phone-code__actions">
           <TextButton leftIcon={<CopyIcon size={12} />} onClick={onCopy}>
