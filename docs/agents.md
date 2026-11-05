@@ -699,15 +699,29 @@ with the window hidden.
 
 Each agent has `engine: "claude" | "codex"` (default `claude`), so it can run
 on a ChatGPT plan with the same chat, tools, memory and Chief around it. The
-editor's **Runs on** shows only engines that are installed and signed in
-(Codex: `codex login status`; Claude Code counts once installed), plus the
-one the agent is on, and hides itself when there is one choice. Model offers
+editor's **Runs on** (`AgentEngine.tsx`) lists every engine; one that isn't
+installed or signed in (Codex: `codex login status`; Claude Code counts once
+installed) is disabled, with "Codex isn't signed in." and a Sign in / Set up
+button that opens the same terminal as the chat's. Under it, one line says
+what protects an agent on the chosen engine, from `EngineInfo.asks` (Claude
+Code always; Codex only over app-server), never more than is enforced. An
+agent on an engine other than Claude Code wears a small badge in the sidebar
+and the team view. Model offers
 that engine's own list: Claude Code's aliases, or Codex's own
 `models_cache.json` (`visibility: list`, its order). The Chief can set it on
 `create_agent` / `update_agent`; both refuse an engine that isn't ready.
 Switching clears the session and the model, leaves a note ("Runs on Codex
 from its next message"), and the next turn gets the recent conversation
 (`Agent.newEngine` → `with_recap`).
+
+**The boundary.** `engine::Engine` is what an agent is on; `driver::Driver`
+is how one turn runs it (`ClaudePrint`, `CodexApp`, `CodexExec`), picked once
+per turn. It answers everything engine-specific about starting a turn (the
+sign-in check, who names a new session, the command line, whether stdin stays
+open, the leftover-process mark, capabilities read before the turn), and the
+runner reads each engine's output as the shared `stream::Step`s. A third
+engine is an `Engine` variant, a module for its command line and stream, and a
+`Driver` variant; the compiler names the rest.
 
 A Codex turn is one `codex app-server` (`agents/codex_app.rs`), spoken to
 over JSON-RPC on stdin/stdout:
@@ -1066,4 +1080,4 @@ prunes them the diff says it can't be shown.
   result). `AGENTS_E2E_RUNS`, `AGENTS_E2E_JOBS`, `AGENTS_E2E_ONLY`,
   `AGENTS_E2E_OUT=<file.json>`.
 - `node scripts/harness-capture.mjs agents-`: memory (`agents-memory`, `agents-memory-edit`, `agents-remember`), a routine's past runs and a pending retry (`agents-schedule-history`), project binding (`agents-project-*`), Chief audit (`agents-chief-audit`), brief in progress, team, What's in flight (`agents-team-overview`, via ⌘K), @mention menu, approval, secure input (`agents-secret-*`, `agents-secrets-editor`), first run (keep-awake off and on), new
-  agent, import, Claude Code missing, the engine picker (`agents-engine-picker`) and a Codex agent's chat (`agents-codex-chat`).
+  agent, import, Claude Code missing, the engine picker (`agents-engine-picker`), Codex not set up (`agents-engine-unavailable`) and a Codex agent's chat (`agents-codex-chat`).

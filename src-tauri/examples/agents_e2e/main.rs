@@ -151,7 +151,7 @@ impl H {
     }
 
     async fn send(&self, id: &str, text: &str) -> Result<AgentMessage, String> {
-        cmd::agents_send(self.app.clone(), id.into(), text.into(), None, None)
+        cmd::agents_send(self.app.clone(), id.into(), text.into(), None, None, None)
             .await
             .map_err(|e| format!("send failed: {e}"))
     }

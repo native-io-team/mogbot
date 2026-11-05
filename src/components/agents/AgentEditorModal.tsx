@@ -1,7 +1,7 @@
 /**
  * Create a new agent, or edit one. Creating asks only what Grok Bot asks —
- * a name and a face — plus what it runs on (Claude Code or Codex, when both
- * are here and signed in) and its model, with the role and briefing
+ * a name and a face — plus what it runs on (Claude Code or Codex; one that
+ * isn't set up shows why) and its model, with the role and briefing
  * one disclosure away, because
  * most agents are created by the Chief of Staff and briefed in conversation.
  *
@@ -19,13 +19,13 @@ import { AgentProjectField } from './AgentProject';
 import { AgentMemory } from './AgentMemory';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentSecrets } from './AgentSecrets';
+import { AgentEngineField } from './AgentEngine';
 import {
   AGENT_COLORS,
   type AgentColor,
   type AgentEngine,
   createAgent,
   ENGINE_LABEL,
-  engineOptions,
   formatUsage,
   getAgentInstructions,
   getAgentUsage,
@@ -147,6 +147,8 @@ interface AgentEditorModalProps {
   onOpenApps?: () => void;
   /** Editing: open on its memory rather than its settings. */
   initialTab?: EditorTab;
+  /** Install or sign in to an engine that isn't ready, over the editor. */
+  onSetUpEngine?: (engine: AgentEngine, step: 'install' | 'sign-in') => void;
 }
 
 export type EditorTab = 'agent' | 'memory';
@@ -165,6 +167,7 @@ export function AgentEditorModal({
   takenColors,
   onOpenApps,
   initialTab = 'agent',
+  onSetUpEngine,
 }: AgentEditorModalProps) {
   const editing = Boolean(agent);
   const [tab, setTab] = useState<EditorTab>(initialTab);
@@ -176,7 +179,6 @@ export function AgentEditorModal({
   const engines = useAgentsSelector((s) => s.engines);
   const [engine, setEngine] = useState<AgentEngine>(agent?.engine ?? 'claude');
   const [model, setModel] = useState(agent?.model ?? '');
-  const runsOn = engineOptions(engines, engine);
   const switching = Boolean(agent && agent.engine !== engine);
   const [project, setProject] = useState(agent?.project ?? '');
   const [usage, setUsage] = useState<UsageSummary | null>(null);
@@ -289,27 +291,21 @@ export function AgentEditorModal({
         ))}
       </div>
 
-      {runsOn.length > 1 && (
-        <div className="agent-editor__label" role="group" aria-label="Runs on">
-          Runs on
-          <SegmentedControl
-            value={engine}
-            options={runsOn.map((e) => ({ value: e.id, label: e.label }))}
-            onValueChange={(next) => {
-              setEngine(next);
-              // Models don't cross engines.
-              setModel(next === agent?.engine ? (agent.model ?? '') : '');
-            }}
-            aria-label="Runs on"
-          />
-          {switching && (
-            <p className="agent-editor__hint">
-              Its next message starts a new {ENGINE_LABEL[engine]} session, handed the recent
-              conversation. Instructions and memory carry over.
-            </p>
-          )}
-        </div>
-      )}
+      <AgentEngineField
+        engines={engines}
+        value={engine}
+        current={agent?.engine}
+        onChange={(next) => {
+          setEngine(next);
+          // Models don't cross engines.
+          setModel(next === agent?.engine ? (agent.model ?? '') : '');
+        }}
+        onSetUp={onSetUpEngine}
+        note={
+          switching &&
+          `Its next message starts a new ${ENGINE_LABEL[engine]} session, handed the recent conversation. Instructions and memory carry over.`
+        }
+      />
 
       <div className="agent-editor__label" role="group" aria-label="Model">
         Model

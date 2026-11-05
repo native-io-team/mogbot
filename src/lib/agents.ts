@@ -153,6 +153,11 @@ export interface EngineInfo {
   label: string;
   installed: boolean;
   signedIn: boolean;
+  /**
+   * Its turns can stop and ask (an Allow / Deny card) before going past what
+   * it may do alone. Claude Code always; Codex only over its app-server.
+   */
+  asks?: boolean;
   /** The engine's own models, without Default. */
   models: ModelChoice[];
 }
@@ -492,6 +497,31 @@ export function engineIsReady(
 /** The engines that can take an agent right now, plus the one it's already on. */
 export function engineOptions(engines: EngineInfo[], current: AgentEngine): EngineInfo[] {
   return engines.filter((e) => (e.installed && e.signedIn) || e.id === current);
+}
+
+/** What an engine needs before it can take an agent, or null when it can. */
+export function engineUnavailable(info: EngineInfo): 'install' | 'sign-in' | null {
+  if (!info.installed) return 'install';
+  if (!info.signedIn) return 'sign-in';
+  return null;
+}
+
+/**
+ * What stands between an agent on this engine and your Mac, as each engine
+ * actually enforces it (see "Approvals" in docs/agents.md). Never more.
+ */
+export function engineProtections(engine: AgentEngine, info?: EngineInfo): string {
+  if (engine === 'claude') {
+    return 'Edits in its folders go ahead. Other commands, and anything outside its folders, ask you first unless you chose Always allow.';
+  }
+  const sandbox =
+    "Commands run in Codex's sandbox without asking: writes only in its folders, no network.";
+  if (info?.asks === true) return `${sandbox} Going past that asks you first.`;
+  if (info?.asks === false && info.installed) {
+    return `${sandbox} This Codex can't ask, so anything past that fails instead. Update Codex to get approvals.`;
+  }
+  // Not known (not installed, or a Mac that doesn't say): claim nothing more.
+  return sandbox;
 }
 
 export interface RoutineModelChoice extends ModelChoice {

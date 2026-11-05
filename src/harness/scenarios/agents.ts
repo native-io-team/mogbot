@@ -664,6 +664,7 @@ export const ENGINES = [
     label: 'Claude Code',
     installed: true,
     signedIn: true,
+    asks: true,
     models: [
       { value: 'opus', label: 'Opus' },
       { value: 'sonnet', label: 'Sonnet' },
@@ -675,6 +676,7 @@ export const ENGINES = [
     label: 'Codex',
     installed: true,
     signedIn: true,
+    asks: true,
     models: [
       { value: 'gpt-5.6-sol', label: 'GPT-5.6-Sol' },
       { value: 'gpt-5.5', label: 'GPT-5.5' },
@@ -1596,7 +1598,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-engine-picker',
     title: 'Agents — moving an agent to Codex in the editor',
     looksRightWhen:
-      'Editing the Chief of Staff: a “Runs on” control (Claude Code | Codex) above Model, with Codex chosen; under it one muted line saying its next message starts a new Codex session handed the recent conversation, instructions and memory carried over. Model now offers Default / GPT-5.6-Sol / GPT-5.5 with Default chosen. The Apps hint says a Codex agent uses the MCP servers set up in Codex, with no Manage apps button.',
+      'Editing the Chief of Staff: a “Runs on” control (Claude Code | Codex) above Model, with Codex chosen; under it one muted line saying its next message starts a new Codex session handed the recent conversation, instructions and memory carried over, then one saying commands run in Codex’s sandbox without asking (writes only in its folders, no network) and going past that asks first. Model now offers Default / GPT-5.6-Sol / GPT-5.5 with Default chosen. The Apps hint says a Codex agent uses the MCP servers set up in Codex, with no Manage apps button.',
     openSelector: AGENTS_TAB,
     requires: '[aria-label="Runs on"] [aria-pressed="true"]',
     clipSelector: '.agent-editor',
@@ -1610,6 +1612,23 @@ export const agentsScenarios: Scenario[] = [
       agents_messages: messagesFor,
       agents_instructions: 'Keep the team moving.',
       agents_usage: { week: totals(0, 0, 0, 0), allTime: totals(0, 0, 0, 0) },
+    },
+  },
+  {
+    id: 'agents-engine-unavailable',
+    title: 'Agents — a new agent when Codex isn’t set up',
+    looksRightWhen:
+      'The New agent dialog: “Runs on” shows Claude Code chosen and Codex greyed out (not clickable). Under it, one muted line on what protects a Claude Code agent (edits in its folders go ahead; other commands and anything outside ask first unless Always allow), then “Codex isn’t signed in.” with a “Sign in to Codex” text button. Nothing claims Codex is ready.',
+    openSelector: AGENTS_TAB,
+    requires: '[aria-label="Runs on"] button[disabled]',
+    clipSelector: '.agent-editor',
+    steps: [{ click: '.workspace-sidebar-add-project' }],
+    commands: {
+      agents_overview: {
+        ...overview(),
+        engines: [ENGINES[0], { ...ENGINES[1], signedIn: false }],
+      },
+      agents_messages: messagesFor,
     },
   },
   {

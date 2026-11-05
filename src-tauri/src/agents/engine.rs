@@ -69,6 +69,11 @@ pub struct EngineInfo {
     /// once installed (its sign-in lives in the keychain; a signed-out turn
     /// says so in the chat, with a way to sign in).
     pub signed_in: bool,
+    /// Whether its turns can stop and ask the user (an Allow / Deny card)
+    /// before going past what it may do alone. Claude Code always can
+    /// (`--permission-prompt-tool`); Codex only over `app-server`, since
+    /// `codex exec` forces approvals to "never". The editor says which.
+    pub asks: bool,
     /// The engine's own models, without "Default" (no `--model` at all).
     pub models: Vec<ModelChoice>,
 }
@@ -152,12 +157,20 @@ pub async fn signed_in(engine: Engine) -> bool {
 }
 
 pub async fn info(engine: Engine) -> EngineInfo {
-    let installed = binary(engine).await.is_some();
+    let found = binary(engine).await;
+    let installed = found.is_some();
+    let asks = match (&found, engine) {
+        (_, Engine::Claude) => true,
+        (Some(binary), Engine::Codex) => super::codex_app::available(binary).await,
+        // Not installed: unknown, so not claimed.
+        (None, Engine::Codex) => false,
+    };
     EngineInfo {
         id: engine,
         label: engine.label(),
         installed,
         signed_in: installed && signed_in(engine).await,
+        asks,
         models: models(engine),
     }
 }

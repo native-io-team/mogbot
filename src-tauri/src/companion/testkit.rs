@@ -248,6 +248,7 @@ pub fn engines() -> Vec<crate::agents::engine::EngineInfo> {
             label: "Claude Code",
             installed: true,
             signed_in: true,
+            asks: true,
             models: vec![model("opus", "Opus"), model("sonnet", "Sonnet")],
         },
         EngineInfo {
@@ -255,6 +256,7 @@ pub fn engines() -> Vec<crate::agents::engine::EngineInfo> {
             label: "Codex",
             installed: true,
             signed_in: false,
+            asks: true,
             models: vec![model("gpt-5-codex", "GPT-5 Codex")],
         },
     ]

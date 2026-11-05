@@ -221,6 +221,20 @@
   color: var(--text-muted);
 }
 
+/* An agent on an engine other than the default (AgentEngineBadge). Quiet:
+   a label, not a status, so it never competes with the row's own marks. */
+.agent-engine-badge {
+  flex: 0 0 auto;
+  padding: 0 var(--spacing-3xs);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-badge);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-compact);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .agents-list__preview {
   overflow: hidden;
   font-size: var(--font-size-body-sm);
@@ -2071,6 +2085,9 @@
 }
 
 .agents-team__name {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
   font-size: var(--font-size-body-md);
   font-weight: var(--font-weight-label);
   line-height: var(--line-height-compact);

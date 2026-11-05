@@ -35,6 +35,8 @@ import {
   modelChoices,
   engineIsReady,
   engineOptions,
+  engineProtections,
+  engineUnavailable,
   type EngineInfo,
   peerGroupLabel,
   sortAgents,
@@ -309,12 +311,20 @@ describe('formatUsage', () => {
 
   it('offers each engine its own models and only engines that can run', () => {
     const engines: EngineInfo[] = [
-      { id: 'claude', label: 'Claude Code', installed: true, signedIn: true, models: [] },
+      {
+        id: 'claude',
+        label: 'Claude Code',
+        installed: true,
+        signedIn: true,
+        asks: true,
+        models: [],
+      },
       {
         id: 'codex',
         label: 'Codex',
         installed: true,
         signedIn: false,
+        asks: true,
         models: [{ value: 'gpt-5.5', label: 'GPT-5.5' }],
       },
     ];
@@ -330,6 +340,28 @@ describe('formatUsage', () => {
     expect(engineIsReady('claude', engines, true)).toBe(true);
     expect(engineOptions(engines, 'claude').map((e) => e.id)).toEqual(['claude']);
     expect(engineOptions(engines, 'codex').map((e) => e.id)).toEqual(['claude', 'codex']);
+  });
+
+  it('says what an engine needs, and only claims protection the engine enforces', () => {
+    const codex: EngineInfo = {
+      id: 'codex',
+      label: 'Codex',
+      installed: false,
+      signedIn: false,
+      asks: false,
+      models: [],
+    };
+    expect(engineUnavailable(codex)).toBe('install');
+    expect(engineUnavailable({ ...codex, installed: true })).toBe('sign-in');
+    expect(engineUnavailable({ ...codex, installed: true, signedIn: true })).toBeNull();
+    expect(engineProtections('claude')).toMatch(/ask you first/);
+    const app = engineProtections('codex', { ...codex, installed: true, asks: true });
+    expect(app).toMatch(/sandbox/);
+    expect(app).toMatch(/asks you first/);
+    // `codex exec` can't ask: the line must not say it does.
+    const exec = engineProtections('codex', { ...codex, installed: true, asks: false });
+    expect(exec).toMatch(/can't ask/);
+    expect(exec).not.toMatch(/asks you first/);
   });
 });
 
