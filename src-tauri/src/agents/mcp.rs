@@ -457,6 +457,8 @@ fn tools_list(caller: &store::Agent) -> Value {
     }
     // Every agent works on projects the same way.
     tools.extend(super::sessions::definitions());
+    // "Test it": only while the user's run is open (`preview_test`).
+    tools.extend(super::preview_test::definitions(&caller.id));
     json!({ "tools": tools })
 }
 
@@ -494,6 +496,11 @@ pub async fn handle_rpc(
                 .unwrap_or_else(|| json!({}));
             if let Some(tool) = super::sessions::find(name) {
                 return ok(super::sessions::call(app, &caller, tool, &args).await);
+            }
+            // The user's own local preview, after they pressed Test it: no
+            // card (local work), and nothing but that page.
+            if let Some(tool) = super::preview_test::find(name) {
+                return ok(super::preview_test::call(app, &caller, turn, tool, &args).await);
             }
             if let Some(tool) = super::usage_tools::find(name) {
                 return ok(usage_tool(app, &caller, turn, tool, &args).await);

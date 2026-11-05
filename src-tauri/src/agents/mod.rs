@@ -95,6 +95,7 @@ pub mod permissions;
 pub mod policy;
 pub mod policy_card;
 pub mod procs;
+pub mod preview_test;
 pub mod project;
 pub mod prompts;
 pub mod quick_entry;

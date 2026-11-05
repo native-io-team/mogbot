@@ -950,7 +950,12 @@ async fn dispatch_tool(
     };
     let project_path = resolved_project.as_str();
 
-    let Some(window_label) = crate::state::get_window_for_project(project_path) else {
+    // A preview pane beside an agent's chat ("Preview" on a card) answers
+    // for its folder while it's open: the user is looking at it there.
+    let pane = crate::agents::preview_test::pane_window(project_path);
+    let Some(window_label) =
+        pane.clone().or_else(|| crate::state::get_window_for_project(project_path))
+    else {
         return tool_error_result(&format!(
             "This project isn't open in {} right now. Ask the user to open the project (its preview provides these tools).",
             crate::brand::NAME
@@ -959,7 +964,7 @@ async fn dispatch_tool(
 
     // Fail fast when the preview frontend isn't listening — waiting out the
     // timeout would just stall the agent for no reason.
-    if !is_project_attached(project_path) {
+    if pane.is_none() && !is_project_attached(project_path) {
         return tool_error_result(&format!(
             "The project is open in {}, but its web preview isn't active, so these tools can't run. If this is a web project, ask the user to switch to its workspace (the preview loads there). If it's a native mobile project (Expo / React Native / Flutter), it uses the simulator preview instead — these web-preview tools don't apply; verify through code, build output, and the user.",
             crate::brand::NAME
@@ -982,6 +987,8 @@ async fn dispatch_tool(
         "requestId": request_id,
         "tool": tool.name,
         "arguments": arguments,
+        // Which listener answers: the pane's, or the workspace preview's.
+        "target": if pane.is_some() { "pane" } else { "workspace" },
     });
     tracing::info!(
         "[AgentBridge] Tool call '{}' (request {}) for window '{}'",
