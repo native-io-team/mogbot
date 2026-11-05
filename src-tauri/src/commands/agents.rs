@@ -324,7 +324,7 @@ pub struct CreateAgentInput {
 }
 
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, input))]
 pub async fn agents_create(
     app: AppHandle,
     input: CreateAgentInput,
@@ -394,7 +394,7 @@ pub struct UpdateAgentInput {
 }
 
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, input), fields(agent = %agent_id))]
 pub async fn agents_update(
     app: AppHandle,
     agent_id: String,
@@ -700,7 +700,7 @@ pub async fn agents_interrupt(agent_id: String) -> Result<bool, CommandError> {
 /// `always`: allow, and keep allowing what the card offered to (its stored
 /// scope, never one the caller supplies).
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, note))]
 pub async fn agents_answer_approval(
     app: AppHandle,
     agent_id: String,
@@ -916,7 +916,7 @@ pub async fn agents_add_secret(
 
 /// Delete a secret from the Keychain and from the agent.
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, secret_id), fields(agent = %agent_id))]
 pub async fn agents_revoke_secret(
     app: AppHandle,
     agent_id: String,
@@ -1040,7 +1040,7 @@ pub async fn agents_import_talk_stop(app: AppHandle) -> Result<bool, CommandErro
 
 /// Import what the user kept on a review card (`agents::review`).
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, picks))]
 pub async fn agents_import_review_apply(
     app: AppHandle,
     agent_id: String,

@@ -59,7 +59,7 @@ pub fn read_plugin_storage(
 ///
 /// Acquires a per-plugin lock to prevent concurrent read-modify-write races.
 #[tauri::command]
-#[tracing::instrument(fields(project = %project_path))]
+#[tracing::instrument(skip(data), fields(project = %project_path))]
 pub fn write_plugin_storage(
     plugin_id: String,
     project_path: String,

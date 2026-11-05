@@ -97,3 +97,97 @@ pub use static_server::*;
 pub use templates::*;
 pub use window::*;
 pub use workflows::*;
+
+#[cfg(test)]
+mod log_hygiene_tests {
+    //! `#[tracing::instrument]` records every argument it isn't told to skip,
+    //! at INFO, into the log file (and the log goes into bug reports). A
+    //! command taking a credential, an agent's instructions, a note or a
+    //! file's bytes must skip it.
+
+    /// Argument names that carry something that must not reach a log.
+    const SENSITIVE: &[&str] = &[
+        "token",
+        "secret",
+        "secrets",
+        "secret_id",
+        "password",
+        "pin",
+        "value",
+        "values",
+        "input",
+        "note",
+        "notes",
+        "instructions",
+        "text",
+        "body",
+        "data",
+        "file_data",
+        "zip_data",
+        "picks",
+        "old_text",
+        "new_text",
+        "content",
+        "prompt",
+        "draft",
+    ];
+
+    #[test]
+    fn commands_never_log_credentials_instructions_or_notes() {
+        let re = regex::Regex::new(
+            r"#\[tracing::instrument(\((?s:.*?)\))?\]\s*(?:#\[[^\]]*\]\s*)*pub(?:\(crate\))?\s+(?:async\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\(((?s:.*?))\)\s*(?:->|\{)",
+        )
+        .unwrap();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut offenders = Vec::new();
+        for entry in walkdir::WalkDir::new(&root).into_iter().flatten() {
+            if entry.path().extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let src = std::fs::read_to_string(entry.path()).unwrap();
+            for cap in re.captures_iter(&src) {
+                let attr = cap.get(1).map_or("", |m| m.as_str());
+                if attr.contains("skip_all") {
+                    continue;
+                }
+                let skipped: Vec<&str> = regex::Regex::new(r"skip\(([^)]*)\)")
+                    .unwrap()
+                    .captures(attr)
+                    .map(|c| {
+                        c.get(1)
+                            .unwrap()
+                            .as_str()
+                            .split(',')
+                            .map(str::trim)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                for param in cap[3].split(',') {
+                    let Some((name, ty)) = param.split_once(':') else {
+                        continue;
+                    };
+                    let name = name.trim().trim_start_matches("mut ").trim();
+                    // A number or a flag (a comment's pin number, a volume) says nothing.
+                    let ty = ty.trim().trim_start_matches("Option<");
+                    let scalar = ty.starts_with("bool")
+                        || ["u", "i", "f"].iter().any(|p| {
+                            ty.strip_prefix(p).is_some_and(|r| {
+                                r.starts_with(|c: char| c.is_ascii_digit()) || r.starts_with("size")
+                            })
+                        });
+                    if !scalar && SENSITIVE.contains(&name) && !skipped.contains(&name) {
+                        offenders.push(format!(
+                            "{}: {}({name})",
+                            entry.path().strip_prefix(&root).unwrap().display(),
+                            &cap[2]
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "skip these in #[tracing::instrument]: {offenders:#?}"
+        );
+    }
+}
