@@ -33,6 +33,7 @@ import { TakeoverProvider, useTakeover } from './AgentTakeover';
 import { ImportAgentsModal, type ImportPath } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
 import { ChiefIdeasModal } from './ChiefIdeasModal';
+import { TeamLoginsModal } from './TeamLogins';
 import { ProjectActionConfirmModal } from '../dashboard/ProjectActionConfirmModal';
 import { AccentScope } from '../../contexts/AccentScopeContext';
 import { Spinner } from '../primitives/Spinner';
@@ -285,6 +286,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   /** "More ideas…" (and ⌘K): the gallery of things to ask the Chief. */
   const openModal = useOpenModal();
   const openIdeas = useCallback(() => openModal('chiefIdeas'), [openModal]);
+  const openLogins = useCallback(() => openModal('teamLogins'), [openModal]);
   /** A picked idea: the Chief's chat, with its brief typed out. */
   const pickIdea = useCallback(
     (idea: ChiefIdea) => {
@@ -386,6 +388,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     onOpenAgent: openAgent,
     onSearch: focusSearch,
     onIdeas: openIdeas,
+    onLogins: openLogins,
   });
 
   // The order you see in the sidebar, for previous / next.
@@ -965,6 +968,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
         }}
       />
       <AgentAppsModal isOpen={appsOpen} onClose={() => setAppsOpen(false)} />
+      <TeamLoginsModal />
       {roomEditor.open && (
         <RoomEditorModal
           isOpen

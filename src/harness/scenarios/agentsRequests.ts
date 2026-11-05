@@ -323,12 +323,13 @@ export const agentsRequestsScenarios: Scenario[] = [
     id: 'agents-requests-import',
     title: 'Agents — 16 imported agents asking for 39 logins, from the Chief’s chat',
     looksRightWhen:
-      'The Chief’s chat ends on its working line (“Looking at your projects · 2 steps”) and nothing under it: no stack of per-agent chips. Above the composer, one bar with an amber dot: “16 agents need your OK” and “39 logins to add”, with a Review button on the right. The bar is one fixed height and stays put when you type.',
+      'The Chief’s chat ends on its working line (“Looking at your projects · 2 steps”) and nothing under it: no stack of per-agent chips. Above the composer, one bar with an amber dot: “16 agents need your OK” and “39 logins to add”, with a quiet “Logins by app” (opens What your team needs, one row per app) and a Review button on the right. The bar is one fixed height and stays put when you type.',
     command: 'agents.open',
     requires: '[data-bar="requests"] .agent-bar',
     commands: {
       agents_overview: importedTeam(true),
       agents_messages: importedMessages,
+      agents_logins_team: { needs: [], done: 0, total: 0 },
     },
   },
   {

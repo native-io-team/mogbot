@@ -43,12 +43,14 @@ import { TypingDots } from './TypingDots';
 import { ApprovalCard, PhoneReviewCard, PlaybackCard, ReviewOnMacCard } from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
+import { LoginCard } from './LoginCard';
+import { servesLogins } from '../lib/logins';
 import { useTaskName } from './session';
 import { LiveWork, WorkLine } from './work';
 import { CopyCard } from './copy';
 import { ResultCardView, useCanRevise } from './result';
 import { setComposer } from '../lib/drafts';
-import { useApp, useServed } from '../lib/store';
+import { getApp, useApp, useServed } from '../lib/store';
 
 const enter = FadeInDown.duration(220).springify().damping(18);
 
@@ -185,6 +187,20 @@ export const MessageRow = memo(function MessageRow({
         </Pressable>
       );
     case 'approval':
+      // A login card, from a Mac that serves its methods. (One that doesn't
+      // never sends `login`; if it did, the plain card's Allow starts its
+      // first way in on the Mac.)
+      if (message.approval?.login && servesLogins(getApp().welcome)) {
+        return (
+          <LoginCard
+            message={message}
+            approval={message.approval}
+            login={message.approval.login}
+            agent={agent}
+            onError={onError}
+          />
+        );
+      }
       if (message.approval?.secret) {
         return (
           <SecretCard

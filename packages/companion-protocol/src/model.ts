@@ -131,6 +131,8 @@ export interface Agent {
   capabilities?: Capabilities;
   /** Secrets it has in the Keychain (names only); omitted when none. */
   secrets?: AgentSecret[];
+  /** Browser access and the Claude Code apps kept from it; omitted when it has the defaults. */
+  reach?: AgentReachSettings;
   /** Moved engines and not run there yet: its next turn starts a new conversation. */
   newEngine?: boolean;
   /** How full its conversation is, as its engine reported it; omitted when it doesn't say. */
@@ -394,6 +396,143 @@ export interface Approval {
    * after an import. Nothing it asked for ran.
    */
   setAside?: string;
+  /**
+   * A login card (`request_login`): which app, what the agent may do, and the
+   * ways in, best first. Every way in runs on the Mac (`agents.loginStart`);
+   * `flow` is its live state. A Mac without the `logins` feature never sends it.
+   */
+  login?: LoginRequest;
+}
+
+// Logins: identical to src/lib/agentLogins.ts (desktop `agents/logins.rs`).
+// Never a credential: names, abilities and the ways in only.
+
+export type LoginMethod = 'existing' | 'oauth' | 'claude_ai' | 'gh' | 'browser' | 'key';
+
+export interface LoginAbility {
+  /** `read`, or `write` (send, post, change). */
+  id: 'read' | 'write';
+  label: string;
+}
+
+export interface LoginOption {
+  /** Unique on the card: the method, or `existing:<connectionId>`. */
+  id: string;
+  method: LoginMethod;
+  label: string;
+  /** What it means: where it signs in, where the sign-in is kept. */
+  detail: string;
+  connectionId?: string;
+}
+
+export type LoginFlowState = 'starting' | 'waiting' | 'failed' | 'cancelled';
+
+/** A way in under way, on the Mac. Live only; never stored. */
+export interface LoginFlow {
+  state: LoginFlowState;
+  option: string;
+  message?: string;
+  startedAt: number;
+  /** Started from a phone: "Finish signing in on your Mac". */
+  fromPhone?: boolean;
+  /** The sign-in is on the phone (its sheet, claude.ai there, a device code), not the Mac's browser. */
+  onPhone?: boolean;
+  /** A device sign-in's one-time code (GitHub), typed at `verificationUri` on either device. */
+  userCode?: string;
+  verificationUri?: string;
+}
+
+export interface LoginRequest {
+  /** The catalogue's id ("gmail", "linkedin"), or `other`. */
+  service: string;
+  title: string;
+  /** What the agent called it, when that differs ("gmail work"). */
+  askedAs?: string;
+  accountHint?: string;
+  why: string;
+  abilities: LoginAbility[];
+  /** Best first. Empty when nothing on the Mac can sign it in (`noConnector` says why). */
+  options: LoginOption[];
+  noConnector?: string;
+  /** The masked field, when an API key is a way in (`key` option). */
+  key?: SecretRequest;
+  quiet?: boolean;
+  /** The secret card an older Mac build raised, which this replaced. */
+  replaces?: string;
+  flow?: LoginFlow;
+}
+
+/** `agents.loginPhoneBegin`: what the phone opens. No secret: the PKCE verifier stays on the Mac. */
+export interface LoginPhoneBegin {
+  flowId: string;
+  /** The card it signs in for (a team row's first), for `agents.loginCancel`. */
+  agentId: string;
+  requestId: string;
+  /** The provider's authorization URL, for the system sign-in sheet. */
+  url: string;
+  /** The companion app's own redirect, which the sheet hands back. */
+  redirectUri: string;
+}
+
+export type TeamCardState = 'waiting' | 'connected' | 'skipped' | 'covered';
+
+/** One agent's ask on a row of "What your team needs". */
+export interface TeamCard {
+  agentId: string;
+  agentName: string;
+  requestId: string;
+  service: string;
+  title: string;
+  abilities: LoginAbility[];
+  state: TeamCardState;
+  /** How it was answered ("Connected · Gmail (work@acme.com)", "Not needed"). */
+  outcome?: string;
+  askedAs?: string;
+  flow?: LoginFlow;
+}
+
+/** One row: a service (or Google's family), every agent on it, one way in for all. */
+export interface TeamNeed {
+  key: string;
+  title: string;
+  services: string[];
+  options: LoginOption[];
+  noConnector?: string;
+  cards: TeamCard[];
+  done: boolean;
+}
+
+export interface TeamLogins {
+  needs: TeamNeed[];
+  /** Rows done, of rows. */
+  done: number;
+  total: number;
+}
+
+/** "What it can reach" (`agents.reach`): read-only on the phone. */
+export interface AgentReach {
+  connections: {
+    connectionId: string;
+    service: string;
+    title: string;
+    account: string;
+    access: 'read' | 'full';
+    /** Where the sign-in is kept, in words. */
+    kept: string;
+    needsSignIn: boolean;
+    lastUsedAt?: number;
+  }[];
+  /** Absent for an agent on Codex, which has no browser. */
+  browser?: { on: boolean; sites: string[]; helperInstalled: boolean };
+  secrets: {
+    secretId: string;
+    name: string;
+    purpose: string;
+    variables: string[];
+    lastUsedAt?: number;
+  }[];
+  /** Claude Code apps kept from this agent. */
+  blockedApps: string[];
 }
 
 /**
@@ -1266,4 +1405,14 @@ export interface Alert {
   title: string;
   body: string;
   kind: 'reply' | 'approval' | 'error' | 'check_in';
+}
+
+/** What an agent may reach beyond its connections (desktop `AgentReach`). */
+export interface AgentReachSettings {
+  /** The user took its browser away. */
+  browserOff?: boolean;
+  /** Sites it was given the browser for on a login card. */
+  browserSites?: string[];
+  /** Claude Code apps kept from its turns, by name there. */
+  blockedApps?: string[];
 }

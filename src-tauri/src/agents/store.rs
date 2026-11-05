@@ -130,11 +130,37 @@ pub struct Agent {
     /// first-open buttons. Its instructions are its own from then on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
+    /// Browser access and the Claude Code apps it's kept from ("What it can
+    /// reach"). Connections it may use are granted in `connections.json`.
+    #[serde(default, skip_serializing_if = "AgentReach::is_empty")]
+    pub reach: AgentReach,
     /// Fields a newer Ship Studio wrote that this build doesn't know: kept
     /// and written back as they were, so running an older build never
     /// strips what a newer one saved.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+/// What an agent may reach beyond its connections.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentReach {
+    /// The user took its browser away: its Claude Code turns run `--no-chrome`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub browser_off: bool,
+    /// Sites it was given the browser for on a login card (shown, and told
+    /// to the agent; Claude in Chrome itself isn't limited by them).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub browser_sites: Vec<String>,
+    /// Claude Code apps (by name there) kept from this agent's turns.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_apps: Vec<String>,
+}
+
+impl AgentReach {
+    pub fn is_empty(&self) -> bool {
+        !self.browser_off && self.browser_sites.is_empty() && self.blocked_apps.is_empty()
+    }
 }
 
 impl Agent {
@@ -293,6 +319,10 @@ pub struct Approval {
     /// (`agents/team_setup.rs`). Nothing it asked for ran.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub set_aside: Option<String>,
+    /// A login card (`request_login`, `agents/logins.rs`): which app, what
+    /// it may do, and the ways in. No credential is ever on it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login: Option<super::logins::LoginRequest>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -806,6 +836,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         context: None,
         routine_model: None,
         template: None,
+        reach: Default::default(),
         muted: false,
         check_ins: Vec::new(),
         usage: Default::default(),
@@ -963,6 +994,7 @@ pub fn delete(id: &str) -> Result<Agent, CommandError> {
     // It leaves its rooms; the rooms stay, with what it said in them.
     super::rooms::forget_agent(&removed.id);
     super::secrets::forget_all(&removed);
+    super::connections::forget_agent(&removed.id);
     super::work::forget_agent(&removed.id);
     if let Ok(log) = log_path(&removed.id) {
         forget_pending(&log);
@@ -1619,6 +1651,48 @@ pub fn refresh_pending(agent_id: &str) {
     let _ = update(agent_id, |a| a.pending_approvals = pending);
 }
 
+/// Mark a pending card expired, with a line saying why (a secret card
+/// moved onto a login card).
+pub fn expire_with_note(
+    agent_id: &str,
+    request_id: &str,
+    note: &str,
+) -> Result<Option<AgentMessage>, CommandError> {
+    resolve_approval(
+        agent_id,
+        request_id,
+        ApprovalStatus::Expired,
+        None,
+        Some(note),
+        None,
+    )
+}
+
+/// Every login card in an agent's log, answered or not, oldest first.
+pub fn login_cards(agent_id: &str) -> Vec<AgentMessage> {
+    let lock = log_lock(agent_id);
+    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    cards(agent_id, None)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|m| m.approval.as_ref().is_some_and(|a| a.login.is_some()))
+        .collect()
+}
+
+/// The card with this request id, as it reads now (answers applied).
+pub fn card(agent_id: &str, request_id: &str) -> Option<AgentMessage> {
+    let lock = log_lock(agent_id);
+    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(open) = pending_cards(agent_id).ok()?.into_iter().find(|m| {
+        m.approval
+            .as_ref()
+            .is_some_and(|a| a.request_id == request_id)
+    }) {
+        return Some(open);
+    }
+    cards(agent_id, Some(request_id)).ok()?.into_iter().next()
+}
+
 pub fn find_approval(agent_id: &str, request_id: &str) -> Result<Option<Approval>, CommandError> {
     let lock = log_lock(agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
@@ -1873,6 +1947,7 @@ mod tests {
                         secret: None,
                         connector: None,
                         set_aside: None,
+                        login: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2076,6 +2151,7 @@ mod tests {
                     secret: None,
                     connector: None,
                     set_aside: None,
+                    login: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2184,6 +2260,7 @@ mod tests {
                 secret: None,
                 connector: None,
                 set_aside: None,
+                login: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

@@ -361,6 +361,7 @@ mod tests {
             context: None,
             routine_model: None,
             template: None,
+            reach: Default::default(),
             muted,
             check_ins: Vec::new(),
             usage: Default::default(),
@@ -393,6 +394,7 @@ mod tests {
             secret: None,
             connector: None,
             set_aside: None,
+            login: None,
         });
         message
     }

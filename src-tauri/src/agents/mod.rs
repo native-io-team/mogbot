@@ -34,6 +34,10 @@
 //! - [`search`]: find a message across every conversation
 //! - [`secrets`]: credentials an agent asked for, kept in the Keychain, never shown to it
 //! - [`team_setup`]: "Setting up your team" after an import: one checklist, quiet agents, the fan-out cap
+//! - [`logins`]: login cards (`request_login`), the team's list, what an agent can reach
+//! - [`conn_relay`]: a turn reaches a connected app through the bridge, never holding its token
+//! - [`connections`]: accounts connected through them, per-agent grants, what a turn gets
+//! - [`oauth`]: signing in to a remote MCP server ourselves (PKCE, loopback)
 //! - [`templates`]: ready-made agents (role templates) the Chief and the New agent dialog offer
 //! - [`stream`]: a reply while it is being written (drafts)
 //! - [`usage`]: tokens and cost per agent, from each turn's `result` event
@@ -50,6 +54,8 @@ pub mod capacity;
 pub mod claude;
 pub mod codex;
 pub mod codex_app;
+pub mod conn_relay;
+pub mod connections;
 pub mod connector;
 pub mod context;
 pub mod decisions;
@@ -63,9 +69,12 @@ pub mod harvest;
 pub mod import;
 pub mod interview;
 pub mod inventory;
+pub mod login_relay;
+pub mod logins;
 pub mod mcp;
 pub mod memory;
 pub mod notify;
+pub mod oauth;
 pub mod other_app;
 pub mod paste;
 pub mod permissions;
@@ -306,7 +315,11 @@ mod tests {
         let _serial = store::tests_lock();
         let dir = tempfile::tempdir().unwrap();
         // The old default with one word changed is the user's now.
-        let old = prompts::PAST_CHIEF_INSTRUCTIONS.last().unwrap();
+        let old = prompts::PAST_CHIEF_INSTRUCTIONS
+            .iter()
+            .rev()
+            .find(|p| p.contains("daily brief"))
+            .unwrap();
         let edited = old.replace("daily brief", "weekly brief");
         assert_ne!(&edited, old);
         for theirs in [

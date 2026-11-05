@@ -4,6 +4,7 @@
  * @module lib/agents
  */
 
+import type { AgentReachSettings, LoginRequest } from './agentLogins';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
@@ -149,6 +150,8 @@ export interface Agent {
   /** What its last turn could use; omitted before its first turn. */
   capabilities?: Capabilities;
   /** Secrets it has in the Keychain (names only); omitted when none. */
+  /** Browser access and the Claude Code apps it's kept from ("What it can reach"). */
+  reach?: AgentReachSettings;
   secrets?: AgentSecret[];
   /** Moved engines and not run there yet: its next turn starts a new conversation. */
   newEngine?: boolean;
@@ -419,6 +422,8 @@ export interface Approval {
    * Nothing it asked for ran.
    */
   setAside?: string;
+  /** A login card (`request_login`): which app, what it may do, the ways in (`lib/agentLogins`). */
+  login?: LoginRequest;
 }
 
 /**
@@ -2166,7 +2171,7 @@ export function approvalSeries(items: ChatItem[]): Map<string, { index: number; 
     const m = item.message;
     if (m.kind === 'agent' || m.kind === 'note') continue;
     const a = m.approval;
-    if (m.kind !== 'approval' || !a || a.prompt || a.secret) {
+    if (m.kind !== 'approval' || !a || a.prompt || a.secret || a.login) {
       close();
       continue;
     }

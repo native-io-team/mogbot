@@ -66,6 +66,7 @@ import { loadMessages, useAgentsSelector } from '../../lib/agentsStore';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { useOpenModal } from '../../contexts/ModalContext';
 
 interface AgentRequestsBarProps {
   /** The chat this sits in. */
@@ -102,6 +103,7 @@ export function AgentRequestsBar({
   setup,
 }: AgentRequestsBarProps) {
   const { showToast } = useOptionalToast();
+  const openModal = useOpenModal();
   const [open, setOpen] = useState(false);
   // Cards on screen while the panel is open: kept after they're answered, so
   // you see what you did rather than have it vanish under the pointer.
@@ -344,18 +346,35 @@ export function AgentRequestsBar({
         title={requestsTitle(summary)}
         detail={requestsDetail(summary)}
         actions={
-          <Button
-            ref={reviewRef}
-            tabIndex={0}
-            size="compact"
-            variant="secondary"
-            className="agent-requests__review"
-            aria-expanded={open}
-            aria-controls={open ? panelId : undefined}
-            onClick={toggle}
-          >
-            {open ? 'Done' : 'Review'}
-          </Button>
+          <>
+            {summary.logins > 1 && (
+              <Button
+                tabIndex={0}
+                size="compact"
+                variant="ghost"
+                className="agent-requests__logins"
+                data-testid="agent-requests-logins"
+                onClick={() => {
+                  close(false);
+                  openModal('teamLogins');
+                }}
+              >
+                Logins by app
+              </Button>
+            )}
+            <Button
+              ref={reviewRef}
+              tabIndex={0}
+              size="compact"
+              variant="secondary"
+              className="agent-requests__review"
+              aria-expanded={open}
+              aria-controls={open ? panelId : undefined}
+              onClick={toggle}
+            >
+              {open ? 'Done' : 'Review'}
+            </Button>
+          </>
         }
       />
     </div>

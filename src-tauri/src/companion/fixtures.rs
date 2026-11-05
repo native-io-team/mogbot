@@ -129,6 +129,13 @@ fn frames() -> Vec<ServerFrame> {
             },
         ),
         (
+            Some(1),
+            // A login card with every way in, a sign-in under way and a key.
+            Event::Message {
+                message: serde_json::to_value(testkit::login_card()).unwrap(),
+            },
+        ),
+        (
             Some(2),
             Event::Status {
                 agent_id: AGENT.into(),
@@ -533,6 +540,47 @@ async fn generate() -> String {
         call(
             "agents.saveSecret",
             json!({ "agentId": AGENT, "requestId": "q8", "values": ["julian", "hunter2"] }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsReach",
+        "Result<'agents.reach'>",
+        call("agents.reach", json!({ "agentId": AGENT })).await,
+    );
+    out += &entry(
+        "agentsLoginsTeam",
+        "Result<'agents.loginsTeam'>",
+        call(
+            "agents.loginsTeam",
+            json!({ "since": 1_762_200_000_000_i64 }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsLoginStart",
+        "Result<'agents.loginStart'>",
+        call(
+            "agents.loginStart",
+            json!({ "agentId": AGENT, "requestId": "q12", "optionId": "oauth" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsLoginPhoneBegin",
+        "Result<'agents.loginPhoneBegin'>",
+        call(
+            "agents.loginPhoneBegin",
+            json!({ "agentId": AGENT, "requestId": "q12", "optionId": "oauth" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsLoginSaveKey",
+        "Result<'agents.loginSaveKey'>",
+        call(
+            "agents.loginSaveKey",
+            json!({ "agentId": AGENT, "requestId": "q12", "value": "never-in-a-fixture" }),
         )
         .await,
     );

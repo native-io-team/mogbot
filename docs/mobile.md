@@ -145,6 +145,11 @@ inside it.
 - `agents.overview|messages|send|stop|interrupt|answerApproval|focus|markUnread`
   (`answerApproval` takes `choice` for a session's question)
 - `agents.saveSecret` (Tailscale only, never audited with a value), `agents.memory|memoryChange|memorySuggest`
+- Logins (Mac feature `logins`, docs/agents.md "Logins"): `agents.loginStart|loginCancel|loginDecline|loginDismiss`,
+  `agents.loginSaveKey` (as `saveSecret`), `agents.loginsTeam|loginsConnect` ("What your team needs"),
+  `agents.reach` (read-only); Mac feature `logins.phone`: `agents.loginPhoneBegin|loginPhoneFinish`
+  (the sign-in sheet; the finish goes only to an identity-verified Mac) and `onPhone` on
+  `agents.loginStart|loginsConnect`
 - `agents.update` (`pinned`, `muted`, `hidden`, `instructions`),
   `agents.instructions|usage|revokePermission|changeDiff`
 - `agents.files|fetchPath|search`, `agents.schedule.preview|create|update|pause|cancel|runNow`
@@ -478,6 +483,19 @@ sheet, files, a session, the diff and the photo viewer push over them. At
 - **A task's questions** (`PromptCard`): the question, whose task it is and
   where, the diff (tinted) or text it shows, and every option it offers,
   answered with `agents.answerApproval`'s `choice`; the same 400 ms guard.
+- **Login cards** (`approval.login`): which app, which account, read vs
+  send, and the ways in. With a Mac that has `logins.phone`, the sign-in
+  happens here, away from the Mac (docs/agents.md, "From the phone"): an
+  OAuth connector in the system sign-in sheet (`expo-web-browser`,
+  ephemeral; the one-time code goes to the Mac once and is never kept),
+  GitHub's one-time code (Copy code, Open GitHub), or claude.ai opened
+  here. The token is always made and kept in the Mac's Keychain. With an
+  older Mac, or a build without the sheet's native module, Connect starts
+  the sign-in on the Mac and the card says "Finish signing in on your Mac —
+  it's open there". It follows `login.flow` live, then shows the answer. A Mac without `logins` never sends one; a phone without it
+  sees Allow / Deny, and its Allow starts the first way in on the Mac.
+  "What your team needs" (`agents.loginsTeam`) and "What it can reach"
+  (`agents.reach`, read-only) are on the phone too.
 - **Secret cards** (`SecretCard`): masked fields straight to the Mac's
   Keychain via `agents.saveSecret`. Only over HTTPS on Tailscale, and only on
   a socket where the Mac proved the pinned identity (refused on the

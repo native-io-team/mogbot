@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { Agent, AgentMessage } from '../../lib/agents';
+import { ModalProvider } from '../../contexts/ModalContext';
 import { AgentRequestsBar } from './AgentRequests';
 
 const agent = (id: string, name: string, pendingApprovals = 0, isMain = false): Agent =>
@@ -46,13 +47,15 @@ function setTeam(agents: Agent[]) {
 
 const renderBar = (setup?: { agentIds: Set<string>; onOpen: () => void }) =>
   render(
-    <AgentRequestsBar
-      agent={chief}
-      peerIds={new Set()}
-      shownRequestIds={new Set()}
-      onOpenAgent={() => undefined}
-      setup={setup}
-    />
+    <ModalProvider>
+      <AgentRequestsBar
+        agent={chief}
+        peerIds={new Set()}
+        shownRequestIds={new Set()}
+        onOpenAgent={() => undefined}
+        setup={setup}
+      />
+    </ModalProvider>
   );
 
 describe('AgentRequestsBar with "Setting up your team"', () => {
