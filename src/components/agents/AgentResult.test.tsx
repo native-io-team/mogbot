@@ -70,6 +70,28 @@ afterEach(() => {
 });
 
 describe('the result card', () => {
+  it('a site comes back with Preview, which opens its project only when pressed', () => {
+    const site: ResultCard = { ...V1, title: 'Bakery site', project: '/p/bakery-site' };
+    const onPreview = vi.fn();
+    const { rerender } = render(
+      <ResultCardView
+        message={message(site)}
+        card={site}
+        agent={agent}
+        newest
+        onPreview={onPreview}
+      />
+    );
+    expect(onPreview).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(onPreview).toHaveBeenCalledWith('/p/bakery-site');
+    // No project on the card: no Preview.
+    rerender(
+      <ResultCardView message={message(V1)} card={V1} agent={agent} newest onPreview={onPreview} />
+    );
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
+  });
+
   it('shows what the agent gave, with Not verified up front', () => {
     const ask = vi.fn();
     render(

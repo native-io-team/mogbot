@@ -230,6 +230,11 @@ interface ResultCardViewProps {
   /** The folded "what it did" line, under the card. */
   footer?: ReactNode;
   arrived?: boolean;
+  /**
+   * Opens the card's project (`card.project`) when the user chooses: a site
+   * or app comes back as a card with Preview, never by moving the window.
+   */
+  onPreview?: (projectPath: string) => void;
 }
 
 /** One result, one card. */
@@ -243,6 +248,7 @@ export const ResultCardView = memo(function ResultCardView({
   actionsInside,
   footer,
   arrived,
+  onPreview,
 }: ResultCardViewProps) {
   const [opened, setOpened] = useState(false);
   if (!newest && !opened) {
@@ -291,17 +297,30 @@ export const ResultCardView = memo(function ResultCardView({
           )
         }
         // A copy's card carries its own actions row; Ask for changes is in it.
+        // A change card inside (children) has its own Preview.
         actions={
           newest &&
-          onAskForChanges &&
           !actionsInside && (
-            <TextButton
-              tabIndex={0}
-              leftIcon={<CommentIcon size={12} />}
-              onClick={() => onAskForChanges(refOf(card))}
-            >
-              Ask for changes
-            </TextButton>
+            <>
+              {card.project && onPreview && !children && (
+                <TextButton
+                  tabIndex={0}
+                  leftIcon={<GlobeIcon size={12} />}
+                  onClick={() => onPreview(card.project!)}
+                >
+                  Preview
+                </TextButton>
+              )}
+              {onAskForChanges && (
+                <TextButton
+                  tabIndex={0}
+                  leftIcon={<CommentIcon size={12} />}
+                  onClick={() => onAskForChanges(refOf(card))}
+                >
+                  Ask for changes
+                </TextButton>
+              )}
+            </>
           )
         }
       >

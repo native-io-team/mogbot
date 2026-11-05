@@ -91,6 +91,11 @@ pub struct ResultCard {
     /// From version 2 on: what changed since the version before, in its words.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub changes: Option<String>,
+    /// The user's project the work is in (its path, resolved from the name the
+    /// agent gave against the real project list): the card offers Preview,
+    /// which opens it when the user chooses. Never guessed from the files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
 }
 
 /// On a user message: the result it asks to change, as it stood when asked.
@@ -129,6 +134,8 @@ pub struct Draft {
     pub not_verified: Vec<String>,
     pub revises: Option<String>,
     pub changes: Option<String>,
+    /// As the agent named it; the caller resolves it to a path before `prepare`.
+    pub project: Option<String>,
 }
 
 fn chars(s: &str) -> usize {
@@ -280,6 +287,7 @@ pub fn parse(args: &Value) -> Result<Draft, String> {
         not_verified: lines(args, "not_verified")?,
         revises: capped(string(args, "revises")?, "revises", 64)?,
         changes: capped(string(args, "changes")?, "changes", MAX_LINE)?,
+        project: capped(string(args, "project")?, "project", 1_024)?,
     })
 }
 
@@ -361,6 +369,10 @@ pub fn build(
         Some(before) => (before.id.clone(), before.version + 1, draft.changes),
         None => (new_id(), 1, None),
     };
+    // A revision of a site is still that site, unless it names another.
+    let project = draft
+        .project
+        .or_else(|| revising.and_then(|before| before.project.clone()));
     ResultCard {
         id,
         version,
@@ -370,6 +382,7 @@ pub fn build(
         checked: draft.checked,
         not_verified: draft.not_verified,
         changes,
+        project,
     }
 }
 

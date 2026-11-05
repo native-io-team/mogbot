@@ -279,23 +279,18 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const openApps = useCallback(() => setAppsOpen(true), []);
   const openInFlight = useCallback(() => setSelectedId(TEAM_ID), []);
   /** New agent's "Ask your Chief of Staff": the request, drafted in the Chief's composer. */
-  const [prefill, setPrefill] = useState<{
-    agentId: string;
-    text: string;
-    n: number;
-    pickFile?: boolean;
-  } | null>(null);
+  const [prefill, setPrefill] = useState<{ agentId: string; text: string; n: number } | null>(null);
   // Delivered once: leaving that chat and coming back doesn't type it again.
   if (prefill && selectedId !== prefill.agentId) setPrefill(null);
   /** "More ideas…" (and ⌘K): the gallery of things to ask the Chief. */
   const openModal = useOpenModal();
   const openIdeas = useCallback(() => openModal('chiefIdeas'), [openModal]);
-  /** A picked idea: the Chief's chat, with its words typed out (or its file picked first). */
+  /** A picked idea: the Chief's chat, with its brief typed out. */
   const pickIdea = useCallback(
     (idea: ChiefIdea) => {
       const chief = agents.find((a) => a.isMain);
       if (!chief) return;
-      setPrefill({ agentId: chief.id, text: idea.text, n: Date.now(), pickFile: idea.pickFile });
+      setPrefill({ agentId: chief.id, text: idea.text, n: Date.now() });
       setSelectedId(chief.id);
     },
     [agents]

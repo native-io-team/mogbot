@@ -3,30 +3,48 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useEffect } from 'react';
 import { ModalProvider, useModal } from '../../contexts/ModalContext';
 import { ChiefIdeasModal } from './ChiefIdeasModal';
-import { CHIEF_CHIPS, CHIEF_IDEAS, ideaGroups } from '../../lib/chiefIdeas';
+import { CHIEF_CHIPS, CHIEF_IDEAS, findIdea, ideaGroups } from '../../lib/chiefIdeas';
 import { BRAND } from '../../lib/brand';
 
 describe('the Chief’s ideas: the catalogue', () => {
-  it('puts a team, a routine and something real on the chips', () => {
-    expect(CHIEF_CHIPS.map((i) => i.id)).toEqual(['team', 'brief', 'site']);
-    expect(new Set(CHIEF_CHIPS.map((i) => i.group))).toEqual(new Set(['team', 'ongoing', 'make']));
+  it('puts three things that run without you on the chips', () => {
+    expect(CHIEF_CHIPS.map((i) => i.id)).toEqual(['ship-fixes', 'launch', 'client-brief']);
+    // Overnight, every morning, on a trigger: one from each group.
+    expect(new Set(CHIEF_CHIPS.map((i) => i.group))).toEqual(
+      new Set(['schedule', 'together', 'trigger'])
+    );
   });
 
-  it('every idea types, never sends, and is in exactly one group', () => {
+  it('every idea types a whole brief with one blank at its end, and never sends', () => {
     const ids = CHIEF_IDEAS.map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ideaGroups().flatMap((g) => g.ideas)).toHaveLength(CHIEF_IDEAS.length);
     for (const idea of CHIEF_IDEAS) {
       expect(idea.label.endsWith('…')).toBe(true);
-      expect(idea.text.trim().length).toBeGreaterThan(10);
+      expect(idea.text.length).toBeGreaterThan(80);
+      // The blank: the brief ends on a colon and a space, for the user's words.
+      expect(idea.text.endsWith(': ')).toBe(true);
       expect(idea.what.length).toBeGreaterThan(10);
       expect(idea).not.toHaveProperty('send');
     }
   });
 
-  it('none of them needs an account or a connected app on a fresh Mac', () => {
-    const words = CHIEF_IDEAS.map((i) => `${i.text} ${i.what}`).join(' ');
-    expect(words).not.toMatch(/github|gmail|calendar|slack|linear|notion/i);
+  it('each is a pipeline: something starts it and it runs again', () => {
+    for (const idea of CHIEF_IDEAS.filter((i) => i.id !== 'debate')) {
+      expect(idea.text).toMatch(/every|when|through the day/i);
+    }
+  });
+
+  it('what reaches others or the repo waits for the user', () => {
+    for (const id of ['ship-fixes', 'client-brief', 'inbox']) {
+      expect(findIdea(id)?.text).toMatch(/without (me|my Allow)/);
+    }
+  });
+
+  it('says up front when it needs something set up, and that the Chief does it', () => {
+    for (const id of ['ship-fixes', 'inbox']) {
+      expect(findIdea(id)?.what).toMatch(/Your Chief helps you connect/);
+    }
   });
 
   it('is name-free', () => {
@@ -69,8 +87,8 @@ describe('ChiefIdeasModal', () => {
         <Opened onPick={onPick} />
       </ModalProvider>
     );
-    fireEvent.click(screen.getByText('When a PDF lands in Downloads…'));
-    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 'when-pdf' }));
+    fireEvent.click(screen.getByText('Babysit my errors…'));
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 'errors' }));
     expect(screen.getByTestId('ideas')).toHaveTextContent('ideas closed');
   });
 

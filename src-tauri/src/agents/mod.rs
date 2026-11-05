@@ -144,6 +144,9 @@ fn greet(agent_id: &str) {
 /// The Chief of Staff exists from the first time anyone looks.
 pub fn ensure_main() -> Result<store::Agent, CommandError> {
     if let Some(main) = store::list()?.into_iter().find(|a| a.is_main) {
+        if let Err(e) = upgrade_chief(&main) {
+            tracing::warn!("[Agents] Couldn't bring the Chief's instructions up to date: {e}");
+        }
         return Ok(main);
     }
     let created = store::create(store::NewAgent {
@@ -167,6 +170,46 @@ pub fn ensure_main() -> Result<store::Agent, CommandError> {
     }
 }
 
+/// Bring a Chief made by an older build onto the current `CHIEF_INSTRUCTIONS`.
+///
+/// Only the app's own words are replaced: the old default, found word for
+/// word in its `## Instructions`, becomes the new one, and anything the user
+/// added around it stays where it was. Instructions the user rewrote (no old
+/// default left intact) are theirs and are never touched, not even appended
+/// to: new guidance tacked onto rules someone chose could contradict them.
+/// Memory, the role and the heading are kept by `write_instructions`. Cheap
+/// and idempotent (one read), so it runs on every look-up of the Chief.
+/// Returns whether it rewrote anything.
+pub(crate) fn upgrade_chief(chief: &store::Agent) -> Result<bool, CommandError> {
+    let current = store::read_instructions(&chief.id)?;
+    let Some(upgraded) = upgraded_chief_instructions(&current) else {
+        return Ok(false);
+    };
+    store::write_instructions(&store::agent_home(&chief.id)?, chief, &upgraded)?;
+    tracing::info!("[Agents] The Chief's instructions were brought up to date");
+    Ok(true)
+}
+
+/// `instructions` with an old default swapped for the current one, or `None`
+/// when there is nothing of ours to replace.
+fn upgraded_chief_instructions(instructions: &str) -> Option<String> {
+    if instructions.contains(prompts::CHIEF_INSTRUCTIONS) {
+        return None;
+    }
+    // Longest first: an early default is a prefix of the one after it.
+    let mut past: Vec<&str> = prompts::PAST_CHIEF_INSTRUCTIONS.to_vec();
+    past.sort_by_key(|p| std::cmp::Reverse(p.len()));
+    let old = past.into_iter().find(|p| instructions.contains(p))?;
+    Some(instructions.replacen(old, prompts::CHIEF_INSTRUCTIONS, 1))
+}
+
+/// Whether `instructions` is one of the Chief's defaults, current or past:
+/// the app's words, not the user's.
+pub(crate) fn is_chief_default(instructions: &str) -> bool {
+    let t = instructions.trim();
+    t == prompts::CHIEF_INSTRUCTIONS || prompts::PAST_CHIEF_INSTRUCTIONS.contains(&t)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,6 +231,111 @@ mod tests {
         );
         assert_eq!(log[0].kind, store::MessageKind::Agent);
         assert_eq!(log[0].text, prompts::CHIEF_GREETING);
+    }
+
+    fn chief_with(dir: &std::path::Path, instructions: &str, memory: &str) -> store::Agent {
+        store::set_root_for_tests(Some(dir.to_path_buf()));
+        let chief = ensure_main().unwrap();
+        let home = store::agent_home(&chief.id).unwrap();
+        let md = format!(
+            "# {}\n\n{}\n\n## Instructions\n\n{instructions}\n\n## Memory\n\n{memory}\n",
+            chief.name, chief.role
+        );
+        std::fs::write(home.join("CLAUDE.md"), md).unwrap();
+        chief
+    }
+
+    fn claude_md(chief: &store::Agent) -> String {
+        std::fs::read_to_string(store::agent_home(&chief.id).unwrap().join("CLAUDE.md")).unwrap()
+    }
+
+    #[test]
+    fn an_older_chief_gets_the_new_instructions_and_keeps_its_memory() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        let memory = "- Julian runs a design studio.\n- Prefers mornings.";
+        for old in prompts::PAST_CHIEF_INSTRUCTIONS {
+            let chief = chief_with(dir.path(), old, memory);
+            ensure_main().unwrap();
+            let after = claude_md(&chief);
+            assert_eq!(
+                store::read_instructions(&chief.id).unwrap(),
+                prompts::CHIEF_INSTRUCTIONS
+            );
+            assert!(after.contains(memory), "memory kept: {after}");
+            assert!(after.contains(prompts::CHIEF_ROLE));
+            // Once is enough: nothing changes on the next look.
+            ensure_main().unwrap();
+            assert_eq!(claude_md(&chief), after);
+        }
+        store::set_root_for_tests(None);
+    }
+
+    #[test]
+    fn what_the_user_added_around_the_old_default_stays() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        let old = prompts::PAST_CHIEF_INSTRUCTIONS.last().unwrap();
+        let theirs = format!("{old}\n\n### From the other app\n\nAlways answer in French.");
+        let chief = chief_with(dir.path(), &theirs, "- Has two cats.");
+        assert!(upgrade_chief(&chief).unwrap());
+        let now = store::read_instructions(&chief.id).unwrap();
+        store::set_root_for_tests(None);
+        assert_eq!(
+            now,
+            format!(
+                "{}\n\n### From the other app\n\nAlways answer in French.",
+                prompts::CHIEF_INSTRUCTIONS
+            )
+        );
+    }
+
+    #[test]
+    fn instructions_the_user_rewrote_are_left_alone() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        // The old default with one word changed is the user's now.
+        let old = prompts::PAST_CHIEF_INSTRUCTIONS.last().unwrap();
+        let edited = old.replace("daily brief", "weekly brief");
+        assert_ne!(&edited, old);
+        for theirs in [
+            edited.as_str(),
+            "Be brief. Never create agents without asking.",
+        ] {
+            let chief = chief_with(dir.path(), theirs, "- Likes tea.");
+            let before = claude_md(&chief);
+            assert!(!upgrade_chief(&chief).unwrap());
+            ensure_main().unwrap();
+            assert_eq!(claude_md(&chief), before, "untouched");
+        }
+        store::set_root_for_tests(None);
+    }
+
+    #[test]
+    fn a_current_chief_is_not_rewritten() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let chief = ensure_main().unwrap();
+        let before = claude_md(&chief);
+        let upgraded = upgrade_chief(&chief).unwrap();
+        store::set_root_for_tests(None);
+        assert!(!upgraded);
+        assert!(before.contains(prompts::CHIEF_INSTRUCTIONS));
+    }
+
+    #[test]
+    fn every_past_default_is_told_apart_from_the_current_one() {
+        assert!(!prompts::PAST_CHIEF_INSTRUCTIONS.contains(&prompts::CHIEF_INSTRUCTIONS));
+        assert!(is_chief_default(prompts::CHIEF_INSTRUCTIONS));
+        for old in prompts::PAST_CHIEF_INSTRUCTIONS {
+            assert!(is_chief_default(old));
+            assert_eq!(
+                upgraded_chief_instructions(old).as_deref(),
+                Some(prompts::CHIEF_INSTRUCTIONS)
+            );
+        }
+        assert!(!is_chief_default("Be brief."));
     }
 }
 

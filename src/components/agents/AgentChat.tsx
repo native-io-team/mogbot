@@ -83,7 +83,7 @@ import {
   UserBubble,
   WorkingIndicator,
 } from './AgentChatItems';
-import { AgentProjectChip, ChangeCard } from './AgentProject';
+import { AgentProjectChip, ChangeCard, useAgentProjects } from './AgentProject';
 import { ComposerRevising, ResultCardView } from './AgentResult';
 import { WorkTimeline } from './AgentWork';
 import { SessionCard } from './AgentSession';
@@ -134,11 +134,11 @@ import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 
 /**
- * The Chief's first open: three things worth asking first (a team, a
- * routine, something real; `lib/chiefIdeas.ts`), each working on this Mac
- * with no other account, and "More ideas…" for the rest. Each types its words
- * into the composer for the user to finish; nothing is sent until they press
- * Send. Importing isn't the Chief's job (the other assistant does it), so
+ * The Chief's first open: three workflows that run without the user
+ * (overnight fixes, a team with a standup, briefs that start projects;
+ * `lib/chiefIdeas.ts`), and "More ideas…" for the rest. Each types a whole
+ * brief into the composer for the user to finish; nothing is sent until they
+ * press Send. What one needs (GitHub, a folder) the Chief sets up first. Importing isn't the Chief's job (the other assistant does it), so
  * that one opens the import steps instead.
  */
 function ChiefStarters({
@@ -291,7 +291,7 @@ interface AgentChatProps extends AgentActions {
   jumpTo?: string | null;
   onJumped?: () => void;
   /** Words put in the composer for you to finish ("Set up an agent that "); `n` asks again. */
-  prefill?: { text: string; n: number; pickFile?: boolean } | null;
+  prefill?: { text: string; n: number } | null;
   /** "Apps your agents can use", for a ready-made agent that needs one. */
   onOpenApps?: () => void;
   /** The Chief's "More ideas…": the gallery of things to ask it. */
@@ -362,11 +362,6 @@ export function AgentChat({
   // the composer, caret at its end, for you to finish and send.
   useEffect(() => {
     if (!prefill) return;
-    // An idea from the gallery that starts with a file: pick it, then type.
-    if (prefill.pickFile) {
-      startIdea(prefill);
-      return;
-    }
     setDraft(prefill.text);
     const frame = requestAnimationFrame(() => {
       const el = inputRef.current;
@@ -562,6 +557,7 @@ export function AgentChat({
   // What the rows read from the agent. A status or activity change re-renders
   // the header and the indicator, never the history.
   const rowAgent = useMemo(() => agent, [agent.id, agent.name]); // eslint-disable-line react-hooks/exhaustive-deps
+  const projectsCtx = useAgentProjects();
   // Tints for @mentions, keyed by the colours themselves: a status event
   // elsewhere gives a new `agentsById` but the same colours.
   const colorKey = [...agentsById.values()].map((a) => `${a.id}:${a.color}`).join(' ');
@@ -896,21 +892,8 @@ export function AgentChat({
     });
   };
 
-  /**
-   * An idea for the Chief: its words typed out, nothing sent. The document
-   * one picks the file first and stages it with the request.
-   */
-  const startIdea = (idea: Pick<ChiefIdea, 'text' | 'pickFile'>) => {
-    if (!idea.pickFile) {
-      typeStarter(idea.text);
-      return;
-    }
-    pick({ title: 'Choose a document' })
-      .then((picked) => {
-        if (picked && !draftRef.current.trim()) typeStarter(idea.text);
-      })
-      .catch((error: unknown) => toastError(String(error)));
-  };
+  /** An idea for the Chief: its brief typed out for the user to finish, nothing sent. */
+  const startIdea = (idea: ChiefIdea) => typeStarter(idea.text);
   const chiefStarters = (
     <ChiefStarters
       onIdea={startIdea}
@@ -1105,6 +1088,7 @@ export function AgentChat({
                     agent={rowAgent}
                     newest={newestResult.has(m.id)}
                     onAskForChanges={askForChanges}
+                    onPreview={projectsCtx?.openProject}
                     arrived={arrived}
                     footer={m.work && <WorkTimeline work={m.work} agent={rowAgent} />}
                   />
@@ -1199,6 +1183,7 @@ export function AgentChat({
     [
       items,
       agent.engine,
+      projectsCtx?.openProject,
       queuedFrom,
       arrivedAt,
       agentsById,

@@ -46,42 +46,70 @@ Sessions; clicking one opens its chat.
 
 ## A first real result, and ready-made agents (`agents/templates.rs`)
 
-The first few minutes should end in something useful, and should show what a
-team can do, not only what a chat can. The Chief's greeting has three
-starters and **More ideas…**, from one catalogue (`lib/chiefIdeas.ts`). Each
-has to work on a brand-new Mac (an engine and nothing else: no apps
-connected, no GitHub, maybe no Node or Git), and land something visible in a
-turn or two, or set up something that keeps going. None sends by itself: the
-words are typed into the composer and the user finishes them and presses
-Send.
+The people this is for already run an assistant; what they can't get there is
+work that keeps going without them. So the Chief's greeting starts on
+pipelines, not one-offs: something starts it (a time, a file, an email, a
+GitHub issue), agents hand the work between them, and it ends on a card the
+user answers, on the desk or the phone. Three starters and **More ideas…**,
+from one catalogue (`lib/chiefIdeas.ts`). Each types a whole, specific brief
+with one blank at its end; none sends by itself.
 
-- **Build me a team…** ("Build me a team of agents for this: "): the Chief
-  proposes two to four agents and creates them once the user agrees. The
-  sidebar fills with named, coloured agents.
-- **Brief me every morning…** ("Every weekday at 8am, brief me on "): a
-  routine (`schedule_check_in`), said to run only while the app is open, and
-  the first brief now so the user sees what they'll get.
-- **Make me a one-page site…** ("Make me a one-page website for "):
-  `project_create` with the `blank` starter, which needs neither Node nor
-  Git, so the Project tools dialog never opens; its session writes plain
-  HTML, `project_open` shows it in the preview, and a result card hands it
-  back.
+- **Ship fixes while I sleep…**: every night a fixer bound to the repo's
+  project takes the top open GitHub issue and fixes it in its own copy, a
+  reviewer checks it (`message_agent`), and the morning brings one change
+  card with Keep / Review / Discard. Pushing waits for the user.
+- **Run my launch as a team…**: a strategist, a writer and a builder, the
+  Chief keeping the plan in a file, and a 9am weekday standup it collects
+  and summarises. There is no tool for an agent to make a room, so the
+  gallery line says the user can put them in one.
+- **Turn client briefs into sites…**: `watch_for` `new_file` on a folder;
+  each brief becomes a project (`blank` needs nothing installed) whose
+  session drafts the site, handed back with `share_result` naming the
+  project.
 - **More ideas…** opens the gallery (`ChiefIdeasModal`, also ⌘K → "Ideas for
-  your team…"): every idea grouped (A team, Something that keeps going,
-  Something real, Right now), each with one honest line on what happens.
-  Beyond the chips: two agents arguing an idea out, watching a page for
-  changes, a "When…" routine on new PDFs in Downloads (`watch_for`
-  `new_file`; free, though macOS may ask to let the app see Downloads), a
-  comparison table as a result card, **Summarise a document…** (picks the
-  file, stages it with the request; dropping a file on the chat works the
-  same way) and **Research a question…**. Its foot links Ready-made agents
-  and the Phone panel. Picking from it opens the Chief's chat with the words
-  typed out.
+  your team…"), grouped On a schedule / When something happens / Agents
+  together: watch competitors weekly (researcher + analyst, one brief), babysit
+  errors hourly (reproduce, fix in a copy, a card to keep; one line when
+  nothing broke, since a routine always leaves its line), an inbox triage
+  crew (sorter + drafter through the user's email app; sending is always an
+  Allow card), and two agents arguing it out. Its foot links Ready-made
+  agents and the Phone panel.
+
+**Setup is step one, never a dead end.** An idea may need what this Mac
+doesn't have (GitHub signed in, the repo as a project, an email app, a
+folder, a paired phone). The gallery line says so ("Your Chief helps you
+connect GitHub first"), and `CHIEF_INSTRUCTIONS` has the Chief walk the user
+through it in the chat, naming the real places (⌘K → Connect GitHub account,
+Projects → Import from GitHub, ⌘K → Connect an app for agents…, ⌘K → Pair a
+phone), checking each step before the next. Then the team, then the trigger
+(said to run only while the app is open and the Mac awake), then **the first
+run now**, while the user is there to choose Always allow for what it will
+repeat unattended (a 1am run can't wait for an Allow). Always allow is never
+suggested for sending, spending, pushing or anything reaching a client.
+
+**A site comes back on a card, not by moving the window.** `share_result`
+takes an optional `project` (a name from `project_list`, resolved against the
+real list and refused if unknown), stored on the card as its path; the card
+offers **Preview**, which opens the project only when pressed. A revision
+keeps the project. The Chief is told not to call `project_open` (which takes
+over the window) unless asked. When the turn also left a change card (a
+project with git), the result rides on it and that card's own Preview is the
+one shown.
 
 The set is fixed, not rotated: two people comparing notes, and a screenshot
-and the app, should see the same first screen. Left out on purpose: GitHub
-"When…" routines and Inbox (need an account), and pairing the phone as a
-starter (needs Tailscale and the app; it is a link in the gallery instead).
+and the app, should see the same first screen.
+
+**Existing Chiefs get the new instructions** (`agents::upgrade_chief`, on
+every look-up of the Chief, one read when there's nothing to do). Every
+earlier default is kept word for word in `prompts::PAST_CHIEF_INSTRUCTIONS`
+(add the old text there whenever `CHIEF_INSTRUCTIONS` changes). If one is
+found intact in the Chief's `## Instructions`, only it is swapped for the
+current text: what the user added around it (or a `### From Ship Studio`
+merge) stays, and `write_instructions` keeps the role, heading and `##
+Memory`. Instructions the user rewrote (no old default left intact) are
+theirs and are never touched or appended to: new guidance tacked onto rules
+someone chose could contradict them. The Ship Studio Chief merge also skips
+any past default, so stale guidance isn't merged in as the user's.
 
 Research runs on the engine's own tools and account. On
 Claude Code every web search and every page opened is a tool call the
@@ -100,12 +128,10 @@ find it can't search and says so, per its briefing. The briefings tell a
 Codex agent not to promise cards it won't raise. Not verified: a live
 Codex research turn.
 
-`CHIEF_INSTRUCTIONS` (a new Chief's only) tells it what each idea wants (a
-prompts.rs test holds each line): do the task first, from real sources, never
-pad what it couldn't read, then offer the matching ready-made agent in one
-line. Not verified: any of the ideas on a live engine, the site's preview and
-screenshot on a machine without Node or Git, and the Downloads watcher under
-macOS privacy prompts.
+A prompts.rs test holds each line of `CHIEF_INSTRUCTIONS` the ideas lean on.
+Not verified: any of the pipelines on a live engine end to end (a night's
+fix, a reviewer hand-off, a triggered site), and whether a routine turn at
+1am stalls on an Allow the first run didn't cover.
 
 **Ready-made agents** (role templates) are one catalogue,
 `src-tauri/src/agents/templates.json`: Research assistant, Inbox triage and
@@ -1939,8 +1965,15 @@ of their own is open.
 
 A finished piece of work comes back as **one** card, not prose plus a pile
 of attachments. The agent calls `share_result { title, summary, items[],
-checked[], not_verified[], revises?, changes? }` at the end of the work; the
-prompt (`prompts::FILES`) tells it to for deliverables, never for chat.
+checked[], not_verified[], revises?, changes?, project? }` at the end of the
+work; the prompt (`prompts::FILES`) tells it to for deliverables, never for
+chat.
+
+- **Preview, when it names a project.** `project` is a project's name from
+  `project_list`, resolved against the real list (an unknown one shares
+  nothing) and stored as its path. The desk's card then offers Preview, which
+  opens the project only when pressed; a revision keeps it. A card riding on
+  a change card shows that card's Preview instead. The phone ignores it.
 
 - **Only what exists.** `items` are files (`path`) or links (`url`). A file
   must resolve inside the agent's home or a registered project

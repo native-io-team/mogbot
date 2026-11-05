@@ -3,115 +3,103 @@
  * "More ideas…" gallery behind them. One catalogue, so a chip and its row in
  * the gallery always type the same words.
  *
- * Each idea has to work on a brand-new Mac: an engine and nothing else (no
- * apps connected, no GitHub, maybe no Node or Git). Each one lands something
- * visible within a turn or two, or sets up something that keeps going. None
- * sends by itself: the words are typed into the composer, the user finishes
- * or reads them, and presses Send. `CHIEF_INSTRUCTIONS`
- * (`src-tauri/src/agents/prompts.rs`) tells a new Chief what each one wants.
+ * Who it's for: people who already run an assistant and want work that keeps
+ * going without them. So every idea is a pipeline, not a one-off: something
+ * starts it (a time, a file, an email), agents hand the work between them,
+ * and it ends on a card the user answers, on the desk or the phone.
+ *
+ * An idea may need something this Mac doesn't have yet (GitHub, an email
+ * app, a folder, the repo as a project). That is never a dead end: the
+ * Chief's first step is to set it up with the user, conversationally
+ * (`CHIEF_INSTRUCTIONS`, `src-tauri/src/agents/prompts.rs`), and the
+ * gallery line says so up front.
+ *
+ * None sends by itself: each `text` is a complete brief with one blank at
+ * its end, typed into the composer for the user to finish, and nothing goes
+ * until they press Send.
  *
  * @module lib/chiefIdeas
  */
 
-export type ChiefIdeaGroup = 'team' | 'ongoing' | 'make' | 'now';
+export type ChiefIdeaGroup = 'schedule' | 'trigger' | 'together';
 
 export interface ChiefIdea {
   id: string;
   /** The chip and the gallery row's title. Ends in "…": it types, it doesn't send. */
   label: string;
-  /** One line in the gallery: what happens, said honestly. */
+  /** One line in the gallery: what happens, and what it needs, said honestly. */
   what: string;
-  /** Typed into the Chief's composer. Ending in a space: the user finishes it. */
+  /** Typed into the Chief's composer: a whole brief whose one blank ends it. */
   text: string;
   group: ChiefIdeaGroup;
-  /** Picks a file first and stages it with the words (the document idea). */
-  pickFile?: boolean;
 }
 
 export const GROUP_LABEL: Record<ChiefIdeaGroup, string> = {
-  team: 'A team',
-  ongoing: 'Something that keeps going',
-  make: 'Something real',
-  now: 'Right now',
+  schedule: 'On a schedule',
+  trigger: 'When something happens',
+  together: 'Agents together',
 };
-
-export const SUMMARY_PROMPT =
-  'Summarise this for me: the main points, any dates or decisions, and anything I need to do.';
 
 export const CHIEF_IDEAS: readonly ChiefIdea[] = [
   {
-    id: 'team',
-    label: 'Build me a team…',
-    what: 'It suggests a few named agents, each with its own memory, and creates them when you say yes.',
-    text: 'Build me a team of agents for this: ',
-    group: 'team',
+    id: 'ship-fixes',
+    label: 'Ship fixes while I sleep…',
+    what: 'Each night a fixer takes your top open GitHub issue and fixes it in its own copy, a reviewer checks it, and the morning brings one card: Keep, Review or Discard. Your Chief helps you connect GitHub first.',
+    text: 'Every night at 1am, have one agent take the top open GitHub issue in my repo and fix it in its own copy of the project, then have a second agent review the fix. In the morning, give me one card with the change to keep, review or discard. Nothing gets pushed without me. The repo: ',
+    group: 'schedule',
+  },
+  {
+    id: 'competitors',
+    label: 'Watch my competitors…',
+    what: 'Every Monday a researcher reads their sites and changelogs, an analyst compares them with last week, and you get one brief: what changed and what to do about it.',
+    text: 'Every Monday at 8am, have a researcher read these competitors’ sites and changelogs and an analyst compare them with last week’s notes, then send me one brief: what changed, and what I should do about it. The competitors: ',
+    group: 'schedule',
+  },
+  {
+    id: 'errors',
+    label: 'Babysit my errors…',
+    what: 'Every hour an agent checks a project for new errors, reproduces what broke and fixes it in its own copy, for you to keep or discard. When nothing broke, it says so in a line.',
+    text: 'Every hour, check this project for new errors (its dev server, its logs, or an error feed I name), reproduce anything new, fix it in a copy and send me a card to keep or discard. If nothing broke, just say so in one line. The project: ',
+    group: 'schedule',
+  },
+  {
+    id: 'client-brief',
+    label: 'Turn client briefs into sites…',
+    what: 'When a brief lands in a folder you pick, an agent reads it, starts a project, drafts the site and sends you a card with Preview. Nothing goes to the client.',
+    text: 'When a new client brief lands in a folder, read it, start a new project for it, draft the site and send me a card I can preview. Nothing goes to the client without me. The folder to watch: ',
+    group: 'trigger',
+  },
+  {
+    id: 'inbox',
+    label: 'Run an inbox triage crew…',
+    what: 'One agent sorts new email, another drafts the replies worth sending, and nothing is sent without your Allow. Your Chief helps you connect your email first.',
+    text: 'Set up an inbox crew: through the day, one agent sorts my new email into needs me, can wait and ignore, and another drafts replies to the ones that need me. Nothing is sent without my Allow. My email is in: ',
+    group: 'trigger',
+  },
+  {
+    id: 'launch',
+    label: 'Run my launch as a team…',
+    what: 'A strategist, a writer and a builder, a standup from them every weekday at 9am, and your Chief keeping the plan. Put them in a room to talk to all three at once.',
+    text: 'Run my launch as a team: create a strategist, a writer and a builder, keep the plan yourself in a file, and every weekday at 9am collect a standup from each of them and send me one summary with what’s blocked and what needs me. The launch: ',
+    group: 'together',
   },
   {
     id: 'debate',
     label: 'Have two agents argue it out…',
-    what: 'Two new agents take opposite sides, and you get the verdict back here.',
-    text: 'Create two agents, a Skeptic and a Champion, have them argue this out, and bring me the verdict: ',
-    group: 'team',
-  },
-  {
-    id: 'brief',
-    label: 'Brief me every morning…',
-    what: 'A routine on weekday mornings while the app is open, and today’s brief straight away.',
-    text: 'Every weekday at 8am, brief me on ',
-    group: 'ongoing',
-  },
-  {
-    id: 'watch-page',
-    label: 'Watch a page for changes…',
-    what: 'A morning routine that tells you only when something on the page has changed.',
-    text: 'Check this page every morning and tell me only when something on it changes: ',
-    group: 'ongoing',
-  },
-  {
-    id: 'when-pdf',
-    label: 'When a PDF lands in Downloads…',
-    what: 'A “When…” routine on this Mac: no account needed. macOS may ask to let the app see Downloads.',
-    text: 'When a new PDF lands in my Downloads folder, read it and tell me what it is and whether I need to do anything.',
-    group: 'ongoing',
-  },
-  {
-    id: 'site',
-    label: 'Make me a one-page site…',
-    what: 'A new project you can see in the live preview. Nothing to install.',
-    text: 'Make me a one-page website for ',
-    group: 'make',
-  },
-  {
-    id: 'compare',
-    label: 'Compare options in a table…',
-    what: 'Comes back as a result card with a file you can keep, and what it would pick.',
-    text: 'Compare these and give me a table I can keep, with what you’d pick and why: ',
-    group: 'make',
-  },
-  {
-    id: 'document',
-    label: 'Summarise a document…',
-    what: 'Pick a file: the main points, the dates, and what you need to do.',
-    text: SUMMARY_PROMPT,
-    group: 'now',
-    pickFile: true,
-  },
-  {
-    id: 'research',
-    label: 'Research a question…',
-    what: 'It searches the web and brings back a short brief with its sources.',
-    text: 'Research this and bring me a short brief with sources: ',
-    group: 'now',
+    what: 'Two new agents take opposite sides, each answers the other’s case, and your Chief brings you the verdict.',
+    text: 'Create two agents, a Skeptic and a Champion, have them argue this out, each answering the other’s case, and bring me your verdict: ',
+    group: 'together',
   },
 ];
 
 /**
- * The chips under the greeting: a team, a routine, something real. The
- * rest are a click away in the gallery, in a fixed order (rotating them
- * would make the first screen differ between two people comparing notes, and
- * between a screenshot and the app).
+ * The chips under the greeting: the three that best show work running
+ * without the user (overnight, every morning, on a trigger). The rest are a
+ * click away in the gallery. A fixed order: rotating them would make the
+ * first screen differ between two people comparing notes, and between a
+ * screenshot and the app.
  */
-export const CHIEF_CHIP_IDS = ['team', 'brief', 'site'] as const;
+export const CHIEF_CHIP_IDS = ['ship-fixes', 'launch', 'client-brief'] as const;
 
 export function findIdea(id: string): ChiefIdea | null {
   return CHIEF_IDEAS.find((idea) => idea.id === id) ?? null;

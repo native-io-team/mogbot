@@ -27,6 +27,11 @@ export interface ResultCard {
   notVerified?: string[];
   /** From version 2: what changed since the version before, in the agent's words. */
   changes?: string;
+  /**
+   * The user's project the work is in (its path, resolved against the real
+   * project list by the app): the desk's card offers Preview.
+   */
+  project?: string;
 }
 
 /** On a user message: "Ask for changes" on this result, as it stood then. */

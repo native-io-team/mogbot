@@ -63,7 +63,7 @@ import {
   WorkingIndicator,
 } from './AgentChatItems';
 import { ResultCardView } from './AgentResult';
-import { ChangeCard } from './AgentProject';
+import { ChangeCard, useAgentProjects } from './AgentProject';
 import { SessionCard } from './AgentSession';
 import {
   answerApproval,
@@ -896,6 +896,7 @@ const MemberRow = memo(function MemberRow({
   ) => Promise<void>;
   onOpenAgent: (key: string) => void;
 }) {
+  const projectsCtx = useAgentProjects();
   if (!speaker) {
     // A member deleted since: what it said stays, as plain text.
     return m.text ? <div className="agent-note">{m.text}</div> : null;
@@ -911,6 +912,7 @@ const MemberRow = memo(function MemberRow({
             agent={speaker}
             newest={newestResult}
             onAskForChanges={askForChanges}
+            onPreview={projectsCtx?.openProject}
             arrived={arrived}
           />
         );

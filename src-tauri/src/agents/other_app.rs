@@ -1081,10 +1081,7 @@ fn merge_chief(
     // ours already, and something already merged isn't merged twice.
     let theirs = store::instructions_of(&raw);
     let base = store::read_instructions(&chief.id).unwrap_or_default();
-    if !theirs.is_empty()
-        && theirs.trim() != super::prompts::CHIEF_INSTRUCTIONS.trim()
-        && !base.contains(theirs.trim())
-    {
+    if !theirs.is_empty() && !super::is_chief_default(&theirs) && !base.contains(theirs.trim()) {
         let merged = format!("{base}\n\n### From {OTHER_APP_NAME}\n\n{}", theirs.trim());
         store::write_instructions(&chief_home, &chief, &merged)?;
     }

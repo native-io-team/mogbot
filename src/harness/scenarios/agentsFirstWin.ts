@@ -1,14 +1,15 @@
 /**
- * The first few minutes: the Chief's three starters (a team, a morning
- * brief, a one-page site) and "More ideas…", what each leaves in the
- * composer, the gallery and what picking from it does, the New agent dialog
- * on a ready-made agent (and the one that needs an email app), a ready-made
- * agent's own first open, and first results landing (a team built, a
+ * The first few minutes: the Chief's three starters (ship fixes overnight,
+ * a launch team, client briefs into sites) and "More ideas…", the whole
+ * brief each leaves in the composer, the gallery and what picking from it
+ * does, the New agent dialog on a ready-made agent (and the one that needs
+ * an email app), a ready-made agent's own first open, and first results
+ * landing (a nightly pipeline set up, a site handed back with Preview, a
  * document summarised). Built on the base layer's fresh Chief (`./base`).
  */
 
 import type { Scenario } from '../types';
-import { baseCommands, chiefGreeting } from './base';
+import { baseCommands, chiefGreeting, HARNESS_ROOT } from './base';
 import { agent, MIN, now } from './agents';
 
 const BASE_OVERVIEW = baseCommands.agents_overview as {
@@ -17,16 +18,6 @@ const BASE_OVERVIEW = baseCommands.agents_overview as {
   engines: unknown[];
 };
 const CHIEF = BASE_OVERVIEW.agents[0];
-
-/** The document the picker "chooses", and what the backend says about it. */
-const DOCUMENT = '/Users/harness/Documents/Q3 board update.pdf';
-const inspect = (args: Record<string, unknown>) =>
-  (args.paths as string[]).map((path) => ({
-    path,
-    name: path.split('/').pop() ?? path,
-    mime: 'application/pdf',
-    size: 182_400,
-  }));
 
 /** The Chief just made Inbox from its template; nothing said there yet. */
 const INBOX = agent('inbox', 'Inbox', {
@@ -94,93 +85,118 @@ const FIRST_WIN = [
   },
 ];
 
-/** The first win from "Build me a team…": three agents, proposed then made. */
-const TEAM = [
-  agent('studio-ops', 'Studio Ops', {
-    role: 'Keeps projects, deadlines and invoices from slipping.',
+/** "Ship fixes while I sleep…", set up: GitHub first, then the pair, the routine and a first run. */
+const PIPELINE = [
+  agent('fixer', 'Fixer', {
+    role: 'Each night, fixes the top open issue in acme-marketing, in its own copy.',
     color: 'teal',
     shape: 2,
     sessionId: null,
     minutesAgo: 1,
+    project: `${HARNESS_ROOT}/acme-marketing`,
   }),
-  agent('new-business', 'New Business', {
-    role: 'Finds leads and drafts proposals for you to send.',
+  agent('reviewer', 'Reviewer', {
+    role: 'Reviews the Fixer’s change before it reaches you.',
     color: 'orange',
     shape: 4,
     sessionId: null,
     minutesAgo: 1,
   }),
-  agent('scout', 'Scout', {
-    role: 'Watches what other studios ship and what clients ask for.',
-    color: 'blue',
-    shape: 1,
-    sessionId: null,
-    minutesAgo: 1,
-  }),
 ];
-const WITH_TEAM = { ...BASE_OVERVIEW, agents: [CHIEF, ...TEAM] };
-const TEAM_BUILT = [
-  chiefGreeting('chief', now - 8 * MIN),
+const WITH_PIPELINE = { ...BASE_OVERVIEW, agents: [CHIEF, ...PIPELINE] };
+const PIPELINE_SET_UP = [
+  chiefGreeting('chief', now - 12 * MIN),
   {
     id: 'u1',
     agentId: 'chief',
-    ts: now - 7 * MIN,
+    ts: now - 11 * MIN,
     kind: 'user',
-    text: 'Build me a team of agents for this: I run a two-person design studio and I’m bad at follow-ups.',
+    text: 'Every night at 1am, have one agent take the top open GitHub issue in my repo and fix it in its own copy of the project, then have a second agent review the fix. In the morning, give me one card with the change to keep, review or discard. Nothing gets pushed without me. The repo: acme/marketing-site',
   },
   {
     id: 'a1',
     agentId: 'chief',
-    ts: now - 6 * MIN,
+    ts: now - 10 * MIN,
     kind: 'agent',
-    text: [
-      'Here’s a team I’d start with:',
-      '',
-      '- **Studio Ops**: deadlines, invoices and the follow-ups you mean to send.',
-      '- **New Business**: finds leads and drafts proposals for you to send.',
-      '- **Scout**: a weekly look at what other studios ship and what clients ask for.',
-      '',
-      'Each keeps its own memory, and nothing goes out without your OK. Shall I make them?',
-    ].join('\n'),
+    text: 'First, GitHub: this Mac isn’t signed in yet. Open ⌘K → **Connect GitHub account**, finish the sign-in in your browser, and tell me when it’s done.',
   },
-  { id: 'u2', agentId: 'chief', ts: now - 2 * MIN, kind: 'user', text: 'Yes, go ahead.' },
+  { id: 'u2', agentId: 'chief', ts: now - 6 * MIN, kind: 'user', text: 'Done.' },
   {
     id: 'a2',
     agentId: 'chief',
+    ts: now - 2 * MIN,
+    kind: 'agent',
+    text: [
+      'Signed in, and acme/marketing-site is already your **acme-marketing** project. Here’s the pipeline:',
+      '',
+      '- **Fixer** works in its own copy of acme-marketing, so your folder is never touched.',
+      '- **Reviewer** checks each fix and sends it back if it isn’t right.',
+      '- Every night at 1am, while the app is open and this Mac is awake.',
+      '',
+      'I’m doing the first run now so you can see the card you’ll wake up to. If it asks to run `gh`, choose Always allow: at 1am nobody is there to press Allow. Pushing always waits for you.',
+    ].join('\n'),
+  },
+];
+
+/** "Turn client briefs into sites…": the draft handed back on a card with Preview. */
+const SITE_HANDED_BACK = [
+  chiefGreeting('chief', now - 30 * MIN),
+  {
+    id: 'u1',
+    agentId: 'chief',
+    ts: now - 29 * MIN,
+    kind: 'user',
+    text: 'When a new client brief lands in a folder, read it, start a new project for it, draft the site and send me a card I can preview. Nothing goes to the client without me. The folder to watch: ~/Clients/Briefs',
+  },
+  {
+    id: 'a1',
+    agentId: 'chief',
     ts: now - MIN,
     kind: 'agent',
-    text: 'Done: they’re in your sidebar. Studio Ops is asking you for this week’s deadlines, and Scout will have its first look ready on Monday morning.',
+    text: 'One page from the brief: the menu, opening hours and a map link, in the warm palette it asks for.',
+    result: {
+      id: 'res-site',
+      version: 1,
+      title: 'Northwind Bakery: first draft',
+      summary:
+        'One page from the brief: the menu, opening hours and a map link, in the warm palette it asks for.',
+      checked: ['The page loads in the preview with no console errors'],
+      notVerified: [
+        'The opening hours are as the brief gives them; I couldn’t check them anywhere else',
+      ],
+      project: `${HARNESS_ROOT}/portfolio-site`,
+    },
   },
 ];
 
 export const agentsFirstWinScenarios: Scenario[] = [
   {
-    id: 'agents-first-win-team',
-    title: 'Agents — first run: “Build me a team…”',
+    id: 'agents-first-win-ship-fixes',
+    title: 'Agents — first run: “Ship fixes while I sleep…”',
     looksRightWhen:
-      'The greeting with its starters still under it (Build me a team…, Brief me every morning…, Make me a one-page site…, then a quieter More ideas…), and the composer holding “Build me a team of agents for this: ” with the caret after it. Nothing has been sent.',
+      'The greeting with its starters still under it (Ship fixes while I sleep…, Run my launch as a team…, Turn client briefs into sites…, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every night at 1am, have one agent take the top open GitHub issue in my repo … The repo: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
-    steps: [{ click: '.agent-chat__starters > [data-idea="team"]' }],
+    steps: [{ click: '.agent-chat__starters > [data-idea="ship-fixes"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
   },
   {
-    id: 'agents-first-win-brief',
-    title: 'Agents — first run: “Brief me every morning…”',
+    id: 'agents-first-win-launch',
+    title: 'Agents — first run: “Run my launch as a team…”',
     looksRightWhen:
-      'The composer holds “Every weekday at 8am, brief me on ” with the caret after it, ready for the topics. Nothing has been sent.',
+      'The composer holds the whole brief, “Run my launch as a team: create a strategist, a writer and a builder … The launch: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
-    steps: [{ click: '.agent-chat__starters > [data-idea="brief"]' }],
+    steps: [{ click: '.agent-chat__starters > [data-idea="launch"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
   },
   {
-    id: 'agents-first-win-site',
-    title: 'Agents — first run: “Make me a one-page site…”',
+    id: 'agents-first-win-client-brief',
+    title: 'Agents — first run: “Turn client briefs into sites…”',
     looksRightWhen:
-      'The composer holds “Make me a one-page website for ” with the caret after it. Nothing has been sent, and nothing about Node, Git or project tools appears.',
+      'The composer holds the whole brief, “When a new client brief lands in a folder … The folder to watch: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
-    steps: [{ click: '.agent-chat__starters > [data-idea="site"]' }],
+    steps: [{ click: '.agent-chat__starters > [data-idea="client-brief"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
   },
@@ -188,7 +204,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     id: 'agents-ideas',
     title: 'Agents — first run: “More ideas…” opens the gallery',
     looksRightWhen:
-      'A dialog “Ideas to start with”: one line saying a pick is typed out and nothing is sent, then four groups (A team, Something that keeps going, Something real, Right now), each row a title and one muted line on what happens. Nothing is in the accent. At the foot, two quiet links: Ready-made agents… and Talk to your team from your phone….',
+      'A dialog “Ideas to start with”: a short lede (each keeps running once set up; a pick is typed out and nothing is sent; your Chief sets up what it needs), then three groups (On a schedule, When something happens, Agents together), each row a title and one muted line on what happens. Nothing is in the accent. At the foot, two quiet links: Ready-made agents… and Talk to your team from your phone….',
     command: 'agents.open',
     steps: [{ click: '.agent-chat__starters > [data-idea="more"]' }],
     requires: '.agents-ideas__idea',
@@ -204,33 +220,17 @@ export const agentsFirstWinScenarios: Scenario[] = [
     commands: {},
   },
   {
-    id: 'agents-ideas-when',
-    title: 'Agents — gallery: picking “When a PDF lands in Downloads…”',
+    id: 'agents-ideas-errors',
+    title: 'Agents — gallery: picking “Babysit my errors…”',
     looksRightWhen:
-      'The dialog has closed, and the Chief’s composer holds the whole request (“When a new PDF lands in my Downloads folder, read it and tell me what it is and whether I need to do anything.”). Nothing has been sent.',
+      'The dialog has closed, and the Chief’s composer holds the whole brief (“Every hour, check this project for new errors … The project: ”). Nothing has been sent.',
     command: 'agents.open',
     steps: [
       { click: '.agent-chat__starters > [data-idea="more"]' },
-      { click: '.agents-ideas__idea[data-idea="when-pdf"]' },
+      { click: '.agents-ideas__idea[data-idea="errors"]' },
     ],
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
-  },
-  {
-    id: 'agents-first-win-document',
-    title: 'Agents — gallery: “Summarise a document…” picked a file',
-    looksRightWhen:
-      'The greeting with its starters still under it, and the composer holding the picked PDF as a chip with the request typed out (“Summarise this for me: the main points, any dates or decisions, and anything I need to do.”). Nothing has been sent: no user bubble, no working line.',
-    command: 'agents.open',
-    steps: [
-      { click: '.agent-chat__starters > [data-idea="more"]' },
-      { click: '.agents-ideas__idea[data-idea="document"]' },
-    ],
-    requires: '.agent-composer__attachments',
-    commands: {
-      'plugin:dialog|open': [DOCUMENT],
-      agents_inspect_files: inspect,
-    },
   },
   {
     id: 'agents-first-win-ready-made',
@@ -246,16 +246,28 @@ export const agentsFirstWinScenarios: Scenario[] = [
     commands: {},
   },
   {
-    id: 'agents-first-win-team-built',
-    title: 'Agents — the first win: a team built',
+    id: 'agents-first-win-pipeline',
+    title: 'Agents — the first win: a nightly pipeline set up',
     looksRightWhen:
-      'The greeting, the user’s “Build me a team…” request, the Chief’s short list of three agents (a name and one line each), the user’s “Yes, go ahead”, and the Chief saying they’re made and what each is starting on. Three new agents in the sidebar, each its own colour. The starters are gone.',
+      'The greeting, the user’s “Every night at 1am…” brief, the Chief asking for GitHub first and naming ⌘K → Connect GitHub account, the user’s “Done.”, then the Chief’s short plan (Fixer in its own copy, Reviewer, every night at 1am while the app is open) and why it’s running the first one now. Fixer and Reviewer in the sidebar, each its own colour. The starters are gone.',
     command: 'agents.open',
-    requires: '[data-agent-id="studio-ops"]',
+    requires: '[data-agent-id="fixer"]',
     commands: {
-      agents_overview: WITH_TEAM,
+      agents_overview: WITH_PIPELINE,
       agents_messages: (args: Record<string, unknown>) =>
-        args.agentId === 'chief' ? TEAM_BUILT : [],
+        args.agentId === 'chief' ? PIPELINE_SET_UP : [],
+    },
+  },
+  {
+    id: 'agents-first-win-site-preview',
+    title: 'Agents — a client brief’s site, handed back with Preview',
+    looksRightWhen:
+      'The brief, then one result card “Northwind Bakery: first draft”: its summary, Not verified up front, “It says it checked”, and quiet Preview and Ask for changes actions, neither in the accent. The window stays on the chat: Preview opens the project only when pressed.',
+    command: 'agents.open',
+    requires: '.agent-result',
+    commands: {
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? SITE_HANDED_BACK : [],
     },
   },
   {

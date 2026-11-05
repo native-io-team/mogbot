@@ -1,5 +1,5 @@
 /**
- * "More ideas…": what the team can do, as things to ask the Chief of Staff.
+ * "More ideas…": workflows the team can run, as briefs for the Chief of Staff.
  * The chips under the greeting show three; this shows the whole catalogue
  * (`lib/chiefIdeas.ts`), grouped, each with one line on what actually
  * happens. Picking one opens the Chief's chat with the words typed out for
@@ -41,8 +41,9 @@ export function ChiefIdeasModal({
     >
       <div className="agents-ideas__body" ref={bodyRef} tabIndex={-1}>
         <p className="agents-ideas__lede">
-          Pick one and it’s typed out for your Chief of Staff, for you to finish. Nothing is sent
-          until you press Send.
+          Each keeps running once it’s set up. Pick one and its brief is typed out for your Chief of
+          Staff to finish; nothing is sent until you press Send. Anything it needs, like GitHub or a
+          folder, your Chief sets up with you first.
         </p>
         {ideaGroups().map(({ group, label, ideas }) => (
           <section key={group} className="agents-ideas__group" aria-label={label}>

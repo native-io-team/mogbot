@@ -230,7 +230,8 @@ const TOOLS: &[Tool] = &[
                 "checked": { "type": "array", "items": { "type": "string" }, "description": "Checks you actually ran, one short line each." },
                 "not_verified": { "type": "array", "items": { "type": "string" }, "description": "What you didn't or couldn't verify, one short line each. Leave nothing out to look better." },
                 "revises": { "type": "string", "description": "The id of a result you're revising (given when the user asks for changes)." },
-                "changes": { "type": "string", "description": "When revising: one line on what changed since the last version." }
+                "changes": { "type": "string", "description": "When revising: one line on what changed since the last version." },
+                "project": { "type": "string", "description": "When the work is a site or app in one of the user's projects: its name (from project_list). The card gets a Preview button that opens it when the user chooses, so don't call project_open yourself." }
             },
             "required": ["title", "summary"]
         }),
@@ -916,7 +917,7 @@ async fn share_result(
     turn: Option<u64>,
     args: &Value,
 ) -> Value {
-    let draft = match results::parse(args) {
+    let mut draft = match results::parse(args) {
         Ok(draft) => draft,
         Err(e) => return error(e),
     };
@@ -924,6 +925,21 @@ async fn share_result(
         return error("Couldn't find your folder.");
     };
     let roots = share_roots(&home).await;
+    // A named project must be a real one: its card's Preview opens it.
+    if let Some(wanted) = draft.project.take() {
+        let projects: Vec<String> = roots[1..]
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+        match crate::remote_access::tools::resolve_project(&projects, Some(&wanted)) {
+            Ok(path) => draft.project = Some(path),
+            Err(_) => {
+                return error(format!(
+                    "There's no project called \"{wanted}\" (project_list has their names). Nothing was shared."
+                ))
+            }
+        }
+    }
     let agent_id = caller.id.clone();
     let built =
         tokio::task::spawn_blocking(move || results::prepare(&agent_id, &home, &roots, draft))
