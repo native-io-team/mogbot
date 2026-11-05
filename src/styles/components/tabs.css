@@ -90,9 +90,10 @@
   color: var(--text-primary);
 }
 
-/* The focus ring sits inside the tab so the list never clips it. */
+/* The focus ring sits inside the tab, clear of the bar, so the list never
+   clips it and a fill-width tab does not turn into a heavy box. */
 .tabs__list--appearance-underline .tabs__tab.button:focus-visible {
-  outline-offset: calc(var(--focus-ring-width) * -1);
+  outline-offset: calc(var(--spacing-xs) * -1);
 }
 
 .tabs__list--appearance-underline .tabs__indicator {

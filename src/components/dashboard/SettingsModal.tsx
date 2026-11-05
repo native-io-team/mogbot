@@ -170,9 +170,16 @@ export function SettingsModal({
   }, [isOpen]);
 
   // Opens on General, unless a command asked for a tab (⌘K → "Accent color…").
-  useEffect(() => {
+  // Chosen during render, not in an effect: the dialog places focus on its
+  // first commit, and an effect-driven switch left focus (and its ring) on
+  // General while Appearance was the tab showing.
+  const [openedFor, setOpenedFor] = useState(false);
+  if (isOpen !== openedFor) {
+    setOpenedFor(isOpen);
     if (isOpen) setActiveSettingsTab(peekSettingsTabOnOpen() ?? 'general');
-    else clearSettingsTabOnOpen();
+  }
+  useEffect(() => {
+    if (!isOpen) clearSettingsTabOnOpen();
   }, [isOpen]);
 
   // Keep either Settings modal instance in sync with inline home-screen hide
