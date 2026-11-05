@@ -23,7 +23,10 @@ use tracing::{debug, warn};
 /// Bump when SKILL.md changes so installed copies are refreshed.
 const SKILL_VERSION: &str = "1";
 
-const SKILL_DIR_NAME: &str = "shipstudio-workflows";
+/// `<slug>-workflows`: ours, beside Ship Studio's own `shipstudio-workflows`.
+fn skill_dir_name() -> String {
+    crate::brand::scoped("workflows")
+}
 
 /// The skill body.
 ///
@@ -40,13 +43,13 @@ pub(crate) fn skill_markdown() -> String {
         r#"---
 name: shipstudio-workflows
 description: >-
-  Create and manage Ship Studio workflows — saved instructions that run on a
-  schedule or on demand in this project and file what they find to the user's
-  Ship Studio inbox. Use this whenever the user says they want something
-  checked regularly or repeatedly ("every time", "each week", "before every
-  release", "keep an eye on", "remind me to check", "I keep forgetting to"),
-  asks to automate a review or audit, or mentions workflows, scheduled checks,
-  or the Ship Studio inbox.
+  Create and manage workflows — saved instructions that run on a schedule or
+  on demand in this project and file what they find to the user's inbox. Use
+  this whenever the user says they want something checked regularly or
+  repeatedly ("every time", "each week", "before every release",
+  "keep an eye on", "remind me to check", "I keep forgetting to"), asks to
+  automate a review or audit, or mentions workflows, scheduled checks, or the
+  workflows inbox.
 metadata:
   shipstudio-skill-version: "{SKILL_VERSION}"
 ---
@@ -167,7 +170,7 @@ fn skill_dirs() -> Vec<(&'static str, PathBuf)> {
                 agent.id,
                 home.join(agent.auth_config_dir)
                     .join(dir_name)
-                    .join(SKILL_DIR_NAME),
+                    .join(skill_dir_name()),
             ))
         })
         .collect()
@@ -192,7 +195,7 @@ pub struct WorkflowsSkillStatus {
 /// scattering directories into someone's home for tools they don't use is not
 /// ours to do. It writes the `skills/` subdirectory only.
 pub fn install_workflows_skill() -> Vec<WorkflowsSkillStatus> {
-    let body = skill_markdown();
+    let body = crate::commands::skills::bundled::branded_body(&skill_markdown());
     skill_dirs()
         .into_iter()
         .map(|(agent_id, dir)| {
@@ -210,7 +213,7 @@ pub fn install_workflows_skill() -> Vec<WorkflowsSkillStatus> {
 }
 
 fn write_skill_if_agent_present(dir: &std::path::Path, body: &str) -> std::io::Result<bool> {
-    // dir is <home>/<config>/skills/shipstudio-workflows — the agent's own
+    // dir is <home>/<config>/skills/<slug>-workflows — the agent's own
     // config dir is two levels up and must already exist.
     let agent_config_dir = dir.parent().and_then(|p| p.parent());
     match agent_config_dir {
@@ -340,7 +343,7 @@ mod tests {
         let ends_with = |agent: &str, config_dir: &str| {
             let tail = std::path::Path::new(config_dir)
                 .join("skills")
-                .join(SKILL_DIR_NAME);
+                .join(skill_dir_name());
             dirs.iter()
                 .any(|(id, path)| *id == agent && path.ends_with(&tail))
         };

@@ -21,9 +21,11 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-na
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { AgentAvatar } from '../../components/agent';
 import { useNow } from '../../components/ConnectionPill';
-import { Button, choose, Icon, Row, T } from '../../components/ui';
+import { choose } from '../../components/menu';
+import { Button, Icon, Row, T } from '../../components/ui';
 import {
   describeScope,
+  engineCantAsk,
   engineLine,
   engineName,
   folderName,
@@ -40,9 +42,15 @@ import {
   setAgentToggles,
 } from '../../lib/session';
 import { useApp } from '../../lib/store';
+import { switchColors, useAccent } from '../../lib/accent';
+import { withAgentAccent } from '../../lib/accentScreen';
 import { colors, radius, space } from '../../lib/theme';
 
-export default function AgentSheet() {
+// Its colour, which is also its chat's accent, is set at the desk: the Mac
+// doesn't take a colour change from a phone (`AgentToggles` in companion/router.rs).
+export default withAgentAccent(AgentSheet);
+
+function AgentSheet() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const agent = useApp((s) => s.overview?.agents.find((a) => a.id === id));
@@ -66,6 +74,7 @@ export default function AgentSheet() {
   if (!agent) return null;
   const canSchedule = canCall('agents.schedule.create', welcome);
   const checkIns = sortCheckIns(agent.checkIns ?? []);
+  const cantAsk = engineCantAsk(agent, engines);
   const where = [engineLine(agent, engines), agent.project && folderName(agent.project)]
     .filter(Boolean)
     .join(' · ');
@@ -113,11 +122,19 @@ export default function AgentSheet() {
             onPress={() => router.push({ pathname: '/files/[id]', params: { id } })}
           />
         )}
-        <Toggle agent={agent} field="pinned" label="Pinned" enabled={live} onError={setError} />
+        <Toggle
+          agent={agent}
+          field="pinned"
+          label="Pinned"
+          detail="Stays at the top of your agents."
+          enabled={live}
+          onError={setError}
+        />
         <Toggle
           agent={agent}
           field="muted"
           label="Muted"
+          detail="No alerts from it. Unread still counts."
           enabled={live}
           onError={setError}
           last={agent.isMain}
@@ -127,6 +144,7 @@ export default function AgentSheet() {
             agent={agent}
             field="hidden"
             label="Hidden"
+            detail="Tucked under Hidden in your list. It keeps working."
             enabled={live}
             onError={setError}
             last
@@ -140,6 +158,11 @@ export default function AgentSheet() {
           <Row label="Runs on" value={engineName(agent)} />
           <Row label="Model" value={modelName(agent, engines)} last />
         </View>
+      )}
+      {!!cantAsk && (
+        <T variant="small" color={colors.textMuted} style={styles.note}>
+          {cantAsk}
+        </T>
       )}
 
       {usage && <Usage usage={usage} />}
@@ -303,6 +326,7 @@ function Toggle({
   agent,
   field,
   label,
+  detail,
   enabled,
   onError,
   last,
@@ -310,17 +334,21 @@ function Toggle({
   agent: Agent;
   field: 'pinned' | 'muted' | 'hidden';
   label: string;
+  detail: string;
   enabled: boolean;
   onError: (text: string | null) => void;
   last?: boolean;
 }) {
+  const accent = useAccent();
   return (
     <Row
       label={label}
+      detail={detail}
       last={last}
       trailing={
         <Switch
           value={agent[field]}
+          {...switchColors(accent, agent[field])}
           disabled={!enabled}
           accessibilityLabel={label}
           onValueChange={(on) => {
@@ -437,6 +465,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   none: { padding: space.lg },
+  note: { marginHorizontal: space.lg },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

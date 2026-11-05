@@ -2183,7 +2183,8 @@ async fn show_progress(app: &tauri::AppHandle, project: &str, args: &Value) -> V
 
 struct NewProjectTemplate {
     id: &'static str,
-    /// Public repo cloned anonymously; empty for an empty folder.
+    /// Public repo cloned anonymously, by name under `links.starterRepoBase`
+    /// (brand.json); empty for an empty folder.
     repo: &'static str,
     install: bool,
 }
@@ -2191,35 +2192,42 @@ struct NewProjectTemplate {
 /// The web starters from the New Project picker (`TEMPLATES` in
 /// src/hooks/useProjectCreation.ts — keep the two in step). Mobile and
 /// Shopify starters need setup at the desk, so they aren't offered here.
+/// `<links.starterRepoBase>/<name>`, or `None` when this build has no
+/// starter repos. Mirrors `starterRepo` in src/hooks/useProjectCreation.ts.
+fn starter_repo_url(name: &str) -> Option<String> {
+    crate::brand::links::STARTER_REPO_BASE
+        .map(|base| format!("{}/{name}", base.trim_end_matches('/')))
+}
+
 const NEW_PROJECT_TEMPLATES: &[NewProjectTemplate] = &[
     NewProjectTemplate {
         id: "nextjs-basic",
-        repo: "https://github.com/ship-studio/static-marketing-site-starter",
+        repo: "static-marketing-site-starter",
         install: true,
     },
     NewProjectTemplate {
         id: "nextjs-plain-css",
-        repo: "https://github.com/ship-studio/nextjs-plain-css-starter",
+        repo: "nextjs-plain-css-starter",
         install: true,
     },
     NewProjectTemplate {
         id: "astro-basic",
-        repo: "https://github.com/ship-studio/astro-static-marketing-site-starter",
+        repo: "astro-static-marketing-site-starter",
         install: true,
     },
     NewProjectTemplate {
         id: "astro-html",
-        repo: "https://github.com/ship-studio/astro-html-starter",
+        repo: "astro-html-starter",
         install: true,
     },
     NewProjectTemplate {
         id: "sveltekit-basic",
-        repo: "https://github.com/ship-studio/sveltekit-static-marketing-site-starter",
+        repo: "sveltekit-static-marketing-site-starter",
         install: true,
     },
     NewProjectTemplate {
         id: "html-basic",
-        repo: "https://github.com/ship-studio/html-starter",
+        repo: "html-starter",
         install: false,
     },
     NewProjectTemplate {
@@ -2401,9 +2409,15 @@ async fn scaffold(name: &str, template: &NewProjectTemplate) -> Result<std::path
             .map_err(|e| e.to_string())?;
         return Ok(path);
     }
+    let Some(repo_url) = starter_repo_url(template.repo) else {
+        return Err(
+            "Starter templates aren't available in this build. Use the blank template instead."
+                .to_string(),
+        );
+    };
     let mut cmd = crate::utils::git_command().map_err(|e| e.to_string())?;
     cmd.current_dir(&root)
-        .args(["clone", "--depth", "1", template.repo, name]);
+        .args(["clone", "--depth", "1", repo_url.as_str(), name]);
     let output = crate::external_command::run_with_timeout(
         tokio::process::Command::from(cmd),
         "git clone",
@@ -2544,8 +2558,11 @@ pub(crate) async fn frozen_tree(project: &str) -> Result<(String, String), Strin
         .await?
         .trim()
         .to_string();
-    let index =
-        std::env::temp_dir().join(format!("shipstudio-remote-index-{}", super::new_token()));
+    let index = std::env::temp_dir().join(format!(
+        "{}-remote-index-{}",
+        crate::brand::SLUG,
+        super::new_token()
+    ));
     let index_str = index.to_string_lossy().into_owned();
     let env = [("GIT_INDEX_FILE", index_str.as_str())];
     let result = async {
@@ -3224,7 +3241,8 @@ mod tests {
                 t.id
             );
             if !t.repo.is_empty() {
-                assert!(picker.contains(t.repo), "{} not in the picker", t.repo);
+                let call = format!("starterRepo('{}')", t.repo);
+                assert!(picker.contains(&call), "{} not in the picker", t.repo);
             }
         }
     }
@@ -3336,7 +3354,7 @@ mod tests {
     }
 
     /// Headless Chromium against a running server, with nothing on screen.
-    /// Needs Ship Studio's Playwright environment (~/.ship-studio/playwright-env)
+    /// Needs the app's Playwright environment (~/.<slug>/playwright-env)
     /// and writes a scratch project under ~/ShipStudio, removed afterwards.
     #[tokio::test]
     #[ignore = "launches headless Chromium; run with --ignored"]

@@ -13,9 +13,14 @@ import { Button, T } from '../components/ui';
 import { haptic } from '../lib/haptics';
 import { describeError, readInstructions, setInstructions } from '../lib/session';
 import { useApp } from '../lib/store';
+import { useAccent } from '../lib/accent';
+import { withAgentAccent } from '../lib/accentScreen';
 import { colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
 
-export default function Instructions() {
+export default withAgentAccent(Instructions);
+
+function Instructions() {
+  const accent = useAccent();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const name = useApp((s) => s.overview?.agents.find((a) => a.id === id)?.name ?? 'This agent');
@@ -117,7 +122,7 @@ export default function Instructions() {
           maxLength={20_000}
           style={[styles.body, styles.input]}
           keyboardAppearance="dark"
-          selectionColor={colors.accentActive}
+          selectionColor={accent.accent}
           accessibilityLabel={`${name}’s instructions`}
         />
       ) : (

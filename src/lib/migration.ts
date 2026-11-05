@@ -1,4 +1,5 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { brandScoped } from './brand';
 
 /**
  * Site migration — types and the data layer behind the Migration panel.
@@ -325,7 +326,7 @@ export function buildMigrationPrompt(sourceUrl: string, rebuildUrl = REBUILD_URL
   return [
     `Rebuild ${sourceUrl} in this project.`,
     '',
-    'Use the shipstudio-site-to-code skill and follow its phases in order:',
+    `Use the ${brandScoped('site-to-code')} skill and follow its phases in order:`,
     'survey, then the design system from computed values, then the homepage',
     'verified against the original, then the remaining templates.',
     '',
@@ -457,7 +458,7 @@ export function buildResumePrompt(sourceUrl: string, rebuildUrl = REBUILD_URL_FA
     'about to do next — before you start doing it. If anything in "needsYou" is',
     'still unanswered, ask me again rather than picking for me.',
     '',
-    'Carry on from there under the shipstudio-site-to-code skill, and keep',
+    `Carry on from there under the ${brandScoped('site-to-code')} skill, and keep`,
     '`.shipstudio/migration.json` current in the shape it already uses.',
     '',
     `The rebuild is served at ${rebuildUrl} — check it is up before measuring,`,

@@ -3,5 +3,31 @@
   "slug": "dashbot",
   "identifier": "io.native.dashbot",
   "urlScheme": "dashbot",
-  "repository": "https://github.com/native-io-team/dashbot"
+  "appDirName": "Dashbot",
+  "repository": "https://github.com/native-io-team/dashbot",
+  "companion": {
+    "scheme": "dashbot-companion",
+    "bundleId": "io.native.dashbot.companion",
+    "tailnetPort": 47463
+  },
+  "links": {
+    "issueRepo": null,
+    "securityAdvisories": null,
+    "discussions": null,
+    "community": null,
+    "website": null,
+    "errorReports": null,
+    "releases": null,
+    "updates": null,
+    "pluginRegistry": null,
+    "templateApi": null,
+    "starterRepoBase": "https://github.com/ship-studio",
+    "companionSource": null,
+    "pushRelay": null
+  },
+  "telemetry": {
+    "posthogKey": null,
+    "posthogHost": null,
+    "sentryDsn": null
+  }
 }

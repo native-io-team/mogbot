@@ -179,7 +179,7 @@ pub fn read_init(event: &Value) -> Option<Init> {
     })
 }
 
-/// The permission mode every turn is started in (`runner::turn_args`).
+/// The permission mode every turn is started in (`claude::args`).
 pub const EXPECTED_MODE: &str = "acceptEdits";
 
 #[derive(Debug, Clone, PartialEq)]

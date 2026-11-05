@@ -278,14 +278,13 @@ pub async fn agents_create(
     app: AppHandle,
     input: CreateAgentInput,
 ) -> Result<store::Agent, CommandError> {
+    // Checked whichever way it was chosen: an agent is never put on an
+    // engine that can't run its first message.
     let engine = match input.engine.as_deref() {
-        Some(e) => {
-            let engine = Engine::parse(e)?;
-            engine::require_ready(engine).await?;
-            engine
-        }
+        Some(e) => Engine::parse(e)?,
         None => Engine::default(),
     };
+    engine::require_ready(engine).await?;
     let model = input
         .model
         .as_deref()
@@ -1076,6 +1075,7 @@ mod tests {
                 label: "",
                 installed: ready,
                 signed_in: ready,
+                asks: true,
                 models: Vec::new(),
             })
             .collect()

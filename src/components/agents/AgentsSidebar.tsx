@@ -28,6 +28,7 @@ import { AddIcon, BellOffIcon, ChevronRightIcon, DownloadIcon, PinIcon } from '@
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../primitives/ContextMenu';
 import { Button } from '../primitives/Button';
 import { AgentAvatar } from './AgentAvatar';
+import { AgentEngineBadge } from './AgentEngine';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { AgentsSearchResults } from './AgentsSearchResults';
 import { ImportNudge, useImportNudge } from './ImportNudge';
@@ -274,6 +275,7 @@ const AgentRow = memo(function AgentRow({
               {agent.muted && (
                 <BellOffIcon size={12} className="agents-list__pin" aria-label="Muted" />
               )}
+              <AgentEngineBadge engine={agent.engine} />
             </span>
             <span className="agents-list__preview" data-state={lineState(agent)}>
               {subtitle(agent)}

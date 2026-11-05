@@ -153,6 +153,11 @@ export interface EngineInfo {
   label: string;
   installed: boolean;
   signedIn: boolean;
+  /**
+   * Its turns can stop and ask (an Allow / Deny card) before going past what
+   * it may do alone. Claude Code always; Codex only over its app-server.
+   */
+  asks?: boolean;
   /** The engine's own models, without Default. */
   models: ModelChoice[];
 }
@@ -500,14 +505,48 @@ export function noEngineInstalled(engines: EngineInfo[]): boolean {
  * `engine::default_for`.
  */
 export function defaultEngine(engines: EngineInfo[]): AgentEngine {
-  const ready = engines.filter((e) => e.installed && e.signedIn);
+  const ready = engines.filter((e) => engineUnavailable(e) === null);
   if (ready.some((e) => e.id === 'claude')) return 'claude';
   return ready[0]?.id ?? 'claude';
 }
 
-/** The engines that can take an agent right now, plus the one it's already on. */
-export function engineOptions(engines: EngineInfo[], current: AgentEngine): EngineInfo[] {
-  return engines.filter((e) => (e.installed && e.signedIn) || e.id === current);
+/** What an engine needs before it can take an agent, or null when it can. */
+export function engineUnavailable(info: EngineInfo): 'install' | 'sign-in' | null {
+  if (!info.installed) return 'install';
+  if (!info.signedIn) return 'sign-in';
+  return null;
+}
+
+/**
+ * What stands between an agent on this engine and your computer, as each
+ * engine actually enforces it (see "Approvals" in docs/agents.md). Never more:
+ * the app's own tools and anything you've already allowed don't ask, and
+ * apps connected to Codex itself run outside its limits.
+ */
+export function engineProtections(engine: AgentEngine, info?: EngineInfo): string {
+  if (engine === 'claude') {
+    return "Edits in your projects, and its tools in this app, go ahead. Anything else asks you first, unless you've already allowed it.";
+  }
+  const limits =
+    "Its commands go ahead without asking, but can only change files in your projects and its own folder, and can't reach the internet.";
+  const apps = "Apps you've connected to Codex aren't limited by this.";
+  if (info?.asks === true) return `${limits} Going further asks you first. ${apps}`;
+  const cantAsk = engineCantAsk(engine, info ? [info] : []);
+  if (cantAsk) return `${limits} ${cantAsk} ${apps}`;
+  // Not known (not installed, or a computer that doesn't say): claim nothing more.
+  return `${limits} ${apps}`;
+}
+
+/**
+ * Said wherever an agent on this engine is on show (the editor, its chat,
+ * the phone's agent sheet) when its turns can't stop to ask: anything that
+ * would need your OK is refused instead. Null when it can ask, or when that
+ * isn't known. Must match `engineCantAsk` in mobile/src/lib/agents.ts.
+ */
+export function engineCantAsk(engine: AgentEngine, engines: EngineInfo[]): string | null {
+  const info = engines.find((e) => e.id === engine);
+  if (!info?.installed || info.asks !== false) return null;
+  return `${info.label} can't stop to ask you here, so anything that needs your OK is refused. Updating ${info.label} fixes this.`;
 }
 
 export interface RoutineModelChoice extends ModelChoice {

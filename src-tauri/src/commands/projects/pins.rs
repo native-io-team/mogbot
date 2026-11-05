@@ -57,26 +57,7 @@ pub struct PinsFile {
 
 /// Returns the absolute path to `pins.json` for the current OS.
 pub(crate) fn get_pins_file_path() -> PathBuf {
-    #[cfg(target_os = "macos")]
-    {
-        dirs::home_dir()
-            .map(|h| h.join("Library/Application Support/ShipStudio/pins.json"))
-            .unwrap_or_else(|| PathBuf::from("/tmp/ship-studio-pins.json"))
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        dirs::data_local_dir()
-            .map(|d| d.join("ShipStudio/pins.json"))
-            .unwrap_or_else(|| PathBuf::from("C:/temp/ship-studio-pins.json"))
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        dirs::data_local_dir()
-            .map(|d| d.join("ship-studio/pins.json"))
-            .unwrap_or_else(|| PathBuf::from("/tmp/ship-studio-pins.json"))
-    }
+    crate::brand::app_support_dir().join("pins.json")
 }
 
 /// Read pins from disk. Returns an empty `PinsFile` if the file does not

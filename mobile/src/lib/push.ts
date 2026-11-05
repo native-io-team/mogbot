@@ -1,5 +1,5 @@
 /**
- * Real push, through the Mac and Ship Studio's content-free relay
+ * Real push, through the Mac and the content-free push relay
  * (docs/push-relay.md). The phone's only part: hand the Mac its push token
  * once it may show notifications, and say honestly where that leaves it.
  *
@@ -20,7 +20,11 @@ import { Platform } from 'react-native';
 import { targetOf } from './notify';
 import { getApp, setApp } from './store';
 
-/** Built by Ship Studio's EAS project (TestFlight, the App Store). */
+/** How alerts work without push: Settings and the after-pairing card say the same. */
+export const ALERTS_WHILE_OPEN =
+  'Alerts arrive while this app is open on your phone. Your Mac still notifies you at the desk.';
+
+/** Built by the official EAS project (TestFlight, the App Store). */
 export const isOfficialBuild = () => Boolean(Constants.expoConfig?.extra?.official);
 
 /** What Settings says about push, from what is known. Null: say nothing yet. */
@@ -40,7 +44,7 @@ export function pushLine(
       return {
         value: 'On',
         footer:
-          'Your Mac can wake this phone through Ship Studio’s push service. Alerts say only that an agent needs you or finished, never what it said.',
+          'Your Mac can wake this phone through the push service. Alerts say only that an agent needs you or finished, never what it said.',
       };
     case 'pending':
       return {
@@ -50,14 +54,12 @@ export function pushLine(
     case 'off':
       return {
         value: 'Off on your Mac',
-        footer:
-          'Turn on “Phone notifications via Ship Studio’s push service” in Ship Studio → Phone on your Mac.',
+        footer: 'Turn on phone notifications on your Mac, in Settings → Phone.',
       };
     case 'unavailable':
       return {
         value: 'Not on this Mac',
-        footer:
-          'The Ship Studio on your Mac has no push service. Alerts arrive while the app is open.',
+        footer: 'The app on your Mac has no push service. Alerts arrive while this app is open.',
       };
     default:
       return null;

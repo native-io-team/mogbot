@@ -27,9 +27,11 @@ use super::{Companion, DeviceRecord};
 use crate::agents::notify::Limiter;
 use crate::errors::CommandError;
 
-/// Where the relay is, baked in at build time for official builds; the same
-/// variable at run time overrides it (a local `wrangler dev`).
-pub const RELAY_URL_VAR: &str = "SHIPSTUDIO_PUSH_RELAY_URL";
+/// Where the relay is: `links.pushRelay` in brand.json (none by default, so
+/// push is off); this variable at run time overrides it (a local
+/// `wrangler dev`). Not Ship Studio's `SHIPSTUDIO_PUSH_RELAY_URL`, so a value
+/// set for Ship Studio never routes this app's pushes through its relay.
+pub const RELAY_URL_VAR: &str = "APP_PUSH_RELAY_URL";
 
 const RELAY_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -390,7 +392,7 @@ impl Relay for HttpRelay {
 pub fn relay_url() -> Option<String> {
     let url = std::env::var(RELAY_URL_VAR)
         .ok()
-        .or_else(|| option_env!("SHIPSTUDIO_PUSH_RELAY_URL").map(str::to_string))?;
+        .or_else(|| crate::brand::links::PUSH_RELAY.map(str::to_string))?;
     let ok = url.starts_with("https://")
         || url.starts_with("http://127.0.0.1:")
         || url.starts_with("http://localhost:");

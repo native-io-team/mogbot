@@ -25,6 +25,7 @@ import { DiffLines } from '../../components/diff';
 import { useNow } from '../../components/ConnectionPill';
 import { SessionState, tabName } from '../../components/session';
 import { Button, Icon, ripple, T } from '../../components/ui';
+import { useAccent } from '../../lib/accent';
 import { formatAgo } from '../../lib/agents';
 import { questionContext } from '../../lib/diff';
 import { haptic } from '../../lib/haptics';
@@ -49,6 +50,7 @@ import {
 } from '../../lib/theme';
 
 export default function Session() {
+  const accent = useAccent();
   const { id, project, path, tab, reply } = useLocalSearchParams<{
     id: string;
     project?: string;
@@ -133,7 +135,11 @@ export default function Session() {
                 {title || 'Session'}
               </T>
               <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={chromeScale}>
-                {data ? `Output ${formatAgo(data.session.lastOutputAt, now)}` : 'Loading…'}
+                {gone
+                  ? 'Closed'
+                  : data
+                    ? `Updated ${formatAgo(data.session.lastOutputAt, now)}`
+                    : 'Loading…'}
               </T>
             </View>
           ),
@@ -208,7 +214,7 @@ export default function Session() {
                         />
                       ))}
                       <Button
-                        title="Cancel (Esc)"
+                        title="Cancel"
                         variant="ghost"
                         busy={busy === 'escape'}
                         disabled={!connected || !!busy}
@@ -230,7 +236,7 @@ export default function Session() {
                         ))}
                       </View>
                       <T variant="caption" color={colors.textSecondary}>
-                        Answer it in Ship Studio on your Mac.
+                        Answer it on your Mac.
                       </T>
                     </>
                   )}
@@ -272,7 +278,7 @@ export default function Session() {
                 }
                 placeholderTextColor={colors.textMuted}
                 keyboardAppearance="dark"
-                selectionColor={colors.accentActive}
+                selectionColor={accent.accent}
                 style={styles.input}
                 accessibilityLabel={`Message ${tabName(data.session)}`}
               />
@@ -288,20 +294,19 @@ export default function Session() {
                   <View
                     style={[
                       styles.send,
+                      { backgroundColor: accent.accent },
                       (!text.trim() || !connected || !!question) && styles.sendOff,
                       pressed && { transform: [{ scale: 0.92 }] },
                     ]}
                   >
                     {busy === 'send' ? (
-                      <Spinner size={12} color={colors.textOnAccent} />
+                      <Spinner size={12} color={accent.onAccent} />
                     ) : (
                       <Icon
                         name="arrow.up"
                         size={16}
                         color={
-                          text.trim() && connected && !question
-                            ? colors.textOnAccent
-                            : colors.textMuted
+                          text.trim() && connected && !question ? accent.onAccent : colors.textMuted
                         }
                       />
                     )}
@@ -380,7 +385,6 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accentActive,
   },
   sendOff: { backgroundColor: colors.surfaceSelected },
   screen: {

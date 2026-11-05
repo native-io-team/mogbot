@@ -13,6 +13,7 @@ vi.mock('@tauri-apps/plugin-process', () => ({
 }));
 
 import { BootLoadingScreen, BOOT_WATCHDOG_MS } from './BootLoadingScreen';
+import { BRAND } from '../lib/brand';
 
 describe('BootLoadingScreen', () => {
   beforeEach(() => {
@@ -25,10 +26,10 @@ describe('BootLoadingScreen', () => {
     vi.useRealTimers();
   });
 
-  it('shows the logo and progress bar initially', () => {
+  it('shows only a progress bar initially, with no logo', () => {
     render(<BootLoadingScreen />);
-    expect(screen.getByAltText('Ship Studio')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar', { name: 'Starting Ship Studio' })).toHaveAttribute(
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Starting up' })).toHaveAttribute(
       'aria-valuenow',
       '0'
     );
@@ -49,8 +50,8 @@ describe('BootLoadingScreen', () => {
       vi.advanceTimersByTime(BOOT_WATCHDOG_MS);
     });
     expect(screen.getByText(/taking longer than expected/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Restart Ship Studio' })).toBeInTheDocument();
-    expect(screen.getByText(/~\/Library\/Logs\/ShipStudio\//)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restart' })).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`~/Library/Logs/${BRAND.appDirName}/`))).toBeInTheDocument();
   });
 
   it('calls relaunch when the restart button is clicked', async () => {
@@ -58,7 +59,7 @@ describe('BootLoadingScreen', () => {
     act(() => {
       vi.advanceTimersByTime(BOOT_WATCHDOG_MS);
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Restart Ship Studio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Restart' }));
     await act(async () => {
       await vi.runAllTimersAsync();
     });

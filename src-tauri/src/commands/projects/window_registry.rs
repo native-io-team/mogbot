@@ -59,7 +59,7 @@ pub async fn open_project_in_new_window(
 
     // Create the window
     let mut builder = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
-        .title(format!("{project_name} - Ship Studio"))
+        .title(format!("{project_name} - {}", crate::brand::NAME))
         .inner_size(1400.0, 900.0)
         .min_inner_size(400.0, 300.0)
         .resizable(true)

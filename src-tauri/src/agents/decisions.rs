@@ -597,7 +597,7 @@ pub fn trust(config: &Path, project: &Path) -> Result<(), String> {
     }
     let text = serde_json::to_string_pretty(&root).map_err(|e| e.to_string())?;
     // Replace the file in one step: Claude Code reads it on every start.
-    let tmp = config.with_extension(format!("json.shipstudio-{}", store::new_id()));
+    let tmp = config.with_extension(format!("json.{}-{}", crate::brand::SLUG, store::new_id()));
     std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
     if let Ok(meta) = std::fs::metadata(config) {
         let _ = std::fs::set_permissions(&tmp, meta.permissions());

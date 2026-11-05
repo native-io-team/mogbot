@@ -1,4 +1,11 @@
-# Agent instructions for Ship Studio
+# Agent instructions for Dashbot
+
+> **Start with [docs/MISSION.md](docs/MISSION.md).** Dashbot (working name, from
+> `brand.json`) is the evolution of Ship Studio: an open-source tool that gives
+> professionals who refuse mediocrity the best way to work with AI agents, on
+> desktop and mobile. Grok Bot's experience, on Claude Code and Codex on your own
+> machine; Ship Studio's project workspace underneath. Not a coding tool.
+> Everything below describes the Ship Studio foundation it inherits.
 
 The full agent-facing guide for this codebase is **[CLAUDE.md](CLAUDE.md)** —
 read it before writing code. It covers the architecture, the canonical

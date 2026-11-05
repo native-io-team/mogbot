@@ -124,6 +124,11 @@ export interface EngineInfo {
   label: string;
   installed: boolean;
   signedIn: boolean;
+  /**
+   * Its turns can stop to ask (an approval card) before going past what it
+   * may do alone. Optional: a Mac from before it sends none.
+   */
+  asks?: boolean;
   /** The engine's own models, without Default. */
   models: ModelChoice[];
 }

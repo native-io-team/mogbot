@@ -207,11 +207,17 @@ mod tests {
     fn image_paths_parse_with_or_without_the_mount() {
         let id = "a".repeat(64);
         assert_eq!(
-            id_from_path(&format!("/shipstudio/shot/{id}.jpg")),
+            id_from_path(&format!(
+                "{}/shot/{id}.jpg",
+                crate::brand::FUNNEL_MOUNT_PATH
+            )),
             Some(id.as_str())
         );
         assert_eq!(id_from_path(&format!("/shot/{id}.jpg")), Some(id.as_str()));
-        assert_eq!(id_from_path(&format!("/shipstudio/mcp/{id}")), None);
+        assert_eq!(
+            id_from_path(&format!("{}/mcp/{id}", crate::brand::FUNNEL_MOUNT_PATH)),
+            None
+        );
         assert_eq!(id_from_path(&format!("/shot/{id}.png")), None);
     }
 

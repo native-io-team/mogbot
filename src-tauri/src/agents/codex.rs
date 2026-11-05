@@ -97,6 +97,10 @@ fn models_from(raw: &str) -> Vec<ModelChoice> {
     listed.into_iter().map(|(_, m)| m).collect()
 }
 
+/// The sandbox's network switch. Off for every Codex turn, on the command
+/// line and again on the app-server's thread (see [`super::codex_app`]).
+pub(super) const NO_NETWORK: &str = "sandbox_workspace_write.network_access";
+
 /// A TOML value for `-c`: JSON's string and array syntax is TOML's too.
 fn toml<T: serde::Serialize + ?Sized>(value: &T) -> String {
     serde_json::to_string(value).unwrap_or_default()
@@ -123,9 +127,11 @@ pub(super) fn scripted() -> bool {
 }
 
 /// The `-c` overrides every Codex turn gets, whichever way it runs: where
-/// commands may write, our MCP server (its tools pre-approved: they put up
-/// their own cards), and CLAUDE.md as the project doc. Then the e2e suite's
-/// own, in debug builds.
+/// commands may write, no network for them (set here, so a
+/// `network_access = true` in the user's own config.toml can't widen it;
+/// checked against Codex 0.166 with `codex sandbox`), our MCP server (its tools pre-approved: they put up
+/// their own cards), CLAUDE.md as the project doc, and Ship Studio's preview server disabled
+/// when it's registered. Then the e2e suite's own, in debug builds.
 pub(super) fn shared_config(url: &str, writable: &[String]) -> Vec<String> {
     let server = format!(
         "mcp_servers.{}={{url={},tool_timeout_sec={},default_tools_approval_mode=\"approve\"}}",
@@ -135,10 +141,14 @@ pub(super) fn shared_config(url: &str, writable: &[String]) -> Vec<String> {
     );
     [
         format!("sandbox_workspace_write.writable_roots={}", toml(writable)),
+        format!("{NO_NETWORK}=false"),
         server,
         "project_doc_fallback_filenames=[\"CLAUDE.md\"]".to_string(),
     ]
     .into_iter()
+    // Ship Studio's preview server, off for this turn when it's registered:
+    // an agent here drives our preview, never theirs.
+    .chain(crate::preview_isolation::codex_override(None, None))
     .chain(extra_config())
     .collect()
 }
@@ -449,6 +459,8 @@ mod tests {
         assert!(config.contains(&"sandbox_mode=\"workspace-write\""));
         assert!(config
             .contains(&r#"sandbox_workspace_write.writable_roots=["/h/a","/u/Ship \"Studio\""]"#));
+        // Commands get no network whatever the user's config.toml says.
+        assert!(config.contains(&"sandbox_workspace_write.network_access=false"));
         assert!(config.contains(&r#"mcp_servers.shipstudio_agents={url="http://127.0.0.1:9/mcp/t/agents/a",tool_timeout_sec=300,default_tools_approval_mode="approve"}"#));
         assert!(config.contains(&r#"developer_instructions="Be \"brief\".\nOk""#));
         assert!(fresh.windows(2).any(|w| w[0] == "-m" && w[1] == "gpt-5.5"));

@@ -1,9 +1,9 @@
 /**
- * Create a new agent, or edit one. Creating asks only what Grok Bot asks —
- * a name and a face — plus what it runs on (Claude Code or Codex, when both
- * are here and signed in) and its model, with the role and briefing
- * one disclosure away, because
- * most agents are created by the Chief of Staff and briefed in conversation.
+ * Create a new agent, or edit one. Up front: a name, what it should do and
+ * what it should know. Colour, what it runs on (a choice only once two
+ * engines are installed; otherwise a quiet "Also use …" at the foot), model,
+ * project and apps sit under Advanced, because most agents are created by
+ * the Chief of Staff and briefed in conversation.
  *
  * @module components/agents/AgentEditorModal
  */
@@ -19,6 +19,7 @@ import { AgentProjectField } from './AgentProject';
 import { AgentMemory } from './AgentMemory';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentSecrets } from './AgentSecrets';
+import { AgentEngineField, AgentEngineMore } from './AgentEngine';
 import { ChevronRightIcon } from '@/components/icons';
 import {
   AGENT_COLORS,
@@ -27,7 +28,6 @@ import {
   createAgent,
   ENGINE_LABEL,
   defaultEngine,
-  engineOptions,
   formatUsage,
   getAgentInstructions,
   getAgentUsage,
@@ -149,6 +149,8 @@ interface AgentEditorModalProps {
   onOpenApps?: () => void;
   /** Editing: open on its memory rather than its settings. */
   initialTab?: EditorTab;
+  /** Install or sign in to an engine that isn't ready, over the editor. */
+  onSetUpEngine?: (engine: AgentEngine, step: 'install' | 'sign-in') => void;
 }
 
 export type EditorTab = 'agent' | 'memory';
@@ -167,6 +169,7 @@ export function AgentEditorModal({
   takenColors,
   onOpenApps,
   initialTab = 'agent',
+  onSetUpEngine,
 }: AgentEditorModalProps) {
   const editing = Boolean(agent);
   const [tab, setTab] = useState<EditorTab>(initialTab);
@@ -176,9 +179,11 @@ export function AgentEditorModal({
   const [role, setRole] = useState(agent?.role ?? '');
   const [instructions, setInstructions] = useState('');
   const engines = useAgentsSelector((s) => s.engines);
-  const [engine, setEngine] = useState<AgentEngine>(() => agent?.engine ?? defaultEngine(engines));
+  // Until someone picks, a new agent goes on the first engine that can take
+  // it, worked out from the overview as it arrives rather than once.
+  const [picked, setEngine] = useState<AgentEngine | null>(agent?.engine ?? null);
+  const engine = picked ?? defaultEngine(engines);
   const [model, setModel] = useState(agent?.model ?? '');
-  const runsOn = engineOptions(engines, engine);
   const switching = Boolean(agent && agent.engine !== engine);
   const [project, setProject] = useState(agent?.project ?? '');
   const [usage, setUsage] = useState<UsageSummary | null>(null);
@@ -281,6 +286,24 @@ export function AgentEditorModal({
         <p className="agent-editor__hint">Or just ask your Chief of Staff to set one up for you.</p>
       )}
 
+      {/* Out of Advanced: it shows only a choice (two engines installed) or why
+          the engine it would use can't run yet, and neither may be hidden. */}
+      <AgentEngineField
+        engines={engines}
+        value={engine}
+        current={agent?.engine}
+        onChange={(next) => {
+          setEngine(next);
+          // Models don't cross engines.
+          setModel(next === agent?.engine ? (agent.model ?? '') : '');
+        }}
+        onSetUp={onSetUpEngine}
+        note={
+          switching &&
+          `Its next message starts a new ${ENGINE_LABEL[engine]} session, handed the recent conversation. Instructions and memory carry over.`
+        }
+      />
+
       <div className="agent-editor__advanced">
         <TextButton
           className="agent-editor__more"
@@ -338,28 +361,6 @@ export function AgentEditorModal({
               </div>
             </div>
 
-            {runsOn.length > 1 && (
-              <div className="agent-editor__label" role="group" aria-label="Runs on">
-                Runs on
-                <SegmentedControl
-                  value={engine}
-                  options={runsOn.map((e) => ({ value: e.id, label: e.label }))}
-                  onValueChange={(next) => {
-                    setEngine(next);
-                    // Models don't cross engines.
-                    setModel(next === agent?.engine ? (agent.model ?? '') : '');
-                  }}
-                  aria-label="Runs on"
-                />
-                {switching && (
-                  <p className="agent-editor__hint">
-                    Its next message starts a new {ENGINE_LABEL[engine]} session, handed the recent
-                    conversation. Instructions and memory carry over.
-                  </p>
-                )}
-              </div>
-            )}
-
             <div className="agent-editor__label" role="group" aria-label="Model">
               Model
               <SegmentedControl
@@ -401,6 +402,9 @@ export function AgentEditorModal({
           <AgentSecrets agent={agent} />
         </div>
       )}
+      {/* With one engine there's no "Runs on": what protects it, and the way to add another, live down here. */}
+      <AgentEngineMore engines={engines} value={engine} onSetUp={onSetUpEngine} />
+
       {error && (
         <p className="agent-editor__error" role="alert">
           {error}

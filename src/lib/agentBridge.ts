@@ -18,6 +18,7 @@ import {
   formatElementsForAgent,
 } from './inspectFormat';
 import { addMcpServer, removeMcpServer } from './mcp';
+import { brandScoped } from './brand';
 import {
   asCommandError,
   formatCommandError,
@@ -78,7 +79,10 @@ export interface BridgeToolContext {
   getOverlayFrameSize: () => { w: number; h: number } | null;
 }
 
-export const PREVIEW_MCP_SERVER_NAME = 'shipstudio-preview';
+/** Ours, never Ship Studio's `shipstudio-preview`: both apps register a bridge
+ *  in the same agent configs, and each must only add or remove its own entry.
+ *  Mirrors `brand::preview_mcp_name()` in Rust. */
+export const PREVIEW_MCP_SERVER_NAME = brandScoped('preview');
 
 const DEFAULT_ENTRY_LIMIT = 50;
 

@@ -559,10 +559,10 @@ fn initialize_result(params: Option<&Value>) -> Value {
         "protocolVersion": version,
         "capabilities": { "tools": {} },
         "serverInfo": {
-            "name": "ship-studio-preview",
+            "name": crate::brand::preview_mcp_name(),
             "version": env!("CARGO_PKG_VERSION"),
         },
-        "instructions": "PREFERRED tools for anything involving THIS project's own site: viewing pages, clicking buttons, filling forms, reading console/network output, taking screenshots. They drive the live preview inside Ship Studio that the user is already watching — always use these instead of generic browser automation (Chrome extensions, Playwright, opening a browser) when the target is this project's pages; they are faster, need no setup, and the user sees an agent cursor mark every action. Start with preview_status to see what's running and which pages exist. After making code changes, use preview_console to check for runtime errors and preview_screenshot to see the rendered result. preview_click/preview_type/preview_scroll interact with the page like a user would; preview_navigate switches pages. When NOT to use these: (1) other websites, the deployed production site, or tasks needing an existing logged-in browser session — use a browser automation tool if one is available; (2) anything requiring the user personally — signing in with real credentials, OAuth/social-login popups, payments or checkout, camera/microphone permissions, or judging how the site feels on their real devices and browsers — there, ask the user to check it themselves in their own browser and tell them what to look for.",
+        "instructions": format!("PREFERRED tools for anything involving THIS project's own site: viewing pages, clicking buttons, filling forms, reading console/network output, taking screenshots. They drive the live preview inside {} that the user is already watching — always use these instead of generic browser automation (Chrome extensions, Playwright, opening a browser) when the target is this project's pages; they are faster, need no setup, and the user sees an agent cursor mark every action. Start with preview_status to see what's running and which pages exist. After making code changes, use preview_console to check for runtime errors and preview_screenshot to see the rendered result. preview_click/preview_type/preview_scroll interact with the page like a user would; preview_navigate switches pages. When NOT to use these: (1) other websites, the deployed production site, or tasks needing an existing logged-in browser session — use a browser automation tool if one is available; (2) anything requiring the user personally — signing in with real credentials, OAuth/social-login popups, payments or checkout, camera/microphone permissions, or judging how the site feels on their real devices and browsers — there, ask the user to check it themselves in their own browser and tell them what to look for.", crate::brand::NAME),
     })
 }
 
@@ -576,7 +576,7 @@ struct ToolDef {
 const TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "preview_console",
-        description: "Read recent console output (logs, warnings, errors, uncaught exceptions, unhandled rejections) captured from the Ship Studio live preview of this project. Use after making changes to check for runtime errors.",
+        description: "Read recent console output (logs, warnings, errors, uncaught exceptions, unhandled rejections) captured from the live preview of this project. Use after making changes to check for runtime errors.",
         timeout_secs: DEFAULT_TOOL_TIMEOUT_SECS,
         input_schema: || json!({
             "type": "object",
@@ -803,17 +803,19 @@ async fn dispatch_tool(
     let project_path = resolved_project.as_str();
 
     let Some(window_label) = crate::state::get_window_for_project(project_path) else {
-        return tool_error_result(
-            "This project isn't open in Ship Studio right now. Ask the user to open the project (its preview provides these tools).",
-        );
+        return tool_error_result(&format!(
+            "This project isn't open in {} right now. Ask the user to open the project (its preview provides these tools).",
+            crate::brand::NAME
+        ));
     };
 
     // Fail fast when the preview frontend isn't listening — waiting out the
     // timeout would just stall the agent for no reason.
     if !is_project_attached(project_path) {
-        return tool_error_result(
-            "The project is open in Ship Studio, but its web preview isn't active, so these tools can't run. If this is a web project, ask the user to switch to its workspace (the preview loads there). If it's a native mobile project (Expo / React Native / Flutter), it uses the simulator preview instead — these web-preview tools don't apply; verify through code, build output, and the user.",
-        );
+        return tool_error_result(&format!(
+            "The project is open in {}, but its web preview isn't active, so these tools can't run. If this is a web project, ask the user to switch to its workspace (the preview loads there). If it's a native mobile project (Expo / React Native / Flutter), it uses the simulator preview instead — these web-preview tools don't apply; verify through code, build output, and the user.",
+            crate::brand::NAME
+        ));
     }
 
     let request_id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
@@ -822,9 +824,10 @@ async fn dispatch_tool(
     if let Ok(mut pending) = PENDING_REQUESTS.lock() {
         pending.insert(request_id, tx);
     } else {
-        return tool_error_result(
-            "Ship Studio's agent bridge is in a broken state (lock poisoned). Restart Ship Studio.",
-        );
+        return tool_error_result(&format!(
+            "{name}'s agent bridge is in a broken state (lock poisoned). Restart {name}.",
+            name = crate::brand::NAME
+        ));
     }
 
     let payload = json!({
@@ -844,7 +847,8 @@ async fn dispatch_tool(
             pending.remove(&request_id);
         }
         return tool_error_result(&format!(
-            "Could not reach the Ship Studio preview window: {e}"
+            "Could not reach the {} preview window: {e}",
+            crate::brand::NAME
         ));
     }
 
@@ -855,7 +859,7 @@ async fn dispatch_tool(
             if result.get("content").map(Value::is_array).unwrap_or(false) {
                 result
             } else {
-                tool_error_result("The preview returned a malformed tool result (missing 'content'). This is a Ship Studio bug.")
+                tool_error_result(&format!("The preview returned a malformed tool result (missing 'content'). This is a {} bug.", crate::brand::NAME))
             }
         }
         Ok(Err(_)) | Err(_) => {
@@ -863,8 +867,9 @@ async fn dispatch_tool(
                 pending.remove(&request_id);
             }
             tool_error_result(&format!(
-                "The preview did not respond within {}s. The preview panel may not be open in Ship Studio, or the dev server may not be running. Ask the user to open the preview.",
-                tool.timeout_secs
+                "The preview did not respond within {}s. The preview panel may not be open in {}, or the dev server may not be running. Ask the user to open the preview.",
+                tool.timeout_secs,
+                crate::brand::NAME
             ))
         }
     }
@@ -893,9 +898,10 @@ fn resolve_active_project(app: &tauri::AppHandle) -> Result<String, String> {
     use tauri::Manager;
     let open = crate::state::get_open_project_windows();
     if open.is_empty() {
-        return Err(
-            "No project is open in Ship Studio right now. Ask the user to open the project you're working on (its preview provides these tools).".to_string(),
-        );
+        return Err(format!(
+            "No project is open in {} right now. Ask the user to open the project you're working on (its preview provides these tools).",
+            crate::brand::NAME
+        ));
     }
     for (label, window) in app.webview_windows() {
         if window.is_focused().unwrap_or(false) {
@@ -908,7 +914,8 @@ fn resolve_active_project(app: &tauri::AppHandle) -> Result<String, String> {
         return Ok(open[0].0.clone());
     }
     Err(format!(
-        "Several projects are open in Ship Studio ({}) and none is focused, so it's unclear which preview to use. Ask the user to focus the project you're working on.",
+        "Several projects are open in {} ({}) and none is focused, so it's unclear which preview to use. Ask the user to focus the project you're working on.",
+        crate::brand::NAME,
         open.iter()
             .map(|(p, _)| p.rsplit('/').next().unwrap_or(p))
             .collect::<Vec<_>>()
@@ -932,7 +939,10 @@ mod tests {
         let params = json!({ "protocolVersion": "2024-11-05" });
         let result = initialize_result(Some(&params));
         assert_eq!(result["protocolVersion"], "2024-11-05");
-        assert_eq!(result["serverInfo"]["name"], "ship-studio-preview");
+        assert_eq!(
+            result["serverInfo"]["name"],
+            crate::brand::preview_mcp_name()
+        );
         assert!(result["capabilities"]["tools"].is_object());
     }
 

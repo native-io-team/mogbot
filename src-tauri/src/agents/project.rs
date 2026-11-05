@@ -174,8 +174,11 @@ pub async fn snapshot(project: &Path) -> Option<String> {
     })
     .await?;
     let index = project.join(index.trim());
-    let scratch =
-        std::env::temp_dir().join(format!("shipstudio-agent-index-{}", super::store::new_id()));
+    let scratch = std::env::temp_dir().join(format!(
+        "{}-agent-index-{}",
+        crate::brand::SLUG,
+        super::store::new_id()
+    ));
     // Starting from a copy of the real index keeps `add -A` fast (git trusts
     // its stat cache) without touching what the user has staged.
     if index.exists() {

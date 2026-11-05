@@ -665,6 +665,7 @@ export const ENGINES = [
     label: 'Claude Code',
     installed: true,
     signedIn: true,
+    asks: true,
     models: [
       { value: 'opus', label: 'Opus' },
       { value: 'sonnet', label: 'Sonnet' },
@@ -676,6 +677,7 @@ export const ENGINES = [
     label: 'Codex',
     installed: true,
     signedIn: true,
+    asks: true,
     models: [
       { value: 'gpt-5.6-sol', label: 'GPT-5.6-Sol' },
       { value: 'gpt-5.5', label: 'GPT-5.5' },
@@ -1597,7 +1599,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-engine-picker',
     title: 'Agents — moving an agent to Codex in the editor',
     looksRightWhen:
-      'Editing the Chief of Staff: a “Runs on” control (Claude Code | Codex) above Model, with Codex chosen; under it one muted line saying its next message starts a new Codex session handed the recent conversation, instructions and memory carried over. Model now offers Default / GPT-5.6-Sol / GPT-5.5 with Default chosen. The Apps hint says a Codex agent uses the MCP servers set up in Codex, with no Manage apps button.',
+      'Editing the Chief of Staff: a “Runs on” control (Claude Code | Codex) above Model, with Codex chosen; under it one muted line saying its next message starts a new Codex session handed the recent conversation, instructions and memory carried over, then one saying its commands go ahead without asking but can only change files in your projects and its own folder and can’t reach the internet, going further asks first, and apps connected to Codex aren’t limited by this. Model now offers Default / GPT-5.6-Sol / GPT-5.5 with Default chosen. The Apps hint says a Codex agent uses the MCP servers set up in Codex, with no Manage apps button.',
     openSelector: AGENTS_TAB,
     requires: '[aria-label="Runs on"] [aria-pressed="true"]',
     clipSelector: '.agent-editor',
@@ -1612,6 +1614,57 @@ export const agentsScenarios: Scenario[] = [
       agents_messages: messagesFor,
       agents_instructions: 'Keep the team moving.',
       agents_usage: { week: totals(0, 0, 0, 0), allTime: totals(0, 0, 0, 0) },
+    },
+  },
+  {
+    id: 'agents-engine-unavailable',
+    title: 'Agents — a new agent when Codex isn’t signed in',
+    looksRightWhen:
+      'The New agent dialog: “Runs on” shows Claude Code chosen and Codex greyed out (not clickable). Under it, one muted line on what protects a Claude Code agent (edits in your projects and its tools in this app go ahead; anything else asks first unless already allowed), then “Codex isn’t signed in.” with a “Sign in to Codex” text button. Nothing claims Codex is ready.',
+    openSelector: AGENTS_TAB,
+    requires: '[aria-label="Runs on"] button[disabled]',
+    clipSelector: '.agent-editor',
+    steps: [{ click: '.workspace-sidebar-add-project' }],
+    commands: {
+      agents_overview: {
+        ...overview(),
+        engines: [ENGINES[0], { ...ENGINES[1], signedIn: false }],
+      },
+      agents_messages: messagesFor,
+    },
+  },
+  {
+    id: 'agents-engine-one',
+    title: 'Agents — a new agent with only Claude Code installed',
+    looksRightWhen:
+      'The New agent dialog has no “Runs on” control at all: name, colour, Model, then “Add a role and instructions”. At the foot, one muted line on what protects a Claude Code agent, and a quiet “Also use Codex” text button. No greyed-out Codex, no jargon.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-editor [data-testid="agent-engine-protections"]',
+    clipSelector: '.agent-editor',
+    steps: [{ click: '.workspace-sidebar-add-project' }],
+    commands: {
+      agents_overview: {
+        ...overview(),
+        engines: [ENGINES[0], { ...ENGINES[1], installed: false, signedIn: false }],
+      },
+      agents_messages: messagesFor,
+    },
+  },
+  {
+    id: 'agents-codex-cant-ask',
+    title: 'Agents — a Codex agent on a Codex that can’t ask',
+    looksRightWhen:
+      'Research’s chat, with one muted line just above the composer: “Codex can’t stop to ask you here, so anything that needs your OK is refused. Updating Codex fixes this.” Everything else as in a normal Codex chat.',
+    openSelector: AGENTS_TAB,
+    requires: '[data-testid="agent-cant-ask"]',
+    steps: [{ click: '[data-agent-id="research"]' }],
+    commands: {
+      agents_overview: {
+        ...overview(CODEX_TEAM),
+        engines: [ENGINES[0], { ...ENGINES[1], asks: false }],
+      },
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'research' ? CODEX_CHAT : messagesFor(args),
     },
   },
   {

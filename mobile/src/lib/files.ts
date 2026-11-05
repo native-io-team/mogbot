@@ -87,7 +87,7 @@ function fromAsset(a: ImagePicker.ImagePickerAsset): PickedFile {
 /** Throws a sentence when the user said no to the permission. */
 export async function takePhoto(): Promise<PickedFile[]> {
   const { granted } = await ImagePicker.requestCameraPermissionsAsync();
-  if (!granted) throw new Error('Ship Studio can’t use the camera. Allow it in Settings.');
+  if (!granted) throw new Error('This app can’t use the camera. Allow it in Settings.');
   const r = await ImagePicker.launchCameraAsync({ quality: 0.85 });
   return r.canceled ? [] : r.assets.map(fromAsset);
 }

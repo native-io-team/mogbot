@@ -12,7 +12,7 @@
  *
  * Legacy plugin-based skills are also supported from ~/.claude/plugins/installed_plugins.json
  */
-mod bundled;
+pub(crate) mod bundled;
 mod install;
 mod search;
 

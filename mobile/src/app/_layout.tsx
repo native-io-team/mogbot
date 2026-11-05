@@ -3,9 +3,10 @@ import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
 import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
 import { DarkTheme, Stack, ThemeProvider, usePathname, useRouter } from 'expo-router';
+import type { ReactNode } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { MenuHost } from '../components/menu';
@@ -20,21 +21,30 @@ import {
 import { boot, watchLifecycle } from '../lib/session';
 import { useApp } from '../lib/store';
 import { sheet, stackOptions } from '../lib/navigation';
+import { RootAccent, useAccent } from '../lib/accent';
 import { colors } from '../lib/theme';
 
 void SplashScreen.preventAutoHideAsync();
 
-const theme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: colors.surfaceApp,
-    card: colors.surfaceApp,
-    border: colors.borderDefault,
-    text: colors.textPrimary,
-    primary: colors.accentActive,
-  },
-};
+/** The navigation theme: the palette, with the accent in scope as `primary`. */
+function NavigationTheme({ children }: { children: ReactNode }) {
+  const { accent } = useAccent();
+  const theme = useMemo(
+    () => ({
+      ...DarkTheme,
+      colors: {
+        ...DarkTheme.colors,
+        background: colors.surfaceApp,
+        card: colors.surfaceApp,
+        border: colors.borderDefault,
+        text: colors.textPrimary,
+        primary: accent,
+      },
+    }),
+    [accent]
+  );
+  return <ThemeProvider value={theme}>{children}</ThemeProvider>;
+}
 
 export default function RootLayout() {
   const router = useRouter();
@@ -122,43 +132,53 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.surfaceApp }}>
       <KeyboardProvider>
-        <ThemeProvider value={theme}>
-          <StatusBar style="light" />
-          <Stack screenOptions={stackOptions}>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="pair" options={{ headerShown: false, gestureEnabled: false }} />
-            <Stack.Screen
-              name="scan"
-              options={{ presentation: 'fullScreenModal', headerShown: false }}
-            />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false }} />
-            <Stack.Screen name="chat/[id]" options={{ title: '' }} />
-            <Stack.Screen name="agent/[id]" options={sheet([0.62, 1])} />
-            <Stack.Screen name="schedule" options={sheet([0.5, 0.9])} />
-            <Stack.Screen name="files/[id]" options={{ title: 'Files' }} />
-            <Stack.Screen name="diff" options={sheet([0.75, 1])} />
-            <Stack.Screen name="start" options={sheet([0.6, 0.9])} />
-            <Stack.Screen name="instructions" options={sheet([0.9])} />
-            <Stack.Screen name="memory" options={sheet([0.9])} />
-            <Stack.Screen name="remember" options={sheet([0.5, 0.9])} />
-            <Stack.Screen name="session/[id]" options={{ title: '' }} />
-            <Stack.Screen
-              name="viewer"
-              options={{
-                presentation: 'fullScreenModal',
-                headerShown: false,
-                animation: 'fade',
-                contentStyle: { backgroundColor: colors.black },
-              }}
-            />
-            <Stack.Screen
-              name="connection"
-              options={{ ...sheet([0.75, 1]), contentStyle: undefined }}
-            />
-            <Stack.Screen name="settings" options={{ title: 'Settings' }} />
-          </Stack>
-          <MenuHost />
-        </ThemeProvider>
+        <RootAccent>
+          <NavigationTheme>
+            <StatusBar style="light" />
+            <Stack screenOptions={stackOptions}>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="pair" options={{ headerShown: false, gestureEnabled: false }} />
+              <Stack.Screen
+                name="scan"
+                options={{ presentation: 'fullScreenModal', headerShown: false }}
+              />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false }} />
+              <Stack.Screen name="chat/[id]" options={{ title: '' }} />
+              <Stack.Screen name="agent/[id]" options={sheet([0.62, 1])} />
+              <Stack.Screen name="schedule" options={sheet([0.5, 0.9])} />
+              <Stack.Screen name="files/[id]" options={{ title: 'Files' }} />
+              <Stack.Screen name="diff" options={sheet([0.75, 1])} />
+              <Stack.Screen name="start" options={sheet([0.6, 0.9])} />
+              <Stack.Screen name="instructions" options={sheet([0.9])} />
+              <Stack.Screen name="memory" options={sheet([0.9])} />
+              <Stack.Screen name="remember" options={sheet([0.5, 0.9])} />
+              <Stack.Screen name="session/[id]" options={{ title: '' }} />
+              <Stack.Screen
+                name="viewer"
+                options={{
+                  presentation: 'fullScreenModal',
+                  headerShown: false,
+                  animation: 'fade',
+                  contentStyle: { backgroundColor: colors.black },
+                }}
+              />
+              {/*
+              An opaque dark sheet: without a background iOS 26 draws light
+              glass under its white text. The app colour, so its grouped
+              sections (panel colour) still read as cards.
+            */}
+              <Stack.Screen
+                name="connection"
+                options={{
+                  ...sheet([0.75, 1]),
+                  contentStyle: { backgroundColor: colors.surfaceApp },
+                }}
+              />
+              <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+            </Stack>
+            <MenuHost />
+          </NavigationTheme>
+        </RootAccent>
       </KeyboardProvider>
     </GestureHandlerRootView>
   );

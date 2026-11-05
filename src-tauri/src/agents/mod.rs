@@ -9,6 +9,8 @@
 //! - [`runner`]: per-agent inbox; each turn is one `claude --print --resume`
 //!   or one `codex app-server` (`codex exec [resume]` on a Codex without it)
 //! - [`engine`]: Claude Code or Codex per agent: availability, sign-in, models
+//! - [`driver`]: how one turn runs its engine (the per-engine boundary)
+//! - [`claude`]: Claude Code's command line for a turn
 //! - [`codex`]: Codex's command line and JSONL, mapped onto the same turn steps
 //! - [`codex_app`]: Codex's app-server: streaming, approval cards, interrupt
 //! - [`mcp`]: the tools agents get (team, projects, management, approvals)
@@ -36,9 +38,11 @@ pub mod attachments;
 pub mod broker;
 pub mod capabilities;
 pub mod capacity;
+pub mod claude;
 pub mod codex;
 pub mod codex_app;
 pub mod decisions;
+pub mod driver;
 pub mod engine;
 pub mod failure;
 pub mod files;

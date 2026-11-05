@@ -10,6 +10,7 @@ import {
   type FidelityRun,
 } from './migration';
 import { normaliseUrl } from '../components/migration/SiteUrlPanel';
+import { brandScoped } from './brand';
 
 afterEach(() => {
   clearMocks();
@@ -41,7 +42,7 @@ describe('buildMigrationPrompt', () => {
 
   it('names the site and the skill that carries the method', () => {
     expect(prompt).toContain('https://example.com/');
-    expect(prompt).toContain('shipstudio-site-to-code');
+    expect(prompt).toContain(brandScoped('site-to-code'));
   });
 
   it('points at the engine by the name it is actually written under', () => {

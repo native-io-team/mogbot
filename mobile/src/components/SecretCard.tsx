@@ -120,7 +120,7 @@ export function SecretCard({
           maxFontSizeMultiplier={2}
           style={{ flexShrink: 1 }}
         >
-          {agent.name} asks for <T variant="mono">{request.name}</T>
+          {agent.name} asks for “{request.name}”
         </T>
       </View>
       <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>

@@ -34,9 +34,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use ship_studio_lib::agents::engine::Engine;
-use ship_studio_lib::agents::{self, runner, store};
-use ship_studio_lib::commands::agents as cmd;
+use app_lib::agents::engine::Engine;
+use app_lib::agents::{self, runner, store};
+use app_lib::commands::agents as cmd;
 use store::{AgentMessage, MessageKind};
 use tauri::{AppHandle, Listener};
 
@@ -151,7 +151,7 @@ impl H {
     }
 
     async fn send(&self, id: &str, text: &str) -> Result<AgentMessage, String> {
-        cmd::agents_send(self.app.clone(), id.into(), text.into(), None, None)
+        cmd::agents_send(self.app.clone(), id.into(), text.into(), None, None, None)
             .await
             .map_err(|e| format!("send failed: {e}"))
     }
@@ -1426,7 +1426,7 @@ fn serve_session_starts(h: &H) {
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
             .collect();
-            let opened = ship_studio_lib::commands::pty_session::pty_session_open(
+            let opened = app_lib::commands::pty_session::pty_session_open(
                 app,
                 v["sessionId"].as_str().unwrap_or("").to_string(),
                 "claude".into(),
@@ -1465,7 +1465,7 @@ fn prompt_cards(id: &str) -> Vec<store::Approval> {
 /// chats; Allow in the Chief's records the trust as Claude Code does and
 /// resolves Site Builder's too; the edit happens; a change card follows.
 async fn session_prompt(h: &H) -> Check {
-    use ship_studio_lib::agents::decisions;
+    use app_lib::agents::decisions;
     serve_session_starts(h);
     let dir = git_project(h, "demo");
     std::fs::write(
@@ -1605,7 +1605,7 @@ async fn session_prompt(h: &H) -> Check {
             && store::get(&site.id).unwrap().pending_approvals == 0,
         "cards still pending",
     )?;
-    let _ = ship_studio_lib::commands::pty_session::kill_all_sessions_sync();
+    let _ = app_lib::commands::pty_session::kill_all_sessions_sync();
     ensure(
         allowed.len() >= 2,
         "the edit's permission prompt never became a card",

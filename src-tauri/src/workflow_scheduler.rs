@@ -2,7 +2,7 @@
 //!
 //! One tokio task, ticking once a minute over every armed workflow in every
 //! known project. This is Tier A of the two-tier model described in
-//! `docs/workflows-inbox.md`: it fires only while Ship Studio is running, and
+//! `docs/workflows-inbox.md`: it fires only while the app is running, and
 //! the UI says so in those words rather than implying a clock the app cannot
 //! keep.
 //!
@@ -21,6 +21,16 @@
 //!   best; if either has `can-edit`, it's a corruption risk. The guard is
 //!   global rather than per-project because a run started by hand in one
 //!   project is still the user's quota and still their machine's CPU.
+//!
+//! ## Running beside Ship Studio
+//!
+//! Both apps scan the same projects and share `workflows-state.json`, so the
+//! `last_run_at` either one records stops the other running that slot again —
+//! including on this app's first launch, which therefore sees Ship Studio's
+//! history rather than an empty one. Before starting a scheduled slot the tick
+//! also takes a cross-process claim on it (`slot_claim`), which covers the
+//! window while a run is still going. Ship Studio doesn't take claims, so that
+//! window stays open between the two apps; see `slot_claim.rs`.
 
 use crate::commands::workflows::{
     due_at, projects_with_workflows, read_project_workflows, Workflow,
@@ -54,45 +64,54 @@ pub fn spawn(app: AppHandle) {
     });
 }
 
-/// The armed, time-triggered workflow that is most overdue, if any.
-fn most_overdue(now: i64) -> Option<Workflow> {
+/// Every armed, time-triggered workflow that is owed a run, most overdue first,
+/// with the slot (the moment it became due) each one is owed for.
+fn due_now(now: i64) -> Vec<(i64, Workflow)> {
     let state = crate::commands::workflows::load_state();
     let candidates = projects_with_workflows()
         .into_iter()
         .flat_map(|project| read_project_workflows(&project));
-    pick_due(candidates, &state.last_run_at, now)
+    due_in_order(candidates, &state.last_run_at, now)
 }
 
-/// Choose what to run from a set of candidates.
+/// Choose what to run from a set of candidates: the most overdue one.
 ///
 /// Split out from the filesystem scan so the choice itself can be tested: the
 /// bug this guards against — asking "when is the next occurrence?" instead of
 /// "did one pass?", which made every daily and weekly workflow unrunnable —
 /// lived here, in nine lines that read fine and did nothing.
+#[cfg(test)]
 fn pick_due(
     workflows: impl IntoIterator<Item = Workflow>,
     last_run_at: &std::collections::BTreeMap<String, i64>,
     now: i64,
 ) -> Option<Workflow> {
-    let mut best: Option<(i64, Workflow)> = None;
-    for workflow in workflows {
-        if !workflow.auto_run || !workflow.trigger.is_armable() {
-            continue;
-        }
-        let last = last_run_at.get(&workflow.id).copied();
-        // `due_at`, not `next_due_at`: the next occurrence of a daily trigger
-        // is always in the future, so asking that question here means daily
-        // and weekly workflows never run at all.
-        let Some(due) = due_at(workflow.trigger, last, workflow.updated_at, now) else {
-            continue;
-        };
-        // Most overdue first, so a backlog drains oldest-first rather than
-        // letting one workflow's cadence starve another's.
-        if best.as_ref().is_none_or(|(best_due, _)| due < *best_due) {
-            best = Some((due, workflow));
-        }
-    }
-    best.map(|(_, workflow)| workflow)
+    due_in_order(workflows, last_run_at, now)
+        .into_iter()
+        .next()
+        .map(|(_, workflow)| workflow)
+}
+
+/// The owed workflows and their slots, most overdue first, so a backlog drains
+/// oldest-first rather than letting one workflow's cadence starve another's.
+fn due_in_order(
+    workflows: impl IntoIterator<Item = Workflow>,
+    last_run_at: &std::collections::BTreeMap<String, i64>,
+    now: i64,
+) -> Vec<(i64, Workflow)> {
+    let mut due: Vec<(i64, Workflow)> = workflows
+        .into_iter()
+        .filter(|workflow| workflow.auto_run && workflow.trigger.is_armable())
+        .filter_map(|workflow| {
+            let last = last_run_at.get(&workflow.id).copied();
+            // `due_at`, not `next_due_at`: the next occurrence of a daily
+            // trigger is always in the future, so asking that question here
+            // means daily and weekly workflows never run at all.
+            due_at(workflow.trigger, last, workflow.updated_at, now).map(|slot| (slot, workflow))
+        })
+        .collect();
+    due.sort_by_key(|(slot, _)| *slot);
+    due
 }
 
 async fn tick(app: &AppHandle) -> Result<(), crate::errors::CommandError> {
@@ -103,7 +122,32 @@ async fn tick(app: &AppHandle) -> Result<(), crate::errors::CommandError> {
     }
 
     let now = crate::commands::workflows::now_ms();
-    let Some(workflow) = most_overdue(now) else {
+    crate::commands::workflows::slot_claim::prune(now);
+
+    // The state is shared with Ship Studio, so another app may be running one
+    // of these slots right now and won't record it until it ends. Take the
+    // first slot nobody has claimed; a slot someone else holds is theirs.
+    let mut chosen = None;
+    for (slot, workflow) in due_now(now) {
+        match crate::commands::workflows::slot_claim::try_claim(&workflow.id, slot, now) {
+            Ok(true) => {
+                chosen = Some(workflow);
+                break;
+            }
+            Ok(false) => {
+                debug!(workflow = %workflow.name, slot, "slot already claimed by another scheduler");
+            }
+            // Can't write the claim (a read-only or missing ~/ShipStudio):
+            // running unclaimed is what this app did before claims existed,
+            // and the shared `last_run_at` still stops a repeat.
+            Err(err) => {
+                warn!(workflow = %workflow.name, error = %err, "could not claim the slot; running anyway");
+                chosen = Some(workflow);
+                break;
+            }
+        }
+    }
+    let Some(workflow) = chosen else {
         return Ok(());
     };
 

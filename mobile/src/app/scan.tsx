@@ -61,7 +61,7 @@ export default function Scan() {
           <View style={styles.frame} />
           <T color={colors.textWhite} style={styles.caption}>
             {wrong
-              ? 'That code isn’t a Ship Studio pairing code'
+              ? 'That isn’t a pairing code'
               : 'Point at the code in Settings → Phone on your Mac'}
           </T>
         </View>
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     height: 240,
     borderRadius: radius.lg + 12,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.85)',
+    borderColor: colors.overlayFrame,
   },
   caption: { textAlign: 'center', paddingHorizontal: space.xl },
   close: { position: 'absolute', right: space.lg },

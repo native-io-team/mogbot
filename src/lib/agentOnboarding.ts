@@ -91,7 +91,7 @@ export async function mockMarkSetupItemReady(itemId: string): Promise<void> {
  * Directory the guided agent session runs in — the projects root
  * (~/ShipStudio), created if missing. Never the user's home: an agent
  * scanning $HOME trips macOS permission prompts (Photos, Desktop, Documents)
- * attributed to Ship Studio, and the pending dialog freezes the agent
+ * attributed to this app, and the pending dialog freezes the agent
  * mid-scan.
  */
 export async function ensureAgentWorkdir(): Promise<string> {

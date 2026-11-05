@@ -656,7 +656,7 @@ fn emulator_log_path(avd: &str) -> std::path::PathBuf {
             }
         })
         .collect();
-    std::env::temp_dir().join(format!("shipstudio-emulator-{safe}.log"))
+    std::env::temp_dir().join(format!("{}-emulator-{safe}.log", crate::brand::SLUG))
 }
 
 /// Read the last `max_lines` lines of a log file, capped for embedding in an
@@ -2709,7 +2709,10 @@ mod tests {
     fn emulator_log_path_sanitizes_avd_name() {
         let path = emulator_log_path("Pixel 8 / API 35");
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
-        assert_eq!(name, "shipstudio-emulator-Pixel_8___API_35.log");
+        assert_eq!(
+            name,
+            format!("{}-emulator-Pixel_8___API_35.log", crate::brand::SLUG)
+        );
     }
 
     #[test]

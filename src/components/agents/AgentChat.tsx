@@ -96,6 +96,7 @@ import {
   type AgentRef,
   type OutgoingAttachment,
   ENGINE_LABEL,
+  engineCantAsk,
   engineIsReady,
 } from '../../lib/agents';
 import {
@@ -239,6 +240,8 @@ export function AgentChat({
   const engineInstalled = useAgentsSelector(
     (s) => s.engines.find((e) => e.id === agent.engine)?.installed ?? false
   );
+  // An engine whose turns can't stop to ask refuses instead: said where you talk to it.
+  const cantAsk = useAgentsSelector((s) => engineCantAsk(agent.engine, s.engines));
   const hasOlder = useAgentsSelector((s) => s.older[agent.id] ?? false);
   // Whitespace that hasn't become words yet isn't worth a bubble.
   const draftText = rawDraft?.text.trimStart() ?? '';
@@ -1069,6 +1072,12 @@ export function AgentChat({
               </TextButton>
             )}
             <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
+          </p>
+        )}
+
+        {engineReady && cantAsk && (
+          <p className="agent-composer__notice" data-testid="agent-cant-ask">
+            {cantAsk}
           </p>
         )}
 

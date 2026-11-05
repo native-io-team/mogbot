@@ -579,6 +579,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
         }}
         onDelete={setDeleting}
         onOpenApps={openApps}
+        onSetUpEngine={(engine, step) => setEngineSetup({ engine, step })}
       />
       <ImportAgentsModal
         isOpen={importOpen}
