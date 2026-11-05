@@ -160,12 +160,15 @@ value, consume a semantic role or an owner-appropriate component token.
 | --- | --- | --- |
 | Surfaces | `--surface-app` / `--surface-panel` / `--surface-control` / `--surface-selected` / `--surface-recessed` | App background → panels → controls → selected rows; recessed wells are used for terminals, log output, and code editors. |
 | Text | `--text-primary` / `--text-secondary` / `--text-muted` / `--text-faint` / `--text-terminal-strong` | Default → supporting labels → muted hints → faint chrome; terminal output has its own readable roles. |
-| Brand / interactive | `--accent-active` / `--accent-active-hover` / `--accent-success` / `--accent-warning` / `--text-on-accent` | Figma active green and warning amber with explicit state intent. |
-| Status | `--accent-success`, `--accent-warning`, `--accent-error`, `--accent-error-light`, `--accent-error-deep`, `--modified-yellow` | Semantic states. Error values are retained as reviewed legacy inputs until their Figma mapping is confirmed. |
+| Accent | `--accent-active` / `--accent-active-hover` / `--accent-active-strong` / `--accent-active-soft` / `--accent-text` / `--text-on-accent` | The app is monochrome plus ONE accent: the Chief of Staff's colour, set at runtime. Use it for primary actions, selection and "this is on" — never for status. See "The accent" below. |
+| Focus | `--focus-ring` (= `--accent-focus`) | Every focus indication. A fixed blue, deliberately not the accent, so it is visible whatever colour the user picked. |
+| Fixed status | `--status-info`, `--status-running` | Info severity and in-progress dots. Fixed hues so a red/orange accent never reads as an error. |
+| Overlay | `--accent-overlay` / `--accent-overlay-ink` | Anything drawn on the user's own page (preview overlays, comment pins). Fixed, never the accent. |
+| Status | `--accent-success`, `--accent-warning`, `--accent-error`, `--accent-error-light`, `--accent-error-deep`, `--modified-yellow` | Semantic states. `--accent-success` means healthy/done/connected only — it is not the brand colour, and never stands in for the accent. Error values are retained as reviewed legacy inputs until their Figma mapping is confirmed. |
 | Info blue | `--info(-hover/-light/-dark)` | Links, info banners, "open" PR state, focus accents. |
 | Purple | `--purple`, `--purple-light`, `--purple-deep-rgb` | AI / agent surfaces only (skills, MCP, plugin marketplace). |
 | Slack | `--slack-pink`, `--slack-lavender(-bright)` | Slack community CTA branding only (dashboard, setup, support panel). |
-| RGB triplets | `--accent-*-rgb` and feature `--*-rgb` values | For alpha tints only, e.g. `rgba(var(--accent-error-rgb), 0.1)`. Each must stay in sync with its solid token. |
+| RGB triplets | `--accent-success/warning/error*-rgb` and feature `--*-rgb` values | For alpha tints only, e.g. `rgba(var(--accent-error-rgb), 0.1)`. Each must stay in sync with its solid token. The accent has no triplet: tint it with `color-mix(in srgb, var(--accent-active) N%, transparent)` (`check:patterns` fails on the old `--accent-active-rgb`). |
 | Tints | `--tint-subtle` / `--tint` / `--tint-strong` | White hover/selection washes on dark surfaces (5/8/10% white). |
 | Overlays | `--overlay-30` … `--overlay-80` | Black scrims behind modals, image dimming. Suffix = alpha %. |
 | ANSI palette | `--ansi-green/red/yellow/blue(-dark)` (+ `-rgb`) | Terminal-flavored output: health diagnostics, browser tools, log rendering. Not for general UI status — that's the status group. |
@@ -178,6 +181,33 @@ value, consume a semantic role or an owner-appropriate component token.
 | Shadows | `--shadow-sm` / `--shadow` / `--shadow-md` / `--shadow-lg` | Elevation: small popovers → dropdowns → modals → fullscreen layers. |
 | Transitions | `--transition-fast` (0.1s) / `--transition` (0.15s) / `--transition-slow` (0.3s) | Duration + easing bundled: `transition: background var(--transition)`. |
 | Type scale | Numeric `--font-size-*` primitives, semantic `--font-size-h1/hero/heading/subhead/body-*/control/label/button/menu-item/badge`, `--font-ui`, `--font-code`, `--font-symbol` | Define each numeric size once in the core scale. Every rendered text kind uses a semantic role that references that scale; Geist is for UI, Geist Mono for code/editor styling, and JetBrains Nerd Font for terminal/symbol glyph coverage. |
+
+### The accent
+
+The app is black and white plus one accent: **the Chief of Staff's colour**.
+There is no separate accent preference — Settings → Appearance → *Accent color*
+(and ⌘K → "Accent color…") edits the Chief's registry colour, so the two
+cannot disagree. Inside another agent's conversation the accent is that
+agent's colour instead.
+
+- **One runtime input.** `src/lib/accent.ts` writes `--accent-user`, plus two
+  values it computes in JS: `--accent-on-user` (black or white ink, whichever
+  has the higher WCAG contrast) and `--accent-user-rgb` (only so the
+  plugin-stable `--action-rgb` follows the accent). Every other accent role is
+  derived in CSS with `color-mix()`.
+- **Scoped accents.** The derived roles are declared on `:root,
+  [data-accent-scope]`. A role derived only at `:root` is inherited as a
+  finished colour and would not follow a child's `--accent-user`. To give a
+  subtree its own accent, spread `useAccentScope(colorKey)` onto its root; any
+  new accent-derived token must go in one of the scoped blocks
+  (`accent.test.ts` fails otherwise).
+- **No flash.** The last app accent is cached in `localStorage` and applied by
+  an inline script in `index.html` before the bundle runs.
+- **Selected needs a second cue.** With a white accent, hue says nothing next
+  to white text — pair accent with a fill, ring, weight or check glyph.
+- **Theme-ready.** Nothing in the accent block assumes dark: hover/pressed mix
+  toward black, soft fills mix with surface tokens, accent text mixes with
+  `--text-primary`. A light theme redefines surfaces and text only.
 
 Need a value that doesn't exist? Add it to the smallest appropriate layer, update the inventory, and
 run `pnpm check:token-layers`. Do not add a new alias to the compatibility file unless it is a
@@ -412,8 +442,8 @@ choices, and split actions use the matching family component.
 ```
 
 Gotcha: the spinning arc uses `currentColor` — tint it by setting `color` on the spinner
-(`style={{ color: 'var(--accent-active)' }}`) or let it inherit; inside a green action button it's
-automatically dark. The track stays `var(--border)`.
+(`style={{ color: 'var(--accent-active)' }}`) or let it inherit; inside a primary (accent) button it
+inherits that button's ink. The track stays `var(--border)`.
 
 ### Progress — [Progress.tsx](../src/components/primitives/Progress.tsx)
 
@@ -430,7 +460,7 @@ also supports an indeterminate state when `value` is omitted or `null`.
 <Progress value={56} aria-label="Upload progress" />
 ```
 
-The track and indicator use the shared surface and brand-green tokens. The root exposes native
+The track and indicator use the shared surface and accent tokens. The root exposes native
 `progressbar` semantics, including `aria-valuemin`, `aria-valuemax`, and `aria-valuenow` for
 determinate progress; indeterminate progress intentionally omits `aria-valuenow`.
 
