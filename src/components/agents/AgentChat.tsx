@@ -80,7 +80,8 @@ import { AgentProjectChip, ChangeCard } from './AgentProject';
 import { ComposerRevising, ResultCardView } from './AgentResult';
 import { WorkTimeline } from './AgentWork';
 import { SessionCard } from './AgentSession';
-import { RoomFoldLine } from './AgentRoomParts';
+import { RoomFoldLine, RoomWorkingPlace } from './AgentRoomParts';
+import { takeHandedRevision } from '../../lib/agentRooms';
 import {
   answerApproval,
   buildChatItems,
@@ -258,9 +259,12 @@ export function AgentChat({
   const hasOlder = useAgentsSelector((s) => s.older[agent.id] ?? false);
   // Whitespace that hasn't become words yet isn't worth a bubble.
   const draftText = rawDraft?.text.trimStart() ?? '';
+  // A reply streaming in a room is the room's: shown there, not here as if
+  // it were for you (the working line says where it is answering).
+  const inRoom = agent.status.state !== 'idle' ? agent.status.room : undefined;
   const streaming = useMemo(
-    () => (rawDraft && draftText.trim() ? { ...rawDraft, text: draftText } : null),
-    [rawDraft, draftText]
+    () => (!inRoom && rawDraft && draftText.trim() ? { ...rawDraft, text: draftText } : null),
+    [rawDraft, draftText, inRoom]
   );
   const { showToast } = useOptionalToast();
   // Kept outside the component: an agent opening a project switches this
@@ -414,7 +418,8 @@ export function AgentChat({
   const quoting = useQuoteSelection(scrollRef, sectionRef, insertQuote);
   // "Ask for changes" on a result card: the next message revises it. It
   // waits above the text like a quote, and goes with the send.
-  const [revising, setRevising] = useState<ResultRef | null>(null);
+  // "Ask for changes" in a room opens this chat with the request staged.
+  const [revising, setRevising] = useState<ResultRef | null>(() => takeHandedRevision(agent.id));
 
   useCommands(
     () => [
@@ -511,7 +516,6 @@ export function AgentChat({
         : shown.filter((m) => !foreignOwners.has(m.approval?.prompt?.owner.id ?? '')),
     [shown, foreignOwners]
   );
-  const items = useMemo(() => buildChatItems(listed), [listed]);
   // The agent's open copy of its project: only its newest card offers Keep /
   // Discard, and that card reads the live status (it waits while working).
   const copyId = agent.copy?.id;
@@ -523,6 +527,18 @@ export function AgentChat({
     }
     return null;
   }, [shown, copyId]);
+  // Said in a room, a line folds to "Replied in <room>", except the card for
+  // its open copy (Keep / Discard stays here too) and lines from a room that
+  // is gone, which have nowhere else to be read.
+  const roomsLoaded = useAgentsSelector((s) => s.roomsLoaded);
+  const roomIds = useAgentsSelector((s) => s.rooms.map((r) => r.id).join(' '));
+  const items = useMemo(() => {
+    const rooms = new Set(roomIds ? roomIds.split(' ') : []);
+    return buildChatItems(listed, {
+      unfolded: liveCopyCard,
+      folds: (roomId) => !roomsLoaded || rooms.has(roomId),
+    });
+  }, [listed, liveCopyCard, roomsLoaded, roomIds]);
   const copyAgent = liveCopyCard ? agent : undefined;
   // Each result's newest version is drawn in full; older ones fold.
   const newestResult = useMemo(() => new Set(newestResults(shown).values()), [shown]);
@@ -1043,6 +1059,7 @@ export function AgentChat({
             activity={activity}
             work={work}
             agent={rowAgent}
+            place={inRoom && <RoomWorkingPlace roomId={inRoom} onOpenRoom={onOpenAgent} />}
             entering={indicator.entering}
             leaving={indicator.leaving}
             onExited={indicator.onExited}
@@ -1087,6 +1104,7 @@ export function AgentChat({
       copyAgent,
       newestResult,
       askForChanges,
+      inRoom,
     ]
   );
 

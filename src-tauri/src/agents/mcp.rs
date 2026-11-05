@@ -1637,7 +1637,7 @@ pub(super) async fn decide(
             "Allowed automatically: {} · Always allowed",
             one_line(tool, input)
         );
-        let _ = runner::record(
+        let _ = runner::record_in_turn(
             app,
             runner::new_message(&caller.id, MessageKind::Note, line),
         );

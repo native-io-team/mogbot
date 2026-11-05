@@ -578,6 +578,7 @@ where
         // serve` (TLS at the tailnet edge): the only way in. A LAN listener
         // would set its own kind here.
         route: RouteKind::Tailscale,
+        shows: wire::Shows::from_hello(&hello.features),
     };
     c.registry
         .touch(&record.id, now_ms() as i64, RouteKind::Tailscale, true);
@@ -589,8 +590,7 @@ where
     );
     c.backend.changed();
 
-    let shows = wire::Shows::from_hello(&hello.features);
-    let ended = connected(&c, &mut ws, &caller, protocol, &hello, shows).await;
+    let ended = connected(&c, &mut ws, &caller, protocol, &hello, caller.shows).await;
     tracing::debug!(device = %record.id, ?ended, "[Companion] socket closed");
 
     c.close_conn(conn);

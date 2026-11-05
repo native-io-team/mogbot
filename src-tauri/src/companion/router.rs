@@ -468,6 +468,8 @@ pub struct Caller {
     /// wrong server is the phone's: it sends one only on a socket whose
     /// `welcome` was signed by the identity key it pinned at pairing.
     pub route: super::wire::RouteKind,
+    /// What its app said it shows (`hello.features`).
+    pub shows: super::wire::Shows,
 }
 
 /// Remote Access's refusals for text that becomes an agent's words later
@@ -1190,7 +1192,10 @@ async fn run(
         }
         "agents.search" => {
             let p: QueryParams = parse(params)?;
-            Ok(b.search(p.query).await?)
+            Ok(super::wire::search_for_app(
+                b.search(p.query).await?,
+                caller.shows,
+            ))
         }
         "agents.schedule.preview" => {
             let p: WhenParams = parse(params)?;
@@ -1386,6 +1391,7 @@ mod tests {
             device_name: "Test Phone".into(),
             label: format!("companion:{device}:1"),
             route: crate::companion::wire::RouteKind::Tailscale,
+            shows: Default::default(),
         }
     }
 

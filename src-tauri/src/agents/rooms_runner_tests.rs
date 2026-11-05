@@ -136,20 +136,21 @@ fn only_what_a_turn_says_belongs_to_its_room() {
     for kind in [
         MessageKind::Agent,
         MessageKind::Approval,
-        MessageKind::Error,
-        MessageKind::Note,
         MessageKind::SentToAgent,
         MessageKind::Changes,
         MessageKind::Session,
     ] {
         assert!(said_in_turn(kind), "{kind:?}");
     }
-    // The user's own line, another agent's request, a check-in firing: they
-    // land in the agent's own chat even while it answers in a room.
+    // The user's own line, another agent's request, a check-in firing, and
+    // a note or error the app records for its own reasons: they land in the
+    // agent's own chat even while it answers in a room.
     for kind in [
         MessageKind::User,
         MessageKind::FromAgent,
         MessageKind::CheckIn,
+        MessageKind::Note,
+        MessageKind::Error,
     ] {
         assert!(!said_in_turn(kind), "{kind:?}");
     }
@@ -190,4 +191,147 @@ fn an_inbox_written_before_rooms_still_reads() {
     let saved = serde_json::to_string(&in_room("launch", "x", 1, "Ops")).unwrap();
     let back: Inbound = serde_json::from_str(&saved).unwrap();
     assert_eq!(back.room.unwrap().from_name, "Ops");
+}
+
+fn busy_in(id: &str, room: &str) {
+    let mut runtimes = RUNTIMES.lock().unwrap();
+    let r = runtimes.entry(id.to_string()).or_default();
+    r.running = true;
+    r.room = Some(RoomRef {
+        room_id: room.into(),
+        hop: 0,
+        from_name: String::new(),
+    });
+}
+
+#[test]
+fn a_note_from_outside_the_turn_stays_in_the_agents_own_chat() {
+    scratch(|| {
+        let id = "rm-tag";
+        busy_in(id, "launch");
+        // The engine changed, a secret saved, a routine skipped: the app's own.
+        let mut note = new_message(id, MessageKind::Note, "Runs on Codex from its next message");
+        tag_room(&mut note, Tag::ByKind);
+        assert_eq!(note.room, None);
+        // The turn's own stop and failure are the room's.
+        let mut stopped = new_message(id, MessageKind::Note, "Stopped");
+        tag_room(&mut stopped, Tag::Turn);
+        assert_eq!(stopped.room.as_deref(), Some("launch"));
+        // What only a turn says is the room's without being told.
+        let mut reply = new_message(id, MessageKind::Agent, "Done");
+        tag_room(&mut reply, Tag::ByKind);
+        assert_eq!(reply.room.as_deref(), Some("launch"));
+        // An import's card, or a card's copy in a second chat, never is.
+        let mut card = new_message(id, MessageKind::Approval, "");
+        tag_room(&mut card, Tag::Own);
+        assert_eq!(card.room, None);
+        RUNTIMES.lock().unwrap().remove(id);
+    });
+}
+
+#[test]
+fn interrupting_from_the_agents_own_chat_answers_that_chat_next() {
+    scratch(|| {
+        let id = "rm-interrupt";
+        queue(
+            id,
+            vec![
+                in_room("launch", "room ask", 0, ""),
+                direct("my interrupting message"),
+                in_room("launch", "room ask 2", 0, ""),
+            ],
+        );
+        RUNTIMES.lock().unwrap().get_mut(id).unwrap().cancel = Some(Arc::new(Notify::new()));
+        assert!(interrupt(id));
+        let order: Vec<String> = RUNTIMES.lock().unwrap()[id]
+            .queue
+            .iter()
+            .map(|m| m.text.clone())
+            .collect();
+        assert_eq!(
+            order,
+            vec!["my interrupting message", "room ask", "room ask 2"]
+        );
+        // Only room asks queued: nothing in its own chat to interrupt for.
+        queue(id, vec![in_room("launch", "room ask", 0, "")]);
+        RUNTIMES.lock().unwrap().get_mut(id).unwrap().interrupt = false;
+        assert!(!interrupt(id));
+        assert!(!RUNTIMES.lock().unwrap()[id].interrupt);
+        RUNTIMES.lock().unwrap().remove(id);
+    });
+}
+
+#[test]
+fn what_an_interrupted_turn_was_doing_is_told_only_in_the_same_place() {
+    scratch(|| {
+        let id = "rm-preamble";
+        // A room turn cut off for the agent's own chat.
+        busy_in(id, "launch");
+        {
+            let mut runtimes = RUNTIMES.lock().unwrap();
+            let r = runtimes.get_mut(id).unwrap();
+            r.prompt = Some("the room's question".into());
+            r.interrupt = true;
+        }
+        assert!(take_interrupt(id));
+        assert_eq!(
+            RUNTIMES.lock().unwrap()[id].interrupted_in.as_deref(),
+            Some("launch")
+        );
+        clear_room(id);
+        queue(
+            id,
+            vec![
+                direct("private question"),
+                in_room("launch", "later ask", 0, ""),
+            ],
+        );
+        let own = take_batch(id).unwrap();
+        assert!(
+            !own.prompt.contains("the room's question"),
+            "the room's words don't reach its own chat: {}",
+            own.prompt
+        );
+        assert!(RUNTIMES.lock().unwrap()[id].interrupted.is_some(), "held");
+        // The next turn in that room is told.
+        let room = take_batch(id).unwrap().room.unwrap();
+        assert!(
+            room.preamble.contains("the room's question"),
+            "{}",
+            room.preamble
+        );
+        assert!(RUNTIMES.lock().unwrap()[id].interrupted.is_none());
+        RUNTIMES.lock().unwrap().remove(id);
+    });
+}
+
+#[test]
+fn a_hand_off_in_a_room_carries_its_hop_into_message_agent() {
+    scratch(|| {
+        let id = "rm-hop";
+        queue(id, vec![in_room("launch", "@Ops numbers?", 4, "Finance")]);
+        take_batch(id).unwrap();
+        assert_eq!(current_hop(id), 4, "not a fresh chain");
+        // The user's own ask in a room starts at 0.
+        queue(id, vec![in_room("launch", "hi", 0, "")]);
+        take_batch(id).unwrap();
+        assert_eq!(current_hop(id), 0);
+        RUNTIMES.lock().unwrap().remove(id);
+    });
+}
+
+#[test]
+fn a_stop_tells_each_room_whose_ask_it_dropped_once() {
+    let dropped = vec![
+        in_room("launch", "a", 0, ""),
+        direct("own"),
+        in_room("other", "b", 0, ""),
+        in_room("launch", "c", 1, "Ops"),
+    ];
+    assert_eq!(rooms_asking(&dropped), vec!["launch", "other"]);
+    assert_eq!(
+        dropped_in_room_line("Finance", Dropped::Stopped),
+        "Finance was stopped before answering."
+    );
+    assert!(rooms_asking(&[direct("own")]).is_empty());
 }

@@ -651,6 +651,35 @@ pub fn is_room_only(message: &Value) -> bool {
             .is_none_or(str::is_empty)
 }
 
+/// `agents.search`'s hits for one app. One that doesn't show rooms gets no
+/// room-only hit (the user's own line there has no agent to open), and a
+/// member's line said in a room as a hit in that agent's chat, where an
+/// older app shows it.
+pub fn search_for_app(hits: serde_json::Value, shows: Shows) -> serde_json::Value {
+    if shows.rooms {
+        return hits;
+    }
+    let serde_json::Value::Array(hits) = hits else {
+        return hits;
+    };
+    hits.into_iter()
+        .filter_map(|mut hit| {
+            let Some(o) = hit.as_object_mut() else {
+                return Some(hit);
+            };
+            if o.remove("roomId").is_some() {
+                o.remove("roomName");
+                let speaker = o.get("agentId").and_then(|v| v.as_str()).unwrap_or("");
+                if speaker.is_empty() {
+                    return None;
+                }
+            }
+            Some(hit)
+        })
+        .collect::<Vec<_>>()
+        .into()
+}
+
 /// An event as this app gets it, or `None` when it wouldn't show it: rooms
 /// (and their room-only lines) only to an app that said it shows rooms; a
 /// running turn's steps only to one that shows those. A member's own line
@@ -717,6 +746,28 @@ mod tests {
             Shows::from_hello(&["rooms".into(), "work.live".into()]),
             new
         );
+    }
+
+    #[test]
+    fn an_app_without_rooms_gets_no_room_only_search_hits() {
+        let hits = serde_json::json!([
+            { "agentId": "a1", "messageId": "m1", "snippet": "own" },
+            { "agentId": "", "messageId": "m2", "roomId": "r1", "roomName": "Launch" },
+            { "agentId": "a2", "messageId": "m3", "roomId": "r1", "roomName": "Launch" }
+        ]);
+        let old = search_for_app(hits.clone(), Shows::default());
+        assert_eq!(
+            old,
+            serde_json::json!([
+                { "agentId": "a1", "messageId": "m1", "snippet": "own" },
+                { "agentId": "a2", "messageId": "m3" }
+            ])
+        );
+        let new = Shows {
+            live_work: false,
+            rooms: true,
+        };
+        assert_eq!(search_for_app(hits.clone(), new), hits);
     }
 
     #[test]

@@ -1868,7 +1868,15 @@ const DIVIDER_GAP_MS = 3 * 60 * 60 * 1000;
 
 const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString();
 
-export function buildChatItems(messages: AgentMessage[]): ChatItem[] {
+/** How an agent's own chat folds what its members said in rooms. */
+export interface ChatFolding {
+  /** A line kept in full even though it was said in a room (its open copy's card). */
+  unfolded?: string | null;
+  /** Whether lines from this room fold; a room that is gone doesn't. */
+  folds?: (roomId: string) => boolean;
+}
+
+export function buildChatItems(messages: AgentMessage[], folding: ChatFolding = {}): ChatItem[] {
   const items: ChatItem[] = [];
   let lastTs = 0;
   for (const message of messages) {
@@ -1883,7 +1891,12 @@ export function buildChatItems(messages: AgentMessage[]): ChatItem[] {
     const previous = items[items.length - 1];
     // Said in a room: the room's thread shows it; here it's one line. A card
     // still waiting on you stays a card, so nothing waits out of sight.
-    if (message.room && message.approval?.status !== 'pending') {
+    if (
+      message.room &&
+      message.approval?.status !== 'pending' &&
+      message.id !== folding.unfolded &&
+      (folding.folds?.(message.room) ?? true)
+    ) {
       if (previous?.type === 'room' && previous.roomId === message.room) {
         previous.messages.push(message);
         continue;

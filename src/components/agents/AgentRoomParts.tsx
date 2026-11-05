@@ -152,6 +152,33 @@ export function RoomActionItems({
  * In an agent's own chat, what it said in a room is one quiet line that
  * opens the room: the room's thread is where it reads in full.
  */
+/**
+ * Where a turn answers when it is in a room: on the working line of the
+ * agent's own chat, so its reply there isn't taken for one to you.
+ */
+export function RoomWorkingPlace({
+  roomId,
+  onOpenRoom,
+}: {
+  roomId: string;
+  onOpenRoom: (key: string) => void;
+}) {
+  const room = useAgentsSelector((s) => s.rooms.find((r) => r.id === roomId));
+  if (!room) return <>Replying in a room</>;
+  return (
+    <>
+      Replying in{' '}
+      <TextButton
+        tabIndex={-1}
+        className="agent-note__link"
+        onClick={() => onOpenRoom(roomKey(room.id))}
+      >
+        {room.name}
+      </TextButton>
+    </>
+  );
+}
+
 export const RoomFoldLine = memo(function RoomFoldLine({
   roomId,
   messages,
@@ -192,7 +219,7 @@ export const RoomFoldLine = memo(function RoomFoldLine({
           </TextButton>
         </>
       ) : (
-        <>{what} in a room that was deleted</>
+        <>{what} in a room</>
       )}
     </div>
   );

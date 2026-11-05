@@ -84,7 +84,7 @@ jest.mock('../src/lib/persist', () => ({
 }));
 // Badges animate on Reanimated's native half; the room needs only names.
 jest.mock('../src/components/agent', () => ({ AgentAvatar: () => null, Spinner: () => null }));
-jest.mock('../src/components/ConnectionPill', () => ({ LinkBanner: () => null }));
+jest.mock('../src/components/ConversationBars', () => ({ RoomBars: () => null }));
 
 const room = real.roomsList[0] as RoomView;
 const thread = real.roomsMessages.messages as AgentMessage[];

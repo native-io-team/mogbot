@@ -676,6 +676,16 @@ pub fn validate_name(name: &str) -> Result<String, CommandError> {
             "Keep the name under 40 characters.",
         ));
     }
+    if name.chars().any(char::is_control) {
+        return Err(super::err_invalid("name", "Keep the name on one line."));
+    }
+    // "@everyone" in a room means every member (`agents::rooms`).
+    if name.eq_ignore_ascii_case("everyone") {
+        return Err(super::err_invalid(
+            "name",
+            "\"Everyone\" means every member of a room. Pick another name.",
+        ));
+    }
     Ok(name.to_string())
 }
 

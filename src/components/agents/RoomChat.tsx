@@ -34,6 +34,7 @@ import { BellIcon, BellOffIcon, CloseIcon, EditIcon, TrashIcon } from '@/compone
 import { CompactModeToggle } from '../workspace/ModeToggle';
 import { AgentAvatar } from './AgentAvatar';
 import { RoomAvatars, type RoomActions } from './AgentRoomParts';
+import { ConversationBar, ConversationBars } from './AgentCard';
 import { useMentionPicker } from './AgentMentions';
 import { useArrivals, useFollowBottom, usePresence } from './useAgentMotion';
 import {
@@ -51,17 +52,21 @@ import { SessionCard } from './AgentSession';
 import {
   answerApproval,
   buildChatItems,
+  newestResults,
   plainActivity,
   type Agent,
   type AgentMessage,
   type AgentRef,
+  type ResultRef,
 } from '../../lib/agents';
 import {
   addressLine,
   addressed,
   everyoneEntry,
   EVERYONE_ID,
+  handRevisionTo,
   listNames,
+  MIN_ROOM_MEMBERS,
   roomActivity,
   roomKey,
   roomMembers,
@@ -184,6 +189,34 @@ export function RoomChat({
   const items = useMemo(() => buildChatItems(shown.map(({ room: _room, ...m }) => m)), [shown]);
   const ids = useMemo(() => messages?.map((m) => m.id), [messages]);
   const isArrived = useArrivals(ids);
+  // Each member's open copy of its project: the newest card here for it
+  // offers Keep / Discard, as in that member's own chat.
+  const liveCopyCards = useMemo(() => {
+    const live = new Set<string>();
+    for (const member of members) {
+      const copyId = member.copy?.id;
+      if (!copyId) continue;
+      for (let i = shown.length - 1; i >= 0; i--) {
+        const m = shown[i];
+        if (m.agentId === member.id && m.kind === 'changes' && m.changes?.copy?.id === copyId) {
+          live.add(m.id);
+          break;
+        }
+      }
+    }
+    return live;
+  }, [shown, members]);
+  // Each result's newest version is drawn in full; older ones fold.
+  const newestResult = useMemo(() => new Set(newestResults(shown).values()), [shown]);
+  // A room message can't revise a result: the member's own chat opens with
+  // the request staged in its composer.
+  const askForChanges = useCallback(
+    (agentId: string, ref: ResultRef) => {
+      handRevisionTo(agentId, ref);
+      onOpenAgent(agentId);
+    },
+    [onOpenAgent]
+  );
   const indicator = usePresence(working.length > 0 || waiting.length > 0);
   const jump = usePresence(!atBottom);
   const { follow, isGliding } = useFollowBottom(scrollRef, messagesRef, atBottomRef);
@@ -238,7 +271,7 @@ export function RoomChat({
   /** Send what's typed to `target`, or to whoever it names. */
   const send = (target?: Addressed) => {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || members.length === 0) return;
     const aim = target ?? to;
     if (aim.kind === 'ask') {
       setAsking(true);
@@ -320,12 +353,16 @@ export function RoomChat({
           streaming={drafts.some((d) => d.id === m.id)}
           onAnswer={onAnswer(m.agentId)}
           onOpenAgent={onOpenAgent}
+          liveCopy={liveCopyCards.has(m.id)}
+          newestResult={newestResult.has(m.id)}
+          onAskForChanges={askForChanges}
         />
       </SpeakerBlock>
     );
   });
 
-  const canSend = draft.trim().length > 0;
+  // Nobody left to answer: nothing can be sent until someone is added.
+  const canSend = draft.trim().length > 0 && members.length > 0;
   const memberNames = listNames(members.map((m) => m.name));
   const memberLine =
     room.lead && agentsById.get(room.lead)
@@ -440,6 +477,46 @@ export function RoomChat({
               }
               aria-label="Jump to latest"
               title="Jump to latest"
+            />
+          )}
+          {members.length < MIN_ROOM_MEMBERS && (
+            <ConversationBars
+              bars={[
+                {
+                  id: 'engine',
+                  node: (
+                    <ConversationBar
+                      data-testid="room-too-few"
+                      title={
+                        members.length === 1
+                          ? `Only ${members[0].name} is left in this room`
+                          : 'Nobody is left in this room'
+                      }
+                      detail="A room needs two members. Add someone, or delete it."
+                      actions={
+                        <>
+                          <Button
+                            tabIndex={0}
+                            size="compact"
+                            variant="secondary"
+                            onClick={() => onDeleteRoom(room)}
+                          >
+                            Delete room
+                          </Button>
+                          <Button
+                            tabIndex={0}
+                            size="compact"
+                            variant="strong"
+                            onClick={() => onEditRoom(room)}
+                          >
+                            Add members
+                          </Button>
+                        </>
+                      }
+                    />
+                  ),
+                },
+              ]}
             />
           )}
           {asking && canSend && (
@@ -557,11 +634,19 @@ const MemberRow = memo(function MemberRow({
   streaming,
   onAnswer,
   onOpenAgent,
+  liveCopy,
+  newestResult,
+  onAskForChanges,
 }: {
   m: AgentMessage;
   speaker: Agent | undefined;
   arrived: boolean;
   streaming: boolean;
+  /** The newest card for the member's open copy: it offers Keep / Discard. */
+  liveCopy: boolean;
+  /** The newest version of its result: drawn in full, with its actions. */
+  newestResult: boolean;
+  onAskForChanges: (agentId: string, ref: ResultRef) => void;
   onAnswer: (
     requestId: string,
     allow: boolean,
@@ -575,11 +660,19 @@ const MemberRow = memo(function MemberRow({
     // A member deleted since: what it said stays, as plain text.
     return m.text ? <div className="agent-note">{m.text}</div> : null;
   }
+  const askForChanges = (ref: ResultRef) => onAskForChanges(speaker.id, ref);
   switch (m.kind) {
     case 'agent':
       if (m.result) {
         return (
-          <ResultCardView message={m} card={m.result} agent={speaker} newest arrived={arrived} />
+          <ResultCardView
+            message={m}
+            card={m.result}
+            agent={speaker}
+            newest={newestResult}
+            onAskForChanges={askForChanges}
+            arrived={arrived}
+          />
         );
       }
       return <AgentBubble message={m} agent={speaker} arrived={arrived} streaming={streaming} />;
@@ -598,7 +691,17 @@ const MemberRow = memo(function MemberRow({
     case 'note':
       return <NoteLine message={m} arrived={arrived} agent={speaker} onOpenPeer={onOpenAgent} />;
     case 'changes':
-      return <ChangeCard message={m} arrived={arrived} owner={speaker} live={false} newestResult />;
+      return (
+        <ChangeCard
+          message={m}
+          arrived={arrived}
+          agent={liveCopy ? speaker : undefined}
+          live={liveCopy}
+          owner={speaker}
+          newestResult={newestResult}
+          onAskForChanges={askForChanges}
+        />
+      );
     case 'session':
       return <SessionCard message={m} agent={speaker} arrived={arrived} />;
     case 'sent_to_agent':

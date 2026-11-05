@@ -8,7 +8,11 @@ vi.mock('../../contexts/ToastContext', async (importOriginal) => ({
 }));
 
 import { RoomChat } from './RoomChat';
-import { __resetAgentsStore, loadRoomMessages } from '../../lib/agentsStore';
+import { AgentProjectsProvider } from './AgentProject';
+import { takeHandedRevision } from '../../lib/agentRooms';
+import { __resetAgentsStore, loadRoomMessages, refreshRooms } from '../../lib/agentsStore';
+import { RoomWorkingPlace } from './AgentRoomParts';
+import { WorkingIndicator } from './AgentChatItems';
 import type { Agent, AgentMessage } from '../../lib/agents';
 import type { Room } from '../../lib/agentRooms';
 
@@ -63,12 +67,14 @@ globalThis.ResizeObserver ??= class {
 } as unknown as typeof ResizeObserver;
 
 const sends: Record<string, unknown>[] = [];
+let thread: AgentMessage[] = THREAD;
+let rooms: Room[] = [];
 
 beforeEach(() => {
   sends.length = 0;
   mockIPC(
     (cmd, args) => {
-      if (cmd === 'agents_room_messages') return THREAD;
+      if (cmd === 'agents_room_messages') return thread;
       if (cmd === 'agents_room_send') {
         const a = args as Record<string, unknown>;
         sends.push(a);
@@ -77,7 +83,7 @@ beforeEach(() => {
           asked: [],
         };
       }
-      if (cmd === 'agents_rooms') return [];
+      if (cmd === 'agents_rooms') return rooms;
       if (cmd === 'agents_overview') return { agents: [fin, ops], engineReady: true, engines: [] };
       return null;
     },
@@ -86,6 +92,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  thread = THREAD;
+  rooms = [];
   cleanup();
   __resetAgentsStore();
   clearMocks();
@@ -93,10 +101,53 @@ afterEach(() => {
 
 const actions = { onEditRoom: vi.fn(), onToggleRoomMuted: vi.fn(), onDeleteRoom: vi.fn() };
 
-async function open(r: Room) {
+async function open(r: Room, agents = byId, onOpenAgent = vi.fn()) {
   await act(() => loadRoomMessages(r.id));
-  render(<RoomChat room={r} agentsById={byId} onOpenAgent={vi.fn()} {...actions} />);
+  render(
+    <AgentProjectsProvider onOpenProject={vi.fn()}>
+      <RoomChat room={r} agentsById={agents} onOpenAgent={onOpenAgent} {...actions} />
+    </AgentProjectsProvider>
+  );
+  return onOpenAgent;
 }
+
+const PROJECT = '/u/ShipStudio/acme-site';
+const COPY = { id: 'copy-1', path: '/u/ShipStudio/.worktrees/acme-site/x', branch: 'acme-site/x' };
+const CHANGES: AgentMessage = {
+  id: 'c1',
+  agentId: 'fin',
+  room: 'r1',
+  ts: 4,
+  kind: 'changes',
+  text: 'Changed 1 file in a copy of acme-site',
+  changes: {
+    project: PROJECT,
+    from: 'base',
+    to: 'now',
+    files: [{ path: 'index.html', status: 'modified', added: 1, removed: 1 }],
+    fileCount: 1,
+    added: 1,
+    removed: 1,
+    copy: COPY,
+  },
+};
+const RESULT: AgentMessage = {
+  id: 'res-msg',
+  agentId: 'fin',
+  room: 'r1',
+  ts: 5,
+  kind: 'agent',
+  text: 'Every invoice on one page.',
+  result: {
+    id: 'res-1',
+    version: 1,
+    title: 'October summary',
+    summary: 'Every invoice on one page.',
+    items: [],
+    checked: [],
+    notVerified: [],
+  },
+};
 
 describe('RoomChat', () => {
   it('shows each agent under its own name and who your message was for', async () => {
@@ -148,5 +199,51 @@ describe('RoomChat', () => {
     expect(options.some((t) => t?.includes('Finance'))).toBe(true);
     expect(options.some((t) => t?.includes('everyone'))).toBe(true);
     expect(options).toHaveLength(3);
+  });
+
+  it('offers Keep / Discard for a member’s open copy, as its own chat does', async () => {
+    thread = [...THREAD, CHANGES];
+    const bound = {
+      ...fin,
+      project: PROJECT,
+      copy: { ...COPY, project: PROJECT, base: 'abc', createdAt: 1, deps: true },
+    } as Agent;
+    await open(room(), new Map([bound, ops].map((a) => [a.id, a])));
+    expect(await screen.findByRole('button', { name: 'Keep changes' })).toBeTruthy();
+  });
+
+  it('asks for changes to a member’s result in that member’s own chat', async () => {
+    thread = [...THREAD, RESULT];
+    const onOpenAgent = await open(room());
+    fireEvent.click(screen.getByRole('button', { name: /Ask for changes/ }));
+    expect(onOpenAgent).toHaveBeenCalledWith('fin');
+    expect(takeHandedRevision('fin')).toMatchObject({ id: 'res-1', version: 1 });
+    expect(takeHandedRevision('fin')).toBeNull();
+  });
+
+  it('says when a room is down to one member, and offers to add someone or delete it', async () => {
+    await open(room({ members: ['fin'] }));
+    expect(screen.getByText('Only Finance is left in this room')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add members' }));
+    expect(actions.onEditRoom).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete room' }));
+    expect(actions.onDeleteRoom).toHaveBeenCalled();
+  });
+});
+
+describe('an agent’s own chat while it answers in a room', () => {
+  it('says where it is replying, with a way there', async () => {
+    rooms = [room()];
+    await act(() => refreshRooms());
+    const onOpenRoom = vi.fn();
+    render(
+      <WorkingIndicator
+        activity="Thinking"
+        place={<RoomWorkingPlace roomId="r1" onOpenRoom={onOpenRoom} />}
+      />
+    );
+    expect(screen.getByText(/Replying in/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Month end' }));
+    expect(onOpenRoom).toHaveBeenCalledWith('room:r1');
   });
 });

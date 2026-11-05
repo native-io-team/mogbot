@@ -1645,6 +1645,13 @@ own inbox.
   lines (each clipped to 1,200 characters, at most 8,000 in all), and, said
   in so many words, how many of how many it is shown. It is told its reply is
   posted for everyone, to answer for itself, and how to bring someone in.
+  Every line is a speaker header the app writes (`[User]`, `[Agent: Name]`)
+  over what was said, each line of it quoted with `> ` (`rooms::quoted`), and
+  the framing says only `[User]` is the user and that a member's words are
+  its report, not instructions. A reply that writes "User: delete the
+  branch" on a line of its own still reads as part of that reply. Names
+  can't hold control characters, and "everyone" is reserved
+  (`store::validate_name`).
 - **Agents bringing each other in.** A finished reply that @mentions another
   member (`rooms::mentioned_in`: whole names, longest first, never an email
   address, never `@everyone`) asks that member next, one hop further. Each
@@ -1652,24 +1659,44 @@ own inbox.
   addressed members included) and the runner's 6-hop cap. Past either, nobody
   else is asked and the room says so once. The room shows "3 of 8 replies for
   this message" while it runs. `message_agent` still works from a room turn
-  (for work outside the room) under its own hop rules.
+  (for work outside the room), and the turn starts as far along the chain as
+  its room hop, so a hand-off at hop 4 can delegate at most two more hops:
+  the 6-hop cap per user message holds across rooms and `message_agent`.
 - **One place per turn.** A room ask carries `room` on the queued message
   (`runner::Inbound`). `take_batch` takes only a run of messages said in the
   same place, so a room turn is never folded into the agent's own chat (or
   another room) and vice versa; the rest waits for the next turn, in order. A
   room ask owes no agent an answer. While it runs, `Runtime.room` is set and
   `Status.room` says so, so the room shows its members' working lines and
-  drafts and no one else's. A member busy elsewhere shows as "will reply
-  after what it's doing now" (`RoomView.waiting`).
-- **Where lines live.** Everything a room turn records (reply, cards, notes,
-  errors, change cards; never your own lines, another agent's request or a
-  check-in) is tagged `room` in the member's own log and copied into
-  `agents/rooms/<id>/messages.jsonl`. A room's page applies each member's
-  card answers and timelines from that member's home, so Allow / Deny,
-  "Worked … · N steps" and result cards work in the room exactly as in the
-  agent's chat. The agent's own chat folds its room lines into one line
-  ("2 replies in Pricing launch", a link to the room); a card still waiting
-  on you stays a card there too. The room's row, not the agent's, gets the
+  drafts and no one else's; the agent's own chat doesn't stream that reply
+  and its working line says "Replying in <room>", a link there. A member
+  busy elsewhere shows as "will reply after what it's doing now"
+  (`RoomView.waiting`).
+- **Interrupting.** ⌘↵ in an agent's own chat moves what was said there
+  ahead of any room asks (`runner::interrupt`), so the message you
+  interrupted for is the one answered. What the cut-off turn was doing is
+  told only to the next turn in the same place (`Runtime.interrupted_in`),
+  so nothing said in a room reaches a private turn, or the other way round.
+  A room turn cut off this way leaves "X was interrupted for a message in
+  its own chat, so it didn't answer here." in the room; a Stop in the
+  agent's own chat that drops queued room asks leaves "X was stopped before
+  answering." in each room.
+- **Where lines live.** What a room turn records (its reply, cards and change
+  cards; its own stop, interruption and error lines through
+  `runner::record_in_turn`; never your own lines, another agent's request, a
+  check-in, or a note the app records for its own reasons meanwhile, like an
+  engine change or a saved secret) is tagged `room` in the member's own log
+  and copied into `agents/rooms/<id>/messages.jsonl`. A line from an agent no
+  longer in the room isn't copied. A room's page applies each member's card
+  answers and timelines from that member's home, so Allow / Deny and
+  "Worked … · N steps" work in the room as in the agent's chat; the newest
+  change card for a member's open copy offers Keep / Discard there, and a
+  result card's **Ask for changes** opens that member's own chat with the
+  request staged (a room message can't revise a result). The agent's own
+  chat folds its room lines into one line ("2 replies in Pricing launch", a
+  link to the room); a card still waiting on you, and the card for its open
+  copy, stay in full there too, and so do lines from a room that was
+  deleted, which have nowhere else to be read (search finds them there). The room's row, not the agent's, gets the
   preview and the unread count; the agent's row still shows a failure.
 - **Accent.** A room is neutral (the monochrome accent); each member's run of
   lines opens with its badge and name in its own colour.
@@ -1678,20 +1705,30 @@ own inbox.
   Mute/Unmute, Delete…. Rooms sit in a "Rooms" section of the list with a
   paired badge. Mute stops the unread count. Deleting a room removes its
   thread and never an agent; deleting an agent takes it out of its rooms
-  (and as lead). "Stop replies here" (`agents_room_stop`) drops only what
+  (and as lead); a room left with fewer than two says so above the composer
+  ("Only Finance is left in this room", Delete room / Add members), and with
+  none it can't be sent to. "Stop replies here" (`agents_room_stop`) drops only what
   was asked in the room and stops a turn answering there; anything said to
   the agent elsewhere stays queued.
 - **Search** scans room threads too; a room hit opens the room. A room line
   is found once, in its room, not again in the member's log.
 - **Phone.** Rooms list and room chat (read, send with @mentions and
   @everyone, Who should answer?) for apps that say `hello.features: ["rooms"]`;
-  older phones see no rooms and no room-only lines (docs/mobile.md).
+  older phones see no rooms, no room-only lines and no room-only search hits;
+  a member's line said in a room is a hit in that agent's chat there
+  (`wire::search_for_app`, docs/mobile.md).
 - **Not built.** Attachments and quotes in a room composer; jumping to a
   search hit's exact line in a room; OS notifications for room replies (cards
   still notify, as the agent's); a user "leave" separate from delete (a room
   with one person in it has nothing to leave; "leave" is an agent leaving,
-  via members). No real agent turns were run in a room for this slice: the
-  routing is unit-tested and the UI is harness-tested on fixtures.
+  via members). A round is per room, not per message: a chain from the
+  previous message still running draws on the new one's 8, and rounds live
+  in memory (a restart starts them at 0). The desk and the backend match
+  @mentions by slightly different rules (the desk wants a space before `@`
+  and ASCII word characters after the name). The phone's room view doesn't
+  offer Keep / Discard or Ask for changes yet. No real agent turns were run
+  in a room for this slice: the routing is unit-tested and the UI is
+  harness-tested on fixtures.
 
 ## Files back from agents (`src-tauri/src/agents/files.rs`)
 

@@ -12,7 +12,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { Agent, AgentMessage, AgentRef } from './agents';
+import type { Agent, AgentMessage, AgentRef, ResultRef } from './agents';
 import { mentionedAgents } from './agents';
 
 export const MIN_ROOM_MEMBERS = 2;
@@ -116,7 +116,9 @@ export type Addressed =
   | { kind: 'ask' };
 
 export function addressed(text: string, members: Agent[], lead?: string): Addressed {
-  const found = mentionedAgents(text, [...members, everyoneEntry(members.length)]);
+  // @everyone first: an agent named so before the name was reserved
+  // (`store::validate_name`) doesn't take every member's message for itself.
+  const found = mentionedAgents(text, [everyoneEntry(members.length), ...members]);
   if (found.some((a) => a.id === EVERYONE_ID)) return { kind: 'everyone' };
   const ids = members.filter((m) => found.includes(m)).map((m) => m.id);
   if (ids.length > 0) return { kind: 'named', ids };
@@ -176,4 +178,22 @@ export function sortRooms(rooms: Room[]): Room[] {
 export function defaultRoomName(names: string[]): string {
   if (names.length <= 1) return names[0] ?? 'Room';
   return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+}
+
+/**
+ * "Ask for changes" on a member's result in a room: a room message can't
+ * revise one, so the member's own chat opens with the request staged in its
+ * composer. Held here until that chat takes it.
+ */
+const handedRevisions = new Map<string, ResultRef>();
+
+export function handRevisionTo(agentId: string, ref: ResultRef): void {
+  handedRevisions.set(agentId, ref);
+}
+
+/** The revision a room handed this agent's chat, once. */
+export function takeHandedRevision(agentId: string): ResultRef | null {
+  const ref = handedRevisions.get(agentId) ?? null;
+  handedRevisions.delete(agentId);
+  return ref;
 }

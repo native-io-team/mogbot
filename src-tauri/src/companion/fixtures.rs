@@ -362,6 +362,10 @@ async fn generate() -> String {
         device_name: "Julian’s iPhone".into(),
         label: "companion:dev_0123456789abcdef:1".into(),
         route: super::wire::RouteKind::Tailscale,
+        shows: super::wire::Shows {
+            live_work: true,
+            rooms: true,
+        },
     };
     let call = |method: &'static str, params: Value| {
         let (c, caller) = (c.clone(), caller.clone());

@@ -212,13 +212,16 @@ impl Prefilter {
 /// doesn't parse.
 fn search_agent(
     agent: &store::Agent,
+    rooms: &[String],
     terms: &[Vec<char>],
     limit: usize,
 ) -> Result<Vec<SearchHit>, CommandError> {
     let path = store::agent_home(&agent.id)?.join("messages.jsonl");
-    // A line said in a room is found in the room (its copy there), once.
+    // A line said in a room is found in the room (its copy there), once;
+    // here only when that room is gone, with nowhere else to find it.
     scan_log(&path, terms, limit, |message, snippet| {
-        (message.room.is_none()).then(|| SearchHit {
+        let elsewhere = message.room.as_ref().is_some_and(|r| rooms.contains(r));
+        (!elsewhere).then(|| SearchHit {
             agent_id: agent.id.clone(),
             agent_name: agent.name.clone(),
             agent_color: agent.color.clone(),
@@ -336,6 +339,12 @@ pub fn search_in(
     if terms.is_empty() {
         return Ok(Vec::new());
     }
+    let rooms: Vec<String> = super::rooms::list()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|r| r.id)
+        .collect();
+    let rooms = &rooms;
     // Each agent's newest `limit` are all that could make the cut; agents are
     // read a few at a time, in order, so the merge below is deterministic.
     let threads = std::thread::available_parallelism()
@@ -350,7 +359,7 @@ pub fn search_in(
                 scope.spawn(move || {
                     let mut hits = Vec::new();
                     for agent in group {
-                        match search_agent(agent, terms, limit) {
+                        match search_agent(agent, rooms, terms, limit) {
                             Ok(mut found) => hits.append(&mut found),
                             Err(e) => tracing::warn!("[Agents] search skipped {}: {e}", agent.id),
                         }

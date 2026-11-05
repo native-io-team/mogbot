@@ -132,7 +132,8 @@ pub(crate) fn focus_room_as(
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_room_stop(app: AppHandle, room_id: String) -> Result<usize, CommandError> {
-    let room = rooms::get(&room_id)?;
+    let id = room_id.clone();
+    let room = blocking(move || rooms::get(&id)).await?;
     let stopped = room
         .members
         .iter()

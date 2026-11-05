@@ -1291,6 +1291,13 @@
   border-radius: var(--radius-pill);
 }
 
+.agent-working__place {
+  flex-shrink: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .agent-working__activity {
   overflow: hidden;
   font-size: var(--font-size-body-sm);

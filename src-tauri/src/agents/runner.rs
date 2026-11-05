@@ -183,6 +183,10 @@ struct Runtime {
     interrupt: bool,
     /// Set when a turn was interrupted: what the next turn is told first.
     interrupted: Option<String>,
+    /// Where the turn `interrupted` was about was said: a room's id, or
+    /// `None` for the agent's own chat. Only a turn in the same place is
+    /// told it, so nothing said in one conversation is carried into another.
+    interrupted_in: Option<String>,
     /// Agents whose requests the turn in progress is answering. Whatever the
     /// turn ends up saying goes back to each of them (see [`return_results`]),
     /// unless it already answered one with `message_agent`.
@@ -269,10 +273,17 @@ impl Runtime {
             return false;
         }
         if let Some(told) = told {
-            self.interrupted = Some(match self.interrupted.take() {
+            // What the user did in the terminal is the agent's own chat's:
+            // a preamble left for a room's turn isn't joined to it.
+            let earlier = self
+                .interrupted
+                .take()
+                .filter(|_| self.interrupted_in.is_none());
+            self.interrupted = Some(match earlier {
                 Some(earlier) => format!("{earlier}{told}"),
                 None => told,
             });
+            self.interrupted_in = None;
         }
         if self.running || self.queue.is_empty() {
             return false;
@@ -814,30 +825,68 @@ pub fn set_status(app: &AppHandle, agent_id: &str, mut status: Status) {
     );
 }
 
+/// Which room a line recorded without one belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Tag {
+    /// Only a turn says this kind of line ([`said_in_turn`]): the room its
+    /// turn in progress answers in, if any.
+    ByKind,
+    /// The turn itself recorded it (its stop, its failure): that turn's room.
+    Turn,
+    /// Not the turn's: the agent's own chat, whatever it is busy with.
+    Own,
+}
+
+/// Said by a turn answering in a room: the line belongs to that room's thread.
+fn tag_room(message: &mut AgentMessage, tag: Tag) {
+    let turns = match tag {
+        Tag::ByKind => said_in_turn(message.kind),
+        Tag::Turn => true,
+        Tag::Own => false,
+    };
+    if message.room.is_none() && turns {
+        message.room = turn_room(&message.agent_id).map(|r| r.room_id);
+    }
+}
+
 /// Persist a message, update the agent's sidebar row, and tell the UI.
 pub fn record(app: &AppHandle, message: AgentMessage) -> Result<AgentMessage, CommandError> {
-    record_as(app, message, true)
+    record_as(app, message, true, Tag::ByKind)
+}
+
+/// [`record`] for a line the turn in progress leaves itself (a note, its
+/// error): while it answers in a room, the line is that room's.
+pub fn record_in_turn(
+    app: &AppHandle,
+    message: AgentMessage,
+) -> Result<AgentMessage, CommandError> {
+    record_as(app, message, true, Tag::Turn)
+}
+
+/// [`record`] for a card that isn't the turn's (an import's consent or
+/// review): it stays in the agent's own chat even while it answers in a room.
+pub fn record_own(app: &AppHandle, message: AgentMessage) -> Result<AgentMessage, CommandError> {
+    record_as(app, message, true, Tag::Own)
 }
 
 /// `record` without the OS notification: the same card shown in a second
-/// chat, which was already announced once.
+/// chat, which was already announced once. That chat's agent may be busy
+/// in a room of its own; the copy is still its own chat's.
 pub fn record_quietly(
     app: &AppHandle,
     message: AgentMessage,
 ) -> Result<AgentMessage, CommandError> {
-    record_as(app, message, false)
+    record_as(app, message, false, Tag::Own)
 }
 
 fn record_as(
     app: &AppHandle,
     message: AgentMessage,
     alert: bool,
+    tag: Tag,
 ) -> Result<AgentMessage, CommandError> {
     let mut message = super::secrets::redact_message(message);
-    // Said by a turn answering in a room: it belongs to that room's thread.
-    if message.room.is_none() && said_in_turn(message.kind) {
-        message.room = turn_room(&message.agent_id).map(|r| r.room_id);
-    }
+    tag_room(&mut message, tag);
     if let Err(e) = store::append_message(&message) {
         // A deleted agent's dying turn: nothing to show, nowhere to show it.
         if !store::is_gone(&message.agent_id) {
@@ -902,18 +951,18 @@ fn announce(
     Ok(message)
 }
 
-/// What only a turn says (or leaves, like its approval cards and notes):
-/// while that turn answers in a room, these are the room's. Never the
-/// user's own lines, another agent's request, or a check-in firing, which
-/// can land in an agent's chat while it is busy in a room.
+/// What only a turn says (or leaves, like its approval cards and change
+/// cards): while that turn answers in a room, these are the room's. Never
+/// the user's own lines, another agent's request, a check-in firing, or a
+/// note or error, which the app also records for its own reasons (an
+/// engine changed, a secret saved, a routine skipped) while the agent is
+/// busy in a room; the turn's own notes go through [`record_in_turn`].
 fn said_in_turn(kind: MessageKind) -> bool {
     matches!(
         kind,
         MessageKind::Agent
             | MessageKind::SentToAgent
             | MessageKind::Approval
-            | MessageKind::Error
-            | MessageKind::Note
             | MessageKind::Changes
             | MessageKind::Session
     )
@@ -1378,6 +1427,7 @@ pub fn update_settings<F: FnOnce(&mut store::Agent)>(
     if switched {
         if let Some(r) = runtimes.get_mut(agent_id) {
             r.interrupted = None;
+            r.interrupted_in = None;
         }
     }
     Ok(updated)
@@ -1477,6 +1527,30 @@ fn dropped_debts(dropped: &[Inbound]) -> (Vec<(AgentRef, u8)>, Vec<String>) {
     (askers, tickets)
 }
 
+/// The rooms `dropped` asked in, each once, in order.
+fn rooms_asking(dropped: &[Inbound]) -> Vec<String> {
+    let mut rooms: Vec<String> = Vec::new();
+    for m in dropped {
+        if let Some(r) = &m.room {
+            if !rooms.contains(&r.room_id) {
+                rooms.push(r.room_id.clone());
+            }
+        }
+    }
+    rooms
+}
+
+/// The room's line for an ask of `name` that was dropped before it started.
+fn dropped_in_room_line(name: &str, why: Dropped) -> String {
+    match why {
+        Dropped::Stopped => format!("{name} was stopped before answering."),
+        Dropped::Deleting => format!("{name} is being deleted, so it won't answer."),
+        Dropped::Failed => {
+            format!("{name} couldn't start on this: something went wrong running it.")
+        }
+    }
+}
+
 /// Why messages left the queue without a turn taking them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Dropped {
@@ -1489,6 +1563,15 @@ enum Dropped {
 }
 
 fn tell_dropped(app: &AppHandle, agent_id: &str, dropped: Vec<Inbound>, why: Dropped) {
+    // A room that asked hears it won't be answered, once per room.
+    let rooms = rooms_asking(&dropped);
+    if !rooms.is_empty() {
+        let name = store::get(agent_id).map(|a| a.name).unwrap_or_default();
+        let text = dropped_in_room_line(&name, why);
+        for room in rooms {
+            super::rooms::say(app, &room, text.clone());
+        }
+    }
     let (askers, tickets) = dropped_debts(&dropped);
     if !tickets.is_empty() {
         // A failure settles as the turn's error line says (retried or reported).
@@ -1617,6 +1700,7 @@ fn begin_fresh(agent_id: &str) -> Result<(store::Agent, AgentMessage), CommandEr
     // hand-back) was about the conversation just left.
     if let Some(r) = runtimes.get_mut(agent_id) {
         r.interrupted = None;
+        r.interrupted_in = None;
     }
     let mut line = new_message(agent_id, MessageKind::Note, FRESH_LINE);
     line.fresh = true;
@@ -1637,22 +1721,40 @@ fn owes_reply(runtimes: &HashMap<String, Runtime>, agent_id: &str) -> Option<Str
     })
 }
 
-/// Stop the turn in progress so what's queued runs now, as the next turn.
-/// That turn is told what it was doing when it was cut off. Nothing queued,
-/// nothing to interrupt for: false.
+/// Stop the turn in progress so what's queued in the agent's own chat runs
+/// now, as the next turn: it is moved ahead of anything waiting for a room,
+/// so the message the user interrupted for is the one answered. That turn
+/// is told what it was doing when it was cut off, if it was doing it in the
+/// same chat. Nothing queued there, nothing to interrupt for: false.
 pub fn interrupt(agent_id: &str) -> bool {
     let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     let Some(runtime) = runtimes.get_mut(agent_id) else {
         return false;
     };
-    if !runtime.running || runtime.queue.is_empty() {
+    if !runtime.running || !put_first(&mut runtime.queue, None) {
         return false;
     }
     let Some(cancel) = runtime.cancel.clone() else {
         return false;
     };
+    save_inbox(agent_id, &runtime.queue);
     runtime.interrupt = true;
     cancel.notify_one();
+    true
+}
+
+/// Move what was said in `place` (a room's id, or `None` for the agent's own
+/// chat) ahead of the rest, each side keeping its order. False when nothing
+/// queued was said there.
+fn put_first(queue: &mut VecDeque<Inbound>, place: Option<&str>) -> bool {
+    let here = |m: &Inbound| m.room.as_ref().map(|r| r.room_id.as_str()) == place;
+    if !queue.iter().any(here) {
+        return false;
+    }
+    let (mut first, rest): (VecDeque<Inbound>, VecDeque<Inbound>) =
+        std::mem::take(queue).into_iter().partition(here);
+    first.extend(rest);
+    *queue = first;
     true
 }
 
@@ -1671,6 +1773,7 @@ fn take_interrupt(agent_id: &str) -> bool {
         runtime.prompt.as_deref().unwrap_or(""),
         activity.as_deref(),
     ));
+    runtime.interrupted_in = runtime.room.as_ref().map(|r| r.room_id.clone());
     true
 }
 
@@ -1928,6 +2031,12 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
             .max()
             .unwrap_or(0)
     };
+    // A room's hand-offs are agents bringing each other in: a turn there
+    // starts as far along the chain as the room's hop, so a `message_agent`
+    // from it can't begin a fresh 6-hop chain of its own.
+    if let Some(room) = &runtime.room {
+        runtime.hop = runtime.hop.max(room.hop);
+    }
     // An interrupted turn's debts carry over to the turn that replaces it.
     for m in &batch {
         if let (From::Agent { sender, .. }, false) = (&m.from, m.reply) {
@@ -1946,7 +2055,15 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     runtime.interrupt = false;
     let prompt = compose(&batch);
     runtime.prompt = Some(prompt.clone());
-    let preamble = runtime.interrupted.take().unwrap_or_default();
+    // What an interrupted turn left is told only to a turn in the same place;
+    // otherwise it waits for one (or goes when the agent is idle again).
+    let place = runtime.room.as_ref().map(|r| r.room_id.clone());
+    let preamble = if runtime.interrupted.is_some() && runtime.interrupted_in == place {
+        runtime.interrupted_in = None;
+        runtime.interrupted.take().unwrap_or_default()
+    } else {
+        String::new()
+    };
     let room = runtime.room.clone();
     let prompt = format!("{preamble}{prompt}");
     Some(Batch {
@@ -2006,6 +2123,7 @@ fn finish_if_idle(agent_id: &str) -> Option<Idle> {
     runtime.origin = None;
     runtime.prompt = None;
     runtime.interrupted = None;
+    runtime.interrupted_in = None;
     runtime.turn_usage = super::usage::UsageTotals::default();
     runtime.turn_mixed = false;
     runtime.outside = false;
@@ -2120,6 +2238,7 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     runtime.cancel = None;
     runtime.interrupt = false;
     runtime.interrupted = None;
+    runtime.interrupted_in = None;
     let hop = std::mem::take(&mut runtime.hop);
     runtime.origin = None;
     runtime.prompt = None;
@@ -2368,7 +2487,7 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
                 }
                 let mut line = new_message(&agent_id, MessageKind::Error, text.clone());
                 line.failure = Some(failure);
-                let _ = record(&app, line);
+                let _ = record_in_turn(&app, line);
                 super::work::finish(&app, &agent_id, store::now_ms());
                 return_results(&app, &agent_id, since, Some(text));
             }
@@ -2388,6 +2507,13 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         clear_room(&agent_id);
         notify::turn_ended(&app, &agent_id);
     }
+}
+
+/// The room's line for a member's turn there that was cut off for a message
+/// in its own chat: the ask isn't answered, and the room is told so.
+fn interrupted_in_room_line(agent_id: &str) -> String {
+    let name = store::get(agent_id).map(|a| a.name).unwrap_or_default();
+    format!("{name} was interrupted for a message in its own chat, so it didn't answer here.")
 }
 
 /// The turn's room is over: what is recorded from now on is the agent's own.
@@ -3373,18 +3499,25 @@ async fn run_turn(
 
     if let Some(note) = stopped {
         if note.is_none() && take_interrupt(agent_id) {
-            let line = "Interrupted to read your new message";
-            let _ = record(app, new_message(agent_id, MessageKind::Note, line));
+            // Cut off in a room for a message in its own chat: the room hears
+            // it won't get an answer, and nothing said there goes with it.
+            let line = match turn_room(agent_id) {
+                Some(_) => interrupted_in_room_line(agent_id),
+                None => "Interrupted to read your new message".to_string(),
+            };
+            let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
             return Ok(Ended::Interrupted);
         }
         // Stopped by the user is their doing, not a failure: a quiet line,
         // unless the cut-off reply already says so. Our own stop is an error.
         match note {
             Some(note) => {
-                let _ = record(app, new_message(agent_id, MessageKind::Error, note));
+                let _ = record_in_turn(app, new_message(agent_id, MessageKind::Error, note));
             }
             None if cut_off.is_none() => {
-                if let Ok(line) = record(app, new_message(agent_id, MessageKind::Note, "Stopped")) {
+                if let Ok(line) =
+                    record_in_turn(app, new_message(agent_id, MessageKind::Note, "Stopped"))
+                {
                     super::work::anchor_on(&line);
                 }
             }

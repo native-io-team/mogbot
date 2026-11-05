@@ -43,6 +43,11 @@ describe('who a room message is for', () => {
     expect(addressed('@Finance and @everyone', members)).toEqual({ kind: 'everyone' });
   });
 
+  it('@everyone means everyone even beside an agent named that before it was reserved', () => {
+    const named = agent('ev', 'everyone');
+    expect(addressed('@everyone wrap up', [fin, named])).toEqual({ kind: 'everyone' });
+  });
+
   it('falls back to the lead, and asks when there is none', () => {
     expect(addressed('Anything overdue?', members, 'fin')).toEqual({ kind: 'lead', id: 'fin' });
     expect(addressed('Anything overdue?', members)).toEqual({ kind: 'ask' });
@@ -111,5 +116,20 @@ describe('an agent’s own chat', () => {
     expect(kinds).toEqual(['message', 'room', 'message', 'room', 'message']);
     const first = items.find((i) => i.type === 'room');
     expect(first?.type === 'room' && first.messages.map((m) => m.id)).toEqual(['m2', 'm3']);
+  });
+
+  it('keeps its open copy’s card, and lines from a room that is gone, in full', () => {
+    const items = buildChatItems(
+      [
+        line('m1', { room: 'r' }),
+        line('m2', { room: 'r', kind: 'changes' }),
+        line('m3', { room: 'gone' }),
+      ],
+      { unfolded: 'm2', folds: (id) => id !== 'gone' }
+    );
+    const shape = items
+      .filter((i) => i.type !== 'day')
+      .map((i) => (i.type === 'message' ? i.message.id : i.type));
+    expect(shape).toEqual(['room', 'm2', 'm3']);
   });
 });
