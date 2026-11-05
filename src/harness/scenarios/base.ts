@@ -214,6 +214,8 @@ export const baseCommands: CommandMap = {
   agents_messages: (args: Record<string, unknown>) =>
     args.agentId === 'chief' ? [chiefGreeting('chief')] : [],
   agents_search: [],
+  // The palette sweep now starts in Agents, where ⌘K → Apps opens this.
+  agents_apps_list: { connected: [], suggestions: [] },
   agents_usage: {
     week: {
       turns: 0,
