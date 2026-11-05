@@ -18,6 +18,21 @@ You need a Mac, a paid Claude (Pro/Max) or ChatGPT plan, and for the phone a
 free Tailscale account. Step by step, with checks and troubleshooting:
 **[docs/INSTALL.md](docs/INSTALL.md)**.
 
+**The phone app, two ways** (until it's on the App Store). Pick whichever is
+easiest for you:
+
+| | Expo Go | Built with Xcode |
+|---|---|---|
+| Best for | Trying it fast, development | The real experience |
+| You install | Expo Go from the App Store | Full Xcode on the Mac; phone plugged in once |
+| Setup time | Minutes | 30–60 min the first time |
+| Dictation, "Send to agent" share sheet, Home Screen actions | No (the keyboard's mic still works) | Yes |
+| Works when the Mac's dev server is off | No | Yes |
+| Push notifications | No | Not yet (needs the App Store build) |
+| Catch | — | With a free Apple ID it must be re-installed every 7 days |
+
+Either way the phone talks only to your Mac, over your own Tailscale.
+
 You open the app and you're talking to your **Chief of Staff**. It sets up
 named agents for the work you hand it, briefs them, delegates, and comes back
 with results. Each agent remembers you, keeps its own instructions and
