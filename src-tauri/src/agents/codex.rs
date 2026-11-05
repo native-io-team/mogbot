@@ -239,6 +239,34 @@ pub(super) fn action(item: &Value) -> Option<super::work::Action> {
     Some(action)
 }
 
+/// What became of a completed Codex item, by its id. `exec` says
+/// `completed` / `failed` / `declined`; the app server says the same in
+/// camelCase. A command that ran but exited non-zero failed.
+pub(super) fn result(item: &Value) -> Option<super::work::CallResult> {
+    use super::work::Outcome;
+    let id = item.get("id")?.as_str()?;
+    let outcome = match item.get("status").and_then(Value::as_str)? {
+        "declined" | "denied" | "rejected" => Outcome::Declined,
+        "failed" | "error" => Outcome::Failed,
+        "completed" => {
+            let exit = item
+                .get("exit_code")
+                .or_else(|| item.get("exitCode"))
+                .and_then(Value::as_i64);
+            if exit.is_some_and(|code| code != 0) {
+                Outcome::Failed
+            } else {
+                Outcome::Done
+            }
+        }
+        _ => return None,
+    };
+    Some(super::work::CallResult {
+        id: id.to_string(),
+        outcome,
+    })
+}
+
 fn usage(value: &Value) -> Option<UsageTotals> {
     let usage = value.get("usage")?.as_object()?;
     let n = |k: &str| usage.get(k).and_then(Value::as_u64).unwrap_or(0);
@@ -276,11 +304,15 @@ pub fn steps(value: &Value) -> Vec<Step> {
             if kind == "item.completed" && item_type == Some("agent_message") {
                 return text("/item/text").map(Step::Reply).into_iter().collect();
             }
+            let mut out = Vec::new();
             // A file change only arrives complete; everything else says so as it starts.
             if kind == "item.started" || item_type == Some("file_change") {
-                return action(item).map(Step::Action).into_iter().collect();
+                out.extend(action(item).map(Step::Action));
             }
-            Vec::new()
+            if kind == "item.completed" {
+                out.extend(result(item).map(Step::Result));
+            }
+            out
         }
         "turn.completed" => usage(value)
             .map(Step::Usage)
@@ -394,13 +426,7 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(
-            activities,
-            [
-                "Running echo hi > note.txt && cat note.txt",
-                "Checking on the team"
-            ]
-        );
+        assert_eq!(activities, ["Running echo", "Checking on the team"]);
         let replies: Vec<&Step> = steps
             .iter()
             .filter(|s| matches!(s, Step::Reply(_)))

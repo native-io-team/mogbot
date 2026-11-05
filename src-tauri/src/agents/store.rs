@@ -741,7 +741,9 @@ pub fn delete(id: &str) -> Result<Agent, CommandError> {
     let removed = registry.agents.remove(index);
     write_registry(&registry)?;
     super::secrets::forget_all(&removed);
-    // The home goes with it: its memory and chat are the agent.
+    super::work::forget_agent(&removed.id);
+    // The home goes with it: its memory and chat are the agent (and the
+    // timelines kept under its replies, in `turns/`).
     let home = agents_root()?.join(&removed.id);
     if home.exists() {
         let _ = crate::utils::remove_dir_all_robust(&home);
@@ -1011,7 +1013,6 @@ pub fn messages_page(
     all.truncate(end);
     let mut page = all.split_off(start);
     apply_answers(agent_id, &mut page)?;
-    super::work::apply(agent_id, &mut page);
     Ok(page)
 }
 
@@ -1103,6 +1104,10 @@ fn resolve_approval(
     let pending = count_pending(&all);
     drop(guard);
     let _ = update(agent_id, |a| a.pending_approvals = pending);
+    if changed.is_some() {
+        // The turn that raised it, if it's still running, says what the answer was.
+        super::work::on_answer(agent_id, request_id, status);
+    }
     Ok(changed)
 }
 

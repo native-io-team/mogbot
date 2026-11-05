@@ -591,7 +591,7 @@ function ItemView({
     ) : item.kind === 'draft' ? (
       <DraftRow id={item.key} text={item.text} onHeight={onDraftHeight} />
     ) : (
-      <WorkingRow label={item.label} />
+      <WorkingRow label={item.label} agent={agent} onError={onError} />
     );
   // A run from one side sits close together; a new speaker gets room.
   const grouped = item.kind === 'message' && item.grouped;

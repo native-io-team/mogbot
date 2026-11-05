@@ -228,22 +228,7 @@ export const agentsOverview = {
       "status": {
         "activity": "Running npm test",
         "since": 1762290000000,
-        "state": "waiting",
-        "work": {
-          "fileCount": 1,
-          "files": [
-            "App.tsx"
-          ],
-          "startedAt": 1762290000000,
-          "stepCount": 3,
-          "steps": [
-            {
-              "at": 1762290030000,
-              "kind": "command",
-              "label": "Ran npm test"
-            }
-          ]
-        }
+        "state": "waiting"
       },
       "unread": 2
     }
@@ -781,13 +766,12 @@ export const agentsMessages = {
       "ts": 1762290025000,
       "work": {
         "endedAt": 1762290025000,
-        "fileCount": 2,
+        "fileCount": 1,
         "files": [
-          "Header.tsx",
-          "Nav.tsx"
+          "Header.tsx"
         ],
         "startedAt": 1762290013000,
-        "stepCount": 14,
+        "stepCount": 17,
         "steps": [
           {
             "at": 1762290013000,
@@ -822,7 +806,20 @@ export const agentsMessages = {
           {
             "at": 1762290017000,
             "kind": "approval",
-            "label": "Asked you to approve: Run a command"
+            "label": "You declined: Run a command",
+            "outcome": "declined"
+          },
+          {
+            "at": 1762290017000,
+            "kind": "command",
+            "label": "Asked to run rm — you declined",
+            "outcome": "declined"
+          },
+          {
+            "at": 1762290017000,
+            "kind": "edit",
+            "label": "Tried to edit Nav.tsx",
+            "outcome": "failed"
           },
           {
             "at": 1762290018000,
@@ -832,7 +829,7 @@ export const agentsMessages = {
           {
             "at": 1762290019000,
             "kind": "delegate",
-            "label": "Ran a sub-task: check the nav"
+            "label": "Worked on a sub-task: check the nav"
           },
           {
             "at": 1762290020000,
@@ -852,8 +849,13 @@ export const agentsMessages = {
           },
           {
             "at": 1762290022000,
+            "kind": "web",
+            "label": "Browsed acme.com"
+          },
+          {
+            "at": 1762290022000,
             "kind": "tool",
-            "label": "Used navigate (claude-in-chrome)"
+            "label": "Searched Google Drive"
           }
         ]
       }
@@ -1705,9 +1707,33 @@ export const frames = [
       "type": "agents.status",
       "agentId": "a1",
       "status": {
-        "activity": "Reading src/App.tsx",
+        "activity": "Running npm test",
         "since": 1762290000000,
-        "state": "working"
+        "state": "working",
+        "work": {
+          "doing": "Running npm test",
+          "fileCount": 0,
+          "startedAt": 1762290000000,
+          "stepCount": 3,
+          "steps": [
+            {
+              "at": 1762290010000,
+              "kind": "read",
+              "label": "Read App.tsx"
+            },
+            {
+              "at": 1762290020000,
+              "kind": "edit",
+              "label": "Tried to edit App.tsx",
+              "outcome": "failed"
+            },
+            {
+              "at": 1762290030000,
+              "kind": "command",
+              "label": "Ran npm test"
+            }
+          ]
+        }
       }
     }
   },
@@ -1908,22 +1934,7 @@ export const frames = [
             "status": {
               "activity": "Running npm test",
               "since": 1762290000000,
-              "state": "waiting",
-              "work": {
-                "fileCount": 1,
-                "files": [
-                  "App.tsx"
-                ],
-                "startedAt": 1762290000000,
-                "stepCount": 3,
-                "steps": [
-                  {
-                    "at": 1762290030000,
-                    "kind": "command",
-                    "label": "Ran npm test"
-                  }
-                ]
-              }
+              "state": "waiting"
             },
             "unread": 2
           }
@@ -2240,22 +2251,7 @@ export const frames = [
             "status": {
               "activity": "Running npm test",
               "since": 1762290000000,
-              "state": "waiting",
-              "work": {
-                "fileCount": 1,
-                "files": [
-                  "App.tsx"
-                ],
-                "startedAt": 1762290000000,
-                "stepCount": 3,
-                "steps": [
-                  {
-                    "at": 1762290030000,
-                    "kind": "command",
-                    "label": "Ran npm test"
-                  }
-                ]
-              }
+              "state": "waiting"
             },
             "unread": 2
           }

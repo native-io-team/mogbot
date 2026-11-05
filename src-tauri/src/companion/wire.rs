@@ -269,7 +269,14 @@ pub struct HelloFrame {
     pub resume: Option<Cursor>,
     #[serde(default)]
     pub foreground: bool,
+    /// What the app can show beyond the protocol version (`FEATURES` in
+    /// frames.ts). An older app sends none.
+    #[serde(default)]
+    pub features: Vec<String>,
 }
+
+/// `hello.features`: the app shows a running turn's steps (`status.work`).
+pub const FEATURE_LIVE_WORK: &str = "work.live";
 
 /// Phone → Mac. Unknown frame types are ignored, as the protocol promises.
 #[derive(Debug, Clone, Deserialize)]
@@ -463,15 +470,31 @@ pub enum Event {
 /// lifetime `usage` totals are dropped: `Agent` in model.ts doesn't carry
 /// them (the phone asks `agents.usage` when it shows them), and this goes
 /// out on every registry change.
+/// A running turn's steps are dropped too: they ride on `agents.status`,
+/// which is sent on every step, to the phones that show them.
 pub fn phone_overview(mut overview: Value) -> Value {
     if let Some(agents) = overview.get_mut("agents").and_then(Value::as_array_mut) {
         for agent in agents {
             if let Some(fields) = agent.as_object_mut() {
                 fields.remove("usage");
+                if let Some(status) = fields.get_mut("status").and_then(Value::as_object_mut) {
+                    status.remove("work");
+                }
             }
         }
     }
     overview
+}
+
+/// An event as a phone that doesn't show a running turn's steps gets it:
+/// without them.
+pub fn without_live_work(mut event: Event) -> Event {
+    if let Event::Status { status, .. } = &mut event {
+        if let Some(fields) = status.as_object_mut() {
+            fields.remove("work");
+        }
+    }
+    event
 }
 
 #[cfg(test)]

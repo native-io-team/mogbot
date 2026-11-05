@@ -151,13 +151,20 @@ struct Runtime {
 static RUNTIMES: LazyLock<Mutex<HashMap<String, Runtime>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// The agent's status, without its timeline (checked all through a turn,
+/// so it never copies one). [`status_with_work`] is the one shown.
 pub fn status_of(agent_id: &str) -> Status {
-    let mut status = RUNTIMES
+    RUNTIMES
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .get(agent_id)
         .and_then(|r| r.status.clone())
-        .unwrap_or_else(Status::idle);
+        .unwrap_or_else(Status::idle)
+}
+
+/// The agent's status as the UI shows it: with the turn's timeline so far.
+pub fn status_with_work(agent_id: &str) -> Status {
+    let mut status = status_of(agent_id);
     with_work(agent_id, &mut status);
     status
 }
@@ -387,11 +394,12 @@ pub fn set_status(app: &AppHandle, agent_id: &str, mut status: Status) {
     if let Some(activity) = status.activity.as_mut() {
         *activity = super::secrets::redact(activity).into_owned();
     }
-    with_work(agent_id, &mut status);
+    status.work = None;
     {
         let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
         runtimes.entry(agent_id.to_string()).or_default().status = Some(status.clone());
     }
+    with_work(agent_id, &mut status);
     #[derive(Serialize, Clone)]
     #[serde(rename_all = "camelCase")]
     struct Payload<'a> {
@@ -1704,6 +1712,14 @@ async fn run_turn(
                                 set_status(app, agent_id, Status { state: "working", activity: Some(doing), since: Some(started), work: None });
                             }
                         }
+                        Step::Result(result) => {
+                            super::work::on_result(agent_id, result);
+                            // The step's outcome changed: the open list says so.
+                            let now = status_of(agent_id);
+                            if now.state == "working" {
+                                set_status(app, agent_id, now);
+                            }
+                        }
                         Step::Usage(mut turn) => {
                             timing.cli_ms = turn.duration_ms;
                             // Codex doesn't time its turns; this one was timed here.
@@ -1835,7 +1851,9 @@ async fn run_turn(
                 let _ = record(app, new_message(agent_id, MessageKind::Error, note));
             }
             None if cut_off.is_none() => {
-                let _ = record(app, new_message(agent_id, MessageKind::Note, "Stopped"));
+                if let Ok(line) = record(app, new_message(agent_id, MessageKind::Note, "Stopped")) {
+                    super::work::anchor_on(&line);
+                }
             }
             None => {}
         }

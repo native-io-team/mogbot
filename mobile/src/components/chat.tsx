@@ -23,7 +23,7 @@ import { Spinner } from './agent';
 import { ApprovalCard } from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
-import { WorkLine } from './work';
+import { LiveWork, WorkLine } from './work';
 import { useApp } from '../lib/store';
 
 const enter = FadeInDown.duration(220).springify().damping(18);
@@ -505,15 +505,34 @@ function Prose({ id, text, streaming = false }: { id: string; text: string; stre
   );
 }
 
-export function WorkingRow({ label }: { label: string }) {
+/** The working row, and under it the turn's steps so far, folded (`LiveWork`). */
+export function WorkingRow({
+  label,
+  agent,
+  onError,
+}: {
+  label: string;
+  agent?: Agent;
+  onError?: (text: string) => void;
+}) {
   const colors = useColors();
   const styles = useStyles();
   return (
-    <Animated.View entering={FadeIn.duration(250)} style={styles.workingRow}>
-      <Spinner />
-      <T variant="small" color={colors.textSecondary} numberOfLines={1}>
-        {label}
-      </T>
+    <Animated.View entering={FadeIn.duration(250)} style={styles.working}>
+      <View style={styles.workingRow}>
+        <Spinner />
+        <T variant="small" color={colors.textSecondary} numberOfLines={1}>
+          {label}
+        </T>
+      </View>
+      {agent && (
+        <LiveWork
+          agentId={agent.id}
+          work={agent.status.work}
+          activity={agent.status.activity}
+          onError={onError ?? (() => {})}
+        />
+      )}
     </Animated.View>
   );
 }
@@ -562,11 +581,11 @@ const useStyles = makeStyles((colors) => ({
   },
   systemTap: { alignSelf: 'flex-start', paddingVertical: space.xs },
   count: { fontVariant: ['tabular-nums'] },
+  working: { gap: space.sm, paddingVertical: space.xs },
   workingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    paddingVertical: space.xs,
   },
   sessionLine: {
     flexDirection: 'row',

@@ -41,6 +41,24 @@ export function stepOffset(step: WorkStep, startedAt: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
 }
 
+/** Under the working row: "Working · 8 steps · edited 1 file". */
+export function liveSummary(work: TurnWork): string {
+  const parts = ['Working', plural(work.stepCount, 'step')];
+  if (work.fileCount > 0) parts.push(`edited ${plural(work.fileCount, 'file')}`);
+  return parts.join(' · ');
+}
+
+/**
+ * The steps to list under the working row. The newest is left out only
+ * while the row is saying it (its call is still running and the row shows
+ * that call's words), so it's never shown twice and never hidden when the
+ * row says something else ("Waiting for your OK", or nothing).
+ */
+export function liveSteps(work: TurnWork, activity: string | null | undefined): WorkStep[] {
+  const shownByRow = work.doing != null && activity != null && activity === work.doing;
+  return shownByRow ? work.steps.slice(0, -1) : work.steps;
+}
+
 /** Steps the Mac saw but no longer keeps (it keeps the newest). */
 export function earlierSteps(work: TurnWork): number {
   return Math.max(0, work.stepCount - work.steps.length);

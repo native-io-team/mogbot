@@ -411,9 +411,9 @@ impl Conversation {
                         }) {
                             self.mcp_calls.remove(i);
                         }
-                        Vec::new()
+                        result_of(item)
                     }
-                    _ => Vec::new(),
+                    _ => result_of(item),
                 }
             }
             "thread/tokenUsage/updated" => {
@@ -641,6 +641,20 @@ fn activity(item: &Value) -> Option<super::work::Action> {
     super::codex::action(&item)
 }
 
+/// What became of a completed item, for its timeline step.
+fn result_of(item: &Value) -> Vec<Out> {
+    let tool_item = matches!(
+        item.get("type").and_then(Value::as_str),
+        Some("commandExecution" | "fileChange" | "mcpToolCall" | "webSearch")
+    );
+    if !tool_item {
+        return Vec::new();
+    }
+    super::codex::result(item)
+        .map(|r| vec![Out::Step(Step::Result(r))])
+        .unwrap_or_default()
+}
+
 /// Answer one of Codex's requests: the same decision a Claude Code call gets
 /// (one-time grant, "Always allow" rule, or a card), as Codex's reply, and a
 /// steer telling the model why when the answer is no.
@@ -863,7 +877,7 @@ mod tests {
         assert!(out.contains(&Out::Step(Step::Reply("Ran it.".into()))));
         assert!(out
             .iter()
-            .any(|o| matches!(o, Out::Step(Step::Action(a)) if a.label.contains("echo esc-ok"))));
+            .any(|o| matches!(o, Out::Step(Step::Action(a)) if a.label == "Ran echo")));
         let asks: Vec<&Ask> = out
             .iter()
             .filter_map(|o| match o {

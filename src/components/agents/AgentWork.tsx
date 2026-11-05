@@ -3,7 +3,9 @@
  * ("Worked 6 min · 23 steps · edited 2 files") that opens into the steps in
  * order, each with its time into the turn and any screenshot it produced.
  * While the agent works the same list hangs above the working line, which
- * stays the current step (`WorkingIndicator`).
+ * stays the current step while its call runs (`WorkingIndicator`, `liveSteps`).
+ * A step the user declined, or that failed, says so in words and is drawn
+ * quieter (`data-outcome`).
  *
  * Everything shown is what the backend recorded from the engine's own output
  * (`agents::work`); a turn with no steps has no line at all.
@@ -17,11 +19,11 @@ import {
   CameraIcon,
   ChevronRightIcon,
   CommentIcon,
-  EditIcon,
   FileTextIcon,
   FolderIcon,
   GlobeIcon,
   ListIcon,
+  PencilIcon,
   PuzzleIcon,
   SearchIcon,
   ShieldCheckIcon,
@@ -31,6 +33,7 @@ import { TextButton } from '../primitives/TextButton';
 import type { Agent, TurnWork, WorkStep } from '../../lib/agents';
 import {
   earlierSteps,
+  liveSteps,
   liveSummary,
   rememberLiveOpen,
   stepOffset,
@@ -44,7 +47,7 @@ type IconComponent = ComponentType<{ size?: number }>;
 
 const STEP_ICON: Record<string, IconComponent> = {
   read: FileTextIcon,
-  edit: EditIcon,
+  edit: PencilIcon,
   search: SearchIcon,
   web: GlobeIcon,
   command: TerminalIcon,
@@ -69,7 +72,7 @@ function StepIcon({ kind }: { kind: string }) {
 
 function StepRow({ step, startedAt, agent }: { step: WorkStep; startedAt: number; agent: Agent }) {
   return (
-    <li className="agent-work__step" data-kind={step.kind}>
+    <li className="agent-work__step" data-kind={step.kind} data-outcome={step.outcome}>
       <StepIcon kind={step.kind} />
       <span className="agent-work__label" title={step.label}>
         {step.label}
@@ -89,13 +92,13 @@ function StepRow({ step, startedAt, agent }: { step: WorkStep; startedAt: number
 interface StepListProps {
   work: TurnWork;
   agent: Agent;
-  /** Leave the newest step out: the working line under the list is it. */
-  dropLast?: boolean;
+  /** While it works: what the working line under the list says (`liveSteps`). */
+  live?: { activity: string | null | undefined };
 }
 
 /** The steps, oldest first, and the files the turn edited. */
-function StepList({ work, agent, dropLast }: StepListProps) {
-  const steps = dropLast ? work.steps.slice(0, -1) : work.steps;
+function StepList({ work, agent, live }: StepListProps) {
+  const steps = live ? liveSteps(work, live.activity) : work.steps;
   const earlier = earlierSteps(work);
   const files = work.files ?? [];
   const more = work.fileCount - files.length;
@@ -111,7 +114,7 @@ function StepList({ work, agent, dropLast }: StepListProps) {
           <StepRow key={`${step.at}-${i}`} step={step} startedAt={work.startedAt} agent={agent} />
         ))}
       </ol>
-      {!dropLast && files.length > 0 && (
+      {!live && files.length > 0 && (
         <p className="agent-work__files">
           <span className="agent-work__files-label">Edited</span> {files.join(', ')}
           {more > 0 && ` and ${more} more`}
@@ -206,12 +209,14 @@ export const WorkTimeline = memo(function WorkTimeline({ work, agent }: WorkTime
 interface LiveWorkProps {
   work: TurnWork | undefined;
   agent: Agent | undefined;
+  /** What the working line says now. */
+  activity: string | null | undefined;
   /** The working line collapsing at the turn's end: nothing opens now. */
   leaving?: boolean;
 }
 
 /** The toggle beside the working line, and the steps so far above it. */
-export function useLiveWork({ work, agent, leaving }: LiveWorkProps) {
+export function useLiveWork({ work, agent, activity, leaving }: LiveWorkProps) {
   const [openAt, setOpenAt] = useState<number | null>(() =>
     work && agent && wasOpenLive(agent.id, work.startedAt) ? work.startedAt : null
   );
@@ -239,7 +244,7 @@ export function useLiveWork({ work, agent, leaving }: LiveWorkProps) {
         <div className="agent-work__inner">
           {(open || ever) && (
             <>
-              <StepList work={work} agent={agent} dropLast />
+              <StepList work={work} agent={agent} live={{ activity }} />
               <OpenProject agent={agent} />
             </>
           )}

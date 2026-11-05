@@ -427,7 +427,16 @@ where
     );
     c.backend.changed();
 
-    let ended = connected(&c, &mut ws, &caller, protocol, hello.resume.as_ref()).await;
+    let live_work = hello.features.iter().any(|f| f == wire::FEATURE_LIVE_WORK);
+    let ended = connected(
+        &c,
+        &mut ws,
+        &caller,
+        protocol,
+        hello.resume.as_ref(),
+        live_work,
+    )
+    .await;
     tracing::debug!(device = %record.id, ?ended, "[Companion] socket closed");
 
     c.close_conn(conn);
@@ -453,6 +462,7 @@ async fn connected<S>(
     caller: &Caller,
     protocol: u32,
     resume: Option<&wire::Cursor>,
+    live_work: bool,
 ) -> Ended
 where
     S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
@@ -480,6 +490,11 @@ where
     let caught_up = match plan {
         Resume::Replay { events, cursor } => {
             for (seq, event) in events {
+                let event = if live_work {
+                    event
+                } else {
+                    wire::without_live_work(event)
+                };
                 if !send(
                     ws,
                     &ServerFrame::Evt {
@@ -596,7 +611,7 @@ where
             item = rx.recv() => {
                 match item {
                     Ok(item) => {
-                        if let Some(ended) = forward(ws, &mut drafts, caller, item).await {
+                        if let Some(ended) = forward(ws, &mut drafts, caller, item, live_work).await {
                             return ended;
                         }
                     }
@@ -609,7 +624,7 @@ where
             Some((id, result)) = done_rx.recv() => {
                 // Events the request caused go out before its response.
                 while let Ok(item) = rx.try_recv() {
-                    if let Some(ended) = forward(ws, &mut drafts, caller, item).await {
+                    if let Some(ended) = forward(ws, &mut drafts, caller, item, live_work).await {
                         return ended;
                     }
                 }
@@ -654,6 +669,7 @@ async fn forward<S>(
     drafts: &mut Drafts,
     caller: &Caller,
     item: HubItem,
+    live_work: bool,
 ) -> Option<Ended>
 where
     S: SinkExt<Message> + Unpin,
@@ -665,6 +681,11 @@ where
                     drafts.finished(id);
                 }
             }
+            let event = if live_work {
+                event
+            } else {
+                wire::without_live_work(event)
+            };
             event_frame(Some(seq), event)
         }
         HubItem::Draft { agent_id, id, text } => {

@@ -59,9 +59,18 @@ export interface WorkStep {
   at: number;
   kind: WorkStepKind;
   label: string;
+  /**
+   * What became of it, when it didn't simply go through: `declined` (the
+   * user said no) or `failed` (it came back with an error). Absent while it
+   * runs and once it succeeded. Its label already says so in words.
+   */
+  outcome?: WorkStepOutcome;
   /** A screenshot this step produced. */
   image?: Attachment;
 }
+
+/** `agents::work::StepOutcome`. */
+export type WorkStepOutcome = 'declined' | 'failed';
 
 /**
  * What a turn did (`agents::work`): on the status while it runs (its newest
@@ -76,9 +85,15 @@ export interface TurnWork {
   stepCount: number;
   /** The newest steps, oldest first. */
   steps: WorkStep[];
-  /** Files it edited, distinct (as named in its edit calls). */
+  /** Files it edited successfully, distinct. Not carried while it runs. */
   files?: string[];
   fileCount: number;
+  /**
+   * While it runs: the working-line words of the newest step, while that
+   * call hasn't come back. When it equals the status's `activity`, the
+   * working line *is* that step.
+   */
+  doing?: string;
 }
 
 export interface Agent {

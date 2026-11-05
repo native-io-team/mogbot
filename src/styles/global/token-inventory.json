@@ -4619,7 +4619,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 798
+      "consumerCount": 799
     },
     {
       "name": "--text-faint",
@@ -5366,7 +5366,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 493
+      "consumerCount": 491
     },
     {
       "name": "--spacing-lg",

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   earlierSteps,
   formatWorked,
+  liveSteps,
   liveSummary,
   rememberLiveOpen,
   stepOffset,
@@ -72,5 +73,19 @@ describe('steps', () => {
     expect(wasOpenLive('a', 6)).toBe(false);
     rememberLiveOpen('a', 5, false);
     expect(wasOpenLive('a', 5)).toBe(false);
+  });
+});
+
+describe('the live list', () => {
+  const steps = [
+    { at: 1, kind: 'read' as const, label: 'Read a.ts' },
+    { at: 2, kind: 'command' as const, label: 'Ran npm test' },
+  ];
+  it('leaves out the newest step only while the working line is saying it', () => {
+    const w = work({ steps, stepCount: 2, doing: 'Running npm test' });
+    expect(liveSteps(w, 'Running npm test')).toHaveLength(1);
+    expect(liveSteps(w, null)).toHaveLength(2);
+    expect(liveSteps(w, 'Waiting for your OK')).toHaveLength(2);
+    expect(liveSteps({ ...w, doing: undefined }, 'Running npm test')).toHaveLength(2);
   });
 });

@@ -176,7 +176,7 @@ pub fn messages() -> Vec<AgentMessage> {
                                           "fields": [{ "label": "Value", "env": "OTHER" }], "reference": "secret:finance/other" } } }),
         // A reply with the timeline of the turn it ended (`agents::work`): every step kind.
         json!({ "id": "m25", "agentId": AGENT, "ts": at(25), "kind": "agent", "text": "Fixed the header.",
-                "work": { "startedAt": at(13), "endedAt": at(25), "stepCount": 14, "fileCount": 2, "files": ["Header.tsx", "Nav.tsx"],
+                "work": { "startedAt": at(13), "endedAt": at(25), "stepCount": 17, "fileCount": 1, "files": ["Header.tsx"],
                           "steps": [
                               { "at": at(13), "kind": "plan", "label": "Updated its plan" },
                               { "at": at(14), "kind": "read", "label": "Read Header.tsx" },
@@ -184,13 +184,16 @@ pub fn messages() -> Vec<AgentMessage> {
                               { "at": at(15), "kind": "web", "label": "Searched the web for “header spacing”" },
                               { "at": at(15), "kind": "edit", "label": "Edited Header.tsx" },
                               { "at": at(16), "kind": "command", "label": "Ran npm test" },
-                              { "at": at(17), "kind": "approval", "label": "Asked you to approve: Run a command" },
+                              { "at": at(17), "kind": "approval", "label": "You declined: Run a command", "outcome": "declined" },
+                              { "at": at(17), "kind": "command", "label": "Asked to run rm — you declined", "outcome": "declined" },
+                              { "at": at(17), "kind": "edit", "label": "Tried to edit Nav.tsx", "outcome": "failed" },
                               { "at": at(18), "kind": "message", "label": "Messaged Ops" },
-                              { "at": at(19), "kind": "delegate", "label": "Ran a sub-task: check the nav" },
+                              { "at": at(19), "kind": "delegate", "label": "Worked on a sub-task: check the nav" },
                               { "at": at(20), "kind": "project", "label": "Worked in site" },
                               { "at": at(21), "kind": "screenshot", "label": "Took a screenshot of site",
                                 "image": { "name": "Desktop.jpg", "path": "attachments/m17/Desktop.jpg", "mime": "image/jpeg", "size": 184_000 } },
-                              { "at": at(22), "kind": "tool", "label": "Used navigate (claude-in-chrome)" }
+                              { "at": at(22), "kind": "web", "label": "Browsed acme.com" },
+                              { "at": at(22), "kind": "tool", "label": "Searched Google Drive" }
                           ] } }),
     ];
     list.into_iter().map(|m| round_trip(m, &[])).collect()
@@ -232,25 +235,51 @@ pub fn routes() -> Vec<Route> {
     ]
 }
 
+/// A turn's timeline as it rides on a working status: the newest steps,
+/// counts, and what the running call is doing.
+pub fn live_work() -> crate::agents::work::TurnWork {
+    use crate::agents::work::{StepKind, StepOutcome, TurnWork, WorkStep};
+    TurnWork {
+        started_at: 1_762_290_000_000,
+        ended_at: None,
+        step_count: 3,
+        steps: vec![
+            WorkStep {
+                at: 1_762_290_010_000,
+                kind: StepKind::Read,
+                label: "Read App.tsx".into(),
+                outcome: None,
+                image: None,
+            },
+            WorkStep {
+                at: 1_762_290_020_000,
+                kind: StepKind::Edit,
+                label: "Tried to edit App.tsx".into(),
+                outcome: Some(StepOutcome::Failed),
+                image: None,
+            },
+            WorkStep {
+                at: 1_762_290_030_000,
+                kind: StepKind::Command,
+                label: "Ran npm test".into(),
+                outcome: None,
+                image: None,
+            },
+        ],
+        files: Vec::new(),
+        file_count: 0,
+        doing: Some("Running npm test".into()),
+    }
+}
+
 /// The overview the desktop would send, live status and all, as the phone gets it.
 pub fn overview() -> Value {
     let status = crate::agents::runner::Status {
         state: "waiting",
         activity: Some("Running npm test".into()),
         since: Some(1_762_290_000_000),
-        work: Some(crate::agents::work::TurnWork {
-            started_at: 1_762_290_000_000,
-            ended_at: None,
-            step_count: 3,
-            steps: vec![crate::agents::work::WorkStep {
-                at: 1_762_290_030_000,
-                kind: crate::agents::work::StepKind::Command,
-                label: "Ran npm test".into(),
-                image: None,
-            }],
-            files: vec!["App.tsx".into()],
-            file_count: 1,
-        }),
+        // The overview never carries a timeline to the phone (`phone_overview`).
+        work: Some(live_work()),
     };
     let view = crate::commands::agents::AgentView {
         agent: stored_agent(),

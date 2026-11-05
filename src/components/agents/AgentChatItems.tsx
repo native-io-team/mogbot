@@ -1180,7 +1180,7 @@ export function WorkingIndicator({
   if (!leaving && activity !== shown) setShown(activity);
   // Only a change of activity crossfades; the first one is just there.
   const [first] = useState(activity);
-  const live = useLiveWork({ work, agent, leaving });
+  const live = useLiveWork({ work, agent, activity, leaving });
   return (
     <div
       className="agent-chat__row agent-chat__row--agent agent-chat__row--working"

@@ -1151,21 +1151,27 @@ fn mcp_title(tool: &str) -> String {
         phrase.push(' ');
         phrase.push_str(&object.join(" "));
     }
+    format!("{phrase} · {}", service_name(server))
+}
+
+/// An MCP server's name as a person would say it: `claude_ai_Gmail` →
+/// "Gmail", `claude_ai_Google_Drive` → "Google Drive", `github` → "GitHub".
+pub(super) fn service_name(server: &str) -> String {
     // Claude.ai connectors arrive as `claude_ai_Gmail`.
     let server = server.strip_prefix("claude_ai_").unwrap_or(server);
-    let server = match server.to_ascii_lowercase().as_str() {
+    match server.to_ascii_lowercase().as_str() {
         "github" => "GitHub".to_string(),
+        "claude-in-chrome" | "claude_in_chrome" | "chrome" => "Chrome".to_string(),
         _ => split_words(server)
             .iter()
             .map(|w| capitalize(w))
             .collect::<Vec<_>>()
             .join(" "),
-    };
-    format!("{phrase} · {server}")
+    }
 }
 
 /// `send_email`, `send-email` and `sendEmail` → ["send", "email"].
-fn split_words(name: &str) -> Vec<String> {
+pub(super) fn split_words(name: &str) -> Vec<String> {
     let mut words = Vec::new();
     let mut current = String::new();
     for c in name.chars() {
@@ -1267,7 +1273,16 @@ async fn approve(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args
     }
     let answer = match decide(app, caller, tool, &input, None).await {
         Decision::Allow => json!({ "behavior": "allow", "updatedInput": input }),
-        Decision::Deny(message) => json!({ "behavior": "deny", "message": message }),
+        Decision::Deny(message) => {
+            // The user said no: the call's step says so (an unanswered card
+            // isn't a no, and its call comes back as an error instead).
+            if message != NOT_YET {
+                if let Some(call) = request_id {
+                    super::work::on_declined(&caller.id, call);
+                }
+            }
+            json!({ "behavior": "deny", "message": message })
+        }
     };
     text(answer.to_string())
 }

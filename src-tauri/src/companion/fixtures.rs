@@ -63,9 +63,10 @@ fn cursor(seq: u64) -> Cursor {
 fn status_value(state: &'static str) -> Value {
     serde_json::to_value(crate::agents::runner::Status {
         state,
-        activity: (state != "idle").then(|| "Reading src/App.tsx".to_string()),
+        activity: (state != "idle").then(|| "Running npm test".to_string()),
         since: (state != "idle").then_some(1_762_290_000_000),
-        work: None,
+        // The turn's steps so far, for a phone that says it shows them.
+        work: (state != "idle").then(testkit::live_work),
     })
     .unwrap()
 }

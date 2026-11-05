@@ -63,7 +63,7 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
         .into_iter()
         .map(|agent| {
             Ok(AgentView {
-                status: runner::status_of(&agent.id),
+                status: runner::status_with_work(&agent.id),
                 home: store::agent_home(&agent.id)?.display().to_string(),
                 agent,
             })
@@ -110,7 +110,7 @@ pub async fn agents_with_projects() -> Result<Vec<AgentView>, CommandError> {
             .filter(|a| a.project.is_some())
             .map(|agent| {
                 Ok(AgentView {
-                    status: runner::status_of(&agent.id),
+                    status: runner::status_with_work(&agent.id),
                     home: store::agent_home(&agent.id)?.display().to_string(),
                     agent,
                 })
@@ -130,12 +130,15 @@ pub async fn agents_messages(
 ) -> Result<Vec<store::AgentMessage>, CommandError> {
     const MAX: usize = 5000;
     blocking(move || {
-        store::messages_page(
+        let mut page = store::messages_page(
             &agent_id,
             limit.unwrap_or(400).min(MAX),
             before.as_deref(),
             through.as_deref().map(|id| (id, MAX)),
-        )
+        )?;
+        // What each turn did, read after the log's lock is let go.
+        crate::agents::work::apply(&agent_id, &mut page);
+        Ok(page)
     })
     .await
 }

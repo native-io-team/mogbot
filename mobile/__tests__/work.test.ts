@@ -1,6 +1,14 @@
 import type { TurnWork } from '@shipstudio/companion-protocol';
 import type { WorkStepKind } from '@shipstudio/companion-protocol';
-import { earlierSteps, formatWorked, stepOffset, stepSymbol, workSummary } from '../src/lib/work';
+import {
+  earlierSteps,
+  formatWorked,
+  liveSteps,
+  liveSummary,
+  stepOffset,
+  stepSymbol,
+  workSummary,
+} from '../src/lib/work';
 
 const work = (over: Partial<TurnWork> = {}): TurnWork => ({
   startedAt: 0,
@@ -44,5 +52,27 @@ describe('what a turn did', () => {
     ];
     expect(new Set(kinds.map(stepSymbol)).size).toBe(kinds.length);
     expect(stepSymbol('teleport')).toBe('puzzlepiece');
+  });
+});
+
+describe('while it works', () => {
+  const steps = [
+    { at: 1, kind: 'read' as const, label: 'Read a.ts' },
+    { at: 2, kind: 'command' as const, label: 'Ran npm test' },
+  ];
+  it('folds into “Working · n steps”', () => {
+    expect(liveSummary(work({ endedAt: undefined, stepCount: 8, fileCount: 0 }))).toBe(
+      'Working · 8 steps'
+    );
+    expect(liveSummary(work({ endedAt: undefined, stepCount: 1, fileCount: 1 }))).toBe(
+      'Working · 1 step · edited 1 file'
+    );
+  });
+
+  it('leaves out the newest step only while the working row is saying it', () => {
+    const w = work({ steps, stepCount: 2, doing: 'Running npm test' });
+    expect(liveSteps(w, 'Running npm test')).toHaveLength(1);
+    expect(liveSteps(w, null)).toHaveLength(2);
+    expect(liveSteps({ ...w, doing: undefined }, 'Running npm test')).toHaveLength(2);
   });
 });

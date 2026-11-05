@@ -33,6 +33,8 @@ pub enum Step {
     /// A tool call: a step of the turn's timeline (`super::work`), and what
     /// the line under its name says while it runs.
     Action(super::work::Action),
+    /// What became of a tool call, matched to its step by id.
+    Result(super::work::CallResult),
     Usage(UsageTotals),
     /// How full the conversation is, as the engine reported it.
     Context(super::context::ContextFill),
@@ -71,6 +73,13 @@ pub fn claude_steps(value: &Value, now: i64) -> Vec<Step> {
                 super::work::claude_actions(value)
                     .into_iter()
                     .map(Step::Action),
+            );
+        }
+        Some("user") => {
+            out.extend(
+                super::work::claude_results(value)
+                    .into_iter()
+                    .map(Step::Result),
             );
         }
         Some("result") => {
@@ -275,7 +284,7 @@ mod tests {
         assert_eq!(replies, 2);
         assert!(steps
             .iter()
-            .any(|s| matches!(s, Step::Action(a) if a.label == "Ran echo hi")));
+            .any(|s| matches!(s, Step::Action(a) if a.label == "Ran echo")));
         assert!(steps.iter().any(|s| matches!(s, Step::Session(_))));
         assert_eq!(steps.last(), Some(&Step::Done));
     }

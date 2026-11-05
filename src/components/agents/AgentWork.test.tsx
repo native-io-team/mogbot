@@ -58,6 +58,23 @@ describe('the timeline under a reply', () => {
     expect(screen.getByText('7 earlier steps')).toBeInTheDocument();
   });
 
+  it('says what was declined and what failed, and marks them quieter', () => {
+    const honest: TurnWork = {
+      ...work,
+      steps: [
+        { at: 1_000_000 + 2_000, kind: 'command', label: 'Asked to run rm — you declined', outcome: 'declined' },
+        { at: 1_000_000 + 3_000, kind: 'edit', label: 'Tried to edit Hero.tsx', outcome: 'failed' },
+        { at: 1_000_000 + 4_000, kind: 'approval', label: 'You allowed: Run a command' },
+      ],
+    };
+    render(<AgentBubble message={reply(honest)} agent={agent} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Worked/ }));
+    const [declined, failed, allowed] = screen.getAllByRole('listitem');
+    expect(declined).toHaveAttribute('data-outcome', 'declined');
+    expect(failed).toHaveAttribute('data-outcome', 'failed');
+    expect(allowed).not.toHaveAttribute('data-outcome');
+  });
+
   it('is absent when the turn did nothing but reply', () => {
     render(<AgentBubble message={reply()} agent={agent} />);
     expect(screen.queryByRole('button', { name: /steps?/ })).toBeNull();
@@ -65,7 +82,7 @@ describe('the timeline under a reply', () => {
 });
 
 describe('the working line, live', () => {
-  const live: TurnWork = { ...work, endedAt: undefined };
+  const live: TurnWork = { ...work, endedAt: undefined, files: [], doing: 'Running npm test' };
 
   it('is still one line, with the steps so far folded beside it', () => {
     render(<WorkingIndicator activity="Running npm test" work={live} agent={agent} />);
@@ -79,6 +96,26 @@ describe('the working line, live', () => {
     fireEvent.click(screen.getByRole('button', { name: /steps/ }));
     const steps = screen.getAllByRole('listitem').map((li) => li.textContent);
     expect(steps).toEqual(['Read Hero.tsx0:02', 'Edited Hero.tsx0:40']);
+  });
+
+  it('never hides the newest step when the line is not saying it', () => {
+    // An approval was answered: the status comes back with no activity.
+    // A turn of its own: the one above was left open, which this one would inherit.
+    render(<WorkingIndicator activity={null} work={{ ...live, startedAt: 2 }} agent={agent} />);
+    fireEvent.click(screen.getByRole('button', { name: /steps/ }));
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('lists a finished call even while the line still shows its words', () => {
+    render(
+      <WorkingIndicator
+        activity="Running npm test"
+        work={{ ...live, startedAt: 3, doing: undefined }}
+        agent={agent}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /steps/ }));
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
   });
 
   it('without a timeline is the plain working line', () => {

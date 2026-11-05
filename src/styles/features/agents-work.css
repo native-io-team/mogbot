@@ -112,6 +112,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Declined or failed: its label says so; it reads as quieter than the
+   work that went through. */
+.agent-work__step[data-outcome] {
+  color: var(--text-muted);
+}
+
 .agent-work__shot {
   grid-column: 2 / -1;
   margin-top: var(--spacing-xs);
@@ -139,7 +145,8 @@
 /* ----------------------------------------------------- while it works */
 
 /* The steps so far sit above the working line, which stays the current
-   step; its icons line up with the dots inside the pill. */
+   step; the list keeps the finished list's left edge, so it doesn't jump
+   when the turn ends. */
 .agent-chat__row--working[data-work] {
   flex-direction: column;
   align-items: flex-start;
@@ -159,12 +166,11 @@
 }
 
 .agent-work--live .agent-work__steps {
-  padding: 0 0 var(--spacing-sm) var(--spacing-md);
+  padding: 0 0 var(--spacing-sm);
 }
 
 .agent-work--live .agent-work__open {
-  margin: 0 0 var(--spacing-sm)
-    calc(var(--spacing-md) + var(--agents-work-icon) + var(--spacing-sm));
+  margin: 0 0 var(--spacing-sm) calc(var(--agents-work-icon) + var(--spacing-sm));
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -57,6 +57,18 @@ export function stepOffset(step: WorkStep, startedAt: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
 }
 
+/**
+ * The steps to list above the working line. The newest is left out only
+ * when the working line is saying it — its call is still running and the
+ * line shows that call's words — so it's never shown twice, and never
+ * hidden when the line is blank or says something else (after an approval,
+ * "Waiting for your OK", "Reconnecting").
+ */
+export function liveSteps(work: TurnWork, activity: string | null | undefined): WorkStep[] {
+  const shownByLine = work.doing != null && activity != null && activity === work.doing;
+  return shownByLine ? work.steps.slice(0, -1) : work.steps;
+}
+
 /** Steps seen but no longer kept (the backend keeps the newest). */
 export function earlierSteps(work: TurnWork): number {
   return Math.max(0, work.stepCount - work.steps.length);

@@ -28,11 +28,16 @@ const SHOT = {
   size: 31_020,
 };
 
-/** Fix the pricing cards: 30 minutes ago, for 6 minutes. */
+/**
+ * Fix the pricing cards: 30 minutes ago, for 6 minutes. Every label is one
+ * `agents::work` can produce: a command is its program and subcommand, a
+ * page its host, a connector a verb and the service. One edit failed (it
+ * doesn't count toward the files) and one command was declined.
+ */
 const PRICING_TURN = {
   startedAt: at(30, 0),
   endedAt: at(30, 6 * 60 + 4),
-  stepCount: 12,
+  stepCount: 14,
   fileCount: 2,
   files: ['PricingTable.tsx', 'pricing.css'],
   steps: [
@@ -42,9 +47,12 @@ const PRICING_TURN = {
     step(30, 22, 'read', 'Read pricing.css'),
     step(30, 51, 'web', 'Searched the web for “css grid auto-fit minmax cards”'),
     step(30, 98, 'edit', 'Edited pricing.css'),
+    step(30, 120, 'edit', 'Tried to edit PricingTable.tsx', { outcome: 'failed' }),
     step(30, 131, 'edit', 'Edited PricingTable.tsx'),
-    step(30, 160, 'approval', 'Asked you to approve: Run a command'),
-    step(30, 214, 'command', 'Ran npm test -- PricingTable'),
+    step(30, 150, 'approval', 'You declined: Run a command', { outcome: 'declined' }),
+    step(30, 151, 'command', 'Asked to run rm — you declined', { outcome: 'declined' }),
+    step(30, 160, 'approval', 'You allowed: Run a command'),
+    step(30, 214, 'command', 'Ran npm test'),
     step(30, 290, 'screenshot', 'Took a screenshot of acme-marketing', { image: SHOT }),
     step(30, 331, 'message', 'Messaged Chief of Staff'),
     step(30, 360, 'command', 'Ran npm run lint'),
@@ -87,18 +95,22 @@ const ACME_CHAT = [
   },
 ];
 
-/** Acme Site, eight steps into checking the footer links. */
+/**
+ * Acme Site, eight steps into checking the footer links; its npm test is
+ * still running, so the working line is that step. Live, the status carries
+ * counts and the newest steps, never the file names.
+ */
 const LIVE_TURN = {
   startedAt: at(3, 0),
   stepCount: 8,
   fileCount: 1,
-  files: ['Footer.tsx'],
+  doing: 'Running npm test',
   steps: [
     step(3, 2, 'read', 'Read Footer.tsx'),
     step(3, 9, 'search', 'Searched for “href=”'),
-    step(3, 21, 'web', 'Opened acme.com'),
-    step(3, 40, 'web', 'Opened acme.com/careers'),
-    step(3, 58, 'tool', 'Used navigate (claude-in-chrome)'),
+    step(3, 21, 'web', 'Browsed acme.com'),
+    step(3, 40, 'web', 'Browsed staging.acme.com'),
+    step(3, 58, 'web', 'Worked in Chrome'),
     step(3, 96, 'edit', 'Edited Footer.tsx'),
     step(3, 131, 'screenshot', 'Took a screenshot of acme-marketing', {
       image: { ...SHOT, path: 'attachments/m-att1/Footer links.jpg', name: 'footer.jpg' },
@@ -142,7 +154,7 @@ export const agentsWorkScenarios: Scenario[] = [
     id: 'agents-work-folded',
     title: 'Agents — what a turn did, folded under each reply',
     looksRightWhen:
-      'Acme Site’s chat. Under each reply, one quiet muted line with a small chevron: “Worked 6 min · 12 steps · edited 2 files” under the pricing reply and “Worked 41s · 3 steps · edited 1 file” under the footer one. It sits at the reply’s left edge, smaller than the prose, with no box or colour. Nothing else changed in the chat.',
+      'Acme Site’s chat. Under each reply, one quiet muted line with a small chevron: “Worked 6 min · 14 steps · edited 2 files” under the pricing reply and “Worked 41s · 3 steps · edited 1 file” under the footer one. It sits at the reply’s left edge, smaller than the prose, with no box or colour. Nothing else changed in the chat.',
     requires: '.agent-work__toggle',
     openSelector: AGENTS_TAB,
     steps: [openAcme],
@@ -152,7 +164,7 @@ export const agentsWorkScenarios: Scenario[] = [
     id: 'agents-work-expanded',
     title: 'Agents — a turn’s steps, opened',
     looksRightWhen:
-      'The pricing reply’s line is open (chevron turned down). Below it, twelve rows in order, each a small monochrome icon, a plain-words label and a muted time into the turn on the right (0:03 … 6:00): Updated its plan, Searched for “PricingTable”, Read PricingTable.tsx … Asked you to approve: Run a command, Ran npm test -- PricingTable, Took a screenshot of acme-marketing with the phone screenshot as a small thumbnail under its label, Messaged Chief of Staff, Ran npm run lint. Then a muted “Edited PricingTable.tsx, pricing.css”. No raw tool names anywhere.',
+      'The pricing reply’s line is open (chevron turned down). Below it, fourteen rows in order, each a small monochrome icon (a pencil for edits), a plain-words past-tense label and a muted time into the turn on the right (0:03 … 6:00): Updated its plan, Searched for “PricingTable”, Read PricingTable.tsx … “Tried to edit PricingTable.tsx”, “You declined: Run a command” and “Asked to run rm — you declined” drawn quieter (muted) than the rest, “You allowed: Run a command”, Ran npm test, Took a screenshot of acme-marketing with the phone screenshot as a small thumbnail under its label, Messaged Chief of Staff, Ran npm run lint. Then a muted “Edited PricingTable.tsx, pricing.css”. No raw tool names, server ids or command arguments anywhere.',
     requires: '.agent-work[data-open] .agent-work__step',
     openSelector: AGENTS_TAB,
     steps: [openAcme, { click: '[data-message-ids="work-pricing"] .agent-work__toggle' }],
@@ -172,7 +184,7 @@ export const agentsWorkScenarios: Scenario[] = [
     id: 'agents-work-live-open',
     title: 'Agents — the live timeline, opened above the current step',
     looksRightWhen:
-      'Above the working line, the seven steps already done (Read Footer.tsx … Took a screenshot of acme-marketing, with its thumbnail), each with its time; the eighth step is the working line itself (“Running npm test” with the dots), not repeated in the list. Under the list a quiet “Open project” link (Acme Site works in acme-marketing). The chevron beside “8 steps · edited 1 file” points down.',
+      'Above the working line, the seven steps already done (Read Footer.tsx, Searched for “href=”, Browsed acme.com, Browsed staging.acme.com, Worked in Chrome, Edited Footer.tsx, Took a screenshot of acme-marketing with its thumbnail), each with its time, at the same left edge (icons in the same column) as a finished reply’s list; the eighth step is the working line itself (“Running npm test” with the dots), not repeated in the list. Under the list a quiet “Open project” link (Acme Site works in acme-marketing). The chevron beside “8 steps · edited 1 file” points down.',
     requires: '.agent-chat__row--working .agent-work[data-open] .agent-work__step',
     openSelector: AGENTS_TAB,
     steps: [openAcme, { click: '.agent-chat__row--working .agent-work__toggle' }],

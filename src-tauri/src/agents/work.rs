@@ -6,19 +6,30 @@
 //! labelled in plain words ("Read Hero.tsx", "Ran npm test", "Messaged Acme
 //! Site"). Nothing is inferred: a turn with no steps has no timeline.
 //!
+//! **Outcomes are observed, not assumed.** A call is a request; what became
+//! of it arrives later (Claude Code's `tool_result` by `tool_use_id`, a Codex
+//! item's completion by its id, the user's answer on a card). A call the user
+//! declined reads "Asked to run npm test — you declined"; one that failed
+//! reads "Tried to edit App.tsx". "Edited n files" counts only edits that
+//! came back successful.
+//!
 //! While the turn runs the steps ride on its status (the newest
 //! [`LIVE_STEPS`] of them), so the working line can open into them. When it
 //! ends they are written to `<home>/turns/<message-id>.json`, keyed by the
-//! last message the turn left (its reply, its error, or "Stopped"), and that
+//! last thing the turn said (its reply, its error, or "Stopped"), and that
 //! message is sent again carrying them. The chat log itself is never touched:
 //! `messages.jsonl` stays append-only and readable by builds that predate
-//! this, which simply show no timeline.
+//! this, which simply show no timeline. Only the newest [`KEEP_TURNS`]
+//! timelines are kept per agent (older than [`KEEP_DAYS`] days, only the
+//! newest [`KEEP_RECENT`]).
 //!
-//! Bounded and scrubbed: at most [`MAX_STEPS`] steps (the newest) with
-//! labels of at most [`LABEL_CHARS`], at most [`MAX_FILES`] file names. Tool
-//! inputs are never stored, only the label made from them, and a label goes
-//! through the Keychain redaction plus [`scrub`], which blanks anything
-//! shaped like a credential (a `TOKEN=…`, a bearer header, a key prefix).
+//! **Safe by construction.** A label never carries a tool's raw input: a
+//! command is only its program and subcommand ("Ran git push", never its
+//! arguments), a web page only its host, a file only its name, someone else's
+//! MCP tool only a verb and the service ("Searched Google Drive"). Then, as
+//! defence in depth, every label goes through the Keychain redaction and
+//! [`scrub`] (which blanks anything shaped like a credential) and only then
+//! is clipped to [`LABEL_CHARS`], so a cut can never leave half a token.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
@@ -28,7 +39,7 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 
 use super::attachments::Attachment;
-use super::store::{self, AgentMessage, MessageKind};
+use super::store::{self, AgentMessage, ApprovalStatus, MessageKind};
 
 /// Steps kept per turn (the newest); the count still says how many there were.
 pub const MAX_STEPS: usize = 60;
@@ -38,6 +49,12 @@ pub const LIVE_STEPS: usize = 12;
 pub const LABEL_CHARS: usize = 100;
 /// File names kept per turn.
 pub const MAX_FILES: usize = 30;
+/// Timelines kept per agent, newest first.
+pub const KEEP_TURNS: usize = 500;
+/// Timelines always kept, however old: the chat's first pages never lose theirs.
+pub const KEEP_RECENT: usize = 100;
+/// Beyond [`KEEP_RECENT`], a timeline older than this is dropped.
+pub const KEEP_DAYS: u64 = 90;
 
 /// What kind of thing a step was, for its icon. Unknown kinds (a newer
 /// build's) read as `Tool`.
@@ -59,6 +76,17 @@ pub enum StepKind {
     Tool,
 }
 
+/// What became of a step that didn't simply go through. A step without one
+/// either went through or hasn't come back yet.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StepOutcome {
+    /// The user said no (on its card, or on the call itself).
+    Declined,
+    /// It came back with an error.
+    Failed,
+}
+
 /// One step, as stored and shown.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -67,6 +95,8 @@ pub struct WorkStep {
     pub at: i64,
     pub kind: StepKind,
     pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<StepOutcome>,
     /// A screenshot this step produced (an attachment of a `session` line).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<Attachment>,
@@ -83,26 +113,52 @@ pub struct TurnWork {
     pub step_count: u32,
     /// The newest steps, oldest first.
     pub steps: Vec<WorkStep>,
-    /// Files it edited (as named in its edit calls), distinct.
+    /// Files it edited successfully, distinct. Not carried live.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<String>,
     /// How many distinct files it edited, including any not kept in `files`.
     #[serde(default)]
     pub file_count: u32,
+    /// Live only: the working-line words of the newest step while that call
+    /// is still running, so a client can tell the working line *is* that
+    /// step (and show it once, not twice). Absent once it came back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub doing: Option<String>,
 }
 
 /// A tool call, as the parsers describe it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Action {
-    /// The engine's id for the call, so a call reported twice is one step.
+    /// The engine's id for the call: a call reported twice is one step, and
+    /// its result finds it by this.
     pub id: Option<String>,
     pub kind: StepKind,
     /// What it did, for the timeline ("Read Hero.tsx").
     pub label: String,
     /// What it's doing, for the working line ("Reading Hero.tsx").
     pub doing: String,
-    /// Full paths it edits, for counting distinct files.
+    /// What it was going to do, for when it didn't ("edit Hero.tsx", as in
+    /// "Tried to edit Hero.tsx").
+    pub ask: String,
+    /// Full paths it edits, counted once the edit comes back successful.
     pub files: Vec<String>,
+    /// The project a project-scoped call names, so its screenshot finds it.
+    pub project: Option<String>,
+}
+
+/// What became of a call, as the engine reported it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outcome {
+    Done,
+    Failed,
+    Declined,
+}
+
+/// A call's result, matched to its step by id.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallResult {
+    pub id: String,
+    pub outcome: Outcome,
 }
 
 // ============================================================================
@@ -130,6 +186,50 @@ pub fn claude_actions(value: &Value) -> Vec<Action> {
         .collect()
 }
 
+/// What came back for the calls in one line of Claude Code's stream-json (a
+/// `user` event carrying `tool_result` blocks).
+pub fn claude_results(value: &Value) -> Vec<CallResult> {
+    if value.get("type").and_then(Value::as_str) != Some("user") {
+        return Vec::new();
+    }
+    // Claude Code says how each call's permission was decided beside it.
+    let rejected: HashSet<&str> = value
+        .get("tool_result_meta")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|m| {
+            matches!(
+                m.pointer("/permission_decision/decision")
+                    .and_then(Value::as_str),
+                Some("reject" | "deny" | "denied" | "rejected")
+            )
+        })
+        .filter_map(|m| m.get("id").and_then(Value::as_str))
+        .collect();
+    value
+        .pointer("/message/content")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|b| b.get("type").and_then(Value::as_str) == Some("tool_result"))
+        .filter_map(|b| {
+            let id = b.get("tool_use_id")?.as_str()?;
+            let outcome = if rejected.contains(id) {
+                Outcome::Declined
+            } else if b.get("is_error").and_then(Value::as_bool) == Some(true) {
+                Outcome::Failed
+            } else {
+                Outcome::Done
+            };
+            Some(CallResult {
+                id: id.to_string(),
+                outcome,
+            })
+        })
+        .collect()
+}
+
 fn file_name(path: &str) -> &str {
     path.trim_end_matches('/')
         .rsplit('/')
@@ -137,15 +237,33 @@ fn file_name(path: &str) -> &str {
         .unwrap_or(path)
 }
 
-/// `"a long query"` in curly quotes, cut to fit.
+/// `"a long query"` in curly quotes: scrubbed first, then cut to fit, so a
+/// cut never leaves part of a token behind.
 fn quoted(text: &str) -> String {
-    format!("“{}”", clip(text.trim(), 60))
+    format!("“{}”", clip(&scrub(text.trim()), 60))
 }
 
+/// Built-in tools that are the engine's own bookkeeping, not work: no step.
+const HIDDEN: [&str; 12] = [
+    "ToolSearch",
+    "Skill",
+    "BashOutput",
+    "KillShell",
+    "KillBash",
+    "ExitPlanMode",
+    "EnterPlanMode",
+    "ListMcpResourcesTool",
+    "ReadMcpResourceTool",
+    "TodoRead",
+    "SlashCommand",
+    "Monitor",
+];
+
 /// One Claude Code tool call (or the Claude-shaped equivalent of a Codex
-/// item) in plain words. `None` only for a call with no name.
+/// item) in plain words. `None` for a call with no name, and for the
+/// engine's own bookkeeping ([`HIDDEN`]), which isn't work done.
 pub fn describe_tool(name: &str, input: Option<&Value>) -> Option<Action> {
-    if name.is_empty() {
+    if name.is_empty() || HIDDEN.contains(&name) {
         return None;
     }
     let field = |k: &str| {
@@ -156,209 +274,543 @@ pub fn describe_tool(name: &str, input: Option<&Value>) -> Option<Action> {
             .filter(|s| !s.is_empty())
             .map(str::to_string)
     };
-    let act = |kind, label: String, doing: String| Action {
-        id: None,
-        kind,
-        label,
-        doing,
-        files: Vec::new(),
-    };
     let ours = format!("mcp__{}__", super::prompts::SERVER_KEY);
     if let Some(tool) = name.strip_prefix(&ours) {
-        let named = |k: &str| field(k).unwrap_or_default();
-        return Some(match tool {
-            "message_agent" => act(
-                StepKind::Message,
-                format!("Messaged {}", named("agent")),
-                format!("Messaging {}", named("agent")),
-            ),
-            "create_agent" => act(
-                StepKind::Delegate,
-                format!("Created {}", named("name")),
-                format!("Creating {}", named("name")),
-            ),
-            "list_agents" => act(
-                StepKind::Message,
-                "Checked on the team".into(),
-                "Checking on the team".into(),
-            ),
-            "project_list" => act(
-                StepKind::Project,
-                "Looked at your projects".into(),
-                "Looking at your projects".into(),
-            ),
-            "project_create" => act(
-                StepKind::Project,
-                format!("Created the project {}", named("name")),
-                format!("Creating {}", named("name")),
-            ),
-            "session_message" | "session_start" => act(
-                StepKind::Project,
-                format!("Worked in {}", file_name(&named("project"))),
-                format!("Working in {}", file_name(&named("project"))),
-            ),
-            "session_wait" | "session_progress" => act(
-                StepKind::Project,
-                format!("Followed {}", file_name(&named("project"))),
-                format!("Following {}", file_name(&named("project"))),
-            ),
-            "preview_screenshot" => act(
-                StepKind::Screenshot,
-                format!("Took a screenshot of {}", file_name(&named("project"))),
-                format!("Looking at {}", file_name(&named("project"))),
-            ),
-            "push" => act(
-                StepKind::Project,
-                format!("Pushed {}", file_name(&named("project"))),
-                format!("Pushing {}", file_name(&named("project"))),
-            ),
-            other => {
-                let words = sentence(&other.replace('_', " "));
-                act(StepKind::Tool, words.clone(), words)
-            }
-        });
+        return ours_tool(tool, &field);
     }
     if let Some(rest) = name.strip_prefix("mcp__") {
-        // Someone else's MCP server: "Used navigate (claude-in-chrome)".
         let (server, tool) = rest.split_once("__").unwrap_or(("", rest));
-        let tool = tool.replace('_', " ");
-        let from = if server.is_empty() {
-            String::new()
-        } else {
-            format!(" ({})", server.replace('_', " "))
-        };
-        return Some(act(
-            StepKind::Tool,
-            format!("Used {tool}{from}"),
-            format!("Using {tool}"),
-        ));
+        return Some(other_mcp(server, tool, &field));
     }
     Some(match name {
         "Read" | "NotebookRead" => match field("file_path").or_else(|| field("notebook_path")) {
-            Some(path) => act(
-                StepKind::Read,
-                format!("Read {}", file_name(&path)),
-                format!("Reading {}", file_name(&path)),
-            ),
+            Some(path) => {
+                let f = file_name(&path);
+                act(
+                    StepKind::Read,
+                    format!("Read {f}"),
+                    format!("Reading {f}"),
+                    format!("read {f}"),
+                )
+            }
             None => act(
                 StepKind::Read,
-                "Read a file".into(),
-                "Reading a file".into(),
+                "Read a file",
+                "Reading a file",
+                "read a file",
             ),
         },
         "Edit" | "Write" | "MultiEdit" | "NotebookEdit" => {
             let path = field("file_path").or_else(|| field("notebook_path"));
-            let verb = if name == "Write" { "Wrote" } else { "Edited" };
+            let (past, bare) = if name == "Write" {
+                ("Wrote", "write")
+            } else {
+                ("Edited", "edit")
+            };
             let mut a = match &path {
-                Some(path) => act(
-                    StepKind::Edit,
-                    format!("{verb} {}", file_name(path)),
-                    format!("Editing {}", file_name(path)),
-                ),
+                Some(path) => {
+                    let f = file_name(path);
+                    act(
+                        StepKind::Edit,
+                        format!("{past} {f}"),
+                        format!("Editing {f}"),
+                        format!("{bare} {f}"),
+                    )
+                }
                 None => act(
                     StepKind::Edit,
-                    "Edited files".into(),
-                    "Editing files".into(),
+                    format!("{past} a file"),
+                    "Editing a file",
+                    format!("{bare} a file"),
                 ),
             };
             a.files.extend(path);
             a
         }
-        "Bash" => match field("command") {
-            Some(cmd) => {
-                let line = cmd.lines().next().unwrap_or("").trim().to_string();
-                act(
-                    StepKind::Command,
-                    format!("Ran {}", clip(&line, 80)),
-                    format!("Running {}", clip(&line, 80)),
-                )
-            }
+        "Bash" => match field("command").as_deref().and_then(command_words) {
+            Some(words) => act(
+                StepKind::Command,
+                format!("Ran {words}"),
+                format!("Running {words}"),
+                format!("run {words}"),
+            ),
             None => act(
                 StepKind::Command,
-                "Ran a command".into(),
-                "Running a command".into(),
+                "Ran a command",
+                "Running a command",
+                "run a command",
             ),
         },
         "Grep" => match field("pattern") {
-            Some(p) => act(
-                StepKind::Search,
-                format!("Searched for {}", quoted(&p)),
-                format!("Searching for {}", quoted(&p)),
-            ),
-            None => act(StepKind::Search, "Searched".into(), "Searching".into()),
-        },
-        "Glob" | "LS" => match field("pattern").or_else(|| field("path")) {
-            Some(p) => act(
-                StepKind::Search,
-                format!("Listed {}", clip(&p, 60)),
-                format!("Listing {}", clip(&p, 60)),
-            ),
+            Some(p) => {
+                let q = quoted(&p);
+                act(
+                    StepKind::Search,
+                    format!("Searched for {q}"),
+                    format!("Searching for {q}"),
+                    format!("search for {q}"),
+                )
+            }
             None => act(
                 StepKind::Search,
-                "Listed files".into(),
-                "Listing files".into(),
+                "Searched the files",
+                "Searching the files",
+                "search the files",
             ),
         },
+        "Glob" | "LS" => act(
+            StepKind::Search,
+            "Looked through the files",
+            "Looking through the files",
+            "look through the files",
+        ),
         "WebSearch" => match field("query") {
-            Some(q) => act(
-                StepKind::Web,
-                format!("Searched the web for {}", quoted(&q)),
-                format!("Searching the web for {}", quoted(&q)),
-            ),
-            None => act(
-                StepKind::Web,
-                "Searched the web".into(),
-                "Searching the web".into(),
-            ),
-        },
-        "WebFetch" => match field("url") {
-            Some(url) => {
-                let host = url::Url::parse(&url)
-                    .ok()
-                    .and_then(|u| {
-                        u.host_str()
-                            .map(|h| h.trim_start_matches("www.").to_string())
-                    })
-                    .unwrap_or_else(|| clip(&url, 60));
+            Some(q) => {
+                let q = quoted(&q);
                 act(
                     StepKind::Web,
-                    format!("Opened {host}"),
-                    format!("Reading {host}"),
+                    format!("Searched the web for {q}"),
+                    format!("Searching the web for {q}"),
+                    format!("search the web for {q}"),
                 )
             }
             None => act(
                 StepKind::Web,
-                "Opened a web page".into(),
-                "Reading a web page".into(),
+                "Searched the web",
+                "Searching the web",
+                "search the web",
             ),
         },
+        "WebFetch" => browsed(field("url").as_deref()),
         "Task" | "Agent" => match field("description") {
-            Some(d) => act(
-                StepKind::Delegate,
-                format!("Ran a sub-task: {}", clip(&d, 60)),
-                "Working on a sub-task".into(),
-            ),
+            Some(d) => {
+                let d = clip(&scrub(&d), 60);
+                act(
+                    StepKind::Delegate,
+                    format!("Worked on a sub-task: {d}"),
+                    "Working on a sub-task",
+                    format!("work on a sub-task: {d}"),
+                )
+            }
             None => act(
                 StepKind::Delegate,
-                "Ran a sub-task".into(),
-                "Working on a sub-task".into(),
+                "Worked on a sub-task",
+                "Working on a sub-task",
+                "work on a sub-task",
             ),
         },
-        "TodoWrite" => act(StepKind::Plan, "Updated its plan".into(), "Planning".into()),
-        other => act(
-            StepKind::Tool,
-            format!("Used {other}"),
-            format!("Using {other}"),
+        "TodoWrite" => act(
+            StepKind::Plan,
+            "Updated its plan",
+            "Planning",
+            "update its plan",
         ),
+        "AskUserQuestion" => act(
+            StepKind::Message,
+            "Asked you a question",
+            "Asking you a question",
+            "ask you a question",
+        ),
+        _ => act(StepKind::Tool, "Used a tool", "Using a tool", "use a tool"),
     })
 }
 
-fn sentence(text: &str) -> String {
-    let mut chars = text.trim().chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => String::new(),
+fn act(
+    kind: StepKind,
+    label: impl Into<String>,
+    doing: impl Into<String>,
+    ask: impl Into<String>,
+) -> Action {
+    Action {
+        id: None,
+        kind,
+        label: label.into(),
+        doing: doing.into(),
+        ask: ask.into(),
+        files: Vec::new(),
+        project: None,
     }
+}
+
+/// A web page, by its host only: "Browsed acme.com". The path and query are
+/// where tokens live, and they aren't what the user needs to know.
+fn browsed(url: Option<&str>) -> Action {
+    let host = url
+        .and_then(|u| url::Url::parse(u).ok())
+        .and_then(|u| {
+            u.host_str()
+                .map(|h| h.trim_start_matches("www.").to_string())
+        })
+        .filter(|h| !h.is_empty());
+    match host {
+        Some(h) => act(
+            StepKind::Web,
+            format!("Browsed {h}"),
+            format!("Reading {h}"),
+            format!("open {h}"),
+        ),
+        None => act(
+            StepKind::Web,
+            "Browsed a web page",
+            "Reading a web page",
+            "open a web page",
+        ),
+    }
+}
+
+/// Our own tools (the agent bridge), each in past-tense words.
+fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Action> {
+    let named = |k: &str, or: &str| field(k).unwrap_or_else(|| or.to_string());
+    let project = field("project");
+    let p = project
+        .as_deref()
+        .map(file_name)
+        .unwrap_or("a project")
+        .to_string();
+    let mut a = match tool {
+        // The permission prompt tool: its card is the step.
+        "approve" => return None,
+        "message_agent" => {
+            let n = named("agent", "an agent");
+            act(
+                StepKind::Message,
+                format!("Messaged {n}"),
+                format!("Messaging {n}"),
+                format!("message {n}"),
+            )
+        }
+        "create_agent" => {
+            let n = named("name", "an agent");
+            act(
+                StepKind::Delegate,
+                format!("Created {n}"),
+                format!("Creating {n}"),
+                format!("create {n}"),
+            )
+        }
+        "update_agent" => {
+            let n = named("agent", "an agent");
+            act(
+                StepKind::Delegate,
+                format!("Updated {n}"),
+                format!("Updating {n}"),
+                format!("update {n}"),
+            )
+        }
+        "delete_agent" => {
+            let n = named("agent", "an agent");
+            act(
+                StepKind::Delegate,
+                format!("Deleted {n}"),
+                format!("Deleting {n}"),
+                format!("delete {n}"),
+            )
+        }
+        "list_agents" => act(
+            StepKind::Message,
+            "Checked on the team",
+            "Checking on the team",
+            "check on the team",
+        ),
+        "share_file" => act(
+            StepKind::Message,
+            "Shared a file",
+            "Sharing a file",
+            "share a file",
+        ),
+        "schedule_check_in" => act(
+            StepKind::Plan,
+            "Scheduled a check-in",
+            "Scheduling a check-in",
+            "schedule a check-in",
+        ),
+        "list_check_ins" => act(
+            StepKind::Plan,
+            "Looked at its check-ins",
+            "Looking at its check-ins",
+            "look at its check-ins",
+        ),
+        "cancel_check_in" => act(
+            StepKind::Plan,
+            "Cancelled a check-in",
+            "Cancelling a check-in",
+            "cancel a check-in",
+        ),
+        "request_secret" => act(
+            StepKind::Message,
+            "Asked you for a password or key",
+            "Asking you for a password or key",
+            "ask you for a password or key",
+        ),
+        "project_list" => act(
+            StepKind::Project,
+            "Looked at your projects",
+            "Looking at your projects",
+            "look at your projects",
+        ),
+        "project_create" => {
+            let n = named("name", "a project");
+            act(
+                StepKind::Project,
+                format!("Created the project {n}"),
+                format!("Creating {n}"),
+                format!("create the project {n}"),
+            )
+        }
+        "project_open" => act(
+            StepKind::Project,
+            format!("Opened {p}"),
+            format!("Opening {p}"),
+            format!("open {p}"),
+        ),
+        "session_message" | "session_start" => act(
+            StepKind::Project,
+            format!("Worked in {p}"),
+            format!("Working in {p}"),
+            format!("work in {p}"),
+        ),
+        "session_wait" | "session_progress" | "session_read" => act(
+            StepKind::Project,
+            format!("Followed {p}"),
+            format!("Following {p}"),
+            format!("follow {p}"),
+        ),
+        "session_key" => act(
+            StepKind::Project,
+            format!("Pressed a key in {p}"),
+            format!("Pressing a key in {p}"),
+            format!("press a key in {p}"),
+        ),
+        "session_close" => act(
+            StepKind::Project,
+            format!("Closed a session in {p}"),
+            format!("Closing a session in {p}"),
+            format!("close a session in {p}"),
+        ),
+        "preview_screenshot" => act(
+            StepKind::Screenshot,
+            format!("Took a screenshot of {p}"),
+            format!("Looking at {p}"),
+            format!("take a screenshot of {p}"),
+        ),
+        "git_status" => act(
+            StepKind::Project,
+            format!("Checked {p}'s changes"),
+            format!("Checking {p}'s changes"),
+            format!("check {p}'s changes"),
+        ),
+        "push" => act(
+            StepKind::Project,
+            format!("Pushed {p}"),
+            format!("Pushing {p}"),
+            format!("push {p}"),
+        ),
+        "deploy_status" => act(
+            StepKind::Project,
+            format!("Checked {p}'s deploy"),
+            format!("Checking {p}'s deploy"),
+            format!("check {p}'s deploy"),
+        ),
+        _ => act(StepKind::Tool, "Used a tool", "Using a tool", "use a tool"),
+    };
+    a.project = project;
+    Some(a)
+}
+
+/// Someone else's MCP tool: a plain verb and the service, never the tool's
+/// id or its arguments. "Searched Google Drive", "Browsed acme.com".
+fn other_mcp(server: &str, tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Action {
+    let service = match super::mcp::service_name(server) {
+        s if s.is_empty() => "a connected app".to_string(),
+        s => s,
+    };
+    let words = super::mcp::split_words(tool);
+    let has = |list: &[&str]| words.iter().any(|w| list.contains(&w.as_str()));
+    let lower = server.to_ascii_lowercase();
+    let browser = ["chrome", "browser", "playwright", "puppeteer"]
+        .iter()
+        .any(|b| lower.contains(b));
+    if browser {
+        if has(&["navigate", "goto", "open", "visit"]) {
+            return match field("url") {
+                Some(url) => browsed(Some(&url)),
+                None => act(
+                    StepKind::Web,
+                    format!("Opened a page in {service}"),
+                    format!("Opening a page in {service}"),
+                    format!("open a page in {service}"),
+                ),
+            };
+        }
+        if has(&["screenshot", "snapshot"]) {
+            return act(
+                StepKind::Screenshot,
+                format!("Took a screenshot in {service}"),
+                format!("Looking at a page in {service}"),
+                format!("take a screenshot in {service}"),
+            );
+        }
+        if has(&["read", "get", "find", "text", "console", "network"]) {
+            return act(
+                StepKind::Web,
+                format!("Read a page in {service}"),
+                format!("Reading a page in {service}"),
+                format!("read a page in {service}"),
+            );
+        }
+        return act(
+            StepKind::Web,
+            format!("Worked in {service}"),
+            format!("Working in {service}"),
+            format!("work in {service}"),
+        );
+    }
+    let first = words.first().map(String::as_str).unwrap_or("");
+    let (label, doing, ask) = match first {
+        "search" | "query" | "find" | "lookup" => ("Searched", "Searching", "search"),
+        "list" | "get" | "read" | "fetch" | "view" | "retrieve" | "download" | "describe"
+        | "show" | "export" => ("Looked in", "Looking in", "look in"),
+        "send" | "reply" | "post" | "comment" | "share" | "publish" => {
+            ("Sent from", "Sending from", "send from")
+        }
+        "create" | "add" | "new" | "insert" | "upload" | "write" | "update" | "edit" | "patch"
+        | "set" | "move" | "rename" | "delete" | "remove" | "archive" | "cancel" | "deploy" => {
+            ("Made changes in", "Making changes in", "make changes in")
+        }
+        _ => ("Used", "Using", "use"),
+    };
+    act(
+        StepKind::Tool,
+        format!("{label} {service}"),
+        format!("{doing} {service}"),
+        format!("{ask} {service}"),
+    )
+}
+
+/// Shell words that only set up the command after them.
+const WRAPPERS: [&str; 8] = [
+    "sudo",
+    "env",
+    "time",
+    "nohup",
+    "command",
+    "exec",
+    "nice",
+    "caffeinate",
+];
+/// Words that don't do anything on their own: the next command is the one.
+const SETUP: [&str; 9] = [
+    "cd", "export", "set", "source", ".", "pushd", "popd", "true", "unset",
+];
+/// Programs whose first argument says what they do ("git push", "npm test").
+const WITH_SUBCOMMANDS: [&str; 34] = [
+    "git",
+    "npm",
+    "pnpm",
+    "yarn",
+    "bun",
+    "npx",
+    "bunx",
+    "cargo",
+    "go",
+    "docker",
+    "kubectl",
+    "gh",
+    "brew",
+    "pip",
+    "pip3",
+    "uv",
+    "poetry",
+    "make",
+    "aws",
+    "gcloud",
+    "az",
+    "vercel",
+    "netlify",
+    "wrangler",
+    "deno",
+    "rails",
+    "bundle",
+    "dotnet",
+    "flutter",
+    "expo",
+    "terraform",
+    "supabase",
+    "firebase",
+    "prisma",
+];
+
+/// A command line as its program and subcommand only: `git clone https://…`
+/// → "git clone", `mysql -u root -p…` → "mysql", `cd x && npm test -- a` →
+/// "npm test". Arguments are where credentials live, and a person reading
+/// the timeline doesn't need them. `None` when no program is plain enough
+/// to show.
+pub fn command_words(command: &str) -> Option<String> {
+    let line = command
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty() && !l.starts_with('#'))?;
+    for segment in line
+        .split(['&', '|', ';'])
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        let mut words = segment
+            .split_whitespace()
+            .map(|w| w.trim_matches(|c: char| "'\"()`{}".contains(c)))
+            .filter(|w| !w.is_empty());
+        let program = words
+            .by_ref()
+            .find(|w| !WRAPPERS.contains(w) && !w.starts_with('-') && !is_assignment(w))?;
+        let program = file_name(program);
+        if SETUP.contains(&program) {
+            continue;
+        }
+        let plain = program.chars().count() <= 32
+            && program
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphanumeric())
+            && program
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "._+-".contains(c))
+            && !looks_like_token(program);
+        if !plain {
+            return None;
+        }
+        let mut out = program.to_string();
+        if WITH_SUBCOMMANDS.contains(&program) {
+            if let Some(sub) = words.next().filter(|w| plain_subcommand(w)) {
+                out.push(' ');
+                out.push_str(sub);
+                // "npm run build": the script is what it ran.
+                let runs_scripts = matches!(program, "npm" | "pnpm" | "yarn" | "bun");
+                if runs_scripts && sub == "run" {
+                    if let Some(script) = words.next().filter(|w| plain_subcommand(w)) {
+                        out.push(' ');
+                        out.push_str(script);
+                    }
+                }
+            }
+        }
+        return Some(out);
+    }
+    None
+}
+
+fn is_assignment(word: &str) -> bool {
+    word.split_once('=').is_some_and(|(name, _)| {
+        !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    })
+}
+
+/// A subcommand-shaped word: short, lower-case, no paths, values or flags.
+fn plain_subcommand(word: &str) -> bool {
+    (1..=24).contains(&word.len())
+        && word.starts_with(|c: char| c.is_ascii_lowercase())
+        && word
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || ":_-".contains(c))
 }
 
 /// At most `max` characters, an ellipsis if anything was cut.
@@ -374,104 +826,214 @@ fn clip(text: &str, max: usize) -> String {
 // Scrubbing
 // ============================================================================
 
-const SECRET_WORDS: [&str; 9] = [
+const SECRET_WORDS: [&str; 10] = [
     "key",
     "token",
     "secret",
     "password",
     "passwd",
     "pass",
+    "pwd",
     "auth",
     "credential",
     "session",
 ];
 
-const SECRET_PREFIXES: [&str; 10] = [
+/// Query and header names that carry a credential without saying so.
+const SECRET_NAMES: [&str; 6] = [
+    "sig",
+    "signature",
+    "x-amz-signature",
+    "x-amz-credential",
+    "x-amz-security-token",
+    "code",
+];
+
+const SECRET_PREFIXES: [&str; 12] = [
     "sk-",
     "sk_",
     "pk_live",
+    "rk_live",
     "ghp_",
     "gho_",
     "ghs_",
+    "ghu_",
     "github_pat_",
     "xox",
     "glpat-",
     "AKIA",
 ];
 
+/// Characters a word is wrapped in, which aren't part of it.
+const WRAPPING: &str = "\"'`,;()[]{}“”‘’<>";
+
 fn secretish_name(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
-    SECRET_WORDS.iter().any(|w| lower.contains(w))
+    let lower = lower.trim_start_matches('-');
+    !lower.is_empty()
+        && (SECRET_WORDS.iter().any(|w| lower.contains(w)) || SECRET_NAMES.contains(&lower))
 }
 
 /// Long, mixed letters and digits, not a path or a file name: a token.
 fn looks_like_token(word: &str) -> bool {
-    let w = word.trim_matches(|c: char| "\"'`,;()[]{}".contains(c));
+    let w = word.trim_matches(|c: char| WRAPPING.contains(c));
     if SECRET_PREFIXES.iter().any(|p| w.starts_with(p)) && w.len() >= 12 {
         return true;
     }
     if w.starts_with("eyJ") && w.len() >= 24 {
         return true; // a JWT
     }
+    // Base64 can hold `/` (an AWS secret does); a path starts with one.
     w.len() >= 32
-        && !w.contains('/')
+        && !w.starts_with(['/', '.', '~'])
+        && !w.contains("://")
         && !w.contains('.')
         && w.chars().any(|c| c.is_ascii_digit())
         && w.chars().any(|c| c.is_ascii_alphabetic())
         && w.chars()
-            .all(|c| c.is_ascii_alphanumeric() || "-_+=".contains(c))
+            .all(|c| c.is_ascii_alphanumeric() || "-_+=/".contains(c))
+}
+
+/// Flags whose value is the next word, or glued on (`-phunter2`).
+fn value_flag(lower: &str) -> bool {
+    matches!(lower, "-u" | "--user" | "-p" | "-a" | "--pass")
+        || (lower.starts_with("--") && secretish_name(lower) && !lower.contains('='))
+}
+
+/// Blank the value of every `name=value` / `name: value` pair in a word whose
+/// name sounds secret (`?api_key=…`, `&sig=…`, `"password":"…"`,
+/// `X-Api-Key:…`). Returns the word and whether the value is the next word
+/// (`Authorization:` then `Bearer x`).
+fn scrub_pairs(word: &str) -> (String, bool) {
+    let chars: Vec<char> = word.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    let mut value_next = false;
+    while i < chars.len() {
+        let c = chars[i];
+        out.push(c);
+        if c != '=' && c != ':' {
+            i += 1;
+            continue;
+        }
+        // `://` is a scheme, never a pair.
+        if c == ':' && chars.get(i + 1) == Some(&'/') {
+            i += 1;
+            continue;
+        }
+        let mut start = i;
+        let name_end = if start > 0 && chars[start - 1] == '"' {
+            start - 1
+        } else {
+            start
+        };
+        start = name_end;
+        while start > 0
+            && (chars[start - 1].is_ascii_alphanumeric() || "_-.".contains(chars[start - 1]))
+        {
+            start -= 1;
+        }
+        let name: String = chars[start..name_end].iter().collect();
+        i += 1;
+        if !secretish_name(&name) {
+            continue;
+        }
+        if chars.get(i) == Some(&'"') {
+            out.push('"');
+            i += 1;
+        }
+        let from = i;
+        while i < chars.len() && !"&#,;}\"' ".contains(chars[i]) {
+            i += 1;
+        }
+        let value: String = chars[from..i].iter().collect();
+        if value.is_empty()
+            || matches!(
+                value.to_ascii_lowercase().as_str(),
+                "bearer" | "basic" | "token"
+            )
+        {
+            value_next = true;
+        }
+        if !value.is_empty() {
+            out.push('…');
+        }
+    }
+    (out, value_next)
 }
 
 /// A label with anything shaped like a credential blanked to `…`: values of
-/// secret-sounding variables and flags, bearer headers, URL passwords, and
-/// long tokens. Errs towards blanking; a label is for reading, not rerunning.
+/// secret-sounding variables, flags, headers, query and JSON fields; bearer
+/// headers; URL user info; long tokens. Errs towards blanking: a label is for
+/// reading, not rerunning.
 pub fn scrub(label: &str) -> String {
     let mut out: Vec<String> = Vec::new();
     let mut blank_next = false;
     for word in label.split(' ') {
-        if blank_next && !word.is_empty() {
+        if word.is_empty() {
+            out.push(String::new());
+            continue;
+        }
+        let bare = word.trim_matches(|c: char| WRAPPING.contains(c));
+        let lower = bare.to_ascii_lowercase();
+        if blank_next {
+            // `Authorization: Bearer x`: the scheme stays, the credential goes.
+            if matches!(lower.as_str(), "bearer" | "basic" | "token") {
+                out.push(word.to_string());
+                continue;
+            }
             blank_next = false;
             out.push("…".into());
             continue;
         }
-        let bare = word.trim_matches(|c: char| "\"'`".contains(c));
-        let lower = bare.to_ascii_lowercase();
-        // `Authorization: Bearer x`, `-u user:pass`, `--token x`
-        if matches!(lower.as_str(), "bearer" | "basic" | "-u" | "--user")
-            || (lower.starts_with("--") && secretish_name(&lower) && !lower.contains('='))
+        if matches!(lower.as_str(), "bearer" | "basic") || value_flag(&lower) {
+            out.push(word.to_string());
+            blank_next = true;
+            continue;
+        }
+        // `-phunter2`, `-ahunter2`: a password glued to its flag.
+        if (lower.starts_with("-p") || lower.starts_with("-a"))
+            && !lower.starts_with("--")
+            && lower.len() > 2
+        {
+            out.push(format!("{}…", &word[..word.find('-').unwrap_or(0) + 2]));
+            continue;
+        }
+        // A name that says the next word is a secret: `aws_secret_access_key x`, `X-Api-Key: x`.
+        let named = lower.trim_end_matches(':');
+        if (named.len() < lower.len() || named.contains(['_', '-']))
+            && secretish_name(named)
+            && !named.contains(['=', '/', ':'])
         {
             out.push(word.to_string());
             blank_next = true;
             continue;
         }
-        // NAME=value / --name=value / ?api_key=value
-        if let Some((name, _)) = bare.split_once('=') {
-            let name = name.rsplit(['?', '&']).next().unwrap_or(name);
-            if secretish_name(name) && !name.is_empty() {
-                let keep = &bare[..bare.find('=').unwrap_or(0) + 1];
-                out.push(format!("{keep}…"));
-                continue;
-            }
-        }
-        // https://user:pass@host
-        if let Some(at) = bare.find("://").and_then(|s| {
-            let rest = &bare[s + 3..];
-            let at = rest.find('@')?;
-            rest[..at].contains(':').then_some((s + 3, s + 3 + at))
+        // https://user:pass@host, https://token@host
+        if let Some((from, to)) = word.find("://").and_then(|s| {
+            let rest = &word[s + 3..];
+            let end = rest.find('/').unwrap_or(rest.len());
+            let at = rest[..end].rfind('@')?;
+            Some((s + 3, s + 3 + at))
         }) {
-            out.push(format!("{}…{}", &bare[..at.0], &bare[at.1..]));
+            let (rest, next) = scrub_pairs(&word[to..]);
+            out.push(format!("{}…{rest}", &word[..from]));
+            blank_next = next;
             continue;
         }
         if looks_like_token(word) {
             out.push("…".into());
             continue;
         }
-        out.push(word.to_string());
+        let (scrubbed, next) = scrub_pairs(word);
+        blank_next = next;
+        out.push(scrubbed);
     }
     out.join(" ")
 }
 
-/// Everything a label goes through before it is shown or kept.
+/// Everything a label goes through before it is shown or kept: the
+/// Keychain's values, then [`scrub`], and only then the length limit.
 fn clean(label: &str) -> String {
     let redacted = super::secrets::redact(label);
     clip(&scrub(&redacted), LABEL_CHARS)
@@ -481,24 +1043,44 @@ fn clean(label: &str) -> String {
 // The turn in progress
 // ============================================================================
 
+/// A call the turn made, until its result is in.
+#[derive(Default)]
+struct Call {
+    /// Its step's index among all the turn's steps.
+    step: u32,
+    kind: Option<StepKind>,
+    ask: String,
+    /// Paths it edits, counted when it comes back successful.
+    files: Vec<String>,
+    project: Option<String>,
+    /// Its outcome is known.
+    settled: bool,
+}
+
 #[derive(Default)]
 struct Live {
     work: TurnWork,
-    /// Call ids seen, and where each one's step is (its index among all steps).
-    calls: HashMap<String, u32>,
+    calls: HashMap<String, Call>,
+    /// Approval cards the turn raised, by request id: their step and title.
+    cards: HashMap<String, (u32, String)>,
     files: HashSet<String>,
     /// The newest message the turn left that a timeline can hang under.
     anchor: Option<AgentMessage>,
+    /// The newest step's call, while it's still running.
+    running: Option<String>,
+    doing: Option<String>,
 }
 
 impl Live {
-    fn push(&mut self, step: WorkStep) {
+    fn push(&mut self, step: WorkStep) -> u32 {
+        let n = self.work.step_count;
         self.work.step_count = self.work.step_count.saturating_add(1);
         self.work.steps.push(step);
         if self.work.steps.len() > MAX_STEPS {
             let over = self.work.steps.len() - MAX_STEPS;
             self.work.steps.drain(..over);
         }
+        n
     }
 
     /// The step at absolute index `n`, if it's still kept.
@@ -508,81 +1090,202 @@ impl Live {
         self.work.steps.get_mut(at)
     }
 
-    fn action(&mut self, action: Action, now: i64) {
-        for path in action.files {
+    fn count_files(&mut self, paths: Vec<String>) {
+        for path in paths {
             if self.files.insert(path.clone()) {
                 self.work.file_count = self.work.file_count.saturating_add(1);
                 if self.work.files.len() < MAX_FILES {
-                    self.work.files.push(clip(file_name(&path), LABEL_CHARS));
+                    self.work.files.push(clean(file_name(&path)));
                 }
             }
         }
+    }
+
+    fn action(&mut self, action: Action, now: i64) {
         let label = clean(&action.label);
+        let doing = clean(&action.doing);
+        let Some(id) = action.id else {
+            // Nothing can come back for a call without an id, so its edits
+            // are never counted: only an observed success is.
+            self.push(WorkStep {
+                at: now,
+                kind: action.kind,
+                label,
+                outcome: None,
+                image: None,
+            });
+            self.running = None;
+            self.doing = None;
+            return;
+        };
         // The same call reported again (Codex says so as it starts and as it
         // ends): one step, with the better description.
-        if let Some(id) = &action.id {
-            if let Some(&n) = self.calls.get(id) {
-                if let Some(step) = self.step_mut(n) {
-                    step.label = label;
-                }
+        if let Some(call) = self.calls.get_mut(&id) {
+            if call.settled {
                 return;
             }
-            self.calls.insert(id.clone(), self.work.step_count);
+            call.ask = action.ask;
+            if !action.files.is_empty() {
+                call.files = action.files;
+            }
+            let n = call.step;
+            if let Some(step) = self.step_mut(n) {
+                step.label = label;
+            }
+            return;
         }
-        self.push(WorkStep {
+        let n = self.push(WorkStep {
             at: now,
             kind: action.kind,
             label,
+            outcome: None,
             image: None,
         });
+        self.calls.insert(
+            id.clone(),
+            Call {
+                step: n,
+                kind: Some(action.kind),
+                ask: action.ask,
+                files: action.files,
+                project: action.project,
+                settled: false,
+            },
+        );
+        self.running = Some(id);
+        self.doing = Some(doing);
+    }
+
+    /// A call's result is in. Only the first word on a call counts: a call
+    /// the user declined stays declined when its error comes back.
+    fn result(&mut self, result: CallResult) {
+        if self.running.as_deref() == Some(result.id.as_str()) {
+            self.running = None;
+            self.doing = None;
+        }
+        let Some(call) = self.calls.get_mut(&result.id) else {
+            return;
+        };
+        if call.settled {
+            return;
+        }
+        call.settled = true;
+        let (n, ask) = (call.step, call.ask.clone());
+        let files = std::mem::take(&mut call.files);
+        let (outcome, label) = match result.outcome {
+            Outcome::Done => {
+                self.count_files(files);
+                return;
+            }
+            Outcome::Failed => (StepOutcome::Failed, format!("Tried to {ask}")),
+            Outcome::Declined => (
+                StepOutcome::Declined,
+                format!("Asked to {ask} — you declined"),
+            ),
+        };
+        let label = clean(&label);
+        if let Some(step) = self.step_mut(n) {
+            step.outcome = Some(outcome);
+            step.label = label;
+        }
+    }
+
+    /// The user answered a card this turn raised.
+    fn answer(&mut self, request_id: &str, status: ApprovalStatus) {
+        let Some((n, title)) = self.cards.get(request_id).cloned() else {
+            return;
+        };
+        let (label, outcome) = match status {
+            ApprovalStatus::Allowed => (format!("You allowed: {title}"), None),
+            ApprovalStatus::Denied => (
+                format!("You declined: {title}"),
+                Some(StepOutcome::Declined),
+            ),
+            ApprovalStatus::Pending | ApprovalStatus::Expired => return,
+        };
+        let label = clean(&label);
+        if let Some(step) = self.step_mut(n) {
+            step.label = label;
+            step.outcome = outcome;
+        }
     }
 
     /// A message the turn recorded.
     fn message(&mut self, message: &AgentMessage) {
         match message.kind {
-            MessageKind::Agent | MessageKind::Error | MessageKind::Note => {
+            // What the turn said. Notes are never an anchor here: they're
+            // other people's lines (an audit note, an engine switch, an
+            // auto-allow) or a divider; "Stopped" anchors through `anchor_on`.
+            MessageKind::Agent | MessageKind::Error => {
                 self.anchor = Some(message.clone());
             }
             MessageKind::Approval => {
                 if let Some(approval) = &message.approval {
-                    self.push(WorkStep {
+                    let title = approval.title.clone();
+                    let n = self.push(WorkStep {
                         at: message.ts,
                         kind: StepKind::Approval,
-                        label: clean(&format!("Asked you to approve: {}", approval.title)),
+                        label: clean(&format!("Asked for your OK: {title}")),
+                        outcome: None,
                         image: None,
                     });
+                    self.cards.insert(approval.request_id.clone(), (n, title));
+                    self.running = None;
+                    self.doing = None;
                 }
             }
-            MessageKind::Session => {
-                let shot = message
-                    .session
-                    .as_ref()
-                    .is_some_and(|s| s.event == super::sessions::SessionEvent::Screenshot);
-                let Some(image) = message.attachments.first().filter(|_| shot) else {
-                    return;
-                };
-                // The screenshot call's own step gets its picture; any other
-                // (a second device, or one a session reply came with) is a step.
-                if let Some(last) = self.work.steps.last_mut().filter(|s| {
-                    s.image.is_none() && matches!(s.kind, StepKind::Screenshot | StepKind::Project)
-                }) {
-                    last.image = Some(image.clone());
-                    return;
-                }
-                let project = message
-                    .session
-                    .as_ref()
-                    .map(|s| file_name(&s.project).to_string())
-                    .unwrap_or_default();
-                self.push(WorkStep {
-                    at: message.ts,
-                    kind: StepKind::Screenshot,
-                    label: clean(&format!("Took a screenshot of {project}")),
-                    image: Some(image.clone()),
-                });
-            }
+            MessageKind::Session => self.screenshot(message),
             _ => {}
         }
+    }
+
+    /// A screenshot line: its picture goes on the screenshot call that took
+    /// it — the oldest one still running for that project — and nowhere else.
+    /// One that no call explains (it came with a session's reply) is a step.
+    fn screenshot(&mut self, message: &AgentMessage) {
+        let Some(mark) = message
+            .session
+            .as_ref()
+            .filter(|s| s.event == super::sessions::SessionEvent::Screenshot)
+        else {
+            return;
+        };
+        let Some(image) = message.attachments.first() else {
+            return;
+        };
+        let project = file_name(&mark.project).to_string();
+        let mut taking: Vec<u32> = self
+            .calls
+            .values()
+            .filter(|c| {
+                !c.settled
+                    && c.kind == Some(StepKind::Screenshot)
+                    && c.project.as_deref().map(file_name) == Some(project.as_str())
+            })
+            .map(|c| c.step)
+            .collect();
+        taking.sort_unstable();
+        if !taking.is_empty() {
+            // The first picture a call took is its step's; another size from
+            // the same call is in the chat, not a step of its own.
+            if let Some(n) = taking
+                .iter()
+                .copied()
+                .find(|&n| self.step_mut(n).is_some_and(|s| s.image.is_none()))
+            {
+                if let Some(step) = self.step_mut(n) {
+                    step.image = Some(image.clone());
+                }
+            }
+            return;
+        }
+        self.push(WorkStep {
+            at: message.ts,
+            kind: StepKind::Screenshot,
+            label: clean(&format!("Took a screenshot of {project}")),
+            outcome: None,
+            image: Some(image.clone()),
+        });
     }
 }
 
@@ -616,20 +1319,64 @@ pub fn on_action(agent_id: &str, action: Action, now: i64) -> String {
     doing
 }
 
+/// What came back for a call the turn made.
+pub fn on_result(agent_id: &str, result: CallResult) {
+    with_live(agent_id, |live| live.result(result));
+}
+
+/// The user said no to a call, before it ran (the permission prompt).
+pub fn on_declined(agent_id: &str, call_id: &str) {
+    on_result(
+        agent_id,
+        CallResult {
+            id: call_id.to_string(),
+            outcome: Outcome::Declined,
+        },
+    );
+}
+
+/// A card was answered (in any chat; only the turn that raised it has its step).
+pub fn on_answer(agent_id: &str, request_id: &str, status: ApprovalStatus) {
+    with_live(agent_id, |live| live.answer(request_id, status));
+}
+
 /// A message the turn recorded (called for every message; ignored between turns).
 pub fn on_message(message: &AgentMessage) {
     with_live(&message.agent_id, |live| live.message(message));
 }
 
-/// The timeline so far, newest [`LIVE_STEPS`] only, for the status.
+/// The turn's own closing line that isn't a reply or an error ("Stopped"):
+/// its timeline hangs under that.
+pub fn anchor_on(message: &AgentMessage) {
+    with_live(&message.agent_id, |live| {
+        live.anchor = Some(message.clone())
+    });
+}
+
+/// The timeline so far, for the status: the newest [`LIVE_STEPS`] steps and
+/// counts only, since it is sent on every step.
 pub fn live(agent_id: &str) -> Option<TurnWork> {
     with_live(agent_id, |live| {
-        let mut work = live.work.clone();
-        let from = work.steps.len().saturating_sub(LIVE_STEPS);
-        work.steps.drain(..from);
-        work
+        let kept = &live.work.steps;
+        let from = kept.len().saturating_sub(LIVE_STEPS);
+        TurnWork {
+            started_at: live.work.started_at,
+            ended_at: None,
+            step_count: live.work.step_count,
+            steps: kept[from..].to_vec(),
+            files: Vec::new(),
+            file_count: live.work.file_count,
+            doing: live.running.as_ref().and(live.doing.clone()),
+        }
     })
     .filter(|w| w.step_count > 0)
+}
+
+/// The agent is gone: so is any timeline it was keeping.
+pub fn forget_agent(agent_id: &str) {
+    LIVE.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(agent_id);
 }
 
 /// The turn is over: keep its timeline under the last message it left, and
@@ -649,6 +1396,7 @@ pub fn finish(app: &AppHandle, agent_id: &str, now: i64) {
         tracing::warn!("[Agents] couldn't keep the timeline for {agent_id}: {e}");
         return;
     }
+    prune(agent_id);
     let mut message = message;
     message.work = Some(work);
     let _ = app.emit(super::runner::EVENT_MESSAGE, &message);
@@ -660,6 +1408,7 @@ fn settle(live: Live, now: i64) -> Option<(AgentMessage, TurnWork)> {
     }
     let mut work = live.work;
     work.ended_at = Some(now.max(work.started_at));
+    work.doing = None;
     Some((live.anchor?, work))
 }
 
@@ -667,21 +1416,23 @@ fn settle(live: Live, now: i64) -> Option<(AgentMessage, TurnWork)> {
 // On disk: <home>/turns/<message-id>.json
 // ============================================================================
 
-fn path_for(agent_id: &str, message_id: &str) -> Option<std::path::PathBuf> {
-    let safe = !message_id.is_empty()
+fn safe_id(message_id: &str) -> bool {
+    !message_id.is_empty()
         && message_id.len() <= 64
         && message_id
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-    if !safe {
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+fn turns_dir(agent_id: &str) -> Option<std::path::PathBuf> {
+    Some(store::agent_home(agent_id).ok()?.join("turns"))
+}
+
+fn path_for(agent_id: &str, message_id: &str) -> Option<std::path::PathBuf> {
+    if !safe_id(message_id) {
         return None;
     }
-    Some(
-        store::agent_home(agent_id)
-            .ok()?
-            .join("turns")
-            .join(format!("{message_id}.json")),
-    )
+    Some(turns_dir(agent_id)?.join(format!("{message_id}.json")))
 }
 
 fn save(agent_id: &str, message_id: &str, work: &TurnWork) -> Result<(), String> {
@@ -697,25 +1448,70 @@ fn save(agent_id: &str, message_id: &str, work: &TurnWork) -> Result<(), String>
     std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 
+/// Keep the newest [`KEEP_TURNS`] timelines, and of those past the newest
+/// [`KEEP_RECENT`], none older than [`KEEP_DAYS`] days. The replies stay in
+/// the chat; only what they did is forgotten.
+fn prune(agent_id: &str) {
+    prune_at(agent_id, std::time::SystemTime::now());
+}
+
+fn prune_at(agent_id: &str, now: std::time::SystemTime) {
+    let Some(dir) = turns_dir(agent_id) else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    let mut kept: Vec<(std::time::SystemTime, std::path::PathBuf)> = entries
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+        .collect();
+    if kept.len() <= KEEP_RECENT {
+        return;
+    }
+    kept.sort_by(|a, b| b.0.cmp(&a.0));
+    let max_age = std::time::Duration::from_secs(KEEP_DAYS * 24 * 60 * 60);
+    for (i, (modified, path)) in kept.iter().enumerate() {
+        let old = now.duration_since(*modified).is_ok_and(|age| age > max_age);
+        if i >= KEEP_TURNS || (i >= KEEP_RECENT && old) {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
 /// The timeline kept under this message, if any.
 pub fn load(agent_id: &str, message_id: &str) -> Option<TurnWork> {
     let raw = std::fs::read(path_for(agent_id, message_id)?).ok()?;
     serde_json::from_slice(&raw).ok()
 }
 
-/// Give each message in a page the timeline kept under it.
+/// Give each message in a chat page the timeline kept under it. For the
+/// paged chat reads only (search and summaries never need it), and never
+/// under the log's lock: one listing of `turns/`, then a read per hit.
 pub fn apply(agent_id: &str, page: &mut [AgentMessage]) {
-    let Some(dir) = store::agent_home(agent_id).ok().map(|h| h.join("turns")) else {
+    let Some(dir) = turns_dir(agent_id) else {
         return;
     };
-    if !dir.is_dir() {
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    let kept: HashSet<String> = entries
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().into_string().ok()?;
+            name.strip_suffix(".json").map(str::to_string)
+        })
+        .collect();
+    if kept.is_empty() {
         return;
     }
     for message in page.iter_mut().filter(|m| {
         matches!(
             m.kind,
             MessageKind::Agent | MessageKind::Error | MessageKind::Note
-        )
+        ) && !m.fresh
+            && kept.contains(&m.id)
     }) {
         if let Some(work) = load(agent_id, &message.id) {
             message.work = Some(work);
@@ -723,299 +1519,5 @@ pub fn apply(agent_id: &str, page: &mut [AgentMessage]) {
     }
 }
 
-/// The timeline file a message's deletion should take with it.
-pub fn forget(agent_id: &str, message_id: &str) {
-    if let Some(path) = path_for(agent_id, message_id) {
-        let _ = std::fs::remove_file(path);
-    }
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    const CLAUDE: &str = include_str!("testdata/stream-partial.jsonl");
-    const CODEX_EXEC: &str = include_str!("testdata/codex-exec.jsonl");
-    const CODEX_APP: &str = include_str!("testdata/codex-app-server.jsonl");
-
-    fn lines(sample: &str) -> impl Iterator<Item = Value> + '_ {
-        sample.lines().filter_map(|l| serde_json::from_str(l).ok())
-    }
-
-    fn message(kind: MessageKind, id: &str) -> AgentMessage {
-        let mut m = super::super::runner::new_message("a1", kind, "hi");
-        m.id = id.into();
-        m
-    }
-
-    #[test]
-    fn a_real_claude_turn_has_one_step_per_tool_call() {
-        let actions: Vec<Action> = lines(CLAUDE).flat_map(|v| claude_actions(&v)).collect();
-        assert_eq!(
-            actions.len(),
-            1,
-            "one Bash call; stream events aren't steps"
-        );
-        assert_eq!(actions[0].kind, StepKind::Command);
-        assert_eq!(actions[0].label, "Ran echo hi");
-        assert_eq!(actions[0].doing, "Running echo hi");
-        assert_eq!(
-            actions[0].id.as_deref(),
-            Some("toolu_01Bx3SDHNvfg9pLufm1c4tQQ")
-        );
-    }
-
-    #[test]
-    fn a_real_codex_exec_turn_maps_onto_the_same_steps() {
-        let actions: Vec<Action> = lines(CODEX_EXEC)
-            .flat_map(|v| super::super::codex::steps(&v))
-            .filter_map(|s| match s {
-                super::super::stream::Step::Action(a) => Some(a),
-                _ => None,
-            })
-            .collect();
-        let labels: Vec<&str> = actions.iter().map(|a| a.label.as_str()).collect();
-        assert_eq!(
-            labels,
-            [
-                "Ran echo hi > note.txt && cat note.txt",
-                "Checked on the team"
-            ]
-        );
-        // Started and completed are one step, not two.
-        let mut live = Live::default();
-        for a in actions {
-            live.action(a, 1);
-        }
-        assert_eq!(live.work.step_count, 2);
-    }
-
-    #[test]
-    fn a_real_codex_app_server_turn_maps_onto_the_same_steps() {
-        let mut conversation = super::super::codex_app::Conversation::new(
-            None,
-            std::path::Path::new("/h/a"),
-            None,
-            "",
-            "run it",
-        )
-        .0;
-        let mut live = Live::default();
-        for value in lines(CODEX_APP) {
-            for out in conversation.on_message(&value) {
-                if let super::super::codex_app::Out::Step(super::super::stream::Step::Action(a)) =
-                    out
-                {
-                    live.action(a, 1);
-                }
-            }
-        }
-        assert_eq!(live.work.step_count, 1);
-        assert_eq!(
-            live.work.steps[0].label,
-            "Ran echo esc-ok > /tmp/ss-probe-esc.txt"
-        );
-    }
-
-    #[test]
-    fn tool_calls_read_as_plain_words() {
-        let d = |name: &str, input: Value| describe_tool(name, Some(&input)).unwrap().label;
-        assert_eq!(
-            d("Read", serde_json::json!({"file_path": "/a/src/Hero.tsx"})),
-            "Read Hero.tsx"
-        );
-        assert_eq!(
-            d("WebSearch", serde_json::json!({"query": "best espresso"})),
-            "Searched the web for “best espresso”"
-        );
-        assert_eq!(
-            d(
-                "WebFetch",
-                serde_json::json!({"url": "https://www.example.com/a?b"})
-            ),
-            "Opened example.com"
-        );
-        assert_eq!(
-            d("Bash", serde_json::json!({"command": "npm test\nmore"})),
-            "Ran npm test"
-        );
-        let ours = format!("mcp__{}__message_agent", super::super::prompts::SERVER_KEY);
-        assert_eq!(
-            d(&ours, serde_json::json!({"agent": "Acme Site"})),
-            "Messaged Acme Site"
-        );
-        assert_eq!(
-            d("mcp__claude-in-chrome__navigate", serde_json::json!({})),
-            "Used navigate (claude-in-chrome)"
-        );
-        let edit = describe_tool(
-            "Edit",
-            Some(&serde_json::json!({"file_path": "/p/App.tsx"})),
-        )
-        .unwrap();
-        assert_eq!(
-            (edit.label.as_str(), edit.doing.as_str()),
-            ("Edited App.tsx", "Editing App.tsx")
-        );
-        assert_eq!(edit.files, ["/p/App.tsx"]);
-    }
-
-    #[test]
-    fn credentials_never_reach_a_label() {
-        for (raw, want) in [
-            (
-                "Ran STRIPE_KEY=sk_live_abcdefghijklmnop npm run x",
-                "Ran STRIPE_KEY=… npm run x",
-            ),
-            (
-                "Ran curl -H Authorization: Bearer abc.def.ghi https://x.io",
-                "Ran curl -H Authorization: Bearer … https://x.io",
-            ),
-            (
-                "Ran git clone https://me:hunter2@github.com/a/b",
-                "Ran git clone https://…@github.com/a/b",
-            ),
-            ("Ran deploy --token abcd", "Ran deploy --token …"),
-            ("Ran echo ghp_0123456789abcdefABCDEF", "Ran echo …"),
-            (
-                "Opened https://x.io/?api_key=123",
-                "Opened https://x.io/?api_key=…",
-            ),
-            (
-                "Ran npm test -- src/App.test.tsx",
-                "Ran npm test -- src/App.test.tsx",
-            ),
-        ] {
-            assert_eq!(scrub(raw), want, "{raw}");
-        }
-    }
-
-    #[test]
-    fn a_turn_is_bounded() {
-        let mut live = Live::default();
-        for n in 0..(MAX_STEPS + 15) {
-            let mut a = describe_tool(
-                "Edit",
-                Some(&serde_json::json!({"file_path": format!("/p/f{n}.ts")})),
-            )
-            .unwrap();
-            a.label = "x".repeat(500);
-            live.action(a, n as i64);
-        }
-        assert_eq!(live.work.step_count as usize, MAX_STEPS + 15);
-        assert_eq!(live.work.steps.len(), MAX_STEPS);
-        assert_eq!(live.work.steps[0].at, 15, "the newest are kept");
-        assert!(live
-            .work
-            .steps
-            .iter()
-            .all(|s| s.label.chars().count() <= LABEL_CHARS));
-        assert_eq!(live.work.file_count as usize, MAX_STEPS + 15);
-        assert_eq!(live.work.files.len(), MAX_FILES);
-    }
-
-    #[test]
-    fn an_edit_to_the_same_file_twice_is_one_file() {
-        let mut live = Live::default();
-        for _ in 0..3 {
-            let a = describe_tool(
-                "Edit",
-                Some(&serde_json::json!({"file_path": "/p/App.tsx"})),
-            )
-            .unwrap();
-            live.action(a, 0);
-        }
-        assert_eq!((live.work.step_count, live.work.file_count), (3, 1));
-        assert_eq!(live.work.files, ["App.tsx"]);
-    }
-
-    #[test]
-    fn approvals_and_screenshots_are_steps_and_the_last_reply_is_the_anchor() {
-        let mut live = Live::default();
-        let ours = format!(
-            "mcp__{}__preview_screenshot",
-            super::super::prompts::SERVER_KEY
-        );
-        live.action(
-            describe_tool(&ours, Some(&serde_json::json!({"project": "/p/acme"}))).unwrap(),
-            1,
-        );
-        let mut shot = message(MessageKind::Session, "s1");
-        shot.session = Some(super::super::sessions::SessionMark {
-            project: "/p/acme".into(),
-            event: super::super::sessions::SessionEvent::Screenshot,
-            session_id: None,
-            tab: None,
-            cli: None,
-        });
-        shot.attachments = vec![Attachment {
-            name: "acme-desktop.jpg".into(),
-            path: "attachments/s1/acme-desktop.jpg".into(),
-            mime: "image/jpeg".into(),
-            size: 10,
-        }];
-        live.message(&shot);
-        live.message(&shot); // the phone-sized one
-        live.message(&message(MessageKind::Agent, "r1"));
-        live.message(&message(MessageKind::Agent, "r2"));
-        live.message(&message(MessageKind::User, "u1"));
-        assert_eq!(live.work.step_count, 2);
-        assert!(live.work.steps.iter().all(|s| s.image.is_some()));
-        assert_eq!(live.work.steps[0].label, "Took a screenshot of acme");
-        let (anchor, work) = settle(live, 9).unwrap();
-        assert_eq!(anchor.id, "r2");
-        assert_eq!(work.ended_at, Some(9));
-    }
-
-    #[test]
-    fn a_turn_without_steps_keeps_nothing() {
-        let mut live = Live::default();
-        live.message(&message(MessageKind::Agent, "r1"));
-        assert!(settle(live, 1).is_none());
-    }
-
-    #[test]
-    fn kept_on_disk_beside_the_log_never_in_it() {
-        let _serial = store::tests_lock();
-        let dir = tempfile::tempdir().unwrap();
-        store::set_root_for_tests(Some(dir.path().to_path_buf()));
-        let agent_id = "a1";
-        let work = TurnWork {
-            started_at: 1,
-            ended_at: Some(2),
-            step_count: 1,
-            steps: vec![WorkStep {
-                at: 1,
-                kind: StepKind::Read,
-                label: "Read a.ts".into(),
-                image: None,
-            }],
-            files: vec![],
-            file_count: 0,
-        };
-        let id = store::new_id();
-        save(agent_id, &id, &work).unwrap();
-        assert_eq!(load(agent_id, &id), Some(work.clone()));
-        let mut page = vec![
-            message(MessageKind::Agent, &id),
-            message(MessageKind::User, "u"),
-        ];
-        apply(agent_id, &mut page);
-        assert_eq!(page[0].work.as_ref(), Some(&work));
-        assert!(page[1].work.is_none());
-        // Never a path out of the home.
-        assert!(path_for(agent_id, "../x").is_none());
-        forget(agent_id, &id);
-        assert!(load(agent_id, &id).is_none());
-        store::set_root_for_tests(None);
-    }
-
-    #[test]
-    fn an_older_build_reads_a_message_carrying_work() {
-        // What a newer build would send: an unknown step kind still reads.
-        let raw =
-            r#"{"startedAt":1,"stepCount":1,"steps":[{"at":1,"kind":"teleport","label":"x"}]}"#;
-        let work: TurnWork = serde_json::from_str(raw).unwrap();
-        assert_eq!(work.steps[0].kind, StepKind::Tool);
-    }
-}
+mod tests;
