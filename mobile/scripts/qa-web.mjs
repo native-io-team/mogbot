@@ -722,6 +722,14 @@ const LIVE = [
     check: 'Dates in the one short format ("Nov 5, 2026")',
   },
   {
+    name: 'settings-usage',
+    route: '/settings',
+    ready: 'Use it all before reset',
+    act: scrollToText('Spare-capacity list'),
+    check:
+      'Usage: "Use it all before reset" with its line; "Claude 5-hour limit resets … · 62% unused"; "Claude Code: average turn" says it is an estimate; the list "0 waiting" (its one item started); Ollama running with its model, Opencode installed. Read-only.',
+  },
+  {
     name: 'connection',
     route: '/connection',
     pages: 2,

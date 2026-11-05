@@ -40,6 +40,8 @@ pub const EVENT_REGISTRY: &str = "agents://registry";
 pub const EVENT_DRAFT: &str = "agents://draft";
 /// An engine reported how much of the plan is left (`super::quota`).
 pub const EVENT_QUOTA: &str = "agents://quota";
+/// The usage mode or the spare-capacity list changed (`agents::usage_plan`).
+pub const EVENT_USAGE_PLAN: &str = "agents://usage-plan";
 
 /// How often a growing draft is sent to the UI: smooth to the eye, and a
 /// burst of tiny deltas costs one event rather than dozens.
@@ -1323,20 +1325,56 @@ impl Drop for MemorySeal {
 
 /// Queue an agent's answer to a request `agent_id` sent it.
 pub fn enqueue_reply(app: &AppHandle, agent_id: &str, text: String, sender: AgentRef, hop: u8) {
+    enqueue_reply_from(app, agent_id, text, sender, hop, false);
+}
+
+/// [`enqueue_reply`], carrying the outside taint of the sender's turn (see
+/// [`from_outside`]): what a turn answering a "When…" routine's items says
+/// to another agent is as much outside text as the items were.
+pub fn enqueue_reply_from(
+    app: &AppHandle,
+    agent_id: &str,
+    text: String,
+    sender: AgentRef,
+    hop: u8,
+    outside: bool,
+) {
     push(
         app,
         agent_id,
-        Inbound {
-            id: String::new(),
-            text,
-            from: From::Agent { sender, hop },
-            reply: true,
-            routine: false,
-            ticket: None,
-            room: None,
-            outside: false,
-        },
+        agent_inbound(text, sender, hop, true, outside),
     );
+}
+
+/// A request from another agent (`message_agent`), carrying the outside
+/// taint of the sender's turn, as a room's @mention does.
+pub fn enqueue_request(
+    app: &AppHandle,
+    agent_id: &str,
+    text: String,
+    sender: AgentRef,
+    hop: u8,
+    outside: bool,
+) {
+    push(
+        app,
+        agent_id,
+        agent_inbound(text, sender, hop, false, outside),
+    );
+}
+
+/// What another agent's request (or answer, `reply`) queues.
+fn agent_inbound(text: String, sender: AgentRef, hop: u8, reply: bool, outside: bool) -> Inbound {
+    Inbound {
+        id: String::new(),
+        text,
+        from: From::Agent { sender, hop },
+        reply,
+        routine: false,
+        ticket: None,
+        room: None,
+        outside,
+    }
 }
 
 /// `from` is messaging `to`. If `from`'s turn is answering a request `to`
@@ -2530,6 +2568,11 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
                     None => super::failure::describe_now(engine, &err.to_string()),
                 };
                 // Signed out: the plan reading kept belonged to a login that isn't here.
+                if failure.kind == super::failure::FailureKind::SignedOut {
+                    if let Some(from) = super::wallet::reading_from(engine) {
+                        super::usage_plan::forget_reading(engine, &from);
+                    }
+                }
                 if failure.kind == super::failure::FailureKind::SignedOut
                     && super::quota::clear(engine, store::now_ms())
                 {
@@ -2644,6 +2687,8 @@ fn return_results(app: &AppHandle, agent_id: &str, since: i64, error: Option<Str
         return;
     }
     let hop = current_hop(agent_id).saturating_add(1);
+    // A turn answering outside text passes the taint to whoever it answers.
+    let outside = from_outside(agent_id);
     let Ok(me) = store::get(agent_id) else { return };
     let said: Vec<String> = store::messages(agent_id, 40)
         .unwrap_or_default()
@@ -2671,7 +2716,7 @@ fn return_results(app: &AppHandle, agent_id: &str, since: i64, error: Option<Str
         let mut line = new_message(&to.id, MessageKind::FromAgent, text.clone());
         line.peer = Some(sender.clone());
         let _ = record(app, line);
-        enqueue_reply(app, &to.id, text.clone(), sender.clone(), hop);
+        enqueue_reply_from(app, &to.id, text.clone(), sender.clone(), hop, outside);
     }
 }
 
@@ -2870,6 +2915,11 @@ pub(super) fn system_prompt_for(
     layout: &super::project::Layout,
 ) -> String {
     let mut prompt = system_prompt_base(agent, home, layout);
+    prompt.push_str("\n\n");
+    prompt.push_str(&prompts::usage_section(
+        super::usage_plan::mode().0,
+        agent.is_main,
+    ));
     if agent.is_main {
         if let Some(team) = store::list()
             .ok()
@@ -3543,6 +3593,8 @@ async fn run_turn(
                             }
                             let today = super::usage::today();
                             add_turn_usage(agent_id, &turn);
+                            // The account's token count, which forecasts set against its readings.
+                            super::usage_plan::add_tokens(engine, &account.id, &turn);
                             let id = agent_id.to_string();
                             let _ = tokio::task::spawn_blocking(move || store::update(&id, |a| a.usage.record(&turn, today))).await;
                         }
@@ -3552,6 +3604,8 @@ async fn run_turn(
                             if let Some(at) = super::quota::limited_until(std::slice::from_ref(&reading), reading.engine, now_ms) {
                                 super::wallet::reported_out(reading.engine, &account.id, at, now_ms);
                             }
+                            // Kept as this account's own too, with a sample for forecasts.
+                            super::usage_plan::archive(&account.id, &reading, now_ms);
                             // A reading is one account's: another's is cleared first.
                             if super::wallet::reading_moves_to(reading.engine, &account.id) {
                                 super::quota::clear(reading.engine, now_ms);
@@ -4026,6 +4080,42 @@ mod tests {
         agent
     }
 
+    /// Agents made or imported by an older build (a registry entry without
+    /// any of the usage fields) get the usage section on their next turn:
+    /// it is app-owned, built into the system prompt from code, so nothing in
+    /// their own CLAUDE.md is rewritten. The Chief also gets its own lines,
+    /// and both get the user's mode.
+    #[test]
+    fn agents_from_an_older_build_get_the_usage_section_without_touching_their_files() {
+        let _serial = store::tests_lock();
+        let root = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(root.path().to_path_buf()));
+        let home = tempfile::tempdir().unwrap();
+        let claude_md = home.path().join("CLAUDE.md");
+        let before = "Old instructions.\n\n## Memory\n\n- Likes tea\n";
+        std::fs::write(&claude_md, before).unwrap();
+        let old: store::Agent = serde_json::from_value(serde_json::json!({
+            "id": "imp1", "name": "Imported", "role": "Research", "shape": 0,
+            "color": "red", "createdAt": 0
+        }))
+        .unwrap();
+        let mut chief = old.clone();
+        chief.is_main = true;
+        let mode = super::super::usage_plan::Mode::UseItAll;
+        super::super::usage_plan::set_mode(mode, 1).unwrap();
+        let layout = super::super::project::layout(&old, home.path(), vec![]);
+        let agent_prompt = system_prompt_for(&old, home.path(), &layout);
+        let chief_prompt = system_prompt_for(&chief, home.path(), &layout);
+        store::set_root_for_tests(None);
+
+        assert!(agent_prompt.ends_with(&prompts::usage_section(mode, false)));
+        assert!(agent_prompt.contains("## Usage limits"));
+        assert!(agent_prompt.contains("Use it all before reset"));
+        assert!(!agent_prompt.contains("set_usage_mode"));
+        assert!(chief_prompt.contains("set_usage_mode"));
+        assert_eq!(std::fs::read_to_string(&claude_md).unwrap(), before);
+    }
+
     #[test]
     fn an_unbound_agents_command_line_is_unchanged() {
         let agent = test_agent(Some("opus"));
@@ -4033,8 +4123,20 @@ mod tests {
         let layout =
             super::super::project::layout(&agent, std::path::Path::new("/h"), dirs.clone());
         assert_eq!(layout.cwd, std::path::PathBuf::from("/h"));
-        let prompt = system_prompt_for(&agent, std::path::Path::new("/h"), &layout);
-        assert_eq!(prompt, prompts::system_prompt(&agent, None));
+        let prompt = {
+            let _serial = store::tests_lock();
+            let root = tempfile::tempdir().unwrap();
+            store::set_root_for_tests(Some(root.path().to_path_buf()));
+            let prompt = system_prompt_for(&agent, std::path::Path::new("/h"), &layout);
+            store::set_root_for_tests(None);
+            prompt
+        };
+        // The same prompt, plus the app-owned usage section every agent gets.
+        let usage = prompts::usage_section(super::super::usage_plan::Mode::Normal, false);
+        assert_eq!(
+            prompt,
+            format!("{}\n\n{usage}", prompts::system_prompt(&agent, None))
+        );
         let args = super::super::claude::args(
             agent.model.as_deref(),
             "sid",

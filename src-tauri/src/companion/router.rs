@@ -45,6 +45,7 @@ pub const METHODS: &[&str] = &[
     "agents.usage",
     "agents.quota",
     "agents.accounts",
+    "agents.usagePlan",
     "agents.changeDiff",
     "agents.keepCopy",
     "agents.discardCopy",
@@ -84,6 +85,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.usage",
     "agents.quota",
     "agents.accounts",
+    "agents.usagePlan",
     "agents.import.status",
     "agents.templates",
     "agents.changeDiff",
@@ -390,6 +392,8 @@ pub trait Backend: Send + Sync + 'static {
     async fn quota(&self) -> Result<Value, CommandError>;
     /// `agents_accounts`: each engine's usage accounts, read-only.
     async fn accounts(&self) -> Result<Value, CommandError>;
+    /// `agents_usage_overview`: the capacity inventory, read-only.
+    async fn usage_plan(&self) -> Result<Value, CommandError>;
     /// An import from another assistant, as the phone follows it: whether
     /// this Mac's Remote access is on and has been reached, whether an import
     /// may begin, the one going on, and the message to send. Never the link:
@@ -1279,6 +1283,7 @@ async fn run(
             Ok(b.set_defaults(change).await?)
         }
         "agents.accounts" => Ok(b.accounts().await?),
+        "agents.usagePlan" => Ok(b.usage_plan().await?),
         "agents.import.status" => Ok(b.import_status().await?),
         "agents.import.start" => Ok(b.import_start().await?),
         "agents.import.stop" => Ok(b.import_stop().await?),

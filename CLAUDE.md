@@ -24,6 +24,7 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - **"What it did"** - A folded timeline under each reply: observed steps and honest outcomes in plain labels, screenshots, live while the turn runs
 - **Start fresh, keep memory** - A new conversation that keeps what the agent remembers, plus a context meter showing only what the engine reported
 - **Usage before the wall** - Cost per agent and per routine this week (tokens, not list-price dollars, on Pro/Max), and the plan's usage only when the engine reports it
+- **Usage awareness** - Agents read every account's reported limits, other compute on this Mac, and *labelled* estimates from past runs (`usage_overview`, `forecast_usage`); the user picks Normal, Save my limits or Use it all before reset, which spends expiring capacity on a spare-capacity list (see docs/agents.md, "Usage awareness")
 - **Routines** - On a schedule (one picker on desk and phone), or **"When…"** something happens: GitHub mentions/assignments, new files in a folder, or a connector check that runs sealed (read-only tools, no shell or files), with caps and an approval before it changes the team
 - **Nothing goes silent** - A panicked, stopped or cut-off turn always ends in a line saying so, and delegators are told
 - **Phone** - The companion app (`mobile/`, [docs/mobile.md](docs/mobile.md)) is the primary way in away from the desk: chats, approvals, result cards, the timeline, and starting things (new agents, routines, dictation, Send to agent). It pairs by QR and talks to this Mac over the user's own Tailscale
@@ -175,6 +176,7 @@ Command modules in `src-tauri/src/commands/`. Domains with submodules are direct
 Single-file domains:
 - `agent_bridge.rs` - Commands for the agent preview bridge (the loopback MCP server in `src-tauri/src/agent_bridge.rs` that lets the workspace agent read the preview's console/network/DOM, navigate it, and take screenshots)
 - `agents.rs` - Agents mode commands (overview, messages, send, create/update/delete, approvals, focus). The engine is `src-tauri/src/agents/`
+- `agents_usage.rs` - Settings → Agents → Usage: the capacity inventory, the usage mode and the spare-capacity list
 - `ai.rs` - AI-powered PR title/description generation via the agent CLI
 - `analytics.rs` - PostHog event tracking (API key stays in Rust; see `docs/analytics.md`)
 - `assets.rs` - Assets panel file management (configurable root, default `/public`)
@@ -540,7 +542,7 @@ Answers: **can I run my work through a team of agents, the way I do in Grok Bot,
 9. A bound agent's turn runs in its own copy (`agents/task.rs`: a locked worktree under `<projects root>/.worktrees/`, its own branch and dev port). Keep only into the branch it came from; a copy left unchanged is removed
 10. Take over (`agents/takeover.rs`) claims the agent under the inbox lock: no turn starts, queued messages wait, routines due are skipped and recorded, until Hand back
 11. Routines (`agents/schedule.rs`) and "When…" routines (`agents/watch.rs`, sealed by `agents/watch_seal.rs`): polling checks from this Mac, no webhooks; first check is a baseline, nothing fires twice, one firing at a time. A turn answering outside text can't write its own `CLAUDE.md` and needs a card to change the team
-12. Usage (`agents/usage.rs`, `agents/quota.rs`): only what the engines report, never estimated; no reading, no line
+12. Usage (`agents/usage.rs`, `agents/quota.rs`): only what the engines report, never estimated; no reading, no line. Forecasts (`agents/forecast.rs`) are estimates from past runs, always labelled so and absent with too little history; the inventory, modes and spare-capacity list are `agents/inventory.rs` and `agents/usage_plan.rs`, the tools `agents/usage_tools.rs`
 13. The phone drives the same commands through the companion server (`src-tauri/src/companion/`): chats, approval and result cards, the timeline and starting things all work there (see docs/mobile.md)
 
 Full design and limits: [docs/agents.md](docs/agents.md).

@@ -57,6 +57,7 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { AgentsStayOnNote } from './AgentsStayOn';
 import { AgentsQuota } from './AgentsQuota';
+import { AgentsSpareNote } from './AgentsUsage';
 import { kbd } from '../../lib/shortcuts';
 
 /** Lines read per chat: enough for its latest reply. A chat with a card open reads a page. */
@@ -579,6 +580,8 @@ export function AgentsTeamView({
 
           {/* The plan's usage, when an engine reported it: before the wall, not at it. */}
           <AgentsQuota place="team" />
+          {/* A reset near, with capacity left on the account turns run on: worth knowing. */}
+          <AgentsSpareNote />
         </div>
       </div>
     </section>
