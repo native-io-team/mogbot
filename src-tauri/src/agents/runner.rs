@@ -2116,7 +2116,10 @@ mod tests {
         let mut r = Runtime::default();
         r.claim().unwrap();
         r.admit(from_user("while you drove"));
-        assert!(r.release(Some("[handed back]".into())), "a worker starts for the queue");
+        assert!(
+            r.release(Some("[handed back]".into())),
+            "a worker starts for the queue"
+        );
         assert!(!r.driven);
         assert!(r.running);
         assert_eq!(r.interrupted.as_deref(), Some("[handed back]"));
@@ -2126,7 +2129,10 @@ mod tests {
         quiet.claim().unwrap();
         assert!(!quiet.release(Some("[handed back]".into())));
         assert_eq!(quiet.interrupted.as_deref(), Some("[handed back]"));
-        assert!(quiet.admit(from_user("later")), "an ordinary message starts a turn again");
+        assert!(
+            quiet.admit(from_user("later")),
+            "an ordinary message starts a turn again"
+        );
 
         // A hand-back of an agent nobody drove changes nothing.
         let mut never = Runtime::default();

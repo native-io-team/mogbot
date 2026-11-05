@@ -473,7 +473,10 @@ mod tests {
         let codex = spawn_for(&ctx(Engine::Codex, &l, vec![]));
         assert_eq!(codex.args[0], "resume");
         assert_eq!(codex.args.last().map(String::as_str), Some("sess-1"));
-        assert!(codex.args.windows(2).any(|w| w == ["-C", "/u/ShipStudio/acme"]));
+        assert!(codex
+            .args
+            .windows(2)
+            .any(|w| w == ["-C", "/u/ShipStudio/acme"]));
         assert!(codex.args.windows(2).any(|w| w == ["-m", "m1"]));
         // A turn's sandbox and our server, and asking rather than refusing.
         for want in [
@@ -481,7 +484,10 @@ mod tests {
             "approval_policy=\"on-request\"",
             "sandbox_workspace_write.network_access=false",
         ] {
-            assert!(codex.args.windows(2).any(|w| w[0] == "-c" && w[1] == want), "{want}");
+            assert!(
+                codex.args.windows(2).any(|w| w[0] == "-c" && w[1] == want),
+                "{want}"
+            );
         }
         assert!(codex
             .args
@@ -489,7 +495,9 @@ mod tests {
             .any(|a| a.starts_with("mcp_servers.") && a.contains("/mcp/t/agents/a1")));
         // Not the headless fallback.
         assert!(!codex.args.contains(&"exec".to_string()));
-        assert!(!codex.args.contains(&"approval_policy=\"never\"".to_string()));
+        assert!(!codex
+            .args
+            .contains(&"approval_policy=\"never\"".to_string()));
     }
 
     #[test]

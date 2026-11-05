@@ -115,7 +115,7 @@ pub async fn agents_with_projects() -> Result<Vec<AgentView>, CommandError> {
             .map(|agent| {
                 Ok(AgentView {
                     takeover: takeover::view(&agent.id),
-                status: runner::status_with_work(&agent.id),
+                    status: runner::status_with_work(&agent.id),
                     home: store::agent_home(&agent.id)?.display().to_string(),
                     agent,
                 })

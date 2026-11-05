@@ -559,7 +559,10 @@ pub struct OpenSpec {
 }
 
 /// [`pty_session_open`], callable from Rust.
-pub async fn open_session(app: AppHandle, spec: OpenSpec) -> Result<OpenSessionResult, CommandError> {
+pub async fn open_session(
+    app: AppHandle,
+    spec: OpenSpec,
+) -> Result<OpenSessionResult, CommandError> {
     let OpenSpec {
         session_id,
         command,
