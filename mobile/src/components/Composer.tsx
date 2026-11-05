@@ -16,12 +16,7 @@
  * as the Mac keeps them.
  */
 
-import {
-  MAX_ATTACHMENTS,
-  withQuotes,
-  type Agent,
-  type AgentRef,
-} from '@shipstudio/companion-protocol';
+import { MAX_ATTACHMENTS, type Agent, type AgentRef } from '@shipstudio/companion-protocol';
 import {
   useCallback,
   useEffect,
@@ -51,8 +46,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccent } from '../lib/accent';
-import { needsYou } from '../lib/agents';
-import { mentionQuery, sendMode } from '../lib/composer';
+import { needsYou, waitingOnMac } from '../lib/agents';
+import { mentionQuery, sendMode, takeDraft } from '../lib/composer';
 import {
   addFile,
   clearComposer,
@@ -178,6 +173,8 @@ export function Composer({
   const blocked = uploading || staged.some((f) => f.error);
   const mode = sendMode(agent, hasContent);
   const waitingOnYou = needsYou(agent);
+  // What it waits on is answered on the Mac (an import to review), not above.
+  const onMac = useApp((s) => waitingOnMac(agent, s.chats[agent.id]?.messages));
   // Offline, Send still works: it waits for the Mac in the outbox.
   const canSend = hasContent && !blocked;
   const offerNow = mode === 'queue' && connected && !waitingOnYou;
@@ -253,11 +250,13 @@ export function Composer({
 
   const submit = (now: boolean) => {
     if (!canSend) return;
+    // From the store, not this render: a second tap in the same frame finds
+    // the draft already emptied by the first, and sends nothing.
+    const current = takeDraft(getApp().composer[agent.id]);
+    if (!current) return;
     if (now) haptic.medium();
     else haptic.light();
-    const body = withQuotes(draft.quotes, draft.text.trim());
-    const mentions = liveMentions(draft.text, draft.mentions).map((m) => m.id);
-    const files = ready.map(({ stagedAt: _at, ...f }) => f);
+    const { body, mentions, files } = current;
     // Words still on their way would land in the emptied draft.
     dictation.cancel();
     clearComposer(agent.id);
@@ -287,11 +286,13 @@ export function Composer({
           : 'Not connected · what you type stays here'
         : uploading
           ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
-          : mode === 'queue'
-            ? waitingOnYou
-              ? `${agent.name} reads it after you answer above`
-              : `${agent.name} reads it when this turn ends`
-            : null;
+          : onMac
+            ? `Review the import on your Mac. ${agent.name} carries on after`
+            : mode === 'queue'
+              ? waitingOnYou
+                ? `${agent.name} reads it after you answer above`
+                : `${agent.name} reads it when this turn ends`
+              : null;
 
   return (
     <View

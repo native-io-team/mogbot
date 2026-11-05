@@ -13,6 +13,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { cardOutcome, folderName } from '../lib/agents';
 import { diffLineKind } from '../lib/diff';
 import { haptic } from '../lib/haptics';
+import { useInFlight } from '../lib/once';
 import { answerApproval, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
 import { CARD_TITLE_SCALE, space } from '../lib/theme';
@@ -57,29 +58,31 @@ export function PromptCard({
   const armed = useArmed(pending, `${compact}:${fit.pinned}`);
   const connected = useApp((s) => s.link.kind === 'connected');
   const off = busy !== null || !connected;
+  const once = useInFlight();
 
-  const choose = async (index: number) => {
-    if (!armed) return;
-    const option = prompt.options[index];
-    setBusy(index);
-    try {
-      await answerApproval(
-        message.agentId,
-        approval.requestId,
-        option.role !== 'deny',
-        false,
-        undefined,
-        index
-      );
-      if (option.role === 'deny') haptic.warning();
-      else haptic.success();
-    } catch (error) {
-      haptic.error();
-      onError(describeError(error));
-    } finally {
-      setBusy(null);
-    }
-  };
+  const choose = (index: number) =>
+    once(async () => {
+      if (!armed) return;
+      const option = prompt.options[index];
+      setBusy(index);
+      try {
+        await answerApproval(
+          message.agentId,
+          approval.requestId,
+          option.role !== 'deny',
+          false,
+          undefined,
+          index
+        );
+        if (option.role === 'deny') haptic.warning();
+        else haptic.success();
+      } catch (error) {
+        haptic.error();
+        onError(describeError(error));
+      } finally {
+        setBusy(null);
+      }
+    });
 
   const { deny, allow, more, listed } = promptAnswers(prompt);
   // Whose session it is, said plainly: "In acme-site · Claude Code 1", or
@@ -115,12 +118,7 @@ export function PromptCard({
 
   if (!pending) {
     return (
-      <Receipt
-        icon="terminal"
-        title={approval.title}
-        outcome={cardOutcome(approval)}
-        ok={approval.status === 'allowed'}
-      >
+      <Receipt status={approval.status} title={approval.title} outcome={cardOutcome(approval)}>
         <T variant="caption" color={colors.textMuted}>
           {where}
         </T>

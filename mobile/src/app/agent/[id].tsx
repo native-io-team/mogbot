@@ -503,7 +503,13 @@ function Conversation({
         {freshable && (
           <Row
             label={busy ? 'Starting fresh…' : 'Start fresh'}
-            leading={<Icon name="arrow.counterclockwise" size={iconSize.body} color={colors.textSecondary} />}
+            leading={
+              <Icon
+                name="arrow.counterclockwise"
+                size={iconSize.body}
+                color={colors.textSecondary}
+              />
+            }
             // Its turn is in the conversation it would leave.
             onPress={busy ? undefined : confirm}
             disabled={!!unavailable}

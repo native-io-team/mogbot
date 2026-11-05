@@ -12,7 +12,8 @@ import { BROADER, broaderCaption, moreMessage, promptAnswers } from '../src/lib/
 import { readBrand } from '../src/lib/brand';
 import { agentTints, APPEARANCES, contrast, luminance, palettes } from '../src/lib/theme';
 import { PromptCard } from '../src/components/PromptCard';
-import { ARM_MS, ReviewOnMacCard, useArmed } from '../src/components/ApprovalCard';
+import { ARM_MS, Receipt, ReviewOnMacCard, useArmed } from '../src/components/ApprovalCard';
+import { inFlight } from '../src/lib/once';
 import { Text } from 'react-native';
 import { agent } from './helpers';
 
@@ -251,6 +252,16 @@ describe('PromptCard', () => {
   });
 });
 
+const proposal = (key: string, name: string, role: string) => ({
+  key,
+  name,
+  role,
+  instructions: '',
+  memory: '',
+  routines: [],
+  logins: [],
+});
+
 describe('an import review card', () => {
   const approval = {
     requestId: 'r1',
@@ -258,15 +269,64 @@ describe('an import review card', () => {
     detail:
       "Finance · Money\nTravel · Trips\nReview on your Mac: each agent's instructions are shown there, and nothing is created until you import them.",
     status: 'pending',
-    connector: { kind: 'review', talkId: 't', source: 'Grok' },
+    connector: {
+      kind: 'review',
+      talkId: 't',
+      source: 'Grok',
+      review: {
+        proposals: [
+          proposal('finance', 'Finance', 'Money'),
+          {
+            ...proposal('travel', 'Travel', 'Trips'),
+            clash: { agentId: 'a2', name: 'Trips', role: 'Old trips', instructions: '' },
+          },
+        ],
+      },
+    },
   } as Approval;
 
-  it('names the agents and sends you to the Mac, with nothing to press', async () => {
+  it('names the agents from the card’s data, says where to go, with nothing to press', async () => {
     await render(<ReviewOnMacCard approval={approval} />);
     expect(screen.getByText('Finance · Money')).toBeTruthy();
-    expect(screen.getByText(/Review on your Mac: each agent’s instructions/)).toBeTruthy();
+    expect(screen.getByText('Travel · Trips · replaces your Trips')).toBeTruthy();
+    expect(screen.getByText('ON YOUR MAC')).toBeTruthy();
+    // Once: the eyebrow says where, the body says why, never the desktop's sentence twice.
+    expect(screen.queryByText(/Review on your Mac/)).toBeNull();
     expect(screen.queryAllByRole('button')).toHaveLength(0);
     expect(screen.queryByText('Allow')).toBeNull();
+  });
+
+  it('answered, keeps who it was about behind its receipt', async () => {
+    await render(<ReviewOnMacCard approval={{ ...approval, status: 'allowed' }} />);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('a receipt with nothing more to show is a plain line: no press, no promise of detail', async () => {
+    await render(<Receipt status="expired" title="Run a command" outcome="Not answered in time" />);
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.getByLabelText('Not answered in time. Run a command')).toBeTruthy();
+  });
+});
+
+describe('answering once', () => {
+  it('lets one answer through while it is in flight, and the next after it settles', async () => {
+    const guard = inFlight();
+    let finish = () => {};
+    const run = jest.fn(() => new Promise<void>((r) => (finish = r)));
+    const first = guard(run);
+    // A second tap in the same frame: nothing sent.
+    await expect(guard(run)).resolves.toBeUndefined();
+    expect(run).toHaveBeenCalledTimes(1);
+    finish();
+    await first;
+    void guard(run);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('frees itself after a failure, so the answer can be tried again', async () => {
+    const guard = inFlight();
+    await expect(guard(() => Promise.reject(new Error('no')))).rejects.toThrow('no');
+    await expect(guard(() => Promise.resolve(1))).resolves.toBe(1);
   });
 });
 

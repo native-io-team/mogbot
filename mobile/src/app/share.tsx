@@ -12,7 +12,7 @@
 
 import { MAX_ATTACHMENTS, type Agent } from '@shipstudio/companion-protocol';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { AgentAvatar } from '../components/agent';
 import { Button, SheetPage, T, useRipple } from '../components/ui';
@@ -47,7 +47,9 @@ export default function Share() {
   const canAttach = useApp((s) => canCall('agents.files', s.welcome));
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const [busy, setBusy] = useState<{ agentId: string; note: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Synchronous, unlike `busy`: a second tap in the same frame, on this row
+  // or another, never adds the quote twice.
+  const delivering = useRef(false);
   const agents = useMemo(
     () => sortAgents(overview?.agents ?? []).filter((a) => !a.hidden),
     [overview]
@@ -55,16 +57,24 @@ export default function Share() {
   const files = payload.files ?? [];
   const filesBlocked = files.length > 0 && (!connected || !canAttach);
 
+  /**
+   * Delivered once, to one agent: the quote goes in, the files go up, and
+   * the chat opens whatever happened. What didn't make it (a failed upload,
+   * files past the cap) is said in that chat, where the draft is, rather
+   * than on a sheet that has already put the words somewhere.
+   */
   const deliver = async (agent: Agent) => {
-    if (busy) return;
-    setError(null);
+    if (delivering.current) return;
+    delivering.current = true;
     haptic.select();
     const draft = getApp().composer[agent.id];
     // A quote above the draft, never mixed into what was typed there.
     addQuote(agent.id, sharedQuote(payload));
+    let notice: string | undefined;
     if (files.length && !filesBlocked) {
       const room = MAX_ATTACHMENTS - (draft?.files?.length ?? 0);
       const { kept, refused } = admit(files, room);
+      let sent = 0;
       try {
         for (const [i, file] of kept.entries()) {
           setBusy({
@@ -81,19 +91,20 @@ export default function Share() {
               stagedAt: Date.now(),
             })
           );
+          sent++;
         }
+        notice = refused ?? undefined;
       } catch (e) {
         haptic.error();
-        setBusy(null);
-        setError(
-          `${describeError(e)} The words are in ${agent.name}’s chat; attach the rest there.`
-        );
-        return;
+        const left = kept.length - sent;
+        notice = `${describeError(e)} ${left === 1 ? '1 file' : `${left} files`} didn’t attach; attach ${left === 1 ? 'it' : 'them'} here.`;
       }
-      if (refused) setError(refused);
     }
     setBusy(null);
-    router.replace({ pathname: '/chat/[id]', params: { id: agent.id, compose: '1' } });
+    router.replace({
+      pathname: '/chat/[id]',
+      params: { id: agent.id, compose: '1', ...(notice ? { notice } : {}) },
+    });
   };
 
   if (isEmptyShare(payload)) {
@@ -131,11 +142,7 @@ export default function Share() {
                   : `Files need ${macName}: only the words go while it’s away.`}
               </T>
             )}
-            {error && (
-              <T variant="small" color={colors.accentErrorLight} accessibilityLiveRegion="polite">
-                {error}
-              </T>
-            )}
+
             <T variant="caption" color={colors.textMuted} style={styles.eyebrow}>
               PUT IT IN A CHAT FOR YOU TO SEND
             </T>

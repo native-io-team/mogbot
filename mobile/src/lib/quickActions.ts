@@ -18,7 +18,7 @@ function items(): QuickActions.Action[] {
   const s = getApp();
   if (!s.credentials || !s.overview) return [];
   const chief = s.overview.agents.find((a) => a.isMain);
-  const { needYou } = attentionCounts(s.overview.agents);
+  const { needYou } = attentionCounts(s.overview.agents, s.chats);
   return [
     ...(needYou
       ? [

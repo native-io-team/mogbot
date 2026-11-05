@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useLinkState, useNow } from '../components/ConnectionPill';
 import { Button, Dot, Section, T, useToneColor, SheetPage, InsetDivider } from '../components/ui';
-import { formatAgo } from '../lib/agents';
+import { engineName, formatAgo } from '../lib/agents';
 import { layers, pill } from '../lib/connection';
 import { appInfo, openTailscale } from '../lib/pairing';
 import { currentTransport, deviceSelf } from '../lib/session';
@@ -89,7 +89,7 @@ export default function Connection() {
                   <T color={colors.textBody}>{a.name}</T>
                   <T variant="small" color={colors.textMuted}>
                     {a.failure?.kind === 'signed_out'
-                      ? 'Last turn failed: Claude Code is signed out'
+                      ? `Last turn failed: ${engineName(a)} is signed out`
                       : a.failure?.kind === 'usage_limit'
                         ? 'At its usage limit'
                         : 'Last turn didn’t finish'}

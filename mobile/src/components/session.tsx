@@ -6,27 +6,21 @@
 
 import type { SessionSummary } from '@shipstudio/companion-protocol';
 import { StyleSheet, View } from 'react-native';
+import { sessionLabel } from '../lib/agents';
 import { iconSize, space } from '../lib/theme';
 import { useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { Dot, T } from './ui';
 
-const CLI_NAMES: Record<string, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'Opencode',
-};
-
-/** "Claude Code 2", as the project's tab bar names the tab. */
-export const tabName = (s: Pick<SessionSummary, 'cli' | 'tab'>) =>
-  `${(s.cli && CLI_NAMES[s.cli]) ?? s.cli ?? 'Task'} ${s.tab}`;
+/** "Claude Code 2", as the project's tab bar names the tab (one rule: `sessionLabel`). */
+export const tabName = (s: Pick<SessionSummary, 'cli' | 'tab'>) => sessionLabel(s);
 
 export function sessionStateText(s: SessionSummary): string {
   switch (s.state) {
     case 'working':
       return s.activity ?? 'Working…';
     case 'needs_decision':
-      return s.question?.question ?? 'Waiting for your decision';
+      return s.question?.question ?? 'Needs your OK';
     case 'finished':
       return 'Finished · ready for a message';
     case 'exited':

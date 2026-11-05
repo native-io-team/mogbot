@@ -155,13 +155,7 @@ export function WorkLine({
     <View style={styles.wrap}>
       <Toggle open={open} label={workSummary(work)} onPress={() => setOpen((o) => !o)} />
       {open && (
-        <Steps
-          work={work}
-          steps={work.steps}
-          agentId={message.agentId}
-          onError={onError}
-          files
-        />
+        <Steps work={work} steps={work.steps} agentId={message.agentId} onError={onError} files />
       )}
     </View>
   );
