@@ -358,11 +358,14 @@ mod tests {
     fn the_masked_link_never_contains_the_secret() {
         let token = "3f9c2a7be1d04c55a9e2f1b7c6d8e9f03f9c2a7be1d04c55a9e2f1b7c6d8e9f0";
         let masked = mask("m.t.ts.net", token);
-        assert!(masked.starts_with("https://m.t.ts.net/shipstudio/mcp/3f9c"));
+        assert!(masked.starts_with(&format!(
+            "https://m.t.ts.net{}/mcp/3f9c",
+            tailscale::MOUNT_PATH
+        )));
         assert!(!masked.contains(&token[4..12]));
         assert_eq!(
             connector_url("m.t.ts.net", "abc"),
-            "https://m.t.ts.net/shipstudio/mcp/abc"
+            format!("https://m.t.ts.net{}/mcp/abc", tailscale::MOUNT_PATH)
         );
     }
 }

@@ -28,6 +28,10 @@ import {
 } from '../../hooks/useProjectCreation';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { TemplateGallery, type CommunityTemplate } from './TemplateGallery';
+import { BRAND_LINKS } from '../../lib/brand';
+
+/** The community gallery needs a template API of our own (`links.templateApi`). */
+const TEMPLATE_GALLERY_ENABLED = BRAND_LINKS.templateApi !== null;
 import { TemplateCard } from './TemplateCard';
 import { SiteUrlPanel, normaliseUrl } from '../migration/SiteUrlPanel';
 
@@ -136,11 +140,13 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
 
   // Fetch on mount and when search changes
   useEffect(() => {
+    if (!TEMPLATE_GALLERY_ENABLED) return;
     void fetchTemplates(debouncedSearch);
   }, [fetchTemplates, debouncedSearch]);
 
   // Re-fetch every 50 minutes to keep signed zip_urls fresh (they expire after 1 hour)
   useEffect(() => {
+    if (!TEMPLATE_GALLERY_ENABLED) return;
     const interval = setInterval(() => void fetchTemplates(debouncedSearch), 50 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchTemplates, debouncedSearch]);
@@ -343,20 +349,24 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
             <TabsPanel value="template" className="create-tab-panel">
               {activeTab === 'template' && (
                 <>
-                  <TemplateGallery
-                    templates={communityTemplates}
-                    loading={communityLoading}
-                    onSelect={handleCommunitySelect}
-                    selectedId={selectedCommunityId}
-                    searchQuery={communitySearch}
-                    onSearchChange={setCommunitySearch}
-                    loadError={communityError}
-                    onRetry={() => void fetchTemplates(debouncedSearch)}
-                  />
+                  {TEMPLATE_GALLERY_ENABLED && (
+                    <>
+                      <TemplateGallery
+                        templates={communityTemplates}
+                        loading={communityLoading}
+                        onSelect={handleCommunitySelect}
+                        selectedId={selectedCommunityId}
+                        searchQuery={communitySearch}
+                        onSearchChange={setCommunitySearch}
+                        loadError={communityError}
+                        onRetry={() => void fetchTemplates(debouncedSearch)}
+                      />
 
-                  <div className="template-divider">
-                    <span>or upload a template</span>
-                  </div>
+                      <div className="template-divider">
+                        <span>or upload a template</span>
+                      </div>
+                    </>
+                  )}
 
                   {!hasZipTemplate ? (
                     <div

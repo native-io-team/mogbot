@@ -219,12 +219,17 @@ pub fn keep_awake_active() -> bool {
 // Reopen after restart
 // ============================================================================
 
-const LAUNCH_AGENT_LABEL: &str = "studio.ship.reopen-at-login";
+/// `<identifier>.reopen-at-login`. Ship Studio's agent is
+/// `studio.ship.reopen-at-login`; sharing it would let either app's toggle
+/// rewrite or delete the other's.
+fn launch_agent_label() -> String {
+    format!("{}.reopen-at-login", crate::brand::IDENTIFIER)
+}
 
 fn launch_agent_path() -> Option<std::path::PathBuf> {
     dirs::home_dir().map(|h| {
         h.join("Library/LaunchAgents")
-            .join(format!("{LAUNCH_AGENT_LABEL}.plist"))
+            .join(format!("{}.plist", launch_agent_label()))
     })
 }
 
@@ -253,7 +258,7 @@ pub fn launch_agent_plist(bundle: &std::path::Path) -> String {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>{LAUNCH_AGENT_LABEL}</string>
+  <string>{label}</string>
   <key>ProgramArguments</key>
   <array>
     <string>/usr/bin/open</string>
@@ -264,7 +269,8 @@ pub fn launch_agent_plist(bundle: &std::path::Path) -> String {
   <true/>
 </dict>
 </plist>
-"#
+"#,
+        label = launch_agent_label()
     )
 }
 

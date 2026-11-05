@@ -9,6 +9,12 @@ import type { PinnedProjectRow } from '../../hooks/usePinnedProjects';
 import { mockInvokeResponse } from '../../test/setup';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 
+// Features brand.json can switch off are tested switched on.
+vi.mock('../../lib/brand', async (importOriginal) => {
+  const { withAllLinks } = await import('../../test/brandFixture');
+  return withAllLinks(await importOriginal<typeof import('../../lib/brand')>());
+});
+
 // The toggle reads agent attention from the live store; nothing here wants any.
 vi.mock('../../lib/agentsStore', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/agentsStore')>()),

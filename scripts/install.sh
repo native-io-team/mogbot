@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 #
-# Ship Studio -- one-command installer for macOS.
+# One-command installer for macOS.
 #
-#   curl -fsSL https://ship.studio/install | bash
+#   curl -fsSL <this script's URL> | bash
 #
-# Downloads the latest build, installs it to /Applications, and launches it.
-# Builds are Developer ID signed AND Apple-notarized, so the normal path is
-# simply downloading the DMG from https://ship.studio -- this script is the
-# power-user / scripted alternative (CI, dotfiles, fleet installs). It still
-# clears the quarantine flag as belt-and-braces for older, un-notarized builds.
+# Downloads the latest build from this app's own releases, installs it to
+# /Applications, and launches it. It still clears the quarantine flag as
+# belt-and-braces for older, un-notarized builds.
+#
+# A build with no releases of its own (`links.releases` null in brand.json)
+# has nothing to download, and this script says so and stops. It never falls
+# back to another app's releases.
 #
 # Uses only tools that ship with macOS (curl, tar, ditto, xattr) -- no Python,
 # no Homebrew, nothing to install first.
@@ -18,15 +20,21 @@
 #   SHIPSTUDIO_NO_LAUNCH=1       install but don't open the app afterwards
 set -euo pipefail
 
-REPO="ship-studio/releases"
-APP_NAME="Ship Studio.app"
+# --- brand (generated from brand.json by `node scripts/check-brand.mjs --write`) ---
+BRAND_NAME="Dashbot"
+BRAND_RELEASES=""
+# --- end brand ---
+
+APP_NAME="${BRAND_NAME}.app"
 DEST="${SHIPSTUDIO_DEST:-/Applications}"
-MANIFEST="https://github.com/${REPO}/releases/latest/download/latest.json"
 
 say()  { printf '\033[1;32m==>\033[0m %s\n' "$1"; }
 err()  { printf '\033[1;31mError:\033[0m %s\n' "$1" >&2; exit 1; }
 
-[ "$(uname -s)" = "Darwin" ] || err "This installer is for macOS. On Windows, run the PowerShell command from https://ship.studio/install"
+[ -n "$BRAND_RELEASES" ] || err "${BRAND_NAME} has no published releases to install yet. Build it from source instead: see docs/INSTALLATION.md in its repository."
+MANIFEST="${BRAND_RELEASES%/}/latest/download/latest.json"
+
+[ "$(uname -s)" = "Darwin" ] || err "This installer is for macOS. On Windows, use scripts/install.ps1."
 
 # Map the CPU to the updater's platform key.
 case "$(uname -m)" in
@@ -47,11 +55,11 @@ URL="$(printf '%s' "$JSON" | tr -d '\n' | grep -oE "\"${PLATFORM}\"[^}]*\"url\"[
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-say "Downloading Ship Studio ${VERSION:-latest} (${PLATFORM})..."
-curl -fSL --progress-bar "$URL" -o "$TMP/shipstudio.tar.gz" || err "Download failed: $URL"
+say "Downloading ${BRAND_NAME} ${VERSION:-latest} (${PLATFORM})..."
+curl -fSL --progress-bar "$URL" -o "$TMP/app.tar.gz" || err "Download failed: $URL"
 
 say "Extracting..."
-tar -xzf "$TMP/shipstudio.tar.gz" -C "$TMP"
+tar -xzf "$TMP/app.tar.gz" -C "$TMP"
 APP_PATH="$(find "$TMP" -maxdepth 2 -name '*.app' -type d | head -1)"
 [ -n "$APP_PATH" ] || err "No .app found inside the downloaded archive."
 
@@ -75,7 +83,7 @@ run ditto "$APP_PATH" "${DEST}/${APP_NAME}"
 say "Clearing the quarantine flag..."
 run xattr -dr com.apple.quarantine "${DEST}/${APP_NAME}" 2>/dev/null || true
 
-say "Ship Studio ${VERSION:-} installed to ${DEST}."
+say "${BRAND_NAME} ${VERSION:-} installed to ${DEST}."
 if [ -z "${SHIPSTUDIO_NO_LAUNCH:-}" ]; then
   open "${DEST}/${APP_NAME}"
 fi

@@ -20,6 +20,7 @@ import {
   checkPluginUpdate,
   updatePlugin,
   fetchPluginRegistry,
+  PLUGIN_REGISTRY_ENABLED,
   isExpectedPluginFailure,
   isRegistryUnreachableError,
   linkDevPlugin,
@@ -479,9 +480,11 @@ export function PluginManager({
               <TabsTab value="installed" className="plugins-tab">
                 Installed
               </TabsTab>
-              <TabsTab value="library" className="plugins-tab">
-                Library
-              </TabsTab>
+              {PLUGIN_REGISTRY_ENABLED && (
+                <TabsTab value="library" className="plugins-tab">
+                  Library
+                </TabsTab>
+              )}
             </TabsList>
           }
           controls={
@@ -520,11 +523,17 @@ export function PluginManager({
 
                 {!isLoading && plugins.length === 0 && (
                   <ExtensionState kind="empty">
-                    No plugins installed yet. Browse the{' '}
-                    <TextButton variant="primary" onClick={() => setActiveTab('library')}>
-                      Library
-                    </TextButton>{' '}
-                    to add one.
+                    {PLUGIN_REGISTRY_ENABLED ? (
+                      <>
+                        No plugins installed yet. Browse the{' '}
+                        <TextButton variant="primary" onClick={() => setActiveTab('library')}>
+                          Library
+                        </TextButton>{' '}
+                        to add one.
+                      </>
+                    ) : (
+                      'No plugins installed yet.'
+                    )}
                   </ExtensionState>
                 )}
 

@@ -13,6 +13,7 @@ import {
   executeBridgeTool,
   isValidPreviewPath,
   overlayFraction,
+  PREVIEW_MCP_SERVER_NAME,
   registerPreviewMcpServer,
   type BridgeToolContext,
 } from './agentBridge';
@@ -352,13 +353,13 @@ describe('registerPreviewMcpServer', () => {
     invokeMock.mockResolvedValue(undefined);
     await registerPreviewMcpServer('http://127.0.0.1:4123/mcp/abc', '/Users/me/ShipStudio/site');
     expect(invokeMock).toHaveBeenCalledWith('remove_mcp_server', {
-      name: 'shipstudio-preview',
+      name: PREVIEW_MCP_SERVER_NAME,
       scope: 'local',
       projectPath: '/Users/me/ShipStudio/site',
       agentId: 'claude-code',
     });
     expect(invokeMock).toHaveBeenCalledWith('add_mcp_server', {
-      rawArgs: '--transport http shipstudio-preview http://127.0.0.1:4123/mcp/abc',
+      rawArgs: `--transport http ${PREVIEW_MCP_SERVER_NAME} http://127.0.0.1:4123/mcp/abc`,
       scope: 'local',
       projectPath: '/Users/me/ShipStudio/site',
       agentId: 'claude-code',

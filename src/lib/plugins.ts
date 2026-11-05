@@ -10,6 +10,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { asCommandError, formatCommandError, isExpectedCommandError } from './errors';
 import { logger } from './logger';
+import { BRAND_LINKS, brandScoped } from './brand';
 
 /** Setup item contributed by a plugin */
 export interface PluginSetupItem {
@@ -103,12 +104,12 @@ export const SUPERSEDED_PLUGINS: Record<string, string> = {
   vercel: 'Hosting is built in now — see the Hosting section when you push.',
   cloudflare: 'Hosting is built in now — see the Hosting section when you push.',
   netlify: 'Hosting is built in now — see the Hosting section when you push.',
-  'brand-guidelines': 'Replaced by the shipstudio-brand-guidelines skill — just ask your agent.',
+  'brand-guidelines': `Replaced by the ${brandScoped('brand-guidelines')} skill — just ask your agent.`,
   hue: 'The Hue skill does this directly — just ask your agent.',
-  'url-to-code': 'Replaced by the shipstudio-site-to-code skill — just ask your agent.',
-  'webflow-to-code': 'Replaced by the shipstudio-site-to-code skill — just ask your agent.',
-  'weweb-to-code': 'Replaced by the shipstudio-site-to-code skill — just ask your agent.',
-  'wordpress-to-code': 'Replaced by the shipstudio-site-to-code skill — just ask your agent.',
+  'url-to-code': `Replaced by the ${brandScoped('site-to-code')} skill — just ask your agent.`,
+  'webflow-to-code': `Replaced by the ${brandScoped('site-to-code')} skill — just ask your agent.`,
+  'weweb-to-code': `Replaced by the ${brandScoped('site-to-code')} skill — just ask your agent.`,
+  'wordpress-to-code': `Replaced by the ${brandScoped('site-to-code')} skill — just ask your agent.`,
 };
 
 /** Why this plugin no longer runs, or null if it still does. */
@@ -116,8 +117,15 @@ export function supersededReason(pluginId: string): string | null {
   return SUPERSEDED_PLUGINS[pluginId] ?? null;
 }
 
-const REGISTRY_URL =
-  'https://raw.githubusercontent.com/ship-studio/plugin-registry/main/registry.json';
+/**
+ * The plugin library's registry (`links.pluginRegistry` in brand.json). Null
+ * (the default): no library — the registry decides what code is offered for
+ * install, so it is never someone else's. Installing by repo URL still works.
+ */
+const REGISTRY_URL = BRAND_LINKS.pluginRegistry;
+
+/** Whether the plugin Library tab exists in this build. */
+export const PLUGIN_REGISTRY_ENABLED = REGISTRY_URL !== null;
 
 /** Cached registry to avoid re-fetching */
 let registryCache: { plugins: PluginRegistryEntry[]; fetchedAt: number } | null = null;
@@ -158,6 +166,7 @@ type RegistryFetchOutcome =
   | { kind: 'fail'; error: Error };
 
 async function attemptRegistryFetch(): Promise<RegistryFetchOutcome> {
+  if (!REGISTRY_URL) return { kind: 'ok', plugins: [] };
   let response: Response;
   try {
     response = await fetch(REGISTRY_URL);

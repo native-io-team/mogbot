@@ -148,7 +148,7 @@ export const teamScenarios: Scenario[] = [
     project: WORKSPACE_PROJECT,
     openSelector: '[aria-label="Settings & Help"]',
     steps: [{ click: '.settings-menu [role="menuitem"]:first-child' }],
-    requires: '[aria-label="Credit Ship Studio in commits"]',
+    requires: '[aria-label="Credit the agent in commits"]',
     commands: { ...workspaceCommands, ...teamCommands },
   },
 ];

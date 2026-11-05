@@ -9,6 +9,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { Modal, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAccent } from '../lib/accent';
 import { plainText } from '../lib/actions';
 import { haptic } from '../lib/haptics';
 import { colors, fonts, lineHeight, space, type } from '../lib/theme';
@@ -23,6 +24,7 @@ export function SelectSheet({
   onClose: () => void;
   onQuote: (text: string) => void;
 }) {
+  const accent = useAccent();
   const insets = useSafeAreaInsets();
   const text = message ? (message.kind === 'agent' ? plainText(message.text) : message.text) : '';
   // Keyed by the message, so a new one never inherits the last selection.
@@ -50,7 +52,7 @@ export function SelectSheet({
           scrollEnabled
           contextMenuHidden={false}
           onSelectionChange={(e) => setRange({ id: message?.id ?? '', ...e.nativeEvent.selection })}
-          selectionColor={colors.accentActive}
+          selectionColor={accent.accent}
           style={styles.text}
           accessibilityLabel="Message text. Select a part of it to quote or copy"
         />

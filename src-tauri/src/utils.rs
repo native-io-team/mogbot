@@ -1127,8 +1127,75 @@ fn account_root_in(
         if let Some(pb) = state.projects_root.as_deref().and_then(existing_dir) {
             return pb;
         }
+        // Nothing configured here: start where Ship Studio's dashboard is, so
+        // someone who moved their projects folder there doesn't open this app
+        // to an empty one. Read-only, and only until they choose a folder.
+        if let Some(pb) = ship_studio_projects_root() {
+            return pb;
+        }
     }
     default.to_path_buf()
+}
+
+/// Ship Studio's own `app_state.json`. Not ours: read, never written.
+fn ship_studio_app_state_path() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "macos")]
+    let path =
+        dirs::home_dir().map(|h| h.join("Library/Application Support/ShipStudio/app_state.json"));
+    #[cfg(target_os = "windows")]
+    let path = dirs::data_local_dir().map(|d| d.join("ShipStudio/app_state.json"));
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let path = dirs::data_local_dir().map(|d| d.join("ship-studio/app_state.json"));
+    // If this app's own state lives there, there is no "other app" to read.
+    path.filter(|p| *p != crate::commands::setup::get_app_state_path())
+}
+
+/// Cached answer of [`ship_studio_projects_root`]; cleared with the projects
+/// root cache. `Some(None)` is a cached "Ship Studio has none".
+static SHIP_STUDIO_ROOT_CACHE: RwLock<Option<Option<std::path::PathBuf>>> = RwLock::new(None);
+
+/// The projects folder Ship Studio's Default workspace uses, when it set one
+/// that still exists. Its own Default workspace's folder wins over its legacy
+/// top-level setting, the same order [`account_root_in`] applies to ours.
+fn ship_studio_projects_root() -> Option<std::path::PathBuf> {
+    if let Some(cached) = SHIP_STUDIO_ROOT_CACHE
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+    {
+        return cached;
+    }
+    let found = ship_studio_app_state_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|raw| ship_studio_root_from_state(&raw));
+    *SHIP_STUDIO_ROOT_CACHE
+        .write()
+        .unwrap_or_else(|e| e.into_inner()) = Some(found.clone());
+    found
+}
+
+/// Parsed leniently (a `Value`, not our `AppState`), so a field Ship Studio
+/// adds or renames later can't make this fail or misread.
+fn ship_studio_root_from_state(raw: &str) -> Option<std::path::PathBuf> {
+    use crate::commands::accounts::DEFAULT_ACCOUNT_ID;
+    let state: serde_json::Value = serde_json::from_str(raw).ok()?;
+    let dir = |v: Option<&serde_json::Value>| {
+        v.and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.is_dir())
+    };
+    let default_account = state
+        .get("accounts")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|accounts| {
+            accounts.iter().find(|a| {
+                a.get("id").and_then(serde_json::Value::as_str) == Some(DEFAULT_ACCOUNT_ID)
+            })
+        });
+    dir(default_account.and_then(|a| a.get("projectsRoot")))
+        .or_else(|| dir(state.get("projectsRoot")))
 }
 
 /// The projects folder for a *specific* workspace (not necessarily the active
@@ -1143,6 +1210,9 @@ pub fn projects_root_for_account(account_id: &str) -> std::path::PathBuf {
 /// `projects_root()` re-reads from app state.
 pub fn invalidate_projects_root_cache() {
     *PROJECTS_ROOT_CACHE
+        .write()
+        .unwrap_or_else(|e| e.into_inner()) = None;
+    *SHIP_STUDIO_ROOT_CACHE
         .write()
         .unwrap_or_else(|e| e.into_inner()) = None;
 }
@@ -3120,6 +3190,44 @@ mod tests {
             // NotFound is not a lock — must not burn ~8s of retries, and the
             // caller keeps remove_file's missing-file error semantics.
             assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+        }
+    }
+}
+
+#[cfg(test)]
+mod ship_studio_root_tests {
+    use super::ship_studio_root_from_state;
+
+    #[test]
+    fn reads_ship_studios_default_workspace_folder_then_its_legacy_setting() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let (a_s, b_s) = (a.path().to_string_lossy(), b.path().to_string_lossy());
+        let both = format!(
+            r#"{{"projectsRoot":"{b_s}","accounts":[{{"id":"other","projectsRoot":"/nope"}},{{"id":"default","projectsRoot":"{a_s}"}}]}}"#
+        );
+        assert_eq!(
+            ship_studio_root_from_state(&both).as_deref(),
+            Some(a.path())
+        );
+        let legacy = format!(r#"{{"projectsRoot":"{b_s}","accounts":[{{"id":"default"}}]}}"#);
+        assert_eq!(
+            ship_studio_root_from_state(&legacy).as_deref(),
+            Some(b.path())
+        );
+    }
+
+    #[test]
+    fn nothing_usable_reads_as_none() {
+        for raw in [
+            "",
+            "not json",
+            "{}",
+            r#"{"projectsRoot":"   "}"#,
+            r#"{"projectsRoot":"/definitely/not/a/real/folder/x9"}"#,
+            r#"{"accounts":[{"id":"default","projectsRoot":42}]}"#,
+        ] {
+            assert!(ship_studio_root_from_state(raw).is_none(), "{raw}");
         }
     }
 }

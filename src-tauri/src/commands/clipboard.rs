@@ -88,7 +88,11 @@ pub fn stage_clipboard_image() -> Result<Option<String>, CommandError> {
         Err(err) => return Err(clipboard_read_error("image", err)),
     };
 
-    let path = std::env::temp_dir().join(format!("shipstudio-paste-{}.png", uuid::Uuid::new_v4()));
+    let path = std::env::temp_dir().join(format!(
+        "{}-paste-{}.png",
+        crate::brand::SLUG,
+        uuid::Uuid::new_v4()
+    ));
     write_rgba_png(&path, image.width, image.height, &image.bytes)?;
     Ok(Some(path.to_string_lossy().into_owned()))
 }

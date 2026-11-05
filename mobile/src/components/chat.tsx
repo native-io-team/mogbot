@@ -30,15 +30,12 @@ export const MessageRow = memo(function MessageRow({
   message,
   agent,
   queued,
-  time,
   onError,
   onLongPress,
 }: {
   message: AgentMessage;
   agent: Agent;
   queued: boolean;
-  /** The clock under the last message of a run, iMessage-style. */
-  time?: boolean;
   onError: (text: string) => void;
   /** Copy, Quote, Select Text: words only, so only user and agent messages. */
   onLongPress?: (message: AgentMessage) => void;
@@ -66,12 +63,10 @@ export const MessageRow = memo(function MessageRow({
               <Bubble text={message.text} />
             </Pressable>
           )}
-          {queued ? (
+          {queued && (
             <T variant="caption" color={colors.textSecondary} style={styles.meta}>
               Queued · {agent.name} reads it when this turn ends
             </T>
-          ) : (
-            time && <Clock ts={message.ts} align="right" />
           )}
         </View>
       );
@@ -91,11 +86,9 @@ export const MessageRow = memo(function MessageRow({
               onError={onError}
             />
           )}
-          {(message.stopped || time) && (
+          {message.stopped && (
             <T variant="caption" color={colors.textSecondary}>
-              {[message.stopped && 'Stopped', time && formatClock(message.ts)]
-                .filter(Boolean)
-                .join(' · ')}
+              Stopped
             </T>
           )}
         </Pressable>
@@ -150,7 +143,7 @@ export const MessageRow = memo(function MessageRow({
 /** Your words, with any quoted passages set off above them. */
 function Bubble({ text }: { text: string }) {
   const parts = splitQuotes(text);
-  if (parts.length === 1 && parts[0].kind === 'text') return <T>{text}</T>;
+  if (parts.length === 1 && parts[0].kind === 'text') return <T color={colors.textBody}>{text}</T>;
   return (
     <View style={{ gap: space.xs }}>
       {parts.map((p, i) =>
@@ -161,30 +154,25 @@ function Bubble({ text }: { text: string }) {
             </T>
           </View>
         ) : (
-          <T key={i}>{p.text}</T>
+          <T key={i} color={colors.textBody}>
+            {p.text}
+          </T>
         )
       )}
     </View>
   );
 }
 
-function Clock({ ts, align }: { ts: number; align?: 'right' }) {
-  return (
-    <T
-      variant="caption"
-      color={colors.textSecondary}
-      style={align === 'right' ? styles.meta : undefined}
-      maxFontSizeMultiplier={chromeScale}
-    >
-      {formatClock(ts)}
-    </T>
-  );
-}
-
+/** "Today 2:40 PM", centred: where the day changes or the talk picks up after a pause. */
 export function DaySeparator({ label }: { label: string }) {
   return (
     <View style={styles.day} accessibilityRole="header">
-      <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={chromeScale}>
+      <T
+        variant="caption"
+        color={colors.textMuted}
+        maxFontSizeMultiplier={chromeScale}
+        style={styles.dayText}
+      >
         {label}
       </T>
     </View>
@@ -306,17 +294,17 @@ function SystemLine({ message }: { message: AgentMessage }) {
           : message.kind === 'check_in'
             ? `${message.checkIn?.manual ? 'Ran now' : 'Check-in'} · ${message.text}`
             : message.text;
+  const opens = message.kind === 'changes' && !!message.changes && canDiff;
+  // No clock of its own: the chat's time lines say when (and the long-press menu, exactly).
   const line = (
     <View style={styles.systemRow}>
       <T variant="small" color={colors.textSecondary} numberOfLines={4} style={{ flexShrink: 1 }}>
         {text}
       </T>
-      <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={chromeScale}>
-        {formatClock(message.ts)}
-      </T>
+      {opens && <Icon name="chevron.right" size={10} color={colors.textMuted} />}
     </View>
   );
-  if (message.kind !== 'changes' || !message.changes || !canDiff) return line;
+  if (!opens) return line;
   return (
     <Pressable
       accessibilityRole="button"
@@ -486,7 +474,8 @@ const styles = StyleSheet.create({
     marginRight: space.xs,
   },
   agentRow: { gap: space.xs, paddingRight: space.sm },
-  day: { alignItems: 'center', paddingVertical: space.sm },
+  day: { alignItems: 'center', paddingTop: space.md, paddingBottom: space.xs },
+  dayText: { letterSpacing: 0.2 },
   errorRow: {
     flexDirection: 'row',
     gap: space.sm,
@@ -497,9 +486,8 @@ const styles = StyleSheet.create({
   },
   systemRow: {
     flexDirection: 'row',
-    gap: space.sm,
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
+    gap: space.tight,
+    alignItems: 'center',
   },
   workingRow: {
     flexDirection: 'row',
