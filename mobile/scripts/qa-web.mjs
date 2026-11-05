@@ -612,6 +612,14 @@ const LIVE = [
       'Every message kind: receipts, failure cards, diff tints span the box, To/From Ops, folded result line wraps',
   },
   {
+    name: 'chat-table',
+    route: '/chat/chief',
+    ready: 'Chief of Staff',
+    act: scrollToText('Lighthouse'),
+    check:
+      'The launch table: Check and Owner start-aligned; Score (98%, 100%, —, 1,204.5) right-aligned with its digits lined up, header too',
+  },
+  {
     name: 'result-tested',
     route: '/chat/site',
     ready: 'Acme Site',
@@ -654,6 +662,42 @@ const LIVE = [
     },
     check: 'Stopped by the silence: the whole sentence in the field, normal ink, mic and Send back',
     after: async (page) => {
+      await page.clickLabel('Send').catch(() => {});
+      await sleep(800);
+    },
+  },
+  {
+    name: 'dictation-long',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await page.eval(`globalThis.__qaDictation = { long: true }`);
+      await page.clickLabel('Dictate');
+      await sleep(5200);
+    },
+    check:
+      'A long dictation while listening: the waveform and 0:0x in a slim row over the field; the words use the full width beside Stop and Send, wrapping like typed text, six lines then scrolled to the newest',
+    after: async (page) => {
+      await page.clickLabel('Cancel dictation').catch(() => {});
+      await page.eval(`globalThis.__qaDictation = {}`);
+      await sleep(600);
+    },
+  },
+  {
+    name: 'dictation-long-done',
+    route: '/chat/fin',
+    ready: 'Finance',
+    act: async (page) => {
+      await page.eval(`globalThis.__qaDictation = { long: true }`);
+      await page.clickLabel('Dictate');
+      await sleep(5000);
+      await page.clickLabel('Stop dictating');
+      await sleep(800);
+    },
+    check:
+      'Stopped, keep editing: the paragraph in the field at the same width it had while listening, no row over it, mic and Send back',
+    after: async (page) => {
+      await page.eval(`globalThis.__qaDictation = {}`);
       await page.clickLabel('Send').catch(() => {});
       await sleep(800);
     },

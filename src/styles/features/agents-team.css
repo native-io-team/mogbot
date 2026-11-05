@@ -66,22 +66,26 @@
 
 .agents-team__row:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 var(--border-width-emphasis) var(--accent-focus);
+  box-shadow: inset 0 0 0 var(--border-width-emphasis) var(--focus-ring);
 }
 
+/* One line: "Hiring · Send an email", the name holding, what it's about
+   giving way first. */
 .agents-team__text {
   display: flex;
   flex: 1;
-  flex-direction: column;
-  gap: var(--spacing-2xs);
+  align-items: baseline;
+  gap: var(--spacing-xs);
   min-width: 0;
 }
 
 .agents-team__name {
   display: flex;
+  flex: 0 1 auto;
   align-items: center;
   gap: var(--spacing-xs);
   min-width: 0;
+  max-width: 45%;
   font-size: var(--font-size-body-md);
   font-weight: var(--font-weight-label);
   line-height: var(--line-height-compact);
@@ -97,6 +101,8 @@
 }
 
 .agents-team__line {
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
   font-size: var(--font-size-body-md);
   line-height: var(--line-height-compact);
@@ -105,8 +111,45 @@
   text-overflow: ellipsis;
 }
 
+.agents-team__line::before {
+  margin-right: var(--spacing-xs);
+  color: var(--text-muted);
+  content: '·';
+}
+
+/* What it's asking for, in quiet words, as the review panel says it: the
+   heading already says "needs you", and sixteen amber lines would shout it. */
 .agents-team__line[data-state='waiting'] {
-  color: var(--accent-warning);
+  color: var(--text-secondary);
+}
+
+.agents-team__chevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform var(--transition-interaction-fast);
+}
+
+.agents-team__row[aria-expanded='true'] .agents-team__chevron {
+  transform: rotate(90deg);
+}
+
+/* A Needs you row and its Open chat, side by side. */
+.agents-team__head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.agents-team__head .agents-team__row {
+  flex: 1;
+  min-width: 0;
+}
+
+.text-button.button.agents-team__open {
+  flex: none;
+  margin-right: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
 }
 
 .agents-team__meta {

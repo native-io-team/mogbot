@@ -710,8 +710,11 @@ The phone can start work as well as answer it. Each piece is gated by
   back afterwards if it was up), and the field listens. The words stream into
   it as you speak, the last few lighter while the recognizer is still
   deciding them (`stablePrefix`: what a partial shares with the one before,
-  never its last word), with the recognizer's own punctuation. The mic's
-  place holds a waveform and the elapsed time, × takes the +'s place, and
+  never its last word), with the recognizer's own punctuation, at the
+  field's full width, wrapping exactly as typing does. A waveform and the
+  elapsed time ride in a slim row over the field (inside it, beside the
+  words, they squeezed a long dictation to three words a line), × takes the
+  +'s place, and
   the field holds **Stop** and **Send**, as Grok's dictation does. **Stop
   keeps the words in the draft** to read and edit; **Send** sends exactly
   what's on screen at once (the reducer's `send`: the partial too, then the
@@ -929,7 +932,7 @@ some dev clients may log reconnect attempts.
 `lib/notify.ts` keeps them honest: one per alert, grouped per agent
 (`threadIdentifier`, the same thread id the relay sets), taken back once
 handled anywhere (an approval answered or a chat read, here or at the desk),
-the icon badge equal to the desk's `badge_count`, and all cleared on Forget
+the icon badge equal to the desk's Dock badge (`notify::badge_now`, who needs you), and all cleared on Forget
 this Mac. Android has "Needs you" (high) and "Replies" channels. A tap waits
 for fonts and credentials, opens at the message, and replaces a chat already
 on top instead of stacking.

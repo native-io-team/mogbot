@@ -156,6 +156,19 @@ describe('the words', () => {
     expect(groupLine(two.groups[0])).toBe('1 login: Stripe key');
   });
 
+  it('in the Chief’s chat, says the team’s count, the one the sidebar and the phone say', () => {
+    const two = groupRequests(
+      [agent('l', 'Lead Gen', 1), agent('f', 'Finance', 1)],
+      { l: [card('l')], f: [card('f')] },
+      new Set()
+    );
+    // The Chief's own card is in the chat above: still one of the three.
+    expect(requestsTitle(two, 3)).toBe('3 agents need your OK');
+    expect(requestsCounts(two, 3)).toBe('3 agents · 2 requests');
+    // The same count as the bar lists: the names, as before.
+    expect(requestsTitle(two, 2)).toBe('Finance and Lead Gen need your OK');
+  });
+
   it('lists two login names, then an ellipsis', () => {
     const s = groupRequests(
       [agent('a', 'Slack Watch', 3)],

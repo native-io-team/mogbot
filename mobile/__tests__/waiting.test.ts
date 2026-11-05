@@ -74,7 +74,8 @@ describe('a card only the Mac can answer', () => {
     expect(waitingOnMac(a, messages)).toBe(true);
     expect(needsYouHere(a, messages)).toBe(false);
     expect(needsLine(a, messages)).toMatch(new RegExp(`^${ON_MAC_LINE}`));
-    expect(attentionCounts([a], { chief: { messages } }).needYou).toBe(0);
+    // Still counted: every count is the one rule (the desk says so too); the row says where.
+    expect(attentionCounts([a]).needYou).toBe(1);
     expect(nextNeedsYou([a], { chief: { messages } })).toBeNull();
   });
 
@@ -101,7 +102,7 @@ describe('a card only the Mac can answer', () => {
 });
 
 describe('the Agents badge and Home’s summary', () => {
-  it('count the same agents: what needs you here, not failures or the Mac’s reviews', () => {
+  it('count the same agents as every other surface: requests, not usage limits or hidden ones', () => {
     const agents = [
       chief({ pendingApprovals: 1 }),
       agent({ id: 'site', name: 'Site', hidden: false, pendingApprovals: 1 }),
@@ -110,7 +111,7 @@ describe('the Agents badge and Home’s summary', () => {
     ];
     const chats = { chief: { messages: [review('r')] }, site: { messages: [card('c')] } };
     // The tab reads exactly this (app/(tabs)/_layout.tsx), and so does the summary.
-    expect(attentionCounts(agents, chats).needYou).toBe(1);
+    expect(attentionCounts(agents).needYou).toBe(2);
     expect(nextNeedsYou(agents, chats)?.agentId).toBe('site');
   });
 });

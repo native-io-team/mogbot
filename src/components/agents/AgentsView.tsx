@@ -116,13 +116,8 @@ import {
   type Room,
 } from '../../lib/agentRooms';
 import { kbd } from '../../lib/shortcuts';
-import {
-  onlySetupRequests,
-  setupHeldCounts,
-  useResumableTeamSetup,
-  useTeamSetup,
-  withoutHeldLogins,
-} from '../../lib/teamSetup';
+import { needsYouCount as countNeedsYou } from '../../../packages/companion-protocol/src/attention';
+import { useResumableTeamSetup, useTeamSetup, withoutHeldLogins } from '../../lib/teamSetup';
 
 const SELECTED_KEY = 'shipstudio.agents.selected';
 
@@ -469,14 +464,11 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const setup = useResumableTeamSetup();
   const listed = useMemo(() => withoutHeldLogins(agents, setup), [agents, setup]);
 
-  // What the "Needs you" row counts: the agents What's in flight lists under Needs you.
+  // What the "Needs you" row counts: the one number every surface shows
+  // (the review bar, the phone's Home bar and tab badge, the Dock badge).
+  // An agent whose only requests are the checklist's logins is counted once, there.
   const teamSetup = useTeamSetup();
-  const setupHeld = useMemo(() => setupHeldCounts(teamSetup), [teamSetup]);
-  // An agent being set up whose only requests are the checklist's logins is
-  // counted once, there, not again here.
-  const needsYouCount = listed.filter(
-    (a) => !a.hidden && needsAttention(a) && !onlySetupRequests(a, setupHeld)
-  ).length;
+  const needsYouCount = useMemo(() => countNeedsYou(agents, teamSetup), [agents, teamSetup]);
 
   // The oldest card waiting on you, on the first agent (sidebar order) with one.
   const waitingOn = sortAgents(listed).find((a) => !a.hidden && needsYou(a)) ?? null;

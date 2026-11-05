@@ -410,6 +410,21 @@
   gap: var(--spacing-xs);
 }
 
+/* A reply's Copy and time show under it, in the gap before the next line,
+   not beside it: beside, they took a column of their own and the prose ended
+   short of the composer's right edge. Out of flow, so nothing moves on hover. */
+.agent-chat__row--agent:not(.agent-chat__row--card) {
+  position: relative;
+}
+
+.agent-chat__messages:not([data-greeting])
+  > .agent-chat__row--agent:not(.agent-chat__row--card)
+  > .agent-message__actions {
+  position: absolute;
+  top: 100%;
+  left: calc(var(--spacing-2xs) * -1);
+}
+
 .agent-chat__line {
   display: flex;
   align-items: flex-end;
@@ -630,6 +645,21 @@
 .agent-markdown th:first-child,
 .agent-markdown td:first-child {
   padding-left: 0;
+}
+
+/* A column of figures (agentMarkdown's alignFigures) or one the author
+   aligned: its digits line up, as a spreadsheet's do. */
+.agent-markdown :is(th, td)[align='right'] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-markdown :is(th, td)[align='center'] {
+  text-align: center;
+}
+
+.agent-markdown :is(th, td)[align='right']:last-child {
+  padding-right: 0;
 }
 
 .agent-markdown tr:last-child td {

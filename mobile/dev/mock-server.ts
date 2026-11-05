@@ -3299,11 +3299,12 @@ const RICH = `Here’s where the launch stands:
 2. **Docs**: two pages still use the old screenshots
 3. **Changelog**: drafted, waiting for your review
 
-| Check | Status | Owner |
+| Check | Owner | Score |
 | --- | --- | --- |
-| Lighthouse | 98 | Acme Site |
-| Links | 0 broken | QA 2 |
-| Copy review | Pending | You |
+| Lighthouse | Acme Site | 98% |
+| Links | QA 2 | 100% |
+| Copy review | You | — |
+| Bundle (kB) | Acme Site | 1,204.5 |
 
 To ship it, run:
 

@@ -65,6 +65,8 @@ import {
   type RequestGroup,
 } from '../../lib/agentRequests';
 import { loadMessages, useAgentsSelector } from '../../lib/agentsStore';
+import { useTeamSetup } from '../../lib/teamSetup';
+import { needsYouCount as countNeedsYou } from '../../../packages/companion-protocol/src/attention';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -138,6 +140,12 @@ export function AgentRequestsBar({
     sameAgents
   );
   const messages = useAgentsSelector((s) => s.messages);
+  // In the Chief's chat the number is the team's, the one every other surface
+  // shows (the Chief included); elsewhere the bar counts only this chat's peers.
+  const setupView = useTeamSetup();
+  const team = useAgentsSelector((s) =>
+    agent.isMain ? countNeedsYou(s.agents, setupView) : undefined
+  );
   // Their cards are in their own chats: read each once.
   const unloaded = asking
     .filter((a) => !messages[a.id])
@@ -340,7 +348,7 @@ export function AgentRequestsBar({
             <div className="agent-requests-panel__heading">
               <h3 className="agent-requests-panel__title">Needs your OK</h3>
               {summary.requests > 0 && (
-                <p className="agent-requests-panel__counts">{requestsCounts(summary)}</p>
+                <p className="agent-requests-panel__counts">{requestsCounts(summary, team)}</p>
               )}
             </div>
             {allowable > 1 && !confirming && (
@@ -446,7 +454,7 @@ export function AgentRequestsBar({
       <ConversationBar
         state={summary.requests > 0 ? 'waiting' : 'info'}
         data-testid="agent-requests-bar"
-        title={requestsTitle(summary)}
+        title={requestsTitle(summary, team)}
         detail={requestsDetail(summary)}
         actions={
           <>

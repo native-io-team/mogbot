@@ -6,13 +6,22 @@
  * It "hears" one sentence a word at a time with a speech-like level, then
  * goes quiet (so the auto-stop after silence can be seen), and finalises it
  * on stop. `window.__qaDictation = { deny: true }` refuses permission;
- * `{ error: 'network' }` fails a second in.
+ * `{ error: 'network' }` fails a second in; `{ long: true }` hears a paragraph
+ * (over five lines), fast, to show how a long dictation wraps.
  */
 
 type Listener = (e: unknown) => void;
 
 const SENTENCE = 'Can you draft the launch email for Thursday, and send it to me first?'.split(' ');
+const PARAGRAPH = (
+  'Okay so for the launch on Thursday I want the email to go to everyone on the waitlist first, ' +
+  'then the press list an hour later. Keep it short, lead with the pricing change, link the ' +
+  'changelog, and make sure the unsubscribe footer is the new one legal approved last week. ' +
+  'Send me a draft before noon so I can read it on the train.'
+).split(' ');
 const WORD_MS = 320;
+/** The paragraph arrives faster, so a shot can catch all of it. */
+const LONG_WORD_MS = 60;
 const LEVEL_MS = 50;
 
 const listeners = new Map<string, Set<Listener>>();
@@ -22,7 +31,7 @@ let timers: ReturnType<typeof setTimeout>[] = [];
 let running = false;
 let heard = '';
 
-type QaOptions = { deny?: boolean; error?: string };
+type QaOptions = { deny?: boolean; error?: string; long?: boolean };
 const qa = (): QaOptions =>
   (globalThis as unknown as { __qaDictation?: QaOptions }).__qaDictation ?? {};
 
@@ -59,7 +68,9 @@ export const ExpoSpeechRecognitionModule = {
       );
       return;
     }
-    const speechEnd = 300 + SENTENCE.length * WORD_MS;
+    const words = qa().long ? PARAGRAPH : SENTENCE;
+    const wordMs = qa().long ? LONG_WORD_MS : WORD_MS;
+    const speechEnd = 300 + words.length * wordMs;
     // A voice: syllables riding on a slower swell, then the room.
     for (let t = 150; t < speechEnd + 6000; t += LEVEL_MS) {
       const speaking = t > 300 && t < speechEnd;
@@ -68,14 +79,14 @@ export const ExpoSpeechRecognitionModule = {
         : -1;
       timers.push(setTimeout(() => emit('volumechange', { value }), t));
     }
-    SENTENCE.forEach((_, i) => {
+    words.forEach((_, i) => {
       timers.push(
         setTimeout(
           () => {
-            heard = SENTENCE.slice(0, i + 1).join(' ');
+            heard = words.slice(0, i + 1).join(' ');
             emit('result', { isFinal: false, results: [{ transcript: heard }] });
           },
-          300 + (i + 1) * WORD_MS
+          300 + (i + 1) * wordMs
         )
       );
     });
