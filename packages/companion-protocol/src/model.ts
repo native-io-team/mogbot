@@ -344,6 +344,8 @@ export interface Approval {
   requestId: string;
   title: string;
   detail: string;
+  /** A plain sentence to lead with when `detail` is raw (a push); show detail behind Details. */
+  summary?: string;
   status: 'pending' | 'allowed' | 'denied' | 'expired';
   tool?: string;
   input?: unknown;

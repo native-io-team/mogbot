@@ -17,6 +17,8 @@ import { ModalFrame } from './primitives/ModalFrame';
 import { Tabs, TabsList, TabsPanel, TabsTab } from './primitives/Tabs';
 import { useModal } from '../contexts/ModalContext';
 import { asCommandError, formatCommandError } from '../lib/errors';
+import { getDesktopSettings } from '../lib/agentsDesktop';
+import { MODE_TOGGLE_SHORTCUT } from './workspace/ModeToggle';
 
 interface HelpModalProps {
   /** Optional project path to include project-level skills */
@@ -44,6 +46,49 @@ function getWorkspacePanelLabels(): string[] {
     .filter((label): label is string => Boolean(label));
 
   return labels.length > 0 ? labels : DEFAULT_WORKSPACE_PANEL_LABELS;
+}
+
+/**
+ * Agents first: it is the primary view. The quick-message key is the user's
+ * own (Settings → Agents), so it is listed only once read, as they set it.
+ */
+function getAgentShortcuts(quickMessage: string | null): HelpShortcut[] {
+  return [
+    {
+      id: 'agents-mode',
+      label: 'Switch between Agents and Projects',
+      description: 'Flip the whole window between your agents and your projects',
+      keys: [MODE_TOGGLE_SHORTCUT],
+    },
+    {
+      id: 'agents-next',
+      label: 'Next agent that needs your OK',
+      description: 'Open the next conversation waiting on an answer from you',
+      keys: [kbd('mod', 'J')],
+    },
+    {
+      id: 'agents-search',
+      label: 'Search conversations',
+      description: 'Find anything any agent said',
+      keys: [kbd('mod', 'F')],
+    },
+    {
+      id: 'agents-dictate',
+      label: 'Talk instead of typing',
+      description: 'Hold in the message box to dictate; let go to stop',
+      keys: [kbd('alt', 'Space')],
+    },
+    ...(quickMessage
+      ? [
+          {
+            id: 'agents-quick-message',
+            label: 'Quick message',
+            description: 'Message an agent from anywhere on this Mac',
+            keys: [quickMessage],
+          },
+        ]
+      : []),
+  ];
 }
 
 function getHelpShortcuts(): HelpShortcut[] {
@@ -251,9 +296,29 @@ export function HelpModal({ projectPath }: HelpModalProps) {
     }
   }, [isOpen]);
 
+  // The quick-message key as the user set it; not listed until it's known.
+  const [quickMessage, setQuickMessage] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    let live = true;
+    getDesktopSettings()
+      .then((s) => {
+        if (live) setQuickMessage(s.supported && s.quickEntry ? s.shortcutLabel : null);
+      })
+      .catch(() => {
+        if (live) setQuickMessage(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [isOpen]);
+
   const userSkills = skills.filter((s) => s.scope === 'user');
   const projectSkills = skills.filter((s) => s.scope === 'project');
-  const shortcuts = getHelpShortcuts();
+  const groups = [
+    { title: 'Agents', shortcuts: getAgentShortcuts(quickMessage) },
+    { title: 'Projects & workspace', shortcuts: getHelpShortcuts() },
+  ];
 
   return (
     <ModalFrame isOpen={isOpen} onClose={onClose} title="Help & Commands" className="help-modal">
@@ -274,27 +339,32 @@ export function HelpModal({ projectPath }: HelpModalProps) {
           </TabsList>
 
           <TabsPanel value="shortcuts" className="help-modal-body">
-            <div className="help-section">
-              <div className="help-section-title">Keyboard shortcuts</div>
-              <div className="help-shortcut-list">
-                {shortcuts.map((shortcut) => (
-                  <div key={shortcut.id} className="help-shortcut-row">
-                    <div className="help-shortcut-info">
-                      <span className="help-shortcut-label">{shortcut.label}</span>
-                      <span className="help-shortcut-description">{shortcut.description}</span>
-                    </div>
-                    <div className="help-shortcut-keys">
-                      {shortcut.keys.map((key, index) => (
-                        <span key={`${shortcut.id}-${key}`} className="help-shortcut-key-group">
-                          {index > 0 && <span className="help-shortcut-or">or</span>}
-                          <span className="workspace-sidebar-filter-shortcut">{key}</span>
-                        </span>
-                      ))}
-                    </div>
+            {groups.map((group, groupIndex) => (
+              <div key={group.title}>
+                {groupIndex > 0 && <div className="help-divider" />}
+                <div className="help-section">
+                  <div className="help-section-title">{group.title}</div>
+                  <div className="help-shortcut-list">
+                    {group.shortcuts.map((shortcut) => (
+                      <div key={shortcut.id} className="help-shortcut-row">
+                        <div className="help-shortcut-info">
+                          <span className="help-shortcut-label">{shortcut.label}</span>
+                          <span className="help-shortcut-description">{shortcut.description}</span>
+                        </div>
+                        <div className="help-shortcut-keys">
+                          {shortcut.keys.map((key, index) => (
+                            <span key={`${shortcut.id}-${key}`} className="help-shortcut-key-group">
+                              {index > 0 && <span className="help-shortcut-or">or</span>}
+                              <span className="workspace-sidebar-filter-shortcut">{key}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
+            ))}
           </TabsPanel>
 
           <TabsPanel value="commands" className="help-modal-body">

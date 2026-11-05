@@ -339,7 +339,10 @@ export function useAppCommands({
           'quick entry',
           'option space',
         ],
-        run: () => openModal('settings'),
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          openModal('settings');
+        },
       },
       {
         id: 'app.quit',

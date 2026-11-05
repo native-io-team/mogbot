@@ -60,6 +60,16 @@
   padding-block: 0;
 }
 
+/* Home has no Search under the toggle (its page carries one). Hold Search's
+   place with an empty box, so the toggle sits exactly where it does on every
+   other screen and never moves under the cursor between them. */
+.workspace-sidebar:not(.is-hidden)
+  .workspace-sidebar-search-panel:has(.mode-toggle):not(:has(> :nth-child(2)))::after {
+  content: '';
+  flex: none;
+  height: var(--size-control-medium);
+}
+
 /* Compact: the icon pair at the compact top bar's 24px control height. */
 .mode-toggle--icons.tabs__list .tabs__tab.button {
   width: calc(

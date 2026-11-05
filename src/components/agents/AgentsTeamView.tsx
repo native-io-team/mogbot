@@ -106,16 +106,15 @@ function Section({
   children,
 }: {
   title: string;
-  /** Quiet, after the title: a key that gets you there faster. */
-  hint?: ReactNode;
+  /** A key that gets you there faster: on hover, not on the page (it read as a dev keymap). */
+  hint?: string;
   empty: string;
   children: ReactNode[];
 }) {
   return (
     <section className="agents-team__section" aria-label={title}>
-      <h3 className="agents-team__heading">
+      <h3 className="agents-team__heading" title={hint}>
         {title}
-        {hint && <span className="agents-team__hint">{hint}</span>}
       </h3>
       {children.length > 0 ? children : <p className="agents-team__empty">{empty}</p>}
     </section>
@@ -341,8 +340,12 @@ export function AgentsTeamView({
       <div className="agent-chat__scroll">
         <div className="agents-team__column" ref={columnRef}>
           <Section
-            title="Needs you"
-            hint={groups.length > 0 ? `${kbd('mod', 'J')} next agent that needs you` : undefined}
+            title="Needs your OK"
+            hint={
+              groups.length > 0
+                ? `${kbd('mod', 'J')} opens the next agent that needs your OK`
+                : undefined
+            }
             empty="Nothing is waiting on you."
           >
             {groups.map(({ agent, approvals, failure }) => {

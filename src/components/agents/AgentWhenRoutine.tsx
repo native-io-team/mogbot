@@ -106,10 +106,12 @@ interface WhenComposerProps {
   editing: CheckIn | null;
   /** Saved: back to the list. */
   onDone: () => void;
+  /** Leave without saving; offered for a new routine only when there's somewhere to go back to. */
+  onCancel?: () => void;
 }
 
 /** Add or edit a "When…" routine. Mounted fresh for each edit (keyed by the caller). */
-export function WhenComposer({ agent, editing, onDone }: WhenComposerProps) {
+export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerProps) {
   const start = editing?.watch?.source;
   const startKind: Kind = start && start.kind !== 'unknown' ? start.kind : 'github_mentions';
   const [kind, setKind] = useState<Kind>(startKind);
@@ -286,8 +288,8 @@ export function WhenComposer({ agent, editing, onDone }: WhenComposerProps) {
       </p>
 
       <div className="agent-when__actions">
-        {editing && (
-          <Button variant="ghost" size="compact" onClick={onDone}>
+        {(editing || onCancel) && (
+          <Button variant="ghost" size="compact" onClick={onCancel ?? onDone}>
             Cancel
           </Button>
         )}

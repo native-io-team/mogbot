@@ -1291,6 +1291,29 @@ pub(super) async fn ask_user(
     detail: String,
     call: Option<(&str, &Value)>,
 ) -> Answer {
+    ask(app, caller, title, None, detail, call).await
+}
+
+/// `ask_user` for a card whose detail is raw (a push): it leads with `summary`
+/// and keeps the detail behind Details. Never tied to a tool call.
+pub(super) async fn ask_user_with_summary(
+    app: &AppHandle,
+    caller: &store::Agent,
+    title: String,
+    summary: String,
+    detail: String,
+) -> Answer {
+    ask(app, caller, title, Some(summary), detail, None).await
+}
+
+async fn ask(
+    app: &AppHandle,
+    caller: &store::Agent,
+    title: String,
+    summary: Option<String>,
+    detail: String,
+    call: Option<(&str, &Value)>,
+) -> Answer {
     let request_id = store::new_id();
     let (tx, rx) = oneshot::channel();
     PENDING_APPROVALS
@@ -1299,7 +1322,9 @@ pub(super) async fn ask_user(
         .insert(request_id.clone(), tx);
 
     let mut card = runner::new_message(&caller.id, MessageKind::Approval, "");
-    card.approval = Some(new_card(request_id.clone(), title, detail, call));
+    let mut approval = new_card(request_id.clone(), title, detail, call);
+    approval.summary = summary;
+    card.approval = Some(approval);
     let _ = runner::record(app, card);
     store::refresh_pending(&caller.id);
     super::notify::refresh_badge(app);
@@ -1384,6 +1409,7 @@ pub(super) fn new_card(
         input: call.map(|(_, input)| input.clone()),
         always: call.and_then(|(tool, input)| permissions::suggest(tool, input)),
         always_allowed: false,
+        summary: None,
         note: None,
         prompt: None,
         choice: None,

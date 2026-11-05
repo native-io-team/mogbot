@@ -86,9 +86,7 @@ export function AgentsDesktopSettings() {
         <div className="settings-row-info">
           <span className="settings-row-label">Agents in the menu bar</span>
           <span className="settings-row-description">
-            Shows the agents that need you and the ones working, and keeps the app a click away with
-            its window closed. On by default once you've used Agents, or while Keep running when
-            closed is on.
+            Who needs you and who’s working, a click away with the window closed.
           </span>
         </div>
         <Toggle
@@ -101,9 +99,8 @@ export function AgentsDesktopSettings() {
         <div className="settings-row-info">
           <span className="settings-row-label">Quick message</span>
           <span className="settings-row-description">
-            Press {s.shortcutLabel} in any app to message the Chief of Staff, or start with @name
-            for another agent. You can dictate or attach a screenshot; macOS asks for Screen
-            Recording permission the first time you attach one.
+            Press {s.shortcutLabel} in any app to message the Chief of Staff, or @name for another
+            agent.
           </span>
           {s.quickEntry && (
             <button

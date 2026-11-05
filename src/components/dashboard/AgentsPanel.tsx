@@ -106,6 +106,12 @@ function iconFor(agentId: string) {
 }
 
 function statusLine(a: AgentStatus): string {
+  // Agents run on Claude Code or Codex; Opencode is for project terminals only.
+  if (a.id === 'opencode') return `Projects only · ${statusOf(a)}`;
+  return statusOf(a);
+}
+
+function statusOf(a: AgentStatus): string {
   if (!a.installed) return 'Not installed';
   // Expired/needs-reconnect: surface the account (if known) plus the call to action.
   if (a.needsReconnect) {
@@ -515,7 +521,7 @@ export function AgentsPanel() {
         }
         aside={loading && <Spinner size="sm" className="agents-panel-spinner" />}
       >
-        <p className="agents-section-title text-style-label">AGENTS</p>
+        <p className="agents-section-title text-style-label">ENGINES</p>
         <div className="agents-panel-list">
           {agents.map((agent) => {
             // "Ready" (eligible to be the default agent) means connected AND valid.

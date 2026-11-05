@@ -2,8 +2,10 @@
  * SettingsModal - app-level settings accessible from the dashboard.
  *
  * Contains:
- * - General: what anyone running agents cares about first (the menu bar,
- *   quick message, the phone) and the analytics opt-out
+ * - Agents (first, and where Settings opens): the menu bar, quick message,
+ *   keeping agents going, engines and models, notifications, the phone and
+ *   other assistants (`AgentsSettings`)
+ * - General: the analytics opt-out
  * - Projects: the developer rows (projects folder, shared libraries,
  *   thumbnails, commit messages, terminal rendering), kept together so General
  *   stays calm for people who never open a project
@@ -16,7 +18,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
-import { AgentsDesktopSettings } from '../agents/AgentsDesktopSettings';
+import { AgentsSettings } from '../agents/AgentsSettings';
 import { AccentColorSetting } from './AccentColorSetting';
 import { ThemeSetting } from './ThemeSetting';
 import { Button } from '../primitives/Button';
@@ -82,7 +84,7 @@ interface MovePrompt {
   info: MovableProjects;
 }
 
-type SettingsTab = 'general' | 'projects' | 'appearance' | 'experimental';
+type SettingsTab = 'agents' | 'general' | 'projects' | 'appearance' | 'experimental';
 
 export function SettingsModal({
   isOpen,
@@ -106,7 +108,7 @@ export function SettingsModal({
   const [teamSharingEnabled, setLocalTeamSharingEnabled] = useState(true);
   const [thumbnailsOn, setLocalThumbnailsOn] = useState(true);
   const [spotifyWidgetEnabled, setLocalSpotifyWidgetEnabled] = useState(false);
-  const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('general');
+  const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('agents');
   const [loading, setLoading] = useState(true);
 
   const [projectsRoot, setLocalProjectsRoot] = useState('');
@@ -173,7 +175,7 @@ export function SettingsModal({
   const [openedFor, setOpenedFor] = useState(false);
   if (isOpen !== openedFor) {
     setOpenedFor(isOpen);
-    if (isOpen) setActiveSettingsTab(peekSettingsTabOnOpen() ?? 'general');
+    if (isOpen) setActiveSettingsTab(peekSettingsTabOnOpen() ?? 'agents');
   }
   useEffect(() => {
     if (!isOpen) clearSettingsTabOnOpen();
@@ -433,6 +435,9 @@ export function SettingsModal({
             appearance="underline"
             aria-label="Settings sections"
           >
+            <TabsTab value="agents" width="fill" className="command-palette-tab">
+              Agents
+            </TabsTab>
             <TabsTab value="general" width="fill" className="command-palette-tab">
               General
             </TabsTab>
@@ -447,38 +452,30 @@ export function SettingsModal({
             </TabsTab>
           </TabsList>
 
-          {/* General leads with the agents, which is what anyone using the app
-              cares about; the developer rows live on Projects. */}
+          {/* Agents first: it is the primary view, and every agent setting
+              lives there rather than beside analytics. */}
+          <TabsPanel value="agents" className="settings-tab-panel">
+            <AgentsSettings
+              onOpenPhone={() => {
+                onClose();
+                openModal('phone');
+              }}
+              onOpenRemote={() => {
+                onClose();
+                openModal('remoteAccess');
+              }}
+            />
+          </TabsPanel>
+
           <TabsPanel value="general" className="settings-tab-panel">
             <div className="settings-modal-body">
-              <AgentsDesktopSettings />
               <div className="settings-section">
-                <div className="settings-row">
-                  <div className="settings-row-info">
-                    <span className="settings-row-label">Phone</span>
-                    <span className="settings-row-description">
-                      Use your agents from your phone over Tailscale. Pair a phone, see which are
-                      connected, and remove them.
-                    </span>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    data-settings-open="phone"
-                    onClick={() => {
-                      onClose();
-                      openModal('phone');
-                    }}
-                  >
-                    Open
-                  </Button>
-                </div>
                 <div className="settings-row">
                   <div className="settings-row-info">
                     <span className="settings-row-label">Usage analytics &amp; error reports</span>
                     <span className="settings-row-description">
-                      Help improve the app by sharing anonymous usage data and automatic error
-                      reports (error messages and stack traces only — never your code or file
-                      contents, and paths are anonymized). Turning this off stops all data sharing.
+                      Anonymous usage and error reports, never your code or files. Off shares
+                      nothing.
                     </span>
                   </div>
                   <button

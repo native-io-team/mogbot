@@ -302,7 +302,8 @@ async fn commit_records(
         }
     }
 
-    let message = format!("Ship Studio comments from {author}");
+    // No app name: this lands in teammates' git history, and either app may write it.
+    let message = format!("Comments from {author}");
     let mut args: Vec<&str> = vec!["commit-tree", &tree, "-m", &message];
     if let Some(parent) = parent {
         args.push("-p");

@@ -240,6 +240,11 @@ pub struct Approval {
     pub title: String,
     /// The exact thing it will do (the command, the file, the URL).
     pub detail: String,
+    /// A plain-English sentence the card leads with, when `detail` is raw
+    /// (a push: branch, remote, commit ids). Present, the card shows this
+    /// and keeps `detail` behind "Details".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
     pub status: ApprovalStatus,
     /// The Claude Code tool and input this card is about. Present for
     /// permission prompts, which stay answerable after the agent stopped
@@ -1662,6 +1667,7 @@ mod tests {
                         input: None,
                         always: None,
                         always_allowed: false,
+                        summary: None,
                         note: None,
                         prompt: None,
                         choice: None,
@@ -1863,6 +1869,7 @@ mod tests {
                     input: None,
                     always: None,
                     always_allowed: false,
+                    summary: None,
                     note: None,
                     prompt: None,
                     choice: None,
@@ -1967,6 +1974,7 @@ mod tests {
                 input: None,
                 always: None,
                 always_allowed: false,
+                summary: None,
                 note: None,
                 prompt: None,
                 choice: None,

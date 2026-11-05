@@ -584,8 +584,8 @@ export function PluginManager({
             {projectPath && activeTab === 'library' && (
               <>
                 <div className="plugins-beta-notice">
-                  Plugins are new and in beta. If you experience any issues, please report them in
-                  the Slack group.
+                  Plugins are new and in beta. If something goes wrong, report it from Settings
+                  &amp; Help → Report a bug.
                 </div>
 
                 {isLoadingRegistry && registry.length === 0 && (

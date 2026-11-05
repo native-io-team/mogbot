@@ -397,7 +397,7 @@ export function AgentEditorModal({
         onSetUp={onSetUpEngine}
         note={
           switching &&
-          `Its next message starts a new ${ENGINE_LABEL[engine]} session, handed the recent conversation. Instructions and memory carry over.`
+          `Its next message starts fresh on ${ENGINE_LABEL[engine]}, handed the recent conversation. Instructions and memory carry over.`
         }
       />
 
@@ -534,8 +534,9 @@ export function AgentEditorModal({
           </p>
           <div className="agent-editor__rebind-actions">
             <Button
-              variant="primary"
+              variant="strong"
               size="compact"
+              data-allow
               disabled={settle.isLoading}
               onClick={() => void settle.execute('keep')}
             >
