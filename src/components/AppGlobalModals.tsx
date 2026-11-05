@@ -1,4 +1,5 @@
 import { HelpModal } from './HelpModal';
+import { useAppAccent } from '../lib/accent';
 import { ChangelogModal } from './dashboard/ChangelogModal';
 import { AttachedLibrariesModal } from './dashboard/AttachedLibrariesModal';
 import { SettingsModal } from './dashboard/SettingsModal';
@@ -36,6 +37,9 @@ export function AppGlobalModals() {
 }
 
 function GlobalModalsBody() {
+  // Window-wide, mounted once per window: keep <html>'s accent equal to the
+  // Chief of Staff's colour (lives here to keep App.tsx under its LOC limit).
+  useAppAccent();
   const ctx = usePaletteContext();
   const changelog = useModal('changelog');
   const attachedLibraries = useModal('attachedLibraries');

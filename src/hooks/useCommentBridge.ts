@@ -52,9 +52,11 @@ export function useCommentBridge({
       notes: notes
         .filter((n) => n.status !== 'resolved')
         .map((n) => ({ id: n.id, number: n.number, status: n.status, target: n.target })),
-      accent: styles.getPropertyValue('--accent-active').trim(),
+      // Pins are drawn on the user's own page, so they use the fixed overlay
+      // colour rather than the accent (a white accent vanishes on a white page).
+      accent: styles.getPropertyValue('--accent-overlay').trim(),
       scrim: styles.getPropertyValue('--overlay-30').trim(),
-      ink: styles.getPropertyValue('--bg-primary').trim(),
+      ink: styles.getPropertyValue('--accent-overlay-ink').trim(),
     });
   }, [post, enabled, picking, notes]);
   useEffect(() => {

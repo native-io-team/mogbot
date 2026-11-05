@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { ErrorIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
@@ -91,6 +92,7 @@ export function AgentAppsModal({ isOpen, onClose }: AgentAppsModalProps) {
             )}
             {list.error && (
               <p className="agent-apps__error" role="alert">
+                <ErrorIcon size={12} className="inline-error-icon" />
                 {list.error.message}{' '}
                 <TextButton tabIndex={0} onClick={() => void load()}>
                   Try again
@@ -141,6 +143,7 @@ export function AgentAppsModal({ isOpen, onClose }: AgentAppsModalProps) {
 
           {actionError && (
             <p className="agent-apps__error" role="alert">
+              <ErrorIcon size={12} className="inline-error-icon" />
               {actionError}
             </p>
           )}

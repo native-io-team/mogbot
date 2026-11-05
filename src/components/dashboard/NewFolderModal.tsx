@@ -7,6 +7,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
+import { ErrorIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { asCommandError, formatCommandError } from '../../lib/errors';
@@ -92,7 +93,12 @@ export function NewFolderModal({
             spellCheck={false}
           />
         </div>
-        {error && <p className="form-error">{error}</p>}
+        {error && (
+          <p className="form-error">
+            <ErrorIcon size={12} className="inline-error-icon" />
+            {error}
+          </p>
+        )}
         <div className="modal-actions">
           <Button variant="secondary" type="button" onClick={onClose} disabled={loading}>
             Cancel

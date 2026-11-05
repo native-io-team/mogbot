@@ -628,7 +628,7 @@
   pointer-events: none;
 }
 .ss-edit-panel__saved svg {
-  color: var(--accent-active);
+  color: var(--accent-success);
 }
 
 /* The numeric editor adds its own invalid treatment to the shared field. */

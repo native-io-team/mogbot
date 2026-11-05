@@ -58,7 +58,6 @@
   --pixel-loader-size-md: var(--size-control-compact);
   --pixel-loader-size-lg: var(--size-control-standard);
   --pixel-loader-gap: var(--stroke-hairline);
-  --pixel-loader-color: var(--accent-active);
   --pixel-loader-glow-tight: var(--space-04);
   --pixel-loader-glow-wide: var(--space-08);
   --pixel-loader-glow-tight-opacity: 72%;
@@ -93,8 +92,6 @@
 
   --progress-height: var(--space-04);
   --progress-radius: var(--radius-pill);
-  --progress-track: color-mix(in srgb, var(--accent-active) 18%, var(--surface-control));
-  --progress-indicator: var(--accent-active);
   --progress-transition: var(--transition-interaction-slow);
   --progress-indeterminate-width: 40%;
   --progress-indeterminate-duration: var(--duration-loader-standard);
@@ -182,17 +179,13 @@
   --button-shadow: var(--shadow-button);
   --button-disabled-opacity: 0.45;
   --button-active-scale: 0.96;
-  --button-primary-start: var(--color-green-700);
-  --button-primary-mid: var(--color-green-600);
-  --button-primary-end: var(--color-green-500);
-  /* Busy fill for a control that is mid-action. Flat and darker than the
-     idle gradient, and opaque: dimming with `opacity` let whatever sat
-     behind the button show through it. */
-  --button-primary-busy: var(--color-green-800);
   --button-success-border: color-mix(in srgb, var(--accent-success) 30%, transparent);
   --button-success-surface-hover: color-mix(in srgb, var(--accent-success) 10%, transparent);
   --button-success-text: var(--accent-success);
   --button-surface-busy: var(--color-gray-900);
+  --button-strong-surface: var(--surface-inverse);
+  --button-strong-surface-hover: var(--surface-inverse-hover);
+  --button-strong-text: var(--text-on-inverse);
   --button-variable-surface: var(--color-purple-700);
   --button-variable-hover: var(--color-purple-600);
   --button-warning-surface: var(--surface-warning);
@@ -251,8 +244,6 @@
   --compact-topbar-menu-divider-height: var(--stroke-1);
   --compact-topbar-menu-radius: var(--radius-card);
   --compact-topbar-menu-z-index: var(--z-dropdown);
-  --compact-topbar-pin-active-surface: color-mix(in srgb, var(--accent-active) 15%, transparent);
-  --compact-topbar-pin-active-border: color-mix(in srgb, var(--accent-active) 30%, transparent);
 
   --settings-form-width: 420px;
   --settings-form-border-width: var(--stroke-1);
@@ -327,7 +318,6 @@
   --drag-sort-placeholder-opacity: 0.5;
   --drag-sort-source-opacity: 0;
   --drag-sort-overlay-border-width: var(--stroke-1);
-  --drag-sort-target-indicator: var(--accent-active);
   --drag-sort-target-indicator-width: var(--stroke-2);
   --drag-sort-reorder-transition: var(--transition-interaction);
   --drag-sort-settle-transition: var(--duration-sortable-settle) cubic-bezier(0.25, 1, 0.5, 1);
@@ -420,4 +410,34 @@
   /* `--tracking-micro` is +0.56px, which spreads a small label and makes it read
      as fainter still. Frame names want to read as one word. */
   --canvas-label-tracking: 0;
+}
+
+/* Progress and "working" indicators are status, never the accent: a red or
+   amber accent would make "in progress" read as an error or a warning. */
+:root {
+  --pixel-loader-color: var(--status-running);
+  --progress-track: var(--surface-selected);
+  --progress-indicator: var(--status-running);
+}
+
+/* Component roles derived from the accent. Declared on [data-accent-scope] as
+   well as :root for the same reason as the accent block in
+   tokens-semantic.css: a scoped accent must re-derive these, or a primary
+   button inside an agent's conversation would keep the app's colour. */
+:root,
+[data-accent-scope] {
+  --compact-topbar-pin-active-surface: rgba(var(--accent-user-rgb), 0.15);
+  --compact-topbar-pin-active-border: rgba(var(--accent-user-rgb), 0.3);
+  --drag-sort-target-indicator: var(--accent-active);
+
+  /* The primary button: a shallow top-lit gradient of the accent itself. The
+     steps are small on purpose — a deep gradient on a white accent reads as
+     grey and dirty rather than lit. */
+  --button-primary-start: var(--accent-user-start);
+  --button-primary-mid: var(--accent-active);
+  --button-primary-end: var(--accent-user-end);
+  /* Busy fill for a control that is mid-action. Flat and darker than the
+     idle gradient, and opaque: dimming with `opacity` let whatever sat
+     behind the button show through it. */
+  --button-primary-busy: var(--accent-active-strong);
 }

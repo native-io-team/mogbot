@@ -7,6 +7,7 @@
  */
 
 import { useState } from 'react';
+import { ErrorIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { formatAgo } from '../../lib/workflows';
@@ -62,6 +63,7 @@ export function AgentSecrets({ agent }: { agent: Agent }) {
       )}
       {error && (
         <p className="agent-editor__error" role="alert">
+          <ErrorIcon size={12} className="inline-error-icon" />
           {error}
         </p>
       )}

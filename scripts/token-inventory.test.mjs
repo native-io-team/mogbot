@@ -178,14 +178,65 @@ test('a fully defined plugin-stable contract passes', () => {
 });
 
 test('the shipped manifest declares the documented plugin-stable API', async () => {
-  const { default: shippedManifest } = await import(
-    '../src/styles/global/token-manifest.json',
-    { with: { type: 'json' } }
-  );
+  const { default: shippedManifest } = await import('../src/styles/global/token-manifest.json', {
+    with: { type: 'json' },
+  });
   for (const name of ['--accent', '--action', '--border', '--error', '--success', '--warning']) {
     assert.ok(
       shippedManifest.pluginStableApi.tokens.includes(name),
       name + ' must stay in the plugin-stable contract'
     );
+  }
+});
+
+test('a same-file redeclaration inside @supports is an enhancement, not a duplicate', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'token-supports-'));
+  const file = path.join(tmpRoot, 'src/styles/global/tokens-semantic.css');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(
+    file,
+    [
+      ':root {',
+      '  --soft: rgba(0, 0, 0, 0.1);',
+      '}',
+      '@supports (color: color-mix(in srgb, red, red)) {',
+      '  :root {',
+      '    --soft: color-mix(in srgb, black 10%, transparent);',
+      '  }',
+      '}',
+      ':root {',
+      '  --hard: red;',
+      '  --hard: blue;',
+      '}',
+    ].join('\n')
+  );
+  try {
+    const diagnostics = validateTokenTaxonomy({
+      manifest,
+      indexSource,
+      definitions: [
+        { name: '--soft', filePath: file, line: 2, value: ': rgba(0, 0, 0, 0.1);' },
+        {
+          name: '--soft',
+          filePath: file,
+          line: 6,
+          value: ': color-mix(in srgb, black 10%, transparent);',
+        },
+        { name: '--hard', filePath: file, line: 10, value: ': red;' },
+        { name: '--hard', filePath: file, line: 11, value: ': blue;' },
+      ],
+      references: [],
+      root: tmpRoot,
+    });
+    const duplicates = diagnostics.filter((d) => d.code === 'duplicate-token');
+    assert.deepEqual(
+      duplicates.map((d) => d.message.split(' ')[0]),
+      ['--hard']
+    );
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
   }
 });

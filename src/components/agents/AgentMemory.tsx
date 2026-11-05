@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { EditFieldIcon, TrashIcon } from '@/components/icons';
+import { EditFieldIcon, ErrorIcon, TrashIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { TextArea } from '../primitives/TextField';
@@ -130,7 +130,14 @@ export function AgentMemory({ agent }: { agent: Agent }) {
   if (entries === null) {
     return (
       <div className="agent-memory agent-memory--loading">
-        {error ? <p className="agent-editor__error">{error}</p> : <Spinner size="sm" />}
+        {error ? (
+          <p className="agent-editor__error">
+            <ErrorIcon size={12} className="inline-error-icon" />
+            {error}
+          </p>
+        ) : (
+          <Spinner size="sm" />
+        )}
       </div>
     );
   }
@@ -235,6 +242,7 @@ export function AgentMemory({ agent }: { agent: Agent }) {
       </div>
       {error && (
         <p className="agent-editor__error" role="alert">
+          <ErrorIcon size={12} className="inline-error-icon" />
           {error}
         </p>
       )}

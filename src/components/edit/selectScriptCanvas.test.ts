@@ -204,7 +204,8 @@ it('leaves React-owned elements in place and previews a canvas move with a green
     const indicator = Array.from(document.querySelectorAll<HTMLElement>('[data-ss-overlay]')).find(
       (element) => element.style.display === 'block' && element.style.height === '2px'
     );
-    expect(indicator?.style.background).toBe('rgba(70, 231, 111, 0.98)');
+    // The fixed overlay blue (the selection box's), not the user's accent.
+    expect(indicator?.style.background).toBe('rgba(0, 125, 240, 0.98)');
     // No synthetic tag-name box follows the cursor; the real element remains rendered.
     expect(
       Array.from(document.querySelectorAll<HTMLElement>('[data-ss-overlay]')).every(

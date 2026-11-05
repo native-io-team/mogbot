@@ -280,7 +280,7 @@
 /* Layout + tint for the create/import flow's <Spinner size="lg"> */
 .create-spinner {
   margin: 28px 0;
-  color: var(--accent-active);
+  color: var(--status-running);
 }
 
 .create-status {
