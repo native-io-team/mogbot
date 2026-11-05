@@ -4781,7 +4781,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 26
+      "consumerCount": 25
     },
     {
       "name": "--focus-ring-offset",
@@ -5348,7 +5348,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 562
+      "consumerCount": 563
     },
     {
       "name": "--spacing-sm",
