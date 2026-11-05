@@ -12,7 +12,44 @@
         padding: 0;
         background: #1e1e1e;
       }
+      /* The light theme's first frame (the stylesheet repaints it with
+         --surface-app a moment later; this only has to not be dark). */
+      html[data-theme='light'],
+      html[data-theme='light'] body {
+        background: #f5f5f5;
+      }
+      html[data-theme='light'] #boot-fallback,
+      html[data-theme='light'] #styles-fallback {
+        background: #f5f5f5 !important;
+        color: #5c5c5c !important;
+      }
+      html[data-theme='light'] #boot-fallback p:first-child,
+      html[data-theme='light'] #styles-fallback p:first-child {
+        color: #1c1c1c !important;
+      }
     </style>
+    <!-- The theme (Settings → Appearance: System / Light / Dark) is saved in
+         the app settings; src/lib/theme.ts caches the preference here so the
+         first frame is already in the right theme. "System" resolves against
+         prefers-color-scheme, which follows the macOS appearance. -->
+    <script>
+      var bootTheme = 'dark';
+      try {
+        // Same rules as src/lib/theme.ts (theme.test.ts runs this script).
+        var themePref = localStorage.getItem('app.theme');
+        if (themePref !== 'light' && themePref !== 'dark') themePref = 'system';
+        bootTheme =
+          themePref === 'system'
+            ? window.matchMedia && !window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'light'
+              : 'dark'
+            : themePref;
+      } catch (e) {
+        /* storage unavailable: dark until the settings load */
+      }
+      document.documentElement.setAttribute('data-theme', bootTheme);
+      document.documentElement.style.colorScheme = bootTheme;
+    </script>
     <!-- The accent (the Chief of Staff's colour) is read from the agent
          registry once the app is running; src/lib/accent.ts caches the last
          one here so every window paints in it from the first frame instead of
@@ -21,7 +58,12 @@
       try {
         // Same rules as readCachedAccent in src/lib/accent.ts: every value must
         // be well-formed or nothing is applied (accent.test.ts runs this).
-        var cachedAccent = JSON.parse(localStorage.getItem('app.accent') || 'null');
+        // One cache per theme: the white accent is near-black on the light theme.
+        var accentKey =
+          document.documentElement.getAttribute('data-theme') === 'light'
+            ? 'app.accent.light'
+            : 'app.accent';
+        var cachedAccent = JSON.parse(localStorage.getItem(accentKey) || 'null');
         var hexVars = [
           '--accent-user',
           '--accent-on-user',

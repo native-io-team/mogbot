@@ -199,9 +199,9 @@ pub(super) fn unwrap_shell(command: &str) -> &str {
         .unwrap_or(inner)
 }
 
-/// What a Codex item is doing, in the activity line's words: the item as the
-/// Claude Code tool call it corresponds to, labelled the same way.
-pub(super) fn activity(item: &Value) -> Option<String> {
+/// What a Codex item is doing, as a timeline step: the item as the Claude
+/// Code tool call it corresponds to, labelled the same way.
+pub(super) fn action(item: &Value) -> Option<super::work::Action> {
     let field = |k: &str| item.get(k).cloned().unwrap_or(Value::Null);
     let (name, input) = match item.get("type")?.as_str()? {
         "command_execution" => (
@@ -227,11 +227,44 @@ pub(super) fn activity(item: &Value) -> Option<String> {
         "todo_list" => ("TodoWrite".to_string(), Value::Null),
         _ => return None,
     };
-    let line = serde_json::json!({
-        "type": "assistant",
-        "message": { "content": [{ "type": "tool_use", "name": name, "input": input }] }
-    });
-    super::runner::describe_activity(&line.to_string())
+    let mut action = super::work::describe_tool(&name, Some(&input))?;
+    action.id = item.get("id").and_then(Value::as_str).map(String::from);
+    // One change can touch several files; every one of them counts.
+    if let Some(changes) = item.get("changes").and_then(Value::as_array) {
+        action.files = changes
+            .iter()
+            .filter_map(|c| c.get("path")?.as_str().map(String::from))
+            .collect();
+    }
+    Some(action)
+}
+
+/// What became of a completed Codex item, by its id. `exec` says
+/// `completed` / `failed` / `declined`; the app server says the same in
+/// camelCase. A command that ran but exited non-zero failed.
+pub(super) fn result(item: &Value) -> Option<super::work::CallResult> {
+    use super::work::Outcome;
+    let id = item.get("id")?.as_str()?;
+    let outcome = match item.get("status").and_then(Value::as_str)? {
+        "declined" | "denied" | "rejected" => Outcome::Declined,
+        "failed" | "error" => Outcome::Failed,
+        "completed" => {
+            let exit = item
+                .get("exit_code")
+                .or_else(|| item.get("exitCode"))
+                .and_then(Value::as_i64);
+            if exit.is_some_and(|code| code != 0) {
+                Outcome::Failed
+            } else {
+                Outcome::Done
+            }
+        }
+        _ => return None,
+    };
+    Some(super::work::CallResult {
+        id: id.to_string(),
+        outcome,
+    })
 }
 
 fn usage(value: &Value) -> Option<UsageTotals> {
@@ -271,11 +304,15 @@ pub fn steps(value: &Value) -> Vec<Step> {
             if kind == "item.completed" && item_type == Some("agent_message") {
                 return text("/item/text").map(Step::Reply).into_iter().collect();
             }
+            let mut out = Vec::new();
             // A file change only arrives complete; everything else says so as it starts.
             if kind == "item.started" || item_type == Some("file_change") {
-                return activity(item).map(Step::Activity).into_iter().collect();
+                out.extend(action(item).map(Step::Action));
             }
-            Vec::new()
+            if kind == "item.completed" {
+                out.extend(result(item).map(Step::Result));
+            }
+            out
         }
         "turn.completed" => usage(value)
             .map(Step::Usage)
@@ -385,17 +422,11 @@ mod tests {
         let activities: Vec<&str> = steps
             .iter()
             .filter_map(|s| match s {
-                Step::Activity(a) => Some(a.as_str()),
+                Step::Action(a) => Some(a.doing.as_str()),
                 _ => None,
             })
             .collect();
-        assert_eq!(
-            activities,
-            [
-                "$ echo hi > note.txt && cat note.txt",
-                "Checking on the team"
-            ]
-        );
+        assert_eq!(activities, ["Running echo", "Checking on the team"]);
         let replies: Vec<&Step> = steps
             .iter()
             .filter(|s| matches!(s, Step::Reply(_)))

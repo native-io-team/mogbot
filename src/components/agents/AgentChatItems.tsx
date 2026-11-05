@@ -38,6 +38,7 @@ import { MentionText } from './AgentMentions';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { ImportReviewCard } from './ImportReviewCard';
+import { useLiveWork, WorkTimeline } from './AgentWork';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
@@ -64,6 +65,7 @@ import {
   type AgentEngine,
   type AgentMessage,
   type AgentRef,
+  type TurnWork,
   type Approval,
   type SessionPrompt,
 } from '../../lib/agents';
@@ -318,6 +320,7 @@ export const AgentBubble = memo(function AgentBubble({
       data-arrived={arrived || undefined}
       data-stopped={message.stopped || undefined}
       data-attachments={attachments.length > 0 || undefined}
+      data-work={message.work ? true : undefined}
       data-message-ids={message.id}
     >
       {message.text && (
@@ -339,6 +342,7 @@ export const AgentBubble = memo(function AgentBubble({
       ) : (
         actions
       )}
+      {message.work && <WorkTimeline work={message.work} agent={agent} />}
     </div>
   );
 });
@@ -470,6 +474,8 @@ interface ErrorLineProps extends Arrival {
   onSignIn?: () => void;
   /** What the agent runs on, which "Sign in to …" names. */
   engine?: AgentEngine;
+  /** Whose home a timeline's screenshots live in; without it, no timeline. */
+  agent?: Agent;
 }
 
 /**
@@ -485,6 +491,7 @@ export const ErrorLine = memo(function ErrorLine({
   retryScheduled,
   onSignIn,
   engine = 'claude',
+  agent,
 }: ErrorLineProps) {
   const signIn = errorRemedy(message) === 'sign-in' && onSignIn;
   const resetsAt = message.failure?.kind === 'usage_limit' ? message.failure.resetsAt : undefined;
@@ -510,6 +517,7 @@ export const ErrorLine = memo(function ErrorLine({
       onKeyDown={onKeyDown}
       className="agent-chat__row agent-chat__row--agent agent-chat__row--card"
       data-arrived={arrived || undefined}
+      data-work={message.work && agent ? true : undefined}
       data-message-ids={message.id}
     >
       <div
@@ -557,6 +565,7 @@ export const ErrorLine = memo(function ErrorLine({
         )}
       </div>
       <MessageActions text={message.text} ts={message.ts} />
+      {message.work && agent && <WorkTimeline work={message.work} agent={agent} />}
     </div>
   );
 });
@@ -599,7 +608,13 @@ export const NoteLine = memo(function NoteLine({
   message,
   arrived,
   onOpenPeer,
-}: { message: AgentMessage; onOpenPeer?: (agentId: string) => void } & Arrival) {
+  agent,
+}: {
+  message: AgentMessage;
+  onOpenPeer?: (agentId: string) => void;
+  /** Whose home a timeline's screenshots live in; without it, no timeline. */
+  agent?: Agent;
+} & Arrival) {
   // Where a new conversation began: a divider, since what's above it is history to the agent.
   if (message.fresh) {
     return (
@@ -617,7 +632,7 @@ export const NoteLine = memo(function NoteLine({
   // "Created Finance": the agent it names is a link, while that agent exists.
   const name = message.peer?.name;
   const at = name && onOpenPeer ? message.text.indexOf(name) : -1;
-  return (
+  const note = (
     <div className="agent-note" data-arrived={arrived || undefined} data-message-ids={message.id}>
       {at < 0 || !message.peer ? (
         message.text
@@ -637,6 +652,15 @@ export const NoteLine = memo(function NoteLine({
         </>
       )}
     </div>
+  );
+  if (!message.work || !agent) return note;
+  return (
+    <>
+      {note}
+      <div className="agent-chat__row agent-chat__row--agent" data-work>
+        <WorkTimeline work={message.work} agent={agent} />
+      </div>
+    </>
   );
 });
 
@@ -1218,6 +1242,9 @@ function SessionPromptCard({
 
 interface WorkingIndicatorProps {
   activity: string | null;
+  /** The turn's steps so far (`status.work`), and whose they are. */
+  work?: TurnWork;
+  agent?: Agent;
   /** It appeared after the chat opened: open its height rather than pop in. */
   entering?: boolean;
   /** The turn ended: collapse, then `onExited` unmounts it. */
@@ -1226,15 +1253,25 @@ interface WorkingIndicatorProps {
 }
 
 /** Three dots and what it's doing, under the last message while it works. */
-export function WorkingIndicator({ activity, entering, leaving, onExited }: WorkingIndicatorProps) {
+export function WorkingIndicator({
+  activity,
+  work,
+  agent,
+  entering,
+  leaving,
+  onExited,
+}: WorkingIndicatorProps) {
   // Keep the last thing it said while it collapses, rather than blanking it.
   const [shown, setShown] = useState(activity);
   if (!leaving && activity !== shown) setShown(activity);
   // Only a change of activity crossfades; the first one is just there.
   const [first] = useState(activity);
+  const live = useLiveWork({ work, agent, activity, leaving });
   return (
     <div
       className="agent-chat__row agent-chat__row--agent agent-chat__row--working"
+      data-work={live.toggle ? true : undefined}
+      data-open={live.open || undefined}
       data-entering={entering || undefined}
       data-leaving={leaving || undefined}
       onAnimationEnd={(e) => {
@@ -1242,21 +1279,25 @@ export function WorkingIndicator({ activity, entering, leaving, onExited }: Work
       }}
       aria-live="polite"
     >
-      <div className="agent-working">
-        <span className="agent-working__dots" aria-hidden>
-          <span />
-          <span />
-          <span />
-        </span>
-        {shown && (
-          <span
-            key={shown}
-            className="agent-working__activity"
-            data-changed={shown !== first || undefined}
-          >
-            {shown}
+      {live.list}
+      <div className="agent-working__line">
+        <div className="agent-working">
+          <span className="agent-working__dots" aria-hidden>
+            <span />
+            <span />
+            <span />
           </span>
-        )}
+          {shown && (
+            <span
+              key={shown}
+              className="agent-working__activity"
+              data-changed={shown !== first || undefined}
+            >
+              {shown}
+            </span>
+          )}
+        </div>
+        {live.toggle}
       </div>
     </div>
   );

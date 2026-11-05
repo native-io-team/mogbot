@@ -5,6 +5,7 @@ import { AGENT_COLORS } from './agents';
 import {
   AA_TEXT,
   ACCENT_CACHE_KEY,
+  ACCENT_CACHE_KEY_LIGHT,
   ACCENT_SHADE_VARS,
   ACCENT_VAR_NAMES,
   accentVarsForHex,
@@ -156,7 +157,10 @@ describe('boot cache', () => {
 
   it('boot script validates every var the same way readCachedAccent does', () => {
     const html = readFileSync(resolve('index.html'), 'utf8');
-    const script = /<script>([\s\S]*?app\.accent[\s\S]*?)<\/script>/.exec(html)![1];
+    // The one inline script that mentions the accent cache (not the theme one before it).
+    const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+      .map((m) => m[1])
+      .find((body) => body.includes('app.accent'))!;
     const run = (cached: unknown) => {
       const el = document.createElement('html');
       localStorage.setItem(ACCENT_CACHE_KEY, JSON.stringify(cached));
@@ -179,7 +183,10 @@ describe('boot cache', () => {
 
   it('uses the key index.html reads before the bundle loads', () => {
     const html = readFileSync(resolve('index.html'), 'utf8');
-    expect(html).toContain(`localStorage.getItem('${ACCENT_CACHE_KEY}')`);
+    // One cache per theme, chosen by the data-theme the theme script just set.
+    expect(html).toContain(`'${ACCENT_CACHE_KEY}'`);
+    expect(html).toContain(`'${ACCENT_CACHE_KEY_LIGHT}'`);
+    expect(html).toContain('localStorage.getItem(accentKey)');
   });
 });
 

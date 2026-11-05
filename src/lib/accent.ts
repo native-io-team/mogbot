@@ -38,6 +38,7 @@ import { useEffect, useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { AGENT_COLORS, type AgentColor } from './agents';
 import { useAgentsSelector } from './agentsStore';
+import { getResolvedTheme, useResolvedTheme, type ResolvedTheme } from './theme';
 
 /**
  * Hex for each agent colour key. Mirrors `--agents-tint-*` in
@@ -57,6 +58,19 @@ export const ACCENT_PALETTE: Record<AgentColor, string> = {
   pink: '#e45a9f',
   gray: '#8a8a8a',
 };
+
+/**
+ * The one theme rule for the accent: on the light theme, "white" is near-black.
+ *
+ * White is the monochrome accent — "the strongest neutral there is". On a dark
+ * theme that is near-white; on a light one a near-white primary button would
+ * vanish into the page, so it becomes the strongest neutral of the light
+ * theme instead. Every other colour keeps its hue in both themes (its ink is
+ * still chosen by contrast). Mirrored by `--color-accent-light-default` in
+ * tokens-core.css and `--agents-tint-white` (light) in agents.css; accent.test.ts
+ * holds the three in sync.
+ */
+export const LIGHT_THEME_WHITE = '#1c1c1c';
 
 /** The Chief of Staff's default colour, and so the app's default accent. */
 export const DEFAULT_ACCENT: AgentColor = 'white';
@@ -80,8 +94,15 @@ export const ACCENT_LABELS: Record<AgentColor, string> = {
 export const ON_ACCENT_DARK = '#141414';
 export const ON_ACCENT_LIGHT = '#ffffff';
 
-/** localStorage key for the boot cache read by the inline script in index.html. */
+/**
+ * localStorage keys for the boot cache read by the inline script in
+ * index.html: one per theme, because the white accent differs between them.
+ */
 export const ACCENT_CACHE_KEY = 'app.accent';
+export const ACCENT_CACHE_KEY_LIGHT = 'app.accent.light';
+
+export const accentCacheKey = (theme: ResolvedTheme) =>
+  theme === 'light' ? ACCENT_CACHE_KEY_LIGHT : ACCENT_CACHE_KEY;
 
 export type Rgb = readonly [number, number, number];
 
@@ -117,9 +138,17 @@ export const AA_TEXT = 4.5;
 export const isAccentKey = (value: unknown): value is AgentColor =>
   typeof value === 'string' && (AGENT_COLORS as readonly string[]).includes(value);
 
-/** Hex for a colour key; anything unknown (an old or hand-edited registry) is the default. */
-export function accentHex(key: string | null | undefined): string {
-  return isAccentKey(key) ? ACCENT_PALETTE[key] : ACCENT_PALETTE[DEFAULT_ACCENT];
+/**
+ * Hex for a colour key on a theme; anything unknown (an old or hand-edited
+ * registry) is the default. Defaults to the theme currently painted.
+ */
+export function accentHex(
+  key: string | null | undefined,
+  theme: ResolvedTheme = getResolvedTheme()
+): string {
+  const k: AgentColor = isAccentKey(key) ? key : DEFAULT_ACCENT;
+  if (theme === 'light' && k === 'white') return LIGHT_THEME_WHITE;
+  return ACCENT_PALETTE[k];
 }
 
 /** `#rgb` / `#rrggbb` → [r, g, b], or null for anything else. */
@@ -226,6 +255,21 @@ export function shadeOklch(hex: string, toward: 'black' | 'white', amount: numbe
 }
 
 /**
+ * `color-mix(in oklch, hex p, neutral)` where `neutral` is a grey (hue-less,
+ * so the hue is `hex`'s): lightness interpolates, chroma scales by `p`. This
+ * is how `--accent-text` is mixed in CSS, so tests can check it reads.
+ */
+export function mixOklchWithNeutral(hex: string, neutral: string, p: number): string {
+  const a = parseHex(hex);
+  const n = parseHex(neutral);
+  if (!a || !n) return hex;
+  const k = Math.min(1, Math.max(0, p));
+  const [L, A, B] = rgbToOklab(a);
+  const [Ln] = rgbToOklab(n);
+  return toHex(oklabToRgb([L * k + Ln * (1 - k), A * k, B * k]));
+}
+
+/**
  * A shade of `hex` that keeps `ink` at WCAG AA.
  *
  * Moves `toward` by `amount`, clamped to the most it can move before the ink
@@ -257,23 +301,35 @@ export function inkSafeShade(
   return contrastRatio(parseHex(other)!, inkRgb) >= AA_TEXT ? other : shadeOklch(hex, toward, lo);
 }
 
-/** The runtime inputs for a colour key: the colour, its ink, and its shades. */
-export function accentVars(key: string | null | undefined): AccentVars {
-  return accentVarsForHex(accentHex(key));
+/** The runtime inputs for a colour key on a theme: the colour, its ink, and its shades. */
+export function accentVars(
+  key: string | null | undefined,
+  theme: ResolvedTheme = getResolvedTheme()
+): AccentVars {
+  return accentVarsForHex(accentHex(key, theme));
 }
+
+/**
+ * Shades darken by default. A near-black accent (the white accent on the light
+ * theme) has nowhere darker to go that anyone could see, so its shades lift.
+ */
+const NEAR_BLACK_LUMINANCE = 0.03;
 
 /** `accentVars` for a literal colour (tests and the CSS defaults use it). */
 export function accentVarsForHex(hex: string): AccentVars {
   const [r, g, b] = parseHex(hex)!;
   const ink = pickOnAccent(hex);
+  // Hover and pressed move away from the base; for a near-black base that
+  // means up. The gradient keeps its top-lit direction either way.
+  const shade = relativeLuminance([r, g, b]) < NEAR_BLACK_LUMINANCE ? 'white' : 'black';
   return {
     '--accent-user': hex,
     '--accent-on-user': ink,
     '--accent-user-rgb': `${r}, ${g}, ${b}`,
     // The amounts are the ones the CSS used to mix with; small on purpose — a
     // deep gradient on a white accent reads as grey and dirty rather than lit.
-    '--accent-user-hover': inkSafeShade(hex, ink, 'black', 0.12),
-    '--accent-user-strong': inkSafeShade(hex, ink, 'black', 0.28),
+    '--accent-user-hover': inkSafeShade(hex, ink, shade, 0.12),
+    '--accent-user-strong': inkSafeShade(hex, ink, shade, 0.28),
     '--accent-user-start': inkSafeShade(hex, ink, 'black', 0.1, 0),
     '--accent-user-end': inkSafeShade(hex, ink, 'white', 0.08),
   };
@@ -302,9 +358,9 @@ export function applyAccentVars(vars: AccentVars, el: HTMLElement = document.doc
  * default colour and then flips. Storage can be unavailable; that only costs
  * the first frame.
  */
-export function cacheAccentVars(vars: AccentVars) {
+export function cacheAccentVars(vars: AccentVars, theme: ResolvedTheme = getResolvedTheme()) {
   try {
-    localStorage.setItem(ACCENT_CACHE_KEY, JSON.stringify(vars));
+    localStorage.setItem(accentCacheKey(theme), JSON.stringify(vars));
   } catch {
     /* private mode / blocked storage — the registry is the source of truth */
   }
@@ -315,19 +371,23 @@ export function cacheAccentVars(vars: AccentVars) {
  * everything inside it (primary buttons, tints, selection) takes that colour.
  * `data-accent-scope` makes the CSS re-derive the accent roles there.
  */
-export function accentScopeProps(key: string | null | undefined): {
+export function accentScopeProps(
+  key: string | null | undefined,
+  theme: ResolvedTheme = getResolvedTheme()
+): {
   'data-accent-scope': string;
   style: CSSProperties;
 } {
   return {
     'data-accent-scope': isAccentKey(key) ? key : DEFAULT_ACCENT,
-    style: accentVars(key) as unknown as CSSProperties,
+    style: accentVars(key, theme) as unknown as CSSProperties,
   };
 }
 
-/** `accentScopeProps`, memoised on the key. */
+/** `accentScopeProps`, memoised on the key and re-derived when the theme changes. */
 export function useAccentScope(key: string | null | undefined) {
-  return useMemo(() => accentScopeProps(key), [key]);
+  const theme = useResolvedTheme();
+  return useMemo(() => accentScopeProps(key, theme), [key, theme]);
 }
 
 const selectChiefColor = (s: { agents: { isMain: boolean; color: string }[]; loaded: boolean }) =>
@@ -344,8 +404,9 @@ export function useChiefColor(): string | null {
 /** The app accent as hex, for the few consumers that need a literal colour. */
 export function useAppAccentHex(): string {
   const chief = useChiefColor();
-  if (chief !== null) return accentHex(chief);
-  return readCachedAccent()?.['--accent-user'] ?? accentHex(null);
+  const theme = useResolvedTheme();
+  if (chief !== null) return accentHex(chief, theme);
+  return readCachedAccent(theme)?.['--accent-user'] ?? accentHex(null, theme);
 }
 
 /**
@@ -353,9 +414,9 @@ export function useAppAccentHex(): string {
  * well-formed (same rules as the boot script). An entry from an older build
  * that lacks the shades is ignored rather than half-applied.
  */
-export function readCachedAccent(): AccentVars | null {
+export function readCachedAccent(theme: ResolvedTheme = getResolvedTheme()): AccentVars | null {
   try {
-    const raw = localStorage.getItem(ACCENT_CACHE_KEY);
+    const raw = localStorage.getItem(accentCacheKey(theme));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Record<string, unknown> | null;
     if (!parsed || typeof parsed !== 'object') return null;
@@ -368,13 +429,24 @@ export function readCachedAccent(): AccentVars | null {
   }
 }
 
-/** Keep `<html>`'s accent equal to the Chief of Staff's colour, in every window. */
+/**
+ * Keep `<html>`'s accent equal to the Chief of Staff's colour on the current
+ * theme, in every window. Both themes' variants are cached, so switching theme
+ * on the next launch paints the right accent from the first frame too.
+ */
 export function useAppAccent() {
   const chief = useChiefColor();
+  const theme = useResolvedTheme();
   useEffect(() => {
-    if (chief === null) return;
-    const vars = accentVars(chief);
-    applyAccentVars(vars);
-    cacheAccentVars(vars);
-  }, [chief]);
+    if (chief === null) {
+      // Registry not loaded yet: re-derive the boot cache for this theme, so a
+      // theme switch before it loads doesn't leave the other theme's white.
+      const cached = readCachedAccent(theme);
+      if (cached) applyAccentVars(cached);
+      return;
+    }
+    applyAccentVars(accentVars(chief, theme));
+    cacheAccentVars(accentVars(chief, 'dark'), 'dark');
+    cacheAccentVars(accentVars(chief, 'light'), 'light');
+  }, [chief, theme]);
 }

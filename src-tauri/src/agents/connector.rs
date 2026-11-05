@@ -241,6 +241,7 @@ pub fn interview_status(agent_id: &str) -> Option<runner::Status> {
         state: "working",
         activity: Some(format!("Talking to {} (import)", t.source)),
         since: Some(t.started_at),
+        work: None,
     })
 }
 

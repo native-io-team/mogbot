@@ -753,3 +753,44 @@ async fn an_oversized_chunked_upload_is_read_out_and_answered_413() {
     let line = String::from_utf8_lossy(&buf[..n]);
     assert!(line.starts_with("HTTP/1.1 413"), "{line}");
 }
+
+#[tokio::test]
+async fn a_running_turns_steps_go_only_to_phones_that_show_them() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (_, token, _) = c.registry.add(&phone(), String::new(), 1).unwrap();
+    let (mut old, ..) = open(port, &token, None).await;
+    let mut ws = connect(port).await;
+    let mut h = hello(&token, None);
+    h["features"] = json!(["work.live"]);
+    send(&mut ws, h).await;
+    loop {
+        let f = next(&mut ws).await;
+        if f["event"]["type"] == "sync.caughtUp" {
+            break;
+        }
+    }
+    let status = serde_json::to_value(crate::agents::runner::Status {
+        state: "working",
+        activity: Some("Running npm test".into()),
+        since: Some(1),
+        work: Some(crate::companion::testkit::live_work()),
+    })
+    .unwrap();
+    c.hub.publish(crate::companion::wire::Event::Status {
+        agent_id: AGENT.into(),
+        status,
+    });
+    let seen = next(&mut ws).await;
+    assert_eq!(seen["event"]["status"]["work"]["stepCount"], 3, "{seen}");
+    let without = next(&mut old).await;
+    assert_eq!(without["event"]["type"], "agents.status");
+    assert!(
+        without["event"]["status"].get("work").is_none(),
+        "{without}"
+    );
+    assert_eq!(without["event"]["status"]["activity"], "Running npm test");
+    // The overview never carries them: they'd go out on every registry change.
+    let overview = crate::companion::testkit::overview();
+    assert!(overview["agents"][0]["status"].get("work").is_none());
+}

@@ -182,6 +182,70 @@ far back as the page needs, and apply `approvals.jsonl` to the page read. A log 
 fails with the reason; a reply mid-turn is still shown, with one error line
 (at most a minute) saying it won't survive a restart.
 
+### What it did (`src-tauri/src/agents/work.rs`)
+
+Under the last thing a turn says (its reply, its error, or "Stopped"; never
+a note someone else wrote into the chat, and never a "started fresh"
+divider), one quiet line: "Worked 6 min · 23 steps · edited 2 files". It
+opens into the steps in order, each with its time into the turn and any
+screenshot it produced. Every step is something observed: a tool call in the
+engine's own output (Claude Code's `tool_use`, a Codex item; a call reported
+twice is one step), an approval card, a preview screenshot. A turn with no
+steps has no line.
+
+- **Outcomes are observed**: a call is a request, so each step is matched to
+  what came back by id (Claude Code's `tool_result` by `tool_use_id`, with
+  `is_error` and the permission decision beside it; a Codex item's
+  completion and its `status`). Declined reads "Asked to run rm — you
+  declined", failed reads "Tried to edit App.tsx", and both are drawn
+  quieter (`outcome` on the step). An approval step says the answer: "You
+  allowed: Run a command" / "You declined: …". "Edited n files" counts only
+  edits that came back successful.
+- **Words, safe by construction**: `work::describe_tool` is the one table.
+  A command is only its program and subcommand ("Ran npm test", "Ran git
+  push", "Ran curl": never arguments, URLs or environment), a web page only
+  its host ("Browsed acme.com"), a file only its name, someone else's MCP
+  tool a verb and the service ("Searched Google Drive", "Sent from Gmail",
+  "Worked in Chrome"), our own tools past-tense words ("Shared a file").
+  The engine's bookkeeping (ToolSearch, Skill, BashOutput, plan-mode
+  switches) is no step at all; an unknown built-in is "Used a tool". The
+  working line uses the present tense ("Running npm test").
+- **Then scrubbed, then clipped**: Keychain redaction, then `work::scrub`
+  (blanks secret-named variables, flags and headers, `-p…`/`-a`, query and
+  JSON fields such as `sig=` and `"password":`, bearer values, URL user
+  info, key- and base64-shaped strings), and only then the 100-character
+  limit, so a cut never leaves part of a token.
+- **Screenshots** attach to the screenshot call that took them: the oldest
+  one still running for that project. A screenshot no call explains (it
+  came with a session's reply) is a step of its own.
+- **Live**: while the turn runs, the status carries `work` (the newest 12
+  steps and the counts; no file names) plus `doing`, the running call's
+  working-line words. The desktop's working line gets a "5 steps" toggle
+  that opens the steps so far above it; the newest is left out only while
+  the working line is saying it (`doing` equals the activity), never when
+  the line is blank. A bound agent's list offers **Open project** (its
+  workspace), the only real way in today; "Take over" (opening the live
+  session or browser tab) is not built.
+- **Stored** beside the log, never in it: `turns/<message-id>.json`, sent
+  again on `agents://message` when the turn ends, and applied only to the
+  paged chat reads (desktop and phone), after the log's lock is released,
+  with one listing of `turns/` per page. Search, summaries and the shared
+  files list never read them. `messages.jsonl` stays append-only; older
+  builds show no timeline.
+- **Pruned**: an agent keeps the newest 500 timelines, and past its newest
+  100 none older than 90 days; the replies stay, only what they did is
+  forgotten. Deleting an agent removes its home and so its timelines;
+  starting fresh keeps them, since the history above the divider is still
+  shown.
+- **Bounded**: at most 60 steps per turn (the newest; `stepCount` says how
+  many there were), 30 file names.
+- **Phone**: the message's `work` shows as the folded line and list under it
+  (`mobile/src/components/work.tsx`). While it works, "Working · 8 steps"
+  sits folded under the working row and opens into the steps so far. Live
+  steps go only to an app that says it shows them (`hello.features:
+  ["work.live"]`); others get the status without `work`, and the overview
+  never carries it (it goes out on every registry change).
+
 ## Tools agents get (`src-tauri/src/agents/mcp.rs`)
 
 Served by the existing loopback agent bridge at

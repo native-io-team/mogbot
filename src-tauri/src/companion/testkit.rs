@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
-use super::router::{AgentToggles, ApprovalAnswer, Backend, ScheduleOp, SendExtras};
+use super::router::{AgentToggles, ApprovalAnswer, Backend, PhoneNewAgent, ScheduleOp, SendExtras};
 use super::wire::{ClaudeInfo, Event, Known, MacStatus, PowerInfo, Route, RouteKind};
 use super::{Companion, Registry};
 use crate::agents::store::{Agent, AgentMessage};
@@ -174,6 +174,27 @@ pub fn messages() -> Vec<AgentMessage> {
                 "approval": { "requestId": "q11", "title": "Other", "detail": "Other", "status": "expired",
                               "secret": { "name": "Other", "purpose": "Other", "kind": "other",
                                           "fields": [{ "label": "Value", "env": "OTHER" }], "reference": "secret:finance/other" } } }),
+        // A reply with the timeline of the turn it ended (`agents::work`): every step kind.
+        json!({ "id": "m25", "agentId": AGENT, "ts": at(25), "kind": "agent", "text": "Fixed the header.",
+                "work": { "startedAt": at(13), "endedAt": at(25), "stepCount": 17, "fileCount": 1, "files": ["Header.tsx"],
+                          "steps": [
+                              { "at": at(13), "kind": "plan", "label": "Updated its plan" },
+                              { "at": at(14), "kind": "read", "label": "Read Header.tsx" },
+                              { "at": at(14), "kind": "search", "label": "Searched for “padding”" },
+                              { "at": at(15), "kind": "web", "label": "Searched the web for “header spacing”" },
+                              { "at": at(15), "kind": "edit", "label": "Edited Header.tsx" },
+                              { "at": at(16), "kind": "command", "label": "Ran npm test" },
+                              { "at": at(17), "kind": "approval", "label": "You declined: Run a command", "outcome": "declined" },
+                              { "at": at(17), "kind": "command", "label": "Asked to run rm — you declined", "outcome": "declined" },
+                              { "at": at(17), "kind": "edit", "label": "Tried to edit Nav.tsx", "outcome": "failed" },
+                              { "at": at(18), "kind": "message", "label": "Messaged Ops" },
+                              { "at": at(19), "kind": "delegate", "label": "Worked on a sub-task: check the nav" },
+                              { "at": at(20), "kind": "project", "label": "Worked in site" },
+                              { "at": at(21), "kind": "screenshot", "label": "Took a screenshot of site",
+                                "image": { "name": "Desktop.jpg", "path": "attachments/m17/Desktop.jpg", "mime": "image/jpeg", "size": 184_000 } },
+                              { "at": at(22), "kind": "web", "label": "Browsed acme.com" },
+                              { "at": at(22), "kind": "tool", "label": "Searched Google Drive" }
+                          ] } }),
     ];
     list.into_iter().map(|m| round_trip(m, &[])).collect()
 }
@@ -214,12 +235,51 @@ pub fn routes() -> Vec<Route> {
     ]
 }
 
+/// A turn's timeline as it rides on a working status: the newest steps,
+/// counts, and what the running call is doing.
+pub fn live_work() -> crate::agents::work::TurnWork {
+    use crate::agents::work::{StepKind, StepOutcome, TurnWork, WorkStep};
+    TurnWork {
+        started_at: 1_762_290_000_000,
+        ended_at: None,
+        step_count: 3,
+        steps: vec![
+            WorkStep {
+                at: 1_762_290_010_000,
+                kind: StepKind::Read,
+                label: "Read App.tsx".into(),
+                outcome: None,
+                image: None,
+            },
+            WorkStep {
+                at: 1_762_290_020_000,
+                kind: StepKind::Edit,
+                label: "Tried to edit App.tsx".into(),
+                outcome: Some(StepOutcome::Failed),
+                image: None,
+            },
+            WorkStep {
+                at: 1_762_290_030_000,
+                kind: StepKind::Command,
+                label: "Ran npm test".into(),
+                outcome: None,
+                image: None,
+            },
+        ],
+        files: Vec::new(),
+        file_count: 0,
+        doing: Some("Running npm test".into()),
+    }
+}
+
 /// The overview the desktop would send, live status and all, as the phone gets it.
 pub fn overview() -> Value {
     let status = crate::agents::runner::Status {
         state: "waiting",
         activity: Some("Running npm test".into()),
         since: Some(1_762_290_000_000),
+        // The overview never carries a timeline to the phone (`phone_overview`).
+        work: Some(live_work()),
     };
     let view = crate::commands::agents::AgentView {
         agent: stored_agent(),
@@ -340,6 +400,8 @@ pub struct Stub {
     pub focus: Mutex<Vec<(String, Option<String>)>>,
     pub answers: Mutex<Vec<ApprovalAnswer>>,
     pub toggles: Mutex<Vec<(String, AgentToggles)>>,
+    /// Agents created from the phone, as the router handed them over.
+    pub created: Mutex<Vec<PhoneNewAgent>>,
     /// Agents started fresh, by id.
     pub fresh: Mutex<Vec<String>>,
     /// What reached a session: `(session id, text or "key:<key>")`.
@@ -365,6 +427,7 @@ impl Stub {
             focus: Mutex::new(Vec::new()),
             answers: Mutex::new(Vec::new()),
             toggles: Mutex::new(Vec::new()),
+            created: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
@@ -392,6 +455,7 @@ fn status(state: &'static str) -> Value {
         state,
         activity: (state == "working").then(|| "Thinking".to_string()),
         since: None,
+        work: None,
     })
     .unwrap()
 }
@@ -572,6 +636,36 @@ impl Backend for Stub {
         self.fresh.lock().unwrap().push(agent_id.to_string());
         let mut agent = stored_agent();
         agent.start_fresh();
+        Ok(serde_json::to_value(agent).unwrap())
+    }
+
+    async fn create_agent(&self, input: PhoneNewAgent) -> Result<Value, CommandError> {
+        if input.name.eq_ignore_ascii_case("Finance") {
+            return Err(CommandError::expected(
+                "There's already an agent called Finance.",
+            ));
+        }
+        self.created.lock().unwrap().push(input.clone());
+        // What `store::create` makes: a fresh agent, nothing yet but its identity.
+        let mut agent = stored_agent();
+        agent.id = "a9".into();
+        agent.name = input.name;
+        agent.role = input.role;
+        agent.color = input.color.unwrap_or_else(|| "orange".into());
+        agent.pinned = false;
+        agent.session_id = None;
+        agent.preview = None;
+        agent.unread = 0;
+        agent.pending_approvals = 0;
+        agent.model = None;
+        agent.context = None;
+        agent.check_ins.clear();
+        agent.permissions.clear();
+        agent.failure = None;
+        agent.project = None;
+        agent.capabilities = None;
+        agent.routine_model = None;
+        agent.secrets.clear();
         Ok(serde_json::to_value(agent).unwrap())
     }
 

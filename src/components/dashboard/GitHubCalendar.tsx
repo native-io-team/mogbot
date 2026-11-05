@@ -13,6 +13,7 @@ import { GitHubCalendar as GitHubCalendarLib } from 'react-github-calendar';
 import { EyeOffIcon } from '@/components/icons';
 import { Tooltip } from '../primitives/Tooltip';
 import { mixHex, useAppAccentHex } from '../../lib/accent';
+import { useResolvedTheme, type ResolvedTheme } from '../../lib/theme';
 
 interface Activity {
   date: string;
@@ -65,7 +66,7 @@ interface GitHubCalendarProps {
 // Theme: the empty cell plus four steps toward the app accent.
 //
 // BOTH `light` and `dark` MUST be provided as explicit 5-color hex scales, even
-// though we only ever render `colorScheme="dark"`. react-activity-calendar fills
+// though we only ever render one `colorScheme` at a time (the app's theme). react-activity-calendar fills
 // any missing scale from its own default, and that default is generated with
 // `color-mix(in oklab, …)`. It mutates the passed-in theme object to cache that
 // scale, then re-validates it on a later render via `CSS.supports('color', …)`.
@@ -74,12 +75,14 @@ interface GitHubCalendarProps {
 // a few seconds after launch (once the calendar data loads and it re-renders).
 // Supplying both scales as plain hex keeps the library off every color-mix path,
 // which is why the accent steps are mixed in JS (mixHex) rather than in CSS.
-const CALENDAR_EMPTY = '#2d2d2d';
+// The empty cell is a step off each theme's dashboard surface; the steps then
+// climb toward the accent (near-black for the white accent on light).
+const CALENDAR_EMPTY: Record<ResolvedTheme, string> = { dark: '#2d2d2d', light: '#e8e8e8' };
 const CALENDAR_STEPS = [0.25, 0.5, 0.75, 1];
 
-function calendarTheme(accent: string) {
-  const dark = [CALENDAR_EMPTY, ...CALENDAR_STEPS.map((t) => mixHex(CALENDAR_EMPTY, accent, t))];
-  return { light: ['#ebedf0', ...dark.slice(1)], dark };
+export function calendarTheme(accent: string) {
+  const scale = (empty: string) => [empty, ...CALENDAR_STEPS.map((t) => mixHex(empty, accent, t))];
+  return { light: scale(CALENDAR_EMPTY.light), dark: scale(CALENDAR_EMPTY.dark) };
 }
 
 function formatTooltip(activity: Activity): string {
@@ -126,6 +129,7 @@ export const GitHubCalendar = memo(function GitHubCalendar({
   onHide,
 }: GitHubCalendarProps) {
   const accent = useAppAccentHex();
+  const scheme = useResolvedTheme();
   // A new object only when the accent changes: the library caches on it.
   const theme = useMemo(() => calendarTheme(accent), [accent]);
   const currentYear = new Date().getFullYear();
@@ -179,7 +183,7 @@ export const GitHubCalendar = memo(function GitHubCalendar({
         <div style={{ display: dataLoaded ? 'block' : 'none' }}>
           <GitHubCalendarLib
             username={username}
-            colorScheme="dark"
+            colorScheme={scheme}
             theme={theme}
             blockSize={12}
             blockMargin={2}

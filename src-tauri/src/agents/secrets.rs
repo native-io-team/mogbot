@@ -636,6 +636,7 @@ mod tests {
             changes: None,
             session: None,
             client_id: None,
+            work: None,
             fresh: false,
         };
         let request_id = store::new_id();

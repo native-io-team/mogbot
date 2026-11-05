@@ -33,7 +33,7 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  border: var(--stroke-1) solid var(--border-strong);
+  border: var(--stroke-1) solid var(--border-control);
   border-radius: var(--radius-sm);
   background: var(--surface-control);
   color: transparent;

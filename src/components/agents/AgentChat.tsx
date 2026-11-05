@@ -767,6 +767,7 @@ export function AgentChat({
   const rowsPaused = agent.status.state === 'idle';
   const checkIns = agent.checkIns;
   const activity = agent.status.activity;
+  const work = agent.status.work;
   const rows = useMemo(
     () =>
       withIndicatorAt(
@@ -836,6 +837,7 @@ export function AgentChat({
                   key={m.id}
                   message={m}
                   arrived={arrived}
+                  agent={rowAgent}
                   engine={agent.engine}
                   onSignIn={onSignIn}
                   onRetry={m.id === retryId ? retryLast : undefined}
@@ -857,6 +859,7 @@ export function AgentChat({
                   key={m.id}
                   message={m}
                   arrived={arrived}
+                  agent={rowAgent}
                   onOpenPeer={m.peer && agentsById.has(m.peer.id) ? onOpenAgent : undefined}
                 />
               );
@@ -872,6 +875,8 @@ export function AgentChat({
           <WorkingIndicator
             key="working"
             activity={activity}
+            work={work}
+            agent={rowAgent}
             entering={indicator.entering}
             leaving={indicator.leaving}
             onExited={indicator.onExited}
@@ -909,6 +914,7 @@ export function AgentChat({
       indicator.leaving,
       indicator.onExited,
       activity,
+      work,
     ]
   );
 
@@ -1052,6 +1058,8 @@ export function AgentChat({
             {items.length === 0 && indicator.mounted && (
               <WorkingIndicator
                 activity={agent.status.activity}
+                work={agent.status.work}
+                agent={rowAgent}
                 entering={indicator.entering}
                 leaving={indicator.leaving}
                 onExited={indicator.onExited}

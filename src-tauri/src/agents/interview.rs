@@ -246,7 +246,7 @@ pub async fn exchange(
                 line = lines.next_line() => {
                     let Ok(Some(line)) = line else { break };
                     let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
-                    for step in stream::claude_steps(&value, &line, super::store::now_ms()) {
+                    for step in stream::claude_steps(&value, super::store::now_ms()) {
                         match step {
                             Step::Reply(text) if !text.trim().is_empty() => out.replies.push(text),
                             Step::Failed(why) => failed = Some(why),

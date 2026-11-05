@@ -506,6 +506,7 @@ mod tests {
                 state,
                 activity: activity.map(str::to_string),
                 since: None,
+                work: None,
             },
             running: state != "idle",
             queued: false,

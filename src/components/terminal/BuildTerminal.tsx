@@ -39,7 +39,7 @@ import { getTerminalGpuEnabled } from '../../lib/settings';
 import { loadNerdFonts } from '../../lib/fonts';
 import { logger } from '../../lib/logger';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { createTerminalOptions } from './terminalTheme';
+import { createTerminalOptions, followAppTheme } from './terminalTheme';
 import '@xterm/xterm/css/xterm.css';
 
 interface BuildTerminalProps {
@@ -103,6 +103,7 @@ export function BuildTerminal({
       ...createTerminalOptions('build'),
       allowProposedApi: true,
     });
+    followAppTheme(term, 'build');
     const fit = new FitAddon();
     const unicode11 = new Unicode11Addon();
     term.loadAddon(fit);

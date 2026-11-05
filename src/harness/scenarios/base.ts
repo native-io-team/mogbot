@@ -136,6 +136,9 @@ export const baseCommands: CommandMap = {
     defaultAgent: 'Claude Code',
   },
   get_app_icon: 'brand',
+  // The harness's `?theme=` param overrides this (fakeBackend.ts).
+  get_app_theme: 'dark',
+  set_app_theme: null,
   // `null` is the real third state here: never asked. The toggle then reflects
   // default-on, and the explainer runs before the first capture.
   get_thumbnails_enabled: null,

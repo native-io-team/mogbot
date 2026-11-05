@@ -64,6 +64,8 @@ pub async fn open_project_in_new_window(
         .min_inner_size(400.0, 300.0)
         .resizable(true)
         .transparent(true)
+        .theme(crate::commands::settings::saved_native_theme())
+        .background_color(crate::commands::settings::saved_window_background())
         .initialization_script_for_all_frames(crate::webview_scripts::INSPECTOR_SHIM);
 
     #[cfg(target_os = "macos")]
@@ -173,6 +175,8 @@ pub fn spawn_blank_window(app: &AppHandle) -> Result<String, String> {
             .min_inner_size(400.0, 300.0)
             .resizable(true)
             .transparent(true)
+            .theme(crate::commands::settings::saved_native_theme())
+            .background_color(crate::commands::settings::saved_window_background())
             .initialization_script_for_all_frames(crate::webview_scripts::INSPECTOR_SHIM);
 
     #[cfg(target_os = "macos")]

@@ -757,6 +757,108 @@ export const agentsMessages = {
       "kind": "approval",
       "text": "",
       "ts": 1762290024000
+    },
+    {
+      "agentId": "a1",
+      "id": "m25",
+      "kind": "agent",
+      "text": "Fixed the header.",
+      "ts": 1762290025000,
+      "work": {
+        "endedAt": 1762290025000,
+        "fileCount": 1,
+        "files": [
+          "Header.tsx"
+        ],
+        "startedAt": 1762290013000,
+        "stepCount": 17,
+        "steps": [
+          {
+            "at": 1762290013000,
+            "kind": "plan",
+            "label": "Updated its plan"
+          },
+          {
+            "at": 1762290014000,
+            "kind": "read",
+            "label": "Read Header.tsx"
+          },
+          {
+            "at": 1762290014000,
+            "kind": "search",
+            "label": "Searched for “padding”"
+          },
+          {
+            "at": 1762290015000,
+            "kind": "web",
+            "label": "Searched the web for “header spacing”"
+          },
+          {
+            "at": 1762290015000,
+            "kind": "edit",
+            "label": "Edited Header.tsx"
+          },
+          {
+            "at": 1762290016000,
+            "kind": "command",
+            "label": "Ran npm test"
+          },
+          {
+            "at": 1762290017000,
+            "kind": "approval",
+            "label": "You declined: Run a command",
+            "outcome": "declined"
+          },
+          {
+            "at": 1762290017000,
+            "kind": "command",
+            "label": "Asked to run rm — you declined",
+            "outcome": "declined"
+          },
+          {
+            "at": 1762290017000,
+            "kind": "edit",
+            "label": "Tried to edit Nav.tsx",
+            "outcome": "failed"
+          },
+          {
+            "at": 1762290018000,
+            "kind": "message",
+            "label": "Messaged Ops"
+          },
+          {
+            "at": 1762290019000,
+            "kind": "delegate",
+            "label": "Worked on a sub-task: check the nav"
+          },
+          {
+            "at": 1762290020000,
+            "kind": "project",
+            "label": "Worked in site"
+          },
+          {
+            "at": 1762290021000,
+            "image": {
+              "mime": "image/jpeg",
+              "name": "Desktop.jpg",
+              "path": "attachments/m17/Desktop.jpg",
+              "size": 184000
+            },
+            "kind": "screenshot",
+            "label": "Took a screenshot of site"
+          },
+          {
+            "at": 1762290022000,
+            "kind": "web",
+            "label": "Browsed acme.com"
+          },
+          {
+            "at": 1762290022000,
+            "kind": "tool",
+            "label": "Searched Google Drive"
+          }
+        ]
+      }
     }
   ],
   "more": false
@@ -1346,6 +1448,25 @@ export const agentsStartFresh = {
   "shape": 2,
   "unread": 2
 } satisfies Result<'agents.startFresh'>;
+export const agentsCreate = {
+  "color": "teal",
+  "createdAt": 1762200000000,
+  "engine": "claude",
+  "hidden": false,
+  "id": "a9",
+  "isMain": false,
+  "lastActivityAt": 1762290000000,
+  "model": null,
+  "muted": false,
+  "name": "Inbox",
+  "pendingApprovals": 0,
+  "pinned": false,
+  "preview": null,
+  "role": "Keeps my inbox down to what matters",
+  "sessionId": null,
+  "shape": 2,
+  "unread": 0
+} satisfies Result<'agents.create'>;
 export const sessionsSend = {
   "sessionId": "pty-1"
 } satisfies Result<'sessions.send'>;
@@ -1375,6 +1496,7 @@ export const frames = [
       "agents.focus",
       "agents.markUnread",
       "agents.startFresh",
+      "agents.create",
       "agents.update",
       "agents.revokePermission",
       "agents.instructions",
@@ -1398,7 +1520,8 @@ export const frames = [
       "sessions.key",
       "sessions.start",
       "preview.screenshot"
-    ]
+    ],
+    "timeZone": "America/New_York"
   },
   {
     "t": "refused",
@@ -1605,9 +1728,33 @@ export const frames = [
       "type": "agents.status",
       "agentId": "a1",
       "status": {
-        "activity": "Reading src/App.tsx",
+        "activity": "Running npm test",
         "since": 1762290000000,
-        "state": "working"
+        "state": "working",
+        "work": {
+          "doing": "Running npm test",
+          "fileCount": 0,
+          "startedAt": 1762290000000,
+          "stepCount": 3,
+          "steps": [
+            {
+              "at": 1762290010000,
+              "kind": "read",
+              "label": "Read App.tsx"
+            },
+            {
+              "at": 1762290020000,
+              "kind": "edit",
+              "label": "Tried to edit App.tsx",
+              "outcome": "failed"
+            },
+            {
+              "at": 1762290030000,
+              "kind": "command",
+              "label": "Ran npm test"
+            }
+          ]
+        }
       }
     }
   },

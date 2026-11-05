@@ -11,6 +11,7 @@
 //!     messages.jsonl         the conversation as the user sees it (append-only)
 //!     approvals.jsonl        how its approval cards were answered
 //!     turn.json, inbox.json  a turn in flight and what's queued behind it
+//!     turns/<message-id>.json  what the turn ending on that message did (`work`)
 //! ```
 //!
 //! The chat log is ours, not Claude Code's session file. It records exactly
@@ -306,6 +307,10 @@ pub struct AgentMessage {
     /// phone swaps its optimistic bubble by id. Absent everywhere else.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
+    /// What the turn that ended on this message did (`agents::work`). Never in
+    /// `messages.jsonl`: it is kept beside it, in `turns/<id>.json`, and added on read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work: Option<super::work::TurnWork>,
     /// On a `note`: the conversation started fresh here (memory kept), drawn
     /// as a divider. Older builds show it as the plain note it also is.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -781,7 +786,9 @@ pub fn delete(id: &str) -> Result<Agent, CommandError> {
     let removed = registry.agents.remove(index);
     write_registry(&registry)?;
     super::secrets::forget_all(&removed);
-    // The home goes with it: its memory and chat are the agent.
+    super::work::forget_agent(&removed.id);
+    // The home goes with it: its memory and chat are the agent (and the
+    // timelines kept under its replies, in `turns/`).
     let home = agents_root()?.join(&removed.id);
     if home.exists() {
         let _ = crate::utils::remove_dir_all_robust(&home);
@@ -1226,6 +1233,10 @@ fn resolve_approval(
     let pending = count_pending(&all);
     drop(guard);
     let _ = update(agent_id, |a| a.pending_approvals = pending);
+    if changed.is_some() {
+        // The turn that raised it, if it's still running, says what the answer was.
+        super::work::on_answer(agent_id, request_id, status);
+    }
     Ok(changed)
 }
 
@@ -1397,6 +1408,7 @@ mod tests {
                         cli: Some("claude".into()),
                     }),
                     client_id: None,
+                    work: None,
                     fresh: false,
                 })
                 .unwrap();
@@ -1666,6 +1678,7 @@ mod tests {
                 changes: None,
                 session: None,
                 client_id: None,
+                work: None,
                 fresh: false,
             };
             append_message(&pending("r1")).unwrap();
@@ -1707,6 +1720,7 @@ mod tests {
             failure: None,
             session: None,
             client_id: None,
+            work: None,
             fresh: false,
         }
     }
