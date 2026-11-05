@@ -1,0 +1,7 @@
+{
+  "name": "Dashbot",
+  "slug": "dashbot",
+  "identifier": "io.native.dashbot",
+  "urlScheme": "dashbot",
+  "repository": "https://github.com/native-io-team/dashbot"
+}
