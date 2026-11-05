@@ -17,6 +17,7 @@ import { Segmented, T } from '../../components/ui';
 import { formatAgo } from '../../lib/agents';
 import { extensionOf, formatSize, isPreviewableImage, share } from '../../lib/files';
 import { attachmentSource, describeError, download, listFiles } from '../../lib/session';
+import { useRefresh } from '../../lib/refresh';
 import { useApp } from '../../lib/store';
 import { withAgentAccent } from '../../lib/accentScreen';
 import { iconSize, radius, space, type } from '../../lib/theme';
@@ -36,7 +37,6 @@ function Files() {
   const [filter, setFilter] = useState<Filter>('all');
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
   const live = useApp((s) => s.link.kind === 'connected');
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
@@ -53,6 +53,7 @@ function Files() {
       )
       .finally(() => setLoading(false));
   }, [id]);
+  const { refreshing, onRefresh } = useRefresh(load);
   // Asked once the link is up, and again each time it comes back: a cold or
   // deep-linked open lands here before the socket is.
   useEffect(() => {
@@ -102,11 +103,8 @@ function Files() {
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          tintColor={colors.textMuted}
-          onRefresh={() => {
-            setRefreshing(true);
-            void load().finally(() => setRefreshing(false));
-          }}
+          tintColor={colors.textSecondary}
+          onRefresh={onRefresh}
         />
       }
       ListHeaderComponent={
@@ -132,7 +130,7 @@ function Files() {
           {files == null ? (
             !live ? (
               <LinkProblem what="Files from this conversation" macName={macName} />
-            ) : loading ? (
+            ) : loading && !refreshing ? (
               <Spinner />
             ) : null
           ) : (
