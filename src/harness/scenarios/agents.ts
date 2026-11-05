@@ -2118,9 +2118,10 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-fresh-meter',
     title: 'Agents — how full the conversation is, in the editor',
     looksRightWhen:
-      'Editing Acme Site: under This week / All time, a third quiet line “Conversation · 11% full · 21.4k of 200k tokens”. It is there only because the engine reported both numbers.',
+      'Editing Acme Site: under This week / All time, a third quiet line “Conversation · 11% full · 21k of 200k tokens”. It is there only because the engine reported both numbers.',
     openSelector: AGENTS_TAB,
     requires: '.agent-editor__usage',
+    clipSelector: '.agent-editor__usage',
     steps: [
       { click: '[data-agent-id="acme"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
