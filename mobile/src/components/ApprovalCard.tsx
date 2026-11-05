@@ -30,7 +30,7 @@ import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import { answerApproval, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
-import { fonts, iconSize, radius, space, type } from '../lib/theme';
+import { fonts, iconSize, radius, space, type, PRESSED } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
 import { ACTION, Card, Line, OFFLINE_NOTE } from './surfaces';
@@ -519,8 +519,8 @@ export function Command({ text, lines }: { text: string; lines: number }) {
         <Pressable
           accessibilityRole="button"
           onPress={() => setAll(true)}
-          hitSlop={{ top: 8, bottom: 8 }}
-          style={cardStyles.showAll}
+          hitSlop={{ top: 12, bottom: 12 }}
+          style={({ pressed }) => [cardStyles.showAll, pressed && PRESSED]}
         >
           <T variant="caption" color={colors.textSecondary} style={{ fontFamily: fonts.medium }}>
             Show all {rows.length} lines

@@ -160,7 +160,7 @@ function Files() {
           style={({ pressed }) => [
             styles.row,
             index > 0 && styles.divider,
-            pressed && { backgroundColor: colors.surfacePanel },
+            pressed && { backgroundColor: colors.surfaceControl },
           ]}
         >
           <View style={styles.thumb}>

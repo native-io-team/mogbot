@@ -127,7 +127,7 @@ export const RoomRow = memo(function RoomRow({
       style={({ pressed }) => [
         styles.row,
         selected && styles.selected,
-        pressed && { backgroundColor: colors.surfacePanel },
+        pressed && { backgroundColor: colors.surfaceControl },
       ]}
     >
       <StackedAvatars members={members} />

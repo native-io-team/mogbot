@@ -94,30 +94,42 @@ export const AgentRow = memo(function AgentRow({
     />
   );
 
+  // One shape for the row's whole life. Whether the Mac answers, and what its
+  // welcome offers, change under a finger: a reconnect, the welcome arriving
+  // after pairing, the Chief turning unread. A Link that gains or loses its
+  // Menu is a different component (expo-router swaps in its native preview
+  // link), and a row that gains or loses its swipe is a different parent, so
+  // React remounted the row mid-tap and the tap was lost. So the menu is
+  // always there, its items greyed while they can't run, and the swipe is
+  // always there, switched off while it can't.
   const row =
     NATIVE_MENU && !onPress ? (
       <Link href={href} asChild>
         <Link.Trigger>{body}</Link.Trigger>
-        {live && actions.length > 0 && (
-          <Link.Menu>
-            {actions.map((a) => (
+        <Link.Menu>
+          {actions.length > 0 ? (
+            actions.map((a) => (
               <Link.MenuAction
                 key={a.id}
                 icon={a.icon}
                 destructive={a.destructive}
+                disabled={!live}
                 onPress={() => onAction(agent, a.id)}
               >
                 {a.title}
               </Link.MenuAction>
-            ))}
-          </Link.Menu>
-        )}
+            ))
+          ) : (
+            <Link.MenuAction disabled onPress={() => {}}>
+              {live ? 'Nothing to change from this phone' : 'Not connected to your Mac right now.'}
+            </Link.MenuAction>
+          )}
+        </Link.Menu>
       </Link>
     ) : (
       body
     );
 
-  if (!canToggle) return row;
   const act = (id: AgentAction) => {
     swipe.current?.close();
     onAction(agent, id);
@@ -125,6 +137,7 @@ export const AgentRow = memo(function AgentRow({
   return (
     <ReanimatedSwipeable
       ref={swipe}
+      enabled={canToggle}
       friction={1.6}
       overshootFriction={8}
       rightThreshold={ACTION_W / 2}
@@ -277,7 +290,9 @@ function RowBody({
       style={({ pressed }) => [
         styles.row,
         selected && styles.selected,
-        pressed && Platform.OS === 'ios' && { backgroundColor: colors.surfacePanel },
+        // The moment the finger lands. The panel grey was six levels off the
+        // list's in dark, so a tap that registered looked like one that hadn't.
+        pressed && Platform.OS === 'ios' && { backgroundColor: colors.surfaceControl },
       ]}
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}

@@ -12,7 +12,7 @@ import { ActionSheetIOS, Modal, Platform, Pressable, StyleSheet, View } from 're
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Action } from '../lib/actions';
-import { iconSize, radius, space } from '../lib/theme';
+import { iconSize, radius, space, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Icon, useRipple, T } from './ui';
 
@@ -143,7 +143,7 @@ export function MenuHost() {
                   set(null);
                   current.run(a.id);
                 }}
-                style={styles.item}
+                style={({ pressed }) => [styles.item, pressed && Platform.OS === 'ios' && PRESSED]}
               >
                 {a.icon && (
                   <Icon
@@ -165,7 +165,7 @@ export function MenuHost() {
                 accessibilityRole="menuitem"
                 android_ripple={ripple}
                 onPress={() => set(null)}
-                style={styles.item}
+                style={({ pressed }) => [styles.item, pressed && Platform.OS === 'ios' && PRESSED]}
               >
                 <T color={colors.textSecondary}>Cancel</T>
               </Pressable>

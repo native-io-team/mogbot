@@ -73,6 +73,7 @@ function selfSigned(dir: string) {
     takeover: args.includes('--takeover'),
     bars: args.includes('--bars'),
     cors: args.includes('--cors'),
+    solo: args.includes('--solo'),
     identityFile: path.join(state, 'identity.pem'),
     // The same server id and paired phones, a different key: what a phone
     // sees when something else answers at its Mac's address.

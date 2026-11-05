@@ -12,7 +12,7 @@ import { Pressable, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
-import { iconSize, space } from '../lib/theme';
+import { iconSize, space, PRESSED } from '../lib/theme';
 import {
   earlierSteps,
   liveSteps,
@@ -41,7 +41,7 @@ function Toggle({ open, label, onPress }: { open: boolean; label: string; onPres
       accessibilityLabel={label}
       accessibilityHint={open ? 'Hides the steps' : 'Shows each step'}
       accessibilityState={{ expanded: open }}
-      style={styles.head}
+      style={({ pressed }) => [styles.head, pressed && PRESSED]}
     >
       <Icon
         name={open ? 'chevron.down' : 'chevron.right'}
