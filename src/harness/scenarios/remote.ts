@@ -280,7 +280,7 @@ export const remoteScenarios: Scenario[] = [
     title: 'Sidebar footer — phone connected, remote access on (Cursor, just now)',
     looksRightWhen:
       'Three rows at the foot of the sidebar, each a 14px line icon in the same column and ' +
-      'colour, then its words: a phone and "Julian’s iPhone connected", a globe and ' +
+      'colour, then its words: a phone and "Sam’s iPhone connected", a globe and ' +
       '"Remote on · Cursor just now", a gear and "Settings". Phone and globe each carry a small ' +
       'green dot on the icon’s corner; there is no larger dot or halo. Clicking each row opens ' +
       'its own panel (Phone, Remote access, the Settings menu).',
@@ -294,7 +294,7 @@ export const remoteScenarios: Scenario[] = [
         devices: [
           {
             id: 'dev_1',
-            name: 'Julian’s iPhone',
+            name: 'Sam’s iPhone',
             platform: 'ios',
             pairedAt: Date.now() - 3 * 24 * 60 * MIN,
             lastSeenAt: Date.now() - 10_000,
@@ -328,7 +328,7 @@ export const remoteScenarios: Scenario[] = [
         devices: [
           {
             id: 'dev_1',
-            name: 'Julian’s iPhone',
+            name: 'Sam’s iPhone',
             platform: 'ios',
             pairedAt: Date.now() - 3 * 24 * 60 * MIN,
             lastSeenAt: Date.now() - 4 * MIN,
