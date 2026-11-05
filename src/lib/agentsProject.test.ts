@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildChatItems,
+  changedFileLabels,
   drivingBriefId,
   folderName,
   lastOutcome,
@@ -97,4 +98,14 @@ describe('newestPeerGroups', () => {
 
 it('names a project by its folder', () => {
   expect(folderName('/Users/me/ShipStudio/acme/')).toBe('acme');
+});
+
+it('names changed files by name, with the folder only when two share one', () => {
+  const labels = changedFileLabels([
+    'src/app/page.tsx',
+    'src/app/blog/page.tsx',
+    'src/styles/site.css',
+    'README.md',
+  ]);
+  expect([...labels.values()]).toEqual(['app/page.tsx', 'blog/page.tsx', 'site.css', 'README.md']);
 });

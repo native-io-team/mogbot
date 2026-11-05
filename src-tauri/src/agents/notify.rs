@@ -421,6 +421,16 @@ mod tests {
         let alert = alert_for(&agent(false), &line).unwrap();
         assert_eq!(alert.body, "Scheduled");
         assert!(!alert.sound);
+        // A repeating one is a routine, said so.
+        let mut line = new_message("fin", MessageKind::CheckIn, "Brief me.");
+        line.check_in = Some(crate::agents::schedule::CheckInMark {
+            due_at: 0,
+            late: false,
+            repeats: true,
+            manual: false,
+            found: None,
+        });
+        assert_eq!(alert_for(&agent(false), &line).unwrap().body, "Routine");
     }
 
     #[test]

@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { ErrorIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
+import { Tooltip } from '../primitives/Tooltip';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { formatAgo } from '../../lib/workflows';
 import { revokeSecret, secretVars, type AgentSecret } from '../../lib/agentSecrets';
@@ -41,12 +42,11 @@ export function AgentSecrets({ agent }: { agent: Agent }) {
           {secrets.map((secret) => (
             <li key={secret.id} className="agent-permissions__rule agent-secrets__row">
               <span className="agent-secrets__text">
-                <span
-                  className="agent-secrets__name"
-                  title={`Saved as ${secret.name} · ${secretVars(secret)}`}
-                >
-                  {secret.purpose || secret.name}
-                </span>
+                <Tooltip content={`Saved as ${secret.name} · ${secretVars(secret)}`}>
+                  <span className="agent-secrets__name" tabIndex={0}>
+                    {secret.purpose || secret.name}
+                  </span>
+                </Tooltip>
                 <span className="agent-secrets__meta">
                   Added {formatAgo(secret.createdAt, now)} ·{' '}
                   {secret.lastUsedAt ? `used ${formatAgo(secret.lastUsedAt, now)}` : 'not used yet'}

@@ -1,4 +1,3 @@
-import { openUrl } from '@tauri-apps/plugin-opener';
 /**
  * Apps agents can use: the user's Claude Code MCP servers, which every agent
  * turn loads. Mirrors `agents::apps` (src-tauri/src/agents/apps.rs).
@@ -7,6 +6,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 /** Where a server is set up, which decides whether this panel may remove it. */
 export type AgentAppSource = 'user' | 'claudeAi' | 'other';

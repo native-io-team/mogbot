@@ -36,7 +36,6 @@ import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
 import { SegmentedControl } from '../primitives/SegmentedControl';
 import { ToggleButton } from '../primitives/ToggleButton';
-import { Tooltip } from '../primitives/Tooltip';
 import { WhenComposer } from './AgentWhenRoutine';
 import {
   CADENCES,
@@ -605,14 +604,10 @@ function ScheduleRow({
             >
               {describeWatchStatus(item)}
             </span>
-            {/* The window's arithmetic is for whoever asks: a quiet line, the detail on hover. */}
-            {watch.coverage && (
-              <Tooltip content={watch.coverage}>
-                <span className="agent-schedule__spent" tabIndex={0}>
-                  Watches the most recent ones
-                </span>
-              </Tooltip>
-            )}
+            {/* Always visible, never behind hover: it says an older item may
+                start work as if new, which someone deciding to trust this
+                routine needs to read. */}
+            {watch.coverage && <span className="agent-schedule__spent">{watch.coverage}</span>}
             {checked && (
               <span className="agent-when__checked" aria-live="polite">
                 {checked}

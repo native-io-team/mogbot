@@ -475,7 +475,7 @@ export const UserBubble = memo(function UserBubble({
         <div className="agent-chat__failed" role="alert">
           <WarningIcon size={12} />
           Not sent.
-          <TextButton variant="accent" tabIndex={0} onClick={() => onRetry?.(message.id)}>
+          <TextButton variant="strong" tabIndex={0} onClick={() => onRetry?.(message.id)}>
             Try again
           </TextButton>
         </div>
@@ -564,10 +564,12 @@ export const ErrorLine = memo(function ErrorLine({
                 {scheduling ? 'Scheduling…' : `Retry ${retryPhrase(retryAt)}`}
               </TextButton>
             ))}
-          {/* One text action: retry at the reset, or now once it's passed. */}
-          {onRetry && !retryAt && (
-            <TextButton tabIndex={0} variant="accent" onClick={onRetry}>
-              Retry
+          {/* Retry at the reset is the recommended one; "Try anyway" stays
+              beside it, quiet, because the limit may already have lifted
+              (another plan, extra usage). Once the reset has passed, Retry. */}
+          {onRetry && (
+            <TextButton tabIndex={0} variant={retryAt ? 'default' : 'accent'} onClick={onRetry}>
+              {retryAt ? 'Try anyway' : 'Retry'}
             </TextButton>
           )}
         </div>
@@ -1272,6 +1274,9 @@ interface SessionPromptCardProps extends Arrival {
   compact: boolean;
 }
 
+/** An edit as decisions.rs `plain_detail` says it: "Edit index.html", "Create a.md". */
+const EDIT_SENTENCE = /^(Edit|Create) [^\n]+$/;
+
 /**
  * A question a project session is waiting on, with the session's own words
  * and options. The same card is in every chat the work touched; answering
@@ -1375,9 +1380,10 @@ function SessionPromptCard({
         resolved={openedPending && !pending}
       >
         {/* Folder trust is our explanation and an edit is one sentence ("Edit
-            index.html", decisions.rs): prose. A command keeps its own lines. */}
+            index.html", decisions.rs `plain_detail`): prose. A command keeps
+            its own lines, a one-line command too. */}
         {approval.detail &&
-          (prompt.kind === 'trust' || !approval.detail.includes('\n') ? (
+          (prompt.kind === 'trust' || EDIT_SENTENCE.test(approval.detail) ? (
             <p className="agent-card__note">{approval.detail}</p>
           ) : (
             <pre className="agent-approval__detail">{approval.detail}</pre>

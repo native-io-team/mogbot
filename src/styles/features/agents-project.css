@@ -59,7 +59,7 @@
 
 /* Portalled out of the agent editor: above the dialog it opens from. */
 .ss-dropdown__menu.agent-project-menu {
-  z-index: var(--z-tooltip);
+  z-index: var(--z-modal-menu);
 }
 
 /* ------------------------------------------------------------ change card */

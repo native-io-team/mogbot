@@ -35,7 +35,8 @@ top of the agent list, shown only while an agent waits on you (a request, or a
 turn that didn't finish; the same set ⌘J visits), and from ⌘K. A usage limit
 is not waiting on you — it resets by itself — so it isn't counted: What's in
 flight lists it under **Paused**, and in a chat it is a quiet centred line
-with "Retry at 4:45 AM", not a tinted box. There is no
+with "Retry at 4:45 AM" (and a quiet "Try anyway", since the limit may have
+lifted early), not a tinted box. There is no
 icon for it: an unlabeled one was three names for one place. Its foot has the Phone row (the companion
 app: pair, or which phone is connected); remote access, for driving the app
 from another assistant, appears there only while it is on and is otherwise

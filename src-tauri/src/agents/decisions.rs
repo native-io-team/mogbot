@@ -173,15 +173,18 @@ fn strip_key_hint(label: &str) -> &str {
     }
 }
 
-/// An option in the app's words: no key hints, "conversation" for Claude
-/// Code's "session", the project by name rather than its path, and the
-/// known options said plainly (docs/agents.md, vocabulary).
+/// An option in the app's words: no key hints, the project by name rather
+/// than its path, and the known options said plainly (docs/agents.md,
+/// vocabulary). A grant "during this session" lasts as long as that Claude
+/// Code process, which outlives Start fresh and reaches every `--add-dir`
+/// folder too, so it is said as exactly that: never narrowed to a project or
+/// to "this conversation".
 pub fn plain_label(label: &str, project: &str) -> String {
     let name = shared::project_name(project);
     let label = strip_key_hint(label);
     let lower = label.to_lowercase();
     if lower == "yes, allow all edits during this session" {
-        return format!("Allow all edits in {name} for this conversation");
+        return UNTIL_CLOSED_EDITS.into();
     }
     if lower.starts_with("no, and tell claude what to do differently") {
         return "No, and say what to do instead".into();
@@ -192,9 +195,16 @@ pub fn plain_label(label: &str, project: &str) -> String {
         plain = plain.replace(path, name);
     }
     plain
-        .replace("during this session", "for this conversation")
+        .replace("during this session", UNTIL_CLOSED)
+        .replace("for this session only", UNTIL_CLOSED)
+        .replace("for this session", UNTIL_CLOSED)
         .replace("this session", "this conversation")
 }
+
+/// How long a Claude Code "session" grant lasts, in the app's words.
+const UNTIL_CLOSED: &str = "until Claude Code is closed";
+/// Claude Code's "Yes, allow all edits during this session".
+const UNTIL_CLOSED_EDITS: &str = "Allow all edits until Claude Code is closed";
 
 /// The body of a permission card. An edit is said as a sentence ("Edit
 /// index.html"); anything else (a command) keeps the session's own lines,
@@ -982,7 +992,7 @@ mod tests {
             labels,
             vec![
                 "Yes",
-                "Allow all edits in demo-site for this conversation",
+                "Allow all edits until Claude Code is closed",
                 "No, and say what to do instead",
             ]
         );
@@ -1017,8 +1027,13 @@ mod tests {
         );
         assert_eq!(
             plain_label("Yes, for this session only", p),
-            "Yes, for this conversation only"
+            "Yes, until Claude Code is closed"
         );
+        // A session grant is never narrowed to the project or to this
+        // conversation: it reaches every folder and outlives Start fresh.
+        let broad = plain_label("Yes, allow all edits during this session (shift+tab)", p);
+        assert_eq!(broad, "Allow all edits until Claude Code is closed");
+        assert!(!broad.contains("bakery") && !broad.contains("conversation"));
         // A project path of "/" never rewrites every character.
         assert_eq!(plain_label("Yes", "/"), "Yes");
         // A command keeps its own lines.

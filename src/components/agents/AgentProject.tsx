@@ -32,6 +32,7 @@ import { WorkTimeline } from './AgentWork';
 import { AgentCard } from './AgentCard';
 import { listProjects } from '../../lib/project';
 import {
+  changedFileLabels,
   folderName,
   getChangeDiff,
   leftOutLine,
@@ -265,6 +266,8 @@ export const ChangeCard = memo(function ChangeCard({
   const count = changes.fileCount === 1 ? '1 file' : `${changes.fileCount} files`;
   const several = changes.files.length > 1;
   const unlisted = changes.fileCount - changes.files.length;
+  // Two files with one name (app/page.tsx, blog/page.tsx) say their folder.
+  const fileLabels = changedFileLabels(changes.files.map((file) => file.path));
   const copy = changes.copy;
   const offering = Boolean(copy && live && agent);
   const working = agent?.status.state !== 'idle';
@@ -345,7 +348,9 @@ export const ChangeCard = memo(function ChangeCard({
                   data-status={file.status}
                   onClick={() => setViewing(file)}
                 >
-                  <span className="agent-changes__path">{folderName(file.path)}</span>
+                  <span className="agent-changes__path">
+                    {fileLabels.get(file.path) ?? folderName(file.path)}
+                  </span>
                   {file.added != null && (
                     <span className="agent-changes__counts">
                       <LineCounts added={file.added} removed={file.removed} />

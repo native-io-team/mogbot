@@ -136,7 +136,8 @@ export function AgentAppsModal({ isOpen, onClose }: AgentAppsModalProps) {
                   <div className="agent-apps__text">
                     <span className="agent-apps__name">Gmail, Google Calendar, Slack and more</span>
                     <span className="agent-apps__meta">
-                      Connected on claude.ai, under Settings → Connectors
+                      Connect these on claude.ai, under Settings → Connectors. They reach Claude
+                      Code agents signed in with a claude.ai account.
                     </span>
                   </div>
                   <Button

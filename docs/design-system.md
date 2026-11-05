@@ -515,7 +515,9 @@ Use the component matching the behavior instead of flattening different controls
 ```
 
 Use `TextButton` for inline prose/metadata actions: it retains native button, ref, disabled, focus,
-and icon behavior without a fixed control surface. Use `Tabs` for panel navigation and
+and icon behavior without a fixed control surface. Its `accent` variant carries the Chief's colour,
+so it is only for the recommended action; an action inside an alert, a status line or prose (Try
+again, Update available, a link to another panel) is `strong`: full text colour, never the accent. Use `Tabs` for panel navigation and
 `SegmentedControl` for mutually exclusive filters/settings.
 
 `Tabs` defaults to `mode="panel"`: every `TabsList` requires an accessible label, every `TabsTab`

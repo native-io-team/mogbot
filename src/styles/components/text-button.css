@@ -43,6 +43,12 @@
   height: auto;
 }
 
+/* A neutral action that has to read (inside an alert, a status line, prose):
+   full text colour, never the accent, which means primary action, not status. */
+.text-button--strong.button {
+  color: var(--text-primary);
+}
+
 .text-button--primary.button {
   color: var(--accent-active);
 }

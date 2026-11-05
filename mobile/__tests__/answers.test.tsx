@@ -171,13 +171,13 @@ describe('prompt answers', () => {
   it('says what a broader answer covers', () => {
     expect(BROADER.test('Yes, and don’t ask again for npm test')).toBe(true);
     expect(BROADER.test('Yes')).toBe(false);
-    expect(broaderCaption('Yes, allow all edits during this session')).toBe(
-      'Lets it make edits without asking for the rest of this task.'
-    );
-    // The desk's own words for it (decisions.rs).
-    expect(broaderCaption('Allow all edits in demo-site for this conversation')).toBe(
-      'Lets it make edits without asking for the rest of this task.'
-    );
+    const untilClosed =
+      'Lets it make edits without asking, in every folder it works in, until Claude Code is closed.';
+    expect(broaderCaption('Yes, allow all edits during this session')).toBe(untilClosed);
+    // The desk's own words for it (decisions.rs), and an older desk's.
+    expect(BROADER.test('Allow all edits until Claude Code is closed')).toBe(true);
+    expect(broaderCaption('Allow all edits until Claude Code is closed')).toBe(untilClosed);
+    expect(broaderCaption('Allow all edits in demo-site for this conversation')).toBe(untilClosed);
     expect(broaderCaption("Yes, and don't ask again for npm test")).toBe(
       'Lets it do this without asking again, not just this once.'
     );
