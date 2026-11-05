@@ -168,13 +168,13 @@ export function ImportAgentsModal({ isOpen, onClose, onOpenAgent }: ImportAgents
         </>
       ) : (
         <Tabs value={path} onValueChange={(v) => setPath(v as ImportPath)}>
-          <TabsList
-            className="agents-import__tabs"
-            appearance="underline"
-            aria-label="How to import"
-          >
-            <TabsTab value="paste">Paste a reply</TabsTab>
-            <TabsTab value="connected">Connected assistant</TabsTab>
+          <TabsList className="agents-import__tabs" aria-label="How to import">
+            <TabsTab value="paste" width="fill">
+              Paste a reply
+            </TabsTab>
+            <TabsTab value="connected" width="fill">
+              Connected assistant
+            </TabsTab>
           </TabsList>
           <TabsPanel value="paste">
             <ImportPastePanel onCancel={close} onDone={setResult} />

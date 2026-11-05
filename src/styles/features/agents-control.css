@@ -87,7 +87,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-md);
-  padding: var(--spacing-xs) 0;
+  padding: var(--spacing-sm) 0;
   font-size: var(--font-size-body-md);
   font-weight: var(--font-weight-body);
   color: var(--text-primary);
@@ -234,12 +234,12 @@
 
 /* --------------------------------------------------------------- memory */
 
-/* Agent and Memory, under the editor's title. */
+/* Agent and Memory: two views of one small dialog, so a segmented
+   pair (Tabs' default appearance) with equal halves, set into the body with
+   the same inset as its content — not an underline strip on the header. */
 .agent-editor__tabs {
   display: flex;
-  width: 100%;
-  padding: 0 var(--spacing-xl);
-  border-bottom: var(--border-width-default) solid var(--border-subtle);
+  margin: var(--spacing-lg) var(--spacing-xl) 0;
 }
 
 .agent-memory {
@@ -257,7 +257,7 @@
 .agent-memory__group {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2xs);
+  gap: var(--spacing-xs);
 }
 
 .agent-memory__heading {
@@ -279,7 +279,7 @@
   display: flex;
   align-items: flex-start;
   gap: var(--spacing-sm);
-  padding: var(--spacing-xs) 0;
+  padding: var(--spacing-sm) 0;
   font-size: var(--font-size-body-md);
   line-height: var(--line-height-help);
   color: var(--text-primary);
