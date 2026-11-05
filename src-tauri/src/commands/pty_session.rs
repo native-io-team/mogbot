@@ -517,6 +517,86 @@ pub async fn pty_session_open(
     project_path: Option<String>,
     agent_id: Option<String>,
 ) -> Result<OpenSessionResult, CommandError> {
+    // An agent's take-over terminal is spawned by the backend only. A tab
+    // showing one may attach to it while it runs, but never respawn it: a
+    // plain CLI under that id would look like the take-over still going.
+    if crate::agents::takeover::is_takeover_pty(&session_id) {
+        return live_session(&session_id)
+            .ok_or_else(|| CommandError::expected("That take-over has ended. Close this tab."));
+    }
+    open_session(
+        app,
+        OpenSpec {
+            session_id,
+            command,
+            args,
+            cwd,
+            env,
+            env_remove: Vec::new(),
+            cols,
+            rows,
+            project_path,
+            agent_id,
+            account_env: true,
+        },
+    )
+    .await
+}
+
+/// Everything a backend PTY session is opened with. The tab command fills
+/// it from the webview; Rust callers (an agent's take-over) build it
+/// themselves, so what they pass (an MCP URL, an agent's secrets) never
+/// crosses into the webview.
+pub struct OpenSpec {
+    pub session_id: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub cwd: Option<String>,
+    pub env: BTreeMap<String, String>,
+    /// Variables of the app's own environment the child must not inherit.
+    pub env_remove: Vec<String>,
+    pub cols: u16,
+    pub rows: u16,
+    pub project_path: Option<String>,
+    pub agent_id: Option<String>,
+    /// Inject the project's (or active) workspace credentials and config
+    /// dirs. Off for a process that must see exactly what an agent's turn
+    /// sees, which never gets them.
+    pub account_env: bool,
+}
+
+/// The live session registered under `session_id`, as an open of it returns.
+fn live_session(session_id: &str) -> Option<OpenSessionResult> {
+    let map = REGISTRY.lock().ok()?;
+    let existing = map.get(session_id)?;
+    existing
+        .alive
+        .load(Ordering::Relaxed)
+        .then(|| OpenSessionResult {
+            session_id: session_id.to_string(),
+            pid: existing.pid,
+            spawned: false,
+        })
+}
+
+/// [`pty_session_open`], callable from Rust.
+pub async fn open_session(
+    app: AppHandle,
+    spec: OpenSpec,
+) -> Result<OpenSessionResult, CommandError> {
+    let OpenSpec {
+        session_id,
+        command,
+        args,
+        cwd,
+        env,
+        env_remove,
+        cols,
+        rows,
+        project_path,
+        agent_id,
+        account_env,
+    } = spec;
     // Idempotent: if a live session already exists for this id, return it.
     // If an exited session exists under this id (e.g. resume-failed retry
     // respawns the same tab), evict it so we can spawn fresh.
@@ -568,9 +648,12 @@ pub async fn pty_session_open(
         .try_clone_reader()
         .map_err(|e| format!("clone_reader: {e}"))?;
 
-    let account_env = match project_path.as_deref() {
-        Some(p) => crate::commands::accounts::get_env_vars_for_project(std::path::Path::new(p)),
-        None => crate::commands::accounts::get_env_vars_for_active_account(),
+    let account_env = match (account_env, project_path.as_deref()) {
+        (false, _) => Default::default(),
+        (true, Some(p)) => {
+            crate::commands::accounts::get_env_vars_for_project(std::path::Path::new(p))
+        }
+        (true, None) => crate::commands::accounts::get_env_vars_for_active_account(),
     };
 
     // Hide Ship Studio's preview bridge from the agent we're starting, so it
@@ -596,6 +679,9 @@ pub async fn pty_session_open(
     cmd.args(&args);
     if let Some(ref c) = cwd {
         cmd.cwd(std::ffi::OsString::from(c));
+    }
+    for key in &env_remove {
+        cmd.env_remove(std::ffi::OsString::from(key));
     }
     for (k, v) in env.iter() {
         cmd.env(std::ffi::OsString::from(k), std::ffi::OsString::from(v));
@@ -1106,6 +1192,10 @@ pub struct SessionSnapshot {
     pub cols: u16,
     pub alive: bool,
     pub last_output_ms: u64,
+    /// The process this session runs (or ran).
+    pub pid: u32,
+    /// Its exit code, once it has exited and been reaped.
+    pub exit_code: Option<i32>,
 }
 
 pub fn session_snapshot(session_id: &str) -> Option<SessionSnapshot> {
@@ -1119,6 +1209,8 @@ pub fn session_snapshot(session_id: &str) -> Option<SessionSnapshot> {
         cols,
         alive: session.alive.load(Ordering::Relaxed),
         last_output_ms: session.last_output_ms.load(Ordering::Relaxed),
+        pid: session.pid,
+        exit_code: session.exit_code.lock().ok().and_then(|c| *c),
     })
 }
 

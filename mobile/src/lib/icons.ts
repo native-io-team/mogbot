@@ -1,0 +1,70 @@
+/**
+ * Each SF Symbol the app draws, as the Material Symbol Android draws in its
+ * place. One map, and a test (`icons.node.test.ts`) that finds every symbol
+ * named in the source and fails on one missing here, so no icon quietly
+ * vanishes on Android.
+ */
+
+import type { SymbolViewProps } from 'expo-symbols';
+
+export type SFName = Extract<SymbolViewProps['name'], string>;
+
+export const MATERIAL: Partial<Record<SFName, string>> = {
+  'arrow.up': 'arrow_upward',
+  'bubble.left': 'chat_bubble',
+  'checkmark.shield': 'verified_user',
+  globe: 'public',
+  'list.bullet': 'list',
+  pencil: 'edit',
+  'person.2': 'group',
+  puzzlepiece: 'extension',
+  'arrow.down': 'arrow_downward',
+  'arrow.clockwise': 'refresh',
+  'arrow.counterclockwise': 'restart_alt',
+  'arrow.trianglehead.2.clockwise': 'sync',
+  'arrow.uturn.left': 'undo',
+  bell: 'notifications',
+  brain: 'psychology',
+  checkmark: 'check',
+  'bell.slash': 'notifications_off',
+  'bell.slash.fill': 'notifications_off',
+  'chevron.right': 'chevron_right',
+  'chevron.down': 'expand_more',
+  clock: 'schedule',
+  'doc.on.doc': 'content_copy',
+  'doc.on.clipboard': 'content_paste',
+  'doc.text': 'description',
+  ellipsis: 'more_horiz',
+  'exclamationmark.circle': 'error',
+  'exclamationmark.triangle.fill': 'warning',
+  eye: 'visibility',
+  'eye.slash': 'visibility_off',
+  'folder.fill': 'folder',
+  gearshape: 'settings',
+  'info.circle': 'info',
+  'lock.fill': 'lock',
+  magnifyingglass: 'search',
+  mic: 'mic',
+  'mic.fill': 'mic',
+  network: 'lan',
+  'square.and.pencil': 'edit_square',
+  'square.and.arrow.down': 'download',
+  iphone: 'smartphone',
+  photo: 'image',
+  'message.badge': 'mark_chat_unread',
+  pin: 'keep',
+  'pin.fill': 'keep',
+  'pin.slash': 'keep_off',
+  plus: 'add',
+  'qrcode.viewfinder': 'qr_code_scanner',
+  'selection.pin.in.out': 'select_all',
+  'stop.fill': 'stop',
+  terminal: 'terminal',
+  'text.alignleft': 'notes',
+  camera: 'photo_camera',
+  play: 'play_arrow',
+  'text.badge.checkmark': 'markdown',
+  'text.quote': 'format_quote',
+  'tray.and.arrow.up': 'outbox',
+  xmark: 'close',
+};

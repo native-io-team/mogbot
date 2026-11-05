@@ -11,7 +11,14 @@
 import type { Agent } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { RefreshControl, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  Platform,
+  RefreshControl,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
@@ -57,10 +64,23 @@ const SPLIT_AT = 700;
  */
 const SPLIT_MIN_HEIGHT = 600;
 
+/** What an undoable toggle says it did ("Inbox hidden"), and the toggle that undoes it. */
 const UNDO: Partial<Record<AgentAction, [string, AgentAction]>> = {
-  hide: ['Hid', 'unhide'],
-  mute: ['Muted', 'unmute'],
+  hide: ['hidden', 'unhide'],
+  mute: ['muted', 'unmute'],
 };
+
+/**
+ * How far above the screen's bottom edge the native tab bar reaches. On
+ * Android a tab's screen already ends above the bar. On iOS it runs under
+ * it: the home indicator's inset plus the bar (49pt on iPhone, 50 on iPad;
+ * iOS 26's floating bar sits higher, about 64 with its margin).
+ */
+function tabBarClearance(insetBottom: number): number {
+  if (Platform.OS !== 'ios') return 0;
+  const floating = Number.parseInt(String(Platform.Version), 10) >= 26;
+  return insetBottom + (floating ? 64 : Platform.isPad ? 50 : 49);
+}
 
 export default function Agents() {
   const colors = useColors();
@@ -138,7 +158,7 @@ export default function Agents() {
         const undoable = UNDO[action];
         if (undoable) {
           const [verb, back] = undoable;
-          flash(`${verb} ${agent.name}`, () => {
+          flash(`${agent.name} ${verb}`, () => {
             const reverse = toggleFor(back);
             if (reverse) setAgentToggles(agent.id, reverse).catch(fail);
           });
@@ -290,7 +310,7 @@ export default function Agents() {
         <Animated.View
           entering={FadeInDown.duration(180)}
           exiting={FadeOut.duration(150)}
-          style={styles.toast}
+          style={[styles.toast, { bottom: tabBarClearance(insets.bottom) + space.md }]}
           accessibilityLiveRegion="polite"
         >
           <T variant="small" color={colors.textStrong} style={{ flex: 1 }}>
@@ -322,7 +342,7 @@ function Summary({ onOpen }: { onOpen?: (agentId: string) => void }) {
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
-  const counts = useApp(useShallow((s) => attentionCounts(s.overview?.agents ?? [])));
+  const counts = useApp(useShallow((s) => attentionCounts(s.overview?.agents ?? [], s.chats)));
   if (!counts.needYou && !counts.working) return null;
   const parts = [
     counts.needYou && `${counts.needYou} need${counts.needYou === 1 ? 's' : ''} you`,
@@ -558,7 +578,6 @@ const useStyles = makeStyles((colors) => ({
     position: 'absolute',
     left: space.lg,
     right: space.lg,
-    bottom: space['2xl'] + 60,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,

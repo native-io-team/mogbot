@@ -38,10 +38,12 @@ import { IconButton } from '../primitives/IconButton';
 import { CompactModeToggle } from '../workspace/ModeToggle';
 import { TextButton } from '../primitives/TextButton';
 import { AgentSecretHint } from './AgentSecretHint';
-import { AgentModelMenu } from './AgentModelMenu';
+import { AgentModelItems } from './AgentModelMenu';
+import { AgentInlineRequests } from './AgentInlineRequests';
 import { TextArea } from '../primitives/TextField';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
+import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
@@ -83,12 +85,14 @@ import {
   newestPeerGroups,
   interruptAgent,
   isQueued,
-  lastUserMessage,
+  retrySourceFor,
   resendable,
   retryNote,
   whenAt,
   mentionedAgents,
   needsYou,
+  plainActivity,
+  approvalSeries,
   withQuotes,
   sendAgentMessage,
   sortAgents,
@@ -208,16 +212,21 @@ interface AgentChatProps extends AgentActions {
   /** A search result to scroll to and flash; `onJumped` is called once it's shown. */
   jumpTo?: string | null;
   onJumped?: () => void;
+  /** Words put in the composer for you to finish ("Set up an agent that "); `n` asks again. */
+  prefill?: { text: string; n: number } | null;
 }
 
 /** Unsent composer text per agent, for the life of the window. */
 const unsentText = new Map<string, string>();
 
 function statusLabel(agent: Agent): string | null {
+  if (agent.takeover) return `You’re driving ${agent.name}`;
   if (needsYou(agent)) return 'Needs your OK';
   // Queued behind the cap on concurrent turns: working, but not started (no `since`).
   if (agent.status.state === 'working') {
-    return agent.status.since == null ? 'Waiting for a free slot' : 'Working';
+    return agent.status.since == null
+      ? 'Waiting for a free slot'
+      : (plainActivity(agent.status.activity) ?? 'Working');
   }
   return null;
 }
@@ -233,6 +242,7 @@ export function AgentChat({
   compact,
   jumpTo,
   onJumped,
+  prefill,
   ...actions
 }: AgentChatProps) {
   // Everything in this conversation takes on the agent's colour.
@@ -273,6 +283,19 @@ export function AgentChat({
   useLayoutEffect(() => {
     draftRef.current = draft;
   }, [draft]);
+  // A request drafted elsewhere (New agent's "Ask your Chief of Staff"): in
+  // the composer, caret at its end, for you to finish and send.
+  useEffect(() => {
+    if (!prefill) return;
+    setDraft(prefill.text);
+    const frame = requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.setSelectionRange(prefill.text.length, prefill.text.length);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [prefill?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const micRef = useRef<HTMLButtonElement>(null);
   const getDraft = useCallback(() => draftRef.current, []);
   const getVocabulary = useCallback(
@@ -296,6 +319,16 @@ export function AgentChat({
 
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
+  // While you drive an agent with no project to open, its session is shown
+  // here in place of the conversation, until you ask for the chat.
+  const takeover = agent.takeover;
+  const driven = Boolean(takeover);
+  const [chatFor, setChatFor] = useState<string | null>(null);
+  const terminalShown = Boolean(takeover && !takeover.project && chatFor !== takeover.ptySession);
+  const toggleTerminal = useCallback(() => {
+    const pty = agent.takeover?.ptySession ?? null;
+    setChatFor((shown) => (shown === pty ? null : pty));
+  }, [agent.takeover?.ptySession]);
   const [remembering, setRemembering] = useState<AgentMessage | null>(null);
 
   // Who you can @mention here: everyone else on the team, in sidebar order.
@@ -444,13 +477,25 @@ export function AgentChat({
     shown.every((m) => m.kind === 'agent') &&
     agent.status.state === 'idle';
   const livePeerLines = useMemo(() => newestPeerGroups(items), [items]);
+  const similar = useMemo(() => approvalSeries(items), [items]);
+  // Who this chat has worked with, and the cards already in it: for the
+  // other agents' requests offered at its foot.
+  const peerIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of items) {
+      if (item.type === 'peer-group') ids.add(item.peer.id);
+      else if (item.type === 'message' && item.message.peer) ids.add(item.message.peer.id);
+    }
+    return ids;
+  }, [items]);
+  const shownRequestIds = useMemo(
+    () => new Set(shown.flatMap((m) => (m.approval ? [m.approval.requestId] : []))),
+    [shown]
+  );
   const drivingId = useMemo(() => drivingBriefId(items, agent), [items, agent]);
   // Retry belongs to the newest failure only, and only if nothing was said
   // since. It sends that message again whole: its words and its files.
-  const retrySource = useMemo(() => {
-    const last = shown[shown.length - 1];
-    return last?.kind === 'error' ? lastUserMessage(shown, shown.length - 1) : null;
-  }, [shown]);
+  const retrySource = useMemo(() => retrySourceFor(shown), [shown]);
   const retryId = retrySource ? shown[shown.length - 1].id : null;
   // Mid-turn, what you send waits for the next turn. The newest waiting
   // message says so and offers to interrupt instead.
@@ -766,10 +811,17 @@ export function AgentChat({
     <>
       <AgentAvatar name={agent.name} color={agent.color} selected />
       <h2 className="agent-chat__name">{agent.name}</h2>
-      {status && (
+      {status ? (
         <span className="agent-chat__status" data-state={needsYou(agent) ? 'waiting' : 'working'}>
           {status}
         </span>
+      ) : (
+        // Idle: what it's for, not what it runs on (that's in the … menu).
+        agent.role && (
+          <span className="agent-chat__status" title={agent.role}>
+            {agent.role}
+          </span>
+        )
       )}
     </>
   );
@@ -778,7 +830,7 @@ export function AgentChat({
   // of it, and a growing reply re-renders only its own bubble.
   const rowsPaused = agent.status.state === 'idle';
   const checkIns = agent.checkIns;
-  const activity = agent.status.activity;
+  const activity = plainActivity(agent.status.activity);
   const work = agent.status.work;
   const rows = useMemo(
     () =>
@@ -817,6 +869,7 @@ export function AgentChat({
                   onRetry={retry}
                   queued={m.id === queuedId}
                   onInterrupt={interruptNow}
+                  driven={driven}
                   colorOf={colorOf}
                   onRemember={setRemembering}
                 />
@@ -841,6 +894,7 @@ export function AgentChat({
                   paused={rowsPaused}
                   onAnswer={onAnswer}
                   arrived={arrived}
+                  series={similar.get(m.id)}
                 />
               );
             case 'error':
@@ -911,6 +965,7 @@ export function AgentChat({
       agentsById,
       onOpenAgent,
       livePeerLines,
+      similar,
       jumpTo,
       drivingId,
       aliases,
@@ -920,6 +975,7 @@ export function AgentChat({
       retry,
       queuedId,
       interruptNow,
+      driven,
       colorOf,
       streaming,
       rowsPaused,
@@ -947,6 +1003,7 @@ export function AgentChat({
         className="agent-chat"
         data-color={agent.color}
         data-dropping={dropping || undefined}
+        data-takeover-terminal={terminalShown || undefined}
         aria-label={`Conversation with ${agent.name}`}
         {...accentScope}
         {...dropHandlers}
@@ -984,12 +1041,12 @@ export function AgentChat({
                   open={scheduleOpen}
                   onOpenChange={setScheduleOpen}
                 />
-                <AgentModelMenu agent={agent} />
               </>
             )}
             <Dropdown
               align="right"
               portal
+              menuClassName="agent-model-menu"
               className="agent-chat__menu"
               trigger={(p) => (
                 <IconButton
@@ -1009,6 +1066,8 @@ export function AgentChat({
                 onFiles={() => setFilesOpen(true)}
                 {...actions}
               />
+              {/* Nothing to pick a model for until its engine is here. */}
+              {engineReady && <AgentModelItems agent={agent} />}
             </Dropdown>
             <AgentFilesModal agent={agent} isOpen={filesOpen} onClose={() => setFilesOpen(false)} />
             <RememberModal
@@ -1020,8 +1079,25 @@ export function AgentChat({
           </div>
         </header>
 
+        <TakeoverBanner
+          agent={agent}
+          terminalShown={terminalShown}
+          onToggleTerminal={toggleTerminal}
+        />
+        {/* Unmounted while the chat shows (a hidden xterm would fit itself to
+            nothing); showing it again replays the session's scrollback. */}
+        {takeover && terminalShown && (
+          <div className="agent-chat__takeover">
+            <TakeoverTerminal takeover={takeover} />
+          </div>
+        )}
+
         <div className="agent-chat__scroll" ref={scrollRef} onScroll={onScroll}>
-          <div className="agent-chat__messages" ref={messagesRef}>
+          <div
+            className="agent-chat__messages"
+            ref={messagesRef}
+            data-greeting={(greetingOnly && engineReady) || undefined}
+          >
             {items.length === 0 ? (
               <div className="agent-chat__empty">
                 <AgentAvatar name={agent.name} color={agent.color} size="hero" selected />
@@ -1074,12 +1150,20 @@ export function AgentChat({
             {greetingOnly && engineReady && (
               <ChiefStarters onStart={sendStarter} onImport={compact ? onImport : undefined} />
             )}
+            {engineReady && (
+              <AgentInlineRequests
+                agent={agent}
+                agentsById={agentsById}
+                peerIds={peerIds}
+                shownRequestIds={shownRequestIds}
+              />
+            )}
             {items.length > 0 && (
               <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
             )}
             {items.length === 0 && indicator.mounted && (
               <WorkingIndicator
-                activity={agent.status.activity}
+                activity={activity}
                 work={agent.status.work}
                 agent={rowAgent}
                 entering={indicator.entering}

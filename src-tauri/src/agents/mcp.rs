@@ -436,6 +436,9 @@ fn list_agents(caller: &store::Agent) -> Value {
                 .map(|p| format!(" (works in {p})"))
                 .unwrap_or_default();
             let busy = match status.state {
+                _ if runner::driven(&a.id) => {
+                    " — the user is working in its session directly; messages wait until they hand it back"
+                }
                 "working" => " — busy",
                 "waiting" => " — waiting on the user",
                 _ => "",
@@ -761,7 +764,9 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if engine.is_some() {
         fields.push("engine");
     }
-    let updated = store::update(&agent.id, |a| {
+    // The same guard as the editor's: not out of a session the user drives.
+    let moves_session = engine.is_some() || fields.contains(&"project");
+    let updated = runner::update_settings(&agent.id, moves_session, |a| {
         if let Some(n) = new_name {
             a.name = n;
         }
@@ -817,14 +822,12 @@ async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if let Some(refused) = refused_reply(&answer, "delete it") {
         return error(refused);
     }
-    runner::stop(app, &agent.id);
-    // What its dying turn records lands before its folder goes.
-    runner::wait_until_idle(&agent.id, std::time::Duration::from_secs(3)).await;
-    match store::delete(&agent.id) {
-        Ok(_) => {
-            runner::forget(&agent.id);
-            // Its copy's folder goes; a branch with work on it stays.
-            if let Some(copy) = agent.copy.clone() {
+    match super::takeover::delete_agent(app, &agent.id).await {
+        Ok(removed) => {
+            // Its copy's folder goes (pending work committed first); a
+            // branch with work on it stays. The copy as it was at delete,
+            // not before the question.
+            if let Some(copy) = removed.copy {
                 tauri::async_runtime::spawn(super::task::abandon(copy));
             }
             let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());

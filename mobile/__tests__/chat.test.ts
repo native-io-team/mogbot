@@ -9,6 +9,7 @@ import { chatItems, dayLabel, timeLabel } from '../src/lib/timeline';
 import { WireFailure } from '../src/lib/transport';
 import { looksLikePath, splitStable } from '../src/components/Markdown';
 import { mentionQuery, sendMode } from '../src/lib/composer';
+import { DRIVEN_LINE, drivenHint, subtitle } from '../src/lib/agents';
 import { agent, msg } from './helpers';
 
 const pend = (clientId: string, ts: number, extra: Partial<PendingSend> = {}): PendingSend => ({
@@ -252,5 +253,24 @@ describe('streaming markdown', () => {
     ]) {
       expect(looksLikePath(p)).toBe(false);
     }
+  });
+});
+
+describe('driven on the Mac', () => {
+  const driven = () =>
+    agent({
+      status: { state: 'working', activity: null, since: 5 },
+      takeover: { since: 5, cli: 'claude-code' },
+    } as Partial<Agent>);
+
+  it('there is no turn to stop: what you send waits, and nothing offers Stop', () => {
+    expect(sendMode(driven(), false)).toBe('none');
+    expect(sendMode(driven(), true)).toBe('queue');
+  });
+
+  it('says it one way everywhere: the row, the header, the composer', () => {
+    expect(DRIVEN_LINE).toBe('Being driven on your Mac');
+    expect(subtitle(driven())).toBe(DRIVEN_LINE);
+    expect(drivenHint()).toBe('Being driven on your Mac · what you send waits');
   });
 });

@@ -61,7 +61,10 @@ const NASTY: &[&str] = &[
 
 fn nasty_string(rng: &mut Rng) -> String {
     let n = 1 + rng.next() % 4;
-    (0..n).map(|_| *rng.pick(NASTY)).collect::<Vec<_>>().join("")
+    (0..n)
+        .map(|_| *rng.pick(NASTY))
+        .collect::<Vec<_>>()
+        .join("")
 }
 
 /// Every string leaf in `v` replaced with a nasty one (sometimes), and
@@ -69,7 +72,15 @@ fn nasty_string(rng: &mut Rng) -> String {
 fn mutate(v: &Value, rng: &mut Rng) -> Value {
     match v {
         Value::String(_) if rng.next() % 3 == 0 => Value::String(nasty_string(rng)),
-        Value::Number(_) if rng.next() % 5 == 0 => rng.pick(&[json!(-1), json!(0), json!(AUDIT_BIG), json!(1e308), json!("12")]).clone(),
+        Value::Number(_) if rng.next() % 5 == 0 => rng
+            .pick(&[
+                json!(-1),
+                json!(0),
+                json!(AUDIT_BIG),
+                json!(1e308),
+                json!("12"),
+            ])
+            .clone(),
         Value::Array(a) => Value::Array(a.iter().map(|x| mutate(x, rng)).collect()),
         Value::Object(o) => {
             let mut out = serde_json::Map::new();
@@ -78,7 +89,15 @@ fn mutate(v: &Value, rng: &mut Rng) -> Value {
                     continue; // drop a field
                 }
                 let x = if rng.next() % 13 == 0 {
-                    rng.pick(&[json!(null), json!([]), json!({}), json!(true), json!(""), json!("é")]).clone()
+                    rng.pick(&[
+                        json!(null),
+                        json!([]),
+                        json!({}),
+                        json!(true),
+                        json!(""),
+                        json!("é"),
+                    ])
+                    .clone()
                 } else {
                     mutate(x, rng)
                 };
@@ -162,14 +181,36 @@ fn labels_and_failure_wording_never_panic_on_unicode() {
         let r = std::panic::catch_unwind(|| {
             let _ = super::work::scrub(&s);
             let _ = super::work::command_words(&s);
-            for tool in ["Bash", "Edit", "Read", "WebFetch", "Grep", "mcp__x__y", "Task"] {
+            for tool in [
+                "Bash",
+                "Edit",
+                "Read",
+                "WebFetch",
+                "Grep",
+                "mcp__x__y",
+                "Task",
+            ] {
                 let _ = super::work::describe_tool(
                     tool,
-                    Some(&json!({"command": s, "file_path": s, "url": s, "pattern": s, "description": s})),
+                    Some(
+                        &json!({"command": s, "file_path": s, "url": s, "pattern": s, "description": s}),
+                    ),
                 );
             }
-            let _ = failure::describe(Engine::Claude, &s, &chrono::Utc, Some("utc"), 1_700_000_000_000);
-            let _ = failure::describe(Engine::Codex, &format!("Usage limit reached. {s}"), &chrono::Utc, None, 0);
+            let _ = failure::describe(
+                Engine::Claude,
+                &s,
+                &chrono::Utc,
+                Some("utc"),
+                1_700_000_000_000,
+            );
+            let _ = failure::describe(
+                Engine::Codex,
+                &format!("Usage limit reached. {s}"),
+                &chrono::Utc,
+                None,
+                0,
+            );
             let _ = super::runner::result_error_text(&json!({"result": s, "errors": [s]}));
         });
         assert!(r.is_ok(), "panicked on {s:?}");
@@ -225,7 +266,10 @@ fn agents_chat_has_its_own_failure_wording() {
 /// this keeps the truncation that made text matching unsound in view.
 #[test]
 fn an_interrupted_long_routine_prompt_is_truncated_so_tickets_go_by_id() {
-    let routine_prompt = format!("[Scheduled check-in] {}", "Summarise the inbox. ".repeat(40));
+    let routine_prompt = format!(
+        "[Scheduled check-in] {}",
+        "Summarise the inbox. ".repeat(40)
+    );
     assert!(routine_prompt.chars().count() > 600);
     let next_turn = format!(
         "{}{}",
@@ -240,17 +284,27 @@ fn an_interrupted_long_routine_prompt_is_truncated_so_tickets_go_by_id() {
 fn msg(agent_id: &str, i: usize, approval: bool) -> AgentMessage {
     let mut m = super::runner::new_message(
         agent_id,
-        if i % 2 == 0 { MessageKind::User } else { MessageKind::Agent },
-        format!("message {i} about invoices, pricing tables and the quarterly plan. {}", "lorem ipsum ".repeat(20)),
+        if i % 2 == 0 {
+            MessageKind::User
+        } else {
+            MessageKind::Agent
+        },
+        format!(
+            "message {i} about invoices, pricing tables and the quarterly plan. {}",
+            "lorem ipsum ".repeat(20)
+        ),
     );
     if approval {
         m.kind = MessageKind::Approval;
-        m.approval = Some(serde_json::from_value(json!({
-            "requestId": format!("req-{agent_id}-{i}"),
-            "title": "Run npm test",
-            "detail": "",
-            "status": "allowed"
-        })).unwrap());
+        m.approval = Some(
+            serde_json::from_value(json!({
+                "requestId": format!("req-{agent_id}-{i}"),
+                "title": "Run npm test",
+                "detail": "",
+                "status": "allowed"
+            }))
+            .unwrap(),
+        );
     }
     m
 }
@@ -264,8 +318,14 @@ fn scale() {
     let _serial = store::tests_lock();
     let dir = tempfile::tempdir().unwrap();
     store::set_root_for_tests(Some(dir.path().to_path_buf()));
-    let agents_n: usize = std::env::var("AUDIT_AGENTS").ok().and_then(|v| v.parse().ok()).unwrap_or(100);
-    let msgs_n: usize = std::env::var("AUDIT_MSGS").ok().and_then(|v| v.parse().ok()).unwrap_or(10_000);
+    let agents_n: usize = std::env::var("AUDIT_AGENTS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(100);
+    let msgs_n: usize = std::env::var("AUDIT_MSGS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10_000);
     let mut ids = Vec::new();
     let t = std::time::Instant::now();
     for a in 0..agents_n {
@@ -290,17 +350,31 @@ fn scale() {
         std::fs::write(home.join("messages.jsonl"), buf).unwrap();
         ids.push(agent.id);
     }
-    eprintln!("fixture: {agents_n} agents x {msgs_n} msgs in {:?}", t.elapsed());
-    let reg = std::fs::metadata(dir.path().join("agents.json")).map(|m| m.len()).unwrap_or(0);
-    let log = std::fs::metadata(store::agent_home(&ids[1]).unwrap().join("messages.jsonl")).unwrap().len();
-    eprintln!("agents.json = {} KB, one messages.jsonl = {} KB", reg / 1024, log / 1024);
+    eprintln!(
+        "fixture: {agents_n} agents x {msgs_n} msgs in {:?}",
+        t.elapsed()
+    );
+    let reg = std::fs::metadata(dir.path().join("agents.json"))
+        .map(|m| m.len())
+        .unwrap_or(0);
+    let log = std::fs::metadata(store::agent_home(&ids[1]).unwrap().join("messages.jsonl"))
+        .unwrap()
+        .len();
+    eprintln!(
+        "agents.json = {} KB, one messages.jsonl = {} KB",
+        reg / 1024,
+        log / 1024
+    );
 
     let time = |label: &str, n: usize, f: &mut dyn FnMut()| {
         let t = std::time::Instant::now();
         for _ in 0..n {
             f();
         }
-        eprintln!("{label:<44} {:>10.2} ms/op", t.elapsed().as_secs_f64() * 1000.0 / n as f64);
+        eprintln!(
+            "{label:<44} {:>10.2} ms/op",
+            t.elapsed().as_secs_f64() * 1000.0 / n as f64
+        );
     };
     let id = ids[ids.len() / 2].clone();
     time("store::update (per recorded message)", 50, &mut || {
@@ -418,7 +492,11 @@ fn a_message_recorded_after_delete_never_resurrects_the_home() {
     store::delete(&a.id).unwrap();
     assert!(!home.exists());
     // What the dying turn does next:
-    let refused = store::append_message(&super::runner::new_message(&a.id, MessageKind::Agent, "half a reply"));
+    let refused = store::append_message(&super::runner::new_message(
+        &a.id,
+        MessageKind::Agent,
+        "half a reply",
+    ));
     assert!(refused.is_err());
     assert!(!home.exists(), "the deleted chat stays deleted");
     assert!(store::get(&a.id).is_err());

@@ -89,7 +89,10 @@ fn recovery_only_touches_what_the_last_run_left() {
         );
         // A second prepare (recover_after_restart's own) changes nothing.
         prepare_recovery();
-        assert!(!awaiting_recovery(&live.id), "a live turn is never a leftover");
+        assert!(
+            !awaiting_recovery(&live.id),
+            "a live turn is never a leftover"
+        );
         recovered(&old.id);
         assert!(!awaiting_recovery(&old.id));
         RUNTIMES.lock().unwrap().remove(&old.id);
@@ -114,7 +117,10 @@ fn a_quit_after_dequeue_still_leaves_the_turns_mark() {
         assert_eq!(batch.prompt, "deploy the site");
         // ...the app dies here, during turn_start():
         assert!(take_inbox(&a.id).is_empty());
-        assert!(read_mark(&a.id).is_some(), "the next launch says it didn't finish");
+        assert!(
+            read_mark(&a.id).is_some(),
+            "the next launch says it didn't finish"
+        );
         // An emptied queue takes nothing and leaves no mark.
         clear_mark(&a.id);
         assert!(take_batch(&a.id).is_none());
@@ -136,9 +142,11 @@ fn stop_names_who_is_owed_word_for_what_it_dropped() {
             let r = rt.entry(id.into()).or_default();
             r.running = true;
             r.cancel = Some(Arc::new(Notify::new()));
-            r.queue.push_back(from_chief("Chief asks: reconcile March", false));
+            r.queue
+                .push_back(from_chief("Chief asks: reconcile March", false));
             r.queue.push_back(from_chief("and April", false));
-            r.queue.push_back(from_chief("here's what you asked for", true));
+            r.queue
+                .push_back(from_chief("here's what you asked for", true));
             let mut routine = user("[Scheduled check-in] daily summary");
             routine.routine = true;
             routine.ticket = Some("t-1".into());
@@ -162,7 +170,10 @@ fn stop_names_who_is_owed_word_for_what_it_dropped() {
 fn scheduled_runs_settle_by_ticket_across_an_interrupt() {
     scratch(|| {
         let a = agent("Routine");
-        let mut wake = user(&format!("[Scheduled check-in] {}", "Summarise. ".repeat(100)));
+        let mut wake = user(&format!(
+            "[Scheduled check-in] {}",
+            "Summarise. ".repeat(100)
+        ));
         wake.routine = true;
         wake.ticket = Some("t-9".into());
         {
@@ -224,7 +235,10 @@ fn a_panicking_turn_resets_the_agent() {
         let r = rt.get(&id).unwrap();
         assert!(!r.running && !r.queued && r.cancel.is_none());
         assert_eq!(r.status.as_ref().unwrap().state, "idle");
-        assert!(r.owed.is_empty() && r.tickets.is_empty(), "handed back, not lost");
+        assert!(
+            r.owed.is_empty() && r.tickets.is_empty(),
+            "handed back, not lost"
+        );
         drop(rt);
         // With messages that arrived meanwhile, a new worker is claimed for them.
         {
@@ -290,7 +304,10 @@ fn a_quiet_turn_says_it_may_be_stuck() {
     let t0 = 1_000_000;
     assert_eq!(quiet_line("Claude Code", t0, t0 + 9 * 60_000, false), None);
     let line = quiet_line("Claude Code", t0, t0 + 12 * 60_000, false).unwrap();
-    assert!(line.contains("No word from Claude Code for 12 min"), "{line}");
+    assert!(
+        line.contains("No word from Claude Code for 12 min"),
+        "{line}"
+    );
     assert!(line.contains("may be stuck"));
     assert_eq!(quiet_line("Claude Code", t0, t0 + 40 * 60_000, true), None);
 }
@@ -306,7 +323,10 @@ fn going_idle_and_pushing_never_strand_a_message() {
         r.running = true;
         r.queue.push_back(user("one more"));
     }
-    assert!(finish_if_idle(id).is_none(), "work left: the worker carries on");
+    assert!(
+        finish_if_idle(id).is_none(),
+        "work left: the worker carries on"
+    );
     assert!(RUNTIMES.lock().unwrap().get(id).unwrap().running);
     RUNTIMES.lock().unwrap().get_mut(id).unwrap().queue.clear();
     assert!(finish_if_idle(id).is_some());

@@ -675,6 +675,8 @@ pub fn run() {
             commands::agents::agents_focus,
             commands::agents::agents_mark_unread,
             commands::agents::agents_start_fresh,
+            commands::agents::agents_take_over,
+            commands::agents::agents_hand_back,
             commands::agents::agents_import_prompt,
             commands::agents::agents_import_talk,
             commands::agents::agents_import_talk_stop,

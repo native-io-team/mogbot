@@ -66,9 +66,9 @@
 
 .agent-pick-card {
   position: relative;
-  /* css-ok: fixed square card size, not a spacing-scale value */
-  width: 160px;
-  height: 160px;
+  /* css-ok: fixed card width, not a spacing-scale value */
+  width: 200px;
+  min-height: 200px; /* css-ok: card size, room for the plan line */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -128,19 +128,49 @@
   color: var(--text-secondary);
 }
 
-/* What pressing the card does next, as its call to action — no pill. */
+/* "Uses a Claude Pro or Max plan": what you need, before you pick. */
+.agent-pick-card-account {
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-size-badge);
+  line-height: var(--line-height-compact);
+  color: var(--text-secondary);
+}
+
+/* The one to pick if you don't know which. */
+.agent-pick-card-badge {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  padding: var(--spacing-3xs) var(--spacing-xs);
+  font-size: var(--font-size-badge);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-compact);
+  color: var(--text-primary);
+  background: var(--tint-subtle);
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-pill);
+}
+
+/* What pressing the card does next: drawn as the button it is. */
 .agent-pick-card-status {
-  margin-top: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-xs) var(--spacing-md);
   font-size: var(--font-size-body-sm);
   font-weight: var(--font-weight-label);
   color: var(--text-secondary);
   white-space: nowrap;
-  transition: color var(--transition-interaction);
+  background: var(--surface-control);
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  transition:
+    color var(--transition-interaction),
+    background var(--transition-interaction);
 }
 .agent-pick-card:hover .agent-pick-card-status,
 .agent-pick-card:focus-visible .agent-pick-card-status,
 .agent-pick-card-status.ready {
   color: var(--text-white);
+  background: var(--surface-control-hover);
 }
 
 /* ============ Agent setup detail (Phase 0, after a card click) ============ */
@@ -151,7 +181,8 @@
   gap: var(--spacing-md);
 }
 
-.agent-setup-detail-back {
+.agent-setup-detail-back,
+.agent-setup-detail-more {
   align-self: flex-start;
 }
 

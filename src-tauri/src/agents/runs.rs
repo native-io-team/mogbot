@@ -58,6 +58,8 @@ pub enum Outcome {
     /// It failed and is tried again at `retry_at`.
     Retrying,
     Failed,
+    /// Its time came while the user was driving the agent (`takeover`).
+    Skipped,
     /// Written by a newer build.
     #[serde(other)]
     Unknown,

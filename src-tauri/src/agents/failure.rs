@@ -231,14 +231,9 @@ pub fn is_temporary(detail: &str, failure: &Failure) -> bool {
 
 fn is_usage_limit(lower: &str) -> bool {
     // Not "usage credits": that one resets when the user tops up, not on a clock.
-    [
-        "usage limit",
-        "session limit",
-        "weekly limit",
-        "hour limit",
-    ]
-    .iter()
-    .any(|w| lower.contains(w))
+    ["usage limit", "session limit", "weekly limit", "hour limit"]
+        .iter()
+        .any(|w| lower.contains(w))
 }
 
 /// Claude Code's and Codex's own wordings, and `commands::ai`'s classified

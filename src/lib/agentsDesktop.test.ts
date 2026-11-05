@@ -19,11 +19,11 @@ describe('quitPrompt', () => {
     expect(quitPrompt(null, bg)).toBeNull();
   });
 
-  it('leads with how many are working, then who is waiting', () => {
+  it('leads with how many are working; open requests are said to wait', () => {
     const p = quitPrompt({ working: ['Acme Site', 'Native App'], waiting: ['Lead Gen'] }, bg);
     expect(p?.title).toBe('2 agents are still working. Quit anyway?');
     expect(p?.body).toContain('Quitting stops Acme Site and Native App mid-turn');
-    expect(p?.body).toContain('Lead Gen is also waiting for your OK.');
+    expect(p?.body).toContain('Lead Gen’s request will still be here when you reopen.');
     expect(p?.offerBackground).toBe(true);
   });
 
@@ -33,10 +33,15 @@ describe('quitPrompt', () => {
     expect(p?.body).toContain('what it has done so far stays');
   });
 
-  it('leads with approvals when nothing is working', () => {
-    const p = quitPrompt({ working: [], waiting: ['Lead Gen', 'Finance'] }, bg);
-    expect(p?.title).toBe('2 agents are waiting for your OK. Quit anyway?');
-    expect(p?.body).toBe('Quitting stops Lead Gen and Finance waiting on their approval.');
+  it('open requests alone are no reason to stay: they wait', () => {
+    expect(quitPrompt({ working: [], waiting: ['Lead Gen', 'Finance'] }, bg)).toBeNull();
+  });
+
+  it('warns about a check-in that would be missed while closed', () => {
+    const p = quitPrompt({ working: [], waiting: ['Lead Gen'], scheduled: ['Finance'] }, bg);
+    expect(p?.title).toBe('Finance has a check-in coming up. Quit anyway?');
+    expect(p?.body).toContain('they run when you reopen it');
+    expect(p?.body).toContain('Lead Gen’s request will still be here when you reopen.');
   });
 
   it('only offers keep-running where windows can hide', () => {

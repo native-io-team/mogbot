@@ -165,10 +165,16 @@ struct Prefilter {
 
 impl Prefilter {
     fn new(terms: &[Vec<char>]) -> Self {
-        let usable =
-            |t: &&Vec<char>| t.iter().all(|c| c.is_ascii() && !matches!(c, '"' | '\\') && !c.is_control());
+        let usable = |t: &&Vec<char>| {
+            t.iter()
+                .all(|c| c.is_ascii() && !matches!(c, '"' | '\\') && !c.is_control())
+        };
         Prefilter {
-            terms: terms.iter().filter(usable).map(|t| t.iter().collect()).collect(),
+            terms: terms
+                .iter()
+                .filter(usable)
+                .map(|t| t.iter().collect())
+                .collect(),
         }
     }
 
@@ -354,6 +360,7 @@ mod tests {
             client_id: None,
             work: None,
             fresh: false,
+            takeover: false,
         })
         .unwrap();
         id
@@ -426,6 +433,7 @@ mod tests {
                 client_id: None,
                 work: None,
                 fresh: false,
+                takeover: false,
             })
             .unwrap();
             let found = search_in(&store::list().unwrap(), "deploy", 50).unwrap();
@@ -541,6 +549,7 @@ mod tests {
             client_id: None,
             work: None,
             fresh: false,
+            takeover: false,
         };
         assert!(match_message(&message, &terms("müller")).is_some());
         assert!(match_message(&message, &terms("müller schmidt")).is_none());

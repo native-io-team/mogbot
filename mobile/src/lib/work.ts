@@ -41,9 +41,30 @@ export function stepOffset(step: WorkStep, startedAt: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
 }
 
-/** Under the working row: "Working · 8 steps · edited 1 file". */
+/**
+ * The same time for VoiceOver, in words: "12 seconds in", "14 minutes 5
+ * seconds in". "0:12" is otherwise read out digit by digit.
+ */
+export function stepOffsetSpoken(step: WorkStep, startedAt: number): string {
+  const total = Math.max(0, Math.floor((step.at - startedAt) / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const parts = [
+    h ? plural(h, 'hour') : '',
+    m ? plural(m, 'minute') : '',
+    // Seconds stop mattering once it's hours in.
+    s && !h ? plural(s, 'second') : '',
+  ].filter(Boolean);
+  return parts.length ? `${parts.join(' ')} in` : 'at the start';
+}
+
+/**
+ * Under the working row: "8 steps so far · edited 1 file". The row above
+ * already says it's working, so this doesn't say it again.
+ */
 export function liveSummary(work: TurnWork): string {
-  const parts = ['Working', plural(work.stepCount, 'step')];
+  const parts = [`${plural(work.stepCount, 'step')} so far`];
   if (work.fileCount > 0) parts.push(`edited ${plural(work.fileCount, 'file')}`);
   return parts.join(' · ');
 }

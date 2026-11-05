@@ -2,11 +2,12 @@
  * The message field. What it will do is always on the button, never hidden
  * behind a gesture:
  *
- * - idle: **Send**;
- * - working, nothing typed: **Stop**;
- * - working, with text: **Queue** (it reads it when this turn ends), with
- *   **Send now** (interrupt, then send) and Stop beside it;
- * - waiting on your OK: **Queue**, and no Stop: the card above is the control;
+ * - idle: the mic and **Send**;
+ * - working, nothing typed: **Stop**, in place of the mic;
+ * - working, with text: Stop and **Send**, which queues (the hint says it
+ *   reads it when this turn ends), with **Send now** (interrupt, then send)
+ *   in the hint row. Two controls in the field at most, never three;
+ * - waiting on your OK: Send queues, and no Stop: the card above is the control;
  * - offline: **Send** waits for the Mac (outbox.ts), and says so.
  *
  * What's typed, quoted, @mentioned and attached is the chat's draft
@@ -16,12 +17,7 @@
  * as the Mac keeps them.
  */
 
-import {
-  MAX_ATTACHMENTS,
-  withQuotes,
-  type Agent,
-  type AgentRef,
-} from '@shipstudio/companion-protocol';
+import { MAX_ATTACHMENTS, type Agent, type AgentRef } from '@shipstudio/companion-protocol';
 import {
   useCallback,
   useEffect,
@@ -51,8 +47,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccent } from '../lib/accent';
-import { needsYou } from '../lib/agents';
-import { mentionQuery, sendMode } from '../lib/composer';
+import { DRIVEN_LINE, drivenHint, needsYou, waitingOnMac } from '../lib/agents';
+import { mentionQuery, sendMode, takeDraft } from '../lib/composer';
 import {
   addFile,
   clearComposer,
@@ -177,10 +173,15 @@ export function Composer({
   }, [agent.id]);
   const blocked = uploading || staged.some((f) => f.error);
   const mode = sendMode(agent, hasContent);
+  const busy = agent.status.state !== 'idle';
   const waitingOnYou = needsYou(agent);
+  // What it waits on is answered on the Mac (an import to review), not above.
+  const onMac = useApp((s) => waitingOnMac(agent, s.chats[agent.id]?.messages));
   // Offline, Send still works: it waits for the Mac in the outbox.
   const canSend = hasContent && !blocked;
-  const offerNow = mode === 'queue' && connected && !waitingOnYou;
+  // Driven on the Mac: it waits for the hand-back there, and nothing here interrupts it.
+  const driven = Boolean(agent.takeover);
+  const offerNow = mode === 'queue' && connected && !waitingOnYou && !driven;
 
   const query = mentionQuery(draft.text);
   const suggestions = useMemo(() => {
@@ -253,11 +254,13 @@ export function Composer({
 
   const submit = (now: boolean) => {
     if (!canSend) return;
+    // From the store, not this render: a second tap in the same frame finds
+    // the draft already emptied by the first, and sends nothing.
+    const current = takeDraft(getApp().composer[agent.id]);
+    if (!current) return;
     if (now) haptic.medium();
     else haptic.light();
-    const body = withQuotes(draft.quotes, draft.text.trim());
-    const mentions = liveMentions(draft.text, draft.mentions).map((m) => m.id);
-    const files = ready.map(({ stagedAt: _at, ...f }) => f);
+    const { body, mentions, files } = current;
     // Words still on their way would land in the emptied draft.
     dictation.cancel();
     clearComposer(agent.id);
@@ -281,17 +284,21 @@ export function Composer({
     ? 'Listening on this phone · tap the mic when you’re done'
     : micHint
       ? micHint
-      : !connected
-        ? hasContent
-          ? `Not connected · Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
-          : 'Not connected · what you type stays here'
-        : uploading
-          ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
-          : mode === 'queue'
-            ? waitingOnYou
-              ? `${agent.name} reads it after you answer above`
-              : `${agent.name} reads it when this turn ends`
-            : null;
+      : driven
+        ? drivenHint()
+        : !connected
+          ? hasContent
+            ? `Not connected · Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
+            : 'Not connected · what you type stays here'
+          : uploading
+            ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
+            : onMac
+              ? `Review the import on your Mac. ${agent.name} carries on after`
+              : mode === 'queue'
+                ? waitingOnYou
+                  ? `${agent.name} reads it after you answer above`
+                  : `${agent.name} reads it when this turn ends`
+                : null;
 
   return (
     <View
@@ -468,30 +475,24 @@ export function Composer({
           label={`Message ${agent.name}`}
           inputRef={input}
         >
-          <RoundButton
-            key="mic"
-            label={listening ? 'Stop dictating' : 'Dictate'}
-            onPress={mic}
-            tone={listening ? 'accent' : 'off'}
-          >
-            <Icon
-              name={listening ? 'mic.fill' : 'mic'}
-              size={iconSize.body}
-              color={listening ? accent.onAccent : colors.textSecondary}
-              fallback={<T color={colors.textSecondary}>●</T>}
-            />
-          </RoundButton>
-          {mode === 'queue' && !waitingOnYou && (
+          {/* While a turn runs the mic steps aside: Stop takes its place, never a third control.
+              Driven on the Mac there is no Stop here, so the mic stays. */}
+          {(!busy || listening || driven) && (
             <RoundButton
-              label={`Stop ${agent.name}`}
-              disabled={!connected}
-              onPress={stopTurn}
-              tone="quiet"
+              key="mic"
+              label={listening ? 'Stop dictating' : 'Dictate'}
+              onPress={mic}
+              tone={listening ? 'accent' : 'off'}
             >
-              <View style={styles.stopSquare} />
+              <Icon
+                name={listening ? 'mic.fill' : 'mic'}
+                size={iconSize.body}
+                color={listening ? accent.onAccent : colors.textSecondary}
+                fallback={<T color={colors.textSecondary}>●</T>}
+              />
             </RoundButton>
           )}
-          {mode === 'stop' ? (
+          {(mode === 'stop' || (mode === 'queue' && !waitingOnYou && !driven)) && (
             <RoundButton
               key="stop"
               label={`Stop ${agent.name}`}
@@ -501,42 +502,20 @@ export function Composer({
             >
               <View style={styles.stopSquare} />
             </RoundButton>
-          ) : mode === 'queue' ? (
-            <Animated.View key="queue" entering={ZoomIn.duration(160)} style={field.roundSlot}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Queue: ${agent.name} reads it when this turn ends`}
-                disabled={!canSend}
-                onPress={() => submit(false)}
-                hitSlop={8}
-              >
-                {({ pressed }) => (
-                  <View
-                    style={[
-                      field.queue,
-                      { height: size.send, borderRadius: size.send / 2 },
-                      { backgroundColor: accent.accent },
-                      !canSend && field.off,
-                      pressed && { transform: [{ scale: 0.95 }] },
-                    ]}
-                  >
-                    <T
-                      variant="small"
-                      color={accent.onAccent}
-                      style={{ fontFamily: fonts.medium }}
-                      maxFontSizeMultiplier={chromeScale}
-                    >
-                      Queue
-                    </T>
-                    <Icon name="arrow.up" size={iconSize.inline} color={accent.onAccent} />
-                  </View>
-                )}
-              </Pressable>
-            </Animated.View>
-          ) : (
+          )}
+          {mode !== 'stop' && (
             <RoundButton
               key="send"
-              label={connected ? 'Send' : `Send when ${macName} answers`}
+              // Sending while it works queues: the hint above says so, so the button stays an arrow.
+              label={
+                driven
+                  ? `Queue · ${DRIVEN_LINE}`
+                  : mode === 'queue'
+                    ? `Queue: ${agent.name} reads it when this turn ends`
+                    : connected
+                      ? 'Send'
+                      : `Send when ${macName} answers`
+              }
               disabled={!canSend}
               onPress={() => submit(false)}
               tone={canSend ? 'accent' : 'off'}
@@ -714,14 +693,6 @@ const useFieldStyles = makeStyles((colors) => ({
     borderRadius: composer.send / 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  queue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    height: composer.send,
-    paddingHorizontal: space.md,
-    borderRadius: composer.send / 2,
   },
   attach: {
     width: composer.attach,

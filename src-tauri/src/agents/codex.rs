@@ -102,7 +102,7 @@ fn models_from(raw: &str) -> Vec<ModelChoice> {
 pub(super) const NO_NETWORK: &str = "sandbox_workspace_write.network_access";
 
 /// A TOML value for `-c`: JSON's string and array syntax is TOML's too.
-fn toml<T: serde::Serialize + ?Sized>(value: &T) -> String {
+pub(super) fn toml<T: serde::Serialize + ?Sized>(value: &T) -> String {
     serde_json::to_string(value).unwrap_or_default()
 }
 
@@ -183,6 +183,41 @@ pub fn args(
         args.push(id.to_string());
     }
     args.push("-".into());
+    args
+}
+
+/// The command line for the user taking over a Codex agent's thread
+/// (`takeover`): Codex's own interactive `codex resume <thread>`, with the
+/// overrides every turn gets (where it may write, no network, our MCP
+/// server, CLAUDE.md as the project doc) and the app-server turn's sandbox
+/// and approval policy, so it asks the person at the keyboard whatever a
+/// turn would have put on a card. The agent's identity (and the secrets
+/// section) goes in as `developer_instructions`, as a `codex exec` turn
+/// passes it on every invocation: a thread `exec` made doesn't keep it, and
+/// one app-server made is given the same text again. Checked against
+/// `codex resume --help` on 0.166.
+pub fn interactive_args(
+    model: Option<&str>,
+    thread: &str,
+    url: &str,
+    developer_instructions: &str,
+    writable: &[String],
+    cwd: &str,
+) -> Vec<String> {
+    let mut args: Vec<String> = vec!["resume".into()];
+    let config = [
+        "sandbox_mode=\"workspace-write\"".to_string(),
+        "approval_policy=\"on-request\"".to_string(),
+        format!("developer_instructions={}", toml(developer_instructions)),
+    ];
+    for value in config.into_iter().chain(shared_config(url, writable)) {
+        args.extend(["-c".into(), value]);
+    }
+    if let Some(model) = model {
+        args.extend(["-m".into(), model.to_string()]);
+    }
+    args.extend(["-C".into(), cwd.to_string()]);
+    args.push(thread.to_string());
     args
 }
 

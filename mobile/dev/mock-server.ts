@@ -71,6 +71,16 @@ export interface MockOptions {
   quiet?: boolean;
   /** Keep paired devices here across restarts, as the real Mac does. */
   devicesFile?: string;
+  /**
+   * A Mac with only Codex: Claude Code isn't installed, and every agent runs
+   * on Codex. Connection should show a green Codex row and no red Claude Code.
+   */
+  codexOnly?: boolean;
+  /**
+   * Designer is being driven in a terminal on the Mac (take-over): its
+   * `takeover` is set exactly as the Mac's overview carries it.
+   */
+  takeover?: boolean;
 }
 
 interface Conn {
@@ -123,6 +133,20 @@ export function createMockServer(opts: MockOptions = {}) {
 
   const now = Date.now();
   const agents: Agent[] = seedAgents(now);
+  if (opts.codexOnly) {
+    for (const a of agents) {
+      a.engine = 'codex';
+      a.model = null;
+    }
+  }
+  if (opts.takeover) {
+    const design = agents.find((a) => a.id === 'design');
+    if (design) {
+      // The protocol's `AgentTakeover`, as the Mac sends it (terminal id stripped).
+      design.takeover = { since: now - 5 * 60_000, cli: 'claude-code' };
+      design.status = { state: 'idle', activity: null, since: null };
+    }
+  }
   const messages = new Map<string, AgentMessage[]>(agents.map((a) => [a.id, seedMessages(a, now)]));
   // Every message kind exactly as the Mac serialises it, under one agent.
   const sample = structuredClone(real.agentsOverview.agents[0]) as Agent;
@@ -145,8 +169,19 @@ export function createMockServer(opts: MockOptions = {}) {
   );
   const status: MacStatus = {
     ...structuredClone(real.systemStatus),
-    claude: { ...real.systemStatus.claude, signedIn: 'yes' },
+    claude: opts.codexOnly
+      ? { installed: false, signedIn: 'unknown' }
+      : { ...real.systemStatus.claude, signedIn: 'yes' },
     routes: [],
+  };
+  const engines = (): AgentsOverview['engines'] => {
+    const list = structuredClone(real.agentsOverview.engines);
+    if (!opts.codexOnly) return list;
+    return list.map((e) =>
+      e.id === 'claude'
+        ? { ...e, installed: false, signedIn: false }
+        : { ...e, installed: true, signedIn: true }
+    );
   };
 
   // ---- Files: attachments by agent and path, and staged blobs ------------------------
@@ -363,8 +398,8 @@ export function createMockServer(opts: MockOptions = {}) {
 
   const overview = (): AgentsOverview => ({
     agents: structuredClone(agents),
-    engineReady: true,
-    engines: structuredClone(real.agentsOverview.engines),
+    engineReady: !opts.codexOnly,
+    engines: engines(),
   });
   // What each agent remembers (its CLAUDE.md `## Memory`), and secrets saved.
   const memories = new Map<string, MemoryEntry[]>([
@@ -693,6 +728,13 @@ export function createMockServer(opts: MockOptions = {}) {
       const card = list.find((m) => m.approval?.requestId === p.requestId);
       if (!card?.approval)
         return fail({ type: 'Validation', field: 'requestId', reason: 'No such request' });
+      // As the Mac does: an import is read and imported there, never allowed from here.
+      if (card.approval.connector?.kind === 'review' && p.allow) {
+        return fail({
+          type: 'Other',
+          message: 'Review this import on your Mac: each agent’s instructions are shown there.',
+        });
+      }
       const picked =
         typeof p.choice === 'number' ? card.approval.prompt?.options[p.choice] : undefined;
       putMessage({
@@ -1515,17 +1557,23 @@ function seedAgents(now: number): Agent[] {
     ...extra,
   });
   return [
+    // Two import cards (seedMessages): another assistant asking to start, and
+    // its staged agents, which only the Mac can import.
     base('chief', 'Chief of Staff', 'Runs the team', 'white', {
       isMain: true,
       pinned: true,
       createdAt: now - 40 * 86_400_000,
-      lastActivityAt: now - 4 * 60_000,
+      lastActivityAt: now - 2 * 60_000,
       model: 'opus',
+      pendingApprovals: 2,
       preview: 'Here’s where the launch stands: three of four checks are green.',
     }),
+    // Its conversation is 90% full, as its engine reported: the sheet suggests starting fresh.
     base('site', 'Acme Site', 'Marketing site', 'blue', {
       lastActivityAt: now - 2 * 60_000,
       project: '/Users/you/ShipStudio/acme-site',
+      sessionId: 'sess_site',
+      context: { used: 180_000, window: 200_000, at: now - 2 * 60_000 },
       copy: {
         id: 'copy_hero',
         project: '/Users/you/ShipStudio/acme-site',
@@ -1624,6 +1672,73 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
     }
     add({ ts: now - 6 * 60_000, kind: 'user', text: 'Where are we on the launch?' });
     add({ ts: now - 4 * 60_000, kind: 'agent', text: RICH });
+    // An import over the connector, as the Mac's connector.rs writes its two cards.
+    add({
+      ts: now - 3 * 60_000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_consent',
+        title: 'Grok wants to bring its agents over',
+        detail:
+          'It will talk to a separate, sealed copy of Chief of Staff that can only stage agents for you to review. It can’t see your chats, files or other agents, and nothing is created until you press Import.\n\nIts first message: “I’d like to bring over the two agents I run for Julian.”',
+        status: 'pending',
+        connector: { kind: 'consent', talkId: 'talk_seed', source: 'Grok' },
+      },
+    });
+    const proposal = (key: string, name: string, role: string) => ({
+      key,
+      name,
+      role,
+      instructions: `You are ${name}. ${role}.`,
+      memory: '',
+      routines: [],
+      logins: [],
+    });
+    add({
+      ts: now - 2 * 60_000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_review',
+        title: 'Bring in 2 agents from Grok',
+        detail:
+          'Scout · Research\nFinance · Money\nReview on your Mac: each agent’s instructions are shown there, and nothing is created until you import them.',
+        status: 'pending',
+        connector: {
+          kind: 'review',
+          talkId: 'talk_seed',
+          source: 'Grok',
+          review: {
+            proposals: [
+              proposal('scout', 'Scout', 'Research'),
+              {
+                ...proposal('finance', 'Finance', 'Money'),
+                clash: {
+                  agentId: 'fin',
+                  name: 'Finance',
+                  role: 'Invoices and spend',
+                  instructions: 'Reconcile invoices weekly.',
+                  activeRoutines: 1,
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+  } else if (a.id === 'qa') {
+    add({ ts: a.lastActivityAt - 3 * 3_600_000, kind: 'user', text: 'Run the full suite.' });
+    add({ ts: a.lastActivityAt - 3 * 3_600_000 + 60_000, kind: 'agent', text: 'Running it now.' });
+    // Where a new conversation began: the divider the chat centres.
+    add({
+      ts: a.lastActivityAt - 2 * 3_600_000,
+      kind: 'note',
+      text: 'Started fresh · memory kept',
+      fresh: true,
+    });
+    add({ ts: a.lastActivityAt - 60_000, kind: 'user', text: 'Status?' });
+    add({ ts: a.lastActivityAt, kind: 'agent', text: a.preview ?? 'Done.' });
   } else if (a.id === 'design') {
     add({ ts: now - 30 * 60_000, kind: 'user', text: 'Export the new icon set to the site.' });
     add({

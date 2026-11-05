@@ -172,7 +172,8 @@ describe('a change card for a copy of the project', () => {
     await act(() => Promise.resolve());
     expect(screen.getByText('Changed 2 files in a copy of acme-site')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Keep changes' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'View diff' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'See changes' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open preview' })).toBeNull();
   });
 
   it('offers working directly only once a project is picked', async () => {

@@ -13,14 +13,12 @@ const approvalMessage: AgentMessage = {
 };
 
 describe('ApprovalCard', () => {
-  it('has one Deny, and an empty note denies plainly', async () => {
+  it('Deny is one click', async () => {
     const onAnswer = vi.fn().mockResolvedValue(undefined);
     render(
       <ApprovalCard message={approvalMessage} agentName="Acme" paused={false} onAnswer={onAnswer} />
     );
-    expect(screen.getAllByRole('button', { name: /deny/i })).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: /deny/i }));
-    expect(onAnswer).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('button', { name: /^deny/i })).toHaveLength(1);
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
       await Promise.resolve();
@@ -28,19 +26,83 @@ describe('ApprovalCard', () => {
     expect(onAnswer).toHaveBeenCalledWith('r1', false, false, undefined);
   });
 
-  it('gives focus back to Deny when the note is cancelled', () => {
+  it('a note for what to do instead is behind the card’s menu', async () => {
+    const onAnswer = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ApprovalCard message={approvalMessage} agentName="Acme" paused={false} onAnswer={onAnswer} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More answers' }));
+    fireEvent.click(await screen.findByText('Deny with a note…'));
+    const field = screen.getByRole('textbox');
+    expect(field).toHaveFocus();
+    fireEvent.change(field, { target: { value: 'Draft it first' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+      await Promise.resolve();
+    });
+    expect(onAnswer).toHaveBeenCalledWith('r1', false, false, 'Draft it first');
+  });
+
+  it('gives focus back to Deny when the note is cancelled', async () => {
     render(
       <ApprovalCard message={approvalMessage} agentName="Acme" paused={false} onAnswer={vi.fn()} />
     );
-    fireEvent.click(screen.getByRole('button', { name: /deny/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'More answers' }));
+    fireEvent.click(await screen.findByText('Deny with a note…'));
     const field = screen.getByRole('textbox');
-    expect(field).toHaveFocus();
     fireEvent.keyDown(field, { key: 'Escape' });
-    expect(screen.getByRole('button', { name: /deny/i })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Deny' })).toHaveFocus();
+  });
+
+  it('says its place in a run of similar requests', () => {
+    render(
+      <ApprovalCard
+        message={approvalMessage}
+        agentName="Acme"
+        paused={false}
+        onAnswer={vi.fn()}
+        series={{ index: 2, total: 3 }}
+      />
+    );
+    expect(screen.getByText('2 of 3 similar requests')).toBeInTheDocument();
+  });
+});
+
+describe('NoteLine', () => {
+  it('quotes a take-over terminal’s last lines quietly, as the screen showed them', () => {
+    const message = {
+      id: 'n2',
+      agentId: 'acme',
+      ts: 1,
+      kind: 'note',
+      takeover: true,
+      text: 'Claude Code closed after 2 seconds. The last thing it showed:\n\nTrust it?\n❯ 2. No, exit',
+    } as AgentMessage;
+    const { container } = render(<NoteLine message={message} />);
+    expect(container.querySelector('.agent-note--takeover')).not.toBeNull();
+    expect(container.querySelector('.agent-bubble')).toBeNull();
+    expect(container.querySelector('pre')?.textContent).toBe('Trust it?\n❯ 2. No, exit');
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
   });
 });
 
 describe('ErrorLine', () => {
+  it('quotes an older build’s take-over error as the screen showed it', () => {
+    const message = {
+      id: 'e2',
+      agentId: 'acme',
+      ts: 1,
+      kind: 'error',
+      takeover: true,
+      text: 'Claude Code closed after 2 seconds. The last thing it showed:\n\nTrust it?\n❯ 2. No, exit',
+    } as AgentMessage;
+    const { container } = render(<ErrorLine message={message} />);
+    expect(
+      screen.getByText('Claude Code closed after 2 seconds. The last thing it showed:')
+    ).toBeInTheDocument();
+    expect(container.querySelector('pre')?.textContent).toBe('Trust it?\n❯ 2. No, exit');
+  });
+
   it('schedules one retry at the reset however fast the second click comes', async () => {
     let finish = () => {};
     const onRetryAt = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));

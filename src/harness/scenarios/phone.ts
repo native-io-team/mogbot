@@ -93,10 +93,12 @@ const phone = (
 export const phoneScenarios: Scenario[] = [
   phone(
     'phone-off',
-    'Phone — off, nothing paired',
-    'One short paragraph saying the phone talks straight to this Mac over the user’s own ' +
-      'Tailscale and that the Mac has to stay on, then a single "Turn on phone access" button. ' +
-      'No device list, no QR code.',
+    'Phone — off, nothing paired: install comes first',
+    'Titled “Your phone”. One line on what the phone is for, then “1. Get the app on your phone”: ' +
+      'says plainly the app is in beta and not in the stores, that today it is built on this Mac ' +
+      'over a cable (Xcode + Apple ID for iPhone, 7-day expiry on a free ID; USB debugging for ' +
+      'Android), and a primary “Install on my phone…”. Then a muted “2. Connect it to this Mac” ' +
+      'naming Tailscale, with “I already have the app”. No “Turn on phone access” button, no QR.',
     {}
   ),
   phone(

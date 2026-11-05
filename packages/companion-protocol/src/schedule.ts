@@ -20,6 +20,9 @@ export function describeRun(run: CheckInRun, now = Date.now()): string {
         : 'Didn’t run · retrying';
     case 'failed':
       return run.attempt > 1 ? `Didn’t run after ${run.attempt} tries` : 'Didn’t run';
+    case 'skipped':
+      // Its time came while you drove the agent's session (the detail says so).
+      return 'Skipped';
     default:
       return 'Unknown';
   }

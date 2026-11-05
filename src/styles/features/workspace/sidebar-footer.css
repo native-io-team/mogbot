@@ -95,6 +95,16 @@
   flex: 0 0 var(--control-height-standard);
 }
 
+/* Labeled Settings reads as the Phone row above it (.remote-indicator): the
+   same left-aligned, secondary-text row, not a heavier bordered button. */
+.workspace-sidebar-settings--row {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
 /* Project picker styles removed — replaced by the command palette (⌘O). */
 
 /* PROTOTYPE (workflows/inbox): the Inbox nav button carries an unread badge.

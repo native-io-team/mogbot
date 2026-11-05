@@ -153,8 +153,9 @@
   align-items: center;
   gap: var(--spacing-sm);
   width: 100%;
-  height: var(--size-sidebar-project-row);
-  padding: 0 var(--spacing-md) 0 var(--spacing-sm);
+  /* Grows for a two-line preview; a one-line row is the project row's height. */
+  min-height: var(--size-sidebar-project-row);
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
   text-align: left;
   font: inherit;
   color: var(--text-primary);
@@ -224,7 +225,8 @@
 
 .agents-list__pin {
   flex: 0 0 auto;
-  color: var(--text-muted);
+  color: var(--text-faint);
+  pointer-events: none;
 }
 
 /* An agent on an engine other than the default (AgentEngineBadge). Quiet:
@@ -241,13 +243,17 @@
   white-space: nowrap;
 }
 
+/* Two lines before it's cut: a third of a sentence (or of a failure's reason)
+   says nothing. */
 .agents-list__preview {
+  display: -webkit-box;
   overflow: hidden;
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-compact);
   color: var(--text-muted);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .agents-list__row.is-current .agents-list__preview {
@@ -261,7 +267,8 @@
 }
 
 /* A turn that didn't finish shows where it happened. A usage limit heals on
-   its own, so it stays quiet: only its dot says anything. */
+   its own, so it stays quiet: no colour and no dot, only its words (when it
+   resets). Amber is kept for what needs you. */
 .agents-list__preview[data-state='failed'] {
   color: var(--accent-error-light);
 }
@@ -278,17 +285,17 @@
 }
 
 /* New agent / Import agents start on the rows' column, not centred in space:
-   the icon sits in a badge-wide box so its label lines up with the names. */
+   the icon sits in a badge-wide box so its label lines up with the names.
+   Actions, not rows: shorter than an agent, one after the other with no gap,
+   and in the secondary text colour so they read as available. */
 .workspace-sidebar:not(.is-hidden) .agents-list__new,
 .workspace-sidebar:not(.is-hidden) .agents-list__import {
   justify-content: flex-start;
   gap: var(--spacing-sm);
-  padding: 0 var(--spacing-md) 0 var(--spacing-sm);
-  /* One-line actions, so a control's height — at a two-line agent row's
-     height they left a gap between them as tall as a missing row. */
   height: var(--control-height-standard);
   min-height: var(--control-height-standard);
-  color: var(--text-muted);
+  padding: 0 var(--spacing-md) 0 var(--spacing-sm);
+  color: var(--text-secondary);
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new:hover:not(:disabled),
@@ -298,6 +305,66 @@
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new {
   margin-top: var(--spacing-xs);
+}
+
+/* "● Needs you · 2 ›": the way into What's in flight, at the top of the list
+   while anything is waiting. A row, so it's seen without hovering anything. */
+.agents-list__needs-you {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  height: var(--control-height-standard);
+  padding: 0 var(--spacing-md) 0 var(--spacing-sm);
+  font: inherit;
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--accent-warning);
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+  cursor: pointer;
+}
+
+.agents-list__needs-you:hover {
+  background: var(--tint-subtle);
+}
+
+.agents-list__needs-you.is-current {
+  background: var(--surface-selected);
+}
+
+.agents-list__needs-you:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 var(--border-width-emphasis) var(--accent-focus);
+}
+
+/* The dot sits in a badge-wide box, so the label lines up with the names. */
+.agents-list__needs-you-mark {
+  display: inline-flex;
+  flex: 0 0 var(--size-sidebar-project-shortcut);
+  align-items: center;
+  justify-content: center;
+}
+
+.agents-list__needs-you-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.agents-list__needs-you-chevron {
+  color: var(--text-muted);
+}
+
+.workspace-sidebar.is-hidden .agents-list__needs-you {
+  justify-content: center;
+  padding: 0;
+}
+
+.workspace-sidebar.is-hidden .agents-list__needs-you-label,
+.workspace-sidebar.is-hidden .agents-list__needs-you-chevron {
+  display: none;
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new > svg,
@@ -479,10 +546,16 @@
 }
 
 .agent-chat__status {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  /* What it's doing, or idle what it's for: cut, never wrapped. */
+  max-width: 40ch;
+  overflow: hidden;
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-compact);
   color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .agent-chat__status[data-state='waiting'] {
@@ -628,6 +701,24 @@
   justify-content: flex-start;
   max-width: none;
   margin-top: var(--spacing-sm);
+}
+
+/* Only the Chief's greeting so far: it and its starters sit in the middle of
+   the page, as an empty state, rather than at the foot of an empty screen. */
+.agent-chat__messages[data-greeting] {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.agent-chat__messages[data-greeting] > :first-child {
+  margin-top: 0;
+}
+
+.agent-chat__messages[data-greeting] > .agent-chat__starters {
+  justify-content: center;
+  max-width: 480px;
+  margin-top: var(--spacing-md);
 }
 
 /* What keeps them going, at the foot of What's in flight. */
@@ -1011,7 +1102,8 @@
   gap: var(--spacing-xs);
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-compact);
-  color: var(--text-muted);
+  /* A step above the timestamps: work handed off is worth a glance. */
+  color: var(--text-secondary);
 }
 
 .agent-peer__toggle,
@@ -1183,8 +1275,18 @@
 
 .agent-approval__actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: var(--spacing-sm);
+}
+
+/* "1 of 3 similar requests": quiet, after the title. */
+.agent-approval__series {
+  margin-left: auto;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-body);
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* A session's question: whose session asked, under the question. */
@@ -1354,12 +1456,13 @@
   flex: 0 0 auto;
 }
 
+/* A square, as every media Stop is: at 8px with a 4px radius it was a dot. */
 .agent-composer__stop-square {
   display: block;
-  width: 8px; /* css-ok: stop glyph */
-  height: 8px; /* css-ok: stop glyph */
+  width: 10px; /* css-ok: stop glyph */
+  height: 10px; /* css-ok: stop glyph */
   background: currentColor;
-  border-radius: var(--radius-sm);
+  border-radius: 2px; /* css-ok: stop glyph's corner, square not dot */
 }
 
 /* No engine: the composer's slot says why, and offers the fix. */
@@ -1614,6 +1717,13 @@
 .agent-editor__rebind-actions {
   display: flex;
   gap: var(--spacing-sm);
+}
+
+/* The engine's own name for the model picked, under the plain choice. */
+.agent-editor__model-detail {
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-body);
+  color: var(--text-muted);
 }
 
 /* Save stays in reach however long the form gets (permissions, secrets and
@@ -2088,13 +2198,18 @@
 
 /* ---------------------------------------------------------- model, usage */
 
-.agent-chat__model {
-  color: var(--text-muted);
+/* The conversation's … menu carries its actions and then its model: taller
+   than the shared 360px cap, so the model choices aren't hidden below a
+   scroll. Still never taller than the window. */
+.ss-dropdown__menu.agent-model-menu {
+  max-height: calc(100vh - var(--spacing-2xl) * 3);
 }
 
-.agent-chat__model[aria-expanded='true'],
-.agent-chat__model:hover {
-  color: var(--text-primary);
+/* The engine's own name for a model, small beside its plain one. */
+.agent-model-menu .agent-model-menu__detail {
+  margin-left: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
 }
 
 .agent-editor__usage {
@@ -2339,11 +2454,76 @@
   font-variant-numeric: normal;
 }
 
-/* What's in flight's bell: its count is agents waiting on you, which is
-   attention (amber), not an error. */
-.agents-inflight-badge {
-  background: var(--accent-warning);
-  color: var(--text-on-accent);
+/* ------------------------------------------------- other agents' requests */
+
+/* "● Review Lead Gen's request ›" at the foot of a chat; opens the card in place. */
+.agent-requests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
+}
+
+.agent-requests__group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
+
+.agent-requests__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  font: inherit;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
+  color: var(--text-secondary);
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition:
+    color var(--transition-interaction),
+    background var(--transition-interaction);
+}
+
+.agent-requests__chip:hover {
+  color: var(--text-primary);
+  background: var(--surface-control-hover);
+}
+
+.agent-requests__chip:focus-visible {
+  outline: var(--border-width-emphasis) solid var(--accent-focus);
+  outline-offset: var(--spacing-2xs);
+}
+
+.agent-requests__chevron {
+  transition: transform var(--transition-interaction-fast);
+}
+
+.agent-requests__chip[aria-expanded='true'] .agent-requests__chevron {
+  transform: rotate(90deg);
+}
+
+.agent-requests__group > .agent-chat__row {
+  width: 100%;
+}
+
+.agent-requests__loading {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* "⌘J next agent that needs you", quiet after the Needs you heading. */
+.agents-team__hint {
+  margin-left: var(--spacing-sm);
+  font-weight: var(--font-weight-body);
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-faint);
 }
 
 /* ------------------------------------------------ import over the connector */

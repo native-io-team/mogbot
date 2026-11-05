@@ -4,6 +4,8 @@
  *   pnpm mock                      # https://localhost:47443, self-signed
  *   pnpm mock --http --port 47450  # plain HTTP, e.g. behind `tailscale serve --https=47443`
  *   pnpm mock --public-url https://mac.tailnet.ts.net:47443
+ *   pnpm mock --codex-only         # Claude Code not installed; every agent on Codex
+ *   pnpm mock --takeover           # Designer driven in a terminal on the Mac
  */
 
 /* eslint-disable no-console -- a CLI prints to stdout */
@@ -57,6 +59,8 @@ function selfSigned(dir: string) {
     publicUrl: arg('--public-url'),
     devicesFile: path.resolve(__dirname, '.certs', 'devices.json'),
     ...(tls ? { tls: { key: tls.key, cert: tls.cert } } : {}),
+    codexOnly: args.includes('--codex-only'),
+    takeover: args.includes('--takeover'),
   });
   void mock.listen().then((url) => {
     const link = mock.pairingLink();

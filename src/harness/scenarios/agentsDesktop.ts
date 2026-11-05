@@ -42,7 +42,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'agents-quit-guard',
     title: 'Quit — agents still working (⌘Q, menu-bar Quit)',
     looksRightWhen:
-      'A small centred alert, not the plain “Are you sure?”: a semibold line “2 agents are still working. Quit anyway?”, then one muted paragraph naming them (“Quitting stops Acme Site and Native App mid-turn…”), saying Lead Gen is also waiting for your OK, and that Keep running in background hides the window instead. Three full-width buttons stacked like a macOS alert: Keep running in background (green, focused), Quit (danger), Cancel (outline).',
+      'A small centred alert, not the plain “Are you sure?”: a semibold line “2 agents are still working. Quit anyway?”, then one muted paragraph naming them (“Quitting stops Acme Site and Native App mid-turn…”), saying Lead Gen’s request will still be here when you reopen, and that Keep running in background hides the window instead. Three full-width buttons stacked like a macOS alert: Keep running in background (green, focused), Quit (danger), Cancel (outline).',
     command: 'app.quit',
     requires: '.quit-confirm-modal--guard',
     commands: {
@@ -51,13 +51,24 @@ export const agentsDesktopScenarios: Scenario[] = [
   },
   {
     id: 'agents-quit-guard-approval',
-    title: 'Quit — only an approval waiting',
+    title: 'Quit — only an approval waiting: no guard',
     looksRightWhen:
-      'The guard leads with “1 agent is waiting for your OK. Quit anyway?” and says quitting stops Lead Gen waiting on its approval. Same three stacked buttons.',
+      'An open request is no reason to stay (it is there on reopen), so this is the plain one-word “Quit?” with Cancel and a neutral Quit, no agent wording.',
+    command: 'app.quit',
+    requires: '.quit-confirm-modal:not(.quit-confirm-modal--guard)',
+    commands: {
+      agents_quit_check: { working: [], waiting: ['Lead Gen'] },
+    },
+  },
+  {
+    id: 'agents-quit-guard-scheduled',
+    title: 'Quit — a check-in due soon',
+    looksRightWhen:
+      'The guard leads with “Finance has a check-in coming up. Quit anyway?”, says check-ins don’t run while the app is closed and run when you reopen it, and that Lead Gen’s request will still be here. Same three stacked buttons.',
     command: 'app.quit',
     requires: '.quit-confirm-modal--guard',
     commands: {
-      agents_quit_check: { working: [], waiting: ['Lead Gen'] },
+      agents_quit_check: { working: [], waiting: ['Lead Gen'], scheduled: ['Finance'] },
     },
   },
   {

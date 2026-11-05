@@ -324,6 +324,11 @@ pub struct AgentMessage {
     /// as a divider. Older builds show it as the plain note it also is.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub fresh: bool,
+    /// On a `note`: a take-over's terminal closed by itself, early or
+    /// failing, with its last lines after a blank line. Not a turn's
+    /// failure: quiet, no Retry. (Older builds wrote it as an `error`.)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub takeover: bool,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -1565,6 +1570,7 @@ mod tests {
                     client_id: None,
                     work: None,
                     fresh: false,
+                    takeover: false,
                 })
                 .unwrap();
             }
@@ -1835,6 +1841,7 @@ mod tests {
                 client_id: None,
                 work: None,
                 fresh: false,
+                takeover: false,
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -1877,6 +1884,7 @@ mod tests {
             client_id: None,
             work: None,
             fresh: false,
+            takeover: false,
         }
     }
 

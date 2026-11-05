@@ -23,11 +23,17 @@ greeting, `prompts::CHIEF_GREETING`, appended by `ensure_main` when it creates
 the Chief: what it can do (create agents, delegate, approvals, projects, the
 phone) and a question. It is stored, not generated, so nothing runs on the
 user's plan until they reply, and `CHIEF_INSTRUCTIONS` tells the Chief it said
-it. Three starters sit under it until the user's first message.
+it. Three starters sit under it until the user's first message; while the
+greeting is all there is, it and the starters sit in the middle of the page as
+an empty state (`data-greeting` on the message column), not at the foot of an
+empty screen.
 
-In Agents mode the sidebar's top row is the toggle and a bell: What's in
-flight, badged amber with how many agents need you (Home, Workflows and the
-Inbox belong to the Projects side). Its foot has the Phone row (the companion
+In Agents mode the sidebar's top row is the toggle (Home, Workflows and the
+Inbox belong to the Projects side). **What's in flight** — the one name for
+the cross-agent overview — is reached from a **"Needs you · N"** row at the
+top of the agent list, shown only while an agent waits on you (a card, or a
+turn that didn't finish; the same set ⌘J visits), and from ⌘K. There is no
+icon for it: an unlabeled one was three names for one place. Its foot has the Phone row (the companion
 app: pair, or which phone is connected); remote access, for driving the app
 from another assistant, appears there only while it is on and is otherwise
 reached from the Phone panel's last line or ⌘K. In a project's workspace
@@ -94,8 +100,9 @@ From the stream:
   another zone is quoted, never converted) and "Claude Code is signed out."
   (`signed_out`). Anything else is shown as it came. The agent's registry entry
   carries the tag while the error is the newest line (`Agent.failure`, cleared
-  by anything said after it), so the sidebar shows "Didn't finish: …" with a
-  red dot, or "Usage limit · resets 3:00 PM" quietly with an amber one, and
+  by anything said after it), so the sidebar shows "<reason> · didn't finish"
+  (the reason first, over up to two lines) with a red dot, or "Usage limit ·
+  resets 3:00 PM" quietly with no dot at all (amber means needs you, only), and
   What's in flight lists it under Needs you with its remedy.
 
 A vanished session (`--resume` → "No conversation found") is replaced once with
@@ -243,8 +250,9 @@ steps has no line.
   that opens the steps so far above it; the newest is left out only while
   the working line is saying it (`doing` equals the activity), never when
   the line is blank. A bound agent's list offers **Open project** (its
-  workspace), the only real way in today; "Take over" (opening the live
-  session or browser tab) is not built.
+  workspace), and every agent's offers **Take over** (below), as does the
+  working line itself. Taking over a browser tab the agent drives is not
+  built.
 - **Stored** beside the log, never in it: `turns/<message-id>.json`, sent
   again on `agents://message` when the turn ends, and applied only to the
   paged chat reads (desktop and phone), after the log's lock is released,
@@ -462,14 +470,25 @@ So approvals are asynchronous. `approve` waits 240s. If you haven't answered,
 it tells the agent "the user may be away: stop, say what you need, you'll be
 woken if they allow it", and **the card stays live**. A late **Allow** grants
 that exact tool call once (same tool, same input) and queues a turn telling the
-agent to carry on; its retry goes through without a second card. A late
-**Deny** just records the answer. **Deny with note…** declines and hands the
+agent to carry on; its retry goes through without a second card. **Deny** is
+one click and just records the answer. **Deny with a note…**, in the card's
+… menu (as on the phone), declines and hands the
 agent what you typed: as the deny message while it waits on the card, or as a
 queued turn when it doesn't; the card keeps it ("Declined · “…”").
 Live cards survive restarts, because the
 tool and input are stored on the card. The app's own confirmations (delete
 an agent) do expire, since they only mean something while asked. The sidebar
 shows "Needs your OK" while any card is open (`pendingApprovals`).
+
+**Answered where you are** (`AgentInlineRequests`). Another agent's open card
+is offered at the foot of the chat you're in, as a quiet "Review Lead Gen's
+request" chip that opens the same card in place: in the Chief's chat for every
+agent, elsewhere for the agents that chat has worked with. Answering it there
+answers it everywhere (one request id). A card already in the chat (a
+session's question) isn't offered twice. A run of the same request from one
+agent with nothing of yours between says "2 of 3 similar requests" on each
+card, counted from the cards that have arrived, never from how many might
+follow (`approvalSeries`).
 
 **Always allow** (`agents/permissions.rs`). A permission card can offer a
 quiet "Always allow …" beside Deny / Allow, scoped when the card is made and
@@ -550,8 +569,132 @@ Esc in an empty composer stops a working agent only when pressed twice within
 1.5s: the first shows "Esc again to stop <agent>" where the hint goes, so a
 reflexive Esc never drops a turn. ⌘K also lists "Stop <agent>" for every agent
 that isn't idle (with a confirm), Allow / Deny for the oldest card waiting on
-you, and "Open the next agent that needs you" (⌘J: a card, or a turn that
-didn't finish).
+you, "Next agent that needs you" (⌘J: a card, or a turn that didn't finish;
+the Needs you row's tooltip says ⌘J too), and the open agent's own actions,
+everything in its … menu by name: Edit, Pin / Unpin, Mute / Unmute, Hide /
+Show, Mark as unread, Start fresh, Open <agent>'s project (when it works in
+one) and Delete (with the same confirm). The stop control is a square glyph,
+"Stop (Esc twice)".
+
+**Activity, in words** (`plainActivity`). The engine's activity line
+("Editing PricingTable.tsx", "$ npm test", "Reading …/src/App.tsx") is shown
+as a person would say it — "Working on the pricing table", "Running a
+command", "Reading the app" — in the header, the sidebar, the working
+indicator, delegation lines and What's in flight. A line that's already plain
+("Drafting the reminders") is left alone; only file names, paths, commands
+and URLs are put into words.
+
+## Take over (`src-tauri/src/agents/takeover.rs`)
+
+Step into the agent's own session and drive it by hand, then hand it back.
+From the agent menu ("Take over" / "Hand back"), the working line and the
+live timeline, and ⌘K ("Take over <agent>", "Hand <agent> back"). Offered once
+the agent has a conversation on its engine (`sessionId`, not `newEngine`).
+
+- **Paused.** `runner::claim_for_takeover` sets `driven` on the agent's
+  runtime under the inbox lock, and only while no turn is running or waiting
+  for a slot. While driven no turn starts: messages from you, the phone,
+  other agents and one-time check-ins wait in the queue (and in `inbox.json`);
+  a routine coming due is skipped, moved to its next time, recorded as a
+  `skipped` run, with a note ("Skipped “Morning brief” · you were driving
+  Finance"). `list_agents` tells other agents their messages wait. Start
+  fresh, and a change of engine or project, are refused until hand-back —
+  for the editor and the Chief's `update_agent` alike, through one helper
+  (`runner::update_settings`) that checks under the same lock the claim is
+  made under. Deleting (`takeover::delete_agent`, used by both the command
+  and the Chief's `delete_agent`) stops the turn first, then ends the
+  take-over dropping its queue, so nothing starts a turn on the way out;
+  only then is the agent's copy cleaned up (`task::abandon`: pending work
+  committed on its branch first, the copy kept if anything couldn't be), so
+  the terminal is gone from the copy before the copy is. An update must pass
+  both guards: no engine/project/work-directly change while driven, and no
+  rebind while a copy is open (`task::refuse_rebind`). Keep and Discard are
+  refused while driven, since the terminal is working in the copy.
+- **Mid-turn** the session is in use, so take-over is refused and the UI asks:
+  **Stop and take over** (Stop, as ever dropping the queue; then waits for the
+  turn to end, ≤15s) or **Wait**.
+- **The process** is spawned in Rust (`pty_session::open_session`), so the
+  bridge token and the agent's secrets never enter the webview: the engine's
+  interactive CLI resumed on the agent's session, in the turn's working dir
+  (`project::layout`: home, its project, or its open copy of the project —
+  exactly where a turn would run), with the turn's environment (PATH, secrets,
+  `MCP_TOOL_TIMEOUT`, the nested-session variables removed, no workspace
+  account variables) and the turn's own command line minus what only a
+  headless turn needs:
+  - Claude Code: `claude::interactive_args` = a turn's args without
+    `--print`, `--output-format`, `--verbose`, `--include-partial-messages`,
+    `--permission-prompt-tool` (it asks in the terminal, to you): `--chrome
+    --resume <session> --permission-mode acceptEdits --mcp-config …
+    --allowedTools mcp__shipstudio_agents --append-system-prompt … --add-dir …`.
+    The MCP URL carries no `?turn=`, so anything that reaches `approve` is
+    refused; the agent's other tools (message an agent, share a file) work.
+  - Codex: `codex resume -c sandbox_mode="workspace-write" -c
+    approval_policy="on-request" -c developer_instructions=… <every turn's
+    -c> [-m model] -C <cwd> <thread>`. `developer_instructions` is the
+    agent's identity plus its secrets section, as a `codex exec` turn passes
+    it. Built from `codex resume --help` on 0.166; not run against a real
+    thread (no signed-in account on the build machine).
+  The PTY has no project in its metadata, so remote access and other agents'
+  `session_*` tools can't see or type into it, and the phone is never sent
+  its id. Its id starts `takeover-`: a tab's `pty_session_open` may attach to
+  it while it runs but never respawns it, and the take-over's watcher also
+  checks the pid, so a respawn can't pass for the take-over.
+- **Edits are auto-accepted while you drive**, as they are for the agent
+  (Claude Code's `acceptEdits`, Codex's `workspace-write`), in its projects
+  too. Bash still asks. The banner's tooltip says so once; Shift-Tab changes
+  it in Claude Code.
+- **Trust.** If Claude Code hasn't recorded the folder as trusted
+  (`hasTrustDialogAccepted` on it or a folder above, in `.claude.json` under
+  `CLAUDE_CONFIG_DIR` or home — read, never written), the banner adds:
+  "Claude Code will ask whether to trust this folder — choose “Yes,
+  proceed”. Choosing No ends the take-over." Codex's trust prompt isn't
+  checked.
+- **Where.** A bound agent's session becomes a tab in its project's workspace
+  (`adoptTakeover` + focus, through `useRemoteAgentControl`), which opens. The
+  tab is never saved: `set_terminal_state` drops `takeover-` tabs, and
+  `get_terminal_state` drops any on disk and adds the ones running now, so
+  a quit, crash or hand-back leaves no ghost tab to respawn.
+  Any other agent's shows in its chat in place of the conversation
+  (`AttachedTerminal`, attach-only), with "Show chat" to see the conversation
+  and composer. Either way one line under the header says "You're driving
+  Finance in a terminal · Hand back"; the sidebar row and chat header read "You're driving Finance";
+  a message you send waits ("Waiting, sends when you hand Finance back").
+- **Hand back** (the button, ⌘K, or the process exiting, noticed within
+  0.5s). If the terminal printed in the last 2s it is likely mid-response,
+  so the button asks first ("Hand back anyway?"); anything typed but not sent
+  is dropped. Ctrl-C three times, 300ms apart (Claude Code's first clears the
+  prompt, its second arms "press again"), then up to 5s for it to exit; only
+  a process still alive with the session on its command line is killed
+  (pids get reused). Only then is `driven` released, so a turn and the
+  terminal never share the session. A note says "You handed Finance back after 6 min";
+  if the session's transcript grew, the next turn starts with
+  `prompts::handed_back`. Start fresh and an engine switch clear that
+  preamble. A bound agent's tab is closed (`remote-close-agent`). Deleting
+  the agent ends a take-over without a note.
+- **Closed by itself early** (within 10s, or with a non-zero exit — the
+  trust question answered No, a rejected flag, a crash): a quiet note
+  (`kind: note`, `takeover: true`), not an error — it isn't the agent
+  failing — says so plainly with the terminal's last lines in a mono block
+  (`remote_access::screen::render_tail`), no preamble, and no Retry. Being a
+  note, it sets no failure, alerts nobody, and peers and the phone never
+  call it "didn't finish". Older builds wrote it as an error; those still
+  render with the block and no Retry.
+- **Phone:** the overview carries `takeover` (without the PTY id); the phone
+  says "Being driven on your Mac" on the row, the chat header, the composer
+  and a queued message, the only phrasing it uses for this, offers no Stop,
+  and queued messages wait. It can't take over.
+- **One mark on disk.** `<home>/takeover.json` (pid, session) from open to
+  hand-back. At the next launch a leftover mark means the app quit or crashed
+  mid-take-over: the CLI is stopped if it outlived the app (only while it is
+  still that CLI), and the chat says the take-over ended. What waited is sent
+  like any interrupted queue.
+
+Verified for Claude Code 2.1.318 with a throwaway folder on Haiku (about two
+cents): `--print --session-id`, then interactive `--resume` in a PTY (a new
+message, Ctrl-C twice exits), then `--print --resume` recalled both turns
+under the same session id. In a folder Claude Code hasn't been told to trust,
+the interactive CLI first shows its own trust dialog (default "No, exit"),
+which the person at the keyboard answers; nothing is trusted for them.
 
 ## Notifications (`src-tauri/src/agents/notify.rs`)
 
@@ -886,9 +1029,14 @@ pins the icon on, so it doesn't vanish under the pointer.
 **Quit guard.** ⌘Q, the icon's Quit, ⌘K "Quit…", and closing a
 window while it would quit all go through `useQuitGuard`, which asks
 `agents_quit_check` (`tray::quit_check`: agents mid-turn or queued for a slot,
-and agents with an open card, hidden ones included). Nothing interrupted:
-the old "Are you sure?" (and the icon's Quit just quits). Otherwise "2 agents
-are still working. Quit anyway?", naming them, with **Keep running in
+agents with a check-in due in the next 24 hours, and agents with an open card,
+hidden ones included). Only what a quit actually stops is a reason to warn: a
+turn in progress, and a check-in that can't fire while the app is closed (it
+runs late, on reopen). An open card is not: it survives the restart and a late
+Allow resumes the turn, so it is only said, as "Lead Gen's request will still
+be here when you reopen". Nothing stopped: the old "Are you sure?" (and the
+icon's Quit just quits). Otherwise "2 agents are still working. Quit anyway?"
+(or "Finance has a check-in coming up."), naming them, with **Keep running in
 background** (macOS; hides every window, `hide_all_to_background`) as the
 default, then Quit, then Cancel. The backend brings the main window forward
 first, since it may be hidden. The updater's restart is untouched: it still
@@ -1080,9 +1228,12 @@ time. The e2e Codex scenarios run on the account when one is signed in.
   to another engine resets the setting along with its model.
   One-time check-ins, including "Retry at", run on the agent's own model
   (`store::Agent::routine_model`).
-- **Model.** Default / Opus / Sonnet / Haiku, passed as `--model` from the next
-  turn. Set it when creating the agent, in the editor, or from the menu in the
-  chat header. Only Claude Code's own aliases are accepted, and the backend
+- **Model.** Said by what it's for — Default / Most capable / Balanced /
+  Fastest — with Claude Code's own name (Opus / Sonnet / Haiku) in small
+  text beside it; passed as `--model` from the next turn. Set it when creating
+  the agent, in the editor, or at the foot of the chat header's … menu, which
+  also names the engine. The header itself shows the agent's role (idle) or
+  what it's doing, never the engine. Only Claude Code's own aliases are accepted, and the backend
   enforces that too. Default means no `--model`, so whatever Claude Code
   defaults to.
 - **Usage.** Each turn's final stream-json `result` event adds its token counts,
@@ -1136,9 +1287,8 @@ cards.
   recipient does it with `message_agent`. The bubble tints each recorded
   `@Name` in that agent's colour. A name typed without the menu still counts
   if it matches an agent exactly.
-- **What's in flight** (⌘K only, id `agents.team`; it used to be the list's
-  first row and the compact switcher's, and was demoted so the list is just
-  agents, with ⌘J and the toggle's badge carrying "who needs you") shows,
+- **What's in flight** (⌘K, id `agents.team`, or the "Needs you · N" row at
+  the top of the agent list while anything waits on you) shows,
   in a fixed order and present even when empty: who needs you (with their
   pending approval cards, answerable in place, and turns that didn't finish,
   with Retry, Retry at the reset, or Sign in), who is working (their
@@ -1210,10 +1360,11 @@ index, so the user's staging is never touched); after the turn, however it
 ended, it snapshots again and diffs the two (`--numstat`, `--name-status`). If
 anything changed, a `changes` message records the files with +/- counts, the
 branch and both snapshot ids. Edits already present before the turn don't
-count; a commit mid-turn doesn't hide work. **View diff** opens the app's own
+count; a commit mid-turn doesn't hide work. The card leads with **Open
+preview** (opens the project) and **See changes**; the receipt — branch,
+line counts, the file list — is one click down. A file opens the app's own
 diff modal on this turn's change only (`agents_change_diff`, which reads the
-project and snapshots from the stored card); **Open preview** opens the
-project. No deploy status: nothing here knows whether that commit deployed.
+project and snapshots from the stored card). No deploy status: nothing here knows whether that commit deployed.
 Limits: another agent or the user editing the same project during the turn is
 counted too; the snapshots are unreferenced git objects, so after `git gc`
 prunes them the diff says it can't be shown.

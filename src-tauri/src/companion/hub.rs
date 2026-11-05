@@ -233,7 +233,10 @@ impl Hub {
         let mut journal = self.journal();
         // A status's live timeline is for phones watching now; replay sends
         // the latest status without it (the next one carries it again).
-        let seq = journal.append(super::wire::without_live_work(event.clone()), super::now_ms());
+        let seq = journal.append(
+            super::wire::without_live_work(event.clone()),
+            super::now_ms(),
+        );
         let _ = self.tx.send(HubItem::Journaled { seq, event });
         seq
     }

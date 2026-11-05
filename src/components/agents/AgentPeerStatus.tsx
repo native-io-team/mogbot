@@ -8,7 +8,6 @@
  */
 
 import { useEffect, useState } from 'react';
-import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import {
   getAgentMessages,
@@ -42,9 +41,9 @@ export function AgentPeerStatus({ agent }: { agent: Agent }) {
   const state = peerState(agent, useLastOutcome(agent));
   return (
     <span className="agent-peer__state" data-state={state.kind}>
-      {state.kind === 'working' ? (
-        <PixelLoaderRings size="sm" label={`${agent.name} is working`} />
-      ) : state.kind !== 'idle' ? (
+      {/* Working is said in words: a loader here left an empty slot whenever it
+          wasn't drawing, and the line already says what it's doing. */}
+      {state.kind === 'waiting' || state.kind === 'failed' ? (
         <span
           className={`sidebar-row-dot ${state.kind === 'waiting' ? 'dot-attention' : 'dot-error'}`}
           aria-hidden="true"

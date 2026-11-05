@@ -127,6 +127,17 @@ describe('palettes', () => {
     expect(contrast(c.onWarning, c.accentWarning)).toBeGreaterThanOrEqual(4.5);
   });
 
+  it.each(APPEARANCES)(
+    'make a selected chip or segment plain at a glance, and its words readable (%s)',
+    (appearance) => {
+      const c = palettes[appearance];
+      expect(contrast(c.onSelectedFill, c.selectedFill)).toBeGreaterThanOrEqual(7);
+      // Against the unselected ones beside it (a grey step on grey was 1.15:1).
+      expect(contrast(c.selectedFill, c.surfaceControl)).toBeGreaterThanOrEqual(3);
+      expect(contrast(c.selectedFill, c.surfacePanel)).toBeGreaterThanOrEqual(3);
+    }
+  );
+
   it('keep words on media white, over a dark scrim, in both appearances', () => {
     for (const appearance of APPEARANCES) {
       const c = palettes[appearance];

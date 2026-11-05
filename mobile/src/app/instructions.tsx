@@ -10,6 +10,7 @@ import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Spinner } from '../components/agent';
 import { Button, T, SheetPage } from '../components/ui';
+import { SheetTitle } from '../components/SheetTitle';
 import { haptic } from '../lib/haptics';
 import { describeError, readInstructions, setInstructions } from '../lib/session';
 import { useApp } from '../lib/store';
@@ -66,11 +67,11 @@ function Instructions() {
   return (
     <SheetPage>
       <Scroll contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.head}>
-          <T variant="title" color={colors.textStrong} style={{ flex: 1 }}>
-            Instructions
-          </T>
-          {saved !== null &&
+        <SheetTitle
+          // Closing mid-edit would drop the edit: Cancel and Save are the way out then.
+          close={!editing}
+          trailing={
+            saved !== null &&
             (editing ? (
               <>
                 <Button
@@ -98,8 +99,11 @@ function Instructions() {
                 disabled={!connected}
                 onPress={() => setEditing(true)}
               />
-            ))}
-        </View>
+            ))
+          }
+        >
+          Instructions
+        </SheetTitle>
         <T variant="small" color={colors.textSecondary}>
           {name} reads these at the start of every conversation.
         </T>
