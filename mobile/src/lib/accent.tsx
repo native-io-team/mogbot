@@ -55,11 +55,15 @@ export const ANSWER: Accent = agentAccent('white');
 /** Above this, the system's white thumb all but disappears on an accent track. */
 export const LIGHT_ACCENT = 0.6;
 
+/** How far a light accent's on-track is darkened toward the app's surface. */
+const LIGHT_TRACK = 0.55;
+
 /**
  * A switch's colours for an accent. On a light accent (white, the Chief's
  * default) a white thumb on a near-white track reads the same as off, so the
- * thumb goes dark when on. Otherwise the thumb is white, on a dark track when off.
- * (Android paints `thumbColor` in both states, so it follows the value.)
+ * on-track is a darker shade of it, and the thumb is dark where the platform
+ * honours a thumb colour (iOS 26's switch ignores it; Android paints it in
+ * both states, so it follows the value).
  */
 export function switchColors(
   a: Accent,
@@ -71,7 +75,10 @@ export function switchColors(
 } {
   const light = luminance(a.accent) > LIGHT_ACCENT;
   return {
-    trackColor: { true: a.accent, false: colors.surfaceSelected },
+    trackColor: {
+      true: light ? mix(a.accent, colors.surfaceApp, LIGHT_TRACK) : a.accent,
+      false: colors.surfaceSelected,
+    },
     thumbColor: on && light ? colors.inkDark : colors.textWhite,
     ios_backgroundColor: colors.surfaceSelected,
   };

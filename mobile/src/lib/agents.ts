@@ -330,9 +330,11 @@ export function commandLine(command: string): string {
  * (`commandLine`), never a diff's `@@ -18,3 +18,3 @@` or a file header. An
  * edit says which file ("Wants to edit Header.tsx").
  */
-export function askingLine(approval: Pick<Approval, 'title' | 'detail'>): string {
+export function askingLine(approval: Pick<Approval, 'title' | 'detail' | 'tool'>): string {
   if (approval.title === 'Run a command' && approval.detail?.trim())
     return commandLine(approval.detail);
+  // A command whose title already says it in words: the title, never the command.
+  if (approval.tool === 'Bash') return approval.title;
   const lines = (approval.detail ?? '')
     .split('\n')
     .map((l) => l.trim())

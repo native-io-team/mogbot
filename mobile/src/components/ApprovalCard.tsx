@@ -105,16 +105,19 @@ const MIN_DETAIL = 48;
  * pin and the list share, neither of which the pin changes, so it settles
  * instead of flipping the pin on and off.
  */
-export function useFitDetail(pending: boolean, id: string) {
+export function useFitDetail(pending: boolean, id: string, hasAside = false) {
   const pane = useContext(PaneContext);
   const [card, setCard] = useState(0);
   const [detail, setDetail] = useState(0);
   const [head, setHead] = useState(0);
+  const [aside, setAside] = useState(0);
   const candidate = pending && pane.candidate === id;
   const pinned = pending && pane.pinnedId === id;
   const measured = pending && pane.height > 0 && card > 0;
-  // The rest of the card with its head, whether or not the head is drawn now.
-  const restFull = card - detail + (pinned ? head + space.md : 0);
+  // The rest of the card with everything it drops while pinned (its head, and
+  // an aside such as "It paused here"), whether or not they're drawn now.
+  const dropped = head + space.md + (hasAside ? aside + space.md : 0);
+  const restFull = card - detail + (pinned ? dropped : 0);
   const needsPin = candidate && measured && pane.room - restFull - FIT_MARGIN < MIN_DETAIL;
   const { report } = pane;
   useEffect(() => report(id, needsPin), [needsPin, id, report]);
@@ -125,6 +128,7 @@ export function useFitDetail(pending: boolean, id: string) {
     onCardLayout: (e: LayoutChangeEvent) => setCard(e.nativeEvent.layout.height),
     onDetailLayout: (e: LayoutChangeEvent) => setDetail(e.nativeEvent.layout.height),
     onHeadLayout: (e: LayoutChangeEvent) => setHead(e.nativeEvent.layout.height),
+    onAsideLayout: (e: LayoutChangeEvent) => setAside(e.nativeEvent.layout.height),
     maxHeight,
     /** The chat is showing this card's question in the pin: the card leaves its head out. */
     pinned,
@@ -175,7 +179,7 @@ export function ApprovalCard({
   const connected = useApp((s) => s.link.kind === 'connected');
   const pending = approval.status === 'pending';
   const paused = pending && agent.status.state === 'idle';
-  const fit = useFitDetail(pending, message.id);
+  const fit = useFitDetail(pending, message.id, paused);
   const compact = useShortPane();
   const armed = useArmed(pending, `${compact}:${fit.pinned}`);
 
@@ -228,7 +232,12 @@ export function ApprovalCard({
         </FittedDetail>
       )}
       {paused && !fit.pinned && (
-        <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>
+        <T
+          variant="small"
+          color={colors.textSecondary}
+          maxFontSizeMultiplier={2}
+          onLayout={fit.onAsideLayout}
+        >
           It paused here for you. Allow it and it picks up where it left off.
         </T>
       )}

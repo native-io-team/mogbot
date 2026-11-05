@@ -1,7 +1,7 @@
 import type { AgentMessage, Approval, SessionPrompt } from '@shipstudio/companion-protocol';
 import { act, render, screen } from '@testing-library/react-native';
 import { agentAccent, ANSWER, deriveAccent, LIGHT_ACCENT, switchColors } from '../src/lib/accent';
-import { commandLine } from '../src/lib/agents';
+import { askingLine, commandLine } from '../src/lib/agents';
 import { BROADER, broaderCaption, moreMessage, promptAnswers } from '../src/lib/answers';
 import { readBrand } from '../src/lib/brand';
 import { agentTints, colors, contrast, luminance } from '../src/lib/theme';
@@ -60,6 +60,10 @@ describe('switch contrast', () => {
     expect(luminance(agentTints.white)).toBeGreaterThan(LIGHT_ACCENT);
     expect(white.thumbColor).toBe(colors.inkDark);
     expect(contrast(white.thumbColor, white.trackColor.true)).toBeGreaterThanOrEqual(3);
+    // iOS 26 ignores the thumb colour: the white thumb must still stand out on the track…
+    expect(contrast(colors.textWhite, white.trackColor.true)).toBeGreaterThanOrEqual(3);
+    // …and on must still look different from off.
+    expect(contrast(white.trackColor.true, white.trackColor.false)).toBeGreaterThanOrEqual(1.5);
   });
 
   it('keeps the white thumb on a dark accent, and when off', () => {
@@ -136,6 +140,16 @@ describe('command previews', () => {
     expect(commandLine('git push origin main')).toBe('Wants to push commits');
     expect(commandLine('sudo rm -rf dist')).toBe('Wants to delete files');
     expect(commandLine('ffmpeg -i a.mov a.mp4')).toBe('Wants to run “ffmpeg”');
+  });
+
+  it('previews a command by its title when the title already says it in words', () => {
+    expect(
+      askingLine({
+        title: 'Write files outside its folder',
+        detail: 'cp -r export/icons ~/ShipStudio/acme-site/public/icons',
+        tool: 'Bash',
+      })
+    ).toBe('Write files outside its folder');
   });
 
   it('never names only the harmless start of a chain', () => {
