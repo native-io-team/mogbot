@@ -33,12 +33,19 @@
   --agents-bubble-max: 80%;
   /* Agent prose sits on the canvas at a reading measure, not in a bubble. */
   --agents-prose-measure: 38em; /* ≈70 characters of body text */
+  /* A card (approval, result, copy): one step forward of the canvas. Dark
+     gets that from the control fill; light from a white panel ringed by a
+     hairline shadow, or the Allow card reads as a faint smudge. */
+  --agents-card-surface: var(--surface-control);
+  --agents-card-shadow: none;
 }
 
 /* White is the strongest neutral of the theme: near-black on light, as the
    accent itself is (LIGHT_THEME_WHITE in accent.ts). */
 :root[data-theme='light'] {
   --agents-tint-white: #1c1c1c;
+  --agents-card-surface: var(--surface-panel);
+  --agents-card-shadow: var(--shadow-sm);
 }
 
 [data-color='white'] {
@@ -262,14 +269,14 @@
 
 /* Waiting on you is attention, not success: the label takes the amber of its
    dot, here and in the conversation header. */
-.agents-list__preview[data-state='waiting'] {
+.agents-list__row .agents-list__preview[data-state='waiting'] {
   color: var(--accent-warning);
 }
 
 /* A turn that didn't finish shows where it happened. A usage limit heals on
    its own, so it stays quiet: no colour and no dot, only its words (when it
    resets). Amber is kept for what needs you. */
-.agents-list__preview[data-state='failed'] {
+.agents-list__row .agents-list__preview[data-state='failed'] {
   color: var(--accent-error-light);
 }
 
@@ -281,7 +288,8 @@
   justify-content: center;
   width: var(--pixel-loader-size-sm);
   height: var(--pixel-loader-size-sm);
-  color: var(--accent-success);
+  /* In progress is the running status, not green ("done"). */
+  color: var(--status-running);
 }
 
 /* New agent / Import agents start on the rows' column, not centred in space:
@@ -713,6 +721,22 @@
 
 .agent-chat__messages[data-greeting] > :first-child {
   margin-top: 0;
+}
+
+/* The greeting keeps an agent message's measure; its box is centred in the
+   row, not only its text, so it shares the column's centre with the time and
+   the starters. */
+.agent-chat__messages[data-greeting] > .agent-chat__row--agent {
+  position: relative;
+  align-self: stretch;
+  justify-content: center;
+}
+
+/* Its hover actions sit out of flow, so they don't pull the text off-centre. */
+.agent-chat__messages[data-greeting] > .agent-chat__row--agent > .agent-message__actions {
+  position: absolute;
+  right: 0;
+  bottom: 0;
 }
 
 .agent-chat__messages[data-greeting] > .agent-chat__starters {
@@ -1676,9 +1700,9 @@
 .ss-dropdown__menu.agent-schedule {
   border-color: var(--border-subtle);
   box-shadow: var(--shadow-md);
-  width: 340px;
+  width: 380px;
   max-width: calc(100vw - var(--spacing-2xl));
-  max-height: min(480px, calc(100vh - var(--spacing-2xl) * 3));
+  max-height: min(600px, calc(100vh - var(--spacing-2xl) * 3));
   padding: var(--spacing-xs);
 }
 
@@ -1763,22 +1787,84 @@
   color: var(--text-muted);
 }
 
-.agent-schedule__composer {
+/* "+ New routine", under the list. */
+.agent-schedule__add {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-tight);
+  align-items: flex-start;
+  gap: var(--spacing-xs);
   margin-top: var(--spacing-xs);
   padding: var(--spacing-sm) var(--spacing-sm) 0;
   border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
+/* The phone's picker on the desk: When (chips, a time), What (one line),
+   the echo of what it makes, then Cancel / Schedule. */
+.agent-schedule__picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-sm) 0;
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-schedule__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.agent-schedule__label {
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-heading);
+  color: var(--text-muted);
+}
+
+.agent-schedule__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.agent-schedule__time {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agent-schedule__time .ss-text-field {
+  width: auto;
+}
+
+.agent-schedule__echo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+}
+
+.agent-schedule__echo-line {
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* What the backend read back: wraps, never cut mid-time. */
 .agent-schedule__readback {
-  overflow: hidden;
   margin: 0;
   font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
   color: var(--text-muted);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+}
+
+.agent-schedule__picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
 }
 
 .agent-schedule__readback[data-invalid] {
@@ -2441,15 +2527,6 @@
   margin: 0;
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
-}
-
-/* "⌘J next agent that needs you", quiet after the Needs you heading. */
-.agents-team__hint {
-  margin-left: var(--spacing-sm);
-  font-weight: var(--font-weight-body);
-  text-transform: none;
-  letter-spacing: normal;
-  color: var(--text-faint);
 }
 
 /* ------------------------------------------------ import over the connector */

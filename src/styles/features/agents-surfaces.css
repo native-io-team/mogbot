@@ -18,8 +18,9 @@
   font-size: var(--font-size-body-md);
   line-height: var(--line-height-help);
   color: var(--text-secondary);
-  background: var(--surface-control);
-  border-radius: var(--radius-lg);
+  background: var(--agents-card-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--agents-card-shadow);
 }
 
 .agent-card__title {
@@ -152,7 +153,7 @@
 }
 
 .agent-bar[data-tone='active'] .agent-bar__dot {
-  background: var(--accent-active);
+  background: var(--status-running);
   animation: agent-bar-live var(--agents-motion-typing-period) ease-in-out infinite;
 }
 
@@ -167,7 +168,7 @@
 }
 
 .agent-bar[data-tone='active'] .agent-bar__icon {
-  color: var(--accent-active);
+  color: var(--status-running);
 }
 
 .agent-bar__text {

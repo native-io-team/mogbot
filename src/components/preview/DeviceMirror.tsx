@@ -50,6 +50,12 @@ import { IconButton } from '../primitives/IconButton';
 import { Spinner } from '../primitives/Spinner';
 import { BuildTerminal } from '../terminal/BuildTerminal';
 import { AndroidMirrorStage } from './AndroidMirrorStage';
+import { DevServerConsentPrompt } from './DevServerConsentPrompt';
+import {
+  devServerConsentStore,
+  getDevServerConsent,
+  usePendingDevServerConsent,
+} from '../../lib/devServerConsent';
 import { asCommandError, formatCommandError, isExpectedCommandError } from '../../lib/errors';
 
 interface DeviceMirrorProps {
@@ -173,6 +179,9 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
 
   // Bump to re-run the connect flow (Restart / Try again).
   const [attempt, setAttempt] = useState(0);
+  // The build runs the project's own code; it waits for the same OK a dev
+  // server does (lib/devServerConsent.ts).
+  const pendingConsent = usePendingDevServerConsent(projectPath);
 
   // Detect the project's build targets AND this machine's toolchain, then pick the
   // initial platform — only one we can actually preview (targeted + supported),
@@ -234,6 +243,23 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
         /* dep check is best-effort */
       }
       if (cancelled) return;
+      // A session already building was approved when it started; a fresh
+      // build of an unapproved project asks first.
+      if (!seededStatus) {
+        const consent = await getDevServerConsent(projectPath).catch(() => null);
+        if (cancelled) return;
+        if (consent?.state !== 'approved') {
+          if (consent) {
+            devServerConsentStore.set(projectPath, {
+              consent,
+              resume: () => setAttempt((a) => a + 1),
+            });
+          }
+          logger.info('[DeviceMirror] build waits for the user to approve the project');
+          return;
+        }
+        devServerConsentStore.clear(projectPath);
+      }
       buildTextRef.current = '';
       setBuildCommand(cmd);
       setBuildAlive(true);
@@ -663,6 +689,9 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
             />
           )}
         </div>
+        {pendingConsent && !buildCommand && (
+          <DevServerConsentPrompt projectPath={projectPath} pending={pendingConsent} />
+        )}
         {buildCommand && launchStatus !== 'unsupported' && (
           <div className={`device-mirror-build${buildOpen ? ' open' : ''}`}>
             <div className="device-mirror-build-header">

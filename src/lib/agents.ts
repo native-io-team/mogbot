@@ -7,6 +7,9 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
+import type { Watch, WatchSource } from '../../packages/companion-protocol/src/model';
+
+export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
 
 /** Avatar colour keys. The CSS maps each to a feature token. */
 export const AGENT_COLORS = [
@@ -201,6 +204,8 @@ export interface CheckIn {
   runs?: CheckInRun[];
   /** A failed run waiting to be tried again. */
   retry?: CheckInRetry;
+  /** A "When…" routine: it runs when something happens; `nextAt` is its next check. */
+  watch?: Watch;
 }
 
 /** One scheduled run and what came of it; mirrors `runs::Run`. */
@@ -233,6 +238,8 @@ export interface CheckInMark {
   repeats: boolean;
   /** Run now, by the user; its schedule didn't move. */
   manual?: boolean;
+  /** A "When…" routine fired: what it found ("2 new GitHub mentions"). */
+  found?: string;
 }
 
 export interface SchedulePreview {
@@ -307,18 +314,6 @@ export interface SessionMark {
   cli?: string;
 }
 
-const CLI_NAMES: Record<string, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'Opencode',
-};
-
-/** "Claude Code 1": the tab as the project's tab bar would name it. */
-export function sessionLabel(mark: SessionMark): string {
-  const cli = (mark.cli && CLI_NAMES[mark.cli]) ?? mark.cli ?? 'Session';
-  return mark.tab ? `${cli} ${mark.tab}` : cli;
-}
-
 /** Mirrors `capabilities::Capabilities`, from the agent's last turn. */
 export interface Capabilities {
   seenAt: number;
@@ -371,6 +366,8 @@ export interface Approval {
   requestId: string;
   title: string;
   detail: string;
+  /** A plain sentence the card leads with when `detail` is raw (a push); detail then sits behind Details. */
+  summary?: string;
   status: 'pending' | 'allowed' | 'denied' | 'expired';
   tool?: string;
   input?: unknown;
@@ -741,7 +738,7 @@ export function engineUnavailable(info: EngineInfo): 'install' | 'sign-in' | nul
  */
 export function engineProtections(engine: AgentEngine, info?: EngineInfo): string {
   if (engine === 'claude') {
-    return "Edits in your projects, and its tools in this app, go ahead. Anything else asks you first, unless you've already allowed it.";
+    return "It can edit your projects and use this app's tools on its own. Anything else asks you first, unless you've already allowed it.";
   }
   const limits =
     "Its commands go ahead without asking, but can only change files in your projects and its own folder, and can't reach the internet.";
@@ -822,6 +819,9 @@ export interface UsageTotals {
   /** Turns that reported a cost; costUsd is complete only when this equals turns. */
   pricedTurns: number;
   durationMs: number;
+  /** "When…" routines' model checks, counted apart from turns (cost included above). */
+  checks?: number;
+  pricedChecks?: number;
 }
 
 export interface UsageSummary {
@@ -1441,14 +1441,65 @@ const EXACT = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle:
 // The schedule's wording is shared with the phone, which shows the same list.
 export {
   describeCheckInTime,
+  describeEvery,
+  describeWatchSource,
+  describeWatchStatus,
+  describeWatchTitle,
+  watchUsesModel,
+  watchCappedToday,
+  DEFAULT_MAX_CHECKS_PER_DAY,
   describeRepeat,
   describeRun,
   describeRunDetail,
   formatWhen,
+  formatWhenInline,
+  routineEcho,
+  routineInPast,
+  routineWhenOf,
+  routineWhenPhrase,
   scheduleWhenPhrase,
   sortCheckIns,
   splitScheduleInput,
 } from '../../packages/companion-protocol/src/schedule';
+// The routine picker, shared with the phone's schedule sheet.
+export {
+  CADENCES,
+  INTERVALS,
+  intervalLabel,
+  newPicker,
+  onceDays,
+  pickerOf,
+  toggleDay,
+  WEEK,
+  whenOf,
+  type PickerState,
+} from '../../packages/companion-protocol/src/routinePicker';
+
+/** What Check now came to; mirrors `watch::CheckOutcome`. */
+export interface WatchCheckOutcome {
+  found: number;
+  baseline: boolean;
+  /** A model check found nothing before its baseline; the next check confirms it. */
+  unconfirmed?: boolean;
+  error?: string;
+  paused?: string;
+}
+
+export const createWatch = (
+  agentId: string,
+  source: WatchSource,
+  everyMinutes: number,
+  note: string
+) => invoke<CheckIn>('agents_watch_create', { agentId, source, everyMinutes, note });
+export const updateWatch = (
+  agentId: string,
+  id: string,
+  source: WatchSource,
+  everyMinutes: number,
+  note: string
+) => invoke<CheckIn>('agents_watch_update', { agentId, id, source, everyMinutes, note });
+export const checkWatchNow = (agentId: string, id: string) =>
+  invoke<WatchCheckOutcome>('agents_watch_check_now', { agentId, id });
 
 export const searchAgents = (query: string) => invoke<SearchHit[]>('agents_search', { query });
 export const getAgentUsage = (agentId: string) => invoke<UsageSummary>('agents_usage', { agentId });
@@ -1466,12 +1517,14 @@ export {
   resetPhrase,
   retryPhrase,
   routineWeekLine,
+  fullyPriced,
   sumTotals,
   type QuotaLine,
   type QuotaTone,
 } from '../../packages/companion-protocol/src/quota';
 import {
   apiPrice as apiPriceWords,
+  fullyPriced as fullyPricedTotals,
   resetPhrase as resetWords,
 } from '../../packages/companion-protocol/src/quota';
 
@@ -1523,15 +1576,16 @@ function duration(ms: number): string {
  * a list price and not the bill. Null when there were no turns.
  */
 export function formatUsage(totals: UsageTotals, onPlan = false): string | null {
-  if (totals.turns === 0) return null;
+  const checks = totals.checks ?? 0;
+  if (totals.turns === 0 && checks === 0) return null;
   const tokens =
     totals.inputTokens + totals.outputTokens + totals.cacheReadTokens + totals.cacheWriteTokens;
-  const parts = [
-    `${compact(tokens)} tokens`,
-    `${totals.turns} ${totals.turns === 1 ? 'turn' : 'turns'}`,
-  ];
+  const parts = [`${compact(tokens)} tokens`];
+  if (totals.turns > 0) parts.push(`${totals.turns} ${totals.turns === 1 ? 'turn' : 'turns'}`);
+  // "When…" model checks are said apart: they aren't turns.
+  if (checks > 0) parts.push(`${checks} ${checks === 1 ? 'check' : 'checks'}`);
   if (totals.durationMs > 0) parts.push(duration(totals.durationMs));
-  if (totals.pricedTurns === totals.turns && !onPlan) {
+  if (fullyPricedTotals(totals) && !onPlan) {
     parts.unshift(apiPriceWords(totals.costUsd));
   }
   return parts.join(' · ');

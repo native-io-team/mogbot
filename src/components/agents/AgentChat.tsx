@@ -313,6 +313,12 @@ export function AgentChat({
   const sectionRef = useRef<HTMLElement>(null);
 
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  // Opened from ⌘K's "Start work when something happens…": on the When… composer.
+  const [scheduleWhen, setScheduleWhen] = useState(false);
+  const openSchedule = useCallback((open: boolean) => {
+    setScheduleOpen(open);
+    if (!open) setScheduleWhen(false);
+  }, []);
   const [filesOpen, setFilesOpen] = useState(false);
   // While you drive an agent with no project to open, its session is shown
   // here in place of the conversation, until you ask for the chat.
@@ -339,12 +345,34 @@ export function AgentChat({
     () => [
       {
         id: 'agents.scheduleCheckIn',
-        title: `Schedule a check-in for ${agent.name}…`,
+        title: `Schedule a routine for ${agent.name}…`,
         icon: <HistoryIcon size={14} />,
         category: 'action',
         keywords: ['routine', 'remind', 'every', 'recurring', 'later', 'scheduled'],
         when: () => engineReady,
         run: () => setScheduleOpen(true),
+      },
+      {
+        id: 'agents.whenRoutine',
+        title: `Start work for ${agent.name} when something happens…`,
+        icon: <HistoryIcon size={14} />,
+        category: 'action',
+        keywords: [
+          'when',
+          'trigger',
+          'event',
+          'github',
+          'mention',
+          'linear',
+          'folder',
+          'watch',
+          'routine',
+        ],
+        when: () => engineReady,
+        run: () => {
+          setScheduleWhen(true);
+          setScheduleOpen(true);
+        },
       },
       {
         id: 'agents.files',
@@ -1093,7 +1121,8 @@ export function AgentChat({
                 <AgentSchedulePopover
                   agent={agent}
                   open={scheduleOpen}
-                  onOpenChange={setScheduleOpen}
+                  onOpenChange={openSchedule}
+                  startWhen={scheduleWhen}
                 />
               </>
             )}

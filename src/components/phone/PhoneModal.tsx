@@ -26,6 +26,7 @@ import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { TAILSCALE_DOWNLOAD_URL } from '../../lib/remoteAccess';
+import { BRAND } from '../../lib/brand';
 import {
   cancelPairing,
   COMPANION_CHANGED_EVENT,
@@ -222,6 +223,7 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
                 panel is the way to get it; turning access on comes after. */}
             {getAppFirst ? (
               <PhoneGetApp
+                tailscale={s.tailscale}
                 onInstall={COMPANION_INSTALL_ENABLED ? () => setInstall({}) : undefined}
                 onHaveApp={() => setHaveApp(true)}
               />
@@ -311,47 +313,68 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
 }
 
 /**
- * First visit, nothing installed: get the app, said plainly. It's in beta;
- * there's no store download yet, so today it's built on this Mac and put on
- * the phone over a cable. Connecting (Tailscale) is the second step, named
- * so nobody is surprised by it, and offered straight away to someone who
- * already has the app.
+ * First visit, nothing installed: the plain story. Get the app, then pair.
+ * One prerequisite sits between them, said once with its link: Tailscale,
+ * which is how the phone reaches this Mac. How the app gets built (Xcode,
+ * a cable, USB debugging) is the install screen's business, behind
+ * "Install it yourself (advanced)", never a paragraph here.
  */
-function PhoneGetApp({ onInstall, onHaveApp }: { onInstall?: () => void; onHaveApp: () => void }) {
+function PhoneGetApp({
+  tailscale,
+  onInstall,
+  onHaveApp,
+}: {
+  tailscale: PhoneStatus['tailscale'];
+  onInstall?: () => void;
+  onHaveApp: () => void;
+}) {
+  const tailscaleReady = tailscale.state === 'connected';
   return (
     <div className="phone-intro phone-get-app">
       <p className="phone-lede">
         Talk to your agents from your phone, answer their questions and approve what they ask for.
       </p>
-      <section className="phone-step">
-        <h3 className="phone-step__title">1. Get the app on your phone</h3>
-        <p className="phone-step__text">
-          The phone app is in beta, and not in the App Store or Play Store yet. Today it’s built on
-          this Mac and installed over a cable: an iPhone needs Xcode and an Apple ID (with a free
-          Apple ID it stops opening after 7 days, and reinstalling is one click here); an Android
-          phone needs USB debugging turned on.
-        </p>
-        {onInstall ? (
-          <Button
-            variant="primary"
-            onClick={onInstall}
-            className="phone-step__action"
-            data-install-open
-          >
-            Install on my phone…
-          </Button>
-        ) : (
-          <p className="phone-step__text">Installing isn’t available in this version yet.</p>
-        )}
-      </section>
-      <section className="phone-step" data-later>
-        <h3 className="phone-step__title">2. Connect it to this Mac</h3>
-        <p className="phone-step__text">
-          Then turn on phone access. Your phone talks straight to this Mac over Tailscale, a private
-          network between your own devices; nothing goes through anyone else, and this Mac has to
-          stay on. <TextButton onClick={onHaveApp}>I already have the app</TextButton>
-        </p>
-      </section>
+      <ol className="phone-steps">
+        <li className="phone-step">
+          <h3 className="phone-step__title">Get the app</h3>
+          <p className="phone-step__text">Put the {BRAND.name} app on your phone.</p>
+          <div className="phone-step__actions">
+            {onInstall ? (
+              <Button variant="primary" onClick={onInstall} data-install-open>
+                Get the app…
+              </Button>
+            ) : (
+              <p className="phone-step__text">Installing isn’t available in this version yet.</p>
+            )}
+            <Button variant="secondary" onClick={onHaveApp} data-have-app>
+              I already have it
+            </Button>
+          </div>
+        </li>
+        <li className="phone-step" data-done={tailscaleReady || undefined}>
+          <h3 className="phone-step__title">
+            {tailscaleReady && <CheckIcon size={12} className="phone-step__done" />}
+            Tailscale, once
+          </h3>
+          <p className="phone-step__text">
+            {tailscaleReady
+              ? 'Set up on this Mac. Sign in on your phone with the same account.'
+              : 'How your phone reaches this Mac, privately. Install it on both, signed in to the same account.'}
+          </p>
+          {!tailscaleReady && (
+            <TextButton
+              rightIcon={<ExternalLinkIcon size={12} />}
+              onClick={() => void openUrl(TAILSCALE_DOWNLOAD_URL)}
+            >
+              Get Tailscale
+            </TextButton>
+          )}
+        </li>
+        <li className="phone-step" data-later>
+          <h3 className="phone-step__title">Pair</h3>
+          <p className="phone-step__text">Scan a code from this Mac with the app, then allow it.</p>
+        </li>
+      </ol>
     </div>
   );
 }
@@ -382,9 +405,8 @@ function AccessHeader({ step, busy, onEnable, onRetry }: HeaderProps) {
     return (
       <div className="phone-intro">
         <p className="phone-lede">
-          Talk to your agents from your phone, answer their questions and approve what they ask for.
-          The phone connects straight to this Mac over your own Tailscale network. Nothing goes
-          through anyone else, and this Mac has to stay on.
+          Talk to your agents from your phone. It connects straight to this Mac, so this Mac has to
+          stay on.
         </p>
         <Button
           variant="primary"
@@ -420,7 +442,7 @@ function AccessHeader({ step, busy, onEnable, onRetry }: HeaderProps) {
     installTailscale: {
       title: 'Install Tailscale',
       detail:
-        'Phone access goes over Tailscale, a private network between your own devices. Install it on this Mac and on your phone, and sign in to the same account on both.',
+        'Your phone reaches this Mac through it. Install it here and on your phone, signed in to the same account.',
     },
     signInTailscale: {
       title: 'Sign in to Tailscale',
@@ -428,8 +450,7 @@ function AccessHeader({ step, busy, onEnable, onRetry }: HeaderProps) {
     },
     approveHttps: {
       title: 'Switch on HTTPS in Tailscale',
-      detail:
-        'Your phone connects with Tailscale’s own certificate for this Mac. Your Tailscale network needs HTTPS certificates switched on, once.',
+      detail: 'A one-time switch in Tailscale, so your phone can trust this Mac.',
     },
     failed: { title: 'Tailscale didn’t start phone access', detail: '' },
     starting: { title: 'Starting phone access…', detail: '' },

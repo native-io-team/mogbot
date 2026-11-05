@@ -1852,7 +1852,14 @@ fn preview_not_running(project: &str) -> String {
 /// A path within the site, like `/pricing`.
 fn check_page(page: &str) -> Result<&str, String> {
     let page = page.trim();
-    if !page.starts_with('/') || page.starts_with("//") || page.chars().any(char::is_control) {
+    // Browsers read `\` as `/` and drop tabs and newlines in a URL, so
+    // `/\evil.com` would become the scheme-relative `//evil.com`.
+    if !page.starts_with('/')
+        || page.starts_with("//")
+        || page.contains('\\')
+        || page.contains("://")
+        || page.chars().any(|c| c.is_control() || c.is_whitespace())
+    {
         return Err("page must be a path within the site, like /pricing.".into());
     }
     Ok(page)
@@ -3320,6 +3327,11 @@ mod tests {
         assert!(check_page("https://evil.example").is_err());
         assert!(check_page("//evil.example/x").is_err());
         assert!(check_page("/a\nb").is_err());
+        assert!(check_page("/\\evil.example").is_err());
+        assert!(check_page("/\t/evil.example").is_err());
+        assert!(check_page("/a\\b").is_err());
+        assert!(check_page("/x?u=https://evil").is_err());
+        assert_eq!(check_page("/a/b?c=d#e"), Ok("/a/b?c=d#e"));
         let said = preview_not_running("/Users/me/ShipStudio/bakery");
         assert!(said.contains("bakery's preview isn't running"));
         assert!(said.contains("open_project"));

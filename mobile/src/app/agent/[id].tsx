@@ -10,6 +10,9 @@
 
 import {
   describeCheckInTime,
+  describeWatchStatus,
+  describeWatchTitle,
+  MAC_FEATURES,
   onClaudePlan,
   routineWeekLine,
   sortCheckIns,
@@ -98,6 +101,10 @@ function AgentSheet() {
   if (!agent) return null;
   const canSchedule = canCall('agents.schedule.create', welcome);
   const checkIns = sortCheckIns(agent.checkIns ?? []);
+  // "When…" routines: shown (read-only) by a Mac that sends them apart.
+  const watches = welcome?.features?.includes(MAC_FEATURES.whenRoutines)
+    ? sortCheckIns(agent.watches ?? [])
+    : [];
   const cantAsk = engineCantAsk(agent, engines);
   const where = [engineLine(agent, engines), agent.project && folderName(agent.project)]
     .filter(Boolean)
@@ -273,6 +280,25 @@ function AgentSheet() {
             ))
           )}
         </View>
+        {watches.length > 0 && (
+          <>
+            <SectionTitle title="When something happens" style={styles.sectionTitle} />
+            <View style={styles.list}>
+              {watches.map((c, i) => (
+                <WatchRow
+                  key={c.id}
+                  checkIn={c}
+                  // One cost store for checks and runs, worded for the plan.
+                  spent={routineWeekLine(usage?.routines?.find((r) => r.id === c.id)?.week, onPlan)}
+                  last={i === watches.length - 1}
+                />
+              ))}
+            </View>
+            <T variant="caption" color={colors.textMuted} style={styles.none}>
+              Set up and changed on your Mac.
+            </T>
+          </>
+        )}
       </ScrollView>
     </SheetPage>
   );
@@ -365,6 +391,54 @@ function CheckInRow({
       )}
       {!last && <InsetDivider />}
     </Pressable>
+  );
+}
+
+/**
+ * A "When…" routine, read-only: what it waits for, what it does, and what
+ * its last check came to. It's set up and changed on the Mac.
+ */
+function WatchRow({
+  checkIn: c,
+  spent: cost,
+  last,
+}: {
+  checkIn: CheckIn;
+  /** Its checks' and runs' week, as `routineWeekLine` words it. */
+  spent: string | null;
+  last: boolean;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const now = useNow(30_000);
+  if (!c.watch) return null;
+  const title = describeWatchTitle(c.watch.source);
+  const status = describeWatchStatus(c, now);
+  return (
+    <View
+      style={styles.row}
+      accessible
+      accessibilityLabel={[title, c.note, status, cost].filter(Boolean).join('. ')}
+    >
+      <Icon
+        name="bolt"
+        size={iconSize.body}
+        color={c.paused ? colors.textMuted : colors.textSecondary}
+      />
+      <View style={{ flex: 1, gap: space['2xs'] }}>
+        <T color={c.paused ? colors.textMuted : colors.textStrong} numberOfLines={2}>
+          {title}
+        </T>
+        <T variant="small" color={colors.textSecondary} numberOfLines={2}>
+          {c.note}
+        </T>
+        <T variant="caption" color={colors.textMuted}>
+          {status}
+          {cost ? ` · ${cost}` : ''}
+        </T>
+      </View>
+      {!last && <InsetDivider />}
+    </View>
   );
 }
 

@@ -110,6 +110,8 @@ import type { DevServerUnexpectedExit } from '../../hooks/useDevServer';
 import { isEditorFramework, resolveEditorMode } from '../../lib/editorGate';
 import { Tooltip } from '../primitives/Tooltip';
 import { BRAND } from '../../lib/brand';
+import { usePendingDevServerConsent } from '../../lib/devServerConsent';
+import { DevServerConsentPrompt } from './DevServerConsentPrompt';
 
 const BreakpointIcon = ({ type }: { type: Breakpoint }) => {
   if (type === 'full') return <FullBreakpointIcon />;
@@ -396,6 +398,9 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
   // restart in flight means the death is already being handled.
   const serverProcessGone =
     !isStaticProject && !isDevServerRestarting && devServerUnexpectedExit != null;
+
+  // A dev server waiting for the user's OK to run this project's commands.
+  const pendingConsent = usePendingDevServerConsent(projectPath);
 
   // Screenshot capture and crop selection (extracted to hook)
   const capture = usePreviewCapture({
@@ -1360,6 +1365,10 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     },
     [iframeRef]
   );
+
+  if (pendingConsent) {
+    return <DevServerConsentPrompt projectPath={projectPath} pending={pendingConsent} />;
+  }
 
   if (needsInstall) {
     return (

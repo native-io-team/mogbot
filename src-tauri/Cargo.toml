@@ -111,6 +111,10 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Securit
 
 # macOS-specific dependencies for WebKit JavaScript evaluation
 [target.'cfg(target_os = "macos")'.dependencies]
+# Keychain items created by the app itself (SecItemAdd), so their access list
+# names this app rather than /usr/bin/security (see the keychain module).
+security-framework = "3"
+core-foundation = "0.10"
 objc2 = "0.5"
 objc2-foundation = { version = "0.2", features = ["NSString", "NSGeometry", "NSData"] }
 block2 = "0.5"

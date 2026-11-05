@@ -2349,7 +2349,7 @@ fn jsxify_class_attr(text: &str, file: &str) -> String {
 /// touched — surrounding whitespace and the rest of the file are preserved byte-for-
 /// byte. Allows plain text, `<br>` line breaks, and inline formatting; rejects other markup.
 #[tauri::command]
-#[tracing::instrument(fields(project = %project_path, file = %file, line = line))]
+#[tracing::instrument(skip(old_text, new_text), fields(project = %project_path, file = %file, line = line))]
 pub fn apply_text_edit(
     project_path: String,
     file: String,

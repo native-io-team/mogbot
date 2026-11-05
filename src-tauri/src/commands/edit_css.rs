@@ -4251,7 +4251,7 @@ pub fn resolve_css_rule(
 /// rule for `selector` at the given breakpoint. Fail-closed if the rule can't
 /// be pinned to a single block.
 #[tauri::command]
-#[tracing::instrument(fields(project = %project_path, file = %file, selector = %selector, property = %property))]
+#[tracing::instrument(skip(value), fields(project = %project_path, file = %file, selector = %selector, property = %property))]
 pub fn set_css_declaration(
     project_path: String,
     file: String,

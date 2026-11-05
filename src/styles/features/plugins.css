@@ -399,3 +399,84 @@
   font-weight: var(--font-weight-medium);
   text-transform: none;
 }
+
+/* "This project wants to load plugin X": a small card under the Plugins
+   control (PluginTrustPrompt), not a modal. */
+.plugin-trust-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.plugin-trust-prompt {
+  position: absolute;
+  top: calc(100% + var(--spacing-xs));
+  left: 0;
+  z-index: var(--z-modal-overlay);
+  width: 320px;
+  max-width: calc(100vw - var(--spacing-lg) * 2);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-md);
+}
+
+.plugin-trust-prompt p {
+  margin: 0;
+}
+
+.plugin-trust-title {
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-heading);
+  color: var(--text-primary);
+}
+
+.plugin-trust-hint,
+.plugin-trust-count {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.plugin-trust-source {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: baseline;
+  min-width: 0;
+  font-size: var(--font-size-body-sm);
+}
+
+.plugin-trust-label {
+  flex: 0 0 auto;
+  min-width: 32px;
+  color: var(--text-muted);
+}
+
+.plugin-trust-source code {
+  min-width: 0;
+  word-break: break-all;
+}
+
+.plugin-trust-error {
+  font-size: var(--font-size-body-sm);
+  color: var(--accent-error);
+}
+
+.plugin-trust-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.plugin-trust-count {
+  margin-right: auto;
+}
+
+/* Why a switched-on plugin isn't loaded (PluginStatusGrid). */
+.plugin-trust-note {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}

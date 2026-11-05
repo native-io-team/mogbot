@@ -51,9 +51,11 @@
   color: var(--text-primary);
 }
 
+/* Selected is neutral (the current row, not success): the selected fill
+   plus its check. */
 .move-folder-item.active {
-  background: rgba(var(--accent-success-rgb), 0.1);
-  border-color: var(--accent-success);
+  background: var(--surface-selected);
+  border-color: var(--border-default);
   color: var(--text-primary);
 }
 
@@ -78,7 +80,7 @@
 }
 
 .move-folder-item svg:last-child {
-  color: var(--accent-success);
+  color: var(--text-primary);
 }
 
 /* "Current" pill on the workspace the project already belongs to. */

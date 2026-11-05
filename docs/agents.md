@@ -68,12 +68,34 @@ claude --print --output-format stream-json --verbose --include-partial-messages
        --session-id <uuid> | --resume <uuid>
        --permission-mode acceptEdits
        --permission-prompt-tool mcp__shipstudio_agents__approve
-       --mcp-config '{"mcpServers":{"shipstudio_agents":{"type":"http","url":…?turn=<id>}}}'
+       --mcp-config <app support>/agent-bridge/mcp-<random>.json   (0600; see below)
        --allowedTools mcp__shipstudio_agents
        --append-system-prompt <voice + role + team rules>
        --add-dir <projects root> --add-dir <each external project>
+       --disallowedTools 'Edit(**/.git/**)' 'Edit(**/.shipstudio/**)'
+                         'Edit(/<each added dir>/**/.git/**)' …
+                         'Bash(git config core.hooksPath:*)' …
 cwd = the agent's home, prompt on stdin, MCP_TOOL_TIMEOUT raised (see below)
 ```
+
+**What a turn may write.** Its cwd and every `--add-dir` (the whole projects
+root and every external project — not only a bound agent's own project;
+narrowing that to the bound project is a product decision still open), minus
+any `.git` or `.shipstudio` folder anywhere in them. Claude Code gets that as
+deny rules: relative ones for its cwd and absolute `//` ones per added folder,
+because a relative rule doesn't reach an `--add-dir` (verified on 2.1.318: a
+Write into each is refused "denied by your permission settings", including in
+an added folder whose path has a space and a comma). The rules cover the file
+tools. For the shell there are also `Bash` deny rules for persisting the git
+settings that make a later `git` run execute a program (`core.hooksPath`,
+`core.fsmonitor`, `core.sshCommand`, in every `git config` scope); a deny wins
+over any allow in the user's own settings. Those are prefix rules, so other
+ways of writing into `.git` from a shell (`echo … > .git/hooks/x`, `cp`, an
+interpreter, `git -C dir config …`) aren't matched; they aren't silent either,
+since in `acceptEdits` every shell command asks through `approve` unless the
+user's settings allow it. Treat all of this as defence in depth, not a
+sandbox. Codex gets the same as a permissions profile (below). The copy-per-task commit is made by the app at the end of the
+turn, never by the agent (`task`).
 
 There is no long-lived process per agent, so twenty idle agents cost nothing.
 The user's own Claude Code MCP servers and settings still load, which is how an
@@ -290,9 +312,20 @@ steps has no line.
 
 ## Tools agents get (`src-tauri/src/agents/mcp.rs`)
 
-Served by the existing loopback agent bridge at
-`/mcp/<bridge token>/agents/<agent id>`. The id in the path is the caller, and
-the URL is passed only inline to the process the app spawned for that agent.
+Served by the existing loopback agent bridge at `/mcp/agent`. The path names
+no one: the caller is the `Authorization: Bearer` secret it sends, 256 random
+bits issued for that agent and that turn (`broker::grant`) and revoked the
+moment the turn ends; an unknown, missing or ended secret gets a bare 404.
+The secret never touches a command line, where `ps` shows it to every local
+account (`agents/reach.rs`): Claude Code reads it from a 0600 `--mcp-config`
+file in a 0700 folder of ours, removed when the turn ends (verified on
+2.1.318: the header is sent on every request); Codex from an environment
+variable named by `bearer_token_env_var` (verified on 0.166's app-server),
+which Codex's default shell-environment policy keeps out of the commands it
+runs because its name contains `TOKEN`. (Until 2026-11 the URL was
+`/mcp/<bridge token>/agents/<id>?turn=<n>`, inline on the command line, so
+any local account could read it and call in as any agent; the preview token
+those turns exposed is replaced once at the next launch.)
 
 | Tool | Who | What |
 | --- | --- | --- |
@@ -490,8 +523,8 @@ outside those folders) goes to `approve`, which puts a card in that agent's
 chat showing the exact command, file, URL or tool input, and waits for
 **Allow** or **Deny**. While it waits, the agent's row says "Needs your OK".
 
-**What the broker trusts** (`agents/broker.rs`). Each turn gets an id on its
-MCP URL (`?turn=`), open until `run_turn` returns. An `approve` call with no
+**What the broker trusts** (`agents/broker.rs`). Each turn gets an id, named
+by its secret, open until `run_turn` returns. An `approve` call with no
 turn, from a turn that has ended or been replaced, or repeating a
 `tool_use_id` already asked, is denied at once with no card: those could
 only ever be zombie cards. A timeout is never recorded as the user's answer:
@@ -504,8 +537,8 @@ turn is stopped before it acts; a stricter mode (`default`, `plan`,
 our own server shows `failed` there, its approval tool doesn't exist and the
 turn is stopped too.
 
-Codex turns get the same: the `?turn=` URL is what `codex_app::args` passes
-Codex for our server, and Codex's own approval requests go through
+Codex turns get the same: the turn's secret is what Codex presents to our
+server, and Codex's own approval requests go through
 `broker::admit` before a card (`codex_app::answer`, request ids named
 `codex-<turn>-<jsonrpc id>` because JSON-RPC ids restart with each
 app-server). The init check is Claude Code's only: Codex is started with the
@@ -690,8 +723,9 @@ the agent has a conversation on its engine (`sessionId`, not `newEngine`).
     `--permission-prompt-tool` (it asks in the terminal, to you): `--chrome
     --resume <session> --permission-mode acceptEdits --mcp-config …
     --allowedTools mcp__shipstudio_agents --append-system-prompt … --add-dir …`.
-    The MCP URL carries no `?turn=`, so anything that reaches `approve` is
-    refused; the agent's other tools (message an agent, share a file) work.
+    Its secret is granted with no turn (and revoked at hand-back), so anything
+    that reaches `approve` is refused; the agent's other tools (message an
+    agent, share a file) work.
   - Codex: `codex resume -c sandbox_mode="workspace-write" -c
     approval_policy="on-request" -c developer_instructions=… <every turn's
     -c> [-m model] -C <cwd> <thread>`. `developer_instructions` is the
@@ -969,6 +1003,127 @@ the same predicate as replies, and is recorded after the wake starts, so it
 falls inside the turn. Notifications use the same predicate, so a check-in
 and its answer post one notification per turn.
 
+### "When…" routines (`src-tauri/src/agents/watch.rs`)
+
+A routine can start when something happens instead of at a time: "When
+someone mentions me on GitHub, triage it." There are no webhooks (nothing of
+ours is reachable from the internet); each one is a cheap check from this Mac
+every few minutes:
+
+| Source | How it's checked | Cost |
+|---|---|---|
+| Someone mentions me on GitHub | `gh api notifications` (all, participating), reason `mention`/`team_mention`; one firing per new mention (thread id + latest comment, or `updated_at`) | free |
+| An issue or PR is assigned to me | `gh api search/issues -f q="assignee:@me is:open"`, 100 a page, up to 300 | free |
+| A new file appears in a folder | the folder's listing (not hidden, not `.crdownload`/`.part`/…, not modified in the last 5 s; symlinks skipped); folders of at most 2,000 entries | free |
+| A Linear issue is assigned to me | one sealed headless Claude Code call on Haiku through the Linear app set up in Claude Code | a model call |
+| Something else… (in the user's words, through one named app) | the same sealed call, through that app | a model call |
+
+**The rules.** The first check is a baseline (it notes what's there and
+fires nothing). Nothing fires twice: ids seen are kept per routine; a
+complete listing (a folder, or every assigned issue when all of them were
+read) replaces them and is never capped, so a folder of 400 files never
+re-fires; a window (the newest 50 notifications) is added to them, capped at
+300. A file still settling keeps its place in what's seen, so a seen file
+that's touched again isn't new. When more than 300 issues are assigned, the
+row says so ("Covers the 300 most recently updated of 412 …"). The merge
+happens inside the registry update, so two checks racing can't both fire.
+
+**One firing at a time.** A check that finds something new wakes the agent
+once with all of it (the first 20 listed) and marks a run running. Until that
+run settles (or its retry does), the routine isn't checked, and Check now
+says why instead of running, so a retry always works on exactly its own items
+(`Watch::pending`). A retry with nothing left marks nothing running; a
+firing whose turn couldn't be queued fails at once; a run nobody reported
+back on for 5 hours is settled as lost. The ticket is settled by `runs.rs`
+like a scheduled run, and its alerts say “When…” routine, not Scheduled.
+
+**Failures.** A failed check backs off (interval doubled per failure, capped
+at an hour) and says why on the row; after 5 failed checks in a row, or 3
+runs in a row that failed for good, it pauses itself with a note. Runs cut
+off by the app quitting (or lost) don't count toward that. A folder listing
+is given 20 s (a dead network mount is a failed check, not a stalled tick),
+and the tick starts checks in their own tasks, at most 4 at once.
+
+**Outside text.** The items go to the agent in an `<external_items>`
+envelope, one JSON object per line, control characters dropped and the tag
+neutralised inside, so a title can't close it and pass for us (as the import
+interview's `<from_assistant>`). The turn that answers them (or replaces one
+that did: `runner::from_outside`) needs an Allow card for `create_agent`,
+`update_agent`, `delete_agent`, `watch_for` and `schedule_check_in`
+(`mcp::needs_card_in_routine_turn`), and can't write its own CLAUDE.md: on
+Claude Code its edit tools are denied for that file (`--disallowedTools
+Edit(//<home>/CLAUDE.md),…`), and for any engine a change to it is put back
+when the turn ends, with a note in the chat, unless the app itself wrote it
+meanwhile (`runner::MemorySeal`). Bash still asks through `approve` as always.
+*Not verified:* that Claude Code 2.1.318 honours the `Edit(//path)` deny rule
+in a real turn; the put-back covers it either way.
+
+**The sealed model check** (`watch_seal.rs`). `--print --model haiku
+--output-format json --no-session-persistence --no-chrome
+--disable-slash-commands --strict-mcp-config --setting-sources "" --tools ""
+--disallowedTools <every built-in> --permission-mode dontAsk
+--permission-prompts none --mcp-config <that one app> --allowedTools
+mcp__<app>__list*,get*,search*,read*,find*,query* --system-prompt <ours>`,
+in an empty folder. The app's config is read from Claude Code's own
+`~/.claude.json` (user scope, then local to the agents folder) and passed
+verbatim; a claude.ai connector has no config there and isn't loaded under
+`--strict-mcp-config`, so it can't be used (the composer doesn't offer one,
+and `watch_for` refuses it).
+
+Verified once on Claude Code 2.1.318 against a stub stdio server offering
+`list_items` and `create_item` (one Haiku call, $0.0007): `init` listed only
+the stub (no claude.ai connectors, no other servers), no built-in tools,
+`permissionMode: dontAsk`, no slash commands or skills; `list_items` ran
+(so the `list*` pattern is honoured), and the stub's log shows no call to
+`create_item`. The model declined to try it, though asked to, so a refused
+*attempt* was not observed there.
+
+A refused attempt was then observed (two more Haiku calls, $0.0010 together,
+same stub). With the production flags and system prompt and a prompt saying
+"call create_item with name=x", Haiku again declined in text and only called
+`list_items`. With the same flags but a neutral system prompt ("Do exactly
+what the user asks") and `--output-format stream-json --verbose`, `init`
+listed `mcp__stub__create_item` and `mcp__stub__list_items` (the write tool
+is *visible*, just not allowed), Haiku emitted a `tool_use` for
+`mcp__stub__create_item {"name":"x"}`, the `tool_result` was "Permission to
+use mcp__stub__create_item has been denied because Claude Code is running in
+don't ask mode", the result's `permission_denials` recorded exactly that
+call, and the stub's log ends at `tools/list`, with no `tools/call` at all.
+So the refusal is Claude Code's, not the model's restraint, and no change to
+the flags was needed. **Not verified:** a real Linear or Gmail app,
+including whether an OAuth app's saved sign-in is found when its config is
+passed this way.
+
+**Cost.** A model check is counted as a *check*, not a turn
+(`UsageTotals::checks`/`priced_checks`), in the agent's usage and the
+routine's own (`CheckIn::usage`, the one store runs use too), so the row
+shows one line for checks and runs: "46 checks · $0.19 at API prices this
+week", or tokens on a Claude plan. Model checks are at least 15 minutes
+apart (default 30) and at most 24 a day per routine (`max_checks_per_day`;
+the 25th waits for tomorrow and the row says so). An empty first answer
+isn't trusted as a baseline until a second check agrees. Items are known by
+their link, else their id, else a hash of title and date (`stable_id`),
+because Haiku may name the same issue by key one time and uuid the next. An
+agent setting one up gets an Allow card first naming the app, the interval,
+checks a day, and what checks on this Mac have measured this week (or that
+nothing has been). Every routine created, by an agent or the user, leaves a
+line in the chat. At most one model check starts per tick.
+
+They're `CheckIn`s with a `watch` (no `repeat`; `next_at` is the next check),
+so cancel, pause, list and the 12-per-agent cap are shared. The time tick
+ignores them. In the schedule popover, "At a time / When…" switches the
+composer; a When… row shows what it waits for, what it does, how its last
+check went, its week's cost, Check now (`agents_watch_check_now`), Edit,
+Pause and Cancel. ⌘K: "Start work for <agent> when something happens…".
+Agents set them with the `watch_for` tool. The phone gets them apart from
+timed routines as `agent.watches` (without `seen`/`pending`) and shows them
+read-only when `welcome.features` has `routines.when`; the Mac refuses any
+schedule operation the phone sends for one (`refuse_watch_from_phone`).
+
+Not verified against live accounts: a model check through a real connector,
+and the GitHub search source (pagination included). The notifications
+call's shape was checked with one read-only `gh api notifications` call.
+
 ## Usage before the wall (`agents/usage.rs`, `agents/quota.rs`)
 
 Grok Bot's bots went silent at the usage limit. Here the limit is said
@@ -1244,16 +1399,37 @@ over JSON-RPC on stdin/stdout:
 
 ```
 codex app-server
-  -c sandbox_workspace_write.writable_roots=[<home or project dirs>]
-  -c sandbox_workspace_write.network_access=false
-  -c mcp_servers.shipstudio_agents={url=…,tool_timeout_sec=300,default_tools_approval_mode="approve"}
+  -c permissions.shipstudio_agent={extends=":workspace",network={enabled=false},
+       workspace_roots={<home or project dirs>=true},
+       filesystem={<each existing .git / .shipstudio in them>="read"}}
+  -c default_permissions="shipstudio_agent"
+  -c mcp_servers.shipstudio_agents={url=…/mcp/agent,bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",
+       tool_timeout_sec=300,default_tools_approval_mode="approve"}
   -c project_doc_fallback_filenames=["CLAUDE.md"]
 → initialize, initialized
-→ thread/start {cwd, approvalPolicy:"on-request", sandbox:"workspace-write",
-                config:{"sandbox_workspace_write.network_access":false},
-                model, developerInstructions}    (or thread/resume {threadId, …})
+→ thread/start {cwd, approvalPolicy:"on-request", model, developerInstructions}
+               (or thread/resume {threadId, …})
 → turn/start {threadId, input:[prompt]}
 ```
+
+The permissions profile (Codex 0.166+, read off `codex --version`) is what
+keeps `.git` and `.shipstudio` read-only: Codex accepts a glob only to deny
+*reading*, so the folders are listed by path (`reach::protected_paths`: the
+roots, the projects in them and copies under `.worktrees/<project>/`, three
+levels deep, at most 400). Verified on 0.166 with `codex sandbox -P`: a nested
+project's `.git` and `.shipstudio` refuse a write while the project stays
+writable, and `thread/start` answers with the profile active. Re-checked on
+0.166: a `"<root>/**/.git"="read"` entry is refused ("filesystem glob path …
+only supports `deny` access"), and `deny` would stop git reading its own
+store, so there is no pattern to fall back on. The list is fixed when the
+turn's process starts, so a `.git` created during a turn (`git init`, `git
+clone`), one deeper than three levels, or past the cap isn't protected until
+the next turn scans again (the first two) or at all (the cap).
+A thread names no `sandbox` of its own then, since it would replace the
+profile. An older Codex keeps the legacy
+`sandbox_workspace_write.writable_roots` + `network_access=false` (and the
+thread's `sandbox:"workspace-write"`), which only protects each root's own
+top-level `.git`.
 
 Its messages map onto the same `stream::Step`s as Claude Code's stream-json,
 and only those in our own thread (a sub-agent's run in threads of their own

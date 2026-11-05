@@ -324,8 +324,12 @@ pub const FEATURE_LIVE_WORK: &str = "work.live";
 /// for changes", `agents/results.rs`).
 pub const MAC_FEATURE_REVISE_RESULTS: &str = "results.revise";
 
+/// `welcome.features`: agents carry their "When…" routines as `watches`
+/// (`agents/watch.rs`), which the phone shows read-only.
+pub const MAC_FEATURE_WHEN_ROUTINES: &str = "routines.when";
+
 /// Everything `welcome.features` lists.
-pub const MAC_FEATURES: &[&str] = &[MAC_FEATURE_REVISE_RESULTS];
+pub const MAC_FEATURES: &[&str] = &[MAC_FEATURE_REVISE_RESULTS, MAC_FEATURE_WHEN_ROUTINES];
 
 /// Phone → Mac. Unknown frame types are ignored, as the protocol promises.
 #[derive(Debug, Clone, Deserialize)]
@@ -566,10 +570,34 @@ pub fn phone_overview(mut overview: Value) -> Value {
                 if let Some(t) = fields.get_mut("takeover").and_then(Value::as_object_mut) {
                     t.remove("ptySession");
                 }
+                split_watches(fields);
             }
         }
     }
     overview
+}
+
+/// "When…" routines leave `checkIns` for `watches`: an older phone would
+/// read one as a one-time check-in (it has a `nextAt` and no `repeat`) and
+/// offer to edit its time. A phone that knows them reads `watches`. What a
+/// routine has seen, and the items of its last firing, stay on the Mac.
+fn split_watches(fields: &mut serde_json::Map<String, Value>) {
+    let Some(Value::Array(check_ins)) = fields.remove("checkIns") else {
+        return;
+    };
+    let (mut watches, timed): (Vec<Value>, Vec<Value>) = check_ins
+        .into_iter()
+        .partition(|c| c.get("watch").is_some_and(|w| !w.is_null()));
+    for w in &mut watches {
+        if let Some(watch) = w.get_mut("watch").and_then(Value::as_object_mut) {
+            watch.remove("seen");
+            watch.remove("pending");
+        }
+    }
+    fields.insert("checkIns".into(), Value::Array(timed));
+    if !watches.is_empty() {
+        fields.insert("watches".into(), Value::Array(watches));
+    }
 }
 
 /// An event as a phone that doesn't show a running turn's steps gets it:
@@ -599,6 +627,29 @@ mod tests {
             shown["agents"][0]["takeover"],
             serde_json::json!({ "since": 5, "cli": "claude-code", "project": "/p" })
         );
+    }
+
+    #[test]
+    fn when_routines_reach_the_phone_apart_from_timed_ones() {
+        let overview = serde_json::json!({ "agents": [{
+            "id": "a1",
+            "status": { "state": "idle" },
+            "checkIns": [
+                { "id": "t", "note": "Brief", "nextAt": 1, "createdAt": 0, "paused": false, "repeat": { "kind": "every", "minutes": 60 } },
+                { "id": "w", "note": "Triage", "nextAt": 1, "createdAt": 0, "paused": false,
+                  "watch": { "source": { "kind": "github_mentions" }, "everyMinutes": 10, "seen": ["x"], "pending": [{ "id": "x", "title": "t" }], "lastFound": 1, "failures": 0 } }
+            ]
+        }, { "id": "a2", "status": { "state": "idle" } }]});
+        let shown = phone_overview(overview);
+        let agent = &shown["agents"][0];
+        assert_eq!(agent["checkIns"].as_array().unwrap().len(), 1);
+        assert_eq!(agent["checkIns"][0]["id"], "t");
+        assert_eq!(
+            agent["watches"][0]["watch"],
+            serde_json::json!({ "source": { "kind": "github_mentions" }, "everyMinutes": 10, "lastFound": 1, "failures": 0 })
+        );
+        assert!(shown["agents"][1].get("watches").is_none());
+        assert!(shown["agents"][1].get("checkIns").is_none());
     }
 
     #[test]

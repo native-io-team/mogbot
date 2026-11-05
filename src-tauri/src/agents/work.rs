@@ -536,6 +536,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Looking at its check-ins",
             "look at its check-ins",
         ),
+        "watch_for" => act(
+            StepKind::Plan,
+            "Set up a When… routine",
+            "Setting up a When… routine",
+            "set up a When… routine",
+        ),
         "cancel_check_in" => act(
             StepKind::Plan,
             "Cancelled a check-in",

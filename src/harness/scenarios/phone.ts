@@ -94,11 +94,11 @@ export const phoneScenarios: Scenario[] = [
   phone(
     'phone-off',
     'Phone — off, nothing paired: install comes first',
-    'Titled “Your phone”. One line on what the phone is for, then “1. Get the app on your phone”: ' +
-      'says plainly the app is in beta and not in the stores, that today it is built on this Mac ' +
-      'over a cable (Xcode + Apple ID for iPhone, 7-day expiry on a free ID; USB debugging for ' +
-      'Android), and a primary “Install on my phone…”. Then a muted “2. Connect it to this Mac” ' +
-      'naming Tailscale, with “I already have the app”. No “Turn on phone access” button, no QR.',
+    'Titled “Your phone”. One line on what the phone is for, then three short numbered steps, ' +
+      'one sentence each: “Get the app” with a primary “Get the app…” and a secondary “I already ' +
+      'have it”; “Tailscale, once” saying it is how the phone reaches this Mac, with a “Get ' +
+      'Tailscale ↗” link; and a muted “Pair”. No Xcode, Apple ID, cable or USB debugging on this ' +
+      'screen, no “Turn on phone access” button and no QR.',
     {}
   ),
   phone(

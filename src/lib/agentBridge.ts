@@ -415,12 +415,21 @@ function buildStatusReport(ctx: BridgeToolContext): string {
   return lines.join('\n');
 }
 
-/** Validate a preview_navigate path: in-app absolute path, not a full URL. */
+/**
+ * Validate a preview_navigate path: in-app absolute path, not a full URL.
+ *
+ * Browsers read `\` as `/` and drop tabs and newlines inside a URL, so
+ * `/\evil.com` and `/<tab>/evil.com` both become the scheme-relative
+ * `//evil.com` — another origin. Any backslash, control character or
+ * whitespace is refused, as is a leading `//`.
+ */
 export function isValidPreviewPath(path: unknown): path is string {
   return (
     typeof path === 'string' &&
     path.startsWith('/') &&
     !path.startsWith('//') &&
+    !path.includes('\\') &&
+    ![...path].some((c) => /\s/.test(c) || c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f) &&
     !path.includes('://')
   );
 }

@@ -43,6 +43,9 @@ export interface AccountCredentialStatus {
   hasNetlifyAuthToken: boolean;
   hasGitName: boolean;
   hasGitEmail: boolean;
+  /** The Keychain didn't answer for at least one credential (locked or
+   *  refused), so a `false` above may mean "couldn't check", not "not set". */
+  keychainUnavailable: boolean;
 }
 
 /** Credential key identifiers accepted by set/clear commands. */
@@ -99,6 +102,7 @@ export const STATUS_FIELD_TO_KEY: Record<
     | 'opencodeAuthEmail'
     | 'githubAuthEmail'
     | 'vercelUsername'
+    | 'keychainUnavailable'
   >,
   CredentialKey
 > = {

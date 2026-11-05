@@ -301,6 +301,12 @@ export function AccountSettingsModal({
             {/* Credential vault */}
             <div>
               <div className="account-section-title">Credential Vault</div>
+              {credStatus?.keychainUnavailable && (
+                <p className="account-cred-keychain-note" role="status">
+                  The Keychain didn&apos;t answer, so a credential shown as not set may still be
+                  saved. Unlock the Keychain and reopen this window to check again.
+                </p>
+              )}
               {isLoadingCreds ? (
                 <PixelLoaderRings className="account-settings-loader" size="md" />
               ) : (

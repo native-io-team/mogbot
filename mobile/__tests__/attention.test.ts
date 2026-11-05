@@ -151,6 +151,13 @@ describe('usage', () => {
     expect(
       usageLine(totals({ turns: 3, inputTokens: 1500, costUsd: 0.4, pricedTurns: 3 }), true)
     ).toBe('3 messages · 2k tokens');
+    // A "When…" routine's model checks are said apart from messages.
+    expect(
+      usageLine(totals({ checks: 12, pricedChecks: 12, inputTokens: 900, costUsd: 0.05 }))
+    ).toBe('12 checks · $0.05 at API prices');
+    expect(
+      usageLine(totals({ turns: 1, pricedTurns: 1, checks: 2, pricedChecks: 1, costUsd: 0.1 }))
+    ).toBe('1 message · 2 checks · $0.10 at API prices for 2 of them');
   });
 });
 

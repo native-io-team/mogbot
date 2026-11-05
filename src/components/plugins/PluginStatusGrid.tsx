@@ -26,6 +26,24 @@ export interface PluginStatusGridProps {
   onUninstall: (pluginId: string) => void;
   onReloadDev: (pluginId: string) => void;
   onUnlinkDev: (pluginId: string) => void;
+  /** Approve this exact bundle (one that isn't approved in this project). */
+  onAllow?: (pluginId: string, sha256: string) => void;
+}
+
+/** Why a plugin that's switched on isn't loaded, when it's this app's trust. */
+function trustNote(plugin: PluginInfo): string | null {
+  switch (plugin.trust?.state) {
+    case 'new':
+      return 'Not loaded: this project asks for it, and you haven’t allowed it here.';
+    case 'changed':
+      return 'Not loaded: it changed since you allowed it.';
+    case 'declined':
+      return 'Not loaded: you chose not to load it.';
+    case 'devModeOff':
+      return 'Not loaded: dev plugins load only in plugin developer mode.';
+    default:
+      return null;
+  }
 }
 
 export function PluginStatusGrid({
@@ -41,6 +59,7 @@ export function PluginStatusGrid({
   onUninstall,
   onReloadDev,
   onUnlinkDev,
+  onAllow,
 }: PluginStatusGridProps) {
   return (
     <div className="plugins-list">
@@ -91,6 +110,19 @@ export function PluginStatusGrid({
                 </div>
               )}
               <div className="plugin-desc">{superseded ?? plugin.manifest.description}</div>
+              {!superseded && trustNote(plugin) && (
+                <div className="plugin-trust-note">
+                  {trustNote(plugin)}{' '}
+                  {onAllow && plugin.trust?.sha256 && plugin.trust.state !== 'devModeOff' && (
+                    <TextButton
+                      variant="primary"
+                      onClick={() => onAllow(plugin.manifest.id, plugin.trust?.sha256 ?? '')}
+                    >
+                      Allow
+                    </TextButton>
+                  )}
+                </div>
+              )}
               <div className="plugin-actions">
                 {plugin.is_dev ? (
                   <>

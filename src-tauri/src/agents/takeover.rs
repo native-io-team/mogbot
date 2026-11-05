@@ -82,6 +82,10 @@ struct Driving {
     engine: Engine,
     /// The session's transcript size when the terminal opened.
     transcript: Option<u64>,
+    /// The terminal's bridge secret, revoked when this goes (hand-back).
+    _access: super::broker::Access,
+    /// Claude Code's config file holding it, removed with it.
+    _mcp_config: Option<super::reach::ConfigFile>,
 }
 
 static DRIVING: LazyLock<Mutex<HashMap<String, Driving>>> =
@@ -130,7 +134,14 @@ pub struct Context<'a> {
     pub engine: Engine,
     pub model: Option<&'a str>,
     pub session: &'a str,
+    /// The agents endpoint (names no one; Codex reads the secret from env).
     pub url: &'a str,
+    /// Claude Code: the path of the 0600 config file with the secret.
+    pub mcp_config: &'a str,
+    /// The terminal's bridge secret, for Codex's environment.
+    pub secret: &'a str,
+    /// Codex with permission profiles: folders kept read-only.
+    pub protected: Option<&'a [PathBuf]>,
     /// With the secrets section, as a turn's.
     pub system_prompt: &'a str,
     pub layout: &'a super::project::Layout,
@@ -148,7 +159,7 @@ pub fn spawn_for(ctx: &Context) -> Spawn {
         Engine::Claude => super::claude::interactive_args(
             ctx.model,
             ctx.session,
-            ctx.url,
+            ctx.mcp_config,
             ctx.system_prompt,
             &ctx.layout.add_dirs,
         ),
@@ -158,6 +169,7 @@ pub fn spawn_for(ctx: &Context) -> Spawn {
             ctx.url,
             &super::prompts::for_codex_exec(ctx.system_prompt),
             &ctx.layout.add_dirs,
+            ctx.protected,
             &cwd,
         ),
     };
@@ -170,6 +182,9 @@ pub fn spawn_for(ctx: &Context) -> Spawn {
         ((super::mcp::APPROVAL_WAIT_SECS + 60) * 1000).to_string(),
     );
     env.extend(ctx.secrets.iter().cloned());
+    if ctx.engine == Engine::Codex {
+        env.insert(super::reach::TOKEN_ENV.to_string(), ctx.secret.to_string());
+    }
     Spawn {
         args,
         cwd,
@@ -363,12 +378,32 @@ async fn open(
             )));
         }
     }
-    let (port, token) = crate::agent_bridge::start_global_agent_bridge(app.clone())
+    let (port, _) = crate::agent_bridge::start_global_agent_bridge(app.clone())
         .await
         .map_err(super::err_other)?;
-    // No `?turn=`: the approval tool is only for a headless turn. Here the
-    // CLI asks in the terminal, and anything that asks the broker is refused.
-    let url = format!("http://127.0.0.1:{port}/mcp/{token}/agents/{}", agent.id);
+    // A secret with no turn: the approval tool is only for a headless turn.
+    // Here the CLI asks in the terminal, and anything that asks the broker is
+    // refused. It's revoked when the terminal is handed back.
+    let access = super::broker::grant(&agent.id, None);
+    let url = super::reach::agent_url(port);
+    let mcp_config = match agent.engine {
+        Engine::Claude => Some(super::reach::write_config(&super::reach::claude_config(
+            &url,
+            access.secret(),
+        ))?),
+        Engine::Codex => None,
+    };
+    let mcp_config_arg = mcp_config
+        .as_ref()
+        .map(super::reach::ConfigFile::arg)
+        .unwrap_or_default();
+    let protected = (agent.engine == Engine::Codex
+        && super::codex::profiles_supported(binary).await)
+        .then(|| {
+            let mut roots: Vec<PathBuf> = layout.add_dirs.iter().map(PathBuf::from).collect();
+            roots.push(layout.cwd.clone());
+            super::reach::protected_paths(&roots)
+        });
     let secrets = super::secrets::env_for(agent);
     let mut system_prompt = runner::system_prompt_for(agent, &home, &layout);
     let have = super::secrets::prompt_section(agent, &secrets);
@@ -381,6 +416,9 @@ async fn open(
         model: agent.model.as_deref(),
         session,
         url: &url,
+        mcp_config: &mcp_config_arg,
+        secret: access.secret(),
+        protected: protected.as_deref(),
         system_prompt: &system_prompt,
         layout: &layout,
         path: crate::utils::get_extended_path(),
@@ -440,6 +478,8 @@ async fn open(
             session: session.to_string(),
             engine: agent.engine,
             transcript,
+            _access: access,
+            _mcp_config: mcp_config,
         },
     );
     tracing::info!(agent = %agent.id, pid = opened.pid, "[Agents] taken over in a terminal");
@@ -821,7 +861,10 @@ mod tests {
             engine,
             model: Some("m1"),
             session: "sess-1",
-            url: "http://127.0.0.1:9/mcp/t/agents/a1",
+            url: "http://127.0.0.1:9/mcp/agent",
+            mcp_config: "/s/agent-bridge/mcp-a1.json",
+            secret: "s3cret",
+            protected: None,
             system_prompt: "you are Finance",
             layout,
             path: "/opt/bin:/usr/bin".into(),
@@ -848,11 +891,14 @@ mod tests {
             super::super::claude::interactive_args(
                 Some("m1"),
                 "sess-1",
-                "http://127.0.0.1:9/mcp/t/agents/a1",
+                "/s/agent-bridge/mcp-a1.json",
                 "you are Finance",
                 &l.add_dirs
             )
         );
+        // Claude reads its secret from the config file, not the environment.
+        assert!(!s.env.contains_key(super::super::reach::TOKEN_ENV));
+        assert!(!s.args.iter().any(|a| a.contains("s3cret")));
         assert!(s.args.windows(2).any(|w| w == ["--resume", "sess-1"]));
         assert!(!s.args.contains(&"--print".to_string()));
         assert_eq!(s.cwd, "/u/agents/a1");
@@ -937,7 +983,10 @@ mod tests {
         assert!(codex
             .args
             .iter()
-            .any(|a| a.starts_with("mcp_servers.") && a.contains("/mcp/t/agents/a1")));
+            .any(|a| a.starts_with("mcp_servers.") && a.contains("/mcp/agent")));
+        // The secret is in the terminal's environment, never its arguments.
+        assert_eq!(codex.env[super::super::reach::TOKEN_ENV], "s3cret");
+        assert!(!codex.args.iter().any(|a| a.contains("s3cret")));
         // Its identity and secrets section, as a `codex exec` turn is given them.
         let identity = format!(
             "developer_instructions={}",

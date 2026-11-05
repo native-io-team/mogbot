@@ -925,6 +925,51 @@
   color: var(--text-muted);
 }
 
+/* Dev-server consent: the install prompt's layout, plus the list of
+   commands the user is approving. */
+.dev-consent .text-style-hint {
+  max-width: 440px;
+}
+
+.dev-consent-scripts {
+  list-style: none;
+  margin: 0 0 var(--spacing-md);
+  padding: var(--spacing-sm);
+  width: min(100%, 520px);
+  max-height: 220px;
+  overflow: auto;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-app);
+}
+
+.dev-consent-scripts li {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: baseline;
+  padding: var(--spacing-xs) 0;
+  min-width: 0;
+}
+
+.dev-consent-name {
+  flex: 0 0 auto;
+  min-width: 72px;
+  font-size: var(--font-size-body-md);
+  color: var(--text-muted);
+}
+
+.dev-consent-scripts code {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.dev-consent-error {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-body-md);
+  color: var(--accent-error);
+}
+
 /* Dev-server status screen (loading / stopped / error) — replaces the old
    black-box spinner with Stop / Retry / Fix-with-agent + inline logs. */
 .preview-status {

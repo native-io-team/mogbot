@@ -163,6 +163,7 @@ fn stream_parsers_never_panic_on_mutated_real_streams() {
                 None,
                 "dev",
                 "hi",
+                false,
             );
             for v in &app {
                 let _ = conv.on_message(&mutate(v, &mut rng));

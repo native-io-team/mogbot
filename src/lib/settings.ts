@@ -334,7 +334,7 @@ export async function moveProjectsToRoot(from: string, to: string): Promise<Move
 }
 
 /** A Settings tab a command asked to land on, consumed when the modal opens. */
-export type SettingsTabRequest = 'general' | 'projects' | 'appearance' | 'experimental';
+export type SettingsTabRequest = 'agents' | 'general' | 'projects' | 'appearance' | 'experimental';
 let settingsTabOnOpen: SettingsTabRequest | null = null;
 
 /** Ask the next Settings open to show `tab` (e.g. ⌘K → "Accent color…"). */

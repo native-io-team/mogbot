@@ -225,13 +225,10 @@ export const MessageRow = memo(function MessageRow({
       if (message.peer) return <PeerRow message={message} />;
       return <SystemLine message={message} />;
     case 'check_in':
-      if (!message.work)
-        return (
-          <Line text={`${message.checkIn?.manual ? 'Ran now' : 'Routine'} · ${message.text}`} />
-        );
+      if (!message.work) return <Line text={checkInText(message)} />;
       return (
         <View style={styles.agentRow}>
-          <Line text={`${message.checkIn?.manual ? 'Ran now' : 'Routine'} · ${message.text}`} />
+          <Line text={checkInText(message)} />
           <WorkLine message={message} work={message.work} onError={onError} />
         </View>
       );
@@ -372,6 +369,13 @@ function SessionCard({
       )}
     </Card>
   );
+}
+
+/** A routine's line: what found it (a "When…" routine), or that it ran by hand. */
+function checkInText(message: AgentMessage): string {
+  const c = message.checkIn;
+  const what = c?.manual ? 'Ran now' : c?.found ? `Routine · ${c.found}` : 'Routine';
+  return `${what} · ${message.text}`;
 }
 
 /** What changed, in a line of its own: "Changed 2 files in acme-site · +3 −1", opening the diff. */

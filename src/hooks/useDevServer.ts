@@ -91,6 +91,41 @@ import { stripAnsi } from '../lib/ansi';
 import { extractAnnouncedPort } from '../lib/ports';
 import { asCommandError, formatCommandError, isProjectFolderGoneError } from '../lib/errors';
 import { useOptionalToast } from '../contexts/ToastContext';
+import {
+  approveDevServer,
+  devServerConsentStore,
+  getDevServerConsent,
+} from '../lib/devServerConsent';
+
+/**
+ * Whether `projectPath`'s dev command still needs the user's OK. When it
+ * does, the Preview pane asks (`devServerConsentStore`) and `resume` runs
+ * once they approve. A check that fails counts as "not approved": the
+ * spawn's own check (`startDevServer`) would refuse it anyway.
+ */
+async function parkForConsent(
+  projectPath: string,
+  resume: () => void | Promise<unknown>
+): Promise<boolean> {
+  try {
+    const consent = await getDevServerConsent(projectPath);
+    if (consent.state === 'approved') {
+      devServerConsentStore.clear(projectPath);
+      return false;
+    }
+    logger.info('[DevServer] Waiting for the user to approve the dev command', {
+      projectPath,
+      state: consent.state,
+    });
+    devServerConsentStore.set(projectPath, { consent, resume });
+  } catch (error) {
+    logger.warn('[DevServer] Could not check dev-server consent; not starting', {
+      projectPath,
+      error: formatCommandError(asCommandError(error)),
+    });
+  }
+  return true;
+}
 
 /**
  * How long a restart waits for the dev-server PTY to come back.
@@ -789,7 +824,14 @@ export function useDevServer(currentProjectPath: string | null) {
         const cmd = custom ?? packageScript;
         bump();
 
-        if (cmd) {
+        const parked =
+          !!cmd &&
+          (await parkForConsent(projectPath, () =>
+            startServerForProject(projectPath, projectName, port, windowLabel)
+          ));
+        if (!isCurrentStart()) return s.type;
+
+        if (cmd && !parked) {
           try {
             s.outputBuffer = '';
             s.healthBuffer = '';
@@ -807,7 +849,8 @@ export function useDevServer(currentProjectPath: string | null) {
               port,
               windowLabel,
               createOutputHandler(projectPath),
-              cmd
+              cmd,
+              { root: projectPath }
             );
             const startTask = startPromise.then(async (handle) => {
               if (!isCurrentStart()) {
@@ -913,7 +956,8 @@ export function useDevServer(currentProjectPath: string | null) {
               port,
               windowLabel,
               createOutputHandler(projectPath),
-              shopifyThemeDevCommand(store, port)
+              shopifyThemeDevCommand(store, port),
+              'app-defined'
             );
             const startTask = startPromise.then(async (handle) => {
               if (!isCurrentStart()) {
@@ -970,6 +1014,14 @@ export function useDevServer(currentProjectPath: string | null) {
           cwd,
           projectType: detectedType,
         });
+      } else if (
+        await parkForConsent(projectPath, () =>
+          startServerForProject(projectPath, projectName, port, windowLabel)
+        )
+      ) {
+        // Waiting on the Preview pane's "Start dev server?".
+      } else if (!isCurrentStart()) {
+        return s.type;
       } else {
         try {
           s.outputBuffer = '';
@@ -987,7 +1039,9 @@ export function useDevServer(currentProjectPath: string | null) {
             cwd,
             port,
             windowLabel,
-            createOutputHandler(projectPath)
+            createOutputHandler(projectPath),
+            undefined,
+            { root: projectPath }
           );
           const startTask = startPromise.then(async (handle) => {
             if (!isCurrentStart()) {
@@ -1190,6 +1244,17 @@ export function useDevServer(currentProjectPath: string | null) {
         setIsRestartingDevServer(false);
         return;
       }
+      // A restart runs the project's commands as they are *now* — after a
+      // pull or a branch switch that may be new code, so it asks first.
+      if (
+        s.type !== 'statichtml' &&
+        s.type !== 'shopifytheme' &&
+        !(s.type === 'generic' && !(s.customCommand ?? s.packageDevCommand)) &&
+        (await parkForConsent(projectPath, () => handleRestartDevServer(projectPath, portOverride)))
+      ) {
+        setIsRestartingDevServer(false);
+        return;
+      }
       const generation = ++s.startGeneration;
       const isCurrentRestart = () =>
         statesRef.current.get(projectPath) === s && s.startGeneration === generation;
@@ -1206,7 +1271,7 @@ export function useDevServer(currentProjectPath: string | null) {
 
       const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-      const stopAndRestart = async (customCmd?: string) => {
+      const stopAndRestart = async (customCmd?: string, appDefined = false) => {
         if (s.handle) {
           const handle = s.handle;
           s.handle = null;
@@ -1231,7 +1296,8 @@ export function useDevServer(currentProjectPath: string | null) {
           effectivePort,
           getWindowLabel(),
           createOutputHandler(projectPath),
-          customCmd
+          customCmd,
+          appDefined ? 'app-defined' : { root: projectPath }
         );
         const startPromise = withTimeoutFallback(
           spawn,
@@ -1321,7 +1387,7 @@ export function useDevServer(currentProjectPath: string | null) {
           if (!isCurrentRestart()) return;
           s.shopifyLoginDetector = null;
           s.shopifyLoginNudgePending = false;
-          await stopAndRestart(shopifyThemeDevCommand(store, effectivePort));
+          await stopAndRestart(shopifyThemeDevCommand(store, effectivePort), true);
         } else if (s.type === 'statichtml') {
           const windowLabel = getWindowLabel();
           try {
@@ -1468,7 +1534,26 @@ export function useDevServer(currentProjectPath: string | null) {
       }
       const commandToRun = command ?? (s.type === 'generic' ? s.packageDevCommand : null);
 
-      if (commandToRun) {
+      // The user just typed this command: saving it is their OK to run it.
+      // Clearing it falls back to the project's own script, which they
+      // haven't been shown, so that asks like any other start.
+      let parked = false;
+      if (command) {
+        try {
+          const fresh = await getDevServerConsent(projectPath);
+          if (fresh.state !== 'approved') await approveDevServer(projectPath, fresh.fingerprint);
+          devServerConsentStore.clear(projectPath);
+        } catch (e) {
+          logger.warn('[DevServer] Could not record approval of the saved command', {
+            error: formatCommandError(asCommandError(e)),
+          });
+        }
+      } else if (commandToRun) {
+        parked = await parkForConsent(projectPath, () => handleRestartDevServer(projectPath));
+      }
+      if (!isCurrentSave()) return;
+
+      if (commandToRun && !parked) {
         try {
           s.unexpectedExit = null;
           s.outputBuffer = '';
@@ -1481,7 +1566,8 @@ export function useDevServer(currentProjectPath: string | null) {
             s.port,
             getWindowLabel(),
             createOutputHandler(projectPath),
-            commandToRun
+            commandToRun,
+            { root: projectPath }
           );
           const startTask = startPromise.then(async (handle) => {
             if (!isCurrentSave()) {
@@ -1513,6 +1599,7 @@ export function useDevServer(currentProjectPath: string | null) {
       bumpServerLifecycle,
       createOutputHandler,
       getOrCreateState,
+      handleRestartDevServer,
       markServerStarted,
       wireExitWatcher,
     ]

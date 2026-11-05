@@ -108,6 +108,12 @@ export interface Agent {
   routineModel?: string;
   muted: boolean;
   checkIns?: CheckIn[];
+  /**
+   * Its "When…" routines (each a `CheckIn` with `watch`), apart from the
+   * timed ones so an older app doesn't take one for a one-time check-in.
+   * Sent by a Mac whose `welcome.features` has `routines.when`.
+   */
+  watches?: CheckIn[];
   permissions?: PermissionRule[];
   status: AgentStatus;
   /** The agent's home on the Mac. Only meaningful as a base for `Attachment.path`. */
@@ -176,6 +182,55 @@ export interface CheckIn {
   runs?: CheckInRun[];
   /** A failed run waiting to be tried again. */
   retry?: CheckInRetry;
+  /** A "When…" routine: it runs when something happens; `nextAt` is its next check. */
+  watch?: Watch;
+}
+
+/** What a "When…" routine waits for; mirrors `watch::Source`. */
+export type WatchSource =
+  | { kind: 'github_mentions' }
+  | { kind: 'github_assigned' }
+  | { kind: 'linear_assigned' }
+  | { kind: 'new_file'; folder: string }
+  /** `app`: the Claude Code app it checks through. Absent on older Macs' routines. */
+  | { kind: 'custom'; check: string; app?: string }
+  /** Written by a newer Mac. */
+  | { kind: 'unknown' };
+
+/** One thing a check found; mirrors `watch::Event`. */
+export interface WatchEvent {
+  id: string;
+  title: string;
+  detail?: string;
+  url?: string;
+}
+
+/** A "When…" routine's state; mirrors `watch::Watch`. */
+export interface Watch {
+  source: WatchSource;
+  everyMinutes: number;
+  /** Ids already handled. Desk only: it stays on the Mac for the phone. */
+  seen?: string[];
+  /** When the first check noted what was already there; absent until then. */
+  baselineAt?: number;
+  lastCheckedAt?: number;
+  lastFoundAt?: number;
+  lastFound: number;
+  /** Failed checks in a row. */
+  failures: number;
+  lastError?: string;
+  /** The last firing's items, kept for its retry. Desk only. */
+  pending?: WatchEvent[];
+  /** Why it paused itself. */
+  pausedNote?: string;
+  /** Model checks only: how many ran on a local day, for the daily cap. */
+  dayChecks?: { day: string; checks: number };
+  /** Model checks only: the daily cap when not the default (24). */
+  maxChecksPerDay?: number;
+  /** Model checks only: an empty answer before the baseline, not yet trusted as one. */
+  emptyAnswers?: number;
+  /** What part of the source its checks cover, when not all of it. */
+  coverage?: string;
 }
 
 /** One scheduled run and what came of it; mirrors `runs::Run`. */
@@ -206,6 +261,8 @@ export interface CheckInMark {
   late: boolean;
   repeats: boolean;
   manual?: boolean;
+  /** A "When…" routine fired: what it found ("2 new GitHub mentions"). */
+  found?: string;
 }
 
 export interface SchedulePreview {
@@ -287,6 +344,8 @@ export interface Approval {
   requestId: string;
   title: string;
   detail: string;
+  /** A plain sentence to lead with when `detail` is raw (a push); show detail behind Details. */
+  summary?: string;
   status: 'pending' | 'allowed' | 'denied' | 'expired';
   tool?: string;
   input?: unknown;
@@ -567,6 +626,10 @@ export interface UsageTotals {
   costUsd: number;
   pricedTurns: number;
   durationMs: number;
+  /** "When…" routines' model checks: counted apart from turns, their cost included above. Newer Macs only. */
+  checks?: number;
+  /** Checks that reported a cost. */
+  pricedChecks?: number;
 }
 
 export interface UsageSummary {

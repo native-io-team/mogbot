@@ -30,6 +30,32 @@ struct Session {
 
 type PtyHandler = u32;
 
+/// A caller sets this env key to say "this spawn is the dev server of the
+/// project at <value>". It is removed before the child starts, and the spawn
+/// is refused unless the app's guard ([`set_dev_server_guard`]) approves it.
+pub const DEV_SERVER_ROOT_ENV: &str = "__SHIPSTUDIO_DEV_SERVER_ROOT";
+
+/// `(project root, cwd) -> Ok` when that project's dev command may run.
+pub type DevServerGuard = fn(&str, Option<&str>) -> Result<(), String>;
+
+static DEV_SERVER_GUARD: std::sync::OnceLock<DevServerGuard> = std::sync::OnceLock::new();
+
+/// Install the app's consent check for dev-server spawns.
+pub fn set_dev_server_guard(guard: DevServerGuard) {
+    let _ = DEV_SERVER_GUARD.set(guard);
+}
+
+/// Strip the dev-server marker from `env` and, if it was there, ask the guard.
+fn check_dev_server(env: &mut BTreeMap<String, String>, cwd: Option<&str>) -> Result<(), String> {
+    let Some(root) = env.remove(DEV_SERVER_ROOT_ENV) else {
+        return Ok(());
+    };
+    match DEV_SERVER_GUARD.get() {
+        Some(guard) => guard(&root, cwd),
+        None => Err("dev server spawns are refused: no consent check is installed".into()),
+    }
+}
+
 /// Minimum PTY dimension. Windows ConPTY wedges (produces no output, or
 /// hangs the client) when created or resized at 0 rows/cols — which a
 /// caller can request when it spawns before its terminal widget has been
@@ -49,7 +75,7 @@ async fn spawn<R: Runtime>(
     cols: u16,
     rows: u16,
     cwd: Option<String>,
-    env: BTreeMap<String, String>,
+    mut env: BTreeMap<String, String>,
     encoding: Option<String>,
     handle_flow_control: Option<bool>,
     flow_control_pause: Option<String>,
@@ -63,6 +89,8 @@ async fn spawn<R: Runtime>(
     let _ = handle_flow_control;
     let _ = flow_control_pause;
     let _ = flow_control_resume;
+
+    check_dev_server(&mut env, cwd.as_deref())?;
 
     let (rows, cols) = clamp_pty_size(rows, cols);
     let pty_system = native_pty_system();
@@ -246,6 +274,31 @@ async fn exitstatus(pid: PtyHandler, state: tauri::State<'_, PluginState>) -> Re
 #[cfg(test)]
 mod tests {
     use super::clamp_pty_size;
+
+    #[test]
+    fn a_dev_server_spawn_asks_the_guard_and_the_marker_never_reaches_the_child() {
+        use super::{check_dev_server, set_dev_server_guard, DEV_SERVER_ROOT_ENV};
+        use std::collections::BTreeMap;
+        fn guard(root: &str, cwd: Option<&str>) -> Result<(), String> {
+            if root == "/approved" && cwd == Some("/approved") {
+                Ok(())
+            } else {
+                Err("not approved".into())
+            }
+        }
+        set_dev_server_guard(guard);
+        // An ordinary terminal isn't a dev server: no check.
+        let mut env = BTreeMap::from([("PATH".to_string(), "/bin".to_string())]);
+        assert!(check_dev_server(&mut env, Some("/anywhere")).is_ok());
+
+        let mut env = BTreeMap::from([(DEV_SERVER_ROOT_ENV.to_string(), "/evil".to_string())]);
+        assert!(check_dev_server(&mut env, Some("/evil")).is_err());
+        assert!(!env.contains_key(DEV_SERVER_ROOT_ENV));
+
+        let mut env = BTreeMap::from([(DEV_SERVER_ROOT_ENV.to_string(), "/approved".to_string())]);
+        assert!(check_dev_server(&mut env, Some("/approved")).is_ok());
+        assert!(!env.contains_key(DEV_SERVER_ROOT_ENV));
+    }
 
     #[test]
     fn clamp_pty_size_floors_zero_and_one() {

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "11800000001",
+    "unread": true,
+    "reason": "mention",
+    "updated_at": "2026-11-05T14:02:11Z",
+    "last_read_at": null,
+    "subject": {
+      "title": "Pricing page breaks at 768px",
+      "url": "https://api.github.com/repos/acme/site/issues/42",
+      "latest_comment_url": "https://api.github.com/repos/acme/site/issues/comments/900001",
+      "type": "Issue"
+    },
+    "repository": { "id": 1, "name": "site", "full_name": "acme/site", "private": true },
+    "url": "https://api.github.com/notifications/threads/11800000001",
+    "subscription_url": "https://api.github.com/notifications/threads/11800000001/subscription"
+  },
+  {
+    "id": "11800000002",
+    "unread": false,
+    "reason": "state_change",
+    "updated_at": "2026-11-05T13:00:00Z",
+    "last_read_at": "2026-11-05T13:10:00Z",
+    "subject": {
+      "title": "Bump next to 15.2",
+      "url": "https://api.github.com/repos/acme/site/pulls/41",
+      "latest_comment_url": null,
+      "type": "PullRequest"
+    },
+    "repository": { "id": 1, "name": "site", "full_name": "acme/site", "private": true },
+    "url": "https://api.github.com/notifications/threads/11800000002",
+    "subscription_url": "https://api.github.com/notifications/threads/11800000002/subscription"
+  },
+  {
+    "id": "11800000003",
+    "unread": true,
+    "reason": "team_mention",
+    "updated_at": "2026-11-05T12:00:00Z",
+    "last_read_at": null,
+    "subject": {
+      "title": "Design review: new onboarding",
+      "url": "https://api.github.com/repos/acme/app/pulls/7",
+      "latest_comment_url": "https://api.github.com/repos/acme/app/issues/comments/900002",
+      "type": "PullRequest"
+    },
+    "repository": { "id": 2, "name": "app", "full_name": "acme/app", "private": false },
+    "url": "https://api.github.com/notifications/threads/11800000003",
+    "subscription_url": "https://api.github.com/notifications/threads/11800000003/subscription"
+  }
+]

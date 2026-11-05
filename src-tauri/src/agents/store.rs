@@ -240,6 +240,11 @@ pub struct Approval {
     pub title: String,
     /// The exact thing it will do (the command, the file, the URL).
     pub detail: String,
+    /// A plain-English sentence the card leads with, when `detail` is raw
+    /// (a push: branch, remote, commit ids). Present, the card shows this
+    /// and keeps `detail` behind "Details".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
     pub status: ApprovalStatus,
     /// The Claude Code tool and input this card is about. Present for
     /// permission prompts, which stay answerable after the agent stopped
@@ -496,13 +501,89 @@ fn recover_registry(path: &Path, why: &str) -> Result<Registry, CommandError> {
 
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), CommandError> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| super::err_io(e.to_string()))?;
+        ensure_private_dir(dir).map_err(|e| super::err_io(e.to_string()))?;
     }
     let mut tmp = path.as_os_str().to_owned();
     tmp.push(".tmp");
     let tmp = PathBuf::from(tmp);
-    std::fs::write(&tmp, bytes).map_err(|e| super::err_io(e.to_string()))?;
+    write_private(&tmp, bytes).map_err(|e| super::err_io(e.to_string()))?;
     std::fs::rename(&tmp, path).map_err(|e| super::err_io(e.to_string()))
+}
+
+/* ------------------------------------------------------- permissions */
+
+// An agent's folder holds its instructions, its memory, what it was told and
+// what it said: the owner's alone. Folders 0700, files 0600, on every write
+// we make, and fixed at startup for anything an older build (or the agent's
+// own CLI, which writes CLAUDE.md with the default umask) left wider.
+
+/// Create `dir` (and parents) and make it owner-only.
+pub(crate) fn ensure_private_dir(dir: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(())
+}
+
+/// Write `bytes` to `path` as an owner-only file (0600 whatever it was).
+pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    file.write_all(bytes)?;
+    restrict_file(path)
+}
+
+/// 0600 an existing file (`mode` on open applies only when it's created).
+pub(crate) fn restrict_file(path: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(path)?.permissions().mode();
+        if mode & 0o077 != 0 {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode & 0o700))?;
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+/// At startup: the agents folder and every agent's folder 0700, every file
+/// in them (two levels: `agents.json`, `<id>/CLAUDE.md`, `<id>/messages.jsonl`
+/// …) owner-only. Deeper folders are unreachable once these are 0700.
+pub fn harden_permissions() {
+    let Ok(root) = agents_root() else { return };
+    harden_tree(&root, 2);
+}
+
+fn harden_tree(dir: &Path, depth: usize) {
+    if !dir.is_dir() {
+        return;
+    }
+    let _ = ensure_private_dir(dir);
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_dir() && depth > 1 {
+            harden_tree(&entry.path(), depth - 1);
+        } else if kind.is_file() {
+            let _ = restrict_file(&entry.path());
+        }
+    }
 }
 
 /// Written twice: the copy is what [`recover_registry`] falls back on if the
@@ -703,11 +784,38 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         extra: Default::default(),
     };
     let home = agents_root()?.join(&agent.id);
-    std::fs::create_dir_all(&home).map_err(|e| super::err_io(e.to_string()))?;
+    ensure_private_dir(&home).map_err(|e| super::err_io(e.to_string()))?;
     write_instructions(&home, &agent, &new.instructions)?;
     registry.agents.push(agent.clone());
     write_registry(&registry)?;
     Ok(agent)
+}
+
+/// Writes the app itself has made to each CLAUDE.md (instructions, memory),
+/// so a turn's `runner::MemorySeal` can tell the user's edits from the turn's.
+static CLAUDE_MD_WRITES: LazyLock<Mutex<HashMap<PathBuf, u64>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+pub fn note_claude_md_write(path: &Path) {
+    *CLAUDE_MD_WRITES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(path.to_path_buf())
+        .or_default() += 1;
+}
+
+pub fn claude_md_writes(path: &Path) -> u64 {
+    CLAUDE_MD_WRITES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(path)
+        .copied()
+        .unwrap_or(0)
+}
+
+/// Put a CLAUDE.md back as it was.
+pub fn restore_claude_md(path: &Path, bytes: &[u8]) -> Result<(), CommandError> {
+    write_atomic(path, bytes)
 }
 
 /// CLAUDE.md is the agent's own file: instructions on top, a memory section it
@@ -736,6 +844,7 @@ pub fn write_instructions(
         format!("## Instructions\n\n{body}\n\n")
     };
     let content = format!("# {}\n\n{role}{instructions}{memory}", agent.name);
+    note_claude_md_write(&path);
     write_atomic(&path, content.as_bytes())
 }
 
@@ -883,17 +992,21 @@ impl Answer {
 /// Append one JSON line, never fused onto a torn last line.
 fn append_line<T: Serialize>(path: &Path, value: &T) -> Result<(), CommandError> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| super::err_io(e.to_string()))?;
+        ensure_private_dir(dir).map_err(|e| super::err_io(e.to_string()))?;
     }
     // Every line goes through redaction: a secret's value never lands on disk.
     let mut value = serde_json::to_value(value).map_err(|e| super::err_other(e.to_string()))?;
     super::secrets::redact_value(&mut value);
     let mut line = serde_json::to_string(&value).map_err(|e| super::err_other(e.to_string()))?;
     line.push('\n');
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .read(true)
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).append(true).read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
         .open(path)
         .map_err(|e| super::err_io(e.to_string()))?;
     // A crash mid-append leaves a last line with no newline. Appending straight
@@ -934,7 +1047,7 @@ fn ensure_home(agent_id: &str) -> Result<(), CommandError> {
     if get(agent_id).is_err() {
         return Err(CommandError::expected("That agent no longer exists."));
     }
-    std::fs::create_dir_all(&home).map_err(|e| super::err_io(e.to_string()))
+    ensure_private_dir(&home).map_err(|e| super::err_io(e.to_string()))
 }
 
 /// Whether the agent is gone: not in the registry, and no folder.
@@ -1475,6 +1588,42 @@ pub fn expire_stale_approvals() {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn agent_folders_and_files_are_owner_only_and_fixed_when_wider() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("agents");
+        let home = root.join("a1");
+        // What we write is private from the start.
+        write_atomic(&root.join("agents.json"), b"{}").unwrap();
+        assert_eq!(mode(&root), 0o700);
+        assert_eq!(mode(&root.join("agents.json")), 0o600);
+        append_line(&home.join("messages.jsonl"), &serde_json::json!({"x": 1})).unwrap();
+        assert_eq!(mode(&home), 0o700);
+        assert_eq!(mode(&home.join("messages.jsonl")), 0o600);
+        // What an older build (or the CLI) left wider is fixed.
+        std::fs::write(home.join("CLAUDE.md"), "# a").unwrap();
+        std::fs::set_permissions(
+            home.join("CLAUDE.md"),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
+        harden_tree(&root, 2);
+        assert_eq!(mode(&root), 0o700);
+        assert_eq!(mode(&home), 0o700);
+        assert_eq!(mode(&home.join("CLAUDE.md")), 0o600);
+        // An owner-executable file keeps its x bit; only group/other go.
+        std::fs::write(home.join("run.sh"), "#!/bin/sh").unwrap();
+        std::fs::set_permissions(home.join("run.sh"), std::fs::Permissions::from_mode(0o755))
+            .unwrap();
+        harden_tree(&root, 2);
+        assert_eq!(mode(&home.join("run.sh")), 0o700);
+    }
+
     use super::*;
 
     #[test]
@@ -1634,6 +1783,7 @@ mod tests {
                         input: None,
                         always: None,
                         always_allowed: false,
+                        summary: None,
                         note: None,
                         prompt: None,
                         choice: None,
@@ -1835,6 +1985,7 @@ mod tests {
                     input: None,
                     always: None,
                     always_allowed: false,
+                    summary: None,
                     note: None,
                     prompt: None,
                     choice: None,
@@ -1939,6 +2090,7 @@ mod tests {
                 input: None,
                 always: None,
                 always_allowed: false,
+                summary: None,
                 note: None,
                 prompt: None,
                 choice: None,

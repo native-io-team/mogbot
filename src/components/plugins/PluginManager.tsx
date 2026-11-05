@@ -25,6 +25,9 @@ import {
   isRegistryUnreachableError,
   linkDevPlugin,
   unlinkDevPlugin,
+  approvePlugin,
+  getPluginDeveloperMode,
+  setPluginDeveloperMode,
   type PluginInfo,
   type PluginRegistryEntry,
 } from '../../lib/plugins';
@@ -36,6 +39,7 @@ import { PluginStatusGrid } from './PluginStatusGrid';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
+import { ToggleButton } from '../primitives/ToggleButton';
 import { TextButton } from '../primitives/TextButton';
 import {
   ExtensionListRow,
@@ -295,7 +299,7 @@ export function PluginManager({
     if (!projectPath) return;
     setUpdateStates((prev) => ({ ...prev, [pluginId]: 'updating' }));
     try {
-      await updatePlugin(projectPath, pluginId);
+      await updatePlugin(projectPath, pluginId, { userInitiated: true });
       void trackEvent('plugin_updated', { plugin_id: pluginId, $screen_name: 'Plugin Manager' });
       await fetchPlugins();
       onPluginsChanged();
@@ -404,14 +408,57 @@ export function PluginManager({
     }
   };
 
-  // Handle reload dev plugin
-  const handleReloadDevPlugin = (pluginId: string) => {
+  // "Allow" on a plugin this project asks for: approve exactly that bundle.
+  const handleAllow = async (pluginId: string, sha256: string) => {
+    if (!projectPath) return;
+    try {
+      await approvePlugin(projectPath, pluginId, sha256);
+      await fetchPlugins();
+      onPluginsChanged();
+    } catch (err) {
+      showToast(formatCommandError(asCommandError(err)), 'error');
+      await fetchPlugins();
+    }
+  };
+
+  // Handle reload dev plugin. A rebuild changes the bundle's hash; the
+  // developer pressing Reload on their own linked folder is their OK to
+  // load what's there now.
+  const handleReloadDevPlugin = async (pluginId: string) => {
     setReloadingId(pluginId);
     try {
+      if (projectPath) {
+        const fresh = (await listPlugins(projectPath)).find((p) => p.manifest.id === pluginId);
+        const trust = fresh?.trust;
+        if (fresh?.is_dev && trust?.sha256 && trust.state !== 'trusted') {
+          await approvePlugin(projectPath, pluginId, trust.sha256);
+        }
+      }
       onPluginsChanged();
+    } catch (err) {
+      showToast(formatCommandError(asCommandError(err)), 'error');
     } finally {
       // Small delay so spinner is visible
       setTimeout(() => setReloadingId(null), 400);
+    }
+  };
+
+  const [developerMode, setDeveloperMode] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    getPluginDeveloperMode()
+      .then(setDeveloperMode)
+      .catch(() => setDeveloperMode(null));
+  }, [isOpen]);
+  const toggleDeveloperMode = async () => {
+    const next = !developerMode;
+    try {
+      await setPluginDeveloperMode(next);
+      setDeveloperMode(await getPluginDeveloperMode());
+      await fetchPlugins();
+      onPluginsChanged();
+    } catch (err) {
+      showToast(formatCommandError(asCommandError(err)), 'error');
     }
   };
 
@@ -555,8 +602,9 @@ export function PluginManager({
                   onCheckUpdate={(id) => void handleCheckUpdate(id)}
                   onUpdate={(id) => void handleUpdate(id)}
                   onUninstall={(id) => void handleUninstall(id)}
-                  onReloadDev={(id) => handleReloadDevPlugin(id)}
+                  onReloadDev={(id) => void handleReloadDevPlugin(id)}
                   onUnlinkDev={(id) => void handleUnlinkDevPlugin(id)}
+                  onAllow={(id, sha) => void handleAllow(id, sha)}
                 />
 
                 {error && activeTab === 'installed' && (
@@ -569,10 +617,27 @@ export function PluginManager({
                   onClick={() => {
                     void handleLinkDevPlugin();
                   }}
-                  disabled={isLinkingDev}
+                  disabled={isLinkingDev || developerMode === false}
+                  title={
+                    developerMode === false
+                      ? 'Turn on plugin developer mode below to link a dev plugin.'
+                      : undefined
+                  }
                 >
                   {isLinkingDev ? 'Linking…' : 'Link dev plugin'}
                 </Button>
+                {developerMode !== null && (
+                  <ToggleButton
+                    variant="ghost"
+                    size="compact"
+                    width="fill"
+                    pressed={developerMode}
+                    onClick={() => void toggleDeveloperMode()}
+                    title="Dev-linked plugins can be linked and load only while this is on. It starts on in development builds."
+                  >
+                    {developerMode ? 'Plugin developer mode: on' : 'Plugin developer mode: off'}
+                  </ToggleButton>
+                )}
               </>
             )}
           </TabsPanel>
@@ -584,8 +649,8 @@ export function PluginManager({
             {projectPath && activeTab === 'library' && (
               <>
                 <div className="plugins-beta-notice">
-                  Plugins are new and in beta. If you experience any issues, please report them in
-                  the Slack group.
+                  Plugins are new and in beta. If something goes wrong, report it from Settings
+                  &amp; Help → Report a bug.
                 </div>
 
                 {isLoadingRegistry && registry.length === 0 && (

@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { ApprovalCard } from './AgentChatItems';
 import type { AgentMessage, Approval } from '../../lib/agents';
+import { PairConfirm } from '../phone/PhonePairing';
+import type { Device, PairRequestView } from '../../lib/companion';
+import editorSource from './AgentEditorModal.tsx?raw';
 
 /**
  * The owner's rule: an answer on an approval or prompt card is never the
@@ -66,6 +69,50 @@ const cards: [string, Approval][] = [
     },
   ],
 ];
+
+describe('the phone pairing and the editor answer neutrally too', () => {
+  const request = (replaces: Device[]): PairRequestView => ({
+    id: 'p1',
+    device: { name: 'Julian’s iPhone', platform: 'ios', appVersion: '1.0', build: 'official' },
+    requestedAt: Date.now(),
+    codeHint: 'AB12',
+    replaces,
+  });
+  const paired = {
+    id: 'd1',
+    name: 'Julian’s iPhone',
+    platform: 'ios',
+    appVersion: '1.0',
+    build: 'official',
+    pairedAt: Date.now(),
+  } as unknown as Device;
+  for (const [name, replaces] of [
+    ['allow a phone', []],
+    ['allow and replace a phone', [paired]],
+  ] as const) {
+    it(`${name}: Allow is strong, never the accent`, () => {
+      const { container } = render(
+        <PairConfirm request={request([...replaces])} busy={null} onDecide={vi.fn()} />
+      );
+      for (const button of container.querySelectorAll('button')) {
+        expect(button.className, button.textContent ?? '').not.toMatch(/button--primary/);
+      }
+      const allow = container.querySelector('[data-allow]');
+      expect(allow).not.toBeNull();
+      expect(allow!.className).toMatch(/button--strong/);
+    });
+  }
+
+  it('the editor’s “Keep changes” (moving an agent with an open copy) is strong', () => {
+    // The <Button …> that ends in "Keep changes": its props are what's between.
+    const end = editorSource.indexOf('Keep changes\n');
+    expect(end, 'the rebind prompt offers Keep changes').toBeGreaterThan(0);
+    const button = editorSource.slice(editorSource.lastIndexOf('<Button', end), end);
+    expect(button).toMatch(/data-allow/);
+    expect(button).toMatch(/variant="strong"/);
+    expect(button).not.toMatch(/variant="primary"/);
+  });
+});
 
 describe('approval and prompt answers are neutral', () => {
   for (const [name, approval] of cards) {

@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { markInstallScriptsRan, planPackageInstall } from '../../lib/devServerConsent';
 import { trackError } from '../../lib/analytics';
 import {
   getGitHubUsername,
@@ -137,14 +138,17 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       );
     }
 
-    logger.info('[ImportProject] phase: install', { projectPath, packageManager });
+    // Not approved yet, so no lifecycle scripts: they run once it is (dev_consent.rs).
+    const plan = await planPackageInstall(projectPath, packageManager);
+    logger.info('[ImportProject] phase: install', { projectPath, packageManager, plan });
     await runPtyToExit({
       cwd: projectPath,
       command: packageManager,
-      args: ['install'],
+      args: plan.args,
       rows: 10,
       cols: 80,
     });
+    if (plan.runsScripts) await markInstallScriptsRan(projectPath);
   };
 
   /** Retry just the install step (project already cloned) */

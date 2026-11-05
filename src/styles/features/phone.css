@@ -48,13 +48,31 @@
   margin-top: var(--spacing-sm);
 }
 
-/* First visit: get the app (1), then connect it (2). */
+/* First visit: get the app, Tailscale once, pair. Numbered by the list. */
+.phone-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin: var(--spacing-md) 0 0;
+  padding-left: var(--spacing-lg);
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-heading);
+  color: var(--text-primary);
+}
+
 .phone-step {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--spacing-xs);
-  margin-top: var(--spacing-md);
+}
+
+.phone-steps > .phone-step {
+  display: list-item;
+}
+
+.phone-steps > .phone-step > * + * {
+  margin-top: var(--spacing-xs);
 }
 
 .phone-step__title {
@@ -64,9 +82,26 @@
   color: var(--text-primary);
 }
 
+.phone-step__done {
+  margin-right: var(--spacing-xs);
+  vertical-align: -1px;
+  color: var(--accent-success);
+}
+
+.phone-step__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.phone-steps .text-button.button {
+  font-weight: var(--font-weight-body);
+}
+
 .phone-step__text {
   margin: 0;
   font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-body);
   line-height: var(--line-height-help);
   color: var(--text-secondary);
 }

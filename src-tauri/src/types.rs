@@ -704,6 +704,10 @@ pub struct SpawnPtyOptions {
     pub cwd: String,
     pub command: String,
     pub args: Vec<String>,
+    /// Set when this spawn is a project's dev server: the project root whose
+    /// approval it needs (`dev_consent::guard_dev_server_spawn`).
+    #[serde(default, rename = "devServerRoot")]
+    pub dev_server_root: Option<String>,
 }
 
 // ============ Code Health ============
@@ -1013,6 +1017,9 @@ pub struct AccountCredentialStatus {
     pub has_netlify_auth_token: bool,
     pub has_git_name: bool,
     pub has_git_email: bool,
+    /// The Keychain didn't answer for at least one credential, so a `false`
+    /// above may mean "couldn't check" rather than "not set".
+    pub keychain_unavailable: bool,
 }
 
 // ============ Compact Mode ============

@@ -241,8 +241,9 @@ can itself be prompt-injected, never reaches anything that matters:
    `--disallowedTools`; `--setting-sources ""` (no user settings, rules,
    hooks or CLAUDE.md: without it the model quoted the user's
    `~/.claude/CLAUDE.md`, with it it had none, checked on 2.1.318);
-   `--strict-mcp-config` with one server, the import's own URL on the agent
-   bridge (`/mcp/<token>/agents/import/<per-import secret>`), serving only
+   `--strict-mcp-config` with one server, the import's own endpoint on the
+   agent bridge (`/mcp/import`, the per-import 256-bit secret as its bearer,
+   read from a 0600 config file rather than the command line), serving only
    `propose_agent`, `update_proposal` and `finish`; `--permission-mode
    dontAsk --permission-prompts none` and no approval tool, so nothing can be
    granted mid-run; no `--add-dir`, no Chrome, no slash commands; and our own
