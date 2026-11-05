@@ -19,9 +19,11 @@
  */
 mod plugin_lifecycle;
 mod plugin_storage;
+mod plugin_trust;
 
 pub use plugin_lifecycle::*;
 pub use plugin_storage::*;
+pub use plugin_trust::*;
 
 use crate::errors::CommandError;
 use crate::utils::{create_command, find_executable, get_extended_path, validate_project_path};
@@ -221,6 +223,10 @@ pub struct PluginInfo {
     /// Local filesystem path for dev plugins
     #[serde(default)]
     pub local_path: String,
+    /// Whether this app has agreed to run it here (`plugin_trust`). Only
+    /// `list_plugins` fills it in.
+    #[serde(default)]
+    pub trust: Option<PluginTrust>,
 }
 
 /// Registry entry stored in registry.json
@@ -445,44 +451,11 @@ pub(crate) fn get_storage_path(
 #[tauri::command]
 #[tracing::instrument(fields(project = %project_path))]
 pub fn read_plugin_bundle(project_path: String, plugin_id: String) -> Result<String, CommandError> {
-    validate_plugin_id(&plugin_id)?;
-    let registry = read_registry(&project_path)?;
-    let entry = registry.plugins.iter().find(|e| e.plugin_id == plugin_id);
-
-    let bundle_path = if let Some(entry) = entry {
-        if entry.is_dev {
-            PathBuf::from(&entry.local_path)
-                .join("dist")
-                .join("index.js")
-        } else {
-            get_plugins_dir(&project_path)?
-                .join(&plugin_id)
-                .join("dist")
-                .join("index.js")
-        }
-    } else {
-        get_plugins_dir(&project_path)?
-            .join(&plugin_id)
-            .join("dist")
-            .join("index.js")
-    };
-
-    // Expected, not Other: a missing bundle is a broken-install machine state
-    // the frontend already handles (usePlugins' self-heal re-installs from
-    // source, then warns). `Other` auto-reported it at the IPC boundary before
-    // any of that ran, so every session re-filed the same bug (issue #770).
-    // The message text is load-bearing — usePlugins' `isMissingBundleError`
-    // matches on it — so it stays byte-identical.
-    if !bundle_path.exists() {
-        return Err(CommandError::expected(format!(
-            "Plugin bundle not found: {}",
-            bundle_path.display()
-        )));
-    }
-
-    fs::read_to_string(&bundle_path).map_err(|e| CommandError::Io {
-        message: format!("Failed to read plugin bundle: {e}"),
-    })
+    // Only a bundle this app has approved, byte for byte, at this path: the
+    // project's registry.json alone is a request, never permission
+    // (`plugin_trust`). A missing bundle still reads "Plugin bundle not
+    // found: …" (Expected): usePlugins' self-heal matches on it (#770).
+    verified_bundle(&project_path, &plugin_id)
 }
 
 /// Read a plugin's manifest

@@ -401,11 +401,17 @@ pub struct FidelityReportFile {
 /// owns that format, and re-describing it here would create a second place for
 /// it to be wrong.
 #[tauri::command]
-#[tracing::instrument]
+#[tracing::instrument(skip(app))]
 pub async fn read_fidelity_runs(
+    app: tauri::AppHandle,
     project_path: String,
 ) -> Result<Vec<FidelityReportFile>, CommandError> {
     let root = validate_project_path(&project_path)?;
+    // The comparison viewer shows the captures through the asset protocol;
+    // in a project outside ~/ShipStudio each image is granted by itself.
+    for file in crate::commands::external_projects::image_files(&root.join(FIDELITY_DIR)) {
+        crate::commands::external_projects::allow_image(&app, &file);
+    }
     runs_at(&root)
 }
 

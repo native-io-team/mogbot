@@ -60,6 +60,26 @@ pub fn detect_workspaces_at(root: &Path) -> Vec<WorkspaceInfo> {
     workspaces
 }
 
+/// Every workspace folder the repo declares (with a `package.json` or an Nx
+/// `project.json`), runnable or not, sorted and without the root itself.
+/// Dev-server consent fingerprints all of them: `turbo dev` / `nx` fan out to
+/// every workspace, not only the one the preview shows.
+pub fn workspace_dirs_at(root: &Path) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = collect_workspace_globs(root)
+        .iter()
+        .flat_map(|pattern| expand_pattern(root, pattern))
+        .filter(|d| {
+            d != root
+                && d.starts_with(root)
+                && !d.components().any(|c| c == std::path::Component::ParentDir)
+        })
+        .filter(|d| d.join("package.json").is_file() || d.join("project.json").is_file())
+        .collect();
+    dirs.sort();
+    dirs.dedup();
+    dirs
+}
+
 /// Read workspace globs from `pnpm-workspace.yaml`, root
 /// `package.json#workspaces`, and — for Nx — `nx.json`.
 fn collect_workspace_globs(root: &Path) -> Vec<String> {

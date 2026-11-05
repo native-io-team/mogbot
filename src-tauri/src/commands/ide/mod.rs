@@ -267,10 +267,37 @@ pub async fn check_browser_availability() -> Vec<BrowserInfo> {
     }
 }
 
+/// What `open_url_in_browser` will hand a browser: an `http`, `https` or
+/// `mailto` URL, re-serialised by the URL parser so it always starts with its
+/// scheme (never `-`, so never an option to `open` or the browser), with no
+/// whitespace or control characters. `file:`, `javascript:`, app schemes and
+/// bare paths are refused: `open -a Safari /Applications/X.app` launches X.
+pub(crate) fn browser_url(raw: &str) -> Result<String, CommandError> {
+    let trimmed = raw.trim();
+    if trimmed.chars().any(|c| c.is_control()) {
+        return Err(CommandError::expected(
+            "That link has characters a URL can't contain.",
+        ));
+    }
+    let url = url::Url::parse(trimmed)
+        .map_err(|_| CommandError::expected("That isn't a web address the browser can open."))?;
+    match url.scheme() {
+        "http" | "https" if url.host_str().is_some_and(|h| !h.is_empty()) => {}
+        "mailto" => {}
+        _ => {
+            return Err(CommandError::expected(
+                "Only web (http, https) and mailto links open in a browser.",
+            ))
+        }
+    }
+    Ok(url.into())
+}
+
 /// Open a URL in a specific browser
 #[tauri::command]
 #[tracing::instrument]
 pub async fn open_url_in_browser(url: String, browser_id: String) -> Result<(), CommandError> {
+    let url = browser_url(&url)?;
     #[cfg(target_os = "macos")]
     {
         let app_name = MACOS_BROWSERS
@@ -284,6 +311,8 @@ pub async fn open_url_in_browser(url: String, browser_id: String) -> Result<(), 
         // Resource temporarily unavailable (os error 35)" was reaching
         // telemetry as an app malfunction (issue #585).
         let mut cmd = create_command("open");
+        // `open` has no `--`; `browser_url` guarantees this starts with a
+        // scheme, so it can only ever be read as the document to open.
         cmd.args(["-a", app_name, &url]);
         crate::external_command::spawn_with_pressure_retry(&format!("open {browser_id}"), || {
             cmd.spawn()
@@ -316,5 +345,40 @@ pub async fn open_url_in_browser(url: String, browser_id: String) -> Result<(), 
     {
         let _ = (url, browser_id);
         Err(("Browser selection not supported on this platform".to_string()).into())
+    }
+}
+
+#[cfg(test)]
+mod browser_url_tests {
+    use super::browser_url;
+
+    #[test]
+    fn only_web_and_mailto_links_reach_a_browser() {
+        assert_eq!(
+            browser_url("https://example.com/a?b=1").unwrap(),
+            "https://example.com/a?b=1"
+        );
+        assert_eq!(
+            browser_url(" http://localhost:3000 ").unwrap(),
+            "http://localhost:3000/"
+        );
+        assert_eq!(browser_url("mailto:a@b.co").unwrap(), "mailto:a@b.co");
+        for bad in [
+            "file:///Applications/Calculator.app",
+            "/Applications/Calculator.app",
+            "-a Terminal",
+            "--args x",
+            "javascript:alert(1)",
+            "vscode://file/etc/passwd",
+            "x-apple.systempreferences:",
+            "https://",
+            "https://ex ample.com\n",
+            "https://example.com/\u{7}",
+            "",
+        ] {
+            assert!(browser_url(bad).is_err(), "accepted {bad:?}");
+        }
+        assert!(browser_url("https://a.com/\nopen -a Terminal").is_err());
+        assert!(browser_url("https://a.com/\u{0}").is_err());
     }
 }

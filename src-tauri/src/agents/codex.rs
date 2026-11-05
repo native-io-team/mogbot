@@ -126,31 +126,79 @@ pub(super) fn scripted() -> bool {
     !extra_config().is_empty()
 }
 
+/// The permissions profile every Codex turn runs under, when this Codex has
+/// profiles ([`profiles_supported`]).
+pub(super) const PROFILE: &str = "shipstudio_agent";
+
+/// Where a turn's commands may write, as `-c` overrides.
+///
+/// With permission profiles (Codex 0.166+): the built-in `:workspace` (the
+/// cwd and temp folders), the writable folders added as workspace roots, no
+/// network, and every existing `.git` / `.shipstudio` folder inside them
+/// read-only (`reach::protected_paths`). Verified on 0.166 with
+/// `codex sandbox -P`: a write into a nested project's `.git` or
+/// `.shipstudio` is refused while the project itself stays writable, and
+/// `thread/start` reports the profile as active. Codex takes a glob only to
+/// deny reading, so the folders are listed by path.
+///
+/// Without them (an older Codex), the legacy `workspace-write` roots, which
+/// only keep a root's own top-level `.git` read-only.
+fn sandbox_config(writable: &[String], protected: Option<&[PathBuf]>) -> Vec<String> {
+    let Some(protected) = protected else {
+        return vec![
+            format!("sandbox_workspace_write.writable_roots={}", toml(writable)),
+            format!("{NO_NETWORK}=false"),
+        ];
+    };
+    let roots: Vec<String> = writable
+        .iter()
+        .map(|w| format!("{}=true", toml(w)))
+        .collect();
+    let read_only: Vec<String> = protected
+        .iter()
+        .map(|p| format!("{}=\"read\"", toml(&p.to_string_lossy())))
+        .collect();
+    vec![
+        format!(
+            "permissions.{PROFILE}={{extends=\":workspace\",network={{enabled=false}},workspace_roots={{{}}},filesystem={{{}}}}}",
+            roots.join(","),
+            read_only.join(","),
+        ),
+        format!("default_permissions={}", toml(PROFILE)),
+    ]
+}
+
 /// The `-c` overrides every Codex turn gets, whichever way it runs: where
-/// commands may write, no network for them (set here, so a
-/// `network_access = true` in the user's own config.toml can't widen it;
-/// checked against Codex 0.166 with `codex sandbox`), our MCP server (its tools pre-approved: they put up
-/// their own cards), CLAUDE.md as the project doc, and Ship Studio's preview server disabled
-/// when it's registered. Then the e2e suite's own, in debug builds.
-pub(super) fn shared_config(url: &str, writable: &[String]) -> Vec<String> {
+/// commands may write and what they may not ([`sandbox_config`]), no
+/// network for them (set here, so a `network_access = true` in the user's
+/// own config.toml can't widen it; checked against Codex 0.166 with `codex
+/// sandbox`), our MCP server (its tools pre-approved: they put up their own
+/// cards; its secret read from [`super::reach::TOKEN_ENV`], never written
+/// here), CLAUDE.md as the project doc, and Ship Studio's preview server
+/// disabled when it's registered. Then the e2e suite's own, in debug builds.
+pub(super) fn shared_config(
+    url: &str,
+    writable: &[String],
+    protected: Option<&[PathBuf]>,
+) -> Vec<String> {
     let server = format!(
-        "mcp_servers.{}={{url={},tool_timeout_sec={},default_tools_approval_mode=\"approve\"}}",
+        "mcp_servers.{}={{url={},bearer_token_env_var={},tool_timeout_sec={},default_tools_approval_mode=\"approve\"}}",
         super::prompts::SERVER_KEY,
         toml(url),
+        toml(super::reach::TOKEN_ENV),
         super::mcp::APPROVAL_WAIT_SECS + 60,
     );
-    [
-        format!("sandbox_workspace_write.writable_roots={}", toml(writable)),
-        format!("{NO_NETWORK}=false"),
-        server,
-        "project_doc_fallback_filenames=[\"CLAUDE.md\"]".to_string(),
-    ]
-    .into_iter()
-    // Ship Studio's preview server, off for this turn when it's registered:
-    // an agent here drives our preview, never theirs.
-    .chain(crate::preview_isolation::codex_override(None, None))
-    .chain(extra_config())
-    .collect()
+    sandbox_config(writable, protected)
+        .into_iter()
+        .chain([
+            server,
+            "project_doc_fallback_filenames=[\"CLAUDE.md\"]".to_string(),
+        ])
+        // Ship Studio's preview server, off for this turn when it's registered:
+        // an agent here drives our preview, never theirs.
+        .chain(crate::preview_isolation::codex_override(None, None))
+        .chain(extra_config())
+        .collect()
 }
 
 /// Every argument a turn's `codex exec` gets, for a Codex without
@@ -162,18 +210,18 @@ pub fn args(
     url: &str,
     developer_instructions: &str,
     writable: &[String],
+    protected: Option<&[PathBuf]>,
 ) -> Vec<String> {
     let mut args: Vec<String> = vec!["exec".into()];
     if session.is_some() {
         args.push("resume".into());
     }
     args.extend(["--json".into(), "--skip-git-repo-check".into()]);
-    let config = [
-        "sandbox_mode=\"workspace-write\"".to_string(),
+    let config = sandbox_mode(protected).into_iter().chain([
         "approval_policy=\"never\"".to_string(),
         format!("developer_instructions={}", toml(developer_instructions)),
-    ];
-    for value in config.into_iter().chain(shared_config(url, writable)) {
+    ]);
+    for value in config.chain(shared_config(url, writable, protected)) {
         args.extend(["-c".into(), value]);
     }
     if let Some(model) = model {
@@ -202,15 +250,15 @@ pub fn interactive_args(
     url: &str,
     developer_instructions: &str,
     writable: &[String],
+    protected: Option<&[PathBuf]>,
     cwd: &str,
 ) -> Vec<String> {
     let mut args: Vec<String> = vec!["resume".into()];
-    let config = [
-        "sandbox_mode=\"workspace-write\"".to_string(),
+    let config = sandbox_mode(protected).into_iter().chain([
         "approval_policy=\"on-request\"".to_string(),
         format!("developer_instructions={}", toml(developer_instructions)),
-    ];
-    for value in config.into_iter().chain(shared_config(url, writable)) {
+    ]);
+    for value in config.chain(shared_config(url, writable, protected)) {
         args.extend(["-c".into(), value]);
     }
     if let Some(model) = model {
@@ -219,6 +267,68 @@ pub fn interactive_args(
     args.extend(["-C".into(), cwd.to_string()]);
     args.push(thread.to_string());
     args
+}
+
+/// `sandbox_mode`, which Codex refuses alongside `default_permissions`: only
+/// without a profile.
+fn sandbox_mode(protected: Option<&[PathBuf]>) -> Option<String> {
+    protected
+        .is_none()
+        .then(|| "sandbox_mode=\"workspace-write\"".to_string())
+}
+
+/// The first Codex its permission profiles were verified on.
+const PROFILES_SINCE: (u64, u64) = (0, 166);
+
+/// Whether this Codex has permission profiles: its `--version` is
+/// [`PROFILES_SINCE`] or later. Kept per binary until it changes (an
+/// update); a version that can't be read counts as no.
+pub async fn profiles_supported(binary: &Path) -> bool {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    use std::time::SystemTime;
+    type Seen = HashMap<PathBuf, (Option<SystemTime>, bool)>;
+    static CACHE: LazyLock<Mutex<Seen>> = LazyLock::new(Default::default);
+    let stamp = std::fs::metadata(binary).and_then(|m| m.modified()).ok();
+    if let Some((at, yes)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(binary) {
+        if *at == stamp {
+            return *yes;
+        }
+    }
+    let mut cmd = tokio::process::Command::new(binary);
+    cmd.arg("--version")
+        .env("PATH", crate::utils::get_extended_path());
+    let Ok(out) = crate::external_command::run_with_timeout(cmd, "codex --version", 10).await
+    else {
+        return false;
+    };
+    let yes = version_at_least(&String::from_utf8_lossy(&out.stdout), PROFILES_SINCE);
+    CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(binary.to_path_buf(), (stamp, yes));
+    yes
+}
+
+/// `codex-cli 0.166.0` against (major, minor).
+fn version_at_least(text: &str, (major, minor): (u64, u64)) -> bool {
+    let Some(version) = text
+        .split_whitespace()
+        .find(|w| w.chars().next().is_some_and(|c| c.is_ascii_digit()))
+    else {
+        return false;
+    };
+    let mut parts = version.split('.').map(|p| {
+        p.chars()
+            .take_while(char::is_ascii_digit)
+            .collect::<String>()
+            .parse::<u64>()
+            .ok()
+    });
+    match (parts.next().flatten(), parts.next().flatten()) {
+        (Some(a), Some(b)) => (a, b) >= (major, minor),
+        _ => false,
+    }
 }
 
 /// `/bin/zsh -lc 'npm test'` → `npm test`: the command, as the agent wrote it.
@@ -513,9 +623,10 @@ mod tests {
         let fresh = args(
             agent.model.as_deref(),
             None,
-            "http://127.0.0.1:9/mcp/t/agents/a",
+            "http://127.0.0.1:9/mcp/agent",
             "Be \"brief\".\nOk",
             &roots,
+            None,
         );
         assert_eq!(&fresh[..3], ["exec", "--json", "--skip-git-repo-check"]);
         let config: Vec<&str> = fresh
@@ -528,13 +639,53 @@ mod tests {
             .contains(&r#"sandbox_workspace_write.writable_roots=["/h/a","/u/Ship \"Studio\""]"#));
         // Commands get no network whatever the user's config.toml says.
         assert!(config.contains(&"sandbox_workspace_write.network_access=false"));
-        assert!(config.contains(&r#"mcp_servers.shipstudio_agents={url="http://127.0.0.1:9/mcp/t/agents/a",tool_timeout_sec=300,default_tools_approval_mode="approve"}"#));
+        assert!(config.contains(&r#"mcp_servers.shipstudio_agents={url="http://127.0.0.1:9/mcp/agent",bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",tool_timeout_sec=300,default_tools_approval_mode="approve"}"#));
         assert!(config.contains(&r#"developer_instructions="Be \"brief\".\nOk""#));
         assert!(fresh.windows(2).any(|w| w[0] == "-m" && w[1] == "gpt-5.5"));
         assert_eq!(fresh.last().unwrap(), "-");
-        let resumed = args(agent.model.as_deref(), Some("01a1"), "http://x", "", &roots);
+        let resumed = args(
+            agent.model.as_deref(),
+            Some("01a1"),
+            "http://x",
+            "",
+            &roots,
+            None,
+        );
         assert_eq!(&resumed[..2], ["exec", "resume"]);
         assert_eq!(&resumed[resumed.len() - 2..], ["01a1", "-"]);
+    }
+
+    #[test]
+    fn with_profiles_git_and_shipstudio_folders_are_kept_read_only() {
+        let roots = vec!["/u/ShipStudio".to_string(), "/h/a".to_string()];
+        let protected = vec![
+            PathBuf::from("/u/ShipStudio/site/.git"),
+            PathBuf::from("/u/ShipStudio/site/.shipstudio"),
+        ];
+        let line = args(None, None, "http://x", "", &roots, Some(&protected));
+        let config: Vec<&str> = line
+            .windows(2)
+            .filter(|w| w[0] == "-c")
+            .map(|w| w[1].as_str())
+            .collect();
+        // Codex refuses `sandbox_mode` or `[sandbox_workspace_write]` next to a profile.
+        assert!(!config.iter().any(|c| c.starts_with("sandbox_")));
+        assert!(config.contains(&r#"default_permissions="shipstudio_agent""#));
+        assert!(config.contains(
+            &r#"permissions.shipstudio_agent={extends=":workspace",network={enabled=false},workspace_roots={"/u/ShipStudio"=true,"/h/a"=true},filesystem={"/u/ShipStudio/site/.git"="read","/u/ShipStudio/site/.shipstudio"="read"}}"#
+        ));
+        // The bridge secret is never on the command line.
+        assert!(!line.iter().any(|a| a.contains("Bearer")));
+    }
+
+    #[test]
+    fn codex_versions_are_compared_by_major_and_minor() {
+        assert!(version_at_least("codex-cli 0.166.0", (0, 166)));
+        assert!(version_at_least("codex-cli 0.170.2\n", (0, 166)));
+        assert!(version_at_least("codex-cli 1.0.0", (0, 166)));
+        assert!(!version_at_least("codex-cli 0.165.9", (0, 166)));
+        assert!(!version_at_least("codex-cli", (0, 166)));
+        assert!(!version_at_least("", (0, 166)));
     }
 
     #[test]

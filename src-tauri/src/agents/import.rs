@@ -131,7 +131,7 @@ pub(crate) fn add_memory(id: &str, memory: &str, source: &str) -> Result<(), Com
     }
     content.push('\n');
     content.push_str(&block);
-    std::fs::write(&path, content).map_err(super::err_io)
+    super::store::write_private(&path, content.as_bytes()).map_err(super::err_io)
 }
 
 fn outcome(agent: &str, r: &ImportedRoutine, detail: String) -> RoutineOutcome {

@@ -18,6 +18,8 @@ import {
   updatePlugin,
   isExpectedPluginFailure,
   supersededReason,
+  needsTrustDecision,
+  mayLoad,
   PluginInfo,
 } from '../lib/plugins';
 import { loadPluginModule, unloadPluginModule, PluginModule } from '../lib/plugin-loader';
@@ -34,6 +36,13 @@ const SUPPORTED_API_VERSIONS = [0, 1];
  */
 const attemptedSelfHeals = new Set<string>();
 
+/** A self-heal fetched a bundle the user hasn't approved: ask, don't load. */
+class HealNeedsTrust extends Error {
+  constructor(readonly info: PluginInfo) {
+    super(`Plugin ${info.manifest.id} needs approval after being re-installed`);
+  }
+}
+
 /** The load failure produced by a registry entry whose built bundle is gone. */
 function isMissingBundleError(message: string): boolean {
   return message.includes('Plugin bundle not found');
@@ -48,6 +57,11 @@ function isMissingBundleError(message: string): boolean {
  * ever repaired those entries, so they failed identically on every session
  * forever. One re-install from source (which now validates the bundle) fixes
  * them for good. Tried at most once per plugin per session.
+ *
+ * The re-install clones the source URL in the project's own registry, which
+ * the repo controls, so it never carries the plugin's approval over: unless
+ * what it fetched is byte-for-byte what was approved, from the same source,
+ * the plugin goes back to the user's Allow / Don't load ({@link HealNeedsTrust}).
  */
 async function loadModuleWithSelfHeal(
   path: string,
@@ -72,7 +86,7 @@ async function loadModuleWithSelfHeal(
       plugin: info.manifest.id,
     });
     try {
-      await updatePlugin(path, info.manifest.id);
+      await updatePlugin(path, info.manifest.id, { userInitiated: false });
     } catch (healError) {
       logger.warn('Plugin self-heal re-install failed', {
         plugin: info.manifest.id,
@@ -81,6 +95,8 @@ async function loadModuleWithSelfHeal(
       // Surface the original missing-bundle state, not the update error.
       throw e;
     }
+    const healed = (await listPlugins(path)).find((p) => p.manifest.id === info.manifest.id);
+    if (healed && needsTrustDecision(healed)) throw new HealNeedsTrust(healed);
     return await loadPluginModule(path, info.manifest.id, onLifecycleError);
   }
 }
@@ -111,6 +127,11 @@ export interface UsePluginsReturn {
   plugins: LoadedPlugin[];
   /** Plugins that failed to load (unsupported API version, bad bundle, list error) */
   failures: PluginFailure[];
+  /**
+   * Plugins the project's registry asks for that this app hasn't approved as
+   * they are now. Not loaded; the Plugins control asks about them.
+   */
+  pendingTrust: PluginInfo[];
   /** Get plugins registered for a specific UI slot */
   getSlotPlugins: (slotName: string) => LoadedPlugin[];
   /** Reload all plugins (call after install/uninstall) */
@@ -125,6 +146,7 @@ export function usePlugins(
 ): UsePluginsReturn {
   const [plugins, setPlugins] = useState<LoadedPlugin[]>([]);
   const [failures, setFailures] = useState<PluginFailure[]>([]);
+  const [pendingTrust, setPendingTrust] = useState<PluginInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const mountedRef = useRef(true);
   const currentPathRef = useRef(projectPath);
@@ -145,6 +167,7 @@ export function usePlugins(
       if (!path) {
         setPlugins([]);
         setFailures([]);
+        setPendingTrust([]);
         return;
       }
 
@@ -155,7 +178,12 @@ export function usePlugins(
         // merely not rendering one still runs its activation hook and its
         // background timers, which was most of what made the old hosting
         // integration expensive. The Plugin Manager explains the skip.
-        const enabled = installed.filter((p) => p.enabled && !supersededReason(p.manifest.id));
+        const wanted = installed.filter((p) => p.enabled && !supersededReason(p.manifest.id));
+        // A project's registry.json is a request, not permission: only what
+        // this app approved (by path and SHA-256) loads. The rest waits for
+        // the user's Allow, or stays quiet once declined (plugin_trust.rs).
+        const asking = wanted.filter(needsTrustDecision);
+        const enabled = wanted.filter(mayLoad);
         const failed: PluginFailure[] = [];
 
         // Skip plugins with unsupported API versions
@@ -189,6 +217,10 @@ export function usePlugins(
             loaded.push(result.value);
           } else {
             const info = compatible[i];
+            if (result.reason instanceof HealNeedsTrust) {
+              asking.push(result.reason.info);
+              return;
+            }
             const message = formatCommandError(asCommandError(result.reason));
             if (isMissingBundleError(message)) {
               // A missing bundle that survived the self-heal is a broken
@@ -225,6 +257,7 @@ export function usePlugins(
         if (mountedRef.current && currentPathRef.current === path) {
           setPlugins(loaded);
           setFailures(failed);
+          setPendingTrust(asking);
         }
       } catch (e) {
         // Full Disk Access / read-only volume / a project folder that's gone
@@ -236,6 +269,7 @@ export function usePlugins(
         });
         if (mountedRef.current && currentPathRef.current === path) {
           setPlugins([]);
+          setPendingTrust([]);
           setFailures([
             {
               id: null,
@@ -292,5 +326,5 @@ export function usePlugins(
     [plugins]
   );
 
-  return { plugins, failures, getSlotPlugins, reloadPlugins, isLoading };
+  return { plugins, failures, pendingTrust, getSlotPlugins, reloadPlugins, isLoading };
 }

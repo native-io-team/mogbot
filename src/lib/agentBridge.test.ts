@@ -84,6 +84,16 @@ describe('isValidPreviewPath', () => {
     expect(isValidPreviewPath(42)).toBe(false);
     expect(isValidPreviewPath(undefined)).toBe(false);
   });
+
+  it('rejects paths a browser would turn into another origin', () => {
+    // `\` reads as `/`, and tabs/newlines are dropped: both make `//evil.com`.
+    expect(isValidPreviewPath('/\\evil.com')).toBe(false);
+    expect(isValidPreviewPath('/\\/evil.com')).toBe(false);
+    expect(isValidPreviewPath('/\t/evil.com')).toBe(false);
+    expect(isValidPreviewPath('/\n/evil.com')).toBe(false);
+    expect(isValidPreviewPath('/a b')).toBe(false);
+    expect(isValidPreviewPath('/a\\b')).toBe(false);
+  });
 });
 
 describe('executeBridgeTool', () => {
