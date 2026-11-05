@@ -621,6 +621,10 @@ export interface Room {
   lastActivityAt: number;
   preview?: string;
   unread: number;
+  /** What the room is for, in a line. Absent from older Macs and rooms made without one. */
+  purpose?: string;
+  /** The agent that made it (the Chief of Staff); absent when the user did. */
+  createdBy?: string;
 }
 
 /** A room with what is happening in it now. */

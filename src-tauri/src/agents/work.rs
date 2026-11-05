@@ -506,6 +506,34 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
                 format!("delete {n}"),
             )
         }
+        "create_room" => {
+            let n = named("name", "a room");
+            act(
+                StepKind::Delegate,
+                format!("Made the room {n}"),
+                format!("Making the room {n}"),
+                format!("make the room {n}"),
+            )
+        }
+        "add_to_room" | "remove_from_room" => {
+            let (n, r) = (named("agent", "an agent"), named("room", "a room"));
+            let (done, doing, to) = if tool == "add_to_room" {
+                ("Added", "Adding", "add")
+            } else {
+                ("Took", "Taking", "take")
+            };
+            let tail = if tool == "add_to_room" {
+                format!("to {r}")
+            } else {
+                format!("out of {r}")
+            };
+            act(
+                StepKind::Delegate,
+                format!("{done} {n} {tail}"),
+                format!("{doing} {n} {tail}"),
+                format!("{to} {n} {tail}"),
+            )
+        }
         "list_agents" => act(
             StepKind::Message,
             "Checked on the team",

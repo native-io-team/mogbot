@@ -570,7 +570,12 @@ export function RoomChat({
         <div className="agent-chat__scroll" ref={scrollRef} onScroll={onScroll}>
           <div className="agent-chat__messages" ref={messagesRef}>
             {items.length === 0 && messages !== undefined ? (
-              <RoomEmpty room={room} members={members} onPick={(a) => insertMention(a)} />
+              <RoomEmpty
+                room={room}
+                members={members}
+                madeBy={room.createdBy ? agentsById.get(room.createdBy)?.name : undefined}
+                onPick={(a) => insertMention(a)}
+              />
             ) : (
               rows
             )}
@@ -1143,10 +1148,13 @@ function WhoShouldAnswer({
 function RoomEmpty({
   room,
   members,
+  madeBy,
   onPick,
 }: {
   room: Room;
   members: Agent[];
+  /** The agent that made it (the Chief's `create_room`), when one did. */
+  madeBy?: string;
   onPick: (agent: Agent) => void;
 }) {
   const lead = members.find((m) => m.id === room.lead);
@@ -1154,13 +1162,15 @@ function RoomEmpty({
     <div className="agent-chat__empty agent-room__empty">
       <RoomAvatars members={members} />
       <p className="agent-chat__empty-name">{room.name}</p>
+      {room.purpose && <p className="agent-chat__empty-role">{room.purpose}</p>}
       <p className="agent-chat__empty-role">
         {lead
           ? `Talk to everyone here at once. ${lead.name} answers unless you @ someone; @everyone asks all ${members.length}.`
           : `Talk to everyone here at once. @ who should answer, or @everyone to ask all ${members.length}.`}
       </p>
       <p className="agent-chat__empty-hint">
-        Each agent keeps its own memory, and remembers what it says here in its own chat too.
+        {madeBy && `${madeBy} made this room. `}Each agent keeps its own memory, and remembers what
+        it says here in its own chat too.
       </p>
       <div className="agent-chat__starters">
         {members.map((m) => (

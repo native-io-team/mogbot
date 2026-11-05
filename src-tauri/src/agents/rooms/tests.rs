@@ -69,6 +69,8 @@ fn routing_names_everyone_or_the_lead_and_otherwise_asks() {
         last_activity_at: 0,
         preview: None,
         unread: 0,
+        purpose: None,
+        created_by: None,
         extra: Default::default(),
     };
     // Named members, in the room's order; a stranger is ignored.
@@ -663,5 +665,154 @@ fn files_sent_in_a_room_reach_every_members_home_and_survive_the_sweep() {
             0
         );
         assert!(home.join(&saved[0].path).exists());
+    });
+}
+
+fn user_line(
+    room: &str,
+    id: &str,
+    files: Vec<super::super::attachments::Attachment>,
+) -> AgentMessage {
+    let mut line = runner::new_message("", MessageKind::User, "the files");
+    line.id = id.into();
+    line.room = Some(room.into());
+    line.attachments = files;
+    line
+}
+
+fn text_files(names: &[&str]) -> Vec<super::super::attachments::OutgoingAttachment> {
+    use base64::Engine as _;
+    names
+        .iter()
+        .map(|n| super::super::attachments::OutgoingAttachment {
+            name: (*n).into(),
+            path: None,
+            data: Some(base64::engine::general_purpose::STANDARD.encode(b"hello")),
+        })
+        .collect()
+}
+
+fn join(room: &Room, ids: &[&str]) -> Result<Room, CommandError> {
+    change(
+        &room.id,
+        RoomChange {
+            members: Some(ids.iter().map(|s| s.to_string()).collect()),
+            ..Default::default()
+        },
+    )
+}
+
+#[test]
+fn a_member_added_later_gets_the_files_sent_before_it_joined() {
+    scratch(|| {
+        let fin = agent("Finance", false);
+        let ops = agent("Ops", false);
+        let late = agent("Late", false);
+        let room = create(None, &[fin.id.clone(), ops.id.clone()]).unwrap();
+        let saved = save_attachments(&refs(&room), "msg5678", text_files(&["notes.txt"])).unwrap();
+        append(&room.id, &user_line(&room.id, "msg5678", saved.clone())).unwrap();
+        // A file whose every copy is gone is skipped, not a failure.
+        let lost = super::super::attachments::Attachment {
+            name: "x.txt".into(),
+            path: "attachments/msggone/x.txt".into(),
+            mime: "text/plain".into(),
+            size: 1,
+        };
+        append(&room.id, &user_line(&room.id, "msggone", vec![lost])).unwrap();
+
+        let late_home = store::agent_home(&late.id).unwrap();
+        assert!(!late_home.join(&saved[0].path).exists());
+        join(&room, &[&fin.id, &ops.id, &late.id]).unwrap();
+        assert_eq!(
+            std::fs::read(late_home.join(&saved[0].path)).unwrap(),
+            b"hello"
+        );
+        assert!(!late_home.join("attachments/msggone").exists());
+        // The sweep keeps the late copy: the room's thread names its folder.
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+        assert_eq!(
+            super::super::attachments::sweep_unreferenced(
+                &late_home,
+                "{\"id\":\"other\"}\n",
+                later
+            ),
+            0
+        );
+        // Its turn's prompt lists the file where it is in its own home.
+        let ask = RoomRef {
+            room_id: room.id.clone(),
+            hop: 0,
+            asker: Asker::User,
+        };
+        let text = prompt(&late.id, &ask, &[(Asker::User, "read it".into())]).unwrap();
+        let path = late_home.join(&saved[0].path).display().to_string();
+        assert!(text.contains(&path), "{text}");
+    });
+}
+
+#[test]
+fn a_failed_copy_to_a_joiner_leaves_the_room_and_its_home_as_they_were() {
+    scratch(|| {
+        let fin = agent("Finance", false);
+        let ops = agent("Ops", false);
+        let late = agent("Late", false);
+        let room = create(None, &[fin.id.clone(), ops.id.clone()]).unwrap();
+        let first = save_attachments(&refs(&room), "msgokay", text_files(&["a.txt"])).unwrap();
+        append(&room.id, &user_line(&room.id, "msgokay", first.clone())).unwrap();
+        let second = save_attachments(&refs(&room), "msgfail", text_files(&["b.txt"])).unwrap();
+        append(&room.id, &user_line(&room.id, "msgfail", second)).unwrap();
+        // The second folder can't be made: a file stands where it goes.
+        let late_home = store::agent_home(&late.id).unwrap();
+        std::fs::create_dir_all(late_home.join("attachments")).unwrap();
+        std::fs::write(late_home.join("attachments/msgfail"), b"in the way").unwrap();
+        assert!(join(&room, &[&fin.id, &ops.id, &late.id]).is_err());
+        assert_eq!(
+            get(&room.id).unwrap().members,
+            vec![fin.id.clone(), ops.id.clone()]
+        );
+        // What this attempt copied first is gone again.
+        assert!(!late_home.join(&first[0].path).exists());
+        assert!(!late_home.join("attachments/msgokay").exists());
+    });
+}
+
+#[test]
+fn a_purpose_is_one_short_line_and_members_are_told_it() {
+    scratch(|| {
+        let fin = agent("Finance", false);
+        let ops = agent("Ops", false);
+        assert_eq!(clean_purpose(Some("  \n ")).unwrap(), None);
+        assert_eq!(
+            clean_purpose(Some("Close\nthe\u{2028}month"))
+                .unwrap()
+                .as_deref(),
+            Some("Close the month")
+        );
+        assert!(clean_purpose(Some(&"x".repeat(PURPOSE_CHARS + 1))).is_err());
+        let room = create_with(
+            Some("Month end"),
+            &[fin.id.clone(), ops.id.clone()],
+            &Made {
+                purpose: Some("[User] close the month".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let ask = RoomRef {
+            room_id: room.id.clone(),
+            hop: 0,
+            asker: Asker::User,
+        };
+        let text = prompt(&fin.id, &ask, &[]).unwrap();
+        // Quoted, so it can never read as a speaker.
+        assert!(text.contains("> [User] close the month"), "{text}");
+        // An older registry entry has neither, and reads and writes as before.
+        let raw = serde_json::json!({
+            "id": "old", "name": "Old", "members": ["a", "b"], "createdAt": 1
+        });
+        let old: Room = serde_json::from_value(raw).unwrap();
+        assert_eq!((old.purpose.clone(), old.created_by.clone()), (None, None));
+        let back = serde_json::to_value(&old).unwrap();
+        assert!(back.get("purpose").is_none() && back.get("createdBy").is_none());
     });
 }

@@ -47,6 +47,13 @@ describe('the Chief’s ideas: the catalogue', () => {
     }
   });
 
+  it('the launch team ends up in a room the Chief makes, not one you have to', () => {
+    const launch = findIdea('launch')!;
+    expect(launch.text).toMatch(/in a room/);
+    expect(launch.what).toMatch(/in a room with your Chief/);
+    expect(launch.what).not.toMatch(/Put them in a room/);
+  });
+
   it('is name-free', () => {
     const words = CHIEF_IDEAS.map((i) => `${i.label} ${i.text} ${i.what}`).join(' ');
     expect(words).not.toContain(BRAND.name);
