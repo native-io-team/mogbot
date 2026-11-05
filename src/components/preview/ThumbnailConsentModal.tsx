@@ -39,13 +39,13 @@ export function ThumbnailConsentModal({
     >
       <div className="thumbnail-consent-body">
         <p>
-          Ship Studio takes a screenshot of its own preview window to show a thumbnail for each
-          project on your dashboard.
+          The app takes a screenshot of its own preview window to show a thumbnail for each project
+          on your dashboard.
         </p>
         <p>
           macOS calls this &ldquo;recording screen content&rdquo;, so it may ask for permission.
-          Nothing is recorded or sent anywhere &mdash; it&rsquo;s a single image of Ship
-          Studio&rsquo;s own window, saved locally inside your project.
+          Nothing is recorded or sent anywhere &mdash; it&rsquo;s a single image of the app&rsquo;s
+          own window, saved locally inside your project.
         </p>
         <div className="thumbnail-consent-actions">
           <Button variant="ghost" onClick={onDeny}>

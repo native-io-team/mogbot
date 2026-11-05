@@ -304,7 +304,7 @@ fn resent_note(queued: &[Inbound]) -> String {
         n => format!("{n} messages"),
     };
     format!(
-        "Sent {what} still waiting when Ship Studio closed: {}",
+        "Sent {what} still waiting when the app closed: {}",
         quoted.join(", ")
     )
 }
@@ -329,7 +329,7 @@ pub async fn recover_after_restart(app: &AppHandle) {
             if let (Some(project), Some(tree)) = (mark.project, mark.tree) {
                 record_changes(app, &agent.id, project.into(), tree).await;
             }
-            let text = "Ship Studio closed while this agent was working, so that turn didn't finish. Retry to send it again.";
+            let text = "The app closed while this agent was working, so that turn didn't finish. Retry to send it again.";
             let mut line = new_message(&agent.id, MessageKind::Error, text);
             line.failure = Some(super::failure::Failure::OTHER);
             let _ = record(app, line);
@@ -491,7 +491,7 @@ fn unsaved(app: &AppHandle, message: &AgentMessage, error: &CommandError) {
     let warning = new_message(
         &message.agent_id,
         MessageKind::Error,
-        "Couldn't save this conversation to disk, so what's shown here will be gone after Ship Studio restarts. Check that the disk isn't full.",
+        "Couldn't save this conversation to disk, so what's shown here will be gone after the app restarts. Check that the disk isn't full.",
     );
     let _ = app.emit(EVENT_MESSAGE, &warning);
 }
@@ -1397,7 +1397,7 @@ async fn run_turn(
     let home = store::agent_home(agent_id)?;
     std::fs::create_dir_all(&home).map_err(super::err_io)?;
     let binary = super::engine::binary(engine).await.ok_or_else(|| {
-        CommandError::expected(format!("{} isn't installed, or Ship Studio can't find it. Install it, or move this agent to another engine in Edit agent, then send this again.", engine.label()))
+        CommandError::expected(format!("{} isn't installed, or the app can't find it. Install it, or move this agent to another engine in Edit agent, then send this again.", engine.label()))
     })?;
     // How this turn runs it (Codex speaks app-server when it can).
     let driver = Driver::pick(engine, &binary).await;
@@ -2174,7 +2174,7 @@ mod tests {
         assert!(take_inbox("a1").is_empty(), "taken twice");
         assert_eq!(
             resent_note(&taken),
-            "Sent 2 messages still waiting when Ship Studio closed: “Also check the footer”, Finance's “Receipts filed.”"
+            "Sent 2 messages still waiting when the app closed: “Also check the footer”, Finance's “Receipts filed.”"
         );
         save_inbox("a1", &VecDeque::new());
         assert!(!store::agent_home("a1").unwrap().join("inbox.json").exists());

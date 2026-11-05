@@ -511,7 +511,7 @@ async fn probe(dns_name: &str, token: &str) -> Reachability {
         Ok(r) if r.status().is_success() => match r.json::<Value>().await {
             Ok(v) if v.get("result").is_some() => Reachability::Reachable,
             _ => Reachability::Unreachable {
-                detail: "Something answered at this address, but not Ship Studio.".into(),
+                detail: "Something answered at this address, but not this app.".into(),
             },
         },
         Ok(r) => Reachability::Unreachable {

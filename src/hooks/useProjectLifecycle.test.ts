@@ -163,7 +163,7 @@ describe('handleImportLocalFolder — expected-refusal routing (#518/#535)', () 
 
     const [message, type] = vi.mocked(params.showToast).mock.calls[0];
     expect(type).toBe('info');
-    expect(message).toContain('already in Ship Studio');
+    expect(message).toContain('already in your projects');
   });
 
   it('still surfaces genuine failures as error toasts and error logs', async () => {

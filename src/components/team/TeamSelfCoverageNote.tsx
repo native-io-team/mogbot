@@ -101,7 +101,7 @@ export function TeamSelfCoverageNote({
       </span>
 
       <p className="team-coverage-text">
-        <strong>Your pushes are not writing summaries.</strong> Ship Studio can see that you pushed;
+        <strong>Your pushes are not writing summaries.</strong> The app can see that you pushed;
         only the agent that did the work knows why it did it. Add a commit-message section to this
         project&rsquo;s agent instructions and every session reads it — the rows above stay as they
         are.

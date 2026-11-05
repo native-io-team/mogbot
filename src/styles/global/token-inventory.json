@@ -524,7 +524,7 @@
       "status": "migration",
       "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 18
+      "consumerCount": 16
     },
     {
       "name": "--size-control-standard",
@@ -3998,7 +3998,7 @@
       "owner": "global/core",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 39
+      "consumerCount": 38
     },
     {
       "name": "--space-06",
@@ -4088,7 +4088,7 @@
       "owner": "global/core",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 15
+      "consumerCount": 14
     },
     {
       "name": "--stroke-hairline",
@@ -4610,7 +4610,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 480
+      "consumerCount": 481
     },
     {
       "name": "--text-muted",
@@ -4619,7 +4619,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 793
+      "consumerCount": 794
     },
     {
       "name": "--text-faint",
@@ -4763,7 +4763,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 50
+      "consumerCount": 49
     },
     {
       "name": "--focus-ring",
@@ -5015,7 +5015,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 184
+      "consumerCount": 185
     },
     {
       "name": "--font-size-body-md",
@@ -5123,7 +5123,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 14
+      "consumerCount": 15
     },
     {
       "name": "--font-weight-label",

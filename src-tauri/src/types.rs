@@ -271,8 +271,7 @@ fn default_schema_version() -> u32 {
 }
 
 fn default_description() -> String {
-    "Ship Studio project metadata. Auto-generated - safe to delete if needed, will be recreated."
-        .to_string()
+    "Project metadata. Auto-generated - safe to delete if needed, will be recreated.".to_string()
 }
 
 impl Default for ProjectMetadata {

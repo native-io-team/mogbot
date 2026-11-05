@@ -496,7 +496,7 @@ export function AgentsPanel() {
       <DashboardCardDisclosure
         storageKey="shipstudio.dashboard.workspaceAccountsExpanded"
         defaultExpanded
-        title="Workspace accounts"
+        title="Accounts"
         className="agents-panel"
         subtitle={
           <p className="dashboard-card-subtitle text-style-body-medium">
@@ -510,7 +510,7 @@ export function AgentsPanel() {
                 {activeAccount.name}
               </span>
             )}{' '}
-            — each workspace signs in separately, like a separate client.
+            — each workspace signs in separately.
           </p>
         }
         aside={loading && <Spinner size="sm" className="agents-panel-spinner" />}

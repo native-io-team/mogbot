@@ -444,7 +444,7 @@ impl Backend for DesktopBackend {
     async fn session_key(&self, session_id: &str, key: &str) -> Result<(), CommandError> {
         use crate::remote_access::tools::{press, project_of_session, Undelivered};
         let project = project_of_session(&all_projects().await, session_id).ok_or_else(|| {
-            CommandError::expected("That session isn't open in Ship Studio any more.")
+            CommandError::expected("That session isn't open in the app any more.")
         })?;
         match press(&project, Some(session_id), key) {
             Ok(_) => Ok(()),

@@ -399,7 +399,7 @@ fn winget_installer_cancelled_error(
 fn winget_spawn_error(err: &std::io::Error) -> CommandError {
     if err.raw_os_error() == Some(1920) {
         return CommandError::expected(
-            "Windows wouldn't let Ship Studio start winget (the App Installer alias is \
+            "Windows wouldn't let the app start winget (the App Installer alias is \
              turned off or needs repairing). Open Settings → Apps → Advanced app settings → \
              App execution aliases and switch on \"App Installer (winget.exe)\", or update \
              App Installer from the Microsoft Store, then try again."

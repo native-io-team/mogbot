@@ -1418,7 +1418,7 @@ export const frames = [
   {
     "t": "refused",
     "reason": "update_mac",
-    "message": "Update Ship Studio on Julian’s MacBook Pro."
+    "message": "Update the app on Julian’s MacBook Pro."
   },
   {
     "t": "refused",

@@ -7,6 +7,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { BRAND } from '../lib/brand';
 
 export const DICTATION_EVENT = 'dictation://event';
 
@@ -58,17 +59,17 @@ export function blockedCopy(reason: DictationBlock): { message: string; settings
   switch (reason) {
     case 'microphone':
       return {
-        message: 'Ship Studio needs microphone access to dictate.',
+        message: `${BRAND.name} needs microphone access to dictate.`,
         settings: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
       };
     case 'speechRecognition':
       return {
-        message: 'Ship Studio needs speech recognition access to dictate.',
+        message: `${BRAND.name} needs speech recognition access to dictate.`,
         settings:
           'x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition',
       };
     case 'missingUsageDescription':
-      return { message: 'This build of Ship Studio can’t ask for microphone access.' };
+      return { message: 'This build can’t ask for microphone access.' };
     case 'unavailable':
       return { message: 'Speech recognition isn’t available on this Mac right now.' };
   }

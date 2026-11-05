@@ -246,7 +246,7 @@ fn register(app: &AppHandle, wanted: Option<String>, label: &str) -> Result<(), 
         shortcuts.register(next.as_str()).map_err(|e| {
             tracing::warn!("[Agents] quick entry shortcut {next}: {e}");
             CommandError::expected(format!(
-                "macOS didn't let Ship Studio use {label}. Another app may already use it; try another."
+                "macOS didn't let the app use {label}. Another app may already use it; try another."
             ))
         })?;
         *current = Some(next);

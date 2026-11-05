@@ -268,7 +268,7 @@ fn is_git_repository(project: &std::path::Path) -> bool {
 }
 
 /// Message used for the commit that finishes a Ship Studio conflict merge.
-const MERGE_COMMIT_MESSAGE: &str = "Resolved merge conflicts via Ship Studio";
+const MERGE_COMMIT_MESSAGE: &str = "Resolve merge conflicts";
 
 /// Run an index-mutating git invocation, retrying when it loses the
 /// `.git/index.lock` race.

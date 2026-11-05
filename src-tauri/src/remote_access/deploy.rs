@@ -72,8 +72,8 @@ pub(crate) fn describe(status: &HostingStatus) -> (Vec<String>, &'static str) {
     }
     if status.providers.is_empty() {
         return (
-            vec!["This project isn't connected to a host (Vercel, Cloudflare Pages or Netlify) in Ship Studio, so whether it deployed can't be checked from here.".into()],
-            "NEXT: Tell the user the push reached GitHub, and that Ship Studio can't see a host for this project — they can connect one in the Push menu at the computer.",
+            vec!["This project isn't connected to a host (Vercel, Cloudflare Pages or Netlify) on the computer, so whether it deployed can't be checked from here.".into()],
+            "NEXT: Tell the user the push reached GitHub, and that the app can't see a host for this project — they can connect one in the Push menu at the computer.",
         );
     }
     let mut lines = vec![format!(
@@ -92,7 +92,7 @@ pub(crate) fn describe(status: &HostingStatus) -> (Vec<String>, &'static str) {
         let label = p.link.provider.label();
         lines.push(match (&p.auth, &p.transport_error, &p.lookup) {
             (Auth::NoToken, _, _) => {
-                format!("{label}: Ship Studio isn't signed in to {label}, so it can't check.")
+                format!("{label}: the app isn't signed in to {label}, so it can't check.")
             }
             (Auth::Rejected, _, _) => format!(
                 "{label}: {label} rejected the saved sign-in; it needs renewing at the computer."

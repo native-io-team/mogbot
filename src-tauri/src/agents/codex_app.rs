@@ -526,7 +526,7 @@ impl Conversation {
                 let server = str_at(params, "/serverName").unwrap_or("").to_string();
                 if str_at(params, "/_meta/codex_approval_kind") != Some("mcp_tool_call") {
                     let refuse = format!(
-                        "[Ship Studio: the {server} connector asked for something this chat can't show: \"{message}\". Tell the user in one line what it needs; they can set it up in Codex.]"
+                        "[Note from the app: the {server} connector asked for something this chat can't show: \"{message}\". Tell the user in one line what it needs; they can set it up in Codex.]"
                     );
                     return vec![ask(
                         None,
@@ -602,7 +602,7 @@ impl Conversation {
                     .filter_map(|q| q.get("question")?.as_str().map(String::from))
                     .collect();
                 let refuse = format!(
-                    "[Ship Studio: questions can't be shown as a form in this chat. Ask the user in your reply, in plain words, and stop there: {}]",
+                    "[Note from the app: questions can't be shown as a form in this chat. Ask the user in your reply, in plain words, and stop there: {}]",
                     questions.join(" / ")
                 );
                 let none = json!({ "answers": {} });
@@ -612,7 +612,7 @@ impl Conversation {
             _ => vec![Out::Send(json!({
                 "jsonrpc": "2.0",
                 "id": id,
-                "error": { "code": -32601, "message": format!("Ship Studio doesn't handle {method}") },
+                "error": { "code": -32601, "message": format!("This app doesn't handle {method}") },
             }))],
         }
     }
@@ -663,8 +663,12 @@ pub async fn answer(app: &AppHandle, agent_id: &str, turn: u64, ask: Ask) -> Vec
     // The steer goes first: it is queued on the turn while the request is
     // still open, so the model reads it with the declined call's result
     // rather than racing it (verified: sent after, it can miss the turn).
-    let refused =
-        |message: String| vec![steer(format!("[Ship Studio: {message}]")), reply(&ask.deny)];
+    let refused = |message: String| {
+        vec![
+            steer(format!("[Note from the app: {message}]")),
+            reply(&ask.deny),
+        ]
+    };
     if let Some(note) = &ask.refuse {
         return vec![steer(note.clone()), reply(&ask.deny)];
     }

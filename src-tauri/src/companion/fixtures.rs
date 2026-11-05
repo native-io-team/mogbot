@@ -221,7 +221,7 @@ fn frames() -> Vec<ServerFrame> {
         ),
         (
             RefusedReason::UpdateMac,
-            "Update Ship Studio on Julian’s MacBook Pro.",
+            "Update the app on Julian’s MacBook Pro.",
         ),
         (
             RefusedReason::TooManyConnections,

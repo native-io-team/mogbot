@@ -98,7 +98,7 @@ describe('describeSchedule', () => {
     const trigger: WorkflowTrigger = { kind: 'interval', everyMinutes: 30 };
     expect(describeSchedule({ trigger, autoRun: false })).toBe('Every 30 min — auto-run off');
     expect(describeSchedule({ trigger, autoRun: true })).toBe(
-      'Every 30 min, while Ship Studio is open'
+      'Every 30 min, while the app is open'
     );
   });
 

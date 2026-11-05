@@ -118,8 +118,8 @@
   flex-shrink: 0;
 }
 
-/* Figma-specific hero geometry: the 48px mark, 16px type gap, and 24px
-   vertical padding create the intended compact display block. */
+/* Figma-specific hero geometry: 24px vertical padding around the headline
+   creates the intended compact display block. */
 .dashboard-hero {
   position: relative;
   display: flex;
@@ -146,56 +146,6 @@
 
 .dashboard-hero-hide:hover {
   color: var(--text-primary);
-}
-
-.dashboard-hero-icon {
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
-}
-
-.dashboard-hero-icon-button {
-  display: flex;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.dashboard-hero-icon-button:focus-visible {
-  outline: var(--stroke-2) solid var(--accent-focus);
-  outline-offset: var(--space-04);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .dashboard-hero-icon-button:not(.dashboard-hero-icon-button--hover-suppressed):hover
-    .dashboard-hero-icon {
-    animation: dashboard-hero-icon-pulse var(--transition-slow);
-  }
-
-  .dashboard-hero-icon--click-pulsing {
-    animation: dashboard-hero-icon-click-pulse var(--transition-slow);
-  }
-}
-
-@keyframes dashboard-hero-icon-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.08);
-  }
-}
-
-@keyframes dashboard-hero-icon-click-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.16);
-  }
 }
 
 .dashboard-hero-title {

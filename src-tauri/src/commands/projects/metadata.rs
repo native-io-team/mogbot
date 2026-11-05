@@ -114,7 +114,7 @@ mod save_project_metadata_tests {
 
         // Verbatim v3 shape, including the removed block with its stale URLs.
         let v3 = r#"{
-  "_description": "Ship Studio project metadata. Auto-generated - safe to delete if needed, will be recreated.",
+  "_description": "Project metadata. Auto-generated - safe to delete if needed, will be recreated.",
   "schema_version": 3,
   "last_opened": 1755000000000,
   "custom_dev_command": "pnpm dev",

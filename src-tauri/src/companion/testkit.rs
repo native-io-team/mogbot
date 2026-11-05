@@ -747,7 +747,7 @@ impl Backend for Stub {
         let screen = session_screen();
         if screen.session.session_id != session_id {
             return Err(CommandError::expected(
-                "That session isn't open in Ship Studio any more.",
+                "That session isn't open in the app any more.",
             ));
         }
         Ok(serde_json::to_value(screen).unwrap())

@@ -636,7 +636,7 @@ async fn serve_file(file_path: &Path) -> Result<Response<ServerBody>, hyper::Err
                     "[StaticServer] Permission denied reading {} (os error 1) — likely missing Full Disk Access / Files & Folders access on macOS",
                     file_path.display()
                 );
-                let body = "<html><body><h1>403 - Permission Denied</h1><p>Ship Studio isn't allowed to read this project's files. Grant access in System Settings → Privacy & Security → Files & Folders (or Full Disk Access), then reload the preview.</p></body></html>";
+                let body = format!("<html><body><h1>403 - Permission Denied</h1><p>{} isn't allowed to read this project's files. Grant access in System Settings → Privacy & Security → Files & Folders (or Full Disk Access), then reload the preview.</p></body></html>", crate::brand::NAME);
                 return Ok(Response::builder()
                     .status(StatusCode::FORBIDDEN)
                     .header("Content-Type", "text/html; charset=utf-8")

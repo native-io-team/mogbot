@@ -103,9 +103,9 @@ describe('app icon setting', () => {
   });
 
   it('reads a valid persisted icon', async () => {
-    invokeMock.mockResolvedValueOnce('dark');
+    invokeMock.mockResolvedValueOnce('light');
 
-    await expect(getAppIcon()).resolves.toBe('dark');
+    await expect(getAppIcon()).resolves.toBe('light');
     expect(invokeMock).toHaveBeenCalledWith('get_app_icon');
   });
 

@@ -91,7 +91,7 @@ impl ImportSummary {
                 .collect();
             parts.push(format!("Routines set ({}).", set.join("; ")));
         }
-        let mut next = String::from("NEXT: Tell the user their agents are in Ship Studio → Agents, each with its instructions and memory. They don't start working until the user messages them, except for their routines, which run only while Ship Studio is open on this Mac.");
+        let mut next = String::from("NEXT: Tell the user their agents are in Agents on this computer, each with its instructions and memory. They don't start working until the user messages them, except for their routines, which run only while the app is open on this Mac.");
         if !self.routines_refused.is_empty() {
             let refused: Vec<String> = self
                 .routines_refused
@@ -99,11 +99,11 @@ impl ImportSummary {
                 .map(|r| format!("{}: \"{}\" ({})", r.agent, r.when, r.detail))
                 .collect();
             parts.push(format!("Routines NOT set: {}.", refused.join("; ")));
-            next.push_str(" List every routine that was NOT set, word for word, and offer to resend it with a time Ship Studio understands (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\", \"friday at 14:30\"); importing again is safe.");
+            next.push_str(" List every routine that was NOT set, word for word, and offer to resend it with a time the schedule understands (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\", \"friday at 14:30\"); importing again is safe.");
         }
-        next.push_str(" Connections your platform had (email, calendar and so on) don't come across: in Ship Studio, agents use whatever this computer and Claude Code are connected to.");
+        next.push_str(" Connections your platform had (email, calendar and so on) don't come across: here, agents use whatever this computer and Claude Code are connected to.");
         format!(
-            "Imported from {source} into Ship Studio Agents. {}\n\n{next}",
+            "Imported from {source} into Agents. {}\n\n{next}",
             parts.join(" ")
         )
     }
@@ -264,7 +264,7 @@ pub fn import_and_notify(
 }
 
 /// The words the user pastes into their other assistant to start an import.
-pub const IMPORT_PROMPT: &str = "Import my setup into Ship Studio. Use Ship Studio's import_agents tool: send every agent I have with you, each with its name, a one-line role, its full instructions, and everything you remember that it needs (one fact per line). Mark the agent that manages the others as the main one. Include each agent's routines and automations, with when each runs in plain words (\"every weekday at 9am\", \"every 2 hours\") and what it does then. Leave out passwords, API keys and card numbers.";
+pub const IMPORT_PROMPT: &str = "Import my setup into the app I just connected you to. Use its import_agents tool: send every agent I have with you, each with its name, a one-line role, its full instructions, and everything you remember that it needs (one fact per line). Mark the agent that manages the others as the main one. Include each agent's routines and automations, with when each runs in plain words (\"every weekday at 9am\", \"every 2 hours\") and what it does then. Leave out passwords, API keys and card numbers.";
 
 #[cfg(test)]
 mod tests {

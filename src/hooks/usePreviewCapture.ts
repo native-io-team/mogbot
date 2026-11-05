@@ -17,6 +17,7 @@ import { isMac } from '../lib/setup';
 import { setThumbnailsEnabled } from '../lib/settings';
 import { isPermissionDenialError } from '../lib/thumbnailGate';
 import { asCommandError, formatCommandError } from '../lib/errors';
+import { BRAND } from '../lib/brand';
 
 /** Real underlying message for a capture failure (never "[object Object]"). */
 const captureErrorMessage = (error: unknown): string => formatCommandError(asCommandError(error));
@@ -82,7 +83,8 @@ export function usePreviewCapture({
     const windows = await getScreenshotableWindows();
     const ourWindow = windows.find(
       (w) =>
-        w.title?.toLowerCase().includes('ship studio') || w.title?.toLowerCase().includes('tauri')
+        w.title?.toLowerCase().includes(BRAND.name.toLowerCase()) ||
+        w.title?.toLowerCase().includes('tauri')
     );
 
     if (!ourWindow) {
@@ -92,10 +94,10 @@ export function usePreviewCapture({
       // returning null (the message doubles as the denial-detection signal).
       throw new Error(
         isMac()
-          ? "Ship Studio's window isn't visible to macOS screen capture — Screen Recording " +
-              'permission was likely denied. Allow Ship Studio in System Settings → ' +
+          ? `${BRAND.name}'s window isn't visible to macOS screen capture — Screen Recording ` +
+              `permission was likely denied. Allow ${BRAND.name} in System Settings → ` +
               'Privacy & Security → Screen Recording, then try again.'
-          : "Ship Studio's window wasn't found in the list of capturable windows."
+          : "The app's window wasn't found in the list of capturable windows."
       );
     }
 

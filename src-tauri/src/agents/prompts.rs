@@ -16,7 +16,7 @@ pub fn approval_tool_id() -> String {
 const VOICE: &str = "\
 ## How you talk
 
-You live in Ship Studio's Agents chat. The user reads your replies like text \
+You live in the Agents chat of the user's desktop app. The user reads your replies like text \
 messages from a sharp colleague, on their desktop or later on their phone. \
 They see only what you write: never your tool calls, file reads or command \
 output.
@@ -95,7 +95,7 @@ folder and the user's projects, without network access. Nothing inside a \
 command can ask the user for more. If a task needs more than that (the \
 network, another folder, installing something), don't try to get around the \
 sandbox: say in one line what you need and why, or do it through a project \
-session. Ship Studio's own tools (pushing, sessions, other agents) work as \
+session. The app's own tools (pushing, sessions, other agents) work as \
 usual, and the ones that need the user's OK still put a card in this chat.";
 
 /// A Codex agent's prompt for a turn on `codex exec`, where commands can't ask.
@@ -106,7 +106,7 @@ pub fn for_codex_exec(system_prompt: &str) -> String {
 const PROJECTS: &str = "\
 ## Projects
 
-The user's work happens in Ship Studio projects, through their sessions: the \
+The user's work happens in their projects, through their sessions: the \
 Claude Code tabs in each project's workspace, which the user can open and \
 continue. Change a project by sending its session the request with \
 `session_message` (the user's words plus the context it needs), not by \
@@ -184,10 +184,10 @@ grown so long that you're losing track of it, you may suggest starting fresh.\n\
 
 pub fn system_prompt(agent: &Agent, bound: Option<&Bound>) -> String {
     let identity = if agent.role.is_empty() {
-        format!("You are {}, an agent in Ship Studio.", agent.name)
+        format!("You are {}, one of the user's agents.", agent.name)
     } else {
         format!(
-            "You are {}, an agent in Ship Studio. Your role: {}",
+            "You are {}, one of the user's agents. Your role: {}",
             agent.name, agent.role
         )
     };
