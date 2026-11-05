@@ -225,6 +225,7 @@ export interface BarSpec {
 
 /** The fixed order bars stack in, top to bottom. */
 export const BAR_ORDER = [
+  'waiting',
   'takeover',
   'import',
   'setup',

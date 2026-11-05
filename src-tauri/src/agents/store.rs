@@ -1936,9 +1936,13 @@ pub fn pending_approvals(agent_id: &str) -> Result<Vec<Approval>, CommandError> 
 pub fn expire_stale_approvals() {
     let Ok(agents) = list() else { return };
     for agent in agents {
-        super::expiry::sweep_store(&agent.id, super::expiry::Moment::Launch, now_ms(), &|_| {
-            false
-        });
+        let changed =
+            super::expiry::sweep_store(&agent.id, super::expiry::Moment::Launch, now_ms(), &|_| {
+                false
+            });
+        if !changed.is_empty() {
+            refresh_pending(&agent.id);
+        }
     }
 }
 

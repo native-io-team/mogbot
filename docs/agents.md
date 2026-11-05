@@ -713,14 +713,31 @@ calls):
   anything that spawns, reaches the network, deletes or names a protected
   place. That last check reads only the script, not what it imports (not
   verified beyond that).
+  Also local work: `git fetch` / `git pull` (no helper programs or `ext::`
+  remotes), `curl` / `wget` GETs to http(s) with no body, form, upload or
+  config file; writing inside `/tmp`, `/private/tmp` and macOS's `$TMPDIR`;
+  installing *named* packages (`npm/pnpm/yarn/bun install|add|ci`, `pnpm
+  dlx`, `npx`/`uvx` of a named package, `pip`/`uv`/`pipx install`, `cargo
+  add|install`, `go get|install`, `brew install|upgrade`) — never global
+  (`-g`, `--prefix`, `--target`, `--break-system-packages`), never from a raw
+  address (`https://…`, `git+…`, `github:…`, a tarball); and anything on a
+  top-level folder this Mac doesn't have and this account can't make
+  (`/workspace/…`, Grok-era paths: it fails at once). Web searches and page
+  fetches (`WebSearch`, `WebFetch`, Codex's web search) are reads.
 - **Always a card, at every level** (`autoallow::ALWAYS_ASK` plus everything
-  unrecognised): `git push` and every other git write, `gh` writes, `curl`,
-  `wget` and any network transfer, mail/Slack/hosting/cloud CLIs, `npm
-  publish` and every install (`brew`, `npm install`, `pip install`…), `rm` /
-  `trash` of the user's files, `sudo`, `chown`, `chmod` on system paths,
-  launch agents and shell profiles, `security`, `osascript`, `open`, `kill`,
-  connector tools, web pages and searches, payments, and Codex's "Allow more
-  access" cards.
+  unrecognised): `git push`, `commit`, `reset` and every other git write,
+  `gh` writes (`pr create|comment|review|merge|close|edit`, `release create`,
+  `gh api` with a non-GET method, fields without `-X GET`, `--input` or
+  `graphql`), `curl`/`wget` with a method other than GET/HEAD or a body,
+  other network tools, mail/Slack/hosting/cloud CLIs, `npm publish`,
+  installs from raw addresses or global ones, `curl … | sh`, `rm` / `trash`
+  of the user's files, `sudo`, `chown`, `chmod` on system paths, launch
+  agents and shell profiles, `security`, `osascript`, `open`, `kill`,
+  connector tools, payments, and Codex's "Allow more access" cards.
+- **Loops and variables**: `for NAME in …; do …; done`, `while`/`until`/`if`
+  and a line that only sets a variable (`RID=$(gh run list …)`) take the
+  class of the commands inside; a variable that changes how programs run
+  (`PATH`, `IFS`, `DYLD_*`, `GIT_*`, an exported name…) asks.
 - **Compound commands** are split into every command they run (`&&`, `||`,
   `;`, `|`, `&`, line breaks, `$(…)`, backticks, `bash -c '…'`) and take the
   class of the most dangerous part. Variables other than `$HOME`,
@@ -1119,10 +1136,11 @@ place the independence level changes an approval, and only for the browser:
 
 A browser card says what it would do in plain words ("Click “Send” on
 mail.google.com", "This would send it as you"), then what it types or fills and where and as whom (`browser::card_for`: the site last opened and the account found there, `browser_profiles`), with the raw call behind
-Details. Allowed steps leave only their line in "What it did". At launch,
-pending browser cards the current rules wouldn't ask about are answered Allow
-(`mcp::allow_open_browser_cards`), with one receipt line per agent, and the
-agent woken once. Turns answering outside text still never get the browser.
+Details. Allowed steps leave only their line in "What it did". At launch every
+pending browser card expires with the rest (its turn is gone); when the user
+changes the level, an open browser card whose turn is still waiting and that
+the browser gate now lets through is allowed with a receipt
+(`mcp::sweep_auto_allowed`). Turns answering outside text still never get the browser.
 `browser_sites` only ever holds a catalogue service's built-in host
 (`logins::SERVICES`): the access chain, a login card's "Use my browser" and
 the reach check add one; nothing an agent or an import types becomes a site.
