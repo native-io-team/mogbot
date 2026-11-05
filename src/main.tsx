@@ -11,6 +11,8 @@
  */
 
 import './instrument';
+// Before any React root: keeps infinite CSS animations on the compositor.
+import './lib/noAnimationIterationListeners';
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';

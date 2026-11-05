@@ -95,6 +95,11 @@ export function useFollowBottom(
   atBottomRef: RefObject<boolean>
 ) {
   const glideUntil = useRef(0);
+  /** When the reader last touched the scroll: wheel, touch, a key, the scrollbar. */
+  // Never, to begin with: 0 would read as "just now" for the first second
+  // after the page loads (performance.now() starts at 0), and a chat opened
+  // then (the Chief, on launch) stopped following as its lines settled.
+  const lastInput = useRef(-Infinity);
 
   const follow = useCallback(
     (smooth: boolean) => {
@@ -114,18 +119,29 @@ export function useFollowBottom(
   );
 
   const isGliding = useCallback(() => performance.now() < glideUntil.current, []);
+  /**
+   * Whether a scroll could be the reader's. A scroll nobody asked for (the
+   * browser clamping after lines above were drawn at their real height, say)
+   * is not the reader leaving the bottom, and must not stop the following.
+   */
+  const readerScrolled = useCallback(() => performance.now() - lastInput.current < 1000, []);
 
   useEffect(() => {
     const el = scrollRef.current;
     const content = contentRef.current;
     if (!el || !content) return;
+    // The reader took the scroll: any glide is over, and what scrolls next is theirs.
     const stop = () => {
       glideUntil.current = 0;
+      lastInput.current = performance.now();
     };
     // A glide that has landed is over: growth after it (a reply streaming)
-    // snaps in the same frame instead of riding a stale smooth scroll.
+    // snaps in the same frame instead of riding a stale smooth scroll. Not
+    // the reader's doing, so it isn't counted as input: it was, and every
+    // follow that landed made the next second's layout shifts (lines drawn
+    // at their real height) read as the reader leaving the bottom.
     const landed = () => {
-      if (el.scrollHeight - el.clientHeight - el.scrollTop < 1) stop();
+      if (el.scrollHeight - el.clientHeight - el.scrollTop < 1) glideUntil.current = 0;
     };
     const observer = new ResizeObserver(() => {
       if (atBottomRef.current) follow(false);
@@ -139,16 +155,19 @@ export function useFollowBottom(
     el.addEventListener('wheel', stop, { passive: true });
     el.addEventListener('touchstart', stop, { passive: true });
     el.addEventListener('keydown', stop);
+    // The scrollbar, and a middle-click autoscroll.
+    el.addEventListener('pointerdown', stop, { passive: true });
     return () => {
       observer.disconnect();
       el.removeEventListener('scroll', landed);
       el.removeEventListener('wheel', stop);
       el.removeEventListener('touchstart', stop);
       el.removeEventListener('keydown', stop);
+      el.removeEventListener('pointerdown', stop);
     };
   }, [scrollRef, contentRef, atBottomRef, follow]);
 
-  return { follow, isGliding };
+  return { follow, isGliding, readerScrolled };
 }
 
 /**

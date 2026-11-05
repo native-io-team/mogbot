@@ -171,22 +171,33 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
     promoteTitleAttributes(document.body);
 
     const observer = new MutationObserver((mutations) => {
+      // Each added subtree is scanned once: a node added inside another one
+      // added in the same batch is covered by its ancestor's scan.
+      const added = new Set<Element>();
       mutations.forEach((mutation) => {
         if (mutation.type === 'attributes' && mutation.target instanceof Element) {
           const content = readTooltipContent(mutation.target);
-          if (
-            mutation.attributeName === 'data-tooltip-content' &&
-            mutation.target === anchorRef.current
-          ) {
+          // A title changing on the shown anchor is promoted just above, and
+          // that write's own record is dropped below: update from either.
+          if (mutation.target === anchorRef.current) {
             setState(content ? { content: content.content, text: content.text } : null);
           }
           return;
         }
 
         mutation.addedNodes.forEach((node) => {
-          if (node instanceof Element) promoteTitleAttributes(node);
+          if (node instanceof Element) added.add(node);
         });
       });
+      added.forEach((node) => {
+        for (let up = node.parentElement; up; up = up.parentElement) {
+          if (added.has(up)) return;
+        }
+        if (node.isConnected) promoteTitleAttributes(node);
+      });
+      // What promoting just did (a title moved to data-tooltip-content) is
+      // ours, already handled: not another round of records to read back.
+      observer.takeRecords();
     });
 
     observer.observe(document.body, {

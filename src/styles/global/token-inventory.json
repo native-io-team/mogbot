@@ -893,7 +893,7 @@
       "owner": "WorkspaceSidebar",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 2
+      "consumerCount": 1
     },
     {
       "name": "--size-sidebar-server-glow-rest-outer-radius",
@@ -902,7 +902,7 @@
       "owner": "WorkspaceSidebar",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 2
+      "consumerCount": 1
     },
     {
       "name": "--size-sidebar-server-glow-current-inner-radius",
@@ -911,7 +911,7 @@
       "owner": "WorkspaceSidebar",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 2
+      "consumerCount": 1
     },
     {
       "name": "--size-sidebar-server-glow-current-outer-radius",
@@ -920,7 +920,7 @@
       "owner": "WorkspaceSidebar",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 2
+      "consumerCount": 1
     },
     {
       "name": "--duration-sidebar-server-glow",
@@ -929,7 +929,7 @@
       "owner": "global/component",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 1
+      "consumerCount": 3
     },
     {
       "name": "--spotify-widget-progress-height",
@@ -1082,7 +1082,7 @@
       "owner": "global/component",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--pixel-loader-glow-tight",
@@ -1217,7 +1217,7 @@
       "owner": "global/component",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--pixel-loader-duration-ripple",
