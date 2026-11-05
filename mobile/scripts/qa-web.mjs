@@ -597,6 +597,13 @@ const LIVE = [
     check: '"Start of your conversation" is a Line with no stacked padding',
   },
   {
+    name: 'signin-linkedin',
+    route: '/signin?agentId=qa&requestId=req_login_linkedin',
+    ready: 'Close',
+    settle: 2500,
+    check: 'Sign in on the Mac from here, on a route that cannot carry it: refused in words, Close',
+  },
+  {
     name: 'chat-qa',
     route: '/chat/qa',
     ready: 'QA 2',
@@ -659,7 +666,8 @@ const LIVE = [
       await page.clickLabel('Dictate');
       await sleep(900);
     },
-    check: 'Permission refused: the plain line over the field and an Open Settings chip; the mic still there',
+    check:
+      'Permission refused: the plain line over the field and an Open Settings chip; the mic still there',
     after: async (page) => {
       await page.eval(`globalThis.__qaDictation = {}`);
     },
@@ -738,7 +746,8 @@ const LIVE = [
     route: '/agent/qa',
     ready: 'QA 2',
     act: scrollToText('WHAT IT CAN REACH'),
-    check: 'What it can reach: Google Calendar connection, your browser, read-only with "Change this on your Mac."',
+    check:
+      'What it can reach: Google Calendar connection, your browser, read-only with "Change this on your Mac."',
   },
   {
     name: 'policy',
@@ -845,7 +854,8 @@ const LIVE = [
     route: '/settings',
     ready: 'Largest',
     act: scrollToText('Largest'),
-    check: 'Text size: Smaller / Default / Larger / Largest, each "Aa" drawn at its own size, Default ticked',
+    check:
+      'Text size: Smaller / Default / Larger / Largest, each "Aa" drawn at its own size, Default ticked',
   },
   ...['smaller', 'larger', 'largest'].map((size) => ({
     name: `text-${size}-chat`,

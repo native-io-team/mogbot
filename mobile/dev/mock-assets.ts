@@ -93,6 +93,28 @@ export function siteScreenshot(): Buffer {
   );
 }
 
+/** A site's sign-in page as the Mac's Chrome would show it (fictional). */
+export function signinPage(): Buffer {
+  const W = 800;
+  const field: RGB = [255, 255, 255];
+  const line: RGB = [210, 210, 216];
+  return png(
+    W,
+    560,
+    [244, 244, 246],
+    [
+      { x: 250, y: 60, w: 300, h: 400, color: [255, 255, 255], r: 14 },
+      { x: 330, y: 92, w: 140, h: 26, color: [17, 17, 17], r: 6 },
+      { x: 280, y: 160, w: 240, h: 44, color: line, r: 8 },
+      { x: 282, y: 162, w: 236, h: 40, color: field, r: 7 },
+      { x: 280, y: 222, w: 240, h: 44, color: line, r: 8 },
+      { x: 282, y: 224, w: 236, h: 40, color: field, r: 7 },
+      { x: 280, y: 292, w: 240, h: 44, color: [77, 143, 245], r: 8 },
+      { x: 280, y: 372, w: 240, h: 44, color: line, r: 8 },
+    ]
+  );
+}
+
 /** A sheet of icons, as a design agent might export them. */
 export function iconSheet(): Buffer {
   const tints: RGB[] = [

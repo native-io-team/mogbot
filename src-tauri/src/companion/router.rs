@@ -41,6 +41,11 @@ pub const METHODS: &[&str] = &[
     "agents.loginDismiss",
     "agents.loginPhoneBegin",
     "agents.loginPhoneFinish",
+    "agents.signinBegin",
+    "agents.signinFrame",
+    "agents.signinInput",
+    "agents.signinDone",
+    "agents.signinStop",
     "agents.focus",
     "agents.markUnread",
     "agents.startFresh",
@@ -121,6 +126,18 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "rooms.messages",
     "projects.list",
     "sessions.read",
+];
+
+/// Signing in on the Mac from the phone (`agents/phone_signin.rs`): never
+/// audited by the router. Frames and inputs aren't audited at all (what's
+/// typed is a password); the session writes its own line, the domain and
+/// how it ended.
+pub const SELF_AUDITED_METHODS: &[&str] = &[
+    "agents.signinBegin",
+    "agents.signinFrame",
+    "agents.signinInput",
+    "agents.signinDone",
+    "agents.signinStop",
 ];
 
 /// How long a `clientId` is remembered.
@@ -515,6 +532,14 @@ pub trait Backend: Send + Sync + 'static {
         flow_id: &str,
         callback: &str,
     ) -> Result<(), CommandError>;
+    /// Signing in on this Mac's Chrome from the phone
+    /// (`agents/phone_signin.rs`), for the paired device calling.
+    async fn phone_signin(
+        &self,
+        device_id: &str,
+        device_name: &str,
+        op: crate::agents::phone_signin::Op,
+    ) -> Result<Value, CommandError>;
     /// `agents_login_cancel`: stop a sign-in under way.
     async fn login_cancel(&self, agent_id: &str, request_id: &str) -> Result<(), CommandError>;
     /// `agents_login_decline`.
@@ -879,6 +904,29 @@ struct PhoneBeginParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SigninBeginParams {
+    agent_id: String,
+    request_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SigninParams {
+    session_id: String,
+    #[serde(default)]
+    anyway: bool,
+}
+
+/// `Debug` is `Input`'s: never what was typed.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SigninInputParams {
+    session_id: String,
+    input: crate::agents::phone_signin::Input,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PhoneFinishParams {
     flow_id: String,
     /// The redirect the sign-in sheet came back with. Never logged.
@@ -1139,6 +1187,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             }
         ),
         "agents.loginPhoneFinish" => "finished signing in on the phone".into(),
+        // Never read: what's typed there is a password.
+        m if SELF_AUDITED_METHODS.contains(&m) => "phone sign-in".into(),
         // Never the value.
         "agents.loginSaveKey" => format!("saved a key for {}", field("agentId")),
         "agents.memoryChange" => {
@@ -1222,6 +1272,54 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
     }
 }
 
+/// A phone sign-in request, parsed. A refusal says what's wrong with it,
+/// never what was typed.
+fn signin_op(method: &str, params: Value) -> Result<crate::agents::phone_signin::Op, WireError> {
+    use crate::agents::phone_signin::Op;
+    let id = |s: &str| -> Result<(), WireError> {
+        if s.is_empty() || s.len() > 100 {
+            return Err(bad_params("Which sign-in?"));
+        }
+        Ok(())
+    };
+    Ok(match method {
+        "agents.signinBegin" => {
+            let p: SigninBeginParams = parse(params)?;
+            id(&p.agent_id)?;
+            id(&p.request_id)?;
+            Op::Begin {
+                agent_id: p.agent_id,
+                request_id: p.request_id,
+            }
+        }
+        "agents.signinInput" => {
+            let p: SigninInputParams =
+                parse(params).map_err(|_| bad_params("That isn't something the page can take."))?;
+            id(&p.session_id)?;
+            Op::Input {
+                session_id: p.session_id,
+                input: p.input,
+            }
+        }
+        _ => {
+            let p: SigninParams = parse(params)?;
+            id(&p.session_id)?;
+            match method {
+                "agents.signinFrame" => Op::Frame {
+                    session_id: p.session_id,
+                },
+                "agents.signinDone" => Op::Done {
+                    session_id: p.session_id,
+                    anyway: p.anyway,
+                },
+                _ => Op::Stop {
+                    session_id: p.session_id,
+                },
+            }
+        }
+    })
+}
+
 /// Run one request, with the rate limit and the audit line around it.
 pub async fn dispatch(
     c: &Companion,
@@ -1243,7 +1341,7 @@ pub async fn dispatch(
     }
     let detail = audit_detail(method, &params);
     let result = run(c, caller, method, params).await;
-    if !READ_ONLY_METHODS.contains(&method) {
+    if !READ_ONLY_METHODS.contains(&method) && !SELF_AUDITED_METHODS.contains(&method) {
         let (detail, ok) = match &result {
             Ok(_) => (detail, true),
             Err(e) => (
@@ -1692,6 +1790,11 @@ async fn run(
                 .await?;
             Ok(Value::Null)
         }
+        m if SELF_AUDITED_METHODS.contains(&m) => {
+            let op = signin_op(m, params)?;
+            Ok(b.phone_signin(&caller.device_id, &caller.device_name, op)
+                .await?)
+        }
         "agents.loginCancel" => {
             let p: LoginParams = parse(params)?;
             b.login_cancel(&p.agent_id, &p.request_id).await?;
@@ -2096,6 +2199,84 @@ mod tests {
             .unwrap()
             .to_lowercase()
             .contains("token\""));
+    }
+
+    /// Signing in on the Mac's Chrome from the phone: every call carries the
+    /// caller's own device id, what's typed never reaches the audit or the
+    /// backend's record, and nothing past the parse is echoed back.
+    #[tokio::test]
+    async fn a_phone_sign_in_in_the_macs_chrome_never_audits_or_echoes_what_is_typed() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let secret = "correct-horse-battery-staple";
+        let begun = dispatch(
+            &c,
+            &me,
+            "agents.signinBegin",
+            json!({ "agentId": AGENT, "requestId": "q12" }),
+        )
+        .await
+        .unwrap();
+        let id = begun["sessionId"].as_str().unwrap().to_string();
+        dispatch(&c, &me, "agents.signinFrame", json!({ "sessionId": id }))
+            .await
+            .unwrap();
+        for input in [
+            json!({ "kind": "tap", "x": 10, "y": 20 }),
+            json!({ "kind": "type", "text": secret, "secure": true }),
+            json!({ "kind": "key", "key": "enter" }),
+            json!({ "kind": "back" }),
+        ] {
+            dispatch(
+                &c,
+                &me,
+                "agents.signinInput",
+                json!({ "sessionId": id, "input": input }),
+            )
+            .await
+            .unwrap();
+        }
+        // Refused at the parse, without saying what it was.
+        for bad in [
+            json!({ "sessionId": id, "input": { "kind": "key", "key": "cmd+l", "text": secret } }),
+            json!({ "sessionId": id, "input": { "kind": "navigate", "url": secret } }),
+            json!({ "sessionId": "", "input": { "kind": "type", "text": secret } }),
+        ] {
+            let e = dispatch(&c, &me, "agents.signinInput", bad)
+                .await
+                .unwrap_err();
+            assert!(!format!("{e:?}").contains(secret));
+        }
+        dispatch(&c, &me, "agents.signinDone", json!({ "sessionId": id }))
+            .await
+            .unwrap();
+        dispatch(&c, &me, "agents.signinStop", json!({ "sessionId": id }))
+            .await
+            .unwrap();
+        let record = stub.logins.lock().unwrap().join("\n");
+        assert!(!record.contains(secret), "{record}");
+        assert!(record.lines().all(|l| l.ends_with("by dev_a")), "{record}");
+        assert!(
+            record.contains("Type { chars: 28, secure: true }"),
+            "{record}"
+        );
+        // The router writes no line for any of it: the session writes its own.
+        let audited = stub.audited();
+        assert!(
+            audited
+                .iter()
+                .all(|(_, m, d, _)| !m.starts_with("agents.signin") && !d.contains(secret)),
+            "{audited:?}"
+        );
+        assert_eq!(
+            audit_detail("agents.signinInput", &json!({ "text": secret })),
+            "phone sign-in"
+        );
+        for m in SELF_AUDITED_METHODS {
+            assert!(METHODS.contains(m));
+            assert!(!READ_ONLY_METHODS.contains(m));
+        }
     }
 
     /// Signing in on the phone itself: the sheet is begun for the caller's

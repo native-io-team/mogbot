@@ -25,6 +25,7 @@ import {
   type LoginRequest,
 } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
 import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, TextInput, View } from 'react-native';
 import { haptic } from '../lib/haptics';
@@ -49,6 +50,7 @@ import {
   primaryOption,
   saveLoginKey,
 } from '../lib/logins';
+import { signinHereLine } from '../lib/signinView';
 import { currentTransport, describeError, secretRouteProblem } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
 import { CARD_TITLE_SCALE, fonts, space, type } from '../lib/theme';
@@ -88,6 +90,9 @@ export function LoginCard({
   const title = loginTitle(approval, login, agent.name);
   const phoneSignIn = useServed('agents.loginPhoneBegin', MAC_FEATURES.loginsPhone);
   const way = (o: LoginOption) => phoneWay(o, phoneSignIn, hasSignInSheet());
+  // The Mac's Chrome, driven from here, for a card whose way in is the browser.
+  const signinServed = useServed('agents.signinBegin', MAC_FEATURES.signinPhone);
+  const router = useRouter();
 
   const wipe = () => {
     value.current = '';
@@ -370,6 +375,25 @@ export function LoginCard({
           </T>
         </View>
       ))}
+      {signinServed && login.options.some((o) => o.method === 'browser') && (
+        <View style={styles.other}>
+          <Button
+            title="Sign in from here"
+            variant="outline"
+            disabled={off}
+            onPress={() =>
+              router.push({
+                pathname: '/signin',
+                params: { agentId: message.agentId, requestId: approval.requestId },
+              })
+            }
+            testID="login-signin-here"
+          />
+          <T variant="caption" color={colors.textMuted}>
+            {signinHereLine(login.title)}
+          </T>
+        </View>
+      )}
       {key && login.key && (
         <View style={styles.other}>
           {!typing ? (

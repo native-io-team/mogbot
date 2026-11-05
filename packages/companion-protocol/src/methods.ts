@@ -13,6 +13,10 @@ import type {
   AgentMessage,
   AgentReach,
   LoginPhoneBegin,
+  SigninBegun,
+  SigninFrame,
+  SigninInput,
+  SigninOutcome,
   TeamLogins,
   AgentSecret,
   AgentsOverview,
@@ -171,6 +175,27 @@ export interface Methods {
     params: { flowId: string; callbackUrl: string };
     result: null;
   };
+  /**
+   * Mac feature `signin.phone`: open a login card's site in a tab of the
+   * Mac's own in its Chrome, for this phone to sign in on (the card must
+   * have a `browser` way in). One at a time on a Mac; five idle minutes
+   * end it. Never audited beyond the domain and how it ended.
+   */
+  'agents.signinBegin': { params: { agentId: string; requestId: string }; result: SigninBegun };
+  /** One picture of the tab. Polling it doesn't keep the session alive. */
+  'agents.signinFrame': { params: { sessionId: string }; result: SigninFrame };
+  /** A tap, typing, a key, a scroll, Back or Reload. Only from the phone that began it. */
+  'agents.signinInput': { params: { sessionId: string; input: SigninInput }; result: null };
+  /**
+   * Checked on the Mac: signed in, the card answers itself and the agent
+   * carries on. `anyway`: hand it over without the check.
+   */
+  'agents.signinDone': {
+    params: { sessionId: string; anyway?: boolean };
+    result: { outcome: SigninOutcome };
+  };
+  /** The tab closes; nothing is kept. */
+  'agents.signinStop': { params: { sessionId: string }; result: null };
   'agents.loginCancel': { params: { agentId: string; requestId: string }; result: null };
   'agents.loginDecline': {
     params: { agentId: string; requestId: string; note?: string };

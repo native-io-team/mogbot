@@ -138,6 +138,15 @@ function Screens() {
                   contentStyle: { backgroundColor: colors.black },
                 }}
               />
+              {/* Signing in on the Mac's Chrome from here: the whole screen is the page. */}
+              <Stack.Screen
+                name="signin"
+                options={{
+                  presentation: 'fullScreenModal',
+                  headerShown: false,
+                  gestureEnabled: false,
+                }}
+              />
               {/* Every sheet and grouped screen: panel behind, groups on surfaceGroup. */}
               <Stack.Screen name="connection" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="needs-you" options={sheet(colors, [0.6, 1])} />

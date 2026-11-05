@@ -173,6 +173,11 @@ export const MAC_FEATURES = {
    * device code).
    */
   loginsPhone: 'logins.phone',
+  /**
+   * Signing in to a site in the Mac's own Chrome from the phone: the
+   * `agents.signin*` methods, one tab shown live here and driven from here.
+   */
+  signinPhone: 'signin.phone',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

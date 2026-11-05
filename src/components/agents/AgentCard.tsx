@@ -225,6 +225,7 @@ export interface BarSpec {
 
 /** The fixed order bars stack in, top to bottom. */
 export const BAR_ORDER = [
+  'phoneSignin',
   'waiting',
   'takeover',
   'import',
@@ -241,10 +242,11 @@ export const MAX_BARS = 2;
 
 /**
  * Bars that never fold: a key in the draft guards something the user is
- * about to do and can't take back, so it shows whatever else is up, and
- * takes its place in the two first.
+ * about to do and can't take back, and the phone signing in through this
+ * Mac's Chrome is happening right now, so each shows whatever else is up,
+ * and takes its place in the two first.
  */
-export const PINNED_BARS: readonly BarId[] = ['secret'];
+export const PINNED_BARS: readonly BarId[] = ['phoneSignin', 'secret'];
 
 /**
  * The bars above the composer, in their fixed order. Past two, the rest fold

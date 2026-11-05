@@ -149,7 +149,10 @@ inside it.
   `agents.loginSaveKey` (as `saveSecret`), `agents.loginsTeam|loginsConnect` ("What your team needs"),
   `agents.reach` (read-only); Mac feature `logins.phone`: `agents.loginPhoneBegin|loginPhoneFinish`
   (the sign-in sheet; the finish goes only to an identity-verified Mac) and `onPhone` on
-  `agents.loginStart|loginsConnect`
+  `agents.loginStart|loginsConnect`; Mac feature `signin.phone`:
+  `agents.signinBegin|signinFrame|signinInput|signinDone|signinStop` (signing in to a site in
+  the Mac's own Chrome from the phone; never audited by the router, see docs/agents.md,
+  "Signing in on your Mac from the phone")
 - `agents.update` (`pinned`, `muted`, `hidden`, `instructions`),
   `agents.instructions|usage|revokePermission|changeDiff`
 - `agents.files|fetchPath|search`, `agents.schedule.preview|create|update|pause|cancel|runNow`
