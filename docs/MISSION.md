@@ -115,8 +115,8 @@ Act like it.
 - **Monochrome, coloured by your agents.** Black and white, no brand green.
   Your Chief of Staff's colour is the app's accent; open another agent and
   everything there takes that agent's colour, like Grok Bot. Semantic
-  colours (success, warning, error) keep their meaning. Dark now; light
-  mode is coming, so nothing should assume dark beyond the surface tokens.
+  colours (success, warning, error) keep their meaning. Light and dark
+  both ship, so nothing may assume either beyond the semantic tokens.
 - **The companion app is everything.** The phone is where people's work
   will be driven; it is the product, held to the highest bar, and the
   desktop matches it. "Put this on your phone" always means the companion

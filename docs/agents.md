@@ -6,7 +6,7 @@ of Staff**, manages the rest: it creates agents, briefs them, delegates to them,
 keeps track of what they're doing, and deletes them when you say so. You can
 talk only to the Chief and let it run everything else.
 
-Agents is a mode, not a page. The **Projects | Agents** toggle at the top of
+Agents is a mode, not a page. The **Agents | Projects** toggle at the top of
 the sidebar (⌘⇧A, or ⌘K → Switch to Agents) turns the whole window into the
 chat app: agent list on the left, one conversation on the right. Switching
 back returns to wherever you were on the Projects side (the dashboard,
@@ -250,7 +250,7 @@ steps has no line.
 
 Served by the existing loopback agent bridge at
 `/mcp/<bridge token>/agents/<agent id>`. The id in the path is the caller, and
-the URL is passed only inline to the process Ship Studio spawned for that agent.
+the URL is passed only inline to the process the app spawned for that agent.
 
 | Tool | Who | What |
 | --- | --- | --- |
@@ -282,7 +282,7 @@ acknowledgements to each other.
 
 ## Working on projects (`src-tauri/src/agents/sessions.rs`)
 
-Agents work on Ship Studio projects the way Remote Access does: in the
+Agents work on projects the way Remote Access does: in the
 project's real agent tabs (backend PTY sessions), so the user can open the
 project and carry on the same conversation. It is Remote Access's toolset,
 run by the same handlers in `remote_access/tools.rs`, under names that can't
@@ -296,7 +296,7 @@ be confused with agent-to-agent `message_agent`:
 | `preview_screenshot`, `git_status`, `deploy_status` | same |
 | `push` | own: a card instead of the PIN |
 
-- **Scope:** every Ship Studio project (agents already run as the user with
+- **Scope:** every project in the app (agents already run as the user with
   every project as an `--add-dir`), not the remote's opt-in list.
   `project_create` doesn't share the project for remote access and doesn't
   switch the window.
@@ -343,7 +343,7 @@ be confused with agent-to-agent `message_agent`:
 - **Questions a session asks** (`agents/decisions.rs`): when a session stops
   on something it can't answer itself (Claude Code's folder-trust dialog, a
   permission prompt in the tab, any menu or y/n `agent_state.rs` recognises),
-  Ship Studio raises a card with the prompt's own text and options, and the
+  the app raises a card with the prompt's own text and options, and the
   agent's tool call waits on it like `approve` (240s; then the card stays live
   and an answer wakes the agent with "call session_wait"). The card goes in
   the owner's chat **and** where the work came from: up the delegation chain
@@ -448,7 +448,7 @@ agent to carry on; its retry goes through without a second card. A late
 agent what you typed: as the deny message while it waits on the card, or as a
 queued turn when it doesn't; the card keeps it ("Declined · “…”").
 Live cards survive restarts, because the
-tool and input are stored on the card. Ship Studio's own confirmations (delete
+tool and input are stored on the card. The app's own confirmations (delete
 an agent) do expire, since they only mean something while asked. The sidebar
 shows "Needs your OK" while any card is open (`pendingApprovals`).
 
@@ -459,7 +459,7 @@ command's leading words (`npm test`, `git push`, `npm run build`), or the exact
 command for wrappers and risky programs (`sudo`, `rm`, `bash`, `curl`…) and for
 anything whose second word is a flag; one exact host for WebFetch; one
 connector tool; web search. Never Bash, Write or Edit as a whole, and never on
-Ship Studio's own confirmations (delete an agent has no tool call, so no
+The app's own confirmations (delete an agent has no tool call, so no
 scope). A command only matches if it is one plain command: `;`, `&`, `|`,
 redirects, `$`, backticks, parentheses, backslashes and line breaks all ask
 again, so `npm test && rm -rf ~` never matches `npm test`. Rules are stored per
@@ -689,13 +689,13 @@ with `runner::strip_session_env`, from the agents folder, so what's listed is
 what a turn sees. The project MCP modal edits the same Claude Code settings for
 the active agent CLI, plus project scope; it's left as it is.
 
-## When the Mac sleeps, a window closes, or Ship Studio quits
+## When the Mac sleeps, a window closes, or the app quits
 
 Agents are not a service. Each turn is one `claude --print --resume <session>`
-process that Ship Studio starts on this Mac and reads to the end, and the
+process that the app starts on this Mac and reads to the end, and the
 check-in tick is a loop inside the app. So:
 
-- **A window closes.** By default closing a window quits Ship Studio (the
+- **A window closes.** By default closing a window quits the app (the
   frontend's close handler calls `exit`), so it is the same as quitting. With
   **Keep running when closed** on (opt-in, macOS), the window is hidden
   instead (`close_to_background`) and nothing stops: agents, check-ins,
@@ -703,7 +703,7 @@ check-in tick is a loop inside the app. So:
   destroying matters, because a destroyed main window runs the global cleanup
   that kills agent processes. Clicking the Dock icon brings hidden windows
   back (`RunEvent::Reopen`); so do a notification and opening that project.
-- **Ship Studio quits** (⌘Q, or a close with the option off). The turn in progress ends with it: its Claude Code
+- **The app quits** (⌘Q, or a close with the option off). The turn in progress ends with it: its Claude Code
   process is stopped on the way out (`cleanup_agent_processes`), and any that
   outlived a crash are cleaned up at the next launch. What the agent already
   did (files written, commands run) stands. Messages queued behind that turn
@@ -712,7 +712,7 @@ check-in tick is a loop inside the app. So:
 - **It reopens.** Every conversation is on disk and the next message resumes
   the same Claude Code session, so the agent still has its context. There is
   no automatic restart of an interrupted turn on this branch: you pick it up
-  by sending the next message. Ship Studio's own confirmation cards left
+  by sending the next message. The app's own confirmation cards left
   pending are marked expired (`store::expire_stale_approvals`); permission
   cards stay answerable, and a late Allow wakes the agent again. Missed
   check-ins follow the rules above: a one-time one fires once, late; a routine
@@ -753,11 +753,11 @@ schedule popover's footnote. Elsewhere than macOS none of it shows.
 
 ## Menu bar, quit guard and quick entry (`agents/tray.rs`, `agents/quick_entry.rs`)
 
-Agents run inside Ship Studio, so staying alive, and being reachable while
+Agents run inside the app, so staying alive, and being reachable while
 the window is closed, is part of the product.
 
 **Menu-bar icon.** A monochrome template image (`src-tauri/icons/tray/*.svg`,
-rasterised by `pnpm icons:tray`): Ship Studio's three discs, with a dot while
+rasterised by `pnpm icons:tray`): a placeholder ring (until real branding), with a dot while
 anything needs you. The menu is a pure function of the agents and their live
 status (`tray::menu_model`), rebuilt at most every 300ms on `agents://status`
 and `agents://registry`:
@@ -765,7 +765,7 @@ and `agents://registry`:
 - **Needs you** (up to 5): `Name · Needs your OK` (`· 3 need your OK`).
 - **Working** (up to 5): `Name · <activity line>`, cut to one short line. An agent waiting for a free slot is listed after the running ones and isn't counted as working: the tooltip says `2 working, 1 waiting for a slot` (`runner::queued`).
 - Overflow is counted (`2 more`), not listed. Hidden agents aren't listed; idle ones aren't either.
-- Then Open Ship Studio, New message to Chief… (quick entry), Keep this Mac awake / Keep running when closed (checkmarks, the same `set_stay_on`), Quit Ship Studio.
+- Then Open <name>, New message to Chief… (quick entry), Keep this Mac awake / Keep running when closed (checkmarks, the same `set_stay_on`), Quit <name> (`brand::NAME`).
 - Clicking an agent opens its chat (`notify::open_agent`, the notification click's path), showing a window that a close hid.
 
 Shown by default **once the user has actually used Agents, or while Keep
@@ -780,7 +780,7 @@ same runner status and approval cards. Quick entry stays opt-in (it follows
 Keep running only). Turning Keep running off *from the icon*
 pins the icon on, so it doesn't vanish under the pointer.
 
-**Quit guard.** ⌘Q, the icon's Quit, ⌘K "Quit Ship Studio…", and closing a
+**Quit guard.** ⌘Q, the icon's Quit, ⌘K "Quit…", and closing a
 window while it would quit all go through `useQuitGuard`, which asks
 `agents_quit_check` (`tray::quit_check`: agents mid-turn or queued for a slot,
 and agents with an open card, hidden ones included). Nothing interrupted:
@@ -798,8 +798,8 @@ only shows it, on the display under the pointer, a third of the way down.
 
 - To the Chief of Staff; a leading `@Name` sends it to that agent instead (`quickEntryRecipient`, longest name wins). Other @mentions work as in a chat.
 - Dictation is the chat composer's (`useDictation`). The camera runs `screencapture -i -o -x` (drag a region, or Space and click a window) with the composer hidden; the PNG goes to `<agents>/.quick-entry/` (cleared after a day) and is attached like a file. **macOS asks for Screen Recording permission the first time**; the composer says so until a screenshot has worked.
-- Return sends (queued like any message), focus goes back to the app you were in (`[NSApp deactivate]`), and "Sent to Chief of Staff · Open chat" stays up 2.4s, unfocused, then hides. Esc or clicking elsewhere closes; closing hands focus back (`NSApp hide`) if Ship Studio wasn't in front.
-- The shortcut is released while one of Ship Studio's own windows has focus, and taken again when they lose it: in-app, ⌥Space stays the composer's hold-to-dictate key.
+- Return sends (queued like any message), focus goes back to the app you were in (`[NSApp deactivate]`), and "Sent to Chief of Staff · Open chat" stays up 2.4s, unfocused, then hides. Esc or clicking elsewhere closes; closing hands focus back (`NSApp hide`) if the app wasn't in front.
+- The shortcut is released while one of the app's own windows has focus, and taken again when they lose it: in-app, ⌥Space stays the composer's hold-to-dictate key.
 - Conflicts we can know are refused with a reason (`Accelerator::conflict`): no ⌃/⌥/⌘, macOS's own (⌘Space, ⌃Space, ⌃⌥Space, ⌃⌘Space, ⌘⇧3/4/5, ⌘Tab…), and a bare ⌘-letter every app uses. Another app's global shortcut can only be found by trying; when macOS refuses, the old shortcut is put back and the reason shown.
 - Off by default unless Keep running when closed is on (`AppState.quick_entry`): a global ⌥Space takes a non-breaking space from every other app.
 
@@ -1084,7 +1084,7 @@ cards.
 
 ## Agents that work in a project (`src-tauri/src/agents/project.rs`)
 
-An agent can be bound to one Ship Studio project (`Agent.project`, a path from
+An agent can be bound to one project (`Agent.project`, a path from
 `list_projects`), from the editor's **Works in** or by the Chief
 (`create_agent` / `update_agent` take `project`, a name or path; `"none"`
 unbinds). Unbound agents run exactly as before; nothing is migrated.
@@ -1146,7 +1146,7 @@ prunes them the diff says it can't be shown.
   left running would keep the agent "working" for hours; instead, a few
   seconds after the turn's result the tree is stopped. An agent can't leave a
   server running for you to look at.
-- Check-ins and routines only fire while Ship Studio is open.
+- Check-ins and routines only fire while the app is open.
 - Notification click-through is unverified in a signed build.
 - After a restart, the interrupted turn is not re-run (it may have done half
   its work); messages queued behind it are, once. Retry then belongs to

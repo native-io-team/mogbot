@@ -1,35 +1,42 @@
 # Dashbot Development Guidelines
 
-> **Start with [docs/MISSION.md](docs/MISSION.md).** Dashbot (working name, from
-> `brand.json`) is the evolution of Ship Studio: an open-source tool that gives
-> professionals who refuse mediocrity the best way to work with AI agents, on
-> desktop and mobile. Grok Bot's experience, on Claude Code and Codex on your own
-> machine; Ship Studio's project workspace underneath. Not a coding tool.
-> Everything below describes the Ship Studio foundation it inherits.
+> **Start with [docs/MISSION.md](docs/MISSION.md), then [docs/ROADMAP.md](docs/ROADMAP.md).**
+> Dashbot is the working name (it lives only in `brand.json`; see "Brand and identity"). It is
+> the evolution of Ship Studio: an open-source app for running your own team of AI agents, on
+> desktop and phone. Grok Bot's experience, on Claude Code and Codex on your own machine, with
+> Ship Studio's project workspace underneath. Not a coding tool. Much of the codebase (and the
+> patterns below) is inherited from Ship Studio and still carries its name in identifiers.
 
 ## Feature Overview
 
-Ship Studio is a desktop app for web developers that provides:
-- **Project Management** - Create new projects from templates (web + mobile starters), import repos from GitHub, register external local folders, and organize the dashboard with folders
-- **AI Agent Terminal** - Integrated terminal for Claude Code, Codex, or Opencode, with multi-tab and side-by-side panes
-- **Flexible Panels** - Every panel (Agent, Team, Variables, Edit, Navigator) can be dragged anywhere in the workspace rail, floated as a window, or moved to the other side of the preview. The arrangement is remembered per project, with a default new projects start from (see `docs/flexible-panels.md`)
-- **Live Preview** - Responsive breakpoints, zoom, fullscreen mode, and a locale switcher for multilingual projects. The breakpoint canvas shows every breakpoint at once, side by side, each showing its whole page at an honest viewport height, with editing in whichever frame is active (see `docs/breakpoint-canvas.md`)
-- **Visual Editing** - Point-and-click edit mode on the preview with a pinnable editor panel and a Webflow-style element tree (fullscreen)
-- **Mobile App Preview** - Build and mirror Expo / React Native / Flutter apps on the iOS simulator inside the workspace
-- **Branch Management** - Create, switch, and manage git branches
-- **Pull Request Creation** - Submit PRs with AI-generated titles and descriptions
-- **Merge Conflict Resolution** - Visual UI for resolving git merge conflicts
-- **Site Migration** - Paste a live URL into New Project and the agent rebuilds it here, measuring every page against the original before calling it done (see `docs/site-migration.md`)
-- **Snapshots & Backups** - Create and restore project snapshots (rewind)
-- **Asset Management** - Upload, view, and delete files under a configurable assets folder (default `/public`)
-- **Multi-Window & Hot Sessions** - Open projects in separate windows; terminal sessions stay available when switching projects, and an Experimental setting can keep background dev servers alive too
-- **Plugins, Skills & MCP** - Extend the app with plugins; install agent skills and configure MCP servers
-- **Command Palette** - Cmd+K palette; every user-facing feature registers its actions here (see "New feature → contribute commands")
-- **IDE Integration** - Open projects in VS Code or Cursor with one click
-- **Hosting Status** - After a push, see whether *that commit* deployed on Vercel, Cloudflare Pages or Netlify, with the build error when it didn't (see "Hosting Flow")
-- **Remote Access** - Drive Ship Studio from any MCP-capable AI assistant (Grok, Claude, ChatGPT, Cursor…) on your phone: continue agent conversations and get the result back (each tool waits and reports the agent as working, waiting on a decision, or finished, plus its reply and a screenshot), start and close agents, switch projects and create new ones, push behind a PIN and see whether it deployed. Your own Mac does the work over your own Tailscale Funnel, so it has to stay on — see "Remote Access Flow"
-- **Agents** - A Grok Bot-style chat mode: named, persistent agents (each a Claude Code session on this Mac with its own memory), run by a Chief of Staff that creates, briefs, delegates to and deletes the others. Risky actions arrive as Allow / Deny cards in the chat. An existing setup can be imported from any assistant connected over Remote Access (see "Agents Flow")
-- **Auto-Updates** - Automatic update detection and installation
+**Agents come first.** The app opens on Agents, and onboarding ends in a conversation with the
+Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
+
+- **Chief of Staff** - Exists from first launch and speaks first (a stored greeting, no model turn). It creates, briefs, delegates to, keeps track of and deletes the other agents; you can talk only to it
+- **Named agents** - Persistent, each with its own colour, instructions, memory it maintains, routines and check-ins, apps, and optionally a bound project. Each runs on **Claude Code or Codex** (chosen per agent) on this Mac, on the user's own accounts
+- **Approvals** - Anything consequential (spending, sending, changing what others see) arrives as an Allow / Deny card; secrets go into a masked card and the Keychain, never the chat
+- **"What it did"** - A folded timeline under each reply: observed steps and outcomes, screenshots, live while the turn runs
+- **Start fresh, keep memory** - A new conversation that keeps what the agent remembers, plus an honest context meter
+- **Phone** - The companion app (`mobile/`, [docs/mobile.md](docs/mobile.md)) is the primary way in away from the desk: chats, approvals, the timeline, and starting things (new agents, routines, dictation, Send to agent). It pairs by QR and talks to this Mac over the user's own Tailscale
+- **Import** - Bring agents over from Grok Bot or any other assistant, with their memory and routines (paste, or over Remote Access)
+
+**Projects underneath.** When work becomes a site or an app it lives in the workspace inherited from Ship Studio, which agents create, run sessions in and push from (with approval):
+
+- **Project Management** - Templates (web + mobile starters), GitHub import, external local folders, dashboard folders
+- **Agent terminals** - Claude Code, Codex or Opencode in multi-tab, side-by-side panes; terminal sessions stay hot when switching projects
+- **Flexible Panels** - Every panel can be docked anywhere in the rail, floated, or moved across the preview; remembered per project (see `docs/flexible-panels.md`)
+- **Live Preview** - Responsive breakpoints, zoom, fullscreen, locale switcher, and the breakpoint canvas showing every breakpoint at once (see `docs/breakpoint-canvas.md`)
+- **Visual Editing** - Point-and-click edit mode with a pinnable editor panel and an element tree
+- **Mobile App Preview** - Build and mirror Expo / React Native / Flutter apps on the iOS simulator
+- **Git** - Branches, PRs with generated titles/descriptions, visual merge-conflict resolution, snapshots (rewind)
+- **Hosting Status** - Whether *the pushed commit* deployed on Vercel, Cloudflare Pages or Netlify, with the build error when it didn't (see "Hosting Flow")
+- **Site Migration** - Rebuild a live URL here, measured page by page against the original (see `docs/site-migration.md`)
+- **Workflows & Inbox** - Scheduled read-only agent runs that file findings (see `docs/workflows-inbox.md`)
+- **Assets, Plugins, Skills & MCP, IDE integration** - As in Ship Studio
+
+**Across both:** the Cmd+K palette (every feature registers there), light and dark themes on desktop and phone, multi-window, and **Remote Access** — driving your agents from another MCP-capable assistant (Grok, Claude, ChatGPT…) over your own Tailscale Funnel (see "Remote Access Flow"). For the phone, the answer is the companion app; Remote Access answers a different question. Updates, telemetry, issue reporting and the plugin/template catalogues are off until `brand.json` names an endpoint for them.
+
+**Compatible with Ship Studio, both directions:** the `~/ShipStudio` projects folder and the in-project `.shipstudio/` format are shared, so either app opens the other's projects; app state is this app's own, so both run side by side.
 
 ## Core Principles
 
@@ -271,6 +278,16 @@ including its casing.
 It cannot tell you anything about Rust, and it runs in Chrome rather than
 WKWebView. Full guide: [docs/ui-harness.md](docs/ui-harness.md).
 
+**Several harnesses at once** (other worktrees, other agents): never assume
+1425 is yours. Give each its own port *and* its own `TMPDIR` (the capture
+script's Chrome profile lives there), the same in both shells:
+
+```bash
+export SHIPSTUDIO_HARNESS_PORT=1437 TMPDIR=$(mktemp -d)
+pnpm harness &
+node scripts/harness-capture.mjs <scenario>
+```
+
 ### Frontend Tests (Vitest + React Testing Library)
 ```bash
 pnpm test:run     # Run all tests once
@@ -284,6 +301,10 @@ Tests are in `src/**/*.test.{ts,tsx}`. Uses official `@tauri-apps/api/mocks` for
 ```bash
 cd src-tauri && cargo test
 ```
+
+**In a worktree** (`.claude/worktrees/<name>`), build against the shared target dir so each
+worktree doesn't compile the crate from scratch: set `CARGO_TARGET_DIR` to the main checkout's
+`.claude/cargo-shared` (absolute path) for every cargo and `pnpm tauri` command.
 
 Unit tests are colocated in source files using `#[cfg(test)]` modules.
 
@@ -440,7 +461,7 @@ Full design, the trial results, and the bugs each rule came from:
 
 Answers: **can I keep my agents going from my phone, and pick up exactly where they left off?**
 
-1. An MCP server (`src-tauri/src/remote_access/`) binds loopback and is published by Tailscale Funnel on the user's *own* account at `/shipstudio` — nothing passes through infrastructure we run. It is a separate server from the agent bridge, which must never be internet-reachable
+1. An MCP server (`src-tauri/src/remote_access/`) binds loopback and is published by Tailscale Funnel on the user's *own* account at `/<slug>` (from `brand.json`; Ship Studio's is `/shipstudio`, so both can be on) — nothing passes through infrastructure we run. It is a separate server from the agent bridge, which must never be internet-reachable
 2. Tools act on the *existing* agent tabs (backend PTY sessions, rendered through `vt100`) — not a parallel shell — so the conversation is waiting when the user is back. New work starts via `remote-start-agent` → `startInBackground` (spawn-with-prompt, never paste; the same command builder as a mounted tab, adopted by the project's tabs without switching the window). Screenshots are headless Playwright against the running dev server. Agent tools wait and answer `STATUS:` (read off the screen by `agent_state.rs`) … `NEXT:` (the step the assistant must take), so the assistant reports results instead of stopping at "sent"
 3. The computer must stay on, and the UI says so first: keep-awake (`caffeinate -w`), opt-in lid-closed mode (`pmset disablesleep`), reopen-at-login, quit warning, and a sidebar indicator that turns amber on battery
 4. Security rules — don't weaken without updating docs/remote-access.md: the token never enters the webview (masked; copied from Rust); text goes only to agent tabs, never shells, with `!`, non-allowlisted `/` commands and control characters refused; opening prompts can't start with `-` (`agentPromptArgs`); pushing needs a PIN the assistant never sees, with a lockout; every action is audited
@@ -454,10 +475,12 @@ Answers: **can I run my work through a team of agents, the way I do in Grok Bot,
 
 1. Agents is the primary view (`AppView` `'agents'`): launch and the end of onboarding land there (`postSetupViewFor` in `useAppSetup.ts`; a project window still opens its workspace), and Projects is the sidebar toggle or ⌘K. The Chief of Staff exists from first open (`ensure_main`) and its chat opens on a stored greeting (`CHIEF_GREETING`). The bell beside the sidebar toggle opens What's in flight, with how many agents need you; the Phone row at the foot of the sidebar is the companion app (remote access shows there only while on)
 2. An agent is a registry entry plus a home folder: `CLAUDE.md` (instructions + a `## Memory` section it maintains) and `messages.jsonl` (what the user was shown). The chat log is ours, never reconstructed from Claude's transcript
-3. Each turn is one `claude --print --resume` process in the agent's home, with the agent tools on the agent bridge at `/mcp/<token>/agents/<id>`. Text blocks become bubbles; tool calls only update the "working" line. No process per idle agent
+3. Each turn is one engine process in the agent's home — `claude --print --resume`, or Codex on its app-server (`exec` as the fallback), chosen per agent (`agents/engine.rs`) — with the agent tools on the agent bridge at `/mcp/<token>/agents/<id>`. Text blocks become bubbles; tool calls update the "working" line and become the observed steps of the "what it did" timeline (`agents/work.rs`), stored beside the log, never in it. No process per idle agent
 4. `message_agent` is asynchronous and capped at 6 agent-to-agent hops per user message. Management tools are Chief-only; `delete_agent` asks the user first
 5. Approvals: `acceptEdits` plus `--permission-prompt-tool` → an Allow / Deny card. Claude Code's ~60s MCP timeout is raised with `MCP_TOOL_TIMEOUT`, or a waiting card times out as "the tool is hanging"; never remove it
-6. Import: Remote Access's `import_agents` tool lets the user's other assistant send its agents over; the main one merges into the Chief
+6. Import: Remote Access's `import_agents` tool (or a paste) brings another assistant's agents over; the main one merges into the Chief
+7. Start fresh (`agents_start_fresh`) begins a new session and keeps memory; the context meter shows only a reading the engine reported (`agents/context.rs`)
+8. The phone drives the same commands through the companion server (`src-tauri/src/companion/`): chats, approval cards, the timeline and starting things all work there (see docs/mobile.md)
 
 Full design and limits: [docs/agents.md](docs/agents.md).
 
@@ -531,7 +554,7 @@ import { Spinner } from './primitives/Spinner';
 <Spinner size="lg" style={{ color: 'var(--accent-active)' }} /> {/* 32px — section loading */}
 ```
 
-The arc uses `currentColor` — set `color` on the spinner or let it inherit (inside a green action button it's automatically dark).
+The arc uses `currentColor` — set `color` on the spinner or let it inherit (inside a primary button it takes the accent's ink).
 
 ### New button → use the semantic button family from `src/components/primitives/`
 
@@ -688,6 +711,18 @@ Need a value that doesn't exist yet? Add it to the correct layer named by the to
 - `@keyframes` names are **global** in CSS. Shared keyframes (`spin`, `fadeIn`, `skeleton-pulse`) live in base.css only; feature-specific ones must be feature-prefixed. Duplicates fail CI (a duplicate silently overrides every consumer app-wide based on import order).
 - `var(--something)` referencing a token that's defined nowhere fails CI — an undefined var makes the declaration invalid and the style silently doesn't apply.
 
+### Colour, theme and name → monochrome, both themes, name-free
+
+Full model: [The accent](docs/design-system.md#the-accent) and [Themes](docs/design-system.md#themes-light-and-dark).
+
+- **The accent is the Chief of Staff's colour**, scoped per agent (`useAccentScope`; `AccentScope` for portals). It means primary action, selection and "this is on" — **never status**. Running, success and info have their own roles (`--status-running`, `--accent-success`, `--status-info`); the Chief's colour may be red, amber or green.
+- **Answers are neutral, never accent.** Allow on an approval, secret or prompt card is `variant="strong"`, never `primary` (`approvalNeutral.test.tsx`). Danger is told apart by an icon as well as hue.
+- **Focus is neutral**: `--focus-ring`, never a hue or the accent.
+- **Both themes, desktop and phone.** Semantic roles only, so light and dark both work; nothing assumes dark. `theme.test.ts` holds every role's light value and its contrast.
+- **No literal colours or sizes in mobile.** Colours, radii, icon/avatar sizes and type sizes come from `mobile/src/lib/theme.ts`; scan tests in `mobile/__tests__/theme.node.test.ts` fail any literal.
+- **The product name comes only from `brand.json`** (`BRAND.name` in TS, `brand::NAME` in Rust), and only where macOS or a connector needs a name. Copy says "the app", "here" or "this Mac". `scripts/check-brand-copy.mjs` (run by `pnpm check:patterns`) fails on the old name in `src/` copy and on brand-named files; `pnpm check:brand` checks the identity copies.
+- **Tabs vs segmented**: underline `Tabs` for sections, segmented tabs in small dialogs, `SegmentedControl` for a value that changes in place — see [the rule](docs/design-system.md#underline-tabs-segmented-tabs-or-a-segmented-control).
+
 ### New CSS file → mind the folder structure
 
 CSS lives under this folder structure:
@@ -823,7 +858,9 @@ git push origin main && git push origin vX.Y.Z
 
 The `-n` flag automatically adds notes to `RELEASE_NOTES.md`. Without `-n`, you must update `RELEASE_NOTES.md` manually before running the script.
 
-**IMPORTANT:** Also update the changelog data in `src/components/Changelog.tsx` before each release — it displays "What's New" on the dashboard sidebar.
+No update feed is configured yet (`links.updates` in `brand.json` is null, so the updater is off and the Ship Studio changelog is emptied); the steps below are inherited and apply once there is one.
+
+**IMPORTANT:** Also update the changelog data in `src/components/dashboard/Changelog.tsx` before each release — it displays "What's New" on the dashboard sidebar.
 
 For Windows builds, tag with a `-win` suffix (e.g. `v0.5.0-win`) — this triggers a separate workflow independent from the macOS pipeline.
 
