@@ -20,9 +20,17 @@ const WEB_STANDINS = {
   'expo-file-system/legacy': 'expo-file-system-legacy.ts',
   'expo-speech-recognition': 'expo-speech-recognition.ts',
 };
+// Simulator QA only: `QA_SCRIPTED_DICTATION=1 expo start` gives a native
+// build the same scripted recognizer, so dictation's states can be looked at
+// with no microphone and no sound (the simulator's own recognizer doesn't
+// start anyway, docs/mobile.md "Dictation"). Unset, nothing changes.
+const SCRIPTED_DICTATION = process.env.QA_SCRIPTED_DICTATION === '1';
 const upstream = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (platform === 'web' && WEB_STANDINS[moduleName]) {
+  if (
+    (platform === 'web' || (SCRIPTED_DICTATION && moduleName === 'expo-speech-recognition')) &&
+    WEB_STANDINS[moduleName]
+  ) {
     return {
       type: 'sourceFile',
       filePath: path.join(__dirname, 'dev/web', WEB_STANDINS[moduleName]),

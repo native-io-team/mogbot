@@ -97,6 +97,8 @@ import { SelectSheet } from './SelectSheet';
 import { Button, Dot, Icon, IconButton, useRipple, T } from './ui';
 
 const NONE: never[] = [];
+/** The header's buttons are the system's own bar buttons (round glass on iOS 26). */
+const NATIVE_HEADER_BUTTONS = Platform.OS === 'ios';
 const NO_KEYS: ReadonlySet<string> = new Set();
 /** A card counts as seen once its top is on screen: its title is the question. */
 const VIEWABILITY = { itemVisiblePercentThreshold: 10 };
@@ -483,16 +485,32 @@ export function ChatView({
                 {header}
               </Pressable>
             ),
-            headerRight: () => (
-              <IconButton
-                name="info.circle"
-                label={`About ${agent.name}`}
-                fallback="ⓘ"
-                onPress={openSheet}
-              />
-            ),
+            // On iOS the system's own bar button (below): a view of ours in its
+            // glass got the bar's side padding, so the circle came out wider than tall.
+            ...(NATIVE_HEADER_BUTTONS
+              ? {}
+              : {
+                  headerRight: () => (
+                    <IconButton
+                      name="info.circle"
+                      label={`About ${agent.name}`}
+                      fallback="ⓘ"
+                      onPress={openSheet}
+                    />
+                  ),
+                }),
           }}
         />
+      )}
+      {!embedded && NATIVE_HEADER_BUTTONS && (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon="info.circle"
+            accessibilityLabel={`About ${agent.name}`}
+            tintColor={accent.accent}
+            onPress={openSheet}
+          />
+        </Stack.Toolbar>
       )}
       <View style={{ flex: 1 }} onLayout={(e) => setRoomHeight(e.nativeEvent.layout.height)}>
         {pinQuestion && card?.approval && (

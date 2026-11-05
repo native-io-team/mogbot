@@ -73,7 +73,7 @@ pub const MAX_DEVICE_NAME_CHARS: usize = 40;
 /// visible themselves: bidi overrides and isolates, zero-width joiners and
 /// spaces, the BOM, soft hyphens, variation selectors, Hangul fillers and
 /// the rest of Unicode's format (Cf) class. A name made with them can read
-/// as "Julian's iPhone" while being something else, or flip the words after it.
+/// as "Sam's iPhone" while being something else, or flip the words after it.
 fn is_invisible_format(c: char) -> bool {
     matches!(c as u32,
         0x00AD | 0x034F | 0x061C | 0x115F | 0x1160 | 0x17B4 | 0x17B5 | 0x180B..=0x180F

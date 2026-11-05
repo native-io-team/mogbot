@@ -269,6 +269,15 @@ export interface Methods {
     result: { level: AgentIndependence };
   };
   /**
+   * `agents_set_admin`: the user's own "Admin — can manage and approve for
+   * other agents" switch, per agent. No agent can set it. Audited. Newer
+   * Macs only.
+   */
+  'agents.setAdmin': {
+    params: { agentId: string; admin: boolean };
+    result: { agentId: string; admin: boolean };
+  };
+  /**
    * Each engine's usage accounts, in the order turns try them when one
    * reaches its usage limit (`agents::wallet`). Read-only: they are added
    * and signed in on the Mac. Newer Macs only.
@@ -371,6 +380,16 @@ export interface Methods {
   'agents.teamSetup.missing': { params: Record<string, never>; result: AgentMessage };
   /** Put it away; `agents.teamSetup` with `any` brings it back. */
   'agents.teamSetup.dismiss': { params: Record<string, never>; result: null };
+  /**
+   * A row nothing on the Mac reached: `connect` raises one sign-in card and
+   * starts its best way in on the Mac; `not_needed` puts it away.
+   */
+  'agents.teamSetup.later': {
+    params: { key: string; action: 'connect' | 'not_needed'; onPhone?: boolean };
+    result: { agentId: string; requestId: string } | null;
+  };
+  /** Check again what the team can already reach (progress arrives on the checklist). */
+  'agents.teamSetup.check': { params: Record<string, never>; result: number };
   'agents.import.pastePrompt': { params: Record<string, never>; result: string };
   'agents.import.pastePreview': { params: { text: string }; result: PasteImportPreview };
   'agents.import.paste': { params: { text: string }; result: ImportSummary };

@@ -219,6 +219,44 @@ export const agentsDesktopScenarios: Scenario[] = [
     },
   },
   {
+    id: 'settings-agents-admins',
+    title: 'Settings — Admins, what they did, and Recently deleted',
+    looksRightWhen:
+      'Opened from ⌘K “Admins: who manages and approves for your team…”: under Admins, one row per agent with a switch; Chief of Staff on (“Admin: manages and approves local work for the others”), the rest off, and a muted line “Spending, sending, publishing, pushing, sharing and keys always come to you.” Admin activity lists two lines newest first with a time. Recently deleted shows “Kite Watch” deleted by Chief of Staff, “Restorable for 29 more days”, and a Restore button.',
+    command: 'agents.admins',
+    requires: '.agent-admin-settings .agent-admin-activity__line',
+    clipSelector: 'section[aria-labelledby="agents-settings-admins"]',
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_desktop_settings: DESKTOP_SETTINGS,
+      agents_admin_activity: [
+        {
+          ts: Date.now() - 5 * 60_000,
+          admin: { id: 'chief', name: 'Chief of Staff' },
+          target: { id: 'leadgen', name: 'Lead Gen' },
+          action: 'Allowed for Lead Gen: look inside your Northwind folder',
+        },
+        {
+          ts: Date.now() - 60 * 60_000,
+          admin: { id: 'chief', name: 'Chief of Staff' },
+          target: { id: 'kite', name: 'Kite Watch' },
+          action: 'Deleted Kite Watch · in Recently deleted for 30 days',
+        },
+      ],
+      agents_recently_deleted: [
+        {
+          id: 'kite',
+          name: 'Kite Watch',
+          role: 'Watches the kite shop',
+          color: 'teal',
+          deletedAt: Date.now() - 60 * 60_000,
+          restorableUntil: Date.now() + 29 * 86_400_000 - 60 * 60_000,
+          deletedBy: { id: 'chief', name: 'Chief of Staff' },
+        },
+      ],
+    },
+  },
+  {
     id: 'settings-agents-defaults',
     title: 'Settings — new agents start on Codex, on GPT-5.5',
     looksRightWhen:

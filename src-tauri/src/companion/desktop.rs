@@ -231,6 +231,7 @@ impl Backend for DesktopBackend {
             // What each turn did, read after the log's lock is let go.
             crate::agents::work::apply(&agent_id, &mut page);
             crate::agents::logins::apply(&mut page);
+            crate::agents::admin::apply(&mut page);
             Ok::<_, CommandError>((page, more))
         })
         .await
@@ -484,6 +485,14 @@ impl Backend for DesktopBackend {
         Ok(serde_json::json!({ "level": level }))
     }
 
+    async fn set_admin(&self, agent_id: &str, admin: bool) -> Result<Value, CommandError> {
+        let agent = cmd::agents_set_admin(self.app.clone(), agent_id.to_string(), admin).await?;
+        Ok(serde_json::json!({
+            "agentId": agent.id,
+            "admin": crate::agents::admin::is_admin(&agent),
+        }))
+    }
+
     async fn accounts(&self) -> Result<Value, CommandError> {
         json(cmd::agents_accounts().await?)
     }
@@ -670,6 +679,21 @@ impl Backend for DesktopBackend {
                 cmd::agents_team_setup_dismiss(app).await?;
                 Ok(Value::Null)
             }
+            A::Later {
+                key,
+                connect,
+                on_phone,
+            } => json(
+                cmd::agents_team_setup_later(
+                    app,
+                    key,
+                    if connect { "connect" } else { "not_needed" }.into(),
+                    Some(true),
+                    Some(on_phone),
+                )
+                .await?,
+            ),
+            A::Check => json(cmd::agents_access_check(app).await?),
         }
     }
 

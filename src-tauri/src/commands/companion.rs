@@ -322,7 +322,7 @@ mod tests {
         use crate::companion::testkit::Stub;
         let (c, _) = Stub::companion();
         let phone = wire::PairDevice {
-            name: "Julian’s iPhone".into(),
+            name: "Sam’s iPhone".into(),
             platform: wire::DevicePlatform::Ios,
             model: Some("iPhone 16".into()),
             app_version: "1.0.0".into(),

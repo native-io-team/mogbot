@@ -48,6 +48,7 @@ pub const METHODS: &[&str] = &[
     "agents.update",
     "agents.setDefaults",
     "agents.setIndependence",
+    "agents.setAdmin",
     "agents.revokePermission",
     "agents.instructions",
     "agents.memory",
@@ -89,6 +90,8 @@ pub const METHODS: &[&str] = &[
     "agents.teamSetup.hello",
     "agents.teamSetup.missing",
     "agents.teamSetup.dismiss",
+    "agents.teamSetup.later",
+    "agents.teamSetup.check",
 ];
 
 /// `READ_ONLY_METHODS` in methods.ts (the served subset): not audited.
@@ -345,6 +348,15 @@ pub enum TeamSetupAction {
     /// Everything they said they're missing, to the Chief in one message.
     Missing,
     Dismiss,
+    /// A row nothing reached: `connect` (one sign-in card, its way in
+    /// started on the Mac) or `not_needed`.
+    Later {
+        key: String,
+        connect: bool,
+        on_phone: bool,
+    },
+    /// Check again what the team can already reach.
+    Check,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -440,6 +452,9 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         level: crate::agents::independence::Level,
     ) -> Result<Value, CommandError>;
+    /// `agents_set_admin`: the user's own switch, "Admin — can manage and
+    /// approve for other agents". Answers `{ agentId, admin }`.
+    async fn set_admin(&self, agent_id: &str, admin: bool) -> Result<Value, CommandError>;
     /// `agents_quota`: each engine's plan, as it last reported it.
     async fn quota(&self) -> Result<Value, CommandError>;
     /// `agents_accounts`: each engine's usage accounts, read-only.
@@ -726,6 +741,15 @@ struct TeamSetupGetParams {
 struct TeamSetupStepParams {
     step: crate::agents::team_setup::StepId,
     state: crate::agents::team_setup::StepState,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TeamSetupLaterParams {
+    key: String,
+    action: String,
+    #[serde(default)]
+    on_phone: bool,
 }
 
 #[derive(Deserialize)]
@@ -1137,6 +1161,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         "agents.fetchPath" => preview(field("path")),
         "agents.revokePermission" => format!("revoke {} {}", field("ruleId"), field("agentId")),
         "agents.teamSetup.step" => format!("setup: {} {}", field("step"), field("state")),
+        "agents.teamSetup.later" => format!("setup: {} {}", field("action"), field("key")),
+        "agents.teamSetup.check" => "setup: check what the team can reach".into(),
         "agents.teamSetup.routine" => {
             let on = params.get("on").and_then(Value::as_bool) == Some(true);
             format!(
@@ -1179,6 +1205,15 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             format!("new agents: {}", said.join(", "))
         }
         "agents.setIndependence" => format!("independence: {}", preview(field("level"))),
+        "agents.setAdmin" => format!(
+            "{} admin {}",
+            field("agentId"),
+            if params.get("admin").and_then(Value::as_bool) == Some(true) {
+                "on"
+            } else {
+                "off"
+            }
+        ),
         _ => field("agentId").to_string(),
     }
 }
@@ -1532,6 +1567,16 @@ async fn run(
                 })?;
             Ok(b.set_independence(level).await?)
         }
+        "agents.setAdmin" => {
+            let agent_id = params.get("agentId").and_then(Value::as_str).unwrap_or("");
+            let admin = params.get("admin").and_then(Value::as_bool);
+            let Some(admin) = admin.filter(|_| !agent_id.is_empty()) else {
+                return Err(bad_params(
+                    "Admin takes an agentId and admin: true or false.",
+                ));
+            };
+            Ok(b.set_admin(agent_id, admin).await?)
+        }
         "agents.accounts" => Ok(b.accounts().await?),
         "agents.usagePlan" => Ok(b.usage_plan().await?),
         "agents.import.status" => Ok(b.import_status().await?),
@@ -1580,6 +1625,21 @@ async fn run(
         }
         "agents.teamSetup.missing" => Ok(b.team_setup(TeamSetupAction::Missing).await?),
         "agents.teamSetup.dismiss" => Ok(b.team_setup(TeamSetupAction::Dismiss).await?),
+        "agents.teamSetup.later" => {
+            let p: TeamSetupLaterParams = parse(params)?;
+            let connect = match p.action.as_str() {
+                "connect" => true,
+                "not_needed" => false,
+                _ => return Err(bad_params("action is connect or not_needed.")),
+            };
+            Ok(b.team_setup(TeamSetupAction::Later {
+                key: p.key,
+                connect,
+                on_phone: p.on_phone,
+            })
+            .await?)
+        }
+        "agents.teamSetup.check" => Ok(b.team_setup(TeamSetupAction::Check).await?),
         // The ready-made agents, without their briefings: the phone shows
         // the choice, the Mac fills the instructions in on create.
         "agents.templates" => Ok(templates_for_phone()),
@@ -2339,6 +2399,29 @@ mod tests {
             .any(|(_, m, detail, ok)| m == "agents.setIndependence"
                 && *ok
                 && detail == "independence: often"));
+    }
+
+    #[tokio::test]
+    async fn a_phone_switches_admin_on_and_off_audited() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let set = |params: Value| dispatch(&c, &me, "agents.setAdmin", params);
+        assert!(set(json!({})).await.is_err());
+        assert!(set(json!({ "agentId": "a1" })).await.is_err());
+        assert!(set(json!({ "agentId": "a1", "admin": "yes" }))
+            .await
+            .is_err());
+        let answer = set(json!({ "agentId": "a1", "admin": true }))
+            .await
+            .unwrap();
+        assert_eq!(answer["admin"], true);
+        assert_eq!(*stub.admins.lock().unwrap(), vec![("a1".to_string(), true)]);
+        assert!(!READ_ONLY_METHODS.contains(&"agents.setAdmin"));
+        assert!(stub
+            .audited()
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.setAdmin" && *ok && detail == "a1 admin on"));
     }
 
     #[tokio::test]

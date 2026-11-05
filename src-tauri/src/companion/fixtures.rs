@@ -31,7 +31,7 @@ const PATH: &str = concat!(
 fn device(full: bool) -> DeviceRecord {
     DeviceRecord {
         id: "dev_0123456789abcdef".into(),
-        name: "Julian’s iPhone".into(),
+        name: "Sam’s iPhone".into(),
         platform: if full {
             DevicePlatform::Ios
         } else {
@@ -366,7 +366,7 @@ async fn generate() -> String {
     let (c, stub) = Stub::companion();
     let caller = Caller {
         device_id: "dev_0123456789abcdef".into(),
-        device_name: "Julian’s iPhone".into(),
+        device_name: "Sam’s iPhone".into(),
         label: "companion:dev_0123456789abcdef:1".into(),
         route: super::wire::RouteKind::Tailscale,
         shows: super::wire::Shows {
@@ -448,6 +448,15 @@ async fn generate() -> String {
         "agentsSetIndependence",
         "Result<'agents.setIndependence'>",
         call("agents.setIndependence", json!({ "level": "go_hard" })).await,
+    );
+    out += &entry(
+        "agentsSetAdmin",
+        "Result<'agents.setAdmin'>",
+        call(
+            "agents.setAdmin",
+            json!({ "agentId": AGENT, "admin": true }),
+        )
+        .await,
     );
     out += &entry(
         "agentsImportStatus",

@@ -371,6 +371,27 @@ export function useAppCommands({
         },
       },
       {
+        id: 'agents.admins',
+        title: 'Admins: who manages and approves for your team…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: [
+          'admin',
+          'delegate',
+          'handle requests',
+          'approve for',
+          'team requests',
+          'recently deleted',
+          'restore agent',
+          'admin activity',
+        ],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-admins');
+          openModal('settings');
+        },
+      },
+      {
         id: 'agents.newAgentDefaults',
         title: 'Engine and model for new agents…',
         icon: <SettingsIcon size={14} />,

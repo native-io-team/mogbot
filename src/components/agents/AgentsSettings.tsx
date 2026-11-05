@@ -25,61 +25,17 @@
  * @module components/agents/AgentsSettings
  */
 
-import type { ReactNode } from 'react';
 import { Button } from '../primitives/Button';
 import { AgentsDesktopSettings } from './AgentsDesktopSettings';
 import { AgentDefaultsSettings } from './AgentDefaultsSettings';
 import { AgentAccounts } from './AgentAccounts';
 import { AgentUsageSettings } from './AgentsUsage';
 import { AgentIndependenceSettings } from './AgentIndependenceSettings';
+import { AgentAdminSettings } from './AgentAdmin';
+import { Row, Toggle } from './AgentSettingsRows';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
-
-function Toggle({
-  on,
-  label,
-  onChange,
-}: {
-  on: boolean;
-  label: string;
-  onChange: (on: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={`settings-toggle ${on ? 'on' : 'off'}`}
-      onClick={() => onChange(!on)}
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-    >
-      <span className="settings-toggle-track">
-        <span className="settings-toggle-thumb" />
-      </span>
-    </button>
-  );
-}
-
-function Row({
-  label,
-  description,
-  children,
-}: {
-  label: string;
-  description: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="settings-row">
-      <div className="settings-row-info">
-        <span className="settings-row-label">{label}</span>
-        <span className="settings-row-description">{description}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
 
 const selectEngines = (s: { engines: EngineInfo[] }) => s.engines;
 
@@ -134,6 +90,8 @@ export function AgentsSettings({
       </section>
 
       <AgentIndependenceSettings />
+
+      <AgentAdminSettings />
 
       {engines.length > 0 && hasDefaults && (
         <section className="settings-group" aria-labelledby="agents-settings-engines">

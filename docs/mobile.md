@@ -258,8 +258,8 @@ CA and no trust-on-first-use.
    about to lose.
 2. **Phone:** scan in the app or with the Camera, or paste the link. A link
    is untrusted input (any page or message can open one), so the phone
-   **always asks first**: "Pair with *Julian's MacBook Pro*? at
-   *julians-mbp.tail1234.ts.net:47443*", the code's last four characters,
+   **always asks first**: "Pair with *Sam's MacBook Pro*? at
+   *sams-mbp.tail1234.ts.net:47443*", the code's last four characters,
    and, when a Mac is already paired, "This replaces *that Mac*". A
    Tailscale route must be `https://<name>.ts.net[:port]`
    (`parsePairingLink`); a link with more than one route is refused, so the
@@ -302,7 +302,7 @@ CA and no trust-on-first-use.
    (`PairingView.reachedAt`, once per code). It is unauthenticated, so it
    says "a device", never "your phone"; its absence while the phone spins
    is the tell that the phone isn't on the tailnet.
-3. **Mac:** "Allow **Julian's iPhone** to use your agents?" with the model,
+3. **Mac:** "Allow **Sam's iPhone** to use your agents?" with the model,
    when it asked, the code's last four characters and the tailnet user
    `tailscale serve` named (`Tailscale-User-Login`), open for 120 s. The
    name and model are cleaned of control, bidi and zero-width characters and
@@ -685,13 +685,16 @@ The phone can start work as well as answer it. Each piece is gated by
   it as you speak, the last few lighter while the recognizer is still
   deciding them (`stablePrefix`: what a partial shares with the one before,
   never its last word), with the recognizer's own punctuation. The mic's
-  place holds a waveform and the elapsed time, × takes the +'s place and ✓
-  takes Send's. **✓ keeps the words in the draft** to read and edit, as
-  ChatGPT's and Grok's dictation do; nothing is sent on its own (the desk's
-  rule too, and Send drops words still on their way). × puts the draft back
-  as it was. Tapping the words is ✓ and edit. After about 3 s of quiet
-  following speech it stops by itself (`AUTO_STOP_SILENCE_MS`), and gives up
-  after 8 s if it heard nothing (`NOTHING_HEARD_MS`), saying so.
+  place holds a waveform and the elapsed time, × takes the +'s place, and
+  the field holds **Stop** and **Send**, as Grok's dictation does. **Stop
+  keeps the words in the draft** to read and edit; **Send** sends exactly
+  what's on screen at once (the reducer's `send`: the partial too, then the
+  recognizer is aborted so no late word lands in the emptied field).
+  Nothing is sent unless you press Send (the desk's rule too). × puts the
+  draft back as it was. Tapping the words is Stop and edit. After about 3 s
+  of quiet following speech it stops by itself, as Stop does
+  (`AUTO_STOP_SILENCE_MS`), and gives up after 8 s if it heard nothing
+  (`NOTHING_HEARD_MS`), saying so.
   **The waveform** is driven by the recognizer's own input level
   (`volumechange`, every 50 ms) through a shared value: on the UI thread a
   frame callback eases it (quick rise, slower fall), pushes a bar every
@@ -725,8 +728,32 @@ The phone can start work as well as answer it. Each piece is gated by
   initialize recognizer", on-device and server alike), so the flow there was
   checked by feeding the native module's events (levels and partials) from
   outside; the web QA build uses a scripted stand-in
-  (`dev/web/expo-speech-recognition.ts`). Real recognition, real levels and
-  the fallback need a phone.
+  (`dev/web/expo-speech-recognition.ts`), and `QA_SCRIPTED_DICTATION=1 npx
+  expo start --dev-client` gives a simulator build the same one (silent: no
+  microphone, no sound). Real recognition, real levels and the fallback need
+  a phone.
+- **The composer** is the system's glass where the phone has it
+  (`components/Glass.tsx`, expo-glass-effect: iOS 26 Liquid Glass, the tab
+  bar's material): a 48pt capsule with 17pt text, a 48pt glass + beside it,
+  and 40pt circles inside (mic, Stop, and Send as accent-tinted glass). On iOS
+  before 26, Android and the web build it's `composerFill` with its
+  hairline. The chat header's ⓘ is a native bar button (`Stack.Toolbar`) on
+  iOS, so the system draws it as a true circle.
+- **Crash-safe drafts** (`lib/drafts.ts`, `lib/crash.ts`). The draft (typed
+  and dictated words, quotes, @mentions, uploaded files) is on disk within
+  `DRAFT_SAVE_MS` (300 ms) of every change and at once when the app leaves
+  the foreground; a send puts its message in the outbox file before the
+  emptied draft is written, so the words are always in one or the other. A
+  draft brought back at launch says "Restored your draft" once. A send in
+  flight when the app died comes back waiting with the same `clientId`, so it
+  goes once (the Mac returns the original for an id it has seen), or after
+  `OUTBOX_WAIT_MS` shows "Not sent · Send". An uncaught JS error writes the
+  drafts and the outbox (for up to 1.5 s) and logs to `crash-log.json` on the
+  phone (nowhere else) before the app ends; a run that ended while on screen
+  (a native crash) is caught by a foreground marker (release builds only).
+  The next launch says "The app closed unexpectedly. Your draft is safe."
+  on Agents. A screen that fails to draw shows the root `ErrorBoundary`
+  with Try again.
 - **"Send to agent…"** (`app/share.tsx`, `lib/share.ts`). Something shared
   into the app (a page, text, photos, files) lists your agents, with the
   shared text in full; picking one puts the link and text in that agent's
@@ -931,7 +958,7 @@ on a fork's binary. For self-builders, Reinstall is the update.
   phrases (against the mock's parser and `routine-phrases.json`), the Mac's
   clock, and share payloads; `share.test.tsx` the share sheet (a crafted
   `files=` link uploads nothing); `dictation.test.tsx` the state machine on its own and the mic against a
-  fake recognizer (streaming, ✓, ×, send, silence, errors, the fallback,
+  fake recognizer (streaming, Stop, Send, ×, silence, errors, the fallback,
   Android 12); `waveform.node.test.ts` the level→bar mapping and easing.
 - **Rooms:** `rooms.test.ts` (routing, gating, store keys, folding, the
   room's list), `roomParity.test.ts` (open copies, the foot line, @mentions,

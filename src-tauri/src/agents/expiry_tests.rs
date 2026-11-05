@@ -1,0 +1,193 @@
+use super::*;
+use crate::agents::store::{ApprovalStatus, MessageKind, NewAgent};
+use serde_json::json;
+
+fn with_root<F: FnOnce()>(f: F) {
+    let _serial = store::tests_lock();
+    let dir = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(dir.path().to_path_buf()));
+    f();
+    store::set_root_for_tests(None);
+}
+
+// A fictional agent.
+fn agent() -> store::Agent {
+    store::create(NewAgent {
+        name: "Researcher".into(),
+        role: "Looks things up".into(),
+        instructions: "Be brief.".into(),
+        shape: None,
+        color: None,
+        is_main: false,
+    })
+    .unwrap()
+}
+
+fn bash_card(id: &str, command: &str) -> Approval {
+    let input = json!({ "command": command });
+    super::super::mcp::new_card(
+        id.into(),
+        "Run a command".into(),
+        command.into(),
+        Some(("Bash", &input)),
+    )
+}
+
+fn post(agent_id: &str, approval: Approval, ts: i64) {
+    let mut m = super::super::runner::new_message(agent_id, MessageKind::Approval, "");
+    m.ts = ts;
+    m.approval = Some(approval);
+    store::append_message(&m).unwrap();
+    store::refresh_pending(agent_id);
+}
+
+fn status(agent_id: &str, rid: &str) -> (ApprovalStatus, Option<Expiry>) {
+    let a = store::find_approval(agent_id, rid).unwrap().unwrap();
+    (a.status, a.expiry)
+}
+
+const MIN: i64 = 60_000;
+
+#[test]
+fn a_card_whose_turn_ended_closes_at_once_as_moved_on() {
+    with_root(|| {
+        let a = agent();
+        let now = store::now_ms();
+        post(&a.id, bash_card("r1", "npm test"), now);
+        assert_eq!(store::get(&a.id).unwrap().pending_approvals, 1);
+        let changed = sweep_store(&a.id, Moment::TurnEnded, now, &|_| true);
+        assert_eq!(changed.len(), 1);
+        assert_eq!(
+            status(&a.id, "r1"),
+            (ApprovalStatus::Expired, Some(Expiry::MovedOn))
+        );
+        // Badges count only pending cards: an expired one is not among them.
+        assert_eq!(store::get(&a.id).unwrap().pending_approvals, 0);
+        assert!(store::pending_approvals(&a.id).unwrap().is_empty());
+    });
+}
+
+#[test]
+fn a_card_still_blocking_a_turn_waits_then_expires_as_no_answer() {
+    with_root(|| {
+        let a = agent();
+        let now = store::now_ms();
+        post(&a.id, bash_card("r1", "npm test"), now - 2 * MIN);
+        // Still waited on, within the timeout: left alone.
+        assert!(sweep_store(&a.id, Moment::Tick, now, &|_| true).is_empty());
+        assert_eq!(status(&a.id, "r1").0, ApprovalStatus::Pending);
+        // Past the timeout: closed, and remembered for this task.
+        let later = now + (CARD_EXPIRY_SECS as i64) * 1000;
+        assert_eq!(sweep_store(&a.id, Moment::Tick, later, &|_| true).len(), 1);
+        assert_eq!(
+            status(&a.id, "r1"),
+            (ApprovalStatus::Expired, Some(Expiry::NoAnswer))
+        );
+        let input = json!({ "command": "npm test" });
+        assert!(already_expired(&a.id, &tool_key("Bash", &input)));
+    });
+}
+
+#[test]
+fn a_card_nobody_waits_on_closes_on_the_next_look() {
+    with_root(|| {
+        let a = agent();
+        let now = store::now_ms();
+        post(&a.id, bash_card("r1", "ls"), now);
+        sweep_store(&a.id, Moment::Tick, now, &|_| false);
+        assert_eq!(
+            status(&a.id, "r1"),
+            (ApprovalStatus::Expired, Some(Expiry::MovedOn))
+        );
+    });
+}
+
+#[test]
+fn sign_ins_and_secrets_become_maybe_later_and_are_not_asked_again() {
+    with_root(|| {
+        let a = agent();
+        let now = store::now_ms();
+        let request = super::super::secrets::build_request(
+            &a,
+            "STRIPE_KEY",
+            "To read last month's invoices",
+            "api_key",
+            &[],
+        )
+        .unwrap();
+        let mut card = super::super::mcp::new_card(
+            "s1".into(),
+            "Secure input · STRIPE_KEY".into(),
+            request.purpose.clone(),
+            None,
+        );
+        let name = request.name.clone();
+        card.secret = Some(request);
+        post(&a.id, card, now);
+        // A turn ending doesn't close it: a secure input blocks nothing.
+        sweep_store(&a.id, Moment::TurnEnded, now, &|_| false);
+        assert_eq!(status(&a.id, "s1").0, ApprovalStatus::Pending);
+        let later = now + (CARD_EXPIRY_SECS as i64) * 1000 + 1;
+        sweep_store(&a.id, Moment::Tick, later, &|_| false);
+        assert_eq!(
+            status(&a.id, "s1"),
+            (ApprovalStatus::Expired, Some(Expiry::MaybeLater))
+        );
+        assert!(already_expired(&a.id, &secret_key(&name)));
+        // The user writes: a new task, it may ask again.
+        new_task(&a.id);
+        assert!(!already_expired(&a.id, &secret_key(&name)));
+    });
+}
+
+#[test]
+fn launch_sweeps_old_state_and_keeps_answered_cards() {
+    with_root(|| {
+        let a = agent();
+        let now = store::now_ms();
+        // State an older build left: a permission card kept "answerable"
+        // across restarts, and one answered.
+        post(
+            &a.id,
+            bash_card("old", "rm -rf build"),
+            now - 3 * 24 * 60 * MIN,
+        );
+        post(&a.id, bash_card("done", "ls"), now - MIN);
+        store::set_approval_status(&a.id, "done", ApprovalStatus::Allowed).unwrap();
+        store::expire_stale_approvals();
+        assert_eq!(
+            status(&a.id, "old"),
+            (ApprovalStatus::Expired, Some(Expiry::MovedOn))
+        );
+        assert_eq!(status(&a.id, "done"), (ApprovalStatus::Allowed, None));
+        assert_eq!(store::get(&a.id).unwrap().pending_approvals, 0);
+    });
+}
+
+#[test]
+fn the_same_ask_has_one_key_however_it_is_worded_around() {
+    let a = bash_card("r1", "npm test");
+    let mut b = bash_card("r2", "npm test");
+    b.detail = "npm test\n\nTo check the build".into();
+    assert_eq!(key_for(&a), key_for(&b));
+    assert_ne!(key_for(&a), key_for(&bash_card("r3", "npm run build")));
+}
+
+#[test]
+fn verdicts() {
+    let card = bash_card("r1", "ls");
+    let over = (CARD_EXPIRY_SECS as i64) * 1000;
+    assert_eq!(verdict(&card, 0, true, Moment::Tick), None);
+    assert_eq!(
+        verdict(&card, over, true, Moment::Tick),
+        Some(Expiry::NoAnswer)
+    );
+    assert_eq!(
+        verdict(&card, 0, true, Moment::Launch),
+        Some(Expiry::MovedOn)
+    );
+    assert_eq!(
+        verdict(&card, 0, true, Moment::TurnEnded),
+        Some(Expiry::MovedOn)
+    );
+}

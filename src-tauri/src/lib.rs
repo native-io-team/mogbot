@@ -200,8 +200,18 @@ pub fn run() {
                 // older build or an agent's own CLI left.
                 let _ =
                     tauri::async_runtime::spawn_blocking(agents::store::harden_permissions).await;
+                // Browser cards this build doesn't ask about any more: allowed
+                // before the launch sweep would close them as stale.
+                let sweep_app = badge_app.clone();
+                let _ = tauri::async_runtime::spawn_blocking(move || {
+                    agents::mcp::allow_open_browser_cards(&sweep_app)
+                })
+                .await;
                 let _ = tauri::async_runtime::spawn_blocking(agents::store::expire_stale_approvals)
                     .await;
+                // Then every card nobody can answer usefully any more closes,
+                // and stays closed (`agents/expiry.rs`).
+                agents::expiry::start(badge_app.clone());
                 // Agents imported before they were told where they are now
                 // (no Grok sandbox here): add the app's section, once.
                 let _ = tauri::async_runtime::spawn_blocking(agents::arrival::upgrade_all).await;
@@ -237,8 +247,28 @@ pub fn run() {
                     })
                     .await;
                 }
+                // Login cards an import raised before the checklist checked
+                // first become its "Maybe later" rows (`agents/team_setup.rs`).
+                match tauri::async_runtime::spawn_blocking(agents::team_setup::fold_cards).await {
+                    Ok(Ok(n)) if n > 0 => {
+                        tracing::info!("[Agents] Moved {n} import login cards onto setting up the team");
+                        agents::team_setup::emit(&badge_app);
+                        let _ = tauri::Emitter::emit(&badge_app, agents::runner::EVENT_REGISTRY, ());
+                    }
+                    Ok(Err(e)) => tracing::warn!("[Agents] Couldn't move import login cards: {e}"),
+                    _ => {}
+                }
                 // A turn the last run quit in the middle of: stop its process, say so.
                 agents::runner::recover_after_restart(&badge_app).await;
+                // Cards raised before the independence level answered local
+                // work: the ones it answers now are allowed, with a receipt.
+                {
+                    let app = badge_app.clone();
+                    let _ = tauri::async_runtime::spawn_blocking(move || {
+                        agents::mcp::sweep_auto_allowed(&app)
+                    })
+                    .await;
+                }
                 agents::notify::refresh_badge(&badge_app);
             });
             // Agents' check-ins and routines: one tick a minute, only while open.
@@ -697,6 +727,12 @@ pub fn run() {
             commands::agents::agents_team_setup_hello,
             commands::agents::agents_team_setup_missing,
             commands::agents::agents_team_setup_dismiss,
+            commands::agents::agents_browser_status,
+            commands::agents::agents_browser_enable,
+            commands::agents::agents_browser_disable,
+            commands::agents::agents_browser_open_install,
+            commands::agents::agents_access_check,
+            commands::agents::agents_team_setup_later,
             commands::agents::agents_team_setup_reopen,
             commands::agent_rooms::agents_rooms,
             commands::agent_rooms::agents_room_create,
@@ -724,6 +760,10 @@ pub fn run() {
             commands::agents::agents_set_defaults,
             commands::agents::agents_independence,
             commands::agents::agents_set_independence,
+            commands::agents::agents_set_admin,
+            commands::agents::agents_admin_activity,
+            commands::agents::agents_recently_deleted,
+            commands::agents::agents_restore,
             commands::agents::agents_desktop_settings,
             commands::agents::agents_set_desktop_settings,
             commands::agents::quick_entry_hide,

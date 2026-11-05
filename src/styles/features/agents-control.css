@@ -46,8 +46,14 @@
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
-  font-size: var(--font-size-body-sm);
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-size-caption);
   color: var(--text-muted);
+}
+
+/* Its action is as small and quiet as the line it sits in. */
+.agent-chat__queued > .text-button {
+  font-size: inherit;
 }
 
 .agent-chat__row--user:has(.agent-chat__queued) .agent-bubble--user {

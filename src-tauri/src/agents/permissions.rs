@@ -115,7 +115,7 @@ const EXACT_ONLY: &[&str] = &[
 const RUNNERS: &[&str] = &["run", "run-script", "exec", "x", "dlx"];
 
 /// A command line as its words, if it is one plain command.
-fn plain_words(command: &str) -> Option<Vec<&str>> {
+pub(super) fn plain_words(command: &str) -> Option<Vec<&str>> {
     let command = command.trim();
     if command.is_empty() || command.contains(NOT_PLAIN) {
         return None;

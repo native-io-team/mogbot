@@ -399,8 +399,9 @@
   gap: var(--spacing-2xs);
 }
 
+/* Same left edge as the reply above it (prose, no padding), a step below it. */
 .agent-bubble__stopped {
-  padding-left: var(--spacing-md);
+  margin-top: var(--spacing-xs);
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }

@@ -110,6 +110,14 @@ pub struct TeamSetup {
     /// Some routine arrived paused.
     #[serde(default)]
     pub had_routines: bool,
+    /// The logins the imported agents mentioned, kept for later instead of
+    /// a card each (`access_check`): what the check reached, and what the
+    /// user decided per service.
+    #[serde(
+        default,
+        skip_serializing_if = "super::access_check::LaterBook::is_empty"
+    )]
+    pub later: super::access_check::LaterBook,
     /// Every step done: the checklist is a line now, and nobody is quiet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finished_at: Option<i64>,
@@ -314,6 +322,13 @@ pub struct StepView {
     pub state: StepState,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub logins: Vec<LoginItem>,
+    /// Logins step: one row per service the imported agents mentioned,
+    /// reached or not (`access_check`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub later: Vec<super::access_check::LaterGroup>,
+    /// Logins step: the check, while it runs and once it's done.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub check: Option<super::access_check::CheckView>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub routines: Vec<RoutineItem>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -385,6 +400,8 @@ pub struct Arrived {
     pub agent_id: String,
     /// What it doesn't know yet, in the playback's words.
     pub gaps: Vec<String>,
+    /// The logins it mentioned: kept for later, never a card each.
+    pub later: Vec<super::access_check::Later>,
 }
 
 /// An import just made these agents: start (or extend) the checklist.
@@ -411,6 +428,9 @@ pub fn start(source: &str, arrived: Vec<Arrived>) -> Result<Option<TeamSetup>, C
         if !setup.agents.contains(&a.agent_id) {
             setup.agents.push(a.agent_id.clone());
         }
+        for l in a.later {
+            setup.later.add(l);
+        }
         for text in a.gaps {
             let gap = Gap {
                 agent_id: a.agent_id.clone(),
@@ -434,6 +454,9 @@ pub fn start(source: &str, arrived: Vec<Arrived>) -> Result<Option<TeamSetup>, C
 /// Remember that logins and routines were part of this, so their steps stay
 /// on the list (ticked) once they're dealt with.
 fn note_what_it_had(setup: &mut TeamSetup) {
+    if !setup.later.is_empty() {
+        setup.had_logins = true;
+    }
     for id in &setup.agents {
         if !logins_of(id).is_empty() {
             setup.had_logins = true;
@@ -518,6 +541,107 @@ fn logins_of(agent_id: &str) -> Vec<store::Approval> {
         .collect()
 }
 
+/// Sign-in cards still waiting for this agent (a "Connect" from the
+/// checklist, or one it raised itself): the step isn't done while they wait.
+fn login_cards_waiting(agent_id: &str) -> usize {
+    store::pending_approvals(agent_id)
+        .unwrap_or_default()
+        .iter()
+        .filter(|a| a.login.is_some())
+        .count()
+}
+
+/* ------------------------------------------------------------ maybe later */
+
+/// The live setup's logins for later, for the check.
+pub fn later_book() -> Option<super::access_check::LaterBook> {
+    load().filter(TeamSetup::is_live).map(|s| s.later)
+}
+
+/// The check's findings, onto the kept setup. Returns how many it reached.
+pub fn resolve_later(found: &[super::access_check::Found]) -> Result<usize, CommandError> {
+    Ok(change(|s| super::access_check::resolve(&mut s.later, found))?.unwrap_or(0))
+}
+
+/// The user decided a row: Not needed, or a card raised for it.
+pub fn set_later(key: &str, state: super::access_check::LaterState) -> Result<(), CommandError> {
+    let found = change(|s| {
+        let known = s
+            .later
+            .items
+            .iter()
+            .any(|l| super::access_check::key_of(&l.service, &l.title) == key);
+        if known {
+            s.later.states.insert(key.to_string(), state);
+        }
+        known
+    })?;
+    match found {
+        Some(true) => Ok(()),
+        _ => Err(CommandError::expected(
+            "That isn't on the checklist any more.",
+        )),
+    }
+}
+
+/// Cards an import raised before this existed (quiet login and secret
+/// cards for agents still being set up) become "Maybe later" rows: each is
+/// closed with a line saying where it went, never silently. Returns how
+/// many were folded.
+pub fn fold_cards() -> Result<usize, CommandError> {
+    let Some(setup) = load().filter(TeamSetup::is_live) else {
+        return Ok(0);
+    };
+    let mut moved = Vec::new();
+    for id in &setup.agents {
+        for a in store::pending_approvals(id).unwrap_or_default() {
+            let later = match (&a.login, &a.secret) {
+                (Some(l), _) if l.quiet => {
+                    let mut x = super::access_check::later_from(
+                        id,
+                        l.asked_as.as_deref().unwrap_or(&l.service),
+                        &l.why,
+                        "",
+                    );
+                    x.service = l.service.clone();
+                    x.title = l.title.clone();
+                    x.writes = l.abilities.iter().any(|b| b.id == "write");
+                    x
+                }
+                (None, Some(sec)) if sec.quiet => super::access_check::later_from(
+                    id,
+                    &sec.name,
+                    &sec.purpose,
+                    match sec.kind {
+                        super::secrets::Kind::ApiKey => "api_key",
+                        _ => "",
+                    },
+                ),
+                _ => continue,
+            };
+            moved.push((id.clone(), a.request_id.clone(), later));
+        }
+    }
+    if moved.is_empty() {
+        return Ok(0);
+    }
+    change(|s| {
+        s.had_logins = true;
+        for (_, _, l) in &moved {
+            s.later.add(l.clone());
+        }
+    })?;
+    for (agent_id, request_id, _) in &moved {
+        let _ = store::expire_with_note(agent_id, request_id, FOLDED_LINE);
+        store::refresh_pending(agent_id);
+    }
+    Ok(moved.len())
+}
+
+/// The line on a card folded into the checklist.
+pub const FOLDED_LINE: &str =
+    "Moved to \"Setting up your team\": checked there first, and only asked if this Mac can't reach it.";
+
 fn routines_of(agent: &store::Agent) -> Vec<RoutineItem> {
     agent
         .check_ins
@@ -598,14 +722,37 @@ fn build(setup: &TeamSetup) -> SetupView {
                 .filter_map(|approval| login_item(a, approval))
         })
         .collect();
-    if setup.had_logins || !logins.is_empty() {
+    let names = |id: &str| agents.iter().find(|a| a.id == id).map(|a| a.name.clone());
+    let later = setup.later.groups(&names);
+    let check = super::access_check::current();
+    let checking = check.as_ref().is_some_and(|c| c.running);
+    // Open: nothing reached it and the user hasn't decided; a card raised
+    // from the row is open until it's answered.
+    let later_open = later.iter().any(|g| match &g.state {
+        super::access_check::LaterState::Open => true,
+        super::access_check::LaterState::Asked {
+            agent_id,
+            request_id,
+        } => store::find_approval(agent_id, request_id)
+            .ok()
+            .flatten()
+            .is_some_and(|a| a.status == ApprovalStatus::Pending),
+        _ => false,
+    });
+    let cards_waiting = agents.iter().any(|a| login_cards_waiting(&a.id) > 0);
+    let nothing_left = logins.is_empty() && !later_open && !cards_waiting && !checking;
+    if setup.had_logins || !logins.is_empty() || !later.is_empty() {
         let state = match kept(StepId::Logins) {
-            Some(StepState::Skipped) if !logins.is_empty() => StepState::Skipped,
-            _ if logins.is_empty() => StepState::Done,
+            Some(StepState::Skipped) if !nothing_left => StepState::Skipped,
+            _ if nothing_left => StepState::Done,
             Some(s) => s,
             None => StepState::Open,
         };
-        steps.push(step(StepId::Logins, state, |v| v.logins = logins));
+        steps.push(step(StepId::Logins, state, |v| {
+            v.logins = logins;
+            v.later = later;
+            v.check = check;
+        }));
     }
 
     let routines: Vec<RoutineItem> = agents.iter().flat_map(routines_of).collect();
@@ -687,6 +834,8 @@ fn step(id: StepId, state: StepState, fill: impl FnOnce(&mut StepView)) -> StepV
         id,
         state,
         logins: Vec::new(),
+        later: Vec::new(),
+        check: None,
         routines: Vec::new(),
         gaps: Vec::new(),
         agents: Vec::new(),
@@ -739,7 +888,7 @@ pub fn chief_context() -> Option<String> {
         .iter()
         .filter(|s| s.state == StepState::Open)
         .map(|s| match s.id {
-            StepId::Logins => "adding logins",
+            StepId::Logins => "the few logins this Mac couldn't reach",
             StepId::Routines => "switching routines on",
             StepId::Missing => "what some agents said they're missing",
             StepId::Hello => "saying hi to each agent",
