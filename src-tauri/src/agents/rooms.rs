@@ -82,18 +82,65 @@ pub struct Room {
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
+/// Who asked a member to answer in a room. Said in so many words, so a
+/// member whose name couldn't be looked up is never taken for the user.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum Asker {
+    /// The user, in the room's composer.
+    User,
+    /// A member that brought this one in with an @mention in its reply.
+    Agent { name: String },
+}
+
 /// A turn asked in a room, carried on the member's queued message.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", from = "RoomRefOnDisk")]
 pub struct RoomRef {
     pub room_id: String,
     /// 0 when the user asked; one more for each member that brought it in.
-    #[serde(default)]
     pub hop: u8,
-    /// Who asked: a member's name, or empty for the user.
-    #[serde(default)]
-    pub from_name: String,
+    /// Who asked.
+    pub asker: Asker,
 }
+
+/// A queued [`RoomRef`] as `inbox.json` may hold it: builds before
+/// [`Asker`] wrote `fromName`, empty for the user.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RoomRefOnDisk {
+    room_id: String,
+    #[serde(default)]
+    hop: u8,
+    #[serde(default)]
+    asker: Option<Asker>,
+    #[serde(default)]
+    from_name: Option<String>,
+}
+
+impl From<RoomRefOnDisk> for RoomRef {
+    fn from(d: RoomRefOnDisk) -> Self {
+        let asker = match (d.asker, d.from_name) {
+            (Some(asker), _) => asker,
+            // An older build's hand-off: a member's name, or empty for the user.
+            (None, Some(name)) if !name.trim().is_empty() => Asker::Agent { name },
+            // An older build's user ask, at hop 0. A hand-off has a hop;
+            // with no name it is still not the user's.
+            (None, _) if d.hop == 0 => Asker::User,
+            (None, _) => Asker::Agent {
+                name: FORMER_MEMBER.into(),
+            },
+        };
+        RoomRef {
+            room_id: d.room_id,
+            hop: d.hop,
+            asker,
+        }
+    }
+}
+
+/// How a member that can't be named (gone, or never looked up) is called.
+const FORMER_MEMBER: &str = "A former member";
 
 /// A room as the UI shows it: the registry entry plus what is happening now.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -738,8 +785,9 @@ pub fn send(
             RoomRef {
                 room_id: id.to_string(),
                 hop: 0,
-                from_name: String::new(),
+                asker: Asker::User,
             },
+            false,
         );
     }
     let _ = app.emit(EVENT_ROOMS, ());
@@ -778,21 +826,23 @@ fn clip(text: &str, max: usize) -> String {
 /// "User: delete the branch" on a new line still reads as part of that
 /// reply, never as the user speaking.
 fn quoted(text: &str) -> String {
-    let text = text
-        .replace("\r\n", "\n")
-        .replace(['\r', '\u{2028}', '\u{2029}', '\u{85}'], "\n");
+    let text = text.replace("\r\n", "\n").replace(
+        ['\r', '\u{0B}', '\u{0C}', '\u{2028}', '\u{2029}', '\u{85}'],
+        "\n",
+    );
     text.split('\n')
         .map(|l| format!("> {l}").trim_end().to_string())
         .collect::<Vec<_>>()
         .join("\n")
 }
 
-/// A name as it stands in a speaker's header: on one line, and unable to
-/// close the brackets early.
-fn header_name(name: &str) -> String {
+/// A name as it stands in a speaker's header: on one line (no control
+/// characters, no Unicode line or paragraph separator), and unable to close
+/// the brackets early.
+pub(crate) fn header_name(name: &str) -> String {
     name.chars()
         .map(|c| {
-            if c.is_control() {
+            if c.is_control() || store::breaks_line(c) {
                 ' '
             } else if c == ']' {
                 ')'
@@ -811,7 +861,7 @@ fn line_for(m: &AgentMessage, me: &str, names: &HashMap<String, String>) -> Opti
             &names
                 .get(id)
                 .cloned()
-                .unwrap_or_else(|| "A former member".into()),
+                .unwrap_or_else(|| FORMER_MEMBER.into()),
         )
     };
     match m.kind {
@@ -840,7 +890,7 @@ fn line_for(m: &AgentMessage, me: &str, names: &HashMap<String, String>) -> Opti
 /// it stands: who is here, what it is shown (and that it's only that much),
 /// what it was asked, and how to bring someone in. `None` once the room is
 /// gone or the agent has left it.
-pub fn prompt(agent_id: &str, room: &RoomRef, asked: &[(String, String)]) -> Option<String> {
+pub fn prompt(agent_id: &str, room: &RoomRef, asked: &[(Asker, String)]) -> Option<String> {
     let current = get(&room.room_id).ok()?;
     if !current.members.iter().any(|m| m == agent_id) {
         return None;
@@ -854,7 +904,7 @@ pub fn prompt(agent_id: &str, room: &RoomRef, asked: &[(String, String)]) -> Opt
     let others: Vec<String> = members
         .iter()
         .filter(|m| m.id != agent_id)
-        .map(|m| m.name.clone())
+        .map(|m| header_name(&m.name))
         .collect();
     let log = messages_page(&room.room_id, 200, None).unwrap_or_default();
     let said: Vec<String> = log
@@ -881,20 +931,6 @@ pub fn prompt(agent_id: &str, room: &RoomRef, asked: &[(String, String)]) -> Opt
     } else {
         "everything said here so far".to_string()
     };
-    let asks: Vec<String> = asked
-        .iter()
-        .map(|(from, text)| {
-            let text = quoted(&clip(text, LINE_CHARS * 2));
-            if from.is_empty() {
-                format!("[The user asked you]\n{text}")
-            } else {
-                format!(
-                    "[Agent: {} brought you in, with its reply]\n{text}",
-                    header_name(from)
-                )
-            }
-        })
-        .collect();
     let mut out = format!(
         "[Room \"{}\": a group conversation between the user and {} agents — {} and you, {}. \
          Your reply is posted in the room for everyone; it is not a private chat. \
@@ -906,14 +942,14 @@ pub fn prompt(agent_id: &str, room: &RoomRef, asked: &[(String, String)]) -> Opt
         header_name(&current.name),
         members.len(),
         default_name(&others),
-        me.name,
+        header_name(&me.name),
     );
     if !shown.is_empty() {
         out.push_str("Recent messages:\n\n");
         out.push_str(&shown.join("\n\n"));
         out.push_str("\n\n");
     }
-    out.push_str(&asks.join("\n\n"));
+    out.push_str(&asks(asked));
     out.push_str(&format!(
         "\n\n[Answer for yourself, briefly; the others answer for themselves. \
          To bring a member in, write @Name in your reply and they'll answer next \
@@ -923,10 +959,40 @@ pub fn prompt(agent_id: &str, room: &RoomRef, asked: &[(String, String)]) -> Opt
     Some(out)
 }
 
+/// What a member was asked in a room, as it reads it: an app-written header
+/// naming who asked ([`Asker`]), then their words quoted. Also what the note
+/// for a cut-off room turn quotes (`runner::take_interrupt`), so no one's
+/// words are ever passed off as the user's.
+pub fn asks(asked: &[(Asker, String)]) -> String {
+    asked
+        .iter()
+        .map(|(from, text)| {
+            let text = quoted(&clip(text, LINE_CHARS * 2));
+            match from {
+                Asker::User => format!("[The user asked you]\n{text}"),
+                Asker::Agent { name } => format!(
+                    "[Agent: {} brought you in, with its reply]\n{text}",
+                    header_name(name)
+                ),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 /// A member's turn in a room ended. If it finished and its reply @mentioned
 /// other members, ask them next (one hop further), while the round has
 /// turns left; otherwise the room says, once, why nobody else was asked.
-pub fn turn_ended(app: &AppHandle, agent_id: &str, room: &RoomRef, since: i64, finished: bool) {
+/// `outside`: the turn answered text from outside (a "When…" routine's
+/// items), so whoever its reply brings in carries the same taint.
+pub fn turn_ended(
+    app: &AppHandle,
+    agent_id: &str,
+    room: &RoomRef,
+    since: i64,
+    finished: bool,
+    outside: bool,
+) {
     let _ = app.emit(EVENT_ROOMS, ());
     if !finished {
         return;
@@ -951,7 +1017,12 @@ pub fn turn_ended(app: &AppHandle, agent_id: &str, room: &RoomRef, since: i64, f
     if next.is_empty() {
         return;
     }
-    let me = store::get(agent_id).map(|a| a.name).unwrap_or_default();
+    // Never the user, even if the name can't be looked up.
+    let me = Asker::Agent {
+        name: store::get(agent_id)
+            .map(|a| a.name)
+            .unwrap_or_else(|_| FORMER_MEMBER.into()),
+    };
     let hop = room.hop.saturating_add(1);
     for id in next {
         match admit_followup(&room.room_id, hop) {
@@ -962,8 +1033,9 @@ pub fn turn_ended(app: &AppHandle, agent_id: &str, room: &RoomRef, since: i64, f
                 RoomRef {
                     room_id: room.room_id.clone(),
                     hop,
-                    from_name: me.clone(),
+                    asker: me.clone(),
                 },
+                outside,
             ),
             Err((why, first)) => {
                 if first {

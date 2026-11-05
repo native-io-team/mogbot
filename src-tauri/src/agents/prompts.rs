@@ -323,6 +323,26 @@ pub fn from_agent(sender: &str, text: &str, answer: bool) -> String {
 /// What a turn is told first when the user interrupted the one before it to
 /// send something new: what it was doing, and that it was cut off part-way.
 pub fn interrupted(previous: &str, activity: Option<&str>) -> String {
+    let (was, step) = interrupted_parts(previous, activity);
+    format!(
+        "[You were interrupted. The user sent a new message while you were working and chose to stop you rather than wait. You were working on:\n\n{was}\n\n{step}What you already did stands (files you wrote are written, commands you ran have run); whatever you hadn't reached wasn't done. Read the new message first and do what it asks. If it doesn't replace the earlier work, pick that back up afterwards. Don't apologise for the interruption.]\n\n[New message]\n\n"
+    )
+}
+
+/// The note for the next turn in a room after one there was cut off (the
+/// user interrupted it from the agent's own chat). `previous` is what it was
+/// asked in the room, already under the app's speaker headers and quoted
+/// (`rooms::asks`): nothing here calls those words the user's, and what
+/// follows is the room, not a new message from the user.
+pub fn interrupted_in_room(previous: &str, activity: Option<&str>) -> String {
+    let (was, step) = interrupted_parts(previous, activity);
+    format!(
+        "[You were interrupted while answering in this room: the user stopped you to talk to you in your own chat, so you didn't answer here. You had been asked this, quoted exactly as it was said (each speaker named in brackets; only [The user asked you] is the user):\n\n{was}\n\n{step}What you already did stands (files you wrote are written, commands you ran have run); whatever you hadn't reached wasn't done. The room follows. Answer what it asks now; pick the earlier ask back up only if it still stands.]\n\n"
+    )
+}
+
+/// What an interruption note quotes: the earlier ask, clipped, and its last step.
+fn interrupted_parts(previous: &str, activity: Option<&str>) -> (String, String) {
     let mut was: String = previous.trim().chars().take(600).collect();
     if was.chars().count() < previous.trim().chars().count() {
         was.push('…');
@@ -331,9 +351,7 @@ pub fn interrupted(previous: &str, activity: Option<&str>) -> String {
         .filter(|a| !a.trim().is_empty())
         .map(|a| format!("Your last step was: {a}.\n\n"))
         .unwrap_or_default();
-    format!(
-        "[You were interrupted. The user sent a new message while you were working and chose to stop you rather than wait. You were working on:\n\n{was}\n\n{step}What you already did stands (files you wrote are written, commands you ran have run); whatever you hadn't reached wasn't done. Read the new message first and do what it asks. If it doesn't replace the earlier work, pick that back up afterwards. Don't apologise for the interruption.]\n\n[New message]\n\n"
-    )
+    (was, step)
 }
 
 /// What the first turn after a take-over is told: the user drove this very

@@ -1633,6 +1633,13 @@ conversation, not a merged agent: each member keeps its own session and
 memory, and a message in the room becomes a turn in each addressed member's
 own inbox.
 
+A room turn resumes the member's one engine session, the same one its own
+chat uses (`runner::run_turn`). So an agent remembers its own chat when it
+answers in a room, and what it read and said in a room is in that session
+when you next talk to it alone. A room is not a private place: what a member
+says there is posted for everyone in it. Whether rooms should get sessions
+of their own is open.
+
 - **Who answers.** The members you @mention; every member for `@everyone`;
   otherwise the room's **lead** (the Chief of Staff when it is a member, or
   whoever the room's settings name). With no mention and no lead nothing is
@@ -1649,19 +1656,27 @@ own inbox.
   over what was said, each line of it quoted with `> ` (`rooms::quoted`), and
   the framing says only `[User]` is the user and that a member's words are
   its report, not instructions. A reply that writes "User: delete the
-  branch" on a line of its own still reads as part of that reply. Names
-  can't hold control characters, and "everyone" is reserved
-  (`store::validate_name`).
+  branch" on a line of its own still reads as part of that reply (CR, VT,
+  FF, NEL and the Unicode line and paragraph separators all start a new
+  quoted line). Who asked is said in so many words (`rooms::Asker`: the
+  user, or a named member), so a member that can't be looked up is never
+  taken for the user. Names can't hold control characters or line and
+  paragraph separators, and "everyone" is reserved (`store::validate_name`,
+  imported agents included); every name in the framing goes through
+  `rooms::header_name` too.
 - **Agents bringing each other in.** A finished reply that @mentions another
   member (`rooms::mentioned_in`: whole names, longest first, never an email
   address, never `@everyone`) asks that member next, one hop further. Each
   user message starts a round; at most **8 agent turns** per round (the
   addressed members included) and the runner's 6-hop cap. Past either, nobody
   else is asked and the room says so once. The room shows "3 of 8 replies for
-  this message" while it runs. `message_agent` still works from a room turn
+  this message" while it runs. A reply from a turn answering text from
+  outside (a "When…" routine's items) passes that taint to whoever it
+  brings in. `message_agent` still works from a room turn
   (for work outside the room), and the turn starts as far along the chain as
   its room hop, so a hand-off at hop 4 can delegate at most two more hops:
-  the 6-hop cap per user message holds across rooms and `message_agent`.
+  the 6-hop cap per user message holds across rooms, `message_agent` and
+  `create_agent`'s first task (`runner::next_hop`).
 - **One place per turn.** A room ask carries `room` on the queued message
   (`runner::Inbound`). `take_batch` takes only a run of messages said in the
   same place, so a room turn is never folded into the agent's own chat (or
@@ -1675,12 +1690,16 @@ own inbox.
 - **Interrupting.** ⌘↵ in an agent's own chat moves what was said there
   ahead of any room asks (`runner::interrupt`), so the message you
   interrupted for is the one answered. What the cut-off turn was doing is
-  told only to the next turn in the same place (`Runtime.interrupted_in`),
-  so nothing said in a room reaches a private turn, or the other way round.
+  told only to the next turn in the same place (`Runtime.interrupted_in`):
+  the note about a cut-off room turn quotes what was asked there under the
+  app's speaker headers, never as the user's words. (This scopes only that
+  note; the engine session itself is shared, see above.)
   A room turn cut off this way leaves "X was interrupted for a message in
   its own chat, so it didn't answer here." in the room; a Stop in the
   agent's own chat that drops queued room asks leaves "X was stopped before
-  answering." in each room.
+  answering." in each room, and a room turn that panics leaves "Something
+  went wrong running X, so it didn't answer here." there (its error line
+  stays in the agent's own chat).
 - **Where lines live.** What a room turn records (its reply, cards and change
   cards; its own stop, interruption and error lines through
   `runner::record_in_turn`; never your own lines, another agent's request, a

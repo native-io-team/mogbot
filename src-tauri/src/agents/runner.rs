@@ -379,6 +379,13 @@ pub fn current_hop(agent_id: &str) -> u8 {
         .unwrap_or(0)
 }
 
+/// The hop a request sent from the agent's turn in progress travels at
+/// (`message_agent`, `create_agent`'s first task): one past that turn's, or
+/// `None` past [`MAX_HOPS`]. A room turn's starts at its room hop.
+pub fn next_hop(agent_id: &str) -> Option<u8> {
+    reply_hop(current_hop(agent_id))
+}
+
 /// The hop a message sent on behalf of a turn at `hop` travels at, or
 /// `None` past [`MAX_HOPS`]: that word is not sent, so a chain can't loop.
 fn reply_hop(hop: u8) -> Option<u8> {
@@ -1181,22 +1188,32 @@ pub fn enqueue_from_outside(app: &AppHandle, agent_id: &str, text: String, ticke
 }
 
 /// Queue a turn for a member of a room: asked there by the user, or brought
-/// in by another member's @mention (`agents::rooms`).
-pub fn enqueue_room(app: &AppHandle, agent_id: &str, text: String, room: super::rooms::RoomRef) {
-    push(
-        app,
-        agent_id,
-        Inbound {
-            id: String::new(),
-            text,
-            from: From::User,
-            reply: false,
-            routine: false,
-            ticket: None,
-            room: Some(room),
-            outside: false,
-        },
-    );
+/// in by another member's @mention (`agents::rooms`). `outside`: the reply
+/// that brought it in answered text from outside, and the taint goes with it
+/// (see [`from_outside`]).
+pub fn enqueue_room(
+    app: &AppHandle,
+    agent_id: &str,
+    text: String,
+    room: super::rooms::RoomRef,
+    outside: bool,
+) {
+    push(app, agent_id, room_inbound(text, room, outside));
+}
+
+/// What [`enqueue_room`] queues: a room ask, owed to no agent, carrying the
+/// outside taint of the reply that brought it in.
+fn room_inbound(text: String, room: super::rooms::RoomRef, outside: bool) -> Inbound {
+    Inbound {
+        id: String::new(),
+        text,
+        from: From::User,
+        reply: false,
+        routine: false,
+        ticket: None,
+        room: Some(room),
+        outside,
+    }
 }
 
 /// Whether the agent has been asked in this room and hasn't started on it:
@@ -1769,10 +1786,14 @@ fn take_interrupt(agent_id: &str) -> bool {
         return false;
     }
     let activity = runtime.status.as_ref().and_then(|s| s.activity.clone());
-    runtime.interrupted = Some(prompts::interrupted(
-        runtime.prompt.as_deref().unwrap_or(""),
-        activity.as_deref(),
-    ));
+    let was = runtime.prompt.as_deref().unwrap_or("");
+    // A room turn's prompt is what it was asked there, quoted under the
+    // app's headers (`rooms::asks`): its note says so, and never that the
+    // user sent it.
+    runtime.interrupted = Some(match runtime.room {
+        Some(_) => prompts::interrupted_in_room(was, activity.as_deref()),
+        None => prompts::interrupted(was, activity.as_deref()),
+    });
     runtime.interrupted_in = runtime.room.as_ref().map(|r| r.room_id.clone());
     true
 }
@@ -2053,7 +2074,16 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     runtime.waits = 0;
     runtime.cancel = Some(Arc::new(Notify::new()));
     runtime.interrupt = false;
-    let prompt = compose(&batch);
+    let asked: Vec<(super::rooms::Asker, String)> = batch
+        .iter()
+        .filter_map(|m| m.room.as_ref().map(|r| (r.asker.clone(), m.text.clone())))
+        .collect();
+    // A room's asks are never the user's own words in the agent's chat: what
+    // the turn was asked is kept quoted, under who asked it.
+    let prompt = match runtime.room {
+        Some(_) => super::rooms::asks(&asked),
+        None => compose(&batch),
+    };
     runtime.prompt = Some(prompt.clone());
     // What an interrupted turn left is told only to a turn in the same place;
     // otherwise it waits for one (or goes when the agent is idle again).
@@ -2073,14 +2103,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
         room: room.map(|room| RoomBatch {
             room,
             preamble,
-            asked: batch
-                .iter()
-                .filter_map(|m| {
-                    m.room
-                        .as_ref()
-                        .map(|r| (r.from_name.clone(), m.text.clone()))
-                })
-                .collect(),
+            asked,
         }),
     })
 }
@@ -2101,8 +2124,8 @@ struct RoomBatch {
     room: super::rooms::RoomRef,
     /// What an interrupted turn left for this one to be told first.
     preamble: String,
-    /// Who asked (a name; empty for the user) and what they said, in order.
-    asked: Vec<(String, String)>,
+    /// Who asked and what they said, in order.
+    asked: Vec<(super::rooms::Asker, String)>,
 }
 
 /// The queue is empty: the worker is done. Decided under the same lock
@@ -2226,6 +2249,8 @@ struct PanicReset {
     /// Queued messages dropped with it (it died before taking them), whose
     /// senders are told.
     dropped: Vec<Inbound>,
+    /// The room the dead turn was answering in: it hears the ask won't be.
+    room: Option<String>,
 }
 
 /// Reset a worker that panicked: in memory only (no I/O), so it is safe
@@ -2246,6 +2271,8 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     runtime.turn_usage = super::usage::UsageTotals::default();
     runtime.turn_mixed = false;
     runtime.outside = false;
+    // What is recorded from now on is the agent's own, not the dead turn's room's.
+    let room = runtime.room.take().map(|r| r.room_id);
     runtime.status = Some(Status::idle());
     // Messages that arrived during the dead turn are newer than what killed
     // it: a new worker sends them (or the hand-back does, while someone
@@ -2266,6 +2293,7 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
         restart,
         hop,
         dropped,
+        room,
     }
 }
 
@@ -2285,6 +2313,10 @@ fn after_panic(app: &AppHandle, agent_id: &str, reset: PanicReset) {
     line.failure = Some(super::failure::Failure::OTHER);
     let _ = record(app, line);
     super::work::finish(app, agent_id, store::now_ms());
+    // A room it was answering in is told, so the ask doesn't just vanish.
+    if let Some(room) = &reset.room {
+        super::rooms::say(app, room, panicked_in_room_line(agent_id));
+    }
     for to in &reset.owed {
         tell_couldnt_finish(
             app,
@@ -2464,7 +2496,7 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             Ok(Ended::Interrupted) => {
                 // Its debts and scheduled runs carry over to the next turn.
                 if let Some(room) = &room_ref {
-                    super::rooms::turn_ended(&app, &agent_id, room, since, false);
+                    super::rooms::turn_ended(&app, &agent_id, room, since, false, false);
                 }
                 clear_room(&agent_id);
                 notify::turn_ended(&app, &agent_id);
@@ -2502,7 +2534,8 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         }
         // A room hears who the reply brought in next (its @mentions).
         if let Some(room) = &room_ref {
-            super::rooms::turn_ended(&app, &agent_id, room, since, finished);
+            let outside = from_outside(&agent_id);
+            super::rooms::turn_ended(&app, &agent_id, room, since, finished, outside);
         }
         clear_room(&agent_id);
         notify::turn_ended(&app, &agent_id);
@@ -2514,6 +2547,14 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
 fn interrupted_in_room_line(agent_id: &str) -> String {
     let name = store::get(agent_id).map(|a| a.name).unwrap_or_default();
     format!("{name} was interrupted for a message in its own chat, so it didn't answer here.")
+}
+
+/// The room's line for a member whose turn there panicked.
+fn panicked_in_room_line(agent_id: &str) -> String {
+    let name = store::get(agent_id)
+        .map(|a| a.name)
+        .unwrap_or_else(|_| "a member".into());
+    format!("Something went wrong running {name}, so it didn't answer here.")
 }
 
 /// The turn's room is over: what is recorded from now on is the agent's own.

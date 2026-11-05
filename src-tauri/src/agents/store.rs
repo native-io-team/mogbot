@@ -665,6 +665,13 @@ pub struct NewAgent {
     pub is_main: bool,
 }
 
+/// A character that starts a new line where a model reads text, though it
+/// isn't a control character: Unicode's line and paragraph separators
+/// (Zl, Zp).
+pub fn breaks_line(c: char) -> bool {
+    matches!(c, '\u{2028}' | '\u{2029}')
+}
+
 pub fn validate_name(name: &str) -> Result<String, CommandError> {
     let name = name.trim();
     if name.is_empty() {
@@ -676,7 +683,7 @@ pub fn validate_name(name: &str) -> Result<String, CommandError> {
             "Keep the name under 40 characters.",
         ));
     }
-    if name.chars().any(char::is_control) {
+    if name.chars().any(|c| c.is_control() || breaks_line(c)) {
         return Err(super::err_invalid("name", "Keep the name on one line."));
     }
     // "@everyone" in a room means every member (`agents::rooms`).
@@ -889,9 +896,9 @@ pub fn instructions_of(raw: &str) -> String {
 /// avatar and settings as they were there. Refused if the id or the name is
 /// already taken, or it would be a second Chief of Staff. Its home must
 /// already be in place.
-pub fn insert_imported(agent: Agent) -> Result<Agent, CommandError> {
+pub fn insert_imported(mut agent: Agent) -> Result<Agent, CommandError> {
     validate_id(&agent.id)?;
-    validate_name(&agent.name)?;
+    agent.name = validate_name(&agent.name)?;
     let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut registry = read_registry()?;
     if registry.agents.iter().any(|a| a.id == agent.id) {
