@@ -349,7 +349,7 @@ const bodyOf = (colors: Palette) => ({
 });
 
 const useStyles = makeStyles((colors) => ({
-  root: { gap: space.sm },
+  root: { gap: space.md },
   p: bodyOf(colors),
   heading: { fontFamily: fonts.semibold, color: colors.textStrong, marginTop: space.xs },
   strong: { fontFamily: fonts.semibold, color: colors.textStrong },
