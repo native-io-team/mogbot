@@ -22,10 +22,12 @@ import {
   registerSharedPreviewMcpServers,
   deliverBridgeResponse,
   setAgentBridgeAttached,
+  answersRequest,
   type BridgeRequest,
   type ViewportPreset,
 } from '../lib/agentBridge';
 import { beginAgentActivity } from '../lib/agentActivityStore';
+import { attachPreviewPane } from '../lib/agentPreview';
 import { logger } from '../lib/logger';
 import { trackEvent } from '../lib/analytics';
 
@@ -50,6 +52,10 @@ interface UseAgentBridgeParams {
   /** Size of the box the agent activity overlay covers, in the frame's own
    *  pixels — null when the page's own viewport fractions can be trusted. */
   getOverlayFrameSize: () => { w: number; h: number } | null;
+  /** `pane`: the preview beside an agent's chat. It answers only the calls the
+   *  backend routes to a pane, registers with no agent CLI, and tells the
+   *  backend which folder it shows (`agents_preview_attach`). */
+  mode?: 'workspace' | 'pane';
 }
 
 export function useAgentBridge({
@@ -64,6 +70,7 @@ export function useAgentBridge({
   getViewportWidth,
   canvasMode,
   getOverlayFrameSize,
+  mode = 'workspace',
 }: UseAgentBridgeParams) {
   // Live values for the long-lived listener — rebinding the Tauri listener on
   // every URL change would race in-flight requests.
@@ -102,6 +109,16 @@ export function useAgentBridge({
     let unlisten: (() => void) | null = null;
 
     const setUp = async () => {
+      if (mode === 'pane') {
+        await listenForRequests();
+        if (cancelled) return;
+        attachPreviewPane(projectPath, true).catch((err: unknown) => {
+          logger.warn('[AgentBridge] Failed to attach the preview pane', {
+            error: formatCommandError(asCommandError(err)),
+          });
+        });
+        return;
+      }
       let url: string;
       try {
         url = await getAgentBridgeUrl(projectPath);
@@ -141,8 +158,21 @@ export function useAgentBridge({
       );
       void registerSharedPreviewMcpServers();
 
-      unlisten = await listen<BridgeRequest>('agent-bridge-request', (event) => {
+      await listenForRequests();
+      // The effect was cleaned up while `listen` was in flight.
+      if (cancelled) return;
+      // Listener is live — let tool calls route here instead of failing fast.
+      setAgentBridgeAttached(projectPath, true).catch((err: unknown) => {
+        logger.warn('[AgentBridge] Failed to mark preview attached', {
+          error: formatCommandError(asCommandError(err)),
+        });
+      });
+    };
+
+    const listenForRequests = async () => {
+      const off = await listen<BridgeRequest>('agent-bridge-request', (event) => {
         const request = event.payload;
+        if (!answersRequest(mode, request)) return;
         void (async () => {
           const live = ctxRef.current;
           // Light up the preview overlay (glow/cursor/chip) for the call's
@@ -170,18 +200,11 @@ export function useAgentBridge({
           await deliverBridgeResponse(request.requestId, request.tool, result);
         })();
       });
-      // The effect was cleaned up while `listen` was in flight.
       if (cancelled) {
-        unlisten();
-        unlisten = null;
+        off();
         return;
       }
-      // Listener is live — let tool calls route here instead of failing fast.
-      setAgentBridgeAttached(projectPath, true).catch((err: unknown) => {
-        logger.warn('[AgentBridge] Failed to mark preview attached', {
-          error: formatCommandError(asCommandError(err)),
-        });
-      });
+      unlisten = off;
     };
 
     void setUp();
@@ -192,7 +215,8 @@ export function useAgentBridge({
       // The bridge server stays up for the app's lifetime; detaching makes
       // tool calls fail fast with "preview isn't active" instead of waiting
       // out the timeout.
-      setAgentBridgeAttached(projectPath, false).catch(() => {});
+      if (mode === 'pane') attachPreviewPane(projectPath, false).catch(() => {});
+      else setAgentBridgeAttached(projectPath, false).catch(() => {});
     };
-  }, [projectPath]);
+  }, [projectPath, mode]);
 }

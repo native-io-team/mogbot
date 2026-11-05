@@ -620,6 +620,14 @@ const LIVE = [
       'The launch table: Check and Owner start-aligned; Score (98%, 100%, —, 1,204.5) right-aligned with its digits lined up, header too',
   },
   {
+    name: 'result-tested',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: scrollToText('Watch live'),
+    check:
+      'A tested card: the outcome, what is broken, console errors, a paging strip of step screenshots with captions, Watch live as a text action',
+  },
+  {
     name: 'result-ask',
     route: '/chat/fixtures',
     ready: 'Fixtures',

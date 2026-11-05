@@ -1572,6 +1572,27 @@ impl Backend for Stub {
         Ok(json!({ "outcome": "kept", "files": 2, "branch": into.unwrap_or("main") }))
     }
 
+    async fn watch_port(
+        &self,
+        agent_id: &str,
+        message_id: &str,
+    ) -> Result<(String, u16), CommandError> {
+        if agent_id == AGENT && message_id == "m-result" {
+            Ok(("/Users/test/ShipStudio/site".into(), 4123))
+        } else {
+            Err(CommandError::expected(
+                "Open Preview on the Mac first — the site isn't running there.",
+            ))
+        }
+    }
+
+    async fn watch_publish(&self) -> Result<String, CommandError> {
+        Ok(format!(
+            "https://mac.example.ts.net:{}",
+            super::watch::WATCH_TAILNET_PORT
+        ))
+    }
+
     async fn discard_copy(&self, agent_id: &str, copy_id: &str) -> Result<(), CommandError> {
         if agent_id != AGENT || copy_id != "copy-1" {
             return Err(CommandError::expected(

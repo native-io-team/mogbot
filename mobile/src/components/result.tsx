@@ -15,6 +15,9 @@ import {
   beforeAfter,
   CHECKED_HEADING,
   changesLine,
+  consoleLine,
+  testHeadline,
+  testShots,
   itemName,
   listedItems,
   MAC_FEATURES,
@@ -24,9 +27,12 @@ import {
   type ResultCard,
   type ResultItem,
   type ResultRef,
+  type TestReport,
 } from '@shipstudio/companion-protocol';
 import { useState, type ReactNode } from 'react';
-import { Linking, Pressable, View } from 'react-native';
+import { Linking, Pressable, ScrollView, View } from 'react-native';
+import { openHere } from '../lib/logins';
+import { describeError, watchLive } from '../lib/session';
 import { haptic } from '../lib/haptics';
 import { makeStyles, useColors } from '../lib/appearance';
 import { alpha, iconSize, radius, space } from '../lib/theme';
@@ -44,6 +50,93 @@ export const refOf = (card: ResultCard): ResultRef => ({
   version: card.version,
   title: card.title,
 });
+
+/** A test screenshot's width in the strip: a phone-sized page shows whole, caption below. */
+const SHOT_WIDTH = 200;
+
+/** The Mac can hand out a link to a card's running site (`agents.watchLive`). */
+export const useCanWatch = () => useServed('agents.watchLive');
+
+/**
+ * What "Test it" found on the Mac: the outcome in a line, the console's
+ * errors, the agent's list of what's broken, and its screenshots as a strip
+ * that pages sideways, each captioned with the step it was taken at.
+ */
+export function TestPart({
+  report,
+  agentId,
+  onError,
+}: {
+  report: TestReport;
+  agentId: string;
+  onError: (t: string) => void;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const [width, setWidth] = useState(0);
+  const shots = testShots(report);
+  const broken = report.broken ?? [];
+  const errors = consoleLine(report);
+  return (
+    <View
+      style={{ gap: space.sm }}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      testID="result-test"
+    >
+      <View style={styles.row}>
+        {report.outcome === 'broken' && (
+          <Icon
+            name="exclamationmark.triangle"
+            size={iconSize.inline}
+            color={colors.accentWarning}
+          />
+        )}
+        <T variant="small" style={styles.strong}>
+          {testHeadline(report)}
+        </T>
+      </View>
+      {!!report.summary && (
+        <T variant="small" color={colors.textBody}>
+          {report.summary}
+        </T>
+      )}
+      {broken.map((line, i) => (
+        <T key={`${i}:${line}`} variant="small" color={colors.textBody}>
+          • {line}
+        </T>
+      ))}
+      {errors && (
+        <T variant="caption" color={colors.textMuted}>
+          {errors}
+        </T>
+      )}
+      {shots.length > 0 && width > 0 && (
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          accessibilityLabel={`${shots.length} screenshots from the test`}
+          testID="result-test-strip"
+          style={{ width }}
+        >
+          {shots.map(({ shot, label }, i) => (
+            <View key={`${i}:${shot.path}`} style={{ width, gap: space.xs }}>
+              <Attachments
+                agentId={agentId}
+                attachments={[shot]}
+                width={Math.min(width, SHOT_WIDTH)}
+                onError={onError}
+              />
+              <T variant="caption" color={colors.textMuted} numberOfLines={2}>
+                {`${i + 1} of ${shots.length} · ${label}`}
+              </T>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
 
 /** Only plain web links open; anything else is shown, not followed. */
 const safeLink = (url: string) => /^https?:\/\//i.test(url);
@@ -190,6 +283,8 @@ export function ResultCardView({
   const [opened, setOpened] = useState(false);
   const parts = useCopyParts(copy ?? null);
   const connected = useApp((s) => s.link.kind === 'connected');
+  const canWatch = useCanWatch();
+  const [opening, setOpening] = useState(false);
   if (!newest && !opened) {
     return (
       <Line
@@ -215,18 +310,39 @@ export function ResultCardView({
       />
     </View>
   );
+  // The running site, read-only, over this Mac's own tailnet: a way to look,
+  // not an answer, so a text action like Ask for changes.
+  const watch = newest && canWatch && Boolean(card.project || copy) && (
+    <View style={parts ? { flexBasis: '100%' } : undefined}>
+      <TextAction
+        label={opening ? 'Opening…' : 'Watch live'}
+        hint="Opens the site running on your Mac, read-only"
+        disabled={!connected || opening}
+        onPress={() => {
+          haptic.light();
+          setOpening(true);
+          watchLive(agent.id, message.id)
+            .then((link) => openHere(link.url))
+            .catch((e: unknown) => onError(describeError(e)))
+            .finally(() => setOpening(false));
+        }}
+      />
+    </View>
+  );
   return (
     <Card
       icon="doc.text"
       title={card.title}
       meta={card.version > 1 ? `v${card.version}` : undefined}
-      source={changesLine(card) ?? undefined}
+      // A test's own section says how it went; the same words aren't repeated above it.
+      source={(card.test ? null : changesLine(card)) ?? undefined}
       // Offline the answers stay, disabled, with the one note every card uses
       // (a copy's own note already says it).
       note={parts?.note ?? (ask && !connected ? OFFLINE_NOTE : undefined)}
       actions={
-        ask || parts ? (
+        ask || watch || parts ? (
           <>
+            {watch}
             {ask}
             {parts?.actions}
           </>
@@ -237,6 +353,7 @@ export function ResultCardView({
       testID={`result-${message.id}`}
     >
       <Body card={card} agentId={agent.id} onError={onError} />
+      {card.test && <TestPart report={card.test} agentId={agent.id} onError={onError} />}
       {children}
     </Card>
   );

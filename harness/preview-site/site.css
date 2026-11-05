@@ -1,0 +1,20 @@
+/* A fictional marketing site for the Agents preview pane's harness shots
+   (served on the harness port + 1 by vite.harness.config.ts). */
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.5 system-ui, -apple-system, sans-serif; color: #1d2433; background: #fbfaf7; }
+header { display: flex; align-items: center; justify-content: space-between; padding: 18px 32px; border-bottom: 1px solid #ebe6dc; }
+header strong { font-size: 18px; letter-spacing: -0.01em; }
+nav a { margin-left: 20px; color: #4b5468; text-decoration: none; }
+.hero { padding: 56px 32px 32px; max-width: 880px; }
+.hero h1 { margin: 0 0 12px; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em; }
+.hero p { margin: 0 0 24px; font-size: 18px; color: #4b5468; }
+.button { display: inline-block; padding: 12px 20px; font: inherit; color: #fff; background: #2f5d50; border: 0; border-radius: 8px; text-decoration: none; }
+.plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; padding: 0 32px 56px; }
+.plan { padding: 24px; background: #fff; border: 1px solid #ebe6dc; border-radius: 12px; }
+.plan h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 20px; }
+.plan .badge { padding: 2px 8px; font-size: 12px; color: #2f5d50; background: #e3efe9; border-radius: 99px; }
+.plan .price { margin: 8px 0 16px; font-size: 32px; font-weight: 600; }
+.plan ul { margin: 0 0 20px; padding-left: 18px; color: #4b5468; }
+form { display: flex; gap: 8px; max-width: 420px; }
+input { flex: 1; padding: 11px 12px; font: inherit; border: 1px solid #d9d2c3; border-radius: 8px; }
+footer { padding: 24px 32px; color: #7a8193; border-top: 1px solid #ebe6dc; }
