@@ -19,5 +19,8 @@ AccessibilityInfo.addEventListener('screenReaderChanged', (on) => (screenReader 
  */
 export function announce(text: string, queue = false) {
   if (!screenReader || !text) return;
-  AccessibilityInfo.announceForAccessibilityWithOptions(text, { queue });
+  // react-native-web (the QA build) has only the plain call.
+  if (typeof AccessibilityInfo.announceForAccessibilityWithOptions === 'function') {
+    AccessibilityInfo.announceForAccessibilityWithOptions(text, { queue });
+  } else AccessibilityInfo.announceForAccessibility(text);
 }
