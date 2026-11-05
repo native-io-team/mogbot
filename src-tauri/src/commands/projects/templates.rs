@@ -26,7 +26,7 @@ fn project_exists_error(safe_name: &str) -> CommandError {
 /// - `zip_data`: Raw zip bytes (from browser File API)
 /// - `zip_path`: Path to a zip file on disk (from Tauri drag-drop)
 #[tauri::command]
-#[tracing::instrument]
+#[tracing::instrument(skip(zip_data))]
 pub async fn extract_template_zip(
     project_name: String,
     zip_data: Option<Vec<u8>>,

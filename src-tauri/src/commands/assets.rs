@@ -254,7 +254,7 @@ pub async fn list_assets(project_path: String) -> Result<Vec<Asset>, CommandErro
 
 /// Upload a file to the assets folder (or subfolder)
 #[tauri::command]
-#[tracing::instrument(fields(project = %project_path))]
+#[tracing::instrument(skip(file_data), fields(project = %project_path))]
 pub async fn upload_asset(
     project_path: String,
     destination: String,
