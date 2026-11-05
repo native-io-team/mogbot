@@ -41,6 +41,11 @@
   --size-icon-md: 18px;
   --icon-size-full: 24px;
 
+  /* Status dot on a sidebar footer row's icon (FooterRowIcon). */
+  --footer-row-badge-size: var(--space-06);
+  --footer-row-badge-offset: var(--stroke-1);
+  --footer-row-badge-ring: var(--stroke-1-5);
+
   --context-menu-min-width: 176px;
   --context-menu-max-width: 320px;
   --context-menu-border-width: var(--stroke-1);
