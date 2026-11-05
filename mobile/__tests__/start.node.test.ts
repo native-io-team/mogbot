@@ -6,13 +6,21 @@
  * Mac, which applies the router's rules.
  */
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import {
   describeRoutineWhen,
+  formatWhenIn,
+  localDate,
+  localTs,
   routineEcho,
   routineInPast,
   routineWhenOf,
   routineWhenPhrase,
+  wallClock,
+  zoneDiffers,
   type CompanionEvent,
+  type RoutineWhen,
   type Cursor,
 } from '@shipstudio/companion-protocol';
 import { WebSocket } from 'ws';
@@ -22,11 +30,15 @@ import { chiefRequest, freeColor, suggestAgentName } from '../src/lib/newAgent';
 import { newPicker, onceDays, pickerOf, toggleDay, whenOf } from '../src/lib/routine';
 import {
   describeShare,
-  fromParams,
+  fromLinkParams,
   fromShareIntent,
   isEmptyShare,
-  shareText,
-  toParams,
+  payloadForRoute,
+  releaseShare,
+  sharedQuote,
+  stashedShare,
+  stashShare,
+  toLinkParams,
 } from '../src/lib/share';
 import { applyEvent, emptySync } from '../src/lib/sync';
 import { DirectTransport, WireFailure } from '../src/lib/transport';
@@ -168,28 +180,136 @@ describe('Send to agent…', () => {
     );
   });
 
-  it('round-trips through the route, and takes only local files and web links from it', () => {
-    const payload = {
-      text: 'Look\u0007 at this',
-      url: 'https://example.com',
-      files: [{ uri: 'file:///tmp/a.pdf', name: 'a.pdf', mime: 'application/pdf' }],
+  it('never takes files from a link, whatever it says', () => {
+    const crafted = {
+      text: 'Summarise the attached',
+      files: JSON.stringify([
+        {
+          uri: 'file:///var/mobile/Documents/companion-state/chats.json',
+          name: 'photo.jpg',
+          mime: 'image/jpeg',
+        },
+      ]),
     };
-    expect(fromParams(toParams(payload))).toEqual({ ...payload, text: 'Look at this' });
-    const hostile = fromParams({
-      url: 'javascript:alert(1)',
-      files: JSON.stringify([{ uri: 'https://evil.example/x', name: 'x', mime: 'text/plain' }]),
+    const fromLink = fromLinkParams(crafted);
+    expect(fromLink.files).toBeUndefined();
+    expect(fromLink).toEqual({ text: 'Summarise the attached', fromLink: true });
+    // A key that the share sheet didn't stash finds nothing, so it's the link's words.
+    expect(payloadForRoute({ ...crafted, k: 'guessed' }).files).toBeUndefined();
+    expect(isEmptyShare(fromLinkParams({ files: crafted.files }))).toBe(true);
+    // Only web links, and control characters gone.
+    const hostile = fromLinkParams({ url: 'javascript:alert(1)', text: 'Look\u0007 at this' });
+    expect(hostile).toEqual({ text: 'Look at this', fromLink: true });
+    expect(fromLinkParams(toLinkParams({ url: 'https://example.com', title: 'Ex' }))).toEqual({
+      url: 'https://example.com',
+      title: 'Ex',
+      fromLink: true,
     });
-    expect(isEmptyShare(hostile)).toBe(true);
-    expect(isEmptyShare(fromParams({ files: 'not json' }))).toBe(true);
   });
 
-  it('goes after what you had typed, the link first', () => {
+  it('hands the share sheet’s files over in memory, under a one-time key', () => {
+    const files = [
+      { uri: 'file:///private/var/group/a.pdf', name: 'a.pdf', mime: 'application/pdf' },
+    ];
+    const k = stashShare({ text: 'Notes', files });
+    expect(payloadForRoute({ k })).toEqual({ text: 'Notes', files });
+    expect(payloadForRoute({ k }).fromLink).toBeUndefined();
+    // A newer share replaces it; the screen releases its own when it goes.
+    const k2 = stashShare({ text: 'Newer' });
+    expect(stashedShare(k)).toBeUndefined();
+    releaseShare(k2);
+    expect(stashedShare(k2)).toBeUndefined();
+    expect(k).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it('is one quote, link first, never mixed into what you typed', () => {
     const s = { url: 'https://example.com', title: 'Example', text: 'Worth a read' };
-    expect(shareText(s)).toBe('Example\nhttps://example.com\n\nWorth a read');
-    expect(shareText(s, 'Summarise this:')).toBe(
-      'Summarise this:\n\nExample\nhttps://example.com\n\nWorth a read'
+    expect(sharedQuote(s)).toBe('Example\nhttps://example.com\n\nWorth a read');
+    expect(sharedQuote({ url: 'https://example.com', title: 'https://example.com' })).toBe(
+      'https://example.com'
     );
-    expect(shareText({}, 'kept')).toBe('kept');
+    expect(sharedQuote({})).toBe('');
+  });
+});
+
+describe('routine times on the Mac’s clock', () => {
+  // Wed 4 Nov 2026, 22:30 in New York is Thu 5 Nov, 03:30 UTC and 12:30 in Tokyo.
+  const now = Date.UTC(2026, 10, 5, 3, 30);
+  const mac = 'Asia/Tokyo';
+
+  it('reads days and times in the Mac’s zone', () => {
+    expect(wallClock(now, mac)).toMatchObject({
+      year: 2026,
+      month: 11,
+      day: 5,
+      hour: 12,
+      minute: 30,
+      weekday: 4,
+    });
+    expect(wallClock(now, 'America/New_York')).toMatchObject({ day: 4, hour: 22, weekday: 3 });
+    expect(localDate(now, mac)).toBe('2026-11-05');
+    expect(localTs('2026-11-05', 12, 30, mac)).toBe(now);
+    // Across a DST change from now: 9:00 in New York on 2 Nov is EST (UTC-5).
+    expect(localTs('2026-11-02', 9, 0, 'America/New_York')).toBe(Date.UTC(2026, 10, 2, 14, 0));
+    expect(localTs('2026-10-30', 9, 0, 'America/New_York')).toBe(Date.UTC(2026, 9, 30, 13, 0));
+    // A zone the phone doesn't know is the phone's own clock, not a crash.
+    expect(localDate(now, 'Not/AZone')).toBe(localDate(now));
+    expect(zoneDiffers('Not/AZone', now)).toBe(false);
+    expect(zoneDiffers(undefined, now)).toBe(false);
+  });
+
+  it('opens a one-off on the Mac’s date and time, and its past is the Mac’s', () => {
+    const ts = Date.UTC(2026, 10, 6, 0, 0); // Fri 6 Nov 09:00 in Tokyo
+    expect(routineWhenOf({ nextAt: ts }, mac)).toEqual({
+      kind: 'once',
+      date: '2026-11-06',
+      hour: 9,
+      minute: 0,
+    });
+    // Re-sent unchanged, the phrase is the Mac's own, so the routine doesn't move.
+    expect(routineWhenPhrase(routineWhenOf({ nextAt: ts }, mac))).toBe('2026-11-06 09:00');
+    expect(routineInPast({ kind: 'once', date: '2026-11-05', hour: 12, minute: 0 }, now, mac)).toBe(
+      true
+    );
+    expect(routineInPast({ kind: 'once', date: '2026-11-05', hour: 13, minute: 0 }, now, mac)).toBe(
+      false
+    );
+    expect(formatWhenIn(ts, now, mac)).toMatch(/^Tomorrow 9:00\s?AM$/);
+  });
+
+  it('offers the Mac’s today, and says "Mac time" only when its clock differs', () => {
+    const tokyo = onceDays(now, undefined, mac);
+    expect(tokyo[0]).toEqual({ date: '2026-11-05', label: 'Today' });
+    expect(tokyo[2]).toEqual({ date: '2026-11-07', label: 'Sat 7' });
+    expect(newPicker(now, mac)).toMatchObject({ date: '2026-11-05', days: [4] });
+    const phone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const weekdays: RoutineWhen = { kind: 'days', days: [1, 2, 3, 4, 5], hour: 9, minute: 0 };
+    expect(describeRoutineWhen(weekdays, now, phone)).toMatch(/^Every weekday at 9:00\s?AM$/);
+    const other = phone === 'Asia/Tokyo' ? 'America/New_York' : 'Asia/Tokyo';
+    expect(describeRoutineWhen(weekdays, now, other)).toMatch(
+      /^Every weekday at 9:00\s?AM Mac time$/
+    );
+    expect(describeRoutineWhen({ kind: 'every', minutes: 120 }, now, other)).toBe('Every 2 hours');
+    expect(routineEcho(weekdays, 'Draft my day', now, other)).toMatch(/Mac time — Draft my day$/);
+  });
+});
+
+describe('the picker’s words, as the Mac’s grammar reads them', () => {
+  // The same file feeds agents::schedule::tests::reads_every_phrase_the_phone_picker_writes.
+  const file = JSON.parse(
+    readFileSync(
+      join(__dirname, '../../packages/companion-protocol/src/routine-phrases.json'),
+      'utf8'
+    )
+  ) as { cases: { when: RoutineWhen; phrase: string }[] };
+
+  it('writes each phrase, and the picker opens it on the same schedule', () => {
+    expect(file.cases.length).toBeGreaterThanOrEqual(10);
+    for (const { when, phrase } of file.cases) {
+      expect(routineWhenPhrase(when)).toBe(phrase);
+      const back = whenOf(pickerOf(when, Date.UTC(2026, 10, 3, 20)));
+      expect(back && routineWhenPhrase(back)).toBe(phrase);
+    }
   });
 });
 
@@ -266,5 +386,21 @@ describe('starting things on the mock Mac', () => {
       note: 'Draft my day',
     });
     expect(made.repeat).toEqual({ kind: 'days', days: [1, 4], hour: 9, minute: 0 });
+  });
+
+  it('says its zone, and keeps a schedule when an edit sends no when', async () => {
+    expect(t.welcome?.timeZone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    const made = await t.request('agents.schedule.create', {
+      agentId: 'qa',
+      when: 'every 2 hours',
+      note: 'Check',
+    });
+    const edited = await t.request('agents.schedule.update', {
+      agentId: 'qa',
+      id: made.id,
+      when: '',
+      note: 'Check mail',
+    });
+    expect(edited).toMatchObject({ note: 'Check mail', nextAt: made.nextAt, repeat: made.repeat });
   });
 });

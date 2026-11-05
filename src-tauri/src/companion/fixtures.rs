@@ -208,6 +208,7 @@ fn frames() -> Vec<ServerFrame> {
         device_id: "dev_0123456789abcdef".into(),
         resume: ResumeMode::Replay,
         methods: router::METHODS.to_vec(),
+        time_zone: Some("America/New_York".into()),
     }];
     for (reason, message) in [
         (

@@ -159,18 +159,145 @@ export type RoutineWhen =
   | { kind: 'every'; minutes: number }
   | { kind: 'once'; date: string; hour: number; minute: number };
 
-/** A local date as `YYYY-MM-DD`, the way the grammar writes one. */
-export function localDate(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+/**
+ * The routine picker works in the Mac's wall clock, not the phone's: the
+ * Mac reads "every weekday at 09:00" and "2026-11-20 09:00" in its own zone
+ * (`welcome.timeZone`). Every function below takes that zone; without one
+ * (an older Mac, or the desk itself) it's this device's own.
+ */
+export interface WallClock {
+  year: number;
+  /** 1–12. */
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  /** 0 = Sunday. */
+  weekday: number;
 }
 
-/** The local time `hour:minute` on a `YYYY-MM-DD` date. */
-export function localTs(date: string, hour: number, minute: number): number {
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+/** One formatter per zone, for the reason the ones above are built once. */
+const wallFormats = new Map<string, Intl.DateTimeFormat | null>();
+function wallFormat(timeZone: string): Intl.DateTimeFormat | null {
+  if (!wallFormats.has(timeZone)) {
+    let f: Intl.DateTimeFormat | null = null;
+    try {
+      f = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        weekday: 'short',
+      });
+    } catch {
+      // A zone this device doesn't know: its own clock is the best left.
+      f = null;
+    }
+    wallFormats.set(timeZone, f);
+  }
+  return wallFormats.get(timeZone) ?? null;
+}
+
+/** The wall clock at `ts` in `timeZone` (this device's own without one). */
+export function wallClock(ts: number, timeZone?: string): WallClock {
+  const f = timeZone ? wallFormat(timeZone) : null;
+  if (!f) {
+    const d = new Date(ts);
+    return {
+      year: d.getFullYear(),
+      month: d.getMonth() + 1,
+      day: d.getDate(),
+      hour: d.getHours(),
+      minute: d.getMinutes(),
+      weekday: d.getDay(),
+    };
+  }
+  const parts: Record<string, string> = {};
+  for (const p of f.formatToParts(new Date(ts))) parts[p.type] = p.value;
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    // Some engines write midnight as 24 even in h23.
+    hour: Number(parts.hour) % 24,
+    minute: Number(parts.minute),
+    weekday: WEEKDAY_INDEX[parts.weekday] ?? new Date(ts).getDay(),
+  };
+}
+
+/** How far `timeZone` is ahead of UTC at `ts`, in ms. */
+function offsetAt(ts: number, timeZone?: string): number {
+  const w = wallClock(ts, timeZone);
+  const minute = Math.floor(ts / 60_000) * 60_000;
+  return Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute) - minute;
+}
+
+/**
+ * Whether `timeZone` reads a different clock from this device at `ts`: the
+ * picker then says "Mac time" after a time, so 9:00 AM is never mistaken
+ * for the phone's 9:00 AM.
+ */
+export function zoneDiffers(timeZone: string | undefined, ts = Date.now()): boolean {
+  if (!timeZone || !wallFormat(timeZone)) return false;
+  return offsetAt(ts, timeZone) !== offsetAt(ts);
+}
+
+/** " Mac time" after a time when the Mac's clock isn't this device's. */
+const zoneNote = (timeZone: string | undefined, ts: number) =>
+  zoneDiffers(timeZone, ts) ? ' Mac time' : '';
+
+/** A local date as `YYYY-MM-DD`, the way the grammar writes one, in `timeZone`. */
+export function localDate(ts: number, timeZone?: string): string {
+  const w = wallClock(ts, timeZone);
+  return `${w.year}-${pad2(w.month)}-${pad2(w.day)}`;
+}
+
+/** The instant that reads `hour:minute` on a `YYYY-MM-DD` date in `timeZone`. */
+export function localTs(date: string, hour: number, minute: number, timeZone?: string): number {
   // Indexed, not destructured: under the app's Babel a destructure pulls in a
   // runtime helper this package (which has no dependencies) can't resolve.
   const ymd = date.split('-').map(Number);
-  return new Date(ymd[0], ymd[1] - 1, ymd[2], hour, minute).getTime();
+  if (!timeZone || !wallFormat(timeZone)) {
+    return new Date(ymd[0], ymd[1] - 1, ymd[2], hour, minute).getTime();
+  }
+  // That wall clock as if it were UTC, then corrected by the zone's offset
+  // there (twice, so a date across a DST change from now lands right).
+  const asUtc = Date.UTC(ymd[0], ymd[1] - 1, ymd[2], hour, minute);
+  const first = asUtc - offsetAt(asUtc, timeZone);
+  return asUtc - offsetAt(first, timeZone);
+}
+
+/** "Today 9:00 AM" as `formatWhen` says it, in `timeZone`'s days and clock. */
+export function formatWhenIn(ts: number, now = Date.now(), timeZone?: string): string {
+  if (!timeZone || !wallFormat(timeZone)) return formatWhen(ts, now);
+  const w = wallClock(ts, timeZone);
+  const today = localDate(now, timeZone);
+  const tomorrow = nextDate(today, 1);
+  const date = localDate(ts, timeZone);
+  const time = clockText(w.hour, w.minute);
+  if (date === today) return `Today ${time}`;
+  if (date === tomorrow) return `Tomorrow ${time}`;
+  return `${SHORT_DAY.format(new Date(w.year, w.month - 1, w.day, 12))} ${time}`;
+}
+
+/** `YYYY-MM-DD` plus `days`, by the calendar alone. */
+export function nextDate(date: string, days: number): string {
+  const ymd = date.split('-').map(Number);
+  const d = new Date(Date.UTC(ymd[0], ymd[1] - 1, ymd[2] + days));
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 }
 
 /** The `when` words for the Mac: "every weekday at 09:00", "every 2 hours", "2026-11-20 09:00". */
@@ -181,33 +308,41 @@ export function routineWhenPhrase(w: RoutineWhen): string {
   return scheduleWhenPhrase({ repeat: { ...w, days }, nextAt: 0 });
 }
 
-/** A check-in as the picker shows it, for Edit. */
-export function routineWhenOf(c: Pick<CheckIn, 'repeat' | 'nextAt'>): RoutineWhen {
+/** A check-in as the picker shows it, for Edit; a one-off on the Mac's clock. */
+export function routineWhenOf(
+  c: Pick<CheckIn, 'repeat' | 'nextAt'>,
+  timeZone?: string
+): RoutineWhen {
   const r = c.repeat;
   if (r?.kind === 'every') return { kind: 'every', minutes: r.minutes };
   if (r) return { kind: 'days', days: [...r.days], hour: r.hour, minute: r.minute };
-  const d = new Date(c.nextAt);
-  return { kind: 'once', date: localDate(c.nextAt), hour: d.getHours(), minute: d.getMinutes() };
+  const w = wallClock(c.nextAt, timeZone);
+  return { kind: 'once', date: localDate(c.nextAt, timeZone), hour: w.hour, minute: w.minute };
 }
 
 /**
  * What the picker will make, in the words the list shows it in:
- * "Every weekday at 9:00 AM", "Every 2 hours", "Once · Tomorrow 9:00 AM".
+ * "Every weekday at 9:00 AM", "Every 2 hours", "Once · Tomorrow 9:00 AM",
+ * with "Mac time" after the time when the Mac's clock isn't this phone's.
  */
-export function describeRoutineWhen(w: RoutineWhen, now = Date.now()): string {
-  if (w.kind === 'once') return `Once · ${formatWhen(localTs(w.date, w.hour, w.minute), now)}`;
+export function describeRoutineWhen(w: RoutineWhen, now = Date.now(), timeZone?: string): string {
   if (w.kind === 'every') return describeRepeat(w);
-  return describeRepeat({ ...w, days: [...new Set(w.days)] });
+  const note = zoneNote(timeZone, now);
+  if (w.kind === 'once') {
+    const ts = localTs(w.date, w.hour, w.minute, timeZone);
+    return `Once · ${formatWhenIn(ts, now, timeZone)}${note}`;
+  }
+  return `${describeRepeat({ ...w, days: [...new Set(w.days)] })}${note}`;
 }
 
 /** The picker's echo, the check-in in one line: "Every weekday at 9:00 AM — Draft my day". */
-export function routineEcho(w: RoutineWhen, note: string, now = Date.now()): string {
+export function routineEcho(w: RoutineWhen, note: string, now = Date.now(), timeZone?: string) {
   const what = note.trim().replace(/\s+/g, ' ');
-  const when = describeRoutineWhen(w, now);
+  const when = describeRoutineWhen(w, now, timeZone);
   return what ? `${when} — ${what}` : when;
 }
 
 /** A once that's already past can't run: the picker says so before the Mac has to. */
-export function routineInPast(w: RoutineWhen, now = Date.now()): boolean {
-  return w.kind === 'once' && localTs(w.date, w.hour, w.minute) <= now;
+export function routineInPast(w: RoutineWhen, now = Date.now(), timeZone?: string): boolean {
+  return w.kind === 'once' && localTs(w.date, w.hour, w.minute, timeZone) <= now;
 }

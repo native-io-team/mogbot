@@ -72,7 +72,7 @@ describe('dictation', () => {
       expect(await hook.result.current.start()).toBe(false);
     });
     expect(r.start).not.toHaveBeenCalled();
-    expect(dictationHint('needs-network')).toMatch(/never leaves the phone/);
+    expect(dictationHint('needs-network')).toMatch(/mic stays off/);
   });
 
   it('listens on the device, puts words in the draft, and never sends', async () => {
@@ -108,6 +108,48 @@ describe('dictation', () => {
     await act(() => r.fire('result', { isFinal: true, results: [{ transcript: 'late' }] }));
     expect(draft()).toBe('');
     expect(r.abort).toHaveBeenCalled();
+  });
+
+  it('stops when you type, so later words never overwrite your typing', async () => {
+    const r = fakeRecognizer();
+    let draft = 'Ask';
+    const hook = await renderHook(() =>
+      useDictation({
+        getDraft: () => draft,
+        setDraft: (t) => (draft = t),
+        vocabulary: [],
+        onProblem: () => {},
+        recognizer: r as never,
+      })
+    );
+    await act(async () => {
+      await hook.result.current.start();
+    });
+    await act(() => r.fire('result', { isFinal: false, results: [{ transcript: 'Inbox to' }] }));
+    expect(draft).toBe('Ask Inbox to');
+    // A keystroke: the field's own text, then the composer tells the mic.
+    draft = 'Ask Inbox to file this';
+    let stopped = false;
+    await act(() => {
+      stopped = hook.result.current.typed();
+    });
+    expect(stopped).toBe(true);
+    expect(hook.result.current.phase).toBe('idle');
+    await act(() => r.fire('result', { isFinal: true, results: [{ transcript: 'Inbox to go' }] }));
+    expect(draft).toBe('Ask Inbox to file this');
+    // Typing while it isn't listening is just typing.
+    expect(hook.result.current.typed()).toBe(false);
+  });
+
+  it('keeps the mic off on Android before 13, where recognition may leave the phone', () => {
+    const r = fakeRecognizer();
+    expect(dictationSupport(r as never, { OS: 'android', Version: 31 })).toBe('needs-network');
+    expect(dictationSupport(r as never, { OS: 'android', Version: 32 })).toBe('needs-network');
+    expect(dictationSupport(r as never, { OS: 'android', Version: 33 })).toBe('on-device');
+    expect(dictationSupport(r as never, { OS: 'ios', Version: '17.0' })).toBe('on-device');
+    // And says so without promising anything about where a voice goes.
+    expect(dictationHint('needs-network')).toMatch(/off the phone/);
+    expect(dictationHint('needs-network')).not.toMatch(/never leaves/);
   });
 
   it('says what it needs when permission is refused', async () => {

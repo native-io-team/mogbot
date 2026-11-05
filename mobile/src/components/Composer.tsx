@@ -235,8 +235,12 @@ export function Composer({
       },
     ]);
 
-  const setText = (text: string) =>
+  const setText = (text: string) => {
+    // A keystroke while the mic listens stops it, so the next words it hears
+    // can't overwrite what you just typed.
+    if (dictation.typed()) setMicHint('Dictation stopped so you can type. Tap the mic to go on.');
     setComposer(agent.id, { text, mentions: liveMentions(text, draft.mentions) });
+  };
 
   const pickMention = (peer: AgentRef) => {
     const text = draft.text.replace(/@[\w.-]*$/, `@${peer.name} `);

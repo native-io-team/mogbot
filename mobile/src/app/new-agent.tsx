@@ -144,8 +144,8 @@ export default function NewAgent() {
             <ColorSwatches value={color} onChange={setColor} />
             {engine && (
               <T variant="caption" color={colors.textMuted}>
-                Runs on {engine} on {macName}, like one made there. Its instructions, model and
-                project can be changed on the Mac.
+                Runs on {engine} on {macName}, like one made there. You can edit its instructions
+                from its agent sheet here; its model and project are set on the Mac.
               </T>
             )}
           </>

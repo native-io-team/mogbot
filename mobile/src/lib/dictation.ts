@@ -13,6 +13,7 @@
 
 import { requireOptionalNativeModule } from 'expo';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import type { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 
 type Recognizer = typeof ExpoSpeechRecognitionModule;
@@ -40,8 +41,22 @@ const getRecognizer = () =>
  */
 export type DictationSupport = 'on-device' | 'no-module' | 'needs-network';
 
-export function dictationSupport(r: Recognizer | null = getRecognizer()): DictationSupport {
+/**
+ * Android builds an on-device recognizer only from API 33. On 31–32 the
+ * module says it supports on-device recognition, but starts the default
+ * recognizer (usually Google's service) with "prefer offline", which is a
+ * hint rather than a promise. There the mic stays off.
+ */
+export const ANDROID_ON_DEVICE_API = 33;
+
+export function dictationSupport(
+  r: Recognizer | null = getRecognizer(),
+  platform: { OS: string; Version: number | string } = Platform
+): DictationSupport {
   if (!r) return 'no-module';
+  if (platform.OS === 'android' && Number(platform.Version) < ANDROID_ON_DEVICE_API) {
+    return 'needs-network';
+  }
   try {
     return r.supportsOnDeviceRecognition() && r.isRecognitionAvailable()
       ? 'on-device'
@@ -65,7 +80,8 @@ export function dictationHint(support: DictationSupport): string | null {
     case 'no-module':
       return 'Use the mic on your keyboard to dictate.';
     case 'needs-network':
-      return 'This phone can’t recognise speech on its own, so the mic stays off. Your voice never leaves the phone.';
+      // No claim about the keyboard's mic: where that sends your voice is its own business.
+      return 'This phone can only recognise speech by sending it off the phone, so this mic stays off.';
     default:
       return null;
   }
@@ -179,5 +195,16 @@ export function useDictation({
     setPhase('idle');
   }, [r]);
 
-  return { phase, start, stop, cancel, support: dictationSupport(r) };
+  /**
+   * You typed while it listened: typing takes over. What it heard so far is
+   * already in the field, and nothing it hears after can overwrite what you
+   * type (its results are built on the draft as it was when it started).
+   */
+  const typed = useCallback(() => {
+    if (!active.current) return false;
+    cancel();
+    return true;
+  }, [cancel]);
+
+  return { phase, start, stop, cancel, typed, support: dictationSupport(r) };
 }

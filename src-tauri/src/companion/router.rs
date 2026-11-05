@@ -899,7 +899,18 @@ async fn run(
                 )
             })?;
             let input = check_new_agent(p.input)?;
+            let device = caller.device_id.clone();
             let create = || async move {
+                // Counted here, so a retry answered from the cache isn't a second agent.
+                if !c.allow_create(&device, now_ms()) {
+                    return Err(WireError::protocol(
+                        ProtocolCode::RateLimited,
+                        format!(
+                            "That's {} new agents in a minute, the most a phone can make. Try again in a minute.",
+                            super::MAX_AGENTS_CREATED_PER_MINUTE
+                        ),
+                    ));
+                }
                 // A `StoredAgent`, without lifetime usage, as `agents.update` returns.
                 let mut stored = b.create_agent(input).await?;
                 if let Some(fields) = stored.as_object_mut() {
@@ -1305,6 +1316,57 @@ mod tests {
             .audited()
             .iter()
             .any(|(_, m, _, ok)| m == "agents.create" && !ok));
+    }
+
+    #[tokio::test]
+    async fn a_phone_makes_at_most_ten_agents_a_minute() {
+        use crate::companion::testkit::Stub;
+        use crate::companion::MAX_AGENTS_CREATED_PER_MINUTE;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        for i in 0..MAX_AGENTS_CREATED_PER_MINUTE {
+            let params =
+                json!({ "input": { "name": format!("A{i}") }, "clientId": format!("c{i}") });
+            dispatch(&c, &me, "agents.create", params).await.unwrap();
+        }
+        // A retry of one already made is the cache's answer, not an eleventh.
+        let retry = json!({ "input": { "name": "A0" }, "clientId": "c0" });
+        assert!(dispatch(&c, &me, "agents.create", retry).await.is_ok());
+        let refused = dispatch(
+            &c,
+            &me,
+            "agents.create",
+            json!({ "input": { "name": "One more" } }),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            refused.summary().contains("in a minute"),
+            "{}",
+            refused.summary()
+        );
+        assert!(matches!(
+            refused,
+            WireError::Protocol {
+                code: ProtocolCode::RateLimited,
+                ..
+            }
+        ));
+        assert_eq!(
+            stub.created.lock().unwrap().len(),
+            MAX_AGENTS_CREATED_PER_MINUTE
+        );
+        // Another phone has its own minute, and the window rolls.
+        let other = caller("dev_b");
+        assert!(dispatch(
+            &c,
+            &other,
+            "agents.create",
+            json!({ "input": { "name": "B" } })
+        )
+        .await
+        .is_ok());
+        assert!(c.allow_create("dev_a", now_ms() + 60_000));
     }
 
     #[test]

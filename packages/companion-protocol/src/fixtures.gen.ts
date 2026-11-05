@@ -1418,7 +1418,8 @@ export const frames = [
       "sessions.key",
       "sessions.start",
       "preview.screenshot"
-    ]
+    ],
+    "timeZone": "America/New_York"
   },
   {
     "t": "refused",

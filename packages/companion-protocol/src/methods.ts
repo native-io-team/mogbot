@@ -180,6 +180,10 @@ export interface Methods {
     result: CheckIn;
   };
   'agents.schedule.update': {
+    /**
+     * An empty `when` keeps the schedule and changes only the note, on a Mac
+     * whose welcome has `timeZone`; an older one refuses it.
+     */
     params: { agentId: string; id: string; when: string; note: string };
     result: CheckIn;
   };

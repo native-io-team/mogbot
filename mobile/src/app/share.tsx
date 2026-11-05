@@ -1,23 +1,35 @@
 /**
  * "Send to agent…": what was shared into the app, and the agents to hand it
- * to. Picking one puts it in that agent's composer (the words after what you
- * had typed, the files uploaded to the Mac as attachments) and opens the
- * chat, for you to add a line and send. Nothing is sent from here.
+ * to. Picking one puts it in that agent's composer (the words as a quote
+ * above whatever you'd typed, which stays as it was; the files uploaded to
+ * the Mac as attachments) and opens the chat, for you to add a line and
+ * send. Nothing is sent from here.
+ *
+ * Files come only from the share sheet, through the in-memory hand-over in
+ * `lib/share.ts`. A `share?` link brings words alone, shown in full and
+ * marked as from a link (`fromLinkParams`).
  */
 
 import { MAX_ATTACHMENTS, type Agent } from '@shipstudio/companion-protocol';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { AgentAvatar } from '../components/agent';
 import { Button, SheetPage, T, useRipple } from '../components/ui';
 import { makeStyles, useColors } from '../lib/appearance';
 import { sortAgents } from '../lib/agents';
-import { addFile, setComposer } from '../lib/drafts';
+import { addFile, addQuote } from '../lib/drafts';
 import { admit } from '../lib/files';
 import { haptic } from '../lib/haptics';
 import { canCall, describeError, upload } from '../lib/session';
-import { describeShare, fromParams, isEmptyShare, shareText } from '../lib/share';
+import {
+  describeShare,
+  isEmptyShare,
+  payloadForRoute,
+  releaseShare,
+  sharedQuote,
+  type SharedPayload,
+} from '../lib/share';
 import { getApp, useApp } from '../lib/store';
 import { avatarSize, radius, space } from '../lib/theme';
 
@@ -26,7 +38,10 @@ export default function Share() {
   const styles = useStyles();
   const router = useRouter();
   const params = useLocalSearchParams();
-  const payload = useMemo(() => fromParams(params), [params]);
+  // Read once: the share sheet's payload is released when the screen goes.
+  const [payload] = useState(() => payloadForRoute(params));
+  const key = typeof params.k === 'string' ? params.k : undefined;
+  useEffect(() => () => releaseShare(key), [key]);
   const overview = useApp((s) => s.overview);
   const connected = useApp((s) => s.link.kind === 'connected');
   const canAttach = useApp((s) => canCall('agents.files', s.welcome));
@@ -45,7 +60,8 @@ export default function Share() {
     setError(null);
     haptic.select();
     const draft = getApp().composer[agent.id];
-    setComposer(agent.id, { text: shareText(payload, draft?.text ?? '') });
+    // A quote above the draft, never mixed into what was typed there.
+    addQuote(agent.id, sharedQuote(payload));
     if (files.length && !filesBlocked) {
       const room = MAX_ATTACHMENTS - (draft?.files?.length ?? 0);
       const { kept, refused } = admit(files, room);
@@ -145,14 +161,18 @@ export default function Share() {
   );
 }
 
-function Preview({ payload }: { payload: ReturnType<typeof fromParams> }) {
+function Preview({ payload }: { payload: SharedPayload }) {
   const colors = useColors();
   const styles = useStyles();
   const files = payload.files ?? [];
+  const what = describeShare(payload);
   return (
-    <View style={styles.preview} accessibilityLabel={`Shared: ${describeShare(payload)}`}>
+    <View
+      style={styles.preview}
+      accessibilityLabel={`Shared: ${what}${payload.fromLink ? ', from a link' : ''}`}
+    >
       <T variant="caption" color={colors.textMuted}>
-        {describeShare(payload)}
+        {payload.fromLink ? `${what}, from a link. Read it before you send it.` : what}
       </T>
       {payload.title && (
         <T variant="headline" color={colors.textStrong} numberOfLines={2}>
@@ -165,7 +185,8 @@ function Preview({ payload }: { payload: ReturnType<typeof fromParams> }) {
         </T>
       )}
       {payload.text && (
-        <T variant="small" color={colors.textPrimary} numberOfLines={4}>
+        // In full: this is what goes into the chat, and you should see all of it first.
+        <T variant="small" color={colors.textPrimary} selectable>
           {payload.text}
         </T>
       )}

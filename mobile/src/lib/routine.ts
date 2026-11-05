@@ -3,9 +3,12 @@
  * is tested without a screen: the chips choose a cadence, the time picker a
  * time, and `whenOf` turns them into the `RoutineWhen` the Mac is sent (as
  * the grammar's own words, `routineWhenPhrase`).
+ *
+ * Dates and days are the Mac's (`timeZone`, from `welcome.timeZone`): it
+ * reads the picker's words on its own clock, so "Today" is its today.
  */
 
-import { localDate, type RoutineWhen } from '@shipstudio/companion-protocol';
+import { localDate, nextDate, wallClock, type RoutineWhen } from '@shipstudio/companion-protocol';
 
 export type Cadence = 'daily' | 'weekdays' | 'weekly' | 'hours' | 'once';
 
@@ -56,20 +59,20 @@ const same = (a: number[], b: number[]) =>
   a.length === b.length && [...a].sort().every((d, i) => d === [...b].sort()[i]);
 
 /** A new routine: weekdays at 9:00, the most asked-for. */
-export function newPicker(now = Date.now()): PickerState {
+export function newPicker(now = Date.now(), timeZone?: string): PickerState {
   return {
     cadence: 'weekdays',
-    days: [new Date(now).getDay()],
+    days: [wallClock(now, timeZone).weekday],
     minutes: 60,
-    date: localDate(now),
+    date: localDate(now, timeZone),
     hour: 9,
     minute: 0,
   };
 }
 
 /** An existing check-in, as the picker shows it for Edit. */
-export function pickerOf(w: RoutineWhen, now = Date.now()): PickerState {
-  const base = newPicker(now);
+export function pickerOf(w: RoutineWhen, now = Date.now(), timeZone?: string): PickerState {
+  const base = newPicker(now, timeZone);
   if (w.kind === 'every') return { ...base, cadence: 'hours', minutes: w.minutes };
   if (w.kind === 'once') {
     return { ...base, cadence: 'once', date: w.date, hour: w.hour, minute: w.minute };
@@ -106,20 +109,25 @@ export function toggleDay(days: number[], day: number): number[] {
 /**
  * Once: today, tomorrow and the five days after, as chips ("Today",
  * "Tomorrow", "Fri 7"), plus the edited check-in's own date when it's further out.
+ * The Mac's days, in `timeZone`.
  */
-export function onceDays(now = Date.now(), keep?: string): { date: string; label: string }[] {
-  const start = new Date(now);
-  start.setHours(12, 0, 0, 0);
+export function onceDays(
+  now = Date.now(),
+  keep?: string,
+  timeZone?: string
+): { date: string; label: string }[] {
+  const today = localDate(now, timeZone);
   const out = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start.getTime());
-    d.setDate(start.getDate() + i);
+    const date = nextDate(today, i);
+    const [y, m, day] = date.split('-').map(Number);
+    const weekday = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
     const label =
       i === 0
         ? 'Today'
         : i === 1
           ? 'Tomorrow'
-          : `${WEEK.find((w) => w.day === d.getDay())?.short} ${d.getDate()}`;
-    return { date: localDate(d.getTime()), label };
+          : `${WEEK.find((w) => w.day === weekday)?.short} ${day}`;
+    return { date, label };
   });
   if (keep && !out.some((o) => o.date === keep)) {
     const [y, m, day] = keep.split('-').map(Number);

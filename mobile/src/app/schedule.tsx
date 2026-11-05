@@ -6,6 +6,11 @@
  *
  * The picker writes the same `when` words the desk's one-line composer
  * takes (`routineWhenPhrase`), so a phone-made routine is a desk-made one.
+ *
+ * Times are the Mac's: it reads the words on its own clock, so the picker
+ * works in `welcome.timeZone` and says "Mac time" when that isn't the
+ * phone's. An edit that leaves the When alone sends no `when`, so the
+ * schedule stays exactly as it was (on a Mac that reports its zone).
  */
 
 import DateTimePicker, {
@@ -15,10 +20,12 @@ import DateTimePicker, {
 import {
   describeRun,
   formatWhen,
+  formatWhenIn,
   routineEcho,
   routineInPast,
   routineWhenOf,
   routineWhenPhrase,
+  zoneDiffers,
   type CheckInRun,
   type SchedulePreview,
 } from '@shipstudio/companion-protocol';
@@ -54,10 +61,13 @@ type Reading =
   | { kind: 'ok'; preview: SchedulePreview }
   | { kind: 'bad'; reason: string };
 
-/** The Mac's reading: "First run tomorrow 9:00 AM". */
-function firstRun(p: SchedulePreview, now = Date.now()): string {
-  const when = formatWhen(p.nextAt, now).replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase());
-  return p.repeat ? `First run ${when}` : `Runs ${when}`;
+/** The Mac's reading: "First run tomorrow 9:00 AM", on the clock the echo uses. */
+function firstRun(p: SchedulePreview, now = Date.now(), timeZone?: string): string {
+  const when = formatWhenIn(p.nextAt, now, timeZone).replace(/^(Today|Tomorrow)/, (w) =>
+    w.toLowerCase()
+  );
+  const zone = zoneDiffers(timeZone, now) ? ' Mac time' : '';
+  return p.repeat ? `First run ${when}${zone}` : `Runs ${when}${zone}`;
 }
 
 export default withAgentAccent(Schedule, 'agentId');
@@ -72,8 +82,16 @@ function Schedule() {
   const { agentId, id } = useLocalSearchParams<{ agentId: string; id?: string }>();
   const agent = useApp((s) => s.overview?.agents.find((a) => a.id === agentId));
   const editing = agent?.checkIns?.find((c) => c.id === id);
+  // The Mac's zone, and whether it keeps a schedule when an edit sends no `when`.
+  const timeZone = useApp((s) => s.welcome?.timeZone);
   const [picker, setPicker] = useState<PickerState>(() =>
-    editing ? pickerOf(routineWhenOf(editing)) : newPicker()
+    editing
+      ? pickerOf(routineWhenOf(editing, timeZone), Date.now(), timeZone)
+      : newPicker(Date.now(), timeZone)
+  );
+  // What the When said when the sheet opened: unchanged, it isn't re-sent.
+  const [openedAs] = useState(() =>
+    editing ? routineWhenPhrase(routineWhenOf(editing, timeZone)) : null
   );
   const [note, setNote] = useState(() => editing?.note ?? '');
   const [answer, setAnswer] = useState<{ phrase: string; reading: Reading } | null>(null);
@@ -83,10 +101,11 @@ function Schedule() {
 
   const when = whenOf(picker);
   const phrase = when ? routineWhenPhrase(when) : '';
-  const past = when ? routineInPast(when, now) : false;
+  const past = when ? routineInPast(when, now, timeZone) : false;
+  const macClock = zoneDiffers(timeZone, now);
   // The editing check-in's own date and interval stay offered even if off the usual chips.
   const [keepDate] = useState(() => (editing && !editing.repeat ? picker.date : undefined));
-  const days = useMemo(() => onceDays(now, keepDate), [now, keepDate]);
+  const days = useMemo(() => onceDays(now, keepDate, timeZone), [now, keepDate, timeZone]);
   const intervals = useMemo(
     () => (INTERVALS.includes(picker.minutes) ? INTERVALS : [...INTERVALS, picker.minutes]),
     // Only the opening value adds a chip; tapping the offered ones doesn't.
@@ -132,8 +151,11 @@ function Schedule() {
     setSaving(true);
     setError(null);
     try {
-      if (editing) await schedule.update(agentId, editing.id, phrase, note.trim());
-      else await schedule.create(agentId, phrase, note.trim());
+      if (editing) {
+        // Left as it was: no `when`, so "every 2 hours" isn't re-anchored to now.
+        const keep = phrase === openedAs && timeZone !== undefined;
+        await schedule.update(agentId, editing.id, keep ? '' : phrase, note.trim());
+      } else await schedule.create(agentId, phrase, note.trim());
       router.back();
     } catch (e) {
       setError(describeError(e));
@@ -225,6 +247,7 @@ function Schedule() {
               hour={picker.hour}
               minute={picker.minute}
               onChange={(hour, minute) => change({ hour, minute })}
+              macClock={macClock}
               themeVariant={appearance}
               tint={accent.accent}
             />
@@ -255,13 +278,13 @@ function Schedule() {
         <View style={styles.echo} accessibilityLiveRegion="polite">
           {when && (
             <T variant="subhead" color={colors.textStrong} maxFontSizeMultiplier={2}>
-              {routineEcho(when, note || '…', now)}
+              {routineEcho(when, note || '…', now, timeZone)}
             </T>
           )}
           {reading.kind === 'ok' ? (
             <Animated.View entering={FadeIn.duration(150)}>
               <T variant="caption" color={colors.textSecondary}>
-                {firstRun(reading.preview, now)}
+                {firstRun(reading.preview, now, timeZone)}
                 {!note.trim() && ` · now say what ${agent?.name ?? 'it'} should do`}
               </T>
             </Animated.View>
@@ -310,12 +333,15 @@ function TimeRow({
   hour,
   minute,
   onChange,
+  macClock,
   themeVariant,
   tint,
 }: {
   hour: number;
   minute: number;
   onChange: (hour: number, minute: number) => void;
+  /** The Mac's clock isn't the phone's: the time is its. */
+  macClock: boolean;
   themeVariant: 'light' | 'dark';
   tint: string;
 }) {
@@ -329,7 +355,7 @@ function TimeRow({
   return (
     <View style={styles.timeRow}>
       <T variant="subhead" color={colors.textPrimary} maxFontSizeMultiplier={chromeScale}>
-        At
+        {macClock ? 'At, Mac time' : 'At'}
       </T>
       {Platform.OS === 'ios' ? (
         <DateTimePicker
@@ -340,7 +366,7 @@ function TimeRow({
           onChange={picked}
           themeVariant={themeVariant}
           accentColor={tint}
-          accessibilityLabel={`Time, ${clock}`}
+          accessibilityLabel={`Time, ${clock}${macClock ? ' Mac time' : ''}`}
         />
       ) : (
         <Button
@@ -349,7 +375,7 @@ function TimeRow({
           onPress={() =>
             DateTimePickerAndroid.open({ value, mode: 'time', onChange: picked, is24Hour: false })
           }
-          accessibilityLabel={`Time, ${clock}. Change`}
+          accessibilityLabel={`Time, ${clock}${macClock ? ' Mac time' : ''}. Change`}
         />
       )}
     </View>

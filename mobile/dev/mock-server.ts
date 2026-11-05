@@ -812,6 +812,15 @@ export function createMockServer(opts: MockOptions = {}) {
     },
     'agents.schedule.update': (p) => {
       const ci = checkIn(p);
+      // An empty `when` keeps the schedule (the Mac's `schedule::edit_in`).
+      if (typeof p.when !== 'string' || !p.when.trim()) {
+        if (!String(p.note).trim()) {
+          return fail({ type: 'Validation', field: 'note', reason: 'Say what to do then.' });
+        }
+        ci.note = String(p.note).trim();
+        emit({ type: 'agents.registry', overview: overview() });
+        return ci;
+      }
       const parsed = parseWhen(String(p.when), Date.now());
       if ('error' in parsed)
         return fail({ type: 'Validation', field: 'when', reason: parsed.error });
@@ -1159,6 +1168,8 @@ export function createMockServer(opts: MockOptions = {}) {
           resume: canReplay ? 'replay' : 'snapshot',
           // What the real Mac advertises in P1, not what the mock happens to implement.
           methods: realWelcome.methods,
+          // The zone the mock's parser reads times in: this machine's own.
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
         if (canReplay) {
           for (const e of compact(journal.filter((j) => j.seq > resume.seq))) {
