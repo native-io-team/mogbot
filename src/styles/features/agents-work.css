@@ -169,8 +169,16 @@
   padding: 0 0 var(--spacing-sm);
 }
 
-.agent-work--live .agent-work__open {
+/* The ways into a working agent: its project, its session. */
+.agent-work__ways-in {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
   margin: 0 0 var(--spacing-sm) calc(var(--agents-work-icon) + var(--spacing-sm));
+}
+
+.agent-work__ways-in:empty {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

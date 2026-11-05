@@ -39,6 +39,7 @@ import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { ImportReviewCard } from './ImportReviewCard';
 import { useLiveWork, WorkTimeline } from './AgentWork';
+import { TakeOverButton } from './AgentTakeover';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
@@ -364,6 +365,8 @@ interface UserBubbleProps extends Arrival {
    */
   queued?: boolean;
   onInterrupt?: () => void;
+  /** You're driving the agent's session: it waits for the hand-back, and nothing interrupts. */
+  driven?: boolean;
   /** Still copying its files in: the files as staged, shown while it sends. */
   sending?: DraftAttachment[];
   /** "Remember this", with this message. */
@@ -380,6 +383,7 @@ export const UserBubble = memo(function UserBubble({
   colorOf,
   queued,
   onInterrupt,
+  driven,
   sending,
   onRemember,
 }: UserBubbleProps) {
@@ -438,7 +442,12 @@ export const UserBubble = memo(function UserBubble({
           Sending…
         </div>
       )}
-      {queued && !failed && (
+      {queued && !failed && driven && (
+        <div className="agent-chat__queued" role="status">
+          Waiting, sends when you hand {agent.name} back
+        </div>
+      )}
+      {queued && !failed && !driven && (
         <div className="agent-chat__queued" role="status">
           Queued, sends when {agent.name} finishes
           <span aria-hidden>·</span>
@@ -526,7 +535,7 @@ export const ErrorLine = memo(function ErrorLine({
         data-failure={message.failure?.kind}
         role={message.failure?.kind === 'usage_limit' ? 'status' : 'alert'}
       >
-        <p className="agent-bubble__text">{message.text}</p>
+        <ErrorText message={message} />
         {(signIn || onRetry) && (
           <div className="agent-bubble__remedy">
             {signIn && (
@@ -568,6 +577,28 @@ export const ErrorLine = memo(function ErrorLine({
     </div>
   );
 });
+
+/**
+ * A take-over's terminal that closed by itself quotes its last lines after a
+ * blank line (`takeover::early_exit_line`): the sentence, and the lines as
+ * the terminal showed them. `null` for any other message.
+ */
+function screenTail(message: AgentMessage): [string, string] | null {
+  const at = message.takeover ? message.text.indexOf('\n\n') : -1;
+  return at < 0 ? null : [message.text.slice(0, at), message.text.slice(at + 2)];
+}
+
+/** An error's words (an older build wrote a take-over's early exit as one). */
+function ErrorText({ message }: { message: AgentMessage }) {
+  const tail = screenTail(message);
+  if (!tail) return <p className="agent-bubble__text">{message.text}</p>;
+  return (
+    <>
+      <p className="agent-bubble__text">{tail[0]}</p>
+      <pre className="agent-bubble__screen">{tail[1]}</pre>
+    </>
+  );
+}
 
 /**
  * "Scheduled check-in", centred like the agent-to-agent lines, with the note
@@ -625,6 +656,21 @@ export const NoteLine = memo(function NoteLine({
         data-message-ids={message.id}
       >
         {message.text}
+      </div>
+    );
+  }
+  // A take-over's terminal that closed by itself: quiet, as any note, with
+  // what it last showed. The agent didn't fail, so nothing offers a Retry.
+  const tail = screenTail(message);
+  if (tail) {
+    return (
+      <div
+        className="agent-note agent-note--takeover"
+        data-arrived={arrived || undefined}
+        data-message-ids={message.id}
+      >
+        {tail[0]}
+        <pre className="agent-bubble__screen agent-note__screen">{tail[1]}</pre>
       </div>
     );
   }
@@ -1314,6 +1360,7 @@ export function WorkingIndicator({
           )}
         </div>
         {live.toggle}
+        {!leaving && agent && <TakeOverButton agent={agent} className="agent-working__takeover" />}
       </div>
     </div>
   );

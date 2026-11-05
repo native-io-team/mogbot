@@ -8,6 +8,8 @@ export type SendMode = 'send' | 'queue' | 'stop' | 'none';
 
 /** The composer's state machine, pure so it is tested. */
 export function sendMode(agent: Agent, hasContent: boolean): SendMode {
+  // Being driven on the Mac: what you send waits, and there's no turn to stop.
+  if (agent.takeover) return hasContent ? 'queue' : 'none';
   const busy = agent.status.state !== 'idle';
   if (hasContent) return busy ? 'queue' : 'send';
   // Waiting on an approval: the card is the control, not Stop.

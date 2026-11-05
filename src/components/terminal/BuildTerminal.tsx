@@ -3,9 +3,8 @@
  * (`expo run:ios` / `react-native run-ios` / `flutter run`) inside a backend
  * {@link openPtySession | pty_session}.
  *
- * It is the minimal subset of {@link Terminal} needed for a build log: open /
- * attach / subscribe / write. It deliberately has none of Terminal's agent,
- * resume, or status-detection logic. Two properties matter:
+ * It is {@link AttachedTerminal} with the build's shell as its opener. Two
+ * properties matter:
  *
  * - **Interactive.** Keystrokes are written to the PTY, so a build that prompts
  *   (CocoaPods, `npx` "Ok to proceed?") can actually be answered — the read-only
@@ -17,30 +16,9 @@
  * @module components/BuildTerminal
  */
 
-import { useEffect, useRef } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { Unicode11Addon } from '@xterm/addon-unicode11';
-import { attachWebglRenderer } from '../../lib/terminalWebgl';
-import { createWebLinksAddon } from '../../lib/terminalLinks';
-import {
-  openPtySession,
-  attachPtySession,
-  writePtySessionLogged,
-  resizePtySessionLogged,
-  detachPtySession,
-  onPtySessionData,
-  onPtySessionExit,
-  createAttachGate,
-  setPtySessionPaused,
-} from '../../lib/ptySession';
-import { createTerminalFlowControl } from '../../lib/terminalFlowControl';
-import { getTerminalGpuEnabled } from '../../lib/settings';
-import { loadNerdFonts } from '../../lib/fonts';
-import { logger } from '../../lib/logger';
-import { asCommandError, formatCommandError } from '../../lib/errors';
-import { createTerminalOptions, followAppTheme } from './terminalTheme';
-import '@xterm/xterm/css/xterm.css';
+import { useCallback } from 'react';
+import { openPtySession } from '../../lib/ptySession';
+import { AttachedTerminal } from './AttachedTerminal';
 
 interface BuildTerminalProps {
   /** Stable pty_session id — use `buildSessionId(projectPath)` so it matches the
@@ -74,213 +52,34 @@ export function BuildTerminal({
   onExit,
   onOutput,
 }: BuildTerminalProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<XTerm | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
-
-  // Keep the callbacks in refs so their identity churn doesn't re-run the heavy
-  // setup effect (which would re-open the session).
-  const onExitRef = useRef(onExit);
-  useEffect(() => {
-    onExitRef.current = onExit;
-  }, [onExit]);
-  const onOutputRef = useRef(onOutput);
-  useEffect(() => {
-    onOutputRef.current = onOutput;
-  }, [onOutput]);
-
-  // Setup: keyed only on the session identity, not on isActive/onExit.
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    let cancelled = false;
-    // Set once openPtySession resolves — resize calls before that would hit
-    // the backend's "unknown session" guard (issue #261).
-    let sessionOpened = false;
-    const disposers: Array<() => void> = [];
-
-    const term = new XTerm({
-      ...createTerminalOptions('build'),
-      allowProposedApi: true,
-    });
-    followAppTheme(term, 'build');
-    const fit = new FitAddon();
-    const unicode11 = new Unicode11Addon();
-    term.loadAddon(fit);
-    term.loadAddon(unicode11);
-    term.loadAddon(createWebLinksAddon());
-    term.unicode.activeVersion = '11';
-    term.open(container);
-    termRef.current = term;
-    fitRef.current = fit;
-
-    const safeFit = () => {
-      try {
-        fit.fit();
-      } catch {
-        /* container detached mid-teardown */
-      }
-    };
-
-    void loadNerdFonts().then(() => {
-      if (!cancelled) safeFit();
-    });
-
-    // GPU renderer, gated by the same user setting Terminal honors.
-    // attachWebglRenderer keeps the addon loaded only while the pane has
-    // layout — a zero-size/hidden pane made the glyph atlas throw from
-    // getImageData (issue #383).
-    void (async () => {
-      if (cancelled) return;
-      const gpuEnabled = await getTerminalGpuEnabled();
-      if (cancelled || !gpuEnabled) return;
-      disposers.push(attachWebglRenderer(term, container));
-    })();
-
-    // Initial fit after layout settles; focus is owned by the isActive effect.
-    setTimeout(() => {
-      if (!cancelled) safeFit();
-    }, 0);
-
-    // Stream-decode PTY bytes to text for onOutput, preserving multi-byte chars
-    // split across chunk/replay boundaries.
-    const decoder = new TextDecoder();
-    const emitOutput = (bytes: Uint8Array) => {
-      const cb = onOutputRef.current;
-      if (cb) cb(decoder.decode(bytes, { stream: true }));
-    };
-
-    // User keystrokes → PTY (this is what makes prompts answerable).
-    const inputDisposable = term.onData((data) => {
-      writePtySessionLogged(sessionId, data);
-    });
-    disposers.push(() => inputDisposable.dispose());
-
-    // Open (idempotent) → subscribe to live feed → attach (replay ring
-    // buffer, then flush the gate). Subscribing BEFORE attaching matters:
-    // Tauri drops events with no registered listener, so the old
-    // attach-then-subscribe order could lose a chunk emitted between the
-    // snapshot and the subscription (issue #156). The offset gate drops the
-    // chunks the snapshot already covers, so nothing double-writes either.
-    void (async () => {
-      try {
-        await openPtySession({
-          sessionId,
-          command: BUILD_SHELL,
-          args: ['-lic', command],
-          cwd,
-          env: {},
-          // Clamp: spawning before layout settles can report 0-size, and a
-          // 0-size ConPTY produces no output at all (the backend clamps
-          // too; this keeps xterm and the PTY in agreement).
-          cols: Math.max(term.cols, 2),
-          rows: Math.max(term.rows, 2),
-          projectPath: cwd,
-        });
-        sessionOpened = true;
-        if (cancelled) return;
-        // Layout may have settled while the open was in flight (those resize
-        // callbacks were skipped) — sync the PTY to the current size once.
-        resizePtySessionLogged(sessionId, Math.max(term.cols, 2), Math.max(term.rows, 2));
-
-        // A build is the single most likely thing in the app to outrun
-        // xterm's parser — a verbose bundler can emit megabytes in a second.
-        // Pace it (issue #910); without this xterm eventually discards output
-        // and the error the user is looking for is the part that vanishes.
-        const flow = createTerminalFlowControl(term, {
-          onPause: () => setPtySessionPaused(sessionId, true),
-          onResume: () => setPtySessionPaused(sessionId, false),
-        });
-        disposers.push(() => flow.dispose());
-
-        const gate = createAttachGate((bytes) => {
-          flow.write(bytes);
-          emitOutput(bytes);
-        });
-        const unlistenData = await onPtySessionData(sessionId, (bytes, offset) => {
-          if (cancelled) return;
-          gate.push(offset, bytes);
-        });
-        disposers.push(() => void unlistenData());
-
-        // Exit is parked until the snapshot replay so onOutput consumers see
-        // the build's final output before its exit classification.
-        let gateOpen = false;
-        let pendingExit: number | null = null;
-        let exitEventSeen = false;
-        const unlistenExit = await onPtySessionExit(sessionId, (exitCode) => {
-          if (cancelled) return;
-          exitEventSeen = true;
-          if (!gateOpen) {
-            pendingExit = exitCode;
-            return;
-          }
-          onExitRef.current?.(exitCode);
-        });
-        disposers.push(() => void unlistenExit());
-
-        const attach = await attachPtySession(sessionId);
-        if (cancelled) return;
-        if (attach.buffer.length > 0) {
-          flow.write(attach.buffer);
-          emitOutput(attach.buffer);
-        }
-        gateOpen = true;
-        gate.open(attach.endOffset);
-        if (pendingExit !== null) {
-          onExitRef.current?.(pendingExit);
-        } else if (!attach.alive && attach.exitCode !== null && !exitEventSeen) {
-          // It exited before we even subscribed — surface that immediately.
-          onExitRef.current?.(attach.exitCode);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          logger.error('[BuildTerminal] failed to start build session', {
-            error: formatCommandError(asCommandError(err)),
-          });
-          term.write(
-            `\r\n\x1b[31mFailed to start build: ${formatCommandError(asCommandError(err))}\x1b[0m\r\n`
-          );
-        }
-      }
-    })();
-
-    // ResizeObserver fires an initial callback within a frame of observe(),
-    // while openPtySession is a real IPC round-trip — an unguarded resize can
-    // reach the backend before the session exists in its registry, producing
-    // "unknown session" (issue #261). Mirror Terminal.tsx's opened-guard.
-    const resizeObserver = new ResizeObserver(() => {
-      if (cancelled) return;
-      safeFit();
-      if (sessionOpened) {
-        resizePtySessionLogged(sessionId, term.cols, term.rows);
-      }
-    });
-    resizeObserver.observe(container);
-
-    return () => {
-      cancelled = true;
-      resizeObserver.disconnect();
-      void detachPtySession(sessionId);
-      for (const dispose of disposers) {
-        try {
-          dispose();
-        } catch {
-          /* best-effort */
-        }
-      }
-      term.dispose();
-      termRef.current = null;
-      fitRef.current = null;
-      // Intentionally NOT killing the pty_session — the backend owns its
-      // lifecycle so the build survives this unmount (e.g. a tab switch).
-    };
-  }, [sessionId, command, cwd]);
-
-  // Focus when this becomes the active view (separate so it doesn't re-open).
-  useEffect(() => {
-    if (isActive) termRef.current?.focus();
-  }, [isActive]);
-
-  return <div ref={containerRef} className="build-terminal" />;
+  // Idempotent: a re-mount (tab switch) finds the build still running.
+  const open = useCallback(
+    async ({ cols, rows }: { cols: number; rows: number }) => {
+      await openPtySession({
+        sessionId,
+        command: BUILD_SHELL,
+        args: ['-lic', command],
+        cwd,
+        env: {},
+        cols,
+        rows,
+        projectPath: cwd,
+      });
+    },
+    [sessionId, command, cwd]
+  );
+  return (
+    <AttachedTerminal
+      // A different build is a different session: set it up again.
+      key={`${sessionId}\n${command}\n${cwd}`}
+      sessionId={sessionId}
+      open={open}
+      variant="build"
+      isActive={isActive}
+      onExit={onExit}
+      onOutput={onOutput}
+      failureLabel="Failed to start build"
+      className="build-terminal"
+    />
+  );
 }

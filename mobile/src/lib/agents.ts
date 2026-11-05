@@ -98,6 +98,7 @@ export function engineCantAsk(agent: Agent, engines: EngineInfo[] | undefined): 
 
 /** The row's second line, as the sidebar writes it. */
 export function subtitle(agent: Agent): string {
+  if (agent.takeover) return DRIVEN_LINE;
   if (needsYou(agent)) return 'Needs your OK';
   if (agent.status.state === 'working') return workingLine(agent);
   const failure = failedTurn(agent);
@@ -108,6 +109,7 @@ export function subtitle(agent: Agent): string {
 export type LineState = 'waiting' | 'working' | 'failed' | 'limited' | undefined;
 
 export function lineState(agent: Agent): LineState {
+  if (agent.takeover) return 'working';
   if (needsYou(agent)) return 'waiting';
   if (agent.status.state === 'working') return 'working';
   const failure = failedTurn(agent);
@@ -117,8 +119,22 @@ export function lineState(agent: Agent): LineState {
 
 /** A message of yours sent after the turn in progress began: queued for the next one. */
 export function isQueued(message: Pick<AgentMessage, 'kind' | 'ts'>, agent: Agent): boolean {
+  if (message.kind !== 'user') return false;
+  // Driven on the Mac: what you send waits for the hand-back.
+  if (agent.takeover) return message.ts > agent.takeover.since;
   const { state, since } = agent.status;
-  return message.kind === 'user' && state !== 'idle' && since != null && message.ts > since;
+  return state !== 'idle' && since != null && message.ts > since;
+}
+
+/**
+ * Someone is driving the agent's session by hand in a terminal on the Mac
+ * (desktop "Take over"). The phone shows it; taking over is the Mac's.
+ */
+export const DRIVEN_LINE = 'Being driven on your Mac';
+
+/** The composer's line while it's driven on the Mac: the same words as the row. */
+export function drivenHint(): string {
+  return `${DRIVEN_LINE} · what you send waits`;
 }
 
 /** "Chief of Staff" → "CS", "Agent 3" → "A3", "Finance" → "FI". */

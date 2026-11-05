@@ -224,8 +224,9 @@ steps has no line.
   that opens the steps so far above it; the newest is left out only while
   the working line is saying it (`doing` equals the activity), never when
   the line is blank. A bound agent's list offers **Open project** (its
-  workspace), the only real way in today; "Take over" (opening the live
-  session or browser tab) is not built.
+  workspace), and every agent's offers **Take over** (below), as does the
+  working line itself. Taking over a browser tab the agent drives is not
+  built.
 - **Stored** beside the log, never in it: `turns/<message-id>.json`, sent
   again on `agents://message` when the turn ends, and applied only to the
   paged chat reads (desktop and phone), after the log's lock is released,
@@ -533,6 +534,118 @@ reflexive Esc never drops a turn. ⌘K also lists "Stop <agent>" for every agent
 that isn't idle (with a confirm), Allow / Deny for the oldest card waiting on
 you, and "Open the next agent that needs you" (⌘J: a card, or a turn that
 didn't finish).
+
+## Take over (`src-tauri/src/agents/takeover.rs`)
+
+Step into the agent's own session and drive it by hand, then hand it back.
+From the agent menu ("Take over" / "Hand back"), the working line and the
+live timeline, and ⌘K ("Take over <agent>", "Hand <agent> back"). Offered once
+the agent has a conversation on its engine (`sessionId`, not `newEngine`).
+
+- **Paused.** `runner::claim_for_takeover` sets `driven` on the agent's
+  runtime under the inbox lock, and only while no turn is running or waiting
+  for a slot. While driven no turn starts: messages from you, the phone,
+  other agents and one-time check-ins wait in the queue (and in `inbox.json`);
+  a routine coming due is skipped, moved to its next time, recorded as a
+  `skipped` run, with a note ("Skipped “Morning brief” · you were driving
+  Finance"). `list_agents` tells other agents their messages wait. Start
+  fresh, and a change of engine or project, are refused until hand-back —
+  for the editor and the Chief's `update_agent` alike, through one helper
+  (`runner::update_settings`) that checks under the same lock the claim is
+  made under. Deleting (`takeover::delete_agent`, used by both the command
+  and the Chief's `delete_agent`) stops the turn first, then ends the
+  take-over dropping its queue, so nothing starts a turn on the way out;
+  only then is the agent's copy cleaned up (`task::abandon`: pending work
+  committed on its branch first, the copy kept if anything couldn't be), so
+  the terminal is gone from the copy before the copy is. An update must pass
+  both guards: no engine/project/work-directly change while driven, and no
+  rebind while a copy is open (`task::refuse_rebind`). Keep and Discard are
+  refused while driven, since the terminal is working in the copy.
+- **Mid-turn** the session is in use, so take-over is refused and the UI asks:
+  **Stop and take over** (Stop, as ever dropping the queue; then waits for the
+  turn to end, ≤15s) or **Wait**.
+- **The process** is spawned in Rust (`pty_session::open_session`), so the
+  bridge token and the agent's secrets never enter the webview: the engine's
+  interactive CLI resumed on the agent's session, in the turn's working dir
+  (`project::layout`: home, its project, or its open copy of the project —
+  exactly where a turn would run), with the turn's environment (PATH, secrets,
+  `MCP_TOOL_TIMEOUT`, the nested-session variables removed, no workspace
+  account variables) and the turn's own command line minus what only a
+  headless turn needs:
+  - Claude Code: `claude::interactive_args` = a turn's args without
+    `--print`, `--output-format`, `--verbose`, `--include-partial-messages`,
+    `--permission-prompt-tool` (it asks in the terminal, to you): `--chrome
+    --resume <session> --permission-mode acceptEdits --mcp-config …
+    --allowedTools mcp__shipstudio_agents --append-system-prompt … --add-dir …`.
+    The MCP URL carries no `?turn=`, so anything that reaches `approve` is
+    refused; the agent's other tools (message an agent, share a file) work.
+  - Codex: `codex resume -c sandbox_mode="workspace-write" -c
+    approval_policy="on-request" -c developer_instructions=… <every turn's
+    -c> [-m model] -C <cwd> <thread>`. `developer_instructions` is the
+    agent's identity plus its secrets section, as a `codex exec` turn passes
+    it. Built from `codex resume --help` on 0.166; not run against a real
+    thread (no signed-in account on the build machine).
+  The PTY has no project in its metadata, so remote access and other agents'
+  `session_*` tools can't see or type into it, and the phone is never sent
+  its id. Its id starts `takeover-`: a tab's `pty_session_open` may attach to
+  it while it runs but never respawns it, and the take-over's watcher also
+  checks the pid, so a respawn can't pass for the take-over.
+- **Edits are auto-accepted while you drive**, as they are for the agent
+  (Claude Code's `acceptEdits`, Codex's `workspace-write`), in its projects
+  too. Bash still asks. The banner's tooltip says so once; Shift-Tab changes
+  it in Claude Code.
+- **Trust.** If Claude Code hasn't recorded the folder as trusted
+  (`hasTrustDialogAccepted` on it or a folder above, in `.claude.json` under
+  `CLAUDE_CONFIG_DIR` or home — read, never written), the banner adds:
+  "Claude Code will ask whether to trust this folder — choose “Yes,
+  proceed”. Choosing No ends the take-over." Codex's trust prompt isn't
+  checked.
+- **Where.** A bound agent's session becomes a tab in its project's workspace
+  (`adoptTakeover` + focus, through `useRemoteAgentControl`), which opens. The
+  tab is never saved: `set_terminal_state` drops `takeover-` tabs, and
+  `get_terminal_state` drops any on disk and adds the ones running now, so
+  a quit, crash or hand-back leaves no ghost tab to respawn.
+  Any other agent's shows in its chat in place of the conversation
+  (`AttachedTerminal`, attach-only), with "Show chat" to see the conversation
+  and composer. Either way one line under the header says "You're driving
+  Finance in a terminal · Hand back"; the sidebar row and chat header read "You're driving Finance";
+  a message you send waits ("Waiting, sends when you hand Finance back").
+- **Hand back** (the button, ⌘K, or the process exiting, noticed within
+  0.5s). If the terminal printed in the last 2s it is likely mid-response,
+  so the button asks first ("Hand back anyway?"); anything typed but not sent
+  is dropped. Ctrl-C three times, 300ms apart (Claude Code's first clears the
+  prompt, its second arms "press again"), then up to 5s for it to exit; only
+  a process still alive with the session on its command line is killed
+  (pids get reused). Only then is `driven` released, so a turn and the
+  terminal never share the session. A note says "You handed Finance back after 6 min";
+  if the session's transcript grew, the next turn starts with
+  `prompts::handed_back`. Start fresh and an engine switch clear that
+  preamble. A bound agent's tab is closed (`remote-close-agent`). Deleting
+  the agent ends a take-over without a note.
+- **Closed by itself early** (within 10s, or with a non-zero exit — the
+  trust question answered No, a rejected flag, a crash): a quiet note
+  (`kind: note`, `takeover: true`), not an error — it isn't the agent
+  failing — says so plainly with the terminal's last lines in a mono block
+  (`remote_access::screen::render_tail`), no preamble, and no Retry. Being a
+  note, it sets no failure, alerts nobody, and peers and the phone never
+  call it "didn't finish". Older builds wrote it as an error; those still
+  render with the block and no Retry.
+- **Phone:** the overview carries `takeover` (without the PTY id); the phone
+  says "Being driven on your Mac" on the row, the chat header, the composer
+  and a queued message, the only phrasing it uses for this, offers no Stop,
+  and queued messages wait. It can't take over.
+- **One mark on disk.** `<home>/takeover.json` (pid, session) from open to
+  hand-back. At the next launch a leftover mark means the app quit or crashed
+  mid-take-over: the CLI is stopped if it outlived the app (only while it is
+  still that CLI), and the chat says the take-over ended. What waited is sent
+  like any interrupted queue.
+
+Verified for Claude Code 2.1.318 with a throwaway folder on Haiku (about two
+cents): `--print --session-id`, then interactive `--resume` in a PTY (a new
+message, Ctrl-C twice exits), then `--print --resume` recalled both turns
+under the same session id. In a folder Claude Code hasn't been told to trust,
+the interactive CLI first shows its own trust dialog (default "No, exit"),
+which the person at the keyboard answers; nothing is trusted for them.
 
 ## Notifications (`src-tauri/src/agents/notify.rs`)
 

@@ -141,7 +141,7 @@ const team = (working: boolean) =>
     )
   );
 
-const commands = (working: boolean) => ({
+export const workCommands = (working: boolean) => ({
   agents_overview: team(working),
   agents_messages: (args: Record<string, unknown>) =>
     args.agentId === 'acme' ? (working ? LIVE_CHAT : ACME_CHAT) : messagesFor(args),
@@ -158,7 +158,7 @@ export const agentsWorkScenarios: Scenario[] = [
     requires: '.agent-work__toggle',
     openSelector: AGENTS_TAB,
     steps: [openAcme],
-    commands: commands(false),
+    commands: workCommands(false),
   },
   {
     id: 'agents-work-expanded',
@@ -168,26 +168,26 @@ export const agentsWorkScenarios: Scenario[] = [
     requires: '.agent-work[data-open] .agent-work__step',
     openSelector: AGENTS_TAB,
     steps: [openAcme, { click: '[data-message-ids="work-pricing"] .agent-work__toggle' }],
-    commands: commands(false),
+    commands: workCommands(false),
   },
   {
     id: 'agents-work-live',
     title: 'Agents — the working line with its steps so far, folded',
     looksRightWhen:
-      'At the bottom of Acme Site’s chat, the usual working line (three dots, “Running npm test”) with, beside it, a muted chevron and “8 steps · edited 1 file”. One line: the steps are not shown and nothing is duplicated.',
+      'At the bottom of Acme Site’s chat, the usual working line (three dots, “Running npm test”) with, beside it, a muted chevron and “8 steps · edited 1 file”, then a quiet “Take over”. One line: the steps are not shown and nothing is duplicated.',
     requires: '.agent-chat__row--working .agent-work__toggle',
     openSelector: AGENTS_TAB,
     steps: [openAcme],
-    commands: commands(true),
+    commands: workCommands(true),
   },
   {
     id: 'agents-work-live-open',
     title: 'Agents — the live timeline, opened above the current step',
     looksRightWhen:
-      'Above the working line, the seven steps already done (Read Footer.tsx, Searched for “href=”, Browsed acme.com, Browsed staging.acme.com, Worked in Chrome, Edited Footer.tsx, Took a screenshot of acme-marketing with its thumbnail), each with its time, at the same left edge (icons in the same column) as a finished reply’s list; the eighth step is the working line itself (“Running npm test” with the dots), not repeated in the list. Under the list a quiet “Open project” link (Acme Site works in acme-marketing). The chevron beside “8 steps · edited 1 file” points down.',
+      'Above the working line, the seven steps already done (Read Footer.tsx, Searched for “href=”, Browsed acme.com, Browsed staging.acme.com, Worked in Chrome, Edited Footer.tsx, Took a screenshot of acme-marketing with its thumbnail), each with its time, at the same left edge (icons in the same column) as a finished reply’s list; the eighth step is the working line itself (“Running npm test” with the dots), not repeated in the list. Under the list two quiet links side by side, “Open project” (Acme Site works in acme-marketing) and “Take over”. The chevron beside “8 steps · edited 1 file” points down.',
     requires: '.agent-chat__row--working .agent-work[data-open] .agent-work__step',
     openSelector: AGENTS_TAB,
     steps: [openAcme, { click: '.agent-chat__row--working .agent-work__toggle' }],
-    commands: commands(true),
+    commands: workCommands(true),
   },
 ];

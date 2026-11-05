@@ -1064,7 +1064,7 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
         });
     }
 
-    if let Some(firing) = plan.fire {
+    if let Some(firing) = plan.fire.filter(|f| !skip_while_driven(app, f)) {
         // Move it on before waking anyone, so a crash mid-turn can't fire it twice.
         store::update(&firing.agent_id, |a| match firing.next {
             Some(next) => {
@@ -1087,6 +1087,69 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
         let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
     }
     Ok(())
+}
+
+/// A routine coming due while the user drives its agent's session
+/// (`takeover`) doesn't run: it moves on to its next time, with a note in
+/// the chat and in its past runs. A one-time check-in isn't skipped; it
+/// waits in the queue like a message and runs once the agent is handed back.
+/// True when `firing` was skipped.
+fn skip_while_driven(app: &AppHandle, firing: &Firing) -> bool {
+    if firing.manual || firing.check_in.repeat.is_none() || !runner::driven(&firing.agent_id) {
+        return false;
+    }
+    let now = store::now_ms();
+    let name = store::get(&firing.agent_id)
+        .map(|a| a.name)
+        .unwrap_or_default();
+    let detail = format!("Skipped: you were driving {name} in a terminal.");
+    let updated = store::update(&firing.agent_id, |a| {
+        if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == firing.check_in.id) {
+            if let Some(next) = firing.next {
+                c.next_at = next;
+            }
+            if c.retry.take().is_some() {
+                runs::superseded(&mut c.runs);
+            }
+            runs::record(&mut c.runs, skipped_run(firing, now, detail.clone()));
+        }
+    });
+    if updated.is_err() {
+        // Not moved on: firing it is better than skipping it every tick.
+        return false;
+    }
+    let line = runner::new_message(
+        &firing.agent_id,
+        MessageKind::Note,
+        skipped_line(&firing.check_in.note, &name),
+    );
+    let _ = runner::record(app, line);
+    tracing::info!(agent = %firing.agent_id, check_in = %firing.check_in.id, "routine skipped: taken over");
+    true
+}
+
+fn skipped_run(firing: &Firing, now: i64, detail: String) -> runs::Run {
+    runs::Run {
+        outcome: runs::Outcome::Skipped,
+        detail: Some(detail),
+        ..running(firing, now)
+    }
+}
+
+/// "Skipped “Morning brief” · you were driving Finance".
+fn skipped_line(note: &str, name: &str) -> String {
+    let mut what: String = note
+        .lines()
+        .next()
+        .unwrap_or("")
+        .trim()
+        .chars()
+        .take(60)
+        .collect();
+    if what.chars().count() < note.trim().chars().count() {
+        what.push('…');
+    }
+    format!("Skipped “{what}” · you were driving {name}")
 }
 
 /// Queue the turn and leave the "Scheduled check-in" line above its answer.
@@ -1149,6 +1212,20 @@ where
 mod tests {
     use super::*;
     use chrono::{FixedOffset, NaiveDate, Offset};
+
+    #[test]
+    fn a_routine_skipped_while_driven_says_which_and_why() {
+        assert_eq!(
+            skipped_line("Morning brief\nwith the calendar", "Finance"),
+            "Skipped “Morning brief…” · you were driving Finance"
+        );
+        assert_eq!(
+            skipped_line("Triage email", "Inbox"),
+            "Skipped “Triage email” · you were driving Inbox"
+        );
+        let long = "x".repeat(80);
+        assert!(skipped_line(&long, "A").contains(&format!("{}…", "x".repeat(60))));
+    }
 
     /// US Eastern for 2026, by hand (chrono has no tz database here):
     /// EDT (UTC-4) from Sun 8 Mar 02:00 local to Sun 1 Nov 02:00 local.
