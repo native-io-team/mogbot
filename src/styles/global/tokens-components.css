@@ -20,6 +20,8 @@
   --size-sidebar-project-shortcut: 24px;
   --size-sidebar-project: 214px;
   --size-sidebar-project-row: 46px;
+  /* How far the sidebar footer's fade reaches up over the list above it. */
+  --size-sidebar-footer-fade: calc(var(--space-32) + var(--space-16));
   --size-sidebar-section-row: 22px;
   --size-sidebar-shortcut: 21px;
 

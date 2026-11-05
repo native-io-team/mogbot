@@ -117,7 +117,7 @@ function AgentSheet() {
         <View style={styles.who}>
           <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.sheet} />
           <View style={{ flex: 1, gap: space['2xs'] }}>
-            <SheetTitle numberOfLines={1}>{agent.name}</SheetTitle>
+            <SheetTitle numberOfLines={2}>{agent.name}</SheetTitle>
             {!!agent.role && (
               <T variant="small" color={colors.textSecondary} numberOfLines={2}>
                 {agent.role}

@@ -238,6 +238,33 @@ describe('RoomChat', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete room' }));
     expect(actions.onDeleteRoom).toHaveBeenCalled();
   });
+
+  it('a room the Chief made opens on what it is for and who made it', async () => {
+    thread = [];
+    const chief = agent('chief', 'Chief of Staff', 'blue');
+    const agents = new Map([...byId, ['chief', chief]]);
+    await open(
+      room({
+        members: ['chief', 'fin', 'ops'],
+        lead: 'chief',
+        purpose: 'Close October by Friday',
+        createdBy: 'chief',
+      }),
+      agents
+    );
+    expect(screen.getByText('Close October by Friday')).toBeTruthy();
+    expect(screen.getByText(/^Chief of Staff made this room\. Each agent keeps/)).toBeTruthy();
+    expect(
+      screen.getAllByText(/Chief of Staff answers unless you @ someone/).length
+    ).toBeGreaterThan(0);
+  });
+
+  it('a room you made says nothing about who made it', async () => {
+    thread = [];
+    await open(room());
+    expect(screen.queryByText(/made this room/)).toBeNull();
+    expect(screen.getByText(/^Each agent keeps its own memory/)).toBeTruthy();
+  });
 });
 
 describe('an agent’s own chat while it answers in a room', () => {

@@ -373,6 +373,14 @@ fn tools_list(caller: &store::Agent) -> Value {
             .filter(|t| !t.main_only || caller.is_main)
             .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() })),
     );
+    // Rooms are the Chief's to make and change, like agents.
+    if caller.is_main {
+        tools.extend(
+            super::room_tools::TOOLS
+                .iter()
+                .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() })),
+        );
+    }
     // Every agent works on projects the same way.
     tools.extend(super::sessions::definitions());
     json!({ "tools": tools })
@@ -415,6 +423,11 @@ pub async fn handle_rpc(
             }
             if let Some(tool) = super::usage_tools::find(name) {
                 return ok(usage_tool(app, &caller, turn, tool, &args).await);
+            }
+            // Chief-only, and a card first in a turn answering outside text
+            // (`room_tools::gate`), after the call is checked in full.
+            if let Some(tool) = super::room_tools::find(name) {
+                return ok(super::room_tools::call(app, &caller, turn, tool, &args).await);
             }
             let Some(tool) = TOOLS.iter().find(|t| t.name == name) else {
                 return fail(-32602, &format!("Unknown tool: {name}"));
@@ -532,13 +545,20 @@ async fn call(
 pub fn needs_card_in_routine_turn(tool: &str) -> bool {
     matches!(
         tool,
-        "create_agent" | "update_agent" | "delete_agent" | "watch_for" | "schedule_check_in"
+        "create_agent"
+            | "update_agent"
+            | "delete_agent"
+            | "watch_for"
+            | "schedule_check_in"
+            | "create_room"
+            | "add_to_room"
+            | "remove_from_room"
     )
 }
 
 /// Why a card is asked for while an agent answers what a "When…" routine
 /// found: in the user's words, no "turn" or "outside text".
-const OUTSIDE_WHY: &str = "It’s working on something a “When…” routine found, which came from outside this app, so it asks you first.";
+pub(super) const OUTSIDE_WHY: &str = "It’s working on something a “When…” routine found, which came from outside this app, so it asks you first.";
 
 /// The card for one of those, in a turn answering outside text.
 fn outside_card(tool: &str, args: &Value) -> (String, String) {

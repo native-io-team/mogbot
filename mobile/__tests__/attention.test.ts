@@ -1,7 +1,8 @@
-import type { Agent, AgentMessage, UsageTotals } from '@shipstudio/companion-protocol';
+import type { Agent, AgentMessage, Approval, UsageTotals } from '@shipstudio/companion-protocol';
 import type { NotificationRequest } from 'expo-notifications';
 import {
   askingLine,
+  plainSnippet,
   attentionCounts,
   canStartFresh,
   contextLine,
@@ -100,6 +101,22 @@ describe('attention', () => {
       'Wants to run the tests'
     );
     expect(askingLine({ title: 'Fetch a page', detail: '' })).toBe('Fetch a page');
+    // A connector tool's detail is its JSON input: the title is the request.
+    expect(
+      askingLine({
+        title: 'Send an email · Gmail',
+        tool: 'mcp__claude_ai_Gmail__send_email',
+        detail: '{\n  "to": "dana@northwind.example"\n}',
+      })
+    ).toBe('Send an email · Gmail');
+    // An import's review card: a short line in the row, not the card's title.
+    expect(
+      askingLine({
+        title: 'Here’s what your 2 agents will do for you',
+        detail: '',
+        connector: { kind: 'review' } as Approval['connector'],
+      })
+    ).toBe('Review the agents to import');
   });
 
   it('counts who needs you and who is working, and finds the next card', () => {
@@ -312,5 +329,14 @@ describe('the conversation reading', () => {
     expect(contextLine(real.agentsOverview.agents[0])).toBe('15% full');
     expect('context' in real.agentsStartFresh).toBe(false);
     expect(canStartFresh(real.agentsStartFresh)).toBe(false);
+  });
+});
+
+describe('search snippets', () => {
+  it('reads a table as its cells, without the markup', () => {
+    expect(
+      plainSnippet('…e | Draft | | --- | --- | --- | --- | | **Renewal** pricing | Dana | Mon |')
+    ).toBe('…e · Draft · Renewal pricing · Dana · Mon');
+    expect(plainSnippet('## Email\n- `142` new')).toBe('Email - 142 new');
   });
 });

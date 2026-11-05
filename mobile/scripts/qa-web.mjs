@@ -7,13 +7,15 @@
  * It starts the mock (`--http --cors`) and `expo start --web`, pairs through
  * the real `/pair?d=` confirm screen, then walks the phases below, restarting
  * or stopping the mock to reach the states only a Mac can cause (out of
- * reach, "This isn't your Mac", three bars). Writes PNGs plus `report.md`.
+ * reach, "This isn't your Mac", three bars, a heavy account). Writes PNGs plus
+ * `report.md`.
  *
  * Dependency-free on purpose, like the desktop's scripts/harness-capture.mjs:
  * the Chrome DevTools Protocol over Node's built-in WebSocket and fetch.
  *
  *   pnpm qa:web                          # everything, into qa-shots/
  *   pnpm qa:web --only chat-             # shots whose name starts with chat-
+ *   pnpm qa:web --phases heavy           # only these phases (fresh,live,cached,impostor,bars,heavy,importing)
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --out /tmp/shots
  *   pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681
@@ -44,6 +46,8 @@ const OUT = path.resolve(opt('--out', 'QA_OUT', path.join(ROOT, 'qa-shots')));
 const ONLY = opt('--only', 'QA_ONLY', '');
 const THEMES = opt('--themes', 'QA_THEMES', 'light,dark').split(',').filter(Boolean);
 const VERBOSE = args.includes('--verbose');
+const PHASES = opt('--phases', 'QA_PHASES', 'fresh,live,cached,impostor,bars,heavy,importing').split(',');
+const phase = (name) => PHASES.includes(name);
 // Ports other tools in this repo own: the desktop app, its harness, the phone's Metro.
 for (const p of [WEB_PORT, MOCK_PORT, CDP_PORT]) {
   if ([8090, 1420, 1425, 1435].includes(p)) throw new Error(`Port ${p} belongs to another tool`);
@@ -303,6 +307,18 @@ class Page {
       `() => [...document.querySelectorAll('[aria-label]')].find((e) => e.getAttribute('aria-label').endsWith(${JSON.stringify(label)}))`,
       label
     );
+  }
+
+  /** Focus the first text field (or the one `selector` names) and type `text` into it. */
+  async type(text, selector = 'input, textarea') {
+    const ok = await this.eval(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return false;
+      el.focus();
+      return true;
+    })()`);
+    if (!ok) throw new Error(`No field to type into: ${selector}`);
+    await this.send('Input.insertText', { text });
   }
 
   /** `clip`: `{ x, y, width, height, scale }` in CSS pixels, for a close-up. */
@@ -938,6 +954,81 @@ const IMPORTING = [
   },
 ];
 
+/** `--heavy`: an account in daily use (17 agents, ~40 cards waiting, long chats). */
+const HEAVY = [
+  {
+    name: 'heavy-agents',
+    route: '/agents',
+    ready: 'Recruiting Coordinator',
+    pages: 4,
+    check: 'Density with 17 agents; needs-you first; long names truncate once; counts align',
+  },
+  {
+    name: 'heavy-chat-inbox',
+    route: '/chat/inbox',
+    ready: 'Inbox Zero',
+    pages: 8,
+    check: 'Long chat: markdown, tables, code, timelines, a result card, then a run of cards',
+  },
+  {
+    name: 'heavy-chat-recruit',
+    route: '/chat/recruit',
+    ready: 'Recruiting Coordinator',
+    pages: 3,
+    check: 'A long name in the header; login and key cards in a row',
+  },
+  {
+    name: 'heavy-chat-chief',
+    route: '/chat/chief',
+    ready: 'Chief of Staff',
+    settle: 3000,
+    check: 'Bars with an import an hour in; the composer above them',
+  },
+  {
+    name: 'heavy-chat-ci',
+    route: '/chat/ci',
+    ready: 'Competitive Intelligence',
+    pages: 3,
+    check: 'Code block and result card in a long chat',
+  },
+  {
+    name: 'heavy-search',
+    route: '/search?q=renewal',
+    settle: 3500,
+    check: 'Many hits across agents: rows align, names truncate, snippets wrap to two lines',
+  },
+  {
+    name: 'heavy-agent-sheet',
+    route: '/agent/recruit',
+    ready: 'Recruiting Coordinator',
+    pages: 3,
+    check: 'Paused routines; a long name and role',
+  },
+  {
+    name: 'heavy-import',
+    route: '/import',
+    ready: 'Import agents',
+    check: 'Import an hour in: 16 staged, 11 imported, 412 conversations',
+  },
+  { name: 'heavy-settings', route: '/settings', pages: 2, check: 'Settings with a busy account' },
+];
+
+/** The heavy account with the Mac out of reach. */
+const HEAVY_OFFLINE = [
+  {
+    name: 'heavy-offline-agents',
+    route: '/agents',
+    settle: 5000,
+    check: 'Saved heavy list, "as of …"',
+  },
+  {
+    name: 'heavy-offline-chat-inbox',
+    route: '/chat/inbox',
+    settle: 5000,
+    check: 'A run of cards disabled with one note, not one per card',
+  },
+];
+
 // ---- Report -------------------------------------------------------------------------
 
 function report(meta) {
@@ -1037,27 +1128,47 @@ async function main() {
   };
 
   // Nothing opened yet: the deep-linked chat has nothing saved.
-  await stopMock();
-  await each(OFFLINE_FRESH);
+  if (phase('fresh')) {
+    await stopMock();
+    await each(OFFLINE_FRESH);
+  }
 
-  await startMock();
-  await each(LIVE);
+  if (phase('live') || phase('cached')) {
+    await startMock();
+    if (phase('live')) await each(LIVE);
+    if (phase('cached')) {
+      await stopMock();
+      await each(OFFLINE_CACHED);
+    }
+  }
 
-  await stopMock();
-  await each(OFFLINE_CACHED);
+  if (phase('impostor')) {
+    await startMock('--impostor');
+    await each(NOT_YOUR_MAC);
+  }
 
-  await startMock('--impostor');
-  await each(NOT_YOUR_MAC);
+  if (phase('bars')) {
+    await startMock('--bars');
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000); // reconnect to the real key again
+    await each(BARS);
+  }
 
-  await startMock('--bars');
-  await page.goto(`${WEB}/agents`);
-  await sleep(4000); // reconnect to the real key again
-  await each(BARS);
+  if (phase('heavy')) {
+    await startMock('--heavy');
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await each(HEAVY);
+    await stopMock();
+    await each(HEAVY_OFFLINE);
+  }
 
-  await startMock('--importing');
-  await page.goto(`${WEB}/agents`);
-  await sleep(4000);
-  await each(IMPORTING);
+  if (phase('importing')) {
+    await startMock('--importing');
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await each(IMPORTING);
+  }
 
   page.close();
   await writeFile(

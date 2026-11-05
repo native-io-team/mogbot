@@ -5,13 +5,13 @@
  */
 
 import type { SearchHit } from '@shipstudio/companion-protocol';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { AgentAvatar, Spinner } from '../../../components/agent';
 import { Icon, T } from '../../../components/ui';
-import { formatAgo } from '../../../lib/agents';
+import { formatAgo, plainSnippet } from '../../../lib/agents';
 import { roomsOffered } from '../../../lib/rooms';
 import { canCall, describeError, search } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
@@ -57,15 +57,15 @@ const WHO: Partial<Record<SearchHit['kind'], string>> = {
   note: 'Note',
 };
 
-/** Snippets are raw message text: drop the markdown marks a reader never sees. */
-const plain = (snippet: string) => snippet.replace(/\*\*|__|`+|^#+\s*/gm, '');
-
 export default function Search() {
   const colors = useColors();
   const router = useRouter();
   const served = useApp((s) => canCall('agents.search', s.welcome));
   const rooms = useApp((s) => roomsOffered(s.welcome));
-  const [query, setQuery] = useState('');
+  // `?q=` starts with a query: a link into a search, and the web QA (no
+  // native search bar there to type into).
+  const { q: initial } = useLocalSearchParams<{ q?: string }>();
+  const [query, setQuery] = useState(typeof initial === 'string' ? initial : '');
   const [answer, setAnswer] = useState<{ q: string; hits?: SearchHit[]; error?: string } | null>(
     null
   );
@@ -95,22 +95,26 @@ export default function Search() {
   const sections = useMemo(() => groupHits(hits ?? [], rooms), [hits, rooms]);
   const words = useMemo(() => query.trim().toLowerCase().split(/\s+/).filter(Boolean), [query]);
 
+  // Once per palette, not per keystroke: see `largeTitle` in lib/navigation.
+  const screenOptions = useMemo(
+    () => ({
+      title: 'Search',
+      headerLargeTitle: true,
+      headerLargeTitleStyle: { fontFamily: fonts.semibold, color: colors.textStrong },
+      headerSearchBarOptions: {
+        placeholder: 'Search conversations',
+        autoCapitalize: 'none' as const,
+        hideWhenScrolling: false,
+        textColor: colors.textStrong,
+        onChangeText: (e: { nativeEvent: { text: string } }) => setQuery(e.nativeEvent.text),
+      },
+    }),
+    [colors]
+  );
+
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: 'Search',
-          headerLargeTitle: true,
-          headerLargeTitleStyle: { fontFamily: fonts.semibold, color: colors.textStrong },
-          headerSearchBarOptions: {
-            placeholder: 'Search conversations',
-            autoCapitalize: 'none',
-            hideWhenScrolling: false,
-            textColor: colors.textStrong,
-            onChangeText: (e) => setQuery(e.nativeEvent.text),
-          },
-        }}
-      />
+      <Stack.Screen options={screenOptions} />
       <SectionList
         sections={sections}
         keyExtractor={(h) => `${h.agentId}:${h.messageId}`}
@@ -166,7 +170,7 @@ export default function Search() {
                 {formatAgo(item.ts)}
               </T>
             </View>
-            <Highlighted text={plain(item.snippet)} words={words} />
+            <Highlighted text={plainSnippet(item.snippet)} words={words} />
           </Pressable>
         )}
         ListEmptyComponent={

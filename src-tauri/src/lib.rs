@@ -310,7 +310,10 @@ pub fn run() {
                         // `y` sizes Tao's native titlebar container to 14 + 32 = 46px;
                         // `center_macos_traffic_lights` below performs the missing Y move.
                         .traffic_light_position(tauri::LogicalPosition::new(16.0, 32.0))
-                        .hidden_title(true);
+                        .hidden_title(true)
+                        // A click on an unfocused window focuses it *and* acts,
+                        // like Slack or Linear.
+                        .accept_first_mouse(true);
                 }
 
                 let main_window = main_builder.build()?;

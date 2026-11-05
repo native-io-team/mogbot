@@ -83,6 +83,7 @@ pub mod quota;
 pub mod reach;
 pub mod results;
 pub mod review;
+pub mod room_tools;
 pub mod rooms;
 pub mod runner;
 pub mod runs;

@@ -322,6 +322,16 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     searchRef.current?.select();
   }, [popoverSearch]);
   const search = useMemo(() => ({ query, setQuery, close: closeSearch }), [query, closeSearch]);
+  // Picked by name: the agent was the answer, so search goes away. setQuery
+  // rather than closeSearch, so the composer focus is openAgent's.
+  const openAgentByName = useCallback(
+    (id: string) => {
+      setPopoverOpen(false);
+      setQuery('');
+      openAgent(id);
+    },
+    [openAgent]
+  );
 
   // ⌘F searches every conversation, wherever focus is in Agents mode. Esc
   // anywhere puts search away, unless something on top (a dialog, a menu,
@@ -831,6 +841,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
                 query={popoverSearch ? '' : query}
                 searchRef={searchRef}
                 onOpenHit={openHit}
+                onOpenAgent={openAgentByName}
                 currentHit={currentHit}
               />
             }
@@ -844,6 +855,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
               open={popoverOpen}
               field={searchRef}
               onOpenHit={openHit}
+              onOpenAgent={openAgentByName}
             />
           )}
           {error && !loaded ? (

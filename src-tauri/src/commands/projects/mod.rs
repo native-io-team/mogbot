@@ -204,15 +204,61 @@ async fn scan_uncommitted_counts(
         .await
 }
 
+/// Every directory excluded from the dashboard this session, with why, and a
+/// count bumped whenever one is new or its reason changes.
+#[derive(Default)]
+struct ExclusionLog {
+    seen: std::collections::HashMap<PathBuf, String>,
+    changes: u64,
+    summarized: u64,
+}
+
+static EXCLUSION_LOG: std::sync::LazyLock<std::sync::Mutex<ExclusionLog>> =
+    std::sync::LazyLock::new(Default::default);
+
 /// Issue #162: a project silently missing from the dashboard is
 /// indistinguishable from data loss to users. Every filter that hides a
-/// directory from the project list must log through here so the exclusion
-/// shows up loudly in the logs (logging only — no behavior change).
+/// directory from the project list must log through here (logging only — no
+/// behavior change).
+///
+/// The dashboard rescans on every focus and refresh, so this logged the same
+/// folders hundreds of times a session at WARN. Now each path is logged once
+/// per session (and again only if its reason changes), at debug, and each pass
+/// that finds something new ends in one summary line ([`summarize_exclusions`]).
 fn warn_project_excluded(path: &Path, reason: &str) {
-    tracing::warn!(
-        path = %path.display(),
-        reason,
-        "project directory excluded from dashboard list"
+    let fresh = {
+        let mut log = EXCLUSION_LOG.lock().unwrap_or_else(|e| e.into_inner());
+        let fresh = log.seen.get(path).map(String::as_str) != Some(reason);
+        if fresh {
+            log.seen.insert(path.to_path_buf(), reason.to_string());
+            log.changes += 1;
+        }
+        fresh
+    };
+    if fresh {
+        tracing::debug!(
+            path = %path.display(),
+            reason,
+            "project directory excluded from dashboard list"
+        );
+    }
+}
+
+/// One line at the end of a scan, only when that scan excluded something not
+/// logged before: how many directories are hidden in all, so the exclusion
+/// still shows at the default level without naming every folder each time.
+fn summarize_exclusions() {
+    let total = {
+        let mut log = EXCLUSION_LOG.lock().unwrap_or_else(|e| e.into_inner());
+        if log.changes == log.summarized {
+            return;
+        }
+        log.summarized = log.changes;
+        log.seen.len()
+    };
+    tracing::info!(
+        excluded = total,
+        "dashboard list excludes {total} project directories (each logged once at debug)"
     );
 }
 
@@ -599,6 +645,7 @@ pub async fn list_projects() -> Result<Vec<ProjectInfo>, CommandError> {
         (None, None) => a.name.cmp(&b.name),
     });
 
+    summarize_exclusions();
     Ok(projects)
 }
 
@@ -703,6 +750,7 @@ fn collect_dashboard_projects(
         }
     }
 
+    summarize_exclusions();
     Ok((projects, scan_paths))
 }
 
@@ -2322,6 +2370,30 @@ mod scan_tests {
         ];
         want.sort();
         assert_eq!(got, want);
+    }
+
+    #[test]
+    fn a_rescan_does_not_log_the_same_exclusions_again() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        make_synthetic_project(&root.join("kept"), Some(1), None);
+        std::fs::create_dir_all(root.join("not-a-project")).expect("dir");
+        let inputs = empty_inputs();
+
+        let (_, first) =
+            capture_exclusions(|| collect_dashboard_projects(root, &inputs).expect("collect"));
+        let (_, second) =
+            capture_exclusions(|| collect_dashboard_projects(root, &inputs).expect("collect"));
+        assert_eq!(first.len(), 1);
+        assert!(second.is_empty(), "logged again: {second:?}");
+
+        // A new reason for the same folder is news, and is logged.
+        std::fs::remove_dir_all(root.join("not-a-project")).expect("rm");
+        let mut inputs = empty_inputs();
+        inputs.external_paths.push(root.join("not-a-project"));
+        let (_, third) =
+            capture_exclusions(|| collect_dashboard_projects(root, &inputs).expect("collect"));
+        assert_eq!(third.len(), 1);
     }
 
     #[test]

@@ -84,6 +84,9 @@ import { DISABLED_OPACITY, Icon, useRipple, T } from './ui';
 
 const NONE: Agent[] = [];
 
+/** Past this many characters the placeholder drops the name, so it stays on one line. */
+const PLACEHOLDER_NAME_MAX = 22;
+
 export function Composer({
   agent,
   autoFocus,
@@ -478,7 +481,15 @@ export function Composer({
           value={draft.text}
           autoFocus={autoFocus}
           onChangeText={setText}
-          placeholder={listening ? 'Listening…' : `Message ${agent.name}`}
+          // One line: a long name ("Recruiting Coordinator for the Platform
+          // Team") wrapped the placeholder onto two. The header says who.
+          placeholder={
+            listening
+              ? 'Listening…'
+              : agent.name.length > PLACEHOLDER_NAME_MAX
+                ? 'Message'
+                : `Message ${agent.name}`
+          }
           label={`Message ${agent.name}`}
           inputRef={input}
         >

@@ -10,6 +10,27 @@ type NativeStackNavigationOptions = Exclude<
   ((...args: never[]) => unknown) | undefined
 >;
 
+/**
+ * A tab's root screen: the large title, flush with the page. Pass the result
+ * through `useMemo`: `Stack.Screen` calls `setOptions` whenever its `options`
+ * object is new, and a header rebuilt on every render (each overview push,
+ * each turn of a pull to refresh) re-applies the navigation bar under a
+ * large title mid-gesture, which is one of the ways a pull can end janky or
+ * held part-way down.
+ */
+export const largeTitle = (
+  colors: Palette,
+  title: string,
+  extra?: NativeStackNavigationOptions
+): NativeStackNavigationOptions => ({
+  title,
+  headerLargeTitle: true,
+  headerLargeTitleShadowVisible: false,
+  headerLargeStyle: { backgroundColor: colors.surfaceApp },
+  headerLargeTitleStyle: { fontFamily: fonts.semibold, color: colors.textStrong },
+  ...extra,
+});
+
 export const stackOptions = (colors: Palette): NativeStackNavigationOptions => ({
   headerStyle: { backgroundColor: colors.surfaceApp },
   headerTransparent: false,

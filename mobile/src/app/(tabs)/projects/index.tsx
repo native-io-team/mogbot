@@ -24,7 +24,9 @@ import { formatAgo } from '../../../lib/agents';
 import { haptic } from '../../../lib/haptics';
 import { canCall, describeError, previewScreenshot, refreshProjects } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
-import { fonts, iconSize, radius, space } from '../../../lib/theme';
+import { largeTitle } from '../../../lib/navigation';
+import { useRefresh } from '../../../lib/refresh';
+import { iconSize, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
 
 /** Waiting on you first, then the most recently active. */
@@ -45,7 +47,6 @@ export default function Projects() {
   const served = useApp((s) => canCall('projects.list', s.welcome));
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(
     () =>
@@ -56,18 +57,12 @@ export default function Projects() {
     []
   );
   const sorted = useMemo(() => order(projects ?? []), [projects]);
+  const { refreshing, onRefresh } = useRefresh(load);
+  const screenOptions = useMemo(() => largeTitle(colors, 'Projects'), [colors]);
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: 'Projects',
-          headerLargeTitle: true,
-          headerLargeTitleShadowVisible: false,
-          headerLargeStyle: { backgroundColor: colors.surfaceApp },
-          headerLargeTitleStyle: { fontFamily: fonts.semibold, color: colors.textStrong },
-        }}
-      />
+      <Stack.Screen options={screenOptions} />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.content}
@@ -75,10 +70,7 @@ export default function Projects() {
           <RefreshControl
             refreshing={refreshing}
             tintColor={colors.textSecondary}
-            onRefresh={() => {
-              setRefreshing(true);
-              void load().finally(() => setRefreshing(false));
-            }}
+            onRefresh={onRefresh}
           />
         }
       >

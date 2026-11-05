@@ -129,6 +129,8 @@ pub fn room() -> crate::agents::rooms::RoomView {
             last_activity_at: 1_762_290_004_000,
             preview: Some("Ops: Filed.".into()),
             unread: 1,
+            purpose: None,
+            created_by: None,
             extra: Default::default(),
         },
         turns_used: 2,

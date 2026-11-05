@@ -53,7 +53,9 @@ import {
   unpair,
 } from '../../../lib/session';
 import { setApp, useApp } from '../../../lib/store';
-import { chromeScale, fonts, iconSize, PRESSED, radius, space } from '../../../lib/theme';
+import { useRefresh } from '../../../lib/refresh';
+import { largeTitle } from '../../../lib/navigation';
+import { chromeScale, iconSize, PRESSED, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
 
 type Row =
@@ -73,6 +75,7 @@ const SPLIT_MIN_HEIGHT = 600;
 
 /** The list's content box: a little room under the last row, and nothing else. */
 const LIST_CONTENT = { paddingBottom: space['2xl'] } as const;
+const ROW_LAYOUT = LinearTransition.springify().damping(20).mass(0.6);
 
 /** What an undoable toggle says it did ("Inbox hidden"), and the toggle that undoes it. */
 const UNDO: Partial<Record<AgentAction, [string, AgentAction]>> = {
@@ -160,7 +163,6 @@ export default function Agents() {
   const [selected, setSelected] = useState<string | null>(null);
   const [undo, setUndo] = useState<{ text: string; run: () => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
 
   const rows = useMemo<Row[]>(() => {
     // A Mac that removed this phone shows nothing of its agents: only the way back.
@@ -226,18 +228,17 @@ export default function Agents() {
     [flash]
   );
 
-  const refresh = useCallback(async () => {
-    if (!live) return;
-    setRefreshing(true);
+  // Offline, a pull just lets go: the control stays mounted either way, since
+  // unmounting one mid-refresh leaves the list held down (lib/refresh).
+  const { refreshing, onRefresh } = useRefresh(async () => {
+    if (useApp.getState().link.kind !== 'connected') return;
     try {
       setApp({ overview: await call('agents.overview', {}) });
       if (roomsOffered(useApp.getState().welcome)) await refreshRooms();
     } catch (e) {
       setError(describeError(e));
-    } finally {
-      setRefreshing(false);
     }
-  }, [live]);
+  });
 
   // In the split, something is always open: what needs you, else the top agent.
   const firstAgent = rows.find((r): r is Extract<Row, { kind: 'agent' }> => r.kind === 'agent');
@@ -249,25 +250,62 @@ export default function Agents() {
       : null;
 
   const quota = useQuotaLines();
+  // Memoised on what the buttons depend on, not rebuilt each render: see `largeTitle`.
+  const hasList = !!overview && !removed;
+  const screenOptions = useMemo(
+    () =>
+      largeTitle(colors, 'Agents', {
+        // Always on: changing it (or the header) at runtime loses the title
+        // when the phone rotates back. In landscape iOS shows it small anyway.
+        headerRight: () => (
+          <View style={styles.headerButtons}>
+            {/* Always offered: an older Mac's sheet hands the request to the Chief instead. */}
+            {hasList && (
+              <IconButton
+                name="square.and.pencil"
+                label="New agent"
+                fallback="+"
+                onPress={() => router.push('/new-agent')}
+              />
+            )}
+            {hasList && canImport && (
+              <IconButton
+                name="square.and.arrow.down"
+                label="Import agents"
+                fallback="↓"
+                onPress={() => router.push('/import')}
+              />
+            )}
+            <IconButton
+              name="gearshape"
+              label="Settings"
+              fallback="⚙"
+              onPress={() => router.push('/settings')}
+            />
+          </View>
+        ),
+      }),
+    [colors, styles, hasList, canImport, router]
+  );
   const list = (
     <Animated.FlatList
       data={rows}
       keyExtractor={(r) => r.key}
       contentInsetAdjustmentBehavior="automatic"
-      itemLayoutAnimation={LinearTransition.springify().damping(20).mass(0.6)}
+      // Rows don't spring into a new order while the list itself springs back
+      // from a pull: two springs at once is the likeliest source of its jank.
+      itemLayoutAnimation={refreshing ? undefined : ROW_LAYOUT}
       // No flexGrow: with the automatic insets (the large title above, the
       // tab bar below) a content box grown to the list's own height is that
       // height *plus* both insets, so a list with only the Chief scrolled a
       // screen's worth into nothing. The empty state keeps its own minHeight.
       contentContainerStyle={LIST_CONTENT}
       refreshControl={
-        live ? (
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={refresh}
-            tintColor={colors.textSecondary}
-          />
-        ) : undefined
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.textSecondary}
+        />
       }
       ListHeaderComponent={
         <>
@@ -329,44 +367,7 @@ export default function Agents() {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: 'Agents',
-          // Always on: changing it (or the header) at runtime loses the title
-          // when the phone rotates back. In landscape iOS shows it small anyway.
-          headerLargeTitle: true,
-          headerLargeTitleShadowVisible: false,
-          headerLargeStyle: { backgroundColor: colors.surfaceApp },
-          headerLargeTitleStyle: { fontFamily: fonts.semibold, color: colors.textStrong },
-          headerRight: () => (
-            <View style={styles.headerButtons}>
-              {/* Always offered: an older Mac's sheet hands the request to the Chief instead. */}
-              {overview && !removed && (
-                <IconButton
-                  name="square.and.pencil"
-                  label="New agent"
-                  fallback="+"
-                  onPress={() => router.push('/new-agent')}
-                />
-              )}
-              {overview && !removed && canImport && (
-                <IconButton
-                  name="square.and.arrow.down"
-                  label="Import agents"
-                  fallback="↓"
-                  onPress={() => router.push('/import')}
-                />
-              )}
-              <IconButton
-                name="gearshape"
-                label="Settings"
-                fallback="⚙"
-                onPress={() => router.push('/settings')}
-              />
-            </View>
-          ),
-        }}
-      />
+      <Stack.Screen options={screenOptions} />
       {split ? (
         <View style={styles.split}>
           <View style={[styles.splitList, { paddingLeft: insets.left, width: 360 + insets.left }]}>

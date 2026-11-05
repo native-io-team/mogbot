@@ -56,6 +56,7 @@ pub const CONTEXT_LINES: usize = 20;
 pub const CONTEXT_CHARS: usize = 8000;
 const LINE_CHARS: usize = 1200;
 const NAME_CHARS: usize = 60;
+pub const PURPOSE_CHARS: usize = 300;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -77,6 +78,14 @@ pub struct Room {
     pub preview: Option<String>,
     #[serde(default)]
     pub unread: u32,
+    /// What the room is for, in a line: shown on its empty state and to each
+    /// member in its turn's prompt. Absent in rooms made before it existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purpose: Option<String>,
+    /// The agent that made it (the Chief of Staff's `create_room`); absent
+    /// when the user made it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
     /// Fields a newer build wrote, kept and written back untouched.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
@@ -247,6 +256,18 @@ pub fn get(id: &str) -> Result<Room, CommandError> {
         .ok_or_else(|| CommandError::expected("That room no longer exists."))
 }
 
+/// A room by its id, or by its name (any case), as an agent names it.
+pub fn find(name_or_id: &str) -> Result<Option<Room>, CommandError> {
+    let needle = name_or_id.trim();
+    let rooms = list()?;
+    if let Some(found) = rooms.iter().find(|r| r.id == needle) {
+        return Ok(Some(found.clone()));
+    }
+    Ok(rooms
+        .into_iter()
+        .find(|r| r.name.to_lowercase() == needle.to_lowercase()))
+}
+
 pub fn update<F: FnOnce(&mut Room)>(id: &str, change: F) -> Result<Room, CommandError> {
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut registry = read_registry()?;
@@ -327,19 +348,79 @@ fn default_lead(members: &[store::Agent]) -> Option<String> {
 }
 
 pub fn create(name: Option<&str>, members: &[String]) -> Result<Room, CommandError> {
+    create_with(name, members, &Made::default())
+}
+
+/// What `create_room` adds to a room it makes: a lead other than the
+/// default, what the room is for, and who made it.
+#[derive(Debug, Default, Clone)]
+pub struct Made {
+    pub lead: Option<String>,
+    pub purpose: Option<String>,
+    pub by: Option<String>,
+}
+
+/// A room [`check_new`] found could be made.
+#[derive(Debug)]
+pub struct Checked {
+    pub members: Vec<store::Agent>,
+    pub name: String,
+    pub lead: Option<String>,
+    pub purpose: Option<String>,
+}
+
+/// The members, name and lead a room would have, checked, without making it:
+/// `create_room` asks the user (when it must) only about a room that can be made.
+pub fn check_new(
+    name: Option<&str>,
+    members: &[String],
+    made: &Made,
+) -> Result<Checked, CommandError> {
     let agents = checked_members(members)?;
     let name = clean_name(name, &agents)?;
+    let lead = match &made.lead {
+        Some(lead) if !agents.iter().any(|a| &a.id == lead) => {
+            return Err(super::err_invalid(
+                "lead",
+                "The lead has to be in the room.",
+            ));
+        }
+        Some(lead) => Some(lead.clone()),
+        None => default_lead(&agents),
+    };
+    let purpose = clean_purpose(made.purpose.as_deref())?;
+    Ok(Checked {
+        members: agents,
+        name,
+        lead,
+        purpose,
+    })
+}
+
+pub fn create_with(
+    name: Option<&str>,
+    members: &[String],
+    made: &Made,
+) -> Result<Room, CommandError> {
+    let Checked {
+        members: agents,
+        name,
+        lead,
+        purpose,
+    } = check_new(name, members, made)?;
     let now = store::now_ms();
     let room = Room {
         id: store::new_id(),
         name,
         members: agents.iter().map(|a| a.id.clone()).collect(),
-        lead: default_lead(&agents),
+        lead,
         muted: false,
         created_at: now,
         last_activity_at: now,
         preview: None,
         unread: 0,
+        purpose,
+        created_by: made.by.clone(),
         extra: Default::default(),
     };
     {
@@ -352,6 +433,27 @@ pub fn create(name: Option<&str>, members: &[String]) -> Result<Room, CommandErr
     Ok(room)
 }
 
+/// A room's purpose: one line (whitespace folded), at most
+/// [`PURPOSE_CHARS`]; empty is none.
+pub fn clean_purpose(purpose: Option<&str>) -> Result<Option<String>, CommandError> {
+    let line = purpose
+        .unwrap_or_default()
+        .split(|c: char| c.is_whitespace() || c.is_control() || store::breaks_line(c))
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if line.is_empty() {
+        return Ok(None);
+    }
+    if line.chars().count() > PURPOSE_CHARS {
+        return Err(super::err_invalid(
+            "purpose",
+            "Keep the room's purpose to a line or two (under 300 characters).",
+        ));
+    }
+    Ok(Some(line))
+}
+
 /// What the room's settings can change. `None` leaves a field as it is;
 /// `lead: Some(None)` clears it.
 #[derive(Debug, Default, Deserialize)]
@@ -362,6 +464,9 @@ pub struct RoomChange {
     #[serde(default, deserialize_with = "some_option")]
     pub lead: Option<Option<String>>,
     pub muted: Option<bool>,
+    /// An empty string clears it. Older desks never send it.
+    #[serde(default)]
+    pub purpose: Option<String>,
 }
 
 fn some_option<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<String>>, D::Error> {
@@ -382,6 +487,20 @@ pub fn change(id: &str, change: RoomChange) -> Result<Room, CommandError> {
         Some(n) => Some(clean_name(Some(n), &members)?),
         None => None,
     };
+    let purpose = match &change.purpose {
+        Some(p) => Some(clean_purpose(Some(p))?),
+        None => None,
+    };
+    // A member who joins gets a copy of every file already sent here before
+    // it is in: if a copy fails, the room is left as it was.
+    let joining: Vec<String> = members
+        .iter()
+        .map(|a| a.id.clone())
+        .filter(|m| !current.members.contains(m))
+        .collect();
+    if !joining.is_empty() {
+        copy_files_to(&current, &joining)?;
+    }
     let lead = match change.lead {
         Some(Some(lead)) if !members.iter().any(|m| m.id == lead) => {
             return Err(super::err_invalid(
@@ -397,18 +516,119 @@ pub fn change(id: &str, change: RoomChange) -> Result<Room, CommandError> {
             _ => default_lead(&members),
         },
     };
-    update(id, |room| {
+    let changed = update(id, |room| {
         if let Some(name) = name {
             room.name = name;
         }
         room.members = members.iter().map(|a| a.id.clone()).collect();
         room.lead = lead;
+        if let Some(purpose) = purpose {
+            room.purpose = purpose;
+        }
         if let Some(muted) = change.muted {
             room.muted = muted;
             if muted {
                 room.unread = 0;
             }
         }
+    })?;
+    // A file sent while that copy ran went only to the members then; the
+    // second pass copies only what is missing.
+    if !joining.is_empty() {
+        if let Err(e) = copy_files_to(&changed, &joining) {
+            tracing::warn!("[Rooms] a file sent meanwhile wasn't copied to a new member: {e}");
+        }
+    }
+    Ok(changed)
+}
+
+/// Copy every file said in the room's thread (the user's attachments and
+/// members' shared files) into each of `joining`'s homes, at the same
+/// `attachments/<message id>/` path, so a member added later can read what
+/// was sent before it joined and the room can show it through that member.
+/// A file is copied from any home that has it: the room's members, or the
+/// member who shared it. One no home has any more is skipped (nobody can
+/// show it). All or nothing per call: a failed copy removes every file and
+/// folder this call made. Copies already there are left alone. The startup
+/// sweep keeps them, since the room's thread names their folders
+/// ([`any_log_mentions`]).
+fn copy_files_to(room: &Room, joining: &[String]) -> Result<(), CommandError> {
+    let thread = {
+        let lock = room_lock(&room.id);
+        let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+        store::read_back(&log_path(&room.id)?, |_| false)?
+    };
+    let with_files: Vec<&AgentMessage> = thread
+        .iter()
+        .filter(|m| !m.attachments.is_empty())
+        .collect();
+    if with_files.is_empty() {
+        return Ok(());
+    }
+    let sources: Vec<PathBuf> = room
+        .members
+        .iter()
+        .filter(|m| !joining.contains(m))
+        .filter_map(|m| store::agent_home(m).ok())
+        .collect();
+    let mut made: Vec<PathBuf> = Vec::new();
+    let result = (|| {
+        for id in joining {
+            let home = store::agent_home(id)?;
+            for message in &with_files {
+                let mut from: Vec<PathBuf> = sources.clone();
+                if !message.agent_id.is_empty() {
+                    if let Ok(theirs) = store::agent_home(&message.agent_id) {
+                        from.insert(0, theirs);
+                    }
+                }
+                for a in &message.attachments {
+                    // Only a real attachment path, in a home that has it.
+                    let Some(source) = from
+                        .iter()
+                        .find_map(|h| super::attachments::resolve(h, &a.path).ok())
+                    else {
+                        continue;
+                    };
+                    let dest = home.join(&a.path);
+                    // Already there, or something (a link an agent planted)
+                    // stands in the way: never written through.
+                    if std::fs::symlink_metadata(&dest).is_ok() || has_link(&home, &a.path) {
+                        continue;
+                    }
+                    if let Some(dir) = dest.parent() {
+                        if !dir.exists() {
+                            std::fs::create_dir_all(dir).map_err(super::err_io)?;
+                            made.push(dir.to_path_buf());
+                        }
+                    }
+                    std::fs::copy(&source, &dest).map_err(super::err_io)?;
+                    made.push(dest);
+                }
+            }
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        // Newest first: files, then the folders this call made.
+        for path in made.iter().rev() {
+            if path.is_dir() {
+                let _ = std::fs::remove_dir_all(path);
+            } else {
+                let _ = std::fs::remove_file(path);
+            }
+        }
+    }
+    result
+}
+
+/// Whether any folder on the way to `rel` in `home` is a symlink.
+fn has_link(home: &std::path::Path, rel: &str) -> bool {
+    let mut at = home.to_path_buf();
+    let parts: Vec<_> = std::path::Path::new(rel).components().collect();
+    parts[..parts.len().saturating_sub(1)].iter().any(|part| {
+        at.push(part);
+        std::fs::symlink_metadata(&at).is_ok_and(|m| m.file_type().is_symlink())
     })
 }
 
@@ -818,8 +1038,8 @@ pub fn send(
 
 /// Files sent into a room: saved into the first member's home, then copied
 /// to every other member's under the same `attachments/<message id>/` path,
-/// so the room shows them through any member who was there when they were
-/// sent (one added later gets no copy). All or nothing: a failed copy
+/// so the room shows them through any member (one added later is given its
+/// copy when it joins, [`copy_files_to`]). All or nothing: a failed copy
 /// removes every copy.
 fn save_attachments(
     members: &[AgentRef],
@@ -927,8 +1147,38 @@ pub(crate) fn header_name(name: &str) -> String {
 }
 
 /// One line of the room as a member reads it: a header in brackets naming
-/// who said it (`[User]`, or `[Agent: Name]`), then what they said, quoted.
-fn line_for(m: &AgentMessage, me: &str, names: &HashMap<String, String>) -> Option<String> {
+/// who said it (`[User]`, or `[Agent: Name]`), then what they said, quoted,
+/// then the files sent with it where they are in the member's own `home`
+/// (each copied there when it was sent or when the member joined).
+fn line_for(
+    m: &AgentMessage,
+    me: &str,
+    names: &HashMap<String, String>,
+    home: Option<&std::path::Path>,
+) -> Option<String> {
+    let said = said_line(m, me, names)?;
+    let files: Vec<String> = home
+        .map(|home| {
+            m.attachments
+                .iter()
+                .filter_map(|a| super::attachments::resolve(home, &a.path).ok())
+                .map(|p| p.display().to_string())
+                // As `attachments::prompt_block` lists them, on one line each.
+                .filter(|p| !p.chars().any(|c| c.is_control() || store::breaks_line(c)))
+                .map(|p| format!("- {p}"))
+                .collect()
+        })
+        .unwrap_or_default();
+    if files.is_empty() {
+        return Some(said);
+    }
+    Some(format!(
+        "{said}\n[Files sent with it, in your folder; read them with the Read tool:\n{}]",
+        files.join("\n")
+    ))
+}
+
+fn said_line(m: &AgentMessage, me: &str, names: &HashMap<String, String>) -> Option<String> {
     let who = |id: &str| {
         header_name(
             &names
@@ -980,9 +1230,10 @@ pub fn prompt(agent_id: &str, room: &RoomRef, asked: &[(Asker, String)]) -> Opti
         .map(|m| header_name(&m.name))
         .collect();
     let log = messages_page(&room.room_id, 200, None).unwrap_or_default();
+    let home = store::agent_home(agent_id).ok();
     let said: Vec<String> = log
         .iter()
-        .filter_map(|m| line_for(m, agent_id, &names))
+        .filter_map(|m| line_for(m, agent_id, &names, home.as_deref()))
         .collect();
     let total = said.len();
     let mut shown: Vec<String> = Vec::new();
@@ -1017,6 +1268,12 @@ pub fn prompt(agent_id: &str, room: &RoomRef, asked: &[(Asker, String)]) -> Opti
         default_name(&others),
         header_name(&me.name),
     );
+    if let Some(purpose) = current.purpose.as_deref() {
+        out.push_str(&format!(
+            "[What this room is for, as it was set up:]\n{}\n\n",
+            quoted(&clip(purpose, PURPOSE_CHARS))
+        ));
+    }
     if !shown.is_empty() {
         out.push_str("Recent messages:\n\n");
         out.push_str(&shown.join("\n\n"));

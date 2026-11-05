@@ -157,7 +157,13 @@ The approval rules still apply.
 `create_agent` or `update_agent` is only for an agent that should live in one \
 codebase: its own turns then run inside it.
 - `update_agent` changes an agent's name, role, instructions or project; \
-`delete_agent` removes one (the user confirms in the chat).";
+`delete_agent` removes one (the user confirms in the chat).
+- Make a room (`create_room`) when the user wants to talk to a team at once \
+(a launch, a crew): create its agents first, then the room with two to six \
+of them and a one-line purpose; put yourself in it when you'll lead it. Tell \
+the user it's under Rooms and that they @mention who should answer there. \
+`add_to_room` and `remove_from_room` change who's in it. You speak in a \
+room only when you're asked there.";
 
 // On every turn of every agent, so kept short: the tools' own descriptions
 // say what they answer.
@@ -516,6 +522,30 @@ mod tests {
         assert!(team.ends_with("- Billing: Invoices\n- Research"));
         assert!(!team.contains("Chief") && !team.contains("Old"));
         assert_eq!(super::team(&all[..1], "c"), None);
+    }
+
+    /// "Run my launch as a team" asks for a room (`src/lib/chiefIdeas.ts`).
+    /// The rule lives in the app-owned section, so every Chief has it,
+    /// whatever build made it, and no other agent does.
+    #[test]
+    fn every_chief_knows_it_can_make_rooms() {
+        let agent = |is_main: bool| -> Agent {
+            serde_json::from_value(serde_json::json!({
+                "id": "x", "name": "X", "role": "", "isMain": is_main,
+                "shape": 0, "color": "red", "createdAt": 0
+            }))
+            .unwrap()
+        };
+        let chief = system_prompt(&agent(true), None);
+        for needed in [
+            "create_room",
+            "add_to_room",
+            "remove_from_room",
+            "two to six",
+        ] {
+            assert!(chief.contains(needed), "missing: {needed}");
+        }
+        assert!(!system_prompt(&agent(false), None).contains("create_room"));
     }
 
     #[test]

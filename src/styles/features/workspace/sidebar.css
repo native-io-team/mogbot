@@ -325,7 +325,11 @@
   max-width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 0 var(--spacing-md);
+  /* The footer overlaps this area by its fade (sidebar-footer.css, 48px).
+   * The list ends above it, and keyboard focus and scrollIntoView keep rows
+   * clear of it, so nothing comes to rest half-hidden under the fade. */
+  padding: 0 0 var(--size-sidebar-footer-fade);
+  scroll-padding-bottom: var(--size-sidebar-footer-fade);
   /* Plain block layout. Every child takes a full line. */
   display: block;
   /* Hide the scrollbar visually while keeping the container scrollable.

@@ -201,6 +201,30 @@ const EMPTY_ROOM = room({
   preview: undefined,
 });
 
+/** Made by the Chief (`create_room`): a purpose, and who made it. */
+const CHIEF_ROOM = room({
+  id: 'chief-made',
+  name: 'Launch',
+  members: ['chief', 'acme', 'social', 'finance'],
+  lead: 'chief',
+  purpose: 'Ship the annual pricing launch on Thursday: site, posts and invoices.',
+  createdBy: 'chief',
+  createdAt: now - 2 * MIN,
+  lastActivityAt: now - 2 * MIN,
+  preview: undefined,
+});
+
+/** The Chief's chat after it made that room: its audit line, then its reply. */
+const CHIEF_MADE_ROOM = [
+  msg('user', 'Run my launch as a team, and put us all in a room.', 4),
+  msg('note', 'Made a room, Launch, with Chief of Staff, Acme Site, Social Posts & Finance', 2),
+  msg(
+    'agent',
+    'Done: Launch is under Rooms with Acme Site, Social Posts, Finance and me. Write there to talk to everyone at once; I answer unless you @ someone.',
+    2
+  ),
+];
+
 /** Its other members were deleted: one left. */
 const SOLO_ROOM = room({
   id: 'solo',
@@ -384,6 +408,30 @@ export const agentsRoomsScenarios: Scenario[] = [
     openSelector: AGENTS_TAB,
     steps: [openRoom('empty')],
     commands: roomCommands(THREAD, team(IDLE), [EMPTY_ROOM, OPS_ROOM]),
+  },
+  {
+    id: 'agents-room-chief-made',
+    title: 'Rooms — a room the Chief made with create_room',
+    looksRightWhen:
+      'Launch open, empty: three member badges and “+1”, “Launch”, then its purpose “Ship the annual pricing launch on Thursday: site, posts and invoices.”, then “Talk to everyone here at once. Chief of Staff answers unless you @ someone; @everyone asks all 4.”, then “Chief of Staff made this room. Each agent keeps its own memory…”, then the @ chips. The sidebar lists Launch first under Rooms with an outlined “LA” badge.',
+    requires: '.agent-room__empty',
+    openSelector: AGENTS_TAB,
+    steps: [openRoom('chief-made')],
+    commands: roomCommands(THREAD, team(IDLE), [CHIEF_ROOM, LAUNCH_ROOM, OPS_ROOM]),
+  },
+  {
+    id: 'agents-room-chief-made-chat',
+    title: 'Rooms — the Chief’s chat after it made a room',
+    looksRightWhen:
+      'The Chief’s chat: your message, a quiet centred note “Made a room, Launch, with Chief of Staff, Acme Site, Social Posts & Finance”, then the Chief’s reply saying where the room is. Launch is in the sidebar under Rooms.',
+    requires: '.agent-chat',
+    openSelector: AGENTS_TAB,
+    steps: [{ click: '[data-agent-id="chief"]' }],
+    commands: {
+      ...roomCommands(THREAD, team(IDLE), [CHIEF_ROOM, LAUNCH_ROOM, OPS_ROOM]),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? CHIEF_MADE_ROOM : messagesFor(args),
+    },
   },
   {
     id: 'agents-room-too-few',

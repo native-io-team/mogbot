@@ -99,7 +99,7 @@ pub fn lines(engine: Engine, tools: &[&str], servers: &[Server]) -> Vec<Line> {
     if ours("create_agent") {
         push(
             "The team",
-            "Create, brief, message and manage the other agents.".into(),
+            "Create, brief, message and manage the other agents, and put them in rooms.".into(),
         );
     } else if ours("message_agent") {
         push("The team", "Message the other agents.".into());
