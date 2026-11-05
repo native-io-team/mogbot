@@ -820,7 +820,6 @@ export const PeerGroup = memo(function PeerGroup({
             onClick={() => peerAgent && onOpenPeer(peerAgent.id)}
             disabled={!peerAgent}
           >
-            {peerAgent && <span className="agent-peer__dot" data-color={peerAgent.color} />}
             {peer.name}
             {live && peerAgent && <AgentPeerStatus agent={peerAgent} />}
           </button>
