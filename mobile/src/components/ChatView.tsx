@@ -635,7 +635,8 @@ function ItemView({
   // belongs to that block: it sits close under it, not a paragraph away.
   const attached =
     grouped &&
-    (item.message.kind === 'changes' ||
+    // A live copy's changes are a Card of their own, not a line under the block.
+    ((item.message.kind === 'changes' && item.message.id !== liveCopyCard) ||
       (item.message.kind === 'session' &&
         (item.message.session?.event === 'started' || item.message.session?.event === 'sent')));
   const tight = afterLine && isLineItem(item);

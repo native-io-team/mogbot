@@ -43,7 +43,11 @@ export function SymbolView({
         color: tintColor,
         textAlign: 'center',
         overflow: 'hidden',
-      }}
+        // A glyph never gives up width in a row that wraps (rn-web Text
+        // shrinks, and a squeezed ligature shows its name's first letter).
+        flexShrink: 0,
+        whiteSpace: 'nowrap',
+      } as object}
     >
       {glyph}
     </Text>

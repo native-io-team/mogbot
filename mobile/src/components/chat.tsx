@@ -440,12 +440,12 @@ export function ChangeStats({ message }: { message: AgentMessage }) {
   if (!changes) return null;
   return (
     <View style={styles.stats}>
-      <T variant="small" color={colors.textMuted} style={{ flexShrink: 1 }}>
+      <T variant="caption" color={colors.textMuted} style={{ flexShrink: 1 }}>
         {`${changes.fileCount} file${changes.fileCount === 1 ? '' : 's'} · `}
-        <T variant="small" color={colors.diffAdd} style={styles.count}>
+        <T variant="caption" color={colors.diffAdd} style={styles.count}>
           +{changes.added}
         </T>{' '}
-        <T variant="small" color={colors.diffDel} style={styles.count}>
+        <T variant="caption" color={colors.diffDel} style={styles.count}>
           −{changes.removed}
         </T>
       </T>
