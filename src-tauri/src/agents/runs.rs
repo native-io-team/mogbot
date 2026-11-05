@@ -374,7 +374,7 @@ pub fn after_restart(check_ins: &mut [CheckIn], now: i64) -> bool {
     for c in check_ins.iter_mut() {
         for run in c.runs.iter_mut().filter(|r| r.outcome == Outcome::Running) {
             run.outcome = Outcome::Failed;
-            run.detail = Some("Ship Studio closed before it finished.".to_string());
+            run.detail = Some("The app closed before it finished.".to_string());
             changed = true;
         }
         let stale = c.repeat.is_some()
@@ -392,7 +392,7 @@ pub fn after_restart(check_ins: &mut [CheckIn], now: i64) -> bool {
                 run.outcome = Outcome::Failed;
                 run.retry_at = None;
                 run.detail =
-                    Some("Ship Studio wasn't running when it was due to try again.".to_string());
+                    Some("The app wasn't running when it was due to try again.".to_string());
             }
             changed = true;
         }

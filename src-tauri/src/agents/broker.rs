@@ -193,7 +193,7 @@ pub enum Verdict {
 
 pub fn judge(init: &Init) -> Verdict {
     if init.ours.as_deref() == Some("failed") {
-        return Verdict::Stop("Ship Studio's connection to Claude Code didn't start for this turn, so nothing could ask you before acting. It was stopped. Send your message again.");
+        return Verdict::Stop("The connection to Claude Code didn't start for this turn, so nothing could ask you before acting. It was stopped. Send your message again.");
     }
     match init.permission_mode.as_deref() {
         None | Some(EXPECTED_MODE) => Verdict::Fine,
@@ -202,7 +202,7 @@ pub fn judge(init: &Init) -> Verdict {
             "Claude Code ran this turn in its “{mode}” permission mode rather than accept-edits, so it may ask more often or do less."
         )),
         Some(mode) => Verdict::Note(format!(
-            "Claude Code reported a permission mode Ship Studio doesn't know (“{mode}”). Requests still come to you here."
+            "Claude Code reported a permission mode this app doesn't know (“{mode}”). Requests still come to you here."
         )),
     }
 }

@@ -176,7 +176,7 @@ pub fn update_app_state<T>(
     let _guard = lock_app_state_writes();
     let mut state = try_read_app_state().map_err(|e| {
         crate::errors::CommandError::expected(format!(
-            "Ship Studio couldn't read its saved settings ({e}), so nothing was changed — \
+            "The app couldn't read its saved settings ({e}), so nothing was changed — \
              your existing settings are safe. Try again in a moment."
         ))
     })?;
