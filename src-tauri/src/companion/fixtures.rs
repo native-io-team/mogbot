@@ -211,6 +211,7 @@ fn frames() -> Vec<ServerFrame> {
         device_id: "dev_0123456789abcdef".into(),
         resume: ResumeMode::Replay,
         methods: router::METHODS.to_vec(),
+        time_zone: Some("America/New_York".into()),
     }];
     for (reason, message) in [
         (
@@ -507,6 +508,15 @@ async fn generate() -> String {
         "agentsStartFresh",
         "Result<'agents.startFresh'>",
         call("agents.startFresh", json!({ "agentId": AGENT })).await,
+    );
+    out += &entry(
+        "agentsCreate",
+        "Result<'agents.create'>",
+        call(
+            "agents.create",
+            json!({ "input": { "name": "Inbox", "role": "Keeps my inbox down to what matters", "color": "teal" }, "clientId": "n_1" }),
+        )
+        .await,
     );
     out += &entry(
         "sessionsSend",

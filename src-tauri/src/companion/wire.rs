@@ -392,6 +392,12 @@ pub enum ServerFrame {
         device_id: String,
         resume: ResumeMode,
         methods: Vec<&'static str>,
+        /// This Mac's IANA zone ("America/New_York"), the zone it reads a
+        /// routine's times in. Absent when the system won't say. A Mac that
+        /// sends it also keeps a check-in's schedule when an edit's `when`
+        /// is empty.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        time_zone: Option<String>,
     },
     Refused {
         reason: RefusedReason,

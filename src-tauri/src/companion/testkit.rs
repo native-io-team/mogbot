@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
-use super::router::{AgentToggles, ApprovalAnswer, Backend, ScheduleOp, SendExtras};
+use super::router::{AgentToggles, ApprovalAnswer, Backend, PhoneNewAgent, ScheduleOp, SendExtras};
 use super::wire::{ClaudeInfo, Event, Known, MacStatus, PowerInfo, Route, RouteKind};
 use super::{Companion, Registry};
 use crate::agents::store::{Agent, AgentMessage};
@@ -400,6 +400,8 @@ pub struct Stub {
     pub focus: Mutex<Vec<(String, Option<String>)>>,
     pub answers: Mutex<Vec<ApprovalAnswer>>,
     pub toggles: Mutex<Vec<(String, AgentToggles)>>,
+    /// Agents created from the phone, as the router handed them over.
+    pub created: Mutex<Vec<PhoneNewAgent>>,
     /// Agents started fresh, by id.
     pub fresh: Mutex<Vec<String>>,
     /// What reached a session: `(session id, text or "key:<key>")`.
@@ -425,6 +427,7 @@ impl Stub {
             focus: Mutex::new(Vec::new()),
             answers: Mutex::new(Vec::new()),
             toggles: Mutex::new(Vec::new()),
+            created: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
@@ -633,6 +636,36 @@ impl Backend for Stub {
         self.fresh.lock().unwrap().push(agent_id.to_string());
         let mut agent = stored_agent();
         agent.start_fresh();
+        Ok(serde_json::to_value(agent).unwrap())
+    }
+
+    async fn create_agent(&self, input: PhoneNewAgent) -> Result<Value, CommandError> {
+        if input.name.eq_ignore_ascii_case("Finance") {
+            return Err(CommandError::expected(
+                "There's already an agent called Finance.",
+            ));
+        }
+        self.created.lock().unwrap().push(input.clone());
+        // What `store::create` makes: a fresh agent, nothing yet but its identity.
+        let mut agent = stored_agent();
+        agent.id = "a9".into();
+        agent.name = input.name;
+        agent.role = input.role;
+        agent.color = input.color.unwrap_or_else(|| "orange".into());
+        agent.pinned = false;
+        agent.session_id = None;
+        agent.preview = None;
+        agent.unread = 0;
+        agent.pending_approvals = 0;
+        agent.model = None;
+        agent.context = None;
+        agent.check_ins.clear();
+        agent.permissions.clear();
+        agent.failure = None;
+        agent.project = None;
+        agent.capabilities = None;
+        agent.routine_model = None;
+        agent.secrets.clear();
         Ok(serde_json::to_value(agent).unwrap())
     }
 

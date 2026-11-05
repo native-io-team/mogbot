@@ -228,8 +228,7 @@ function AgentSheet() {
         <View style={styles.list}>
           {checkIns.length === 0 ? (
             <T variant="small" color={colors.textMuted} style={styles.none}>
-              Nothing scheduled. Add one in a line, like “every weekday 9am: brief me on the
-              launch”.
+              Nothing scheduled. Add a routine, like every weekday at 9:00, “Draft my day”.
             </T>
           ) : (
             checkIns.map((c, i) => (

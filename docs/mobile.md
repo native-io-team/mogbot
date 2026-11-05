@@ -102,7 +102,9 @@ another device's blob or a path outside the agent's `attachments/` is a bare
 **Heartbeat:** the Mac pings every 15 s; the phone treats 40 s of silence as
 a dead link, which catches sleep and Wi-Fi handoffs faster than TCP.
 
-**Limits:** 600 requests a minute per device; 4 sockets per device, 16 in
+**Limits:** 600 requests a minute per device, of which at most 10 may
+create an agent (`MAX_AGENTS_CREATED_PER_MINUTE`; a retry answered from the
+`clientId` cache doesn't count); 4 sockets per device, 16 in
 all; 1 MB frames; 25 MB a file and 10 files a message (`MAX_ATTACHMENT*`);
 30 staged files or 300 MB per device; a 10 s wait for `hello`.
 
@@ -110,6 +112,8 @@ all; 1 MB frames; 25 MB a file and 10 files a message (`MAX_ATTACHMENT*`);
 
 `router::METHODS` is what the Mac serves and lists in `welcome.methods`; the
 phone hides anything not listed (`canCall`), so an older Mac just shows less.
+`welcome.timeZone` (optional) is the Mac's IANA zone, the clock routines are
+read on (see "Routines" below).
 
 - `system.status`, `devices.self|unpairSelf|setPush`
 - `agents.overview|messages|send|stop|interrupt|answerApproval|focus|markUnread`
@@ -118,9 +122,11 @@ phone hides anything not listed (`canCall`), so an older Mac just shows less.
 - `agents.update` (`pinned`, `muted`, `hidden`, `instructions`),
   `agents.instructions|usage|revokePermission|changeDiff`
 - `agents.files|fetchPath|search`, `agents.schedule.preview|create|update|pause|cancel|runNow`
+- `agents.create` (`name`, `role`, `color` only; idempotent by an optional
+  `clientId`; see "Starting things")
 - `projects.list`, `sessions.read|send|key|start`, `preview.screenshot`
 
-Declared in the package but not served: `agents.create|delete`, the import
+Declared in the package but not served: `agents.delete`, the import
 methods. Pure reads (`READ_ONLY_METHODS`, mirrored in Rust) are not audited.
 
 ### Events, cursors and resync
@@ -279,12 +285,13 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   helpers live in the package), and files from the camera, Photos or Files,
   each uploading as soon as it's picked with progress, retry and remove.
   Drafts, including uploaded files (kept 55 min), survive leaving the chat and
-  a cold start (`lib/drafts.ts`).
+  a cold start (`lib/drafts.ts`). A mic in the field dictates into the draft
+  (see "Dictation" below).
 - **Agent sheet.** "Claude · Opus" / "Codex · …" (also in the chat
   header), Runs on and Model read-only, Memory (view, edit, forget with
   Undo, add; "Remember This" in a message's menu), Instructions (view and edit), pin/mute/hide, check-ins and
-  routines (create, edit with past runs, pause, run now, cancel), usage, and "Allowed
-  without asking" with Revoke.
+  routines (create and edit with the picker below, past runs, pause, run now,
+  cancel), usage, and "Allowed without asking" with Revoke.
 - **Files** per agent; **search** across every chat, which pages a chat back
   (40 pages at most) to the hit and lights it.
 - **Projects and sessions.** Live from `projects.changed` events (the Mac
@@ -295,6 +302,112 @@ sheet, files, a session, the diff and the photo viewer push over them. At
 - **Connection screen.** Every layer of the link (below).
 - **Settings.** The paired Mac, alerts (with their limits), haptics, updates,
   about.
+
+### Starting things
+
+The phone can start work as well as answer it. Each piece is gated by
+`welcome.methods`, so an older Mac shows less instead of failing.
+
+- **New agent** (the pencil on Agents, or the empty list's button;
+  `app/new-agent.tsx`). One question, "What should it do?", then an optional
+  name and colour. With no name, one comes from what you wrote ("Keeps my
+  inbox down to what matters" → "Inbox", made unique against the team;
+  `lib/newAgent.ts`): it's the field's placeholder and the Create button's
+  words, so nothing is named unseen. The colour starts on the first one
+  nobody wears, as the desk's editor does. `agents.create` calls the desk's
+  own `agents_create` with the engine the desk would pick
+  (`engine::default_for`: Claude Code when ready, else the first engine that
+  is) and that engine's own model; the phone can't set the engine, model,
+  project or instructions at creation (refused with `bad_params`): the
+  instructions are edited afterwards from the agent sheet, on either side,
+  and the engine, model and project at the desk. The name and role are one
+  line each, without control characters, at most 40 and 500 characters, and
+  a phone can make at most 10 agents a minute (refused with `rate_limited`). The create is audited as `create <name> — <role>`,
+  and a retry with the same `clientId` returns the first agent. Once the
+  overview has it, its chat opens with the composer up.
+  **Ask your Chief of Staff instead** writes the request into the Chief's
+  draft ("Can you set up a new agent? What it's for: …") for you to read and
+  send. On a Mac without `agents.create`, that is all the sheet offers.
+- **Routines** (`app/schedule.tsx`). A picker instead of the "when: what"
+  line: When is chips (Every day, Weekdays, Weekly with day chips, Every few
+  hours, Once with Today / Tomorrow / the next five days) and the platform's
+  own time picker; What is one line. Above Save it echoes the routine
+  ("Every weekday at 9:00 AM — Draft my day", `routineEcho`) and the Mac's
+  parser confirms the first run. The picker writes the grammar's own words
+  (`routineWhenPhrase`: "every monday and thursday at 08:30",
+  "2026-11-20 09:00"), so it uses the existing `agents.schedule.*` methods
+  and makes exactly what the desk's composer would. Edit opens a check-in on
+  the chips that made it. `packages/companion-protocol/src/routine-phrases.json`
+  lists every kind of phrase the picker writes; the mobile tests check the
+  picker writes them and a Rust test (`agents::schedule`) checks the Mac's
+  grammar reads each back as the same schedule.
+  **Times are the Mac's.** The Mac reads the words on its own clock
+  (`chrono::Local`), so the picker works in `welcome.timeZone`: "Today", the
+  date chips, the past check and a one-off's Edit are the Mac's, and when
+  that clock isn't the phone's the echo, the first run and the time row say
+  "Mac time" ("Every weekday at 9:00 AM Mac time"). An older Mac sends no
+  zone, and the phone's clock is used as before. An edit that leaves the
+  When as it opened sends an empty `when`, which keeps the schedule (and a
+  pending retry) and changes only the note, so "every 2 hours" isn't
+  re-anchored to now and a one-off isn't moved; only a Mac that sends
+  `timeZone` gets that, since an older one refuses an empty `when`.
+- **Dictation** (`lib/dictation.ts`, the mic in the composer). The phone's
+  own recognizer through expo-speech-recognition, with
+  `requiresOnDeviceRecognition`: a phone that can't recognise speech on the
+  device keeps the mic off and says so, rather than send audio to a server.
+  iOS enforces the flag. Android only builds an on-device recognizer from
+  API 33 (Android 13); on 12/12L the module falls back to the default
+  recognizer with "prefer offline", a hint, so there the mic is off
+  (`needs-network`) and its hint says why without promising anything.
+  Nothing is recorded to a file; words appear in the draft as you speak,
+  after what you'd typed, and are never sent on their own (Send drops any
+  still on their way). Typing while it listens stops it, so later words
+  can't overwrite what you typed (tap the mic to go on). The team's names
+  are passed as contextual strings.
+  **Expo Go has no recognizer module**, so there the mic focuses the field
+  and points at the keyboard's own mic; a development or release build
+  (`pnpm ios`, `expo run:ios --configuration Release`) has it. The config
+  plugin adds the microphone and speech-recognition usage strings. iOS has
+  one microphone string for the app (expo-camera and expo-image-picker
+  write it too), so it says only what the mic is for; the on-device claim
+  is in the speech-recognition string, which is iOS's and which iOS keeps.
+- **"Send to agent…"** (`app/share.tsx`, `lib/share.ts`). Something shared
+  into the app (a page, text, photos, files) lists your agents, with the
+  shared text in full; picking one puts the link and text in that agent's
+  draft as a quote (sent as a `> ` blockquote, never mixed into what you'd
+  typed, which stays as it was) and uploads the files as its attachments,
+  then opens the chat to add a line and send. Nothing is sent from the
+  sheet. Two ways in:
+  - **The share sheet**, through expo-share-intent's native extension
+    (`lib/shareIntent.tsx`, `app/+native-intent.tsx` for its
+    `<scheme>://dataUrl=…` link). What it hands over waits in memory under
+    a one-time key (`stashShare`), and the route carries only that key
+    (`/share?k=…`): this is the only way files reach the sheet. The
+    extension target needs an App Group, which a free Apple team can't
+    always sign, so its config plugin is
+    **off unless `SHIPSTUDIO_SHARE_EXTENSION=1`** is set for `expo prebuild`
+    (`app.config.ts`: text, one web URL or page, up to 10 images or files;
+    Android `text/*`, `image/*`, `*/*`). The flag also reaches the app as
+    `extra.shareExtension`, and that is what the app checks: autolinking
+    links expo-share-intent's native module into every dev and release
+    build (it can't be excluded per build from `app.config.ts`), so
+    without the flag the module is present but inert. The app never loads
+    the package's JS, so its hook never runs, never refreshes on
+    foreground and never reads an intent another app sends. A free-team
+    build's config and behaviour are otherwise unchanged. The package is
+    pinned to an exact version (9.0.0), as a native module with a config
+    plugin should be. To build
+    it: `SHIPSTUDIO_SHARE_EXTENSION=1 npx expo prebuild --clean`, then
+    `npx expo run:ios` with a team that has App Groups. EAS needs the
+    extension's bundle id registered too (expo-share-intent's README,
+    "iOS Extension Target"). **Not verified on a device yet.**
+  - **A link**, `<scheme>://share?text=…&url=…&title=…` (in Expo Go,
+    `exp://<host>:<port>/--/share?…`). Any web page or app can open one,
+    so it brings words only: `text`, `title` and an `http(s)` `url`.
+    **Never files**: a `files=` param is ignored, since a link could
+    otherwise name a file in the app's own storage, under a harmless name,
+    and have it uploaded to the Mac. The sheet says the words came from a
+    link and asks you to read them before sending.
 
 ### Connection status
 
@@ -407,6 +520,11 @@ on a fork's binary. For self-builders, Reinstall is the update.
   markdown under `jest-expo`, and the real `DirectTransport` against the mock
   (`*.node.test.ts`): a dropped socket mid-turn, a Mac restart, retried sends,
   files, search and schedules. Nothing may be missed or doubled.
+  `start.node.test.ts` covers creating an agent, the routine picker's
+  phrases (against the mock's parser and `routine-phrases.json`), the Mac's
+  clock, and share payloads; `share.test.tsx` the share sheet (a crafted
+  `files=` link uploads nothing); `dictation.test.tsx` the mic against a
+  fake recognizer, including Android 12 and typing while it listens.
 - **Server:** `cargo test --lib companion::` (including the fixture drift
   check); **relay:** `pnpm test` in `services/push-relay`.
 
@@ -415,10 +533,13 @@ on a fork's binary. For self-builders, Reinstall is the update.
 - The LAN route and its pinned-transport module; Bonjour discovery; more than
   one Mac at a time.
 - The live-socket notifier, and background refresh.
-- Dictation (planned on-device only, never a server fallback, results never
-  auto-sent), paste import, creating or deleting agents from the phone.
+- Paste import, deleting agents from the phone, and setting a new agent's
+  engine, model or project there.
 - Pushing to git from the phone: Remote Access gates it behind a PIN, and the
   phone gets nothing until the owner decides how.
-- Native targets that need a dev build and an Apple team: a needs-you widget,
-  a Live Activity per working turn, and a "Send to agent…" share extension.
+- Native targets that need a dev build and an Apple team: a needs-you widget
+  and a Live Activity per working turn. The "Send to agent…" extension is
+  configured behind `SHIPSTUDIO_SHARE_EXTENSION=1` but not yet built or
+  tried on a device, and dictation's recognizer has only been exercised
+  against a fake in tests, not on a phone.
 - Verification on Android hardware.

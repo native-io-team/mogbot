@@ -236,6 +236,18 @@ export const agentTints: Record<Appearance, Record<string, string>> = {
   },
 };
 
+/**
+ * Every `Agent.color` key, in the desk's order (`store::COLORS`): the neutral
+ * one, then the tints above. A new agent starts on the first that nobody
+ * wears, never on the two left for you to pick, and on the fallback when
+ * all are taken (the desk's `freeColor`).
+ */
+export const agentColorKeys = {
+  all: ['white', ...Object.keys(agentTints.dark)],
+  pickedOnly: ['white', 'gray'],
+  fallback: 'purple',
+} as const;
+
 /** `--spacing-*`. */
 export const space = {
   '3xs': 1,

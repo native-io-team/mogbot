@@ -117,6 +117,13 @@ export interface WelcomeFrame {
   resume: 'replay' | 'snapshot';
   /** Methods this Mac supports, so a newer app can hide what an older Mac lacks. */
   methods: MethodName[];
+  /**
+   * The Mac's IANA zone ("America/New_York"): routine times are its wall
+   * clock, so the phone shows them in it. Absent from older Macs and when
+   * the Mac can't say. A Mac that sends it keeps a check-in's schedule when
+   * `agents.schedule.update` has an empty `when` (a note-only edit).
+   */
+  timeZone?: string;
 }
 
 export interface RefusedFrame {
