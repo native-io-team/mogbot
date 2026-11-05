@@ -1941,3 +1941,77 @@ pub async fn agents_team_setup_dismiss(app: AppHandle) -> Result<(), CommandErro
     agents::team_setup::emit(&app);
     Ok(())
 }
+
+/* ------------------------------------------- your browser, reach check */
+
+/// "Let agents use your browser": the guided card, checked now (Claude
+/// Code's sign-in, the extension, whether a browser answers). Opens nothing.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_browser_status() -> Result<agents::browser::BrowserStatus, CommandError> {
+    Ok(agents::browser::status().await)
+}
+
+/// Switch the team's browser on: only once a browser answers.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_browser_enable(
+    app: AppHandle,
+) -> Result<agents::browser::BrowserStatus, CommandError> {
+    let st = agents::browser::enable(&app).await?;
+    // Now that it's on, the checklist's rows can be checked in the browser too.
+    agents::access_check::spawn(&app);
+    Ok(st)
+}
+
+/// Switch the team's browser off (every agent's, at once).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_browser_disable(app: AppHandle) -> Result<(), CommandError> {
+    blocking(move || agents::browser::disable(&app)).await
+}
+
+/// Open the extension's install page in this Mac's browser. Only the
+/// setup's own URL: nothing from the webview is opened.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_browser_open_install() -> Result<(), CommandError> {
+    tauri_plugin_opener::open_url(agents::browser::INSTALL_URL, None::<&str>)
+        .map_err(|_| CommandError::expected("Couldn't open this Mac's browser."))
+}
+
+/// "Checking what your team can already reach": run it now. Returns how
+/// many services it reached; progress arrives on the checklist.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_access_check(app: AppHandle) -> Result<usize, CommandError> {
+    agents::access_check::run(&app).await
+}
+
+/// A row nothing reached: "connect" (one sign-in card, started now) or
+/// "not_needed". Returns the card raised, for showing it in place.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_team_setup_later(
+    app: AppHandle,
+    key: String,
+    action: String,
+    from_phone: Option<bool>,
+    on_phone: Option<bool>,
+) -> Result<Option<agents::access_check::Raised>, CommandError> {
+    match action.as_str() {
+        "connect" => {
+            let (agent_id, request_id) =
+                agents::access_check::connect(&app, &key, origin(from_phone, on_phone)).await?;
+            Ok(Some(agents::access_check::Raised {
+                agent_id,
+                request_id,
+            }))
+        }
+        "not_needed" => {
+            blocking(move || agents::access_check::not_needed(&app, &key)).await?;
+            Ok(None)
+        }
+        _ => Err(agents::err_invalid("action", "connect or not_needed")),
+    }
+}

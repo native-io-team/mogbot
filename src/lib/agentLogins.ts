@@ -67,6 +67,8 @@ export interface LoginRequest {
   quiet?: boolean;
   replaces?: string;
   flow?: LoginFlow;
+  /** Other agents that asked for the same and joined this card: answering it answers them. */
+  alsoFor?: string[];
 }
 
 export type TeamCardState = 'waiting' | 'connected' | 'skipped' | 'covered';
@@ -117,7 +119,18 @@ export interface ReachConnection {
 export interface Reach {
   connections: ReachConnection[];
   /** Absent for an agent on Codex. */
-  browser?: { on: boolean; sites: string[]; helperInstalled: boolean };
+  /**
+   * `on`: its turns get the user's Chrome (the team's browser is set up and on,
+   * and this agent's wasn't taken away; never for outside text). `teamOn`: the
+   * team's switch. `ownOff`: taken away from this agent.
+   */
+  browser?: {
+    on: boolean;
+    teamOn: boolean;
+    ownOff: boolean;
+    sites: string[];
+    helperInstalled: boolean;
+  };
   secrets: {
     secretId: string;
     name: string;

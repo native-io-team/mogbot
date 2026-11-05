@@ -613,6 +613,8 @@ pub fn team_setup_fixture() -> crate::agents::team_setup::SetupView {
         id,
         state,
         logins: Vec::new(),
+        later: Vec::new(),
+        check: None,
         routines: Vec::new(),
         gaps: Vec::new(),
         agents: Vec::new(),
@@ -625,6 +627,83 @@ pub fn team_setup_fixture() -> crate::agents::team_setup::SetupView {
         name: "wise".into(),
         purpose: "Read balances and pay invoices".into(),
     }];
+    {
+        use crate::agents::access_check::{CheckView, Checked, LaterGroup, LaterState};
+        let row = |key: &str, title: &str, state: LaterState, action: Option<&str>, key_only| {
+            LaterGroup {
+                key: key.into(),
+                service: if key.starts_with("other:") {
+                    "other".into()
+                } else {
+                    key.into()
+                },
+                title: title.into(),
+                agents: vec!["Finance".into(), "Ops".into()],
+                agent_ids: vec![AGENT.into(), "a2".into()],
+                state,
+                action: action.map(str::to_string),
+                key_only,
+            }
+        };
+        logins.later = vec![
+            row(
+                "figma",
+                "Figma",
+                LaterState::Reachable {
+                    via: "your browser, signed in on www.figma.com".into(),
+                },
+                Some("Connect Figma"),
+                false,
+            ),
+            row(
+                "linkedin",
+                "LinkedIn",
+                LaterState::Open,
+                Some("Use my browser"),
+                false,
+            ),
+            row(
+                "other:bankline",
+                "Bankline",
+                LaterState::Open,
+                Some("Add a key for Bankline"),
+                true,
+            ),
+            row(
+                "notion",
+                "Notion",
+                LaterState::NotNeeded,
+                Some("Connect Notion"),
+                false,
+            ),
+            row(
+                "gmail",
+                "Gmail",
+                LaterState::Asked {
+                    agent_id: AGENT.into(),
+                    request_id: "q9".into(),
+                },
+                Some("Connect Gmail"),
+                false,
+            ),
+        ];
+        logins.check = Some(CheckView {
+            running: false,
+            total: 5,
+            checked: vec![
+                Checked {
+                    title: "Figma".into(),
+                    reached: true,
+                },
+                Checked {
+                    title: "LinkedIn".into(),
+                    reached: false,
+                },
+            ],
+            browser: true,
+            finished_at: Some(1_762_290_000_000),
+        });
+    }
     let mut routines = step(StepId::Routines, StepState::Skipped);
     routines.routines = vec![RoutineItem {
         agent_id: "a2".into(),
@@ -1393,6 +1472,8 @@ impl Backend for Stub {
         Ok(match action {
             A::Get { .. } => serde_json::to_value(team_setup_fixture()).unwrap(),
             A::Hello { .. } | A::Missing => serde_json::to_value(&messages()[0]).unwrap(),
+            A::Later { connect: true, .. } => json!({ "agentId": AGENT, "requestId": "q9" }),
+            A::Check => json!(2),
             _ => Value::Null,
         })
     }
@@ -1654,7 +1735,7 @@ pub fn reach_fixture() -> Value {
             "access": "full", "kept": "Connected on claude.ai; the sign-in is held there",
             "needsSignIn": false, "lastUsedAt": 1_760_000_000_000_i64
         }],
-        "browser": { "on": true, "sites": ["www.linkedin.com"], "helperInstalled": true },
+        "browser": { "on": true, "teamOn": true, "ownOff": false, "sites": ["www.linkedin.com"], "helperInstalled": true },
         "secrets": [{ "secretId": "s1", "name": "x_key", "purpose": "Post to X", "variables": ["$X_KEY"] }],
         "blockedApps": []
     })
@@ -1742,6 +1823,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
                 user_code: Some("9985-8448".into()),
                 verification_uri: Some("https://github.com/login/device".into()),
             }),
+            also_for: vec!["Ops".into()],
         }),
     });
     m

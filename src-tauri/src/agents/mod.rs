@@ -35,6 +35,8 @@
 //! - [`secrets`]: credentials an agent asked for, kept in the Keychain, never shown to it
 //! - [`team_setup`]: "Setting up your team" after an import: one checklist, quiet agents, the fan-out cap
 //! - [`logins`]: login cards (`request_login`), the team's list, what an agent can reach
+//! - [`browser`]: the team's signed-in Chrome (Claude in Chrome), set up once, per agent, never for outside text
+//! - [`access_check`]: "Checking what your team can already reach" after an import
 //! - [`conn_relay`]: a turn reaches a connected app through the bridge, never holding its token
 //! - [`connections`]: accounts connected through them, per-agent grants, what a turn gets
 //! - [`oauth`]: signing in to a remote MCP server ourselves (PKCE, loopback)
@@ -45,10 +47,13 @@
 //!
 //! Full design: docs/agents.md.
 
+pub mod access_chain;
+pub mod access_check;
 pub mod apps;
 pub mod arrival;
 pub mod attachments;
 pub mod broker;
+pub mod browser;
 pub mod capabilities;
 pub mod capacity;
 pub mod claude;
