@@ -491,6 +491,11 @@ pub fn session_screen() -> crate::remote_access::tools::ScreenView {
         session: projects()[0].sessions[1].clone(),
         screen: "> Fix the header\n\n⏺ Editing Header.tsx".into(),
         reply: Some("Fixed the header's spacing.".into()),
+        sent: Some(crate::remote_access::tools::SentView {
+            text: "Fix the header".into(),
+            at: 1_700_000_000_000,
+            by_agent: false,
+        }),
     }
 }
 

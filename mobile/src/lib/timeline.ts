@@ -49,7 +49,7 @@ export function chatItems(
   for (let i = pending.length - 1; i >= 0; i--) {
     out.push({ kind: 'pending', key: `pending:${pending[i].clientId}`, pending: pending[i] });
   }
-  const rows = messages.some((m) => m.room) ? foldRoomLines(messages) : messages;
+  const rows = messages.some((m) => m.room) ? foldRoomLines(messages, agent.copy?.id) : messages;
   for (let i = rows.length - 1; i >= 0; i--) {
     const row = rows[i];
     const before = rows[i - 1];

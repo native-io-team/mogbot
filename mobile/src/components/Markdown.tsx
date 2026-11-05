@@ -17,12 +17,49 @@ import { Lexer, type Token, type Tokens } from 'marked';
 import { createContext, memo, useContext, useMemo, useState, type ReactNode } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { haptic } from '../lib/haptics';
+import { splitMentions } from '../lib/rooms';
 import { makeStyles, useColors } from '../lib/appearance';
 import { alpha, fonts, lineHeight, radius, space, type, type Palette } from '../lib/theme';
 import { T } from './ui';
 
 /** Opens a path written in a reply; absent where paths can't be opened. */
 export const PathContext = createContext<((path: string) => void) | null>(null);
+
+/**
+ * In a room, the members a reply can @mention, each with its name's colour:
+ * a hand-off ("@Ops can you file it?") reads as one at a glance. Absent
+ * outside a room, where nothing is tinted.
+ */
+export const MentionContext = createContext<{ name: string; color: string }[] | null>(null);
+
+/** Plain words, with any member's @mention in that member's colour. */
+function Mentioned({ text }: { text: string }) {
+  const members = useContext(MentionContext);
+  if (!members?.length || !text.includes('@')) return <>{text}</>;
+  const parts = splitMentions(
+    text,
+    members.map((m) => m.name)
+  );
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.name ? (
+          <Text
+            key={i}
+            style={{
+              color: members.find((m) => m.name === p.name)?.color,
+              fontFamily: fonts.medium,
+            }}
+          >
+            {p.text}
+          </Text>
+        ) : (
+          p.text
+        )
+      )}
+    </>
+  );
+}
 
 /**
  * Split at the last block boundary (a blank line outside a code fence):
@@ -226,7 +263,11 @@ function inline(tokens: Token[] | undefined, styles: Styles): ReactNode[] {
         return '\n';
       case 'text': {
         const tt = t as Tokens.Text;
-        return tt.tokens ? <Text key={i}>{inline(tt.tokens, styles)}</Text> : decode(tt.text);
+        return tt.tokens ? (
+          <Text key={i}>{inline(tt.tokens, styles)}</Text>
+        ) : (
+          <Mentioned key={i} text={decode(tt.text)} />
+        );
       }
       case 'escape':
         return (t as Tokens.Escape).text;

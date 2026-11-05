@@ -12,6 +12,7 @@
 
 import {
   MAC_FEATURES,
+  newestResults,
   type Agent,
   type AgentMessage,
   type AgentRef,
@@ -87,22 +88,101 @@ export function roomSuggestions(members: Agent[], query: string | null): AgentRe
   return list.filter((a) => a.name.toLowerCase().startsWith(q)).slice(0, 7);
 }
 
-/** "to Finance · Ops", or "to everyone" when the whole room was asked. */
+/**
+ * What a room is, under its first line. True to how a room turn runs
+ * (docs/agents.md, "Rooms"): it resumes the member's own engine session, so
+ * an agent answers here remembering its own chat, and what's said here is
+ * posted for every member. Never "sees only what's said here".
+ */
+export const ROOM_INTRO =
+  'Everything said here is posted for everyone in the room. Each agent keeps its own memory and remembers its own chat when it answers here.';
+
+/** "Finance", "Finance and Ops", "Finance, Ops and Design": as the desk joins names (`listNames`). */
+export function listNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/**
+ * Under your line: "To Finance and Ops", or "To everyone" when every member
+ * was asked, however many there are.
+ */
 export function toLine(asked: AgentRef[] | undefined, memberCount: number): string | null {
   if (!asked?.length) return null;
-  if (memberCount > 2 && asked.length === memberCount) return 'to everyone';
-  return `to ${asked.map((a) => a.name).join(' · ')}`;
+  if (memberCount > 1 && asked.length >= memberCount) return 'To everyone';
+  return `To ${listNames(asked.map((a) => a.name))}`;
 }
 
-/** "Finance, Ops & Chief of Staff": the room's people, as the row's second line falls back to. */
+/** "Finance, Ops and Chief of Staff": the room's people, as the row's second line falls back to. */
 export function memberNames(members: Pick<Agent, 'name'>[]): string {
-  const names = members.map((m) => m.name);
-  if (names.length <= 1) return names[0] ?? '';
-  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+  return listNames(members.map((m) => m.name));
 }
 
-/** Members whose turn in progress answers in this room. */
+/**
+ * The composer's foot line, word for word the desk's (`addressLine`): who
+ * will answer what you're typing, so nobody is surprised by who replies.
+ */
+export function addressLine(
+  room: Pick<RoomView, 'members' | 'lead'>,
+  members: Pick<Agent, 'id' | 'name'>[],
+  mentions: string[],
+  everyone: boolean
+): string {
+  const to = answerers(room, mentions, everyone);
+  if (to === 'ask') return 'Who should answer? @ someone';
+  const name = (id: string) => members.find((m) => m.id === id)?.name ?? '';
+  if (everyone) return `To everyone · ${to.length} replies`;
+  if (!mentions.some((m) => room.members.includes(m))) {
+    return `To ${name(to[0])} · @ someone else, or @everyone`;
+  }
+  return `To ${listNames(to.map(name))}`;
+}
+
+/**
+ * A line cut where it @mentions a member, by whole name (longest first, as
+ * the Mac's `rooms::mentioned_in` reads them), so the mention can be drawn in
+ * that member's colour. Never an email address, never a name inside a word.
+ */
+export function splitMentions(text: string, names: string[]): { text: string; name?: string }[] {
+  const sorted = names.filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!sorted.length || !text.includes('@')) return [{ text }];
+  const out: { text: string; name?: string }[] = [];
+  let plain = '';
+  let i = 0;
+  while (i < text.length) {
+    const before = i === 0 ? '' : text[i - 1];
+    if (text[i] === '@' && !/[\w.]/.test(before)) {
+      const rest = text.slice(i + 1);
+      const hit = sorted.find(
+        (n) =>
+          rest.slice(0, n.length).toLowerCase() === n.toLowerCase() &&
+          !/^[\w@-]/.test(rest.slice(n.length))
+      );
+      if (hit) {
+        if (plain) out.push({ text: plain });
+        plain = '';
+        out.push({ text: `@${rest.slice(0, hit.length)}`, name: hit });
+        i += hit.length + 1;
+        continue;
+      }
+    }
+    plain += text[i];
+    i++;
+  }
+  if (plain) out.push({ text: plain });
+  return out;
+}
+
+/** Members whose turn in progress answers in this room (a member waiting on your OK isn't replying). */
 export const workingHere = (members: Agent[], roomId: string) =>
+  members.filter((a) => a.status.state === 'working' && a.status.room === roomId);
+
+/** Members whose turn in this room is stopped on a card for you. */
+export const askingHere = (members: Agent[], roomId: string) =>
+  members.filter((a) => a.status.state === 'waiting' && a.status.room === roomId);
+
+/** Members with a turn in progress here, working or waiting on you: their draft stays on screen. */
+const activeHere = (members: Agent[], roomId: string) =>
   members.filter((a) => a.status.state !== 'idle' && a.status.room === roomId);
 
 /** A member's approval card in this room still waiting on you. */
@@ -114,7 +194,9 @@ export const pendingHere = (messages: AgentMessage[]) =>
  * newest thing said (as the Mac wrote it: "Ops: Filed.").
  */
 export function roomLine(room: RoomView, members: Agent[], messages?: AgentMessage[]): string {
-  if (messages && pendingHere(messages)) return 'Needs your OK';
+  if (askingHere(members, room.id).length || (messages && pendingHere(messages))) {
+    return 'Needs your OK';
+  }
   const working = workingHere(members, room.id);
   if (working.length === 1) return `${working[0].name} is replying`;
   if (working.length > 1) return `${working.length} replying`;
@@ -154,7 +236,7 @@ export function roomItems(
 ): RoomItem[] {
   const out: RoomItem[] = [];
   const shown = new Set<string>();
-  for (const a of workingHere(members, roomId)) {
+  for (const a of activeHere(members, roomId)) {
     const d = drafts[a.id];
     if (d) {
       shown.add(d.id);
@@ -181,6 +263,59 @@ export function roomItems(
   return out;
 }
 
+/**
+ * Each member's open copy of its project: the newest change card in this
+ * room for it offers Keep / Discard, as in that member's own chat (the
+ * desk's `RoomChat`). A member with no open copy, or whose copy's card
+ * isn't in the room, has none here; nor does one whose own chat (`own`, as
+ * far as this phone has it) holds a newer card for that copy, since this
+ * one no longer lists everything Keep would bring over.
+ */
+export function liveCopyCards(
+  members: Pick<Agent, 'id' | 'copy'>[],
+  messages: AgentMessage[],
+  own: Record<string, AgentMessage[] | undefined> = {}
+): Set<string> {
+  const live = new Set<string>();
+  const newest = (list: AgentMessage[] | undefined, agentId: string, copyId: string) => {
+    for (let i = (list?.length ?? 0) - 1; i >= 0; i--) {
+      const m = list![i];
+      if (m.agentId === agentId && m.kind === 'changes' && m.changes?.copy?.id === copyId) return m;
+    }
+    return undefined;
+  };
+  for (const member of members) {
+    const copyId = member.copy?.id;
+    if (!copyId) continue;
+    const card = newest(messages, member.id, copyId);
+    if (!card) continue;
+    const there = newest(own[member.id], member.id, copyId);
+    if (there && there.id !== card.id && there.ts > card.ts) continue;
+    live.add(card.id);
+  }
+  return live;
+}
+
+/**
+ * Each result's newest version in this room, counting the versions in its
+ * member's own chat (`own`): an older card here doesn't offer Ask for changes
+ * once a newer one was made there.
+ */
+export function newestRoomResults(
+  messages: AgentMessage[],
+  own: Record<string, AgentMessage[] | undefined> = {}
+): Set<string> {
+  // The room's copy last, so a version in both counts as the room's.
+  const all = [...Object.values(own).flatMap((l) => l ?? []), ...messages];
+  return new Set(newestResults(all).values());
+}
+
+/** Members to read the newest page of, so the checks above see their own chats. */
+export const membersWithCards = (members: Agent[], messages: AgentMessage[]) =>
+  members.filter((a) =>
+    messages.some((m) => m.agentId === a.id && (m.kind === 'changes' || !!m.result))
+  );
+
 /** The newest line of a run folded into an agent's own chat, and how many it stands for. */
 export interface RoomFold {
   roomId: string;
@@ -191,12 +326,17 @@ export interface RoomFold {
 /**
  * An agent's own chat with what it said in rooms folded: each run of lines
  * from one room becomes one "In <room>" line. A card still waiting on you
- * stays whole, so it can be answered from either chat.
+ * stays whole, so it can be answered from either chat, and so does a change
+ * card for the agent's open copy (`openCopy`), so Keep / Discard are here too.
  */
-export function foldRoomLines(messages: AgentMessage[]): (AgentMessage | RoomFold)[] {
+export function foldRoomLines(
+  messages: AgentMessage[],
+  openCopy?: string
+): (AgentMessage | RoomFold)[] {
   const out: (AgentMessage | RoomFold)[] = [];
   for (const m of messages) {
-    if (!m.room || m.approval?.status === 'pending') {
+    const copyCard = !!openCopy && m.kind === 'changes' && m.changes?.copy?.id === openCopy;
+    if (!m.room || m.approval?.status === 'pending' || copyCard) {
       out.push(m);
       continue;
     }

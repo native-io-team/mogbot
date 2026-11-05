@@ -9,6 +9,7 @@ import {
   roomItems,
   roomKey,
   roomLine,
+  workingHere,
   roomsOffered,
   roomSuggestions,
   toLine,
@@ -76,9 +77,10 @@ describe('the composer’s @ menu', () => {
       { id: 'a1', name: 'Finance' },
       { id: 'a2', name: 'Ops' },
     ];
-    expect(toLine(asked.slice(1), 2)).toBe('to Ops');
-    expect(toLine(asked, 2)).toBe('to Finance · Ops');
-    expect(toLine([...asked, { id: 'a3', name: 'Chief' }], 3)).toBe('to everyone');
+    expect(toLine(asked.slice(1), 2)).toBe('To Ops');
+    expect(toLine(asked, 3)).toBe('To Finance and Ops');
+    expect(toLine(asked, 2)).toBe('To everyone');
+    expect(toLine([...asked, { id: 'a3', name: 'Chief' }], 3)).toBe('To everyone');
     expect(toLine(undefined, 2)).toBeNull();
   });
 });
@@ -156,6 +158,19 @@ describe('the room’s list', () => {
       { ...ops, status: { state: 'working' as const, activity: null, since: 1, room: room.id } },
     ];
     expect(roomLine(room, busy, answered)).toBe('Ops is replying');
+  });
+
+  it('a member stopped on a card in this room needs you, before anyone replying, card loaded or not', () => {
+    const waiting = { ...ops, status: { state: 'waiting' as const, activity: null, since: 1, room: room.id } };
+    const working = {
+      ...finance,
+      status: { state: 'working' as const, activity: null, since: 1, room: room.id },
+    };
+    expect(roomLine(room, [working, waiting], undefined)).toBe('Needs your OK');
+    expect(workingHere([working, waiting], room.id).map((a) => a.id)).toEqual([working.id]);
+    // Waiting in another room or its own chat: not this room's.
+    const away = { ...waiting, status: { ...waiting.status, room: 'other' } };
+    expect(roomLine(room, [away], [])).not.toBe('Needs your OK');
   });
 });
 
