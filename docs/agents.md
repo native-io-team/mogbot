@@ -65,12 +65,27 @@ claude --print --output-format stream-json --verbose --include-partial-messages
        --session-id <uuid> | --resume <uuid>
        --permission-mode acceptEdits
        --permission-prompt-tool mcp__shipstudio_agents__approve
-       --mcp-config '{"mcpServers":{"shipstudio_agents":{"type":"http","url":…?turn=<id>}}}'
+       --mcp-config <app support>/agent-bridge/mcp-<random>.json   (0600; see below)
        --allowedTools mcp__shipstudio_agents
        --append-system-prompt <voice + role + team rules>
        --add-dir <projects root> --add-dir <each external project>
+       --disallowedTools 'Edit(**/.git/**)' 'Edit(**/.shipstudio/**)'
+                         'Edit(/<each added dir>/**/.git/**)' …
 cwd = the agent's home, prompt on stdin, MCP_TOOL_TIMEOUT raised (see below)
 ```
+
+**What a turn may write.** Its cwd and every `--add-dir` (the whole projects
+root and every external project — not only a bound agent's own project;
+narrowing that to the bound project is a product decision still open), minus
+any `.git` or `.shipstudio` folder anywhere in them. Claude Code gets that as
+deny rules: relative ones for its cwd and absolute `//` ones per added folder,
+because a relative rule doesn't reach an `--add-dir` (verified on 2.1.318: a
+Write into each is refused "denied by your permission settings", including in
+an added folder whose path has a space and a comma). The rules cover the file
+tools; a shell command touching those folders isn't read-only, so it asks
+through `approve` like any other. Codex gets the same as a permissions
+profile (below). The copy-per-task commit is made by the app at the end of the
+turn, never by the agent (`task`).
 
 There is no long-lived process per agent, so twenty idle agents cost nothing.
 The user's own Claude Code MCP servers and settings still load, which is how an
@@ -256,9 +271,20 @@ steps has no line.
 
 ## Tools agents get (`src-tauri/src/agents/mcp.rs`)
 
-Served by the existing loopback agent bridge at
-`/mcp/<bridge token>/agents/<agent id>`. The id in the path is the caller, and
-the URL is passed only inline to the process the app spawned for that agent.
+Served by the existing loopback agent bridge at `/mcp/agent`. The path names
+no one: the caller is the `Authorization: Bearer` secret it sends, 256 random
+bits issued for that agent and that turn (`broker::grant`) and revoked the
+moment the turn ends; an unknown, missing or ended secret gets a bare 404.
+The secret never touches a command line, where `ps` shows it to every local
+account (`agents/reach.rs`): Claude Code reads it from a 0600 `--mcp-config`
+file in a 0700 folder of ours, removed when the turn ends (verified on
+2.1.318: the header is sent on every request); Codex from an environment
+variable named by `bearer_token_env_var` (verified on 0.166's app-server),
+which Codex's default shell-environment policy keeps out of the commands it
+runs because its name contains `TOKEN`. (Until 2026-11 the URL was
+`/mcp/<bridge token>/agents/<id>?turn=<n>`, inline on the command line, so
+any local account could read it and call in as any agent; the preview token
+those turns exposed is replaced once at the next launch.)
 
 | Tool | Who | What |
 | --- | --- | --- |
@@ -408,8 +434,8 @@ outside those folders) goes to `approve`, which puts a card in that agent's
 chat showing the exact command, file, URL or tool input, and waits for
 **Allow** or **Deny**. While it waits, the agent's row says "Needs your OK".
 
-**What the broker trusts** (`agents/broker.rs`). Each turn gets an id on its
-MCP URL (`?turn=`), open until `run_turn` returns. An `approve` call with no
+**What the broker trusts** (`agents/broker.rs`). Each turn gets an id, named
+by its secret, open until `run_turn` returns. An `approve` call with no
 turn, from a turn that has ended or been replaced, or repeating a
 `tool_use_id` already asked, is denied at once with no card: those could
 only ever be zombie cards. A timeout is never recorded as the user's answer:
@@ -422,8 +448,8 @@ turn is stopped before it acts; a stricter mode (`default`, `plan`,
 our own server shows `failed` there, its approval tool doesn't exist and the
 turn is stopped too.
 
-Codex turns get the same: the `?turn=` URL is what `codex_app::args` passes
-Codex for our server, and Codex's own approval requests go through
+Codex turns get the same: the turn's secret is what Codex presents to our
+server, and Codex's own approval requests go through
 `broker::admit` before a card (`codex_app::answer`, request ids named
 `codex-<turn>-<jsonrpc id>` because JSON-RPC ids restart with each
 app-server). The init check is Claude Code's only: Codex is started with the
@@ -607,8 +633,9 @@ the agent has a conversation on its engine (`sessionId`, not `newEngine`).
     `--permission-prompt-tool` (it asks in the terminal, to you): `--chrome
     --resume <session> --permission-mode acceptEdits --mcp-config …
     --allowedTools mcp__shipstudio_agents --append-system-prompt … --add-dir …`.
-    The MCP URL carries no `?turn=`, so anything that reaches `approve` is
-    refused; the agent's other tools (message an agent, share a file) work.
+    Its secret is granted with no turn (and revoked at hand-back), so anything
+    that reaches `approve` is refused; the agent's other tools (message an
+    agent, share a file) work.
   - Codex: `codex resume -c sandbox_mode="workspace-write" -c
     approval_policy="on-request" -c developer_instructions=… <every turn's
     -c> [-m model] -C <cwd> <thread>`. `developer_instructions` is the
@@ -1078,16 +1105,31 @@ over JSON-RPC on stdin/stdout:
 
 ```
 codex app-server
-  -c sandbox_workspace_write.writable_roots=[<home or project dirs>]
-  -c sandbox_workspace_write.network_access=false
-  -c mcp_servers.shipstudio_agents={url=…,tool_timeout_sec=300,default_tools_approval_mode="approve"}
+  -c permissions.shipstudio_agent={extends=":workspace",network={enabled=false},
+       workspace_roots={<home or project dirs>=true},
+       filesystem={<each existing .git / .shipstudio in them>="read"}}
+  -c default_permissions="shipstudio_agent"
+  -c mcp_servers.shipstudio_agents={url=…/mcp/agent,bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",
+       tool_timeout_sec=300,default_tools_approval_mode="approve"}
   -c project_doc_fallback_filenames=["CLAUDE.md"]
 → initialize, initialized
-→ thread/start {cwd, approvalPolicy:"on-request", sandbox:"workspace-write",
-                config:{"sandbox_workspace_write.network_access":false},
-                model, developerInstructions}    (or thread/resume {threadId, …})
+→ thread/start {cwd, approvalPolicy:"on-request", model, developerInstructions}
+               (or thread/resume {threadId, …})
 → turn/start {threadId, input:[prompt]}
 ```
+
+The permissions profile (Codex 0.166+, read off `codex --version`) is what
+keeps `.git` and `.shipstudio` read-only: Codex accepts a glob only to deny
+*reading*, so the folders are listed by path (`reach::protected_paths`: the
+roots, the projects in them and copies under `.worktrees/<project>/`; one
+created during the turn isn't listed). Verified on 0.166 with `codex sandbox
+-P`: a nested project's `.git` and `.shipstudio` refuse a write while the
+project stays writable, and `thread/start` answers with the profile active.
+A thread names no `sandbox` of its own then, since it would replace the
+profile. An older Codex keeps the legacy
+`sandbox_workspace_write.writable_roots` + `network_access=false` (and the
+thread's `sandbox:"workspace-write"`), which only protects each root's own
+top-level `.git`.
 
 Its messages map onto the same `stream::Step`s as Claude Code's stream-json,
 and only those in our own thread (a sub-agent's run in threads of their own

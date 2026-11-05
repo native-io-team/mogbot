@@ -198,6 +198,8 @@ pub fn run() {
             // launch so it's listening before any agent session spawns —
             // registrations from previous runs stay valid from second zero.
             {
+                // Agent config files a crashed run left behind: their secrets are dead.
+                agents::reach::sweep();
                 let handle = _app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     if let Err(e) = agent_bridge::start_global_agent_bridge(handle).await {

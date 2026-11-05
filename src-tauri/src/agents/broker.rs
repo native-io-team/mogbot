@@ -1,11 +1,16 @@
 //! What the approval broker (`mcp::approve`) trusts before it puts a card in
 //! front of the user, and what it checks Claude Code is actually doing.
 //!
-//! - **A request belongs to a live turn.** Each turn gets an id, carried in
-//!   its MCP URL (`?turn=`). A request with no turn, from a turn that has
-//!   ended (a dying process, a Stop that raced it), or naming a turn that was
-//!   never issued is denied at once: it would only ever be a zombie card
-//!   nobody can act on.
+//! - **A caller is who its secret says.** Each turn (and each take-over
+//!   terminal) is granted a random 256-bit secret ([`grant`]), which its CLI
+//!   sends as `Authorization: Bearer`, read from a 0600 config file or an
+//!   environment variable: never from a command line, where `ps` shows it to
+//!   every local account. The secret names the agent and the turn; nothing
+//!   in the URL does. It stops working the moment its turn ends.
+//! - **A request belongs to a live turn.** A request with no turn, from a
+//!   turn that has ended (a dying process, a Stop that raced it), or naming a
+//!   turn that was never issued is denied at once: it would only ever be a
+//!   zombie card nobody can act on.
 //! - **A request is asked once.** A repeated `tool_use_id` is denied rather
 //!   than shown twice.
 //! - **The permission mode is read, not assumed.** We start every turn in
@@ -91,16 +96,87 @@ fn book() -> std::sync::MutexGuard<'static, Book> {
     BOOK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/* ------------------------------------------------------ bridge access */
+
+/// Who a request to the agents endpoint comes from, as its secret says.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Caller {
+    pub agent_id: String,
+    /// The headless turn it belongs to; `None` for a take-over terminal,
+    /// whose CLI asks the person at the keyboard rather than the broker.
+    pub turn: Option<u64>,
+}
+
+static GRANTS: LazyLock<Mutex<HashMap<String, Caller>>> = LazyLock::new(Default::default);
+
+fn grants() -> std::sync::MutexGuard<'static, HashMap<String, Caller>> {
+    GRANTS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// 256 bits from the OS, as hex.
+pub fn new_secret() -> String {
+    let mut bytes = [0u8; 32];
+    getrandom::getrandom(&mut bytes).expect("the OS random number generator is unavailable");
+    hex::encode(bytes)
+}
+
+/// A secret that opens the agents endpoint as one agent, for as long as this
+/// is held. Dropping it revokes the secret.
+#[derive(Debug)]
+pub struct Access {
+    secret: String,
+}
+
+impl Access {
+    pub fn secret(&self) -> &str {
+        &self.secret
+    }
+}
+
+impl Drop for Access {
+    fn drop(&mut self) {
+        grants().remove(&self.secret);
+    }
+}
+
+/// Issue a fresh secret for `agent_id` (and `turn`, when it's a turn's).
+pub fn grant(agent_id: &str, turn: Option<u64>) -> Access {
+    let secret = new_secret();
+    grants().insert(
+        secret.clone(),
+        Caller {
+            agent_id: agent_id.to_string(),
+            turn,
+        },
+    );
+    Access { secret }
+}
+
+/// Who holds `secret`, while it's live. An empty or unknown secret is no one.
+pub fn caller(secret: &str) -> Option<Caller> {
+    if secret.len() != 64 {
+        return None;
+    }
+    grants().get(secret).cloned()
+}
+
 /// A turn's id, open for as long as this is held: dropped when `run_turn`
-/// returns, however it returns.
+/// returns, however it returns. It carries the turn's bridge secret, which
+/// is revoked with it.
 pub struct TurnGuard {
     agent_id: String,
     id: u64,
+    access: Access,
 }
 
 impl TurnGuard {
     pub fn id(&self) -> u64 {
         self.id
+    }
+
+    /// The secret this turn's CLI presents to the agents endpoint.
+    pub fn secret(&self) -> &str {
+        self.access.secret()
     }
 }
 
@@ -111,9 +187,11 @@ impl Drop for TurnGuard {
 }
 
 pub fn open_turn(agent_id: &str) -> TurnGuard {
+    let id = book().open(agent_id);
     TurnGuard {
         agent_id: agent_id.to_string(),
-        id: book().open(agent_id),
+        id,
+        access: grant(agent_id, Some(id)),
     }
 }
 
@@ -129,14 +207,6 @@ pub fn refusal(admission: Admission) -> &'static str {
         Admission::Duplicate => "This exact request was already put to the user; it isn't asked twice. Wait for that answer, or tell the user what you need.",
         Admission::NoTurn | Admission::Closed => "This request arrived after its turn had ended, so it was declined without asking the user. If you still need it, say so in your next reply.",
     }
-}
-
-/// `?turn=7` on the agent's MCP URL.
-pub fn turn_from_query(query: Option<&str>) -> Option<u64> {
-    query?
-        .split('&')
-        .find_map(|pair| pair.strip_prefix("turn="))
-        .and_then(|v| v.parse().ok())
 }
 
 /* ------------------------------------------------------- the init event */
@@ -324,11 +394,55 @@ mod tests {
     }
 
     #[test]
-    fn the_turn_rides_on_the_url() {
-        assert_eq!(turn_from_query(Some("turn=12")), Some(12));
-        assert_eq!(turn_from_query(Some("x=1&turn=3")), Some(3));
-        assert_eq!(turn_from_query(Some("turn=abc")), None);
-        assert_eq!(turn_from_query(None), None);
+    fn a_turns_secret_names_it_and_dies_with_it() {
+        let (secret, id) = {
+            let guard = open_turn("secret-agent");
+            let secret = guard.secret().to_string();
+            assert_eq!(secret.len(), 64);
+            assert!(secret.chars().all(|c| c.is_ascii_hexdigit()));
+            assert_eq!(
+                caller(&secret),
+                Some(Caller {
+                    agent_id: "secret-agent".into(),
+                    turn: Some(guard.id()),
+                })
+            );
+            (secret, guard.id())
+        };
+        // The turn is over: its secret opens nothing, and its id is closed.
+        assert_eq!(caller(&secret), None);
+        assert_eq!(admit("secret-agent", Some(id), None), Admission::Closed);
+    }
+
+    #[test]
+    fn secrets_are_random_not_sequential_and_unguessable() {
+        let a = open_turn("seq-agent");
+        let b = open_turn("seq-agent");
+        assert_ne!(a.secret(), b.secret());
+        // Neither the agent id, nor the turn id, nor a near miss gets in.
+        assert_eq!(caller("seq-agent"), None);
+        assert_eq!(caller(&b.id().to_string()), None);
+        assert_eq!(caller(""), None);
+        let mut near = a.secret().to_string();
+        let first = if near.starts_with('0') { "1" } else { "0" };
+        near.replace_range(0..1, first);
+        assert_eq!(caller(&near), None);
+        assert_eq!(caller(&a.secret()[..63]), None);
+    }
+
+    #[test]
+    fn a_take_over_grant_has_no_turn_and_ends_when_dropped() {
+        let access = grant("driven-agent", None);
+        let secret = access.secret().to_string();
+        assert_eq!(
+            caller(&secret),
+            Some(Caller {
+                agent_id: "driven-agent".into(),
+                turn: None,
+            })
+        );
+        drop(access);
+        assert_eq!(caller(&secret), None);
     }
 
     /// Trimmed from a real Claude Code 2.1.318 init event.

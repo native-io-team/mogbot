@@ -1647,16 +1647,22 @@ async fn run_turn(
     // How this turn runs it (Codex speaks app-server when it can).
     let driver = Driver::pick(engine, &binary).await;
     driver.ready().await?;
-    let (port, token) = crate::agent_bridge::start_global_agent_bridge(app.clone())
+    let (port, _) = crate::agent_bridge::start_global_agent_bridge(app.clone())
         .await
         .map_err(super::err_other)?;
-    // The turn's id rides on its URL: the approval broker refuses requests
-    // from any turn but this one, once it's over (`agents::broker`).
+    // The turn's secret names the agent and the turn, and dies with the
+    // turn: the approval broker refuses requests from any turn but this one,
+    // once it's over (`agents::broker`). It reaches the CLI by a 0600 file
+    // (Claude Code) or this process's environment (Codex), never argv.
     let turn = super::broker::open_turn(agent_id);
-    let url = format!(
-        "http://127.0.0.1:{port}/mcp/{token}/agents/{agent_id}?turn={}",
-        turn.id()
-    );
+    let url = super::reach::agent_url(port);
+    let mcp_config = match engine {
+        Engine::Claude => Some(super::reach::write_config(&super::reach::claude_config(
+            &url,
+            turn.secret(),
+        ))?),
+        Engine::Codex => None,
+    };
 
     let (session_id, resuming) = match &agent.session_id {
         Some(id) => (id.clone(), true),
@@ -1701,16 +1707,40 @@ async fn run_turn(
     } else {
         agent.model.as_deref()
     };
+    // Codex with permission profiles keeps every `.git` / `.shipstudio`
+    // folder it can reach read-only; Claude Code gets the same as deny rules.
+    let profiles =
+        driver.engine() == Engine::Codex && super::codex::profiles_supported(&binary).await;
+    let protected = profiles.then(|| {
+        let mut roots: Vec<std::path::PathBuf> = layout
+            .add_dirs
+            .iter()
+            .map(std::path::PathBuf::from)
+            .collect();
+        roots.push(layout.cwd.clone());
+        super::reach::protected_paths(&roots)
+    });
+    let mcp_config_arg = mcp_config
+        .as_ref()
+        .map(super::reach::ConfigFile::arg)
+        .unwrap_or_default();
     let mut cmd = crate::utils::create_command(&binary);
     cmd.args(driver.args(&TurnSpec {
         model,
         session: &session_id,
         resuming,
         url: &url,
+        mcp_config: &mcp_config_arg,
         system_prompt: &system_prompt,
         writable: &layout.add_dirs,
+        protected: protected.as_deref(),
     }));
     strip_session_env(&mut cmd);
+    if engine == Engine::Codex {
+        // Read by `bearer_token_env_var`. Codex's default shell environment
+        // policy leaves any `*TOKEN*` variable out of the commands it runs.
+        cmd.env(super::reach::TOKEN_ENV, turn.secret());
+    }
     cmd.env("PATH", crate::utils::get_extended_path())
         // Claude Code gives an MCP tool call ~60s by default, and the approval
         // tool waits for a person. Verified: with the default, a card left for
@@ -1757,6 +1787,7 @@ async fn run_turn(
             model,
             &system_prompt,
             &prompt,
+            profiles,
         );
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Option<String>>();
         let mut stdin = child.stdin.take();
@@ -2434,7 +2465,7 @@ mod tests {
             "--permission-prompt-tool",
             "mcp__shipstudio_agents__approve",
             "--mcp-config",
-            r#"{"mcpServers":{"shipstudio_agents":{"type":"http","url":"http://x"}}}"#,
+            "http://x",
             "--allowedTools",
             "mcp__shipstudio_agents",
             "--append-system-prompt",
@@ -2443,6 +2474,13 @@ mod tests {
             "/u/ShipStudio",
             "--add-dir",
             "/ext/site",
+            "--disallowedTools",
+            "Edit(**/.git/**)",
+            "Edit(**/.shipstudio/**)",
+            "Edit(//u/ShipStudio/**/.git/**)",
+            "Edit(//u/ShipStudio/**/.shipstudio/**)",
+            "Edit(//ext/site/**/.git/**)",
+            "Edit(//ext/site/**/.shipstudio/**)",
             "--disallowedTools=mcp__shipstudio-preview",
             "--model",
             "opus",

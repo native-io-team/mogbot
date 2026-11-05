@@ -141,9 +141,9 @@ async fn schema_lists_everything(binary: &Path) -> Option<bool> {
 /// The command line: `app-server` with the same overrides `exec` gets.
 /// Everything per thread (sandbox, approvals, model, instructions) goes in
 /// `thread/start` instead.
-pub fn args(url: &str, writable: &[String]) -> Vec<String> {
+pub fn args(url: &str, writable: &[String], protected: Option<&[PathBuf]>) -> Vec<String> {
     let mut args = vec!["app-server".to_string()];
-    for value in super::codex::shared_config(url, writable) {
+    for value in super::codex::shared_config(url, writable, protected) {
         args.extend(["-c".into(), value]);
     }
     args
@@ -213,23 +213,28 @@ fn str_at<'a>(value: &'a Value, pointer: &str) -> Option<&'a str> {
 
 impl Conversation {
     /// A conversation for one turn, and its first message. `session` is the
-    /// thread to resume.
+    /// thread to resume. `profile`: the command line set a permissions
+    /// profile (`codex::sandbox_config`), which a thread's own `sandbox`
+    /// would replace, so the thread names none.
     pub fn new(
         session: Option<&str>,
         cwd: &Path,
         model: Option<&str>,
         developer_instructions: &str,
         prompt: &str,
+        profile: bool,
     ) -> (Self, Value) {
         let mut params = json!({
             "cwd": cwd.to_string_lossy(),
             "approvalPolicy": "on-request",
-            "sandbox": "workspace-write",
-            // Also on the command line; here too so the thread's own policy
-            // says it (thread/start echoes the policy it applied).
-            "config": { super::codex::NO_NETWORK: false },
             "developerInstructions": developer_instructions,
         });
+        if !profile {
+            params["sandbox"] = json!("workspace-write");
+            // Also on the command line; here too so the thread's own policy
+            // says it (thread/start echoes the policy it applied).
+            params["config"] = json!({ super::codex::NO_NETWORK: false });
+        }
         if let Some(model) = model {
             params["model"] = json!(model);
         }
@@ -784,6 +789,7 @@ mod tests {
             Some("gpt-5.5"),
             "Be brief.",
             "run it",
+            false,
         )
     }
 
@@ -798,14 +804,26 @@ mod tests {
     }
 
     #[test]
-    fn our_server_is_passed_with_the_turn_on_its_url() {
-        // The broker admits only the live turn's requests (`broker::admit`).
-        let args = args("http://127.0.0.1:9/mcp/t/agents/a?turn=7", &[]);
+    fn our_server_is_passed_with_its_secret_left_to_the_environment() {
+        // The secret names the agent and the turn (`broker::grant`); the
+        // command line only names the variable it's in.
+        let args = args("http://127.0.0.1:9/mcp/agent", &[], None);
         assert!(args.iter().any(|a| a.starts_with("mcp_servers.")
-            && a.contains(r#"url="http://127.0.0.1:9/mcp/t/agents/a?turn=7""#)));
+            && a.contains(r#"url="http://127.0.0.1:9/mcp/agent""#)
+            && a.contains(r#"bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN""#)));
         assert!(args
             .windows(2)
             .any(|w| w == ["-c", "sandbox_workspace_write.network_access=false"]));
+    }
+
+    #[test]
+    fn a_profiled_thread_names_no_sandbox_of_its_own() {
+        let (mut c, _) = Conversation::new(None, Path::new("/h/a"), None, "x", "go", true);
+        c.on_message(&json!({ "id": 1, "result": {} }));
+        let start = c.start.clone();
+        assert!(start["params"].get("sandbox").is_none());
+        assert!(start["params"].get("config").is_none());
+        assert_eq!(start["params"]["approvalPolicy"], "on-request");
     }
 
     #[test]
