@@ -1284,7 +1284,9 @@
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-sm);
-  max-width: var(--agents-bubble-max);
+  /* The cap is on the line (whose parent is the full row): a percentage
+     here resolved against the shrink-to-fit line and cut every status. */
+  min-width: 0;
   min-height: calc(var(--font-size-subhead) * 1.4 + var(--spacing-sm) * 2);
   padding: 0 var(--spacing-md);
   background: var(--surface-control);
@@ -1445,7 +1447,7 @@
 
 .agent-composer__blocked-icon {
   flex: 0 0 auto;
-  color: var(--accent-warning);
+  color: var(--text-muted);
 }
 
 .agent-composer__blocked-text {
@@ -1740,6 +1742,7 @@
 
 .agent-schedule__item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-xs) var(--spacing-sm) var(--spacing-sm);
@@ -1785,18 +1788,36 @@
   color: var(--text-muted);
 }
 
-/* Row actions surface on hover or keyboard focus; they keep their space so
-   the note doesn't reflow under the pointer. */
-/* Row actions are always there, quiet; they brighten with their row. */
+/* Row actions: one line of labelled text actions under the row's words,
+   always there and quiet; they brighten with their row. */
 .agent-schedule__actions {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+}
+
+.agent-schedule__actions .text-button--default.button {
   color: var(--text-muted);
 }
 
-.agent-schedule__item:hover .agent-schedule__actions,
-.agent-schedule__item:focus-within .agent-schedule__actions {
+.agent-schedule__item:hover .agent-schedule__actions .text-button--default.button,
+.agent-schedule__item:focus-within .agent-schedule__actions .text-button--default.button {
   color: var(--text-secondary);
+}
+
+/* The form's commit row stays reachable while the popover scrolls: the
+   menu is the scroll box, so its foot sticks to the menu's bottom. */
+.agent-schedule .agent-schedule__picker-actions,
+.agent-schedule .agent-when__actions {
+  position: sticky;
+  bottom: calc(var(--spacing-xs) * -1);
+  z-index: 1;
+  margin-inline: calc(var(--spacing-sm) * -1);
+  padding: var(--spacing-sm);
+  background: var(--surface-panel);
+  border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
 .agent-schedule__empty {

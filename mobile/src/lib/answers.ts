@@ -11,7 +11,8 @@ import type { PromptOption, SessionPrompt } from '@shipstudio/companion-protocol
  * An option that covers more than this one request ("Yes, allow all edits
  * during this session", "…and don't ask again").
  */
-export const BROADER = /\b(all|always|during this session|don.t ask again|for this session)\b/i;
+export const BROADER =
+  /\b(all|always|(during|for) this (session|conversation)|until claude code is closed|don.t ask again)\b/i;
 
 /**
  * What a broader option covers, in a sentence. The phone can't know its
@@ -19,11 +20,17 @@ export const BROADER = /\b(all|always|during this session|don.t ask again|for th
  * no more; anything it can't read stays "more than this one request".
  */
 export function broaderCaption(label: string): string {
-  const session = /\b(during|for) this session\b/i.test(label);
+  // The desk says "until Claude Code is closed" (decisions.rs); older builds
+  // sent Claude Code's own "during this session" or "for this conversation".
+  // Either way the grant lasts as long as that Claude Code process, which
+  // outlives Start fresh, and reaches every folder it works in.
+  const session =
+    /\b((during|for) this (session|conversation)|until claude code is closed)\b/i.test(label);
   const forever = /\b(always|don.t ask again)\b/i.test(label);
   const edits = /\bedit/i.test(label);
   const what = edits ? 'make edits' : 'do this';
-  if (session) return `Lets it ${what} without asking for the rest of this task.`;
+  if (session)
+    return `Lets it ${what} without asking, in every folder it works in, until Claude Code is closed.`;
   if (forever) return `Lets it ${what} without asking again, not just this once.`;
   return 'Covers more than this one request.';
 }

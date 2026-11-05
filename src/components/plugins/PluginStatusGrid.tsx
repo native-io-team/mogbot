@@ -152,7 +152,7 @@ export function PluginStatusGrid({
                       if (state === 'available') {
                         return (
                           <TextButton
-                            variant="accent"
+                            variant="strong"
                             onClick={() => {
                               onUpdate(plugin.manifest.id);
                             }}

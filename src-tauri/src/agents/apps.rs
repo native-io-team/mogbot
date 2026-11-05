@@ -46,18 +46,26 @@ pub struct Suggested {
     pub url: &'static str,
 }
 
+/// Everyday tools first (docs, money, work tracking, design); the
+/// developer ones (errors, deploys) last.
 pub const SUGGESTED: &[Suggested] = &[
-    Suggested {
-        server_name: "linear",
-        title: "Linear",
-        blurb: "Issues, projects and cycles",
-        url: "https://mcp.linear.app/mcp",
-    },
     Suggested {
         server_name: "notion",
         title: "Notion",
         blurb: "Pages and databases",
         url: "https://mcp.notion.com/mcp",
+    },
+    Suggested {
+        server_name: "stripe",
+        title: "Stripe",
+        blurb: "Customers, payments and invoices",
+        url: "https://mcp.stripe.com",
+    },
+    Suggested {
+        server_name: "linear",
+        title: "Linear",
+        blurb: "Issues, projects and cycles",
+        url: "https://mcp.linear.app/mcp",
     },
     Suggested {
         server_name: "figma",
@@ -72,18 +80,35 @@ pub const SUGGESTED: &[Suggested] = &[
         url: "https://mcp.sentry.dev/mcp",
     },
     Suggested {
-        server_name: "stripe",
-        title: "Stripe",
-        blurb: "Customers, payments and invoices",
-        url: "https://mcp.stripe.com",
-    },
-    Suggested {
         server_name: "vercel",
         title: "Vercel",
         blurb: "Deployments, logs and projects",
         url: "https://mcp.vercel.com",
     },
 ];
+
+/// An app's name as people say it: the catalogue's title when it's one of
+/// ours, else its config id in words ("google-drive" → "Google Drive"),
+/// never the raw lower-case id. Mirrors `appTitle` in `src/lib/agentApps.ts`.
+pub fn display_name(server: &str) -> String {
+    if let Some(s) = SUGGESTED
+        .iter()
+        .find(|s| s.server_name.eq_ignore_ascii_case(server))
+    {
+        return s.title.to_string();
+    }
+    let name = server.strip_prefix("claude.ai ").unwrap_or(server);
+    name.split(|c: char| c == '-' || c == '_' || c.is_whitespace())
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            let mut c = w.chars();
+            c.next()
+                .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -319,6 +344,14 @@ pub async fn remove(name: &str) -> Result<(), CommandError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_app_is_named_the_way_people_say_it() {
+        assert_eq!(display_name("figma"), "Figma");
+        assert_eq!(display_name("gmail"), "Gmail");
+        assert_eq!(display_name("google-drive"), "Google Drive");
+        assert_eq!(display_name("claude.ai Google Calendar"), "Google Calendar");
+    }
 
     /// Captured from Claude Code 2.1.318 (URLs shortened).
     const LIST: &str = "Checking MCP server health…\n\n\

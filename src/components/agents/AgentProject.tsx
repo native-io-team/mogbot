@@ -18,7 +18,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { BranchIcon, CheckIcon, ChevronIcon, FolderIcon, GlobeIcon } from '@/components/icons';
+import { CheckIcon, ChevronIcon, FolderIcon, GlobeIcon } from '@/components/icons';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
 import { Button } from '../primitives/Button';
@@ -32,6 +32,7 @@ import { WorkTimeline } from './AgentWork';
 import { AgentCard } from './AgentCard';
 import { listProjects } from '../../lib/project';
 import {
+  changedFileLabels,
   folderName,
   getChangeDiff,
   leftOutLine,
@@ -112,7 +113,7 @@ export function AgentProjectChip({ agent }: { agent: Agent }) {
         disabled={missing}
       >
         {name}
-        {onCopy && <span className="agent-chat__project-copy">copy</span>}
+        {onCopy && <span className="agent-chat__project-copy">· copy</span>}
       </Button>
     </Tooltip>
   );
@@ -146,12 +147,22 @@ export function AgentProjectField({
       live = false;
     };
   }, [ctx?.projects]);
-  const projects = ctx?.projects ?? loaded;
+  const listed = ctx?.projects ?? loaded;
+  // Where it works now is always in the menu, checked, even before the
+  // project list has loaded or when that project isn't in it.
+  const projects: ProjectEntry[] | null =
+    value && !listed?.some((p) => p.path === value)
+      ? [{ path: value, name: nameOf(listed, value) } as ProjectEntry, ...(listed ?? [])]
+      : listed;
   const label = value ? nameOf(projects, value) : 'No project';
   return (
     <div className="agent-editor__label" role="group" aria-label="Works in">
       Works in
+      {/* Portalled and upward: the field sits at the foot of the editor's
+          scroll box, which cut an inline menu to its first row. */}
       <Dropdown
+        portal
+        side="top"
         menuClassName="agent-model-menu agent-project-menu"
         trigger={(p) => (
           <MenuButton
@@ -188,8 +199,8 @@ export function AgentProjectField({
         {!value
           ? 'It works in its own folder and can still reach every project.'
           : direct
-            ? "It works inside this project, so the project's CLAUDE.md and settings apply. After each turn that changes files, the chat lists them."
-            : "It works on its own copy of this project, so the project's CLAUDE.md and settings apply and your folder stays as you left it. When it changes something, the chat asks whether to keep it."}
+            ? "It works inside this project and follows the project's own instructions and settings. When it changes files, the chat lists them."
+            : "It works on its own copy of this project and follows the project's own instructions and settings, so your folder stays as you left it. When it changes something, the chat asks whether to keep it."}
       </p>
       {value && onDirectChange && (
         <label className="agent-editor__direct">
@@ -255,6 +266,8 @@ export const ChangeCard = memo(function ChangeCard({
   const count = changes.fileCount === 1 ? '1 file' : `${changes.fileCount} files`;
   const several = changes.files.length > 1;
   const unlisted = changes.fileCount - changes.files.length;
+  // Two files with one name (app/page.tsx, blog/page.tsx) say their folder.
+  const fileLabels = changedFileLabels(changes.files.map((file) => file.path));
   const copy = changes.copy;
   const offering = Boolean(copy && live && agent);
   const working = agent?.status.state !== 'idle';
@@ -313,18 +326,13 @@ export const ChangeCard = memo(function ChangeCard({
       }
       source={offering && agent ? copyLine(agent.name, project, working) : undefined}
     >
-      {/* The receipt (branch, line counts, files) is one click down, for
-          whoever wants it. */}
+      {/* The receipt (line counts, files) is one click down, for whoever
+          wants it: files by name, the full path on hover and the diff a click
+          away. No branch names in the conversation (docs/agents.md). */}
       {expanded && (
         <ul className="agent-changes__files">
-          {((!copy && changes.branch) || Boolean(changes.added || changes.removed)) && (
+          {Boolean(changes.added || changes.removed) && (
             <li className="agent-changes__more agent-changes__receipt">
-              {!copy && changes.branch && (
-                <span className="agent-changes__branch">
-                  <BranchIcon size={12} />
-                  {changes.branch}
-                </span>
-              )}
               <span className="agent-changes__counts">
                 <LineCounts added={changes.added} removed={changes.removed} />
               </span>
@@ -332,7 +340,7 @@ export const ChangeCard = memo(function ChangeCard({
           )}
           {changes.files.map((file) => (
             <li key={file.path}>
-              <Tooltip content={`View the diff of ${file.path}`}>
+              <Tooltip content={`See what changed in ${file.path}`}>
                 <button
                   type="button"
                   tabIndex={0}
@@ -340,14 +348,14 @@ export const ChangeCard = memo(function ChangeCard({
                   data-status={file.status}
                   onClick={() => setViewing(file)}
                 >
-                  <span className="agent-changes__path">{file.path}</span>
-                  <span className="agent-changes__counts">
-                    {file.added == null ? (
-                      'binary'
-                    ) : (
-                      <LineCounts added={file.added} removed={file.removed} />
-                    )}
+                  <span className="agent-changes__path">
+                    {fileLabels.get(file.path) ?? folderName(file.path)}
                   </span>
+                  {file.added != null && (
+                    <span className="agent-changes__counts">
+                      <LineCounts added={file.added} removed={file.removed} />
+                    </span>
+                  )}
                 </button>
               </Tooltip>
             </li>

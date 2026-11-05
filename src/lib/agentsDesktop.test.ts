@@ -39,7 +39,7 @@ describe('quitPrompt', () => {
 
   it('warns about a check-in that would be missed while closed', () => {
     const p = quitPrompt({ working: [], waiting: ['Lead Gen'], scheduled: ['Finance'] }, bg);
-    expect(p?.title).toBe('Finance has a check-in coming up. Quit anyway?');
+    expect(p?.title).toBe('Finance has a routine coming up. Quit anyway?');
     expect(p?.body).toContain('they run when you reopen it');
     expect(p?.body).toContain('Lead Gen’s request will still be here when you reopen.');
   });

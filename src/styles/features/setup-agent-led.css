@@ -53,7 +53,7 @@
 
 /* Wide enough for three cards per row; flex centering gives the 3 + 2 split. */
 .onboarding-content.agent-onboarding-content {
-  max-width: 600px; /* css-ok: layout max, three 170px cards + gaps */
+  max-width: 600px; /* css-ok: layout max, two 260px cards + gaps */
   width: 100%;
 }
 
@@ -67,8 +67,8 @@
 .agent-pick-card {
   position: relative;
   /* css-ok: fixed card width, not a spacing-scale value */
-  width: 200px;
-  min-height: 200px; /* css-ok: card size, room for the plan line */
+  width: 260px;
+  min-height: 240px; /* css-ok: card size, room for the plan line */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -114,12 +114,12 @@
 }
 
 .agent-pick-card-name {
-  font-size: var(--font-size-body-sm);
-  font-weight: 600;
+  font-size: var(--font-size-subhead);
+  font-weight: var(--font-weight-heading);
 }
 
 .agent-pick-card-desc {
-  font-size: var(--font-size-badge);
+  font-size: var(--font-size-body-sm);
   color: var(--text-muted);
   line-height: var(--line-height-compact);
   transition: color var(--transition-interaction);
@@ -131,7 +131,7 @@
 /* "Uses a Claude Pro or Max plan": what you need, before you pick. */
 .agent-pick-card-account {
   margin-top: var(--spacing-xs);
-  font-size: var(--font-size-badge);
+  font-size: var(--font-size-body-sm);
   line-height: var(--line-height-compact);
   color: var(--text-secondary);
 }
@@ -153,6 +153,9 @@
 
 /* What pressing the card does next: drawn as the button it is. */
 .agent-pick-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
   margin-top: var(--spacing-md);
   padding: var(--spacing-xs) var(--spacing-md);
   font-size: var(--font-size-body-sm);

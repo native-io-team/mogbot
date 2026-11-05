@@ -302,7 +302,13 @@
     {
       "name": "ModalFrame",
       "file": "src/components/primitives/ModalFrame.tsx",
-      "exports": ["MODAL_INERT_EXEMPT_ATTR", "ModalFrameProps", "ModalFrame"],
+      "exports": [
+        "MODAL_INERT_EXEMPT_ATTR",
+        "PORTAL_OWNER_ATTR",
+        "PORTAL_ANCHOR_ATTR",
+        "ModalFrameProps",
+        "ModalFrame"
+      ],
       "purpose": "Canonical modal overlay and dialog frame with dismissal, focus management, nesting, inert siblings, and scroll locking.",
       "owner": "primitives/overlays",
       "props": [

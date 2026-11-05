@@ -139,7 +139,7 @@ pub fn lines(engine: Engine, tools: &[&str], servers: &[Server]) -> Vec<Line> {
         work.push("send you files");
     }
     if ours("schedule_check_in") {
-        work.push("schedule check-ins");
+        work.push("schedule routines");
     }
     if !work.is_empty() {
         let mut detail = join(&work);

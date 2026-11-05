@@ -222,10 +222,10 @@ const DID: Record<string, string> = {
   'agents.interrupt': 'Interrupted an agent',
   'agents.markUnread': 'Marked a chat unread',
   'agents.fetchPath': 'Downloaded a file',
-  'agents.schedule.create': 'Added a check-in',
-  'agents.schedule.update': 'Edited a check-in',
-  'agents.schedule.cancel': 'Cancelled a check-in',
-  'agents.schedule.runNow': 'Ran a check-in now',
+  'agents.schedule.create': 'Added a routine',
+  'agents.schedule.update': 'Edited a routine',
+  'agents.schedule.cancel': 'Cancelled a routine',
+  'agents.schedule.runNow': 'Ran a routine now',
   'devices.unpairSelf': 'Forgot this Mac',
 };
 
@@ -235,7 +235,7 @@ export function activityLine(a: PhoneActivity, now: number): string {
   if (a.tool === 'agents.answerApproval') {
     what = a.detail.startsWith('deny') ? 'Denied a request' : 'Allowed a request';
   } else if (a.tool === 'agents.schedule.pause') {
-    what = a.detail.startsWith('resume') ? 'Resumed a check-in' : 'Paused a check-in';
+    what = a.detail.startsWith('resume') ? 'Resumed a routine' : 'Paused a routine';
   }
   const line = `${what ?? a.tool}${a.ok ? '' : ', refused'}`;
   return `${line} · ${ago(a.atMs, now)}`;
@@ -255,7 +255,7 @@ export function phoneCapabilities(methods: string[]): { can: string[]; cannot: s
   if (has('agents.fetchPath')) can.push('Send photos and files, and download what agents share');
   if (has('agents.files')) can.push('Browse every file in a conversation');
   if (has('agents.search')) can.push('Search every conversation');
-  if (has('agents.schedule.create')) can.push('Add, edit, pause and run check-ins');
+  if (has('agents.schedule.create')) can.push('Add, edit, pause and run routines');
   if (has('projects.list', 'sessions.read')) can.push('See projects and read their agent sessions');
   const cannot = ['Push to git', 'Edit code', 'Type into a plain terminal', 'Manage other phones'];
   if (has('projects.list') && !has('sessions.send')) cannot.unshift('Type into project sessions');

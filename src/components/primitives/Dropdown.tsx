@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -15,6 +16,7 @@ import {
 import { createPortal } from 'react-dom';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { usePortalAccentScope } from '../../contexts/AccentScopeContext';
+import { PORTAL_ANCHOR_ATTR, PORTAL_OWNER_ATTR } from './ModalFrame';
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"]';
 const TYPEAHEAD_TIMEOUT_MS = 500;
@@ -130,6 +132,9 @@ export function Dropdown({
   const [internalOpen, setInternalOpen] = useState(false);
   const isOpen = controlledOpen ?? internalOpen;
   const [portalPos, setPortalPos] = useState<CSSProperties | null>(null);
+  // Ties a portalled menu to where it was opened from, so a dialog's focus
+  // trap treats the menu as its own (ModalFrame, PORTAL_OWNER_ATTR).
+  const portalId = useId();
   // A portalled menu leaves the DOM scope it was opened from; carry it over.
   const accentScope = usePortalAccentScope(
     portalPos ?? { position: 'fixed', visibility: 'hidden' }
@@ -432,6 +437,7 @@ export function Dropdown({
         .filter(Boolean)
         .join(' ')}
       data-accent-scope={portal ? accentScope['data-accent-scope'] : undefined}
+      {...(portal ? { [PORTAL_OWNER_ATTR]: portalId } : {})}
       style={portal ? accentScope.style : undefined}
       role={presentation === 'menu' ? 'menu' : 'dialog'}
       aria-label={presentation === 'popover' ? ariaLabel : undefined}
@@ -474,6 +480,7 @@ export function Dropdown({
         .filter(Boolean)
         .join(' ')}
       ref={containerRef}
+      {...(portal ? { [PORTAL_ANCHOR_ATTR]: portalId } : {})}
       onMouseEnter={openOnHover ? openFromHover : undefined}
       onMouseLeave={openOnHover ? scheduleHoverClose : undefined}
     >

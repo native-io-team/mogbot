@@ -385,6 +385,9 @@
   --hint-card-max-w: 720px;
   --z-modal-overlay: 1000;
   --z-modal: 1001;
+  /* A menu portalled out of a dialog: above the dialog it opens from, below
+     tooltips and notifications. */
+  --z-modal-menu: calc(var(--z-modal) + 1);
   --z-tooltip: 1100;
   --z-notification: 1200;
   --z-app-overlay: 9999;

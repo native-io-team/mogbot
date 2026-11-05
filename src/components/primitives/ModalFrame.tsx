@@ -84,6 +84,26 @@ const FOCUSABLE_SELECTOR = [
 export const MODAL_INERT_EXEMPT_ATTR = 'data-modal-inert-exempt';
 
 /**
+ * A popup portalled to the body (a `Dropdown portal` menu) leaves the dialog's
+ * DOM but not its control. It names the element it was opened from: the popup
+ * carries `PORTAL_OWNER_ATTR`, its anchor `PORTAL_ANCHOR_ATTR`, with the same
+ * id. While that anchor is inside the dialog, focus in the popup counts as
+ * focus in the dialog, so the trap doesn't pull it back and arrow keys reach
+ * the menu.
+ */
+export const PORTAL_OWNER_ATTR = 'data-portal-owner';
+export const PORTAL_ANCHOR_ATTR = 'data-portal-anchor';
+
+function inOwnedPortal(target: Node, content: HTMLElement): boolean {
+  const element = target instanceof Element ? target : target.parentElement;
+  const id = element?.closest(`[${PORTAL_OWNER_ATTR}]`)?.getAttribute(PORTAL_OWNER_ATTR);
+  if (!id) return false;
+  return Array.from(content.querySelectorAll(`[${PORTAL_ANCHOR_ATTR}]`)).some(
+    (anchor) => anchor.getAttribute(PORTAL_ANCHOR_ATTR) === id
+  );
+}
+
+/**
  * Controls that get first refusal on Escape before the dialog closes: text
  * entry (an inline rename, a search box) and anything inside — or owning — an
  * open menu/listbox. See `handleEscape` for the one-grace-press contract.
@@ -427,6 +447,7 @@ export function ModalFrame({
       if (!isTopmost(modalId)) return;
       const target = event.target;
       if (target instanceof Node && contentRef.current!.contains(target)) return;
+      if (target instanceof Node && inOwnedPortal(target, contentRef.current!)) return;
       focusInitialElement(contentRef.current!, initialFocusRef ?? { current: null });
     };
 

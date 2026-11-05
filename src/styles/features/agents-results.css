@@ -49,7 +49,7 @@
 /* What the agent says it didn't verify: up front, tinted, never folded. */
 .agent-result__unverified {
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--surface-warning);
+  border: var(--border-width-default) solid var(--border-subtle);
   border-radius: var(--radius-card);
 }
 
@@ -64,12 +64,14 @@
   line-height: var(--line-height-compact);
 }
 
+/* What wasn't checked is normal and expected: a quiet question, not an
+   alarm (the warning triangle is only for real danger). */
 .agent-result__unverified-title {
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
 .agent-result__unverified-title svg {
-  color: var(--accent-warning);
+  color: var(--text-muted);
 }
 
 .agent-result__unverified ul,

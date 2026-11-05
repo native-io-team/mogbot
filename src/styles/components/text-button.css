@@ -43,6 +43,12 @@
   height: auto;
 }
 
+/* A neutral action that has to read (inside an alert, a status line, prose):
+   full text colour, never the accent, which means primary action, not status. */
+.text-button--strong.button {
+  color: var(--text-primary);
+}
+
 .text-button--primary.button {
   color: var(--accent-active);
 }
@@ -51,12 +57,14 @@
   color: var(--accent-active-hover);
 }
 
+/* The recommended inline action: the accent pulled toward the text colour,
+   so it always reads and never looks like the disabled one. */
 .text-button--accent.button {
-  color: var(--accent-focus);
+  color: var(--accent-text);
 }
 
 .text-button--accent.button:hover:not(:disabled) {
-  color: var(--info-light);
+  color: var(--text-primary);
 }
 
 .text-button--danger.button {

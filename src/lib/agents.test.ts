@@ -8,6 +8,7 @@ import {
   buildChatItems,
   describeScope,
   errorRemedy,
+  roleWithoutPath,
   filterFiles,
   isCodePath,
   isQueued,
@@ -473,10 +474,30 @@ describe('distinctInitials', () => {
   });
 });
 
+describe('roleWithoutPath', () => {
+  it('drops a folder path from the role, keeping the sentence', () => {
+    expect(
+      roleWithoutPath('Owns the Acme marketing site rebuild in ~/ShipStudio/acme-marketing.')
+    ).toBe('Owns the Acme marketing site rebuild.');
+    expect(roleWithoutPath('Files /Users/a/Downloads/x.pdf, then reports')).toBe(
+      'Files, then reports'
+    );
+    expect(roleWithoutPath('Keeps the books')).toBe('Keeps the books');
+    // A slash that isn't a path stays.
+    expect(roleWithoutPath('Sales/ops lead')).toBe('Sales/ops lead');
+  });
+});
+
 describe('agentInitials', () => {
   it('takes two words, skipping filler', () => {
     expect(agentInitials('Chief of Staff')).toBe('CS');
     expect(agentInitials('Finance')).toBe('FI');
+  });
+
+  it('never takes a bracket or a symbol', () => {
+    expect(agentInitials('Finance (from Grok)')).toBe('FI');
+    expect(agentInitials('Sales/Ops')).toBe('SO');
+    expect(distinctInitials('Finance (from Grok)', ['Finance', 'Finance (from Grok)'])).toBe('FN');
   });
 
   it('keeps numbers apart', () => {
