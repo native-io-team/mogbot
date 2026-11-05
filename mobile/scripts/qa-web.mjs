@@ -579,6 +579,12 @@ const LIVE = [
     name: 'session',
     route: '/session/pty-site-1',
     settle: 3500,
+    // The terminal opens by itself while the task has said nothing yet
+    // (taskScreen's `terminalFirst`): close it to see the conversation alone.
+    act: async (page) => {
+      await page.clickText('Hide terminal').catch(() => {});
+      await sleep(800);
+    },
     check:
       'A task as a conversation: its state in words, what it was asked, its steps, what it said; no terminal chrome or "esc to interrupt"',
   },
@@ -587,7 +593,8 @@ const LIVE = [
     route: '/session/pty-site-1',
     settle: 3500,
     act: async (page) => {
-      await page.clickText('Show terminal');
+      // Already open when the rule above opened it; else open it.
+      await page.clickText('Show terminal').catch(() => {});
       await sleep(800);
     },
     check: 'Show terminal: the raw screen in a sideways-scrolling well with a right-edge fade',

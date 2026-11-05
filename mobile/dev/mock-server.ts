@@ -285,6 +285,17 @@ export function createMockServer(opts: MockOptions = {}) {
   const instructions = new Map<string, string>();
   const createdByClient = new Map<string, Omit<Agent, 'status' | 'home'>>();
   const screens = new Map<string, string>(seedScreens());
+  // What the Mac last typed into each tab (`SessionScreen.sent`), as typed.
+  const sentTo = new Map<string, NonNullable<SessionScreen['sent']>>([
+    [
+      'pty-site-1',
+      {
+        text: 'Tighten the hero spacing below 640px and keep the CTA above the fold.',
+        at: Date.now() - 2 * 60_000,
+        byAgent: false,
+      },
+    ],
+  ]);
   const sessionClientIds = new Map<string, string>();
   const findSession = (id: string) =>
     projects.flatMap((x) => x.sessions).find((x) => x.sessionId === id);
@@ -1236,6 +1247,7 @@ export function createMockServer(opts: MockOptions = {}) {
         session,
         screen,
         ...(session.state === 'finished' ? { reply: lastReply(screen) } : {}),
+        ...(sentTo.has(id) ? { sent: sentTo.get(id) } : {}),
       } satisfies SessionScreen;
     },
     // The ready-made agents, as the Mac serializes them.
@@ -1351,6 +1363,7 @@ export function createMockServer(opts: MockOptions = {}) {
       if (known) return { sessionId: known };
       sessionClientIds.set(String(p.clientId), session.sessionId);
       screens.set(session.sessionId, `${screens.get(session.sessionId) ?? ''}\n\n> ${text}\n`);
+      sentTo.set(session.sessionId, { text, at: Date.now(), byAgent: false });
       setSession(session.sessionId, { state: 'working', activity: 'Thinking…' });
       setTimeout(() => {
         screens.set(

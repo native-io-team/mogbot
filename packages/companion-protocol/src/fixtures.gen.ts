@@ -1529,6 +1529,11 @@ export const projectsList = [
 export const sessionsRead = {
   "reply": "Fixed the header's spacing.",
   "screen": "> Fix the header\n\n⏺ Editing Header.tsx",
+  "sent": {
+    "at": 1700000000000,
+    "byAgent": false,
+    "text": "Fix the header"
+  },
   "session": {
     "activity": "Editing Header.tsx",
     "cli": "codex",

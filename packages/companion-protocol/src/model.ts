@@ -851,6 +851,20 @@ export interface SessionScreen {
   screen: string;
   /** The agent's latest reply, without the input box and spinner lines. */
   reply?: string;
+  /**
+   * The newest message the Mac typed into this tab (from this phone, an
+   * outside assistant or an agent), and when. Absent when it typed none
+   * since the app started, or on an older Mac. Never read off the screen:
+   * a message typed at the desk isn't here.
+   */
+  sent?: SessionSent;
+}
+
+export interface SessionSent {
+  text: string;
+  at: number;
+  /** One of the user's agents sent it, not the user. */
+  byAgent: boolean;
 }
 
 // ============================================================================

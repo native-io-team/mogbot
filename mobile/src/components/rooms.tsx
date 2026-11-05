@@ -9,7 +9,6 @@
  */
 
 import {
-  newestResults,
   type Agent,
   type AgentMessage,
   type AgentRef,
@@ -34,6 +33,8 @@ import {
   EVERYONE,
   liveCopyCards,
   memberNames,
+  membersWithCards,
+  newestRoomResults,
   membersOf,
   mentionsEveryone,
   roomItems,
@@ -156,8 +157,26 @@ function RoomChat({ id }: { id: string }) {
   );
   // As in each member's own chat: the newest card for its open copy offers
   // Keep / Discard, and each result's newest version is drawn in full.
-  const liveCopies = useMemo(() => liveCopyCards(members, messages), [members, messages]);
-  const newest = useMemo(() => new Set(newestResults(messages).values()), [messages]);
+  // A newer card in the member's own chat retires the one here, so that
+  // chat's newest page is read for every member with a card in the room.
+  const carded = useMemo(() => membersWithCards(members, messages), [members, messages]);
+  const own = useApp(
+    useShallow((s) => Object.fromEntries(carded.map((m) => [m.id, s.chats[m.id]?.messages])))
+  );
+  const ownLoaded = useApp(
+    useShallow((s) => carded.map((m) => !!s.chats[m.id]?.loaded))
+  );
+  useEffect(() => {
+    if (!connected) return;
+    carded.forEach((m, i) => {
+      if (!ownLoaded[i]) loadLatest(m.id).catch(() => {});
+    });
+  }, [connected, carded, ownLoaded]);
+  const liveCopies = useMemo(
+    () => liveCopyCards(members, messages, own),
+    [members, messages, own]
+  );
+  const newest = useMemo(() => newestRoomResults(messages, own), [messages, own]);
   // A room message can't revise a result: the member's own chat opens with
   // the request staged in its composer, as on the desk.
   const router = useRouter();

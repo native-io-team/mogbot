@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { AgentRow } from '../../../components/AgentRow';
 import { RoomRow } from '../../../components/RoomRow';
-import { roomsOffered, sortRooms } from '../../../lib/rooms';
+import { pendingHere, roomKey, roomsOffered, sortRooms } from '../../../lib/rooms';
 import { ChatView } from '../../../components/ChatView';
 import { QuotaLines } from '../../../components/QuotaLines';
 import { useQuotaLines } from '../../../lib/quota';
@@ -127,6 +127,31 @@ export default function Agents() {
   );
   // Rooms only from a Mac that does them (`welcome.features`): an older one shows none.
   const rooms = useApp((s) => (roomsOffered(s.welcome) ? s.rooms : null));
+  // A room's row says "Needs your OK" for a card left waiting after the turn
+  // ended, which only its thread shows: as for agents, its newest page is read
+  // for any room with a member waiting on you whose saved thread doesn't hold
+  // a pending card yet. (The card is in that member's own count, wherever it
+  // was raised, so this may read a room that turns out not to hold it.)
+  const roomsUnsaid = useApp(
+    useShallow((s) => {
+      if (!live || !roomsOffered(s.welcome)) return [];
+      const agents = s.overview?.agents ?? [];
+      return (s.rooms ?? [])
+        .map((r) => {
+          const owed = agents
+            .filter((a) => r.members.includes(a.id) && (a.pendingApprovals ?? 0) > 0)
+            .reduce((n, a) => n + (a.pendingApprovals ?? 0), 0);
+          const thread = s.chats[roomKey(r.id)]?.messages;
+          return owed > 0 && !(thread && pendingHere(thread)) ? `${r.id}:${owed}` : '';
+        })
+        .filter(Boolean);
+    })
+  );
+  useEffect(() => {
+    for (const key of roomsUnsaid) {
+      loadLatest(roomKey(key.slice(0, key.lastIndexOf(':')))).catch(() => {});
+    }
+  }, [roomsUnsaid]);
   const [showHidden, setShowHidden] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [undo, setUndo] = useState<{ text: string; run: () => void } | null>(null);

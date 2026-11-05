@@ -12,6 +12,7 @@
 
 import {
   MAC_FEATURES,
+  newestResults,
   type Agent,
   type AgentMessage,
   type AgentRef,
@@ -172,8 +173,16 @@ export function splitMentions(text: string, names: string[]): { text: string; na
   return out;
 }
 
-/** Members whose turn in progress answers in this room. */
+/** Members whose turn in progress answers in this room (a member waiting on your OK isn't replying). */
 export const workingHere = (members: Agent[], roomId: string) =>
+  members.filter((a) => a.status.state === 'working' && a.status.room === roomId);
+
+/** Members whose turn in this room is stopped on a card for you. */
+export const askingHere = (members: Agent[], roomId: string) =>
+  members.filter((a) => a.status.state === 'waiting' && a.status.room === roomId);
+
+/** Members with a turn in progress here, working or waiting on you: their draft stays on screen. */
+const activeHere = (members: Agent[], roomId: string) =>
   members.filter((a) => a.status.state !== 'idle' && a.status.room === roomId);
 
 /** A member's approval card in this room still waiting on you. */
@@ -185,7 +194,9 @@ export const pendingHere = (messages: AgentMessage[]) =>
  * newest thing said (as the Mac wrote it: "Ops: Filed.").
  */
 export function roomLine(room: RoomView, members: Agent[], messages?: AgentMessage[]): string {
-  if (messages && pendingHere(messages)) return 'Needs your OK';
+  if (askingHere(members, room.id).length || (messages && pendingHere(messages))) {
+    return 'Needs your OK';
+  }
   const working = workingHere(members, room.id);
   if (working.length === 1) return `${working[0].name} is replying`;
   if (working.length > 1) return `${working.length} replying`;
@@ -225,7 +236,7 @@ export function roomItems(
 ): RoomItem[] {
   const out: RoomItem[] = [];
   const shown = new Set<string>();
-  for (const a of workingHere(members, roomId)) {
+  for (const a of activeHere(members, roomId)) {
     const d = drafts[a.id];
     if (d) {
       shown.add(d.id);
@@ -256,26 +267,54 @@ export function roomItems(
  * Each member's open copy of its project: the newest change card in this
  * room for it offers Keep / Discard, as in that member's own chat (the
  * desk's `RoomChat`). A member with no open copy, or whose copy's card
- * isn't in the room, has none here.
+ * isn't in the room, has none here; nor does one whose own chat (`own`, as
+ * far as this phone has it) holds a newer card for that copy, since this
+ * one no longer lists everything Keep would bring over.
  */
 export function liveCopyCards(
   members: Pick<Agent, 'id' | 'copy'>[],
-  messages: AgentMessage[]
+  messages: AgentMessage[],
+  own: Record<string, AgentMessage[] | undefined> = {}
 ): Set<string> {
   const live = new Set<string>();
+  const newest = (list: AgentMessage[] | undefined, agentId: string, copyId: string) => {
+    for (let i = (list?.length ?? 0) - 1; i >= 0; i--) {
+      const m = list![i];
+      if (m.agentId === agentId && m.kind === 'changes' && m.changes?.copy?.id === copyId) return m;
+    }
+    return undefined;
+  };
   for (const member of members) {
     const copyId = member.copy?.id;
     if (!copyId) continue;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i];
-      if (m.agentId === member.id && m.kind === 'changes' && m.changes?.copy?.id === copyId) {
-        live.add(m.id);
-        break;
-      }
-    }
+    const card = newest(messages, member.id, copyId);
+    if (!card) continue;
+    const there = newest(own[member.id], member.id, copyId);
+    if (there && there.id !== card.id && there.ts > card.ts) continue;
+    live.add(card.id);
   }
   return live;
 }
+
+/**
+ * Each result's newest version in this room, counting the versions in its
+ * member's own chat (`own`): an older card here doesn't offer Ask for changes
+ * once a newer one was made there.
+ */
+export function newestRoomResults(
+  messages: AgentMessage[],
+  own: Record<string, AgentMessage[] | undefined> = {}
+): Set<string> {
+  // The room's copy last, so a version in both counts as the room's.
+  const all = [...Object.values(own).flatMap((l) => l ?? []), ...messages];
+  return new Set(newestResults(all).values());
+}
+
+/** Members to read the newest page of, so the checks above see their own chats. */
+export const membersWithCards = (members: Agent[], messages: AgentMessage[]) =>
+  members.filter((a) =>
+    messages.some((m) => m.agentId === a.id && (m.kind === 'changes' || !!m.result))
+  );
 
 /** The newest line of a run folded into an agent's own chat, and how many it stands for. */
 export interface RoomFold {

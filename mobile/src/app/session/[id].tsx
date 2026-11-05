@@ -6,7 +6,7 @@
  * only, never typing into a tab that's showing a question).
  */
 
-import type { SessionScreen } from '@shipstudio/companion-protocol';
+import type { SessionScreen, SessionSent } from '@shipstudio/companion-protocol';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
@@ -23,7 +23,13 @@ import { Button, Dot, Icon, T } from '../../components/ui';
 import { useAccent } from '../../lib/accent';
 import { formatAgo } from '../../lib/agents';
 import { questionContext } from '../../lib/diff';
-import { readTaskScreen, type TaskReading } from '../../lib/taskScreen';
+import {
+  noticesOf,
+  readTaskScreen,
+  terminalFirst,
+  type TaskPart,
+  type TaskReading,
+} from '../../lib/taskScreen';
 import { haptic } from '../../lib/haptics';
 import {
   canCall,
@@ -66,8 +72,9 @@ export default function Session() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // The raw terminal is there, one tap away, but never what the screen leads with.
-  const [showTerminal, setShowTerminal] = useState(false);
+  // The raw terminal is one tap away. It opens by itself when the reading may
+  // be missing something (`terminalFirst`); a tap then decides.
+  const [terminalChoice, setTerminalChoice] = useState<boolean | null>(null);
   const connected = useApp((s) => s.link.kind === 'connected');
   const canAnswer = useApp((s) => canCall('sessions.key', s.welcome));
   // The project's path, from the list when we came from a chat's session card.
@@ -129,14 +136,17 @@ export default function Session() {
   const question = data?.session.question;
   // What it's asking about (an edit's diff, a command), read off its screen.
   const context = question && data ? questionContext(data.screen, question) : [];
-  // The screen read as a conversation; when it holds no words of the agent's
-  // own, the Mac's reading of its latest reply (already without the box).
-  const reading = useMemo(() => {
-    if (!data) return null;
-    const r = readTaskScreen(data.screen);
-    if (!r.said && data.reply) return { ...r, said: readTaskScreen(data.reply).said };
-    return r;
-  }, [data]);
+  // The screen read as a conversation, from what the Mac says it sent (never
+  // a line guessed off the screen).
+  const reading = useMemo(
+    () => (data ? readTaskScreen(data.screen, data.sent?.text) : null),
+    [data]
+  );
+  const showTerminal =
+    terminalChoice ??
+    (!!reading && !!data && terminalFirst(reading, data.session.state, !!question));
+  // Something on its screen went wrong or was cut off: the state never says it went fine.
+  const trouble = !!reading && noticesOf(reading).length > 0;
 
   return (
     <View style={{ flex: 1 }}>
@@ -144,10 +154,21 @@ export default function Session() {
         options={{
           headerTitle: () => (
             <View style={styles.header}>
-              <T variant="headline" color={colors.textStrong} numberOfLines={1}>
+              <T
+                variant="headline"
+                color={colors.textStrong}
+                numberOfLines={1}
+                style={styles.headerText}
+              >
                 {title || 'Task'}
               </T>
-              <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={chromeScale}>
+              <T
+                variant="caption"
+                color={colors.textMuted}
+                maxFontSizeMultiplier={chromeScale}
+                numberOfLines={1}
+                style={styles.headerText}
+              >
                 {gone
                   ? 'Closed'
                   : data
@@ -196,7 +217,7 @@ export default function Session() {
             <>
               {!question && (
                 <View style={styles.state}>
-                  <SessionState session={data.session} />
+                  <SessionState session={data.session} trouble={trouble} />
                 </View>
               )}
               {question && (
@@ -256,12 +277,18 @@ export default function Session() {
                   )}
                 </Animated.View>
               )}
-              <TaskConversation reading={reading} />
+              <TaskConversation
+                reading={reading}
+                sent={data.sent}
+                now={now}
+                // The Mac read the prompt as a question: the card above draws it.
+                promptShown={!question}
+              />
               <View style={styles.terminalToggle}>
                 <TextAction
                   label={showTerminal ? 'Hide terminal' : 'Show terminal'}
-                  hint="Shows the task's own screen, as your Mac has it"
-                  onPress={() => setShowTerminal((v) => !v)}
+                  hint="Shows the task’s own screen, as your Mac has it"
+                  onPress={() => setTerminalChoice(!showTerminal)}
                 />
               </View>
               {showTerminal && (
@@ -340,45 +367,132 @@ export default function Session() {
   );
 }
 
-/** Steps shown in full; older ones fold into a count (the terminal has them all). */
+/** Steps shown in full in a run; older ones fold into a count (the terminal has them all). */
 const STEPS_SHOWN = 5;
 
+type Block =
+  | { kind: 'steps'; steps: string[] }
+  | Exclude<TaskPart, { kind: 'step' }>;
+
+/** Runs of steps together, everything else as it came. */
+function blocksOf(parts: TaskPart[]): Block[] {
+  const out: Block[] = [];
+  for (const p of parts) {
+    const last = out[out.length - 1];
+    if (p.kind === 'step') {
+      if (last?.kind === 'steps') last.steps.push(p.text);
+      else out.push({ kind: 'steps', steps: [p.text] });
+    } else out.push(p);
+  }
+  return out;
+}
+
+/** Who sent the message the reading starts after, as far as the Mac knows. */
+export function sentLabel(sent: SessionSent, now: number): string {
+  const when = formatAgo(sent.at, now);
+  return sent.byAgent ? `An agent sent this · ${when}` : `Sent to it · ${when}`;
+}
+
 /**
- * The task as a conversation: what it was asked (your bubble), the steps it
- * took in plain words, and what it said. Read off its screen
- * (`readTaskScreen`), so a part with nothing behind it is left out.
+ * The task as a conversation, in screen order: what the Mac sent it (only
+ * when the Mac says so, labelled, never "you"), its steps in plain words,
+ * what it said, every line saying something went wrong, messages typed into
+ * the terminal as they appear, and a prompt the Mac didn't read, whole.
  */
-function TaskConversation({ reading }: { reading: TaskReading | null }) {
+function TaskConversation({
+  reading,
+  sent,
+  now,
+  promptShown,
+}: {
+  reading: TaskReading | null;
+  sent?: SessionSent;
+  now: number;
+  promptShown: boolean;
+}) {
   const colors = useColors();
   const styles = useStyles();
   if (!reading) return null;
-  const { asked, steps, said } = reading;
-  const earlier = Math.max(0, steps.length - STEPS_SHOWN);
+  const { asked, parts, prompt } = reading;
   return (
     <View style={styles.conversation}>
-      {!!asked && (
-        <View style={styles.askedBubble}>
-          <T color={colors.textBody}>{asked}</T>
+      {!!asked && !!sent && (
+        <View style={styles.asked}>
+          <T variant="caption" color={colors.textMuted}>
+            {sentLabel(sent, now)}
+          </T>
+          <T color={colors.textBody} selectable>
+            {asked}
+          </T>
         </View>
       )}
-      {steps.length > 0 && (
-        <View style={styles.steps} accessibilityLabel={`Steps: ${steps.join('. ')}`}>
-          {earlier > 0 && (
-            <T variant="caption" color={colors.textMuted}>
-              {earlier === 1 ? '1 earlier step' : `${earlier} earlier steps`}
-            </T>
-          )}
-          {steps.slice(-STEPS_SHOWN).map((step, i) => (
-            <View key={`${i}:${step}`} style={styles.step}>
-              <Dot color={colors.textMuted} />
-              <T variant="small" color={colors.textSecondary} numberOfLines={2} style={{ flex: 1 }}>
-                {step}
+      {blocksOf(parts).map((block, i) => {
+        switch (block.kind) {
+          case 'steps': {
+            const earlier = Math.max(0, block.steps.length - STEPS_SHOWN);
+            return (
+              <View
+                key={i}
+                style={styles.steps}
+                accessibilityLabel={`Steps: ${block.steps.join('. ')}`}
+              >
+                {earlier > 0 && (
+                  <T variant="caption" color={colors.textMuted}>
+                    {earlier === 1 ? '1 earlier step' : `${earlier} earlier steps`}
+                  </T>
+                )}
+                {block.steps.slice(-STEPS_SHOWN).map((step, j) => (
+                  <View key={`${j}:${step}`} style={styles.step}>
+                    <Dot color={colors.textMuted} />
+                    <T
+                      variant="small"
+                      color={colors.textSecondary}
+                      numberOfLines={2}
+                      style={{ flex: 1 }}
+                    >
+                      {step}
+                    </T>
+                  </View>
+                ))}
+              </View>
+            );
+          }
+          case 'said':
+            return <Markdown key={i} text={block.text} />;
+          case 'notice':
+            return (
+              <View key={i} style={styles.notice} accessibilityLabel={`From its screen: ${block.text}`}>
+                <Icon
+                  name="exclamationmark.triangle"
+                  size={iconSize.inline}
+                  color={colors.accentWarning}
+                  fallback={<T color={colors.accentWarning}>!</T>}
+                />
+                <T variant="small" color={colors.textStrong} selectable style={{ flex: 1 }}>
+                  {block.text}
+                </T>
+              </View>
+            );
+          case 'typed':
+            return (
+              <T key={i} variant="mono" color={colors.textSecondary} selectable>
+                {block.text}
               </T>
-            </View>
+            );
+        }
+      })}
+      {!!prompt && promptShown && (
+        <View style={styles.prompt} accessibilityLabel="On its screen now">
+          <T variant="caption" color={colors.textMuted}>
+            On its screen now · answer it in the terminal
+          </T>
+          {prompt.map((line, i) => (
+            <T key={i} variant="mono" color={colors.textPrimary} selectable>
+              {line}
+            </T>
           ))}
         </View>
       )}
-      {!!said && <Markdown text={said} />}
     </View>
   );
 }
@@ -402,6 +516,8 @@ const textGlyphs = (screen: string) => screen.replace(/([⏺⏸⏹✻✳])(?!\uF
 const useStyles = makeStyles((colors) => ({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { alignItems: 'center', maxWidth: 260 },
+  // Both lines centred on one axis, however long the title.
+  headerText: { textAlign: 'center', alignSelf: 'stretch' },
   content: { padding: space.lg, gap: space.md, paddingBottom: space['2xl'] },
   state: { paddingVertical: space.xs },
   card: {
@@ -448,13 +564,21 @@ const useStyles = makeStyles((colors) => ({
   },
   terminalToggle: { alignItems: 'flex-start', paddingTop: space.xs },
   conversation: { gap: space.md },
-  askedBubble: {
-    alignSelf: 'flex-end',
-    maxWidth: '78%',
+  // What the Mac sent: labelled, left-aligned, not drawn as your own bubble.
+  asked: {
+    gap: space.xs,
     backgroundColor: colors.surfaceBubble,
     borderRadius: composer.corner,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
+  },
+  notice: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  prompt: {
+    gap: space.xs,
+    padding: space.md,
+    borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.cardBorder,
   },
   steps: { gap: space.xs },
   step: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

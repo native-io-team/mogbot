@@ -787,6 +787,8 @@ fn tab_line(n: usize, s: &SessionSummary) -> String {
 struct Run {
     sent_ms: u64,
     message: String,
+    /// One of the user's agents sent it (the agent bridge), not the user.
+    by_agent: bool,
     /// The working tree as git would commit it, before the message.
     tree_before: Option<String>,
     /// Its change card was recorded (see [`take_run_tree`]).
@@ -812,6 +814,7 @@ fn begin_run(session_id: &str, message: &str, tree_before: Option<String>) {
         Run {
             sent_ms: super::now_ms(),
             message: message.to_string(),
+            by_agent: for_agents(),
             tree_before,
             carded: false,
         },
@@ -2846,6 +2849,18 @@ pub(crate) struct ScreenView {
     pub screen: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply: Option<String>,
+    /// What this app last typed into the tab, as typed: never read off the screen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sent: Option<SentView>,
+}
+
+/// `SessionSent` in packages/companion-protocol.
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SentView {
+    pub text: String,
+    pub at: u64,
+    pub by_agent: bool,
 }
 
 /// How many screen lines `session_screen` returns.
@@ -2982,12 +2997,18 @@ pub(crate) fn session_screen(projects: &[String], session_id: &str) -> Result<Sc
             .ok_or("That tab is a plain terminal; only agent tabs can be read from the phone.")?;
         let snap = pty_session::session_snapshot(session_id).ok_or("That tab was closed.")?;
         let lines = screen::render_tail(&snap.bytes, snap.rows, snap.cols, SCREEN_LINES);
-        let sent = run_for(session_id).map(|r| r.message);
-        let reply = agent_state::latest_reply(&lines, sent.as_deref(), 80).join("\n");
+        let run = run_for(session_id);
+        let sent = run.as_ref().map(|r| r.message.as_str());
+        let reply = agent_state::latest_reply(&lines, sent, 80).join("\n");
         return Ok(ScreenView {
             session: view,
             screen: lines.join("\n"),
             reply: (!reply.trim().is_empty()).then_some(reply),
+            sent: run.map(|r| SentView {
+                text: r.message,
+                at: r.sent_ms,
+                by_agent: r.by_agent,
+            }),
         });
     }
     Err("That session isn't open in the app any more.".into())

@@ -10,6 +10,8 @@ import {
   addressLine,
   foldRoomLines,
   liveCopyCards,
+  membersWithCards,
+  newestRoomResults,
   ROOM_INTRO,
   splitMentions,
 } from '../src/lib/rooms';
@@ -39,6 +41,29 @@ describe('room parity with the desk', () => {
       copyCard('m3', 'a2', 'c9'),
     ];
     expect([...liveCopyCards([withCopy, ops], lines)]).toEqual(['m2']);
+  });
+
+  it('retires the room’s copy card once the member’s own chat has a newer one', () => {
+    const withCopy = { ...finance, copy: { id: 'c1' } } as never;
+    const here = [copyCard('m1', 'a1', 'c1')];
+    const newer = { ...copyCard('o1', 'a1', 'c1'), room: undefined, ts: 5 } as AgentMessage;
+    expect([...liveCopyCards([withCopy], here, { a1: [newer] })]).toEqual([]);
+    // The same card in both, or an older one there: the room's stays live.
+    expect([...liveCopyCards([withCopy], here, { a1: here })]).toEqual(['m1']);
+    const older = { ...newer, ts: 0 } as AgentMessage;
+    expect([...liveCopyCards([withCopy], here, { a1: [older] })]).toEqual(['m1']);
+  });
+
+  it('counts a result’s newer version in the member’s own chat', () => {
+    const result = (id: string, version: number, room?: string) =>
+      ({ id, agentId: 'a1', room, ts: version, kind: 'text', text: '',
+         result: { id: 'r1', version } }) as unknown as AgentMessage;
+    const here = [result('m1', 1, 'r')];
+    expect([...newestRoomResults(here)]).toEqual(['m1']);
+    expect([...newestRoomResults(here, { a1: [result('o2', 2)] })]).toEqual(['o2']);
+    // The same version in both counts as the room's.
+    expect([...newestRoomResults(here, { a1: [result('m1', 1)] })]).toEqual(['m1']);
+    expect(membersWithCards(members, here).map((a) => a.id)).toEqual(['a1']);
   });
 
   it('keeps the open copy’s card whole in the agent’s own chat', () => {
