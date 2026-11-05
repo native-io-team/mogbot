@@ -147,7 +147,7 @@ export function TemplateGallery({
         <input
           type="text"
           className="tg-search-input"
-          placeholder="Search community templates..."
+          placeholder="Search community templates…"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           autoComplete="off"

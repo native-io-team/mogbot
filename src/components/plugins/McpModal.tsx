@@ -302,7 +302,7 @@ export function McpModal({
                   <div className="mcp-connected-controls">
                     <ExtensionSearchField
                       ref={searchRef}
-                      placeholder="Filter servers..."
+                      placeholder="Filter servers…"
                       aria-label="Filter MCP servers"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -326,7 +326,7 @@ export function McpModal({
 
                   {isLoadingServers && servers.length === 0 && (
                     <ExtensionState kind="loading" loadingLabel="Loading MCP servers">
-                      Loading MCP servers...
+                      Loading MCP servers…
                     </ExtensionState>
                   )}
 
@@ -351,7 +351,7 @@ export function McpModal({
                             onClick={() => void handleRemove(server)}
                             disabled={removingServer === serverKey(server)}
                           >
-                            {removingServer === serverKey(server) ? 'Removing...' : 'Remove'}
+                            {removingServer === serverKey(server) ? 'Removing…' : 'Remove'}
                           </Button>
                         }
                       >
@@ -408,7 +408,7 @@ export function McpModal({
                         onClick={() => void handleAdd()}
                         disabled={isAdding || !addCommand.trim()}
                       >
-                        {isAdding ? 'Adding...' : 'Add'}
+                        {isAdding ? 'Adding…' : 'Add'}
                       </Button>
                     </div>
                     <div className="mcp-scope-toggle">

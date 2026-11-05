@@ -204,7 +204,7 @@ export function EnvEditor({ projectPath }: EnvEditorProps) {
 
                   {/* Variables List */}
                   {isLoading ? (
-                    <div className="env-loading">Loading...</div>
+                    <div className="env-loading">Loading…</div>
                   ) : selectedFile ? (
                     <div className="env-vars-container">
                       <div className="env-vars-list">
@@ -293,7 +293,7 @@ export function EnvEditor({ projectPath }: EnvEditorProps) {
                             disabled={!hasChanges || isSaving || isLoading}
                             leftIcon={!isSaving ? <SaveIcon size={14} /> : undefined}
                           >
-                            {isSaving ? 'Saving...' : 'Save'}
+                            {isSaving ? 'Saving…' : 'Save'}
                           </Button>
                         </div>
                       </div>

@@ -1274,7 +1274,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
             fontSize: 13,
           }}
         >
-          Loading...
+          Loading…
         </div>
       )}
       {/* Dimming overlay when terminal is not focused */}

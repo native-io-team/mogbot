@@ -211,7 +211,7 @@ export function BranchesMenu({
                 disabled={isPulling}
                 leftIcon={isPulling ? <Spinner size="sm" /> : <PullIcon size={14} />}
               >
-                {isPulling ? 'Pulling latest...' : `Pull latest from ${remoteName}`}
+                {isPulling ? 'Pulling latest…' : `Pull latest from ${remoteName}`}
               </Button>
             </section>
 

@@ -2,7 +2,7 @@
  * Tests for PublishBranchDropdown.
  *
  * The core contract: the trigger button says "Push" at ALL times (or
- * "Pushing..." while in flight) — never "Sync", "Publish", "Synced", or
+ * "Pushing…" while in flight) — never "Sync", "Publish", "Synced", or
  * "Go Live". That label churn was a real UX complaint; these tests pin it.
  */
 
@@ -38,7 +38,7 @@ function makeProps(overrides?: Partial<Parameters<typeof PublishBranchDropdown>[
   };
 }
 
-const BANNED_LABELS = ['Sync', 'Synced', 'Syncing...', 'Publish', 'Publishing...', 'Go Live'];
+const BANNED_LABELS = ['Sync', 'Synced', 'Syncing…', 'Publish', 'Publishing…', 'Go Live'];
 
 /**
  * The hosting section opens the deployments panel through ModalContext, which
@@ -84,10 +84,10 @@ describe('PublishBranchDropdown trigger label', () => {
     expectNoBannedLabels();
   });
 
-  it('says "Pushing..." while a push is in flight', () => {
+  it('says "Pushing…" while a push is in flight', () => {
     render(<PublishBranchDropdown {...makeProps({ isPublishing: true })} />);
 
-    expect(screen.getByText('Pushing...')).toBeInTheDocument();
+    expect(screen.getByText('Pushing…')).toBeInTheDocument();
     expectNoBannedLabels();
   });
 

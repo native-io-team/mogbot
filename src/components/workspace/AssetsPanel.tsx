@@ -266,7 +266,7 @@ export function AssetsModal({ projectPath, isOpen, onClose, pick }: AssetsModalP
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
           >
-            {isUploading ? 'Uploading...' : 'Upload'}
+            {isUploading ? 'Uploading…' : 'Upload'}
           </Button>
           <input
             ref={fileInputRef}
@@ -315,7 +315,7 @@ export function AssetsModal({ projectPath, isOpen, onClose, pick }: AssetsModalP
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search assets..."
+            placeholder="Search assets…"
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
@@ -476,7 +476,7 @@ export function AssetsModal({ projectPath, isOpen, onClose, pick }: AssetsModalP
           onDrop={handleDrop}
         >
           {isLoading ? (
-            <div className="assets-loading">Loading assets...</div>
+            <div className="assets-loading">Loading assets…</div>
           ) : visibleAssets.length === 0 ? (
             <div className="assets-empty">
               <div className="assets-empty-icon">

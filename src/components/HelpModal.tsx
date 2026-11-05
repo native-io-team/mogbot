@@ -421,7 +421,7 @@ export function HelpModal({ projectPath }: HelpModalProps) {
               <>
                 <div className="help-section">
                   <div className="help-section-title">Your Skills</div>
-                  <div className="help-loading">Loading skills...</div>
+                  <div className="help-loading">Loading skills…</div>
                 </div>
                 <div className="help-divider" />
               </>

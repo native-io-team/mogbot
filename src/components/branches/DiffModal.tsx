@@ -270,7 +270,7 @@ export function DiffModal({
           {isLoading && (
             <div className="diff-loading">
               <Spinner size="lg" />
-              <p>Loading diff...</p>
+              <p>Loading diff…</p>
             </div>
           )}
 

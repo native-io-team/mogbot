@@ -13,13 +13,13 @@ describe('SearchField', () => {
         value=""
         onChange={onChange}
         aria-label="Search project files"
-        placeholder="Search files..."
+        placeholder="Search files…"
       />
     );
 
     const input = screen.getByRole('searchbox', { name: 'Search project files' });
     expect(ref.current).toBe(input);
-    expect(input).toHaveAttribute('placeholder', 'Search files...');
+    expect(input).toHaveAttribute('placeholder', 'Search files…');
     fireEvent.change(input, { target: { value: 'tokens.css' } });
     expect(onChange).toHaveBeenCalledWith('tokens.css');
 
@@ -29,7 +29,7 @@ describe('SearchField', () => {
         value="tokens.css"
         onChange={onChange}
         aria-label="Search project files"
-        placeholder="Search files..."
+        placeholder="Search files…"
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
@@ -41,7 +41,7 @@ describe('SearchField', () => {
         value="tokens.css"
         onChange={onChange}
         aria-label="Search project files"
-        placeholder="Search files..."
+        placeholder="Search files…"
         disabled
       />
     );

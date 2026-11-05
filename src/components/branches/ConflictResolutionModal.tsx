@@ -259,7 +259,7 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
       >
         <div className="conflict-loading">
           <Spinner size="lg" />
-          <p>Analyzing conflicts...</p>
+          <p>Analyzing conflicts…</p>
         </div>
       </ModalFrame>
     );
@@ -446,14 +446,14 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
                 onClick={() => void handleResolve('current')}
                 disabled={isApplying}
               >
-                {isApplying ? 'Applying...' : 'Keep Yours'}
+                {isApplying ? 'Applying…' : 'Keep Yours'}
               </button>
               <button
                 className="conflict-btn theirs"
                 onClick={() => void handleResolve('incoming')}
                 disabled={isApplying}
               >
-                {isApplying ? 'Applying...' : 'Keep Theirs'}
+                {isApplying ? 'Applying…' : 'Keep Theirs'}
               </button>
             </div>
 

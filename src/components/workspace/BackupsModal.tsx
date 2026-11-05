@@ -141,7 +141,7 @@ export function BackupsModal({ projectPath, onRestore, onCreatePR }: BackupsModa
               disabled={isRestoring}
               leftIcon={isRestoring ? <Spinner size="sm" /> : undefined}
             >
-              {isRestoring ? 'Restoring...' : 'Restore'}
+              {isRestoring ? 'Restoring…' : 'Restore'}
             </Button>
           </div>
         </div>
@@ -210,7 +210,7 @@ export function BackupsModal({ projectPath, onRestore, onCreatePR }: BackupsModa
         {isLoading ? (
           <div className="backups-loading">
             <Spinner />
-            <span>Loading backups...</span>
+            <span>Loading backups…</span>
           </div>
         ) : isNotGitRepo ? (
           <EmptyState

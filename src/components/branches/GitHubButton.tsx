@@ -194,9 +194,9 @@ export function GitHubButton({
   // Show loading state while creating repo (even after modal closes)
   if (isCreatingRepo) {
     return (
-      <Button disabled title="Setting up...">
+      <Button disabled title="Setting up…">
         <GitHubIcon size={12} />
-        Setting up...
+        Setting up…
       </Button>
     );
   }
@@ -204,9 +204,9 @@ export function GitHubButton({
   // Still checking GitHub status - show loading state
   if (projectStatus === null) {
     return (
-      <Button disabled title="Checking GitHub status...">
+      <Button disabled title="Checking GitHub status…">
         <GitHubIcon size={12} />
-        Checking...
+        Checking…
       </Button>
     );
   }
@@ -368,7 +368,7 @@ export function GitHubButton({
             }}
             disabled={isLoading || !repoName.trim()}
           >
-            {isLoading ? 'Creating...' : 'Create Repository'}
+            {isLoading ? 'Creating…' : 'Create Repository'}
           </Button>
         </div>
       </ModalFrame>

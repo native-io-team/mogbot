@@ -57,7 +57,7 @@ export const CLAUDE_CODE: AgentConfig = {
   supportsSkills: true,
   supportsMcp: true,
   supportsStatusDetection: true,
-  loadingMessage: 'Starting Claude Code...',
+  loadingMessage: 'Starting Claude Code…',
   notFoundMessage: 'Error starting Claude',
   installHint: 'Make sure Claude Code is installed: npm install -g @anthropic-ai/claude-code',
 };
@@ -74,7 +74,7 @@ export const CODEX: AgentConfig = {
   supportsSkills: true,
   supportsMcp: true,
   supportsStatusDetection: false,
-  loadingMessage: 'Starting Codex...',
+  loadingMessage: 'Starting Codex…',
   notFoundMessage: 'Error starting Codex',
   installHint: 'Make sure Codex is installed: npm install -g @openai/codex',
 };
@@ -90,7 +90,7 @@ export const OPENCODE: AgentConfig = {
   supportsSkills: false,
   supportsMcp: true,
   supportsStatusDetection: false,
-  loadingMessage: 'Starting Opencode...',
+  loadingMessage: 'Starting Opencode…',
   notFoundMessage: 'Error starting Opencode',
   installHint: 'Make sure Opencode is installed: curl -fsSL https://opencode.ai/install | bash',
 };
@@ -106,7 +106,7 @@ export const CURSOR: AgentConfig = {
   supportsSkills: false,
   supportsMcp: false,
   supportsStatusDetection: false,
-  loadingMessage: 'Starting Cursor...',
+  loadingMessage: 'Starting Cursor…',
   notFoundMessage: 'Error starting Cursor',
   installHint: 'Make sure Cursor CLI is installed: curl https://cursor.com/install -fsS | bash',
 };
@@ -122,7 +122,7 @@ export const TERMINAL: AgentConfig = {
   supportsSkills: false,
   supportsMcp: false,
   supportsStatusDetection: false,
-  loadingMessage: 'Starting terminal...',
+  loadingMessage: 'Starting terminal…',
   notFoundMessage: 'Error starting terminal',
   installHint: 'Could not launch shell',
 };

@@ -108,7 +108,7 @@ function getActionButton(
     return (
       <div className="setup-item-progress-container">
         <span className="setup-item-progress-text">
-          {progressText ?? (SETUP_PROGRESS_MESSAGES[item.id] || 'Working...')}
+          {progressText ?? (SETUP_PROGRESS_MESSAGES[item.id] || 'Working…')}
         </span>
         {!progressText && BREW_PACKAGES.has(item.id) && (
           <span className="setup-item-progress-hint">This may take a few minutes</span>

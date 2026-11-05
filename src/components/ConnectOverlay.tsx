@@ -47,7 +47,7 @@ export function ConnectOverlay({
         <p className="connect-overlay-description">{description}</p>
         {onConnect && (
           <Button variant="primary" onClick={onConnect} disabled={isConnecting}>
-            {isConnecting ? 'Connecting...' : 'Connect GitHub'}
+            {isConnecting ? 'Connecting…' : 'Connect GitHub'}
           </Button>
         )}
       </div>

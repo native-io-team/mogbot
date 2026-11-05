@@ -734,7 +734,7 @@ export function ProjectList({
             hint="This removes the local project folder and its files. Use Remove from projects if you only want to hide it from the app."
             loading={deleting}
             confirmLabel="Delete files"
-            loadingLabel="Deleting..."
+            loadingLabel="Deleting…"
             confirmVariant="danger"
             onCancel={() => setDeleteConfirm(null)}
             onConfirm={() => void handleDelete(deleteConfirm)}
@@ -753,7 +753,7 @@ export function ProjectList({
             hint="Your project folder and files will stay on this computer. You can add it back later with Import project, Local folder."
             loading={removing}
             confirmLabel="Remove from projects"
-            loadingLabel="Removing..."
+            loadingLabel="Removing…"
             confirmVariant="primary"
             onCancel={() => setRemoveConfirm(null)}
             onConfirm={() => void handleRemoveFromApp(removeConfirm)}
@@ -772,7 +772,7 @@ export function ProjectList({
             hint="Projects in this folder will not be deleted. They will appear at the root level."
             loading={deletingFolder}
             confirmLabel="Delete"
-            loadingLabel="Deleting..."
+            loadingLabel="Deleting…"
             confirmVariant="danger"
             onCancel={() => setDeleteFolderConfirm(null)}
             onConfirm={() => void handleDeleteFolder(deleteFolderConfirm)}

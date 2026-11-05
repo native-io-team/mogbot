@@ -68,7 +68,7 @@ export function ChangedFilesActions({
         onClick={() => void handleDiscardAll()}
         disabled={isDiscarding}
       >
-        {isDiscarding ? 'Discarding...' : confirmDiscard ? 'Click to Confirm' : 'Discard All'}
+        {isDiscarding ? 'Discarding…' : confirmDiscard ? 'Click to Confirm' : 'Discard All'}
       </Button>
       {primaryAction}
     </div>

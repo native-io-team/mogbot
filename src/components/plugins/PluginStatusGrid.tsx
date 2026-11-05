@@ -130,7 +130,7 @@ export function PluginStatusGrid({
                       onClick={() => onReloadDev(plugin.manifest.id)}
                       disabled={reloadingId === plugin.manifest.id}
                     >
-                      {reloadingId === plugin.manifest.id ? 'Reloading...' : 'Reload'}
+                      {reloadingId === plugin.manifest.id ? 'Reloading…' : 'Reload'}
                     </TextButton>
                     <TextButton
                       variant="danger"
@@ -139,7 +139,7 @@ export function PluginStatusGrid({
                       }}
                       disabled={unlinkingId === plugin.manifest.id}
                     >
-                      {unlinkingId === plugin.manifest.id ? 'Unlinking...' : 'Unlink'}
+                      {unlinkingId === plugin.manifest.id ? 'Unlinking…' : 'Unlink'}
                     </TextButton>
                   </>
                 ) : (
@@ -147,7 +147,7 @@ export function PluginStatusGrid({
                     {(() => {
                       const state = updateStates[plugin.manifest.id] || 'idle';
                       if (state === 'checking') {
-                        return <span className="plugin-action-status">Checking...</span>;
+                        return <span className="plugin-action-status">Checking…</span>;
                       }
                       if (state === 'available') {
                         return (
@@ -162,7 +162,7 @@ export function PluginStatusGrid({
                         );
                       }
                       if (state === 'updating') {
-                        return <span className="plugin-action-status">Updating...</span>;
+                        return <span className="plugin-action-status">Updating…</span>;
                       }
                       if (state === 'up_to_date') {
                         return <span className="plugin-action-status">Up to date</span>;
@@ -184,7 +184,7 @@ export function PluginStatusGrid({
                       }}
                       disabled={removingId === plugin.manifest.id}
                     >
-                      {removingId === plugin.manifest.id ? 'Removing...' : 'Remove'}
+                      {removingId === plugin.manifest.id ? 'Removing…' : 'Remove'}
                     </TextButton>
                   </>
                 )}

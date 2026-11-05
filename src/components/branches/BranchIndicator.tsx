@@ -249,11 +249,7 @@ export function BranchIndicator({
                 onClick={() => void handleDiscardAll()}
                 disabled={isDiscarding}
               >
-                {isDiscarding
-                  ? 'Discarding...'
-                  : confirmDiscard
-                    ? 'Click to Confirm'
-                    : 'Discard All'}
+                {isDiscarding ? 'Discarding…' : confirmDiscard ? 'Click to Confirm' : 'Discard All'}
               </Button>
             </div>
           </div>

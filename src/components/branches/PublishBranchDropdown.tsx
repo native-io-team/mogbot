@@ -298,7 +298,7 @@ export function PublishBranchDropdown({
           className="source-control-push-button"
           data-education-id="publish-button"
           disabled
-          title="Checking GitHub status..."
+          title="Checking GitHub status…"
         >
           <span className="source-control-push-content">
             <PushIcon size={16} />
@@ -353,7 +353,7 @@ export function PublishBranchDropdown({
       >
         <span className="source-control-push-content">
           <PushIcon size={16} />
-          <span>{isPublishing ? 'Pushing...' : 'Push'}</span>
+          <span>{isPublishing ? 'Pushing…' : 'Push'}</span>
         </span>
         <ChevronIcon size={16} />
       </MenuButton>

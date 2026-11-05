@@ -232,7 +232,7 @@ interface PreviewProps {
   onHealthOutput?: (data: string) => void;
   /** When set, the dev server hasn't been started because dependencies aren't
    *  installed. Render an install CTA in the preview pane instead of the
-   *  "Starting dev server..." spinner. */
+   *  "Starting dev server…" spinner. */
   needsInstall?: { packageManager: string } | null;
   /** Set when the managed dev-server process died without Ship Studio
    *  stopping it (crash, or an external kill — e.g. an agent in the terminal
@@ -1928,14 +1928,14 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
               {isBranchSwitching && (
                 <div className="preview-branch-switching-overlay">
                   <Spinner size="lg" className="ss-spinner--muted" />
-                  <span>Switching branch...</span>
+                  <span>Switching branch…</span>
                 </div>
               )}
               {/* Dev server restarting overlay */}
               {isDevServerRestarting && (
                 <div className="preview-branch-switching-overlay">
                   <Spinner size="lg" className="ss-spinner--muted" />
-                  <span>Restarting dev server...</span>
+                  <span>Restarting dev server…</span>
                 </div>
               )}
               {/* Crop selection overlay */}

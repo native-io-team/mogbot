@@ -54,7 +54,7 @@ export function ProjectBulkActionConfirm<T extends DashboardProject>({
       }
       loading={loading}
       confirmLabel={isDelete ? 'Delete files' : 'Remove from projects'}
-      loadingLabel={isDelete ? 'Deleting...' : 'Removing...'}
+      loadingLabel={isDelete ? 'Deleting…' : 'Removing…'}
       confirmVariant={isDelete ? 'danger' : 'primary'}
       onCancel={onCancel}
       onConfirm={onConfirm}

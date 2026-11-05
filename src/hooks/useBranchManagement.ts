@@ -325,7 +325,7 @@ export function useBranchManagement({
       // If we have branch info, we're resolving PR conflicts
       if (headBranch && baseBranch) {
         try {
-          showToast('Preparing to resolve conflicts...', 'success');
+          showToast('Preparing to resolve conflicts…', 'success');
 
           // Switch to the PR's head branch
           const switchResult = await switchBranch(currentProject.path, headBranch, true);

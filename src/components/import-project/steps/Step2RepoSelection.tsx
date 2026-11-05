@@ -66,7 +66,7 @@ export function Step2RepoSelection({
       <div className="import-search">
         <input
           type="text"
-          placeholder="Search repositories..."
+          placeholder="Search repositories…"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           autoFocus
@@ -81,7 +81,7 @@ export function Step2RepoSelection({
         {loadingRepos ? (
           <div className="import-repo-loading">
             <Spinner style={{ color: 'var(--text-primary)' }} />
-            <span>Loading repositories...</span>
+            <span>Loading repositories…</span>
           </div>
         ) : filteredRepos.length === 0 ? (
           <div className="import-repo-empty">

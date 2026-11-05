@@ -238,22 +238,22 @@ export const SETUP_FRIENDLY_NAMES: Record<string, string> = {
 
 /** Messages shown while item is in progress */
 export const SETUP_PROGRESS_MESSAGES: Record<string, string> = {
-  homebrew: 'Installing package manager...',
-  node: 'Installing Node.js...',
-  npm_fix: 'Fixing npm permissions...',
-  git: 'Installing Git...',
-  gh: 'Installing GitHub CLI...',
-  gh_auth: 'Connecting to GitHub...',
-  claude: 'Installing Claude Code...',
-  claude_auth: 'Connecting to Claude...',
-  codex: 'Installing Codex...',
-  codex_auth: 'Connecting to Codex...',
-  opencode: 'Installing Opencode...',
-  opencode_auth: 'Connecting to Opencode...',
-  cursor: 'Installing Cursor...',
-  cursor_auth: 'Connecting to Cursor...',
-  vercel: 'Installing Vercel CLI...',
-  vercel_auth: 'Connecting to Vercel...',
+  homebrew: 'Installing package manager…',
+  node: 'Installing Node.js…',
+  npm_fix: 'Fixing npm permissions…',
+  git: 'Installing Git…',
+  gh: 'Installing GitHub CLI…',
+  gh_auth: 'Connecting to GitHub…',
+  claude: 'Installing Claude Code…',
+  claude_auth: 'Connecting to Claude…',
+  codex: 'Installing Codex…',
+  codex_auth: 'Connecting to Codex…',
+  opencode: 'Installing Opencode…',
+  opencode_auth: 'Connecting to Opencode…',
+  cursor: 'Installing Cursor…',
+  cursor_auth: 'Connecting to Cursor…',
+  vercel: 'Installing Vercel CLI…',
+  vercel_auth: 'Connecting to Vercel…',
 };
 
 /** Time estimates for each setup item */

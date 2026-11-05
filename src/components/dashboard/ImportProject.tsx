@@ -443,7 +443,7 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       return (
         <div className="create-modal-content creating">
           <Spinner size="lg" className="create-spinner" />
-          <p className="create-status">Loading GitHub accounts...</p>
+          <p className="create-status">Loading GitHub accounts…</p>
         </div>
       );
     }

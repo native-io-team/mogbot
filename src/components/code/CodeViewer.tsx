@@ -402,7 +402,7 @@ export function CodeViewer({
                   onSelect={() => void handleOpenInIde('vscode')}
                   disabled={openingIde !== null}
                 >
-                  {openingIde === 'vscode' ? 'Opening...' : 'VS Code'}
+                  {openingIde === 'vscode' ? 'Opening…' : 'VS Code'}
                 </DropdownItem>
               )}
               {ideAvailability.cursor && (
@@ -411,7 +411,7 @@ export function CodeViewer({
                   onSelect={() => void handleOpenInIde('cursor')}
                   disabled={openingIde !== null}
                 >
-                  {openingIde === 'cursor' ? 'Opening...' : 'Cursor'}
+                  {openingIde === 'cursor' ? 'Opening…' : 'Cursor'}
                 </DropdownItem>
               )}
             </Dropdown>
@@ -461,7 +461,7 @@ export function CodeViewer({
             <input
               className="code-selection-input"
               type="text"
-              placeholder="Ask about this code..."
+              placeholder="Ask about this code…"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => {

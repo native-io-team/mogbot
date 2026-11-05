@@ -137,7 +137,7 @@ export function SubmitReviewModal({
       //    just returns false). A FAILED commit must stop the flow: continuing
       //    would open a PR that silently lacks the user's latest changes while
       //    the UI reports success — the worst failure mode for this audience.
-      setProgressLabel('Saving your changes...');
+      setProgressLabel('Saving your changes…');
       try {
         await commitChanges(projectPath, 'Save changes for review');
       } catch (e) {
@@ -150,7 +150,7 @@ export function SubmitReviewModal({
       // 2. Read the diff and write a title + summary. Falls back to a
       //    branch-name title if AI isn't available or fails; never blocks the PR.
       if (aiAvailable) {
-        setProgressLabel('Writing a summary of your changes...');
+        setProgressLabel('Writing a summary of your changes…');
         try {
           const result = await generatePRDescription(projectPath, baseBranch);
           if (result.title?.trim()) prTitle = result.title.trim();
@@ -162,7 +162,7 @@ export function SubmitReviewModal({
       }
 
       // 3. Open the pull request.
-      setProgressLabel('Opening pull request...');
+      setProgressLabel('Opening pull request…');
       const prUrl = await createPullRequest(
         projectPath,
         prTitle,
@@ -331,7 +331,7 @@ export function SubmitReviewModal({
             Done
           </Button>
           <Button variant="primary" onClick={() => void handleMerge()} disabled={isBusy}>
-            {isMerging ? 'Merging...' : `Merge into ${baseBranch}`}
+            {isMerging ? 'Merging…' : `Merge into ${baseBranch}`}
           </Button>
         </div>
       </ModalFrame>
@@ -406,7 +406,7 @@ export function SubmitReviewModal({
             No, thanks
           </Button>
           <Button variant="primary" onClick={() => void handlePostMergeCleanup()} disabled={isBusy}>
-            {isCleaningUp ? 'Cleaning up...' : 'Yes, clean up'}
+            {isCleaningUp ? 'Cleaning up…' : 'Yes, clean up'}
           </Button>
         </div>
       </ModalFrame>

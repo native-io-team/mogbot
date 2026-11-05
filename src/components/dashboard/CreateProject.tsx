@@ -500,7 +500,7 @@ export function CreateProject({
               }
               onClick={() => void handleContinue()}
             >
-              {downloading ? 'Downloading...' : 'Continue'}
+              {downloading ? 'Downloading…' : 'Continue'}
             </Button>
           </div>
         </div>

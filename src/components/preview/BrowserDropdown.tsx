@@ -227,7 +227,7 @@ export function BrowserDropdown({
                 disabled={openingBrowser !== null}
               >
                 {getBrowserIcon(browser.id)}
-                {openingBrowser === browser.id ? 'Opening...' : browser.name}
+                {openingBrowser === browser.id ? 'Opening…' : browser.name}
               </button>
             ))}
           </div>
