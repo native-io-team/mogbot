@@ -557,7 +557,7 @@
 
 .account-cred-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--spacing-xs);
   flex-shrink: 0;
 }
 

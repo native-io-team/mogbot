@@ -458,9 +458,13 @@ export function AgentEditorModal({
       >
         {agent ? (
           <Tabs value={tab} onValueChange={(v) => setTab(v as EditorTab)}>
-            <TabsList className="agent-editor__tabs" appearance="underline" aria-label="Edit">
-              <TabsTab value="agent">Agent</TabsTab>
-              <TabsTab value="memory">Memory</TabsTab>
+            <TabsList className="agent-editor__tabs" aria-label="Edit">
+              <TabsTab value="agent" width="fill">
+                Agent
+              </TabsTab>
+              <TabsTab value="memory" width="fill">
+                Memory
+              </TabsTab>
             </TabsList>
             <TabsPanel value="agent">{form}</TabsPanel>
             <TabsPanel value="memory">

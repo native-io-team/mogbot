@@ -87,28 +87,8 @@
   flex-shrink: 0;
 }
 
-.command-palette-tab {
-  position: relative;
-  display: flex;
-  flex: 1 1 0;
-  align-items: center;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  appearance: none;
-  -webkit-appearance: none;
-  padding: var(--spacing-lg) 0;
-  font-size: var(--font-size-body-lg);
-  color: var(--text-muted);
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
-  transition: color var(--transition);
-  outline: none;
-}
-
 /* The shared tab primitive defaults to a compact fixed height. Let these
-   palette tabs grow with their larger vertical padding instead. */
+   palette tabs fill the band; everything else is the underline appearance. */
 .command-palette-tabs .tabs__tab.button.command-palette-tab {
   height: auto;
   min-height: 0;
@@ -124,20 +104,7 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  border-top: var(--stroke-1) solid var(--border-default);
-}
-
-.command-palette-tab:hover,
-.command-palette-tab:focus,
-.command-palette-tab:focus-visible {
-  color: var(--text-secondary);
-  background: transparent;
-  outline: none;
-  box-shadow: none;
-}
-
-.command-palette-tab.is-active {
-  color: var(--text-primary);
+  border-top: var(--stroke-1) solid var(--border-subtle);
 }
 
 /* ===== Result list ===== */

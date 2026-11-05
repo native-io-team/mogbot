@@ -412,6 +412,20 @@ Gotchas:
 - Open/close state: `useModalState()` for local toggles, `useModal('id')` from `ModalContext`
   for app-registered modals.
 
+Layout rules every dialog follows:
+
+- **Header.** Use the frame's header (`title`) unchanged — `--spacing-lg` / `--spacing-xl`
+  padding, `--font-size-h4` title, one rule under it. Don't restyle it per feature; an off-scale
+  title or hand-picked padding is what made sibling dialogs look like different apps.
+- **Anything under the header** (tabs, a search field) starts `--spacing-lg` below the rule and
+  sits on the content's `--spacing-xl` inset. Never butt a control against the header's rule.
+- **Actions.** Right-aligned, dismissal first, commitment last: `Cancel` then the primary. A
+  destructive commitment uses `variant="danger"` in the primary's place. Inline confirm rows
+  (Save/Cancel beside a field) follow the same order.
+- **Copy.** Sentence case on buttons ("Restart now", not "Restart Now"); a true ellipsis (`…`)
+  only when the action opens another step; progress labels say what is happening
+  ("Installing…"), never "Please wait".
+
 ### Button family — [Button.tsx](../src/components/primitives/Button.tsx)
 
 Every button control uses one visual recipe and token set while retaining the semantics of its
@@ -448,6 +462,29 @@ panels remain inert. Use `mode="navigation"` only when the control changes a rou
 whose content is rendered elsewhere (for example, the workspace Preview/Focus/Code switch); this
 mode deliberately omits `aria-controls`. Do not use `Tabs` for an in-place display/filter choice —
 use `SegmentedControl`, whose options expose `aria-pressed` state.
+
+#### Underline tabs, segmented tabs, or a segmented control
+
+Three looks, one decision each. Pick by what the control *is*, then by how big the surface is:
+
+| The control… | Use | Looks like |
+| --- | --- | --- |
+| Filters or sets a value; nothing else on screen is swapped out (All / User / Project, an install scope, a sort) | `SegmentedControl` | Pill group, pressed option sunken |
+| Swaps between 2–3 views of one **small** surface — a dialog under ~600px, a card, a popover (Paste a reply / Connected assistant, Agent / Memory) | `Tabs` with the default `appearance="segmented"`, tabs `width="fill"`, set into the body with the content's inset | Pill group with a sliding selected surface |
+| Navigates the sections of a **large** surface, where the strip is effectively that surface's header (Settings, Help, Cmd+K, a docked panel, the workspace modes) | `Tabs` with `appearance="underline"` | Text labels, muted until active, a 2px bar under the active *label* |
+
+Rules for underline tabs, all owned by the primitive — a feature stylesheet sets layout (fill,
+stretch, inset) and nothing else:
+
+- No list surface and no rule of its own. If the surface needs an edge under the strip, the owner
+  draws **one** hairline in `--border-subtle`; never stack it on a header that already has one.
+- The bar spans the active label (icon included), not the hit area, so fill-width tabs don't get a
+  column-wide bar. It is `--border-width-emphasis` (2px) in `--text-primary`; there is no thicker variant.
+- Hit area: `--spacing-sm` each side, `--spacing-xs` between tabs. Inactive labels are `--text-muted`,
+  hover `--text-secondary`, active `--text-primary`, weight 500 throughout so selection never
+  shifts the layout.
+- Keep the Button focus ring. Never `outline: none` a tab — two feature stylesheets did, which
+  made the Help and Cmd+K tabs invisible to keyboard focus.
 
 Editor values use [PropertyField.tsx](../src/components/primitives/PropertyField.tsx), not
 `Button`: `value` and `select` are neutral, while `variable` uses the purple variable tokens.

@@ -278,6 +278,20 @@
   justify-content: flex-start;
   gap: var(--spacing-sm);
   padding: 0 var(--spacing-md) 0 var(--spacing-sm);
+  /* One-line actions, so a control's height — at a two-line agent row's
+     height they left a gap between them as tall as a missing row. */
+  height: var(--control-height-standard);
+  min-height: var(--control-height-standard);
+  color: var(--text-muted);
+}
+
+.workspace-sidebar:not(.is-hidden) .agents-list__new:hover:not(:disabled),
+.workspace-sidebar:not(.is-hidden) .agents-list__import:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.workspace-sidebar:not(.is-hidden) .agents-list__new {
+  margin-top: var(--spacing-xs);
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new > svg,
@@ -1574,10 +1588,20 @@
   color: var(--accent-error-light);
 }
 
+/* Save stays in reach however long the form gets (permissions, secrets and
+   usage push it well below the fold): a footer pinned to the dialog's
+   bottom edge, bled to its sides like Import agents' footer. */
 .agent-editor__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-sm);
+  margin: 0 calc(var(--spacing-xl) * -1) calc(var(--spacing-xl) * -1);
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: var(--surface-panel);
+  border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
 .agent-editor__delete {

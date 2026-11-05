@@ -476,16 +476,18 @@ export function PluginManager({
       <Tabs value={activeTab} onValueChange={(next) => setActiveTab(next as Tab)}>
         <ExtensionManagerLayout
           tabs={
-            <TabsList className="plugins-tabs" aria-label="Plugins view">
-              <TabsTab value="installed" className="plugins-tab">
-                Installed
-              </TabsTab>
-              {PLUGIN_REGISTRY_ENABLED && (
+            // One view needs no tab bar: a lone "Installed" tab was a control
+            // that switched to nothing.
+            PLUGIN_REGISTRY_ENABLED ? (
+              <TabsList className="plugins-tabs" aria-label="Plugins view">
+                <TabsTab value="installed" className="plugins-tab">
+                  Installed
+                </TabsTab>
                 <TabsTab value="library" className="plugins-tab">
                   Library
                 </TabsTab>
-              )}
-            </TabsList>
+              </TabsList>
+            ) : null
           }
           controls={
             projectPath ? (
@@ -569,7 +571,7 @@ export function PluginManager({
                   }}
                   disabled={isLinkingDev}
                 >
-                  {isLinkingDev ? 'Linking...' : 'Link Dev Plugin'}
+                  {isLinkingDev ? 'Linking…' : 'Link dev plugin'}
                 </Button>
               </>
             )}

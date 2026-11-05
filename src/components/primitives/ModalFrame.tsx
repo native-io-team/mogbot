@@ -270,7 +270,16 @@ function focusInitialElement(
   // intended target cannot use React's prop. Unlike `[autofocus]`, React does
   // render it.
   const marked = content.querySelector<HTMLElement>('[data-autofocus]');
-  const firstFocusable = getFocusableElements(content)[0] ?? null;
+  // Never the header's controls: a dialog that asked for nothing opened with
+  // a focus ring (and tooltip) on its "×" — Help, Settings and others. The
+  // first control in the body is where the user is headed; with none, the
+  // dialog surface takes focus quietly and Tab enters from there.
+  const firstFocusable =
+    getFocusableElements(content).find(
+      // tabIndex -1 is a roving control's resting state (an unselected tab):
+      // reachable by arrow keys, never where a dialog should start.
+      (element) => element.tabIndex >= 0 && !element.closest('.modal-frame-header')
+    ) ?? null;
   if (focusElement(marked) || focusElement(firstFocusable)) return;
   content.focus({ preventScroll: true });
 }
