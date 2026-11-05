@@ -11,11 +11,16 @@
  * - offline: **Send** waits for the Mac (outbox.ts), and says so;
  * - dictating: the field listens (lib/dictation.ts). The words stream into
  *   it, the last few lighter while the recognizer decides; the mic's place
- *   holds the waveform and the time, × takes the +'s place and ✓ Send's.
- *   ✓ keeps the words in the draft to read and edit, as ChatGPT's and
- *   Grok's dictation do: what you say is never sent on its own (the desk's
- *   rule too). The keyboard steps away while it listens and comes back after
- *   if it was up; tapping the words is ✓ and edit.
+ *   holds the waveform and the time, × takes the +'s place, and two
+ *   controls sit in the field, as Grok's dictation has them: **Stop** puts
+ *   the words in the field to read and edit (as a few seconds of silence
+ *   does), **Send** stops and sends what's on screen at once. × puts the
+ *   draft back as it was. Nothing is sent unless you press Send. The
+ *   keyboard steps away while it listens and comes back after if it was up;
+ *   tapping the words is Stop and edit.
+ *
+ * The field, the + and the × are the system's glass (Glass.tsx) where the
+ * phone has it, as the tab bar is; a theme surface where it doesn't.
  *
  * What's typed, quoted, @mentioned and attached is the chat's draft
  * (drafts.ts): it survives leaving the chat and restarting the app. Files
@@ -69,6 +74,7 @@ import {
   clearComposer,
   expiredFiles,
   liveMentions,
+  takeRestored,
   removeFiles,
   setComposer,
   useComposerDraft,
@@ -91,6 +97,7 @@ import {
 } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AgentAvatar } from './agent';
+import { Glass } from './Glass';
 import { StagedTile, type Staged } from './attachments';
 import { choose } from './menu';
 import { DISABLED_OPACITY, Icon, useRipple, T } from './ui';
@@ -139,6 +146,14 @@ export function Composer({
   const seq = useRef(0);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const [micHint, setMicHint] = useState<string | null>(null);
+  // The draft came back from disk this launch (after a crash, a restart, iOS
+  // reclaiming the app): a quiet line says so, once, for a few seconds.
+  const [restored, setRestored] = useState(() => takeRestored(agent.id));
+  useEffect(() => {
+    if (!restored) return;
+    const t = setTimeout(() => setRestored(false), 5000);
+    return () => clearTimeout(t);
+  }, [restored]);
   const vocabulary = useMemo(() => team.map((a) => a.name), [team]);
   const getDraft = useCallback(() => getApp().composer[agent.id]?.text ?? '', [agent.id]);
   const putSpoken = useCallback(
@@ -194,9 +209,10 @@ export function Composer({
     Keyboard.dismiss();
     void dictation.start();
   };
-  const dictationDone = () => {
+  /** Stop: the words stay in the field, to read and edit. */
+  const dictationStop = () => {
     haptic.select();
-    dictation.done();
+    dictation.stop();
   };
   const dictationCancel = () => {
     haptic.select();
@@ -205,7 +221,7 @@ export function Composer({
   /** Tapping the words while it listens: keep them and edit. */
   const editDictation = () => {
     refocus.current = true;
-    dictation.done();
+    dictation.stop();
   };
   const fixProblem = () => {
     const fix = problem?.fix;
@@ -342,6 +358,13 @@ export function Composer({
     );
   };
 
+  /** Send while listening: stop, and send what's on screen now. */
+  const dictationSend = () => {
+    if (!canSend) return;
+    dictation.send();
+    submit(false);
+  };
+
   const stopTurn = () => {
     haptic.medium();
     stop(agent.id).catch((error: unknown) => {
@@ -358,6 +381,8 @@ export function Composer({
       ? problem.text
       : micHint
         ? micHint
+        : restored
+          ? 'Restored your draft'
         : !connected
           ? hasContent
             ? `Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
@@ -539,20 +564,22 @@ export function Composer({
             hitSlop={4}
           >
             {({ pressed }) => (
-              <Animated.View
-                entering={ZoomIn.duration(160)}
-                style={[
-                  field.attach,
-                  { width: size.field, height: size.field, borderRadius: size.field / 2 },
-                  pressed && { backgroundColor: colors.surfaceControlHover },
-                ]}
-              >
-                <Icon
-                  name="xmark"
-                  size={iconSize.body}
-                  color={colors.textPrimary}
-                  fallback={<T>×</T>}
-                />
+              <Animated.View entering={ZoomIn.duration(160)}>
+                <Glass
+                  interactive
+                  style={[
+                    field.attach,
+                    { width: size.field, height: size.field, borderRadius: size.field / 2 },
+                    pressed && field.pressed,
+                  ]}
+                >
+                  <Icon
+                    name="xmark"
+                    size={iconSize.button}
+                    color={colors.textPrimary}
+                    fallback={<T>×</T>}
+                  />
+                </Glass>
               </Animated.View>
             )}
           </Pressable>
@@ -566,21 +593,22 @@ export function Composer({
             hitSlop={4}
           >
             {({ pressed }) => (
-              <View
+              <Glass
+                interactive
                 style={[
                   field.attach,
                   { width: size.field, height: size.field, borderRadius: size.field / 2 },
                   (!connected || attached >= MAX_ATTACHMENTS) && field.off,
-                  pressed && { backgroundColor: colors.surfaceControlHover },
+                  pressed && field.pressed,
                 ]}
               >
                 <Icon
                   name="plus"
-                  size={iconSize.body}
+                  size={iconSize.button}
                   color={colors.textPrimary}
                   fallback={<T>+</T>}
                 />
-              </View>
+              </Glass>
             )}
           </Pressable>
         )}
@@ -615,18 +643,30 @@ export function Composer({
           )}
           {listening && (
             <RoundButton
-              key="done"
-              label="Done dictating"
-              hint="Keeps what you said in the message"
+              key="dictation-stop"
+              label="Stop dictating"
+              hint="Puts what you said in the message, to edit before you send"
               disabled={dictation.phase === 'stopping'}
-              onPress={dictationDone}
-              tone="accent"
+              onPress={dictationStop}
+              tone="quiet"
+            >
+              <View style={styles.stopSquare} />
+            </RoundButton>
+          )}
+          {listening && (
+            <RoundButton
+              key="dictation-send"
+              label="Send"
+              hint="Stops listening and sends what you said"
+              disabled={!canSend}
+              onPress={dictationSend}
+              tone={canSend ? 'accent' : 'off'}
             >
               <Icon
-                name="checkmark"
-                size={iconSize.body}
-                color={accent.onAccent}
-                fallback={<T color={accent.onAccent}>✓</T>}
+                name="arrow.up"
+                size={iconSize.button}
+                color={canSend ? accent.onAccent : colors.textMuted}
+                fallback={<T color={canSend ? accent.onAccent : colors.textMuted}>↑</T>}
               />
             </RoundButton>
           )}
@@ -636,7 +676,7 @@ export function Composer({
             <RoundButton key="mic" label="Dictate" onPress={mic} tone="off">
               <Icon
                 name="mic"
-                size={iconSize.body}
+                size={iconSize.button}
                 color={colors.textSecondary}
                 fallback={<T color={colors.textSecondary}>●</T>}
               />
@@ -672,7 +712,7 @@ export function Composer({
             >
               <Icon
                 name="arrow.up"
-                size={iconSize.body}
+                size={iconSize.button}
                 color={canSend ? accent.onAccent : colors.textMuted}
                 fallback={<T color={canSend ? accent.onAccent : colors.textMuted}>↑</T>}
               />
@@ -685,9 +725,10 @@ export function Composer({
 }
 
 /**
- * The field itself, shared with a session's composer: a 36pt pill at one
- * line that keeps its 18pt corner as it grows to six, then scrolls inside.
- * Its buttons (`children`) sit inside it at the right, on the last line.
+ * The field itself, shared with a session's and a room's composer: a 48pt
+ * glass pill at one line that keeps its 24pt corner as it grows to six, then
+ * scrolls inside. Its buttons (`children`) sit inside it at the right, on the
+ * last line.
  */
 export function ComposerField({
   value,
@@ -724,7 +765,7 @@ export function ComposerField({
   if (dictation) {
     const empty = !dictation.settled && !dictation.deciding;
     return (
-      <View style={[field.field, { minHeight: size.field }]}>
+      <Glass style={[field.field, { minHeight: size.field }]}>
         <Pressable
           style={field.words}
           onPress={dictation.onPress}
@@ -756,11 +797,11 @@ export function ComposerField({
           </ScrollView>
         </Pressable>
         {children}
-      </View>
+      </Glass>
     );
   }
   return (
-    <View style={[field.field, { minHeight: size.field }]}>
+    <Glass style={[field.field, { minHeight: size.field }]}>
       <TextInput
         ref={inputRef}
         maxFontSizeMultiplier={chromeScale}
@@ -777,13 +818,14 @@ export function ComposerField({
         accessibilityLabel={label}
       />
       {children}
-    </View>
+    </Glass>
   );
 }
 
 /**
- * A 28pt circle inside the field, 4pt in from its edge and its last line, in
- * a 44pt target. Filled with the accent only when there's something to send.
+ * A 40pt circle inside the field, 4pt in from its edge and its last line, in
+ * a 48pt target. Accent glass only when there's something to send; `quiet`
+ * is a filled circle (Stop), `off` none.
  */
 export function RoundButton({
   label,
@@ -813,29 +855,31 @@ export function RoundButton({
         accessibilityState={{ disabled: !!disabled }}
         disabled={disabled}
         onPress={onPress}
-        hitSlop={8}
+        hitSlop={composer.inset}
       >
-        {({ pressed }) => (
-          <View
-            style={[
-              field.round,
-              { width: send, height: send, borderRadius: send / 2 },
-              {
-                backgroundColor:
-                  tone === 'accent'
-                    ? accent.accent
-                    : tone === 'quiet'
-                      ? colors.surfaceSelected
-                      : 'transparent',
-              },
-              // Disabled reads one way everywhere: as the + beside it does.
-              disabled && field.off,
-              pressed && { transform: [{ scale: 0.92 }] },
-            ]}
-          >
-            {children}
-          </View>
-        )}
+        {({ pressed }) => {
+          const look = [
+            field.round,
+            { width: send, height: send, borderRadius: send / 2 },
+            // Disabled reads one way everywhere: as the + beside it does.
+            disabled && field.off,
+            pressed && field.pressed,
+          ];
+          return tone === 'accent' ? (
+            <Glass interactive tint={accent.accent} style={look}>
+              {children}
+            </Glass>
+          ) : (
+            <View
+              style={[
+                look,
+                { backgroundColor: tone === 'quiet' ? colors.surfaceSelected : 'transparent' },
+              ]}
+            >
+              {children}
+            </View>
+          );
+        }}
       </Pressable>
     </Animated.View>
   );
@@ -882,7 +926,7 @@ export const FIELD_MIN = composer.height;
 export function useComposerSize() {
   const { fontScale } = useWindowDimensions();
   const k = Math.min(Math.max(fontScale, 1), chromeScale);
-  const line = composer.line * k;
+  const line = composer.fieldLine * k;
   const field = Math.round(line + composer.padV * 2);
   return {
     field,
@@ -897,20 +941,17 @@ const useFieldStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'flex-end',
     minHeight: FIELD_MIN,
-    backgroundColor: colors.composerFill,
-    borderRadius: composer.corner,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.composerBorder,
+    borderRadius: composer.fieldCorner,
     paddingLeft: composer.padLeft - StyleSheet.hairlineWidth,
   },
   input: {
     flex: 1,
     fontFamily: fonts.regular,
-    fontSize: type.body,
-    lineHeight: composer.line,
+    fontSize: type.field,
+    lineHeight: composer.fieldLine,
     color: colors.textBody,
     // Six lines, then it scrolls inside: the field never takes over the chat.
-    maxHeight: composer.line * composer.maxLines + composer.padV * 2,
+    maxHeight: composer.fieldLine * composer.maxLines + composer.padV * 2,
     paddingTop: composer.padV - StyleSheet.hairlineWidth,
     paddingBottom: composer.padV - StyleSheet.hairlineWidth,
     paddingRight: composer.padRight,
@@ -930,11 +971,9 @@ const useFieldStyles = makeStyles((colors) => ({
     borderRadius: composer.attach / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.composerFill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.composerBorder,
   },
   off: { opacity: DISABLED_OPACITY },
+  pressed: { transform: [{ scale: 0.92 }] },
 }));
 
 const useStyles = makeStyles((colors) => ({
@@ -995,9 +1034,9 @@ const useStyles = makeStyles((colors) => ({
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },
   tray: { gap: space.sm, paddingTop: space.tight, paddingHorizontal: space.xs },
   stopSquare: {
-    width: 10,
-    height: 10,
-    borderRadius: radius.sm / 2,
+    width: 14,
+    height: 14,
+    borderRadius: radius.sm,
     backgroundColor: colors.textPrimary,
   },
 }));

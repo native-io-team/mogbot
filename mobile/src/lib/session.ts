@@ -39,7 +39,7 @@ import {
   usableRoutes,
   type Credentials,
 } from './pairing';
-import { flushCache, forgetCache, loadCache, watchCache } from './cache';
+import { flushCache, forgetCache, saveOutbox, loadCache, watchCache } from './cache';
 import { flushDrafts, forgetDrafts, loadDrafts, refusedToDraft, setComposer } from './drafts';
 import { outboxPlan, unreached } from './outbox';
 import { loadPrefs } from './prefs';
@@ -414,6 +414,9 @@ export async function send(
         ...(revises ? { revises } : {}),
       })
     );
+  // The outbox on disk first, then the composer's emptied draft: a crash in
+  // between finds the words in one file or the other, never in neither.
+  void saveOutbox().then(() => flushDrafts());
   if (offline) return;
   let message: AgentMessage;
   try {

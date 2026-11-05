@@ -327,25 +327,33 @@ export const iconSize = { micro: 10, inline: 12, body: 16, button: 20, hero: 28 
 export const typingDot = { size: 5, gap: space.xs, lift: 1.5 } as const;
 
 /**
- * The message field, iMessage's geometry: one line is a 36pt pill, and the
- * corner stays 18 as it grows, so several lines read as a rounded rectangle
- * rather than a blob. The + is a 36pt circle (as tall as one line); send is
- * a 28pt circle inside the field, 4pt in from its edge. Both sit on the last
- * line as the field grows. User bubbles share the corner and the line.
+ * The message field: a chunky capsule of the system's glass (components/Glass.tsx),
+ * like the tab bar's. One line is a 48pt pill and the corner stays 24 as it
+ * grows, so several lines read as a rounded rectangle rather than a blob.
+ * The + is a 48pt glass circle (as tall as one line); send, the mic and Stop
+ * are 40pt circles inside the field, 4pt in from its edge. All sit on the
+ * last line as the field grows. Every one of them is a 44pt target or more.
+ *
+ * `line` and `corner` are the user bubble's (components/chat.tsx), which
+ * keeps iMessage's 20pt line and 18pt corner; the field has its own.
  */
 export const composer = {
-  /** 16pt text on a 20pt line. */
+  /** The bubble's 16pt text on a 20pt line. */
   line: 20,
-  /** Above and below the text, so one line is 36. */
-  padV: 8,
-  padLeft: 12,
-  padRight: 8,
-  height: 36,
+  /** The bubble's corner. */
   corner: 18,
+  /** The field's 17pt text (`type.field`) on a 22pt line. */
+  fieldLine: 22,
+  /** Above and below the text, so one line is 48. */
+  padV: 13,
+  padLeft: 18,
+  padRight: 8,
+  height: 48,
+  fieldCorner: 24,
   /** Lines before it scrolls inside. */
   maxLines: 6,
-  attach: 36,
-  send: 28,
+  attach: 48,
+  send: 40,
   /** Send's inset from the field's edge. */
   inset: 4,
 } as const;
@@ -379,6 +387,8 @@ export const type = {
   caption: 12,
   small: 14,
   body: 16,
+  /** The message field's words: iOS's own body size, a step up from a message's. */
+  field: 17,
   subhead: 16,
   title: 18,
   display: 28,
