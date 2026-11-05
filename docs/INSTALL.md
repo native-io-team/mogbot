@@ -6,17 +6,30 @@ for you.
 
 ## For the human (read this first)
 
+Invited to try it? Start with [WELCOME.md](WELCOME.md): what this is and what
+to expect.
+
 1. Open this folder in **Claude Code** or **Codex** and say: *"Set this up on my
    Mac and phone. Follow docs/INSTALL.md."*
 2. The agent installs the tools and builds the app (the first build takes
-   10–25 minutes). It will stop and ask you to do a few things only you can
-   do: type your Mac password, sign in in your browser, install two apps on
-   your phone, scan a code, click Allow.
-3. You need: a Mac (Apple Silicon or Intel) on a recent macOS, about 15 GB
-   free, an internet connection, and **a paid Claude plan (Pro or Max) or a
-   paid ChatGPT plan (Plus, Pro, Business…)** for the agents to run on. For
-   the phone: an iPhone or Android phone and a free Tailscale account.
-4. Your Mac does the work. Agents stop when the Mac sleeps or the app is closed.
+   10–25 minutes). It stops and asks you to do the things only you can do:
+   type your Mac password, sign in in your browser, install apps on your
+   phone, scan a code, click Allow.
+3. You need:
+   - A Mac (Apple Silicon or Intel) on a recent macOS, an internet connection,
+     and **15 GB free** (about **25 GB** if you build the phone app with Xcode).
+   - **A paid Claude plan (Pro or Max) for Claude Code, or a paid ChatGPT plan
+     (Plus, Pro, Business…) for Codex**, or both. You can add more than one
+     account; when one runs out, the app switches to the next.
+   - For the phone: an iPhone (or Android phone) and a free **Tailscale**
+     account, signed in on the Mac **and** the phone with the same account
+     **before** you scan the pairing code.
+4. The phone app comes two ways, and the agent will ask which:
+   **Expo Go** (minutes; runs inside Expo Go while a terminal on the Mac stays
+   open; no dictation or share sheet) or **built with Xcode** (the real app;
+   30–60 minutes the first time; with a free Apple ID, re-install every 7
+   days). Neither gets push notifications yet.
+5. Your Mac does the work. Agents stop when the Mac sleeps or the app is closed.
 
 No agent? Follow the same steps by hand: run each **Run** block in Terminal and
 check it against **Check**.
@@ -36,9 +49,11 @@ Rules:
   outside this repo beyond what a step says.
 - If a step fails and its **If it fails** doesn't fix it, stop. Tell the human
   which step failed and show the error. Don't guess.
-- Use the **simple path** (build the desktop app, phone through Expo Go) unless
-  the human asks for something else. Developer options are in
-  [Other routes](#other-routes).
+- For the phone, ask the human which route (Step 13) instead of choosing.
+  Developer options are in [Other routes](#other-routes).
+- Never run commands as the human (`sudo`) without telling them why first, and
+  never delete anything outside this repo without asking (see
+  [Disk full](#disk-full)).
 - Run every command from the repo root unless the step says otherwise.
   `REPO` below means the repo root.
 
@@ -51,11 +66,13 @@ sw_vers -productVersion; uname -m; df -h ~ | tail -1
 ```
 
 Expected: a macOS version (tested on macOS 26; macOS 14 or later is what we
-expect to work), `arm64` or `x86_64`, and at least 15 GB available.
+expect to work), `arm64` or `x86_64`, and at least 15 GB available (25 GB if
+the phone app will be built with Xcode, Step 15B).
 
-**If it fails:** if there's less than 15 GB free, tell the human: *"Your Mac
-needs about 15 GB free for the build. Can you free some space and tell me when
-it's done?"*
+**If it fails:** if there's less than that free, tell the human: *"Your Mac
+needs about 15 GB free for the build (25 GB if we build the phone app with
+Xcode). You have <N> free. I can show you what's taking space and what's safe
+to remove. Want me to?"* Then follow [Disk full](#disk-full).
 
 ### Step 2. Xcode Command Line Tools
 
@@ -86,8 +103,8 @@ together with a failing `clang` means the install is broken. Run
 one command that resets the developer tools. Please type it in the terminal
 when it asks."*), then run the check again.
 
-Full Xcode is **not** needed for the simple path. It's only needed for
-building the phone app yourself ([Route B](#route-b-build-the-phone-app-onto-your-iphone)).
+Full Xcode is **not** needed for the desktop app or Expo Go. It's only needed for
+building the phone app with Xcode (Step 15B).
 
 ### Step 3. Node.js (22 or later)
 
@@ -231,8 +248,8 @@ for the one `.app` there. If `CARGO_TARGET_DIR` is set, the bundle is under
 - `linker 'cc' not found` or `xcrun: error`: go back to Step 2.
 - `Port 1420 is already in use`: that only affects `pnpm tauri dev`, not this
   build. See [Troubleshooting](#troubleshooting).
-- Out of disk space: the build needs about 3 GB in `src-tauri/target/`, plus
-  Rust's and pnpm's caches.
+- `No space left on device`: the build needs about 3 GB in
+  `src-tauri/target/`, plus Rust's and pnpm's caches. See [Disk full](#disk-full).
 
 ### Step 9. Install and open the app
 
@@ -263,7 +280,9 @@ files get checked). If macOS still says it "can't be opened", see
 **HUMAN:** *"The app is open. It will ask you to pick Claude Code or Codex.
 Pick the one you pay for (Claude Pro/Max: Claude Code. ChatGPT Plus/Pro:
 Codex). It installs it and opens a sign-in page in your browser. Sign in
-there, then come back and tell me what the app shows."*
+there. Then it asks one question, how much your agents should do on their
+own: pick what feels right (Use good judgement is the default; you can change
+it later). Come back and tell me what the app shows."*
 
 ### Step 10. The engine is installed and signed in
 
@@ -306,10 +325,29 @@ and then a chat with your Chief of Staff greeting you?"* If yes, the desktop
 is done. If it still asks you to sign in, quit the app (⌘Q), open it again
 and tell me what it shows.
 
-### Step 11. Tailscale on the Mac
+### Step 11. More than one account (optional)
+
+Skip unless the human has a second Claude or ChatGPT plan (a work and a
+personal one, say).
+
+**HUMAN:** *"Do you have more than one Claude or ChatGPT plan you'd like the
+agents to use? If one runs out of usage, the app switches to the next one on
+its own. If yes: in the app open Settings → Agents → Accounts and click Add a
+Claude Code account (or Add a Codex account), then sign in to the other
+account in the browser page that opens. Tell me when it's listed."*
+
+**Check:** the human sees the account in Settings → Agents → Accounts, below
+**This Mac** (the login from Step 10, always first). Accounts are tried in that
+order; when one hits its usage limit the chat shows a quiet note like
+"Switched to Work: This Mac is out of usage until 10:00 AM." There is no
+terminal check for this; the list in Settings is the answer.
+
+### Step 12. Tailscale on the Mac
 
 The phone reaches the Mac over the human's own Tailscale network. Nothing goes
-through our servers.
+through our servers. **Tailscale not being on, or being signed in to a
+different account on the phone, is the most common reason pairing gets stuck**,
+so do Steps 12 and 14 fully before anyone scans a code.
 
 Every Tailscale command below starts with this line, because the CLI may be on
 `PATH` (Homebrew) or only inside the app, and each new shell forgets `TS`:
@@ -322,10 +360,11 @@ TS=$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tai
 
 ```bash
 TS=$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)
-TAILSCALE_BE_CLI=1 "$TS" status --json 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["BackendState"], d["Self"]["DNSName"])'
+TAILSCALE_BE_CLI=1 "$TS" status --json 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); u=d.get("User",{}).get(str(d["Self"].get("UserID")),{}); print(d["BackendState"], d["Self"]["DNSName"], u.get("LoginName","(no login: tagged machine)"))'
 ```
 
-Expected: `Running <name>.<tailnet>.ts.net.`
+Expected: `Running <name>.<tailnet>.ts.net. <login>`. Remember the login (the
+last word): the phone must use the same one.
 
 **HUMAN** (if it's not installed or not `Running`): *"Please install Tailscale
 on your Mac from https://tailscale.com/download/mac (or the Mac App Store),
@@ -338,24 +377,50 @@ on, then click **Enable HTTPS** under HTTPS Certificates. Tell me when it's
 done."* If you skip this, the app's Phone panel shows a "turn on HTTPS
 certificates" message with a link to the same page.
 
-### Step 12. Tailscale and Expo Go on the phone
+### Step 13. Choose how to get the phone app
 
-**HUMAN:** *"On your phone, install two free apps: **Tailscale** and **Expo
-Go** (App Store or Google Play). Open Tailscale and sign in with the **same
-account** as on the Mac, and turn it on. Tell me when both are installed and
-Tailscale says Connected."*
+There's no App Store or TestFlight build yet, so the phone app is either run
+inside Expo Go or built onto the iPhone with Xcode. Ask; don't pick for them.
 
-**Check** (from the Mac): the phone shows up on the tailnet.
+**HUMAN:** *"How do you want the phone app? **1. Expo Go**: a few minutes.
+It runs inside a free app called Expo Go and only works while a terminal on
+this Mac keeps running. No built-in dictation, no 'Send to agent' in the share
+sheet. **2. Built with Xcode** onto your iPhone: the real app, with its own
+icon, dictation and no terminal to keep open. It takes 30–60 minutes the first
+time, needs the full Xcode app (about 25 GB free in total) and your iPhone
+plugged in by cable once. With a free Apple ID it has to be re-installed every
+7 days. Neither one gets push notifications yet: those need the official
+build, which needs a paid Apple Developer account and TestFlight, and doesn't
+exist yet. Until then you're alerted only while the app is open. Which one?"*
+
+- **1** → Step 14, then Step 15A.
+- **2** → Step 14, then Step 15B. (Android phone: Step 15A, or the Android
+  note at the end of 15B.)
+- Not sure → Expo Go. They can build with Xcode later; pairing again is all
+  it takes.
+
+### Step 14. Tailscale on the phone (before any scanning)
+
+**HUMAN:** *"On your phone, install **Tailscale** from the App Store (or
+Google Play). Open it and sign in with the **same account** as on the Mac:
+`<login from Step 12>`. Then switch it on. Tell me when it says Connected."*
+(If Step 15A is next, add: *"Also install **Expo Go**, a free app from the
+same store."*)
+
+**Check** (from the Mac): the phone shows up on the same tailnet.
 
 ```bash
 TS=$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)
 TAILSCALE_BE_CLI=1 "$TS" status | grep -iE 'iphone|ipad|android|phone'
 ```
 
-Expected: a line for the phone. If nothing shows, ask the human to check that
-Tailscale on the phone is on and signed in to the same account.
+Expected: a line for the phone that doesn't end in `offline`. **Don't go on
+until it does.** If nothing shows, the phone is signed in to a different
+Tailscale account, or Tailscale on the phone is off: *"I can't see your phone
+on your Tailscale network yet. On the phone, open Tailscale, check it's
+switched on and signed in as `<login>`, and tell me again."*
 
-### Step 13. Run the phone app (Expo Go)
+### Step 15A. Run the phone app in Expo Go
 
 **Run** (from `REPO/mobile`, in a terminal that stays open)
 
@@ -390,7 +455,7 @@ see 'Scan the code on your Mac'."*
 - *"Project is incompatible with this version of Expo Go"*: Expo Go only
   runs one Expo SDK version, and this app is on SDK 58 (`mobile/package.json`).
   If the store's Expo Go is on a different SDK, Expo Go can't run it. Use
-  [Route B](#route-b-build-the-phone-app-onto-your-iphone) instead.
+  Step 15B instead.
 - Port 8081 in use: add `--port 8082` (any free port).
 
 **This terminal must stay open.** In Expo Go the phone app loads its code from
@@ -399,25 +464,209 @@ open. If you close it, the phone app stops loading. To start it again later,
 open Terminal in the dashbot folder and run `cd mobile && npx expo start --go
 --lan`, then open Expo Go and tap Dashbot under Recently opened."*
 
-### Step 14. Pair the phone
+What's missing in Expo Go: [What doesn't work in Expo Go](#what-doesnt-work-in-expo-go).
+
+Then go to Step 16.
+
+### Step 15B. Build the phone app onto the iPhone with Xcode
+
+The real app: no Metro, a Home Screen icon, dictation and quick actions work.
+Needs **full Xcode** from the App Store (Expo SDK 58 needs **Xcode 26.4 or
+later**), a free Apple ID, and the iPhone plugged in by cable.
+
+The desktop app's **Phone → Get the phone app** checklist does this same build
+with an agent beside it (docs/mobile.md, "Installing the app"), but it is
+**only offered when the app runs from source** (`pnpm tauri dev`). A `.app`
+from Step 8 hides it, because `links.companionSource` in `brand.json` is null,
+so it has no repository to fetch the phone app's source from. From the built
+`.app`, do it by hand as below.
+
+**Check disk space first.** Xcode plus its iOS components and the first build
+take roughly 15–25 GB on top of the desktop build.
+
+```bash
+df -h ~ | tail -1
+```
+
+Under 25 GB available: see [Disk full](#disk-full) before installing Xcode.
+
+**HUMAN:** *"Please install **Xcode** from the Mac App Store (it's large, so it
+takes a while). Open it once, let it install the components it offers (iOS
+included), and sign in under Xcode → Settings → Accounts with your Apple ID; a
+free one is fine. Then plug your iPhone into the Mac with a cable, unlock it,
+tap **Trust** on the phone, and turn on **Settings → Privacy & Security →
+Developer Mode** (the phone restarts; confirm Turn On afterwards). Tell me when
+that's done."*
+
+**Accept the license and install first-launch components (after installing
+*or updating* Xcode).** Until both pass, git and every build fail with a
+license message, so run them again after **every** Xcode update.
+
+```bash
+xcodebuild -license check || sudo xcodebuild -license accept
+xcodebuild -checkFirstLaunchStatus || sudo xcodebuild -runFirstLaunch
+```
+
+**HUMAN** (for the `sudo` lines): *"I need your Mac password to accept Xcode's
+license. Please type it in the terminal when it asks; nothing shows while you
+type."*
+
+**Check**
+
+```bash
+xcode-select -p
+xcodebuild -version | head -1
+xcrun xctrace list devices
+```
+
+Expected: a path inside `Xcode.app` (if it's `/Library/Developer/CommandLineTools`,
+run `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`), then
+`Xcode 26.4` or later, then the iPhone under `== Devices ==` as
+`<name> (<iOS version>) (<UDID>)`. That last bracket is the phone's **hardware
+UDID** (it looks like `00008XXX-XXXXXXXXXXXXXXXX`), the id the build needs.
+**Not** the identifier `xcrun devicectl list devices` prints (a plain UUID like
+`1A2B3C4D-5E6F-…`): xcodebuild refuses that one.
+
+**If it fails:**
+
+- Xcode older than 26.4, or the build later fails in `expo-modules-jsi` with a
+  Swift error like *"sending 'slot' risks causing data races"*: this Xcode is
+  too old for Expo SDK 58. **HUMAN:** *"Your Xcode is too old for the phone app.
+  Please update it in the App Store (Updates), open it once, and tell me when
+  it's done."* Then run the license lines above again.
+- The phone isn't listed: unlock it, re-plug the cable, tap Trust; check
+  Developer Mode is on.
+
+**Run.** The team id is the `OU=` field of the Apple Development certificate
+(not the id in brackets in the certificate's name). A free Apple ID's team is a
+*personal team*, which can't sign the Push Notifications capability; the
+prebuild leaves the push entitlement out by itself (no `EAS_PROJECT_ID` and no
+`COMPANION_PUSH_ENTITLEMENT=1`), so leave those unset. If there's no Apple
+Development certificate yet, the first `xcodebuild` with
+`-allowProvisioningUpdates` creates one; run the `TEAM=` line again after it.
+
+```bash
+TEAM=$(security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject | sed -n 's/.*OU *= *\([A-Z0-9]*\).*/\1/p')
+echo "$TEAM"
+UDID=<the hardware UDID from xctrace above>
+export COMPANION_BUNDLE_ID=io.native.dashbot.companion.$(printf %s "$TEAM" | shasum -a 256 | cut -c1-6) APPLE_TEAM_ID=$TEAM
+cd mobile && pnpm install
+npx expo prebuild -p ios --clean
+cd ios
+xcodebuild -workspace Dashbot.xcworkspace -scheme Dashbot -configuration Release \
+  -destination id=$UDID -allowProvisioningUpdates -derivedDataPath build \
+  DEVELOPMENT_TEAM=$TEAM CODE_SIGN_STYLE=Automatic build
+xcrun devicectl device install app --device $UDID build/Build/Products/Release-iphoneos/Dashbot.app
+```
+
+(The bundle id is the one the desktop app looks for: `companion.bundleId` from
+`brand.json`, plus six hex characters of the team id's SHA-256. The workspace,
+scheme and `.app` are named after `name` in `brand.json`, letters and digits
+only.) Not `npx expo run:ios`: it doesn't pass `-allowProvisioningUpdates`, so
+a free Apple ID's build can't create its provisioning profile. If signing
+still names the Push Notifications capability, the `ios/` folder is from an
+older prebuild: run the prebuild again (it has `--clean`).
+
+**Check:** `xcrun devicectl device info apps --device $UDID | grep -i dashbot`
+lists the app.
+
+**HUMAN** after it installs: *"On the iPhone, open **Settings → General → VPN &
+Device Management**, tap your Apple ID under Developer App, and tap **Trust**.
+Then open the Dashbot app. Tell me when you see 'Scan the code on your Mac'."*
+Until then, opening it says "Untrusted Developer". Developer Mode must stay on.
+
+**A free Apple ID's build stops opening after 7 days.** Tell the human: *"With
+a free Apple ID this build stops opening after 7 days. When it does, ask me
+(or any agent in this folder) to 'rebuild the phone app with Xcode, Step 15B
+of docs/INSTALL.md'; you stay paired."* A paid Apple Developer account makes
+it last a year. Push still doesn't arrive on a self-build.
+
+Android: `COMPANION_BUNDLE_ID=io.native.dashbot.companion.self npx expo prebuild -p android --clean`,
+then `npx expo run:android --variant release` with the phone on adb. It
+doesn't expire. Not verified on Android hardware.
+
+### Step 16. Pair the phone
+
+**Check first** (both must pass; this is where most stuck pairings come from):
+Step 12's check says `Running`, and Step 14's check shows the phone, not
+`offline`.
 
 **HUMAN:** *"On the Mac, in the app, click **Phone** at the bottom of the left
-sidebar, then **Pair a phone**. A QR code appears. On your phone, in the app
-inside Expo Go, tap **Scan the code on your Mac** and scan it. (In Expo Go, use
-that button, not the Camera app.) The phone asks 'Pair with …?': tap Pair.
-Then the Mac asks 'Allow … to use your agents?': click **Allow**. Tell me what
-the phone shows."*
+sidebar, then **Pair a phone**. A QR code appears. On your phone, in the app,
+tap **Scan the code on your Mac** and scan it (in Expo Go, use that button,
+not the Camera app). The phone asks 'Pair with …?': tap **Pair**. Then the Mac
+asks 'Allow … to use your agents?': click **Allow**. Tell me what the phone
+shows."*
 
 **Check:** the phone shows the agents list with the Chief of Staff, and the
 Mac's Phone panel lists the phone as paired. **HUMAN:** *"Send the Chief of
 Staff a message from your phone. Does a reply appear on both the phone and the
 Mac?"*
 
-**If it fails:** see [Pairing can't reach the Mac](#pairing-cant-reach-the-mac).
+**If it fails:** the phone sits on "Reaching …" or says it can't reach the
+Mac: see [Pairing is stuck](#pairing-is-stuck-or-cant-reach-the-mac).
+
+### Step 17. Let agents use Chrome (optional, Claude Code only)
+
+With this, an agent can work in the human's own Chrome where they're already
+signed in (LinkedIn, X, a dashboard), and every click, post, send or payment
+still asks on a card first. Codex agents can't use it.
+
+**HUMAN:** *"If you want your agents to be able to use websites in your own
+Chrome: in **each Chrome profile** you want them to use, install the
+**Claude** extension by Anthropic from the Chrome Web Store, and sign in to it
+with the **same Claude account** you signed in to Claude Code with. Keep
+Chrome open while agents work. The first time an agent opens a site, the
+extension asks whether it may use that site: approve it. Tell me when it's
+installed."*
+
+**Check**
+
+```bash
+ls "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_code_browser_extension.json" && echo HELPER_OK
+```
+
+Expected: `HELPER_OK`. That file is Claude Code's link to the extension; the
+app looks for it too ("It needs the Claude in Chrome extension, which isn't
+set up on this Mac yet" on a login card means it's missing). If it's missing,
+run `claude --chrome` once in a terminal, type `/chrome` to see the connection
+status, then `/exit`. It says nothing about whether Chrome is open; with Chrome
+closed, agents report the browser as not connected.
+
+### Step 18. First run choices
+
+**HUMAN:** *"Two things worth knowing. **How independent your agents are**:
+the app asked you once (Check with me often, Use good judgement, Go hard). You
+can change it any time in Settings → Agents → Independence, or in Settings on
+the phone. Whatever you pick, anything that spends money, sends as you,
+publishes or deletes still asks you first. **Your team**: the Chief of Staff
+creates, changes and removes the other agents for you, and you can change an
+agent's instructions or routines just by asking in the chat."*
+
+There's nothing to check here. Don't change these settings for the human.
+
+### Step 19. Bring agents from Grok Bot or another assistant (optional)
+
+Only if the human already has agents in Grok Bot (or another assistant that
+can add an MCP connector).
+
+**HUMAN:** *"To bring your agents over: in the app, open **Import agents**
+(or ⌘K → 'Import agents from another assistant…'). Step 1 is **Set up Remote
+access…**: follow its steps (it uses the same Tailscale; approve Funnel when
+Tailscale asks) and **Copy link**. In your other assistant, add that link as a
+custom connector. Then back in Import agents press **Start** and send your
+assistant the message it shows. Your assistant describes its agents; the Chief
+plays the plan back to you, and you pick what to keep on one review card.
+Afterwards it checks what your new agents can already reach on this Mac and
+asks you only for the rest."*
+
+**Check:** the review card appears in the Chief's chat, and after Import the
+agents are in the sidebar. Imported routines arrive paused.
 
 Done. Tell the human: *"You're set up. Talk to your Chief of Staff on the Mac
 or the phone. Keep the Mac on and the app open for your agents to keep
-working, and keep the Expo terminal open for the phone app."*
+working (Settings → Agents → On this Mac can keep it awake)."* On Expo Go add:
+*"and keep the Expo terminal open for the phone app."*
 
 ---
 
@@ -452,97 +701,6 @@ without it.
 
 ## Other routes
 
-### Route B: build the phone app onto your iPhone
-
-No Metro, a real Home Screen app, dictation and quick actions work. Needs
-**full Xcode** from the App Store (Expo SDK 58 needs Xcode 26.4 or later), a
-free Apple ID, and the iPhone plugged in by cable.
-
-**From the desktop app** (Phone → **Get the phone app**): a checklist, with
-your agent running the build beside it while the app checks each step
-(docs/mobile.md, "Installing the app"). **This is only offered when the app
-runs from source (`pnpm tauri dev`).** A `.app` from `pnpm tauri build` hides
-it, because `links.companionSource` in `brand.json` is null, so it has no
-repository to fetch the phone app's source from. From a built `.app`, do it
-by hand:
-
-HUMAN steps first: *"Please install Xcode from the App Store (it's large, so
-it takes a while), open it once, and sign in under Xcode → Settings →
-Accounts with your Apple ID. Then plug your iPhone into the Mac, tap Trust on
-the phone, and turn on Settings → Privacy & Security → Developer Mode (the
-phone restarts). Tell me when that's done."*
-
-**Accept the license (after installing *or updating* Xcode).** Until both of
-these pass, git and every build fail, so run them again after each Xcode
-update. Each `sudo` asks for the Mac password and shows nothing while you type.
-
-```bash
-xcodebuild -license check || sudo xcodebuild -license accept
-xcodebuild -checkFirstLaunchStatus || sudo xcodebuild -runFirstLaunch
-```
-
-**Check**
-
-```bash
-xcodebuild -version | head -1
-security find-identity -v -p codesigning | grep "Apple Development"
-xcrun xctrace list devices
-```
-
-Expected: `Xcode 26.4` or later, at least one `Apple Development` identity,
-and the iPhone under `== Devices ==` as `<name> (<iOS version>) (<UDID>)`.
-That last bracket is the phone's **hardware UDID** (`00008140-…`), the id the
-build needs. Not the identifier `xcrun devicectl list devices` prints (a plain
-UUID like `D9365757-35EA-…`): xcodebuild refuses that one. No identity yet?
-The Run step's `-allowProvisioningUpdates` creates it with automatic signing.
-
-**Older Xcode:** if the build fails in `expo-modules-jsi` with a Swift error
-like *"sending 'slot' risks causing data races"*, this Xcode is older than
-Expo SDK 58 needs. Update it in the App Store (then accept the license again).
-
-**Run.** Use your team id: the `OU=` field of your Apple Development
-certificate, not the id in brackets. A free Apple ID's team is a *personal
-team*, which can't sign the Push Notifications capability; the prebuild
-leaves the push entitlement out on its own (no `EAS_PROJECT_ID` and no
-`COMPANION_PUSH_ENTITLEMENT=1`), so leave those unset.
-
-```bash
-TEAM=$(security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject | sed -n 's/.*OU *= *\([A-Z0-9]*\).*/\1/p')
-echo "$TEAM"
-UDID=00008140-…   # the hardware UDID from xctrace above
-export COMPANION_BUNDLE_ID=io.native.dashbot.companion.$(printf %s "$TEAM" | shasum -a 256 | cut -c1-6) APPLE_TEAM_ID=$TEAM
-cd mobile && pnpm install
-npx expo prebuild -p ios --clean
-cd ios
-xcodebuild -workspace Dashbot.xcworkspace -scheme Dashbot -configuration Release \
-  -destination id=$UDID -allowProvisioningUpdates -derivedDataPath build \
-  DEVELOPMENT_TEAM=$TEAM CODE_SIGN_STYLE=Automatic build
-xcrun devicectl device install app --device $UDID build/Build/Products/Release-iphoneos/Dashbot.app
-```
-
-(The bundle id is the one the desktop app looks for: `companion.bundleId` from
-`brand.json`, plus six hex characters of the team id's SHA-256. The workspace,
-scheme and `.app` are named after `name` in `brand.json`, letters and digits
-only.) Not `npx expo run:ios`: it doesn't pass `-allowProvisioningUpdates`, so
-a free Apple ID's build can't create its provisioning profile, and its
-`--device` also needs the hardware UDID. If signing still names the Push
-Notifications capability, the `ios/` folder is from an older prebuild: run
-the prebuild again (it has `--clean`).
-
-**HUMAN** after it installs: *"On the iPhone, open Settings → General → VPN &
-Device Management, tap your Apple ID under Developer App, and tap Trust. Then
-open Dashbot and pair it as before (Step 14). In this build, the Camera app can
-open the pairing code too."* Until then, opening it says "Untrusted
-Developer". Developer Mode must stay on.
-
-**A free Apple ID's build stops opening after 7 days.** Run the prebuild,
-build and install again to renew it (or Phone panel → Reinstall when running
-from source). A paid Apple Developer account makes it last a year.
-Push still doesn't work (no push entitlement on a self-build).
-
-Android: `COMPANION_BUNDLE_ID=io.native.dashbot.companion.self npx expo prebuild -p android --clean`, then the same with `npx expo run:android --variant release`, with a phone on adb. It
-doesn't expire. Not verified on Android hardware.
-
 ### Developer: run from source with hot reload
 
 ```bash
@@ -573,14 +731,27 @@ Apple Developer account (docs/internal/release-checklist.md).
 
 ## Troubleshooting
 
-### Pairing can't reach the Mac
+The failures people actually hit, most common first:
+
+| What you see | Usually | Fix |
+| --- | --- | --- |
+| Pairing stuck on "Reaching …", "can't reach", or "this phone isn't on your Mac's tailnet" | Tailscale off on the phone, or signed in to a different account than the Mac | [Pairing is stuck](#pairing-is-stuck-or-cant-reach-the-mac) |
+| "The app entry module failed to load", or a blank or black desktop window | The dev server (Vite) isn't running, or the app needs a restart | [Entry module](#the-app-entry-module-failed-to-load-or-a-blank-or-black-window) |
+| Links from the app open nothing, or a blank window | A leftover headless Chrome is catching them | [Links open blank](#links-open-nothing-or-a-blank-window) |
+| Phone build fails: Xcode license, "sending 'slot' risks causing data races", or a device id refused | Xcode too old, or its license not accepted after an update; the wrong device id | [Xcode](#xcode-version-license-or-device-id) |
+| `No space left on device`, or a build that dies part-way | Disk full | [Disk full](#disk-full) |
+| An agent says the browser isn't connected, or a card says the Claude in Chrome extension isn't set up | The extension is missing, signed in to another Claude account, or Chrome is closed | [Extension not connected](#chrome-extension-not-connected) |
+| Agents don't answer, or "no engine" | Claude Code or Codex not signed in | [Agents don't answer](#agents-dont-answer--no-engine) |
+
+### Pairing is stuck or can't reach the Mac
 
 The phone talks to `https://<mac>.<tailnet>.ts.net:47463` (the port is
-`companion.tailnetPort` in `brand.json`).
+`companion.tailnetPort` in `brand.json`). Go down this list in order:
 
-1. Tailscale is on, on **both** devices, with the **same account**: run the
-   Step 11 and Step 12 checks.
-2. HTTPS certificates are on for the tailnet (Step 11). The Phone panel says
+1. Tailscale is on, on **both** devices, signed in to the **same account**.
+   Run the Step 12 and Step 14 checks. This is the cause most of the time: on
+   the phone, open Tailscale and look at the account and the switch.
+2. HTTPS certificates are on for the tailnet (Step 12). The Phone panel says
    so when they're off.
 3. The app is open on the Mac and the Phone panel shows it's on. Check the
    route:
@@ -601,8 +772,88 @@ The desktop window couldn't load its interface. In a `pnpm tauri dev` window
 that means Vite isn't serving on the port Tauri expects: the dev terminal was
 closed, Vite crashed, or it's on a different port. Check the dev terminal for
 errors, and `curl -s http://127.0.0.1:1420 | head -3`. Restart
-`pnpm tauri dev`. In a built `.app` it shouldn't happen. Rebuild (Step 8), and
-if it persists, it's a bug; send `~/Library/Logs/Dashbot/`.
+`pnpm tauri dev`. In a built `.app` it shouldn't happen: quit it (⌘Q) and open
+it again; if it persists, rebuild (Step 8) and report it as a bug with
+`~/Library/Logs/Dashbot/`.
+
+In Expo Go, the phone's version of this is a red error screen or "Could not
+connect to the server": the Expo terminal (Step 15A) was closed. Start it
+again and reopen the app from Expo Go.
+
+### Links open nothing, or a blank window
+
+When a headless Chrome is running (left behind by a test or automation tool),
+macOS can hand links to it instead of the Chrome you see, so clicking a link
+seems to do nothing or opens a blank window. List them:
+
+```bash
+pgrep -fl -- '--headless' | grep -i chrom
+```
+
+Each line is a headless Chrome, not the human's own browser windows.
+**HUMAN:** *"There's an invisible copy of Chrome running that's catching your
+links. Can I close it? Your normal Chrome windows stay open."* On yes, `kill`
+each process id (the first number on each line) the list showed, then click
+the link again.
+
+### Xcode: version, license or device id
+
+- *"You have not agreed to the Xcode license"*, or git suddenly fails after an
+  Xcode update: run the two license lines in Step 15B
+  (`sudo xcodebuild -license accept`, `sudo xcodebuild -runFirstLaunch`).
+  They're needed again after **every** Xcode update.
+- *"sending 'slot' risks causing data races"* in `expo-modules-jsi`: Xcode is
+  older than 26.4, which Expo SDK 58 needs. Update Xcode in the App Store,
+  open it once, accept the license again.
+- *"Unable to find a destination matching…"*: the build was given devicectl's
+  identifier. Use the hardware UDID from `xcrun xctrace list devices`.
+- *"Personal development teams … do not support the Push Notifications
+  capability"*: the `ios/` folder is from an older prebuild. Run
+  `npx expo prebuild -p ios --clean` again, with `EAS_PROJECT_ID` and
+  `COMPANION_PUSH_ENTITLEMENT` unset.
+- *"Untrusted Developer"* on the phone: Settings → General → VPN & Device
+  Management → your Apple ID → Trust.
+- The app stopped opening after a week: a free Apple ID's build lasts 7 days.
+  Build and install again (Step 15B); the pairing is kept.
+
+### Disk full
+
+Check what's free and what's big:
+
+```bash
+df -h ~ | tail -1
+du -sh ~/Library/Developer/Xcode/DerivedData "$HOME/Library/Developer/Xcode/iOS DeviceSupport" ~/Library/Developer/CoreSimulator ~/Library/Caches/CocoaPods ~/.cargo/registry src-tauri/target mobile/ios/build 2>/dev/null
+```
+
+Safe to remove, because each is rebuilt or downloaded again when needed. Ask
+the human before deleting anything outside this repo:
+
+| What | How | Note |
+| --- | --- | --- |
+| Xcode's build caches | Delete `~/Library/Developer/Xcode/DerivedData` | Often the biggest |
+| Support files for old iOS versions | Delete old folders in `~/Library/Developer/Xcode/iOS DeviceSupport` | Keep the one for the phone's current iOS |
+| Unused simulators | `xcrun simctl delete unavailable` | Only simulators whose runtime is gone |
+| CocoaPods' cache | `pod cache clean --all` | |
+| pnpm's store | `pnpm store prune` | Only packages no project uses |
+| This repo's build output | Delete `src-tauri/target` and `mobile/ios/build` | The next build takes the full time again |
+
+Never delete `~/Library/Application Support/Dashbot/` or `~/ShipStudio/`:
+those are the human's agents and projects. Beyond that, **System Settings →
+General → Storage** shows what else is large (often Photos, Messages
+attachments, old downloads); that's the human's call.
+
+### Chrome extension not connected
+
+1. The **Claude** extension by Anthropic is installed in the Chrome profile
+   the agent should use (each profile needs its own install) and signed in
+   with the **same Claude account** as Claude Code (`claude auth status`
+   shows which).
+2. Chrome is open. Agents can't use a closed Chrome.
+3. Step 17's check passes (`HELPER_OK`). If not, run `claude --chrome` once
+   and type `/chrome` to see the status.
+4. The extension asked whether it may use the site: approve it in Chrome.
+5. Only Claude Code agents can use Chrome. A Codex agent says so; ask the Chief to
+   switch that agent to Claude Code if it needs the browser.
 
 ### Port already in use
 

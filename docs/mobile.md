@@ -258,8 +258,8 @@ CA and no trust-on-first-use.
    about to lose.
 2. **Phone:** scan in the app or with the Camera, or paste the link. A link
    is untrusted input (any page or message can open one), so the phone
-   **always asks first**: "Pair with *Julian's MacBook Pro*? at
-   *julians-mbp.tail1234.ts.net:47443*", the code's last four characters,
+   **always asks first**: "Pair with *Sam's MacBook Pro*? at
+   *sams-mbp.tail1234.ts.net:47443*", the code's last four characters,
    and, when a Mac is already paired, "This replaces *that Mac*". A
    Tailscale route must be `https://<name>.ts.net[:port]`
    (`parsePairingLink`); a link with more than one route is refused, so the
@@ -302,7 +302,7 @@ CA and no trust-on-first-use.
    (`PairingView.reachedAt`, once per code). It is unauthenticated, so it
    says "a device", never "your phone"; its absence while the phone spins
    is the tell that the phone isn't on the tailnet.
-3. **Mac:** "Allow **Julian's iPhone** to use your agents?" with the model,
+3. **Mac:** "Allow **Sam's iPhone** to use your agents?" with the model,
    when it asked, the code's last four characters and the tailnet user
    `tailscale serve` named (`Tailscale-User-Login`), open for 120 s. The
    name and model are cleaned of control, bidi and zero-width characters and
