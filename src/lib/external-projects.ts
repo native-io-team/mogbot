@@ -33,3 +33,14 @@ export async function unregisterExternalProject(path: string): Promise<void> {
 export async function isProjectExternal(path: string): Promise<boolean> {
   return invoke<boolean>('is_project_external', { path });
 }
+
+/**
+ * Let the asset protocol serve one image before it is shown. A project
+ * outside ~/ShipStudio has only its image files in scope, never its folder,
+ * so an image that appeared since the project was opened (a diff, a new
+ * capture) is granted here. Rejects anything that isn't an image file inside
+ * a project this app may open.
+ */
+export function allowProjectImage(path: string): Promise<void> {
+  return invoke<void>('allow_project_image', { path });
+}

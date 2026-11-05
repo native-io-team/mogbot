@@ -1121,6 +1121,7 @@ pub fn run() {
             commands::health::get_package_json,
             // External Projects
             commands::external_projects::register_external_project,
+            commands::external_projects::allow_project_image,
             commands::external_projects::unregister_external_project,
             commands::external_projects::is_project_external,
             commands::external_projects::ensure_external_project_registered,

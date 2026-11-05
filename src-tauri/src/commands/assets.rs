@@ -233,8 +233,11 @@ pub async fn set_assets_root(project_path: String, root: String) -> Result<Strin
 
 /// List all assets in the project's assets folder (recursive)
 #[tauri::command]
-#[tracing::instrument(fields(project = %project_path))]
-pub async fn list_assets(project_path: String) -> Result<Vec<Asset>, CommandError> {
+#[tracing::instrument(skip(app), fields(project = %project_path))]
+pub async fn list_assets(
+    app: tauri::AppHandle,
+    project_path: String,
+) -> Result<Vec<Asset>, CommandError> {
     let repo_root = validate_project_path(&project_path)?;
     let project = resolve_workspace_path(&repo_root);
     let root_dir = assets_root_dir(&repo_root, &project);
@@ -248,6 +251,15 @@ pub async fn list_assets(project_path: String) -> Result<Vec<Asset>, CommandErro
 
     // Sort by path for consistent ordering
     assets.sort_by(|a, b| a.path.cmp(&b.path));
+
+    // The panel shows these through the asset protocol: each image is
+    // granted by itself (an external project's folder never is).
+    for asset in assets.iter().filter(|a| !a.is_directory) {
+        crate::commands::external_projects::allow_image(
+            &app,
+            std::path::Path::new(&asset.full_path),
+        );
+    }
 
     Ok(assets)
 }

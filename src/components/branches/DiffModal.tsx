@@ -10,6 +10,7 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { getFileDiff, FileDiff, ChangeStatus } from '../../lib/git';
+import { allowProjectImage } from '../../lib/external-projects';
 import { newFileRows, parseUnifiedDiff } from '../../lib/diff';
 import { ArrowLeftIcon, ArrowRightIcon, FileIcon } from '@/components/icons';
 import { trackError } from '../../lib/analytics';
@@ -82,7 +83,23 @@ export function DiffModal({
   const stepping = files && files.length > 1 && index >= 0;
 
   const isImage = isImageFile(shown.path);
-  const imageSrc = isImage ? convertFileSrc(`${projectPath}/${shown.path}`) : null;
+  const imagePath = isImage ? `${projectPath}/${shown.path}` : null;
+  // The image is shown once the asset protocol may serve it (an external
+  // project's images are granted one by one, never its folder).
+  const [allowedImage, setAllowedImage] = useState<string | null>(null);
+  useEffect(() => {
+    if (!imagePath) return;
+    let live = true;
+    void allowProjectImage(imagePath)
+      .catch(() => undefined)
+      .then(() => {
+        if (live) setAllowedImage(imagePath);
+      });
+    return () => {
+      live = false;
+    };
+  }, [imagePath]);
+  const imageSrc = imagePath && allowedImage === imagePath ? convertFileSrc(imagePath) : null;
 
   const fetchDiff = useCallback(
     async (proj: string, file: string) => {

@@ -103,6 +103,8 @@ export const workspaceCommands: CommandMap = {
   plan_package_install: { args: ['install'], runsScripts: true },
   plan_pending_install_scripts: null,
   mark_install_scripts_ran: null,
+  // An image about to be shown is granted to the asset protocol first.
+  allow_project_image: null,
 
   // Asked for on every workspace open. Unmocked it badged every workspace
   // capture incomplete, which by this harness's own rule means none of their
