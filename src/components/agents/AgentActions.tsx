@@ -1,5 +1,6 @@
 /**
- * What you can do to an agent: Pin, Mark as unread, Mute, Edit, Start fresh, Hide, Delete. One
+ * What you can do to an agent: Pin, Mark as unread, Mute, Edit, Take over, Start fresh, Hide,
+ * Delete. One
  * list, rendered as a row's right-click menu or as the conversation header's
  * … menu, so the two never drift apart.
  *
@@ -18,11 +19,12 @@ import {
   PaperclipIcon,
   PinIcon,
   ResetIcon,
+  TerminalIcon,
   TrashIcon,
 } from '@/components/icons';
 import { ContextMenuItem, ContextMenuSeparator } from '../primitives/ContextMenu';
 import { DropdownDivider, DropdownItem } from '../primitives/Dropdown';
-import { canStartFresh, contextPercent, type Agent } from '../../lib/agents';
+import { canStartFresh, canTakeOver, contextPercent, type Agent } from '../../lib/agents';
 
 export interface AgentActions {
   onTogglePin: (agent: Agent) => void;
@@ -33,6 +35,10 @@ export interface AgentActions {
   onDelete: (agent: Agent) => void;
   /** A new conversation, memory kept (asks first). */
   onStartFresh: (agent: Agent) => void;
+  /** Step into its session in a terminal (asks first while it works). Only in Agents mode. */
+  onTakeOver?: (agent: Agent) => void;
+  /** End the terminal and give the session back. */
+  onHandBack?: (agent: Agent) => void;
 }
 
 interface Item {
@@ -54,6 +60,8 @@ export function AgentActionItems({
   onEdit,
   onDelete,
   onStartFresh,
+  onTakeOver,
+  onHandBack,
   onSchedule,
   onFiles,
 }: {
@@ -81,6 +89,7 @@ export function AgentActionItems({
       ? [{ label: 'Schedule a check-in…', icon: <HistoryIcon size={12} />, run: onSchedule }]
       : []),
     { label: 'Edit agent…', icon: <EditIcon size={12} />, run: () => onEdit(agent) },
+    ...takeoverItems(agent, onTakeOver, onHandBack),
     ...(canStartFresh(agent)
       ? [
           {
@@ -141,6 +150,21 @@ export function AgentActionItems({
       ])}
     </>
   );
+}
+
+/** Take over, or Hand back while you're driving; nothing before its first conversation. */
+function takeoverItems(
+  agent: Agent,
+  onTakeOver: ((agent: Agent) => void) | undefined,
+  onHandBack: ((agent: Agent) => void) | undefined
+): Item[] {
+  if (agent.takeover) {
+    return onHandBack
+      ? [{ label: 'Hand back', icon: <TerminalIcon size={12} />, run: () => onHandBack(agent) }]
+      : [];
+  }
+  if (!onTakeOver || !canTakeOver(agent)) return [];
+  return [{ label: 'Take over', icon: <TerminalIcon size={12} />, run: () => onTakeOver(agent) }];
 }
 
 function freshLabel(agent: Agent): string {

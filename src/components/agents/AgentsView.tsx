@@ -29,6 +29,7 @@ import { AgentChat } from './AgentChat';
 import { AgentsTeamView } from './AgentsTeamView';
 import { AgentEditorModal, type EditorTab } from './AgentEditorModal';
 import { AgentProjectsProvider } from './AgentProject';
+import { TakeoverProvider, useTakeover } from './AgentTakeover';
 import { ImportAgentsModal, type ImportPath } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
 import { ProjectActionConfirmModal } from '../dashboard/ProjectActionConfirmModal';
@@ -38,6 +39,7 @@ import { TextButton } from '../primitives/TextButton';
 import {
   answerApproval,
   canStartFresh,
+  canTakeOver,
   deleteAgent,
   focusAgent,
   markAgentUnread,
@@ -79,6 +81,7 @@ import {
   PinIcon,
   ResetIcon,
   TrashIcon,
+  TerminalIcon,
 } from '@/components/icons';
 import { useAgentProjects } from './AgentProject';
 import { kbd } from '../../lib/shortcuts';
@@ -112,7 +115,9 @@ interface AgentsViewProps {
 export function AgentsView(props: AgentsViewProps) {
   return (
     <AgentProjectsProvider onOpenProject={props.sidebarProps.onSelectProject}>
-      <AgentsModeView {...props} />
+      <TakeoverProvider>
+        <AgentsModeView {...props} />
+      </TakeoverProvider>
     </AgentProjectsProvider>
   );
 }
@@ -129,6 +134,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const error = useAgentsSelector((s) => s.error);
   const engines = useAgentsSelector((s) => s.engines);
   const { showToast } = useOptionalToast();
+  const takeover = useTakeover();
   const [selectedId, setSelectedId] = useState<string | null>(readSelected);
   const [editor, setEditor] = useState<{ open: boolean; agent: Agent | null; tab?: EditorTab }>({
     open: false,
@@ -394,8 +400,10 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
       onEdit: (a: Agent) => setEditor({ open: true, agent: a }),
       onDelete: setDeleting,
       onStartFresh: setFreshening,
+      onTakeOver: takeover?.takeOver,
+      onHandBack: takeover?.handBack,
     }),
-    [run]
+    [run, takeover]
   );
   const agentProjects = useAgentProjects();
 
@@ -530,6 +538,35 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
             },
           ]
         : []),
+      ...(takeover
+        ? agents
+            .filter((a) => !a.hidden || a.id === selected?.id)
+            .flatMap((a) =>
+              a.takeover
+                ? [
+                    {
+                      id: `agents.handBack.${a.id}`,
+                      title: `Hand ${a.name} back`,
+                      icon: <TerminalIcon size={14} />,
+                      category: 'action' as const,
+                      keywords: ['agents', 'take over', 'terminal', 'resume', 'give back'],
+                      run: () => takeover.handBack(a),
+                    },
+                  ]
+                : canTakeOver(a)
+                  ? [
+                      {
+                        id: `agents.takeOver.${a.id}`,
+                        title: `Take over ${a.name}`,
+                        icon: <TerminalIcon size={14} />,
+                        category: 'action' as const,
+                        keywords: ['agents', 'terminal', 'session', 'drive', 'by hand', 'resume'],
+                        run: () => takeover.takeOver(a),
+                      },
+                    ]
+                  : []
+            )
+        : []),
       ...agents
         .filter((a) => a.status.state !== 'idle')
         .map((a) => ({
@@ -551,6 +588,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
       selected,
       actions,
       agentProjects,
+      takeover,
     ]
   );
 

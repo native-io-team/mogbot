@@ -18,12 +18,18 @@ type Same<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 type Assert<T extends true> = T;
 
+/** The desktop's take-over as the phone gets it: without the Mac's terminal id. */
+type PhoneTakeover = Omit<Desktop.AgentTakeover, 'ptySession'>;
+
 export type Conformance = [
-  Assert<Same<Wire.Agent, Desktop.Agent>>,
+  Assert<Same<Omit<Wire.Agent, 'takeover'>, Omit<Desktop.Agent, 'takeover'>>>,
+  Assert<Same<Wire.Agent['takeover'], PhoneTakeover | undefined>>,
   Assert<Same<Wire.AgentMessage, Desktop.AgentMessage>>,
-  Assert<Same<Wire.AgentsOverview, Desktop.AgentsOverview>>,
+  Assert<Same<Omit<Wire.AgentsOverview, 'agents'>, Omit<Desktop.AgentsOverview, 'agents'>>>,
+  Assert<Same<Wire.AgentsOverview['agents'], Wire.Agent[]>>,
   Assert<Same<Wire.AgentStatus, Desktop.AgentStatus>>,
   Assert<Same<Wire.ContextFill, Desktop.ContextFill>>,
+  Assert<Same<Wire.AgentTakeover, PhoneTakeover>>,
   Assert<Same<Wire.Approval, Desktop.Approval>>,
   Assert<Same<Wire.Attachment, Desktop.Attachment>>,
   Assert<Same<Wire.SharedFile, Desktop.SharedFile>>,

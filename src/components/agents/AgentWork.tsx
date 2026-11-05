@@ -42,6 +42,7 @@ import {
 } from '../../lib/agentWork';
 import { MessageAttachments } from './AgentAttachments';
 import { useAgentProjects } from './AgentProject';
+import { TakeOverButton } from './AgentTakeover';
 
 type IconComponent = ComponentType<{ size?: number }>;
 
@@ -245,7 +246,10 @@ export function useLiveWork({ work, agent, activity, leaving }: LiveWorkProps) {
           {(open || ever) && (
             <>
               <StepList work={work} agent={agent} live={{ activity }} />
-              <OpenProject agent={agent} />
+              <div className="agent-work__ways-in">
+                <OpenProject agent={agent} />
+                <TakeOverButton agent={agent} className="agent-work__open" />
+              </div>
             </>
           )}
         </div>

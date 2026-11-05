@@ -147,6 +147,22 @@ export interface Agent {
   newEngine?: boolean;
   /** How full its conversation is, as its engine reported it; omitted when it doesn't say. */
   context?: ContextFill;
+  /** You're driving its session in a terminal; omitted otherwise. */
+  takeover?: AgentTakeover;
+}
+
+/** Mirrors `takeover::View`: you're driving the agent's own session by hand. */
+export interface AgentTakeover {
+  /** When it began (epoch ms). */
+  since: number;
+  /** The backend PTY session the terminal shows. */
+  ptySession: string;
+  /** A bound agent's project: the terminal is a tab in its workspace. */
+  project?: string;
+  /** The workspace's id for the CLI, for that tab. */
+  cli: 'claude-code' | 'codex';
+  /** Claude Code will ask whether to trust the folder first; omitted otherwise. */
+  trustPrompt?: boolean;
 }
 
 /** Mirrors `context::ContextFill`: two numbers the engine reported, never estimated. */
@@ -190,7 +206,7 @@ export interface CheckIn {
 /** One scheduled run and what came of it; mirrors `runs::Run`. */
 export interface CheckInRun {
   at: number;
-  outcome: 'running' | 'ran' | 'retrying' | 'failed' | 'unknown';
+  outcome: 'running' | 'ran' | 'retrying' | 'failed' | 'skipped' | 'unknown';
   /** 1 for the run itself, 2 for its first retry. */
   attempt: number;
   /** Why it failed, as the chat said it. */
@@ -442,6 +458,8 @@ export interface AgentMessage {
   work?: TurnWork;
   /** On a `note`: the conversation started fresh here; drawn as a divider. */
   fresh?: boolean;
+  /** On a `note` (an `error` in older logs): a take-over's terminal closed by itself, its last lines after a blank line; not a turn's failure, so no Retry. */
+  takeover?: boolean;
 }
 
 /** Mirrors `project::ChangedFile`: line counts are absent for a binary file. */
@@ -958,6 +976,47 @@ export const startAgentFresh = (agentId: string) =>
 export const canStartFresh = (agent: Pick<Agent, 'sessionId' | 'newEngine'>) =>
   Boolean(agent.sessionId || agent.newEngine);
 
+/**
+ * Step into the agent's own session in a terminal (`agents::takeover`). It
+ * pauses until handed back. `stopFirst` stops a turn in progress first, as
+ * Stop does; without it a working agent is refused.
+ */
+export const takeOverAgent = (agentId: string, cols: number, rows: number, stopFirst = false) =>
+  invoke<AgentTakeover>('agents_take_over', {
+    agentId,
+    cols: Math.max(2, Math.round(cols)),
+    rows: Math.max(2, Math.round(rows)),
+    stopFirst: stopFirst || undefined,
+  });
+/** Mirrors `takeover::HandBack`. `busy`: the terminal is printing, so ask, then `force`. */
+export type HandBackResult = 'handedBack' | 'notDriving' | 'busy';
+
+/** End the terminal and give the session back. Without `force`, refused while it's printing. */
+export const handBackAgent = (agentId: string, force = false) =>
+  invoke<HandBackResult>('agents_hand_back', { agentId, force: force || undefined });
+
+/** "Claude Code will ask…": the one thing to know before the terminal opens. */
+export const TRUST_HINT =
+  'Claude Code will ask whether to trust this folder — choose “Yes, proceed”. Choosing No ends the take-over.';
+
+/** What driving it means for edits, said once, on the banner. */
+export function takeoverPolicy(takeover: AgentTakeover, name: string): string {
+  const edits = `Edits in its projects are accepted automatically while you drive, as they are for ${name}`;
+  return takeover.cli === 'claude-code' ? `${edits}. Shift-Tab changes it.` : `${edits}.`;
+}
+
+/** There is a session to step into: it has had a conversation on this engine. */
+export const canTakeOver = (agent: Pick<Agent, 'sessionId' | 'newEngine'>) =>
+  Boolean(agent.sessionId) && !agent.newEngine;
+
+/** Where the person driving it is: "in a terminal", or "in acme-site". */
+export function takeoverWhere(takeover: AgentTakeover, projectName?: string): string {
+  if (!takeover.project) return 'in a terminal';
+  const name =
+    projectName ?? takeover.project.split(/[\\/]/).filter(Boolean).pop() ?? 'its project';
+  return `in ${name}`;
+}
+
 /** From this full, the chat suggests starting fresh. */
 export const CONTEXT_SUGGEST_AT = 85;
 
@@ -1471,8 +1530,11 @@ export function sortAgents(agents: Agent[]): Agent[] {
  * progress began, so it is queued for the next one.
  */
 export function isQueued(message: AgentMessage, agent: Agent): boolean {
+  if (message.kind !== 'user') return false;
+  // While you drive it, what you send in the chat waits for the hand-back.
+  if (agent.takeover) return message.ts > agent.takeover.since;
   const { state, since } = agent.status;
-  return message.kind === 'user' && state !== 'idle' && since != null && message.ts > since;
+  return state !== 'idle' && since != null && message.ts > since;
 }
 
 /** Waiting on you: mid-turn on a card, or paused with one still open. */
@@ -1779,6 +1841,17 @@ export function lastUserMessage(messages: AgentMessage[], index: number): AgentM
     return m.text.trim() || m.attachments?.length ? m : null;
   }
   return null;
+}
+
+/**
+ * What Retry sends again: the user's message before the newest line, when
+ * that line is a turn's error. A take-over's terminal that closed by itself
+ * isn't a turn, so it offers none.
+ */
+export function retrySourceFor(messages: AgentMessage[]): AgentMessage | null {
+  const last = messages[messages.length - 1];
+  if (last?.kind !== 'error' || last.takeover) return null;
+  return lastUserMessage(messages, messages.length - 1);
 }
 
 /** A message's files as `agents_send` takes them: copied again from the agent's home. */

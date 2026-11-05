@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::agents::{
     self, apps, attachments, engine, files, import, mcp, memory, notify, paste, project, prompts,
-    runner, schedule, search, secrets, store, usage,
+    runner, schedule, search, secrets, store, takeover, usage,
 };
 use crate::errors::CommandError;
 use engine::Engine;
@@ -18,6 +18,9 @@ pub struct AgentView {
     pub status: runner::Status,
     /// The agent's home, which attachment paths are relative to.
     pub home: String,
+    /// The user is driving its session in a terminal; omitted otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub takeover: Option<takeover::View>,
 }
 
 #[derive(Serialize)]
@@ -63,6 +66,7 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
         .into_iter()
         .map(|agent| {
             Ok(AgentView {
+                takeover: takeover::view(&agent.id),
                 status: runner::status_with_work(&agent.id),
                 home: store::agent_home(&agent.id)?.display().to_string(),
                 agent,
@@ -110,6 +114,7 @@ pub async fn agents_with_projects() -> Result<Vec<AgentView>, CommandError> {
             .filter(|a| a.project.is_some())
             .map(|agent| {
                 Ok(AgentView {
+                    takeover: takeover::view(&agent.id),
                     status: runner::status_with_work(&agent.id),
                     home: store::agent_home(&agent.id)?.display().to_string(),
                     agent,
@@ -373,6 +378,12 @@ pub async fn agents_update(
     let current = store::get(&agent_id)?;
     let engine = match input.engine.as_deref().map(Engine::parse).transpose()? {
         Some(engine) if engine != current.engine => {
+            // The terminal is in this engine's session; switching would
+            // leave it, and the agent, in two conversations. Checked again,
+            // atomically, by `update_settings` below.
+            if runner::driven(&agent_id) {
+                return Err(runner::driven_refusal(&current.name));
+            }
             engine::require_ready(engine).await?;
             Some(engine)
         }
@@ -392,10 +403,21 @@ pub async fn agents_update(
         Some(p) => Some(project::resolve(p).await?.map(|p| p.path)),
         None => None,
     };
+    // A copy open with unkept work stays tied to the project it was made of.
     if let Some(p) = &project {
         agents::task::refuse_rebind(&current, p.as_deref())?;
     }
-    let updated = store::update(&agent_id, |a| {
+    // A new engine, or a new folder to work in, would leave the session the
+    // user may be driving.
+    // Working directly or in a copy moves its folder too.
+    let moves_session = engine.is_some()
+        || project
+            .as_ref()
+            .is_some_and(|p: &Option<String>| *p != current.project)
+        || input
+            .work_directly
+            .is_some_and(|d| d != current.work_directly);
+    let updated = runner::update_settings(&agent_id, moves_session, |a| {
         if let Some(n) = name {
             a.name = n;
         }
@@ -541,11 +563,12 @@ pub async fn agents_memory_suggest(text: String) -> Result<String, CommandError>
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_delete(app: AppHandle, agent_id: String) -> Result<(), CommandError> {
-    runner::stop(&agent_id);
-    let copy = store::get(&agent_id).ok().and_then(|a| a.copy);
-    store::delete(&agent_id)?;
-    // Its copy's folder goes; a branch with work on it stays.
-    if let Some(copy) = copy {
+    // Stopped, the take-over ended (its terminal gone from the copy), then
+    // deleted.
+    let removed = takeover::delete_agent(&app, &agent_id).await?;
+    // Its copy's folder goes once pending work is committed on its branch;
+    // a branch with work on it stays.
+    if let Some(copy) = removed.copy {
         tauri::async_runtime::spawn(agents::task::abandon(copy));
     }
     emit_registry(&app);
@@ -568,6 +591,44 @@ pub async fn agents_stop(app: AppHandle, agent_id: String) -> Result<bool, Comma
     // running; only the import's own messages go, never the user's.
     let import = store::get(&agent_id).is_ok_and(|a| a.is_main) && agents::connector::stop(&app);
     Ok(stopped || import)
+}
+
+/// Step into the agent's own session in a terminal: the agent pauses (no
+/// turn starts; what arrives waits) until it's handed back. Refused while a
+/// turn is in the session; `stop_first` stops that turn (as Stop does,
+/// dropping what was queued) and takes over once it has ended.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_take_over(
+    app: AppHandle,
+    agent_id: String,
+    cols: u16,
+    rows: u16,
+    stop_first: Option<bool>,
+) -> Result<takeover::View, CommandError> {
+    if stop_first.unwrap_or(false) && takeover::view(&agent_id).is_none() {
+        runner::stop(&agent_id);
+        // The turn's process tree gets ~1.5s to go, then its exit is waited
+        // on for at most 10s (`runner::finish`); wait that out.
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
+        while runner::in_turn(&agent_id) && tokio::time::Instant::now() < deadline {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    }
+    takeover::begin(&app, &agent_id, cols, rows).await
+}
+
+/// Give the session back: the terminal's process ends, the agent resumes,
+/// and its next turn continues the same session. Without `force`, refused
+/// (`busy`) while the terminal is printing, so the UI can ask first.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_hand_back(
+    app: AppHandle,
+    agent_id: String,
+    force: Option<bool>,
+) -> Result<takeover::HandBack, CommandError> {
+    Ok(takeover::hand_back(&app, &agent_id, force.unwrap_or(false)).await)
 }
 
 /// Start the agent's next message in a new conversation: its instructions

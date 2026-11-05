@@ -68,7 +68,41 @@ describe('ApprovalCard', () => {
   });
 });
 
+describe('NoteLine', () => {
+  it('quotes a take-over terminal’s last lines quietly, as the screen showed them', () => {
+    const message = {
+      id: 'n2',
+      agentId: 'acme',
+      ts: 1,
+      kind: 'note',
+      takeover: true,
+      text: 'Claude Code closed after 2 seconds. The last thing it showed:\n\nTrust it?\n❯ 2. No, exit',
+    } as AgentMessage;
+    const { container } = render(<NoteLine message={message} />);
+    expect(container.querySelector('.agent-note--takeover')).not.toBeNull();
+    expect(container.querySelector('.agent-bubble')).toBeNull();
+    expect(container.querySelector('pre')?.textContent).toBe('Trust it?\n❯ 2. No, exit');
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
+  });
+});
+
 describe('ErrorLine', () => {
+  it('quotes an older build’s take-over error as the screen showed it', () => {
+    const message = {
+      id: 'e2',
+      agentId: 'acme',
+      ts: 1,
+      kind: 'error',
+      takeover: true,
+      text: 'Claude Code closed after 2 seconds. The last thing it showed:\n\nTrust it?\n❯ 2. No, exit',
+    } as AgentMessage;
+    const { container } = render(<ErrorLine message={message} />);
+    expect(
+      screen.getByText('Claude Code closed after 2 seconds. The last thing it showed:')
+    ).toBeInTheDocument();
+    expect(container.querySelector('pre')?.textContent).toBe('Trust it?\n❯ 2. No, exit');
+  });
+
   it('schedules one retry at the reset however fast the second click comes', async () => {
     let finish = () => {};
     const onRetryAt = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
