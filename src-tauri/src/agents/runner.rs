@@ -2560,6 +2560,8 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             card.ts = store::now_ms();
             let _ = record(&app, card);
         }
+        // A "Test it" run closes with its turn (a line if it never reported).
+        super::preview_test::turn_ended(&app, &agent_id, since);
         // A copy made for a turn that changed nothing (a question) goes again.
         if let Some(copy) = &made {
             super::task::drop_if_unused(&app, &agent_id, copy).await;

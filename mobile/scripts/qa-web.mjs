@@ -612,6 +612,14 @@ const LIVE = [
       'Every message kind: receipts, failure cards, diff tints span the box, To/From Ops, folded result line wraps',
   },
   {
+    name: 'result-tested',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: scrollToText('Watch live'),
+    check:
+      'A tested card: the outcome, what is broken, console errors, a paging strip of step screenshots with captions, Watch live as a text action',
+  },
+  {
     name: 'result-ask',
     route: '/chat/fixtures',
     ready: 'Fixtures',

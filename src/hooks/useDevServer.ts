@@ -1226,6 +1226,14 @@ export function useDevServer(currentProjectPath: string | null) {
     []
   );
 
+  // Any project's install gate, current or not (the Agents preview pane
+  // starts servers for folders the window hasn't opened).
+  const getProjectNeedsInstall = useCallback(
+    (projectPath: string): { packageManager: string } | null =>
+      statesRef.current.get(projectPath)?.needsInstall ?? null,
+    []
+  );
+
   // Read-only accessor for the tracked project type of any project, current
   // or not. Returns 'unknown' when the project has no state.
   const getProjectType = useCallback(
@@ -1641,6 +1649,7 @@ export function useDevServer(currentProjectPath: string | null) {
     isServerStarting,
     getProjectDevServerSnapshot,
     getProjectType,
+    getProjectNeedsInstall,
     clearOutputBuffers,
     saveCustomDevCommand,
     clearNeedsInstall,

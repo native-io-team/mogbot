@@ -88,6 +88,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "Opening a file’s diff needs your Mac.",
   "Opens claude.ai here to add … to your Claude account (the one your Mac uses). claude.ai holds that sign-in, not your Mac.",
   "Opens the file from your Mac",
+  "Opens the site running on your Mac, read-only",
   "Opens the task",
   "Over-the-air updates are off in this build (a development or self-built app). Reinstall it from your Mac to update.",
   "Paired Mac",

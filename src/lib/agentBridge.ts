@@ -39,6 +39,14 @@ export interface BridgeRequest {
   requestId: number;
   tool: string;
   arguments?: Record<string, unknown>;
+  /** Which listener answers: a preview pane beside an agent's chat, or the
+   *  workspace preview (older backends send none: the workspace). */
+  target?: 'pane' | 'workspace';
+}
+
+/** Whether a listener in `mode` answers this request. */
+export function answersRequest(mode: 'pane' | 'workspace', request: BridgeRequest): boolean {
+  return mode === 'pane' ? request.target === 'pane' : request.target !== 'pane';
 }
 
 import type { McpToolResult } from './agentBridgeTransport';
@@ -545,8 +553,17 @@ export async function executeBridgeTool(
   try {
     switch (request.tool) {
       case 'preview_console': {
-        const filtered = filterConsole(inspectStore.getConsoleEntries(), args.level);
-        return text(formatConsoleForAgent(filtered.slice(-clampLimit(args.limit))));
+        // `since` (ms): only what the page logged from then on (a test run).
+        const since = typeof args.since === 'number' ? args.since : null;
+        const entries = inspectStore
+          .getConsoleEntries()
+          .filter((e) => since === null || e.t >= since);
+        const filtered = filterConsole(entries, args.level).slice(-clampLimit(args.limit));
+        return {
+          ...text(formatConsoleForAgent(filtered)),
+          // The same lines, one per entry, for the app's own reading.
+          _meta: { lines: filtered.map((e) => `[${e.level}] ${e.args.join(' ')}`) },
+        };
       }
       case 'preview_network': {
         const filtered = filterNetwork(inspectStore.getNetworkEntries(), args.failed_only);
