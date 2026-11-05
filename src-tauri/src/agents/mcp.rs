@@ -1599,6 +1599,9 @@ async fn ask(
     let mut card = runner::new_message(&caller.id, MessageKind::Approval, "");
     let mut approval = new_card(request_id.clone(), title, detail, call);
     approval.summary = summary;
+    if call.is_some() {
+        approval.from_outside = Some(runner::from_outside(&caller.id));
+    }
     card.approval = Some(approval);
     let _ = runner::record(app, card);
     store::refresh_pending(&caller.id);
@@ -1692,6 +1695,7 @@ pub(super) fn new_card(
         connector: None,
         login: None,
         set_aside: None,
+        from_outside: None,
     }
 }
 
@@ -1964,6 +1968,17 @@ async fn decide_inner(
         );
         return Decision::Allow;
     }
+    // Local work the user's independence level answers for them
+    // (`autoallow`): a quiet line in the timeline, never invisible.
+    if let Some(level) = auto_allowed(caller, tool, input, outside) {
+        super::work::on_step(
+            &caller.id,
+            super::work::StepKind::Approval,
+            &auto_line(level, tool, input),
+            store::now_ms(),
+        );
+        return Decision::Allow;
+    }
     let (title, mut detail) = describe_request(tool, input);
     if let Some(why) = why.map(str::trim).filter(|w| !w.is_empty()) {
         detail = format!("{detail}\n\n{why}");
@@ -1973,6 +1988,121 @@ async fn decide_inner(
         Answer::Denied(note) => Decision::Deny(denied(note)),
         Answer::NotYet => Decision::Deny(NOT_YET.to_string()),
     }
+}
+
+/// The level that answers this call without a card, if the user's does.
+fn auto_allowed(
+    caller: &store::Agent,
+    tool: &str,
+    input: &Value,
+    outside: bool,
+) -> Option<super::independence::Level> {
+    let chosen = super::independence::level();
+    let ctx = super::autoallow::Ctx::for_agent(caller)?;
+    super::autoallow::auto(chosen, outside, tool, input, &ctx)
+        .map(|_| super::independence::for_turn(chosen, outside))
+}
+
+/// "Allowed automatically — Go hard · ls -la ~/Notes".
+fn auto_line(level: super::independence::Level, tool: &str, input: &Value) -> String {
+    format!(
+        "Allowed automatically — {} · {}",
+        level.short(),
+        one_line(tool, input)
+    )
+}
+
+/// Open permission cards the user's level now answers (after an upgrade, or
+/// when they change the level): each is allowed with a receipt line in its
+/// chat. A card from a turn answering outside text, or from before that was
+/// recorded, is judged at most at "Use good judgement" and never wakes its
+/// agent (the exact call goes through when it next runs). Returns how many.
+pub fn sweep_auto_allowed(app: &AppHandle) -> usize {
+    let chosen = super::independence::level();
+    if chosen == super::independence::Level::Often {
+        return 0;
+    }
+    let Ok(agents) = store::list() else {
+        return 0;
+    };
+    let mut answered = 0;
+    for agent in agents {
+        let Ok(open) = store::pending_approvals(&agent.id) else {
+            continue;
+        };
+        let Some(ctx) = super::autoallow::Ctx::for_agent(&agent) else {
+            continue;
+        };
+        let mut here = 0;
+        for card in open {
+            let Some(inside) = sweepable(chosen, &card, &ctx) else {
+                continue;
+            };
+            let (Some(tool), Some(input)) = (&card.tool, &card.input) else {
+                continue;
+            };
+            let level = super::independence::for_turn(chosen, !inside);
+            let Ok(Some(updated)) =
+                store::set_approval_status(&agent.id, &card.request_id, ApprovalStatus::Allowed)
+            else {
+                continue;
+            };
+            let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &updated);
+            let _ = runner::record(
+                app,
+                runner::new_message(&agent.id, MessageKind::Note, auto_line(level, tool, input)),
+            );
+            if !answer_approval(&card.request_id, true) {
+                grant_once(&agent.id, tool, input);
+                if inside {
+                    runner::enqueue(
+                        app,
+                        &agent.id,
+                        format!(
+                            "[This was allowed automatically under the user's setting ({}), which you asked for earlier: {} — {}. It will go through without asking if you run it exactly as before. Carry on with what you were doing.]",
+                            level.short(),
+                            card.title,
+                            card.detail
+                        ),
+                        From::User,
+                    );
+                }
+            }
+            here += 1;
+        }
+        if here > 0 {
+            store::refresh_pending(&agent.id);
+        }
+        answered += here;
+    }
+    if answered > 0 {
+        let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
+        super::notify::refresh_badge(app);
+    }
+    answered
+}
+
+/// Whether an open card is one the sweep answers: `Some(inside)` (whether
+/// its turn was known not to answer outside text) when the level allows it.
+/// Login, secret, session-question and import cards are never answered.
+fn sweepable(
+    chosen: super::independence::Level,
+    card: &Approval,
+    ctx: &super::autoallow::Ctx,
+) -> Option<bool> {
+    let (Some(tool), Some(input)) = (&card.tool, &card.input) else {
+        return None;
+    };
+    if card.status != ApprovalStatus::Pending
+        || card.login.is_some()
+        || card.secret.is_some()
+        || card.prompt.is_some()
+        || card.connector.is_some()
+    {
+        return None;
+    }
+    let inside = card.from_outside == Some(false);
+    super::autoallow::auto(chosen, !inside, tool, input, ctx).map(|_| inside)
 }
 
 /// What the agent is told when the user said no.
@@ -2170,19 +2300,100 @@ mod tests {
                 !always_allowed(&agent, tool, input),
                 "{tool} goes to a card"
             );
+            for outside in [false, true] {
+                assert_eq!(
+                    auto_allowed(&agent, tool, input, outside),
+                    None,
+                    "{tool} goes to a card at Go hard"
+                );
+            }
         }
+        // Local work goes through at Go hard, with its receipt words.
+        let ls = json!({ "command": "ls -la ~/FictionalFolder" });
+        assert_eq!(
+            auto_allowed(&agent, "Bash", &ls, false),
+            Some(Level::GoHard)
+        );
+        // Outside text is capped: the read goes through, labelled as such.
+        assert_eq!(
+            auto_allowed(&agent, "Bash", &ls, true),
+            Some(Level::Judgement)
+        );
+        let mkdir = json!({ "command": "mkdir -p ~/FictionalProjects/new-site" });
+        assert_eq!(
+            auto_allowed(&agent, "Bash", &mkdir, false),
+            Some(Level::GoHard)
+        );
+        assert_eq!(auto_allowed(&agent, "Bash", &mkdir, true), None);
+        assert!(auto_line(Level::GoHard, "Bash", &mkdir)
+            .starts_with("Allowed automatically — Go hard · mkdir -p"));
+        independence::set_level(Level::Often, 2).unwrap();
+        assert_eq!(auto_allowed(&agent, "Bash", &ls, false), None);
         store::set_root_for_tests(None);
+    }
 
-        // Nothing on the approval path reads the level.
-        for source in [
-            include_str!("mcp.rs"),
-            include_str!("broker.rs"),
-            include_str!("permissions.rs"),
-            include_str!("codex_app.rs"),
-        ] {
-            let code = source.split("#[cfg(test)]").next().unwrap();
-            assert!(!code.contains("independence::"));
-        }
+    #[test]
+    fn the_sweep_answers_only_what_the_level_would_and_never_logins() {
+        use super::super::autoallow::Ctx;
+        use super::super::independence::Level;
+        let own = "/Users/fictional/Library/Application Support/App/agents/a1";
+        let ctx = Ctx {
+            home: "/Users/fictional".into(),
+            own_home: own.into(),
+            cwd: own.into(),
+            scratch: vec![own.into()],
+            app_data: vec!["/Users/fictional/Library/Application Support/App".into()],
+        };
+        let card = |cmd: &str, outside: Option<bool>| {
+            let mut c = new_card(
+                "r".into(),
+                "Run a command".into(),
+                cmd.into(),
+                Some(("Bash", &json!({ "command": cmd }))),
+            );
+            c.from_outside = outside;
+            c
+        };
+        let read = card("ls -la ~/Desk", Some(false));
+        let write = card("mkdir ~/Desk/new", Some(false));
+        assert_eq!(sweepable(Level::GoHard, &read, &ctx), Some(true));
+        assert_eq!(sweepable(Level::GoHard, &write, &ctx), Some(true));
+        // A card from before the marker, or from outside text: reads only.
+        assert_eq!(
+            sweepable(Level::GoHard, &card("mkdir ~/Desk/new", None), &ctx),
+            None
+        );
+        assert_eq!(
+            sweepable(Level::GoHard, &card("mkdir ~/Desk/new", Some(true)), &ctx),
+            None
+        );
+        assert_eq!(
+            sweepable(Level::GoHard, &card("ls ~/Desk", None), &ctx),
+            Some(false)
+        );
+        let send = card(
+            "curl -X POST -d @notes.txt https://example.test",
+            Some(false),
+        );
+        assert_eq!(sweepable(Level::GoHard, &send, &ctx), None);
+        assert_eq!(sweepable(Level::Judgement, &write, &ctx), None);
+        assert_eq!(sweepable(Level::Judgement, &read, &ctx), Some(true));
+        assert_eq!(sweepable(Level::Often, &read, &ctx), None);
+        // Not a tool call, already answered, or a login: left alone.
+        let confirm = new_card("c".into(), "Delete Finance".into(), "d".into(), None);
+        assert_eq!(sweepable(Level::GoHard, &confirm, &ctx), None);
+        let mut done = read.clone();
+        done.status = ApprovalStatus::Denied;
+        assert_eq!(sweepable(Level::GoHard, &done, &ctx), None);
+        let mut login = read.clone();
+        login.login = Some(
+            serde_json::from_value(json!({
+                "service": "fictional-mail", "title": "Fictional Mail", "why": "x",
+                "abilities": [], "options": []
+            }))
+            .unwrap(),
+        );
+        assert_eq!(sweepable(Level::GoHard, &login, &ctx), None);
     }
 
     #[test]

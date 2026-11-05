@@ -48,6 +48,7 @@
 pub mod apps;
 pub mod arrival;
 pub mod attachments;
+pub mod autoallow;
 pub mod broker;
 pub mod capabilities;
 pub mod capacity;

@@ -323,6 +323,11 @@ pub struct Approval {
     /// (`agents/team_setup.rs`). Nothing it asked for ran.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub set_aside: Option<String>,
+    /// Whether the turn that raised this permission card was answering
+    /// outside text. Absent on cards from before it was recorded, which are
+    /// treated as if it was (`mcp::sweep_auto_allowed`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_outside: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1948,6 +1953,7 @@ mod tests {
                         connector: None,
                         login: None,
                         set_aside: None,
+                        from_outside: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2152,6 +2158,7 @@ mod tests {
                     connector: None,
                     login: None,
                     set_aside: None,
+                    from_outside: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2261,6 +2268,7 @@ mod tests {
                 connector: None,
                 login: None,
                 set_aside: None,
+                from_outside: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

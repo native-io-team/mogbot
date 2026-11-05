@@ -1606,6 +1606,11 @@ pub async fn agents_set_independence(
 ) -> Result<agents::independence::Level, CommandError> {
     let level = agents::independence::Level::parse(&level)?;
     blocking(move || agents::independence::set_level(level, store::now_ms())).await?;
+    // Open cards the new level answers are answered now, with a receipt.
+    {
+        let app = app.clone();
+        let _ = blocking(move || Ok(agents::mcp::sweep_auto_allowed(&app))).await;
+    }
     // The overview carries it: Settings and the phone pick it up.
     emit_registry(&app);
     Ok(level)
