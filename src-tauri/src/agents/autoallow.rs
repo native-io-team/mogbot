@@ -28,10 +28,9 @@
 //! can't parse ask.
 //!
 //! **Levels** ([`allows`]): "Check with me often" answers nothing; "Use good
-//! judgement" answers reads; "Go hard" answers reads and local work. A turn
-//! answering outside text runs at most at "Use good judgement"
-//! (`independence::for_turn`), so outside text never gets a write without a
-//! card.
+//! judgement" answers reads (at most that for a turn answering outside text,
+//! `independence::for_turn`). "Go hard" doesn't use this classifier at all:
+//! it allows by default and asks only for its short list (`go_hard`).
 
 use serde_json::Value;
 use std::path::{Component, Path, PathBuf};
@@ -59,6 +58,17 @@ pub fn allows(level: Level, class: Class) -> bool {
 /// The class a call is answered as, when the user's `chosen` level answers
 /// it: `None` means a card. `outside`: the turn answers outside text.
 pub fn auto(chosen: Level, outside: bool, tool: &str, input: &Value, ctx: &Ctx) -> Option<Class> {
+    // "Go hard" is allow-by-default with a short list that asks
+    // (`go_hard`), outside text or not: reading a page is the job.
+    if chosen == Level::GoHard {
+        if super::go_hard::asks(tool, input, ctx, outside) {
+            return None;
+        }
+        return Some(match classify(tool, input, ctx) {
+            Class::Read => Class::Read,
+            _ => Class::Change,
+        });
+    }
     let level = independence::for_turn(chosen, outside);
     if level == Level::Often {
         return None;

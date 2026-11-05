@@ -14,9 +14,11 @@
 //! checkout, payment or compose page. When it can't be told, it asks. At
 //! "Check with me often" every interaction asks.
 //!
-//! **Always a card**, at every level: `javascript_tool`, `file_upload`,
+//! **Always a card** below "Go hard": `javascript_tool`, `file_upload`,
 //! `upload_image`, `shortcuts_execute` (each can carry data anywhere), and
-//! anything this build doesn't know.
+//! anything this build doesn't know. **At "Go hard"** everything runs,
+//! scripts and shortcuts included, except uploads, send-like clicks and
+//! keys, and a script that submits or posts (`go_hard::script_sends`).
 //!
 //! Turns answering outside text never get the browser at all
 //! (`browser::allowed`). Threat model: docs/agents.md, "Your browser".
@@ -546,6 +548,16 @@ fn batch_steps(input: &Value) -> Option<Vec<(String, Value)>> {
 /// One browser tool (its name without the server) at `level`.
 fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -> Gate {
     let free = |ok: bool| if ok { Gate::Allow } else { Gate::Ask };
+    // "Go hard": everything runs, scripts and shortcuts included, except
+    // uploads and what sends (a script that submits or posts, a send click).
+    if level == Level::GoHard {
+        match name {
+            "file_upload" | "upload_image" => return Gate::Ask,
+            "javascript_tool" => return free(!super::go_hard::script_sends(input)),
+            "shortcuts_execute" => return Gate::Allow,
+            _ => {}
+        }
+    }
     if ALWAYS_ASK.contains(&name) {
         return Gate::Ask;
     }
@@ -599,7 +611,7 @@ fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -
             _ => Gate::Ask,
         },
         n if LOOKS.contains(&n) => Gate::Allow,
-        _ => Gate::Ask,
+        _ => free(level == Level::GoHard),
     }
 }
 

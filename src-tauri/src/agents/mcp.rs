@@ -2126,8 +2126,20 @@ fn auto_allowed(
     // Its own level when its settings give it one (`policy`).
     let chosen = super::policy::chosen_level(caller);
     let ctx = super::autoallow::Ctx::for_agent(caller)?;
-    super::autoallow::auto(chosen, outside, tool, input, &ctx)
-        .map(|_| super::independence::for_turn(chosen, outside))
+    super::autoallow::auto(chosen, outside, tool, input, &ctx).map(|_| receipt_level(chosen, outside))
+}
+
+/// The level a receipt names: "Go hard" answers at its own level even for a
+/// turn answering outside text (`go_hard`); the others as the turn runs.
+fn receipt_level(
+    chosen: super::independence::Level,
+    outside: bool,
+) -> super::independence::Level {
+    if chosen == super::independence::Level::GoHard {
+        chosen
+    } else {
+        super::independence::for_turn(chosen, outside)
+    }
 }
 
 /// "Allowed automatically — Go hard · ls -la ~/Notes".
@@ -2178,7 +2190,7 @@ pub fn sweep_auto_allowed(app: &AppHandle) -> usize {
             let (Some(tool), Some(input)) = (&card.tool, &card.input) else {
                 continue;
             };
-            let level = super::independence::for_turn(chosen, !inside);
+            let level = receipt_level(chosen, !inside);
             let Ok(Some(updated)) =
                 store::set_approval_status(&agent.id, &card.request_id, ApprovalStatus::Allowed)
             else {
@@ -2438,17 +2450,23 @@ mod tests {
             auto_allowed(&agent, "Bash", &ls, false),
             Some(Level::GoHard)
         );
-        // Outside text is capped: the read goes through, labelled as such.
+        // Outside text keeps Go hard for reading and local work (`go_hard`);
+        // only network writes and fetched packages ask there.
         assert_eq!(
             auto_allowed(&agent, "Bash", &ls, true),
-            Some(Level::Judgement)
+            Some(Level::GoHard)
         );
         let mkdir = json!({ "command": "mkdir -p ~/FictionalProjects/new-site" });
         assert_eq!(
             auto_allowed(&agent, "Bash", &mkdir, false),
             Some(Level::GoHard)
         );
-        assert_eq!(auto_allowed(&agent, "Bash", &mkdir, true), None);
+        assert_eq!(
+            auto_allowed(&agent, "Bash", &mkdir, true),
+            Some(Level::GoHard)
+        );
+        let fetched = json!({ "command": "npx some-fictional-package" });
+        assert_eq!(auto_allowed(&agent, "Bash", &fetched, true), None);
         assert!(auto_line(Level::GoHard, "Bash", &mkdir)
             .starts_with("Allowed automatically — Go hard · mkdir -p"));
         independence::set_level(Level::Often, 2).unwrap();
@@ -2488,7 +2506,8 @@ mod tests {
             sweepable(Level::GoHard, &write, &ctx, &no_browser),
             Some(true)
         );
-        // A card from before the marker, or from outside text: reads only.
+        // A card from before the marker, or from outside text: Go hard still
+        // answers local work; a network write from there waits.
         assert_eq!(
             sweepable(
                 Level::GoHard,
@@ -2496,12 +2515,21 @@ mod tests {
                 &ctx,
                 &no_browser
             ),
-            None
+            Some(false)
         );
         assert_eq!(
             sweepable(
                 Level::GoHard,
-                &card("mkdir ~/Desk/new", Some(true)),
+                &card("curl -X POST localhost:3000/api -d x", Some(true)),
+                &ctx,
+                &no_browser
+            ),
+            None
+        );
+        assert_eq!(
+            sweepable(
+                Level::Judgement,
+                &card("mkdir ~/Desk/new", None),
                 &ctx,
                 &no_browser
             ),
