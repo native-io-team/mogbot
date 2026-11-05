@@ -535,6 +535,8 @@ pub struct Stub {
     pub typed: Mutex<Vec<(String, String)>>,
     /// Permission rules revoked, by id.
     pub revoked: Mutex<Vec<String>>,
+    /// Login card calls, as "start <request> <option>", "cancel <request>"…
+    pub logins: Mutex<Vec<String>>,
     /// "keep <copy>" / "discard <copy>", in order.
     pub copies: Mutex<Vec<String>>,
     /// Secure input cards saved (the values are not kept).
@@ -568,6 +570,7 @@ impl Stub {
             fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
+            logins: Mutex::new(Vec::new()),
             copies: Mutex::new(Vec::new()),
             secrets_saved: AtomicUsize::new(0),
             slow_done: AtomicUsize::new(0),
@@ -1075,6 +1078,86 @@ impl Backend for Stub {
         ]))
     }
 
+    async fn login_start(
+        &self,
+        _agent_id: &str,
+        request_id: &str,
+        option_id: &str,
+    ) -> Result<(), CommandError> {
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("start {request_id} {option_id}"));
+        Ok(())
+    }
+
+    async fn login_cancel(&self, _agent_id: &str, request_id: &str) -> Result<(), CommandError> {
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("cancel {request_id}"));
+        Ok(())
+    }
+
+    async fn login_decline(
+        &self,
+        _agent_id: &str,
+        request_id: &str,
+        _note: Option<String>,
+    ) -> Result<(), CommandError> {
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("decline {request_id}"));
+        Ok(())
+    }
+
+    async fn login_save_key(
+        &self,
+        _agent_id: &str,
+        request_id: &str,
+        _value: String,
+    ) -> Result<Value, CommandError> {
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("key {request_id}"));
+        Ok(
+            json!({ "id": "s1", "name": "x_key", "purpose": "Post", "kind": "api_key",
+                   "fields": [{ "label": "X API bearer token", "env": "X_KEY" }],
+                   "reference": "secret:social/x_key", "createdAt": 0 }),
+        )
+    }
+
+    async fn reach(&self, _agent_id: &str) -> Result<Value, CommandError> {
+        Ok(reach_fixture())
+    }
+
+    async fn logins_team(&self, _since: Option<i64>) -> Result<Value, CommandError> {
+        Ok(team_fixture())
+    }
+
+    async fn logins_connect(
+        &self,
+        key: &str,
+        option_id: &str,
+        _skip: Vec<String>,
+    ) -> Result<(), CommandError> {
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("team {key} {option_id}"));
+        Ok(())
+    }
+
+    async fn login_dismiss(&self, _agent_id: &str, request_id: &str) -> Result<(), CommandError> {
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("dismiss {request_id}"));
+        Ok(())
+    }
+
     async fn revoke_permission(&self, _agent_id: &str, rule_id: &str) -> Result<(), CommandError> {
         self.revoked.lock().unwrap().push(rule_id.to_string());
         Ok(())
@@ -1321,4 +1404,178 @@ impl Backend for Stub {
     }
 
     fn changed(&self) {}
+}
+
+/// "What it can reach", as `agents_reach` serializes it: one connection,
+/// the browser with one site, one secret. Never a token.
+pub fn reach_fixture() -> Value {
+    json!({
+        "connections": [{
+            "connectionId": "c1", "service": "gmail", "title": "Gmail", "account": "work@acme.com",
+            "access": "full", "kept": "Connected on claude.ai; the sign-in is held there",
+            "needsSignIn": false, "lastUsedAt": 1_760_000_000_000_i64
+        }],
+        "browser": { "on": true, "sites": ["www.linkedin.com"], "helperInstalled": true },
+        "secrets": [{ "secretId": "s1", "name": "x_key", "purpose": "Post to X", "variables": ["$X_KEY"] }],
+        "blockedApps": []
+    })
+}
+
+/// A login card as `request_login` raises it, with every way in, a sign-in
+/// under way (started from the phone) and a key field: the real Rust types,
+/// so the fixture is what the Mac sends.
+pub fn login_card() -> crate::agents::store::AgentMessage {
+    use crate::agents::logins::{Ability, Flow, FlowState, LoginOption, LoginRequest, Method};
+    use crate::agents::store::{Approval, ApprovalStatus, MessageKind};
+    let option = |id: &str, method: Method, label: &str| LoginOption {
+        id: id.into(),
+        method,
+        label: label.into(),
+        detail: format!("{label}, on this Mac."),
+        connection_id: (method == Method::Existing).then(|| "c1".to_string()),
+    };
+    let mut m = crate::agents::runner::new_message(AGENT, MessageKind::Approval, "");
+    m.id = "m40".into();
+    m.ts = 1_762_290_000_000;
+    m.approval = Some(Approval {
+        request_id: "q12".into(),
+        title: "Finance needs your Gmail (work)".into(),
+        detail: "Read invoices that arrive by email".into(),
+        summary: None,
+        status: ApprovalStatus::Pending,
+        tool: None,
+        input: None,
+        always: None,
+        always_allowed: false,
+        note: None,
+        prompt: None,
+        choice: None,
+        secret: None,
+        connector: None,
+        login: Some(LoginRequest {
+            service: "gmail".into(),
+            title: "Gmail".into(),
+            asked_as: Some("gmail native".into()),
+            account_hint: Some("work".into()),
+            why: "Read invoices that arrive by email".into(),
+            abilities: vec![
+                Ability {
+                    id: "read".into(),
+                    label: "Read and search your email".into(),
+                },
+                Ability {
+                    id: "write".into(),
+                    label: "Draft and send email — it asks you on a card each time".into(),
+                },
+            ],
+            options: vec![
+                option("existing:c1", Method::Existing, "Use work@acme.com"),
+                option("oauth", Method::Oauth, "Connect Linear"),
+                option("claude_ai", Method::ClaudeAi, "Connect Gmail"),
+                option("gh", Method::Gh, "Use GitHub on this Mac"),
+                option("browser", Method::Browser, "Use my browser"),
+                option("key", Method::Key, "Enter an API key"),
+            ],
+            no_connector: Some(
+                "Google only lets apps it has approved use Gmail's own connector.".into(),
+            ),
+            key: Some(crate::agents::secrets::Request {
+                name: "gmail_key".into(),
+                purpose: "Read invoices".into(),
+                kind: crate::agents::secrets::Kind::ApiKey,
+                fields: vec![crate::agents::secrets::Field {
+                    label: "API key".into(),
+                    env: "GMAIL_KEY".into(),
+                }],
+                reference: "secret:finance/gmail_key".into(),
+                quiet: false,
+            }),
+            quiet: true,
+            replaces: Some("q8".into()),
+            flow: Some(Flow {
+                state: FlowState::Waiting,
+                option: "claude_ai".into(),
+                message: Some("claude.ai's connectors are open in this Mac's browser.".into()),
+                started_at: 1_762_290_000_000,
+                from_phone: true,
+            }),
+        }),
+    });
+    m
+}
+
+/// "What your team needs" from the real Rust types: a Google row for three
+/// agents (one skipped), and a GitHub row that's done.
+pub fn team_fixture() -> Value {
+    use crate::agents::logins::{Ability, CardState, TeamCard, TeamLogins, TeamNeed};
+    let card = |agent: &str, name: &str, request: &str, service: &str, state: CardState| TeamCard {
+        agent_id: agent.into(),
+        agent_name: name.into(),
+        request_id: request.into(),
+        service: service.into(),
+        title: match service {
+            "gmail" => "Gmail".into(),
+            "google_calendar" => "Google Calendar".into(),
+            _ => "GitHub".into(),
+        },
+        abilities: vec![Ability {
+            id: "read".into(),
+            label: "Read and search your email".into(),
+        }],
+        state,
+        outcome: (state == CardState::Skipped).then(|| "Not needed".to_string()),
+        asked_as: (request == "q20").then(|| "gmail native".to_string()),
+        flow: None,
+    };
+    let login = login_card();
+    let options = login.approval.unwrap().login.unwrap().options;
+    serde_json::to_value(TeamLogins {
+        needs: vec![
+            TeamNeed {
+                key: "google".into(),
+                title: "Google · Gmail + Calendar".into(),
+                services: vec!["gmail".into(), "google_calendar".into()],
+                options: options
+                    .into_iter()
+                    .filter(|o| o.id != "existing:c1")
+                    .collect(),
+                no_connector: Some(
+                    "Google only lets apps it has approved use Gmail's own connector.".into(),
+                ),
+                cards: vec![
+                    card(AGENT, "Finance", "q20", "gmail", CardState::Waiting),
+                    card(
+                        "agent_b",
+                        "Inbox Zero",
+                        "q21",
+                        "gmail",
+                        CardState::Connected,
+                    ),
+                    card(
+                        "agent_c",
+                        "Calendar",
+                        "q22",
+                        "google_calendar",
+                        CardState::Skipped,
+                    ),
+                ],
+                done: false,
+            },
+            TeamNeed {
+                key: "github".into(),
+                title: "GitHub".into(),
+                services: vec!["github".into()],
+                options: Vec::new(),
+                no_connector: None,
+                cards: vec![TeamCard {
+                    state: CardState::Covered,
+                    ..card("agent_d", "Release", "q23", "github", CardState::Covered)
+                }],
+                done: true,
+            },
+        ],
+        done: 1,
+        total: 2,
+    })
+    .unwrap()
 }

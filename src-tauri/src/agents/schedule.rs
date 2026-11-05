@@ -1657,6 +1657,7 @@ mod tests {
             context: None,
             routine_model: None,
             template: None,
+            reach: Default::default(),
             muted: false,
             check_ins,
             usage: Default::default(),

@@ -294,6 +294,7 @@ pub(crate) fn card(
         }),
         choice: None,
         connector: None,
+        login: None,
     }
 }
 

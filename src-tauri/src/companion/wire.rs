@@ -335,11 +335,16 @@ pub const FEATURE_ROOMS: &str = "rooms";
 /// `welcome.features`: the `rooms.*` methods and `rooms.changed`.
 pub const MAC_FEATURE_ROOMS: &str = "rooms";
 
+/// `welcome.features`: login cards (`approval.login`) and the `agents.login*`
+/// and `agents.reach` methods (`agents/logins.rs`).
+pub const MAC_FEATURE_LOGINS: &str = "logins";
+
 /// Everything `welcome.features` lists.
 pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_REVISE_RESULTS,
     MAC_FEATURE_WHEN_ROUTINES,
     MAC_FEATURE_ROOMS,
+    MAC_FEATURE_LOGINS,
 ];
 
 /// What one connected app said it shows (`hello.features`).

@@ -386,11 +386,14 @@ async fn open(
     // refused. It's revoked when the terminal is handed back.
     let access = super::broker::grant(&agent.id, None);
     let url = super::reach::agent_url(port);
+    // Its connection servers too (Claude Code), so taking over doesn't
+    // lose the apps it was granted. Blocks and `--no-chrome` aren't applied
+    // here: the person at the keyboard answers every prompt themselves.
+    let reach = super::connections::for_turn(agent).await;
     let mcp_config = match agent.engine {
-        Engine::Claude => Some(super::reach::write_config(&super::reach::claude_config(
-            &url,
-            access.secret(),
-        ))?),
+        Engine::Claude => Some(super::reach::write_config(
+            &super::reach::claude_config_with(&url, access.secret(), reach.claude_servers()),
+        )?),
         Engine::Codex => None,
     };
     let mcp_config_arg = mcp_config
@@ -410,6 +413,10 @@ async fn open(
     if !have.is_empty() {
         system_prompt.push_str("\n\n");
         system_prompt.push_str(&have);
+    }
+    if agent.engine == Engine::Claude && !reach.prompt.is_empty() {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(&reach.prompt);
     }
     // The terminal drives the session on the account its turns last ran on.
     let account = super::wallet::last_account(agent.engine, &agent.id);

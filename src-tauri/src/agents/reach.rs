@@ -64,6 +64,27 @@ pub fn claude_config(url: &str, secret: &str) -> String {
     .to_string()
 }
 
+/// [`claude_config`] plus the agent's connection servers
+/// (`connections::TurnAccess::claude_servers`), each with its token as a
+/// header: in this 0600 file only, never on the command line.
+pub fn claude_config_with(
+    url: &str,
+    secret: &str,
+    extra: serde_json::Map<String, serde_json::Value>,
+) -> String {
+    let mut config: serde_json::Value =
+        serde_json::from_str(&claude_config(url, secret)).unwrap_or_default();
+    if let Some(servers) = config.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
+        for (key, value) in extra {
+            // Ours can't be shadowed by a connection that happens to share its name.
+            if key != SERVER_KEY {
+                servers.insert(key, value);
+            }
+        }
+    }
+    config.to_string()
+}
+
 /// A config file that lives as long as this does.
 #[derive(Debug)]
 pub struct ConfigFile {

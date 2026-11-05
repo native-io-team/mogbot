@@ -145,6 +145,9 @@ inside it.
 - `agents.overview|messages|send|stop|interrupt|answerApproval|focus|markUnread`
   (`answerApproval` takes `choice` for a session's question)
 - `agents.saveSecret` (Tailscale only, never audited with a value), `agents.memory|memoryChange|memorySuggest`
+- Logins (Mac feature `logins`, docs/agents.md "Logins"): `agents.loginStart|loginCancel|loginDecline|loginDismiss`,
+  `agents.loginSaveKey` (as `saveSecret`), `agents.loginsTeam|loginsConnect` ("What your team needs"),
+  `agents.reach` (read-only)
 - `agents.update` (`pinned`, `muted`, `hidden`, `instructions`),
   `agents.instructions|usage|revokePermission|changeDiff`
 - `agents.files|fetchPath|search`, `agents.schedule.preview|create|update|pause|cancel|runNow`
@@ -478,6 +481,15 @@ sheet, files, a session, the diff and the photo viewer push over them. At
 - **A task's questions** (`PromptCard`): the question, whose task it is and
   where, the diff (tinted) or text it shows, and every option it offers,
   answered with `agents.answerApproval`'s `choice`; the same 400 ms guard.
+- **Login cards** (`approval.login`): which app, which account, read vs
+  send, and the ways in. Connect starts the sign-in **on the Mac**
+  (`agents.loginStart`): its browser opens there and the token is made and
+  kept in its Keychain, never sent here. The card says "Finish signing in
+  on your Mac — it's open there" and follows `login.flow` live, then shows
+  the answer. A Mac without `logins` never sends one; a phone without it
+  sees Allow / Deny, and its Allow starts the first way in on the Mac.
+  "What your team needs" (`agents.loginsTeam`) and "What it can reach"
+  (`agents.reach`, read-only) are on the phone too.
 - **Secret cards** (`SecretCard`): masked fields straight to the Mac's
   Keychain via `agents.saveSecret`. Only over HTTPS on Tailscale, and only on
   a socket where the Mac proved the pinned identity (refused on the

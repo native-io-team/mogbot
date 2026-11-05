@@ -147,6 +147,8 @@ pub async fn agents_messages(
         )?;
         // What each turn did, read after the log's lock is let go.
         crate::agents::work::apply(&agent_id, &mut page);
+        // A login card's sign-in under way, as it is now.
+        crate::agents::logins::apply(&mut page);
         Ok(page)
     })
     .await
@@ -741,7 +743,177 @@ pub async fn agents_answer_approval(
     note: Option<String>,
     choice: Option<usize>,
 ) -> Result<(), CommandError> {
+    // A login card answered with plain Allow / Deny (a phone from before
+    // login cards): Allow starts its first way in on this Mac.
+    let login = {
+        let (a, r) = (agent_id.clone(), request_id.clone());
+        blocking(move || Ok(store::find_approval(&a, &r)?.filter(|c| c.login.is_some()))).await?
+    };
+    if login.is_some() {
+        return if allow {
+            agents::logins::allow_from_old_client(&app, &agent_id, &request_id).await
+        } else {
+            let note = note
+                .map(|n| n.trim().chars().take(MAX_DENY_NOTE).collect::<String>())
+                .filter(|n| !n.is_empty());
+            blocking(move || agents::logins::decline(&app, &agent_id, &request_id, note.as_deref()))
+                .await
+        };
+    }
     blocking(move || answer_card(&app, &agent_id, &request_id, allow, always, note, choice)).await
+}
+
+/* ---------------------------------------------------------------- logins */
+
+/// Start one of a login card's ways in, on this Mac (`agents/logins.rs`).
+/// Returns at once; the card follows the sign-in.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_login_start(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+    option_id: String,
+    from_phone: Option<bool>,
+) -> Result<(), CommandError> {
+    agents::logins::start(
+        &app,
+        &agent_id,
+        &request_id,
+        &option_id,
+        from_phone.unwrap_or(false),
+    )
+    .await
+}
+
+/// Stop a sign-in under way; the card stays.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_login_cancel(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+) -> Result<(), CommandError> {
+    agents::logins::cancel(&app, &agent_id, &request_id)
+}
+
+/// Decline a login card.
+#[tauri::command]
+#[tracing::instrument(skip(app, note))]
+pub async fn agents_login_decline(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+    note: Option<String>,
+) -> Result<(), CommandError> {
+    let note = note
+        .map(|n| n.trim().chars().take(MAX_DENY_NOTE).collect::<String>())
+        .filter(|n| !n.is_empty());
+    blocking(move || agents::logins::decline(&app, &agent_id, &request_id, note.as_deref())).await
+}
+
+/// A login card's API key, from its masked field into the Keychain.
+#[tauri::command]
+#[tracing::instrument(skip(app, value))]
+pub async fn agents_login_save_key(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+    value: String,
+) -> Result<secrets::Secret, CommandError> {
+    blocking(move || agents::logins::save_key(&app, &agent_id, &request_id, &value)).await
+}
+
+/// "What your team needs": every login card waiting, one row per service
+/// (and those answered since `since`, for the progress line).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_logins_team(
+    since: Option<i64>,
+) -> Result<agents::logins::TeamLogins, CommandError> {
+    blocking(move || Ok(agents::logins::team(since))).await
+}
+
+/// Connect one row for every agent on it (but those in `skip`).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_logins_connect(
+    app: AppHandle,
+    key: String,
+    option_id: String,
+    skip: Option<Vec<String>>,
+    from_phone: Option<bool>,
+) -> Result<(), CommandError> {
+    agents::logins::connect_need(
+        &app,
+        &key,
+        &option_id,
+        &skip.unwrap_or_default(),
+        from_phone.unwrap_or(false),
+    )
+    .await
+}
+
+/// "Not needed": put a login card away without waking the agent.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_login_dismiss(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+) -> Result<(), CommandError> {
+    blocking(move || agents::logins::dismiss(&app, &agent_id, &request_id)).await
+}
+
+/// What one agent can reach: its connections, browser and secrets.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_reach(agent_id: String) -> Result<agents::logins::Reach, CommandError> {
+    blocking(move || Ok(agents::logins::reach(&store::get(&agent_id)?))).await
+}
+
+/// Take one thing away from what an agent can reach.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_reach_remove(
+    app: AppHandle,
+    agent_id: String,
+    removal: agents::logins::Removal,
+) -> Result<agents::logins::Reach, CommandError> {
+    let reach = blocking(move || agents::logins::remove(&agent_id, &removal)).await?;
+    emit_registry(&app);
+    Ok(reach)
+}
+
+/// Every connection on this Mac, with who may use it. Never a token.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_connections() -> Result<Vec<agents::connections::Connection>, CommandError> {
+    blocking(agents::connections::list).await
+}
+
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_connection_rename(
+    app: AppHandle,
+    connection_id: String,
+    account: String,
+) -> Result<agents::connections::Connection, CommandError> {
+    let c = blocking(move || agents::connections::rename(&connection_id, &account)).await?;
+    emit_registry(&app);
+    Ok(c)
+}
+
+/// Disconnect for every agent, deleting its Keychain item.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_connection_delete(
+    app: AppHandle,
+    connection_id: String,
+) -> Result<(), CommandError> {
+    blocking(move || agents::connections::delete(&connection_id)).await?;
+    emit_registry(&app);
+    Ok(())
 }
 
 fn answer_card(

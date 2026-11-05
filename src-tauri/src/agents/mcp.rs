@@ -294,7 +294,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "request_secret",
-        description: "Ask the user for a password, API key, token or login through a secure card in this chat. They type it into a masked field; it goes into the macOS Keychain for you alone, and you get an environment variable and a reference, never the value. Always use this for credentials: never ask the user to paste one in chat. It returns at once: stop and tell the user in one line what it's for; you'll be woken when they save or decline it.",
+        description: "Ask the user for an API key or token made for programs (a Stripe restricted key, an X API token) through a secure card in this chat. They type it into a masked field; it goes into the macOS Keychain for you alone, and you get an environment variable and a reference, never the value. For an account (email, Slack, LinkedIn, X, GitHub, Linear…) use request_login instead; never ask for a password, here or in chat. It returns at once: stop and tell the user in one line what it's for; you'll be woken when they save or decline it.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -305,6 +305,21 @@ const TOOLS: &[Tool] = &[
                 "fields": { "type": "array", "items": { "type": "string" }, "description": "Optional: labels for a login with several parts, e.g. [\"Username\", \"Password\"]. Each becomes $NAME_USERNAME, $NAME_PASSWORD." }
             },
             "required": ["name", "purpose", "kind"]
+        }),
+    },
+    Tool {
+        name: "request_login",
+        description: "Ask the user to connect an app or account you need (Gmail, Google Calendar, Slack, LinkedIn, X, GitHub, Linear, Notion…). One card appears in this chat, on their phone too: it says which account and what you'll be able to do, and connects it the safest way there is: the app's own sign-in in their Mac's browser (you never see a password; the token stays in the Mac's Keychain), or their own signed-in browser for a site with no connector, where every post, send or payment asks them first. Never ask for a password or a login in chat. It returns at once: stop and tell the user in one line what it's for; you're woken when they connect it, with the tools to use, or decline.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "service": { "type": "string", "description": "The app or site, e.g. gmail, google_calendar, slack, linkedin, x, github, linear, notion, figma, stripe, vercel; or its name if it's something else." },
+                "account_hint": { "type": "string", "description": "Optional: which account, when it matters (\"work Gmail\", \"julian@acme.com\")." },
+                "scopes": { "type": "array", "items": { "type": "string" }, "description": "What you need: [\"read\"], or also [\"send\"], [\"post\"], [\"write\"]. Ask for the least that does the job." },
+                "why": { "type": "string", "description": "What you'll use it for, in one line. Shown on the card." }
+            },
+            "required": ["service", "why"]
         }),
     },
     Tool {
@@ -457,6 +472,7 @@ async fn call(
             check_ins(app, caller, turn, name, args).await
         }
         "request_secret" => request_secret(app, caller, args),
+        "request_login" => request_login(app, caller, args),
         _ => error("Unknown tool"),
     }
 }
@@ -1336,6 +1352,27 @@ async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     }
 }
 
+/// A login card (`agents/logins.rs`). Nothing waits on it: connecting or
+/// declining wakes the agent.
+fn request_login(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+    let ask = super::logins::Ask::from_args(args);
+    match super::logins::raise(app, caller, &ask) {
+        Ok(reply) => text(reply),
+        Err(e) => error(e.to_string()),
+    }
+}
+
+/// A login card for an agent the import brought in: answering it doesn't
+/// wake the agent.
+pub(crate) fn request_login_quiet(app: &AppHandle, agent: &store::Agent, args: &Value) -> Value {
+    let mut ask = super::logins::Ask::from_args(args);
+    ask.quiet = true;
+    match super::logins::raise(app, agent, &ask) {
+        Ok(reply) => text(reply),
+        Err(e) => error(e.to_string()),
+    }
+}
+
 /// A secure input card. Nothing waits on it: saving or declining wakes the
 /// agent (see `commands::agents::agents_save_secret`), so a card answered
 /// tomorrow works as well as one answered now.
@@ -1535,6 +1572,7 @@ pub(super) fn new_card(
         choice: None,
         secret: None,
         connector: None,
+        login: None,
     }
 }
 
@@ -1750,6 +1788,13 @@ pub(super) async fn decide(
 ) -> Decision {
     if take_grant(&caller.id, tool, input) {
         return Decision::Allow;
+    }
+    // A connection the user granted on a login card: reads go through,
+    // a read-only grant refuses the rest (`connections::gate`).
+    match super::connections::gate(&caller.id, tool) {
+        super::connections::Gate::Allow => return Decision::Allow,
+        super::connections::Gate::Refuse(why) => return Decision::Deny(why),
+        super::connections::Gate::Ask => {}
     }
     if permissions::matching(&caller.permissions, tool, input).is_some() {
         // Nothing happens invisibly: each one leaves a quiet line in the chat.
@@ -2005,6 +2050,7 @@ mod tests {
             context: None,
             routine_model: None,
             template: None,
+            reach: Default::default(),
             muted: false,
             check_ins: Vec::new(),
             usage: Default::default(),

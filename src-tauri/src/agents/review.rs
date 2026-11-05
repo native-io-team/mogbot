@@ -806,10 +806,41 @@ fn apply_one(
             } else {
                 login.purpose.clone()
             };
-            let args = serde_json::json!({
-                "name": login.name, "purpose": purpose, "kind": login.kind,
-            });
-            super::mcp::request_secret_quiet(app, &agent, &args);
+            // A login by name that means an app (gmail_native, linkedin) is
+            // a login card: connect it, never a password. Anything else, a
+            // real API key, stays a secure input card.
+            let named = format!("{} {}", login.name, login.purpose);
+            match super::logins::match_service(&login.name)
+                .or_else(|| super::logins::match_service(&named))
+                .filter(|s| !(s.key.is_some() && login.kind == "api_key"))
+            {
+                Some(service) => {
+                    let wants = if login
+                        .purpose
+                        .to_ascii_lowercase()
+                        .split_whitespace()
+                        .any(|w| {
+                            [
+                                "send", "post", "reply", "publish", "tweet", "message", "schedule",
+                            ]
+                            .contains(&w)
+                        }) {
+                        vec!["read", "write"]
+                    } else {
+                        vec!["read"]
+                    };
+                    let args = serde_json::json!({
+                        "service": service.id, "why": purpose, "scopes": wants,
+                    });
+                    super::mcp::request_login_quiet(app, &agent, &args);
+                }
+                None => {
+                    let args = serde_json::json!({
+                        "name": login.name, "purpose": purpose, "kind": login.kind,
+                    });
+                    super::mcp::request_secret_quiet(app, &agent, &args);
+                }
+            }
         }
         let note = if replaced {
             format!(

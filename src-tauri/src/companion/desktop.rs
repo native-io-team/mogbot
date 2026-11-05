@@ -224,6 +224,7 @@ impl Backend for DesktopBackend {
             }
             // What each turn did, read after the log's lock is let go.
             crate::agents::work::apply(&agent_id, &mut page);
+            crate::agents::logins::apply(&mut page);
             Ok::<_, CommandError>((page, more))
         })
         .await
@@ -509,6 +510,96 @@ impl Backend for DesktopBackend {
         .await
         .map_err(crate::agents::err_other)??;
         json(applied)
+    }
+
+    async fn login_start(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+        option_id: &str,
+    ) -> Result<(), CommandError> {
+        cmd::agents_login_start(
+            self.app.clone(),
+            agent_id.to_string(),
+            request_id.to_string(),
+            option_id.to_string(),
+            Some(true),
+        )
+        .await
+    }
+
+    async fn login_cancel(&self, agent_id: &str, request_id: &str) -> Result<(), CommandError> {
+        cmd::agents_login_cancel(
+            self.app.clone(),
+            agent_id.to_string(),
+            request_id.to_string(),
+        )
+        .await
+    }
+
+    async fn login_decline(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+        note: Option<String>,
+    ) -> Result<(), CommandError> {
+        cmd::agents_login_decline(
+            self.app.clone(),
+            agent_id.to_string(),
+            request_id.to_string(),
+            note,
+        )
+        .await
+    }
+
+    async fn login_save_key(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+        value: String,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_login_save_key(
+                self.app.clone(),
+                agent_id.to_string(),
+                request_id.to_string(),
+                value,
+            )
+            .await?,
+        )
+    }
+
+    async fn reach(&self, agent_id: &str) -> Result<Value, CommandError> {
+        json(cmd::agents_reach(agent_id.to_string()).await?)
+    }
+
+    async fn logins_team(&self, since: Option<i64>) -> Result<Value, CommandError> {
+        json(cmd::agents_logins_team(since).await?)
+    }
+
+    async fn logins_connect(
+        &self,
+        key: &str,
+        option_id: &str,
+        skip: Vec<String>,
+    ) -> Result<(), CommandError> {
+        cmd::agents_logins_connect(
+            self.app.clone(),
+            key.to_string(),
+            option_id.to_string(),
+            Some(skip),
+            Some(true),
+        )
+        .await
+    }
+
+    async fn login_dismiss(&self, agent_id: &str, request_id: &str) -> Result<(), CommandError> {
+        cmd::agents_login_dismiss(
+            self.app.clone(),
+            agent_id.to_string(),
+            request_id.to_string(),
+        )
+        .await
     }
 
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError> {

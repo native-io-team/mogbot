@@ -30,6 +30,14 @@ pub const METHODS: &[&str] = &[
     "agents.interrupt",
     "agents.answerApproval",
     "agents.saveSecret",
+    "agents.loginStart",
+    "agents.loginCancel",
+    "agents.loginDecline",
+    "agents.loginSaveKey",
+    "agents.reach",
+    "agents.loginsTeam",
+    "agents.loginsConnect",
+    "agents.loginDismiss",
     "agents.focus",
     "agents.markUnread",
     "agents.startFresh",
@@ -81,6 +89,8 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.messages",
     "agents.instructions",
     "agents.memory",
+    "agents.reach",
+    "agents.loginsTeam",
     "agents.usage",
     "agents.quota",
     "agents.accounts",
@@ -412,6 +422,44 @@ pub trait Backend: Send + Sync + 'static {
     ) -> Result<Value, CommandError>;
     /// `agents_revoke_permission`: an "Always allow" rule taken back.
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError>;
+    /// `agents_login_start`: one of a login card's ways in, started on this
+    /// Mac (its browser opens here; the token is made and kept here). The
+    /// card follows it on both devices.
+    async fn login_start(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+        option_id: &str,
+    ) -> Result<(), CommandError>;
+    /// `agents_login_cancel`: stop a sign-in under way.
+    async fn login_cancel(&self, agent_id: &str, request_id: &str) -> Result<(), CommandError>;
+    /// `agents_login_decline`.
+    async fn login_decline(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+        note: Option<String>,
+    ) -> Result<(), CommandError>;
+    /// `agents_login_save_key`: a login card's API key into the Keychain.
+    async fn login_save_key(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+        value: String,
+    ) -> Result<Value, CommandError>;
+    /// `agents_reach`: what an agent can reach. Read-only on the phone.
+    async fn reach(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_logins_team`: "What your team needs", one row per service.
+    async fn logins_team(&self, since: Option<i64>) -> Result<Value, CommandError>;
+    /// `agents_logins_connect`: one row's way in, for every agent on it but `skip`.
+    async fn logins_connect(
+        &self,
+        key: &str,
+        option_id: &str,
+        skip: Vec<String>,
+    ) -> Result<(), CommandError>;
+    /// `agents_login_dismiss`: "Not needed".
+    async fn login_dismiss(&self, agent_id: &str, request_id: &str) -> Result<(), CommandError>;
     /// `agents_change_diff`: one file of a change card.
     async fn change_diff(
         &self,
@@ -683,6 +731,41 @@ struct SessionSendParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct LoginParams {
+    agent_id: String,
+    request_id: String,
+    #[serde(default)]
+    option_id: String,
+    #[serde(default)]
+    note: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TeamParams {
+    #[serde(default)]
+    since: Option<i64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TeamConnectParams {
+    key: String,
+    option_id: String,
+    #[serde(default)]
+    skip: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LoginKeyParams {
+    agent_id: String,
+    request_id: String,
+    value: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RuleParams {
     agent_id: String,
     rule_id: String,
@@ -885,6 +968,21 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         }
         // Names the card, never a value: `values` is not read here.
         "agents.saveSecret" => format!("saved a secret for {}", field("agentId")),
+        "agents.loginStart" => format!(
+            "started signing in ({}) for {}",
+            field("optionId"),
+            field("agentId")
+        ),
+        "agents.loginCancel" => format!("stopped signing in for {}", field("agentId")),
+        "agents.loginsConnect" => format!(
+            "connected {} ({}) for the team",
+            field("key"),
+            field("optionId")
+        ),
+        "agents.loginDismiss" => format!("not needed: a login for {}", field("agentId")),
+        "agents.loginDecline" => format!("declined a login for {}", field("agentId")),
+        // Never the value.
+        "agents.loginSaveKey" => format!("saved a key for {}", field("agentId")),
         "agents.memoryChange" => {
             let change = params.get("change").cloned().unwrap_or(Value::Null);
             let text = change.get("text").and_then(Value::as_str).unwrap_or("");
@@ -1292,6 +1390,61 @@ async fn run(
         // The ready-made agents, without their briefings: the phone shows
         // the choice, the Mac fills the instructions in on create.
         "agents.templates" => Ok(templates_for_phone()),
+        "agents.loginStart" => {
+            let p: LoginParams = parse(params)?;
+            if p.option_id.is_empty() || p.option_id.len() > 200 {
+                return Err(bad_params(
+                    "Which way in? optionId is one of the card's options.",
+                ));
+            }
+            b.login_start(&p.agent_id, &p.request_id, &p.option_id)
+                .await?;
+            Ok(Value::Null)
+        }
+        "agents.loginCancel" => {
+            let p: LoginParams = parse(params)?;
+            b.login_cancel(&p.agent_id, &p.request_id).await?;
+            Ok(Value::Null)
+        }
+        "agents.loginDecline" => {
+            let p: LoginParams = parse(params)?;
+            let note = p.note.map(|n| n.chars().take(500).collect::<String>());
+            b.login_decline(&p.agent_id, &p.request_id, note).await?;
+            Ok(Value::Null)
+        }
+        "agents.loginSaveKey" => {
+            // As saveSecret: the phone's pinned-identity check keeps it on this Mac.
+            let p: LoginKeyParams = parse(params)
+                .map_err(|_| bad_params("A key needs agentId, requestId and value."))?;
+            if p.value.trim().is_empty() || p.value.chars().count() > MAX_SECRET_CHARS {
+                return Err(bad_params(
+                    "That doesn't look like a key this card asked for.",
+                ));
+            }
+            Ok(b.login_save_key(&p.agent_id, &p.request_id, p.value)
+                .await?)
+        }
+        "agents.reach" => {
+            let p: AgentParam = parse(params)?;
+            Ok(b.reach(&p.agent_id).await?)
+        }
+        "agents.loginsTeam" => {
+            let p: TeamParams = parse(params)?;
+            Ok(b.logins_team(p.since).await?)
+        }
+        "agents.loginsConnect" => {
+            let p: TeamConnectParams = parse(params)?;
+            if p.key.is_empty() || p.option_id.is_empty() || p.skip.len() > 200 {
+                return Err(bad_params("Which row, and which way in?"));
+            }
+            b.logins_connect(&p.key, &p.option_id, p.skip).await?;
+            Ok(Value::Null)
+        }
+        "agents.loginDismiss" => {
+            let p: LoginParams = parse(params)?;
+            b.login_dismiss(&p.agent_id, &p.request_id).await?;
+            Ok(Value::Null)
+        }
         "agents.revokePermission" => {
             let p: RuleParams = parse(params)?;
             b.revoke_permission(&p.agent_id, &p.rule_id).await?;
@@ -1560,6 +1713,93 @@ mod tests {
             );
         }
         assert_eq!(stub.audited().len(), 3);
+    }
+
+    /// The phone answers a login card: Connect starts it on the Mac, the
+    /// team list connects a row, "Not needed" puts one away, a key never
+    /// reaches the audit, and "What it can reach" is read-only.
+    #[tokio::test]
+    async fn a_login_card_is_answered_from_the_phone_and_runs_on_the_mac() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let card = json!({ "agentId": AGENT, "requestId": "q12", "optionId": "claude_ai" });
+        assert_eq!(
+            dispatch(&c, &me, "agents.loginStart", card).await.unwrap(),
+            Value::Null
+        );
+        // A way in must be named.
+        assert!(dispatch(
+            &c,
+            &me,
+            "agents.loginStart",
+            json!({ "agentId": AGENT, "requestId": "q12" })
+        )
+        .await
+        .is_err());
+        dispatch(
+            &c,
+            &me,
+            "agents.loginCancel",
+            json!({ "agentId": AGENT, "requestId": "q12" }),
+        )
+        .await
+        .unwrap();
+        dispatch(
+            &c,
+            &me,
+            "agents.loginsConnect",
+            json!({ "key": "google", "optionId": "claude_ai", "skip": ["agent_c"] }),
+        )
+        .await
+        .unwrap();
+        dispatch(
+            &c,
+            &me,
+            "agents.loginDismiss",
+            json!({ "agentId": AGENT, "requestId": "q20" }),
+        )
+        .await
+        .unwrap();
+        dispatch(
+            &c,
+            &me,
+            "agents.loginSaveKey",
+            json!({ "agentId": AGENT, "requestId": "q12", "value": "xai-secret-value-123" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            stub.logins.lock().unwrap().as_slice(),
+            [
+                "start q12 claude_ai",
+                "cancel q12",
+                "team google claude_ai",
+                "dismiss q20",
+                "key q12"
+            ]
+        );
+        let team = dispatch(&c, &me, "agents.loginsTeam", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(team["needs"][0]["title"], "Google · Gmail + Calendar");
+        let reach = dispatch(&c, &me, "agents.reach", json!({ "agentId": AGENT }))
+            .await
+            .unwrap();
+        assert_eq!(reach["connections"][0]["account"], "work@acme.com");
+        let audited = stub.audited();
+        assert!(audited
+            .iter()
+            .all(|(_, _, detail, _)| !detail.contains("xai-secret-value")));
+        // Reads aren't audited; every change is.
+        assert!(!audited
+            .iter()
+            .any(|(_, m, _, _)| m == "agents.reach" || m == "agents.loginsTeam"));
+        assert!(audited.iter().any(|(_, m, _, _)| m == "agents.loginStart"));
+        assert!(!serde_json::to_string(&reach)
+            .unwrap()
+            .to_lowercase()
+            .contains("token\""));
     }
 
     #[tokio::test]

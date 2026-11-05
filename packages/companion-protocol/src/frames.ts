@@ -164,6 +164,8 @@ export const MAC_FEATURES = {
   whenRoutines: 'routines.when',
   /** Rooms: the `rooms.*` methods and `rooms.changed`. */
   rooms: 'rooms',
+  /** Login cards (`approval.login`) and the `agents.login*` / `agents.reach` methods. */
+  logins: 'logins',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

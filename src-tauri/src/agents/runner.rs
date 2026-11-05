@@ -3164,11 +3164,13 @@ async fn run_turn(
     // (Claude Code) or this process's environment (Codex), never argv.
     let turn = super::broker::open_turn(agent_id);
     let url = super::reach::agent_url(port);
+    // The apps it was granted on login cards (tokens refreshed), the
+    // claude.ai connectors it's kept from, and its browser (`connections`).
+    let access = super::connections::for_turn(&agent).await;
     let mcp_config = match engine {
-        Engine::Claude => Some(super::reach::write_config(&super::reach::claude_config(
-            &url,
-            turn.secret(),
-        ))?),
+        Engine::Claude => Some(super::reach::write_config(
+            &super::reach::claude_config_with(&url, turn.secret(), access.claude_servers()),
+        )?),
         Engine::Codex => None,
     };
 
@@ -3214,6 +3216,10 @@ async fn run_turn(
         system_prompt.push_str("\n\n");
         system_prompt.push_str(&have);
     }
+    if !access.prompt.is_empty() {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(&access.prompt);
+    }
     let model = if routine {
         agent.routine_model()
     } else {
@@ -3246,6 +3252,7 @@ async fn run_turn(
         system_prompt: &system_prompt,
         writable: &layout.add_dirs,
         protected: protected.as_deref(),
+        access: Some(&access),
     }));
     // A "When…" routine's items came from outside: this turn can't write its
     // own instructions or memory (Claude Code refuses the edit; for Codex,
@@ -3260,6 +3267,8 @@ async fn run_turn(
         // Read by `bearer_token_env_var`. Codex's default shell environment
         // policy leaves any `*TOKEN*` variable out of the commands it runs.
         cmd.env(super::reach::TOKEN_ENV, turn.secret());
+        // Each connection server's token, read by its `bearer_token_env_var`.
+        cmd.envs(access.codex_env());
     }
     cmd.env("PATH", crate::utils::get_extended_path())
         // Claude Code gives an MCP tool call ~60s by default, and the approval
@@ -4350,6 +4359,7 @@ mod tests {
                 choice: None,
                 secret: None,
                 connector: None,
+                login: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

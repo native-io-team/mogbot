@@ -10,6 +10,8 @@
 import type { Cursor } from './frames';
 import type {
   AgentMessage,
+  AgentReach,
+  TeamLogins,
   AgentSecret,
   AgentsOverview,
   CheckIn,
@@ -129,6 +131,40 @@ export interface Methods {
     params: { agentId: string; requestId: string; values: string[] };
     result: AgentSecret;
   };
+  /**
+   * Logins (Mac feature `logins`). Every way in runs on the Mac: Connect
+   * opens the sign-in in the Mac's browser and the token is made and kept
+   * there; the card's `login.flow` follows it on both devices.
+   */
+  'agents.loginStart': {
+    params: { agentId: string; requestId: string; optionId: string };
+    result: null;
+  };
+  'agents.loginCancel': { params: { agentId: string; requestId: string }; result: null };
+  'agents.loginDecline': {
+    params: { agentId: string; requestId: string; note?: string };
+    result: null;
+  };
+  /** A login card's API key (its `key` option), into the Mac's Keychain. As saveSecret. */
+  'agents.loginSaveKey': {
+    params: { agentId: string; requestId: string; value: string };
+    result: AgentSecret;
+  };
+  /** What an agent can reach: connections, browser, secrets. Read-only. */
+  'agents.reach': { params: { agentId: string }; result: AgentReach };
+  /**
+   * "What your team needs": every login card waiting, one row per service
+   * (Gmail + Calendar as one Google row), with each agent on it; `since`
+   * adds the ones answered since then, for "4 of 9 connected".
+   */
+  'agents.loginsTeam': { params: { since?: number }; result: TeamLogins };
+  /** One row's way in, for every agent on it but those in `skip` (agent ids). */
+  'agents.loginsConnect': {
+    params: { key: string; optionId: string; skip?: string[] };
+    result: null;
+  };
+  /** "Not needed": the card is put away and the agent isn't woken. */
+  'agents.loginDismiss': { params: { agentId: string; requestId: string }; result: null };
   /** `agents_memory`: the agent's `## Memory` entries. */
   'agents.memory': { params: { agentId: string }; result: MemoryView };
   /** `agents_memory_change`: add, edit or delete one entry. */
@@ -330,6 +366,8 @@ export const READ_ONLY_METHODS = [
   'agents.messages',
   'agents.instructions',
   'agents.memory',
+  'agents.reach',
+  'agents.loginsTeam',
   'agents.usage',
   'agents.quota',
   'agents.accounts',
