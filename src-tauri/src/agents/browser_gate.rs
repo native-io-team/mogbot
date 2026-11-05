@@ -1,0 +1,828 @@
+//! What a Claude in Chrome call may do without a card, and the card's words
+//! when it may not.
+//!
+//! **Looking is free** at "Use good judgement" and "Go hard": tabs, browsers,
+//! going to any web page (`http`/`https` only), reading it, screenshots,
+//! scrolling, the console and network. At "Check with me often" only the
+//! agent's own sites (`browser_sites`) are free to open, as before.
+//!
+//! **Acting is free unless it sends.** A click, keystroke or form fill goes
+//! through at "Use good judgement" and "Go hard", except when it would send,
+//! post, publish, pay, delete or share: the target's accessible name (from
+//! what `read_page` / `find` answered, kept per agent in [`Page`]) names one
+//! of [`SENDS`], Enter is pressed anywhere but a search box, or the page is a
+//! checkout, payment or compose page. When it can't be told, it asks. At
+//! "Check with me often" every interaction asks.
+//!
+//! **Always a card**, at every level: `javascript_tool`, `file_upload`,
+//! `upload_image`, `shortcuts_execute` (each can carry data anywhere), and
+//! anything this build doesn't know.
+//!
+//! Turns answering outside text never get the browser at all
+//! (`browser::allowed`). Threat model: docs/agents.md, "Your browser".
+
+use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use super::browser::{allowed, team_enabled};
+use super::independence::Level;
+use super::store::Agent;
+
+/// What [`gate`] does with a Claude in Chrome call.
+#[derive(Debug, PartialEq)]
+pub enum Gate {
+    /// Not a browser tool: the usual rules apply.
+    NotBrowser,
+    /// Goes through without a card.
+    Allow,
+    /// Asks on a card.
+    Ask,
+    /// It may not use the browser this turn.
+    Refuse(String),
+}
+
+pub const SERVER: &str = "mcp__claude-in-chrome__";
+
+/// Tools that only look: they change nothing on a page or a site.
+const LOOKS: &[&str] = &[
+    "tabs_context_mcp",
+    "tabs_close_mcp",
+    "get_page_text",
+    "read_page",
+    "find",
+    "read_console_messages",
+    "read_network_requests",
+    "list_connected_browsers",
+    "select_browser",
+    "switch_browser",
+    "resize_window",
+    "shortcuts_list",
+];
+
+/// Always a card: each can run anything or carry data anywhere.
+const ALWAYS_ASK: &[&str] = &[
+    "javascript_tool",
+    "file_upload",
+    "upload_image",
+    "shortcuts_execute",
+];
+
+/// `computer` actions that only look.
+const COMPUTER_LOOKS: &[&str] = &[
+    "screenshot",
+    "scroll",
+    "zoom",
+    "hover",
+    "wait",
+    "scroll_to",
+    "mouse_move",
+];
+
+/// `computer` actions that click.
+const CLICKS: &[&str] = &[
+    "left_click",
+    "right_click",
+    "double_click",
+    "triple_click",
+    "middle_click",
+    "left_click_drag",
+    "left_mouse_down",
+    "left_mouse_up",
+];
+
+/// Words on a control that mean it sends, posts, publishes, pays, deletes or
+/// shares, and what that is in plain words.
+pub const SENDS: &[(&str, &str)] = &[
+    ("send", "send it as you"),
+    ("reply", "send it as you"),
+    ("forward", "send it as you"),
+    ("post", "post it as you"),
+    ("repost", "post it as you"),
+    ("tweet", "post it as you"),
+    ("comment", "post it as you"),
+    ("publish", "publish it as you"),
+    ("share", "share it as you"),
+    ("invite", "invite someone as you"),
+    ("submit", "submit it as you"),
+    ("confirm", "confirm it as you"),
+    ("approve", "approve it as you"),
+    ("pay", "spend your money"),
+    ("buy", "spend your money"),
+    ("purchase", "spend your money"),
+    ("checkout", "spend your money"),
+    ("order", "spend your money"),
+    ("subscribe", "spend your money"),
+    ("upgrade", "spend your money"),
+    ("donate", "spend your money"),
+    ("transfer", "move your money"),
+    ("withdraw", "move your money"),
+    ("book", "book it as you"),
+    ("delete", "delete something"),
+    ("remove", "delete something"),
+    ("discard", "delete something"),
+    ("trash", "delete something"),
+    ("merge", "change what others see"),
+    ("deploy", "change what others see"),
+    ("promote", "change what others see"),
+    ("rollback", "change what others see"),
+];
+
+/// Two-word controls that count as one ("Check out", "Place order").
+const SENDS_PHRASES: &[(&str, &str)] = &[
+    ("check out", "spend your money"),
+    ("place order", "spend your money"),
+    ("roll back", "change what others see"),
+];
+
+/// Hosts where any click may pay.
+const PAY_HOSTS: &[&str] = &[
+    "paypal.com",
+    "checkout.stripe.com",
+    "buy.stripe.com",
+    "pay.google.com",
+    "venmo.com",
+    "wise.com",
+    "coinbase.com",
+    "cash.app",
+];
+
+/// Words in a page's path or fragment that make a click there unsure.
+const SENSITIVE_PAGES: &[&str] = &[
+    "compose",
+    "checkout",
+    "payment",
+    "payments",
+    "pay",
+    "cart",
+    "basket",
+    "billing",
+    "transfer",
+    "send",
+    "purchase",
+    "donate",
+    "subscribe",
+    "upgrade",
+];
+
+/// Labels of boxes where Enter only searches.
+const SEARCH_BOXES: &[&str] = &[
+    "search",
+    "find",
+    "filter",
+    "query",
+    "address",
+    "url",
+    "go",
+    "jump",
+    "searchbox",
+    "combobox",
+];
+
+/* ------------------------------------------------------- page memory */
+
+/// What the agent's browser showed, from its own calls' answers: which
+/// control each `ref` is, the page each tab is on, and what it last acted on.
+#[derive(Debug, Clone, Default)]
+pub struct Page {
+    /// `ref_12` → `button "Send"`.
+    pub refs: HashMap<String, String>,
+    pub tabs: HashMap<u64, String>,
+    /// The page it last went to, when a call doesn't name its tab.
+    pub url: Option<String>,
+    /// The control it last clicked or filled (for Enter).
+    pub last_target: Option<String>,
+}
+
+const MAX_REFS: usize = 4000;
+
+static PAGES: Mutex<Option<HashMap<String, Page>>> = Mutex::new(None);
+
+fn with_pages<T>(f: impl FnOnce(&mut HashMap<String, Page>) -> T) -> T {
+    let mut guard = PAGES.lock().unwrap_or_else(|e| e.into_inner());
+    f(guard.get_or_insert_with(HashMap::new))
+}
+
+/// The agent's page memory as it is now.
+pub fn page_of(agent_id: &str) -> Page {
+    with_pages(|p| p.get(agent_id).cloned().unwrap_or_default())
+}
+
+pub fn forget(agent_id: &str) {
+    with_pages(|p| p.remove(agent_id));
+}
+
+fn tab_of(input: &Value) -> Option<u64> {
+    input.get("tabId").and_then(Value::as_u64)
+}
+
+/// One line of Claude Code's stream-json: the browser calls it makes, and
+/// what `read_page`, `find` and `tabs_context_mcp` answered.
+pub fn observe(agent_id: &str, value: &Value) {
+    let blocks = value.pointer("/message/content").and_then(Value::as_array);
+    let Some(blocks) = blocks else { return };
+    with_pages(|pages| {
+        let page = pages.entry(agent_id.to_string()).or_default();
+        for b in blocks {
+            match b.get("type").and_then(Value::as_str) {
+                Some("tool_use") => {
+                    let Some(name) = b
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .and_then(|n| n.strip_prefix(SERVER))
+                    else {
+                        continue;
+                    };
+                    let input = b.get("input").cloned().unwrap_or(Value::Null);
+                    on_call(page, name, &input);
+                }
+                Some("tool_result") => {
+                    let text = result_text(b.get("content"));
+                    on_answer(page, &text);
+                }
+                _ => {}
+            }
+        }
+    });
+}
+
+fn on_call(page: &mut Page, name: &str, input: &Value) {
+    match name {
+        "navigate" | "tabs_create_mcp" => {
+            if let Some(url) = input.get("url").and_then(Value::as_str) {
+                if host_of(url).is_some() {
+                    page.url = Some(url.trim().to_string());
+                    if let Some(t) = tab_of(input) {
+                        page.tabs.insert(t, url.trim().to_string());
+                    }
+                    page.refs.clear();
+                    page.last_target = None;
+                }
+            }
+        }
+        "form_input" => page.last_target = target_of(page, input),
+        "computer" => {
+            let action = input.get("action").and_then(Value::as_str).unwrap_or("");
+            if CLICKS.contains(&action) {
+                page.last_target = target_of(page, input);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn result_text(content: Option<&Value>) -> String {
+    match content {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Array(parts)) => parts
+            .iter()
+            .filter_map(|p| p.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    }
+}
+
+/// Lines naming a `ref_N` become that ref's label; a tabs answer, the tabs.
+fn on_answer(page: &mut Page, text: &str) {
+    if let Ok(v) = serde_json::from_str::<Value>(text.trim()) {
+        let tabs = v
+            .get("availableTabs")
+            .or_else(|| v.get("tabs"))
+            .and_then(Value::as_array);
+        for t in tabs.into_iter().flatten() {
+            let id = t
+                .get("tabId")
+                .or_else(|| t.get("id"))
+                .and_then(Value::as_u64);
+            if let (Some(id), Some(url)) = (id, t.get("url").and_then(Value::as_str)) {
+                page.tabs.insert(id, url.to_string());
+            }
+        }
+    }
+    for line in text.lines() {
+        let Some(at) = line.find("ref_") else {
+            continue;
+        };
+        let digits: String = line[at + 4..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        if digits.is_empty() || page.refs.len() >= MAX_REFS {
+            continue;
+        }
+        let r = format!("ref_{digits}");
+        let label = line
+            .replace(&format!("[{r}]"), "")
+            .replace(&r, "")
+            .trim_matches(|c: char| c.is_whitespace() || "-:*[]()".contains(c))
+            .to_string();
+        if !label.is_empty() {
+            page.refs.insert(r, label);
+        }
+    }
+}
+
+/* ---------------------------------------------------------- deciding */
+
+fn host_matches(host: &str, site: &str) -> bool {
+    let h = host.trim_start_matches("www.").to_ascii_lowercase();
+    let s = site.trim_start_matches("www.").to_ascii_lowercase();
+    !s.is_empty() && (h == s || h.ends_with(&format!(".{s}")))
+}
+
+/// The host of a web URL (`http`/`https` only).
+pub fn host_of(url: &str) -> Option<String> {
+    let u = url::Url::parse(url.trim()).ok()?;
+    matches!(u.scheme(), "https" | "http")
+        .then(|| u.host_str().map(str::to_string))
+        .flatten()
+}
+
+/// "Check with me often": a web URL on one of `sites`, carrying no other URL
+/// in its query or fragment (an own site's redirect endpoint would otherwise
+/// carry page data to a host nobody named).
+fn own_site(url: &str, sites: &[String]) -> bool {
+    let Ok(u) = url::Url::parse(url.trim()) else {
+        return false;
+    };
+    let Some(host) = host_of(url) else {
+        return false;
+    };
+    if !sites.iter().any(|s| host_matches(&host, s)) {
+        return false;
+    }
+    let rest = format!(
+        "{}?{}#{}",
+        u.path().get(1..).unwrap_or(""),
+        u.query().unwrap_or(""),
+        u.fragment().unwrap_or("")
+    )
+    .to_ascii_lowercase()
+    .replace("%25", "%")
+    .replace("%2f", "/")
+    .replace("%5c", "/")
+    .replace('\\', "/");
+    !rest.contains("//")
+}
+
+/// Whether going to `url` needs a card at `level`.
+fn may_open(level: Level, url: &str, agent: &Agent) -> bool {
+    if matches!(url.trim(), "back" | "forward") {
+        return true;
+    }
+    match level {
+        Level::Often => own_site(url, &agent.reach.browser_sites),
+        Level::Judgement | Level::GoHard => host_of(url).is_some(),
+    }
+}
+
+fn words(text: &str) -> Vec<String> {
+    text.to_ascii_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// The quoted name in `button "Send now"`, else the whole label.
+pub fn name_in(label: &str) -> String {
+    let quoted = label
+        .split_once('"')
+        .and_then(|(_, rest)| rest.split_once('"'))
+        .map(|(name, _)| name.trim().to_string());
+    quoted
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| label.trim().to_string())
+}
+
+/// What a control would do as the user, when its label says it sends, pays,
+/// deletes or shares.
+pub fn sends(label: &str) -> Option<&'static str> {
+    let name = name_in(label).to_ascii_lowercase();
+    let joined = words(&name).join(" ");
+    if let Some((_, what)) = SENDS_PHRASES.iter().find(|(p, _)| joined.contains(p)) {
+        return Some(what);
+    }
+    let ws = words(&name);
+    SENDS
+        .iter()
+        .find(|(w, _)| ws.iter().any(|x| x == w))
+        .map(|(_, what)| *what)
+}
+
+/// The page a call acts on.
+fn url_for(page: &Page, input: &Value) -> Option<String> {
+    tab_of(input)
+        .and_then(|t| page.tabs.get(&t).cloned())
+        .or_else(|| page.url.clone())
+}
+
+/// A checkout, payment or compose page: a click there can't be told safe.
+fn sensitive_page(url: Option<&str>) -> bool {
+    let Some(url) = url else { return false };
+    let Ok(u) = url::Url::parse(url) else {
+        return false;
+    };
+    let host = u.host_str().unwrap_or("");
+    if PAY_HOSTS.iter().any(|h| host_matches(host, h)) {
+        return true;
+    }
+    let tail = format!(
+        "{} {} {}",
+        u.path(),
+        u.query().unwrap_or(""),
+        u.fragment().unwrap_or("")
+    );
+    words(&tail)
+        .iter()
+        .any(|w| SENSITIVE_PAGES.contains(&w.as_str()))
+}
+
+/// The control a call names by `ref`, as `read_page` / `find` labelled it.
+fn target_of(page: &Page, input: &Value) -> Option<String> {
+    let r = input.get("ref").and_then(Value::as_str)?;
+    page.refs.get(r.trim()).cloned()
+}
+
+fn is_enter(key: &str) -> bool {
+    key.split(['+', ' ']).any(|k| {
+        matches!(
+            k.trim().to_ascii_lowercase().as_str(),
+            "enter" | "return" | "kp_enter"
+        )
+    })
+}
+
+fn search_box(label: &str) -> bool {
+    words(label)
+        .iter()
+        .any(|w| SEARCH_BOXES.contains(&w.as_str()))
+}
+
+/// An interaction at "Use good judgement" or "Go hard": through, unless it
+/// would send (or it can't be told).
+fn interaction_may_go(page: &Page, name: &str, input: &Value) -> bool {
+    let url = url_for(page, input);
+    match name {
+        "form_input" => match target_of(page, input) {
+            // Filling in a field doesn't send; pressing its button does.
+            Some(label) => sends(&label).is_none() || is_field(&label),
+            None => !sensitive_page(url.as_deref()),
+        },
+        "computer" => {
+            let action = input.get("action").and_then(Value::as_str).unwrap_or("");
+            if CLICKS.contains(&action) {
+                return match target_of(page, input) {
+                    Some(label) => sends(&label).is_none() && !sensitive_page(url.as_deref()),
+                    None => !sensitive_page(url.as_deref()),
+                };
+            }
+            match action {
+                "type" => true,
+                "key" => {
+                    let key = input
+                        .get("text")
+                        .or_else(|| input.get("key"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
+                    !is_enter(key)
+                        || page
+                            .last_target
+                            .as_deref()
+                            .is_some_and(|t| search_box(t) && !sensitive_page(url.as_deref()))
+                }
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+/// A text box or option, not a button: `textbox "Message"`, `combobox …`.
+fn is_field(label: &str) -> bool {
+    let lower = label.trim_start().to_ascii_lowercase();
+    [
+        "textbox",
+        "searchbox",
+        "combobox",
+        "checkbox",
+        "radio",
+        "option",
+        "listbox",
+        "spinbutton",
+        "slider",
+        "textarea",
+        "input",
+    ]
+    .iter()
+    .any(|r| lower.starts_with(r))
+}
+
+/// The steps of a `browser_batch`, as (tool, input). `None` when its shape
+/// can't be read (it asks).
+fn batch_steps(input: &Value) -> Option<Vec<(String, Value)>> {
+    let list = ["actions", "steps", "calls", "batch", "commands"]
+        .iter()
+        .find_map(|k| input.get(*k).and_then(Value::as_array))?;
+    list.iter()
+        .map(|s| {
+            let name = s
+                .get("tool")
+                .or_else(|| s.get("name"))
+                .and_then(Value::as_str)?;
+            let args = s
+                .get("input")
+                .or_else(|| s.get("args"))
+                .or_else(|| s.get("arguments"))
+                .or_else(|| s.get("params"))
+                .cloned()
+                .unwrap_or_else(|| s.clone());
+            Some((name.trim_start_matches(SERVER).to_string(), args))
+        })
+        .collect()
+}
+
+/// One browser tool (its name without the server) at `level`.
+fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -> Gate {
+    let free = |ok: bool| if ok { Gate::Allow } else { Gate::Ask };
+    if ALWAYS_ASK.contains(&name) {
+        return Gate::Ask;
+    }
+    match name {
+        "navigate" => {
+            let url = input.get("url").and_then(Value::as_str).unwrap_or("");
+            free(may_open(level, url, agent))
+        }
+        "tabs_create_mcp" => match input.get("url").and_then(Value::as_str) {
+            Some(url) if !url.trim().is_empty() => free(may_open(level, url, agent)),
+            _ => Gate::Allow,
+        },
+        // Recording is a look; exporting can drop the file onto a page.
+        "gif_creator" => {
+            let action = input.get("action").and_then(Value::as_str).unwrap_or("");
+            free(matches!(
+                action,
+                "start_recording" | "stop_recording" | "clear"
+            ))
+        }
+        "computer" => {
+            let action = input.get("action").and_then(Value::as_str).unwrap_or("");
+            if COMPUTER_LOOKS.contains(&action) {
+                Gate::Allow
+            } else if level == Level::Often {
+                Gate::Ask
+            } else {
+                free(interaction_may_go(page, name, input))
+            }
+        }
+        "form_input" => {
+            if level == Level::Often {
+                Gate::Ask
+            } else {
+                free(interaction_may_go(page, name, input))
+            }
+        }
+        "browser_batch" => match batch_steps(input) {
+            Some(steps) if !steps.is_empty() => {
+                // Steps after a navigation in the batch land on a page whose
+                // controls weren't read: judged as unknown targets there.
+                let mut page = page.clone();
+                for (n, i) in &steps {
+                    if n == "browser_batch" || decide(level, agent, n, i, &page) != Gate::Allow {
+                        return Gate::Ask;
+                    }
+                    on_call(&mut page, n, i);
+                }
+                Gate::Allow
+            }
+            _ => Gate::Ask,
+        },
+        n if LOOKS.contains(&n) => Gate::Allow,
+        _ => Gate::Ask,
+    }
+}
+
+/// Decide a browser tool call from `agent` before any card. `enabled`: the
+/// team's switch; `level`: the turn's independence level.
+pub fn gate_with(
+    enabled: bool,
+    level: Level,
+    agent: &Agent,
+    tool: &str,
+    input: &Value,
+    outside: bool,
+    page: &Page,
+) -> Gate {
+    let Some(name) = tool.strip_prefix(SERVER) else {
+        return Gate::NotBrowser;
+    };
+    if !allowed(enabled, agent, outside) {
+        return Gate::Refuse(if outside {
+            "Your browser isn't available while you answer text from outside (a routine's items, or a message that carried them). Do this from the user's own request.".into()
+        } else {
+            "The user's browser isn't on for you. If the task needs a signed-in site, ask with request_login for it.".into()
+        });
+    }
+    decide(level, agent, name, input, page)
+}
+
+pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
+    if !tool.starts_with(SERVER) {
+        return Gate::NotBrowser;
+    }
+    let level = super::independence::for_turn(super::independence::level(), outside);
+    gate_with(
+        team_enabled(),
+        level,
+        agent,
+        tool,
+        input,
+        outside,
+        &page_of(&agent.id),
+    )
+}
+
+/* ------------------------------------------------------- card words */
+
+fn site_of(page: &Page, input: &Value) -> String {
+    url_for(page, input)
+        .as_deref()
+        .and_then(host_of)
+        .map(|h| h.trim_start_matches("www.").to_string())
+        .unwrap_or_else(|| "the page".to_string())
+}
+
+fn on(site: &str) -> String {
+    if site == "the page" {
+        "on the page".to_string()
+    } else {
+        format!("on {site}")
+    }
+}
+
+fn clip(text: &str, n: usize) -> String {
+    let t = text.trim().replace('\n', " ");
+    if t.chars().count() > n {
+        t.chars().take(n).collect::<String>() + "…"
+    } else {
+        t
+    }
+}
+
+/// A browser call in plain words: a title, and a sentence saying what it
+/// would do. The raw call stays behind Details.
+pub fn describe(tool: &str, input: &Value, page: &Page) -> (String, String) {
+    let name = tool.strip_prefix(SERVER).unwrap_or(tool);
+    let site = site_of(page, input);
+    let s = |k: &str| {
+        input
+            .get(k)
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    };
+    let target = target_of(page, input).map(|l| name_in(&l));
+    let as_you = |label: &str| match sends(label) {
+        Some(what) => format!("This would {what}, in your signed-in Chrome."),
+        None => "In your signed-in Chrome.".to_string(),
+    };
+    match name {
+        "navigate" => {
+            let url = s("url");
+            match host_of(&url) {
+                Some(h) => (
+                    format!("Go to {}", h.trim_start_matches("www.")),
+                    format!("Open {} in your Chrome.", clip(&url, 120)),
+                ),
+                None => (
+                    "Open a link that isn't a web page".into(),
+                    format!("Open {} in your Chrome.", clip(&url, 120)),
+                ),
+            }
+        }
+        "tabs_create_mcp" => ("Open a tab".into(), "A new tab in your Chrome.".into()),
+        "tabs_close_mcp" => ("Close a tab".into(), "A tab it opened.".into()),
+        "tabs_context_mcp" => (
+            "Look at your open tabs".into(),
+            "Which tabs are open.".into(),
+        ),
+        "list_connected_browsers" | "select_browser" | "switch_browser" => (
+            "Use one of your Chrome profiles".into(),
+            "Which Chrome it works in.".into(),
+        ),
+        "read_page" | "get_page_text" | "find" => (
+            format!("Look at the page {}", on(&site)),
+            "Reading only.".into(),
+        ),
+        "read_console_messages" | "read_network_requests" => (
+            format!("Read the page's diagnostics {}", on(&site)),
+            "Reading only.".into(),
+        ),
+        "javascript_tool" => (
+            format!("Run a script {}", on(&site)),
+            "A script can read anything on the page and send it anywhere.".into(),
+        ),
+        "file_upload" | "upload_image" => (
+            format!("Upload a file {}", on(&site)),
+            "This puts a file from this Mac on the page.".into(),
+        ),
+        "shortcuts_execute" => (
+            "Run a Chrome shortcut".into(),
+            "A shortcut can do anything in your Chrome.".into(),
+        ),
+        "gif_creator" => ("Save a recording".into(), "A GIF of what it did.".into()),
+        "form_input" => {
+            let what = target.clone().unwrap_or_else(|| "a field".into());
+            (
+                format!("Fill in “{}” {}", clip(&what, 40), on(&site)),
+                as_you(&what),
+            )
+        }
+        "computer" => {
+            let action = s("action");
+            if CLICKS.contains(&action.as_str()) {
+                match target {
+                    Some(t) => (
+                        format!("Click “{}” {}", clip(&t, 40), on(&site)),
+                        as_you(&t),
+                    ),
+                    None => (
+                        format!("Click {}", on(&site)),
+                        "It can't tell what this button does, so it's asking.".into(),
+                    ),
+                }
+            } else if action == "type" {
+                (
+                    format!("Type {}", on(&site)),
+                    format!("“{}”", clip(&s("text"), 120)),
+                )
+            } else if action == "key" {
+                let key = Some(s("text"))
+                    .filter(|k| !k.is_empty())
+                    .unwrap_or_else(|| s("key"));
+                if is_enter(&key) {
+                    (
+                        format!("Press Enter {}", on(&site)),
+                        "This could send what it typed.".into(),
+                    )
+                } else {
+                    (
+                        format!("Press {} {}", clip(&key, 30), on(&site)),
+                        String::new(),
+                    )
+                }
+            } else {
+                (format!("Look at the page {}", on(&site)), String::new())
+            }
+        }
+        "browser_batch" => {
+            let steps = batch_steps(input).unwrap_or_default();
+            let first = steps
+                .iter()
+                .find(|(n, i)| !is_look(n, i))
+                .map(|(n, i)| describe(&format!("{SERVER}{n}"), i, page));
+            match first {
+                Some((t, d)) if steps.len() > 1 => {
+                    (format!("{t} (and {} more steps)", steps.len() - 1), d)
+                }
+                Some(td) => td,
+                None => (
+                    format!("Do several steps {}", on(&site)),
+                    "In your signed-in Chrome.".into(),
+                ),
+            }
+        }
+        other => (
+            format!(
+                "{} {}",
+                capitalized(&super::mcp::split_words(other).join(" ")),
+                on(&site)
+            ),
+            "In your Chrome.".into(),
+        ),
+    }
+}
+
+/// A step that only looks (for picking the one a batch's card is about).
+fn is_look(name: &str, input: &Value) -> bool {
+    LOOKS.contains(&name)
+        || name == "tabs_create_mcp"
+        || (name == "computer"
+            && input
+                .get("action")
+                .and_then(Value::as_str)
+                .is_some_and(|a| COMPUTER_LOOKS.contains(&a)))
+}
+
+fn capitalized(text: &str) -> String {
+    let mut c = text.chars();
+    c.next()
+        .map(|f| f.to_uppercase().chain(c).collect())
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+#[path = "browser_gate_tests.rs"]
+mod tests;

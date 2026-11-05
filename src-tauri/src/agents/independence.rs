@@ -9,22 +9,25 @@
 //! already asked for it and that every way you have of doing it yourself has
 //! been tried.
 //!
-//! **What it changes is words, never the wall.** The level is one short,
-//! app-owned section of every agent's system prompt ([`prompt_section`]),
-//! built from code each turn, so existing and imported agents get it on their
-//! next turn and nothing in their own CLAUDE.md is touched. It changes only
-//! when the user changes the level, never per turn, so the engine's prompt
-//! cache holds. Approvals don't read it: every card that asks before
-//! spending, sending, publishing, pushing, sharing or deleting appears at
-//! every level (`mcp::decide` only skips a card for a one-time grant or an
-//! "Always allow" rule the user chose).
+//! **What it changes.** The level is one short, app-owned section of every
+//! agent's system prompt ([`prompt_section`]), built from code each turn, so
+//! existing and imported agents get it on their next turn and nothing in
+//! their own CLAUDE.md is touched. It changes only when the user changes the
+//! level, never per turn, so the engine's prompt cache holds. It also decides
+//! which *local* cards are answered for the user (`agents::autoallow`):
+//! "Use good judgement" answers reads, "Go hard" reads and local work in the
+//! home. Every card that asks before spending, sending, publishing, pushing,
+//! sharing, deleting the user's files or touching credentials appears at
+//! every level.
+//! The browser (`browser_gate`): above "Check with me often", looking around
+//! and clicks that don't send go through without a card; sending asks.
 //!
 //! **Outside text never goes hard.** A turn answering outside text (a
 //! "When…" routine's items, or anything that carried their taint through
 //! `message_agent` or a room) runs at most at `Judgement` ([`for_turn`]):
-//! text from outside never gets "carry on without asking", yet unattended
-//! routines still finish their work; the approval wall and the taint gate
-//! anything consequential.
+//! text from outside never gets "carry on without asking" or a write without
+//! a card, yet unattended routines still finish their work; the approval
+//! wall and the taint gate anything consequential.
 //!
 //! Saved beside the agents (`independence.json`); a missing or unreadable
 //! file is the default.
@@ -66,6 +69,15 @@ impl Level {
             Level::Often => "Check with me often",
             Level::Judgement => "Use good judgement",
             Level::GoHard => "Go hard — get it done",
+        }
+    }
+
+    /// The level in a receipt line ("Allowed automatically — Go hard").
+    pub fn short(self) -> &'static str {
+        match self {
+            Level::Often => "Check with me often",
+            Level::Judgement => "Use good judgement",
+            Level::GoHard => "Go hard",
         }
     }
 }

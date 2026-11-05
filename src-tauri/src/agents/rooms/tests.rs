@@ -197,6 +197,7 @@ fn the_thread_reads_back_with_each_members_card_answers() {
             login: None,
             set_aside: None,
             expiry: None,
+            from_outside: None,
             front: None,
             summary: None,
         });

@@ -407,6 +407,7 @@ mod tests {
             login: None,
             set_aside: None,
             expiry: None,
+            from_outside: None,
             front: None,
         });
         message

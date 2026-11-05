@@ -1792,6 +1792,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
         choice: None,
         secret: None,
         connector: None,
+        from_outside: None,
         login: Some(LoginRequest {
             service: "gmail".into(),
             title: "Gmail".into(),
