@@ -157,6 +157,7 @@ pub async fn agents_send(
     attachments: Option<Vec<attachments::OutgoingAttachment>>,
     mentions: Option<Vec<String>>,
     client_id: Option<String>,
+    revises: Option<String>,
 ) -> Result<store::AgentMessage, CommandError> {
     let text = text.trim().to_string();
     let incoming = attachments.unwrap_or_default();
@@ -166,6 +167,20 @@ pub async fn agents_send(
     let recipient = store::get(&agent_id)?;
     let home = store::agent_home(&agent_id)?;
     let mut message = runner::new_message(&agent_id, store::MessageKind::User, text.clone());
+    // "Ask for changes": pinned to the result as the log has it, never as
+    // the client named it, and refused if it isn't in this conversation.
+    if let Some(id) = revises.filter(|r| !r.trim().is_empty()) {
+        let log_of = agent_id.clone();
+        let log = tokio::task::spawn_blocking(move || store::messages(&log_of, usize::MAX))
+            .await
+            .map_err(agents::err_other)??;
+        message.revises = Some(agents::results::reference(&log, id.trim()).ok_or_else(|| {
+            agents::err_invalid(
+                "revises",
+                "That result isn't in this conversation any more.",
+            )
+        })?);
+    }
     // A phone's send id, echoed so its optimistic bubble reconciles by id.
     message.client_id = client_id.filter(|c| !c.is_empty());
     // Only real agents, other than the recipient, once each; anything else is dropped.
@@ -188,11 +203,21 @@ pub async fn agents_send(
     // The log keeps what the user typed; the agent also gets where the files are.
     let block = attachments::prompt_block(&store::agent_home(&agent_id)?, &message.attachments);
     let names: Vec<String> = message.mentions.iter().map(|m| m.name.clone()).collect();
-    let prompt = [text, prompts::mentions(&names, recipient.is_main), block]
-        .into_iter()
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n");
+    let revising = message
+        .revises
+        .as_ref()
+        .map(agents::results::revising_prompt)
+        .unwrap_or_default();
+    let prompt = [
+        revising,
+        text,
+        prompts::mentions(&names, recipient.is_main),
+        block,
+    ]
+    .into_iter()
+    .filter(|part| !part.is_empty())
+    .collect::<Vec<_>>()
+    .join("\n\n");
     let message = runner::record(&app, message)?;
     runner::enqueue(&app, &agent_id, prompt, runner::From::User);
     agents::tray::mark_used(&app);
@@ -217,21 +242,26 @@ pub async fn agents_inspect_files(
 }
 
 /// Open an attachment in its default app (a PDF in Preview, a CSV in Numbers),
-/// or with `reveal`, show it in Finder.
+/// or with `reveal`, show it in Finder. The same allowlist as a path in prose
+/// decides: an agent can share a `.command` file, and clicking its card must
+/// not run it — anything off the list is only shown in Finder.
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_open_attachment(
     agent_id: String,
     path: String,
     reveal: Option<bool>,
-) -> Result<(), CommandError> {
-    let full = attachments::resolve(&store::agent_home(&agent_id)?, &path)?;
-    let action = if reveal.unwrap_or(false) {
-        files::PathAction::Reveal
-    } else {
-        files::PathAction::Open
-    };
-    files::perform(&full, action)
+) -> Result<files::PathAction, CommandError> {
+    let home = store::agent_home(&agent_id)?;
+    let full = attachments::resolve(&home, &path)?;
+    let (full, action) = files::local_path(
+        &full.display().to_string(),
+        &home,
+        std::slice::from_ref(&home),
+        reveal.unwrap_or(false),
+    )?;
+    files::perform(&full, action)?;
+    Ok(action)
 }
 
 /// Everything shared in one conversation, both ways, newest first.
@@ -243,8 +273,9 @@ pub async fn agents_files(agent_id: String) -> Result<Vec<files::SharedFile>, Co
         .map_err(agents::err_other)?
 }
 
-/// A path an agent wrote in its reply, clicked: a document opens in its
-/// default app; folders, apps and scripts are only shown in Finder. Returns
+/// A path an agent wrote in its reply, clicked: a document, image or text file
+/// opens in its default app; anything else is only shown in Finder; a path
+/// outside the agent's folder, the user's projects and its copy is refused. Returns
 /// what was done, so the UI can say "Shown in Finder".
 #[tauri::command]
 #[tracing::instrument]
@@ -254,7 +285,19 @@ pub async fn agents_open_path(
     reveal: Option<bool>,
 ) -> Result<files::PathAction, CommandError> {
     let home = store::agent_home(&agent_id)?;
-    let (full, action) = files::local_path(&path, &home, reveal.unwrap_or(false))?;
+    // Its home, the user's projects, and its own copy of its project.
+    let mut roots = vec![home.clone()];
+    if let Ok(projects) = crate::commands::projects::list_projects().await {
+        roots.extend(
+            projects
+                .into_iter()
+                .map(|p| std::path::PathBuf::from(p.path)),
+        );
+    }
+    if let Some(copy) = store::get(&agent_id).ok().and_then(|a| a.copy) {
+        roots.push(std::path::PathBuf::from(copy.path));
+    }
+    let (full, action) = files::local_path(&path, &home, &roots, reveal.unwrap_or(false))?;
     files::perform(&full, action)?;
     Ok(action)
 }

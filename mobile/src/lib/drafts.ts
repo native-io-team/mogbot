@@ -6,7 +6,7 @@
  * nothing either).
  */
 
-import type { AgentRef } from '@shipstudio/companion-protocol';
+import type { AgentRef, ResultRef } from '@shipstudio/companion-protocol';
 import { debounced, readJson, removeJson, writeJson } from './persist';
 import { getApp, setApp, useApp } from './store';
 import type { PendingAttachment, PendingSend } from './sync';
@@ -22,6 +22,8 @@ export interface ComposerDraft {
   mentions: AgentRef[];
   /** Absent in drafts saved before files were kept. */
   files?: DraftFile[];
+  /** "Ask for changes": the result this message will revise. */
+  revising?: ResultRef;
 }
 
 export const EMPTY_DRAFT: ComposerDraft = { text: '', quotes: [], mentions: [], files: [] };
@@ -33,7 +35,7 @@ export const EMPTY_DRAFT: ComposerDraft = { text: '', quotes: [], mentions: [], 
 export const FILE_KEEP_MS = 55 * 60_000;
 
 const isEmpty = (d: ComposerDraft) =>
-  !d.text && !d.quotes.length && !d.mentions.length && !d.files?.length;
+  !d.text && !d.quotes.length && !d.mentions.length && !d.files?.length && !d.revising;
 
 /** Files that waited too long for the Mac to still have them. */
 export const expiredFiles = (d: ComposerDraft, now = Date.now()) =>

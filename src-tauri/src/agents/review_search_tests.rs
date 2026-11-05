@@ -44,6 +44,8 @@ fn msg(agent: &store::Agent, ts: i64, text: &str) -> AgentMessage {
         work: None,
         fresh: false,
         takeover: false,
+        result: None,
+        revises: None,
     }
 }
 

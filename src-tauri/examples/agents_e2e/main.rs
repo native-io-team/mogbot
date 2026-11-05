@@ -151,9 +151,17 @@ impl H {
     }
 
     async fn send(&self, id: &str, text: &str) -> Result<AgentMessage, String> {
-        cmd::agents_send(self.app.clone(), id.into(), text.into(), None, None, None)
-            .await
-            .map_err(|e| format!("send failed: {e}"))
+        cmd::agents_send(
+            self.app.clone(),
+            id.into(),
+            text.into(),
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .map_err(|e| format!("send failed: {e}"))
     }
 
     /// Until none of `ids` has a turn running or queued, steadily for `settle`.

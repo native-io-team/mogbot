@@ -28,6 +28,7 @@ import { isExpectedCommandError } from './lib/errors';
 import { OverlayScrollbars } from 'overlayscrollbars';
 import 'overlayscrollbars/overlayscrollbars.css';
 import { initTheme } from './lib/theme';
+import { installNavigationGuard } from './lib/navigationGuard';
 
 // Expose React globals and context ref for plugins before any rendering
 exposeReactGlobals(React, ReactDOM);
@@ -35,6 +36,9 @@ exposePluginContextRef();
 
 // Follow the saved theme (index.html already painted the first frame in it).
 initTheme();
+
+// No link or form ever loads in the app window (see lib/navigationGuard).
+installNavigationGuard();
 
 // Global safety net: catch unhandled errors from plugins.
 // Plugins that bundle their own React can throw errors that escape React error

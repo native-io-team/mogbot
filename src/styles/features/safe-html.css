@@ -1,0 +1,31 @@
+/* Containers for HTML rendered from agent, workflow or outside text (see
+   src/lib/safeHtml.ts). The sanitizer already drops `style`, but these are the
+   second wall: whatever renders inside is painted only inside its own box, so
+   nothing a message contains can draw over an Allow / Deny card or the app. */
+.agent-markdown__prose,
+.inbox-detail-body {
+  contain: paint;
+  overflow: hidden;
+}
+
+/* An image in a message, shown as a link instead of loaded. */
+.md-image-link {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 var(--spacing-xs);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-control);
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.md-image-link:hover {
+  background: var(--surface-control-hover);
+  color: var(--text-primary);
+}

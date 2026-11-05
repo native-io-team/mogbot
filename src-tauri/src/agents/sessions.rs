@@ -300,6 +300,8 @@ fn mark(project: &str, event: SessionEvent, o: Option<&Outcome>) -> SessionMark 
     }
 }
 
+/// Returns where each screenshot was kept, relative to the agent's home, so
+/// the agent can put it on a result card (`share_result`).
 fn record_lines(
     app: &AppHandle,
     caller: &store::Agent,
@@ -307,14 +309,15 @@ fn record_lines(
     project: &str,
     args: &Value,
     seen: &Seen,
-) {
+) -> Vec<String> {
     for (event, outcome, text) in plan(tool, args, &seen.outcomes, &seen.started) {
         let mut line = runner::new_message(&caller.id, MessageKind::Session, text);
         line.session = Some(mark(project, event, Some(outcome)));
         let _ = runner::record(app, line);
     }
+    let mut kept = Vec::new();
     let Ok(home) = store::agent_home(&caller.id) else {
-        return;
+        return kept;
     };
     for (device, jpeg) in &seen.shots {
         use base64::Engine;
@@ -329,10 +332,28 @@ fn record_lines(
             }],
         );
         let Ok(attachments) = saved else { continue };
+        kept.extend(attachments.iter().map(|a| a.path.clone()));
         line.attachments = attachments;
         line.session = Some(mark(project, SessionEvent::Screenshot, None));
         let _ = runner::record(app, line);
     }
+    kept
+}
+
+/// Tell the agent where the screenshots it just took are kept, so a result
+/// card can show them (as `before` / `after`) without taking them again.
+fn with_screenshots(mut result: Value, kept: &[String]) -> Value {
+    if kept.is_empty() {
+        return result;
+    }
+    let text = format!(
+        "Screenshots kept in your folder: {}. To include one in your result, pass its path to share_result (role \"before\" or \"after\" for a comparison).",
+        kept.join(", ")
+    );
+    if let Some(blocks) = result.get_mut("content").and_then(Value::as_array_mut) {
+        blocks.push(json!({ "type": "text", "text": text }));
+    }
+    result
 }
 
 // ============================================================================
@@ -431,7 +452,8 @@ async fn run_with_cards(
         let Some(p) = project else {
             return result;
         };
-        record_lines(app, caller, name, p, &args_now, &seen);
+        let kept = record_lines(app, caller, name, p, &args_now, &seen);
+        let result = with_screenshots(result, &kept);
         record_changes(app, caller, p, &seen).await;
         let asked = seen.outcomes.iter().rev().find(|o| o.decision.is_some());
         let settled = match asked {

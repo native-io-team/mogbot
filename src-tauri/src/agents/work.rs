@@ -518,6 +518,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Sharing a file",
             "share a file",
         ),
+        "share_result" => act(
+            StepKind::Message,
+            "Put together its result",
+            "Putting together its result",
+            "put together its result",
+        ),
         "schedule_check_in" => act(
             StepKind::Plan,
             "Scheduled a check-in",
@@ -1217,6 +1223,11 @@ impl Live {
             // other people's lines (an audit note, an engine switch, an
             // auto-allow) or a divider; "Stopped" anchors through `anchor_on`.
             MessageKind::Agent | MessageKind::Error => {
+                self.anchor = Some(message.clone());
+            }
+            // A change card carrying the turn's result card is the result:
+            // the turn ends on it, so its timeline hangs under it.
+            MessageKind::Changes if message.result.is_some() => {
                 self.anchor = Some(message.clone());
             }
             MessageKind::Approval => {

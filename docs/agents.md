@@ -297,6 +297,7 @@ the URL is passed only inline to the process the app spawned for that agent.
 | `message_agent` | all | async: records "Messaged X" here and "Message from Y" there, queues a turn for X |
 | `project_*`, `session_*`, `preview_screenshot`, `git_status`, `push`, `deploy_status` | all | working on projects, below |
 | `share_file` | all | hands the user a file it made: copied into its `attachments/`, posted as its own message with a file card |
+| `share_result` | all | ends a piece of work on one result card: files, links, what it checked and did not verify; revisions become v2 (below, "Result cards") |
 | `request_secret` | all | a secure input card for a password, key, token or login; the agent gets `$VAR` and a reference, never the value (below) |
 | `create_agent` | Chief | name, role, instructions, optional `project` and `first_task` |
 | `update_agent` | Chief | name / role / instructions / project (memory kept) |
@@ -1347,6 +1348,71 @@ cards.
   (`.command`, `.app`, `.py`, `.webloc`…) are only revealed in Finder, never
   run. ⌘-click always reveals.
 
+## Result cards (`src-tauri/src/agents/results.rs`)
+
+A finished piece of work comes back as **one** card, not prose plus a pile
+of attachments. The agent calls `share_result { title, summary, items[],
+checked[], not_verified[], revises?, changes? }` at the end of the work; the
+prompt (`prompts::FILES`) tells it to for deliverables, never for chat.
+
+- **Only what exists.** `items` are files (`path`) or links (`url`). A file
+  must resolve inside the agent's home or a registered project
+  (`files::shareable`, so `..` and symlinks are judged by where they lead)
+  and is copied into `attachments/<message id>/`; one bad file shares
+  nothing. `.env*` files (examples aside) and private keys (SSH key names,
+  `.key`/`.p12`/`.pfx`, any file with a PEM private key block) are refused
+  with an honest error (`files::is_secret_file`), here and for `share_file`.
+  Links are http/https with no sign-in details in them. `checked`
+  and `not_verified` are the agent's own words; the app never fills either,
+  and shows each only when given.
+- **Refused, never trimmed.** Title 120, summary 2,000, each line 300, 12
+  lines per list, 12 items (files also ≤ 10, 25 MB each). Cutting a "not
+  verified" list would hide exactly what matters, so too much is an error the
+  agent fixes. `role: before|after` is only for pictures.
+- **One card per turn, at the end.** The call stages the card
+  (`results::stage`; a second call replaces the first and deletes its
+  copies). When the turn ends, the runner records it after the reply, so the
+  reply ends on it and "What it did" hangs under it. A turn that also changed
+  a project puts the card **on its change card** (`results::ride_on`: same
+  message, the staged id), so a project copy's card is the result card with
+  Keep · Review · Preview · Ask for changes · Discard inside it. A turn cut
+  off by quitting loses a staged card (it was never shown); its copied files
+  are swept on the next launch (`attachments::sweep_unreferenced`: any
+  `attachments/<id>/` the raw log never mentions, older than two minutes).
+- **No headless turn, no staging.** A take-over's terminal has the same MCP
+  URL minus `?turn=`, and nothing would ever take a staged card there. So when
+  the caller has no live turn (`broker::is_live`) the card is recorded into
+  the chat at once and the agent is told it is there now
+  (`results::recorded_reply`); a second call adds a second card.
+- **Ask for changes** opens the composer with a "Changes to <title> · v1"
+  chip; the send carries `revises` (the result id). `agents_send` pins the
+  message to the result as the log has it (`revises: {id, version, title}`)
+  and adds `results::revising_prompt` ahead of the text. The next
+  `share_result` revises that result: explicitly (`revises`) or because the
+  user's latest message is that ask and no result came after it. Anything
+  the user says after an ask is a new request, so it can't capture an
+  unrelated result. Retry on a failed ask keeps its `revises`. A revision keeps the id, becomes version
+  n+1, and must say what changed (`changes`), shown as "Changes since v1: …".
+  The log stays append-only: the older version is still there, folded to
+  "<title> · v1 · a newer version is below" (`newestResults`), and opens on
+  click, for reading only, with its change receipt (See changes, the diff)
+  when it rode on a change card.
+- **Checks are the agent's.** The list is headed "It says it checked"
+  (`CHECKED_HEADING`) with plain bullets, never ticks, on desk and phone.
+- **Open** that could only show a file in Finder (off the open allowlist)
+  says so in a toast.
+- **Wire**: `message.result` (`ResultCard`) on an `agent` or `changes`
+  message; the files are also on `attachments`, so the Files list, search
+  previews and older clients still see them. Types and the pure rules
+  (`newestResults`, `beforeAfter`, `changesLine`…) live in
+  `packages/companion-protocol/src/results.ts`, shared by desk and phone.
+- **Screenshots**: a preview screenshot's result now names where it was kept
+  (`attachments/<id>/<name>.jpg`), so the agent can put it on a result as
+  `before` / `after` without taking it again.
+- Not built: a PR straight from a non-copy result, recordings, and "Open"
+  for a result whose project copy has since been kept or discarded (the
+  card then reads as a record).
+
 ## Agents that work in a project (`src-tauri/src/agents/project.rs`)
 
 An agent can be bound to one project (`Agent.project`, a path from
@@ -1527,6 +1593,9 @@ can't trample each other. The UI says "a copy of acme-site", "Keep changes",
   kind users have on disk must load, and a write must keep what a newer build
   added), process trees, share-path validation (traversal, symlinks), prompts framing, activity labels, MCP
   tool visibility, approval descriptions, import merge rules, memory parse and write-back (odd markdown included), the retry schedule and run settling, broker admission and the init check, memory-scaled slots.
+- `cargo test --lib agents::results`: share_result validation and size caps, files that must exist in the agent's own files (all or nothing), versioning and Ask for changes targets, one card per turn.
+- `pnpm vitest run src/components/agents/AgentResult.test.tsx` and `mobile/__tests__/result.test.tsx`: the card on desk and phone, folding, Ask for changes.
+- `node scripts/harness-capture.mjs agents-result`: v1, asking, v2, not verified, a copy's card with before/after.
 - `pnpm vitest run src/lib/agents.test.ts`: chat grouping, dividers, ordering.
 - `scripts/agents-e2e.sh [scenario…]` (opt-in, real turns, on Haiku): `src-tauri/examples/agents_e2e/main.rs` drives the real
   runner, store, bridge and MCP tools through the same Tauri commands the UI
