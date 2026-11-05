@@ -374,11 +374,11 @@ export const composer = {
 export const chatFade = { height: 28, bands: 14 } as const;
 
 /**
- * The dictation waveform (`components/Waveform.tsx`), inside the field where
- * the mic was: 2pt bars 2pt apart, a dot at silence and 18pt at full voice,
- * centred on a send-tall slot so the field never changes height. Under Reduce
- * Motion a 2pt-thick meter of the same width stands in. Twelve bars (48pt,
- * about 0.85 s of voice) leave the words most of the field's width.
+ * The dictation waveform (`components/Waveform.tsx`), in the slim row over the
+ * field with the time (never inside it: beside the words it squeezed them to
+ * a few per line): 2pt bars 2pt apart, a dot at silence and 18pt at full
+ * voice, the row's height. Under Reduce Motion a 2pt-thick meter of the same
+ * width stands in. Twelve bars, about 0.85 s of voice.
  */
 export const waveform = {
   bars: 12,

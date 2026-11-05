@@ -690,8 +690,11 @@ The phone can start work as well as answer it. Each piece is gated by
   back afterwards if it was up), and the field listens. The words stream into
   it as you speak, the last few lighter while the recognizer is still
   deciding them (`stablePrefix`: what a partial shares with the one before,
-  never its last word), with the recognizer's own punctuation. The mic's
-  place holds a waveform and the elapsed time, × takes the +'s place, and
+  never its last word), with the recognizer's own punctuation, at the
+  field's full width, wrapping exactly as typing does. A waveform and the
+  elapsed time ride in a slim row over the field (inside it, beside the
+  words, they squeezed a long dictation to three words a line), × takes the
+  +'s place, and
   the field holds **Stop** and **Send**, as Grok's dictation does. **Stop
   keeps the words in the draft** to read and edit; **Send** sends exactly
   what's on screen at once (the reducer's `send`: the partial too, then the
