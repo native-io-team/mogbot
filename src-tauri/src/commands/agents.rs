@@ -2182,6 +2182,23 @@ pub async fn agents_browser_disable(app: AppHandle) -> Result<(), CommandError> 
     blocking(move || agents::browser::disable(&app)).await
 }
 
+/// The phone signing in through this Mac's Chrome right now, for the desk's
+/// bar (`agents/phone_signin.rs`). `None`: nothing is.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_phone_signin_status(
+) -> Result<Option<agents::phone_signin::Banner>, CommandError> {
+    Ok(agents::phone_signin::banner())
+}
+
+/// The desk's Stop: the phone's sign-in ends and its tab closes.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_phone_signin_stop(app: AppHandle) -> Result<(), CommandError> {
+    agents::phone_signin::stop_from_desk(&app).await;
+    Ok(())
+}
+
 /// Open the extension's install page in this Mac's browser. Only the
 /// setup's own URL: nothing from the webview is opened.
 #[tauri::command]

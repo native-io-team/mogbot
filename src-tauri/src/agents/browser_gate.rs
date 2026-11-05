@@ -46,6 +46,9 @@ pub enum Gate {
 
 pub const SERVER: &str = "mcp__claude-in-chrome__";
 
+/// Every browser call while the user signs in from their phone.
+pub const PHONE_SIGNIN_REFUSAL: &str = "The user is signing in to a site in this Mac's Chrome from their phone right now. Don't use the browser until they're done: carry on with what doesn't need it, or wait a few minutes and try again.";
+
 /// Tools that only look: they change nothing on a page or a site.
 const LOOKS: &[&str] = &[
     "tabs_context_mcp",
@@ -639,9 +642,20 @@ pub fn gate_with(
     decide(level, agent, name, input, page)
 }
 
+/// Every browser call is refused while a phone sign-in is live, at every
+/// level and for every agent: the tab is the user's, and so is the page.
+pub fn while_phone_signs_in(live: bool) -> Option<Gate> {
+    live.then(|| Gate::Refuse(PHONE_SIGNIN_REFUSAL.into()))
+}
+
 pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
     if !tool.starts_with(SERVER) {
         return Gate::NotBrowser;
+    }
+    // The user's phone is driving a sign-in in this Chrome: no agent sees
+    // or touches it until it ends (`phone_signin`).
+    if let Some(refused) = while_phone_signs_in(super::phone_signin::live()) {
+        return refused;
     }
     let level = super::independence::for_turn(super::policy::chosen_level(agent), outside);
     gate_with(

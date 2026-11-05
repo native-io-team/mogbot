@@ -597,6 +597,13 @@ const LIVE = [
     check: '"Start of your conversation" is a Line with no stacked padding',
   },
   {
+    name: 'signin-linkedin',
+    route: '/signin?agentId=qa&requestId=req_login_linkedin',
+    ready: 'Close',
+    settle: 2500,
+    check: 'Sign in on the Mac from here, on a route that cannot carry it: refused in words, Close',
+  },
+  {
     name: 'chat-qa',
     route: '/chat/qa',
     ready: 'QA 2',

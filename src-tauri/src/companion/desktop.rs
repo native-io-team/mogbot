@@ -576,6 +576,15 @@ impl Backend for DesktopBackend {
         json(crate::agents::login_relay::begin(&self.app, device_id, target, option_id).await?)
     }
 
+    async fn phone_signin(
+        &self,
+        device_id: &str,
+        device_name: &str,
+        op: crate::agents::phone_signin::Op,
+    ) -> Result<Value, CommandError> {
+        crate::agents::phone_signin::run(&self.app, device_id, device_name, op).await
+    }
+
     async fn login_phone_finish(
         &self,
         device_id: &str,

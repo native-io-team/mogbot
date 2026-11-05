@@ -1409,6 +1409,95 @@ Deny declines.
   redirect fails `state`. A team row signed in on the phone grants the
   row's other agents the same connection once it's in (`fan_out`).
 
+### Signing in on your Mac from the phone (`agents/phone_signin.rs`)
+
+Owner requirement: when an agent can't get into a site because the Mac's
+Chrome isn't signed in, the user can do that sign-in **from the phone**,
+instead of being told to go to the computer. A login card with a browser way
+in shows **Sign in from here** on the phone (Mac feature `signin.phone`):
+
+1. `agents.signinBegin {agentId, requestId}`: the Mac starts its own
+   Claude in Chrome MCP server (`claude --claude-in-chrome-mcp`, as the
+   checks do), picks the profile this site was last found in
+   (`browser_profiles`), and opens the site's account page (`probe_url`,
+   which sends a signed-out visitor to its sign-in) in a tab of the app's
+   own, in its own tab group.
+2. The phone polls `agents.signinFrame` about three times a second, one
+   request at a time: a `computer` screenshot of that tab, re-encoded on the
+   Mac as a JPEG at most 1000px wide (well under the socket's 1MB frame).
+3. Taps (in the frame's pixels, scaled back on the Mac), typing, a short
+   list of keys (Tab, Delete, Enter, …; no modifiers, no shortcuts), Up/Down
+   scrolls, Back and Reload go back as `agents.signinInput`. Pinch zooms the
+   picture on the phone only. **Password** hides the field as it's typed.
+4. **Done** (`agents.signinDone`) opens the account page again and reads
+   where it landed (`browser::signed_in`). Signed in: the tab closes and the
+   card answers itself through its browser way in ("Using your browser ·
+   www.figma.com"), so the agent is woken and carries on. Still on a sign-in
+   page: the screen says so and carries on. Can't tell: **Hand it over
+   anyway**.
+
+**Why this mechanism.** (a) Claude in Chrome's own MCP server, which the app
+already drives, has everything needed (`tabs_create_mcp`, `navigate`,
+`computer` screenshot / click / type / key / scroll, `tabs_close_mcp`) and
+reaches the user's real Chrome profile, signed-in cookies and all, with
+nothing new installed. (b) The DevTools Protocol would stream better
+(`Page.startScreencast`), but the user's Chrome has no debugging port, and
+relaunching it with one would expose every tab to anything on the Mac. (c)
+macOS Screen Sharing over Tailscale works for anything, but shows the whole
+screen, needs setup in System Settings and a VNC client, and isn't scoped to
+one site. (a) was chosen; (c) remains the honest fallback for what (a) can't
+do (below).
+
+**Rules** (tested in `phone_signin_tests.rs` and the router's tests):
+- Only through the companion router, so only a paired phone, over the
+  Tailscale route; the phone also refuses to begin or type unless the Mac
+  proved its pinned identity (`secretRouteProblem`, as for a secret). No
+  agent tool reaches it.
+- One session on the Mac at a time; frames and inputs are accepted only from
+  the device that began it (`Table::check`).
+- The tab is shown and driven only on the card's site (its domain:
+  `www.figma.com` → `figma.com` and its subdomains), a sibling the site
+  signs in on (`x.com` → `twitter.com`), or a sign-in provider
+  (`IDP_HOSTS`: Google, Microsoft, Apple, GitHub, Facebook, Slack;
+  `IDP_SUFFIXES`: Okta, Auth0, OneLogin, Duo, JumpCloud tenants), `https`
+  only. Anywhere else the phone sees "outside the sign-in" and no picture,
+  and only Back works. There's no address bar.
+- What's typed is never logged, stored or shown to an agent: `Input`'s
+  `Debug` gives a length; the router doesn't audit any `agents.signin*`
+  call; refusals never quote input; the phone keeps the field in a ref,
+  wipes it on send, on leaving the app and on closing the screen. The audit
+  line is "phone sign-in · figma.com: started / signed in / stopped on the
+  phone / stopped on the Mac / timed out".
+- While it's live, every agent's Claude in Chrome call is refused
+  (`browser_gate::while_phone_signs_in`), so no agent can look at the tab.
+- It ends after five minutes with no input from the phone (looking doesn't
+  count) or twenty in all, on Stop on either device, on Done, and when the
+  phone leaves the screen. The tab closes each time.
+- The desk shows a bar on every conversation, "Your phone is signing in to
+  figma.com", with Stop (`PhoneSigninBar`, event `agents://phone-signin`).
+
+**Not covered / not verified.**
+- Claude in Chrome's own per-site permission prompt opens on the Mac. A site
+  (or sign-in provider) the extension hasn't been allowed on can't be
+  opened from the phone: the call times out after about 30s and the phone
+  says it must be allowed at the Mac once. Seen on this Mac on 2026-11-05
+  while verifying (on example.com).
+- A sign-in that opens a pop-up window ("Sign in with Google" as a popup)
+  opens outside the tab, so it isn't shown; use the site's own email sign-in
+  or a redirect. Passkeys and the macOS / Chrome password manager prompts
+  on the Mac aren't reachable either; a code sent to the phone works.
+- What's typed passes, as it must, through Claude Code's MCP server process
+  and the Claude in Chrome extension on this Mac (local native messaging,
+  `isLocal`); whether either logs tool arguments hasn't been checked.
+- Not yet run end to end against a real sign-in: the screenshot, click and
+  type calls, the coordinate scaling and the frame rate are untested
+  against a live tab, because the extension's prompt blocked the read-only
+  probe (see above). `tabs_context_mcp` / `tabs_create_mcp` / `tabs_close_mcp`
+  in a new group were seen working, and the empty first tab of a new group
+  is reused so nothing is left behind.
+- Agents whose Claude Code settings pre-allow the Chrome tools would skip
+  the broker, and so the refusal; the app's own turns don't.
+
 ### Grants, read vs send, and turns
 
 A connection is one account at one service, in `connections.json` (names,

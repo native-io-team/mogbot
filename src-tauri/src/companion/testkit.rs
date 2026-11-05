@@ -1331,6 +1331,50 @@ impl Backend for Stub {
         Ok(())
     }
 
+    async fn phone_signin(
+        &self,
+        device_id: &str,
+        _device_name: &str,
+        op: crate::agents::phone_signin::Op,
+    ) -> Result<Value, CommandError> {
+        use crate::agents::phone_signin::Op;
+        // As the router handed it over, through `Op`'s own `Debug`.
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("signin {op:?} by {device_id}"));
+        use crate::agents::phone_signin::{Begun, Frame, FrameState, Outcome};
+        Ok(match op {
+            Op::Begin { .. } => serde_json::to_value(Begun {
+                session_id: "signin_0123".into(),
+                domain: "figma.com".into(),
+                title: "Figma".into(),
+                idle_seconds: 300,
+            })
+            .unwrap(),
+            Op::Frame { session_id } if session_id == "outside" => serde_json::to_value(Frame {
+                state: FrameState::Outside,
+                host: Some("example.com".into()),
+                image: None,
+                width: 0,
+                height: 0,
+            })
+            .unwrap(),
+            Op::Frame { .. } => serde_json::to_value(Frame {
+                state: FrameState::Live,
+                host: Some("www.figma.com".into()),
+                image: Some("/9j/2w==".into()),
+                width: 1000,
+                height: 640,
+            })
+            .unwrap(),
+            Op::Done { anyway, .. } => serde_json::json!({
+                "outcome": if anyway { Outcome::SignedIn } else { Outcome::SignedOut }
+            }),
+            Op::Input { .. } | Op::Stop { .. } => Value::Null,
+        })
+    }
+
     async fn login_cancel(&self, _agent_id: &str, request_id: &str) -> Result<(), CommandError> {
         self.logins
             .lock()
