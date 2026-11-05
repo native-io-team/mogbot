@@ -250,6 +250,7 @@ const useStyles = makeStyles((colors) => ({
     padding: space.md,
     borderRadius: radius.inner,
     backgroundColor: alpha(colors.accentWarning, 0.14),
+    overflow: 'hidden',
   },
   pair: { flexDirection: 'row', gap: space.sm },
   link: {
@@ -260,5 +261,6 @@ const useStyles = makeStyles((colors) => ({
     paddingHorizontal: space.md,
     borderRadius: radius.inner,
     backgroundColor: colors.surfaceControl,
+    overflow: 'hidden',
   },
 }));

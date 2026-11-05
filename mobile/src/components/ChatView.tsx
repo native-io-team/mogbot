@@ -11,7 +11,7 @@
 import { newestResults, type Agent, type AgentMessage } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   type FlatList,
   type LayoutChangeEvent,
@@ -22,7 +22,11 @@ import {
   type ScrollViewProps,
   type FlatListProps,
 } from 'react-native';
-import { KeyboardChatScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
+import {
+  KeyboardChatScrollView,
+  KeyboardStickyView,
+  useReanimatedKeyboardAnimation,
+} from 'react-native-keyboard-controller';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -30,6 +34,7 @@ import Animated, {
   LinearTransition,
   ZoomIn,
   ZoomOut,
+  interpolate,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -55,7 +60,28 @@ import { useAccent } from '../lib/accent';
 import { useApp } from '../lib/store';
 import { SETUP_KEY, chatItems, sentAt, withSetupCard, type Item } from '../lib/timeline';
 import { setupAnchor, shows as showsSetup } from '../lib/teamSetup';
-import { alpha, avatarSize, chromeScale, iconSize, radius, space, PRESSED } from '../lib/theme';
+import {
+  alpha,
+  avatarSize,
+  chromeScale,
+  fonts,
+  iconSize,
+  radius,
+  space,
+  PRESSED,
+} from '../lib/theme';
+import {
+  endOffset,
+  FAR,
+  FOLLOWING,
+  fromEnd,
+  holdFor,
+  newestSignature,
+  pillFor,
+  scrolled,
+  toEnd,
+  type Follow,
+} from '../lib/follow';
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
@@ -77,12 +103,6 @@ const VIEWABILITY = { itemVisiblePercentThreshold: 10 };
 
 /** Rows glide to where a growing or collapsing neighbour puts them: nothing jumps. */
 const glide = LinearTransition.duration(220);
-
-/**
- * A reply taller than this share of the screen stops pushing its own first
- * line away: its start stays put and it grows down, as ChatGPT and Claude do.
- */
-const TALL_REPLY = 0.7;
 
 /**
  * A pending approval's question, held above a pane too short for the whole
@@ -166,18 +186,20 @@ export function ChatView({
   const connected = useApp((s) => s.link.kind === 'connected');
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const list = useRef<FlatList<Item>>(null);
-  const [away, setAway] = useState(false);
-  // Scrolled off the bottom at all: what's on screen holds still while the newest grows.
-  const [scrolled, setScrolled] = useState(false);
+  // Following the newest line, or let go to read back (lib/follow.ts).
+  const [follow, setFollow] = useState<Follow>(FOLLOWING);
+  const [far, setFar] = useState(false);
+  // The keyboard's lift, as the list's top inset: where the newest end is now.
+  const insetTop = useRef(0);
+  // A finger on the list, or its fling still running: only that lets go.
+  const dragging = useRef(false);
+  const flinging = useRef(false);
   const [listHeight, setListHeight] = useState(0);
   // The pin and the list together: the room a card is measured against, the
   // same whether the pin shows or not.
   const [roomHeight, setRoomHeight] = useState(0);
   // The pending card that said it can't fit whole with its question.
   const [pinFor, setPinFor] = useState<string | null>(null);
-  const [draftHeight, setDraftHeight] = useState(0);
-  // The newest row when you scrolled away: anything newer is "New reply".
-  const [awayFrom, setAwayFrom] = useState<string | null>(null);
   const [composerHeight, setComposerHeight] = useState(90);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [toast, setToast] = useState<string | null>(notice ?? null);
@@ -274,14 +296,30 @@ export function ChatView({
   );
   // A phone in landscape: the notch or the Dynamic Island is at a side.
   const side = embedded ? { left: 0, right: 0 } : { left: insets.left, right: insets.right };
-  const tall = !!draft && listHeight > 0 && draftHeight > listHeight * TALL_REPLY;
-  const newest = items[0]?.key ?? null;
-  const newReply =
-    away &&
-    awayFrom !== null &&
-    newest !== awayFrom &&
-    items[0]?.kind === 'message' &&
-    items[0].message.kind === 'agent';
+  const newest = newestSignature(items[0]);
+  // Read by the scroll handler, which outlives a render.
+  const newestRef = useRef(newest);
+  useLayoutEffect(() => {
+    newestRef.current = newest;
+  }, [newest]);
+
+  // The pill and the toast ride the keyboard with the composer, as KeyboardStickyView does.
+  const keyboard = useReanimatedKeyboardAnimation();
+  const lift = embedded ? 0 : insets.bottom;
+  const overKeyboard = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: keyboard.height.value + interpolate(keyboard.progress.value, [0, 1], [0, lift]),
+      },
+    ],
+  }));
+
+  /** To the newest line, wherever the keyboard has put it, and following it again. */
+  const toNewest = useCallback((animated = true) => {
+    setFollow(toEnd());
+    setFar(false);
+    list.current?.scrollToOffset({ offset: endOffset(insetTop.current), animated });
+  }, []);
 
   useEffect(() => {
     if (!at || !connected) return;
@@ -335,7 +373,14 @@ export function ChatView({
 
   const renderScroll = useCallback(
     (props: ScrollViewProps) => (
-      <KeyboardChatScrollView {...props} inverted offset={embedded ? 0 : insets.bottom} />
+      <KeyboardChatScrollView
+        {...props}
+        inverted
+        offset={embedded ? 0 : insets.bottom}
+        onContentInsetChange={(inset) => {
+          insetTop.current = inset.top;
+        }}
+      />
     ),
     [insets.bottom, embedded]
   );
@@ -405,9 +450,10 @@ export function ChatView({
   const header = <Header agent={agent} />;
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
   const urgentBelow =
-    away &&
+    !follow.pinned &&
     (needsYouHere(agent, chat?.messages) || asking) &&
     !messages.some((m) => m.approval?.status === 'pending' && inView.has(m.id));
+  const pill = pillFor(follow, far ? FAR + 1 : 0, newest, urgentBelow);
 
   return (
     <View style={{ flex: 1 }}>
@@ -471,11 +517,10 @@ export function ChatView({
               keyExtractor={(i) => i.key}
               itemLayoutAnimation={glide}
               onLayout={(e: LayoutChangeEvent) => setListHeight(e.nativeEvent.layout.height)}
-              // Scrolled up, or reading a reply taller than the screen: the rows
-              // above the newest stay where they are while it grows below them.
-              maintainVisibleContentPosition={
-                scrolled || tall ? { minIndexForVisible: 1 } : undefined
-              }
+              // Let go to read back: the rows on screen hold still while the
+              // newest grows or arrives below them. Following: none, so the
+              // inverted list keeps the newest line on the composer.
+              maintainVisibleContentPosition={holdFor(follow)}
               renderItem={({ item, index }) => (
                 <ItemView
                   item={item}
@@ -491,7 +536,6 @@ export function ChatView({
                   latestFailure={latestFailure}
                   onError={showError}
                   onLongPress={onMessageAction}
-                  onDraftHeight={setDraftHeight}
                   lit={item.key === target}
                 />
               )}
@@ -522,16 +566,26 @@ export function ChatView({
               onEndReachedThreshold={0.6}
               onViewableItemsChanged={onViewable}
               viewabilityConfig={VIEWABILITY}
-              onScroll={(e) => {
-                const y = e.nativeEvent.contentOffset.y;
-                const isAway = y > 360;
-                setScrolled(y > 8);
-                if (isAway !== away) {
-                  setAway(isAway);
-                  setAwayFrom(isAway ? newest : null);
-                }
+              onScrollBeginDrag={() => {
+                dragging.current = true;
               }}
-              scrollEventThrottle={64}
+              onScrollEndDrag={() => {
+                dragging.current = false;
+              }}
+              onMomentumScrollBegin={() => {
+                flinging.current = true;
+              }}
+              onMomentumScrollEnd={() => {
+                flinging.current = false;
+              }}
+              onScroll={(e) => {
+                const distance = fromEnd(e.nativeEvent.contentOffset.y, insetTop.current);
+                const byUser = dragging.current || flinging.current;
+                // Bail-outs keep these from re-rendering on every event.
+                setFollow((now) => scrolled(now, distance, newestRef.current, byUser));
+                setFar(distance > FAR);
+              }}
+              scrollEventThrottle={32}
               initialNumToRender={16}
               maxToRenderPerBatch={12}
               windowSize={13}
@@ -558,43 +612,34 @@ export function ChatView({
           </PaneContext.Provider>
         </PathContext.Provider>
       </View>
-      {away && (
+      {pill && (
         <Animated.View
           entering={ZoomIn.duration(160)}
           exiting={ZoomOut.duration(120)}
           style={[
             styles.jumpWrap,
             { bottom: composerHeight + space.md, right: space.lg + side.right },
+            overKeyboard,
           ]}
         >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
-              urgentBelow
+              pill.says === 'urgent'
                 ? 'Needs your OK. Jump to it'
-                : newReply
-                  ? 'New reply. Jump to it'
-                  : 'Jump to latest'
+                : pill.says === 'new'
+                  ? 'New messages below. Jump to the newest'
+                  : 'Jump to the newest'
             }
             android_ripple={ripple}
-            onPress={() => list.current?.scrollToOffset({ offset: 0, animated: true })}
+            onPress={() => toNewest()}
             // Neutral like any jump control: an amber dot says it's waiting on you, not a fill.
             style={({ pressed }) => [styles.jump, pressed && Platform.OS === 'ios' && PRESSED]}
           >
-            {urgentBelow && (
+            {pill.says === 'urgent' && (
               <View style={{ marginLeft: space.xs }}>
                 <Dot color={colors.accentWarning} />
               </View>
-            )}
-            {(urgentBelow || newReply) && (
-              <T
-                variant="small"
-                color={colors.textPrimary}
-                maxFontSizeMultiplier={chromeScale}
-                style={!urgentBelow && { marginLeft: space.xs }}
-              >
-                {urgentBelow ? 'Needs your OK' : 'New reply'}
-              </T>
             )}
             <Icon
               name="arrow.down"
@@ -602,6 +647,16 @@ export function ChatView({
               color={colors.textPrimary}
               fallback={<T>↓</T>}
             />
+            {!!pill.says && (
+              <T
+                variant="small"
+                color={colors.textPrimary}
+                maxFontSizeMultiplier={chromeScale}
+                style={{ fontFamily: fonts.medium, marginRight: space.xs }}
+              >
+                {pill.says === 'urgent' ? 'Needs your OK' : 'New'}
+              </T>
+            )}
           </Pressable>
         </Animated.View>
       )}
@@ -611,8 +666,9 @@ export function ChatView({
           exiting={FadeOut.duration(150)}
           style={[
             styles.toast,
+            overKeyboard,
             {
-              bottom: composerHeight + space.md + (away ? 52 : 0),
+              bottom: composerHeight + space.md + (pill ? 52 : 0),
               left: space.lg + side.left,
               right: space.lg + side.right,
             },
@@ -633,7 +689,7 @@ export function ChatView({
           onError={showError}
           onHeight={setComposerHeight}
           side={side}
-          onSent={() => list.current?.scrollToOffset({ offset: 0, animated: true })}
+          onSent={() => toNewest()}
           onOpenSetup={() => setFindSetup(true)}
         />
       </KeyboardStickyView>
@@ -657,7 +713,6 @@ function ItemView({
   latestFailure,
   onError,
   onLongPress,
-  onDraftHeight,
   lit,
   afterLine,
 }: {
@@ -669,7 +724,6 @@ function ItemView({
   latestFailure?: string | null;
   onError: (t: string) => void;
   onLongPress: (m: AgentMessage) => void;
-  onDraftHeight: (height: number) => void;
   lit?: boolean;
 }) {
   const styles = useStyles();
@@ -690,7 +744,7 @@ function ItemView({
     ) : item.kind === 'pending' ? (
       <PendingRow pending={item.pending} />
     ) : item.kind === 'draft' ? (
-      <DraftRow id={item.key} text={item.text} onHeight={onDraftHeight} />
+      <DraftRow id={item.key} text={item.text} />
     ) : item.kind === 'room' ? (
       <RoomFoldRow fold={item.fold} />
     ) : item.kind === 'setup' ? (
@@ -829,8 +883,8 @@ const useStyles = makeStyles((colors) => ({
   // A new speaker gets clear room; consecutive items from the same speaker
   // (a change summary, a reply, a file, an approval card) are separate blocks
   // and still need air between them.
-  item: { paddingTop: space.xl },
-  itemGrouped: { paddingTop: space.md },
+  item: { paddingTop: space.xl + space.xs },
+  itemGrouped: { paddingTop: space.lg },
   itemAttached: { paddingTop: space.tight },
   // A Line under a Line: their own padding is the gap.
   itemAfterLine: { paddingTop: space.xs },

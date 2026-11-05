@@ -15,7 +15,7 @@
 import type { TeamSetupStep, TeamSetupStepId, TeamSetupView } from '@shipstudio/companion-protocol';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, Switch, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, View } from 'react-native';
 import { useSwitchColors } from '../lib/accent';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
@@ -40,7 +40,9 @@ import { iconSize, space, PRESSED } from '../lib/theme';
 import { AgentAvatar, Spinner } from './agent';
 import { Card, CardActions, Line } from './surfaces';
 import { Button, Icon, T } from './ui';
-import { TeamLoginsList } from './teamLogins';
+import { NeedRow, TeamLoginsList } from './teamLogins';
+import { showActions } from './menu';
+import { agentList } from '../lib/loginState';
 
 export function TeamSetupCard({
   chief,
@@ -387,6 +389,8 @@ const useStyles = makeStyles((colors) => ({
   items: { gap: space.md },
   item: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   group: { gap: space['2xs'] },
+  // Keys under the sign-ins: one hairline between the two lists, as between rows.
+  keysAfter: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
 }));
 
 /**
@@ -411,34 +415,51 @@ function SetupLogins({
   return (
     <View style={styles.items}>
       {signIns.length > 0 && <TeamLoginsList agentIds={agentIds} embedded />}
-      {groups.map((g) => (
-        <View key={g.key} testID={`setup-login-${g.key}`}>
-          <T variant="small" color={colors.textStrong}>
-            {g.name}
-          </T>
-          {g.items.map((l) => (
-            <View key={l.requestId} style={styles.item}>
-              <View style={{ flex: 1 }}>
-                <T variant="caption" color={colors.textSecondary}>
-                  {l.agentName}
-                </T>
-                {!!l.purpose && (
-                  <T variant="caption" color={colors.textMuted}>
-                    {l.purpose}
-                  </T>
-                )}
-              </View>
-              <Button
-                title="Add"
-                variant="secondary"
-                size="compact"
-                onPress={() => onOpenChat(l.agentId)}
-                accessibilityHint={`Opens ${l.agentName}’s chat, where the login goes in`}
+      {groups.length > 0 && (
+        <View style={signIns.length > 0 && styles.keysAfter}>
+          {groups.map((g, i) => {
+            const agents = [...new Map(g.items.map((l) => [l.agentId, l.agentName])).entries()];
+            const purposes = [...new Set(g.items.map((l) => l.purpose).filter(Boolean))];
+            // One answer per row. Several agents want the same key: Add asks
+            // whose card to open, since each goes in through its own chat.
+            const add = () =>
+              agents.length === 1
+                ? onOpenChat(agents[0][0])
+                : showActions(
+                    `Add ${g.name} for…`,
+                    agents.map(([id, name]) => ({ id, title: name, icon: 'bubble.left' as const })),
+                    onOpenChat
+                  );
+            return (
+              <NeedRow
+                key={g.key}
+                testID={`setup-login-${g.key}`}
+                last={i === groups.length - 1}
+                title={g.name}
+                subtitle={`Used by ${agentList(agents.map(([, name]) => name))}`}
+                detail={
+                  purposes.length > 0 && (
+                    <T variant="small" color={colors.textMuted}>
+                      {purposes.join(' · ')}
+                    </T>
+                  )
+                }
+                primary={{
+                  title: 'Add',
+                  onPress: add,
+                  hint:
+                    agents.length === 1
+                      ? `Opens ${agents[0][1]}’s chat, where the login goes in`
+                      : 'Choose whose chat to open; the login goes in there',
+                }}
+                // "Not needed" for a key waits on the Mac: `agents.loginDismiss`
+                // puts away sign-ins only. The row has the slot (`secondary`)
+                // for it once a key can be put away the same way.
               />
-            </View>
-          ))}
+            );
+          })}
         </View>
-      ))}
+      )}
     </View>
   );
 }

@@ -373,25 +373,99 @@ export const avatarSize = { group: 24, header: 28, list: 48, sheet: 56 } as cons
 /**
  * The desktop's type scale (`--font-size-*`), one step up where the desk
  * reads at arm's length and a phone at hand's: body 16 (T3 and most chat
- * apps sit at 16-17), subtitles 14, captions 12 for metadata only.
+ * apps sit at 16-17), subtitles 14, captions 12 for metadata only. `read` is
+ * what a conversation is written in (a reply, your bubble): 17, Grok's and
+ * iMessage's size, on the roomier `READ_LINE`.
+ *
+ * These are the sizes at the Default text size. Settings → Text size scales
+ * every one of them (`TEXT_SIZES`), on top of Dynamic Type, which iOS applies
+ * to whatever size a Text asks for. `type` reads the size in force each time
+ * it's read, so a stylesheet built through `makeStyles` (rebuilt when the
+ * size changes) picks it up.
  */
-export const type = {
+export const baseType = {
   caption: 12,
   small: 14,
   body: 16,
   subhead: 16,
+  read: 17,
+  /** A reply's top heading: a step over `title`, so a `#` reads over a `##`. */
+  heading: 20,
   title: 18,
   display: 28,
   /** Tile labels only (a file's extension on a 40pt badge): never a sentence. */
   micro: 10,
 } as const;
 
+export type TypeRole = keyof typeof baseType;
+
+/** Settings → Text size: the phone's own step, multiplied into every size. */
+export const TEXT_SIZES = {
+  smaller: 0.88,
+  default: 1,
+  larger: 1.12,
+  largest: 1.25,
+} as const;
+export type TextSize = keyof typeof TEXT_SIZES;
+export const TEXT_SIZE_KEYS = Object.keys(TEXT_SIZES) as TextSize[];
+
+let textScale: number = TEXT_SIZES.default;
+
+/** The phone's text size in force, as a multiplier. */
+export const currentTextScale = () => textScale;
+
+/** The multiplier for a saved choice; anything unknown is Default. */
+export const textScaleOf = (size: string | undefined): number =>
+  (size && TEXT_SIZES[size as TextSize]) || TEXT_SIZES.default;
+
+/** Sets the multiplier `type` reads (the AppearanceProvider does). True when it changed. */
+export function setTextScale(size: string | undefined): boolean {
+  const next = textScaleOf(size);
+  if (next === textScale) return false;
+  textScale = next;
+  return true;
+}
+
+/** Runs `build` with `type` read at `scale`: a stylesheet built for a theme, whatever is in force. */
+export function atTextScale<R>(scale: number, build: () => R): R {
+  const before = textScale;
+  textScale = scale;
+  try {
+    return build();
+  } finally {
+    textScale = before;
+  }
+}
+
+/** A size from the base scale at the text size in force, on whole points. */
+export const scaledSize = (base: number, scale = textScale) => Math.round(base * scale);
+
+/** The type scale at the text size in force. Read it when a style is built; don't keep it. */
+export const type = Object.defineProperties(
+  {},
+  Object.fromEntries(
+    (Object.keys(baseType) as TypeRole[]).map((role) => [
+      role,
+      { enumerable: true, get: () => scaledSize(baseType[role]) },
+    ])
+  )
+) as Readonly<Record<TypeRole, number>>;
+
+/** A conversation's line: 1.55× (17 on 26), the air Grok's replies have. */
+export const READ_LINE = 1.55;
+
 /**
  * How far chrome may grow with Dynamic Type before it would crowd out what
- * it frames: titles, pills, avatar initials and buttons. Message bodies have
- * no cap; they reflow.
+ * it frames: titles, pills, avatar initials and buttons.
  */
 export const chromeScale = 1.3;
+
+/**
+ * Message bodies reflow, so they grow much further than chrome, but not
+ * without end: at the largest accessibility sizes (×3 and more) a 17pt reply
+ * sets two words a line. Clamped at ×2 it still reads at AX3.
+ */
+export const READ_MAX_SCALE = 2;
 
 /**
  * A card's title and its asides: they may grow further than chrome, but not

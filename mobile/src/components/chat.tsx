@@ -772,16 +772,17 @@ export function WorkingRow({
 
 const useStyles = makeStyles((colors) => ({
   userRow: { alignItems: 'flex-end', gap: space.xs },
-  // iMessage's proportions: 16 on a 20 line, 12×8 inside, an 18 corner that
-  // stays 18 however many lines, and never wider than 78% of the column.
+  // The reading size (17) on a 24 line, a little tighter than a reply's so a
+  // short bubble stays a pill; 14×10 inside, the composer's 18 corner that
+  // stays 18 however many lines, and never wider than 80% of the column.
   userBubble: {
-    maxWidth: '78%',
+    maxWidth: '80%',
     backgroundColor: colors.surfaceBubble,
     borderRadius: composer.corner,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
+    paddingHorizontal: space.md + space['2xs'],
+    paddingVertical: space.sm + space['2xs'],
   },
-  bubbleText: { fontSize: type.body, lineHeight: composer.line },
+  bubbleText: { fontSize: type.read, lineHeight: lineHeight(type.read, 1.4) },
   held: { backgroundColor: colors.surfaceControlHover },
   heldProse: { opacity: 0.7 },
   bubbleQuote: {

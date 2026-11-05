@@ -297,6 +297,7 @@ const useStyles = makeStyles((colors) => ({
     paddingLeft: space.md,
     borderRadius: radius.card,
     backgroundColor: colors.surfaceSelected,
+    overflow: 'hidden',
   },
   add: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   input: {

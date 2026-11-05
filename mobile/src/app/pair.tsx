@@ -555,6 +555,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,
+    overflow: 'hidden',
   },
   waitingTitle: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   checks: { gap: space.sm },

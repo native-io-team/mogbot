@@ -15,6 +15,7 @@ import { create } from 'zustand';
 import type { ComposerDraft } from './drafts';
 import type { Credentials } from './pairing';
 import { emptySync, type SyncState } from './sync';
+import type { TextSize } from './theme';
 
 export interface AppState extends SyncState {
   /** Read from the keychain at launch; `undefined` until then. */
@@ -55,9 +56,11 @@ export type AppearancePref = 'system' | 'light' | 'dark';
 export interface Prefs {
   haptics: boolean;
   appearance: AppearancePref;
+  /** Settings → Text size, on top of Dynamic Type (`TEXT_SIZES` in theme.ts). */
+  textSize: TextSize;
 }
 
-export const defaultPrefs: Prefs = { haptics: true, appearance: 'system' };
+export const defaultPrefs: Prefs = { haptics: true, appearance: 'system', textSize: 'default' };
 
 export const useApp = create<AppState>(() => ({
   ...emptySync(),

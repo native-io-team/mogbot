@@ -603,6 +603,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,
+    overflow: 'hidden',
   },
   barText: { flex: 1, gap: space.xs },
   hiddenToggle: {
@@ -621,6 +622,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,
+    overflow: 'hidden',
   },
   emptyCentered: {
     flex: 1,
