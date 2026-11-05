@@ -295,7 +295,8 @@ pub(crate) fn browser_url(raw: &str) -> Result<String, CommandError> {
 
 /// Open a URL in a specific browser
 #[tauri::command]
-#[tracing::instrument]
+// The link can carry an OAuth code or a signed query: the browser is enough.
+#[tracing::instrument(skip(url))]
 pub async fn open_url_in_browser(url: String, browser_id: String) -> Result<(), CommandError> {
     let url = browser_url(&url)?;
     #[cfg(target_os = "macos")]
