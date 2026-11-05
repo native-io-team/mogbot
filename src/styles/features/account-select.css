@@ -182,7 +182,7 @@
 }
 
 .account-pick-card.is-current .account-pick-card-main {
-  border-color: rgba(var(--accent-active-rgb), 0.5);
+  border-color: color-mix(in srgb, var(--accent-active) 50%, transparent);
 }
 
 /* Identity tile: the workspace colour as a rounded square with its initial,
@@ -241,7 +241,7 @@
 .account-pick-card-status {
   margin-top: var(--spacing-2xs);
   font-size: var(--font-size-badge);
-  color: var(--accent-active);
+  color: var(--accent-success);
 }
 
 /* Settings gear: a sibling of the tile button, shown on hover or focus so the
@@ -386,7 +386,7 @@
 
 .account-name-input:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .account-name-input:disabled {
@@ -552,7 +552,7 @@
 
 .account-cred-input:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .account-cred-actions {

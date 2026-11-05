@@ -14,7 +14,7 @@
 }
 
 .ss-search-field:focus-within {
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .ss-search-field--compact {

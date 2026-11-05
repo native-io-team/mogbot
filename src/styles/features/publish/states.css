@@ -4,13 +4,16 @@
   align-items: center;
   gap: 12px;
   padding: 20px 16px;
-  color: var(--accent-active);
-  font-size: 15px;
+  color: var(--text-primary);
+  font-size: var(--font-size-body-lg);
   font-weight: 500;
 }
 
+/* A state, not an action: the check carries "done" in status green and the
+   sentence stays plain text, so it neither shouts nor borrows the accent. */
 .publish-success svg {
   flex-shrink: 0;
+  color: var(--accent-success);
 }
 
 /* The status sentence is the widest line in a fixed-width popover ("Nothing to

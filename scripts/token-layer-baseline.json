@@ -563,19 +563,13 @@
     {
       "path": "src/styles/features/conflicts.css",
       "token": "--info",
-      "count": 6,
-      "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
-    },
-    {
-      "path": "src/styles/features/conflicts.css",
-      "token": "--info-hover",
       "count": 1,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
     },
     {
       "path": "src/styles/features/conflicts.css",
       "token": "--info-rgb",
-      "count": 3,
+      "count": 2,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
     },
     {
@@ -1133,7 +1127,7 @@
     {
       "path": "src/styles/features/notifications.css",
       "token": "--info",
-      "count": 3,
+      "count": 1,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
     },
     {
@@ -1428,12 +1422,6 @@
       "path": "src/styles/features/team/workspace.css",
       "token": "--stroke-1",
       "count": 1,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/features/update-banner.css",
-      "token": "--color-green-300",
-      "count": 4,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {

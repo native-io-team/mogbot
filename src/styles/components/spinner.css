@@ -20,3 +20,8 @@
   height: 32px;
   border-width: 3px;
 }
+
+/* A plain "loading", with nothing to say about state: neutral, never the accent. */
+.ss-spinner--muted {
+  color: var(--text-secondary);
+}

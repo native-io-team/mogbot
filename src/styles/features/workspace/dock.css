@@ -179,7 +179,7 @@
   margin-left: calc(var(--dock-drop-line-w) / -2);
   background: var(--accent-active);
   border-radius: var(--radius-pill);
-  box-shadow: 0 0 0 var(--space-04) rgba(var(--accent-active-rgb), 0.2);
+  box-shadow: 0 0 0 var(--space-04) color-mix(in srgb, var(--accent-active) 20%, transparent);
   pointer-events: none;
   /* Keep the target line above every pinned/fixed workspace surface, but below
      floating panels. Floating panels are body-portaled windows and must remain

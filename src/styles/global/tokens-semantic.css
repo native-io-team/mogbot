@@ -23,6 +23,13 @@
   --text-terminal: var(--color-gray-500);
   --text-terminal-strong: var(--color-gray-300);
   --text-inverse: var(--color-white);
+  /* The neutral "strong" fill (near-white on the dark theme) and its ink. A
+     light theme flips these, not the components that use them. */
+  --surface-inverse: var(--color-gray-100);
+  --surface-inverse-hover: var(--color-white);
+  --text-on-inverse: var(--color-gray-950);
+  /* Ink on a success-green fill (a completed step dot). */
+  --text-on-success: var(--color-gray-950);
 
   --border-default: var(--color-gray-850);
   --border-subtle: var(--color-gray-800);
@@ -32,10 +39,12 @@
   --border-width-default: var(--stroke-1);
   --border-width-emphasis: var(--stroke-2);
 
-  --accent-active: var(--color-green-500);
-  --accent-active-hover: var(--color-green-600);
   --accent-selected: var(--text-primary);
+  /* Focus is deliberately NOT the accent: the accent is whatever colour the
+     user picked (possibly white, possibly navy), and a focus ring has to be
+     visible on every surface regardless. */
   --accent-focus: var(--color-blue-500);
+  --focus-ring: var(--accent-focus);
 
   --focus-ring-width: var(--stroke-2);
   --focus-ring-offset: calc(-1 * var(--stroke-1));
@@ -49,7 +58,17 @@
   --accent-warning-light-rgb: 232, 154, 28;
   --accent-scope-project: var(--color-purple-400);
 
-  --text-on-accent: var(--color-gray-950);
+  /* Status colours that are not success/warning/error: an informational
+     severity and "in progress". Fixed hues, never the accent — a red or orange
+     user accent would otherwise make "running" read as an error. */
+  --status-info: var(--color-blue-400);
+  --status-running: var(--color-blue-400);
+
+  /* Drawing ON the user's own page (preview overlays, comment pins, drop
+     lines). Fixed, because it must stay visible on backgrounds we don't know —
+     a white accent on a white page would vanish. */
+  --accent-overlay: var(--color-blue-500);
+  --accent-overlay-ink: var(--color-white);
 
   --color-red-traffic: var(--color-red-500);
   --color-amber-traffic: var(--color-orange-500);
@@ -112,7 +131,6 @@
     inset 0 4px 4px var(--color-black-o15), inset 0 8px 8px var(--color-black-o15),
     inset 0 12px 12px var(--color-black-o15), inset 0 16px 16px var(--color-black-o15);
 
-  --accent-active-rgb: 70, 231, 111;
   --accent-success-rgb: 53, 211, 93;
   --accent-warning-rgb: 232, 154, 28;
   --accent-error-rgb: 244, 71, 71;
@@ -167,4 +185,69 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * ============================================================================
+ * THE ACCENT
+ * ============================================================================
+ * The app is monochrome plus one accent: the Chief of Staff's colour. Exactly
+ * one value is set at runtime — `--accent-user` — by src/lib/accent.ts, along
+ * with two companions it computes in JS: `--accent-on-user` (ink that reads on
+ * the accent, chosen by WCAG contrast) and `--accent-user-rgb` (an r, g, b
+ * triplet, kept only so the plugin-stable `--action-rgb` still works).
+ *
+ * The shades (hover, pressed/busy, the primary gradient's stops) are ALSO
+ * computed in JS and written as finished hex — `--accent-user-hover`,
+ * `-strong`, `-start`, `-end` — never with color-mix(). Two reasons: a WebView
+ * without color-mix() (Safari 15 / macOS 12) drops the declaration and a
+ * primary button lost its fill but kept its dark label; and the ink is
+ * checked against every one of those fills in accent.ts, which it can only do
+ * with the real colours.
+ *
+ * The roles below are declared on `[data-accent-scope]` as well as `:root`. A
+ * custom property is computed where it is declared and inherited as a finished
+ * value, so overriding the inputs on a child would not reach a role resolved
+ * at :root. Any element that sets its own accent (an agent's conversation takes
+ * on that agent's colour) carries `data-accent-scope`, which re-resolves them
+ * against its own inputs.
+ *
+ * Only theme-relative tints (the accent mixed with a surface or a text token)
+ * use color-mix(), inside @supports, with a plain fallback that never hides a
+ * label. Nothing here assumes a dark theme.
+ * ============================================================================
+ */
+:root {
+  /* Inputs. Defaults only (the white accent): accent.ts writes all of them on
+     <html> (and on any [data-accent-scope] element) via inline style, and
+     accent.test.ts holds these defaults equal to accentVars('white'). */
+  --accent-user: var(--color-accent-default);
+  --accent-on-user: var(--color-gray-950);
+  --accent-user-rgb: 230, 230, 230;
+  --accent-user-hover: var(--color-accent-default-hover);
+  --accent-user-strong: var(--color-accent-default-strong);
+  --accent-user-start: var(--color-accent-default-start);
+  --accent-user-end: var(--color-accent-default-end);
+}
+
+:root,
+[data-accent-scope] {
+  --accent-active: var(--accent-user);
+  --accent-active-hover: var(--accent-user-hover);
+  --accent-active-strong: var(--accent-user-strong);
+  /* A selected/current row: a quiet accent tint. */
+  --accent-active-soft: rgba(var(--accent-user-rgb), 0.14);
+  /* Accent-coloured text on a tinted surface. */
+  --accent-text: var(--accent-user);
+  --text-on-accent: var(--accent-on-user);
+}
+
+@supports (color: color-mix(in oklch, red, blue)) {
+  :root,
+  [data-accent-scope] {
+    /* Opaque on the control surface, so it reads the same on any parent. */
+    --accent-active-soft: color-mix(in srgb, var(--accent-user) 14%, var(--surface-control));
+    /* The accent pulled toward the primary text colour, so it always reads. */
+    --accent-text: color-mix(in oklch, var(--accent-user) 65%, var(--text-primary));
+  }
 }

@@ -131,7 +131,7 @@ body.rail-drag-active iframe {
 
 .project-rail-item:focus-visible {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .project-rail-item.is-current {
@@ -186,7 +186,7 @@ body.rail-drag-active iframe {
 }
 
 .project-rail-dot.dot-waiting {
-  background: var(--accent-active);
+  background: var(--status-info);
   animation: rail-dot-pulse 2s ease-in-out infinite;
 }
 

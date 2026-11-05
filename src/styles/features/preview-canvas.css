@@ -220,7 +220,7 @@
 
 .preview-canvas-activate:hover {
   border-color: var(--border-strong);
-  background: rgba(var(--accent-active-rgb), 0.06);
+  background: color-mix(in srgb, var(--accent-active) 6%, transparent);
 }
 
 /* While the canvas is being moved, the frames are scenery. A pan that sweeps

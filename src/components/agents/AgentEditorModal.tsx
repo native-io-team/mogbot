@@ -9,6 +9,7 @@
  */
 
 import { Fragment, useEffect, useState } from 'react';
+import { ErrorIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { TextArea, TextField } from '../primitives/TextField';
@@ -41,6 +42,7 @@ import {
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { useAsyncState } from '../../hooks/useAsyncState';
+import { AccentScope } from '../../contexts/AccentScopeContext';
 
 /** This week and all time, as Claude Code reported them; nothing before any turn. */
 function UsageLines({ usage }: { usage: UsageSummary | null }) {
@@ -128,6 +130,7 @@ function Permissions({ agent }: { agent: Agent }) {
       )}
       {error && (
         <p className="agent-editor__error" role="alert">
+          <ErrorIcon size={12} className="inline-error-icon" />
           {error}
         </p>
       )}
@@ -382,6 +385,7 @@ export function AgentEditorModal({
 
       {error && (
         <p className="agent-editor__error" role="alert">
+          <ErrorIcon size={12} className="inline-error-icon" />
           {error}
         </p>
       )}
@@ -402,25 +406,31 @@ export function AgentEditorModal({
     </form>
   );
 
+  // The modal is portalled out of the chat, so it is scoped here — to the
+  // colour being picked, which makes Save preview it.
   return (
-    <ModalFrame
-      isOpen={isOpen}
-      onClose={onClose}
-      title={editing ? `Edit ${agent?.name}` : 'New agent'}
-      className="agent-editor"
-    >
-      {agent ? (
-        <Tabs value={tab} onValueChange={(v) => setTab(v as EditorTab)}>
-          <TabsList className="agent-editor__tabs" appearance="underline" aria-label="Edit">
-            <TabsTab value="agent">Agent</TabsTab>
-            <TabsTab value="memory">Memory</TabsTab>
-          </TabsList>
-          <TabsPanel value="agent">{form}</TabsPanel>
-          <TabsPanel value="memory">{tab === 'memory' && <AgentMemory agent={agent} />}</TabsPanel>
-        </Tabs>
-      ) : (
-        form
-      )}
-    </ModalFrame>
+    <AccentScope color={color}>
+      <ModalFrame
+        isOpen={isOpen}
+        onClose={onClose}
+        title={editing ? `Edit ${agent?.name}` : 'New agent'}
+        className="agent-editor"
+      >
+        {agent ? (
+          <Tabs value={tab} onValueChange={(v) => setTab(v as EditorTab)}>
+            <TabsList className="agent-editor__tabs" appearance="underline" aria-label="Edit">
+              <TabsTab value="agent">Agent</TabsTab>
+              <TabsTab value="memory">Memory</TabsTab>
+            </TabsList>
+            <TabsPanel value="agent">{form}</TabsPanel>
+            <TabsPanel value="memory">
+              {tab === 'memory' && <AgentMemory agent={agent} />}
+            </TabsPanel>
+          </Tabs>
+        ) : (
+          form
+        )}
+      </ModalFrame>
+    </AccentScope>
   );
 }

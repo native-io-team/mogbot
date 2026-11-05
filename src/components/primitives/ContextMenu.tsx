@@ -19,6 +19,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalAccentScope } from '../../contexts/AccentScopeContext';
 
 interface ContextMenuPosition {
   align?: 'left' | 'right';
@@ -221,6 +222,7 @@ export function ContextMenuContent({
   const { close, isOpen, position } = useContextMenuContext('ContextMenuContent');
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuPosition, setMenuPosition] = useState<ContextMenuPosition | null>(null);
+  const accentScope = usePortalAccentScope();
 
   const reposition = useCallback(() => {
     if (!position || !menuRef.current) return;
@@ -293,7 +295,8 @@ export function ContextMenuContent({
       data-context-menu-content
       data-state={isOpen ? 'open' : 'closed'}
       role="menu"
-      style={{ ...positionStyle, ...style }}
+      data-accent-scope={accentScope['data-accent-scope']}
+      style={{ ...accentScope.style, ...positionStyle, ...style }}
       tabIndex={-1}
       onKeyDown={handleKeyDown}
     >

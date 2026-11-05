@@ -31,9 +31,6 @@
   /* Brand / interactive */
   --accent: var(--text-white);
   --accent-hover: var(--text-primary);
-  --action: var(--accent-active);
-  --action-hover: var(--accent-active-hover);
-  --action-text: var(--text-on-accent);
 
   /* Structure */
   --border: var(--border-default);
@@ -48,7 +45,6 @@
   --error-deep: var(--accent-error-deep);
 
   /* RGB triplets — for alpha tints: rgba(var(--error-rgb), 0.1) */
-  --action-rgb: var(--accent-active-rgb);
   --success-rgb: var(--accent-success-rgb);
   --success-light-rgb: var(--accent-success-rgb);
   --warning-rgb: var(--accent-warning-rgb);
@@ -62,6 +58,18 @@
 
   /* Shape (docs/plugins.md names --radius explicitly) */
   --radius: var(--radius-control);
+}
+
+/* The plugin-facing accent aliases. Scoped like the accent itself (see
+   tokens-semantic.css) so they follow a [data-accent-scope] element too.
+   `--action-rgb` follows the runtime accent because accent.ts writes
+   `--accent-user-rgb` alongside `--accent-user`. */
+:root,
+[data-accent-scope] {
+  --action: var(--accent-active);
+  --action-hover: var(--accent-active-hover);
+  --action-text: var(--text-on-accent);
+  --action-rgb: var(--accent-user-rgb);
 }
 
 :root {

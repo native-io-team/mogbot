@@ -33,7 +33,7 @@
  * Scoped to non-active rows because the active row is where the user
  * already is (attention clears on activate). */
 .sidebar-row.is-attention .sidebar-row-label {
-  color: var(--accent-success);
+  color: var(--text-white);
   font-weight: 600;
 }
 
@@ -67,7 +67,7 @@
 }
 
 .sidebar-row-pixel-loader {
-  color: var(--accent-success);
+  color: var(--pixel-loader-color);
 }
 
 .sidebar-row-dot.dot-idle {
@@ -89,7 +89,7 @@
 /* Something new to read. The one unread mark in the sidebar: every agent row
  * uses it, so "new" never has two colours. */
 .sidebar-row-dot.dot-unread {
-  background: var(--accent-active);
+  background: var(--text-white);
 }
 
 .sidebar-row-dot.dot-waiting {

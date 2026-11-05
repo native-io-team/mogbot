@@ -16,6 +16,7 @@ import { basename } from '../lib/paths';
 import { requestPairOnOpen } from '../lib/companion';
 import { COMPANION_INSTALL_ENABLED, requestInstallOnOpen } from '../lib/companionInstall';
 import { fileManagerName } from '../lib/setup';
+import { requestSettingsTabOnOpen } from '../lib/settings';
 import {
   CodeIcon,
   CloseIcon,
@@ -291,6 +292,17 @@ export function useAppCommands({
         category: 'settings',
         keywords: ['compact', 'toolbar', 'topbar', 'layout', 'single row'],
         run: () => setCompactWorkspaceToolbarEnabled(!compactWorkspaceToolbarEnabled),
+      },
+      {
+        id: 'settings.accentColor',
+        title: 'Accent color…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: ['accent', 'colour', 'color', 'theme', 'appearance', 'chief of staff'],
+        run: () => {
+          requestSettingsTabOnOpen('appearance');
+          openModal('settings');
+        },
       },
       {
         id: 'settings.changelog',

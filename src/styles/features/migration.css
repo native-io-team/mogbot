@@ -601,7 +601,7 @@
 /* Only the active phase is emphasised. Ticking every finished phase in green
    makes a migration that is 20% through look like a wall of success. */
 .mig-rail__item--active {
-  border-color: var(--accent-active);
+  border-color: var(--status-running);
 }
 
 .mig-rail__item--not-started {
@@ -623,7 +623,7 @@
 }
 
 .mig-rail__item--active .mig-rail__marker {
-  color: var(--accent-active);
+  color: var(--status-running);
 }
 
 .mig-rail__item--blocked .mig-rail__marker {
@@ -647,7 +647,7 @@
 
 .mig-rail__now {
   font-size: var(--font-size-label);
-  color: var(--accent-active);
+  color: var(--status-running);
 }
 
 .mig-rail__detail {
@@ -803,7 +803,7 @@
   color: var(--mig-band-match);
 }
 .mig-report__col--doing svg {
-  color: var(--accent-active);
+  color: var(--status-running);
 }
 .mig-report__col--pending svg {
   color: var(--text-muted);

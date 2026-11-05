@@ -1,8 +1,3 @@
-/* GitHub-local colors — intentional one-offs, not part of the global scale. */
-:root {
-  --github-publish-hover-teal: #5ed9d0;
-}
-
 /* GitHub Integration - Project List */
 .project-list-actions {
   display: flex;
@@ -90,14 +85,14 @@
 }
 
 .github-button.github-publish {
-  background: var(--accent-success);
-  color: var(--surface-app);
+  background: var(--accent-active);
+  color: var(--text-on-accent);
   font-weight: 600;
   margin-left: auto;
 }
 
 .github-button.github-publish:hover:not(:disabled) {
-  background: var(--github-publish-hover-teal);
+  background: var(--accent-active-hover);
 }
 
 .github-button.github-publish:disabled,

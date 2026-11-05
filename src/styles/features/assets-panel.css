@@ -175,7 +175,7 @@
 
 .assets-root-custom input:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 /* Toolbar */

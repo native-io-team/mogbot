@@ -160,8 +160,8 @@
 }
 .canvas-comment-card[data-status='sent'] .canvas-comment-pin {
   background: transparent;
-  color: var(--accent-active);
-  box-shadow: inset 0 0 0 var(--border-width-default) var(--accent-active);
+  color: var(--text-secondary);
+  box-shadow: inset 0 0 0 var(--border-width-default) var(--text-secondary);
 }
 .canvas-comment-card__target {
   min-width: 0;
@@ -187,7 +187,7 @@
   color: var(--text-secondary);
 }
 .canvas-comments-sent {
-  color: var(--accent-active);
+  color: var(--accent-success);
   font-size: var(--font-size-body-sm);
 }
 .canvas-comments-agent {
@@ -259,9 +259,9 @@
 }
 .canvas-comment-pin-marker[data-status='sent'] {
   background: var(--surface-panel);
-  color: var(--accent-active);
+  color: var(--text-secondary);
   box-shadow:
-    inset 0 0 0 2px var(--accent-active),
+    inset 0 0 0 2px var(--text-secondary),
     var(--shadow-sm); /* css-ok: 2px ring reads as a pin outline at 22px; 1px disappears */
 }
 .canvas-comment-bubble {

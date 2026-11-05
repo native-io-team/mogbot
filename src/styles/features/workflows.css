@@ -177,7 +177,7 @@
 }
 
 .workflow-row-dot[data-state='running'] {
-  background: var(--accent-active);
+  background: var(--status-running);
   animation: workflow-pulse 1.4s ease-in-out infinite;
 }
 
@@ -811,7 +811,7 @@
 }
 
 .run-history-item-dot[data-state='running'] {
-  background: var(--accent-active);
+  background: var(--status-running);
 }
 
 .run-history-item-body {
