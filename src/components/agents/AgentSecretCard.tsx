@@ -13,7 +13,7 @@ import { Button } from '../primitives/Button';
 import { TextField } from '../primitives/TextField';
 import { ErrorIcon, LockedIcon } from '@/components/icons';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { saveSecret, secretVars } from '../../lib/agentSecrets';
+import { saveSecret, secretTitle, secretVars } from '../../lib/agentSecrets';
 import type { AgentMessage } from '../../lib/agents';
 
 interface SecretCardProps {
@@ -78,8 +78,10 @@ export const SecretCard = memo(function SecretCard({
       >
         <div className="agent-approval__title">
           <LockedIcon size={14} className="agent-secret__icon" />
-          <span>
-            {agentName} asks for <code className="agent-secret__name">{request.name}</code>
+          {/* The identifier and its variables are the agent's business: a
+              tooltip for the curious, not the headline. */}
+          <span title={`${request.name} · ${secretVars(request)}`}>
+            {agentName} needs your {secretTitle(request.name)}
           </span>
         </div>
         <p className="agent-secret__purpose">{request.purpose}</p>
@@ -103,9 +105,8 @@ export const SecretCard = memo(function SecretCard({
                 </label>
               ))}
             </div>
-            <p className="agent-approval__note">
-              Kept in your Keychain for {agentName} only. It gets {secretVars(request)}, never the
-              value.
+            <p className="agent-approval__note" title={secretVars(request)}>
+              Kept in your Keychain for {agentName} only. {agentName} can use it but never sees it.
             </p>
             {error && (
               <p className="agent-editor__error" role="alert">
@@ -134,7 +135,7 @@ export const SecretCard = memo(function SecretCard({
             data-resolved={(openedPending && !pending) || undefined}
           >
             {approval.status === 'allowed'
-              ? `Saved to your Keychain · ${agentName} uses ${secretVars(request)}`
+              ? `Saved to your Keychain · ${agentName} can use it now`
               : approval.status === 'denied'
                 ? approval.note
                   ? `Declined · “${approval.note}”`

@@ -21,6 +21,7 @@ import {
   describeCheckInTime,
   describeRepeat,
   describeRun,
+  describeRunDetail,
   groupMemory,
   undoDelete,
   formatWhen,
@@ -233,6 +234,15 @@ describe('schedule helpers', () => {
     );
     expect(describeRun({ ...run, outcome: 'failed', attempt: 8 })).toBe('Didn’t run after 8 tries');
     expect(describeRun({ ...run, outcome: 'unknown' })).toBe('Unknown');
+  });
+
+  it('says a provider failure in plain words, and leaves the rest as it came', () => {
+    expect(describeRunDetail('API Error: 529 overloaded')).toBe('The service was busy');
+    expect(describeRunDetail('API Error: 500 Internal Server Error')).toBe(
+      'The service had a problem'
+    );
+    expect(describeRunDetail('429 rate_limit_error')).toBe('Too many requests at once');
+    expect(describeRunDetail('Claude Code is signed out.')).toBe('Claude Code is signed out.');
   });
 
   it('names today and tomorrow, and dates further out', () => {

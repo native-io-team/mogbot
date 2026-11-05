@@ -3,6 +3,7 @@ import { Button } from './primitives/Button';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { getRemoteAccessBrief } from '../lib/remoteAccess';
 import { quitPrompt, type QuitCheck } from '../lib/agentsDesktop';
+import { BRAND } from '../lib/brand';
 
 interface QuitConfirmModalProps {
   onCancel: () => void;
@@ -79,22 +80,29 @@ export function QuitConfirmModal({
     );
   }
 
+  // Nothing is running: a standard dialog, title in the header and the
+  // actions right-aligned with the dismissal first.
   return (
     <ModalFrame
       isOpen
       onClose={onCancel}
-      ariaLabel="Quit"
+      title={`Quit ${BRAND.name}?`}
       showCloseButton={false}
-      className="quit-confirm-modal"
+      className="quit-confirm-plain"
     >
       <div
+        className="quit-confirm-plain__body"
         onKeyDown={(e) => {
           if (e.key === 'Enter') onQuit();
         }}
       >
-        <p>Quit?</p>
-        {remoteLine}
-        <div className="quit-confirm-actions">
+        <div className="confirm-modal-text">
+          <p className="text-style-hint">
+            Agents and scheduled routines don&rsquo;t run while the app is closed.
+          </p>
+          {remoteLine}
+        </div>
+        <div className="modal-actions">
           <Button variant="secondary" onClick={onCancel}>
             Cancel
           </Button>

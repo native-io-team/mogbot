@@ -36,14 +36,8 @@ const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const PENDING_ALLOWLIST = new Set([
   'public/ship_studio_full.png',
   'src/App.tsx',
-  'src/commands/useAppCommands.tsx',
   'src/components/BootLoadingScreen.tsx',
-  'src/components/UpdateBanner.tsx',
   'src/components/agents/AgentsStayOn.tsx',
-  'src/components/code/CodeViewer.tsx',
-  'src/components/dashboard/ProjectList.tsx',
-  'src/components/dashboard/SettingsModal.tsx',
-  'src/components/issue-reports/IssueReportModals.tsx',
   'src/components/preview/Preview.tsx',
   'src/components/setup/OnboardingScreen.tsx',
   'src/components/setup/agent-led/AgentOnboardingScreen.tsx',
@@ -53,15 +47,11 @@ const PENDING_ALLOWLIST = new Set([
   'src/harness/main.tsx',
   'src/harness/scenarios/agents.ts',
   'src/harness/scenarios/agentsProject.ts',
-  'src/harness/scenarios/base.ts',
   'src/harness/scenarios/phoneInstall.ts',
   'src/harness/scenarios/remote.ts',
   'src/harness/scenarios/team.ts',
   'src/lib/agentOnboarding.ts',
   'src/lib/companionInstall.ts',
-  'src/lib/issueReports.ts',
-  'src/lib/plugins.ts',
-  'src/lib/setup.ts',
 ]);
 
 const ALLOWED = [

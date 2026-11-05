@@ -32,6 +32,7 @@ import {
   describeCheckInTime,
   describeRepeat,
   describeRun,
+  describeRunDetail,
   formatWhen,
   pauseCheckIn,
   previewSchedule,
@@ -354,7 +355,7 @@ function RunHistory({ runs }: { runs: CheckInRun[] }) {
       {[...runs].reverse().map((run) => {
         const extra = [
           run.manual ? 'run now' : null,
-          run.detail ?? null,
+          run.detail ? describeRunDetail(run.detail) : null,
           run.signIn?.length ? `${run.signIn.join(', ')} needs signing in again` : null,
         ].filter(Boolean);
         const outcome = [describeRun(run), ...extra].join(' · ');

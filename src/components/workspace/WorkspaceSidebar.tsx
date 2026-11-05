@@ -491,6 +491,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   // For the ~80% single-workspace users the footer switcher stays hidden; the
   // picker is still reachable any time via the ⌘K command below.
   const hasMultipleWorkspaces = accounts.length > 1;
+  const pageHasSearch = activeNav === 'home' || activeNav === 'workflows' || activeNav === 'inbox';
   const showWorkspaceSwitcher = Boolean(onSwitchAccount && activeAccount && hasMultipleWorkspaces);
   // With no workspace switcher between them, Slack and Settings share the row
   // as two labelled halves instead of two icons with a gap in the middle.
@@ -1655,7 +1656,17 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
       )}
     </>
   );
-  const projectGroups = (
+  // Nothing pinned and nothing open: one line instead of two empty groups
+  // with a "0" each, which read as an admin panel with nothing in it.
+  const noProjectRows = pinnedGroupEmpty && activeGroupEmpty && !isSidebarHidden;
+  const projectGroups = noProjectRows ? (
+    <>
+      <div className="sidebar-group-empty sidebar-group-empty--all">
+        Projects you pin or open show up here.
+      </div>
+      {projectActions}
+    </>
+  ) : (
     <>
       {renderProjectGroup(
         'pinned',
@@ -1769,19 +1780,22 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
               layout={isSidebarHidden ? 'stacked' : 'labels'}
             />
           )}
-          {searchContent ?? (
-            <button
-              type="button"
-              className="workspace-sidebar-filter"
-              onClick={() => openPalette()}
-              title="Open command palette"
-              aria-label="Open command palette"
-            >
-              <SearchIcon size={12} />
-              <span className="workspace-sidebar-filter-placeholder">Search</span>
-              <span className="workspace-sidebar-filter-shortcut">{kbd('mod', 'K')}</span>
-            </button>
-          )}
+          {/* Home, Workflows and Inbox carry the palette's search across their top
+              bar; a second field with the same shortcut beside it is just noise. */}
+          {searchContent ??
+            (pageHasSearch ? null : (
+              <button
+                type="button"
+                className="workspace-sidebar-filter"
+                onClick={() => openPalette()}
+                title="Open command palette"
+                aria-label="Open command palette"
+              >
+                <SearchIcon size={12} />
+                <span className="workspace-sidebar-filter-placeholder">Search</span>
+                <span className="workspace-sidebar-filter-shortcut">{kbd('mod', 'K')}</span>
+              </button>
+            ))}
         </div>
 
         <SpotifyWidget isSidebarHidden={isSidebarHidden} />
@@ -2079,7 +2093,7 @@ function SidebarGroupHeader({
         {label === 'Pinned' ? <PinIcon size={14} /> : <ActivityIcon size={14} />}
       </span>
       <span className="sidebar-group-label">{label}</span>
-      <span className="sidebar-group-count">{count}</span>
+      {count > 0 && <span className="sidebar-group-count">{count}</span>}
     </button>
   );
 }

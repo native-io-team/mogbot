@@ -451,6 +451,12 @@
   line-height: 1.25;
 }
 
+/* The one line that stands in for both groups when neither has anything. */
+.sidebar-group-empty.sidebar-group-empty--all {
+  padding: var(--spacing-md);
+  color: var(--text-muted);
+}
+
 /* Projects (top-level groups). No vertical padding — we want the row to
  * sit flush against the dividers above and below so the separator line
  * reads as the only breathing room between adjacent projects. */

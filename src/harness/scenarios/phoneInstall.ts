@@ -113,8 +113,9 @@ function fakePty(screen: string) {
  * Steps run before a scenario's command, so a flow that clicks on inside the
  * panel opens it the way a person does: Settings, Phone, Install….
  */
+// With feedback and the changelog switched off by brand, the Settings trigger
+// opens Settings directly; there is no one-item menu to pick from.
 const OPEN: ScenarioStep[] = [
-  { click: '.settings-menu [data-settings-item="app-settings"]' },
   { click: 'button[data-settings-open="phone"]' },
   { click: '[data-install-open]' },
 ];
@@ -153,7 +154,7 @@ const install = (
 export const phoneInstallScenarios: Scenario[] = [
   install(
     'phone-install-choose',
-    'Install on my phone — choose a route',
+    'Get the phone app — choose a route',
     '"Phone" back link on the left, iPhone | Android on the right. A dashed, quieter TestFlight ' +
       'card saying what it is, with a grey "Not available yet" pill instead of a button. Below, ' +
       '"Build it on this Mac" in a solid card, saying plainly it needs Xcode and an Apple ID and ' +

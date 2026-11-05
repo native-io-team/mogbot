@@ -286,21 +286,9 @@
     },
     {
       "path": "src/styles/features/agents-panel.css",
-      "token": "--color-black-o75",
-      "count": 1,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/features/agents-panel.css",
       "token": "--radius-full",
       "count": 1,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
-    },
-    {
-      "path": "src/styles/features/agents-panel.css",
-      "token": "--stroke-1",
-      "count": 2,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
       "path": "src/styles/features/agents-panel.css",

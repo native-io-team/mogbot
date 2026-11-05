@@ -476,7 +476,7 @@ yet"; when set, maintainers ship through EAS (`eas.json` profiles map to
 `expo-updates` channels), with a build at least every 60 days because
 TestFlight builds expire at 90.
 
-**Install on my phone** (Phone panel or Cmd+K) is the route today, and follows
+**Get the phone app** (sidebar, Phone panel or Cmd+K) is the route today, and follows
 the agent-led onboarding pattern: **the agent drives, the app verifies.** It
 spawns the user's agent beside a checklist with a prescriptive prompt
 (`buildIosInstallPrompt` / `buildAndroidInstallPrompt`); every check is a

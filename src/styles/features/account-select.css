@@ -332,6 +332,11 @@
   align-items: center;
 }
 
+.account-detail-footer--actions {
+  justify-content: flex-end;
+  gap: var(--button-gap);
+}
+
 .account-detail-footer-note {
   color: var(--text-muted);
   font-size: var(--font-size-badge);
@@ -356,6 +361,19 @@
   display: flex;
   gap: var(--spacing-sm);
   flex-shrink: 0;
+}
+
+/* A form field's label: sentence case, like the Agents side's labels. */
+.account-field-label {
+  display: block;
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.account-field-label--spaced {
+  margin-top: var(--spacing-md);
 }
 
 .account-section-title {

@@ -1799,7 +1799,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-new-advanced',
     title: 'Agents — creating an agent, Advanced open',
     looksRightWhen:
-      'Advanced open under the brief: Colour (eleven swatches), Runs on, Model (Default / Opus / Sonnet / Haiku), Works in, Apps.',
+      'Advanced open under the brief: Color (eleven swatches), Runs on, Model (Default / Opus / Sonnet / Haiku), Works in, Apps.',
     // Steps run before a scenario's command, so the dialog is opened by its button.
     steps: [{ click: '.agents-list__new' }, { click: '.agent-editor__more' }],
     requires: '.agent-editor__colors',
@@ -1830,7 +1830,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-paste-preview',
     title: 'Agents — import, a pasted reply previewed',
     looksRightWhen:
-      'Step 1 has folded to a ticked line with “Show message”; the paste field is shorter. Under it: “4 agents from Grok Bot, in 2 parts · 1 routine can’t be set as written” (the tail amber). One sidebar-style row per agent: its badge in the colour it will have (the main one wears the Chief of Staff’s badge), the name with a chip (Merges into Chief of Staff, Updates, New in green), the role, and compact counts (2.1k chars of instructions · 3 memories · 2 routines). Finance’s counts end in amber “1 won’t be set”. Each row has a chevron. The primary button reads “Import 4 agents”.',
+      'Step 1 has folded to a ticked line with “Show message”; the paste field is shorter. Under it: “4 agents from Grok Bot, in 2 parts · 1 routine can’t be set as written” (the tail amber). One sidebar-style row per agent: its badge in the colour it will have (the main one wears the Chief of Staff’s badge), the name with a chip (Merges into Chief of Staff, Updates, New in green), the role, and compact counts (Instructions · 3 memories · 2 routines). Finance’s counts end in amber “1 won’t be set”. Each row has a chevron. The primary button reads “Import 4 agents”.',
     // Steps run before a palette command, so these walk in: Agents mode, then
     // the sidebar note's Import agents.
     requires: '.agents-import-agent',
@@ -2349,11 +2349,11 @@ export const agentsScenarios: Scenario[] = [
   },
   secretScenario(
     'pending',
-    'Finance’s chat: a card with a lock, “Finance asks for stripe_key” (stripe_key in mono), the purpose under it, one masked “API key” field, a muted line saying it’s kept in the Keychain for Finance only and Finance gets $STRIPE_KEY, then Deny and a disabled Save on the right.'
+    'Finance’s chat: a card with a lock, “Finance needs your Stripe key”, the purpose under it, one masked “API key” field, a muted line saying it’s kept in the Keychain for Finance only and Finance never sees it, then Deny and a disabled Save on the right.'
   ),
   secretScenario(
     'allowed',
-    'The same card resolved: no field or buttons, a green “Saved to your Keychain · Finance uses $STRIPE_KEY”, then Finance’s reconciliation reply.'
+    'The same card resolved: no field or buttons, a green “Saved to your Keychain · Finance can use it now”, then Finance’s reconciliation reply.'
   ),
   secretScenario(
     'denied',

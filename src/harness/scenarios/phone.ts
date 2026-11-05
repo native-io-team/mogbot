@@ -134,13 +134,13 @@ export const phoneScenarios: Scenario[] = [
   phone(
     'phone-ready',
     'Phone — on, two phones paired',
-    'Green bar "On for phones on your tailnet" with the mono address and Turn off. A "Pair a ' +
+    'Green bar "Phone access is on" (the address is its tooltip) and Turn off. A "Pair a ' +
       'phone" card with an icon tile and "Show code". Paired phones: the iPhone with a green ' +
       'tile, a green dot and "Connected now"; the Pixel "Last seen 2 h ago over Tailscale" and ' +
       '"built on this Mac". Each row has a quiet Remove and its last action ("Sent a message · 3 min ' +
       'ago"). Below, "What a paired phone can do": green-ticked abilities on the left, the ' +
       "things it can't do (push, edit code, type into sessions or terminals) muted on the right. " +
-      'A "Notifications" section has its checkbox disabled and says it is not available in this build.',
+      'No "Notifications" section: this build can\'t send them, so it is hidden.',
     {
       ...ON,
       devices,
@@ -211,7 +211,6 @@ export const phoneScenarios: Scenario[] = [
       command: undefined,
       openSelector: '[data-settings-menu-trigger]',
       steps: [
-        { click: '.settings-menu [data-settings-item="app-settings"]' },
         { click: 'button[data-settings-open="phone"]' },
         { click: '.phone-device .phone-device__actions button' },
       ],

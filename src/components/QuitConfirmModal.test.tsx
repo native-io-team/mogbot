@@ -12,7 +12,7 @@ describe('QuitConfirmModal', () => {
     mockIPC(() => ({ enabled: false }));
     const h = handlers();
     render(<QuitConfirmModal {...h} check={{ working: [], waiting: [] }} backgroundAvailable />);
-    expect(screen.getByText('Quit?')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: /^Quit .+\?$/ })).toBeTruthy();
     expect(screen.queryByText('Keep running in background')).toBeNull();
   });
 

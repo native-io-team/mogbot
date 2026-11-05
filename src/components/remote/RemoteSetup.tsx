@@ -18,7 +18,7 @@
 import { useState, type ReactNode } from 'react';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
-import { CheckIcon } from '@/components/icons';
+import { CheckIcon, WarningIcon } from '@/components/icons';
 import { BRAND } from '../../lib/brand';
 import type { DashboardProject } from '../../lib/project';
 import {
@@ -145,11 +145,23 @@ export function RemoteSetup({ ctl, choices, setChoice, projects, onProjectChange
     <ol className="remote-stepper">
       {steps.map((step, i) => {
         const open = step.state === 'current' || reopened === step.id;
+        // Acknowledged isn't fixed: a done "stay on" step with things left to
+        // fix shows the warning, never a check beside "2 things to fix".
+        const warn = step.state === 'done' && step.id === 'stayOn' && toFix > 0;
         return (
-          <li key={step.id} className={`remote-step remote-step--${step.state}`}>
+          <li
+            key={step.id}
+            className={`remote-step remote-step--${step.state}${warn ? ' remote-step--warn' : ''}`}
+          >
             <div className="remote-step__head">
               <span className="remote-step__marker" aria-hidden>
-                {step.state === 'done' ? <CheckIcon size={12} /> : i + 1}
+                {warn ? (
+                  <WarningIcon size={12} />
+                ) : step.state === 'done' ? (
+                  <CheckIcon size={12} />
+                ) : (
+                  i + 1
+                )}
               </span>
               <span className="remote-step__title">{step.title}</span>
               {step.state === 'done' && !open && (

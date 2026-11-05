@@ -200,7 +200,7 @@ export function UpdateBanner() {
       logger.warn('[UpdateBanner] Restart failed', { error: detail });
       trackError('app_restart', err, 'Project Sidebar');
       setStatus('error');
-      setError(`Couldn't restart the app: ${detail}. Please quit and reopen Ship Studio manually.`);
+      setError(`Couldn't restart the app: ${detail}. Please quit and reopen the app manually.`);
     }
   }, []);
 
@@ -295,7 +295,7 @@ export function UpdateBanner() {
                   ? `Downloading version ${version}`
                   : status === 'error'
                     ? `Retry update to version ${version}`
-                    : `Update Ship Studio to version ${version}`
+                    : `Update to version ${version}`
             }
           >
             <span className="update-indicator-icon" aria-hidden="true">

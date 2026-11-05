@@ -163,6 +163,15 @@
   color: var(--accent-success);
 }
 
+.remote-step--done.remote-step--warn .remote-step__marker {
+  background: rgba(var(--accent-warning-rgb), 0.16);
+  color: var(--accent-warning);
+}
+
+.remote-step--warn .remote-step__summary {
+  color: var(--accent-warning);
+}
+
 .remote-step__title {
   font-size: var(--font-size-body-lg);
   color: var(--text-muted);

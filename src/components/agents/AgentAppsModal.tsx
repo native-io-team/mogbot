@@ -42,7 +42,8 @@ export function AgentAppsModal({ isOpen, onClose }: AgentAppsModalProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [signingIn, setSigningIn] = useState<string | null>(null);
+  // The display name for the dialog's title, and the raw server name /mcp lists.
+  const [signingIn, setSigningIn] = useState<{ title: string; name: string } | null>(null);
   const { execute: load } = list;
 
   useEffect(() => {
@@ -110,7 +111,7 @@ export function AgentAppsModal({ isOpen, onClose }: AgentAppsModalProps) {
                     app={app}
                     busy={busy !== null}
                     confirming={confirming === app.name}
-                    onSignIn={() => setSigningIn(appTitle(app))}
+                    onSignIn={() => setSigningIn({ title: appTitle(app), name: app.name })}
                     onRemove={() =>
                       confirming === app.name
                         ? void change(app.name, () => removeAgentApp(app.name))
@@ -155,7 +156,7 @@ export function AgentAppsModal({ isOpen, onClose }: AgentAppsModalProps) {
             </p>
             <p>
               Gmail, Google Calendar and Slack come from claude.ai: connect them there under
-              Settings → Connectors. A project’s MCP servers screen edits these same settings.
+              Settings → Connectors.
             </p>
           </div>
 
@@ -174,11 +175,12 @@ export function AgentAppsModal({ isOpen, onClose }: AgentAppsModalProps) {
             setSigningIn(null);
             void load();
           }}
-          title={`Sign in to ${signingIn}`}
+          title={`Sign in to ${signingIn.title}`}
           className="agents-panel-terminal-modal"
         >
           <p className="agent-apps__terminal-hint">
-            Type /mcp, choose {signingIn}, then Authenticate. Close this once it says connected.
+            Type /mcp, choose {signingIn.name}, then Authenticate. Close this once it says
+            connected.
           </p>
           <div className="agents-panel-terminal-body">
             <OnboardingTerminal
@@ -213,12 +215,11 @@ function ConnectedRow({
   const managed = appManagedWhere(app.source);
   return (
     <li className="agent-apps__row">
-      <div className="agent-apps__text">
+      {/* Where it connects (a host or a command) is a detail for the curious:
+          a tooltip, not a line every row has to carry. */}
+      <div className="agent-apps__text" title={appTarget(app.target)}>
         <span className="agent-apps__name">{appTitle(app)}</span>
-        <span className="agent-apps__meta">
-          {appTarget(app.target)}
-          {managed && ` · ${managed}`}
-        </span>
+        {managed && <span className="agent-apps__meta">{managed}</span>}
       </div>
       {status && (
         <span className="agent-apps__status" data-status={app.status}>

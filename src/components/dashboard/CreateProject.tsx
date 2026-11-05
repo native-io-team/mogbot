@@ -24,7 +24,9 @@ import {
   UploadIcon,
 } from '@/components/icons';
 import { Button } from '../primitives/Button';
+import { ModalFrame } from '../primitives/ModalFrame';
 import { Spinner } from '../primitives/Spinner';
+import { TextButton } from '../primitives/TextButton';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
 import {
   useProjectCreation,
@@ -41,6 +43,9 @@ import { BRAND_LINKS } from '../../lib/brand';
 const TEMPLATE_GALLERY_ENABLED = BRAND_LINKS.templateApi !== null;
 import { TemplateCard } from './TemplateCard';
 import { SiteUrlPanel, normaliseUrl } from '../migration/SiteUrlPanel';
+import { availableOutcomes, outcomeFor, templateForOutcome } from '../../lib/projectOutcomes';
+
+const OUTCOMES = availableOutcomes(TEMPLATES);
 
 /** Props for the CreateProject component */
 interface CreateProjectProps {
@@ -87,6 +92,12 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
   } = useProjectCreation({ onComplete, onCancel });
 
   const [setAsDefaultChecked, setSetAsDefaultChecked] = useState(false);
+  // Frameworks are a second question, asked only of people who open it. It
+  // starts open when the saved default belongs to no outcome (Eve agent).
+  const [showFrameworks, setShowFrameworks] = useState(
+    () => selectedTemplate !== null && outcomeFor(selectedTemplate.id) === null
+  );
+  const selectedOutcome = hasZipTemplate ? null : outcomeFor(selectedTemplate?.id);
 
   // Tab state: "scratch" = start from scratch, "template" = community templates
   const [activeTab, setActiveTab] = useState<'scratch' | 'template' | 'url'>('scratch');
@@ -288,23 +299,13 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
     if (formStep === 'select-template') {
       return (
         <div className="create-modal-content">
-          <div className="create-modal-header">
-            <div>
-              <h2>New Project</h2>
-              <p>Select a starting point</p>
-            </div>
-            <button className="create-modal-close" onClick={onCancel} type="button">
-              <CloseIcon size={20} />
-            </button>
-          </div>
-
           <Tabs value={activeTab} onValueChange={(next) => setActiveTab(next as typeof activeTab)}>
             <TabsList className="create-tabs" variant="stretch" aria-label="Project source">
               <TabsTab value="scratch" className="create-tab">
-                Start from Scratch
+                Start fresh
               </TabsTab>
               <TabsTab value="template" className="create-tab">
-                Start from Template
+                From a template
               </TabsTab>
               <TabsTab value="url" className="create-tab">
                 From a URL
@@ -314,29 +315,66 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
             <TabsPanel value="scratch" className="create-tab-panel">
               {activeTab === 'scratch' && (
                 <>
-                  {TEMPLATE_GROUPS.map((group) => {
-                    const groupTemplates = TEMPLATES.filter((t) => t.category === group.id);
-                    if (groupTemplates.length === 0) return null;
-                    return (
-                      <div key={group.id} className="stack-group">
-                        <h3 className="stack-group-title">{group.label}</h3>
-                        <div className="stack-grid">
-                          {groupTemplates.map((template) => (
-                            <TemplateCard
-                              key={template.id}
-                              name={template.name}
-                              description={template.description}
-                              selected={selectedTemplate?.id === template.id && !hasZipTemplate}
-                              onSelect={() => {
-                                handleTemplateSelect(template);
-                                setSetAsDefaultChecked(false);
-                              }}
-                            />
-                          ))}
+                  <div className="stack-grid stack-grid--outcomes">
+                    {OUTCOMES.map((outcome) => {
+                      const picked = selectedOutcome?.id === outcome.id;
+                      const framework = templateForOutcome(
+                        outcome,
+                        TEMPLATES,
+                        selectedTemplate?.id ?? null,
+                        defaultTemplateId
+                      );
+                      // Which framework it will use, only where there's a choice.
+                      const meta =
+                        outcome.templateIds.length > 1 && framework ? framework.name : undefined;
+                      return (
+                        <TemplateCard
+                          key={outcome.id}
+                          name={outcome.name}
+                          description={outcome.description}
+                          meta={meta}
+                          selected={picked}
+                          onSelect={() => {
+                            if (framework) handleTemplateSelect(framework);
+                            setSetAsDefaultChecked(false);
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  <TextButton
+                    className="create-more-options"
+                    aria-expanded={showFrameworks}
+                    onClick={() => setShowFrameworks((v) => !v)}
+                  >
+                    {showFrameworks ? 'Fewer options' : 'More options'}
+                  </TextButton>
+
+                  {showFrameworks &&
+                    TEMPLATE_GROUPS.map((group) => {
+                      const groupTemplates = TEMPLATES.filter((t) => t.category === group.id);
+                      if (groupTemplates.length === 0) return null;
+                      return (
+                        <div key={group.id} className="stack-group">
+                          <h3 className="stack-group-title">{group.label}</h3>
+                          <div className="stack-grid">
+                            {groupTemplates.map((template) => (
+                              <TemplateCard
+                                key={template.id}
+                                name={template.name}
+                                description={template.description}
+                                selected={selectedTemplate?.id === template.id && !hasZipTemplate}
+                                onSelect={() => {
+                                  handleTemplateSelect(template);
+                                  setSetAsDefaultChecked(false);
+                                }}
+                              />
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
 
                   {selectedTemplate &&
                     selectedTemplate.id !== defaultTemplateId &&
@@ -463,20 +501,12 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
     // Name entry step
     return (
       <div className="create-modal-content">
-        <div className="create-modal-header">
-          <div>
-            <h2>New Project</h2>
-            <p className="template-context">
-              Using{' '}
-              <strong>
-                {hasZipTemplate ? displayZipName?.replace('.zip', '') : selectedTemplate?.name}
-              </strong>
-            </p>
-          </div>
-          <button className="create-modal-close" onClick={onCancel} type="button">
-            <CloseIcon size={20} />
-          </button>
-        </div>
+        <p className="template-context">
+          Using{' '}
+          <strong>
+            {hasZipTemplate ? displayZipName?.replace('.zip', '') : selectedTemplate?.name}
+          </strong>
+        </p>
 
         <form
           onSubmit={(e) => {
@@ -524,15 +554,15 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
   };
 
   return (
-    <div
-      className="create-modal-overlay"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isCreating) {
-          onCancel();
-        }
-      }}
+    <ModalFrame
+      isOpen
+      onClose={onCancel}
+      title="New project"
+      dismissable={!isCreating}
+      showCloseButton={!isCreating}
+      className="create-project-modal"
     >
-      <div className="create-modal">{renderContent()}</div>
-    </div>
+      {renderContent()}
+    </ModalFrame>
   );
 }

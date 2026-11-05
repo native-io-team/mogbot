@@ -98,23 +98,21 @@ export const appScenarios: Scenario[] = [
   {
     id: 'dashboard-settings-menu',
     startOn: 'projects',
-    title: 'Dashboard — Preferences menu',
+    title: 'Dashboard — Settings & Help',
     looksRightWhen:
-      "The Preferences row opens a compact menu with App Settings, Report Bug, Feature Request, and What's New; the bug row uses the shared BugReportIcon.",
+      'With feedback and release notes switched off by brand.json, the row opens Settings directly; there is no menu of one item. With them on, it opens a compact menu instead.',
     openSelector: '[data-education-id="settings-button"]',
-    requires: '.ss-dropdown__menu.settings-menu',
-    clipSelector: '.ss-dropdown__menu.settings-menu',
+    requires: '.settings-modal',
     commands: {},
   },
   {
     id: 'workspace-settings-menu',
-    title: 'Workspace — Settings menu',
+    title: 'Workspace — Settings & Help',
     looksRightWhen:
-      "The bottom-left Settings & Help control opens the same compact menu with App Settings, Report Bug, Feature Request, and What's New; the bug row uses the shared BugReportIcon.",
+      'The bottom-left Settings control opens Settings directly while feedback and release notes are switched off by brand.json.',
     project: WORKSPACE_PROJECT,
     openSelector: '[aria-label="Settings & Help"]',
-    requires: '.ss-dropdown__menu.settings-menu',
-    clipSelector: '.ss-dropdown__menu.settings-menu',
+    requires: '.settings-modal',
     commands: { ...workspaceCommands },
   },
   {

@@ -147,7 +147,6 @@ export const teamScenarios: Scenario[] = [
       'The row names the trailer and says where it does not appear: not in the subject line, not in `git log --oneline`. Default on, reading as a choice rather than as a warning.',
     project: WORKSPACE_PROJECT,
     openSelector: '[aria-label="Settings & Help"]',
-    steps: [{ click: '.settings-menu [role="menuitem"]:first-child' }],
     requires: '[aria-label="Credit the agent in commits"]',
     commands: { ...workspaceCommands, ...teamCommands },
   },

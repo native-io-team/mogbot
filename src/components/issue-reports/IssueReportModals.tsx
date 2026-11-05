@@ -46,7 +46,7 @@ import { ModalFrame } from '../primitives/ModalFrame';
 import { Spinner } from '../primitives/Spinner';
 import { TextButton } from '../primitives/TextButton';
 import '../../styles/features/issue-reports.css';
-import { BRAND_LINKS } from '../../lib/brand';
+import { BRAND, BRAND_LINKS } from '../../lib/brand';
 import { ISSUE_REPO } from '../../lib/issueReports';
 
 // Each is nullable in brand.json; a null route isn't offered.
@@ -883,7 +883,7 @@ function PublicIssueModal({
               selected={evidenceChoice === 'upload'}
               onSelect={chooseEvidence}
               title="Upload images on GitHub"
-              description="Open the GitHub issue form with your saved report. Add image files there and finish creating the issue in GitHub. Ship Studio will not submit it."
+              description="Open the GitHub issue form with your saved report. Add image files there and finish creating the issue in GitHub. The app will not submit it."
             />
           </fieldset>
           {evidenceChoice === 'links' && (
@@ -1061,7 +1061,7 @@ function PublicIssueModal({
             onOpenReceipt={(url) => void handoff.execute(url)}
           />
           <p className="issue-report__privacy-note">
-            Ship Studio will send only this title and body. It does not collect logs or screenshots
+            The app will send only this title and body. It does not collect logs or screenshots
             automatically. Review pasted details for paths, project names, branch names, or secrets.
           </p>
           <div className="issue-report__actions issue-report__actions--split">
@@ -1295,7 +1295,7 @@ function BugReportFields({
           <div className="issue-report__environment-pair">
             <TextField
               field="app-version"
-              label="Ship Studio version"
+              label={`${BRAND.name} version`}
               value={draft.appVersion}
               onChange={(value) => update('appVersion', value)}
               singleLine
@@ -1338,7 +1338,7 @@ function BugReportFields({
             value={draft.installMethod}
             onChange={(value) => update('installMethod', value)}
             singleLine
-            hint="Optional; enter how you installed or launched Ship Studio."
+            hint="Optional; enter how you installed or launched the app."
             placeholder="For example, .dmg, .exe, or pnpm tauri dev"
             className="issue-report__environment-install"
           />
@@ -1401,7 +1401,7 @@ function FeatureRequestFields({
         value={draft.proposedSolution}
         onChange={(value) => update('proposedSolution', value)}
         required
-        hint="What should Ship Studio do?"
+        hint="What should the app do?"
       />
       <TextField
         field="alternatives"

@@ -83,9 +83,7 @@ describe('SecretCard', () => {
         onAnswer={vi.fn()}
       />
     );
-    expect(
-      screen.getByText(/Saved to your Keychain · Finance uses \$STRIPE_KEY/)
-    ).toBeInTheDocument();
+    expect(screen.getByText('Saved to your Keychain · Finance can use it now')).toBeInTheDocument();
     expect(screen.queryByLabelText('API key')).toBeNull();
     rerender(
       <ApprovalCard

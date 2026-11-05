@@ -256,7 +256,7 @@ const EXPECTED_PLUGIN_FAILURE_PHRASES = [
   'Plugin ID contains invalid characters',
   'has no built bundle (dist/index.js)',
   'Plugin bundle not found',
-  'requires Ship Studio v',
+  'requires app version',
   'requests commands that are not available to plugins',
   'is already installed. Uninstall it first',
   // Repository URL refusals and remote-git classifications
@@ -274,7 +274,7 @@ const EXPECTED_PLUGIN_FAILURE_PHRASES = [
   'no longer exists — it may have been moved',
   // A cloud-sync drive that hasn't materialized the file yet: ETIMEDOUT
   // (#758) or macOS ECANCELED (#948) — issue #947
-  'Ship Studio timed out trying to',
+  'The app timed out trying to',
   'macOS canceled the read',
 ];
 

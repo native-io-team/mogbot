@@ -59,11 +59,6 @@ const allowlist = [
     reason: 'nested paste flow retained for the EnvEditor follow-up',
   },
   {
-    file: 'src/components/dashboard/CreateProject.tsx',
-    label: 'create-modal-overlay class',
-    reason: 'multi-step creation flow retained for its dedicated migration',
-  },
-  {
     file: 'src/components/dashboard/ImportProject.tsx',
     label: 'create-modal-overlay class',
     reason: 'multi-step import flow retained for its dedicated migration',

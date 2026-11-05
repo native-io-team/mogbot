@@ -34,7 +34,7 @@ export function PhoneInstallEntry({ now, onInstall, onReinstall }: EntryProps) {
       </span>
       <div className="phone-offer__body">
         <span className="phone-offer__title">
-          {record ? `Built on this Mac for ${record.deviceName}` : 'Install on my phone'}
+          {record ? `Built on this Mac for ${record.deviceName}` : 'Get the phone app'}
         </span>
         <span className="phone-offer__detail">
           {record

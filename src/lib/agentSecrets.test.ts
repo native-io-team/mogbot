@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findSecret, secretVars } from './agentSecrets';
+import { findSecret, secretTitle, secretVars } from './agentSecrets';
 
 describe('findSecret', () => {
   it('spots common key shapes and names them', () => {
@@ -33,6 +33,14 @@ describe('findSecret', () => {
     ]) {
       expect(findSecret(text)).toBeNull();
     }
+  });
+});
+
+describe('secretTitle', () => {
+  it('says the identifier as words', () => {
+    expect(secretTitle('stripe_key')).toBe('Stripe key');
+    expect(secretTitle('bank-login')).toBe('Bank login');
+    expect(secretTitle('GitHub')).toBe('GitHub');
   });
 });
 
