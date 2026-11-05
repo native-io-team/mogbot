@@ -426,6 +426,8 @@ function PaneFrame({
   const [custom, setCustom] = useState<number | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [address, setAddress] = useState<string | null>(null);
+  // The site's first page has loaded in the frame (for the UI harness to wait on).
+  const [loaded, setLoaded] = useState(false);
   const [stageWidth, setStageWidth] = useState<number | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const conn = usePreviewConnection({
@@ -583,7 +585,12 @@ function PaneFrame({
             className="agent-preview__iframe"
             src={conn.serverReady ? conn.currentUrl : 'about:blank'}
             title={`Preview of ${folderName(target.project)}`}
-            onLoad={conn.handleIframeLoad}
+            data-tooltip-disabled
+            onLoad={(e) => {
+              if (e.currentTarget.getAttribute('src') !== 'about:blank') setLoaded(true);
+              conn.handleIframeLoad();
+            }}
+            data-loaded={loaded || undefined}
             hidden={!conn.serverReady}
           />
           <AgentActivityOverlay />
