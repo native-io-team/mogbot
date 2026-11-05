@@ -1,0 +1,181 @@
+/* What a turn did (components/agents/AgentWork.tsx): one quiet line under
+   the message a turn ended on, opening into its steps; while the agent
+   works, the steps so far above the working line. Monochrome, metadata
+   size, the message column's left edge. */
+
+/* The timeline takes a line of its own under the reply, which keeps its
+   actions beside its last line. */
+.agent-chat__row--agent[data-work] {
+  flex-wrap: wrap;
+}
+
+.agent-work {
+  --agents-work-icon: var(--spacing-lg);
+  --agents-work-shot: 200px; /* css-ok: a screenshot thumbnail in a step */
+
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+/* The row wraps at full width; the content keeps the reading measure. */
+.agent-work > * {
+  max-width: min(var(--agents-prose-measure), 100%);
+}
+
+.agent-work__head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-2xs);
+}
+
+/* Quieter than a TextButton's default; hover brings it up. */
+.text-button.button.agent-work__toggle,
+.text-button.button.agent-work__open {
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.text-button.button.agent-work__toggle:hover:not(:disabled),
+.text-button.button.agent-work__open:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.agent-work__toggle svg {
+  transition: transform var(--transition-interaction);
+}
+
+.agent-work__toggle[data-open] svg {
+  transform: rotate(90deg);
+}
+
+/* Height animates by grid rows (0fr ↔ 1fr): no measuring, no fixed height. */
+.agent-work__body {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--transition-interaction-slow),
+    opacity var(--transition-interaction-slow);
+}
+
+.agent-work[data-open] > .agent-work__body {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.agent-work__inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.agent-work__steps {
+  max-width: min(var(--agents-bubble-max), 100%);
+}
+
+.agent-work__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin: 0;
+  padding: var(--spacing-sm) 0 0;
+  list-style: none;
+}
+
+.agent-work__step {
+  display: grid;
+  grid-template-columns: var(--agents-work-icon) minmax(0, 1fr) auto;
+  column-gap: var(--spacing-sm);
+  align-items: center;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
+  color: var(--text-secondary);
+}
+
+.agent-work__icon {
+  display: inline-flex;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.agent-work__label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
+.agent-work__time {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Declined or failed: its label says so; it reads as quieter than the
+   work that went through. */
+.agent-work__step[data-outcome] {
+  color: var(--text-muted);
+}
+
+.agent-work__shot {
+  grid-column: 2 / -1;
+  margin-top: var(--spacing-xs);
+  --agents-attachment-image-max: var(--agents-work-shot);
+}
+
+.agent-work__step--earlier,
+.agent-work__files {
+  display: block;
+  padding-left: calc(var(--agents-work-icon) + var(--spacing-sm));
+  color: var(--text-muted);
+}
+
+.agent-work__files {
+  margin: var(--spacing-sm) 0 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
+}
+
+.agent-work__files-label {
+  color: var(--text-secondary);
+}
+
+/* ----------------------------------------------------- while it works */
+
+/* The steps so far sit above the working line, which stays the current
+   step; the list keeps the finished list's left edge, so it doesn't jump
+   when the turn ends. */
+.agent-chat__row--working[data-work] {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.agent-working__line {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.agent-work--live {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.agent-work--live .agent-work__steps {
+  padding: 0 0 var(--spacing-sm);
+}
+
+.agent-work--live .agent-work__open {
+  margin: 0 0 var(--spacing-sm) calc(var(--agents-work-icon) + var(--spacing-sm));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-work__toggle svg,
+  .agent-work__body {
+    transition: none;
+  }
+}

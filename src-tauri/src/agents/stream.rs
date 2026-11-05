@@ -27,8 +27,14 @@ pub enum Step {
     Capabilities(Capabilities),
     /// A complete top-level text block: a message to the user.
     Reply(String),
-    /// What it's doing right now, for the line under its name.
+    /// What it's doing right now, for the line under its name, when that
+    /// isn't a tool call ("Reconnecting to Codex").
     Activity(String),
+    /// A tool call: a step of the turn's timeline (`super::work`), and what
+    /// the line under its name says while it runs.
+    Action(super::work::Action),
+    /// What became of a tool call, matched to its step by id.
+    Result(super::work::CallResult),
     Usage(UsageTotals),
     /// How full the conversation is, as the engine reported it.
     Context(super::context::ContextFill),
@@ -43,7 +49,7 @@ pub enum Step {
 
 /// One line of Claude Code's stream-json (other than `stream_event`, which
 /// feeds [`Drafts`]), as turn steps.
-pub fn claude_steps(value: &Value, line: &str, now: i64) -> Vec<Step> {
+pub fn claude_steps(value: &Value, now: i64) -> Vec<Step> {
     let mut out = Vec::new();
     match value.get("type").and_then(Value::as_str) {
         Some("system") => {
@@ -63,7 +69,18 @@ pub fn claude_steps(value: &Value, line: &str, now: i64) -> Vec<Step> {
                     }
                 }
             }
-            out.extend(super::runner::describe_activity(line).map(Step::Activity));
+            out.extend(
+                super::work::claude_actions(value)
+                    .into_iter()
+                    .map(Step::Action),
+            );
+        }
+        Some("user") => {
+            out.extend(
+                super::work::claude_results(value)
+                    .into_iter()
+                    .map(Step::Result),
+            );
         }
         Some("result") => {
             out.extend(super::usage::from_result(value).map(Step::Usage));
@@ -260,12 +277,14 @@ mod tests {
     fn a_claude_turn_maps_onto_steps() {
         let steps: Vec<Step> = SAMPLE
             .lines()
-            .filter_map(|l| Some((serde_json::from_str::<Value>(l).ok()?, l)))
-            .flat_map(|(v, l)| claude_steps(&v, l, 0))
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .flat_map(|v| claude_steps(&v, 0))
             .collect();
         let replies = steps.iter().filter(|s| matches!(s, Step::Reply(_))).count();
         assert_eq!(replies, 2);
-        assert!(steps.iter().any(|s| matches!(s, Step::Activity(_))));
+        assert!(steps
+            .iter()
+            .any(|s| matches!(s, Step::Action(a) if a.label == "Ran echo")));
         assert!(steps.iter().any(|s| matches!(s, Step::Session(_))));
         assert_eq!(steps.last(), Some(&Step::Done));
     }

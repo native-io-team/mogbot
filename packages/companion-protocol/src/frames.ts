@@ -67,7 +67,19 @@ export interface HelloFrame {
   resume?: Cursor;
   /** The phone is in the foreground (only then does it count as "showing" an agent). */
   foreground: boolean;
+  /**
+   * What this app can show beyond the protocol version, so the Mac sends it
+   * only what it will use. An older app sends none. See `FEATURES`.
+   */
+  features?: Feature[];
 }
+
+/** Optional things an app can say it shows (`hello.features`). */
+export const FEATURES = {
+  /** The steps of a turn still running, on `agents.status` (`status.work`). */
+  liveWork: 'work.live',
+} as const;
+export type Feature = (typeof FEATURES)[keyof typeof FEATURES];
 
 export interface RequestFrame<M extends MethodName = MethodName> {
   t: 'req';

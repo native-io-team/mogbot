@@ -5174,7 +5174,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 479
+      "consumerCount": 482
     },
     {
       "name": "--text-muted",
@@ -5183,7 +5183,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 795
+      "consumerCount": 800
     },
     {
       "name": "--text-faint",
@@ -5642,7 +5642,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 385
+      "consumerCount": 388
     },
     {
       "name": "--font-size-control",
@@ -5795,7 +5795,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 70
+      "consumerCount": 72
     },
     {
       "name": "--line-height-help",
@@ -5831,7 +5831,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 79
+      "consumerCount": 80
     },
     {
       "name": "--transition-interaction-slow",
@@ -5840,7 +5840,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 2
+      "consumerCount": 4
     },
     {
       "name": "--transition-icon-swap",
@@ -5948,7 +5948,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 232
+      "consumerCount": 233
     },
     {
       "name": "--spacing-xs",
@@ -5957,7 +5957,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 561
+      "consumerCount": 564
     },
     {
       "name": "--spacing-sm",
@@ -5966,7 +5966,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 677
+      "consumerCount": 686
     },
     {
       "name": "--spacing-md",
@@ -6524,7 +6524,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 479
+      "consumerCount": 482
     },
     {
       "name": "--text-quiet",
@@ -6542,7 +6542,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 795
+      "consumerCount": 800
     },
     {
       "name": "--text-faint",

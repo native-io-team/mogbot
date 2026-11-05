@@ -232,6 +232,7 @@ mod tests {
             changes: None,
             session: None,
             client_id: None,
+            work: None,
             fresh: false,
         })
         .unwrap();
@@ -303,6 +304,7 @@ mod tests {
                 changes: None,
                 session: None,
                 client_id: None,
+                work: None,
                 fresh: false,
             })
             .unwrap();
@@ -369,6 +371,7 @@ mod tests {
             changes: None,
             session: None,
             client_id: None,
+            work: None,
             fresh: false,
         };
         assert!(match_message(&message, &terms("müller")).is_some());

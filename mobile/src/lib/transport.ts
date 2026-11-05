@@ -8,6 +8,7 @@
 
 import {
   DEAD_AFTER_MS,
+  FEATURES,
   HEARTBEAT_MS,
   HTTP,
   MAX_ATTACHMENT_BYTES,
@@ -284,6 +285,7 @@ export class DirectTransport implements Transport {
         app: this.opts.app,
         ...(resume ? { resume } : {}),
         foreground: this.foreground,
+        features: [FEATURES.liveWork],
       });
     };
     ws.onmessage = (ev) => {

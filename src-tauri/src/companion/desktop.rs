@@ -193,15 +193,19 @@ impl Backend for DesktopBackend {
     ) -> Result<(Vec<Value>, bool), CommandError> {
         let (agent_id, before) = (agent_id.to_string(), before.map(str::to_string));
         // One past the page says whether older messages exist.
-        let mut page = tokio::task::spawn_blocking(move || {
-            store::messages_page(&agent_id, limit.saturating_add(1), before.as_deref(), None)
+        let (page, more) = tokio::task::spawn_blocking(move || {
+            let mut page =
+                store::messages_page(&agent_id, limit.saturating_add(1), before.as_deref(), None)?;
+            let more = page.len() > limit;
+            if more {
+                page.drain(..page.len() - limit);
+            }
+            // What each turn did, read after the log's lock is let go.
+            crate::agents::work::apply(&agent_id, &mut page);
+            Ok::<_, CommandError>((page, more))
         })
         .await
         .map_err(crate::agents::err_other)??;
-        let more = page.len() > limit;
-        if more {
-            page.drain(..page.len() - limit);
-        }
         Ok((page.into_iter().map(json).collect::<Result<_, _>>()?, more))
     }
 

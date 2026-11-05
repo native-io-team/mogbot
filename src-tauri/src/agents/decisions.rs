@@ -331,6 +331,7 @@ pub(crate) async fn ask(
             state: "waiting",
             activity: Some("Waiting for your OK".into()),
             since: before.since,
+            work: None,
         },
     );
     let mut rx = mcp::register_waiter(&request_id);
@@ -371,6 +372,7 @@ pub(crate) async fn ask(
                 state: "working",
                 activity: None,
                 since: before.since,
+                work: None,
             },
         );
     }
