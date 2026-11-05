@@ -46,36 +46,92 @@ Sessions; clicking one opens its chat.
 
 ## A first real result, and ready-made agents (`agents/templates.rs`)
 
-The first few minutes should end in something useful, not a blank chat. The
-Chief's three starters each lead to real work on this Mac with no other
-account, and none sends anything by itself:
+The people this is for already run an assistant; what they can't get there is
+work that keeps going without them. So the Chief's greeting starts on
+pipelines, not one-offs: something starts it (a time, a file, an email, a
+GitHub issue), agents hand the work between them, and it ends on a card the
+user answers, on the desk or the phone. Three starters and **More ideas…**,
+from one catalogue (`lib/chiefIdeas.ts`). Each types a whole, specific brief
+with one blank at its end; none sends by itself.
 
-- **Summarise a document…** opens the file picker; the picked file is staged
-  in the composer with the request typed out ("Summarise this for me: the main
-  points, any dates or decisions, and anything I need to do."). The user
-  presses Send. Dropping a file on the chat works the same way.
-- **Research a question…** types "Research this for me: " for the user to
-  finish. Web research runs on the engine's own tools and account. On
-  Claude Code every web search and every page opened is a tool call the
-  approval broker asks about, so a first research turn can raise several
-  Allow cards. The Chief and the Research assistant are told to say so
-  before they start ("I'll ask before searching the web"), and a search's
-  card offers **Always allow web searches** (a `Tool` rule on `WebSearch`,
-  `permissions::suggest`); a page's card offers its one host, so each new
-  site still asks once. On Codex, web search is Codex's own built-in tool
-  (seen as `webSearch` items): it doesn't come through the broker, so it
-  runs without a card. There is no WebFetch on Codex; a command that
-  reaches the network is sandboxed and asks to escalate, with a card.
-  Whether a user's Codex has web search turned on (and live or cached) is
-  Codex's own setting, which the app doesn't read, so Research there may
-  find it can't search and says so, per its briefing. The briefings tell a
-  Codex agent not to promise cards it won't raise. Not verified: a live
-  Codex research turn.
-- **Ready-made agents…** opens New agent on the first ready-made agent.
+- **Ship fixes while I sleep…**: every night a fixer bound to the repo's
+  project takes the top open GitHub issue and fixes it in its own copy, a
+  reviewer checks it (`message_agent`), and the morning brings one change
+  card with Keep / Review / Discard. Pushing waits for the user.
+- **Run my launch as a team…**: a strategist, a writer and a builder, the
+  Chief keeping the plan in a file, and a 9am weekday standup it collects
+  and summarises. There is no tool for an agent to make a room, so the
+  gallery line says the user can put them in one.
+- **Turn client briefs into sites…**: `watch_for` `new_file` on a folder;
+  each brief becomes a project (`blank` needs nothing installed) whose
+  session drafts the site, handed back with `share_result` naming the
+  project.
+- **More ideas…** opens the gallery (`ChiefIdeasModal`, also ⌘K → "Ideas for
+  your team…"), grouped On a schedule / When something happens / Agents
+  together: watch competitors weekly (researcher + analyst, one brief), babysit
+  errors hourly (reproduce, fix in a copy, a card to keep; one line when
+  nothing broke, since a routine always leaves its line), an inbox triage
+  crew (sorter + drafter through the user's email app; sending is always an
+  Allow card), and two agents arguing it out. Its foot links Ready-made
+  agents and the Phone panel.
 
-`CHIEF_INSTRUCTIONS` (a new Chief's only) tells it a first message may be one
-of these: do the task first, from the document or real sources, never pad what
-it couldn't read, then offer the matching ready-made agent in one line.
+**Setup is step one, never a dead end.** An idea may need what this Mac
+doesn't have (GitHub signed in, the repo as a project, an email app, a
+folder, a paired phone). The gallery line says so ("Your Chief helps you
+connect GitHub first"), and `CHIEF_INSTRUCTIONS` has the Chief walk the user
+through it in the chat, naming the real places (⌘K → Connect GitHub account,
+Projects → Import from GitHub, ⌘K → Connect an app for agents…, ⌘K → Pair a
+phone), checking each step before the next. Then the team, then the trigger
+(said to run only while the app is open and the Mac awake), then **the first
+run now**, while the user is there to choose Always allow for what it will
+repeat unattended (a 1am run can't wait for an Allow). Always allow is never
+suggested for sending, spending, pushing or anything reaching a client.
+
+**A site comes back on a card, not by moving the window.** `share_result`
+takes an optional `project` (a name from `project_list`, resolved against the
+real list and refused if unknown), stored on the card as its path; the card
+offers **Preview**, which opens the project only when pressed. A revision
+keeps the project. The Chief is told not to call `project_open` (which takes
+over the window) unless asked. When the turn also left a change card (a
+project with git), the result rides on it and that card's own Preview is the
+one shown.
+
+The set is fixed, not rotated: two people comparing notes, and a screenshot
+and the app, should see the same first screen.
+
+**Existing Chiefs get the new instructions** (`agents::upgrade_chief`, on
+every look-up of the Chief, one read when there's nothing to do). Every
+earlier default is kept word for word in `prompts::PAST_CHIEF_INSTRUCTIONS`
+(add the old text there whenever `CHIEF_INSTRUCTIONS` changes). If one is
+found intact in the Chief's `## Instructions`, only it is swapped for the
+current text: what the user added around it (or a `### From Ship Studio`
+merge) stays, and `write_instructions` keeps the role, heading and `##
+Memory`. Instructions the user rewrote (no old default left intact) are
+theirs and are never touched or appended to: new guidance tacked onto rules
+someone chose could contradict them. The Ship Studio Chief merge also skips
+any past default, so stale guidance isn't merged in as the user's.
+
+Research runs on the engine's own tools and account. On
+Claude Code every web search and every page opened is a tool call the
+approval broker asks about, so a first research turn can raise several
+Allow cards. The Chief and the Research assistant are told to say so
+before they start ("I'll ask before searching the web"), and a search's
+card offers **Always allow web searches** (a `Tool` rule on `WebSearch`,
+`permissions::suggest`); a page's card offers its one host, so each new
+site still asks once. On Codex, web search is Codex's own built-in tool
+(seen as `webSearch` items): it doesn't come through the broker, so it
+runs without a card. There is no WebFetch on Codex; a command that
+reaches the network is sandboxed and asks to escalate, with a card.
+Whether a user's Codex has web search turned on (and live or cached) is
+Codex's own setting, which the app doesn't read, so Research there may
+find it can't search and says so, per its briefing. The briefings tell a
+Codex agent not to promise cards it won't raise. Not verified: a live
+Codex research turn.
+
+A prompts.rs test holds each line of `CHIEF_INSTRUCTIONS` the ideas lean on.
+Not verified: any of the pipelines on a live engine end to end (a night's
+fix, a reviewer hand-off, a triggered site), and whether a routine turn at
+1am stalls on an Allow the first run didn't cover.
 
 **Ready-made agents** (role templates) are one catalogue,
 `src-tauri/src/agents/templates.json`: Research assistant, Inbox triage and
@@ -2035,8 +2091,15 @@ of their own is open.
 
 A finished piece of work comes back as **one** card, not prose plus a pile
 of attachments. The agent calls `share_result { title, summary, items[],
-checked[], not_verified[], revises?, changes? }` at the end of the work; the
-prompt (`prompts::FILES`) tells it to for deliverables, never for chat.
+checked[], not_verified[], revises?, changes?, project? }` at the end of the
+work; the prompt (`prompts::FILES`) tells it to for deliverables, never for
+chat.
+
+- **Preview, when it names a project.** `project` is a project's name from
+  `project_list`, resolved against the real list (an unknown one shares
+  nothing) and stored as its path. The desk's card then offers Preview, which
+  opens the project only when pressed; a revision keeps it. A card riding on
+  a change card shows that card's Preview instead. The phone ignores it.
 
 - **Only what exists.** `items` are files (`path`) or links (`url`). A file
   must resolve inside the agent's home or a registered project
@@ -2284,7 +2347,7 @@ can't trample each other. The UI says "a copy of acme-site", "Keep changes",
 - `cargo test --lib agents::results`: share_result validation and size caps, files that must exist in the agent's own files (all or nothing), versioning and Ask for changes targets, one card per turn.
 - `pnpm vitest run src/components/agents/AgentResult.test.tsx` and `mobile/__tests__/result.test.tsx`: the card on desk and phone, folding, Ask for changes.
 - `cargo test --lib agents::templates` and `pnpm vitest run src/components/agents/AgentTemplates.test.tsx`: the catalogue, the Chief's section, `create_agent`'s schema, the dialog's fill-in and swap rules; `mobile/__tests__/start.node.test.ts`: the phone's list and create.
-- `node scripts/harness-capture.mjs agents-first-win` / `agents-template-`: the three starters' results (document staged, research typed, New agent on Research), a first result, Inbox in the dialog with its connect line, and a Chief-made Inbox's first open.
+- `node scripts/harness-capture.mjs agents-first-win` / `agents-template-`: the starters and the gallery (`agents-ideas`, `agents-ideas-when`: team, brief and site typed; a document staged and New agent on Research, both from the gallery), first results (a team built, a document summarised), Inbox in the dialog with its connect line, and a Chief-made Inbox's first open.
 - `node scripts/harness-capture.mjs agents-result`: v1, asking, v2, not verified, a copy's card with before/after.
 - `pnpm vitest run src/lib/agents.test.ts`: chat grouping, dividers, ordering.
 - `scripts/agents-e2e.sh [scenario…]` (opt-in, real turns, on Haiku): `src-tauri/examples/agents_e2e/main.rs` drives the real

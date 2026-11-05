@@ -32,6 +32,7 @@ import { AgentProjectsProvider } from './AgentProject';
 import { TakeoverProvider, useTakeover } from './AgentTakeover';
 import { ImportAgentsModal, type ImportPath } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
+import { ChiefIdeasModal } from './ChiefIdeasModal';
 import { ProjectActionConfirmModal } from '../dashboard/ProjectActionConfirmModal';
 import { AccentScope } from '../../contexts/AccentScopeContext';
 import { Spinner } from '../primitives/Spinner';
@@ -68,6 +69,9 @@ import {
 } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { useOpenModal } from '../../contexts/ModalContext';
+import { ROLE_TEMPLATES } from '../../lib/agentTemplates';
+import type { ChiefIdea } from '../../lib/chiefIdeas';
 import { useAgentsIntents } from '../../commands/useAgentsCommands';
 import { useCommands } from '../../commands/useCommands';
 import {
@@ -278,6 +282,19 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const [prefill, setPrefill] = useState<{ agentId: string; text: string; n: number } | null>(null);
   // Delivered once: leaving that chat and coming back doesn't type it again.
   if (prefill && selectedId !== prefill.agentId) setPrefill(null);
+  /** "More ideas…" (and ⌘K): the gallery of things to ask the Chief. */
+  const openModal = useOpenModal();
+  const openIdeas = useCallback(() => openModal('chiefIdeas'), [openModal]);
+  /** A picked idea: the Chief's chat, with its brief typed out. */
+  const pickIdea = useCallback(
+    (idea: ChiefIdea) => {
+      const chief = agents.find((a) => a.isMain);
+      if (!chief) return;
+      setPrefill({ agentId: chief.id, text: idea.text, n: Date.now() });
+      setSelectedId(chief.id);
+    },
+    [agents]
+  );
   // The sidebar's top field searches conversations. With no sidebar to hold
   // it (compact, or the rail collapsed) it comes up over the chat instead.
   const popoverSearch = isCompact || sidebarProps.isSidebarHidden;
@@ -358,6 +375,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     onApps: openApps,
     onOpenAgent: openAgent,
     onSearch: focusSearch,
+    onIdeas: openIdeas,
   });
 
   // The order you see in the sidebar, for previous / next.
@@ -876,8 +894,8 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
               onSetUpEngine={setUpShownEngine}
               onSignIn={signInShown}
               onImport={openImport}
-              onNewAgent={openNew}
               onOpenApps={openApps}
+              onMoreIdeas={shown.isMain ? openIdeas : undefined}
               onEscape={escapeSearch}
               compact={chatCompact}
               {...actions}
@@ -920,6 +938,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
         }
         onSetUpEngine={(engine, step) => setEngineSetup({ engine, step })}
       />
+      <ChiefIdeasModal onPick={pickIdea} onReadyMade={() => openNew(ROLE_TEMPLATES[0]?.id)} />
       <ImportAgentsModal
         isOpen={importOpen}
         initialPath={importPath}

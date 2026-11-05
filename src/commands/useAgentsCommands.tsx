@@ -14,6 +14,7 @@ import {
   PlugIcon,
   PlusIcon,
   SearchIcon,
+  ZapIcon,
 } from '@/components/icons';
 import { useCommands } from './useCommands';
 import { useOptionalToast } from '../contexts/ToastContext';
@@ -28,6 +29,7 @@ type AgentsIntent =
   | { kind: 'import'; from?: 'otherApp' }
   | { kind: 'apps' }
   | { kind: 'search' }
+  | { kind: 'ideas' }
   | { kind: 'open'; agentId: string };
 let pendingIntent: AgentsIntent | null = null;
 const intentListeners = new Set<(intent: AgentsIntent) => void>();
@@ -50,14 +52,17 @@ export function useAgentsIntents(handlers: {
   onApps: () => void;
   onOpenAgent: (agentId: string) => void;
   onSearch: () => void;
+  /** The gallery of things to ask the Chief. */
+  onIdeas: () => void;
 }) {
-  const { onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch } = handlers;
+  const { onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch, onIdeas } = handlers;
   useEffect(() => {
     const listener = (intent: AgentsIntent) => {
       if (intent.kind === 'new') onNewAgent(intent.template);
       else if (intent.kind === 'import') onImportAgents(intent.from);
       else if (intent.kind === 'apps') onApps();
       else if (intent.kind === 'search') onSearch();
+      else if (intent.kind === 'ideas') onIdeas();
       else onOpenAgent(intent.agentId);
     };
     intentListeners.add(listener);
@@ -69,7 +74,7 @@ export function useAgentsIntents(handlers: {
     return () => {
       intentListeners.delete(listener);
     };
-  }, [onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch]);
+  }, [onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch, onIdeas]);
 }
 
 /** What the "Open <agent>" commands name: a status or a new message doesn't change them. */
@@ -155,6 +160,27 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         keywords: ['agents', 'create', 'bot'],
         run: () => {
           requestAgentsIntent({ kind: 'new' });
+          setView('agents');
+        },
+      },
+      {
+        id: 'agents.ideas',
+        title: 'Ideas for your team…',
+        icon: <ZapIcon size={14} />,
+        category: 'navigation',
+        keywords: [
+          'agents',
+          'chief of staff',
+          'starters',
+          'examples',
+          'what can it do',
+          'routine',
+          'brief',
+          'site',
+          'inspiration',
+        ],
+        run: () => {
+          requestAgentsIntent({ kind: 'ideas' });
           setView('agents');
         },
       },

@@ -639,6 +639,7 @@ fn a_result_card_is_where_the_turn_ends() {
         checked: Vec::new(),
         not_verified: Vec::new(),
         changes: None,
+        project: None,
     });
     let merged = super::super::results::ride_on(message(MessageKind::Changes, "c"), card);
     assert_eq!(

@@ -59,8 +59,3 @@ export function needsLine(template: RoleTemplate, engine: Agent['engine']): stri
     ? 'It reads your email through an app you’ve connected in Codex, such as Gmail.'
     : 'It reads your email through an app you connect, such as Gmail.';
 }
-
-/** The Chief's first-open starters: each does something on this Mac, no accounts needed. */
-export const SUMMARY_PROMPT =
-  'Summarise this for me: the main points, any dates or decisions, and anything I need to do.';
-export const RESEARCH_PROMPT = 'Research this for me: ';

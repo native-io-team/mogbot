@@ -141,6 +141,7 @@ fn result_message(id: &str, card_id: &str, version: u32) -> AgentMessage {
         checked: Vec::new(),
         not_verified: Vec::new(),
         changes: None,
+        project: None,
     });
     m
 }
@@ -298,6 +299,34 @@ fn the_wire_shape_is_camel_case_and_tagged() {
         json!({ "kind": "link", "url": "https://a.com/", "label": "Site" })
     );
     assert!(v.get("checked").is_none() && v.get("changes").is_none());
+}
+
+#[test]
+fn a_site_result_carries_its_project_through_revisions() {
+    let mut first = parse(&args(json!({ "project": "bakery-site" }))).unwrap();
+    assert_eq!(first.project.as_deref(), Some("bakery-site"));
+    // The caller resolves the name to the real path before building.
+    first.project = Some("/Users/me/ShipStudio/bakery-site".into());
+    let v1 = build(first, None, Vec::new(), || "r1".into());
+    assert_eq!(
+        serde_json::to_value(&v1).unwrap()["project"],
+        json!("/Users/me/ShipStudio/bakery-site")
+    );
+    let v2 = build(
+        parse(&args(json!({ "changes": "Bigger photos" }))).unwrap(),
+        Some(&v1),
+        Vec::new(),
+        || unreachable!(),
+    );
+    assert_eq!(v2.project, v1.project, "a revision is still that site");
+    // No project named: none on the card, and none on the wire.
+    let plain = build(parse(&args(json!({}))).unwrap(), None, Vec::new(), || {
+        "r2".into()
+    });
+    assert!(serde_json::to_value(&plain)
+        .unwrap()
+        .get("project")
+        .is_none());
 }
 
 // ---------------------------------------------------------------- files

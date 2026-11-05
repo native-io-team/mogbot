@@ -48,7 +48,8 @@ export type ModalId =
   | 'migrationFidelity'
   | 'remoteAccess'
   | 'phone'
-  | 'projectTools';
+  | 'projectTools'
+  | 'chiefIdeas';
 
 interface ModalContextValue {
   isOpen: (id: ModalId) => boolean;
