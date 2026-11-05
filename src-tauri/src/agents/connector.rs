@@ -801,7 +801,7 @@ fn ask_consent(app: &AppHandle, chief: &store::Agent, talk_id: &str, first: &str
         store::new_id(),
         format!("{source} wants to bring its agents over"),
         format!(
-            "It will talk to a separate, sealed conversation that can only stage agents for you to review. It can't see your chats, files or other agents, and nothing is created until you import.\n\nIts first message: “{}{}”",
+            "It will talk to a separate conversation that can only stage agents for you to review. It can't see your chats, files or other agents, and nothing is created until you import.\n\nIts first message: “{}{}”",
             preview,
             if first.chars().count() > 400 { "…" } else { "" }
         ),
@@ -868,7 +868,7 @@ pub fn answer_card(
                 note(
                     app,
                     chief_id,
-                    format!("{} is talking to a separate, sealed conversation, not this chat. Nothing is created until you review it. Stop it any time.", card.source),
+                    format!("{} is talking to a separate conversation that can't see your chats, not this one. Nothing is created until you review it. Stop it any time.", card.source),
                 );
                 audit(&card.source, "the user allowed the import", true);
                 if let Some(first) = held {

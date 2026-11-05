@@ -71,8 +71,8 @@ describe('AgentOnboardingScreen', () => {
     expect(
       screen.getByText(/Talk to your Chief of Staff\. It builds a team\./)
     ).toBeInTheDocument();
-    expect(await card('Claude Code')).toHaveTextContent('Sign in →');
-    expect(await card('Codex')).toHaveTextContent('Install & sign in →');
+    expect(await card('Claude Code')).toHaveTextContent('Sign in');
+    expect(await card('Codex')).toHaveTextContent('Install & sign in');
   });
 
   it('force mode shows the pick even with an engine ready; its card finishes', async () => {
@@ -80,7 +80,7 @@ describe('AgentOnboardingScreen', () => {
     getFullSetupStatus.mockResolvedValue(machine({ claude: 'ready', claude_auth: 'ready' }));
     render(<AgentOnboardingScreen onComplete={vi.fn()} />);
     const claude = await card('Claude Code');
-    expect(claude).toHaveTextContent('Ready →');
+    expect(claude).toHaveTextContent('Ready');
     fireEvent.click(claude);
     expect(await screen.findByTestId('handoff')).toHaveTextContent('Claude Code');
   });

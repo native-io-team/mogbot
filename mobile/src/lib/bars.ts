@@ -77,7 +77,7 @@ export function importBar(agent: Agent, messages: AgentMessage[] | undefined): B
   return {
     tone: 'active',
     title: `Importing from ${going[1]}`,
-    detail: `${going[1]} talks to a separate, sealed conversation: what you type here stays between you and ${agent.name}.`,
+    detail: `${going[1]} talks to a separate conversation that can’t see your chats: what you type here stays between you and ${agent.name}.`,
   };
 }
 

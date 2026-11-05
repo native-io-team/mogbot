@@ -44,6 +44,13 @@
   gap: var(--spacing-sm);
 }
 
+/* The sentence reads as body text, the same rhythm as the hint under it. */
+.confirm-modal-text p {
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

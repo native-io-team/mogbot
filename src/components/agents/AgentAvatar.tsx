@@ -15,9 +15,12 @@ import { getAgentsSnapshot, subscribeAgents } from '../../lib/agentsStore';
  * of agents doesn't collapse onto one badge.
  */
 export function agentInitials(name: string): string {
+  // Only letters and digits make initials: "Finance (from Grok)" is
+  // "Finance", never "F(". A trailing aside in brackets is dropped.
   const words = name
+    .replace(/\s*[([{].*$/u, '')
     .trim()
-    .split(/\s+/)
+    .split(/[^\p{L}\p{N}&]+/u)
     .filter(
       (w) => /[A-Za-z0-9]/.test(w) && !['of', 'the', 'and', 'for', '&'].includes(w.toLowerCase())
     );

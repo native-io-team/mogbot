@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'react';
 import { Dropdown, DropdownItem } from './Dropdown';
+import { ModalFrame } from './ModalFrame';
 
 function TestTrigger(props: ComponentProps<'button'>) {
   return <button type="button" {...props} />;
@@ -258,6 +259,38 @@ describe('Dropdown', () => {
     fireEvent.resize(window);
 
     expect(apply).toHaveFocus();
+  });
+
+  it('keeps a portalled menu opened from a dialog keyboard-driven', async () => {
+    // The dialog's focus trap used to pull focus straight back out of a menu
+    // portalled to the body, so arrows and Enter never reached it.
+    const user = userEvent.setup();
+    const onBeta = vi.fn();
+    render(
+      <ModalFrame isOpen onClose={vi.fn()} title="Edit agent">
+        <Dropdown
+          portal
+          side="top"
+          trigger={(props) => <TestTrigger {...props}>Works in</TestTrigger>}
+        >
+          <DropdownItem onSelect={vi.fn()}>No project</DropdownItem>
+          <DropdownItem onSelect={onBeta}>demo-site</DropdownItem>
+        </Dropdown>
+      </ModalFrame>
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Works in' });
+    trigger.focus();
+    await user.keyboard('{Enter}');
+    const first = await screen.findByRole('menuitem', { name: 'No project' });
+    expect(first).toHaveFocus();
+
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'demo-site' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onBeta).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 
   it('rejects an unnamed dialog popover', () => {
