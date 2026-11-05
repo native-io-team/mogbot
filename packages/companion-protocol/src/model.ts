@@ -929,7 +929,10 @@ export interface UsageAccount {
   name: string;
   thisMac: boolean;
   signedIn: boolean;
+  /** Who it is signed in as, as the engine recorded it; absent when unknown. */
   email?: string;
+  /** The plan's name, only when the engine's own file names it ("Max", "plus"). */
+  plan?: string;
   limit?: UsageLimitHit;
   /** Out of usage right now. */
   out: boolean;

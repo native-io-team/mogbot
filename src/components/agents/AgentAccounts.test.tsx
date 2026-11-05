@@ -4,6 +4,7 @@ import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { AgentAccounts } from './AgentAccounts';
 import type { EngineInfo } from '../../lib/agents';
 import {
+  accountDetail,
   accountState,
   moved,
   requestAccountsOnOpen,
@@ -69,6 +70,58 @@ describe('accountState', () => {
   });
 });
 
+describe('accountDetail', () => {
+  it('shows who each account is, This Mac included, only as reported', () => {
+    const signed = { ...mac('claude'), email: 'sam@example.com', plan: 'Max' };
+    expect(accountDetail(signed, NOW)).toEqual({
+      state: 'Signed in',
+      email: 'sam@example.com',
+      plan: 'Max plan',
+      note: undefined,
+    });
+    // Nothing reported: just "Signed in", never a made-up address or plan.
+    expect(accountDetail(mac('claude'), NOW)).toMatchObject({ state: 'Signed in' });
+    expect(accountDetail(mac('claude'), NOW).email).toBeUndefined();
+    expect(accountDetail(mac('claude'), NOW).plan).toBeUndefined();
+    // A file that outlived a sign-out isn't shown.
+    expect(accountDetail({ ...signed, signedIn: false }, NOW)).toEqual({
+      state: 'Not signed in',
+    });
+    // Out of usage still says who it is.
+    const out = accountDetail({ ...work, email: 'w@example.com' }, NOW);
+    expect(out.state).toMatch(/^Out of usage until /);
+    expect(out.email).toBe('w@example.com');
+    expect(out.note).toBeUndefined();
+    // The email comes before a past limit, so it's what truncates.
+    const past = accountDetail({ ...work, out: false, email: 'w@example.com' }, NOW);
+    expect(past.state).toBe('Signed in');
+    expect(past.email).toBe('w@example.com');
+    expect(past.note).toMatch(/^last limit /);
+  });
+
+  it('renders the email on the second line for This Mac too', async () => {
+    const personal = {
+      ...work,
+      out: false,
+      limit: undefined,
+      name: 'Personal Account',
+      email: 'p@example.net',
+    };
+    mockIPC(
+      (cmd) =>
+        cmd === 'agents_accounts'
+          ? [{ ...mac('claude'), email: 'sam@example.com' }, personal]
+          : null,
+      EVENTS
+    );
+    render(<AgentAccounts engines={[engine('claude')]} />);
+    const rows = await screen.findAllByRole('listitem');
+    expect(within(rows[0]).getByText('sam@example.com')).toBeTruthy();
+    expect(within(rows[1]).getByText('Personal Account')).toBeTruthy();
+    expect(within(rows[1]).getByText('p@example.net')).toBeTruthy();
+  });
+});
+
 describe('AgentAccounts', () => {
   it('lists each installed engine’s accounts in order, with honest states', async () => {
     const live = { ...work, limit: { at: Date.now() - H, resetsAt: Date.now() + 2 * H } };
@@ -81,9 +134,17 @@ describe('AgentAccounts', () => {
     expect(rows).toHaveLength(2);
     expect(within(rows[1]).getByText('Work')).toBeTruthy();
     expect(within(rows[1]).getByText(/Out of usage until/)).toBeTruthy();
-    // This Mac's own sign-in can't be removed; an added one can.
-    expect(within(rows[0]).queryByText('Remove')).toBeNull();
-    expect(within(rows[1]).getByText('Remove')).toBeTruthy();
+    // This Mac's own sign-in can't be removed, and says why; an added one can.
+    fireEvent.click(within(rows[0]).getByLabelText('More for This Mac'));
+    const macRemove = (await screen.findByText('Remove…')).closest('button')!;
+    expect(macRemove).toHaveProperty('disabled', true);
+    expect(macRemove.parentElement?.getAttribute('title')).toMatch(/stays/);
+    fireEvent.click(within(rows[1]).getByLabelText('More for Work'));
+    await waitFor(() =>
+      expect(screen.getAllByText('Remove…').some((el) => !el.closest('button')?.disabled)).toBe(
+        true
+      )
+    );
     // First can't move up, last can't move down.
     expect(within(rows[0]).getByLabelText('Try This Mac earlier')).toHaveProperty('disabled', true);
     expect(within(rows[1]).getByLabelText('Try Work later')).toHaveProperty('disabled', true);
@@ -116,7 +177,8 @@ describe('AgentAccounts', () => {
       return null;
     }, EVENTS);
     render(<AgentAccounts engines={[engine('claude')]} />);
-    fireEvent.click(await screen.findByText('Remove'));
+    fireEvent.click(await screen.findByLabelText('More for Work'));
+    fireEvent.click(await screen.findByText('Remove…'));
     expect(screen.getByText('Remove its sign-in from this Mac?')).toBeTruthy();
     expect(removed).toHaveLength(0);
     fireEvent.click(screen.getByText('Remove'));

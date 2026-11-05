@@ -362,6 +362,31 @@
   color: var(--text-muted);
 }
 
+/* The same air under every group before its divider. A group that ends on
+   rows already has the row's own padding there; one that ends on a control
+   (Usage's field, Accounts' Add button) had none, and sat on the line. */
+.agents-settings > .settings-group {
+  padding-bottom: var(--spacing-lg);
+}
+
+.agents-settings > .settings-group:last-child {
+  padding-bottom: 0;
+}
+
+.agents-settings > .settings-group > .settings-section:last-child > .settings-row:last-child {
+  padding-bottom: 0;
+}
+
+/* Likewise above: the group's gap is the space under its heading, so the
+   first row doesn't add its own (Usage and Accounts start flush too). */
+.agents-settings
+  > .settings-group
+  > .settings-group__title
+  + .settings-section
+  > .settings-row:first-child {
+  padding-top: 0;
+}
+
 .agents-desktop-settings + .settings-section {
   margin-top: var(--spacing-lg);
 }
@@ -417,7 +442,7 @@
    the order turns try them. */
 .agent-accounts__lead {
   margin: 0;
-  font-size: var(--font-size-body-md);
+  font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }
 
@@ -428,6 +453,13 @@
   gap: var(--spacing-sm);
 }
 
+/* Each engine is its own block: air between one's Add button and the next
+   engine's name. */
+.agent-accounts__engine + .agent-accounts__engine {
+  margin-top: var(--spacing-md);
+}
+
+/* The same subheading as Usage's ("What you have"). */
 .agent-accounts__engine-name {
   font-size: var(--font-size-body-lg);
   font-weight: 500;
@@ -458,7 +490,7 @@
 
 .agent-account__order {
   flex: none;
-  width: var(--spacing-lg);
+  width: var(--spacing-md);
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -472,7 +504,11 @@
   min-width: 0;
 }
 
+/* The name is the thing you recognise a row by: it keeps its width, and
+   only an implausibly long one ellipsises (full text in its tooltip). */
 .agent-account__name {
+  align-self: flex-start;
+  max-width: 100%;
   font-size: var(--font-size-body-md);
   font-weight: 500;
   color: var(--text-primary);
@@ -481,8 +517,35 @@
   white-space: nowrap;
 }
 
+/* "Signed in · sam@example.com · Max plan": the email is what gives way. */
+.agent-account__detail {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .agent-account__state,
-.agent-account__kind,
+.agent-account__plan,
+.agent-account__note {
+  flex: none;
+}
+
+.agent-account__email {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-account__email::before,
+.agent-account__plan::before,
+.agent-account__note::before {
+  content: '·';
+  padding: 0 var(--spacing-xs);
+}
+
 .agent-account__confirm {
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
@@ -498,6 +561,23 @@
   flex: none;
   align-items: center;
   gap: var(--spacing-xs);
+}
+
+/* Up and down are one control: kept together, a little apart from the rest. */
+.agent-account__order-controls {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--spacing-xs);
+}
+
+/* A disabled item takes no pointer events; its wrapper carries the reason. */
+.agent-account__no-remove {
+  display: block;
+}
+
+.agent-account__no-remove > .ss-dropdown__item {
+  width: 100%;
+  pointer-events: none;
 }
 
 .agent-account__name-field {
