@@ -20,9 +20,10 @@ import { openTailscale, pair, PairError, type PairFailure } from '../lib/pairing
 import { adopt, enableAlerts } from '../lib/session';
 import { PAIRING_SCHEME } from '@shipstudio/companion-protocol';
 import { haptic } from '../lib/haptics';
-import { radius, space } from '../lib/theme';
+import { iconSize, radius, space, squircle } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
-import icon from '../../assets/icon.png';
+// The placeholder tile (unbranded) until real branding lands.
+import icon from '../../assets/splash-icon.png';
 
 type Phase =
   | { kind: 'start'; error?: string }
@@ -161,7 +162,7 @@ export default function Pair() {
           style={[styles.card, styles.block]}
         >
           <View style={styles.waitingTitle}>
-            <Spinner size={14} color={colors.textPrimary} />
+            <Spinner size={iconSize.body} color={colors.textPrimary} />
             <T variant="title" color={colors.textStrong}>
               Allow on your Mac
             </T>
@@ -203,7 +204,12 @@ export default function Pair() {
       {phase.kind === 'paired' && (
         <Animated.View entering={FadeInDown.duration(250)} style={[styles.card, styles.block]}>
           <Animated.View entering={ZoomIn.duration(260).springify()} style={styles.check}>
-            <Icon name="checkmark" size={22} color={colors.accentSuccess} fallback={<T>✓</T>} />
+            <Icon
+              name="checkmark"
+              size={iconSize.button}
+              color={colors.accentSuccess}
+              fallback={<T>✓</T>}
+            />
           </Animated.View>
           <T variant="title" color={colors.textStrong} accessibilityRole="header">
             Paired with {phase.mac}
@@ -305,34 +311,37 @@ function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
   );
 }
 
+const LOGO = 56;
+/** A step's number: a 24pt disc, centred on the step's first 22pt line. */
+const STEP = 24;
+
 const useStyles = makeStyles((colors) => ({
   page: { paddingHorizontal: space.xl, gap: space['2xl'], flexGrow: 1 },
   hero: { gap: space.md },
-  logo: { width: 56, height: 56, borderRadius: 13, marginBottom: space.sm },
+  logo: { width: LOGO, height: LOGO, borderRadius: squircle(LOGO), marginBottom: space.sm },
   block: { gap: space.md },
   steps: { gap: space.md, marginBottom: space.xs },
   step: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
   stepN: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: STEP,
+    height: STEP,
+    borderRadius: STEP / 2,
     backgroundColor: colors.surfaceControl,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1,
   },
   card: {
-    padding: space.xl,
-    borderRadius: radius.lg + 4,
+    padding: space.lg,
+    borderRadius: radius.card,
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.cardBorder,
   },
   waitingTitle: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   check: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceControl,

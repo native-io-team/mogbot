@@ -23,7 +23,8 @@ export function DiffLines({ lines, label }: { lines: string[]; label?: string })
   const tint = tintOf(colors);
   return (
     <View style={styles.box} accessibilityLabel={label}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      {/* The indicator shows, so a line running off the edge reads as one to scroll. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator>
         <View style={styles.inner}>
           {lines.map((line, i) => {
             const t = tint[diffLineKind(line)];
@@ -33,7 +34,7 @@ export function DiffLines({ lines, label }: { lines: string[]; label?: string })
                 variant="mono"
                 color={t.fg}
                 selectable
-                maxFontSizeMultiplier={2}
+                maxFontSizeMultiplier={1.5}
                 style={[styles.line, t.bg ? { backgroundColor: t.bg } : null]}
               >
                 {line || ' '}
@@ -47,7 +48,7 @@ export function DiffLines({ lines, label }: { lines: string[]; label?: string })
 }
 
 const useStyles = makeStyles((colors) => ({
-  box: { backgroundColor: colors.surfaceApp, borderRadius: radius.card, overflow: 'hidden' },
+  box: { backgroundColor: colors.surfaceApp, borderRadius: radius.inner, overflow: 'hidden' },
   inner: { paddingVertical: space.sm, minWidth: '100%' },
   line: { paddingHorizontal: space.md },
 }));

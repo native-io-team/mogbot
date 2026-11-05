@@ -33,7 +33,10 @@ export default function Scan() {
   };
 
   return (
-    <View style={styles.page}>
+    // Black once the camera is up, as the viewer is: the frame, caption and ×
+    // are drawn in media white, and a white page under a camera that hasn't
+    // produced a frame yet would hide every one of them.
+    <View style={[styles.page, permission?.granted && { backgroundColor: colors.black }]}>
       {permission?.granted ? (
         <>
           <CameraView
@@ -99,7 +102,7 @@ const useStyles = makeStyles((colors) => ({
   frame: {
     width: 240,
     height: 240,
-    borderRadius: radius.lg + 12,
+    borderRadius: radius.sheet,
     borderWidth: 2,
     borderColor: colors.overlayFrame,
   },

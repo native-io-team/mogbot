@@ -32,6 +32,16 @@ export function resolveAppearance(
   return system === 'light' ? 'light' : 'dark';
 }
 
+/**
+ * Before React draws anything: the root view takes the system's appearance at
+ * once, so a light phone never flashes the dark root (app.config's single
+ * `backgroundColor`) under a sheet's corners or the keyboard. The provider
+ * corrects it if the phone's own setting says otherwise.
+ */
+void SystemUI.setBackgroundColorAsync(
+  palettes[resolveAppearance(undefined, RNAppearance.getColorScheme())].surfaceApp
+).catch(() => {});
+
 const themes: Record<Appearance, Theme> = {
   dark: { appearance: 'dark', colors: palettes.dark },
   light: { appearance: 'light', colors: palettes.light },

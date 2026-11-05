@@ -18,7 +18,7 @@ import { extensionOf, formatSize, isPreviewableImage, share } from '../../lib/fi
 import { attachmentSource, describeError, download, listFiles } from '../../lib/session';
 import { useApp } from '../../lib/store';
 import { withAgentAccent } from '../../lib/accentScreen';
-import { radius, space } from '../../lib/theme';
+import { iconSize, radius, space, type } from '../../lib/theme';
 import { makeStyles, useColors } from '../../lib/appearance';
 
 type Filter = 'all' | 'user' | 'agent';
@@ -161,7 +161,7 @@ function Files() {
                 transition={150}
               />
             ) : opening === item.path ? (
-              <Spinner size={14} />
+              <Spinner size={iconSize.body} />
             ) : (
               <T variant="caption" color={colors.textSecondary} style={styles.ext}>
                 {extensionOf(item.name)}
@@ -193,15 +193,15 @@ const useStyles = makeStyles((colors) => ({
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
   },
-  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
   thumb: {
     width: 48,
     height: 48,
-    borderRadius: radius.card,
+    borderRadius: radius.inner,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceControl,
   },
-  ext: { fontSize: 10, letterSpacing: 0.4 },
+  ext: { fontSize: type.micro, letterSpacing: 0.4 },
 }));

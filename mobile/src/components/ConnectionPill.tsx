@@ -54,7 +54,7 @@ function ConnectionPill() {
       onPress={() => router.push('/connection')}
     >
       <Animated.View layout={LinearTransition.duration(200)} style={styles.pill}>
-        <Dot color={toneColor[p.tone]} size={7} glow={p.tone === 'ok'} />
+        <Dot color={toneColor[p.tone]} glow={p.tone === 'ok'} />
         <Animated.View
           key={p.label}
           entering={FadeIn.duration(180)}
@@ -132,7 +132,7 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.pill,
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.borderDefault,
     maxWidth: 320,
   },
   banner: {
@@ -140,6 +140,6 @@ const useStyles = makeStyles((colors) => ({
     paddingVertical: space.tight,
     backgroundColor: colors.surfacePanel,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
+    borderBottomColor: colors.borderDefault,
   },
 }));

@@ -13,7 +13,7 @@ import { failureLine, folderName, formatClock, sessionLabel } from '../lib/agent
 import { haptic } from '../lib/haptics';
 import { discardPending, send } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
-import { alpha, chromeScale, radius, space } from '../lib/theme';
+import { alpha, chromeScale, composer, fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Attachments } from './attachments';
 import { useReveal } from '../lib/reveal';
@@ -130,7 +130,11 @@ export const MessageRow = memo(function MessageRow({
     case 'error':
       return (
         <View style={styles.errorRow}>
-          <Icon name="exclamationmark.circle" size={14} color={colors.accentErrorLight} />
+          <Icon
+            name="exclamationmark.circle"
+            size={iconSize.inline}
+            color={colors.accentErrorLight}
+          />
           <T variant="small" color={colors.accentErrorLight} style={{ flex: 1 }}>
             {message.failure ? failureLine(message.failure, message.text) : message.text}
           </T>
@@ -148,7 +152,13 @@ function Bubble({ text }: { text: string }) {
   const colors = useColors();
   const styles = useStyles();
   const parts = splitQuotes(text);
-  if (parts.length === 1 && parts[0].kind === 'text') return <T color={colors.textBody}>{text}</T>;
+  if (parts.length === 1 && parts[0].kind === 'text') {
+    return (
+      <T color={colors.textBody} style={styles.bubbleText}>
+        {text}
+      </T>
+    );
+  }
   return (
     <View style={{ gap: space.xs }}>
       {parts.map((p, i) =>
@@ -159,7 +169,7 @@ function Bubble({ text }: { text: string }) {
             </T>
           </View>
         ) : (
-          <T key={i} color={colors.textBody}>
+          <T key={i} color={colors.textBody} style={styles.bubbleText}>
             {p.text}
           </T>
         )
@@ -226,15 +236,16 @@ function SessionCard({
         disabled={!open}
         onPress={open}
         accessibilityRole={open ? 'button' : undefined}
+        hitSlop={{ top: 10, bottom: 10 }}
         style={({ pressed }) => [styles.sessionLine, pressed && { opacity: 0.6 }]}
       >
-        <Icon name="terminal" size={12} color={colors.textSecondary} />
+        <Icon name="terminal" size={iconSize.inline} color={colors.textMuted} />
         <T variant="small" color={colors.textSecondary} numberOfLines={1} style={{ flexShrink: 1 }}>
           {mark.event === 'started'
             ? `Started a session in ${project}`
             : `Sent to ${project} · ${tab}`}
         </T>
-        {open && <Icon name="chevron.right" size={10} color={colors.textMuted} />}
+        {open && <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />}
       </Pressable>
     );
   }
@@ -244,7 +255,7 @@ function SessionCard({
       <View style={styles.sessionHead}>
         <Icon
           name={mark.event === 'reply' ? 'terminal' : 'iphone'}
-          size={12}
+          size={iconSize.inline}
           color={colors.textMuted}
         />
         <T variant="caption" color={colors.textSecondary} numberOfLines={1} style={{ flex: 1 }}>
@@ -257,7 +268,7 @@ function SessionCard({
         </T>
       </View>
       {mark.event === 'reply' ? (
-        <T color={colors.textPrimary} numberOfLines={8}>
+        <T color={colors.textBody} numberOfLines={8}>
           {message.text}
         </T>
       ) : (
@@ -277,10 +288,10 @@ function SessionCard({
           style={styles.sessionOpen}
           accessibilityRole="button"
         >
-          <T variant="small" color={colors.textPrimary}>
+          <T variant="small" color={colors.textStrong} style={{ fontFamily: fonts.medium }}>
             Open session
           </T>
-          <Icon name="chevron.right" size={10} color={colors.textMuted} />
+          <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
         </Pressable>
       )}
     </View>
@@ -293,26 +304,38 @@ function SystemLine({ message }: { message: AgentMessage }) {
   const styles = useStyles();
   const router = useRouter();
   const canDiff = useApp((s) => !!s.welcome?.methods.includes('agents.changeDiff'));
-  const text =
-    message.kind === 'changes' && message.changes
-      ? `Changed ${message.changes.fileCount} file${message.changes.fileCount === 1 ? '' : 's'} in ${message.changes.project
-          .split('/')
-          .pop()} · +${message.changes.added} −${message.changes.removed}`
-      : message.kind === 'sent_to_agent' && message.peer
-        ? `To ${message.peer.name}: ${message.text}`
-        : message.kind === 'from_agent' && message.peer
-          ? `From ${message.peer.name}: ${message.text}`
-          : message.kind === 'check_in'
-            ? `${message.checkIn?.manual ? 'Ran now' : 'Check-in'} · ${message.text}`
-            : message.text;
-  const opens = message.kind === 'changes' && !!message.changes && canDiff;
+  const changes = message.kind === 'changes' ? message.changes : undefined;
+  const text = changes
+    ? `Changed ${changes.fileCount} file${changes.fileCount === 1 ? '' : 's'} in ${changes.project
+        .split('/')
+        .pop()}`
+    : message.kind === 'sent_to_agent' && message.peer
+      ? `To ${message.peer.name}: ${message.text}`
+      : message.kind === 'from_agent' && message.peer
+        ? `From ${message.peer.name}: ${message.text}`
+        : message.kind === 'check_in'
+          ? `${message.checkIn?.manual ? 'Ran now' : 'Check-in'} · ${message.text}`
+          : message.text;
+  const opens = !!changes && canDiff;
   // No clock of its own: the chat's time lines say when (and the long-press menu, exactly).
   const line = (
     <View style={styles.systemRow}>
+      {changes && <Icon name="doc.text" size={iconSize.inline} color={colors.textMuted} />}
       <T variant="small" color={colors.textSecondary} numberOfLines={4} style={{ flexShrink: 1 }}>
         {text}
+        {changes && (
+          <>
+            {' · '}
+            <T variant="small" color={colors.diffAdd} style={styles.count}>
+              +{changes.added}
+            </T>{' '}
+            <T variant="small" color={colors.diffDel} style={styles.count}>
+              −{changes.removed}
+            </T>
+          </>
+        )}
       </T>
-      {opens && <Icon name="chevron.right" size={10} color={colors.textMuted} />}
+      {opens && <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />}
     </View>
   );
   if (!opens) return line;
@@ -326,7 +349,8 @@ function SystemLine({ message }: { message: AgentMessage }) {
           params: { agentId: message.agentId, messageId: message.id },
         })
       }
-      style={({ pressed }) => pressed && { opacity: 0.6 }}
+      hitSlop={{ top: 12, bottom: 12 }}
+      style={({ pressed }) => [styles.systemTap, pressed && { opacity: 0.6 }]}
     >
       {line}
     </Pressable>
@@ -461,7 +485,7 @@ export function WorkingRow({ label }: { label: string }) {
   const styles = useStyles();
   return (
     <Animated.View entering={FadeIn.duration(250)} style={styles.workingRow}>
-      <Spinner size={12} />
+      <Spinner />
       <T variant="small" color={colors.textSecondary} numberOfLines={1}>
         {label}
       </T>
@@ -470,13 +494,17 @@ export function WorkingRow({ label }: { label: string }) {
 }
 
 const useStyles = makeStyles((colors) => ({
-  userRow: { alignItems: 'flex-end', gap: space.xs, paddingLeft: '18%' },
+  userRow: { alignItems: 'flex-end', gap: space.xs },
+  // iMessage's proportions: 16 on a 20 line, 12×8 inside, an 18 corner that
+  // stays 18 however many lines, and never wider than 78% of the column.
   userBubble: {
+    maxWidth: '78%',
     backgroundColor: colors.surfaceBubble,
-    borderRadius: radius.lg + 6,
-    paddingHorizontal: space.md + 2,
-    paddingVertical: space.sm + 1,
+    borderRadius: composer.corner,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
   },
+  bubbleText: { fontSize: type.body, lineHeight: composer.line },
   held: { backgroundColor: colors.surfaceControlHover },
   heldProse: { opacity: 0.7 },
   bubbleQuote: {
@@ -491,15 +519,15 @@ const useStyles = makeStyles((colors) => ({
     gap: space.md,
     marginRight: space.xs,
   },
-  agentRow: { gap: space.sm, paddingRight: space.sm },
-  day: { alignItems: 'center', paddingTop: space.md, paddingBottom: space.xs },
+  agentRow: { gap: space.sm },
+  day: { alignItems: 'center', paddingVertical: space.xs },
   dayText: { letterSpacing: 0.2 },
   errorRow: {
     flexDirection: 'row',
     gap: space.sm,
     alignItems: 'flex-start',
     padding: space.md,
-    borderRadius: radius.card,
+    borderRadius: radius.inner,
     backgroundColor: alpha(colors.accentError, 0.08),
   },
   systemRow: {
@@ -507,6 +535,8 @@ const useStyles = makeStyles((colors) => ({
     gap: space.tight,
     alignItems: 'center',
   },
+  systemTap: { alignSelf: 'flex-start', paddingVertical: space.xs },
+  count: { fontVariant: ['tabular-nums'] },
   workingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -522,11 +552,11 @@ const useStyles = makeStyles((colors) => ({
   },
   sessionCard: {
     gap: space.sm,
-    padding: space.md,
-    borderRadius: radius.lg,
+    padding: space.lg,
+    borderRadius: radius.card,
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.cardBorder,
   },
   sessionHead: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   sessionOpen: {
@@ -534,5 +564,6 @@ const useStyles = makeStyles((colors) => ({
     alignItems: 'center',
     gap: space.xs,
     alignSelf: 'flex-start',
+    marginTop: space.xs,
   },
 }));

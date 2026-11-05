@@ -18,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { distinctInitials, failedTurn, needsYou, teamNames, waitingForSlot } from '../lib/agents';
 import { useApp } from '../lib/store';
-import { fonts, mix, radius } from '../lib/theme';
+import { avatarSize, fonts, iconSize, mix, squircle } from '../lib/theme';
 import { agentTint } from '../lib/accent';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { Dot, T } from './ui';
@@ -30,11 +30,11 @@ const useTeamNames = () =>
 export function AgentAvatar({
   name,
   color,
-  size = 36,
+  size = avatarSize.header,
 }: {
   name: string;
   color: string;
-  size?: number;
+  size?: (typeof avatarSize)[keyof typeof avatarSize];
 }) {
   const colors = useColors();
   const styles = useStyles();
@@ -48,7 +48,7 @@ export function AgentAvatar({
         {
           width: size,
           height: size,
-          borderRadius: size > 40 ? radius.lg : radius.card,
+          borderRadius: squircle(size),
           // color-mix(tint 24%, --surface-control) / color-mix(tint 70%, --text-primary)
           backgroundColor: mix(tint, colors.surfaceControl, 0.24),
         },
@@ -109,7 +109,13 @@ export function StatusMark({ agent, live = true }: { agent: Agent; live?: boolea
 }
 
 /** A small arc that turns: the working state, quiet enough to sit in a list. */
-export function Spinner({ size = 12, color }: { size?: number; color?: string }) {
+export function Spinner({
+  size = iconSize.inline,
+  color,
+}: {
+  size?: (typeof iconSize)[keyof typeof iconSize];
+  color?: string;
+}) {
   const colors = useColors();
   color ??= colors.textSecondary;
   const turn = useSharedValue(0);
@@ -140,9 +146,9 @@ const useStyles = makeStyles((colors) => ({
   avatar: { alignItems: 'center', justifyContent: 'center' },
   // A still ring: "it was working when we last heard".
   wasWorking: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: iconSize.inline,
+    height: iconSize.inline,
+    borderRadius: iconSize.inline / 2,
     borderWidth: 1.5,
     borderColor: colors.textMuted,
   },

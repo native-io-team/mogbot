@@ -9,14 +9,7 @@
 import type { SessionScreen } from '@shipstudio/companion-protocol';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-  type ScrollViewInstance,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +17,7 @@ import { Spinner } from '../../components/agent';
 import { DiffLines } from '../../components/diff';
 import { useNow } from '../../components/ConnectionPill';
 import { SessionState, tabName } from '../../components/session';
-import { Button, Icon, useRipple, T } from '../../components/ui';
+import { Button, Icon, T } from '../../components/ui';
 import { useAccent } from '../../lib/accent';
 import { formatAgo } from '../../lib/agents';
 import { questionContext } from '../../lib/diff';
@@ -38,14 +31,13 @@ import {
 } from '../../lib/session';
 import { useApp } from '../../lib/store';
 import { usePolling } from '../../lib/usePolling';
-import { alpha, chromeScale, fonts, lineHeight, radius, space, type } from '../../lib/theme';
-import { makeStyles, useAppearance, useColors } from '../../lib/appearance';
+import { chromeScale, fonts, iconSize, lineHeight, radius, space, type } from '../../lib/theme';
+import { ComposerField, RoundButton } from '../../components/Composer';
+import { makeStyles, useColors } from '../../lib/appearance';
 
 export default function Session() {
   const colors = useColors();
   const styles = useStyles();
-  const appearance = useAppearance();
-  const ripple = useRipple();
   const accent = useAccent();
   const { id, project, path, tab, reply } = useLocalSearchParams<{
     id: string;
@@ -117,6 +109,7 @@ export default function Session() {
   };
 
   const title = [project, data ? tabName(data.session) : tab].filter(Boolean).join(' · ');
+  const sendable = !!text.trim() && connected && !data?.session.question;
   const question = data?.session.question;
   // What it's asking about (an edit's diff, a command), read off its screen.
   const context = question && data ? questionContext(data.screen, question) : [];
@@ -127,10 +120,10 @@ export default function Session() {
         options={{
           headerTitle: () => (
             <View style={styles.header}>
-              <T variant="subhead" color={colors.textStrong} numberOfLines={1}>
+              <T variant="headline" color={colors.textStrong} numberOfLines={1}>
                 {title || 'Session'}
               </T>
-              <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={chromeScale}>
+              <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={chromeScale}>
                 {gone
                   ? 'Closed'
                   : data
@@ -143,7 +136,7 @@ export default function Session() {
       />
       {!data && !gone ? (
         <View style={styles.center}>
-          <Spinner size={16} />
+          <Spinner size={iconSize.body} />
         </View>
       ) : (
         <ScrollView
@@ -162,7 +155,7 @@ export default function Session() {
         >
           {gone && (
             <Animated.View entering={FadeIn} style={styles.card}>
-              <T variant="subhead" color={colors.textStrong}>
+              <T variant="headline" color={colors.textStrong}>
                 This session isn’t open on your Mac any more
               </T>
               <T variant="small" color={colors.textSecondary}>
@@ -183,8 +176,8 @@ export default function Session() {
                 </View>
               )}
               {question && (
-                <Animated.View entering={FadeIn} style={[styles.card, styles.asking]}>
-                  <T variant="subhead" color={colors.textStrong}>
+                <Animated.View entering={FadeIn} style={styles.card}>
+                  <T variant="headline" color={colors.textStrong}>
                     {question.question}
                   </T>
                   {!!question.action && (
@@ -231,16 +224,27 @@ export default function Session() {
                           </T>
                         ))}
                       </View>
-                      <T variant="caption" color={colors.textSecondary}>
+                      <T variant="caption" color={colors.textMuted}>
                         Answer it on your Mac.
                       </T>
                     </>
                   )}
                 </Animated.View>
               )}
-              <T selectable style={styles.screen} color={colors.textPrimary}>
-                {textGlyphs(data.screen.replace(/\s+$/, ''))}
-              </T>
+              {/*
+                The terminal at its own width, scrolled sideways: wrapped to a
+                phone's ~49 columns, an 80-column box turns into a staircase.
+              */}
+              <ScrollView
+                horizontal
+                style={styles.screenWell}
+                contentContainerStyle={styles.screenContent}
+                showsHorizontalScrollIndicator={false}
+              >
+                <T selectable style={styles.screen} color={colors.textPrimary}>
+                  {textGlyphs(data.screen.replace(/\s+$/, ''))}
+                </T>
+              </ScrollView>
             </>
           )}
         </ScrollView>
@@ -256,60 +260,44 @@ export default function Session() {
             {error}
           </T>
           <Pressable accessibilityLabel="Dismiss" hitSlop={14} onPress={() => setError(null)}>
-            <Icon name="xmark" size={12} color={colors.textSecondary} fallback={<T>×</T>} />
+            <Icon
+              name="xmark"
+              size={iconSize.inline}
+              color={colors.textSecondary}
+              fallback={<T>×</T>}
+            />
           </Pressable>
         </Animated.View>
       )}
       {canType && data && !gone && (
         <KeyboardStickyView offset={{ opened: insets.bottom }} style={styles.composerWrap}>
           <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, space.sm) }]}>
-            <View style={styles.field}>
-              <TextInput
-                value={text}
-                onChangeText={setText}
-                multiline
-                editable={!question}
-                placeholder={
-                  question ? 'Answer the question above first' : `Message ${tabName(data.session)}`
-                }
-                placeholderTextColor={colors.textMuted}
-                keyboardAppearance={appearance}
-                selectionColor={accent.accent}
-                style={styles.input}
-                accessibilityLabel={`Message ${tabName(data.session)}`}
-              />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Send"
-                disabled={!text.trim() || !!busy || !connected || !!question}
+            <ComposerField
+              value={text}
+              onChangeText={setText}
+              editable={!question}
+              placeholder={
+                question ? 'Answer the question above first' : `Message ${tabName(data.session)}`
+              }
+              label={`Message ${tabName(data.session)}`}
+            >
+              <RoundButton
+                label="Send"
+                disabled={!sendable || !!busy}
                 onPress={submit}
-                android_ripple={{ ...ripple, borderless: true }}
-                style={styles.hit}
+                tone={sendable ? 'accent' : 'off'}
               >
-                {({ pressed }) => (
-                  <View
-                    style={[
-                      styles.send,
-                      { backgroundColor: accent.accent },
-                      (!text.trim() || !connected || !!question) && styles.sendOff,
-                      pressed && { transform: [{ scale: 0.92 }] },
-                    ]}
-                  >
-                    {busy === 'send' ? (
-                      <Spinner size={12} color={accent.onAccent} />
-                    ) : (
-                      <Icon
-                        name="arrow.up"
-                        size={16}
-                        color={
-                          text.trim() && connected && !question ? accent.onAccent : colors.textMuted
-                        }
-                      />
-                    )}
-                  </View>
+                {busy === 'send' ? (
+                  <Spinner size={iconSize.inline} color={accent.onAccent} />
+                ) : (
+                  <Icon
+                    name="arrow.up"
+                    size={iconSize.body}
+                    color={sendable ? accent.onAccent : colors.textMuted}
+                  />
                 )}
-              </Pressable>
-            </View>
+              </RoundButton>
+            </ComposerField>
           </View>
         </KeyboardStickyView>
       )}
@@ -326,15 +314,15 @@ const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, gap: space.md, paddingBottom: space['2xl'] },
   state: { paddingVertical: space.xs },
   card: {
-    gap: space.sm,
+    gap: space.md,
     padding: space.lg,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    borderColor: colors.cardBorder,
   },
-  asking: { borderColor: alpha(colors.accentWarning, 0.45) },
-  option: { justifyContent: 'flex-start' },
+  // A choice reads as a menu, left-aligned, not as a centred button that wrapped.
+  option: { justifyContent: 'flex-start', paddingHorizontal: space.lg },
   toast: {
     position: 'absolute',
     left: space.lg,
@@ -343,53 +331,22 @@ const useStyles = makeStyles((colors) => ({
     alignItems: 'center',
     gap: space.sm,
     padding: space.md,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     backgroundColor: colors.surfaceSelected,
   },
   composerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   composer: {
-    paddingHorizontal: space.md,
+    paddingHorizontal: space.lg,
     paddingTop: space.sm,
     backgroundColor: colors.surfaceApp,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
+    borderTopColor: colors.borderDefault,
   },
-  field: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: colors.surfacePanel,
-    borderRadius: radius.lg + 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    paddingLeft: space.lg,
-    paddingRight: space['2xs'],
-  },
-  input: {
-    flex: 1,
-    fontFamily: fonts.regular,
-    fontSize: type.body,
-    lineHeight: lineHeight(type.body, 1.35),
-    color: colors.textPrimary,
-    maxHeight: lineHeight(type.body, 1.35) * 5 + space.md,
-    paddingTop: space.md,
-    paddingBottom: space.md,
-  },
-  hit: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  send: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendOff: { backgroundColor: colors.surfaceSelected },
+  screenWell: { borderRadius: radius.card, backgroundColor: colors.surfacePanel },
+  screenContent: { padding: space.md },
   screen: {
     fontFamily: fonts.mono,
-    fontSize: 12,
-    lineHeight: 18,
-    padding: space.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfacePanel,
-    overflow: 'hidden',
+    fontSize: type.caption,
+    lineHeight: lineHeight(type.caption, 1.5),
   },
 }));

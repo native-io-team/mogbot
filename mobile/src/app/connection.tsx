@@ -6,9 +6,9 @@
 import type { Device } from '@shipstudio/companion-protocol';
 import { PROTOCOL_VERSION } from '@shipstudio/companion-protocol';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useLinkState, useNow } from '../components/ConnectionPill';
-import { Button, Dot, Section, T, useToneColor } from '../components/ui';
+import { Button, Dot, Section, T, useToneColor, SheetPage, InsetDivider } from '../components/ui';
 import { formatAgo } from '../lib/agents';
 import { layers, pill } from '../lib/connection';
 import { appInfo, openTailscale } from '../lib/pairing';
@@ -38,83 +38,87 @@ export default function Connection() {
   const failures = (state.overview?.agents ?? []).filter((a) => a.failure);
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
-      <View style={styles.head}>
-        <T variant="title" color={colors.textStrong}>
-          {state.credentials?.name ?? 'Your Mac'}
-        </T>
-        <View style={styles.headLine}>
-          <Dot color={toneColor[p.tone]} size={7} />
-          <T variant="small" color={colors.textSecondary}>
-            {p.label}
+    <SheetPage>
+      <ScrollView contentContainerStyle={styles.page}>
+        <View style={styles.head}>
+          <T variant="title" color={colors.textStrong}>
+            {state.credentials?.name ?? 'Your Mac'}
           </T>
-        </View>
-        {state.refusal && (
-          <T variant="small" color={colors.accentErrorLight}>
-            {state.refusal.message}
-          </T>
-        )}
-      </View>
-
-      <Section>
-        {rows.map((layer, i) => (
-          <View key={layer.title} style={[styles.layer, i < rows.length - 1 && styles.divider]}>
-            <View style={styles.dot}>
-              <Dot color={toneColor[layer.tone]} size={8} />
-            </View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <T color={colors.textPrimary}>{layer.title}</T>
-              <T variant="small" color={colors.textMuted}>
-                {layer.detail}
-              </T>
-            </View>
+          <View style={styles.headLine}>
+            <Dot color={toneColor[p.tone]} />
+            <T variant="small" color={colors.textSecondary}>
+              {p.label}
+            </T>
           </View>
-        ))}
-      </Section>
+          {state.refusal && (
+            <T variant="small" color={colors.accentErrorLight}>
+              {state.refusal.message}
+            </T>
+          )}
+        </View>
 
-      {failures.length > 0 && (
-        <Section title="Agents">
-          {failures.map((a, i) => (
-            <View key={a.id} style={[styles.layer, i < failures.length - 1 && styles.divider]}>
+        <Section>
+          {rows.map((layer, i) => (
+            <View key={layer.title} style={styles.layer}>
               <View style={styles.dot}>
-                <Dot
-                  color={
-                    a.failure?.kind === 'usage_limit' ? colors.accentWarning : colors.accentError
-                  }
-                />
+                <Dot color={toneColor[layer.tone]} />
               </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <T color={colors.textPrimary}>{a.name}</T>
+              <View style={{ flex: 1, gap: space['2xs'] }}>
+                <T color={colors.textBody}>{layer.title}</T>
                 <T variant="small" color={colors.textMuted}>
-                  {a.failure?.kind === 'signed_out'
-                    ? 'Last turn failed: Claude Code is signed out'
-                    : a.failure?.kind === 'usage_limit'
-                      ? 'At its usage limit'
-                      : 'Last turn didn’t finish'}
-                  {a.capabilities ? ` · as of ${formatAgo(a.capabilities.seenAt, now)}` : ''}
+                  {layer.detail}
                 </T>
               </View>
+              {i < rows.length - 1 && <InsetDivider />}
             </View>
           ))}
         </Section>
-      )}
 
-      <Section title="This phone">
-        <Info label="Name" value={device?.name ?? 'Unknown until connected'} />
-        <Info
-          label="Paired"
-          value={
-            state.credentials ? new Date(state.credentials.pairedAt).toLocaleDateString() : '—'
-          }
-        />
-        <Info label="App" value={`${appInfo().version} (${appInfo().build})`} />
-        <Info label="Protocol" value={`v${t?.welcome?.protocol ?? PROTOCOL_VERSION}`} last />
-      </Section>
+        {failures.length > 0 && (
+          <Section title="Agents">
+            {failures.map((a, i) => (
+              <View key={a.id} style={styles.layer}>
+                <View style={styles.dot}>
+                  <Dot
+                    color={
+                      a.failure?.kind === 'usage_limit' ? colors.accentWarning : colors.accentError
+                    }
+                  />
+                </View>
+                <View style={{ flex: 1, gap: space['2xs'] }}>
+                  <T color={colors.textBody}>{a.name}</T>
+                  <T variant="small" color={colors.textMuted}>
+                    {a.failure?.kind === 'signed_out'
+                      ? 'Last turn failed: Claude Code is signed out'
+                      : a.failure?.kind === 'usage_limit'
+                        ? 'At its usage limit'
+                        : 'Last turn didn’t finish'}
+                    {a.capabilities ? ` · as of ${formatAgo(a.capabilities.seenAt, now)}` : ''}
+                  </T>
+                </View>
+                {i < failures.length - 1 && <InsetDivider />}
+              </View>
+            ))}
+          </Section>
+        )}
 
-      {!connected && (
-        <Button title="Open Tailscale" icon="network" onPress={() => void openTailscale()} />
-      )}
-    </ScrollView>
+        <Section title="This phone">
+          <Info label="Name" value={device?.name ?? 'Unknown until connected'} />
+          <Info
+            label="Paired"
+            value={
+              state.credentials ? new Date(state.credentials.pairedAt).toLocaleDateString() : '—'
+            }
+          />
+          <Info label="App" value={`${appInfo().version} (${appInfo().build})`} />
+          <Info label="Protocol" value={`v${t?.welcome?.protocol ?? PROTOCOL_VERSION}`} last />
+        </Section>
+
+        {!connected && (
+          <Button title="Open Tailscale" icon="network" onPress={() => void openTailscale()} />
+        )}
+      </ScrollView>
+    </SheetPage>
   );
 }
 
@@ -122,21 +126,22 @@ function Info({ label, value, last }: { label: string; value: string; last?: boo
   const colors = useColors();
   const styles = useStyles();
   return (
-    <View style={[styles.info, !last && styles.divider]}>
-      <T color={colors.textPrimary}>{label}</T>
-      <T color={colors.textMuted} numberOfLines={1} style={{ flexShrink: 1 }}>
+    <View style={styles.info}>
+      <T color={colors.textBody}>{label}</T>
+      <T color={colors.textSecondary} numberOfLines={1} style={{ flexShrink: 1 }}>
         {value}
       </T>
+      {!last && <InsetDivider />}
     </View>
   );
 }
 
-const useStyles = makeStyles((colors) => ({
+const useStyles = makeStyles(() => ({
   page: { padding: space.lg, paddingTop: space.xl, gap: space.xs },
   head: { gap: space.tight, marginBottom: space.lg, paddingHorizontal: space.xs },
   headLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   layer: { flexDirection: 'row', gap: space.md, padding: space.lg, alignItems: 'flex-start' },
-  dot: { paddingTop: 6 },
-  divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle },
+  // Centred on the title's first line: (24 line − 8 dot) / 2.
+  dot: { paddingTop: space.sm },
   info: { flexDirection: 'row', justifyContent: 'space-between', gap: space.md, padding: space.lg },
 }));

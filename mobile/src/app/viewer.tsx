@@ -15,7 +15,7 @@ import { Spinner } from '../components/agent';
 import { T } from '../components/ui';
 import { share } from '../lib/files';
 import { attachmentSource, describeError, download } from '../lib/session';
-import { alpha, radius, space } from '../lib/theme';
+import { alpha, iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 
 export default function Viewer() {
@@ -100,7 +100,7 @@ export default function Viewer() {
           style={styles.pill}
         >
           {sharing ? (
-            <Spinner size={14} color={colors.onMedia} />
+            <Spinner size={iconSize.body} color={colors.onMedia} />
           ) : (
             <T variant="subhead" color={colors.onMedia}>
               Share
@@ -156,7 +156,7 @@ const useStyles = makeStyles((colors) => ({
     left: space.lg,
     right: space.lg,
     padding: space.md,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     backgroundColor: colors.mediaScrim,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: alpha(colors.onMedia, 0.2),

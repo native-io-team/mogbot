@@ -9,13 +9,19 @@ import { join, relative } from 'node:path';
 import {
   agentTints,
   APPEARANCES,
+  avatarSize,
   contrast,
+  iconSize,
   luminance,
   palettes,
+  radius,
   type Palette,
 } from '../src/lib/theme';
 
 const COLOUR = /^(#[0-9a-f]{6}|rgba\(\d{1,3}, \d{1,3}, \d{1,3}, (0|1|0?\.\d+)\))$/;
+
+/** Roles that may be no colour at all: a line light leaves out because its fill carries it. */
+const MAY_BE_CLEAR = new Set<string>(['cardBorder', 'composerBorder']);
 
 /** The surfaces words are read on: the app (chats, lists) and a panel (cards, sheets). */
 const READ_ON = ['surfaceApp', 'surfacePanel'] as const;
@@ -45,7 +51,8 @@ describe('palettes', () => {
       for (const [role, value] of Object.entries(
         palettes[appearance] as unknown as Record<string, string>
       )) {
-        expect([role, COLOUR.test(value)]).toEqual([role, true]);
+        const ok = COLOUR.test(value) || (MAY_BE_CLEAR.has(role) && value === 'transparent');
+        expect([role, ok]).toEqual([role, true]);
       }
     }
   });
@@ -81,6 +88,29 @@ describe('palettes', () => {
         expect([fg, bg, contrast(c[fg], c[bg]) >= 4.5]).toEqual([fg, bg, true]);
       }
     }
+  });
+
+  it.each(APPEARANCES)(
+    'pass AA for the quietest words where they sit on a fill: placeholders, metadata (%s)',
+    (appearance) => {
+      const c = palettes[appearance];
+      // Placeholders sit in fields; metadata sits on controls and groups.
+      for (const bg of ['surfaceControl', 'composerFill', 'inputFill', 'surfaceGroup'] as const) {
+        expect([bg, contrast(c.textMuted, c[bg]) >= 4.5]).toEqual([bg, true]);
+      }
+      // What you type and what you read in a field.
+      for (const bg of ['composerFill', 'inputFill', 'surfaceBubble'] as const) {
+        expect([bg, contrast(c.textBody, c[bg]) >= 7]).toEqual([bg, true]);
+      }
+    }
+  );
+
+  it.each(APPEARANCES)('name borders by how much they show (%s)', (appearance) => {
+    const c = palettes[appearance];
+    const on = c.surfacePanel;
+    // Default is the divider; subtle shows less; strong (interactive outlines) shows most.
+    expect(contrast(c.borderDefault, on)).toBeGreaterThan(contrast(c.borderSubtle, on));
+    expect(contrast(c.borderStrong, on)).toBeGreaterThan(contrast(c.borderDefault, on));
   });
 
   it.each(APPEARANCES)('pass AA for every agent colour as words (%s)', (appearance) => {
@@ -133,34 +163,103 @@ describe('light accents', () => {
   });
 });
 
-describe('colour literals', () => {
-  // A hex colour, rgb()/hsl(), or a named white or black. 'transparent' is no colour.
-  const LITERAL = /#[0-9a-fA-F]{3,8}\b|\b(rgba?|hsla?)\(|['"](white|black)['"]/;
-  /** A literal that isn't a colour drawn by the app: an SF Symbol name or a platform keyword. */
-  const ALLOWED = [/indicatorStyle=\{[^}]*\}/, /agentAccent\('white'/, /\* "white"/];
+function files(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return files(path);
+    return /\.tsx?$/.test(name) ? [path] : [];
+  });
+}
 
-  function files(dir: string): string[] {
-    return readdirSync(dir).flatMap((name) => {
-      const path = join(dir, name);
-      if (statSync(path).isDirectory()) return files(path);
-      return /\.tsx?$/.test(name) ? [path] : [];
-    });
-  }
+const SRC = join(__dirname, '..', 'src');
+
+/** Every line of every source file but theme.ts, with where it is. */
+function sourceLines(): { at: string; line: string }[] {
+  return files(SRC).flatMap((path) => {
+    const rel = relative(SRC, path);
+    if (rel === join('lib', 'theme.ts')) return [];
+    return readFileSync(path, 'utf8')
+      .split('\n')
+      .map((line, i) => ({ at: `${rel}:${i + 1}`, line }));
+  });
+}
+
+describe('colour literals', () => {
+  // A hex colour, rgb()/hsl(), a platform colour, or a named colour in quotes.
+  // 'transparent' is no colour.
+  const NAMED =
+    'white|black|red|green|blue|gray|grey|orange|yellow|purple|pink|brown|cyan|magenta|silver|gold|navy|teal|maroon|olive|lime|aqua|fuchsia|tomato|crimson|coral|salmon|indigo|violet|beige|ivory|khaki|lavender|plum|tan|wheat|azure|lightgray|darkgray';
+  const LITERAL = new RegExp(
+    `#[0-9a-f]{3,8}\\b|\\b(rgba?|hsla?)\\(|\\b(PlatformColor|DynamicColorIOS)\\b|['"](${NAMED})['"]`,
+    'gi'
+  );
+  /**
+   * What looks like a colour and isn't one the app draws: the scroll
+   * indicator's style keyword, an agent's colour key, a comment naming one.
+   * Each is cut out of the line and the rest is still checked.
+   */
+  const ALLOWED = [
+    /indicatorStyle=\{[^}]*\}/g,
+    /agentAccent\('white'/g,
+    /\* "white"/g,
+    /color === 'white'/g,
+  ];
 
   it('live only in theme.ts', () => {
-    const root = join(__dirname, '..', 'src');
     const found: string[] = [];
-    for (const path of files(root)) {
-      const rel = relative(root, path);
-      if (rel === join('lib', 'theme.ts')) continue;
-      readFileSync(path, 'utf8')
-        .split('\n')
-        .forEach((line, i) => {
-          if (!LITERAL.test(line)) return;
-          if (ALLOWED.some((a) => a.test(line))) return;
-          found.push(`${rel}:${i + 1}: ${line.trim()}`);
-        });
+    for (const { at, line } of sourceLines()) {
+      const rest = ALLOWED.reduce((l, a) => l.replace(a, ''), line);
+      for (const m of rest.matchAll(LITERAL)) found.push(`${at}: ${m[0]} in ${line.trim()}`);
     }
     expect(found).toEqual([]);
+  });
+});
+
+describe('the scale', () => {
+  it('draws every corner from radius, a circle or a squircle', () => {
+    // `borderRadius: radius.card`, `borderTopLeftRadius: radius.sheet`, a
+    // circle (`size / 2`), or `squircle(size)`. Never a number, never
+    // `radius.lg + 8`: a corner that isn't on the scale is a typo in the system.
+    const CORNER = /\b(border\w*Radius|sheetCornerRadius)\s*[:=]\s*([^,}\n]+)/g;
+    const OK = [
+      new RegExp(`^radius\\.(${Object.keys(radius).join('|')})$`),
+      /^[\w.]+ \/ 2$/,
+      /^squircle\([\w.]+\)$/,
+      /^composer\.corner$/,
+    ];
+    const found: string[] = [];
+    for (const { at, line } of sourceLines()) {
+      for (const m of line.matchAll(CORNER)) {
+        const value = m[2].trim();
+        if (!OK.some((ok) => ok.test(value))) found.push(`${at}: ${m[0].trim()}`);
+      }
+    }
+    expect(found).toEqual([]);
+  });
+
+  it('sizes every icon, spinner, avatar and dot from the theme', () => {
+    // A literal size on any of them (`size={13}`) is off the scale.
+    const LITERAL_SIZE = /\bsize=\{\s*\d/g;
+    const found: string[] = [];
+    for (const { at, line } of sourceLines()) {
+      for (const m of line.matchAll(LITERAL_SIZE)) found.push(`${at}: ${m[0]} in ${line.trim()}`);
+    }
+    expect(found).toEqual([]);
+  });
+
+  it('keeps every type size on the type scale', () => {
+    const LITERAL_FONT = /\bfontSize:\s*\d/g;
+    const found: string[] = [];
+    for (const { at, line } of sourceLines()) {
+      for (const m of line.matchAll(LITERAL_FONT)) found.push(`${at}: ${m[0]} in ${line.trim()}`);
+    }
+    expect(found).toEqual([]);
+  });
+
+  it('has the four icon sizes and one exception, and the avatar sizes, as the spec sets them', () => {
+    expect(iconSize).toEqual({ micro: 10, inline: 12, body: 16, button: 20, hero: 28 });
+    expect(avatarSize).toEqual({ group: 24, header: 28, list: 48, sheet: 56 });
+    // A well's corner is tighter than its card's, so the two read as nested.
+    expect(radius.inner).toBeLessThan(radius.card);
   });
 });

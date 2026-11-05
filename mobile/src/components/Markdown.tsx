@@ -288,14 +288,26 @@ function Table({ table }: { table: Tokens.Table }) {
   const row = (cells: Tokens.TableCell[], header: boolean, key: number) => (
     <View key={key} style={[styles.tr, header && styles.th]}>
       {cells.map((cell, c) => (
-        <View key={c} style={[styles.td, { width: widths[c] }]}>
+        <View
+          key={c}
+          style={[
+            styles.td,
+            // The last column takes what's left, so a narrow table still fills the measure.
+            c === cells.length - 1 ? { minWidth: widths[c], flexGrow: 1 } : { width: widths[c] },
+          ]}
+        >
           <Text style={[styles.cell, header && styles.strong]}>{inline(cell.tokens, styles)}</Text>
         </View>
       ))}
     </View>
   );
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tableScroll}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.tableScroll}
+      contentContainerStyle={styles.tableFill}
+    >
       <View style={styles.table}>
         {row(table.header, true, -1)}
         {table.rows.map((r, i) => row(r, false, i))}
@@ -311,7 +323,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   return (
     <View style={styles.code}>
       <View style={styles.codeHeader}>
-        <T variant="caption" color={colors.textSecondary}>
+        <T variant="caption" color={colors.textMuted}>
           {lang || 'code'}
         </T>
         <Pressable
@@ -325,7 +337,11 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
             setTimeout(() => setCopied(false), 1500);
           }}
         >
-          <T variant="caption" color={copied ? colors.textStrong : colors.textSecondary}>
+          <T
+            variant="caption"
+            color={copied ? colors.textStrong : colors.textSecondary}
+            style={{ fontFamily: fonts.medium }}
+          >
             {copied ? 'Copied' : 'Copy'}
           </T>
         </Pressable>
@@ -351,7 +367,7 @@ const bodyOf = (colors: Palette) => ({
 const useStyles = makeStyles((colors) => ({
   root: { gap: space.md },
   p: bodyOf(colors),
-  heading: { fontFamily: fonts.semibold, color: colors.textStrong, marginTop: space.xs },
+  heading: { fontFamily: fonts.semibold, color: colors.textStrong, marginTop: space.sm },
   strong: { fontFamily: fonts.semibold, color: colors.textStrong },
   em: { fontStyle: 'italic' },
   del: { textDecorationLine: 'line-through', color: colors.textSecondary },
@@ -370,8 +386,9 @@ const useStyles = makeStyles((colors) => ({
     gap: space.sm,
   },
   list: { gap: space.xs },
-  item: { flexDirection: 'row', gap: space.sm },
-  bullet: { color: colors.textMuted, minWidth: 14 },
+  item: { flexDirection: 'row', gap: space.tight },
+  // Wide enough for "10." so a long list's numbers line up with its first.
+  bullet: { color: colors.textMuted, minWidth: 18 },
   itemBody: { flex: 1, gap: space.xs },
   hr: {
     height: StyleSheet.hairlineWidth,
@@ -380,9 +397,9 @@ const useStyles = makeStyles((colors) => ({
   },
   code: {
     backgroundColor: colors.surfacePanel,
-    borderRadius: radius.card,
+    borderRadius: radius.inner,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.borderDefault,
     overflow: 'hidden',
   },
   codeHeader: {
@@ -390,9 +407,9 @@ const useStyles = makeStyles((colors) => ({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: space.md,
-    paddingVertical: space.tight,
+    paddingVertical: space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
+    borderBottomColor: colors.borderDefault,
   },
   codeBody: { padding: space.md },
   codeText: {
@@ -402,16 +419,18 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textPrimary,
   },
   tableScroll: { flexGrow: 0 },
+  tableFill: { minWidth: '100%' },
   table: {
+    flexGrow: 1,
     overflow: 'hidden',
-    borderRadius: radius.card,
+    borderRadius: radius.inner,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    borderColor: colors.borderDefault,
   },
   tr: {
     flexDirection: 'row',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
+    borderBottomColor: colors.borderDefault,
   },
   th: { backgroundColor: alpha(colors.textStrong, 0.03) },
   td: { paddingHorizontal: space.md, paddingVertical: space.sm },

@@ -3,7 +3,7 @@
 import type { Stack } from 'expo-router';
 import { useMemo, type ComponentProps } from 'react';
 import { useColors } from './appearance';
-import { fonts, type Palette } from './theme';
+import { fonts, radius, type Palette } from './theme';
 
 type NativeStackNavigationOptions = Exclude<
   ComponentProps<typeof Stack.Screen>['options'],
@@ -39,7 +39,7 @@ export const sheet = (
   presentation: 'formSheet',
   sheetAllowedDetents: detents,
   sheetGrabberVisible: true,
-  sheetCornerRadius: 22,
+  sheetCornerRadius: radius.sheet,
   headerShown: false,
   contentStyle: { backgroundColor: background },
 });

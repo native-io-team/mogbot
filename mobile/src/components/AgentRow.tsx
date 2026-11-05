@@ -20,7 +20,15 @@ import { agentActions, type AgentAction, type AgentCaps } from '../lib/actions';
 import { formatAgo, lineState, needsLine, needsYou, subtitle } from '../lib/agents';
 import { useApp } from '../lib/store';
 import { haptic } from '../lib/haptics';
-import { chromeScale, radius, space, type Palette } from '../lib/theme';
+import {
+  avatarSize,
+  chromeScale,
+  fonts,
+  iconSize,
+  radius,
+  space,
+  type Palette,
+} from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, StatusMark } from './agent';
 import { showActions } from './menu';
@@ -199,7 +207,7 @@ function SwipeAction({
         ]}
       />
       <Animated.View style={[styles.actionInner, style]}>
-        <Icon name={icon} size={18} color={colors.textStrong} />
+        <Icon name={icon} size={iconSize.button} color={colors.textStrong} />
         <T variant="caption" color={colors.textStrong} maxFontSizeMultiplier={chromeScale}>
           {label}
         </T>
@@ -233,10 +241,14 @@ function RowBody({
   const line = useApp((s) =>
     needsYou(agent) ? needsLine(agent, s.chats[agent.id]?.messages) : subtitle(agent)
   );
+  const tinted = !!state && live && (state === 'waiting' || state === 'failed');
+  const cut = line.indexOf(' · ');
+  const head = cut < 0 ? line : line.slice(0, cut);
+  const tail = cut < 0 ? '' : line.slice(cut);
   const time = (
     <T
       variant="caption"
-      color={colors.textSecondary}
+      color={colors.textMuted}
       numberOfLines={1}
       maxFontSizeMultiplier={chromeScale}
       style={styles.time}
@@ -264,11 +276,11 @@ function RowBody({
       }`}
       accessibilityHint="Hold for Pin, Mute and Hide"
     >
-      <AgentAvatar name={agent.name} color={agent.color} size={44} />
+      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.list} />
       <View style={styles.text}>
         <View style={styles.nameLine}>
           <T
-            variant="subhead"
+            variant="headline"
             color={colors.textStrong}
             numberOfLines={1}
             // Names stop growing at twice the size, under Home's large title.
@@ -277,8 +289,10 @@ function RowBody({
           >
             {agent.name}
           </T>
-          {agent.pinned && <Icon name="pin.fill" size={10} color={colors.textMuted} />}
-          {agent.muted && <Icon name="bell.slash.fill" size={10} color={colors.textMuted} />}
+          {agent.pinned && <Icon name="pin.fill" size={iconSize.inline} color={colors.textMuted} />}
+          {agent.muted && (
+            <Icon name="bell.slash.fill" size={iconSize.inline} color={colors.textMuted} />
+          )}
           {!stacked && time}
         </View>
         <View style={styles.nameLine}>
@@ -286,10 +300,27 @@ function RowBody({
             variant="small"
             numberOfLines={stacked ? 3 : 1}
             maxFontSizeMultiplier={NAME_SCALE}
-            color={state && live ? lineColor(colors)[state] : colors.textSecondary}
+            color={colors.textSecondary}
             style={{ flex: 1 }}
           >
-            {line}
+            {/*
+              Only the state word takes the colour ("Needs your OK"), never
+              the whole line: three amber lines would shout down the list.
+            */}
+            {tinted ? (
+              <>
+                <T
+                  variant="small"
+                  color={lineColor(colors)[state]}
+                  style={{ fontFamily: fonts.medium }}
+                >
+                  {head}
+                </T>
+                {tail}
+              </>
+            ) : (
+              line
+            )}
           </T>
           <View style={styles.mark}>
             <StatusMark agent={agent} live={live} />
@@ -308,7 +339,7 @@ const useStyles = makeStyles((colors) => ({
     gap: space.md,
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
-    minHeight: 68,
+    minHeight: 72,
     backgroundColor: colors.surfaceApp,
   },
   selected: { backgroundColor: colors.surfaceControl },
@@ -320,6 +351,6 @@ const useStyles = makeStyles((colors) => ({
   mark: { width: 14, alignItems: 'flex-end' },
   actions: { flexDirection: 'row' },
   action: { width: ACTION_W, alignItems: 'center', justifyContent: 'center' },
-  actionLeft: { borderTopRightRadius: radius.card, borderBottomRightRadius: radius.card },
+  actionLeft: { borderTopRightRadius: radius.inner, borderBottomRightRadius: radius.inner },
   actionInner: { alignItems: 'center', gap: space.xs },
 }));

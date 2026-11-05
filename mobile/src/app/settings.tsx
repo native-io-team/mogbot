@@ -14,7 +14,7 @@ import { useApp, type AppearancePref } from '../lib/store';
 import { useAccent, useSwitchColors } from '../lib/accent';
 import { brand } from '../lib/brand';
 import { useColors } from '../lib/appearance';
-import { space } from '../lib/theme';
+import { iconSize, space } from '../lib/theme';
 
 /** The phone's own appearance, or the system's. Named as people say it, not "System". */
 const APPEARANCE: { value: AppearancePref; label: string }[] = [
@@ -168,7 +168,7 @@ export default function Settings() {
               }}
               trailing={
                 on ? (
-                  <Icon name="checkmark" size={16} color={accent.accent} />
+                  <Icon name="checkmark" size={iconSize.body} color={accent.accent} />
                 ) : (
                   <View style={styles.check} />
                 )

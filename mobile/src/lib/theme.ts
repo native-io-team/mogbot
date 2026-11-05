@@ -38,9 +38,30 @@ export interface Palette {
   inkDark: string;
   /** Ink on a dark fill (a dark accent). */
   inkLight: string;
+  /** The one divider: between rows in a group, around a well in prose, under a pinned bar. */
   borderDefault: string;
+  /** Fainter than the divider, for a line that should barely register. */
   borderSubtle: string;
+  /** Interactive outlines only (a focused field). Never a card. */
   borderStrong: string;
+  /**
+   * A grouped list on a sheet (Settings, the agent sheet, the diff's files): one
+   * step toward the viewer from the sheet behind it, the iOS grouped idiom.
+   */
+  surfaceGroup: string;
+  /**
+   * The one border a card may have. None in light, where the fill step carries
+   * it; one hairline in dark, where the fill step alone (1.07:1) doesn't.
+   */
+  cardBorder: string;
+  /** A pressed row inside a group. */
+  surfaceGroupPressed: string;
+  /** The message field and the + beside it: a fill in dark, a fill and a hairline in light. */
+  composerFill: string;
+  composerBorder: string;
+  /** A text field in a card or on a sheet: clearly a field on a panel, in either appearance. */
+  inputFill: string;
+  inputBorder: string;
   /** Outcomes only ("Allowed", a diff's additions, "Finished"). Never an action. */
   accentSuccess: string;
   accentWarning: string;
@@ -89,16 +110,26 @@ const dark: Palette = {
   textPrimary: '#bcbcbc', // --text-primary (gray-200)
   textSecondary: '#979797', // --text-secondary (gray-400)
   // --text-muted is gray-600 on the desk, 4.06:1 on these surfaces: too faint
-  // for words read outdoors at 12-14pt. The phone takes the next step up the
-  // desktop's own scale, which passes 4.5:1 on app and panel.
-  textMuted: '#868686', // --color-gray-500
+  // for words read outdoors at 12-14pt. The phone's sits just under
+  // textSecondary, so it still passes 4.5:1 where placeholders and metadata
+  // sit on a fill: a control (4.5), a group (4.6), the message field (4.8).
+  textMuted: '#8e8e8e',
   // Decoration only (rules, chevrons, a disabled glyph), never words: 2.2:1.
   textFaint: '#4e4e4e', // --text-faint (gray-700)
   inkDark: '#141414', // --text-on-accent
   inkLight: '#ffffff',
-  borderDefault: '#282828', // --border-default
-  borderSubtle: '#303030', // --border-subtle
+  // Named by how much they show: the desktop's --border-subtle (#303030) is
+  // the firmer of its two, so the phone's names are the other way round.
+  borderDefault: '#303030',
+  borderSubtle: '#232323',
   borderStrong: '#393939', // --border-strong
+  surfaceGroup: '#262626',
+  cardBorder: '#262626',
+  surfaceGroupPressed: '#303030',
+  composerFill: '#232323',
+  composerBorder: 'transparent',
+  inputFill: '#141414',
+  inputBorder: '#393939',
   accentSuccess: '#35d35d', // --accent-success (green-600)
   accentWarning: '#e89a1c', // --accent-warning (orange-600)
   onWarning: '#141414',
@@ -135,15 +166,22 @@ const light: Palette = {
   textBody: '#1c1c1c',
   textPrimary: '#383838',
   textSecondary: '#5c5c5c',
-  // 4.47:1 on a control, 4.89 on a panel, 5.3 on the app.
-  textMuted: '#6b6b6b',
+  // 4.9:1 on a control (placeholders sit there), 5.2 on a panel, 5.7 on the app.
+  textMuted: '#666666',
   // Decoration only, as in dark.
   textFaint: '#c2c2c2',
   inkDark: '#0f0f0f',
   inkLight: '#ffffff',
-  borderDefault: '#e6e6e6',
-  borderSubtle: '#e0e0e0',
+  borderDefault: '#e0e0e0',
+  borderSubtle: '#ebebeb',
   borderStrong: '#cfcfcf',
+  surfaceGroup: '#ffffff',
+  cardBorder: 'transparent',
+  surfaceGroupPressed: '#ebebeb',
+  composerFill: '#f5f5f5',
+  composerBorder: '#e0e0e0',
+  inputFill: '#ffffff',
+  inputBorder: '#cfcfcf',
   accentSuccess: '#15803d', // green-700
   accentWarning: '#b45309', // amber-700
   onWarning: '#ffffff',
@@ -211,8 +249,59 @@ export const space = {
   '2xl': 32,
 } as const;
 
-/** `--radius-*`. */
-export const radius = { sm: 4, control: 6, card: 8, lg: 12, pill: 999 } as const;
+/**
+ * Corners. One card radius, and an inner radius concentric with it: a well
+ * inside a 16-padded card is `card − padding / 2`, so the two curves share a
+ * centre. Nothing draws a corner that isn't one of these, a circle (`size / 2`)
+ * or a squircle (`squircle(size)`); a test holds that.
+ *
+ * - `inner`: wells inside a card (a command, a diff, code, a table), text
+ *   inputs, small badges.
+ * - `control`: buttons, icon wells, composer tiles.
+ * - `card`: every card, group, chip, thumbnail, toast and summary bar.
+ * - `sheet`: sheets, native and our own menu.
+ */
+export const radius = { sm: 4, inner: 10, control: 12, card: 16, sheet: 24, pill: 999 } as const;
+
+/** An avatar's or logo's corner: one squircle proportion at every size. */
+export const squircle = (size: number) => Math.round(size * 0.28);
+
+/**
+ * Icon sizes. Four, and one exception:
+ * - `inline` 12: beside a caption or small line (every chevron, pin, lock, eyebrow glyph).
+ * - `body` 16: beside body text (row icons, button icons, the composer's glyphs).
+ * - `button` 20: an IconButton's glyph in its 44pt target.
+ * - `hero` 28: an empty state.
+ * - `micro` 10: only the × on a tile too small for 12.
+ */
+export const iconSize = { micro: 10, inline: 12, body: 16, button: 20, hero: 28 } as const;
+
+/**
+ * The message field, iMessage's geometry: one line is a 36pt pill, and the
+ * corner stays 18 as it grows, so several lines read as a rounded rectangle
+ * rather than a blob. The + is a 36pt circle (as tall as one line); send is
+ * a 28pt circle inside the field, 4pt in from its edge. Both sit on the last
+ * line as the field grows. User bubbles share the corner and the line.
+ */
+export const composer = {
+  /** 16pt text on a 20pt line. */
+  line: 20,
+  /** Above and below the text, so one line is 36. */
+  padV: 8,
+  padLeft: 12,
+  padRight: 8,
+  height: 36,
+  corner: 18,
+  /** Lines before it scrolls inside. */
+  maxLines: 6,
+  attach: 36,
+  send: 28,
+  /** Send's inset from the field's edge. */
+  inset: 4,
+} as const;
+
+/** Agent avatars: in a search group, a chat header, a list row, the agent sheet. */
+export const avatarSize = { group: 24, header: 28, list: 48, sheet: 56 } as const;
 
 /**
  * The desktop's type scale (`--font-size-*`), one step up where the desk
@@ -226,6 +315,8 @@ export const type = {
   subhead: 16,
   title: 18,
   display: 28,
+  /** Tile labels only (a file's extension on a 40pt badge): never a sentence. */
+  micro: 10,
 } as const;
 
 /**
@@ -234,6 +325,12 @@ export const type = {
  * no cap; they reflow.
  */
 export const chromeScale = 1.3;
+
+/**
+ * A card's title and its asides: they may grow further than chrome, but not
+ * so far that the answers under them leave the screen.
+ */
+export const CARD_TITLE_SCALE = 1.5;
 
 export const lineHeight = (size: number, ratio = 1.4) => Math.round(size * ratio);
 

@@ -59,7 +59,7 @@ import {
 import { useAccent } from '../lib/accent';
 import { useApp } from '../lib/store';
 import { chatItems, sentAt, type Item } from '../lib/timeline';
-import { alpha, chromeScale, radius, space } from '../lib/theme';
+import { alpha, avatarSize, chromeScale, iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
@@ -113,7 +113,11 @@ function PinnedQuestion({
           { paddingLeft: space.lg + inset.left, paddingRight: space.lg + inset.right },
         ]}
       >
-        <Icon name="exclamationmark.triangle.fill" size={13} color={colors.accentWarning} />
+        <Icon
+          name="exclamationmark.triangle.fill"
+          size={iconSize.inline}
+          color={colors.accentWarning}
+        />
         <View style={{ flex: 1 }}>
           <T variant="small" color={colors.textStrong} numberOfLines={1}>
             {title}
@@ -124,7 +128,7 @@ function PinnedQuestion({
             </T>
           )}
         </View>
-        <Icon name="chevron.down" size={11} color={colors.textMuted} />
+        <Icon name="chevron.down" size={iconSize.inline} color={colors.textMuted} />
       </Pressable>
     </Animated.View>
   );
@@ -505,7 +509,7 @@ export function ChatView({
             )}
             <Icon
               name="arrow.down"
-              size={15}
+              size={iconSize.body}
               color={urgentBelow ? colors.onWarning : colors.textPrimary}
               fallback={<T>↓</T>}
             />
@@ -591,8 +595,15 @@ function ItemView({
     );
   // A run from one side sits close together; a new speaker gets room.
   const grouped = item.kind === 'message' && item.grouped;
+  // A meta line about the block above it (what changed, a session started)
+  // belongs to that block: it sits close under it, not a paragraph away.
+  const attached =
+    grouped &&
+    (item.message.kind === 'changes' ||
+      (item.message.kind === 'session' &&
+        (item.message.session?.event === 'started' || item.message.session?.event === 'sent')));
   return (
-    <View style={[styles.item, grouped && styles.itemGrouped]}>
+    <View style={[styles.item, grouped && styles.itemGrouped, attached && styles.itemAttached]}>
       {lit && <Glow />}
       {body}
     </View>
@@ -634,10 +645,10 @@ function Header({
           : { text: engine ?? (agent.role || 'Idle'), color: colors.textSecondary };
   return (
     <View style={styles.header}>
-      <AgentAvatar name={agent.name} color={agent.color} size={28} />
+      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.header} />
       <View style={{ flexShrink: 1 }}>
         <T
-          variant="subhead"
+          variant="headline"
           color={colors.textStrong}
           numberOfLines={1}
           maxFontSizeMultiplier={chromeScale}
@@ -695,6 +706,7 @@ const useStyles = makeStyles((colors) => ({
   // and still need air between them.
   item: { paddingTop: space.xl },
   itemGrouped: { paddingTop: space.md },
+  itemAttached: { paddingTop: space.tight },
   glow: {
     position: 'absolute',
     top: 0,
@@ -711,7 +723,7 @@ const useStyles = makeStyles((colors) => ({
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
+    borderBottomColor: colors.borderDefault,
   },
   pinned: {
     flexDirection: 'row',
@@ -722,22 +734,25 @@ const useStyles = makeStyles((colors) => ({
     minHeight: 44,
     backgroundColor: colors.surfacePanel,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: alpha(colors.accentWarning, 0.45),
+    borderBottomColor: colors.borderDefault,
   },
   jumpWrap: { position: 'absolute', right: space.lg },
   jump: {
-    minWidth: 40,
-    height: 40,
+    minWidth: 44,
+    height: 44,
     paddingHorizontal: space.md,
-    borderRadius: 20,
+    borderRadius: radius.pill,
     flexDirection: 'row',
     gap: space.tight,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceControl,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    overflow: 'hidden',
+    borderColor: colors.cardBorder,
+    shadowColor: colors.black,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
   jumpUrgent: { backgroundColor: colors.accentWarning, borderColor: colors.accentWarning },
   toast: {
@@ -745,7 +760,7 @@ const useStyles = makeStyles((colors) => ({
     left: space.lg,
     right: space.lg,
     padding: space.md,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     backgroundColor: colors.surfaceSelected,
   },
   gone: {

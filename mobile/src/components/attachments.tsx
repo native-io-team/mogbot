@@ -21,7 +21,7 @@ import {
 } from '../lib/files';
 import { attachmentSource, describeError, download } from '../lib/session';
 import type { PendingAttachment } from '../lib/sync';
-import { alpha, radius, space } from '../lib/theme';
+import { alpha, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { choose } from './menu';
@@ -165,14 +165,14 @@ export function FileChip({
     >
       <View style={styles.badge}>
         {busy ? (
-          <Spinner size={12} />
+          <Spinner />
         ) : (
           <T variant="caption" color={colors.textSecondary} style={styles.badgeText}>
             {extensionOf(file.name)}
           </T>
         )}
       </View>
-      <View style={{ flexShrink: 1 }}>
+      <View style={{ flexShrink: 1, gap: space['2xs'] }}>
         <T variant="small" color={colors.textStrong} numberOfLines={1}>
           {file.name}
         </T>
@@ -235,7 +235,7 @@ export function StagedTile({
             {error ? (
               <Icon
                 name="arrow.clockwise"
-                size={16}
+                size={iconSize.body}
                 color={colors.textStrong}
                 fallback={<T>↻</T>}
               />
@@ -256,7 +256,7 @@ export function StagedTile({
       >
         <Icon
           name="xmark"
-          size={9}
+          size={iconSize.micro}
           color={colors.textStrong}
           fallback={<T variant="caption">×</T>}
         />
@@ -269,15 +269,14 @@ const useStyles = makeStyles((colors) => ({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: space.tight,
-    maxWidth: TILE * 2 + space.tight,
+    gap: space.xs,
+    maxWidth: TILE * 2 + space.xs,
   },
+  // No hairline: the image is its own edge.
   thumb: {
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     overflow: 'hidden',
     backgroundColor: colors.surfaceControl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
   },
   pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
   chip: {
@@ -287,33 +286,33 @@ const useStyles = makeStyles((colors) => ({
     maxWidth: 280,
     paddingVertical: space.sm,
     paddingLeft: space.sm,
-    paddingRight: space.lg,
-    borderRadius: radius.lg,
+    paddingRight: space.md,
+    borderRadius: radius.card,
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    borderColor: colors.cardBorder,
   },
   badge: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.card,
+    width: 40,
+    height: 40,
+    borderRadius: radius.inner,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceControl,
   },
-  badgeText: { letterSpacing: 0.4, fontSize: 10 },
+  badgeText: { letterSpacing: 0.4, fontSize: type.micro },
   tile: { width: 64, height: 64, marginTop: space.tight, marginRight: space.tight },
   tileBody: {
     flex: 1,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     overflow: 'hidden',
     backgroundColor: colors.surfaceControl,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    borderColor: colors.cardBorder,
   },
   tileFile: { flex: 1, padding: space.tight, justifyContent: 'space-between' },
-  tileExt: { fontSize: 10, letterSpacing: 0.4 },
-  tileName: { fontSize: 10, lineHeight: 12 },
+  tileExt: { fontSize: type.micro, letterSpacing: 0.4 },
+  tileName: { fontSize: type.micro, lineHeight: 12 },
   tileVeil: {
     backgroundColor: alpha(colors.surfaceApp, 0.55),
     alignItems: 'center',
@@ -322,18 +321,18 @@ const useStyles = makeStyles((colors) => ({
   progressTrack: {
     width: 40,
     height: 4,
-    borderRadius: 2,
+    borderRadius: radius.pill,
     overflow: 'hidden',
     backgroundColor: alpha(colors.textStrong, 0.25),
   },
-  progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.textStrong },
+  progressFill: { height: 4, borderRadius: radius.pill, backgroundColor: colors.textStrong },
   remove: {
     position: 'absolute',
     top: -6,
     right: -6,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceSelected,

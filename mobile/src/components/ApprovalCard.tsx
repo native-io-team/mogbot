@@ -5,7 +5,14 @@
  */
 
 import type { Agent, AgentMessage, Approval } from '@shipstudio/companion-protocol';
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
 import {
   type LayoutChangeEvent,
   Pressable,
@@ -20,10 +27,10 @@ import { cardOutcome, describeScope } from '../lib/agents';
 import { haptic } from '../lib/haptics';
 import { answerApproval, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
-import { alpha, chromeScale, fonts, radius, space, type } from '../lib/theme';
+import { CARD_TITLE_SCALE, chromeScale, fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
-import { Button, Icon, T } from './ui';
+import { Button, Icon, T, tap } from './ui';
 
 /**
  * How long a new card's answers stay inert: the desktop's anti-misclick
@@ -208,25 +215,39 @@ export function ApprovalCard({
   const outcome = cardOutcome(approval);
   const scope = approval.always ? describeScope(approval.always, agent.name) : null;
   const off = !!busy || !connected;
-  // Behind ⋯: the broader answer always; in a short pane, the note too.
+  // Behind ⋯: the broader answer, and a denial with a note. One row of
+  // answers under the thumb, never a second line of them.
   const more = [
     ...(approval.always
       ? [{ label: `Always allow ${approval.always.label}`, run: () => void answer(true, true) }]
       : []),
-    ...(compact ? [{ label: 'Deny with note…', run: () => setNoting(true) }] : []),
+    { label: 'Deny with note…', run: () => setNoting(true) },
   ];
+
+  if (!pending) {
+    return (
+      <Receipt
+        icon={approval.status === 'allowed' ? 'checkmark' : 'xmark'}
+        title={approval.title}
+        outcome={outcome}
+        ok={approval.status === 'allowed'}
+      >
+        {!!approval.detail && <Command text={approval.detail} lines={12} />}
+      </Receipt>
+    );
+  }
 
   return (
     <Animated.View
       layout={LinearTransition.duration(220)}
       onLayout={fit.onCardLayout}
-      style={[cardStyles.card, pending && cardStyles.cardPending]}
+      style={cardStyles.card}
     >
       {!fit.pinned && (
         // The pin above the chat shows the question while this can't fit whole.
-        <View onLayout={fit.onHeadLayout} style={{ gap: space.md }}>
-          {pending && <Eyebrow />}
-          <T variant="subhead" color={colors.textStrong} maxFontSizeMultiplier={2}>
+        <View onLayout={fit.onHeadLayout} style={cardStyles.head}>
+          <Eyebrow />
+          <T variant="headline" color={colors.textStrong} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
             {approval.title}
           </T>
         </View>
@@ -239,19 +260,19 @@ export function ApprovalCard({
       {paused && !fit.pinned && (
         <T
           variant="small"
-          color={colors.textSecondary}
-          maxFontSizeMultiplier={2}
+          color={colors.textMuted}
+          maxFontSizeMultiplier={CARD_TITLE_SCALE}
           onLayout={fit.onAsideLayout}
         >
           It paused here for you. Allow it and it picks up where it left off.
         </T>
       )}
-      {pending && !connected && (
-        <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>
+      {!connected && (
+        <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
           Answer it once your Mac is back. It stays open until then.
         </T>
       )}
-      {pending && noting ? (
+      {noting ? (
         <Animated.View entering={FadeIn.duration(150)} style={{ gap: space.sm }}>
           <TextInput
             autoFocus
@@ -260,7 +281,7 @@ export function ApprovalCard({
             maxLength={500}
             placeholder={`Tell ${agent.name} what to do instead`}
             placeholderTextColor={colors.textMuted}
-            style={cardStyles.noteInput}
+            style={cardStyles.input}
             returnKeyType="send"
             keyboardAppearance={appearance}
             // Return denies with the note, and only once there is one.
@@ -282,7 +303,7 @@ export function ApprovalCard({
             />
           </View>
         </Animated.View>
-      ) : pending ? (
+      ) : (
         <Animated.View
           // Inert, and fading in, until armed: a tap meant for something else lands on nothing.
           entering={FadeIn.duration(ARM_MS)}
@@ -311,33 +332,90 @@ export function ApprovalCard({
               accessibilityHint={approval.detail || undefined}
               style={{ flex: 1 }}
             />
-            {more.length > 0 && (
-              // Never a second Allow under the thumb: anything broader is a
-              // deliberate second step, with what it covers spelled out.
-              <MoreAnswers
-                disabled={off || !armed}
-                onPress={() => choose(approval.title, more, scope ?? undefined)}
-              />
-            )}
-          </View>
-          {!compact && (
-            <Button
-              title="Deny with note…"
-              variant="ghost"
-              disabled={off}
-              focusable={armed}
-              onPress={() => setNoting(true)}
+            {/*
+              Never a second Allow under the thumb: anything broader is a
+              deliberate second step, with what it covers spelled out.
+            */}
+            <MoreAnswers
+              disabled={off || !armed}
+              onPress={() => choose(approval.title, more, scope ?? undefined)}
             />
-          )}
+          </View>
         </Animated.View>
-      ) : (
-        <Animated.View entering={FadeIn.duration(200).delay(100)}>
-          <T
-            variant="small"
-            color={approval.status === 'allowed' ? colors.accentSuccess : colors.textSecondary}
-          >
-            {outcome}
+      )}
+    </Animated.View>
+  );
+}
+
+type IconName = ComponentProps<typeof Icon>['name'];
+
+/**
+ * A card once it's answered: one quiet line, "✓ Allowed · what it asked", so
+ * a finished request doesn't keep the footprint of a live one (three
+ * answered secret cards used to take a screen). Tap for what it was about.
+ */
+export function Receipt({
+  icon,
+  title,
+  outcome,
+  ok,
+  children,
+}: {
+  icon: IconName;
+  title: string;
+  /** `cardOutcome`: its first part leads the line, the whole of it shows when open. */
+  outcome: string;
+  ok: boolean;
+  children?: ReactNode;
+}) {
+  const colors = useColors();
+  const cardStyles = useCardStyles();
+  const [open, setOpen] = useState(false);
+  const cut = outcome.indexOf(' · ');
+  const word = cut < 0 ? outcome : outcome.slice(0, cut);
+  const rest = cut < 0 ? '' : outcome.slice(cut + 3);
+  const tint = ok ? colors.accentSuccess : colors.textSecondary;
+  return (
+    <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.duration(200)}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${outcome}. ${title}`}
+        accessibilityHint={open ? 'Hides the detail' : 'Shows what it was about'}
+        hitSlop={{ top: 10, bottom: 10 }}
+        onPress={() => {
+          tap();
+          setOpen((o) => !o);
+        }}
+        style={({ pressed }) => [cardStyles.receipt, pressed && { opacity: 0.6 }]}
+      >
+        <Icon name={icon} size={iconSize.inline} color={tint} />
+        <T
+          variant="small"
+          color={colors.textSecondary}
+          numberOfLines={open ? undefined : 1}
+          style={{ flexShrink: 1 }}
+        >
+          <T variant="small" color={tint} style={{ fontFamily: fonts.medium }}>
+            {word}
           </T>
+          {' · '}
+          {title}
+        </T>
+        <Icon
+          name={open ? 'chevron.down' : 'chevron.right'}
+          size={iconSize.inline}
+          color={colors.textMuted}
+        />
+      </Pressable>
+      {open && (
+        <Animated.View entering={FadeIn.duration(150)} style={cardStyles.receiptDetail}>
+          {children}
+          {!!rest && (
+            <T variant="small" color={colors.textMuted}>
+              {rest}
+            </T>
+          )}
         </Animated.View>
       )}
     </Animated.View>
@@ -357,11 +435,11 @@ export function MoreAnswers({ disabled, onPress }: { disabled: boolean; onPress:
       onPress={onPress}
       style={({ pressed }) => [
         cardStyles.more,
-        pressed && { backgroundColor: colors.surfaceControl },
+        pressed && { backgroundColor: colors.surfaceControlHover },
         disabled && { opacity: 0.4 },
       ]}
     >
-      <Icon name="ellipsis" size={16} color={colors.textPrimary} fallback={<T>…</T>} />
+      <Icon name="ellipsis" size={iconSize.body} color={colors.textStrong} fallback={<T>…</T>} />
     </Pressable>
   );
 }
@@ -372,7 +450,11 @@ export function Eyebrow({ text = 'NEEDS YOUR OK' }: { text?: string }) {
   const colors = useColors();
   return (
     <View style={cardStyles.eyebrow}>
-      <Icon name="exclamationmark.triangle.fill" size={12} color={colors.accentWarning} />
+      <Icon
+        name="exclamationmark.triangle.fill"
+        size={iconSize.inline}
+        color={colors.accentWarning}
+      />
       <T
         variant="caption"
         color={colors.accentWarning}
@@ -393,62 +475,93 @@ export function Eyebrow({ text = 'NEEDS YOUR OK' }: { text?: string }) {
 export function Command({ text, lines }: { text: string; lines: number }) {
   const cardStyles = useCardStyles();
   const colors = useColors();
+  const [all, setAll] = useState(false);
+  // Long commands are never cut silently: past `lines` they say how many
+  // more there are, and a tap shows the rest.
+  const rows = text.split('\n');
+  const over = rows.length > lines && !all;
   return (
     <View style={cardStyles.cardDetail}>
       <ScrollView
         horizontal
-        showsHorizontalScrollIndicator={false}
+        // Visible, so a line that runs off the edge reads as one to scroll.
+        showsHorizontalScrollIndicator
         contentContainerStyle={cardStyles.cardDetailInner}
       >
-        <T
-          variant="mono"
-          color={colors.textPrimary}
-          selectable
-          numberOfLines={lines}
-          maxFontSizeMultiplier={2}
-        >
-          {text}
+        <T variant="mono" color={colors.textPrimary} selectable maxFontSizeMultiplier={1.5}>
+          {over ? rows.slice(0, lines).join('\n') : text}
         </T>
       </ScrollView>
+      {over && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setAll(true)}
+          hitSlop={{ top: 8, bottom: 8 }}
+          style={cardStyles.showAll}
+        >
+          <T variant="caption" color={colors.textSecondary} style={{ fontFamily: fonts.medium }}>
+            Show all {rows.length} lines
+          </T>
+        </Pressable>
+      )}
     </View>
   );
 }
 
+/**
+ * The card recipe every card shares: 16 in, 12 between its blocks (head,
+ * detail, aside, answers), and inside the head the lines sit tight (eyebrow
+ * → 6 → title → 2 → meta), so it reads as one block, not five stripes.
+ */
 export const useCardStyles = makeStyles((colors) => ({
   card: {
     gap: space.md,
     padding: space.lg,
-    borderRadius: radius.lg + 8,
+    borderRadius: radius.card,
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    borderColor: colors.cardBorder,
   },
-  cardPending: { borderColor: alpha(colors.accentWarning, 0.45) },
+  head: { gap: space.tight },
   eyebrow: { flexDirection: 'row', gap: space.tight, alignItems: 'center' },
   eyebrowText: { fontFamily: fonts.semibold, letterSpacing: 0.6 },
   cardDetail: {
     backgroundColor: colors.surfaceApp,
-    borderRadius: radius.card,
+    borderRadius: radius.inner,
     overflow: 'hidden',
   },
   cardDetailInner: { padding: space.md },
+  showAll: { paddingHorizontal: space.md, paddingBottom: space.sm },
   actions: { flexDirection: 'row', gap: space.sm },
   more: {
     width: 44,
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth * 2,
-    borderColor: colors.borderStrong,
+    borderRadius: radius.control,
+    backgroundColor: colors.surfaceControl,
   },
-  noteInput: {
+  /** Every text field in a card or a sheet: clearly a field, on a panel, in either appearance. */
+  input: {
+    minHeight: 44,
     fontFamily: fonts.regular,
     fontSize: type.body,
-    color: colors.textPrimary,
-    backgroundColor: colors.surfaceControl,
-    borderRadius: radius.card,
+    color: colors.textBody,
+    backgroundColor: colors.inputFill,
+    borderRadius: radius.inner,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.inputBorder,
     paddingHorizontal: space.md,
-    paddingVertical: space.sm + 2,
+    paddingVertical: 0,
+    textAlignVertical: 'center',
   },
+  receipt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.tight,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    paddingVertical: space.xs,
+  },
+  receiptDetail: { gap: space.sm, paddingTop: space.sm, paddingLeft: space.lg + space['2xs'] },
 }));

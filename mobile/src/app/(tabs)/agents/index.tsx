@@ -40,7 +40,7 @@ import {
   unpair,
 } from '../../../lib/session';
 import { setApp, useApp } from '../../../lib/store';
-import { alpha, chromeScale, radius, space } from '../../../lib/theme';
+import { chromeScale, fonts, iconSize, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
 
 type Row =
@@ -197,9 +197,9 @@ export default function Agents() {
       ListEmptyComponent={
         removed ? undefined : <Empty hasOverview={!!overview} macName={macName} />
       }
-      renderItem={({ item }) =>
+      renderItem={({ item, index }) =>
         item.kind === 'header' ? (
-          <SectionHeader title={item.title} live={live} />
+          <SectionHeader title={item.title} live={live} first={index === 0} />
         ) : item.kind === 'hidden' ? (
           <Pressable
             onPress={() => {
@@ -213,8 +213,8 @@ export default function Agents() {
           >
             <Icon
               name={showHidden ? 'chevron.down' : 'chevron.right'}
-              size={11}
-              color={colors.textSecondary}
+              size={iconSize.inline}
+              color={colors.textMuted}
             />
             <T variant="small" color={colors.textSecondary}>
               Hidden ({item.count})
@@ -244,7 +244,7 @@ export default function Agents() {
           headerLargeTitle: true,
           headerLargeTitleShadowVisible: false,
           headerLargeStyle: { backgroundColor: colors.surfaceApp },
-          headerLargeTitleStyle: { color: colors.textStrong },
+          headerLargeTitleStyle: { fontFamily: fonts.semibold, color: colors.textStrong },
           headerRight: () => (
             <IconButton
               name="gearshape"
@@ -333,11 +333,15 @@ function Summary({ onOpen }: { onOpen?: (agentId: string) => void }) {
       entering={FadeIn.duration(200)}
       exiting={FadeOut.duration(150)}
       layout={LinearTransition.duration(200)}
-      style={[styles.summary, counts.needYou > 0 && styles.summaryUrgent]}
+      style={styles.summary}
       accessibilityRole="summary"
     >
       {counts.needYou > 0 && (
-        <Icon name="exclamationmark.triangle.fill" size={13} color={colors.accentWarning} />
+        <Icon
+          name="exclamationmark.triangle.fill"
+          size={iconSize.inline}
+          color={colors.accentWarning}
+        />
       )}
       <T
         variant="subhead"
@@ -361,7 +365,7 @@ function Summary({ onOpen }: { onOpen?: (agentId: string) => void }) {
 }
 
 /** "NEEDS YOU", or "AGENTS · AS OF 4 MIN AGO" when the Mac isn't answering. */
-function SectionHeader({ title, live }: { title: string; live: boolean }) {
+function SectionHeader({ title, live, first }: { title: string; live: boolean; first: boolean }) {
   const colors = useColors();
   const styles = useStyles();
   useNow(30_000); // re-render to keep "as of" current
@@ -370,8 +374,9 @@ function SectionHeader({ title, live }: { title: string; live: boolean }) {
   return (
     <T
       variant="caption"
-      color={colors.textSecondary}
-      style={styles.section}
+      color={colors.textMuted}
+      // A label belongs to the rows under it: close below, a clear gap above.
+      style={[styles.section, !first && styles.sectionNext]}
       maxFontSizeMultiplier={chromeScale}
       accessibilityRole="header"
     >
@@ -395,7 +400,7 @@ function Refused() {
   // what's true and both ways it happens, not the Mac's own wording too.
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.refused}>
-      <T variant="subhead" color={colors.textStrong}>
+      <T variant="headline" color={colors.textStrong}>
         {removed
           ? `Not paired with ${name} any more`
           : link.reason === 'update_app'
@@ -471,9 +476,10 @@ const useStyles = makeStyles((colors) => ({
   section: {
     paddingHorizontal: space.lg,
     paddingTop: space.lg,
-    paddingBottom: space.tight,
+    paddingBottom: space.xs,
     letterSpacing: 0.4,
   },
+  sectionNext: { paddingTop: space.xl },
   hiddenToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -486,26 +492,25 @@ const useStyles = makeStyles((colors) => ({
     alignItems: 'center',
     gap: space.sm,
     marginHorizontal: space.lg,
-    marginTop: space.sm,
+    marginTop: space.md,
     paddingLeft: space.lg,
-    paddingRight: space.sm,
+    paddingRight: space.md,
     paddingVertical: space.sm,
-    minHeight: 52,
-    borderRadius: radius.lg,
+    minHeight: 56,
+    borderRadius: radius.card,
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.cardBorder,
   },
-  summaryUrgent: { borderColor: alpha(colors.accentWarning, 0.45) },
   refused: {
     marginHorizontal: space.lg,
     marginBottom: space.md,
     padding: space.lg,
     gap: space.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    borderColor: colors.cardBorder,
   },
   emptyCentered: {
     flex: 1,
@@ -522,7 +527,7 @@ const useStyles = makeStyles((colors) => ({
   splitList: {
     width: 360,
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: colors.borderSubtle,
+    borderRightColor: colors.borderDefault,
   },
   splitChat: { flex: 1 },
   toast: {
@@ -537,7 +542,7 @@ const useStyles = makeStyles((colors) => ({
     paddingVertical: space.xs,
     paddingRight: space.xs,
     minHeight: 48,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     backgroundColor: colors.surfaceSelected,
   },
 }));

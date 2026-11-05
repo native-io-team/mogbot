@@ -39,7 +39,7 @@ function NavigationTheme({ children }: { children: ReactNode }) {
         ...base.colors,
         background: colors.surfaceApp,
         card: colors.surfaceApp,
-        border: colors.borderDefault,
+        border: colors.borderSubtle,
         text: colors.textPrimary,
         primary: accent,
       },
@@ -86,15 +86,16 @@ function Screens() {
                   contentStyle: { backgroundColor: colors.black },
                 }}
               />
-              {/*
-              The app colour rather than the panel's, so its grouped
-              sections (panel colour) still read as cards.
-            */}
+              {/* Every sheet and grouped screen: panel behind, groups on surfaceGroup. */}
+              <Stack.Screen name="connection" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen
-                name="connection"
-                options={sheet(colors, [0.75, 1], colors.surfaceApp)}
+                name="settings"
+                options={{
+                  title: 'Settings',
+                  headerStyle: { backgroundColor: colors.surfacePanel },
+                  contentStyle: { backgroundColor: colors.surfacePanel },
+                }}
               />
-              <Stack.Screen name="settings" options={{ title: 'Settings' }} />
             </Stack>
             <MenuHost />
           </NavigationTheme>

@@ -14,7 +14,7 @@ import { Icon, T } from '../../../components/ui';
 import { formatAgo } from '../../../lib/agents';
 import { canCall, describeError, search } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
-import { fonts, space } from '../../../lib/theme';
+import { avatarSize, fonts, iconSize, space } from '../../../lib/theme';
 import { useColors } from '../../../lib/appearance';
 
 interface Group {
@@ -111,8 +111,12 @@ export default function Search() {
         contentContainerStyle={{ paddingBottom: space['2xl'] }}
         renderSectionHeader={({ section }) => (
           <View style={styles.group}>
-            <AgentAvatar name={section.name} color={section.color} size={22} />
-            <T variant="small" color={colors.textStrong} style={{ flex: 1 }}>
+            <AgentAvatar name={section.name} color={section.color} size={avatarSize.group} />
+            <T
+              variant="small"
+              color={colors.textStrong}
+              style={{ flex: 1, fontFamily: fonts.semibold }}
+            >
               {section.name}
             </T>
             <T variant="caption" color={colors.textMuted}>
@@ -180,13 +184,19 @@ function EmptyNote({ title, body, icon }: { title: string; body: string; icon?: 
   const colors = useColors();
   return (
     <View style={styles.emptyNote}>
-      {icon && <Icon name="magnifyingglass" size={28} color={colors.textMuted} />}
-      <T variant="title" color={colors.textStrong} style={styles.centerText}>
-        {title}
-      </T>
-      <T color={colors.textSecondary} style={styles.centerText}>
-        {body}
-      </T>
+      {icon && (
+        <View style={styles.emptyIcon}>
+          <Icon name="magnifyingglass" size={iconSize.hero} color={colors.textMuted} />
+        </View>
+      )}
+      <View style={styles.emptyWords}>
+        <T variant="title" color={colors.textStrong} style={styles.centerText}>
+          {title}
+        </T>
+        <T color={colors.textSecondary} style={styles.centerText}>
+          {body}
+        </T>
+      </View>
     </View>
   );
 }
@@ -226,9 +236,11 @@ const styles = StyleSheet.create({
     paddingTop: space.lg,
     paddingBottom: space.tight,
   },
-  hit: { paddingHorizontal: space.lg, paddingVertical: space.sm, gap: space['2xs'] },
+  hit: { paddingHorizontal: space.lg, paddingVertical: space.md, gap: space['2xs'] },
   hitTop: { flexDirection: 'row', justifyContent: 'space-between' },
   empty: { padding: space.xl, paddingTop: space['2xl'] * 2, alignItems: 'center' },
-  emptyNote: { alignItems: 'center', gap: space.sm, maxWidth: 320 },
+  emptyNote: { alignItems: 'center', maxWidth: 320 },
+  emptyIcon: { marginBottom: space.md },
+  emptyWords: { alignItems: 'center', gap: space.tight },
   centerText: { textAlign: 'center' },
 });

@@ -23,6 +23,7 @@ import {
   alpha,
   chromeScale,
   fonts,
+  iconSize,
   lineHeight,
   radius,
   space,
@@ -56,7 +57,12 @@ function strongerOf(colors: Palette): Record<string, string> {
   return map;
 }
 
-type Variant = 'body' | 'small' | 'caption' | 'subhead' | 'title' | 'display' | 'mono';
+/**
+ * Hierarchy is carried by weight, not colour: a name or a card's title is
+ * `headline` (16 semibold) over a `small` secondary line, and metadata is a
+ * muted `caption`. One coloured element per row at most, never a whole line.
+ */
+type Variant = 'body' | 'small' | 'caption' | 'subhead' | 'headline' | 'title' | 'display' | 'mono';
 
 const variants = StyleSheet.create({
   body: { fontFamily: fonts.regular, fontSize: type.body, lineHeight: lineHeight(type.body, 1.5) },
@@ -70,6 +76,11 @@ const variants = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: type.subhead,
     lineHeight: lineHeight(type.subhead, 1.3),
+  },
+  headline: {
+    fontFamily: fonts.semibold,
+    fontSize: type.subhead,
+    lineHeight: lineHeight(type.subhead, 1.375),
   },
   title: {
     fontFamily: fonts.semibold,
@@ -118,11 +129,12 @@ type ButtonColors = { bg: string; pressed: string; fg: string; border?: string }
 const buttonColorsOf = (
   colors: Palette
 ): Record<Exclude<ButtonVariant, 'primary' | 'answer'>, ButtonColors> => ({
+  // Filled neutral, not outlined: beside a filled Allow it reads as the same
+  // family of control, as Grok's pair does.
   secondary: {
-    bg: 'transparent',
-    pressed: colors.surfaceControl,
-    fg: colors.textPrimary,
-    border: colors.borderStrong,
+    bg: colors.surfaceControl,
+    pressed: colors.surfaceControlHover,
+    fg: colors.textStrong,
   },
   ghost: { bg: 'transparent', pressed: colors.surfaceControl, fg: colors.textSecondary },
   danger: {
@@ -196,7 +208,7 @@ export function Button({
         <ActivityIndicator size="small" color={c.fg} />
       ) : (
         <>
-          {icon && <Icon name={icon} size={16} color={c.fg} />}
+          {icon && <Icon name={icon} size={iconSize.body} color={c.fg} />}
           <T
             variant={size === 'compact' ? 'small' : 'subhead'}
             color={c.fg}
@@ -213,6 +225,9 @@ export function Button({
 }
 
 type SFName = Extract<SymbolViewProps['name'], string>;
+
+/** Only the sizes in `iconSize`: a 13 or a 15 is a typo in the system, so the type refuses it. */
+type IconSize = (typeof iconSize)[keyof typeof iconSize];
 
 /**
  * Each SF Symbol the app draws, as the Material Symbol Android draws in its
@@ -267,12 +282,12 @@ const MATERIAL: Partial<Record<SFName, string>> = {
 /** An SF Symbol on iOS, its Material Symbol on Android; `fallback` if neither exists. */
 export function Icon({
   name,
-  size = 18,
+  size = iconSize.body,
   color,
   fallback,
 }: {
   name: SFName;
-  size?: number;
+  size?: IconSize;
   color?: string;
   fallback?: ReactNode;
 }) {
@@ -313,14 +328,14 @@ export function IconButton({
   label,
   onPress,
   color: tint,
-  size = 18,
+  size = iconSize.button,
   fallback,
 }: {
   name: SFName;
   label: string;
   onPress: () => void;
   color?: string;
-  size?: number;
+  size?: IconSize;
   fallback?: string;
 }) {
   const colors = useColors();
@@ -419,6 +434,8 @@ export function Section({
   );
 }
 
+const LONG_VALUE = 18;
+
 export function Row({
   label,
   value,
@@ -446,6 +463,9 @@ export function Row({
   const colors = useColors();
   const styles = useStyles();
   const ripple = useRipple();
+  // A value too long to sit beside its label goes under it, rather than
+  // squeezing the label onto two lines.
+  const long = value != null && value.length > LONG_VALUE;
   return (
     <Pressable
       disabled={!onPress}
@@ -455,34 +475,66 @@ export function Row({
       android_ripple={onPress ? ripple : undefined}
       style={({ pressed }) => [
         styles.row,
-        !last && styles.rowDivider,
-        pressed && { backgroundColor: colors.surfaceControl },
+        pressed && { backgroundColor: colors.surfaceGroupPressed },
       ]}
     >
       {leading}
-      {detail ? (
-        <View style={{ flex: 1, gap: space['2xs'] }}>
-          <T color={destructive ? colors.accentErrorLight : colors.textPrimary}>{label}</T>
-          <T variant="small" color={colors.textSecondary}>
-            {detail}
-          </T>
+      {detail || long ? (
+        <View style={styles.rowText}>
+          <T color={destructive ? colors.accentErrorLight : colors.textBody}>{label}</T>
+          {!!detail && (
+            <T variant="small" color={colors.textMuted}>
+              {detail}
+            </T>
+          )}
+          {long && (
+            <T variant="small" color={colors.textSecondary}>
+              {value}
+            </T>
+          )}
         </View>
       ) : (
-        <T color={destructive ? colors.accentErrorLight : colors.textPrimary} style={{ flex: 1 }}>
+        <T color={destructive ? colors.accentErrorLight : colors.textBody} style={{ flex: 1 }}>
           {label}
         </T>
       )}
-      {value != null && (
+      {value != null && !long && (
         <T color={colors.textSecondary} numberOfLines={1} style={styles.rowValue}>
           {value}
         </T>
       )}
       {trailing}
       {onPress && !destructive && !trailing && (
-        <Icon name="chevron.right" size={12} color={colors.textMuted} />
+        <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
       )}
+      {/* Inset from the leading edge, as iOS draws a group's dividers. */}
+      {!last && <View style={styles.rowDivider} />}
     </Pressable>
   );
+}
+
+/**
+ * A sheet's page. Its colour reaches past the bottom of the view, under the
+ * home indicator and into the display's rounded corners, so no strip of the
+ * native sheet's own background can show below the content as a square band.
+ */
+export function SheetPage({ children }: { children: ReactNode }) {
+  const styles = useStyles();
+  return (
+    <View style={styles.sheetPage}>
+      <View pointerEvents="none" style={styles.sheetBleed} />
+      {children}
+    </View>
+  );
+}
+
+/** How far a sheet's colour runs past its view: more than any home indicator's inset. */
+const SHEET_BLEED = 160;
+
+/** A group's divider, inset from the leading edge as iOS draws it. Put it last in a row. */
+export function InsetDivider() {
+  const styles = useStyles();
+  return <View style={styles.rowDivider} />;
 }
 
 /** Mutually exclusive filters, as the desktop's SegmentedControl. */
@@ -510,6 +562,7 @@ export function Segmented<V extends string>({
               if (!on) tap();
               onChange(o.value);
             }}
+            hitSlop={4}
             style={[styles.segment, on && styles.segmentOn]}
           >
             <T variant="small" color={on ? colors.textStrong : colors.textSecondary}>
@@ -527,17 +580,15 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     padding: space['2xs'],
     gap: space['2xs'],
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfacePanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderRadius: radius.control,
+    backgroundColor: colors.surfaceControl,
   },
   segment: {
     flex: 1,
-    minHeight: 32,
+    minHeight: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.lg - 2,
+    borderRadius: radius.inner,
   },
   segmentOn: { backgroundColor: colors.surfaceSelected },
   button: {
@@ -545,7 +596,7 @@ const useStyles = makeStyles((colors) => ({
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     borderWidth: StyleSheet.hairlineWidth * 2,
     paddingVertical: space.xs,
     overflow: 'hidden',
@@ -558,12 +609,11 @@ const useStyles = makeStyles((colors) => ({
     justifyContent: 'center',
   },
   section: { marginBottom: space.xl },
-  sectionTitle: { marginLeft: space.lg, marginBottom: space.tight, letterSpacing: 0.4 },
+  sectionTitle: { marginLeft: space.lg, marginBottom: space.sm, letterSpacing: 0.4 },
+  // Groups sit on a sheet or a grouped screen (surfacePanel): fill, no line.
   sectionBody: {
-    backgroundColor: colors.surfacePanel,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    backgroundColor: colors.surfaceGroup,
+    borderRadius: radius.card,
     overflow: 'hidden',
   },
   sectionFooter: { marginHorizontal: space.lg, marginTop: space.sm },
@@ -575,9 +625,23 @@ const useStyles = makeStyles((colors) => ({
     alignItems: 'center',
     gap: space.md,
   },
-  rowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
+  rowText: { flex: 1, gap: space['2xs'] },
+  sheetPage: { flex: 1, backgroundColor: colors.surfacePanel },
+  sheetBleed: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: -SHEET_BLEED,
+    backgroundColor: colors.surfacePanel,
   },
-  rowValue: { maxWidth: '55%', textAlign: 'right' },
+  rowDivider: {
+    position: 'absolute',
+    left: space.lg,
+    right: 0,
+    bottom: 0,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderDefault,
+  },
+  rowValue: { maxWidth: '45%', textAlign: 'right' },
 }));

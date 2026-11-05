@@ -12,7 +12,7 @@ import { ActionSheetIOS, Modal, Platform, Pressable, StyleSheet, View } from 're
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Action } from '../lib/actions';
-import { radius, space } from '../lib/theme';
+import { iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Icon, useRipple, T } from './ui';
 
@@ -148,12 +148,12 @@ export function MenuHost() {
                 {a.icon && (
                   <Icon
                     name={a.icon}
-                    size={20}
+                    size={iconSize.button}
                     color={a.destructive ? colors.accentErrorLight : colors.textSecondary}
                   />
                 )}
                 <T
-                  color={a.destructive ? colors.accentErrorLight : colors.textPrimary}
+                  color={a.destructive ? colors.accentErrorLight : colors.textBody}
                   style={{ flexShrink: 1 }}
                 >
                   {a.title}
@@ -185,12 +185,12 @@ const useStyles = makeStyles((colors) => ({
     right: 0,
     bottom: 0,
     backgroundColor: colors.surfacePanel,
-    borderTopLeftRadius: radius.lg + 8,
-    borderTopRightRadius: radius.lg + 8,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     paddingTop: space.sm,
   },
-  title: { paddingHorizontal: space.xl, paddingVertical: space.md },
-  message: { paddingHorizontal: space.xl, paddingBottom: space.md, marginTop: -space.sm },
+  title: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.sm },
+  message: { paddingHorizontal: space.xl, paddingBottom: space.md },
   item: {
     minHeight: 52,
     flexDirection: 'row',
