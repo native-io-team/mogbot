@@ -53,7 +53,7 @@
 }
 
 .toast.toast-info .toast-icon {
-  color: var(--accent-active);
+  color: var(--status-info);
 }
 
 @keyframes toast-slide-in {

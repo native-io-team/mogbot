@@ -42,7 +42,6 @@ import { AgentModelMenu } from './AgentModelMenu';
 import { TextArea } from '../primitives/TextField';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
-import { AgentsStayOnNote } from './AgentsStayOn';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
@@ -109,12 +108,39 @@ import {
 } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { useAccentScope } from '../../lib/accent';
+import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 
 /**
- * First open: one-click ways in. Importing isn't the Chief's job (the other
- * assistant does it), so that one opens the import steps instead.
+ * The Chief's first open: one-click answers to its greeting. Importing isn't
+ * the Chief's job (the other assistant does it), so that one opens the import
+ * steps instead.
  */
-const STARTERS = ['Set up my team', 'What can you do?'];
+const STARTERS = ['Help me plan my week', 'Set up a daily brief', 'What can you do?'];
+
+function ChiefStarters({
+  onStart,
+  onImport,
+}: {
+  onStart: (text: string) => void;
+  /** With no sidebar to hold the import note, the starters offer it. */
+  onImport?: () => void;
+}) {
+  return (
+    <div className="agent-chat__starters">
+      {STARTERS.map((text) => (
+        <Button key={text} tabIndex={0} variant="secondary" onClick={() => onStart(text)}>
+          {text}
+        </Button>
+      ))}
+      {onImport && (
+        <Button tabIndex={0} variant="secondary" onClick={onImport}>
+          Import agents…
+        </Button>
+      )}
+    </div>
+  );
+}
 /** Any other agent's first open: what to ask a new teammate. */
 const AGENT_STARTERS = ['What’s on your plate?', 'Check in with me tomorrow at 9'];
 
@@ -206,11 +232,17 @@ export function AgentChat({
   onJumped,
   ...actions
 }: AgentChatProps) {
+  // Everything in this conversation takes on the agent's colour.
+  const accentScope = useAccentScope(agent.color);
   // This chat's slices only: another agent's reply streaming doesn't touch it.
   const messages = useAgentsSelector((s) => s.messages[agent.id]);
   const rawDraft = useAgentsSelector((s) => s.drafts[agent.id]);
   const engineReady = useAgentsSelector((s) =>
     engineIsReady(agent.engine, s.engines, s.engineReady)
+  );
+  /** Installed but signed out: the blocked composer offers sign-in, not an install. */
+  const engineInstalled = useAgentsSelector(
+    (s) => s.engines.find((e) => e.id === agent.engine)?.installed ?? false
   );
   // An engine whose turns can't stop to ask refuses instead: said where you talk to it.
   const cantAsk = useAgentsSelector((s) => engineCantAsk(agent.engine, s.engines));
@@ -390,6 +422,12 @@ export function AgentChat({
   }, [colorKey]);
 
   const items = useMemo(() => buildChatItems(shown), [shown]);
+  /** Nothing yet but what the Chief said first: the user hasn't spoken. */
+  const greetingOnly =
+    agent.isMain &&
+    shown.length > 0 &&
+    shown.every((m) => m.kind === 'agent') &&
+    agent.status.state === 'idle';
   const livePeerLines = useMemo(() => newestPeerGroups(items), [items]);
   const drivingId = useMemo(() => drivingBriefId(items, agent), [items, agent]);
   // Retry belongs to the newest failure only, and only if nothing was said
@@ -699,7 +737,9 @@ export function AgentChat({
     const previous = el.style.height;
     el.style.transition = 'none';
     el.style.height = 'auto';
-    const next = `${Math.min(el.scrollHeight, 180)}px`;
+    // The cap is CSS's (about eight lines); past it the field scrolls.
+    const cap = parseFloat(getComputedStyle(el).maxHeight) || 180;
+    const next = `${Math.min(el.scrollHeight, cap)}px`;
     el.style.height = previous || next;
     void el.offsetHeight;
     el.style.transition = '';
@@ -866,270 +906,266 @@ export function AgentChat({
   );
 
   return (
-    <section
-      ref={sectionRef}
-      className="agent-chat"
-      data-color={agent.color}
-      data-dropping={dropping || undefined}
-      aria-label={`Conversation with ${agent.name}`}
-      {...dropHandlers}
-    >
-      <header className="agent-chat__header">
-        {compact && (
-          <CompactModeToggle
-            mode="agents"
-            onProjects={compact.onGoProjects}
-            className="agent-chat__mode"
-          />
-        )}
-        {compact ? (
-          <AgentSwitcher
-            agents={compact.agents}
-            currentId={agent.id}
-            title={title}
-            label={`${agent.name}. Switch agent`}
-            onOpenAgent={onOpenAgent}
-            onGoHome={compact.onGoHome}
-          />
-        ) : (
-          <div className="agent-chat__title">
-            {title}
-            {/* Not in the compact switcher: it's a button already. */}
-            <AgentProjectChip agent={agent} />
-          </div>
-        )}
-        <div className="agent-chat__actions">
-          {/* Nothing to schedule or pick a model for until Claude Code is here. */}
-          {engineReady && (
-            <>
-              <AgentSchedulePopover
-                agent={agent}
-                open={scheduleOpen}
-                onOpenChange={setScheduleOpen}
-              />
-              <AgentModelMenu agent={agent} />
-            </>
-          )}
-          <Dropdown
-            align="right"
-            portal
-            className="agent-chat__menu"
-            trigger={(p) => (
-              <IconButton
-                {...p}
-                tabIndex={0}
-                variant="ghost"
-                icon={<MoreHorizontalIcon size={14} />}
-                title="Agent actions"
-                aria-label={`Actions for ${agent.name}`}
-              />
-            )}
-          >
-            <AgentActionItems
-              agent={agent}
-              kind="dropdown"
-              onSchedule={engineReady ? () => setScheduleOpen(true) : undefined}
-              onFiles={() => setFilesOpen(true)}
-              {...actions}
+    <AccentScopeProvider scope={accentScope}>
+      <section
+        ref={sectionRef}
+        className="agent-chat"
+        data-color={agent.color}
+        data-dropping={dropping || undefined}
+        aria-label={`Conversation with ${agent.name}`}
+        {...accentScope}
+        {...dropHandlers}
+      >
+        <header className="agent-chat__header">
+          {compact && (
+            <CompactModeToggle
+              mode="agents"
+              onProjects={compact.onGoProjects}
+              className="agent-chat__mode"
             />
-          </Dropdown>
-          <AgentFilesModal agent={agent} isOpen={filesOpen} onClose={() => setFilesOpen(false)} />
-          <RememberModal
-            key={remembering?.id ?? 'none'}
-            agent={agent}
-            message={remembering}
-            onClose={() => setRemembering(null)}
-          />
-        </div>
-      </header>
-
-      <div className="agent-chat__scroll" ref={scrollRef} onScroll={onScroll}>
-        <div className="agent-chat__messages" ref={messagesRef}>
-          {items.length === 0 ? (
-            <div className="agent-chat__empty">
-              <AgentAvatar name={agent.name} color={agent.color} size="hero" selected />
-              <p className="agent-chat__empty-name">{agent.name}</p>
-              {agent.isMain ? (
-                <>
-                  <p className="agent-chat__empty-role">
-                    Your Chief of Staff builds and runs your team: it sets up agents for your
-                    projects, briefs them, and tracks their work.
-                  </p>
-                  {engineReady && (
-                    <div className="agent-chat__starters">
-                      {STARTERS.map((text) => (
-                        <Button
-                          key={text}
-                          tabIndex={0}
-                          variant="secondary"
-                          onClick={() => sendStarter(text)}
-                        >
-                          {text}
-                        </Button>
-                      ))}
-                      {/* The sidebar's import note is the way in; with no sidebar, this is. */}
-                      {compact && (
-                        <Button tabIndex={0} variant="secondary" onClick={onImport}>
-                          Import agents…
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                  <AgentsStayOnNote />
-                </>
-              ) : (
-                <>
-                  {agent.role && <p className="agent-chat__empty-role">{agent.role}</p>}
-                  <TextButton tabIndex={0} onClick={() => actions.onEdit(agent)}>
-                    View instructions
-                  </TextButton>
-                  {engineReady && (
-                    <div className="agent-chat__starters">
-                      {AGENT_STARTERS.map((text) => (
-                        <Button
-                          key={text}
-                          tabIndex={0}
-                          variant="secondary"
-                          onClick={() => sendStarter(text)}
-                        >
-                          {text}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+          )}
+          {compact ? (
+            <AgentSwitcher
+              agents={compact.agents}
+              currentId={agent.id}
+              title={title}
+              label={`${agent.name}. Switch agent`}
+              onOpenAgent={onOpenAgent}
+              onGoHome={compact.onGoHome}
+            />
           ) : (
-            rows
+            <div className="agent-chat__title">
+              {title}
+              {/* Not in the compact switcher: it's a button already. */}
+              <AgentProjectChip agent={agent} />
+            </div>
           )}
-          {items.length === 0 && indicator.mounted && (
-            <WorkingIndicator
-              activity={agent.status.activity}
-              entering={indicator.entering}
-              leaving={indicator.leaving}
-              onExited={indicator.onExited}
-            />
-          )}
-        </div>
-      </div>
-
-      <div className="agent-chat__footer">
-        {jump.mounted && (
-          <IconButton
-            tabIndex={0}
-            size="compact"
-            className="agent-chat__jump"
-            data-leaving={jump.leaving || undefined}
-            onAnimationEnd={jump.leaving ? jump.onExited : undefined}
-            icon={<ArrowDownIcon size={14} />}
-            onClick={scrollToBottom}
-            aria-label="Jump to latest"
-            title="Jump to latest"
-          />
-        )}
-
-        {blocked && (
-          <p className="agent-composer__notice" role="alert">
-            <span>{blocked.message}</span>
-            {blocked.settings && (
-              <TextButton
-                variant="accent"
-                onClick={() => {
-                  const url = blocked.settings;
-                  if (url) void openPrivacySettings(url);
-                }}
-              >
-                Open System Settings
-              </TextButton>
+          <div className="agent-chat__actions">
+            {/* Nothing to schedule or pick a model for until Claude Code is here. */}
+            {engineReady && (
+              <>
+                <AgentSchedulePopover
+                  agent={agent}
+                  open={scheduleOpen}
+                  onOpenChange={setScheduleOpen}
+                />
+                <AgentModelMenu agent={agent} />
+              </>
             )}
-            <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
-          </p>
-        )}
-
-        {engineReady && cantAsk && (
-          <p className="agent-composer__notice" data-testid="agent-cant-ask">
-            {cantAsk}
-          </p>
-        )}
-
-        {engineReady && (
-          <AgentSecretHint
-            agentId={agent.id}
-            agentName={agent.name}
-            draft={draft}
-            setDraft={setDraft}
-          />
-        )}
-
-        {engineReady ? (
-          <form
-            className="agent-composer"
-            data-dictation={dictation.phase}
-            data-has-attachments={staged.length > 0 || quotes.length > 0 || undefined}
-            onSubmit={(e) => {
-              e.preventDefault();
-              send();
-            }}
-          >
-            {mentionPicker.menu}
-            <ComposerQuotes quotes={quotes} onRemove={removeQuote} />
-            <ComposerAttachments items={staged} onRemove={attachments.remove} />
-            <TextArea
-              ref={inputRef}
-              className="agent-composer__input"
-              rows={1}
-              value={draft}
-              placeholder={dictating ? '' : `Message ${agent.name}`}
-              readOnly={dictating}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                mentionPicker.sync();
-              }}
-              onSelect={mentionPicker.sync}
-              onPaste={attachments.onPaste}
-              onKeyDown={(e) => {
-                if (dictation.onComposerKeyDown(e)) return;
-                if (mentionPicker.onKeyDown(e)) return;
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  send(e.metaKey);
-                } else if (e.key === 'Escape' && onEscape?.()) {
-                  e.preventDefault();
-                } else if (e.key === 'Escape' && working && !canSend) {
-                  e.preventDefault();
-                  if (escArmed) {
-                    setEscArmed(false);
-                    void onStop();
-                  } else {
-                    setEscArmed(true);
-                  }
-                }
-              }}
-              aria-label={`Message ${agent.name}`}
-            />
-            <div className="agent-composer__bar">
-              {dictating ? (
-                <span className="agent-composer__listening" role="status">
-                  <span className="agent-composer__listening-dot" aria-hidden />
-                  {dictation.phase === 'finishing' ? 'Finishing…' : 'Listening'}
-                  <span aria-hidden>·</span>
-                  <TextButton tabIndex={0} onClick={dictation.cancel}>
-                    Cancel
-                  </TextButton>
-                </span>
-              ) : (
+            <Dropdown
+              align="right"
+              portal
+              className="agent-chat__menu"
+              trigger={(p) => (
                 <IconButton
+                  {...p}
                   tabIndex={0}
                   variant="ghost"
-                  className="agent-composer__attach"
-                  icon={<PaperclipIcon size={14} />}
-                  onClick={pickFiles}
-                  aria-label="Attach files"
-                  title="Attach files, or paste or drop them here"
+                  icon={<MoreHorizontalIcon size={14} />}
+                  title="Agent actions"
+                  aria-label={`Actions for ${agent.name}`}
                 />
               )}
-              <div className="agent-composer__actions">
+            >
+              <AgentActionItems
+                agent={agent}
+                kind="dropdown"
+                onSchedule={engineReady ? () => setScheduleOpen(true) : undefined}
+                onFiles={() => setFilesOpen(true)}
+                {...actions}
+              />
+            </Dropdown>
+            <AgentFilesModal agent={agent} isOpen={filesOpen} onClose={() => setFilesOpen(false)} />
+            <RememberModal
+              key={remembering?.id ?? 'none'}
+              agent={agent}
+              message={remembering}
+              onClose={() => setRemembering(null)}
+            />
+          </div>
+        </header>
+
+        <div className="agent-chat__scroll" ref={scrollRef} onScroll={onScroll}>
+          <div className="agent-chat__messages" ref={messagesRef}>
+            {items.length === 0 ? (
+              <div className="agent-chat__empty">
+                <AgentAvatar name={agent.name} color={agent.color} size="hero" selected />
+                <p className="agent-chat__empty-name">{agent.name}</p>
+                {agent.isMain ? (
+                  <>
+                    <p className="agent-chat__empty-role">
+                      Tell me what you’re working on and I’ll put a team together. I create agents,
+                      hand them the work, and bring you what comes back.
+                    </p>
+                    {engineReady && (
+                      <ChiefStarters
+                        onStart={sendStarter}
+                        onImport={compact ? onImport : undefined}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {agent.role && <p className="agent-chat__empty-role">{agent.role}</p>}
+                    <p className="agent-chat__empty-hint">
+                      It remembers what you tell it. Anything risky comes to you first, as an Allow
+                      or Deny card.
+                    </p>
+                    <TextButton tabIndex={0} onClick={() => actions.onEdit(agent)}>
+                      View instructions
+                    </TextButton>
+                    {engineReady && (
+                      <div className="agent-chat__starters">
+                        {AGENT_STARTERS.map((text) => (
+                          <Button
+                            key={text}
+                            tabIndex={0}
+                            variant="secondary"
+                            onClick={() => sendStarter(text)}
+                          >
+                            {text}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              rows
+            )}
+            {/* The Chief spoke first (its stored greeting); the ways in sit
+              under it until the user says something. */}
+            {greetingOnly && engineReady && (
+              <ChiefStarters onStart={sendStarter} onImport={compact ? onImport : undefined} />
+            )}
+            {items.length === 0 && indicator.mounted && (
+              <WorkingIndicator
+                activity={agent.status.activity}
+                entering={indicator.entering}
+                leaving={indicator.leaving}
+                onExited={indicator.onExited}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="agent-chat__footer">
+          {jump.mounted && (
+            <IconButton
+              tabIndex={0}
+              size="compact"
+              className="agent-chat__jump"
+              data-leaving={jump.leaving || undefined}
+              onAnimationEnd={jump.leaving ? jump.onExited : undefined}
+              icon={<ArrowDownIcon size={14} />}
+              onClick={scrollToBottom}
+              aria-label="Jump to latest"
+              title="Jump to latest"
+            />
+          )}
+
+          {blocked && (
+            <p className="agent-composer__notice" role="alert">
+              <span>{blocked.message}</span>
+              {blocked.settings && (
+                <TextButton
+                  variant="accent"
+                  onClick={() => {
+                    const url = blocked.settings;
+                    if (url) void openPrivacySettings(url);
+                  }}
+                >
+                  Open System Settings
+                </TextButton>
+              )}
+              <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
+            </p>
+          )}
+
+          {engineReady && cantAsk && (
+            <p className="agent-composer__notice" data-testid="agent-cant-ask">
+              {cantAsk}
+            </p>
+          )}
+
+          {engineReady && (
+            <AgentSecretHint
+              agentId={agent.id}
+              agentName={agent.name}
+              draft={draft}
+              setDraft={setDraft}
+            />
+          )}
+
+          {engineReady ? (
+            <form
+              className="agent-composer"
+              data-dictation={dictation.phase}
+              data-has-attachments={staged.length > 0 || quotes.length > 0 || undefined}
+              onSubmit={(e) => {
+                e.preventDefault();
+                send();
+              }}
+            >
+              {mentionPicker.menu}
+              <ComposerQuotes quotes={quotes} onRemove={removeQuote} />
+              <ComposerAttachments items={staged} onRemove={attachments.remove} />
+              <TextArea
+                ref={inputRef}
+                className="agent-composer__input"
+                rows={1}
+                value={draft}
+                placeholder={dictating ? '' : `Message ${agent.name}`}
+                readOnly={dictating}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  mentionPicker.sync();
+                }}
+                onSelect={mentionPicker.sync}
+                onPaste={attachments.onPaste}
+                onKeyDown={(e) => {
+                  if (dictation.onComposerKeyDown(e)) return;
+                  if (mentionPicker.onKeyDown(e)) return;
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    send(e.metaKey);
+                  } else if (e.key === 'Escape' && onEscape?.()) {
+                    e.preventDefault();
+                  } else if (e.key === 'Escape' && working && !canSend) {
+                    e.preventDefault();
+                    if (escArmed) {
+                      setEscArmed(false);
+                      void onStop();
+                    } else {
+                      setEscArmed(true);
+                    }
+                  }
+                }}
+                aria-label={`Message ${agent.name}`}
+              />
+              <div className="agent-composer__bar">
+                {dictating ? (
+                  <span className="agent-composer__listening" role="status">
+                    <span className="agent-composer__listening-dot" aria-hidden />
+                    {dictation.phase === 'finishing' ? 'Finishing…' : 'Listening'}
+                    <span aria-hidden>·</span>
+                    <TextButton tabIndex={0} onClick={dictation.cancel}>
+                      Cancel
+                    </TextButton>
+                  </span>
+                ) : (
+                  <IconButton
+                    tabIndex={0}
+                    variant="ghost"
+                    className="agent-composer__attach"
+                    icon={<PaperclipIcon size={14} />}
+                    onClick={pickFiles}
+                    aria-label="Attach files"
+                    title="Attach files, or paste or drop them here"
+                  />
+                )}
+                {/* Its own row above the text, so a long hint never squeezes it. */}
                 {escArmed && working && !canSend && !dictating ? (
                   <span className="agent-composer__hint" data-armed role="status">
                     Esc again to stop {agent.name}
@@ -1143,87 +1179,91 @@ export function AgentChat({
                     </span>
                   )
                 )}
-                <IconButton
-                  ref={micRef}
-                  tabIndex={0}
-                  variant="ghost"
-                  className="agent-composer__mic"
-                  icon={<MicrophoneIcon size={14} />}
-                  onClick={dictation.toggle}
-                  disabled={dictation.phase === 'finishing'}
-                  aria-pressed={dictating}
-                  aria-label={dictating ? 'Stop dictating' : 'Dictate'}
-                  title={
-                    dictating ? 'Stop dictating (Esc to discard)' : 'Dictate (⌘⇧D, or hold ⌥Space)'
-                  }
-                />
-                {working && !canSend && !dictating ? (
+                <div className="agent-composer__actions">
                   <IconButton
+                    ref={micRef}
                     tabIndex={0}
-                    variant="secondary"
-                    className="agent-composer__stop"
-                    data-armed={escArmed || undefined}
-                    icon={<span className="agent-composer__stop-square" aria-hidden />}
-                    onClick={() => void onStop()}
-                    aria-label={`Stop ${agent.name}`}
-                    title="Stop (Esc twice)"
-                  />
-                ) : (
-                  <IconButton
-                    tabIndex={0}
-                    type="submit"
-                    variant={canSend && !dictating ? 'primary' : 'secondary'}
-                    className="agent-composer__send"
-                    icon={<ArrowUpIcon size={14} />}
-                    disabled={!canSend || dictating}
-                    aria-label="Send"
+                    variant="ghost"
+                    className="agent-composer__mic"
+                    icon={<MicrophoneIcon size={14} />}
+                    onClick={dictation.toggle}
+                    disabled={dictation.phase === 'finishing'}
+                    aria-pressed={dictating}
+                    aria-label={dictating ? 'Stop dictating' : 'Dictate'}
                     title={
-                      busy
-                        ? `Queue it: ${agent.name} reads it when it finishes (↵). Interrupt and send now: ⌘↵`
-                        : 'Send'
+                      dictating
+                        ? 'Stop dictating (Esc to discard)'
+                        : 'Dictate (⌘⇧D, or hold ⌥Space)'
                     }
                   />
-                )}
+                  {working && !canSend && !dictating ? (
+                    <IconButton
+                      tabIndex={0}
+                      variant="secondary"
+                      className="agent-composer__stop"
+                      data-armed={escArmed || undefined}
+                      icon={<span className="agent-composer__stop-square" aria-hidden />}
+                      onClick={() => void onStop()}
+                      aria-label={`Stop ${agent.name}`}
+                      title="Stop (Esc twice)"
+                    />
+                  ) : (
+                    <IconButton
+                      tabIndex={0}
+                      type="submit"
+                      variant={canSend && !dictating ? 'primary' : 'secondary'}
+                      className="agent-composer__send"
+                      icon={<ArrowUpIcon size={14} />}
+                      disabled={!canSend || dictating}
+                      aria-label="Send"
+                      title={
+                        busy
+                          ? `Queue it: ${agent.name} reads it when it finishes (↵). Interrupt and send now: ⌘↵`
+                          : 'Send'
+                      }
+                    />
+                  )}
+                </div>
               </div>
+            </form>
+          ) : (
+            <div className="agent-composer agent-composer--blocked" role="status">
+              <WarningIcon size={14} className="agent-composer__blocked-icon" />
+              <span className="agent-composer__blocked-text">
+                {engineInstalled
+                  ? `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which is signed out on this Mac.`
+                  : `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which isn’t installed on this Mac yet.`}
+              </span>
+              <Button tabIndex={0} variant="primary" onClick={onSetUpEngine}>
+                {engineInstalled ? 'Sign in' : `Set up ${ENGINE_LABEL[agent.engine]}`}
+              </Button>
             </div>
-          </form>
-        ) : (
-          <div className="agent-composer agent-composer--blocked" role="status">
-            <WarningIcon size={14} className="agent-composer__blocked-icon" />
-            <span className="agent-composer__blocked-text">
-              {agent.engine === 'codex'
-                ? `${agent.name} runs on Codex, which isn’t installed and signed in on this Mac.`
-                : 'Agents run on Claude Code, which isn’t installed on this Mac yet.'}
-            </span>
-            <Button tabIndex={0} variant="primary" onClick={onSetUpEngine}>
-              Set up {ENGINE_LABEL[agent.engine]}
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {quoting.anchor && (
-        <Button
-          size="compact"
-          className="agent-chat__quote"
-          style={{ top: quoting.anchor.top, left: quoting.anchor.left }}
-          // Keep the selection: a mousedown here would otherwise clear it.
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => quoting.quote()}
-        >
-          Quote <kbd className="agent-chat__kbd">⌘L</kbd>
-        </Button>
-      )}
-
-      <div className="agent-chat__drop" aria-hidden={!dropping}>
-        <div className="agent-chat__drop-label">
-          <span className="agent-chat__drop-icon">
-            <PaperclipIcon size={18} />
-          </span>
-          Drop files for {agent.name}
+          )}
         </div>
-      </div>
-    </section>
+
+        {quoting.anchor && (
+          <Button
+            size="compact"
+            className="agent-chat__quote"
+            style={{ top: quoting.anchor.top, left: quoting.anchor.left }}
+            // Keep the selection: a mousedown here would otherwise clear it.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => quoting.quote()}
+          >
+            Quote <kbd className="agent-chat__kbd">⌘L</kbd>
+          </Button>
+        )}
+
+        <div className="agent-chat__drop" aria-hidden={!dropping}>
+          <div className="agent-chat__drop-label">
+            <span className="agent-chat__drop-icon">
+              <PaperclipIcon size={18} />
+            </span>
+            Drop files for {agent.name}
+          </div>
+        </div>
+      </section>
+    </AccentScopeProvider>
   );
 }
 

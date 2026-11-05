@@ -533,7 +533,7 @@
 }
 .ss-cascade-selector-display[role='button']:focus-visible {
   border-radius: var(--radius-4);
-  outline: var(--stroke-1) solid var(--accent-active);
+  outline: var(--stroke-1) solid var(--focus-ring);
   outline-offset: var(--space-02);
 }
 .ss-cascade-selector-display__part {
@@ -561,7 +561,7 @@
 }
 .ss-cascade-selector-list[role='button']:focus-visible {
   border-radius: var(--radius-4);
-  outline: var(--stroke-1) solid var(--accent-active);
+  outline: var(--stroke-1) solid var(--focus-ring);
   outline-offset: var(--space-02);
 }
 .ss-cascade-selector-list__member {

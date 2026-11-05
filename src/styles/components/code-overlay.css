@@ -19,7 +19,7 @@
   box-sizing: border-box;
 }
 .ss-codeedit:focus-within {
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 .ss-codeedit .cm-editor {
   height: 100%;

@@ -8,10 +8,11 @@
  * @module components/GitHubCalendar
  */
 
-import { useState, useEffect, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { GitHubCalendar as GitHubCalendarLib } from 'react-github-calendar';
 import { EyeOffIcon } from '@/components/icons';
 import { Tooltip } from '../primitives/Tooltip';
+import { mixHex, useAppAccentHex } from '../../lib/accent';
 
 interface Activity {
   date: string;
@@ -61,7 +62,7 @@ interface GitHubCalendarProps {
   onHide?: () => void;
 }
 
-// Custom theme using app colors.
+// Theme: the empty cell plus four steps toward the app accent.
 //
 // BOTH `light` and `dark` MUST be provided as explicit 5-color hex scales, even
 // though we only ever render `colorScheme="dark"`. react-activity-calendar fills
@@ -71,11 +72,15 @@ interface GitHubCalendarProps {
 // macOS 12 ships Safari 15, which predates `color-mix()` — so the check returns
 // false and the library throws "Invalid color …", white-screening the whole app
 // a few seconds after launch (once the calendar data loads and it re-renders).
-// Supplying both scales as plain hex keeps the library off every color-mix path.
-const theme = {
-  light: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'],
-  dark: ['#2d2d2d', '#0e4429', '#006d32', '#26a641', '#54e36e'],
-};
+// Supplying both scales as plain hex keeps the library off every color-mix path,
+// which is why the accent steps are mixed in JS (mixHex) rather than in CSS.
+const CALENDAR_EMPTY = '#2d2d2d';
+const CALENDAR_STEPS = [0.25, 0.5, 0.75, 1];
+
+function calendarTheme(accent: string) {
+  const dark = [CALENDAR_EMPTY, ...CALENDAR_STEPS.map((t) => mixHex(CALENDAR_EMPTY, accent, t))];
+  return { light: ['#ebedf0', ...dark.slice(1)], dark };
+}
 
 function formatTooltip(activity: Activity): string {
   const date = new Date(activity.date);
@@ -120,6 +125,9 @@ export const GitHubCalendar = memo(function GitHubCalendar({
   isAuthCheckDone,
   onHide,
 }: GitHubCalendarProps) {
+  const accent = useAppAccentHex();
+  // A new object only when the accent changes: the library caches on it.
+  const theme = useMemo(() => calendarTheme(accent), [accent]);
   const currentYear = new Date().getFullYear();
   const [dataLoaded, setDataLoaded] = useState(false);
 

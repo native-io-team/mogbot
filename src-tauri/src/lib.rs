@@ -634,6 +634,7 @@ pub fn run() {
             commands::projects::list_projects,
             // Workflows & Inbox
             commands::agents::agents_overview,
+            commands::agents::agents_with_projects,
             commands::agents::agents_messages,
             commands::agents::agents_change_diff,
             commands::agents::agents_send,

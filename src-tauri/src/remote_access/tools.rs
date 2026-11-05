@@ -2280,6 +2280,12 @@ async fn create_project(app: &tauri::AppHandle, args: &Value) -> Value {
                 .join(", ")
         ));
     };
+    // Checked first: cloning with no git on a Mac pops Apple's developer-tools
+    // dialog out of nowhere, and npm install with no Node can only fail.
+    let missing = missing_project_tools(template);
+    if !missing.is_empty() {
+        return error(project_tools_needed(app, &missing));
+    }
     let path = match scaffold(&name, template).await {
         Ok(p) => p,
         Err(e) => return error(e),
@@ -2343,6 +2349,47 @@ async fn create_project(app: &tauri::AppHandle, args: &Value) -> Value {
             "Created {name} and shared it for remote access. Its packages are still installing; Ship Studio opens it when they're done. Give it a minute, then use message_agent with project \"{name}\"."
         )),
     }
+}
+
+/// The desktop opens "Set up project tools" on this (payload: `missing`, the
+/// setup item ids), so the person can fix it in one click.
+pub(crate) const EVENT_PROJECT_TOOLS_NEEDED: &str = "project-tools-needed";
+
+/// The tools this starter needs that the computer doesn't have, as
+/// (setup item id, name). A blank project needs neither.
+fn missing_project_tools(template: &NewProjectTemplate) -> Vec<(&'static str, &'static str)> {
+    let mut missing = Vec::new();
+    if !template.repo.is_empty() && crate::utils::usable_git().is_none() {
+        missing.push(("git", "Git"));
+    }
+    if template.install
+        && (crate::utils::find_executable("node").is_none()
+            || crate::commands::claude::find_binary_by_name("npm").is_none())
+    {
+        missing.push(("node", "Node.js"));
+    }
+    missing
+}
+
+/// Open "Set up project tools" on the desktop and say what to tell the user.
+fn project_tools_needed(
+    app: &tauri::AppHandle,
+    missing: &[(&'static str, &'static str)],
+) -> String {
+    let ids: Vec<&str> = missing.iter().map(|(id, _)| *id).collect();
+    let names: Vec<&str> = missing.iter().map(|(_, name)| *name).collect();
+    let _ = app.emit_to(
+        "main",
+        EVENT_PROJECT_TOOLS_NEEDED,
+        json!({ "missing": ids }),
+    );
+    format!(
+        "Nothing was created: this computer doesn't have {} yet, which projects need. \
+         \"Set up project tools\" is now open on the computer's screen. Ask the user to \
+         click \"Set them up\" there (their agent installs everything and the app checks \
+         it), then try again. Don't install these yourself.",
+        names.join(" or ")
+    )
 }
 
 /// Clone the starter (or make an empty folder) into the projects folder and
@@ -2930,6 +2977,28 @@ pub(crate) fn session_screen(projects: &[String], session_id: &str) -> Result<Sc
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_blank_project_needs_no_project_tools() {
+        let blank = NewProjectTemplate {
+            id: "blank",
+            repo: "",
+            install: false,
+        };
+        assert!(missing_project_tools(&blank).is_empty());
+    }
+
+    #[test]
+    fn missing_project_tools_names_only_git_and_node() {
+        let starter = NewProjectTemplate {
+            id: "starter",
+            repo: "https://example.com/starter.git",
+            install: true,
+        };
+        for (id, _) in missing_project_tools(&starter) {
+            assert!(id == "git" || id == "node", "unexpected tool {id}");
+        }
+    }
 
     #[test]
     fn options_become_keys_the_phone_can_press() {

@@ -319,6 +319,7 @@ export const migrationScenarios: Scenario[] = [
   },
   {
     id: 'migration-start',
+    startOn: 'projects',
     // Driven by clicks rather than by a command: the harness runs a scenario's
     // `steps` before its `command`, so a step can never reach a control inside
     // a modal that the command is what opens. Both of these are reachable from

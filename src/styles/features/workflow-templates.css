@@ -323,7 +323,7 @@
 }
 
 .workflow-template-example-severity[data-severity='info'] {
-  background: var(--accent-active);
+  background: var(--status-info);
 }
 
 .workflow-template-example-body {

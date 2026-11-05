@@ -17,7 +17,9 @@ import {
   USES_TERMINAL,
   checkClaudeAuthStatus,
   getFullSetupStatus,
+  installPackages,
   isSetupItemReady,
+  PKG_MGR_PACKAGES,
   recheckWithDelays,
 } from '../../../lib/setup';
 import { mockMarkSetupItemReady } from '../../../lib/agentOnboarding';
@@ -118,6 +120,24 @@ export function useAgentSetupActions({ fetchStatus, updateItemStatus, mock }: Pa
         }
       }
 
+      // Node.js (Codex's prerequisite) installs through the package manager
+      // with no terminal; the app's own check decides whether it landed.
+      if (PKG_MGR_PACKAGES.has(itemId)) {
+        try {
+          await installPackages([itemId]);
+        } catch (err) {
+          logger.warn('Package install failed', { itemId, error: String(err) });
+        }
+        if (!mountedRef.current) return;
+        const status = await fetchStatus();
+        if (!mountedRef.current) return;
+        if (!status || !isSetupItemReady(status.items, itemId)) {
+          updateItemStatus(itemId, { status: 'error', errorMessage: notDetectedMessage(itemId) });
+        }
+        setActiveItemId(null);
+        return;
+      }
+
       // Every agent item (binary installs and auth flows) runs in a terminal.
       if (USES_TERMINAL.has(itemId)) {
         const cmd = TERMINAL_COMMANDS[itemId];
@@ -192,7 +212,7 @@ export function useAgentSetupActions({ fetchStatus, updateItemStatus, mock }: Pa
             : (networkMessage ?? extractedError ?? 'Command failed. Click to try again.');
         if (isNodeMissingError(outputTail)) {
           errorMessage =
-            "Node.js/npm wasn't found. This agent needs Node.js — pick one with a native installer (like Claude Code), or use classic onboarding to install Node.js first.";
+            "Node.js wasn't found, and this needs it. Choose Claude Code, which installs on its own, or install Node.js first.";
         } else if (alreadySignedIn) {
           errorMessage = alreadySignedInMessage(itemId, alreadySignedIn.identity);
         }

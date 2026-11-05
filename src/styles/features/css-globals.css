@@ -285,7 +285,7 @@
   cursor: pointer;
 }
 .ss-var-row__swatch--button:focus-visible {
-  outline: var(--stroke-1) solid var(--accent-active);
+  outline: var(--stroke-1) solid var(--focus-ring);
   outline-offset: var(--spacing-2xs);
 }
 
@@ -533,7 +533,7 @@
   font-size: var(--font-size-body-sm);
 }
 .ss-var-input:focus {
-  outline: 1px solid var(--accent-active);
+  outline: 1px solid var(--focus-ring);
 }
 .ss-var-input--name {
   min-width: 0;

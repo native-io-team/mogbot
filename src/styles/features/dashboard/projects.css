@@ -391,7 +391,7 @@
 .integration-bar-item-connect:hover {
   background: var(--accent-active);
   border-color: var(--accent-active);
-  color: var(--text-inverse);
+  color: var(--text-on-accent);
 }
 
 /* ============ Responsive Dashboard Styles ============ */

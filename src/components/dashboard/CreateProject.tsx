@@ -15,7 +15,14 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../../lib/logger';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { CheckIcon, CloseIcon, FileIcon, PendingCircleIcon, UploadIcon } from '@/components/icons';
+import {
+  CheckIcon,
+  CloseIcon,
+  ErrorIcon,
+  FileIcon,
+  PendingCircleIcon,
+  UploadIcon,
+} from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
@@ -422,7 +429,12 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
             </TabsPanel>
           </Tabs>
 
-          {error && <p className="error">{error}</p>}
+          {error && (
+            <p className="error">
+              <ErrorIcon size={12} className="inline-error-icon" />
+              {error}
+            </p>
+          )}
 
           <div className="create-actions">
             <Button variant="secondary" type="button" onClick={onCancel}>
@@ -491,7 +503,12 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
             />
           </label>
 
-          {error && <p className="error">{error}</p>}
+          {error && (
+            <p className="error">
+              <ErrorIcon size={12} className="inline-error-icon" />
+              {error}
+            </p>
+          )}
 
           <div className="create-actions">
             <Button variant="secondary" type="button" onClick={handleBack}>

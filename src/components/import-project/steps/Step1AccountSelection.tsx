@@ -7,7 +7,7 @@
  */
 
 import { Button } from '../../primitives/Button';
-import { CloseIcon, CollaboratorsIcon } from '@/components/icons';
+import { CloseIcon, CollaboratorsIcon, ErrorIcon } from '@/components/icons';
 
 export interface Step1AccountSelectionProps {
   username: string | null;
@@ -85,7 +85,12 @@ export function Step1AccountSelection({
         </button>
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error">
+          <ErrorIcon size={12} className="inline-error-icon" />
+          {error}
+        </p>
+      )}
 
       <div className="create-actions">
         <Button variant="secondary" onClick={onCancel}>

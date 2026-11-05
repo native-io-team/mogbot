@@ -360,7 +360,7 @@ button.dashboard-card-row {
 
 .connect-modal-field input:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .connect-modal-muted {

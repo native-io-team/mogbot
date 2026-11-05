@@ -37,6 +37,7 @@ import { useBranchManagement } from './hooks/useBranchManagement';
 import { useNotifications } from './hooks/useNotifications';
 import { useProjectLifecycle } from './hooks/useProjectLifecycle';
 import { useAppSetup } from './hooks/useAppSetup';
+import { useGatedProjectStarts } from './lib/projectTools';
 import { AppViewRouter } from './components/AppViewRouter';
 import { useAgentDeliveries } from './hooks/useAgentDeliveries';
 import { useAccountSelectNavigation } from './hooks/useAccountSelectNavigation';
@@ -44,8 +45,6 @@ import { useProjectRail } from './hooks/useProjectRail';
 import { useActiveAccount } from './hooks/useActiveAccount';
 import { Project, renameProject, setTerminalState } from './lib/project';
 import { setActiveAccountId, type Account } from './lib/accounts';
-import { markSetupComplete, getDefaultAgentId as fetchDefaultAgentId } from './lib/setup';
-import { initDefaultAgent } from './lib/agent';
 import { sessionRegistry } from './lib/sessionRegistry';
 import { useCloseProject } from './hooks/useCloseProject';
 import { useOrphanedWorkspaceGuard } from './hooks/useOrphanedWorkspaceGuard';
@@ -457,10 +456,10 @@ function AppContents({ initialProjectPath }: AppProps) {
     handleSelectProject,
     handleBackToProjects,
     handleProjectCreated,
-    handleImportProject,
+    handleImportProject: importProjectNow,
     handleProjectImported,
-    handleImportLocalFolder,
-    handleCreateProject,
+    handleImportLocalFolder: importLocalFolderNow,
+    handleCreateProject: createProjectNow,
     handleRestartDevServer,
     handleStartDevServer,
     handleGitHubStatusChange,
@@ -499,6 +498,14 @@ function AppContents({ initialProjectPath }: AppProps) {
     clearBranchState,
     checkPluginSuggestion,
   });
+
+  // A project's tools (Node, Git, …) are asked for when one first starts.
+  const { handleCreateProject, handleImportProject, handleImportLocalFolder } =
+    useGatedProjectStarts({
+      createProject: createProjectNow,
+      importProject: importProjectNow,
+      importLocalFolder: importLocalFolderNow,
+    });
 
   useDevServerRetention({
     keepDevServersRunning,
@@ -712,20 +719,21 @@ function AppContents({ initialProjectPath }: AppProps) {
   );
 
   // App setup, onboarding, HMR recovery, auto-open, keyboard shortcuts
-  const { projectsLoading, setProjectsLoading, bootProgress } = useAppSetup({
-    view,
-    setView,
-    initialProjectPath,
-    setCurrentProject,
-    setDevServerPort,
-    setWorkspaceTab,
-    setIsPreviewHidden,
-    handleSelectProject,
-    refreshAllCliStatuses,
-    setProjectGitHubStatus,
-    fetchBranchInfo,
-    openHelpModal: helpModal.open,
-  });
+  const { projectsLoading, setProjectsLoading, bootProgress, handleOnboardingComplete } =
+    useAppSetup({
+      view,
+      setView,
+      initialProjectPath,
+      setCurrentProject,
+      setDevServerPort,
+      setWorkspaceTab,
+      setIsPreviewHidden,
+      handleSelectProject,
+      refreshAllCliStatuses,
+      setProjectGitHubStatus,
+      fetchBranchInfo,
+      openHelpModal: helpModal.open,
+    });
 
   // Plugin data for PluginSlot components (defined before early returns so all views can use them)
   const hasCurrentProject = Boolean(currentProject);
@@ -1226,14 +1234,6 @@ function AppContents({ initialProjectPath }: AppProps) {
       onKeepRunning={quitGuard.keepRunning}
     />
   );
-
-  const handleOnboardingComplete = useCallback(async () => {
-    const defaultAgent = await fetchDefaultAgentId();
-    initDefaultAgent(defaultAgent);
-    await markSetupComplete();
-    await refreshAllCliStatuses();
-    setView('projects');
-  }, [refreshAllCliStatuses]);
 
   const projectsViewProps = {
     onSelectProject: handleSelectProjectCallback,

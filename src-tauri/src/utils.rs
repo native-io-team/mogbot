@@ -404,6 +404,35 @@ fn build_extended_path() -> String {
     paths.join(get_path_separator())
 }
 
+/// Git that will actually run, found without running it.
+///
+/// On a Mac without the Command Line Tools, `/usr/bin/git` is a stub: running
+/// it (even `git --version`) pops Apple's "install developer tools" dialog.
+/// So the stub only counts when `xcode-select -p` names a developer directory
+/// that exists; `xcode-select -p` itself never opens the dialog.
+pub fn usable_git() -> Option<std::path::PathBuf> {
+    let path = find_executable("git")?;
+    #[cfg(target_os = "macos")]
+    if path == std::path::Path::new("/usr/bin/git") && !mac_developer_tools_installed() {
+        return None;
+    }
+    Some(path)
+}
+
+/// Whether the Command Line Tools (or Xcode) are installed, asked in a way
+/// that can't prompt for them.
+#[cfg(target_os = "macos")]
+pub fn mac_developer_tools_installed() -> bool {
+    Command::new("/usr/bin/xcode-select")
+        .arg("-p")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .is_some_and(|dir| !dir.is_empty() && std::path::Path::new(&dir).exists())
+}
+
 /// Build a `Command` for git, resolving the full binary path first.
 ///
 /// Spawning bare `"git"` can fail to resolve on Windows even when git is
