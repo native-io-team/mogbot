@@ -168,6 +168,30 @@ mod tests {
     }
 
     #[test]
+    fn research_says_it_will_ask_before_searching_the_web() {
+        let brief = find("research").unwrap().instructions();
+        assert!(brief.contains("I'll ask before searching the web"));
+        assert!(brief.contains("Always allow web searches"));
+        // Codex's own search doesn't ask, so it isn't told to say it does.
+        assert!(brief.contains("On Codex, your web search runs without asking"));
+        assert!(crate::agents::prompts::CHIEF_INSTRUCTIONS
+            .contains("I'll ask before searching the web"));
+    }
+
+    #[test]
+    fn nothing_that_sets_up_a_routine_sends_by_itself() {
+        // A routine runs later on its own: the user reads it before it's sent.
+        for t in all() {
+            for s in &t.starters {
+                let text = s.text.to_lowercase();
+                if text.contains("every ") || text.contains("check in with me") {
+                    assert!(!s.send, "{}: {}", t.id, s.label);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn the_chiefs_section_names_every_template() {
         let section = chief_section();
         for t in all() {

@@ -28,6 +28,14 @@ export function freeColor(taken: string[]): string {
   );
 }
 
+/**
+ * A ready-made agent's own colour, unless another agent already wears it:
+ * the desk's `templateColor`. Null means keep the colour you have.
+ */
+export function templateColor(color: string | null | undefined, taken: string[]): string | null {
+  return color && !taken.includes(color) ? color : null;
+}
+
 /** Words that say how, not what: never a name on their own. */
 const FILLER = new Set(
   (

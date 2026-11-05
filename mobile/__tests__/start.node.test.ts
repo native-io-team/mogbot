@@ -26,7 +26,7 @@ import {
 import { WebSocket } from 'ws';
 import { createMockServer } from '../dev/mock-server';
 import { until, provenBy } from './helpers';
-import { chiefRequest, freeColor, suggestAgentName } from '../src/lib/newAgent';
+import { chiefRequest, freeColor, suggestAgentName, templateColor } from '../src/lib/newAgent';
 import { newPicker, onceDays, pickerOf, toggleDay, whenOf } from '../src/lib/routine';
 import {
   describeShare,
@@ -62,6 +62,13 @@ describe('a new agent', () => {
     expect(
       freeColor(['brown', 'red', 'orange', 'amber', 'green', 'teal', 'blue', 'purple', 'pink'])
     ).toBe('purple');
+  });
+
+  it('starts from a template in its own colour only when nobody wears it, as the desk does', () => {
+    expect(templateColor('blue', ['brown', 'red'])).toBe('blue');
+    // Taken: keep the colour already picked (the first free one).
+    expect(templateColor('blue', ['blue'])).toBeNull();
+    expect(templateColor(null, [])).toBeNull();
   });
 
   it('asks the Chief in your own words', () => {

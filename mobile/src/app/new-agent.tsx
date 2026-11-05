@@ -33,6 +33,7 @@ import {
   MAX_NAME,
   MAX_ROLE,
   suggestAgentName,
+  templateColor,
 } from '../lib/newAgent';
 import { call, canCall, createAgent, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
@@ -66,7 +67,8 @@ export default function NewAgent() {
   const taken = useMemo(() => (agents ?? []).map((a) => a.name), [agents]);
   const [role, setRole] = useState('');
   const [name, setName] = useState('');
-  const [color, setColor] = useState(() => freeColor((agents ?? []).map((a) => a.color)));
+  const takenColors = useMemo(() => (agents ?? []).map((a) => a.color), [agents]);
+  const [color, setColor] = useState(() => freeColor(takenColors));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const clientId = useRef(Crypto.randomUUID());
@@ -77,7 +79,8 @@ export default function NewAgent() {
       field.trim() === '' || (template !== null && field === from(template));
     if (untouched(role, (t) => t.role)) setRole(next?.role ?? '');
     if (untouched(name, (t) => t.name)) setName(next?.name ?? '');
-    if (next) setColor(next.color);
+    // Its own colour only when nobody wears it, as on the desk.
+    if (next) setColor(templateColor(next.color, takenColors) ?? color);
     setTemplate(next);
   };
 

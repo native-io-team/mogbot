@@ -54,7 +54,22 @@ account, and none sends anything by itself:
   points, any dates or decisions, and anything I need to do."). The user
   presses Send. Dropping a file on the chat works the same way.
 - **Research a question…** types "Research this for me: " for the user to
-  finish. Web research runs on the engine's own tools and account.
+  finish. Web research runs on the engine's own tools and account. On
+  Claude Code every web search and every page opened is a tool call the
+  approval broker asks about, so a first research turn can raise several
+  Allow cards. The Chief and the Research assistant are told to say so
+  before they start ("I'll ask before searching the web"), and a search's
+  card offers **Always allow web searches** (a `Tool` rule on `WebSearch`,
+  `permissions::suggest`); a page's card offers its one host, so each new
+  site still asks once. On Codex, web search is Codex's own built-in tool
+  (seen as `webSearch` items): it doesn't come through the broker, so it
+  runs without a card. There is no WebFetch on Codex; a command that
+  reaches the network is sandboxed and asks to escalate, with a card.
+  Whether a user's Codex has web search turned on (and live or cached) is
+  Codex's own setting, which the app doesn't read, so Research there may
+  find it can't search and says so, per its briefing. The briefings tell a
+  Codex agent not to promise cards it won't raise. Not verified: a live
+  Codex research turn.
 - **Ready-made agents…** opens New agent on the first ready-made agent.
 
 `CHIEF_INSTRUCTIONS` (a new Chief's only) tells it a first message may be one

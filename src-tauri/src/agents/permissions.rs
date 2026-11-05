@@ -186,7 +186,7 @@ pub fn suggest(tool: &str, input: &Value) -> Option<Scope> {
         "WebSearch" => Some(Scope {
             kind: RuleKind::Tool,
             value: tool.to_string(),
-            label: "Web searches".to_string(),
+            label: "web searches".to_string(),
         }),
         _ if is_scopable_tool(tool) => Some(Scope {
             kind: RuleKind::Tool,
@@ -328,6 +328,24 @@ mod tests {
             label: "rm".into(),
         };
         assert!(!allows(&rule, "rm -rf ~"));
+    }
+
+    #[test]
+    fn web_search_offers_always_allow_web_searches_and_nothing_wider() {
+        let search = |q: &str| json!({ "query": q });
+        let rule = suggest("WebSearch", &search("heat pumps")).unwrap();
+        assert_eq!(
+            (rule.kind, rule.value.as_str()),
+            (RuleKind::Tool, "WebSearch")
+        );
+        // The card reads "Always allow web searches".
+        assert_eq!(
+            format!("Always allow {}", rule.label),
+            "Always allow web searches"
+        );
+        assert!(rule.matches("WebSearch", &search("anything else")));
+        assert!(!rule.matches("WebFetch", &json!({ "url": "https://example.com/" })));
+        assert!(!rule.matches("Bash", &bash("curl example.com")));
     }
 
     #[test]
