@@ -1,7 +1,9 @@
 /**
- * "Setting up your team": one card at the foot of the Chief's chat after an
- * import, the phone's copy of the desk's (`TeamSetupCard` there, desktop
- * `agents/team_setup.rs`). Steps in a fixed order: logins, routines to switch
+ * "Setting up your team": one card in the Chief's chat after an import,
+ * a row in the conversation where it was posted (`withSetupCard`), never
+ * pinned under the newest message; the bar above the composer brings you
+ * back to it. The phone's copy of the desk's (`TeamSetupCard` there,
+ * desktop `agents/team_setup.rs`). Steps in a fixed order: logins, routines to switch
  * on, what the agents said they're missing, then saying hi to each. The
  * first open step is unfolded; done and skipped ones are a ticked row that
  * opens again on a tap. Finished, it's one quiet line.
@@ -12,7 +14,7 @@
 
 import type { TeamSetupStep, TeamSetupStepId, TeamSetupView } from '@shipstudio/companion-protocol';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
 import { useSwitchColors } from '../lib/accent';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -34,6 +36,7 @@ import {
   receipt,
   residueLine,
   rowAgents,
+  groupLogins,
   helloWord,
   openStep,
   progress,
@@ -47,6 +50,7 @@ import { iconSize, space, PRESSED } from '../lib/theme';
 import { AgentAvatar, Spinner } from './agent';
 import { Card, CardActions, Line } from './surfaces';
 import { Button, Icon, T } from './ui';
+import { TeamLoginsList } from './teamLogins';
 
 export function TeamSetupCard({
   chief,
@@ -58,13 +62,8 @@ export function TeamSetupCard({
 }) {
   const view = useApp((s) => s.teamSetup);
   const connected = useApp((s) => s.link.kind === 'connected');
-  const styles = useStyles();
   if (!shows(view)) return null;
-  return (
-    <View style={styles.foot}>
-      <TeamSetup view={view} chief={chief} connected={connected} onError={onError} />
-    </View>
-  );
+  return <TeamSetup view={view} chief={chief} connected={connected} onError={onError} />;
 }
 
 /** The card for a view: split out so tests can draw any state. */
@@ -270,35 +269,9 @@ function StepItems({
       return (
         <View style={styles.items}>
           {!!step.later?.length && (
-            <Reach
-              step={step}
-              connected={connected}
-              busy={busy}
-              run={run}
-              openChat={openChat}
-            />
+            <Reach step={step} connected={connected} busy={busy} run={run} openChat={openChat} />
           )}
-          {(step.logins ?? []).map((l) => (
-            <View key={l.requestId} style={styles.item}>
-              <View style={{ flex: 1 }}>
-                <T variant="small" color={colors.textStrong}>
-                  {l.agentName} · {l.name}
-                </T>
-                {!!l.purpose && (
-                  <T variant="caption" color={colors.textMuted}>
-                    {l.purpose}
-                  </T>
-                )}
-              </View>
-              <Button
-                title="Add"
-                variant="secondary"
-                size="compact"
-                onPress={() => openChat(l.agentId)}
-                accessibilityHint={`Opens ${l.agentName}’s chat, where the login goes in`}
-              />
-            </View>
-          ))}
+          <SetupLogins logins={step.logins ?? []} onOpenChat={openChat} />
         </View>
       );
     case 'routines':
@@ -561,7 +534,6 @@ function RoutineRow({
 
 const useStyles = makeStyles((colors) => ({
   // Under the newest message, apart from it like a new speaker.
-  foot: { paddingTop: space.lg },
   step: {
     gap: space.sm,
     paddingTop: space.sm,
@@ -574,3 +546,57 @@ const useStyles = makeStyles((colors) => ({
   item: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   group: { gap: space['2xs'] },
 }));
+
+/**
+ * The Logins step: apps an agent signs in to are "What your team needs",
+ * for these agents only (one Connect per service); keys and other secure
+ * inputs are one row per service, named by the app, never a raw key, each
+ * agent's card a tap away in its chat.
+ */
+function SetupLogins({
+  logins,
+  onOpenChat,
+}: {
+  logins: NonNullable<TeamSetupStep['logins']>;
+  onOpenChat: (agentId: string) => void;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const signIns = logins.filter((l) => l.kind === 'login');
+  const idList = [...new Set(signIns.map((l) => l.agentId))].sort().join(',');
+  const agentIds = useMemo(() => new Set(idList ? idList.split(',') : []), [idList]);
+  const groups = groupLogins(logins.filter((l) => l.kind !== 'login'));
+  return (
+    <View style={styles.items}>
+      {signIns.length > 0 && <TeamLoginsList agentIds={agentIds} embedded />}
+      {groups.map((g) => (
+        <View key={g.key} testID={`setup-login-${g.key}`}>
+          <T variant="small" color={colors.textStrong}>
+            {g.name}
+          </T>
+          {g.items.map((l) => (
+            <View key={l.requestId} style={styles.item}>
+              <View style={{ flex: 1 }}>
+                <T variant="caption" color={colors.textSecondary}>
+                  {l.agentName}
+                </T>
+                {!!l.purpose && (
+                  <T variant="caption" color={colors.textMuted}>
+                    {l.purpose}
+                  </T>
+                )}
+              </View>
+              <Button
+                title="Add"
+                variant="secondary"
+                size="compact"
+                onPress={() => onOpenChat(l.agentId)}
+                accessibilityHint={`Opens ${l.agentName}’s chat, where the login goes in`}
+              />
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}

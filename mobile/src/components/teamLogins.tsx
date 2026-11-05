@@ -10,7 +10,13 @@
  * it; `app/logins.tsx` is the screen around it.
  */
 
-import { MAC_FEATURES, type LoginOption, type TeamCard, type TeamLogins, type TeamNeed } from '@shipstudio/companion-protocol';
+import {
+  MAC_FEATURES,
+  type LoginOption,
+  type TeamCard,
+  type TeamLogins,
+  type TeamNeed,
+} from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -26,6 +32,7 @@ import {
   phoneDetail,
   phoneWay,
   readTeam,
+  scopeTeam,
   signInWithSheet,
   signingIn,
   teamCardLine,
@@ -45,10 +52,16 @@ const onMac = signingIn;
 export function TeamLoginsList({
   since,
   onProgress,
+  agentIds,
+  embedded,
 }: {
   /** Count rows answered since then in the progress line (default: when this opened). */
   since?: number;
   onProgress?: (team: TeamLogins) => void;
+  /** Only these agents' asks (the setup card's); a Connect skips the rest. */
+  agentIds?: ReadonlySet<string>;
+  /** Inside another card: no "nothing waiting" line of its own. */
+  embedded?: boolean;
 }) {
   const colors = useColors();
   const styles = useStyles();
@@ -67,13 +80,14 @@ export function TeamLoginsList({
 
   const load = useCallback(() => {
     readTeam(opened).then(
-      (t) => {
+      (all) => {
+        const t = agentIds ? scopeTeam(all, agentIds) : all;
         setTeam(t);
         onProgress?.(t);
       },
       (e) => setError(describeError(e))
     );
-  }, [opened, onProgress]);
+  }, [opened, onProgress, agentIds]);
   useEffect(() => {
     if (live) load();
   }, [live, load, stamp]);
@@ -117,7 +131,7 @@ export function TeamLoginsList({
       <T variant="small" color={colors.textSecondary} testID="team-progress">
         {teamProgress(team)}
       </T>
-      {team.total === 0 && (
+      {team.total === 0 && !embedded && (
         <Line text="Nothing waiting. When an agent needs an app, it shows here and in its chat." />
       )}
       {team.needs.map((n) => (
@@ -129,16 +143,18 @@ export function TeamLoginsList({
           way={way}
           onConnect={(o) =>
             void act(`${n.key}:${o.id}`, async () => {
+              // Agents this list leaves off (`agentIds`) are skipped too.
+              const skip = (n as TeamNeed & { hidden?: string[] }).hidden ?? [];
               switch (way(o)) {
                 case 'sheet':
-                  return signInWithSheet({ key: n.key }, o.id);
+                  return signInWithSheet({ key: n.key, skip }, o.id);
                 case 'web':
-                  await connectNeed(n.key, o.id, [], true);
+                  await connectNeed(n.key, o.id, skip, true);
                   return openHere(CLAUDE_AI_CONNECTORS);
                 case 'device':
-                  return connectNeed(n.key, o.id, [], true);
+                  return connectNeed(n.key, o.id, skip, true);
                 default:
-                  return connectNeed(n.key, o.id, []);
+                  return connectNeed(n.key, o.id, skip);
               }
             })
           }
@@ -248,8 +264,8 @@ function Need({
         </CardActions>
       ) : (
         <T variant="small" color={colors.textMuted}>
-          Nothing on your Mac can connect this. Open each agent’s card to enter a key, or mark it Not
-          needed.
+          Nothing on your Mac can connect this. Open each agent’s card to enter a key, or mark it
+          Not needed.
         </T>
       )}
     </Card>
@@ -264,7 +280,8 @@ function RunningLine({ card }: { card?: TeamCard }) {
   if (!flow?.onPhone) {
     return (
       <T variant="small" color={colors.textBody} testID="need-on-mac">
-        Finish signing in on your Mac — it’s open there. Everyone on this row gets it when it’s done.
+        Finish signing in on your Mac — it’s open there. Everyone on this row gets it when it’s
+        done.
       </T>
     );
   }

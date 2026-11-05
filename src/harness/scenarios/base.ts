@@ -19,8 +19,9 @@ export const HARNESS_ROOT = '/Users/harness/ShipStudio';
 /** `prompts::CHIEF_GREETING`, verbatim: what a new Chief's chat opens on. */
 export const CHIEF_GREETING_TEXT =
   "Hi, I'm your Chief of Staff. " +
-  "Tell me what's on your plate this week and I'll put a team of agents together for it. " +
-  "When something needs your OK, I'll ask first, and you Allow or Deny it.";
+  "Tell me what's on your plate this week and I'll put a team of agents on it. " +
+  'They keep working on a schedule or when something happens, and bring the results back to you. ' +
+  'Anything that sends, spends or changes what others see waits for your OK.';
 
 /** The greeting as `agents_messages` returns it. */
 export const chiefGreeting = (agentId: string, ts = 1_790_000_000_000) => ({
@@ -318,6 +319,9 @@ export const baseCommands: CommandMap = {
     now: 0,
   },
   agents_set_usage_mode: null,
+  // How much agents do on their own (`agents::independence`): never chosen.
+  agents_independence: 'judgement',
+  agents_set_independence: (args: Record<string, unknown>) => args.level,
   agents_spare_add: { id: 'h1', text: 'x', addedBy: 'you', addedAt: 0, state: 'waiting' },
   agents_spare_remove: null,
   agents_focus: null,

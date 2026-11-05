@@ -28,6 +28,7 @@ import {
   type AgentStatus,
   type EngineInfo,
   type NewAgentDefaults,
+  type AgentIndependence,
 } from './agents';
 import { asCommandError, formatCommandError } from './errors';
 import { logger } from './logger';
@@ -39,6 +40,8 @@ export interface AgentsState {
   engines: EngineInfo[];
   /** What new agents start on (Settings → Agents); null until the overview says. */
   defaults: NewAgentDefaults | null;
+  /** How much agents do on their own; null until the overview says. */
+  independence: AgentIndependence | null;
   loaded: boolean;
   error: string | null;
   /** Chat lines per agent, oldest first; absent until that chat is opened. */
@@ -58,6 +61,7 @@ let state: AgentsState = {
   engineReady: true,
   engines: [],
   defaults: null,
+  independence: null,
   loaded: false,
   error: null,
   messages: {},
@@ -92,6 +96,7 @@ export async function refreshAgents(): Promise<void> {
         ? state.engines
         : (overview.engines ?? []),
       defaults: overview.defaults ?? null,
+      independence: overview.independence ?? null,
       loaded: true,
       error: null,
     });
@@ -450,6 +455,7 @@ export function __resetAgentsStore() {
     engineReady: true,
     engines: [],
     defaults: null,
+    independence: null,
     loaded: false,
     error: null,
     messages: {},

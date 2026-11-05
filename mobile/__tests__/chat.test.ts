@@ -1,5 +1,8 @@
-import type { Agent } from '@shipstudio/companion-protocol';
+import type { Agent, AgentMessage, TeamSetupView } from '@shipstudio/companion-protocol';
 import { withQuotes } from '@shipstudio/companion-protocol';
+import { SETUP_KEY, withSetupCard, type Item } from '../src/lib/timeline';
+import { setupAnchor, setupBar } from '../src/lib/teamSetup';
+import { BAR_ORDER } from '../src/lib/bars';
 import { agentActions, messageActions, plainText, toggleFor } from '../src/lib/actions';
 import { CACHED_MESSAGES, fromCache, toCache, toOutbox } from '../src/lib/cache';
 import { EMPTY_DRAFT, liveMentions, putDraft } from '../src/lib/drafts';
@@ -231,6 +234,90 @@ describe('timeline', () => {
     const items = chatItems(agent(), [msg('r1', 1)], [], { id: 'r1', text: 'Deplo' }, 2);
     expect(items.filter((i) => i.key === 'r1')).toHaveLength(1);
     expect(items[0].kind).toBe('draft');
+  });
+});
+
+describe('Setting up your team, in the timeline', () => {
+  // Fictional: an import this afternoon, then a conversation under it.
+  const now = new Date(2026, 10, 4, 15, 0).getTime();
+  const min = 60_000;
+  const keys = (items: Item[]) => items.map((i) => i.key);
+
+  it('stays where it was posted: what you send next is the newest thing, under it', () => {
+    const before = [
+      msg('review', now - 10 * min),
+      msg('imported', now - 9 * min, { kind: 'note' }),
+    ];
+    const anchor = now - 9 * min;
+    let items = withSetupCard(chatItems(agent(), before, [], undefined, now), anchor, false);
+    // Newest first (the list is inverted): the card is the newest row for now.
+    expect(keys(items)).toEqual([SETUP_KEY, 'imported', 'review', 'day:review']);
+    const after = [...before, msg('hi', now - 2 * min, { kind: 'user' }), msg('reply', now - min)];
+    items = withSetupCard(
+      chatItems(agent(), after, [pend('sending', now)], undefined, now),
+      anchor,
+      false
+    );
+    expect(keys(items)).toEqual([
+      'pending:sending',
+      'reply',
+      'hi',
+      SETUP_KEY,
+      'imported',
+      'review',
+      'day:review',
+    ]);
+  });
+
+  it('sits above the time line that opens what came after it', () => {
+    const list = [msg('imported', now - 5 * 3_600_000, { kind: 'note' }), msg('later', now - min)];
+    const items = withSetupCard(
+      chatItems(agent(), list, [], undefined, now),
+      now - 5 * 3_600_000,
+      false
+    );
+    expect(keys(items)).toEqual(['later', 'day:later', SETUP_KEY, 'imported', 'day:imported']);
+  });
+
+  it('waits for older pages when its place is above what’s loaded', () => {
+    const items = chatItems(agent(), [msg('much later', now - min)], [], undefined, now);
+    expect(keys(withSetupCard(items, now - 60 * min, true))).not.toContain(SETUP_KEY);
+    expect(keys(withSetupCard(items, now - 60 * min, false)).at(-1)).toBe(SETUP_KEY);
+  });
+
+  it('uses the Mac’s time, else the end of the import on an older Mac', () => {
+    const log = [
+      msg('review', now - 10 * min, {
+        kind: 'approval',
+        approval: { connector: { kind: 'review' } } as AgentMessage['approval'],
+      }),
+      msg('imported', now - 9 * min, { kind: 'note' }),
+      msg('hi', now - min, { kind: 'user' }),
+    ];
+    expect(setupAnchor({ postedAt: now - 20 * min }, log)).toBe(now - 20 * min);
+    expect(setupAnchor({}, log)).toBe(now - 9 * min);
+    expect(setupAnchor({}, [msg('hi', now)])).toBeNull();
+  });
+
+  it('the bar shows while some is left, and goes once it’s done', () => {
+    const v = {
+      id: 's',
+      source: 'Grok Bot',
+      steps: [{ id: 'hello', state: 'open' }],
+      done: 1,
+      total: 3,
+      complete: false,
+      agents: 4,
+      dismissed: false,
+    } as TeamSetupView;
+    expect(setupBar(v)).toEqual({
+      tone: 'waiting',
+      title: 'A few things to finish setting up your team',
+      detail: '2 steps left',
+    });
+    expect(setupBar({ ...v, complete: true })).toBeNull();
+    expect(setupBar({ ...v, dismissed: true })).toBeNull();
+    expect(BAR_ORDER.indexOf('setup')).toBe(BAR_ORDER.indexOf('import') + 1);
   });
 });
 

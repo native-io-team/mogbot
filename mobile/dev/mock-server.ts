@@ -31,6 +31,7 @@ import {
   type TeamNeed,
   type AgentsOverview,
   type NewAgentDefaults,
+  type AgentIndependence,
   type Alert,
   type Attachment,
   type BlobRef,
@@ -494,9 +495,27 @@ export function createMockServer(opts: MockOptions = {}) {
     });
     const said = (i: number): 'quiet' | 'working' | 'said_hi' =>
       i < 2 ? 'said_hi' : i === 6 ? 'working' : 'quiet';
+    // The conversation goes on after the import: the card stays where it was posted.
+    messages.get('chief')!.push(
+      {
+        id: 'chief_after_1',
+        agentId: 'chief',
+        ts: now - 3 * 60_000,
+        kind: 'user',
+        text: 'Thanks. I’ll do the logins tonight. What’s on for tomorrow?',
+      },
+      {
+        id: 'chief_after_2',
+        agentId: 'chief',
+        ts: now - 2 * 60_000,
+        kind: 'agent',
+        text: 'Tomorrow is quiet: the kiln firing at 10 and the wholesale call at 3.',
+      }
+    );
     teamSetup = {
       id: 'setup_mock',
       source: 'Grok Bot',
+      postedAt: now - 9 * 60_000,
       steps: [
         {
           id: 'logins',
@@ -898,11 +917,14 @@ export function createMockServer(opts: MockOptions = {}) {
     return { engine: saved.engine, models, startsOn, model: models[startsOn] };
   };
 
+  // How much agents do on their own (`agents::independence`).
+  let independence: AgentIndependence = 'judgement';
   const overview = (): AgentsOverview => ({
     agents: structuredClone(agents),
     engineReady: !opts.codexOnly,
     engines: engines(),
     defaults: defaults(),
+    independence,
   });
   // What each agent remembers (its CLAUDE.md `## Memory`), and secrets saved.
   const memories = new Map<string, MemoryEntry[]>([
@@ -2005,6 +2027,19 @@ export function createMockServer(opts: MockOptions = {}) {
       if (typeof p.codexModel === 'string') saved.codexModel = p.codexModel || null;
       emit({ type: 'agents.registry', overview: overview() });
       return defaults();
+    },
+    // As `agents::independence::Level::parse` does.
+    'agents.setIndependence': (p) => {
+      if (p.level !== 'often' && p.level !== 'judgement' && p.level !== 'go_hard') {
+        return fail({
+          type: 'Protocol',
+          code: 'bad_params',
+          message: 'How independent agents are takes a level: often, judgement or go_hard.',
+        });
+      }
+      independence = p.level;
+      emit({ type: 'agents.registry', overview: overview() });
+      return { level: independence };
     },
     // "Setting up your team" (null without --team-setup, as a Mac with none answers).
     'agents.teamSetup': (p) => {

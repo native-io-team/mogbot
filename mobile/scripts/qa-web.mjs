@@ -46,7 +46,11 @@ const OUT = path.resolve(opt('--out', 'QA_OUT', path.join(ROOT, 'qa-shots')));
 const ONLY = opt('--only', 'QA_ONLY', '');
 const THEMES = opt('--themes', 'QA_THEMES', 'light,dark').split(',').filter(Boolean);
 const VERBOSE = args.includes('--verbose');
-const PHASES = opt('--phases', 'QA_PHASES', 'fresh,live,cached,impostor,bars,heavy,importing,team-setup').split(',');
+const PHASES = opt(
+  '--phases',
+  'QA_PHASES',
+  'fresh,live,cached,impostor,bars,heavy,importing,team-setup'
+).split(',');
 const phase = (name) => PHASES.includes(name);
 // Ports other tools in this repo own: the desktop app, its harness, the phone's Metro.
 for (const p of [WEB_PORT, MOCK_PORT, CDP_PORT]) {
@@ -614,6 +618,52 @@ const LIVE = [
     act: scrollToText('Ask for changes'),
     check: 'A result card with Ask for changes (needs welcome.features)',
   },
+  // Dictation against the scripted recognizer (dev/web/expo-speech-recognition.ts).
+  {
+    name: 'dictation-listening',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await page.clickLabel('Dictate');
+      await sleep(2300);
+    },
+    check:
+      'Listening: × in the +’s place, words streaming (the last lighter), the waveform and 0:0x beside ✓; no mic, no Send',
+    after: async (page) => {
+      await page.clickLabel('Cancel dictation').catch(() => {});
+      await sleep(600);
+    },
+  },
+  {
+    name: 'dictation-done',
+    // A chat no later shot opens: the kept words are its draft until sent.
+    route: '/chat/fin',
+    ready: 'Finance',
+    act: async (page) => {
+      await page.clickLabel('Dictate');
+      // The sentence, then three seconds of quiet: it stops by itself.
+      await sleep(9500);
+    },
+    check: 'Stopped by the silence: the whole sentence in the field, normal ink, mic and Send back',
+    after: async (page) => {
+      await page.clickLabel('Send').catch(() => {});
+      await sleep(800);
+    },
+  },
+  {
+    name: 'dictation-denied',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await page.eval(`globalThis.__qaDictation = { deny: true }`);
+      await page.clickLabel('Dictate');
+      await sleep(900);
+    },
+    check: 'Permission refused: the plain line over the field and an Open Settings chip; the mic still there',
+    after: async (page) => {
+      await page.eval(`globalThis.__qaDictation = {}`);
+    },
+  },
   {
     name: 'bar-revising',
     route: '/chat/fixtures',
@@ -1032,12 +1082,32 @@ const HEAVY_OFFLINE = [
 /** `--team-setup`: sixteen agents just imported, and the checklist in the Chief's chat. */
 const TEAM_SETUP = [
   {
+    name: 'setup-in-timeline',
+    route: '/chat/chief',
+    ready: 'Tomorrow is quiet',
+    settle: 2500,
+    check:
+      'The newest lines at the foot are your “Thanks. I’ll do the logins tonight…” and the Chief’s reply about tomorrow, never the card. Above the composer one amber bar, “A few things to finish setting up your team · 0 of 4 done”, with Continue',
+  },
+  {
+    name: 'setup-continue',
+    route: '/chat/chief',
+    ready: 'Tomorrow is quiet',
+    settle: 2500,
+    act: async (page) => {
+      await page.clickText('Continue');
+      await sleep(1200);
+    },
+    check:
+      'Continue scrolled up to the card where it was posted, under the import line, lit briefly; the two later messages are under it',
+  },
+  {
     name: 'setup-logins',
     route: '/chat/chief',
     ready: 'Setting up your team',
     settle: 2500,
     check:
-      'One card at the foot of the Chief’s chat: “Setting up your team”, quiet “0 of 4 done”, the source line “A few things to finish… from Grok Bot”, a quiet set-aside note (no count). Add logins open on “Your team is ready. 3 things I couldn’t reach on this Mac:” with LinkedIn (Use my browser), Notion (Connect Notion) and Kiln log (Add a key for Kiln log), each with a quiet Not needed; “3 reached” folded and “Check again” quiet; no per-agent secret rows; the other steps folded rows with chevrons. Skip is quiet; no accent fill anywhere',
+      'One card in the Chief’s chat where it was posted, under the import line: “Setting up your team”, quiet “0 of 4 done”, the source line “A few things to finish… from Grok Bot”, a quiet set-aside note (no count). Add logins open with five rows and Add; the other steps folded rows with chevrons. Skip is quiet; no accent fill anywhere',
   },
   {
     name: 'setup-routines',

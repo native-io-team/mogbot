@@ -1,8 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { SetupStep, TeamSetupView } from '../../lib/teamSetup';
-import { quietAgentIds } from '../../lib/teamSetup';
-import { TeamSetupCard } from './TeamSetupCard';
+import {
+  onlySetupRequests,
+  quietAgentIds,
+  setupAnchorTs,
+  setupHeldCounts,
+  setupItemIndex,
+} from '../../lib/teamSetup';
+import { scopeTeam, type TeamLogins } from '../../lib/agentLogins';
+import { buildChatItems, type Agent, type AgentMessage, type ChatItem } from '../../lib/agents';
+import { SetupLogins, TeamSetupCard } from './TeamSetupCard';
 import { SET_ASIDE_OUTCOME } from './AgentChatItems';
 
 const calls = vi.hoisted(() => ({
@@ -19,6 +27,14 @@ vi.mock('../../lib/teamSetup', async (importOriginal) => ({
   sayHiFromSetup: (a: string) => calls.hello(a),
   askChiefAboutMissing: () => calls.missing(),
   dismissTeamSetup: () => calls.dismiss(),
+}));
+
+const teamLoginsSeen = vi.hoisted(() => ({ ids: [] as string[][] }));
+vi.mock('./TeamLogins', () => ({
+  TeamLogins: ({ agentIds }: { agentIds?: ReadonlySet<string> }) => {
+    teamLoginsSeen.ids.push([...(agentIds ?? [])]);
+    return <div data-testid="team-logins">What your team needs</div>;
+  },
 }));
 
 const logins: SetupStep = {
@@ -92,9 +108,9 @@ describe('TeamSetupCard', () => {
       />
     );
     expect(screen.getByText('Setting up your team')).toBeInTheDocument();
-    expect(screen.getByText('1 of 4 done')).toBeInTheDocument();
+    expect(screen.getByText('3 steps left')).toBeInTheDocument();
     expect(
-      screen.getByText(/A few things to finish for your agents from Grok Bot/)
+      screen.getByText(/agents from Grok Bot are here, quiet until you say hi/)
     ).toBeInTheDocument();
     // Done reads as its outcome; routines (the first open step) is expanded.
     expect(screen.getByText('Logins sorted')).toBeInTheDocument();
@@ -154,7 +170,7 @@ describe('TeamSetupCard', () => {
 
   it('lists each login with whose it is', () => {
     render(<TeamSetupCard view={view([logins, hello(['quiet'])])} chief="Chief of Staff" />);
-    expect(screen.getByText('bankline')).toBeInTheDocument();
+    expect(screen.getByText('Bankline')).toBeInTheDocument();
     expect(screen.getByText('Bookkeeper')).toBeInTheDocument();
     expect(screen.getByText(/Checked against this Mac first/)).toBeInTheDocument();
   });
@@ -169,7 +185,7 @@ describe('TeamSetupCard', () => {
         chief="Chief of Staff"
       />
     );
-    expect(screen.getByText(/Your team is set up/)).toBeInTheDocument();
+    expect(screen.getByText(/Done · Your team is set up/)).toBeInTheDocument();
     expect(screen.queryByText('Setting up your team')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
     await waitFor(() => expect(calls.dismiss).toHaveBeenCalled());
@@ -192,9 +208,118 @@ describe('groupLogins', () => {
       l('Recruiting', 'hirehub'),
     ]);
     expect(groups.map((g) => [g.name, g.items.length])).toEqual([
-      ['bankline', 2],
-      ['hirehub', 1],
+      ['Bankline', 2],
+      ['Hirehub', 1],
     ]);
+  });
+
+  it('names each row by its app, never a raw key, with accounts counted', async () => {
+    const { groupLogins } = await import('../../lib/teamSetup');
+    const l = (name: string, extra: Partial<import('../../lib/teamSetup').SetupLogin> = {}) => ({
+      agentId: 'a',
+      agentName: 'Mailroom',
+      requestId: name,
+      name,
+      purpose: '',
+      ...extra,
+    });
+    const g = groupLogins([
+      l('gmail_personal', { title: 'Gmail', group: 'google', family: 'Google' }),
+      l('gmail_shop', { title: 'Gmail', group: 'google', family: 'Google' }),
+      l('code_host_one', { title: 'GitHub', group: 'github' }),
+      l('code_host_two', { title: 'GitHub', group: 'github' }),
+      l('email_drafts'),
+      l('ledgerApp_owner'),
+    ]);
+    expect(g.map((r) => r.name)).toEqual([
+      'Google — Gmail (2 accounts)',
+      'GitHub (2 accounts)',
+      'Email drafts',
+      'Ledger app owner',
+    ]);
+    for (const r of g) expect(r.name).not.toMatch(/_/);
+  });
+});
+
+describe('SetupLogins', () => {
+  it('puts sign-ins in What your team needs for these agents, keys in rows by app', () => {
+    teamLoginsSeen.ids = [];
+    render(
+      <SetupLogins
+        logins={[
+          {
+            agentId: 'm',
+            agentName: 'Mailroom',
+            requestId: 'l1',
+            name: 'gmail_shop',
+            purpose: 'Read orders',
+            title: 'Gmail',
+            group: 'google',
+            family: 'Google',
+            kind: 'login',
+          },
+          {
+            agentId: 'b',
+            agentName: 'Books',
+            requestId: 's1',
+            name: 'email_drafts',
+            purpose: 'Drafts',
+            kind: 'secret',
+          },
+        ]}
+      />
+    );
+    expect(screen.getByTestId('team-logins')).toBeInTheDocument();
+    expect(teamLoginsSeen.ids[teamLoginsSeen.ids.length - 1]).toEqual(['m']);
+    expect(screen.getByText('Email drafts')).toBeInTheDocument();
+    expect(screen.queryByText('email_drafts')).not.toBeInTheDocument();
+    expect(screen.queryByText('gmail_shop')).not.toBeInTheDocument();
+  });
+});
+
+describe('scopeTeam', () => {
+  it('keeps only these agents, and a Connect skips the rest', () => {
+    const card = (agentId: string, state: 'waiting' | 'connected' = 'waiting') => ({
+      agentId,
+      agentName: agentId,
+      requestId: `r-${agentId}`,
+      service: 'gmail',
+      title: 'Gmail',
+      abilities: [],
+      state,
+    });
+    const team: TeamLogins = {
+      needs: [
+        {
+          key: 'google',
+          title: 'Google',
+          services: ['gmail'],
+          options: [],
+          cards: [card('m'), card('x')],
+          done: false,
+        },
+        { key: 'x', title: 'X', services: ['x'], options: [], cards: [card('x')], done: false },
+      ],
+      done: 0,
+      total: 2,
+    };
+    const scoped = scopeTeam(team, new Set(['m']));
+    expect(scoped.total).toBe(1);
+    expect(scoped.needs[0].cards.map((c) => c.agentId)).toEqual(['m']);
+    expect(scoped.needs[0].hidden).toEqual(['x']);
+  });
+});
+
+describe('the sidebar count', () => {
+  it('does not count an agent whose only requests are the checklist logins', () => {
+    const v = view([logins, hello(['quiet'])]);
+    const held = setupHeldCounts(v);
+    const agent = (pendingApprovals: number) =>
+      ({ id: 'f', pendingApprovals, status: { state: 'waiting' } }) as unknown as Agent;
+    expect(onlySetupRequests(agent(1), held)).toBe(true);
+    // Another request besides: still counted.
+    expect(onlySetupRequests(agent(2), held)).toBe(false);
+    expect(onlySetupRequests(agent(1), setupHeldCounts({ ...v, complete: true }))).toBe(false);
   });
 });
 
@@ -210,5 +335,84 @@ describe('quietAgentIds', () => {
 describe('a request set aside', () => {
   it('reads as set aside, not as unanswered', () => {
     expect(SET_ASIDE_OUTCOME).toBe('Set aside · nothing ran');
+  });
+});
+
+describe('where the card sits in the Chief’s chat', () => {
+  // Fictional times: a quiet afternoon, minutes apart.
+  const t0 = new Date(2026, 2, 4, 14, 0).getTime();
+  const min = 60_000;
+  const msg = (id: string, at: number, extra: Partial<AgentMessage> = {}): AgentMessage =>
+    ({ id, ts: t0 + at * min, kind: 'user', text: id, ...extra }) as AgentMessage;
+  const ids = (items: ChatItem[]) =>
+    items.map((i) => (i.type === 'day' ? 'day' : i.type === 'message' ? i.message.id : 'group'));
+  const placed = (items: ChatItem[], at: number) => {
+    const out = ids(items);
+    out.splice(at, 0, 'CARD');
+    return out;
+  };
+
+  it('stays where it was posted while newer messages arrive under it', () => {
+    const before = [msg('review', 0, { kind: 'approval' }), msg('imported', 1, { kind: 'note' })];
+    const anchor = t0 + 1 * min;
+    let items = buildChatItems(before);
+    expect(placed(items, setupItemIndex(items, anchor))).toEqual([
+      'day',
+      'review',
+      'imported',
+      'CARD',
+    ]);
+    // You send a message: yours is the newest thing, under the card.
+    items = buildChatItems([...before, msg('hi', 3), msg('reply', 4, { kind: 'agent' })]);
+    expect(placed(items, setupItemIndex(items, anchor))).toEqual([
+      'day',
+      'review',
+      'imported',
+      'CARD',
+      'hi',
+      'reply',
+    ]);
+  });
+
+  it('sits above the time line that opens what came after it', () => {
+    const items = buildChatItems([msg('imported', 0, { kind: 'note' }), msg('later', 60 * 24)]);
+    expect(placed(items, setupItemIndex(items, t0))).toEqual([
+      'day',
+      'imported',
+      'CARD',
+      'day',
+      'later',
+    ]);
+  });
+
+  it('is not drawn while its place is above the lines loaded so far', () => {
+    const items = buildChatItems([msg('much later', 90)]);
+    expect(setupItemIndex(items, t0, true)).toBe(-1);
+    // Everything loaded: it is simply first.
+    expect(setupItemIndex(items, t0, false)).toBe(0);
+  });
+
+  it('uses the Mac’s time, else the end of the import (an older Mac)', () => {
+    const log = [
+      msg('earlier', 0),
+      msg('review', 5, {
+        kind: 'approval',
+        approval: { connector: { kind: 'review' } } as AgentMessage['approval'],
+      }),
+      msg('imported', 6, { kind: 'note' }),
+      msg('hi', 9),
+    ];
+    expect(setupAnchorTs({ postedAt: t0 + 2 * min }, log)).toBe(t0 + 2 * min);
+    expect(setupAnchorTs({}, log)).toBe(t0 + 6 * min);
+    expect(setupAnchorTs({}, [msg('hi', 1)])).toBeNull();
+    const items = buildChatItems(log);
+    expect(placed(items, setupItemIndex(items, setupAnchorTs({}, log)))).toEqual([
+      'day',
+      'earlier',
+      'review',
+      'imported',
+      'CARD',
+      'hi',
+    ]);
   });
 });

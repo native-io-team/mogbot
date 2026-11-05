@@ -318,19 +318,30 @@ pub fn window_focused(app: &AppHandle, window: &str) {
 /// sidebar lists (hidden ones don't count there either). macOS badges the app, not a window, so any
 /// window will do.
 pub fn refresh_badge(app: &AppHandle) {
-    let total = store::list()
-        .map(|agents| badge_count(&agents))
-        .unwrap_or(0);
+    let total = store::list().map(|agents| badge_now(&agents)).unwrap_or(0);
     if let Some(window) = app.webview_windows().values().next() {
         let _ = window.set_badge_count((total > 0).then_some(total));
     }
 }
 
+/// The badge now: logins held by "Setting up your team" aren't counted.
+pub fn badge_now(agents: &[Agent]) -> i64 {
+    badge_count_holding(agents, &super::team_setup::held_logins())
+}
+
 pub fn badge_count(agents: &[Agent]) -> i64 {
+    badge_count_holding(agents, &std::collections::HashMap::new())
+}
+
+/// Unread and requests in the sidebar, less what the checklist holds.
+pub fn badge_count_holding(agents: &[Agent], held: &std::collections::HashMap<String, u32>) -> i64 {
     agents
         .iter()
         .filter(|a| !a.hidden)
-        .map(|a| i64::from(a.unread) + i64::from(a.pending_approvals))
+        .map(|a| {
+            let held = held.get(&a.id).copied().unwrap_or(0);
+            i64::from(a.unread) + i64::from(a.pending_approvals.saturating_sub(held))
+        })
         .sum()
 }
 
@@ -393,8 +404,8 @@ mod tests {
             choice: None,
             secret: None,
             connector: None,
-            set_aside: None,
             login: None,
+            set_aside: None,
         });
         message
     }
@@ -519,7 +530,10 @@ mod tests {
         let mut hidden = agent(false);
         hidden.unread = 5;
         hidden.hidden = true;
-        assert_eq!(badge_count(&[a, b, hidden]), 4);
+        assert_eq!(badge_count(&[a.clone(), b, hidden]), 4);
+        // Logins the team checklist holds aren't counted.
+        let held = std::collections::HashMap::from([("fin".to_string(), 1)]);
+        assert_eq!(badge_count_holding(&[a], &held), 2);
     }
 
     #[test]

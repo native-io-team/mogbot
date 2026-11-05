@@ -47,6 +47,7 @@ pub const METHODS: &[&str] = &[
     "agents.templates",
     "agents.update",
     "agents.setDefaults",
+    "agents.setIndependence",
     "agents.revokePermission",
     "agents.instructions",
     "agents.memory",
@@ -443,6 +444,12 @@ pub trait Backend: Send + Sync + 'static {
     async fn set_defaults(
         &self,
         change: crate::agents::defaults::Change,
+    ) -> Result<Value, CommandError>;
+    /// `agents_set_independence`: how much agents do on their own. Changes
+    /// what they're told, never what asks for the user's OK.
+    async fn set_independence(
+        &self,
+        level: crate::agents::independence::Level,
     ) -> Result<Value, CommandError>;
     /// `agents_quota`: each engine's plan, as it last reported it.
     async fn quota(&self) -> Result<Value, CommandError>;
@@ -1193,6 +1200,7 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             .collect();
             format!("new agents: {}", said.join(", "))
         }
+        "agents.setIndependence" => format!("independence: {}", preview(field("level"))),
         _ => field("agentId").to_string(),
     }
 }
@@ -1533,6 +1541,18 @@ async fn run(
                 return Err(bad_params("Nothing to change."));
             }
             Ok(b.set_defaults(change).await?)
+        }
+        "agents.setIndependence" => {
+            let level = params
+                .get("level")
+                .and_then(Value::as_str)
+                .and_then(|l| crate::agents::independence::Level::parse(l).ok())
+                .ok_or_else(|| {
+                    bad_params(
+                        "How independent agents are takes a level: often, judgement or go_hard.",
+                    )
+                })?;
+            Ok(b.set_independence(level).await?)
         }
         "agents.accounts" => Ok(b.accounts().await?),
         "agents.usagePlan" => Ok(b.usage_plan().await?),
@@ -2329,6 +2349,33 @@ mod tests {
         assert!(audited
             .iter()
             .any(|(_, m, _, ok)| m == "agents.setDefaults" && !ok));
+    }
+
+    #[tokio::test]
+    async fn a_phone_reads_and_sets_how_independent_agents_are() {
+        use crate::agents::independence::Level;
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let overview = dispatch(&c, &me, "agents.overview", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(overview["independence"], "go_hard");
+        let set = |params: Value| dispatch(&c, &me, "agents.setIndependence", params);
+        assert!(set(json!({})).await.is_err());
+        assert!(set(json!({ "level": "yolo" })).await.is_err());
+        assert!(set(json!({ "level": 2 })).await.is_err());
+        assert!(stub.independence.lock().unwrap().is_empty());
+        let answer = set(json!({ "level": "often" })).await.unwrap();
+        assert_eq!(answer["level"], "often");
+        assert_eq!(*stub.independence.lock().unwrap(), vec![Level::Often]);
+        assert!(!READ_ONLY_METHODS.contains(&"agents.setIndependence"));
+        assert!(stub
+            .audited()
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.setIndependence"
+                && *ok
+                && detail == "independence: often"));
     }
 
     #[tokio::test]

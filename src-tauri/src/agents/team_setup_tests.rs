@@ -257,6 +257,9 @@ fn a_second_import_joins_the_same_checklist() {
     let second = start("Grok", vec![arrived(&b, &["x"])]).unwrap().unwrap();
     assert_eq!(first.id, second.id);
     assert_eq!(second.agents, vec![a.id.clone(), b.id.clone()]);
+    // The card stays where it was first posted in the Chief's chat.
+    assert_eq!(second.posted_at, first.posted_at);
+    assert_eq!(view().unwrap().posted_at, first.started_at);
     // Someone new reopens Say hi.
     assert!(!second.steps.contains_key(&StepId::Hello));
     // One that was finished is done with: the next import starts its own.
@@ -366,6 +369,14 @@ fn the_upgrade_folds_an_older_import_in_and_sets_aside_the_fan_out_once() {
 
     let done = upgrade(&chief).unwrap().unwrap();
     assert_eq!(done.agents, 2);
+    // The card sits under the upgrade's line ("below"), where it was posted.
+    let chief_log = store::messages(&chief.id, usize::MAX).unwrap();
+    let line = chief_log
+        .iter()
+        .rev()
+        .find(|m| m.text == UPGRADE_LINE)
+        .unwrap();
+    assert_eq!(view_any().unwrap().posted_at, line.ts);
     let mut set: Vec<&str> = done.set_aside.iter().map(|(_, id)| id.as_str()).collect();
     set.sort();
     assert_eq!(set, vec!["car-fan", "fan"]);
@@ -501,6 +512,50 @@ fn an_import_asks_for_no_logins_up_front_and_keeps_them_for_later() {
 }
 
 #[test]
+fn a_setup_kept_by_an_earlier_build_keeps_the_place_it_was_posted() {
+    let (_serial, _dir) = root();
+    let chief = crate::agents::ensure_main().unwrap();
+    let a = agent("Bookkeeper");
+    let now = store::now_ms();
+    // Upgraded by a build that pinned the card at the foot: no `postedAt`.
+    say(
+        &chief.id,
+        now - 60_000,
+        json!({ "kind": "note", "text": UPGRADE_LINE }),
+    );
+    say(
+        &chief.id,
+        now - 1_000,
+        json!({ "kind": "user", "text": "Morning" }),
+    );
+    let kept = TeamSetup {
+        id: "old".into(),
+        source: "Grok Bot".into(),
+        started_at: now - 3_600_000,
+        agents: vec![a.id.clone()],
+        upgraded: true,
+        ..TeamSetup::default()
+    };
+    save(&kept).unwrap();
+    assert!(!std::fs::read_to_string(path().unwrap())
+        .unwrap()
+        .contains("postedAt"));
+    // Under the upgrade's line, not under "Morning"; and written down once.
+    assert_eq!(view().unwrap().posted_at, now - 60_000);
+    assert_eq!(load().unwrap().posted_at, Some(now - 60_000));
+
+    // One from an import: at the import.
+    save(&TeamSetup {
+        upgraded: false,
+        posted_at: None,
+        ..kept
+    })
+    .unwrap();
+    assert_eq!(view().unwrap().posted_at, now - 3_600_000);
+    store::set_root_for_tests(None);
+}
+
+#[test]
 fn quiet_import_cards_from_before_fold_into_the_checklist_with_a_line() {
     let (_serial, _dir) = root();
     crate::agents::ensure_main().unwrap();
@@ -534,4 +589,55 @@ fn quiet_import_cards_from_before_fold_into_the_checklist_with_a_line() {
     let v = view().unwrap();
     assert_eq!(step_of(&v, StepId::Logins).later[0].title, "Bank");
     store::set_root_for_tests(None);
+}
+
+#[test]
+fn the_logins_step_names_apps_by_service_never_by_raw_key() {
+    let (_serial, _dir) = root();
+    crate::agents::ensure_main().unwrap();
+    let mailroom = agent("Mailroom");
+    let books = agent("Books");
+    // An import's quiet secret cards, keyed the way an assistant names them.
+    say(&mailroom.id, 1, login_card("s1", "gmail_personal"));
+    say(&mailroom.id, 2, login_card("s2", "email_drafts"));
+    say(&books.id, 3, login_card("s3", "ledgerApp_owner"));
+    // And a login card, as `request_login` makes it.
+    let ask = crate::agents::logins::Ask {
+        service: "google_calendar".into(),
+        why: "Book interviews".into(),
+        quiet: true,
+        ..Default::default()
+    };
+    let r = crate::agents::logins::build(&books, &ask).unwrap();
+    say(
+        &books.id,
+        4,
+        json!({ "kind": "approval", "approval": {
+            "requestId": "l1", "title": "Books needs your Google Calendar", "detail": "",
+            "status": "pending", "login": r } }),
+    );
+    start("Grok", vec![arrived(&mailroom, &[]), arrived(&books, &[])]).unwrap();
+    let v = view().unwrap();
+    let logins = &step_of(&v, StepId::Logins).logins;
+    let by = |id: &str| logins.iter().find(|l| l.request_id == id).unwrap();
+    assert_eq!(by("s1").title, "Gmail");
+    assert_eq!(by("s1").group, "google");
+    assert_eq!(by("s1").family.as_deref(), Some("Google"));
+    assert_eq!(by("s2").title, "Email drafts");
+    assert_eq!(by("s2").kind, LoginKind::Secret);
+    assert_eq!(by("s3").title, "Ledger app owner");
+    assert_eq!(by("l1").title, "Google Calendar");
+    assert_eq!(by("l1").group, "google");
+    assert_eq!(by("l1").kind, LoginKind::Login);
+    for l in logins.iter() {
+        assert!(!l.title.contains('_'), "{}", l.title);
+    }
+}
+
+#[test]
+fn keys_read_as_words() {
+    assert_eq!(humanise("slack_workspaces"), "Slack workspaces");
+    assert_eq!(humanise("emailDrafts"), "Email drafts");
+    assert_eq!(humanise("x-api.token"), "X api token");
+    assert_eq!(humanise("  "), "A login");
 }

@@ -11,12 +11,23 @@ type NativeStackNavigationOptions = Exclude<
 >;
 
 /**
- * A tab's root screen: the large title, flush with the page. Pass the result
- * through `useMemo`: `Stack.Screen` calls `setOptions` whenever its `options`
- * object is new, and a header rebuilt on every render (each overview push,
- * each turn of a pull to refresh) re-applies the navigation bar under a
- * large title mid-gesture, which is one of the ways a pull can end janky or
- * held part-way down.
+ * A tab's root screen: the large title, over a list that runs under the bar.
+ * Pass the result through `useMemo`: `Stack.Screen` calls `setOptions`
+ * whenever its `options` object is new.
+ *
+ * **Translucent, not opaque, so pull to refresh is smooth.** Under a large
+ * title UIKit hosts the list's refresh spinner in the navigation bar, which
+ * grows by the spinner's height while it spins. With an opaque bar,
+ * react-native-screens (iOS 26) lays the screen out *below* the bar with a
+ * padding view; when the refresh ended the bar shrank in one step, the
+ * padding followed, and the whole list jumped up 60pt with the title blinking
+ * (recorded on the iOS Simulator, iPhone 16 Pro, iOS 26.1). Translucent, the
+ * list runs under the bar, takes the bar's height as its own adjusted inset
+ * (`contentInsetAdjustmentBehavior="automatic"`), and UIKit animates the
+ * spinner away as in Mail. No background colour on the bar, either: on iOS 26
+ * a large title over a coloured bar isn't drawn at all. So anything on these
+ * screens that isn't the scrolling list sits under the bar unless it's padded
+ * by `useHeaderHeight` (the iPad split's chat).
  */
 export const largeTitle = (
   colors: Palette,
@@ -25,8 +36,9 @@ export const largeTitle = (
 ): NativeStackNavigationOptions => ({
   title,
   headerLargeTitle: true,
+  headerTransparent: true,
+  headerStyle: {},
   headerLargeTitleShadowVisible: false,
-  headerLargeStyle: { backgroundColor: colors.surfaceApp },
   headerLargeTitleStyle: { fontFamily: fonts.semibold, color: colors.textStrong },
   ...extra,
 });

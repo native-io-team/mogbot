@@ -399,6 +399,7 @@ pub fn overview() -> Value {
             engine_ready: true,
             engines: engines(),
             defaults: defaults(),
+            independence: crate::agents::independence::Level::GoHard,
         })
         .unwrap(),
     )
@@ -532,6 +533,7 @@ pub struct Stub {
     pub created: Mutex<Vec<PhoneNewAgent>>,
     /// Changes to new agents' defaults, as the router handed them over.
     pub defaults: Mutex<Vec<crate::agents::defaults::Change>>,
+    pub independence: Mutex<Vec<crate::agents::independence::Level>>,
     /// Agents started fresh, by id.
     pub fresh: Mutex<Vec<String>>,
     /// What reached a session: `(session id, text or "key:<key>")`.
@@ -572,6 +574,7 @@ impl Stub {
             toggles: Mutex::new(Vec::new()),
             created: Mutex::new(Vec::new()),
             defaults: Mutex::new(Vec::new()),
+            independence: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
@@ -626,6 +629,11 @@ pub fn team_setup_fixture() -> crate::agents::team_setup::SetupView {
         request_id: "s1".into(),
         name: "wise".into(),
         purpose: "Read balances and pay invoices".into(),
+        title: "Wise".into(),
+        group: "wise".into(),
+        family: None,
+        kind: crate::agents::team_setup::LoginKind::Secret,
+        account: None,
     }];
     {
         use crate::agents::access_check::{CheckView, Checked, LaterGroup, LaterState};
@@ -731,6 +739,7 @@ pub fn team_setup_fixture() -> crate::agents::team_setup::SetupView {
     SetupView {
         id: "setup1".into(),
         source: "Grok".into(),
+        posted_at: 1_700_000_000_000,
         steps: vec![logins, routines, missing, hi],
         done: 2,
         total: 4,
@@ -1145,6 +1154,14 @@ impl Backend for Stub {
         }
         self.defaults.lock().unwrap().push(change);
         Ok(serde_json::to_value(defaults()).unwrap())
+    }
+
+    async fn set_independence(
+        &self,
+        level: crate::agents::independence::Level,
+    ) -> Result<Value, CommandError> {
+        self.independence.lock().unwrap().push(level);
+        Ok(json!({ "level": level }))
     }
 
     async fn import_status(&self) -> Result<Value, CommandError> {
@@ -1759,6 +1776,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
     m.ts = 1_762_290_000_000;
     m.approval = Some(Approval {
         request_id: "q12".into(),
+        set_aside: None,
         title: "Finance needs your Gmail (work)".into(),
         detail: "Read invoices that arrive by email".into(),
         summary: None,
@@ -1772,7 +1790,6 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
         choice: None,
         secret: None,
         connector: None,
-        set_aside: None,
         login: Some(LoginRequest {
             service: "gmail".into(),
             title: "Gmail".into(),

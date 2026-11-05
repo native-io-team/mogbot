@@ -474,6 +474,16 @@ impl Backend for DesktopBackend {
         json(cmd::agents_set_defaults(self.app.clone(), change).await?)
     }
 
+    async fn set_independence(
+        &self,
+        level: crate::agents::independence::Level,
+    ) -> Result<Value, CommandError> {
+        let level = serde_json::to_value(level).map_err(crate::agents::err_other)?;
+        let level = level.as_str().unwrap_or_default().to_string();
+        let level = cmd::agents_set_independence(self.app.clone(), level).await?;
+        Ok(serde_json::json!({ "level": level }))
+    }
+
     async fn accounts(&self) -> Result<Value, CommandError> {
         json(cmd::agents_accounts().await?)
     }
@@ -520,50 +530,6 @@ impl Backend for DesktopBackend {
         .await
         .map_err(crate::agents::err_other)??;
         json(applied)
-    }
-
-    async fn team_setup(
-        &self,
-        action: super::router::TeamSetupAction,
-    ) -> Result<Value, CommandError> {
-        use super::router::TeamSetupAction as A;
-        let app = self.app.clone();
-        match action {
-            A::Get { any } => json(cmd::agents_team_setup(Some(any)).await?),
-            A::Step { step, state } => {
-                cmd::agents_team_setup_step(app, step, state).await?;
-                Ok(Value::Null)
-            }
-            A::Routine {
-                agent_id,
-                check_in_id,
-                on,
-            } => {
-                cmd::agents_team_setup_routine(app, agent_id, check_in_id, on).await?;
-                Ok(Value::Null)
-            }
-            A::Hello { agent_id } => json(cmd::agents_team_setup_hello(app, agent_id).await?),
-            A::Missing => json(cmd::agents_team_setup_missing(app).await?),
-            A::Dismiss => {
-                cmd::agents_team_setup_dismiss(app).await?;
-                Ok(Value::Null)
-            }
-            A::Later {
-                key,
-                connect,
-                on_phone,
-            } => json(
-                cmd::agents_team_setup_later(
-                    app,
-                    key,
-                    if connect { "connect" } else { "not_needed" }.into(),
-                    Some(true),
-                    Some(on_phone),
-                )
-                .await?,
-            ),
-            A::Check => json(cmd::agents_access_check(app).await?),
-        }
     }
 
     async fn login_start(
@@ -676,6 +642,50 @@ impl Backend for DesktopBackend {
             request_id.to_string(),
         )
         .await
+    }
+
+    async fn team_setup(
+        &self,
+        action: super::router::TeamSetupAction,
+    ) -> Result<Value, CommandError> {
+        use super::router::TeamSetupAction as A;
+        let app = self.app.clone();
+        match action {
+            A::Get { any } => json(cmd::agents_team_setup(Some(any)).await?),
+            A::Step { step, state } => {
+                cmd::agents_team_setup_step(app, step, state).await?;
+                Ok(Value::Null)
+            }
+            A::Routine {
+                agent_id,
+                check_in_id,
+                on,
+            } => {
+                cmd::agents_team_setup_routine(app, agent_id, check_in_id, on).await?;
+                Ok(Value::Null)
+            }
+            A::Hello { agent_id } => json(cmd::agents_team_setup_hello(app, agent_id).await?),
+            A::Missing => json(cmd::agents_team_setup_missing(app).await?),
+            A::Dismiss => {
+                cmd::agents_team_setup_dismiss(app).await?;
+                Ok(Value::Null)
+            }
+            A::Later {
+                key,
+                connect,
+                on_phone,
+            } => json(
+                cmd::agents_team_setup_later(
+                    app,
+                    key,
+                    if connect { "connect" } else { "not_needed" }.into(),
+                    Some(true),
+                    Some(on_phone),
+                )
+                .await?,
+            ),
+            A::Check => json(cmd::agents_access_check(app).await?),
+        }
     }
 
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError> {

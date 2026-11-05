@@ -6,6 +6,7 @@
 
 import { NativeTabs } from 'expo-router/native-tabs';
 import { attentionCounts } from '../../lib/agents';
+import { quietAgentIds } from '../../lib/home';
 import { useApp } from '../../lib/store';
 import { useColors } from '../../lib/appearance';
 
@@ -17,7 +18,7 @@ export default function TabsLayout() {
   const live = useApp((s) => s.link.kind === 'connected');
   // The same number as Home's "N need you": what you can answer from here.
   const waiting = useApp((s) =>
-    s.overview ? attentionCounts(s.overview.agents, s.chats).needYou : 0
+    s.overview ? attentionCounts(s.overview.agents, s.chats, quietAgentIds(s.teamSetup)).needYou : 0
   );
   const asking = useApp(
     (s) =>

@@ -8,7 +8,14 @@
  *   reads it when this turn ends), with **Send now** (interrupt, then send)
  *   in the hint row. Two controls in the field at most, never three;
  * - waiting on your OK: Send queues, and no Stop: the card above is the control;
- * - offline: **Send** waits for the Mac (outbox.ts), and says so.
+ * - offline: **Send** waits for the Mac (outbox.ts), and says so;
+ * - dictating: the field listens (lib/dictation.ts). The words stream into
+ *   it, the last few lighter while the recognizer decides; the mic's place
+ *   holds the waveform and the time, × takes the +'s place and ✓ Send's.
+ *   ✓ keeps the words in the draft to read and edit, as ChatGPT's and
+ *   Grok's dictation do: what you say is never sent on its own (the desk's
+ *   rule too). The keyboard steps away while it listens and comes back after
+ *   if it was up; tapping the words is ✓ and edit.
  *
  * What's typed, quoted, @mentioned and attached is the chat's draft
  * (drafts.ts): it survives leaving the chat and restarting the app. Files
@@ -29,22 +36,28 @@ import {
   type Ref,
 } from 'react';
 import {
+  Keyboard,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
+  Text,
   TextInput,
   View,
   useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native';
-import { dictationHint, useDictation } from '../lib/dictation';
+import { dictationHint, listeningNote, problemCopy, useDictation } from '../lib/dictation';
 import Animated, {
   FadeIn,
   FadeOut,
   LinearTransition,
   ZoomIn,
   ZoomOut,
+  useSharedValue,
 } from 'react-native-reanimated';
+import { formatElapsed } from '../lib/waveform';
+import { Waveform } from './Waveform';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccent } from '../lib/accent';
 import { needsYou } from '../lib/agents';
@@ -94,6 +107,7 @@ export function Composer({
   macName,
   onError,
   onSent,
+  onOpenSetup,
   onHeight,
   side = { left: 0, right: 0 },
 }: {
@@ -103,6 +117,8 @@ export function Composer({
   macName: string;
   onError: (text: string) => void;
   onSent: () => void;
+  /** The setup bar's Continue: go to "Setting up your team" in the chat. */
+  onOpenSetup?: () => void;
   onHeight?: (h: number) => void;
   /** Kept clear at each side: a phone in landscape has its notch there. */
   side?: { left: number; right: number };
@@ -132,20 +148,38 @@ export function Composer({
     },
     [agent.id]
   );
-  const dictation = useDictation({ getDraft, setDraft: putSpoken, vocabulary, onProblem: onError });
+  // The voice's level, 0..1, straight to the UI thread: the waveform reads it there.
+  const level = useSharedValue(0);
+  const onLevel = useCallback((l: number) => level.set(l), [level]);
+  const dictation = useDictation({ getDraft, setDraft: putSpoken, vocabulary, onLevel });
   const listening = dictation.phase !== 'idle';
+  const problem = dictation.problem ? problemCopy(dictation.problem) : null;
   // A hint stays a few seconds: it's an answer to a tap, not a state.
   useEffect(() => {
     if (!micHint) return;
     const t = setTimeout(() => setMicHint(null), 5000);
     return () => clearTimeout(t);
   }, [micHint]);
+  // A problem stays longer, with its fix beside it, and goes when you type or tap the mic.
+  const { clearProblem } = dictation;
+  useEffect(() => {
+    if (!dictation.problem) return;
+    if (dictation.problem !== 'nothing-heard') haptic.error();
+    const t = setTimeout(clearProblem, 10_000);
+    return () => clearTimeout(t);
+  }, [dictation.problem, clearProblem]);
+  /** The keyboard was up when the mic was tapped (or the words were): it comes back after. */
+  const refocus = useRef(false);
+  // The input comes back after every dictation: only the first may pull the keyboard up.
+  const [dictated, setDictated] = useState(false);
+  useEffect(() => {
+    if (listening || !refocus.current) return;
+    refocus.current = false;
+    // After the field is a text input again.
+    const t = setTimeout(() => input.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [listening]);
   const mic = () => {
-    if (listening) {
-      haptic.select();
-      dictation.stop();
-      return;
-    }
     const hint = dictationHint(dictation.support);
     if (hint) {
       // No recognizer in this build: the keyboard has one.
@@ -154,7 +188,30 @@ export function Composer({
       return;
     }
     haptic.select();
+    setMicHint(null);
+    setDictated(true);
+    refocus.current = input.current?.isFocused() ?? false;
+    Keyboard.dismiss();
     void dictation.start();
+  };
+  const dictationDone = () => {
+    haptic.select();
+    dictation.done();
+  };
+  const dictationCancel = () => {
+    haptic.select();
+    dictation.cancel();
+  };
+  /** Tapping the words while it listens: keep them and edit. */
+  const editDictation = () => {
+    refocus.current = true;
+    dictation.done();
+  };
+  const fixProblem = () => {
+    const fix = problem?.fix;
+    clearProblem();
+    if (fix === 'settings') void Linking.openSettings();
+    else if (fix === 'retry') mic();
   };
 
   const ready = draft.files ?? [];
@@ -187,6 +244,14 @@ export function Composer({
   // Driven on the Mac: it waits for the hand-back there, and nothing here interrupts it.
   const driven = Boolean(agent.takeover);
   const offerNow = mode === 'queue' && connected && !waitingOnYou && !driven;
+  // One chip in the hint row: a dictation problem's fix comes first.
+  const fixLabel =
+    !listening && problem?.fix === 'settings'
+      ? 'Open Settings'
+      : !listening && problem?.fix === 'retry'
+        ? 'Try again'
+        : null;
+  const chipNow = offerNow && !fixLabel;
 
   const query = mentionQuery(draft.text);
   const suggestions = useMemo(() => {
@@ -242,9 +307,7 @@ export function Composer({
     ]);
 
   const setText = (text: string) => {
-    // A keystroke while the mic listens stops it, so the next words it hears
-    // can't overwrite what you just typed.
-    if (dictation.typed()) setMicHint('Dictation stopped so you can type. Tap the mic to go on.');
+    clearProblem();
     setComposer(agent.id, { text, mentions: liveMentions(text, draft.mentions) });
   };
 
@@ -267,7 +330,7 @@ export function Composer({
     else haptic.light();
     const { body, mentions, files } = current;
     // Words still on their way would land in the emptied draft.
-    dictation.cancel();
+    dictation.drop();
     clearComposer(agent.id);
     setStaged([]);
     onSent();
@@ -288,21 +351,24 @@ export function Composer({
   };
 
   // Driven on the Mac, an import, the link down: the bars above say those, once.
+  // Listening says only where the words go when that's off the phone.
   const hint = listening
-    ? 'Listening on this phone · tap the mic when you’re done'
-    : micHint
-      ? micHint
-      : !connected
-        ? hasContent
-          ? `Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
-          : 'What you type stays here'
-        : uploading
-          ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
-          : mode === 'queue' && !driven
-            ? waitingOnYou
-              ? `${agent.name} reads it after you answer above`
-              : `${agent.name} reads it when this turn ends`
-            : null;
+    ? listeningNote(dictation.via)
+    : problem
+      ? problem.text
+      : micHint
+        ? micHint
+        : !connected
+          ? hasContent
+            ? `Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
+            : 'What you type stays here'
+          : uploading
+            ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
+            : mode === 'queue' && !driven
+              ? waitingOnYou
+                ? `${agent.name} reads it after you answer above`
+                : `${agent.name} reads it when this turn ends`
+              : null;
 
   return (
     <View
@@ -320,6 +386,7 @@ export function Composer({
         agent={agent}
         revising={draft.revising}
         onStopRevising={() => setComposer(agent.id, { revising: undefined })}
+        onOpenSetup={onOpenSetup}
       />
       {suggestions.length > 0 && (
         <Animated.View entering={FadeIn.duration(120)} exiting={FadeOut.duration(100)}>
@@ -347,7 +414,7 @@ export function Composer({
           </ScrollView>
         </Animated.View>
       )}
-      {(hint || offerNow) && (
+      {(hint || chipNow || fixLabel) && (
         <Animated.View
           entering={FadeIn.duration(150)}
           exiting={FadeOut.duration(100)}
@@ -357,7 +424,21 @@ export function Composer({
           <T variant="caption" color={colors.textSecondary} style={styles.hint}>
             {hint}
           </T>
-          {offerNow && (
+          {fixLabel && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={fixLabel}
+              onPress={fixProblem}
+              android_ripple={ripple}
+              hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+              style={({ pressed }) => [styles.nowChip, pressed && styles.pressed]}
+            >
+              <T variant="caption" color={colors.textStrong} maxFontSizeMultiplier={chromeScale}>
+                {fixLabel}
+              </T>
+            </Pressable>
+          )}
+          {chipNow && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Send now: interrupt ${agent.name} and send`}
@@ -448,7 +529,35 @@ export function Composer({
         </ScrollView>
       )}
       <View style={styles.row}>
-        {canAttach && (
+        {listening && (
+          // In the +'s place, the same circle: nothing in the row moves.
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cancel dictation"
+            accessibilityHint="Puts the message back as it was"
+            onPress={dictationCancel}
+            hitSlop={4}
+          >
+            {({ pressed }) => (
+              <Animated.View
+                entering={ZoomIn.duration(160)}
+                style={[
+                  field.attach,
+                  { width: size.field, height: size.field, borderRadius: size.field / 2 },
+                  pressed && { backgroundColor: colors.surfaceControlHover },
+                ]}
+              >
+                <Icon
+                  name="xmark"
+                  size={iconSize.body}
+                  color={colors.textPrimary}
+                  fallback={<T>×</T>}
+                />
+              </Animated.View>
+            )}
+          </Pressable>
+        )}
+        {canAttach && !listening && (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Attach files"
@@ -479,7 +588,7 @@ export function Composer({
           // A new text size remounts the field, so it never keeps a stale height.
           key={`input-${fontScale}`}
           value={draft.text}
-          autoFocus={autoFocus}
+          autoFocus={autoFocus && !dictated}
           onChangeText={setText}
           // One line: a long name ("Recruiting Coordinator for the Platform
           // Team") wrapped the placeholder onto two. The header says who.
@@ -492,25 +601,48 @@ export function Composer({
           }
           label={`Message ${agent.name}`}
           inputRef={input}
+          dictation={listening ? { ...dictation.display, onPress: editDictation } : undefined}
         >
-          {/* While a turn runs the mic steps aside: Stop takes its place, never a third control.
-              Driven on the Mac there is no Stop here, so the mic stays. */}
-          {(!busy || listening || driven) && (
+          {listening && (
+            <Animated.View
+              key="wave"
+              entering={FadeIn.duration(160)}
+              style={[styles.listening, { height: size.send }]}
+            >
+              <Waveform level={level} height={size.send} />
+              <Elapsed since={dictation.startedAt} />
+            </Animated.View>
+          )}
+          {listening && (
             <RoundButton
-              key="mic"
-              label={listening ? 'Stop dictating' : 'Dictate'}
-              onPress={mic}
-              tone={listening ? 'accent' : 'off'}
+              key="done"
+              label="Done dictating"
+              hint="Keeps what you said in the message"
+              disabled={dictation.phase === 'stopping'}
+              onPress={dictationDone}
+              tone="accent"
             >
               <Icon
-                name={listening ? 'mic.fill' : 'mic'}
+                name="checkmark"
                 size={iconSize.body}
-                color={listening ? accent.onAccent : colors.textSecondary}
+                color={accent.onAccent}
+                fallback={<T color={accent.onAccent}>✓</T>}
+              />
+            </RoundButton>
+          )}
+          {/* While a turn runs the mic steps aside: Stop takes its place, never a third control.
+              Driven on the Mac there is no Stop here, so the mic stays. */}
+          {!listening && (!busy || driven) && (
+            <RoundButton key="mic" label="Dictate" onPress={mic} tone="off">
+              <Icon
+                name="mic"
+                size={iconSize.body}
+                color={colors.textSecondary}
                 fallback={<T color={colors.textSecondary}>●</T>}
               />
             </RoundButton>
           )}
-          {(mode === 'stop' || (mode === 'queue' && !waitingOnYou && !driven)) && (
+          {!listening && (mode === 'stop' || (mode === 'queue' && !waitingOnYou && !driven)) && (
             <RoundButton
               key="stop"
               label={`Stop ${agent.name}`}
@@ -521,7 +653,7 @@ export function Composer({
               <View style={styles.stopSquare} />
             </RoundButton>
           )}
-          {mode !== 'stop' && (
+          {!listening && mode !== 'stop' && (
             <RoundButton
               key="send"
               // Sending while it works queues: the hint above says so, so the button stays an arrow.
@@ -565,6 +697,7 @@ export function ComposerField({
   autoFocus,
   editable = true,
   inputRef,
+  dictation,
   children,
 }: {
   value: string;
@@ -574,6 +707,12 @@ export function ComposerField({
   autoFocus?: boolean;
   editable?: boolean;
   inputRef?: Ref<ComponentRef<typeof TextInput>>;
+  /**
+   * Listening: the words as they arrive, in place of the input, with the
+   * input's exact type and padding so the field keeps its height. What's
+   * still being decided is lighter. A tap on them is `onPress`.
+   */
+  dictation?: { settled: string; deciding: string; onPress: () => void };
   children?: ReactNode;
 }) {
   const colors = useColors();
@@ -581,6 +720,45 @@ export function ComposerField({
   const appearance = useAppearance();
   const accent = useAccent();
   const size = useComposerSize();
+  const words = useRef<ComponentRef<typeof ScrollView>>(null);
+  if (dictation) {
+    const empty = !dictation.settled && !dictation.deciding;
+    return (
+      <View style={[field.field, { minHeight: size.field }]}>
+        <Pressable
+          style={field.words}
+          onPress={dictation.onPress}
+          accessibilityRole="text"
+          accessibilityLabel={
+            empty ? 'Listening' : `${label}: ${dictation.settled}${dictation.deciding}`
+          }
+          accessibilityHint="Double-tap to stop and edit"
+          accessibilityLiveRegion="polite"
+        >
+          <ScrollView
+            ref={words}
+            style={{ maxHeight: size.maxHeight }}
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            // The newest words in view, as the input would keep its cursor.
+            onContentSizeChange={() => words.current?.scrollToEnd({ animated: false })}
+          >
+            <Text maxFontSizeMultiplier={chromeScale} style={field.input}>
+              {empty ? (
+                <Text style={{ color: colors.textMuted }}>{placeholder}</Text>
+              ) : (
+                <>
+                  {dictation.settled}
+                  <Text style={{ color: colors.textSecondary }}>{dictation.deciding}</Text>
+                </>
+              )}
+            </Text>
+          </ScrollView>
+        </Pressable>
+        {children}
+      </View>
+    );
+  }
   return (
     <View style={[field.field, { minHeight: size.field }]}>
       <TextInput
@@ -609,12 +787,14 @@ export function ComposerField({
  */
 export function RoundButton({
   label,
+  hint,
   disabled,
   onPress,
   tone,
   children,
 }: {
   label: string;
+  hint?: string;
   disabled?: boolean;
   onPress: () => void;
   tone: 'accent' | 'quiet' | 'off';
@@ -629,6 +809,7 @@ export function RoundButton({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
+        accessibilityHint={hint}
         accessibilityState={{ disabled: !!disabled }}
         disabled={disabled}
         onPress={onPress}
@@ -657,6 +838,35 @@ export function RoundButton({
         )}
       </Pressable>
     </Animated.View>
+  );
+}
+
+/** The time spent listening, beside the waveform: it ticks on the second. */
+function Elapsed({ since }: { since: number }) {
+  const colors = useColors();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!since) return;
+    let t: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const at = Date.now();
+      setNow(at);
+      t = setTimeout(tick, 1000 - ((at - since) % 1000));
+    };
+    tick();
+    return () => clearTimeout(t);
+  }, [since]);
+  return (
+    <T
+      variant="caption"
+      color={colors.textSecondary}
+      maxFontSizeMultiplier={chromeScale}
+      style={{ fontVariant: ['tabular-nums'] }}
+      accessibilityElementsHidden
+      importantForAccessibility="no"
+    >
+      {formatElapsed(since ? now - since : 0)}
+    </T>
   );
 }
 
@@ -706,6 +916,7 @@ const useFieldStyles = makeStyles((colors) => ({
     paddingRight: composer.padRight,
   },
   roundSlot: { marginRight: composer.inset, marginBottom: composer.inset },
+  words: { flex: 1 },
   round: {
     width: composer.send,
     height: composer.send,
@@ -742,6 +953,13 @@ const useStyles = makeStyles((colors) => ({
     marginRight: space.xs,
   },
   hint: { flex: 1 },
+  listening: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginRight: space.sm,
+    marginBottom: composer.inset,
+  },
   nowChip: {
     paddingHorizontal: space.md,
     paddingVertical: space.xs,

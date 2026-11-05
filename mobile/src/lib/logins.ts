@@ -11,7 +11,7 @@
  * The pure parts are in `loginState.ts`, re-exported here.
  */
 
-import type { AgentSecret } from '@shipstudio/companion-protocol';
+import type { AgentSecret, TeamLogins, TeamNeed } from '@shipstudio/companion-protocol';
 import { requireOptionalNativeModule } from 'expo';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
@@ -38,6 +38,26 @@ export const readReach = (agentId: string) => call('agents.reach', { agentId });
 
 export const readTeam = (since?: number) =>
   call('agents.loginsTeam', since !== undefined ? { since } : {});
+
+/**
+ * The list for some agents only (the "Setting up your team" card's): other
+ * agents' cards are left off, empty rows go, progress counts what's shown,
+ * and `hidden` is who a Connect on the row must skip (as the desk's `scopeTeam`).
+ */
+export function scopeTeam(
+  team: TeamLogins,
+  agentIds: ReadonlySet<string>
+): TeamLogins & { needs: (TeamNeed & { hidden: string[] })[] } {
+  const needs = team.needs.flatMap((need) => {
+    const cards = need.cards.filter((c) => agentIds.has(c.agentId));
+    if (cards.length === 0) return [];
+    const hidden = [
+      ...new Set(need.cards.filter((c) => !agentIds.has(c.agentId)).map((c) => c.agentId)),
+    ];
+    return [{ ...need, cards, done: cards.every((c) => c.state !== 'waiting'), hidden }];
+  });
+  return { needs, done: needs.filter((n) => n.done).length, total: needs.length };
+}
 
 export const connectNeed = (key: string, optionId: string, skip: string[], onPhone = false) =>
   call('agents.loginsConnect', {

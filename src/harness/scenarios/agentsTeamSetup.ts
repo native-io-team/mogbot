@@ -297,13 +297,22 @@ const CHIEF_BEFORE = [
   ),
 ];
 
+/** When the upgrade posted the card, under its line. */
+const POSTED_MIN = 20;
+
 const CHIEF_AFTER = [
   ...CHIEF_BEFORE,
   msg(
     'note',
     'What your team needs to get going is in one place now, below. Nothing it asked for has run.',
-    1
+    POSTED_MIN
   ),
+];
+
+/** After the card: the conversation goes on under it, as under any message. */
+const LATER = [
+  msg('user', 'Thanks. I’ll do the logins tonight. What’s on for tomorrow?', 6),
+  msg('agent', 'Tomorrow is quiet: the kiln firing at 10 and the wholesale call at 3.', 5),
 ];
 
 const messages =
@@ -371,6 +380,7 @@ function setupView(
   return {
     id: 'setup1',
     source: SOURCE,
+    postedAt: now - POSTED_MIN * MIN,
     steps,
     done,
     total: steps.length,
@@ -406,6 +416,19 @@ export const agentsTeamSetupScenarios: Scenario[] = [
       agents_overview: overview(agentsFor(true)),
       agents_messages: messages(true),
       agents_team_setup: setupView({}),
+    },
+  },
+  {
+    id: 'agents-team-setup-later',
+    title: 'Agents — Setting up your team, with the conversation going on under it',
+    looksRightWhen:
+      'The card sits where it was posted, right under “What your team needs to get going is in one place now, below…”, and the conversation after it comes under the card: your “Thanks. I’ll do the logins tonight…” and the Chief’s reply about tomorrow are the newest lines, at the foot, over the composer. The bar above the composer still says “A few things to finish setting up your team · 1 of 4 done” with Continue; Continue scrolls up to the card and rings it.',
+    command: 'agents.open',
+    requires: '[data-testid="team-setup"]',
+    commands: {
+      agents_overview: overview(agentsFor(true)),
+      agents_messages: messages(true, LATER),
+      agents_team_setup: setupView({ logins: 'done' }),
     },
   },
   {
@@ -455,12 +478,12 @@ export const agentsTeamSetupScenarios: Scenario[] = [
     id: 'agents-team-setup-done',
     title: 'Agents — Setting up your team, finished',
     looksRightWhen:
-      'No card: one quiet centred line at the foot of the Chief’s chat, “Your team is set up.”, with Hide.',
+      'No card: one quiet centred line where the card was, under “What your team needs…”, “Done · Your team is set up.”, with Hide. The conversation after it stays under it, and there is no setup bar above the composer.',
     command: 'agents.open',
     requires: '[data-testid="team-setup-done"]',
     commands: {
       agents_overview: overview(agentsFor(true)),
-      agents_messages: messages(true),
+      agents_messages: messages(true, LATER),
       agents_team_setup: {
         ...setupView({ logins: 'done', routines: 'done', missing: 'done', hello: 'done' }),
         complete: true,

@@ -2940,6 +2940,12 @@ pub(super) fn system_prompt_for(
         super::usage_plan::mode().0,
         agent.is_main,
     ));
+    // How much to do on its own: the user's level, or the strictest for a
+    // turn answering outside text. Fixed per level, so the cache holds.
+    prompt.push_str("\n\n");
+    prompt.push_str(&super::independence::prompt_section(
+        super::independence::for_turn(super::independence::level(), from_outside(&agent.id)),
+    ));
     if agent.is_main {
         if let Some(team) = store::list()
             .ok()
@@ -4141,7 +4147,7 @@ mod tests {
         let chief_prompt = system_prompt_for(&chief, home.path(), &layout);
         store::set_root_for_tests(None);
 
-        assert!(agent_prompt.ends_with(&prompts::usage_section(mode, false)));
+        assert!(agent_prompt.contains(&prompts::usage_section(mode, false)));
         assert!(agent_prompt.contains("## Usage limits"));
         assert!(agent_prompt.contains("Use it all before reset"));
         assert!(!agent_prompt.contains("set_usage_mode"));
@@ -4164,11 +4170,18 @@ mod tests {
             store::set_root_for_tests(None);
             prompt
         };
-        // The same prompt, plus the app-owned usage section every agent gets.
+        // The same prompt, plus the app-owned usage and independence
+        // sections every agent gets.
         let usage = prompts::usage_section(super::super::usage_plan::Mode::Normal, false);
+        let independence = super::super::independence::prompt_section(
+            super::super::independence::Level::Judgement,
+        );
         assert_eq!(
             prompt,
-            format!("{}\n\n{usage}", prompts::system_prompt(&agent, None))
+            format!(
+                "{}\n\n{usage}\n\n{independence}",
+                prompts::system_prompt(&agent, None)
+            )
         );
         let args = super::super::claude::args(
             agent.model.as_deref(),
@@ -4485,8 +4498,8 @@ mod tests {
                 choice: None,
                 secret: None,
                 connector: None,
-                set_aside: None,
                 login: None,
+                set_aside: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

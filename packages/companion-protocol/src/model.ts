@@ -327,7 +327,15 @@ export interface AgentsOverview {
   engines: EngineInfo[];
   /** What new agents start on. Optional: a Mac from before it sends none. */
   defaults?: NewAgentDefaults;
+  /** How much agents do on their own. Optional: a Mac from before it sends none. */
+  independence?: AgentIndependence;
 }
+
+/**
+ * Mirrors `agents::independence::Level`: how much the user's agents do on
+ * their own. It changes what they're told, never what asks for an Allow.
+ */
+export type AgentIndependence = 'often' | 'judgement' | 'go_hard';
 
 export type MessageKind =
   | 'user'
@@ -638,8 +646,19 @@ export interface TeamSetupLogin {
   agentId: string;
   agentName: string;
   requestId: string;
+  /** What the agent called it (a secret's key): never shown as a title. */
   name: string;
   purpose: string;
+  /** The app's name ("Gmail"), or the key made readable ("Email drafts"). Absent from an older Mac. */
+  title?: string;
+  /** Which row ("google", "github", "email drafts"). */
+  group?: string;
+  /** The family's name ("Google"), when the row is one. */
+  family?: string;
+  /** A login card (connected from "What your team needs") or a secure input card. */
+  kind?: 'login' | 'secret';
+  /** Which account, when the card says. */
+  account?: string;
 }
 
 export interface TeamSetupRoutine {
@@ -714,6 +733,11 @@ export interface TeamSetupStep {
 export interface TeamSetupView {
   id: string;
   source: string;
+  /**
+   * When it was posted (the import's end): its place in the Chief's
+   * conversation, like a message's. Older Macs don't say.
+   */
+  postedAt?: number;
   steps: TeamSetupStep[];
   /** Steps done or skipped. */
   done: number;

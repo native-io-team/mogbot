@@ -315,7 +315,12 @@ export interface AgentsOverview {
   engines: EngineInfo[];
   /** What new agents start on. Optional for the phone's older Macs (see the protocol). */
   defaults?: NewAgentDefaults;
+  /** How much agents do on their own (`agents::independence`). */
+  independence?: AgentIndependence;
 }
+
+/** Mirrors `agents::independence::Level`; worded in `lib/agentIndependence`. */
+export type AgentIndependence = 'often' | 'judgement' | 'go_hard';
 
 export type MessageKind =
   | 'user'
@@ -416,14 +421,14 @@ export interface Approval {
   choice?: string;
   /** An import connector card: another assistant asking to start, or its staged agents. */
   connector?: ConnectorCard;
+  /** A login card (`request_login`): which app, what it may do, the ways in (`lib/agentLogins`). */
+  login?: LoginRequest;
   /**
    * Closed by the app, not answered (status `expired`): the line saying why,
    * e.g. a request from the check-in "Setting up your team" replaced.
    * Nothing it asked for ran.
    */
   setAside?: string;
-  /** A login card (`request_login`): which app, what it may do, the ways in (`lib/agentLogins`). */
-  login?: LoginRequest;
 }
 
 /**

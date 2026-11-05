@@ -49,8 +49,12 @@ const NAME_SCALE = 2;
 const NATIVE_MENU = Platform.OS === 'ios';
 const ACTION_W = 76;
 
+/** A quiet row's line: an agent still being set up after an import. */
+export const SETTING_UP_LINE = 'Being set up · in your Chief of Staff’s chat';
+
 export const AgentRow = memo(function AgentRow({
   agent,
+  quiet,
   caps,
   live,
   selected,
@@ -58,6 +62,8 @@ export const AgentRow = memo(function AgentRow({
   onAction,
 }: {
   agent: Agent;
+  /** Still being set up after an import: no "Needs your OK", no amber (lib/home). */
+  quiet?: boolean;
   caps: AgentCaps;
   /** Connected: what the row shows is current. */
   live: boolean;
@@ -77,6 +83,7 @@ export const AgentRow = memo(function AgentRow({
   const body = (
     <RowBody
       agent={agent}
+      quiet={quiet}
       live={live}
       selected={selected}
       onPress={onPress}
@@ -235,6 +242,7 @@ function SwipeAction({
 
 function RowBody({
   agent,
+  quiet,
   live,
   selected,
   onPress,
@@ -244,6 +252,7 @@ function RowBody({
   ...trigger
 }: {
   agent: Agent;
+  quiet?: boolean;
   live: boolean;
   selected?: boolean;
   onPress?: () => void;
@@ -265,10 +274,14 @@ function RowBody({
       !!s.welcome?.methods.includes('agents.import.review')
     )
   );
-  const state = onMac ? undefined : lineState(agent);
+  const state = onMac || quiet ? undefined : lineState(agent);
   // Waiting on you: say what for, when the saved chat knows.
   const line = useApp((s) =>
-    needsYou(agent) ? needsLine(agent, s.chats[agent.id]?.messages) : subtitle(agent)
+    quiet
+      ? SETTING_UP_LINE
+      : needsYou(agent)
+        ? needsLine(agent, s.chats[agent.id]?.messages)
+        : subtitle(agent)
   );
   const tinted = !!state && live && (state === 'waiting' || state === 'failed');
   const cut = line.indexOf(' · ');

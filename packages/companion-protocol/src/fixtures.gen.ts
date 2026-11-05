@@ -343,7 +343,8 @@ export const agentsOverview = {
       ],
       "signedIn": false
     }
-  ]
+  ],
+  "independence": "go_hard"
 } satisfies Result<'agents.overview'>;
 export const agentsUsage = {
   "allTime": {
@@ -423,6 +424,9 @@ export const agentsSetDefaults = {
   },
   "startsOn": "claude"
 } satisfies Result<'agents.setDefaults'>;
+export const agentsSetIndependence = {
+  "level": "go_hard"
+} satisfies Result<'agents.setIndependence'>;
 export const agentsImportStatus = {
   "armed": false,
   "chiefId": "chief",
@@ -461,6 +465,7 @@ export const agentsTeamSetup = {
   "dismissed": false,
   "done": 2,
   "id": "setup1",
+  "postedAt": 1700000000000,
   "setAside": 2,
   "source": "Grok",
   "steps": [
@@ -571,9 +576,12 @@ export const agentsTeamSetup = {
         {
           "agentId": "a1",
           "agentName": "Finance",
+          "group": "wise",
+          "kind": "secret",
           "name": "wise",
           "purpose": "Read balances and pay invoices",
-          "requestId": "s1"
+          "requestId": "s1",
+          "title": "Wise"
         }
       ],
       "state": "open"
@@ -2682,6 +2690,7 @@ export const frames = [
       "agents.templates",
       "agents.update",
       "agents.setDefaults",
+      "agents.setIndependence",
       "agents.revokePermission",
       "agents.instructions",
       "agents.memory",
@@ -3384,7 +3393,8 @@ export const frames = [
             ],
             "signedIn": false
           }
-        ]
+        ],
+        "independence": "go_hard"
       }
     }
   },
@@ -3799,7 +3809,8 @@ export const frames = [
             ],
             "signedIn": false
           }
-        ]
+        ],
+        "independence": "go_hard"
       },
       "status": {
         "name": "Julian’s MacBook Pro",

@@ -41,6 +41,7 @@ import type {
   TeamSetupView,
   NewAgentInput,
   NewAgentDefaults,
+  AgentIndependence,
   NewAgentDefaultsChange,
   RoleTemplateSummary,
   UpdateAgentInput,
@@ -257,6 +258,16 @@ export interface Methods {
    * audited. Existing agents don't change. Newer Macs only.
    */
   'agents.setDefaults': { params: NewAgentDefaultsChange; result: NewAgentDefaults };
+  /**
+   * `agents_set_independence`: how much agents do on their own (Settings →
+   * Agents), read back from `agents.overview`'s `independence`. Audited.
+   * Changes what agents are told on their next turn, never what asks for the
+   * user's OK. Newer Macs only.
+   */
+  'agents.setIndependence': {
+    params: { level: AgentIndependence };
+    result: { level: AgentIndependence };
+  };
   /**
    * Each engine's usage accounts, in the order turns try them when one
    * reaches its usage limit (`agents::wallet`). Read-only: they are added

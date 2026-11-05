@@ -54,7 +54,18 @@ user answers, on the desk or the phone. Three starters and **More ideas…**,
 from one catalogue (`lib/chiefIdeas.ts`). Each types a whole, specific brief
 with one blank at its end; none sends by itself.
 
-- **Ship fixes while I sleep…**: every night a fixer bound to the repo's
+The chips are **Brief me every morning…**, **Run an inbox triage crew…** and
+**Run my launch as a team…**: one per group, recognisable to someone who
+isn't a developer, and two of them need nothing set up, so the first result
+can land in the first minutes (the morning brief asks for its first one
+now). Ship fixes and client briefs were chips until a first-ten-minutes
+walk-through found them making the first screen read as a coding tool that
+asks for GitHub before showing anything; they are in the gallery.
+
+- **Brief me every morning…**: a researcher reads what's new on the topics
+  the user names and a writer boils it down to one short brief, every
+  weekday at 8am, the first one right away. Needs nothing set up.
+- **Ship fixes while I sleep…** (gallery): every night a fixer bound to the repo's
   project takes the top open GitHub issue and fixes it in its own copy, a
   reviewer checks it (`message_agent`), and the morning brings one change
   card with Keep / Review / Discard. Pushing waits for the user.
@@ -62,7 +73,7 @@ with one blank at its end; none sends by itself.
   Chief keeping the plan in a file, and a 9am weekday standup it collects
   and summarises. The Chief puts the three and itself in a room
   (`create_room`, see "Rooms"), so the user talks to the whole team at once.
-- **Turn client briefs into sites…**: `watch_for` `new_file` on a folder;
+- **Turn client briefs into sites…** (gallery): `watch_for` `new_file` on a folder;
   each brief becomes a project (`blank` needs nothing installed) whose
   session drafts the site, handed back with `share_result` naming the
   project.
@@ -646,6 +657,33 @@ never "session", in what people read; **Take over / Hand back** (no noun
 where the copy means this computer. No branch names, exit codes, tab
 numbers, "via connector" or "(import)" in anything a person reads.
 
+## How much agents do on their own
+
+One choice for the whole team (`agents/independence.rs`): **Check with me
+often**, **Use good judgement** (the default) or **Go hard — get it done**.
+Asked once in onboarding, after the engine is ready and before the hand-off
+(Skip keeps the default); kept in Settings → Agents → Independence, ⌘K "How
+independent your agents are…", and the phone's Settings
+(`agents.setIndependence`, audited; read from the overview's `independence`).
+Saved in `agents/independence.json`.
+
+It changes words, never the wall. The level is one short app-owned section of
+every agent's system prompt, built from code each turn (so existing and
+imported agents get it on their next turn, nothing in their CLAUDE.md is
+touched) and fixed per level (the prompt cache only breaks when the user
+changes it). Go hard tells an agent to finish what it was asked and, before
+asking the user to do anything, check whether they already asked for it and
+whether it has tried every way it has; it stops only for money, identity,
+sending or publishing as them, or deleting their data. No approval reads the
+level: every card appears at every level, and the only ways past one are
+still a one-time grant from a late Allow or an Always-allow rule the user
+chose (`mcp::decide`; a test holds it). Read-only commands already don't ask
+under `acceptEdits`, so no relaxation was added. A turn answering outside
+text (a "When…" routine's items, or anything carrying their taint through
+`message_agent` or a room) never runs at Go hard: it is capped at Use good
+judgement, so unattended routines still finish; the approval wall and the
+taint gate anything consequential.
+
 ## Approvals
 
 `acceptEdits` lets an agent edit files inside its home and every project
@@ -1102,6 +1140,15 @@ really needs it). With `since`, rows answered since then are included, so
 the screen can say "4 of 9 connected". Identical asks are one line: three
 agents asking for a GitHub token are one GitHub row; one agent's two old
 LinkedIn cards are one line.
+
+**In "Setting up your team".** The checklist's Logins step hosts this list
+scoped to the agents being set up (`scopeTeam`, desk and phone; a Connect
+skips everyone else on the row). Secure input cards that aren't logins
+stay rows there, grouped by service and named by the app ("Google — Gmail
+(2 accounts)") or the key made readable (`team_setup::humanise`:
+"email_drafts" → "Email drafts"), never the raw key. An agent whose only
+requests are the checklist's isn't counted again in the sidebar's "Needs
+your OK · N" (`onlySetupRequests`).
 
 **Stale asks go away.** When an agent gets a service one way, its other
 pending asks for it (another login card, an old token card for X when it
@@ -1598,8 +1645,18 @@ chats.
   prompt says the same, and while a setup is open each user message to the
   Chief carries one line on where it stands.
 - **One checklist, one card** in the Chief's chat (`TeamSetupCard`, and on
-  the phone), updating in place, with a bar above the composer ("A few things
-  to finish setting up your team · 2 of 4 done", **Continue**). Steps, in
+  the phone), updating in place, under "Your 16 agents from Grok Bot are
+  here, quiet until you say hi. These get them going.", with a bar above the
+  composer ("Your team is almost ready · 2 steps left", **Continue**). It
+  counts what's left, never "0 of 4 done", which reads as homework. The card
+  is an item in the conversation like a message, at the point it was posted
+  (`postedAt`: the import's end, or under the upgrade's line; a setup kept
+  by an earlier build reads it once from the Chief's chat; from an older
+  Mac, after the import's review card and its line), and scrolls up with the
+  history as you talk: what you send next is the newest thing, never the
+  card. **Continue** goes to it (mounting or paging back to it first) and
+  flashes it; the bar goes once it's done (`setupItemIndex` on the desk,
+  `withSetupCard` on the phone). Steps, in
   order, each skippable and reopenable ("Open again"): **Add logins** (one
   row per service with the agents that need it; Add opens their secure
   cards in place), **Switch on routines** (each with when and what, a
@@ -1608,14 +1665,19 @@ chats.
   Chief answers what it can and asks the rest in one batch), **Say hi to
   your team** (one at a time: Say hi sends a short hello as the user's
   message; others wait while one replies). Progress counts steps, never
-  requests. Finished, it becomes one line, "Your team is set up." (Hide).
+  requests. Finished, it becomes one line where it was, "Done · Your team
+  is set up." (Hide).
   Put away, ⌘K "Continue setting up your team" and a row at the top of
   What's in flight bring it back.
 - **Only choices are kept** (`<agents root>/team-setup.json`: agents, who was
   greeted, gaps, steps done/skipped). Everything else is read from the store
   each time, so a login saved in an agent's own chat ticks it off here. Its
-  logins are left out of the requests bar's counts and What's in flight's
-  Needs your OK (the checklist holds them). A second import before the first
+  logins are left out of the requests bar's counts, What's in flight's
+  Needs your OK, the sidebar's rows and its "Needs your OK · N" row
+  (`withoutHeldLogins`), and the dock and phone push badges
+  (`team_setup::held_logins`): the checklist holds them, so an import of
+  sixteen agents isn't sixteen amber rows. The import's line in the Chief's
+  chat names four agents "and 12 more", not all sixteen. A second import before the first
   is finished joins the same checklist.
 - **Upgrade** (`team_setup::upgrade`, at launch, once): a team imported by
   an older build (its chats open on "Imported from X. It starts when you

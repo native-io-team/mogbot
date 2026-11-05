@@ -307,6 +307,28 @@ export function progressLine(team: Pick<TeamLogins, 'done' | 'total'>): string {
   return `${team.done} of ${team.total} connected`;
 }
 
+/**
+ * The list for some agents only (the "Setting up your team" checklist's):
+ * other agents' cards are left off each row, rows left empty go, and the
+ * progress counts what's shown. `hidden` on a row is the agents left off, so
+ * one Connect there skips them too.
+ */
+export function scopeTeam(
+  team: TeamLogins,
+  agentIds: ReadonlySet<string>
+): TeamLogins & { needs: (TeamNeed & { hidden: string[] })[] } {
+  const needs = team.needs.flatMap((need) => {
+    const cards = need.cards.filter((c) => agentIds.has(c.agentId));
+    if (cards.length === 0) return [];
+    const hidden = [
+      ...new Set(need.cards.filter((c) => !agentIds.has(c.agentId)).map((c) => c.agentId)),
+    ];
+    const done = cards.every((c) => c.state !== 'waiting');
+    return [{ ...need, cards, done, hidden }];
+  });
+  return { needs, done: needs.filter((n) => n.done).length, total: needs.length };
+}
+
 /** The agents on a row still waiting, minus the ones unticked. */
 export function waitingCards(need: TeamNeed, skipped: ReadonlySet<string> = new Set()) {
   return need.cards.filter((c) => c.state === 'waiting' && !skipped.has(c.agentId));

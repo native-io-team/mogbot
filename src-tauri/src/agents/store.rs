@@ -313,16 +313,16 @@ pub struct Approval {
     /// staged for the user to review. Nothing is created until they answer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connector: Option<super::review::ConnectorCard>,
+    /// A login card (`request_login`, `agents/logins.rs`): which app, what
+    /// it may do, and the ways in. No credential is ever on it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login: Option<super::logins::LoginRequest>,
     /// Closed by the app rather than answered (status `expired`), with the
     /// line saying why: a request from work that was replaced, such as the
     /// check-in after an import that "Setting up your team" took over
     /// (`agents/team_setup.rs`). Nothing it asked for ran.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub set_aside: Option<String>,
-    /// A login card (`request_login`, `agents/logins.rs`): which app, what
-    /// it may do, and the ways in. No credential is ever on it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub login: Option<super::logins::LoginRequest>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1946,8 +1946,8 @@ mod tests {
                         choice: None,
                         secret: None,
                         connector: None,
-                        set_aside: None,
                         login: None,
+                        set_aside: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2150,8 +2150,8 @@ mod tests {
                     choice: None,
                     secret: None,
                     connector: None,
-                    set_aside: None,
                     login: None,
+                    set_aside: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2259,8 +2259,8 @@ mod tests {
                 choice: None,
                 secret: None,
                 connector: None,
-                set_aside: None,
                 login: None,
+                set_aside: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();
