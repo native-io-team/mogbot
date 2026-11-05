@@ -1,6 +1,6 @@
 /**
  * A new agent session in a project, from the phone: Remote Access's
- * `start_agent`. Ship Studio opens a new agent tab on the Mac that starts
+ * `start_agent`. The Mac opens a new agent tab in the project that starts
  * on what you type here; once the tab exists, you're watching it.
  */
 
@@ -11,9 +11,11 @@ import { Button, T } from '../components/ui';
 import { haptic } from '../lib/haptics';
 import { describeError, startSession } from '../lib/session';
 import { useApp } from '../lib/store';
+import { useAccent } from '../lib/accent';
 import { colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
 
 export default function Start() {
+  const accent = useAccent();
   const { project, name } = useLocalSearchParams<{ project: string; name: string }>();
   const router = useRouter();
   const connected = useApp((s) => s.link.kind === 'connected');
@@ -46,11 +48,11 @@ export default function Start() {
   return (
     <View style={styles.content}>
       <T variant="title" color={colors.textWhite}>
-        New session in {name}
+        New task in {name}
       </T>
       <T variant="small" color={colors.textSecondary}>
-        Ship Studio opens a new agent tab on {macName} that starts on this. It can take up to a
-        minute.
+        {macName} starts an agent in this project on what you write here. It can take up to a minute
+        to begin.
       </T>
       <TextInput
         autoFocus
@@ -61,8 +63,8 @@ export default function Start() {
         placeholderTextColor={colors.textMuted}
         style={styles.input}
         keyboardAppearance="dark"
-        selectionColor={colors.accentActive}
-        accessibilityLabel="What the new session should do"
+        selectionColor={accent.accent}
+        accessibilityLabel="What the new task should do"
       />
       {error && (
         <T variant="small" color={colors.accentErrorLight}>
@@ -70,7 +72,7 @@ export default function Start() {
         </T>
       )}
       <Button
-        title={busy ? 'Opening a tab…' : 'Start'}
+        title={busy ? 'Starting…' : 'Start'}
         variant="primary"
         busy={busy}
         disabled={!connected || !prompt.trim()}
@@ -78,7 +80,7 @@ export default function Start() {
       />
       {!connected && (
         <T variant="caption" color={colors.textSecondary}>
-          Starting a session needs {macName}.
+          Starting a task needs {macName}.
         </T>
       )}
     </View>

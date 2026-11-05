@@ -18,7 +18,7 @@ const CLI_NAMES: Record<string, string> = {
 
 /** "Claude Code 2", as the project's tab bar names the tab. */
 export const tabName = (s: Pick<SessionSummary, 'cli' | 'tab'>) =>
-  `${(s.cli && CLI_NAMES[s.cli]) ?? s.cli ?? 'Terminal'} ${s.tab}`;
+  `${(s.cli && CLI_NAMES[s.cli]) ?? s.cli ?? 'Task'} ${s.tab}`;
 
 export function sessionStateText(s: SessionSummary): string {
   switch (s.state) {

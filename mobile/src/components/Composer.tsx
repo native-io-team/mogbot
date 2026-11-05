@@ -40,6 +40,7 @@ import Animated, {
   ZoomOut,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAccent } from '../lib/accent';
 import { needsYou } from '../lib/agents';
 import { mentionQuery, sendMode } from '../lib/composer';
 import {
@@ -59,7 +60,8 @@ import { useApp } from '../lib/store';
 import { chromeScale, colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
 import { AgentAvatar } from './agent';
 import { StagedTile, type Staged } from './attachments';
-import { choose, Icon, ripple, T } from './ui';
+import { choose } from './menu';
+import { Icon, ripple, T } from './ui';
 
 const NONE: Agent[] = [];
 
@@ -71,6 +73,7 @@ export function Composer({
   onError,
   onSent,
   onHeight,
+  side = { left: 0, right: 0 },
 }: {
   agent: Agent;
   autoFocus?: boolean;
@@ -79,7 +82,10 @@ export function Composer({
   onError: (text: string) => void;
   onSent: () => void;
   onHeight?: (h: number) => void;
+  /** Kept clear at each side: a phone in landscape has its notch there. */
+  side?: { left: number; right: number };
 }) {
+  const accent = useAccent();
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
   const draft = useComposerDraft(agent.id);
@@ -219,7 +225,14 @@ export function Composer({
 
   return (
     <View
-      style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, space.sm) }]}
+      style={[
+        styles.wrap,
+        {
+          paddingBottom: Math.max(insets.bottom, space.sm),
+          paddingLeft: space.md + side.left,
+          paddingRight: space.md + side.right,
+        },
+      ]}
       onLayout={(e: LayoutChangeEvent) => onHeight?.(e.nativeEvent.layout.height)}
     >
       {suggestions.length > 0 && (
@@ -376,7 +389,7 @@ export function Composer({
             placeholderTextColor={colors.textMuted}
             multiline
             style={styles.input}
-            selectionColor={colors.accentActive}
+            selectionColor={accent.accent}
             keyboardAppearance="dark"
             accessibilityLabel={`Message ${agent.name}`}
           />
@@ -413,19 +426,20 @@ export function Composer({
                   <View
                     style={[
                       styles.queue,
+                      { backgroundColor: accent.accent },
                       !canSend && styles.off,
                       pressed && { transform: [{ scale: 0.95 }] },
                     ]}
                   >
                     <T
                       variant="small"
-                      color={colors.textOnAccent}
+                      color={accent.onAccent}
                       style={{ fontFamily: fonts.semibold }}
                       maxFontSizeMultiplier={chromeScale}
                     >
                       Queue
                     </T>
-                    <Icon name="arrow.up" size={13} color={colors.textOnAccent} />
+                    <Icon name="arrow.up" size={13} color={accent.onAccent} />
                   </View>
                 )}
               </Pressable>
@@ -441,8 +455,8 @@ export function Composer({
               <Icon
                 name="arrow.up"
                 size={16}
-                color={canSend ? colors.textOnAccent : colors.textMuted}
-                fallback={<T color={canSend ? colors.textOnAccent : colors.textMuted}>↑</T>}
+                color={canSend ? accent.onAccent : colors.textMuted}
+                fallback={<T color={canSend ? accent.onAccent : colors.textMuted}>↑</T>}
               />
             </RoundButton>
           )}
@@ -466,6 +480,7 @@ function RoundButton({
   tone: 'accent' | 'quiet' | 'off';
   children: ReactNode;
 }) {
+  const accent = useAccent();
   return (
     <Animated.View entering={ZoomIn.duration(160)}>
       <Pressable
@@ -481,7 +496,7 @@ function RoundButton({
             style={[
               styles.round,
               {
-                backgroundColor: tone === 'accent' ? colors.accentActive : colors.surfaceSelected,
+                backgroundColor: tone === 'accent' ? accent.accent : colors.surfaceSelected,
               },
               disabled && tone !== 'off' && styles.off,
               pressed && { transform: [{ scale: 0.92 }] },
@@ -587,7 +602,6 @@ const styles = StyleSheet.create({
     height: 34,
     paddingHorizontal: space.md,
     borderRadius: 17,
-    backgroundColor: colors.accentActive,
   },
   stopSquare: { width: 11, height: 11, borderRadius: 2, backgroundColor: colors.textPrimary },
 });
