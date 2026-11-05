@@ -72,6 +72,7 @@ pub mod connector;
 pub mod context;
 pub mod decisions;
 pub mod defaults;
+pub mod describe;
 pub mod driver;
 pub mod engine;
 pub mod expiry;

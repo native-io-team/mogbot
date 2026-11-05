@@ -116,6 +116,10 @@ export interface Methods {
   };
   'agents.stop': { params: { agentId: string }; result: boolean };
   'agents.interrupt': { params: { agentId: string }; result: boolean };
+  /** "Stop this step": ends the command the agent is running; its turn carries on. Says what it did. */
+  'agents.stopStep': { params: { agentId: string }; result: string };
+  /** "Check on it": what the Mac can see of the turn now, in one line. Never interrupts it. */
+  'agents.checkOn': { params: { agentId: string }; result: string };
   /** `choice`: on a session's question (`approval.prompt`), the option picked, by index. */
   'agents.answerApproval': {
     params: {
