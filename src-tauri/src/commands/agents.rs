@@ -364,7 +364,7 @@ pub async fn agents_update(
             a.switch_engine(engine);
         }
         if let Some(m) = model {
-            a.model = m;
+            a.set_model(m);
         }
         if let Some(m) = routine_model {
             a.routine_model = m;

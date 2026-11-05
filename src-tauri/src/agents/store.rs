@@ -145,6 +145,15 @@ impl Agent {
         self.session_id.is_some() || self.new_engine
     }
 
+    /// Change the model its turns run on. A reading taken on another model
+    /// is against that model's window, so it goes with the change.
+    pub fn set_model(&mut self, model: Option<String>) {
+        if self.model != model {
+            self.context = None;
+        }
+        self.model = model;
+    }
+
     /// Its next turn starts a new conversation on the same engine, with its
     /// instructions and memory (CLAUDE.md) and nothing else: no recap. The
     /// chat log is the user's and stays as it is.
@@ -1447,6 +1456,7 @@ mod tests {
                 used: 9,
                 window: 10,
                 at: 1,
+                model: None,
             };
             let before = update(&a.id, |a| {
                 a.session_id = Some("s1".into());
@@ -1480,6 +1490,13 @@ mod tests {
             assert!(switched.context.is_none() && switched.has_conversation());
             switched.start_fresh();
             assert!(!switched.has_conversation());
+
+            // A new model has a different window: the old reading goes.
+            let mut a = before.clone();
+            a.set_model(Some("opus".into()));
+            assert!(a.context.is_some(), "the same model keeps it");
+            a.set_model(Some("haiku".into()));
+            assert!(a.context.is_none());
         });
     }
 

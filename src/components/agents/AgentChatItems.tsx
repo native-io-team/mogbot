@@ -1188,11 +1188,15 @@ export function FreshHint({ agent, onStartFresh }: { agent: Agent; onStartFresh:
   }
   return (
     <div className="agent-note agent-fresh-hint">
-      This conversation is {percent}% full.{' '}
-      <TextButton tabIndex={0} className="agent-note__link" onClick={onStartFresh}>
-        Start fresh
-      </TextButton>{' '}
-      to keep {agent.name} quick. Its memory carries over.
+      This conversation is getting long — {agent.name} may lose track of early details.{' '}
+      <TextButton
+        tabIndex={0}
+        variant="primary"
+        className="agent-fresh-hint__action"
+        onClick={onStartFresh}
+      >
+        Start fresh (memory is kept)
+      </TextButton>
     </div>
   );
 }

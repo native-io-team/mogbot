@@ -455,6 +455,12 @@ function Conversation({
   const freshable = canFresh && canStartFresh(agent);
   if (!context && !freshable) return null;
   const idle = agent.status.state === 'idle';
+  // Why it can't be tapped right now, in one line; nothing when it can.
+  const unavailable = !idle
+    ? `Available once ${agent.name} is done`
+    : !live
+      ? 'Available once your Mac is connected'
+      : undefined;
   const confirm = () =>
     Alert.alert(
       `Start ${agent.name} fresh?`,
@@ -486,15 +492,17 @@ function Conversation({
             label={busy ? 'Starting fresh…' : 'Start fresh'}
             leading={<Icon name="arrow.counterclockwise" size={15} color={colors.textSecondary} />}
             // Its turn is in the conversation it would leave.
-            onPress={live && idle && !busy ? confirm : undefined}
+            onPress={busy ? undefined : confirm}
+            disabled={!!unavailable}
+            detail={unavailable}
             last
           />
         )}
       </View>
       {freshable && percent !== null && percent >= CONTEXT_SUGGEST_AT && (
         <T variant="small" color={colors.textMuted} style={styles.note}>
-          This conversation is getting full. Starting fresh keeps {agent.name} quick; its memory
-          carries over.
+          This conversation is getting long — {agent.name} may lose track of early details. Start
+          fresh to give it a new one; its memory is kept.
         </T>
       )}
     </>

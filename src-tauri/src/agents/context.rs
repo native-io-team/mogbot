@@ -17,7 +17,19 @@
 //!   tool call has one `assistant` usage per request; the last is the size.
 //! - **Codex app-server** (0.166): `thread/tokenUsage/updated` carries
 //!   `tokenUsage.last` (that request: `inputTokens` including cached, and
-//!   `outputTokens`) and `tokenUsage.modelContextWindow`.
+//!   `outputTokens`, of which `reasoningOutputTokens` are a part) and
+//!   `tokenUsage.modelContextWindow`. The model is the one `thread/start` or
+//!   `thread/resume` answered with (`result.model`).
+//!
+//!   Reasoning is left out of the size. The model's reasoning isn't carried
+//!   into the next turn's request, so it doesn't fill the conversation, and
+//!   Codex's own source (`TokenUsage::tokens_in_context_window`) counts the
+//!   context as the total less reasoning. The 0.166 binary carries a
+//!   `tokens_in_context` figure separate from its totals, but its app-server
+//!   schema documents no formula, so this rests on the source, not on an
+//!   observed run with reasoning. Codex's "% context left" also sets aside a
+//!   fixed allowance for its system prompt, so its percentage can read a
+//!   point or two lower than ours.
 //! - **`codex exec --json`**: `turn.completed` has token counts but no
 //!   window, so no reading.
 
@@ -29,16 +41,26 @@ use serde_json::Value;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextFill {
-    /// Tokens the latest request carried: input, cached input and output.
+    /// Tokens the latest request carried: input, cached input and output
+    /// (less reasoning, which the next request doesn't carry).
     pub used: u64,
     /// The model's context window, as the engine reported it.
     pub window: u64,
     pub at: i64,
+    /// The model the engine says made that request (its own id, such as
+    /// `claude-opus-5-5`), when it says. The window is that model's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 impl ContextFill {
-    fn new(used: u64, window: u64, at: i64) -> Option<Self> {
-        (window > 0 && used > 0).then_some(Self { used, window, at })
+    fn new(used: u64, window: u64, at: i64, model: Option<String>) -> Option<Self> {
+        (window > 0 && used > 0).then_some(Self {
+            used,
+            window,
+            at,
+            model,
+        })
     }
 }
 
@@ -75,21 +97,23 @@ impl ClaudeContext {
                     .get(&model)?
                     .get("contextWindow")
                     .and_then(Value::as_u64)?;
-                ContextFill::new(used, window, now)
+                ContextFill::new(used, window, now, Some(model))
             }
             _ => None,
         }
     }
 }
 
-/// Codex app-server's `thread/tokenUsage/updated` params.
-pub fn from_codex_app(params: &Value, now: i64) -> Option<ContextFill> {
+/// Codex app-server's `thread/tokenUsage/updated` params, for a thread on `model`.
+pub fn from_codex_app(params: &Value, model: Option<&str>, now: i64) -> Option<ContextFill> {
     let usage = params.get("tokenUsage")?;
     let window = usage.get("modelContextWindow").and_then(Value::as_u64)?;
     let last = usage.get("last")?;
     let n = |k: &str| last.get(k).and_then(Value::as_u64).unwrap_or(0);
-    // `inputTokens` already includes the cached part.
-    ContextFill::new(n("inputTokens") + n("outputTokens"), window, now)
+    // `inputTokens` already includes the cached part; `outputTokens` includes
+    // the reasoning, which the next request leaves behind.
+    let used = (n("inputTokens") + n("outputTokens")).saturating_sub(n("reasoningOutputTokens"));
+    ContextFill::new(used, window, now, model.map(str::to_string))
 }
 
 #[cfg(test)]
@@ -117,7 +141,8 @@ mod tests {
             Some(ContextFill {
                 used: 30_099,
                 window: 1_000_000,
-                at: 7
+                at: 7,
+                model: Some("claude-haiku-5-5".into()),
             })
         );
     }
@@ -157,7 +182,7 @@ mod tests {
         let mut got = None;
         for value in lines(include_str!("testdata/codex-app-server.jsonl")) {
             if value.get("method").and_then(Value::as_str) == Some("thread/tokenUsage/updated") {
-                got = from_codex_app(&value["params"], 9);
+                got = from_codex_app(&value["params"], Some("scripted"), 9);
             }
         }
         assert_eq!(
@@ -165,10 +190,22 @@ mod tests {
             Some(ContextFill {
                 used: 1_020,
                 window: 258_400,
-                at: 9
+                at: 9,
+                model: Some("scripted".into()),
             })
         );
         let no_window = serde_json::json!({"tokenUsage": {"last": {"inputTokens": 5}}});
-        assert!(from_codex_app(&no_window, 1).is_none());
+        assert!(from_codex_app(&no_window, None, 1).is_none());
+    }
+
+    #[test]
+    fn codex_reasoning_is_not_part_of_the_conversation() {
+        let params = serde_json::json!({"tokenUsage": {"modelContextWindow": 100_000,
+            "last": {"inputTokens": 40_000, "cachedInputTokens": 30_000,
+                "outputTokens": 9_000, "reasoningOutputTokens": 8_000, "totalTokens": 49_000}}});
+        assert_eq!(
+            from_codex_app(&params, None, 1).map(|f| f.used),
+            Some(41_000)
+        );
     }
 }

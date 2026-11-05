@@ -65,6 +65,8 @@ export interface ContextFill {
   /** The model's context window. */
   window: number;
   at: number;
+  /** The engine's own id for the model that made the request, when it says. */
+  model?: string;
 }
 
 export interface Failure {

@@ -233,11 +233,9 @@ export function CodeTab({ projectPath, onSendToAgent, revealTarget }: CodeTabPro
         <ProjectActionConfirmModal
           title="Discard unsaved changes?"
           body={
-            <span style={{ display: 'block', marginBottom: 'var(--spacing-md)' }}>
-              {pendingAction.kind === 'switch'
-                ? 'You have unsaved changes in this file. Switching files will discard them.'
-                : 'You have unsaved changes. Turning off Edit mode will discard them.'}
-            </span>
+            pendingAction.kind === 'switch'
+              ? 'You have unsaved changes in this file. Switching files will discard them.'
+              : 'You have unsaved changes. Turning off Edit mode will discard them.'
           }
           hint="This can’t be undone."
           loading={false}

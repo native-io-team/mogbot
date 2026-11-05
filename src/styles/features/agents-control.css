@@ -433,3 +433,10 @@
 .agent-note.agent-fresh-hint {
   white-space: normal;
 }
+
+/* Its action reads as one: in the agent's colour and underlined, not only on hover. */
+.agent-fresh-hint .text-button.agent-fresh-hint__action {
+  font-weight: var(--font-weight-label);
+  text-decoration: underline;
+  text-underline-offset: var(--spacing-2xs);
+}

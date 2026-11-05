@@ -145,5 +145,5 @@ export function AgentActionItems({
 
 function freshLabel(agent: Agent): string {
   const percent = contextPercent(agent);
-  return percent === null ? 'Start fresh…' : `Start fresh… (${percent < 1 ? '<1' : percent}% full)`;
+  return percent === null ? 'Start fresh…' : `Start fresh (${percent < 1 ? '<1' : percent}% full)…`;
 }

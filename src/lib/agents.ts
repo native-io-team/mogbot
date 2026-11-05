@@ -86,6 +86,8 @@ export interface ContextFill {
   /** The model's context window. */
   window: number;
   at: number;
+  /** The engine's own id for the model that made the request, when it says. */
+  model?: string;
 }
 
 /** Mirrors `failure::Failure`: what kind of failure a turn ended in. */

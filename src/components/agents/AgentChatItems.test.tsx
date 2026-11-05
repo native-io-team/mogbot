@@ -96,8 +96,10 @@ describe('Start fresh', () => {
     const { rerender, container } = render(
       <FreshHint agent={agent(full)} onStartFresh={onStartFresh} />
     );
-    expect(container).toHaveTextContent('This conversation is 87% full.');
-    fireEvent.click(screen.getByRole('button', { name: 'Start fresh' }));
+    expect(container).toHaveTextContent(
+      'This conversation is getting long — Acme may lose track of early details.'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start fresh (memory is kept)' }));
     expect(onStartFresh).toHaveBeenCalledTimes(1);
 
     // Nothing reported: nothing shown, never a guess.

@@ -2058,7 +2058,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-fresh-suggested',
     title: 'Agents — a nearly full conversation suggests starting fresh',
     looksRightWhen:
-      'Acme Site is idle. Under its last reply, one quiet centred line: “This conversation is 87% full. Start fresh to keep Acme Site quick. Its memory carries over.”, with “Start fresh” as a link. Nothing else changed in the chat.',
+      'Acme Site is idle. Under its last reply, one quiet centred line: “This conversation is getting long — Acme Site may lose track of early details. Start fresh (memory is kept)”, the last part an underlined, brighter link. Nothing else changed in the chat.',
     openSelector: AGENTS_TAB,
     requires: '.agent-fresh-hint',
     steps: [{ click: '[data-agent-id="acme"]' }],
@@ -2071,7 +2071,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-fresh-menu',
     title: 'Agents — Start fresh in the agent’s … menu',
     looksRightWhen:
-      'The header’s … menu is open. After “Edit agent…” comes “Start fresh… (87% full)” with a reload icon, then the divider, Hide from sidebar and Delete…',
+      'The header’s … menu is open. After “Edit agent…” comes “Start fresh (87% full)…” with a reload icon, then the divider, Hide from sidebar and Delete…',
     openSelector: AGENTS_TAB,
     requires: '.ss-dropdown__item',
     steps: [
