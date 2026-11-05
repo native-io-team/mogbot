@@ -1170,6 +1170,69 @@ quotes used as JSON quotes. Import runs the same `import::import()`.
 What doesn't come across: the other platform's own connectors (its Gmail,
 Calendar…). Here, agents use what this Mac and Claude Code are connected to.
 
+### Setting up your team (`src-tauri/src/agents/team_setup.rs`)
+
+What happens after Import, so a dozen new agents feel handled rather than
+loud. Before this, a real import of 16 agents from Grok Bot went: the user
+asked the Chief to "see what they need"; it messaged all 16 at once; each
+woke, ran shell commands against Grok-era paths and raised a card, beside
+the login cards the import had put in its chat: dozens of requests across 16
+chats.
+
+- **Quiet until you say hi.** Nothing the import does wakes an agent (no
+  first task, routines paused, login cards `quiet`). Until the user messages
+  one or taps **Say hi**, it is *quiet*: one turn's `message_agent` may reach
+  at most one quiet agent (`MAX_QUIET_PER_TURN`) and at most four agents in
+  all (`MAX_FAN_OUT`, any caller; an answer to an agent that asked doesn't
+  count). Refusals tell the agent to use **`read_agent`** (Chief-only,
+  read-only): role, CLAUDE.md (as data), routines, saved and awaited logins,
+  open requests and the import's gaps, without starting a turn. The Chief's
+  prompt says the same, and while a setup is open each user message to the
+  Chief carries one line on where it stands.
+- **One checklist, one card** in the Chief's chat (`TeamSetupCard`, and on
+  the phone), updating in place, with a bar above the composer ("A few things
+  to finish setting up your team · 2 of 4 done", **Continue**). Steps, in
+  order, each skippable and reopenable ("Open again"): **Add logins** (one
+  row per service with the agents that need it; Add opens their secure
+  cards in place), **Switch on routines** (each with when and what, a
+  switch), **Fill in what's missing** (the playback's `gap`/`watch` lines per
+  agent; **Ask <Chief> to sort these** sends them as one message so the
+  Chief answers what it can and asks the rest in one batch), **Say hi to
+  your team** (one at a time: Say hi sends a short hello as the user's
+  message; others wait while one replies). Progress counts steps, never
+  requests. Finished, it becomes one line, "Your team is set up." (Hide).
+  Put away, ⌘K "Continue setting up your team" and a row at the top of
+  What's in flight bring it back.
+- **Only choices are kept** (`<agents root>/team-setup.json`: agents, who was
+  greeted, gaps, steps done/skipped). Everything else is read from the store
+  each time, so a login saved in an agent's own chat ticks it off here. Its
+  logins are left out of the requests bar's counts and What's in flight's
+  Needs your OK (the checklist holds them). A second import before the first
+  is finished joins the same checklist.
+- **Upgrade** (`team_setup::upgrade`, at launch, once): a team imported by
+  an older build (its chats open on "Imported from X. It starts when you
+  message it…", within 30 days) is folded in, with gaps from that import's
+  review card. Every pending permission card raised in a turn the Chief
+  started (after its message, before any of the user's) is closed with
+  `Approval.setAside` ("Set aside: this came from <Chief> checking in with
+  every agent after the import. Nothing ran.", outcome "Set aside · nothing
+  ran"), each such chat gets one line, and the Chief's chat one more. Login
+  cards are kept (they are the Logins step). The kept file is the mark: it
+  never runs twice.
+
+**The requests bar.** In the Chief's chat, requests from agents still
+waiting to be set up belong to the checklist: `AgentRequestsBar` (its
+`setup` prop) leaves them out, gives way to the checklist's own bar when
+they are all there is, and otherwise ends its panel with "A few more are
+from the agents you imported" and a link that opens the checklist.
+
+**Seams.** The Logins step is `SetupLogins` in `TeamSetupCard.tsx`, the slot
+for the logins work's "What your team needs" list (one Connect per service,
+deduped, "Not needed"), which replaces it whole and takes the same `logins`.
+"Where you are now" preambles land in the agent's first turn, which here is
+its Say hi. Usage awareness can read the hello turn like any other.
+**Not built:** the paste and Ship Studio imports don't start a checklist.
+
 ### From Ship Studio on this Mac (`src-tauri/src/agents/other_app.rs`)
 
 When the app this one grew out of has agents on this Mac, **Import agents**

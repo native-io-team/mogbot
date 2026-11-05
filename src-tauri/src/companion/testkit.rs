@@ -182,7 +182,8 @@ pub fn messages() -> Vec<AgentMessage> {
                 "approval": { "requestId": "q3", "title": "Delete Ops", "detail": "Ops and its chat", "status": "denied", "note": "Keep Ops" } }),
         json!({ "id": "m08", "agentId": AGENT, "ts": at(8), "kind": "approval", "text": "",
                 "approval": { "requestId": "q4", "title": "Send an email", "detail": "to accounts@", "status": "expired", "tool": "mcp__gmail__send",
-                              "always": { "kind": "tool", "value": "mcp__gmail__send", "label": "Send an email · Gmail" } } }),
+                              "always": { "kind": "tool", "value": "mcp__gmail__send", "label": "Send an email · Gmail" },
+                              "setAside": "Set aside: this came from Chief of Staff checking in with every agent after the import. Nothing ran." } }),
         json!({ "id": "m09", "agentId": AGENT, "ts": at(9), "kind": "error", "text": "Claude Code is signed out.", "failure": { "kind": "signed_out" } }),
         json!({ "id": "m10", "agentId": AGENT, "ts": at(10), "kind": "error", "text": "Something broke.", "failure": { "kind": "other" } }),
         json!({ "id": "m11", "agentId": AGENT, "ts": at(11), "kind": "check_in", "text": "Check the invoices",
@@ -545,6 +546,8 @@ pub struct Stub {
     pub slow_done: AtomicUsize,
     /// What `serve_hosts` answers: the Tailscale route's host by default.
     pub hosts: Mutex<Vec<String>>,
+    /// "Setting up your team" calls, as the router handed them over.
+    pub team_setup: Mutex<Vec<super::router::TeamSetupAction>>,
 }
 
 /// The host the stub Mac serves on (its Tailscale route's).
@@ -574,6 +577,7 @@ impl Stub {
             secrets_saved: AtomicUsize::new(0),
             slow_done: AtomicUsize::new(0),
             hosts: Mutex::new(vec![HOST.into()]),
+            team_setup: Mutex::new(Vec::new()),
         });
         let c = Arc::new(Companion::with_epoch(registry, stub.clone(), epoch.into()));
         let _ = stub.companion.set(Arc::downgrade(&c));
@@ -589,6 +593,70 @@ impl Stub {
 
     pub fn audited(&self) -> Vec<(String, String, String, bool)> {
         self.audit.lock().unwrap().clone()
+    }
+}
+
+/// "Setting up your team" as the Mac answers it: every step, every kind of
+/// item, every state.
+pub fn team_setup_fixture() -> crate::agents::team_setup::SetupView {
+    use crate::agents::team_setup::*;
+    let hello = |id: &str, name: &str, color: &str, state| HelloItem {
+        agent_id: id.into(),
+        agent_name: name.into(),
+        color: color.into(),
+        state,
+    };
+    let step = |id, state| StepView {
+        id,
+        state,
+        logins: Vec::new(),
+        routines: Vec::new(),
+        gaps: Vec::new(),
+        agents: Vec::new(),
+    };
+    let mut logins = step(StepId::Logins, StepState::Open);
+    logins.logins = vec![LoginItem {
+        agent_id: AGENT.into(),
+        agent_name: "Finance".into(),
+        request_id: "s1".into(),
+        name: "wise".into(),
+        purpose: "Read balances and pay invoices".into(),
+    }];
+    let mut routines = step(StepId::Routines, StepState::Skipped);
+    routines.routines = vec![RoutineItem {
+        agent_id: "a2".into(),
+        agent_name: "Ops".into(),
+        check_in_id: "c1".into(),
+        when: "Every weekday at 09:00".into(),
+        what: "Check for new invoices".into(),
+        on: false,
+    }];
+    let mut missing = step(StepId::Missing, StepState::Done);
+    missing.gaps = vec![GapGroup {
+        agent_id: AGENT.into(),
+        agent_name: "Finance".into(),
+        lines: vec![
+            "When an invoice email arrives: file it (ask me to set this up here once I'm in)"
+                .into(),
+        ],
+    }];
+    let mut hi = step(StepId::Hello, StepState::Open);
+    hi.agents = vec![
+        hello(AGENT, "Finance", "green", HelloState::Quiet),
+        hello("a2", "Ops", "blue", HelloState::Working),
+        hello("a3", "Designer", "pink", HelloState::SaidHi),
+    ];
+    SetupView {
+        id: "setup1".into(),
+        source: "Grok".into(),
+        steps: vec![logins, routines, missing, hi],
+        done: 2,
+        total: 4,
+        current: Some(StepId::Logins),
+        complete: false,
+        agents: 3,
+        set_aside: 2,
+        dismissed: false,
     }
 }
 
@@ -1194,6 +1262,19 @@ impl Backend for Stub {
             now: 1_762_295_000_000,
         };
         serde_json::to_value(inv).map_err(|e| CommandError::expected(e.to_string()))
+    }
+
+    async fn team_setup(
+        &self,
+        action: super::router::TeamSetupAction,
+    ) -> Result<Value, CommandError> {
+        use super::router::TeamSetupAction as A;
+        self.team_setup.lock().unwrap().push(action.clone());
+        Ok(match action {
+            A::Get { .. } => serde_json::to_value(team_setup_fixture()).unwrap(),
+            A::Hello { .. } | A::Missing => serde_json::to_value(&messages()[0]).unwrap(),
+            _ => Value::Null,
+        })
     }
 
     async fn revoke_permission(&self, _agent_id: &str, rule_id: &str) -> Result<(), CommandError> {

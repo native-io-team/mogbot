@@ -392,6 +392,7 @@ mod tests {
             choice: None,
             secret: None,
             connector: None,
+            set_aside: None,
         });
         message
     }

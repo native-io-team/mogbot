@@ -33,6 +33,7 @@
 //! - [`rooms`]: group conversations of 2–6 agents, @one or @everyone
 //! - [`search`]: find a message across every conversation
 //! - [`secrets`]: credentials an agent asked for, kept in the Keychain, never shown to it
+//! - [`team_setup`]: "Setting up your team" after an import: one checklist, quiet agents, the fan-out cap
 //! - [`templates`]: ready-made agents (role templates) the Chief and the New agent dialog offer
 //! - [`stream`]: a reply while it is being written (drafts)
 //! - [`usage`]: tokens and cost per agent, from each turn's `result` event
@@ -88,6 +89,7 @@ pub mod store;
 pub mod stream;
 pub mod takeover;
 pub mod task;
+pub mod team_setup;
 pub mod templates;
 pub mod tray;
 pub mod usage;

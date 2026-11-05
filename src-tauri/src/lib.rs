@@ -205,6 +205,25 @@ pub fn run() {
                 // Agents imported before they were told where they are now
                 // (no Grok sandbox here): add the app's section, once.
                 let _ = tauri::async_runtime::spawn_blocking(agents::arrival::upgrade_all).await;
+                // A team imported before "Setting up your team" existed is
+                // folded into it once, before any turn can start.
+                let upgraded = tauri::async_runtime::spawn_blocking(|| {
+                    agents::ensure_main().and_then(|chief| agents::team_setup::upgrade(&chief))
+                })
+                .await;
+                match upgraded {
+                    Ok(Ok(Some(done))) => {
+                        tracing::info!(
+                            "[Agents] Folded {} imported agents into setting up the team; set aside {} requests",
+                            done.agents,
+                            done.set_aside.len()
+                        );
+                        let _ = tauri::Emitter::emit(&badge_app, agents::runner::EVENT_REGISTRY, ());
+                        agents::team_setup::emit(&badge_app);
+                    }
+                    Ok(Err(e)) => tracing::warn!("[Agents] Couldn't fold the import into setting up the team: {e}"),
+                    _ => {}
+                }
                 // Agents' secrets, known to redaction before any turn runs.
                 let _ = tauri::async_runtime::spawn_blocking(agents::secrets::load_known).await;
                 // A turn the last run quit in the middle of: stop its process, say so.
@@ -661,6 +680,13 @@ pub fn run() {
             commands::agents::agents_copy_keep,
             commands::agents::agents_copy_discard,
             commands::agents::agents_send,
+            commands::agents::agents_team_setup,
+            commands::agents::agents_team_setup_step,
+            commands::agents::agents_team_setup_routine,
+            commands::agents::agents_team_setup_hello,
+            commands::agents::agents_team_setup_missing,
+            commands::agents::agents_team_setup_dismiss,
+            commands::agents::agents_team_setup_reopen,
             commands::agent_rooms::agents_rooms,
             commands::agent_rooms::agents_room_create,
             commands::agent_rooms::agents_room_update,

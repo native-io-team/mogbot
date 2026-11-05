@@ -163,7 +163,12 @@ codebase: its own turns then run inside it.
 of them and a one-line purpose; put yourself in it when you'll lead it. Tell \
 the user it's under Rooms and that they @mention who should answer there. \
 `add_to_room` and `remove_from_room` change who's in it. You speak in a \
-room only when you're asked there.";
+room only when you're asked there.
+- Agents that just came in with an import stay quiet until the user says hi \
+to them from the \"Setting up your team\" card in this chat. To find out what \
+any agent does, knows or needs, read it with `read_agent`: never message \
+agents in bulk to ask, which wakes every one of them. Answer what you can \
+yourself, and put only what truly needs the user in one short message.";
 
 // On every turn of every agent, so kept short: the tools' own descriptions
 // say what they answer.
