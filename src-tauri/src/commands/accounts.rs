@@ -157,67 +157,174 @@ fn write_to_keychain(account_id: &str, key: &str, value: &str) -> Result<(), Com
 
 /// Store `value` under (`service`, `key`). Shared with Agents' secrets
 /// (`agents::secrets`), which keep their own service namespace per agent.
+///
+/// The item is created by this app through the Security framework
+/// (`SecItemAdd`), so its access list trusts this app alone: any other
+/// program asking for it, `security` included, makes macOS ask the user.
+/// Items written before by `security add-generic-password` trusted
+/// `/usr/bin/security`, which meant any process running as the user could
+/// read every secret with `security find-generic-password -w`, silently.
+/// Those are moved over on first read ([`keychain_read`]) and replaced on
+/// write, and our own are told apart by their comment ([`owned::MARK`]).
 pub(crate) fn keychain_write(service: &str, key: &str, value: &str) -> Result<(), CommandError> {
-    use std::io::Write;
-    use std::process::Stdio;
-
     if !KEYCHAIN_SUPPORTED {
         return Err(CommandError::expected(
             "Secrets are only stored on macOS at the moment: there's no credential vault on this platform yet.",
         ));
     }
-    // Pass the secret on stdin rather than as an argv entry — a CLI argument is
-    // visible to any user via `ps`/`/proc`, leaking the credential. With `-w`
-    // and no inline value, `security` prompts for the password and then a
-    // confirmation ("retype password"), reading both from stdin, so we send the
-    // value twice. Callers trim to a single line (no embedded newline), so the
-    // two reads each receive the full value.
-    let mut child = create_command("security")
-        .args(["add-generic-password", "-U", "-a", key, "-s", service, "-w"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Keychain write failed: {e}"))?;
-
-    child
-        .stdin
-        .take()
-        .ok_or_else(|| CommandError::from("Keychain write failed: no stdin handle"))?
-        .write_all(format!("{value}\n{value}\n").as_bytes())
-        .map_err(|e| format!("Keychain write failed: {e}"))?;
-
-    let status = child
-        .wait()
-        .map_err(|e| format!("Keychain write failed: {e}"))?;
-
-    if !status.success() {
-        return Err(format!("Failed to store credential '{key}' in keychain").into());
+    #[cfg(target_os = "macos")]
+    {
+        // A service + account names one item: a CLI-made one must go first,
+        // or the add is a duplicate and the update can't reach it.
+        legacy::delete(service, key);
+        owned::set(service, key, value.as_bytes()).map_err(|e| {
+            CommandError::from(format!(
+                "Failed to store credential '{key}' in keychain: {e}"
+            ))
+        })
     }
-    Ok(())
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (service, key, value);
+        Err(keychain_unsupported())
+    }
 }
 
 fn read_from_keychain(account_id: &str, key: &str) -> Option<String> {
     keychain_read(&keychain_service(account_id), key)
 }
 
+/// The value under (`service`, `key`): ours, or a legacy one, which is moved
+/// into an app-owned item on the way (transparently: no prompt either way,
+/// since `security` reads its own item and we read ours).
 pub(crate) fn keychain_read(service: &str, key: &str) -> Option<String> {
     if !KEYCHAIN_SUPPORTED {
         return None;
     }
-    let output = create_command("security")
-        .args(["find-generic-password", "-a", key, "-s", service, "-w"])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if value.is_empty() {
-        None
-    } else {
+    #[cfg(target_os = "macos")]
+    {
+        match owned::get(service, key) {
+            Ok(Some(bytes)) => return String::from_utf8(bytes).ok().filter(|v| !v.is_empty()),
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!(service, error = %e, "[Keychain] read failed");
+                return None;
+            }
+        }
+        let value = legacy::read(service, key)?;
+        legacy::delete(service, key);
+        if let Err(e) = owned::set(service, key, value.as_bytes()) {
+            // Keep it readable rather than lose it: put the old item back.
+            tracing::warn!(service, error = %e, "[Keychain] couldn't move a credential to an app-owned item");
+            legacy::write(service, key, &value);
+        }
         Some(value)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (service, key);
+        None
+    }
+}
+
+/// Items this app created itself.
+#[cfg(target_os = "macos")]
+pub(crate) mod owned {
+    use security_framework::passwords::{
+        delete_generic_password_options, generic_password, set_generic_password_options,
+        PasswordOptions,
+    };
+
+    /// The comment on every item we create: how ours are told from items a
+    /// `security` command made (which trust `/usr/bin/security`).
+    pub const MARK: &str = "app-owned v1";
+    const NOT_FOUND: i32 = -25300; // errSecItemNotFound
+
+    fn options(service: &str, key: &str) -> PasswordOptions {
+        let mut o = PasswordOptions::new_generic_password(service, key);
+        o.set_comment(MARK);
+        o
+    }
+
+    pub fn get(
+        service: &str,
+        key: &str,
+    ) -> Result<Option<Vec<u8>>, security_framework::base::Error> {
+        match generic_password(options(service, key)) {
+            Ok(v) => Ok(Some(v)),
+            Err(e) if e.code() == NOT_FOUND => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn set(
+        service: &str,
+        key: &str,
+        value: &[u8],
+    ) -> Result<(), security_framework::base::Error> {
+        set_generic_password_options(value, options(service, key))
+    }
+
+    pub fn delete(service: &str, key: &str) {
+        let _ = delete_generic_password_options(options(service, key));
+    }
+}
+
+/// Items `security add-generic-password` made in older builds. Read and
+/// deleted by `security` itself, which they trust, so neither asks the user.
+#[cfg(target_os = "macos")]
+mod legacy {
+    use crate::utils::create_command;
+
+    pub fn read(service: &str, key: &str) -> Option<String> {
+        let output = create_command("security")
+            .args(["find-generic-password", "-a", key, "-s", service, "-w"])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        (!value.is_empty()).then_some(value)
+    }
+
+    /// Every item under (service, key) that isn't ours. Ours is deleted
+    /// through the framework first so this can't remove it by accident.
+    pub fn delete(service: &str, key: &str) {
+        if super::owned::get(service, key).ok().flatten().is_some() {
+            // The one item under this name is ours.
+            return;
+        }
+        for _ in 0..4 {
+            let ok = create_command("security")
+                .args(["delete-generic-password", "-a", key, "-s", service])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success());
+            if !ok {
+                break;
+            }
+        }
+    }
+
+    /// Only to put back a value that couldn't be moved (stdin, never argv).
+    pub fn write(service: &str, key: &str, value: &str) {
+        use std::io::Write;
+        use std::process::Stdio;
+        let Ok(mut child) = create_command("security")
+            .args(["add-generic-password", "-U", "-a", key, "-s", service, "-w"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        else {
+            return;
+        };
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(format!("{value}\n{value}\n").as_bytes());
+        }
+        let _ = child.wait();
     }
 }
 
@@ -229,9 +336,13 @@ pub(crate) fn keychain_delete(service: &str, key: &str) {
     if !KEYCHAIN_SUPPORTED {
         return;
     }
-    let _ = create_command("security")
-        .args(["delete-generic-password", "-a", key, "-s", service])
-        .status();
+    #[cfg(target_os = "macos")]
+    {
+        owned::delete(service, key);
+        legacy::delete(service, key);
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (service, key);
 }
 
 fn delete_all_account_credentials(account_id: &str) {
@@ -2299,5 +2410,84 @@ mod tests {
     fn validate_account_id_rejects_overlong() {
         let long = "a".repeat(65);
         assert!(validate_account_id(&long).is_err());
+    }
+}
+
+/// Against the real login keychain, with a throwaway item only (its own
+/// service name, deleted at the end). Run by hand:
+/// `cargo test --lib keychain_live -- --ignored`.
+#[cfg(all(test, target_os = "macos"))]
+mod keychain_live_tests {
+    use super::*;
+
+    fn exists_any(service: &str, key: &str) -> bool {
+        // Attributes only (no -w): never asks for the value, so never prompts.
+        std::process::Command::new("security")
+            .args(["find-generic-password", "-a", key, "-s", service])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    }
+
+    /// The item's comment, from its attributes (no -w: no prompt).
+    fn comment_of(service: &str, key: &str) -> Option<String> {
+        let out = std::process::Command::new("security")
+            .args(["find-generic-password", "-a", key, "-s", service])
+            .output()
+            .ok()?;
+        let text = String::from_utf8_lossy(&out.stdout).into_owned();
+        text.lines().find(|l| l.contains("\"icmt\"")).and_then(|l| {
+            l.split_once("=\"")
+                .map(|(_, v)| v.trim_end_matches('"').to_string())
+        })
+    }
+
+    #[test]
+    #[ignore = "touches the real keychain (a temporary item it creates and deletes)"]
+    fn keychain_live_items_are_app_owned_and_legacy_ones_move_over() {
+        let service = format!(
+            "{}-selftest-{}",
+            crate::brand::keychain_prefix("account"),
+            uuid::Uuid::new_v4().simple()
+        );
+        let key = "SELFTEST";
+
+        // A new value is an app-owned item.
+        keychain_write(&service, key, "one").unwrap();
+        assert_eq!(comment_of(&service, key).as_deref(), Some(owned::MARK));
+        assert_eq!(
+            owned::get(&service, key).unwrap().as_deref(),
+            Some(&b"one"[..])
+        );
+        assert_eq!(keychain_read(&service, key).as_deref(), Some("one"));
+        keychain_write(&service, key, "two").unwrap();
+        assert_eq!(keychain_read(&service, key).as_deref(), Some("two"));
+        keychain_delete(&service, key);
+        assert!(!exists_any(&service, key));
+
+        // An item made the old way (by `security`) is read once, moved into
+        // an app-owned item, and the old one is gone.
+        legacy::write(&service, key, "legacy-value");
+        assert!(exists_any(&service, key));
+        assert_eq!(
+            owned::get(&service, key).unwrap(),
+            None,
+            "a CLI item isn't ours"
+        );
+        assert_eq!(
+            keychain_read(&service, key).as_deref(),
+            Some("legacy-value")
+        );
+        assert_eq!(
+            owned::get(&service, key).unwrap().as_deref(),
+            Some(&b"legacy-value"[..])
+        );
+        // One item, and it's ours. (Never `security -w` here: on an
+        // app-owned item that is exactly the prompt this change is for.)
+        assert_eq!(comment_of(&service, key).as_deref(), Some(owned::MARK));
+
+        keychain_delete(&service, key);
+        assert!(!exists_any(&service, key));
     }
 }
