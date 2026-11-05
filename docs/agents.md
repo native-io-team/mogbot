@@ -1076,6 +1076,40 @@ the full threat model in docs/remote-access.md):
    offer to set each up as a "When…" routine. Routines arrive paused, as
    before.
 
+**Where you are now** (`agents/arrival.rs`). An imported agent's
+instructions were written for the other assistant's sandbox ("research lives
+at /workspace/canada-west-move/", "use confirm_push"). Taken at their word
+here, a turn runs `ls /workspace/…`, which doesn't exist on a Mac, and every
+try raises an Allow card. So:
+
+- Every agent imported from another assistant (the review card, `import_agents`
+  and Paste) gets a `## Where you are now` section in its CLAUDE.md, written by
+  the app, above `## Instructions`: its home folder, that paths from the other
+  assistant don't exist here (naming the ones its own text mentions) and to use
+  the same name in its home instead, whether anything came over into
+  `imported/<source>/`, that projects are reached with `project_list` and their
+  sessions, that logins are `request_secret` cards or a connection (never a
+  password in chat), that it runs on Claude Code or Codex on this Mac, and the
+  nearest tool here for each foreign tool its text names (Grok's `x_*` search
+  isn't available; `confirm_push` is `push`; `wait_for_agent` is
+  `session_wait`…). It is the app's, not the user's: `store::instructions_of`
+  doesn't include it (so the editor, the Replace diff and the phone never show
+  it) and `store::write_instructions` keeps it in place.
+- At import, the first mention of each foreign path in each field (under
+  `/workspace`, `/mnt/data`, `/mnt/user-data`, `/home/user`, `/home/oai`,
+  `/sandbox`, and only when it doesn't exist on this Mac) gets
+  "(from Grok Bot — not on this Mac)" after it. The path stays as written and
+  nothing else changes. The review card shows the marked text and lists each
+  path it marked and each tool it translated. Nothing maps a path into
+  `imported/`: only past conversations come across (`import_file` isn't built).
+- Agents imported before this (found by the `### Imported from <source>` block
+  in their memory; not the Chief, not Ship Studio imports) get the section once
+  at launch (`arrival::upgrade_all`), by `upgrade_chief`'s rule: only the app's
+  section is added, the user's instructions and memory are byte for byte as
+  they were (their paths aren't marked; the section names them instead), an
+  agent that already has the section is left alone, and one with a turn
+  running or taken over waits for the next launch.
+
 **Past conversations** (`import_history`, `harvest::stage`). Once an agent is
 staged, the other assistant may send its past conversations with the
 `import_history` Remote Access tool, a few per call: `{source, agent,
