@@ -11,7 +11,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { AlertIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
-import { BRAND } from '../../lib/brand';
 import {
   formatAgo,
   formatDuration,
@@ -139,8 +138,7 @@ export function RunHistoryModal({ workflow, onClose }: RunHistoryModalProps) {
 
       <p className="run-history-note text-style-hint">
         The last 20 runs per workflow are kept on this machine, in{' '}
-        <code>~/Library/Application Support/{BRAND.appDirName}/workflows-state.json</code>. Nothing
-        is uploaded anywhere.
+        <code>~/ShipStudio/.shipstudio/workflows-state.json</code>. Nothing is uploaded anywhere.
       </p>
     </ModalFrame>
   );

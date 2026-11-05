@@ -10,7 +10,7 @@
 //! The flex row could not hold three columns at 1024px without the third
 //! wrapping under the first two.
 //!
-//! Made-With: Claude Code in Ship Studio
+//! Made-With: Claude Code
 //! ```
 //!
 //! `Made-With` is attribution — the same idea as Claude Code's `Co-Authored-By`,
@@ -86,16 +86,17 @@ pub fn attribution_enabled() -> bool {
 /// How an agent names itself in the trailer.
 ///
 /// The display name of the project's configured agent — "Claude Code", "Codex",
-/// "Cursor". `None` when Ship Studio committed on its own (a snapshot, a
-/// conflict resolution, an initial commit), in which case the trailer says only
-/// Ship Studio rather than crediting an agent that had nothing to do with it.
-pub fn agent_label(agent: Option<&str>) -> String {
-    match agent {
-        Some(agent) if !agent.trim().is_empty() => {
-            format!("{} in {}", agent.trim(), crate::brand::NAME)
-        }
-        _ => crate::brand::NAME.to_string(),
-    }
+/// "Cursor" — and nothing else. The app's name is deliberately left out: the
+/// key (`Made-With`) is shared with Ship Studio so either app's feed reads the
+/// other's commits, and a working name written into git history stays there
+/// for good. `None` when the app committed on its own (a snapshot, a conflict
+/// resolution, an initial commit): no trailer then, rather than crediting an
+/// agent that had nothing to do with it.
+pub fn agent_label(agent: Option<&str>) -> Option<String> {
+    agent
+        .map(str::trim)
+        .filter(|agent| !agent.is_empty())
+        .map(str::to_string)
 }
 
 /// Add Ship Studio's trailers to a commit message.
@@ -107,7 +108,10 @@ pub fn with_trailers(repo: &std::path::Path, message: &str, agent: Option<&str>)
     if !attribution_enabled() {
         return message.to_string();
     }
-    let trailers = [format!("{MADE_WITH_TRAILER}: {}", agent_label(agent))];
+    let Some(label) = agent_label(agent) else {
+        return message.to_string();
+    };
+    let trailers = [format!("{MADE_WITH_TRAILER}: {label}")];
 
     match interpret_trailers(repo, message, &trailers) {
         Ok(out) => out,
@@ -257,17 +261,14 @@ mod tests {
     #[test]
     fn names_the_agent_when_one_did_the_work_and_does_not_when_none_did() {
         assert_eq!(
-            agent_label(Some("Claude Code")),
-            format!("Claude Code in {}", crate::brand::NAME)
+            agent_label(Some("Claude Code")).as_deref(),
+            Some("Claude Code")
         );
-        assert_eq!(
-            agent_label(Some("  Codex  ")),
-            format!("Codex in {}", crate::brand::NAME)
-        );
+        assert_eq!(agent_label(Some("  Codex  ")).as_deref(), Some("Codex"));
         // A snapshot or a conflict resolution has no agent behind it, and
         // crediting one that was not there is the invention this rule forbids.
-        assert_eq!(agent_label(None), crate::brand::NAME);
-        assert_eq!(agent_label(Some("   ")), crate::brand::NAME);
+        assert_eq!(agent_label(None), None);
+        assert_eq!(agent_label(Some("   ")), None);
     }
 
     #[test]
@@ -419,10 +420,7 @@ mod tests {
                 subject, "Rebuild the pricing tiers as a CSS grid",
                 "`git log --oneline` must read exactly as it did before"
             );
-            assert_eq!(
-                made_with.trim(),
-                format!("Claude Code in {}", crate::brand::NAME)
-            );
+            assert_eq!(made_with.trim(), "Claude Code");
             let _ = std::fs::remove_dir_all(&dir);
         });
     }

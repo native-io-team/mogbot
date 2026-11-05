@@ -41,8 +41,8 @@ pub(crate) fn skill_markdown() -> String {
 name: shipstudio-team
 description: >-
   Write commit messages and pull requests that explain themselves, and resolve
-  review comments, in a Ship Studio project. Use this whenever you are about to
-  commit or push in a project that has a `.shipstudio/` directory, when the user
+  review comments, in a project that has a `.shipstudio/` directory. Use this
+  whenever you are about to commit or push in such a project, when the user
   asks you to push, ship, commit or land work there, and whenever you have
   finished acting on comments the user handed you — anything mentioning a
   comment thread id, a pin number, or "the comments I sent you".

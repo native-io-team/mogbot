@@ -77,9 +77,11 @@ impl BundledSkill {
 /// Studio's `shipstudio-<name>` names, and every bundled skill's name — in
 /// the front matter, and in backticked cross-references between skills — is
 /// swapped for ours. Backticks only, so the shared team format's
-/// `.shipstudio-team/` paths are never touched.
+/// `.shipstudio-team/` paths are never touched. Prose that names the app
+/// ("in Ship Studio's sidebar") names this one; the front-matter descriptions
+/// name no app at all, so the routing text doesn't depend on the brand.
 pub(crate) fn branded_body(body: &str) -> String {
-    let mut out = body.to_string();
+    let mut out = body.replace("Ship Studio", crate::brand::NAME);
     for skill in BUNDLED_SKILLS {
         let theirs = format!("shipstudio-{}", skill.name);
         let ours = skill.dir_name();
@@ -542,7 +544,21 @@ pub struct BundledSkillStatus {
     pub path: String,
 }
 
+/// Ship Studio's copy of a bundled skill, beside where ours would go
+/// (`<skills>/shipstudio-<name>`), when one is installed.
+fn ship_studio_copy(ours: &std::path::Path, name: &str) -> Option<PathBuf> {
+    let theirs = ours.parent()?.join(format!("shipstudio-{name}"));
+    theirs.join("SKILL.md").is_file().then_some(theirs)
+}
+
 /// Write every bundled skill for every agent that supports one.
+///
+/// Except where Ship Studio's own copy of the same skill is already
+/// installed: the two describe the same shared formats, and a near-identical
+/// pair in one skills directory makes the agent choose between them on every
+/// routing decision and spends its context twice. Theirs is used, and a copy
+/// of ours left from before Ship Studio's arrived is removed (the directory is
+/// ours; theirs is never touched).
 pub fn install_bundled_skills() -> Vec<BundledSkillStatus> {
     let mut statuses = Vec::new();
 
@@ -550,6 +566,21 @@ pub fn install_bundled_skills() -> Vec<BundledSkillStatus> {
         let body = branded_body(&(skill.body)());
         let dir_name = skill.dir_name();
         for (agent_id, dir) in skill_dirs(&dir_name) {
+            if let Some(theirs) = ship_studio_copy(&dir, skill.name) {
+                if dir != theirs && dir.join("SKILL.md").is_file() {
+                    if let Err(err) = std::fs::remove_dir_all(&dir) {
+                        warn!(skill = %dir_name, error = %err, "could not remove our duplicate of Ship Studio's skill");
+                    }
+                }
+                debug!(skill = %dir_name, agent = agent_id, "Ship Studio's copy is installed; not installing ours");
+                statuses.push(BundledSkillStatus {
+                    skill: dir_name.clone(),
+                    agent_id: agent_id.to_string(),
+                    installed: true,
+                    path: theirs.join("SKILL.md").to_string_lossy().to_string(),
+                });
+                continue;
+            }
             let installed = write_skill_if_agent_present(&dir, &body, skill.version)
                 .unwrap_or_else(|err| {
                     warn!(
@@ -794,6 +825,38 @@ mod tests {
                 "{} is declared twice and would overwrite itself",
                 skill.dir_name()
             );
+        }
+    }
+
+    #[test]
+    fn ship_studios_copy_is_found_beside_ours() {
+        let skills = tempfile::tempdir().unwrap();
+        let ours = skills.path().join(crate::brand::scoped("team"));
+        assert!(ship_studio_copy(&ours, "team").is_none());
+        let theirs = skills.path().join("shipstudio-team");
+        std::fs::create_dir_all(&theirs).unwrap();
+        // An empty folder isn't an installed skill.
+        assert!(ship_studio_copy(&ours, "team").is_none());
+        std::fs::write(theirs.join("SKILL.md"), "---\nname: shipstudio-team\n---\n").unwrap();
+        assert_eq!(ship_studio_copy(&ours, "team"), Some(theirs));
+    }
+
+    #[test]
+    fn descriptions_name_no_app() {
+        for skill in BUNDLED_SKILLS {
+            let body = branded_body(&(skill.body)());
+            let description = body
+                .split("description:")
+                .nth(1)
+                .and_then(|d| d.split("\n---").next())
+                .unwrap_or_default();
+            for name in ["Ship Studio", crate::brand::NAME] {
+                assert!(
+                    !description.contains(name),
+                    "{}'s description names {name}",
+                    skill.dir_name()
+                );
+            }
         }
     }
 

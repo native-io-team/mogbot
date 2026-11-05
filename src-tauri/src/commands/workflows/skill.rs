@@ -43,13 +43,13 @@ pub(crate) fn skill_markdown() -> String {
         r#"---
 name: shipstudio-workflows
 description: >-
-  Create and manage Ship Studio workflows — saved instructions that run on a
-  schedule or on demand in this project and file what they find to the user's
-  Ship Studio inbox. Use this whenever the user says they want something
-  checked regularly or repeatedly ("every time", "each week", "before every
-  release", "keep an eye on", "remind me to check", "I keep forgetting to"),
-  asks to automate a review or audit, or mentions workflows, scheduled checks,
-  or the Ship Studio inbox.
+  Create and manage workflows — saved instructions that run on a schedule or
+  on demand in this project and file what they find to the user's inbox. Use
+  this whenever the user says they want something checked regularly or
+  repeatedly ("every time", "each week", "before every release",
+  "keep an eye on", "remind me to check", "I keep forgetting to"), asks to
+  automate a review or audit, or mentions workflows, scheduled checks, or the
+  workflows inbox.
 metadata:
   shipstudio-skill-version: "{SKILL_VERSION}"
 ---

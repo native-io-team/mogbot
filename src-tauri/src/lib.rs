@@ -22,6 +22,7 @@ pub mod error_reporting;
 pub mod errors;
 pub mod external_command;
 pub mod logging;
+pub mod preview_isolation;
 pub mod proxy;
 pub mod remote_access;
 pub mod state;

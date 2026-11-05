@@ -46,6 +46,7 @@ fn generate_brand() {
         ("URL_SCHEME", "/urlScheme"),
         ("APP_DIR_NAME", "/appDirName"),
         ("COMPANION_SCHEME", "/companion/scheme"),
+        ("COMPANION_BUNDLE_ID", "/companion/bundleId"),
     ] {
         let value = req(pointer);
         writeln!(out, "pub const {name}: &str = {value:?};").ok();

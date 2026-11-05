@@ -56,16 +56,40 @@ Ship Studio is a desktop app for web developers that provides:
   library, template gallery, community CTAs, updates, version rewind, phone install, PR footer,
   telemetry). Telemetry keys/DSN are compile-time: null means nothing is sent
 - **Ours** (derived from the brand, so this app and Ship Studio run side by side): app-support dir
-  (app state, pins, agents, workflows state, companion build, remote access, bridge token), logs,
-  keychain prefixes, `~/.<slug>/` account homes, deep-link + pairing schemes, companion tailnet
-  port, Funnel mount path, MCP server names, bundled skill folder names, temp names
+  (app state, pins, agents, companion build, remote access, bridge token), logs, keychain
+  prefixes, `~/.<slug>/` account homes, deep-link + pairing schemes, companion tailnet port,
+  Funnel mount path, the preview MCP server name, bundled skill folder names, the reopen-at-login
+  LaunchAgent label (`<identifier>.reopen-at-login`), the phone self-build ids
+  (`<companion.bundleId>.<hex>` / `.self`), temp names
 - **Shared compat** (deliberately unchanged, so the two apps open each other's projects and
   plugins): `~/ShipStudio`, in-project `.shipstudio/`, `.shipstudio-team/` + the `shipstudio-team`
-  branch, `folders.json` / `external-projects.json` / `attached-libraries.json` in
-  `~/ShipStudio/.shipstudio/`, and the plugin ABI (`__SHIPSTUDIO_*`, `@shipstudio/plugin-sdk`,
+  branch, the commit-guidance marker, the `Made-With` trailer *key* (its value names only the
+  agent, never the app), and the plugin ABI (`__SHIPSTUDIO_*`, `@shipstudio/plugin-sdk`,
   `os-theme-shipstudio`)
+- **Shared state files** in `~/ShipStudio/.shipstudio/`, read and written by both apps:
+  - `folders.json`, `external-projects.json`, `attached-libraries.json` — one dashboard
+    organisation, whichever app you open
+  - `workflows-state.json` — run history, inbox, and the `last_run_at` both schedulers decide from.
+    Giving each app its own copy made every armed workflow run twice, and Dashbot's first launch
+    fire every daily workflow Ship Studio had already run. Dashbot additionally takes a per-slot
+    claim (`workflow-claims/`, atomic create, stale after 30 min) before a scheduled run; Ship
+    Studio doesn't, so a slot it is mid-way through can still be started here before it records
+    the run (`commands/workflows/slot_claim.rs`)
+  - **Read-modify-write risk:** each app serialises its own writes with an in-process lock only.
+    Two apps writing the same file at the same moment can drop one write (a folder move, a run's
+    findings). Writes are atomic renames, so the file is never corrupt, just occasionally stale.
+    Don't add a new shared file without accepting that, or adding a cross-process lock
+- **Read-only from Ship Studio:** with no projects folder set here, the Default workspace starts
+  at the folder Ship Studio's Default workspace uses (read from its `app_state.json`, never
+  written; `utils::ship_studio_projects_root`)
+- **Each other's agents:** both apps' preview MCP servers are registered in shared agent configs.
+  Agents we spawn are told to ignore Ship Studio's (`preview_isolation.rs`: Claude
+  `--disallowedTools=mcp__shipstudio-preview`; Codex `-c mcp_servers.shipstudio-preview.enabled=false`
+  only when it's configured). Its registration is never removed. Bundled skills: when Ship
+  Studio's `shipstudio-<name>` copy is installed, ours isn't
 - Files that can't import brand.json carry checked copies: `pnpm check:brand` (CI) verifies
-  tauri.conf.json / Cargo.toml / package.json identity and regenerates
+  tauri.conf.json / Cargo.toml / package.json identity (and that `plugins.updater` exists exactly
+  when `links.updates` is set), the phone build's `COMPANION_BUNDLE_ID` handoff, and regenerates
   `packages/companion-protocol/src/brand.gen.ts` and `index.html` with `--write`
 
 ## Architecture
@@ -435,9 +459,9 @@ recorded in [docs/internal/hosting-provider-matrix.md](docs/internal/hosting-pro
 
 ### Workflows Flow
 
-1. A workflow is a markdown file at `<project>/.shipstudio/workflows/<slug>.md` — frontmatter plus an instruction body. The form in `WorkflowEditorModal` and the user's own agent (via the bundled `shipstudio-workflows` skill) write the *same* artifact; there is no API in front of it
+1. A workflow is a markdown file at `<project>/.shipstudio/workflows/<slug>.md` — frontmatter plus an instruction body. The form in `WorkflowEditorModal` and the user's own agent (via the bundled `<slug>-workflows` skill) write the *same* artifact; there is no API in front of it
 2. Running one shells out to the user's agent CLI headless in the project dir. Read-only is enforced by the CLI (`--permission-mode plan` / `--sandbox read-only`), not merely requested — never weaken this without changing the UI copy that claims it
-3. Findings come back as the last fenced ```json block in the reply, are deduped by fingerprint, and are filed to `~/ShipStudio/.shipstudio/workflows-state.json` — **never** into the project repo
+3. Findings come back as the last fenced ```json block in the reply, are deduped by fingerprint, and are filed to `~/ShipStudio/.shipstudio/workflows-state.json` — shared with Ship Studio (see "Brand and identity"), **never** into the project repo
 4. Scheduling is one tokio tick (`workflow_scheduler.rs`), at most one run per tick, never catching up on a backlog. Nothing fires while the app is closed and every UI string says so
 5. In the Inbox, "Fix in \<project\>" queues the suggested prompt (`lib/workflowHandoff.ts`), opens the workspace, and `useWorkflowHandoff` types it once a terminal exists
 

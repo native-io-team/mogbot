@@ -142,7 +142,11 @@ async fn pair(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
         Negotiation::UpdateMac => {
             return json_response(&PairResponse::refused(
                 PairRefusal::UpdateMac,
-                format!("Update Ship Studio on {} to pair.", c.backend.server_name()),
+                format!(
+                    "Update {} on {} to pair.",
+                    crate::brand::NAME,
+                    c.backend.server_name()
+                ),
             ))
         }
     }
@@ -391,7 +395,7 @@ where
             return refuse(
                 &mut ws,
                 RefusedReason::UpdateMac,
-                format!("Update Ship Studio on {name}."),
+                format!("Update {} on {name}.", crate::brand::NAME),
             )
             .await;
         }

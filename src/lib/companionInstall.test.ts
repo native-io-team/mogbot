@@ -38,7 +38,7 @@ const thisMac: IosInstallStatus = {
   signing: {
     teamId: 'H8NN6DM6G6',
     identity: 'Apple Development: me',
-    bundleId: 'studio.ship.companion.a4c8c6',
+    bundleId: 'io.native.dashbot.companion.a4c8c6',
   },
   source,
 };
@@ -109,7 +109,7 @@ describe('androidSteps', () => {
     jdk: false,
     node: 'v24',
     devices: [],
-    package: 'studio.ship.companion.self',
+    package: 'io.native.dashbot.companion.self',
     source,
   };
 
@@ -138,7 +138,7 @@ describe('the build', () => {
   it('builds Release for the chosen phone with the team’s bundle id', () => {
     const cmd = iosBuildCommand(thisMac, iphone);
     expect(cmd).toContain("cd '/Users/me/ShipStudio/.companion-build/mobile'");
-    expect(cmd).toContain('SHIPSTUDIO_BUNDLE_ID=studio.ship.companion.a4c8c6');
+    expect(cmd).toContain('COMPANION_BUNDLE_ID=io.native.dashbot.companion.a4c8c6');
     expect(cmd).toContain('APPLE_TEAM_ID=H8NN6DM6G6');
     expect(cmd).toContain('--device 00008140-001 --configuration Release');
     expect(iosBuildCommand({ ...thisMac, signing: null }, iphone)).toBeNull();

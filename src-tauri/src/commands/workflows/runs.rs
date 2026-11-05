@@ -537,6 +537,8 @@ async fn invoke_agent(
                 "--permission-mode",
                 mode,
             ])
+            // Our preview bridge, not Ship Studio's (see preview_isolation).
+            .arg(crate::preview_isolation::claude_flag())
             .env("PATH", get_extended_path())
             .current_dir(project);
             let output = run_streaming(
@@ -567,8 +569,11 @@ async fn invoke_agent(
                 now_ms()
             ));
             let mut cmd = create_command(&binary);
+            cmd.arg("exec");
+            if let Some(value) = crate::preview_isolation::codex_override(None, Some(project)) {
+                cmd.args(["-c", &value]);
+            }
             cmd.args([
-                "exec",
                 "--skip-git-repo-check",
                 "--color",
                 "never",

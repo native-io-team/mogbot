@@ -1227,6 +1227,9 @@ fn turn_args(
     for dir in add_dirs {
         args.extend(["--add-dir".to_string(), dir.clone()]);
     }
+    // Ship Studio's preview bridge is registered for the same projects; an
+    // agent here drives our preview, never theirs.
+    args.push(crate::preview_isolation::claude_flag());
     if let Some(model) = model {
         args.extend(["--model".to_string(), model.to_string()]);
     }
@@ -1966,6 +1969,7 @@ mod tests {
             "/u/ShipStudio",
             "--add-dir",
             "/ext/site",
+            "--disallowedTools=mcp__shipstudio-preview",
             "--model",
             "opus",
         ]

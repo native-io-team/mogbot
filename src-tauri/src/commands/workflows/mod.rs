@@ -24,13 +24,16 @@
 //!
 //! Run history and findings deliberately do **not** live in the repo. They are
 //! per-machine, high-churn, and would show up in `git status` and pull requests
-//! within a day of use. They go to `workflows-state.json` in this app's own
-//! support folder (see `state.rs`).
+//! within a day of use. They go to `~/ShipStudio/.shipstudio/workflows-state.json`,
+//! alongside the other workspace-level config (`folders.json`,
+//! `attached-libraries.json`) — the same file Ship Studio uses, so the two
+//! apps agree on what has run (see `state.rs` and `slot_claim.rs`).
 
 mod files;
 pub(crate) mod progress;
 mod runs;
 pub mod skill;
+pub mod slot_claim;
 mod state;
 
 pub use files::*;

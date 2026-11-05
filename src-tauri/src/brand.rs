@@ -14,6 +14,13 @@
 //!   projects folder, the in-project `.shipstudio/` format, and the plugin
 //!   ABI (`__SHIPSTUDIO_*`, `@shipstudio/plugin-sdk`). Those let the two apps
 //!   open each other's projects and run each other's plugins.
+//! - **Shared state files**, also deliberately not here: `folders.json`,
+//!   `external-projects.json`, `attached-libraries.json` and
+//!   `workflows-state.json` in `~/ShipStudio/.shipstudio/`, which both apps
+//!   read and write (one dashboard organisation; one `last_run_at`, so a
+//!   scheduled workflow runs once, not once per app). Each app locks its own
+//!   writes in-process only, so two simultaneous writes can lose one. See
+//!   CLAUDE.md, "Brand and identity".
 //!
 //! A link that is `null` in brand.json is `None` here, and the feature that
 //! would use it is off.

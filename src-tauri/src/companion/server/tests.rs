@@ -415,7 +415,10 @@ async fn unknown_tokens_and_old_versions_are_refused() {
     send(&mut ws, h).await;
     let f = next(&mut ws).await;
     assert_eq!(f["reason"], "update_mac");
-    assert_eq!(f["message"], "Update Ship Studio on Julian’s MacBook Pro.");
+    assert_eq!(
+        f["message"],
+        format!("Update {} on Julian’s MacBook Pro.", crate::brand::NAME)
+    );
 
     let mut ws = connect(port).await;
     let mut h = hello(&token, None);

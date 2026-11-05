@@ -10,12 +10,19 @@
  *   - packages/companion-protocol/src/brand.gen.ts — the pairing scheme and
  *     tailnet port the Mac and the phone must agree on
  *   - index.html — <title> and the log folder named in the boot-failure copy
+ *   - scripts/install.sh and scripts/install.ps1 — the brand block (name,
+ *     releases link) they run on, since they're piped from a URL and can't
+ *     read brand.json; with no releases link they refuse to install anything
  *
  * Checked only (edit by hand):
  *   - src-tauri/tauri.conf.json — productName, identifier, deep-link scheme,
- *     and no updater config unless brand.json names an update feed
+ *     and updater config present exactly when brand.json names an update feed
+ *     (the updater plugin is only registered when links.updates is set, and
+ *     it fails app setup without its config)
  *   - src-tauri/Cargo.toml and package.json — package name = slug
- *   - mobile/app.config.ts — reads ../brand.json rather than hardcoding
+ *   - mobile/app.config.ts — reads ../brand.json rather than hardcoding, and
+ *     takes a self-build's bundle id from the env var the desktop sets
+ *   - companion.bundleId — never Ship Studio's, or the phones collide
  *
  * The Rust side needs no check: src-tauri/build.rs reads brand.json itself.
  */
@@ -40,6 +47,13 @@ if (!/^[a-z][a-z0-9-]*$/.test(brand.slug ?? '')) {
 const companion = brand.companion ?? {};
 if (typeof companion.scheme !== 'string' || !companion.scheme) {
   fail('brand.json: "companion.scheme" must be a string');
+}
+if (typeof companion.bundleId !== 'string' || !companion.bundleId) {
+  fail('brand.json: "companion.bundleId" must be a string');
+} else if (companion.bundleId.startsWith('studio.ship.')) {
+  // Self-builds are `<bundleId>.<hex>` / `<bundleId>.self`; under Ship
+  // Studio's prefix they would replace its phone app.
+  fail('brand.json: "companion.bundleId" must not be under Ship Studio\'s studio.ship.*');
 }
 if (!Number.isInteger(companion.tailnetPort) || companion.tailnetPort < 1) {
   fail('brand.json: "companion.tailnetPort" must be a port number');
@@ -90,6 +104,41 @@ else if (read(GEN_PATH) !== gen)
     fail('index.html title or log folder differs from brand.json — run with --write');
 }
 
+// --- generated: the install scripts' brand blocks ------------------------------
+{
+  const sh = (v) => JSON.stringify(v ?? ''); // "…" is a valid bash literal for these values
+  const ps = (v) => `'${String(v ?? '').replace(/'/g, "''")}'`;
+  const blocks = [
+    [
+      'scripts/install.sh',
+      [`BRAND_NAME=${sh(brand.name)}`, `BRAND_RELEASES=${sh(brand.links?.releases)}`],
+    ],
+    [
+      'scripts/install.ps1',
+      [
+        `$BrandName       = ${ps(brand.name)}`,
+        `$BrandAppDirName = ${ps(brand.appDirName)}`,
+        `$BrandReleases   = ${ps(brand.links?.releases)}`,
+      ],
+    ],
+  ];
+  const START =
+    '# --- brand (generated from brand.json by `node scripts/check-brand.mjs --write`) ---';
+  const END = '# --- end brand ---';
+  for (const [rel, lines] of blocks) {
+    const text = read(rel);
+    const from = text.indexOf(START);
+    const to = text.indexOf(END);
+    if (from < 0 || to < from) {
+      fail(`${rel} has no brand block (${START} … ${END})`);
+      continue;
+    }
+    const next = `${text.slice(0, from)}${START}\n${lines.join('\n')}\n${text.slice(to)}`;
+    if (write) writeFileSync(join(root, rel), next);
+    else if (next !== text) fail(`${rel} brand block differs from brand.json — run with --write`);
+  }
+}
+
 // --- checked: tauri.conf.json ------------------------------------------------
 {
   const conf = JSON.parse(read('src-tauri/tauri.conf.json'));
@@ -108,6 +157,11 @@ else if (read(GEN_PATH) !== gen)
   if (brand.links?.updates == null && conf.plugins?.updater) {
     fail('tauri.conf.json has plugins.updater but brand.json names no update feed (links.updates)');
   }
+  if (brand.links?.updates != null && !conf.plugins?.updater) {
+    fail(
+      'brand.json names an update feed (links.updates) but tauri.conf.json has no plugins.updater — the app would fail to start'
+    );
+  }
 }
 
 // --- checked: package names --------------------------------------------------
@@ -122,8 +176,25 @@ else if (read(GEN_PATH) !== gen)
 }
 
 // --- checked: mobile reads brand.json ------------------------------------------
-if (!read('mobile/app.config.ts').includes('../brand.json')) {
-  fail('mobile/app.config.ts must take its name, scheme and bundle id from ../brand.json');
+{
+  const appConfig = read('mobile/app.config.ts');
+  if (!appConfig.includes('../brand.json')) {
+    fail('mobile/app.config.ts must take its name, scheme and bundle id from ../brand.json');
+  }
+  // The desktop hands the phone build its bundle id through this env var
+  // (src/lib/companionInstall.ts); if the names drift, the phone builds as
+  // the default id and the desktop never sees it installed.
+  const ENV = 'COMPANION_BUNDLE_ID';
+  if (!appConfig.includes(`process.env.${ENV}`)) {
+    fail(`mobile/app.config.ts must read process.env.${ENV}`);
+  }
+  const installer = read('src/lib/companionInstall.ts');
+  const used = new Set(installer.match(/\b[A-Z][A-Z_]*_BUNDLE_ID\b/g) ?? []);
+  if (!used.has(ENV) || used.size !== 1) {
+    fail(
+      `src/lib/companionInstall.ts must pass the bundle id as ${ENV} (found ${[...used].join(', ') || 'none'})`
+    );
+  }
 }
 
 if (problems.length) {
