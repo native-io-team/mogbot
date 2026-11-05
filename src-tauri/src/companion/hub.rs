@@ -231,12 +231,11 @@ impl Hub {
     /// after its replay.
     pub fn publish(&self, event: Event) -> u64 {
         let mut journal = self.journal();
-        // A status's live timeline is for phones watching now; replay sends
-        // the latest status without it (the next one carries it again).
-        let seq = journal.append(
-            super::wire::without_live_work(event.clone()),
-            super::now_ms(),
-        );
+        // Journaled whole, timeline and all: a phone with `live_work` that
+        // reconnects mid-turn gets the steps back on replay, and the server
+        // strips them for phones without it. Only one status per agent is
+        // kept, so this is bounded by the number of agents.
+        let seq = journal.append(event.clone(), super::now_ms());
         let _ = self.tx.send(HubItem::Journaled { seq, event });
         seq
     }
@@ -421,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn the_journal_keeps_a_status_without_its_live_timeline() {
+    fn the_journal_keeps_a_status_with_its_live_timeline() {
         let hub = Hub::new("e1".into());
         let mut rx = hub.tx.subscribe();
         hub.publish(Event::Status {
@@ -444,7 +443,9 @@ mod tests {
             panic!("expected replay")
         };
         match &events[0].1 {
-            Event::Status { status, .. } => assert!(status.get("work").is_none()),
+            // Replayed whole: a `live_work` phone back from sleep mid-turn
+            // sees the steps again (the server strips them for the others).
+            Event::Status { status, .. } => assert!(status.get("work").is_some()),
             other => panic!("unexpected {other:?}"),
         }
     }

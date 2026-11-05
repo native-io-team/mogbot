@@ -26,6 +26,7 @@ fn agent(name: &str) -> store::Agent {
 
 fn user(text: &str) -> Inbound {
     Inbound {
+        id: String::new(),
         text: text.into(),
         from: From::User,
         reply: false,
@@ -36,6 +37,7 @@ fn user(text: &str) -> Inbound {
 
 fn from_chief(text: &str, reply: bool) -> Inbound {
     Inbound {
+        id: String::new(),
         text: text.into(),
         from: From::Agent {
             sender: AgentRef {
@@ -85,6 +87,7 @@ fn recovery_only_touches_what_the_last_run_left() {
                 session: "--resume 1111-2222".into(),
                 project: None,
                 tree: None,
+                batch: Vec::new(),
             },
         );
         // A second prepare (recover_after_restart's own) changes nothing.
@@ -152,7 +155,7 @@ fn stop_names_who_is_owed_word_for_what_it_dropped() {
             routine.ticket = Some("t-1".into());
             r.queue.push_back(routine);
         }
-        let (stopped, dropped) = stop_queue(id);
+        let (stopped, dropped) = stop_queue(id, false);
         assert!(stopped);
         assert!(RUNTIMES.lock().unwrap().get(id).unwrap().queue.is_empty());
         let (askers, tickets) = dropped_debts(&dropped);

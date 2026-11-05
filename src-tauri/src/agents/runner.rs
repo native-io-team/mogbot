@@ -92,6 +92,11 @@ pub enum From {
 
 #[derive(Debug, Clone, Serialize, serde::Deserialize)]
 struct Inbound {
+    /// Given when it is queued (`push`), so recovery can tell a message that
+    /// was resent from one a cut-off turn had already taken. Empty in an
+    /// inbox written before ids existed (given one when it is read back).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    id: String,
     text: String,
     from: From,
     /// An agent's answer to a request this agent sent it: answered by
@@ -176,6 +181,9 @@ struct Runtime {
     /// The user is driving the agent's session in a terminal (`takeover`):
     /// no turn starts, and what arrives waits in the queue until hand-back.
     driven: bool,
+    /// The agent is being deleted (`stop_for_delete`): nothing more is
+    /// queued for it, so no turn starts on an agent about to go.
+    deleting: bool,
 }
 
 /// Why a take-over can't start now.
@@ -188,15 +196,19 @@ pub enum Claim {
 }
 
 impl Runtime {
-    /// Queue `inbound`. True when a worker must be started to drain it:
-    /// nothing is draining yet, and nobody is driving the session.
-    fn admit(&mut self, inbound: Inbound) -> bool {
+    /// Queue `inbound`. `Ok(true)` when a worker must be started to drain
+    /// it: nothing is draining yet, and nobody is driving the session.
+    /// Refused (handed back) while the agent is being deleted.
+    fn admit(&mut self, inbound: Inbound) -> Result<bool, Box<Inbound>> {
+        if self.deleting {
+            return Err(Box::new(inbound));
+        }
         self.queue.push_back(inbound);
         if self.running || self.driven {
-            return false;
+            return Ok(false);
         }
         self.running = true;
-        true
+        Ok(true)
     }
 
     /// Hand the session to the user. Only while no turn is in it, so there
@@ -312,6 +324,13 @@ pub fn current_hop(agent_id: &str) -> u8 {
         .unwrap_or(0)
 }
 
+/// The hop a message sent on behalf of a turn at `hop` travels at, or
+/// `None` past [`MAX_HOPS`]: that word is not sent, so a chain can't loop.
+fn reply_hop(hop: u8) -> Option<u8> {
+    let next = hop.saturating_add(1);
+    (next <= MAX_HOPS).then_some(next)
+}
+
 /// Whether a worker is draining this agent's inbox (a turn is running or about to).
 pub fn in_turn(agent_id: &str) -> bool {
     RUNTIMES
@@ -373,6 +392,11 @@ struct TurnMark {
     project: Option<String>,
     #[serde(default)]
     tree: Option<String>,
+    /// The ids of the messages the turn took, written before they left the
+    /// queue. All of them still in the inbox at launch means the turn never
+    /// took them (the app went in between): they are resent, not retried.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    batch: Vec<String>,
 }
 
 fn read_mark(agent_id: &str) -> Option<TurnMark> {
@@ -479,7 +503,10 @@ pub fn prepare_recovery() {
     for agent in store::list().unwrap_or_default() {
         let marked = mark_path(&agent.id).is_some_and(|p| p.exists())
             || super::takeover::left_over(&agent.id);
-        let queued = take_inbox(&agent.id);
+        let mut queued = take_inbox(&agent.id);
+        for message in queued.iter_mut().filter(|m| m.id.is_empty()) {
+            message.id = store::new_id();
+        }
         if !marked && queued.is_empty() {
             continue;
         }
@@ -527,27 +554,65 @@ fn recovered(agent_id: &str) {
     RECOVERED.notify_waiters();
 }
 
+/// How long recovering one agent may take, and all of them: past either,
+/// turns go ahead without it rather than wait on it forever.
+const RECOVER_ONE_BOUND: Duration = Duration::from_secs(45);
+const RECOVERY_BOUND: Duration = Duration::from_secs(150);
+
+/// Holds turns back while recovery runs, and lets every one of them go
+/// however recovery ends: finished, timed out, or panicked. Only a lock and
+/// a wake-up in its drop, so it is safe while unwinding.
+struct RecoveryGate;
+
+impl Drop for RecoveryGate {
+    fn drop(&mut self) {
+        if let Some(l) = LEFTOVERS.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+            l.clear();
+        }
+        RECOVERED.notify_waiters();
+    }
+}
+
 /// At launch: a turn the last run left mid-flight is over. Its Claude Code
 /// process can outlive the app (a quit doesn't run our cleanup), and would
 /// keep writing the same session as the next turn, so it is stopped; and the
 /// chat says the turn ended, instead of a message sitting there unanswered.
 /// Only what [`prepare_recovery`] found is touched: nothing this run started.
 pub async fn recover_after_restart(app: &AppHandle) {
+    use futures_util::FutureExt;
     prepare_recovery();
-    // Copies whose folder went, or that no agent holds any more.
-    super::task::sweep().await;
     let found: Vec<(String, Vec<Inbound>)> = LEFTOVERS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
         .map(|l| l.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
         .unwrap_or_default();
-    for (agent_id, queued) in found {
-        recover_one(app, &agent_id, &queued).await;
-        recovered(&agent_id);
-        // Nothing has asked it to run since launch: send what was waiting.
-        kick(app, &agent_id);
+    let gate = RecoveryGate;
+    let each = async {
+        for (agent_id, queued) in &found {
+            let one =
+                std::panic::AssertUnwindSafe(recover_one(app, agent_id, queued)).catch_unwind();
+            match tokio::time::timeout(RECOVER_ONE_BOUND, one).await {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => tracing::error!("[Agents] recovering {agent_id} panicked"),
+                Err(_) => tracing::warn!("[Agents] recovering {agent_id} timed out"),
+            }
+            recovered(agent_id);
+            // Nothing has asked it to run since launch: send what was waiting.
+            kick(app, agent_id);
+        }
+    };
+    if tokio::time::timeout(RECOVERY_BOUND, each).await.is_err() {
+        tracing::warn!("[Agents] recovery timed out; letting the remaining agents go");
     }
+    // Whatever wasn't reached goes ahead now.
+    drop(gate);
+    for (agent_id, _) in &found {
+        kick(app, agent_id);
+    }
+    // Copies whose folder went, or that no agent holds any more. After the
+    // agents, so no turn waits behind every project's `git worktree` calls.
+    super::task::sweep().await;
 }
 
 /// Start a worker for an agent with messages queued and none running.
@@ -571,14 +636,16 @@ fn kick(app: &AppHandle, agent_id: &str) {
 }
 
 /// One agent the last run left mid-turn, or with messages waiting.
-async fn recover_one(app: &AppHandle, agent_id: &str, queued: &[Inbound]) {
+async fn recover_one(app: &AppHandle, agent_id: &str, found: &[Inbound]) {
     // A take-over's terminal the last run left behind, first: it is in the
     // session the queue below resumes.
     if let Ok(agent) = store::get(agent_id) {
         super::takeover::recover_after_restart(app, &agent).await;
     }
+    let mut retry_line = false;
     if let Some(path) = mark_path(agent_id).filter(|p| p.exists()) {
         let mark = read_mark(agent_id).unwrap_or_default();
+        retry_line = !never_taken(&mark, found);
         if let Some(pid) = mark.pid {
             if !mark.session.is_empty() {
                 stop_orphan(pid, &mark.session).await;
@@ -590,6 +657,11 @@ async fn recover_one(app: &AppHandle, agent_id: &str, queued: &[Inbound]) {
         if let (Some(project), Some(tree)) = (mark.project, mark.tree) {
             record_changes(app, agent_id, project.into(), tree).await;
         }
+    }
+    // A turn that had taken its messages didn't finish: Retry re-sends. One
+    // that never took them (the app went between its mark and the dequeue)
+    // has nothing to retry: its messages are the ones sent again below.
+    if retry_line {
         let text = "The app closed while this agent was working, so that turn didn't finish. Retry to send it again.";
         let mut line = new_message(agent_id, MessageKind::Error, text);
         line.failure = Some(super::failure::Failure::OTHER);
@@ -597,14 +669,39 @@ async fn recover_one(app: &AppHandle, agent_id: &str, queued: &[Inbound]) {
     }
     // What was queued behind it was never started: it runs now, once (it is
     // already back on the queue), and the chat says which messages were sent
-    // again. The interrupted turn itself is not re-run: it may have done half
-    // its work.
-    if !queued.is_empty() {
+    // again: only those still queued, not any a Stop has dropped meanwhile.
+    // The interrupted turn itself is not re-run: it may have done half its work.
+    let resent = still_queued(agent_id, found);
+    if !resent.is_empty() {
         let _ = record(
             app,
-            new_message(agent_id, MessageKind::Note, resent_note(queued)),
+            new_message(agent_id, MessageKind::Note, resent_note(&resent)),
         );
     }
+}
+
+/// The cut-off turn never took its messages: every one it marked as its
+/// batch was still in the inbox at launch. False for a mark without a batch
+/// (written by an older version, or never got that far): say it didn't finish.
+fn never_taken(mark: &TurnMark, found: &[Inbound]) -> bool {
+    !mark.batch.is_empty()
+        && mark
+            .batch
+            .iter()
+            .all(|id| found.iter().any(|m| !m.id.is_empty() && &m.id == id))
+}
+
+/// Of the messages recovery found, those still on the agent's queue.
+fn still_queued(agent_id: &str, found: &[Inbound]) -> Vec<Inbound> {
+    let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(queue) = runtimes.get(agent_id).map(|r| &r.queue) else {
+        return Vec::new();
+    };
+    found
+        .iter()
+        .filter(|m| queue.iter().any(|q| q.id == m.id))
+        .cloned()
+        .collect()
 }
 
 /// Stop `pid` only if it is still that turn's process: pids get reused, and
@@ -843,6 +940,7 @@ pub fn enqueue(app: &AppHandle, agent_id: &str, text: String, from: From) {
         app,
         agent_id,
         Inbound {
+            id: String::new(),
             text,
             from,
             reply: false,
@@ -866,6 +964,7 @@ pub fn enqueue_scheduled(
         app,
         agent_id,
         Inbound {
+            id: String::new(),
             text,
             from: From::User,
             reply: false,
@@ -881,6 +980,7 @@ pub fn enqueue_reply(app: &AppHandle, agent_id: &str, text: String, sender: Agen
         app,
         agent_id,
         Inbound {
+            id: String::new(),
             text,
             from: From::Agent { sender, hop },
             reply: true,
@@ -903,16 +1003,24 @@ pub fn settle(from: &str, to: &str) -> bool {
     owed.len() < before
 }
 
-fn push(app: &AppHandle, agent_id: &str, inbound: Inbound) {
-    let start = {
+fn push(app: &AppHandle, agent_id: &str, mut inbound: Inbound) {
+    if inbound.id.is_empty() {
+        inbound.id = store::new_id();
+    }
+    let admitted = {
         let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
         let runtime = runtimes.entry(agent_id.to_string()).or_default();
-        let start = runtime.admit(inbound);
-        save_inbox(agent_id, &runtime.queue);
-        start
+        let admitted = runtime.admit(inbound);
+        if admitted.is_ok() {
+            save_inbox(agent_id, &runtime.queue);
+        }
+        admitted
     };
-    if start {
-        start_worker(app, agent_id);
+    match admitted {
+        Ok(true) => start_worker(app, agent_id),
+        Ok(false) => {}
+        // Being deleted: whoever asked hears it won't be done.
+        Err(refused) => tell_dropped(app, agent_id, vec![*refused], Dropped::Deleting),
     }
 }
 
@@ -1004,15 +1112,38 @@ pub fn update_settings<F: FnOnce(&mut store::Agent)>(
 /// dropped goes unanswered: another agent's request is told it was stopped
 /// before it started, and a scheduled run settles as stopped.
 pub fn stop(app: &AppHandle, agent_id: &str) -> bool {
-    let (stopped, dropped) = stop_queue(agent_id);
-    tell_dropped(app, agent_id, dropped);
+    let (stopped, dropped) = stop_queue(agent_id, false);
+    tell_dropped(app, agent_id, dropped, Dropped::Stopped);
     stopped
 }
 
+/// [`stop`] for an agent about to be deleted: from now on nothing more is
+/// queued for it (`admit` refuses), so no turn starts while the delete waits
+/// for the dying one. [`undelete`] if the delete then fails.
+pub fn stop_for_delete(app: &AppHandle, agent_id: &str) -> bool {
+    let (stopped, dropped) = stop_queue(agent_id, true);
+    tell_dropped(app, agent_id, dropped, Dropped::Stopped);
+    stopped
+}
+
+/// The delete [`stop_for_delete`] was for didn't happen: take messages again.
+pub fn undelete(agent_id: &str) {
+    if let Some(r) = RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get_mut(agent_id)
+    {
+        r.deleting = false;
+    }
+}
+
 /// [`stop`]'s part under the lock: what it dropped, and whether a turn (or
-/// a wait for a slot) was told to stop.
-fn stop_queue(agent_id: &str) -> (bool, Vec<Inbound>) {
+/// a wait for a slot) was told to stop. `deleting` also closes the queue.
+fn stop_queue(agent_id: &str, deleting: bool) -> (bool, Vec<Inbound>) {
     let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    if deleting {
+        runtimes.entry(agent_id.to_string()).or_default().deleting = true;
+    }
     let Some(runtime) = runtimes.get_mut(agent_id) else {
         return (false, Vec::new());
     };
@@ -1045,23 +1176,46 @@ fn dropped_debts(dropped: &[Inbound]) -> (Vec<(AgentRef, u8)>, Vec<String>) {
     (askers, tickets)
 }
 
-fn tell_dropped(app: &AppHandle, agent_id: &str, dropped: Vec<Inbound>) {
+/// Why messages left the queue without a turn taking them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Dropped {
+    /// The user stopped the agent.
+    Stopped,
+    /// The agent is being deleted.
+    Deleting,
+    /// Its worker died (a panic) before taking them.
+    Failed,
+}
+
+fn tell_dropped(app: &AppHandle, agent_id: &str, dropped: Vec<Inbound>, why: Dropped) {
     let (askers, tickets) = dropped_debts(&dropped);
     if !tickets.is_empty() {
-        super::runs::turn_ended(app, agent_id, &tickets, Some("Stopped"));
+        // A failure settles as the turn's error line says (retried or reported).
+        let settle_as = (why != Dropped::Failed).then_some("Stopped");
+        super::runs::turn_ended(app, agent_id, &tickets, settle_as);
     }
     if askers.is_empty() {
         return;
     }
     let Ok(me) = store::get(agent_id) else { return };
-    let text = format!("{} was stopped before it started on your request.", me.name);
+    let text = match why {
+        Dropped::Stopped => format!("{} was stopped before it started on your request.", me.name),
+        Dropped::Deleting => format!(
+            "{} is being deleted, so it won't take your request.",
+            me.name
+        ),
+        Dropped::Failed => format!(
+            "{} couldn't start on your request: something went wrong running it.",
+            me.name
+        ),
+    };
     let sender = AgentRef {
         id: me.id.clone(),
         name: me.name.clone(),
     };
     for (to, hop) in askers {
-        let hop = hop.saturating_add(1);
-        if hop > MAX_HOPS || store::get(&to.id).is_err() {
+        let Some(hop) = reply_hop(hop) else { continue };
+        if store::get(&to.id).is_err() {
             continue;
         }
         let mut line = new_message(&to.id, MessageKind::FromAgent, text.clone());
@@ -1404,14 +1558,20 @@ struct Batch {
 /// quit would leave neither: the next launch always says the turn didn't
 /// finish.
 fn take_batch(agent_id: &str) -> Option<Batch> {
-    write_mark(agent_id, TurnMark::default());
     let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     let runtime = runtimes.entry(agent_id.to_string()).or_default();
     if runtime.queue.is_empty() {
-        drop(runtimes);
-        clear_mark(agent_id);
         return None;
     }
+    // Under the lock, like the inbox write below, so the two land in order
+    // and name the same messages.
+    write_mark(
+        agent_id,
+        TurnMark {
+            batch: runtime.queue.iter().map(|m| m.id.clone()).collect(),
+            ..TurnMark::default()
+        },
+    );
     let batch: Vec<Inbound> = runtime.queue.drain(..).collect();
     save_inbox(agent_id, &runtime.queue);
     let routine = batch.iter().all(|m| m.routine);
@@ -1471,7 +1631,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
 /// `push` checks `running` under, so a message pushed now either is seen
 /// here or starts a new worker. Returns what an interrupted turn that was
 /// never replaced (the queue was stopped) still owes, to settle.
-fn finish_if_idle(agent_id: &str) -> Option<(Vec<AgentRef>, Vec<String>)> {
+fn finish_if_idle(agent_id: &str) -> Option<Idle> {
     let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     let runtime = runtimes.entry(agent_id.to_string()).or_default();
     if !runtime.queue.is_empty() {
@@ -1480,14 +1640,24 @@ fn finish_if_idle(agent_id: &str) -> Option<(Vec<AgentRef>, Vec<String>)> {
     runtime.running = false;
     runtime.queued = false;
     runtime.cancel = None;
-    runtime.hop = 0;
+    let hop = std::mem::take(&mut runtime.hop);
     runtime.origin = None;
     runtime.prompt = None;
     runtime.interrupted = None;
-    Some((
-        std::mem::take(&mut runtime.owed),
-        std::mem::take(&mut runtime.tickets),
-    ))
+    Some(Idle {
+        owed: std::mem::take(&mut runtime.owed),
+        tickets: std::mem::take(&mut runtime.tickets),
+        hop,
+    })
+}
+
+/// What a worker going idle still owes (see [`finish_if_idle`]).
+struct Idle {
+    owed: Vec<AgentRef>,
+    tickets: Vec<String>,
+    /// The hop of the last turn, from before the reset: word sent for it
+    /// travels one further, and not past [`MAX_HOPS`].
+    hop: u8,
 }
 
 fn take_tickets(agent_id: &str) -> Vec<String> {
@@ -1507,9 +1677,13 @@ fn stopped_reason(note: Option<&str>) -> String {
     }
 }
 
-/// Resets a worker that died mid-turn (a panic anywhere in it), so the
-/// agent isn't left "working" with every later message queued behind a
-/// worker that no longer exists. Disarmed on every way out but a panic.
+/// The last resort for a worker that died mid-turn. A panic in a turn is
+/// caught in [`drain`] and handled as a failed turn ([`after_panic`]); this
+/// fires only if that handling panics too (or the guard is used bare). It
+/// runs while unwinding, where a second panic aborts the whole app, so it
+/// only resets the agent's in-memory state (one lock, field writes) and
+/// leaves everything else (status, chat line, delegators, scheduled runs,
+/// the restart) to a task spawned for it.
 struct DrainGuard {
     app: Option<AppHandle>,
     agent_id: String,
@@ -1529,25 +1703,30 @@ impl Drop for DrainGuard {
         if !self.armed || !std::thread::panicking() || QUITTING.load(Ordering::SeqCst) {
             return;
         }
-        tracing::error!("[Agents] {}'s turn panicked; resetting it", self.agent_id);
         let reset = reset_after_panic(&self.agent_id, self.progressed);
-        clear_mark(&self.agent_id);
-        let Some(app) = &self.app else { return };
-        set_status(app, &self.agent_id, Status::idle());
-        let mut line = new_message(&self.agent_id, MessageKind::Error, PANIC_LINE);
-        line.failure = Some(super::failure::Failure::OTHER);
-        let _ = record(app, line);
-        super::work::finish(app, &self.agent_id, store::now_ms());
-        for to in reset.owed {
-            tell_couldnt_finish(app, &self.agent_id, &to, "something went wrong running it.");
-        }
-        if !reset.tickets.is_empty() {
-            super::runs::turn_ended(app, &self.agent_id, &reset.tickets, None);
-        }
-        if reset.restart {
-            let app = app.clone();
+        if let Some(app) = self.app.clone() {
             let agent_id = self.agent_id.clone();
-            tauri::async_runtime::spawn(async move { drain(app, agent_id).await });
+            tauri::async_runtime::spawn(
+                async move { after_panic_or_release(&app, &agent_id, reset) },
+            );
+        }
+    }
+}
+
+/// [`after_panic`], from the guard's task: if it panics again, at least
+/// the new worker it claimed is released, so the next message starts one.
+fn after_panic_or_release(app: &AppHandle, agent_id: &str, reset: PanicReset) {
+    let restart = reset.restart;
+    let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        after_panic(app, agent_id, reset)
+    }));
+    if handled.is_err() && restart {
+        if let Some(r) = RUNTIMES
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_mut(agent_id)
+        {
+            r.running = false;
         }
     }
 }
@@ -1558,8 +1737,17 @@ struct PanicReset {
     tickets: Vec<String>,
     /// Messages are still queued and a new worker was claimed for them.
     restart: bool,
+    /// The dead turn's hop, from before the reset: word to its delegators
+    /// travels one further, and not past [`MAX_HOPS`].
+    hop: u8,
+    /// Queued messages dropped with it (it died before taking them), whose
+    /// senders are told.
+    dropped: Vec<Inbound>,
 }
 
+/// Reset a worker that panicked: in memory only (no I/O), so it is safe
+/// to call while unwinding. The queue's file is brought in line by
+/// [`after_panic`].
 fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     let runtime = runtimes.entry(agent_id.to_string()).or_default();
@@ -1567,46 +1755,123 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     runtime.cancel = None;
     runtime.interrupt = false;
     runtime.interrupted = None;
-    runtime.hop = 0;
+    let hop = std::mem::take(&mut runtime.hop);
     runtime.origin = None;
     runtime.prompt = None;
     runtime.waits = 0;
     runtime.status = Some(Status::idle());
     // Messages that arrived during the dead turn are newer than what killed
-    // it: a new worker sends them. If it died before taking anything, they
-    // are what killed it, and are dropped (the error line says to resend).
-    let restart = progressed && !runtime.driven && !runtime.queue.is_empty();
-    if !restart {
-        runtime.queue.clear();
-        save_inbox(agent_id, &runtime.queue);
-    }
+    // it: a new worker sends them (or the hand-back does, while someone
+    // drives it). If it died before taking anything, they are what killed
+    // it, and are dropped (the error line says to resend; agents that asked
+    // are told).
+    let keep = progressed && !runtime.queue.is_empty();
+    let dropped = if keep {
+        Vec::new()
+    } else {
+        runtime.queue.drain(..).collect()
+    };
+    let restart = keep && !runtime.driven;
     runtime.running = restart;
     PanicReset {
         owed: std::mem::take(&mut runtime.owed),
         tickets: std::mem::take(&mut runtime.tickets),
         restart,
+        hop,
+        dropped,
     }
 }
 
+/// A turn panicked: handled like any failed turn, after unwinding is over.
+/// The chat says it didn't finish, delegators and scheduled runs hear so,
+/// and what is still queued gets a new worker.
+fn after_panic(app: &AppHandle, agent_id: &str, reset: PanicReset) {
+    {
+        let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+        let empty = VecDeque::new();
+        let queue = runtimes.get(agent_id).map_or(&empty, |r| &r.queue);
+        save_inbox(agent_id, queue);
+    }
+    clear_mark(agent_id);
+    set_status(app, agent_id, Status::idle());
+    let mut line = new_message(agent_id, MessageKind::Error, PANIC_LINE);
+    line.failure = Some(super::failure::Failure::OTHER);
+    let _ = record(app, line);
+    super::work::finish(app, agent_id, store::now_ms());
+    for to in &reset.owed {
+        tell_couldnt_finish(
+            app,
+            agent_id,
+            to,
+            "something went wrong running it.",
+            reset.hop,
+        );
+    }
+    if !reset.tickets.is_empty() {
+        super::runs::turn_ended(app, agent_id, &reset.tickets, None);
+    }
+    tell_dropped(app, agent_id, reset.dropped, Dropped::Failed);
+    if reset.restart {
+        start_worker(app, agent_id);
+    }
+}
+
+/// How a worker's run ended, once [`drain`] has caught any panic in it:
+/// `panicked` is handled by `cleanup` (normally [`after_panic`]). The guard
+/// stays armed while it runs, so a panic in the handling itself still
+/// resets the agent, without aborting the app.
+fn end_drain(guard: &mut DrainGuard, panicked: bool, cleanup: impl FnOnce(PanicReset)) {
+    if !panicked || QUITTING.load(Ordering::SeqCst) {
+        guard.armed = false;
+        return;
+    }
+    tracing::error!("[Agents] {}'s turn panicked; resetting it", guard.agent_id);
+    let reset = reset_after_panic(&guard.agent_id, guard.progressed);
+    cleanup(reset);
+    guard.armed = false;
+}
+
+/// Drain the agent's queue, one turn at a time, until it is empty. A panic
+/// anywhere in it is caught and handled as a failed turn, never left as an
+/// agent "working" forever with every later message queued behind nothing.
 async fn drain(app: AppHandle, agent_id: String) {
+    use futures_util::FutureExt;
     let mut guard = DrainGuard {
         app: Some(app.clone()),
         agent_id: agent_id.clone(),
         armed: true,
         progressed: false,
     };
+    let run = drain_turns(&app, &agent_id, &mut guard.progressed);
+    let panicked = std::panic::AssertUnwindSafe(run)
+        .catch_unwind()
+        .await
+        .is_err();
+    end_drain(&mut guard, panicked, |reset| {
+        after_panic(&app, &agent_id, reset)
+    });
+}
+
+async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
+    let app = app.clone();
+    let agent_id = agent_id.to_string();
     // What the last run left for this agent is dealt with first.
     wait_for_recovery(&agent_id).await;
     loop {
-        if let Some((owed, tickets)) = finish_if_idle(&agent_id) {
-            guard.armed = false;
+        if let Some(idle) = finish_if_idle(&agent_id) {
             set_status(&app, &agent_id, Status::idle());
             // An interrupted turn whose replacement never ran (stopped).
-            for to in owed {
-                tell_couldnt_finish(&app, &agent_id, &to, "it was stopped before it finished.");
+            for to in &idle.owed {
+                tell_couldnt_finish(
+                    &app,
+                    &agent_id,
+                    to,
+                    "it was stopped before it finished.",
+                    idle.hop,
+                );
             }
-            if !tickets.is_empty() {
-                super::runs::turn_ended(&app, &agent_id, &tickets, Some("Stopped"));
+            if !idle.tickets.is_empty() {
+                super::runs::turn_ended(&app, &agent_id, &idle.tickets, Some("Stopped"));
             }
             return;
         }
@@ -1618,7 +1883,7 @@ async fn drain(app: AppHandle, agent_id: String) {
         let Some(batch) = take_batch(&agent_id) else {
             continue;
         };
-        guard.progressed = true;
+        *progressed = true;
         let Batch {
             prompt,
             routine,
@@ -1646,6 +1911,7 @@ async fn drain(app: AppHandle, agent_id: String) {
                     session: String::new(),
                     project: Some(project.to_string_lossy().into_owned()),
                     tree: Some(tree.clone()),
+                    batch: Vec::new(),
                 },
             );
         }
@@ -1664,7 +1930,6 @@ async fn drain(app: AppHandle, agent_id: String) {
         };
         if QUITTING.load(Ordering::SeqCst) {
             // The app is going: the mark stays, for the next launch to report.
-            guard.armed = false;
             return;
         }
         clear_mark(&agent_id);
@@ -1717,10 +1982,11 @@ async fn drain(app: AppHandle, agent_id: String) {
 }
 
 /// Tell one agent that delegated to `agent_id` that it couldn't finish.
-fn tell_couldnt_finish(app: &AppHandle, agent_id: &str, to: &AgentRef, why: &str) {
+/// `hop` is the turn's, read before its runtime was reset.
+fn tell_couldnt_finish(app: &AppHandle, agent_id: &str, to: &AgentRef, why: &str, hop: u8) {
+    let Some(hop) = reply_hop(hop) else { return };
     let Ok(me) = store::get(agent_id) else { return };
-    let hop = current_hop(agent_id).saturating_add(1);
-    if hop > MAX_HOPS || store::get(&to.id).is_err() {
+    if store::get(&to.id).is_err() {
         return;
     }
     let text = format!("{} couldn't finish: {why}", me.name);
@@ -2745,6 +3011,7 @@ mod tests {
 
     fn from_user(text: &str) -> Inbound {
         Inbound {
+            id: String::new(),
             text: text.into(),
             from: From::User,
             reply: false,
@@ -2780,20 +3047,24 @@ mod tests {
     fn while_driven_nothing_starts_and_everything_waits_in_order() {
         let mut r = Runtime::default();
         r.claim().unwrap();
-        assert!(!r.admit(from_user("one")));
-        assert!(!r.admit(Inbound {
-            text: "from Finance".into(),
-            from: From::Agent {
-                sender: AgentRef {
-                    id: "f".into(),
-                    name: "Finance".into(),
+        assert!(matches!(r.admit(from_user("one")), Ok(false)));
+        assert!(matches!(
+            r.admit(Inbound {
+                id: String::new(),
+                text: "from Finance".into(),
+                from: From::Agent {
+                    sender: AgentRef {
+                        id: "f".into(),
+                        name: "Finance".into(),
+                    },
+                    hop: 1,
                 },
-                hop: 1,
-            },
-            reply: false,
-            routine: false,
-            ticket: None,
-        }));
+                reply: false,
+                routine: false,
+                ticket: None,
+            }),
+            Ok(false)
+        ));
         assert!(!r.running, "no worker may start on a driven session");
         let texts: Vec<_> = r.queue.iter().map(|m| m.text.as_str()).collect();
         assert_eq!(texts, ["one", "from Finance"]);
@@ -2803,7 +3074,7 @@ mod tests {
     fn handing_back_resumes_with_what_waited_and_tells_the_next_turn() {
         let mut r = Runtime::default();
         r.claim().unwrap();
-        r.admit(from_user("while you drove"));
+        r.admit(from_user("while you drove")).unwrap();
         assert!(
             r.release(Some("[handed back]".into()), false),
             "a worker starts for the queue"
@@ -2818,7 +3089,7 @@ mod tests {
         assert!(!quiet.release(Some("[handed back]".into()), false));
         assert_eq!(quiet.interrupted.as_deref(), Some("[handed back]"));
         assert!(
-            quiet.admit(from_user("later")),
+            matches!(quiet.admit(from_user("later")), Ok(true)),
             "an ordinary message starts a turn again"
         );
 
@@ -2883,6 +3154,7 @@ mod tests {
     fn agent_messages_are_framed_as_not_from_the_user() {
         let batch = vec![
             Inbound {
+                id: String::new(),
                 text: "Do X".into(),
                 from: From::User,
                 reply: false,
@@ -2890,6 +3162,7 @@ mod tests {
                 ticket: None,
             },
             Inbound {
+                id: String::new(),
                 text: "Done Y".into(),
                 from: From::Agent {
                     sender: AgentRef {
@@ -3037,6 +3310,7 @@ mod tests {
         store::set_root_for_tests(Some(dir.path().to_path_buf()));
         let queue: VecDeque<Inbound> = [
             Inbound {
+                id: String::new(),
                 text: "Also check the footer".into(),
                 from: From::User,
                 reply: false,
@@ -3044,6 +3318,7 @@ mod tests {
                 ticket: None,
             },
             Inbound {
+                id: String::new(),
                 text: "Receipts filed.\nDetails follow".into(),
                 from: From::Agent {
                     sender: AgentRef {
@@ -3195,6 +3470,7 @@ mod tests {
                 let r = runtimes.get_mut(&b.id).unwrap();
                 r.owed.clear();
                 r.queue.push_back(Inbound {
+                    id: String::new(),
                     text: "Draw the logo".into(),
                     from: From::Agent {
                         sender: me.clone(),
@@ -3291,7 +3567,7 @@ mod tests {
     fn releasing_a_deleted_agents_take_over_drops_what_waited_and_starts_nothing() {
         let mut r = Runtime::default();
         r.claim().unwrap();
-        r.admit(from_user("while you drove"));
+        r.admit(from_user("while you drove")).unwrap();
         assert!(!r.release(Some("[handed back]".into()), true));
         assert!(r.queue.is_empty());
         assert!(!r.running && !r.driven);
@@ -3422,3 +3698,7 @@ mod tests {
 #[cfg(test)]
 #[path = "audit_runner_tests.rs"]
 mod audit_runner_tests;
+
+#[cfg(test)]
+#[path = "review_runner_tests.rs"]
+mod review_runner_tests;

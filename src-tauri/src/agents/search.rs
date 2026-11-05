@@ -158,7 +158,14 @@ fn match_message(message: &AgentMessage, terms: &[Vec<char>]) -> Option<String> 
 /// same way, except where markdown it drops (`**`, a backtick) joins words
 /// (those lines are checked with it dropped), a char is JSON-escaped (a term
 /// with a quote, backslash or control char isn't used to filter; a line with
-/// a `\u` escape is let through), or a term isn't ASCII (left to the parse).
+/// a `\u` escape, or JSON's optional `\/`, is let through), a non-ASCII char
+/// lowers to an ASCII one (the Kelvin sign is `k`: such a line is let
+/// through), or a term isn't ASCII (left to the parse).
+/// U+212A KELVIN SIGN, the one char outside ASCII that lowercases into it
+/// (to `k`). (U+0130's lowercase starts with `i` but carries a combining dot,
+/// so it never matches an ASCII term in the parse either.)
+const KELVIN: char = '\u{212A}';
+
 struct Prefilter {
     terms: Vec<String>,
 }
@@ -180,7 +187,12 @@ impl Prefilter {
 
     fn may_match(&self, lowered: &str) -> bool {
         let all = |line: &str| self.terms.iter().all(|t| line.contains(t.as_str()));
-        if self.terms.is_empty() || all(lowered) || lowered.contains("\\u") {
+        if self.terms.is_empty()
+            || all(lowered)
+            || lowered.contains("\\u")
+            || lowered.contains("\\/")
+            || lowered.contains(KELVIN)
+        {
             return true;
         }
         (lowered.contains("**") || lowered.contains('`'))
@@ -555,3 +567,7 @@ mod tests {
         assert!(match_message(&message, &terms("müller schmidt")).is_none());
     }
 }
+
+#[cfg(test)]
+#[path = "review_search_tests.rs"]
+mod review_search_tests;

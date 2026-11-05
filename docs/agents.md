@@ -180,14 +180,26 @@ agents ("After agents finish"; click again to restart now).
 
 **Nothing goes silent.** A worker that panics mid-turn resets the agent
 (idle, slot freed, an error line saying the turn didn't finish) instead of
-leaving it "working" forever. Stop, and the 3-hour limit, tell any agent
+leaving it "working" forever. The panic is caught (`catch_unwind`) and
+handled as a failed turn; a guard that fires while unwinding only resets
+in-memory state, so a second panic in that handling ends one task, never the
+app. Word to delegators keeps the dead turn's hop (and the 6-hop cap), and a
+worker that died before taking anything tells the agents whose requests it
+dropped. Recovery at launch can't hold turns forever either: each agent is
+bounded (45 s), the whole pass too (150 s), a panic in one is caught, and the
+gate opens however recovery ends; the worktree sweep runs after the agents.
+A turn the app closed on before it took its messages (its mark names them,
+and they were still in the inbox) is reported as sent again, never also as
+"didn't finish · Retry"; and the "sent again" note names only what is still
+queued, not messages a Stop dropped meanwhile. Stop, and the 3-hour limit, tell any agent
 that delegated the turn "{name} couldn't finish: …", and a Stop tells each
 agent whose request was still queued that it was stopped before it started.
 A scheduled run is settled by its ticket id (it rides on the queued wake and
 carries over an interrupt); stopped, or dropped by a Stop, it is recorded as
 failed ("Stopped"), never as a success or left "Running". The status says
 "Needs your OK" until every open card of the turn is answered (a count per
-agent, per turn). Deleting an agent stops it and waits up to 3 s for its
+agent, per turn). Deleting an agent stops it, closes its queue (anything sent to it
+meanwhile is refused and its sender told), and waits up to 3 s for its
 turn to end; a write for an agent no longer registered is refused, so its
 folder never comes back.
 

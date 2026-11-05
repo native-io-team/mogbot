@@ -535,12 +535,20 @@ pub async fn delete_agent(app: &AppHandle, agent_id: &str) -> Result<store::Agen
             "The Chief of Staff can't be deleted.",
         ));
     }
-    runner::stop(app, agent_id);
+    // Closes its queue too: nothing sent to it while the delete waits below
+    // starts a turn (whoever sent it is told it won't be done).
+    runner::stop_for_delete(app, agent_id);
     abandon(app, agent_id).await;
     // What its dying turn records lands before its folder goes (and a line
     // recorded after that is refused: `store::append_message`).
     runner::wait_until_idle(agent_id, Duration::from_secs(3)).await;
-    let removed = store::delete(agent_id)?;
+    let removed = match store::delete(agent_id) {
+        Ok(removed) => removed,
+        Err(e) => {
+            runner::undelete(agent_id);
+            return Err(e);
+        }
+    };
     abandon(app, agent_id).await;
     runner::forget(agent_id);
     Ok(removed)

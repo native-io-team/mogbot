@@ -116,10 +116,21 @@ where
 /// Agents' own words for the CLI failures people hit that aren't the usage
 /// limit or a sign-in (those are [`describe`]'s): the remedy in this app's
 /// terms, never another feature's copy ("AI generation") or a terminal to
-/// live in. `None` for anything else, which is shown as the CLI said it.
+/// live in. `None` for anything else, which is shown as the CLI said it,
+/// and for the usage limit or a sign-in, so [`describe`] says those (and
+/// tags them) even when other words come with them: the usage limit is
+/// checked before usage credits, as `commands::ai` always did.
 pub fn cli_failure(who: &str, detail: &str) -> Option<String> {
     let lower = detail.to_lowercase();
     let has = |words: &[&str]| words.iter().any(|w| lower.contains(w));
+    // The sign-in race says "sign in again" too, but is its own case below.
+    let refresh_race = has(&[
+        "failed to refresh oauth token",
+        "another claude code process is refreshing it",
+    ]);
+    if is_usage_limit(&lower) || (is_signed_out(&lower) && !refresh_race) {
+        return None;
+    }
     let text = if has(&["usage credits", "usage-credits"]) {
         format!("{who} needs usage credits for the model this agent uses. Add credits to your account, or pick another model in Edit agent, then send this again.")
     } else if has(&["not supported when using codex with a chatgpt account"]) {
@@ -135,10 +146,7 @@ pub fn cli_failure(who: &str, detail: &str) -> Option<String> {
         "do you trust the contents of this directory",
     ]) {
         format!("{who} hasn't been allowed to work in this folder yet, so it won't start here. Open the project, start {who} there once and accept its trust question, then send this again.")
-    } else if has(&[
-        "failed to refresh oauth token",
-        "another claude code process is refreshing it",
-    ]) {
+    } else if refresh_race {
         format!("{who} couldn't refresh its sign-in because another {who} was doing the same. Try again in a minute.")
     } else if has(&["api key has expired"]) {
         format!("{who}'s API key has expired. Make a new one with your provider and update it in {who}'s settings, then send this again.")
@@ -230,10 +238,17 @@ pub fn is_temporary(detail: &str, failure: &Failure) -> bool {
 }
 
 fn is_usage_limit(lower: &str) -> bool {
-    // Not "usage credits": that one resets when the user tops up, not on a clock.
-    ["usage limit", "session limit", "weekly limit", "hour limit"]
-        .iter()
-        .any(|w| lower.contains(w))
+    // Not "usage credits": that one resets when the user tops up, not on a
+    // clock. "Quota exceeded" is `commands::ai`'s usage-limit wording too.
+    [
+        "usage limit",
+        "session limit",
+        "weekly limit",
+        "hour limit",
+        "quota exceeded",
+    ]
+    .iter()
+    .any(|w| lower.contains(w))
 }
 
 /// Claude Code's and Codex's own wordings, and `commands::ai`'s classified
@@ -246,6 +261,7 @@ fn is_signed_out(lower: &str) -> bool {
         "sign in again",
         "oauth token has expired",
         "isn't signed in anymore",
+        "session expired",
         "not logged in",
         "invalid api key",
         // Codex's refresh-token rotation failing: only signing in again fixes it.
@@ -365,6 +381,68 @@ where
 mod tests {
     use super::*;
     use chrono::{FixedOffset, Utc};
+
+    /// The run path: `cli_failure` first, then `describe` on what it leaves.
+    fn turn_failure(engine: Engine, raw: &str) -> (String, Failure) {
+        let who = engine.label();
+        let text = cli_failure(who, raw).unwrap_or_else(|| raw.to_string());
+        describe(engine, &text, &Utc, None, NOW)
+    }
+
+    /// The wordings `commands::ai` used to classify for Agents, and the
+    /// order it classified them in.
+    #[test]
+    fn expired_sessions_quotas_and_mixed_wordings_keep_ais_classification() {
+        // An expired session is a sign-out (the sidebar says so).
+        for raw in [
+            "API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"Session expired. Please log in again.\"}}",
+            "Error: Your session expired. Sign in to continue.",
+        ] {
+            let (_, f) = turn_failure(Engine::Claude, raw);
+            assert_eq!(f.kind, FailureKind::SignedOut, "{raw}");
+        }
+        // "Quota exceeded" is the usage limit, with the reset when it gives one.
+        let (text, f) = turn_failure(
+            Engine::Codex,
+            "stream error: Quota exceeded for this account. Try again at 7:18 PM.",
+        );
+        assert_eq!(f.kind, FailureKind::UsageLimit);
+        assert!(text.contains("usage limit is reached"), "{text}");
+        assert!(is_temporary(&text, &f));
+        let (_, f) = turn_failure(Engine::Claude, "Error: quota exceeded");
+        assert_eq!(f.kind, FailureKind::UsageLimit);
+        // Usage limit and usage credits in one message: the limit wins (it
+        // resets on a clock), as it did in `commands::ai`.
+        let (text, f) = turn_failure(
+            Engine::Claude,
+            "You've hit your usage limit · resets 4:40pm. Run /usage-credits to keep going, or wait.",
+        );
+        assert_eq!(f.kind, FailureKind::UsageLimit, "{text}");
+        assert!(!text.contains("needs usage credits"), "{text}");
+        // A sign-out that mentions a cli_failure wording is still a sign-out.
+        let (_, f) = turn_failure(
+            Engine::Claude,
+            "Invalid API key · Please run /login. (this model requires usage credits)",
+        );
+        assert_eq!(f.kind, FailureKind::SignedOut);
+        // The refresh race says "sign in again", but is its own sentence.
+        let (text, f) = turn_failure(
+            Engine::Claude,
+            "Failed to refresh OAuth token: another Claude Code process is refreshing it. If this persists, sign in again.",
+        );
+        assert_eq!(f.kind, FailureKind::Other);
+        assert!(
+            text.contains("another Claude Code was doing the same"),
+            "{text}"
+        );
+        // Credits alone are still credits.
+        let (text, f) = turn_failure(
+            Engine::Claude,
+            "Fable 5 requires usage credits. Run /usage-credits to continue or switch models with /model.",
+        );
+        assert_eq!(f.kind, FailureKind::Other);
+        assert!(text.contains("needs usage credits"), "{text}");
+    }
 
     #[test]
     fn only_failures_that_heal_on_their_own_are_temporary() {
