@@ -38,6 +38,8 @@ iana-time-zone = "0.1"
 which = "6"
 base64 = "0.22"
 url = "2"
+unicode-normalization = "0.1"
+regex = "1"
 tauri-plugin-screenshots = "2.2.0"
 tauri-plugin-fs = "2"
 # jpeg/gif/webp: custom thumbnail uploads decode whatever the user drags in

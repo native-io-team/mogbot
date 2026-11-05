@@ -166,14 +166,23 @@ fn lock() -> std::sync::MutexGuard<'static, State> {
     STATE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// An interview quiet for too long is over: stopped, as if the user had.
+/// An interview quiet for too long is over: stopped, as if the user had,
+/// and written to the audit log like a Stop.
 fn expire(state: &mut State, now: i64) {
     if let Some(t) = state.talk.as_mut() {
         if t.state == TalkState::Interviewing && !t.busy && now - t.last_at > IDLE_MS {
             t.state = TalkState::Stopped;
             t.outbox.clear();
             t.held = None;
+            if let Some(s) = &t.session {
+                s.remove();
+            }
             state.armed = false;
+            audit(
+                &t.source,
+                &format!("ended: no message for {} minutes", IDLE_MS / 60_000),
+                true,
+            );
         }
     }
 }
@@ -347,7 +356,7 @@ pub fn clean_source(raw: &str, chief: &str) -> Result<String, String> {
     let taken = store::list()
         .unwrap_or_default()
         .iter()
-        .any(|a| a.name.eq_ignore_ascii_case(&name));
+        .any(|a| review::same_name(&a.name, &name));
     if review::reserved_name(&name, chief) || taken {
         return Err(format!(
             "\"{name}\" can't be used as `source`: it's a name for the user or one of their agents here. Use your product name, like \"Grok\"."
@@ -418,7 +427,6 @@ pub fn looks_like_secret(text: &str) -> Option<&'static str> {
             return Some("an API key or token");
         }
     }
-    let lower = text.to_lowercase();
     for marker in [
         "password:",
         "password=",
@@ -427,8 +435,8 @@ pub fn looks_like_secret(text: &str) -> Option<&'static str> {
         "pin:",
     ] {
         let mut from = 0;
-        while let Some(at) = lower[from..].find(marker) {
-            let after = &text[from + at + marker.len()..];
+        while let Some(at) = review::find_ascii(text, marker, from) {
+            let after = &text[at + marker.len()..];
             let value: String = after
                 .trim_start()
                 .chars()
@@ -438,15 +446,29 @@ pub fn looks_like_secret(text: &str) -> Option<&'static str> {
             if value.len() >= 4 && !value.starts_with('[') && !value.starts_with('$') {
                 return Some("a password");
             }
-            from += at + marker.len();
+            from = at + marker.len();
         }
     }
     None
 }
 
 fn audit(source: &str, what: &str, ok: bool) {
-    crate::remote_access::audit("import_conversation", None, format!("{source}: {what}"), ok);
+    let detail = format!("{source}: {what}");
+    #[cfg(test)]
+    {
+        let _ = ok;
+        AUDITED
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(detail);
+    }
+    #[cfg(not(test))]
+    crate::remote_access::audit("import_conversation", None, detail, ok);
 }
+
+/// What tests would have written to the audit log (never the real one).
+#[cfg(test)]
+static AUDITED: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 /* ---------------------------------------------------------------- talk */
 
@@ -678,7 +700,9 @@ pub(crate) fn answer(status: Status, talk: &Talk, chief: &str, replies: &[String
 }
 
 /// The interview's answer is in: the replies go to the outbox (and the chat).
-fn on_exchange(talk_id: &str, replies: &[String], failed: bool) -> Option<Talk> {
+/// `began`: Claude Code started the session, so later exchanges resume it,
+/// even when this one failed (a timeout, an API error) after starting.
+fn on_exchange(talk_id: &str, replies: &[String], failed: bool, began: bool) -> Option<Talk> {
     let mut state = lock();
     let t = state
         .talk
@@ -687,7 +711,7 @@ fn on_exchange(talk_id: &str, replies: &[String], failed: bool) -> Option<Talk> 
     t.busy = false;
     t.last_at = store::now_ms();
     if let Some(s) = t.session.as_mut() {
-        if !failed {
+        if began || !failed {
             s.started = true;
         }
     }
@@ -805,8 +829,10 @@ fn ask_consent(app: &AppHandle, chief: &store::Agent, talk_id: &str, first: &str
 }
 
 /// The user answered a connector card (`commands::agents::answer_card`).
-/// Consent: Allow starts the interview. Review: Allow imports everything as
-/// new (the phone's answer); Deny dismisses it.
+/// Consent: Allow starts the interview. Review: Deny dismisses it; Allow
+/// is refused, because importing is only done from the Mac's card, where
+/// each agent's instructions are on screen (the phone says "Review on your
+/// Mac").
 pub fn answer_card(
     app: &AppHandle,
     chief_id: &str,
@@ -859,13 +885,8 @@ pub fn answer_card(
             emit(app, Some(chief_id));
             Ok(())
         }
-        CardKind::Review => {
-            if allow {
-                apply_review(app, chief_id, &approval.request_id, None).map(|_| ())
-            } else {
-                dismiss_review(app, chief_id, &approval.request_id, card)
-            }
-        }
+        CardKind::Review if allow => Err(CommandError::expected(review::REVIEW_ON_MAC)),
+        CardKind::Review => dismiss_review(app, chief_id, &approval.request_id, card),
     }
 }
 
@@ -874,18 +895,10 @@ pub fn apply_review(
     app: &AppHandle,
     chief_id: &str,
     request_id: &str,
-    picks: Option<&Picks>,
+    picks: &Picks,
 ) -> Result<review::Applied, CommandError> {
-    let (_, card) = review::find_card(chief_id, request_id)?;
-    let chief = store::get(chief_id)?;
-    let applied = review::apply(Some(app), &chief, &card, picks)?;
-    let summary = if applied.agents.is_empty() {
-        "Imported nothing".to_string()
-    } else {
-        format!("Imported {}", applied.agents.join(", "))
-    };
-    if let Some(m) = store::answer_prompt(chief_id, request_id, ApprovalStatus::Allowed, &summary)?
-    {
+    let (card, applied, answered) = review::apply_card(Some(app), chief_id, request_id, picks)?;
+    if let Some(m) = answered {
         let _ = app.emit(runner::EVENT_MESSAGE, &m);
     }
     store::refresh_pending(chief_id);
@@ -923,28 +936,32 @@ pub fn apply_review(
         ));
     }
     note(app, chief_id, line);
-    audit(
-        &card.source,
-        &format!(
-            "imported {}{}",
-            if applied.agents.is_empty() {
-                "nothing".to_string()
-            } else {
-                applied.agents.join(", ")
-            },
-            if applied.replaced.is_empty() {
-                String::new()
-            } else {
-                format!(" (replaced {})", applied.replaced.join(", "))
-            }
-        ),
-        true,
-    );
+    audit(&card.source, &applied_audit(&applied), true);
     let _ = app.emit(runner::EVENT_REGISTRY, ());
     super::notify::refresh_badge(app);
     super::tray::mark_used(app);
     emit(app, Some(chief_id));
     Ok(applied)
+}
+
+/// The audit line for an Import: what was made, what was replaced, and
+/// whether the Chief's notes were added.
+fn applied_audit(applied: &review::Applied) -> String {
+    let mut line = format!(
+        "imported {}",
+        if applied.agents.is_empty() {
+            "nothing".to_string()
+        } else {
+            applied.agents.join(", ")
+        }
+    );
+    if !applied.replaced.is_empty() {
+        line.push_str(&format!(" (replaced {})", applied.replaced.join(", ")));
+    }
+    if applied.chief_notes {
+        line.push_str("; added notes to the Chief's memory");
+    }
+    line
 }
 
 fn dismiss_review(
@@ -982,10 +999,59 @@ fn dismiss_review(
     Ok(())
 }
 
+/// The message `admit` let through, if its import is still the one going
+/// and still waiting on it. A Stop (or anything else) between the two
+/// drops the message here: nothing is shown and no `claude` starts.
+fn claim_delivery(talk_id: &str) -> Option<Talk> {
+    lock()
+        .talk
+        .clone()
+        .filter(|t| t.id == talk_id && t.state == TalkState::Interviewing && t.busy)
+}
+
+/// Holds an exchange's "busy" until it reports. Dropped without reporting
+/// (an early return, or a panic unwinding through it), it reports a failed
+/// exchange, so an import is never left working forever, and the other
+/// assistant gets the fixed sentence, never what went wrong.
+struct Busy {
+    talk_id: String,
+    reported: bool,
+}
+
+impl Busy {
+    fn new(talk_id: &str) -> Busy {
+        Busy {
+            talk_id: talk_id.to_string(),
+            reported: false,
+        }
+    }
+
+    /// Nothing to report: the import already ended.
+    fn disarm(mut self) {
+        self.reported = true;
+    }
+
+    fn report(mut self, replies: &[String], failed: bool, began: bool) -> Option<Talk> {
+        self.reported = true;
+        on_exchange(&self.talk_id, replies, failed, began)
+    }
+}
+
+impl Drop for Busy {
+    fn drop(&mut self) {
+        if !self.reported {
+            on_exchange(&self.talk_id, &[], true, false);
+        }
+    }
+}
+
 /// Hand `message` to the interview: show it in the Chief's chat and run one
 /// exchange in the sealed session.
 fn deliver(app: &AppHandle, talk_id: &str, message: &str) {
-    let Some(t) = lock().talk.clone().filter(|t| t.id == talk_id) else {
+    let busy = Busy::new(talk_id);
+    let Some(t) = claim_delivery(talk_id) else {
+        // Stopped meanwhile: nothing to report to.
+        busy.disarm();
         return;
     };
     let mut line = runner::new_message(&t.chief_id, MessageKind::FromAgent, message.to_string());
@@ -994,11 +1060,12 @@ fn deliver(app: &AppHandle, talk_id: &str, message: &str) {
     emit(app, Some(&t.chief_id));
     let app = app.clone();
     let prompt = interview::envelope(&t.source, message);
-    let talk_id = talk_id.to_string();
     tauri::async_runtime::spawn(async move {
-        let failed = match run_exchange(&app, &t, &prompt).await {
-            Ok(replies) => {
-                if let Some(t) = on_exchange(&talk_id, &replies, false) {
+        let done = run_exchange(&app, &t, &prompt).await;
+        let failed = match done.result {
+            Ok(outcome) => {
+                let replies = outcome.replies;
+                if let Some(t) = busy.report(&replies, false, done.began) {
                     for reply in &replies {
                         let mut line = runner::new_message(
                             &t.chief_id,
@@ -1011,11 +1078,19 @@ fn deliver(app: &AppHandle, talk_id: &str, message: &str) {
                 }
                 None
             }
-            Err(interview::Failed::Stopped) => return,
-            Err(interview::Failed::Error(why)) => Some(why),
+            Err(interview::Failed::Stopped) => {
+                // Stop already ended the talk; the exchange may have made its
+                // folder again after Stop removed it.
+                if let Some(s) = &t.session {
+                    s.remove();
+                }
+                busy.disarm();
+                return;
+            }
+            Err(interview::Failed::Error(why)) => Some((why, busy)),
         };
-        if let Some(why) = failed {
-            if let Some(t) = on_exchange(&talk_id, &[], true) {
+        if let Some((why, busy)) = failed {
+            if let Some(t) = busy.report(&[], true, done.began) {
                 note(
                     &app,
                     &t.chief_id,
@@ -1027,17 +1102,18 @@ fn deliver(app: &AppHandle, talk_id: &str, message: &str) {
     });
 }
 
-async fn run_exchange(
-    app: &AppHandle,
-    t: &Talk,
-    prompt: &str,
-) -> Result<Vec<String>, interview::Failed> {
-    let binary = interview::binary()
-        .await
-        .ok_or_else(|| interview::Failed::Error("Claude Code isn't installed.".into()))?;
-    let (port, token) = crate::agent_bridge::start_global_agent_bridge(app.clone())
-        .await
-        .map_err(|e| interview::Failed::Error(e.to_string()))?;
+async fn run_exchange(app: &AppHandle, t: &Talk, prompt: &str) -> interview::Exchanged {
+    let failed = |why: String| interview::Exchanged {
+        began: false,
+        result: Err(interview::Failed::Error(why)),
+    };
+    let Some(binary) = interview::binary().await else {
+        return failed("Claude Code isn't installed.".into());
+    };
+    let (port, token) = match crate::agent_bridge::start_global_agent_bridge(app.clone()).await {
+        Ok(bridge) => bridge,
+        Err(e) => return failed(e.to_string()),
+    };
     let url = format!(
         "http://127.0.0.1:{port}/mcp/{token}/agents/import/{}",
         t.secret
@@ -1046,17 +1122,20 @@ async fn run_exchange(
         .map(|c| c.name)
         .unwrap_or_else(|_| "Chief of Staff".into());
     let system = interview::system_prompt(&chief, &t.source);
-    let session = t.session.clone().ok_or(interview::Failed::Stopped)?;
     // The latest session state (started or not) lives on the talk.
-    let session = lock()
+    let Some(session) = lock()
         .talk
         .as_ref()
         .filter(|x| x.id == t.id)
         .and_then(|x| x.session.clone())
-        .unwrap_or(session);
-    interview::exchange(&binary, &session, &url, &system, prompt, t.cancel.clone())
-        .await
-        .map(|o| o.replies)
+        .or_else(|| t.session.clone())
+    else {
+        return interview::Exchanged {
+            began: false,
+            result: Err(interview::Failed::Stopped),
+        };
+    };
+    interview::exchange(&binary, &session, &url, &system, prompt, t.cancel.clone()).await
 }
 
 /* --------------------------------------------------- the interview's tools */
@@ -1177,7 +1256,7 @@ pub(crate) fn tool_call(
             if t.draft
                 .proposals
                 .iter()
-                .any(|x| x.name.eq_ignore_ascii_case(&p.name))
+                .any(|x| review::same_name(&x.name, &p.name))
             {
                 return Err(format!(
                     "{} is already staged: use update_proposal to change it.",
@@ -1221,7 +1300,7 @@ pub(crate) fn tool_call(
                 .draft
                 .proposals
                 .iter()
-                .position(|x| x.name.eq_ignore_ascii_case(&target))
+                .position(|x| review::same_name(&x.name, &target))
                 .ok_or_else(|| format!("Nothing called {target} is staged."))?;
             let old = t.draft.proposals[i].clone();
             let mut merged = serde_json::json!({
@@ -1242,7 +1321,7 @@ pub(crate) fn tool_call(
                 .proposals
                 .iter()
                 .enumerate()
-                .any(|(j, x)| j != i && x.name.eq_ignore_ascii_case(&p.name))
+                .any(|(j, x)| j != i && review::same_name(&x.name, &p.name))
             {
                 return Err(format!("{} is already staged.", p.name));
             }
@@ -1428,7 +1507,7 @@ pub(crate) fn stage_one_shot_state(
                 if draft
                     .proposals
                     .iter()
-                    .any(|x| x.name.eq_ignore_ascii_case(&p.name)) =>
+                    .any(|x| review::same_name(&x.name, &p.name)) =>
             {
                 errors.push(format!("{}: sent twice", p.name))
             }
@@ -1506,7 +1585,7 @@ mod tests {
             consent_state(&talk_id, true, 1_100),
             Some(Some("Hi, I run 3 agents.".into()))
         );
-        on_exchange(&talk_id, &["Which agents?".into()], false);
+        on_exchange(&talk_id, &["Which agents?".into()], false, true);
         talk_id
     }
 
@@ -1593,7 +1672,7 @@ mod tests {
             err.starts_with("STATUS: working") && err.contains("NOT delivered"),
             "{err}"
         );
-        on_exchange(&talk_id, &["Thanks.".into()], false);
+        on_exchange(&talk_id, &["Thanks.".into()], false, true);
         // The cap.
         lock().talk.as_mut().unwrap().exchanges = MAX_EXCHANGES;
         let err = admit("Grok", "again", &chief(), 3_000).unwrap_err();
@@ -1626,7 +1705,7 @@ mod tests {
         // Handed over once.
         assert!(take_replies(&talk_id).1.is_empty());
         // A failure on our side reaches the assistant as a fixed sentence.
-        on_exchange(&talk_id, &[], true);
+        on_exchange(&talk_id, &[], true, true);
         let (t, replies) = take_replies(&talk_id);
         assert_eq!(replies, vec![FAILED_REPLY.to_string()]);
         let text = answer(Status::Replied, &t.unwrap(), "Chief of Staff", &replies);
@@ -1743,8 +1822,16 @@ mod tests {
             source: "Grok".into(),
             review: Some(review),
         };
-        // The phone's Allow: everything as new, nothing replaced, no notes.
-        let applied = review::apply(None, &chief, &card, None).unwrap();
+        // Both kept, nothing replaced, no notes: a taken name comes in as a copy.
+        let keep = |key: &str| review::Pick {
+            key: key.into(),
+            ..Default::default()
+        };
+        let both = Picks {
+            agents: vec![keep("p1"), keep("p2")],
+            chief_notes: false,
+        };
+        let applied = review::apply(None, &chief, &card, &both).unwrap();
         assert_eq!(
             applied.agents,
             vec!["Finance (from Grok)".to_string(), "Travel".to_string()]
@@ -1769,14 +1856,26 @@ mod tests {
         ])).unwrap();
         store::update(&mine.id, |a| a.permissions = rules).unwrap();
         assert_eq!(store::get(&mine.id).unwrap().permissions.len(), 1);
-        let picks = Picks {
+        // The card showed Finance before it had that rule: Replace refuses,
+        // and nothing is made, until the user has seen it as it is now.
+        let stale = card.review.as_ref().unwrap().proposals[0].clash.clone();
+        let mut picks = Picks {
             agents: vec![review::Pick {
                 key: "p1".into(),
                 replace: true,
+                keep_logins: false,
+                seen: stale,
             }],
             chief_notes: true,
         };
-        let applied = review::apply(None, &chief, &card, Some(&picks)).unwrap();
+        let agents_before = store::list().unwrap().len();
+        let err = review::apply(None, &chief, &card, &picks).unwrap_err();
+        assert!(err.to_string().contains("changed since"), "{err}");
+        assert_eq!(store::list().unwrap().len(), agents_before);
+        assert_eq!(store::read_instructions(&mine.id).unwrap(), "My own rules.");
+        let now = review::with_clashes(card.review.clone().unwrap());
+        picks.agents[0].seen = now.proposals[0].clash.clone();
+        let applied = review::apply(None, &chief, &card, &picks).unwrap();
         assert_eq!(applied.replaced, vec!["Finance".to_string()]);
         assert_eq!(store::read_instructions(&mine.id).unwrap(), "Grok's rules.");
         assert!(store::get(&mine.id).unwrap().permissions.is_empty());
@@ -1820,7 +1919,7 @@ mod tests {
             "the interview's exchange is cancelled"
         );
         // Its late answer goes nowhere.
-        assert!(on_exchange(&talk_id, &["late".into()], false).is_none());
+        assert!(on_exchange(&talk_id, &["late".into()], false, true).is_none());
         assert!(take_replies(&talk_id).1.is_empty());
         // Stopped stays stopped, whenever it asks.
         for at in [4_000, 4_000 + 24 * 3600 * 1000] {
@@ -1891,5 +1990,151 @@ mod tests {
         );
         assert!(replied.contains("Chief of Staff says:\n\nWhich agents?"));
         reset_for_tests();
+    }
+
+    #[test]
+    fn a_failed_first_exchange_that_started_its_session_resumes_it_next() {
+        let _serial = store::tests_lock();
+        let talk_id = interviewing();
+        let started = || {
+            lock()
+                .talk
+                .as_ref()
+                .and_then(|t| t.session.as_ref())
+                .is_some_and(|s| s.started)
+        };
+        // `interviewing` answered once: start over with a talk that hasn't.
+        lock()
+            .talk
+            .as_mut()
+            .unwrap()
+            .session
+            .as_mut()
+            .unwrap()
+            .started = false;
+        // Failed before Claude Code started: the id is still free.
+        assert!(matches!(
+            admit("Grok", "one", &chief(), 2_000).unwrap(),
+            Admit::Deliver { .. }
+        ));
+        on_exchange(&talk_id, &[], true, false);
+        assert!(!started());
+        // Failed after it started (a timeout, an API error): resume from now on.
+        assert!(matches!(
+            admit("Grok", "two", &chief(), 3_000).unwrap(),
+            Admit::Deliver { .. }
+        ));
+        on_exchange(&talk_id, &[], true, true);
+        assert!(started());
+        let session = lock().talk.as_ref().unwrap().session.clone().unwrap();
+        let args = interview::args(&session, "u", "p");
+        assert!(args.iter().any(|a| a == "--resume"), "{args:?}");
+        assert!(!lock().talk.as_ref().unwrap().busy, "never left working");
+        reset_for_tests();
+    }
+
+    #[test]
+    fn a_stop_between_admit_and_delivery_drops_the_message() {
+        let _serial = store::tests_lock();
+        let talk_id = interviewing();
+        assert!(matches!(
+            admit("Grok", "Finance: …", &chief(), 2_000).unwrap(),
+            Admit::Deliver { .. }
+        ));
+        assert!(
+            claim_delivery(&talk_id).is_some(),
+            "delivered when nothing intervened"
+        );
+        stop_state(2_100);
+        assert!(
+            claim_delivery(&talk_id).is_none(),
+            "dropped: no claude starts"
+        );
+        reset_for_tests();
+    }
+
+    #[test]
+    fn a_panic_mid_delivery_never_leaves_the_import_working() {
+        let _serial = store::tests_lock();
+        let talk_id = interviewing();
+        take_replies(&talk_id);
+        assert!(matches!(
+            admit("Grok", "Finance: …", &chief(), 2_000).unwrap(),
+            Admit::Deliver { .. }
+        ));
+        assert!(lock().talk.as_ref().unwrap().busy);
+        let id = talk_id.clone();
+        let caught = std::panic::catch_unwind(move || {
+            let _busy = Busy::new(&id);
+            panic!("something broke");
+        });
+        assert!(caught.is_err());
+        let t = lock().talk.clone().unwrap();
+        assert!(!t.busy, "not working forever");
+        assert_eq!(take_replies(&talk_id).1, vec![FAILED_REPLY.to_string()]);
+        reset_for_tests();
+    }
+
+    #[test]
+    fn going_quiet_ends_it_in_the_audit_log_too() {
+        let _serial = store::tests_lock();
+        interviewing();
+        AUDITED.lock().unwrap().clear();
+        let last = lock().talk.as_ref().unwrap().last_at;
+        expire(&mut lock(), last + IDLE_MS + 1);
+        assert_eq!(lock().talk.as_ref().unwrap().state, TalkState::Stopped);
+        let audited = AUDITED.lock().unwrap().clone();
+        assert_eq!(
+            audited,
+            vec!["Grok: ended: no message for 30 minutes".to_string()]
+        );
+        // Only once.
+        expire(&mut lock(), last + 2 * IDLE_MS);
+        assert_eq!(AUDITED.lock().unwrap().len(), 1);
+        reset_for_tests();
+    }
+
+    #[test]
+    fn the_audit_says_when_the_chiefs_notes_were_added() {
+        let mut applied = review::Applied {
+            agents: vec!["Finance".into()],
+            replaced: vec!["Finance".into()],
+            ..Default::default()
+        };
+        assert_eq!(
+            applied_audit(&applied),
+            "imported Finance (replaced Finance)"
+        );
+        applied.chief_notes = true;
+        assert_eq!(
+            applied_audit(&applied),
+            "imported Finance (replaced Finance); added notes to the Chief's memory"
+        );
+        applied.agents.clear();
+        applied.replaced.clear();
+        assert_eq!(
+            applied_audit(&applied),
+            "imported nothing; added notes to the Chief's memory"
+        );
+    }
+
+    #[test]
+    fn a_lookalike_of_an_agent_or_the_chief_is_refused_as_source() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        store::create(store::NewAgent {
+            name: "Site".into(),
+            role: String::new(),
+            instructions: String::new(),
+            shape: None,
+            color: None,
+            is_main: false,
+        })
+        .unwrap();
+        assert!(clean_source("\u{0405}ite", "Morgan").is_err());
+        assert!(clean_source("Chief \u{043E}f Staff", "Morgan").is_err());
+        assert!(clean_source("Grok", "Morgan").is_ok());
+        store::set_root_for_tests(None);
     }
 }

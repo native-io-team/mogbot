@@ -20,7 +20,7 @@ import { useReveal } from '../lib/reveal';
 import { Markdown } from './Markdown';
 import { Icon, useRipple, T } from './ui';
 import { Spinner } from './agent';
-import { ApprovalCard } from './ApprovalCard';
+import { ApprovalCard, ReviewOnMacCard } from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
 import { LiveWork, WorkLine } from './work';
@@ -109,6 +109,9 @@ export const MessageRow = memo(function MessageRow({
             onError={onError}
           />
         );
+      }
+      if (message.approval?.connector?.kind === 'review') {
+        return <ReviewOnMacCard approval={message.approval} />;
       }
       if (message.approval?.prompt) {
         return (

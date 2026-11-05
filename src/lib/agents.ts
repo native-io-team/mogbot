@@ -924,13 +924,39 @@ export interface ImportProposal {
   memory: string;
   routines: { when: string; what: string; schedule?: string; refused?: string }[];
   logins: { name: string; purpose: string; kind: string }[];
-  /** An agent here already has this name: what it is now, for the diff. */
-  clash?: { agentId: string; role: string; instructions: string };
+  /** An agent here already has this name (or one that looks like it): what it is now. */
+  clash?: ImportClash;
+}
+
+/** The agent here a proposal's name is taken by, with everything Replace would change. */
+export interface ImportClash {
+  agentId: string;
+  /** Its name here: it may only look like the proposal's ("Ѕite" with a Cyrillic Ѕ). */
+  name?: string;
+  role: string;
+  instructions: string;
+  /** Its saved logins, by name: removed on Replace unless you keep them. */
+  logins?: string[];
+  /** The project it's bound to (a path): unbound on Replace. */
+  project?: string;
+  /** Routines that would run: paused on Replace. */
+  activeRoutines?: number;
+  /** Its "Always allow" rules: removed on Replace. */
+  rules?: number;
+  /** It has a conversation going: Replace starts it fresh, memory kept. */
+  conversation?: boolean;
 }
 
 /** What you kept on the review card. */
 export interface ImportPicks {
-  agents: { key: string; replace: boolean }[];
+  agents: {
+    key: string;
+    replace: boolean;
+    /** Replace only: keep the replaced agent's saved logins. Off unless ticked. */
+    keepLogins?: boolean;
+    /** Replace only: the agent as the card showed it; Import refuses if it changed since. */
+    seen?: ImportClash;
+  }[];
   chiefNotes: boolean;
 }
 
@@ -945,12 +971,37 @@ export interface ImportApplied {
 export const applyImportReview = (agentId: string, requestId: string, picks: ImportPicks) =>
   invoke<ImportApplied>('agents_import_review_apply', { agentId, requestId, picks });
 
+/** A review card's agents with each clash read again against the agents here now. */
+export const currentImportReview = (agentId: string, requestId: string) =>
+  invoke<ImportReview>('agents_import_review_current', { agentId, requestId });
+
 /** The peer id prefix of a line in an import conversation. */
 export const CONNECTOR_PEER = 'connector:';
 /** A line of an import conversation (the other assistant's, or to it), not one of your agents. */
 export const isConnectorLine = (m: Pick<AgentMessage, 'kind' | 'peer'>) =>
   (m.kind === 'from_agent' || m.kind === 'sent_to_agent') &&
   !!m.peer?.id.startsWith(CONNECTOR_PEER);
+
+/**
+ * An import conversation's line, as plain text with its web links found:
+ * nothing in it is read as HTML or markdown (it comes from the internet,
+ * through an assistant that can be prompt-injected), and only `http(s)://`
+ * becomes a link. Trailing punctuation stays text ("see https://x.ai.").
+ */
+export function connectorTextParts(text: string): ({ text: string } | { url: string })[] {
+  const parts: ({ text: string } | { url: string })[] = [];
+  const re = /\bhttps?:\/\/[^\s<>"'`]+/gi;
+  let last = 0;
+  for (const match of text.matchAll(re)) {
+    const url = match[0].replace(/[.,;:!?)\]}]+$/, '');
+    const at = match.index ?? 0;
+    if (at > last) parts.push({ text: text.slice(last, at) });
+    parts.push({ url });
+    last = at + url.length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last) });
+  return parts;
+}
 
 /**
  * "Finance (from Grok)": the name a clashing agent comes in under unless

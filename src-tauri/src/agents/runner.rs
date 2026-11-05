@@ -248,6 +248,15 @@ fn set_queued(agent_id: &str, queued: bool) {
         .queued = queued;
 }
 
+/// Whether this agent has a turn running or waiting for a slot.
+pub fn is_working(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.running || r.queued)
+}
+
 /// How many agents have a turn running or waiting for a slot. The updater
 /// asks before it restarts the app.
 pub fn busy_count() -> usize {

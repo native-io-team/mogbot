@@ -2352,8 +2352,18 @@
 
 .agent-bubble--connector {
   max-width: min(var(--agents-prose-measure), 100%);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   background: var(--surface-recessed);
   border: var(--border-width-default) solid var(--border-subtle);
+}
+
+/* As a link in the agents' prose looks. */
+.agent-connector__link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+  text-underline-offset: 2px;
 }
 
 /* What the sealed interview wrote back: indented under the other

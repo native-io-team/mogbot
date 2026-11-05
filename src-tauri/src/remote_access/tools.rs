@@ -592,26 +592,11 @@ fn import_agents(app: &tauri::AppHandle, args: &Value) -> Value {
         return error("`agents` should be a list of {name, role, instructions, memory, is_main, routines: [{when, what}]}.");
     };
     // Staged for the user's review, like the conversation: nothing is created
-    // until they press Import (`agents::connector`).
+    // until they press Import (`agents::connector`). The server writes the
+    // call to the audit log, refusals included, so it isn't written here too.
     match crate::agents::connector::stage_one_shot(app, source, agents) {
-        Ok(answer) => {
-            super::audit(
-                "import_agents",
-                None,
-                format!("{} agent(s) from {source}, staged for review", agents.len()),
-                true,
-            );
-            text(answer)
-        }
-        Err(e) => {
-            super::audit(
-                "import_agents",
-                None,
-                format!("refused: {}", e.lines().next().unwrap_or("")),
-                false,
-            );
-            error(e)
-        }
+        Ok(answer) => text(answer),
+        Err(e) => error(e),
     }
 }
 
@@ -624,17 +609,10 @@ async fn import_conversation(app: &tauri::AppHandle, args: &Value) -> Value {
             .unwrap_or(connector::DEFAULT_WAIT_SECS)
             .min(connector::MAX_WAIT_SECS),
     );
+    // Audited once, by the server, like every call (refusals included).
     match connector::converse(app, field("source"), field("message"), wait).await {
         Ok(answer) => text(answer),
-        Err(e) => {
-            super::audit(
-                "import_conversation",
-                None,
-                format!("refused: {}", e.lines().next().unwrap_or("")),
-                false,
-            );
-            error(e)
-        }
+        Err(e) => error(e),
     }
 }
 

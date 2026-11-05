@@ -471,7 +471,7 @@ const IMPORT_TALK_CHAT = [
   ),
   msg(
     'from_agent',
-    'Finance instructions: “Track every expense in the books sheet, chase invoices after 14 days, ask before paying anything.” It remembers: accountant is Lena; invoices go out on the 1st; reports in EUR. Routines: every weekday at 9am, check for new invoices. Logins: Stripe, the bank. More on it [in my docs](https://example.com/finance).',
+    'Finance instructions: “Track every expense in the books sheet, chase invoices after 14 days, ask before paying anything.” It remembers: accountant is Lena; invoices go out on the 1st; reports in EUR. Routines: every weekday at 9am, check for new invoices. Logins: Stripe, the bank. More on it [in my docs](https://example.com/finance). <img src="https://example.com/pixel.png">',
     3,
     GROK
   ),
@@ -512,9 +512,15 @@ const REVIEW = {
       ],
       clash: {
         agentId: 'finance',
+        name: 'Finance',
         role: 'Keeps the books',
         instructions:
           'Keep the books in the shared sheet.\nChase invoices after 14 days.\nAsk before paying anything.',
+        logins: ['STRIPE_KEY', 'GITHUB_TOKEN'],
+        project: '/Users/sam/ShipStudio/acme-site',
+        activeRoutines: 2,
+        rules: 3,
+        conversation: true,
       },
     },
     {
@@ -543,7 +549,7 @@ const REVIEW_CARD = (status = 'pending', choice?: string) =>
       requestId: 'review1',
       title: 'Bring in 2 agents from Grok',
       detail:
-        'Finance · Tracks spending and chases invoices (name taken here: comes in as a copy)\nTravel · Trips and bookings\nNothing is created until you import.',
+        "Finance · Tracks spending and chases invoices\nTravel · Trips and bookings\nReview on your Mac: each agent's instructions are shown there, and nothing is created until you import them.",
       status,
       choice,
       connector: { kind: 'review', talkId: 'talk1', source: 'Grok', review: REVIEW },
@@ -2297,7 +2303,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-talk',
     title: 'Agents — the sealed import interview, live in the Chief’s chat',
     looksRightWhen:
-      'The Chief’s chat. The answered consent card (“Allowed”), then a quiet note that Grok is talking to a sealed interview separate from your chat. Grok’s lines sit on the left, labelled “From Grok · via connector” over outlined recessed bubbles (its link styled as a link). Each reply to Grok is indented further right, labelled “To Grok · from the import interview” over a dashed, unfilled bubble: never mistakable for the Chief talking to you. The Chief’s row reads “Talking to Grok (import)”. Above the composer: “Importing from Grok · Finance staged for review”, a muted line that what you type here stays between you and Chief of Staff, and a red Stop import button. No import note in the sidebar.',
+      'The Chief’s chat. The answered consent card (“Allowed”), then a quiet note that Grok is talking to a sealed interview separate from your chat. Grok’s lines sit on the left, labelled “From Grok · via connector” over outlined recessed bubbles, in plain text exactly as sent: “**Main**” keeps its asterisks, “[in my docs](…)” its brackets, and the <img …> tag shows as text with no image; only the https addresses are underlined links. Each reply to Grok is indented further right, labelled “To Grok · from the import interview” over a dashed, unfilled bubble: never mistakable for the Chief talking to you. The Chief’s row reads “Talking to Grok (import)”. Above the composer: “Importing from Grok · Finance staged for review”, a muted line that what you type here stays between you and Chief of Staff, and a red Stop import button. No import note in the sidebar.',
     command: 'agents.open',
     requires: '.agent-import-talk[data-state="interviewing"]',
     commands: {
@@ -2314,7 +2320,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-review',
     title: 'Agents — the review card: Grok’s agents, staged',
     looksRightWhen:
-      'After the conversation, one card titled “Bring in 2 agents from Grok” with a download mark. A muted lede: nothing is created until you import, only what’s ticked; routines paused, logins on secure cards, no permissions. Grok’s summary in italics. Two ticked rows on hairlines: “Finance (from Grok)” with a quiet “Name taken here” chip, its role, and muted counts (chars of instructions · 3 memories · 1 routine (paused) · 2 logins); “Travel”. Then an unticked “Add to Chief of Staff’s notes” with what Grok’s managing agent knew in a short recessed box. Footer: Don’t import, primary Import 2 agents. The bar above the composer has an amber dot: “Grok’s agents are ready for you to review”.',
+      'After the conversation, one card titled “Bring in 2 agents from Grok” with a download mark. A muted lede: read each agent’s instructions before you import, they come from Grok; only what’s ticked is created; routines paused, logins on secure cards, no permissions. Grok’s summary in italics. Two ticked rows on hairlines: “Finance (from Grok)” with a quiet “Name taken here” chip, its role, and muted counts (3 memories · 1 routine (paused) · 2 logins), with no character count; under it, already in view, its three lines of instructions in a recessed monospace box. “Travel” the same, with its two lines. Then an unticked “Add to Chief of Staff’s notes” with what Grok’s managing agent knew in a short recessed box. Footer: Don’t import, primary Import 2 agents. The bar above the composer has an amber dot: “Grok’s agents are ready for you to review”.',
     command: 'agents.open',
     requires: '[data-testid="agent-import-review"]',
     commands: {
@@ -2325,13 +2331,14 @@ export const agentsScenarios: Scenario[] = [
       agents_messages: (args: Record<string, unknown>) =>
         args.agentId === 'chief' ? [...REVIEW_CHAT, REVIEW_CARD()] : messagesFor(args),
       agents_import_talk: gateWith({ state: 'review' }),
+      agents_import_review_current: REVIEW,
     },
   },
   {
     id: 'agents-import-review-replace',
     title: 'Agents — the review card, replacing your Finance',
     looksRightWhen:
-      'As agents-import-review with Finance opened: a segmented pair “Add as Finance (from Grok)” | “Replace your Finance”, Replace chosen. An amber line: your Finance’s instructions become these, memory kept, “Always allow” rules removed. A recessed monospace diff: “− Keep the books in the shared sheet.” in red, “+ Track every expense in the books sheet.” in green, the unchanged lines plain. Then Instructions, What it remembers, “Routines · arrive paused” (every weekday at 09:00 · Check for new invoices) and “Logins it asks for · on secure cards, never here” (stripe_key, bank_login). The name chip now reads “Replaces your Finance” in amber.',
+      'As agents-import-review with Finance opened: a segmented pair “Add as Finance (from Grok)” | “Replace your Finance”, Replace chosen. An amber list says every consequence: its instructions become these and its memory is kept; its role becomes “Tracks spending and chases invoices” (now “Keeps the books”); it starts a fresh conversation; its 2 routines are paused; it’s no longer bound to acme-site; its 3 “Always allow” rules are removed; its saved logins are removed: STRIPE_KEY, GITHUB_TOKEN. Under it an unticked “Keep its saved logins”. A recessed monospace diff: “− Keep the books in the shared sheet.” in red, “+ Track every expense in the books sheet.” in green, the unchanged lines plain. Then What it remembers, “Routines · arrive paused” and “Logins it asks for · on secure cards, never here” (stripe_key, bank_login). The name chip now reads “Replaces your Finance” in amber.',
     command: 'agents.open',
     requires: '.agent-import-review__diff',
     steps: [
@@ -2346,6 +2353,7 @@ export const agentsScenarios: Scenario[] = [
       agents_messages: (args: Record<string, unknown>) =>
         args.agentId === 'chief' ? [...REVIEW_CHAT, REVIEW_CARD()] : messagesFor(args),
       agents_import_talk: gateWith({ state: 'review' }),
+      agents_import_review_current: REVIEW,
     },
   },
   {

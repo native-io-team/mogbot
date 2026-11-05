@@ -347,6 +347,49 @@ export function ApprovalCard({
   );
 }
 
+/**
+ * An import's review card (desktop `agents/review.rs`): the agents another
+ * assistant proposed. It can't be answered here. Importing means reading
+ * each agent's instructions first, and those are on the Mac's card, so this
+ * one only says who they are and to go there. No Allow: the Mac refuses one.
+ */
+export function ReviewOnMacCard({ approval }: { approval: Approval }) {
+  const cardStyles = useCardStyles();
+  const colors = useColors();
+  if (approval.status !== 'pending') {
+    return (
+      <Receipt
+        icon={approval.status === 'allowed' ? 'checkmark' : 'xmark'}
+        title={approval.title}
+        outcome={cardOutcome(approval)}
+        ok={approval.status === 'allowed'}
+      />
+    );
+  }
+  const lines = (approval.detail ?? '').split('\n').filter((l) => l.trim());
+  // The desktop's last line is the "Review on your Mac" sentence; the rest name the agents.
+  const agents = lines.filter((l) => !l.startsWith('Review on your Mac'));
+  return (
+    <Animated.View layout={LinearTransition.duration(220)} style={cardStyles.card}>
+      <View style={cardStyles.head}>
+        <Eyebrow text="REVIEW ON YOUR MAC" />
+        <T variant="headline" color={colors.textStrong} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
+          {approval.title}
+        </T>
+      </View>
+      {agents.map((line, i) => (
+        <T key={i} variant="small" color={colors.textSecondary}>
+          {line}
+        </T>
+      ))}
+      <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
+        Review on your Mac: each agent’s instructions are shown there, and nothing is created until
+        you import them.
+      </T>
+    </Animated.View>
+  );
+}
+
 type IconName = ComponentProps<typeof Icon>['name'];
 
 /**

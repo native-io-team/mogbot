@@ -281,8 +281,9 @@ export interface Approval {
 
 /**
  * An import over the connector (desktop `agents/review.rs`). On the phone a
- * consent card is Allow / Deny; a review card's Allow imports every agent as
- * new (a taken name comes in as a copy), with no notes for the Chief.
+ * consent card is Allow / Deny. A review card can't be answered there: it
+ * says "Review on your Mac", where each agent's instructions are on screen
+ * before Import (the desktop refuses an Allow sent for one).
  */
 export interface ConnectorCard {
   kind: 'consent' | 'review';
@@ -305,7 +306,19 @@ export interface ImportProposal {
   memory: string;
   routines: { when: string; what: string; schedule?: string; refused?: string }[];
   logins: { name: string; purpose: string; kind: string }[];
-  clash?: { agentId: string; role: string; instructions: string };
+  clash?: ImportClash;
+}
+
+export interface ImportClash {
+  agentId: string;
+  name?: string;
+  role: string;
+  instructions: string;
+  logins?: string[];
+  project?: string;
+  activeRoutines?: number;
+  rules?: number;
+  conversation?: boolean;
 }
 
 /** One answer a session's question offers, as the session shows it. */

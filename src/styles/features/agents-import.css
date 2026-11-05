@@ -1068,6 +1068,42 @@
   border-radius: var(--radius-control);
 }
 
+.agent-import-review__inline {
+  padding: 0 0 var(--spacing-sm) calc(var(--spacing-lg) + var(--spacing-sm));
+}
+
+.agent-import-review__instructions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-3xs);
+}
+
+.agent-import-review__instructions > pre {
+  align-self: stretch;
+}
+
+/* Shown whole once "Show all" is pressed: the card grows, the chat scrolls. */
+.agent-import-review__text--preview[data-all] {
+  max-height: none;
+}
+
+.agent-import-review__consequences {
+  margin: 0;
+  padding-left: var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+  color: var(--accent-warning);
+}
+
+.agent-import-review__keep {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
 .agent-import-review__text--short {
   max-height: calc(var(--spacing-2xl) * 2);
 }
@@ -1099,12 +1135,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
-}
-
-.agent-import-review__warn {
-  margin: 0;
-  font-size: var(--font-size-body-sm);
-  color: var(--accent-warning);
 }
 
 .agent-import-review__notes {

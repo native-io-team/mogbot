@@ -5165,7 +5165,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 538
+      "consumerCount": 539
     },
     {
       "name": "--text-secondary",
@@ -5192,7 +5192,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 51
+      "consumerCount": 52
     },
     {
       "name": "--text-quiet",
@@ -5642,7 +5642,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 397
+      "consumerCount": 398
     },
     {
       "name": "--font-size-control",
@@ -5939,7 +5939,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 67
+      "consumerCount": 68
     },
     {
       "name": "--spacing-2xs",
@@ -5966,7 +5966,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 702
+      "consumerCount": 705
     },
     {
       "name": "--spacing-md",
@@ -5975,7 +5975,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 501
+      "consumerCount": 502
     },
     {
       "name": "--spacing-lg",
@@ -5984,7 +5984,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 200
+      "consumerCount": 201
     },
     {
       "name": "--spacing-xl",
@@ -6515,7 +6515,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 538
+      "consumerCount": 539
     },
     {
       "name": "--text-secondary",
@@ -6551,7 +6551,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 51
+      "consumerCount": 52
     },
     {
       "name": "--text-terminal",

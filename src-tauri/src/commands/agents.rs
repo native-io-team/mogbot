@@ -902,8 +902,18 @@ pub async fn agents_import_review_apply(
     request_id: String,
     picks: agents::review::Picks,
 ) -> Result<agents::review::Applied, CommandError> {
-    blocking(move || agents::connector::apply_review(&app, &agent_id, &request_id, Some(&picks)))
-        .await
+    blocking(move || agents::connector::apply_review(&app, &agent_id, &request_id, &picks)).await
+}
+
+/// A review card as it should show now: each clash read again against the
+/// agents here (a card restored after a restart, or one an agent changed under).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_import_review_current(
+    agent_id: String,
+    request_id: String,
+) -> Result<agents::review::Review, CommandError> {
+    blocking(move || agents::review::current(&agent_id, &request_id)).await
 }
 
 /// What the user sends their other assistant to get its agents back as JSON

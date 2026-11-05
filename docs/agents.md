@@ -592,15 +592,21 @@ the full threat model in docs/remote-access.md):
    says where it is, that what you type stays between you and the Chief, and
    has a red **Stop import**; the Chief's own Stop (desktop or phone, where
    its row reads "Talking to Grok (import)") stops it too.
-4. `finish` posts the review card: each agent ticked with its role,
-   instructions, memory, routines (paused) and the logins it asks for; a
-   name already taken comes in as "<Name> (from Grok)" unless the user picks
-   **Replace** with the diff shown (which clears that agent's Always-allow
-   rules); the managing agent's notes are an optional "Add to <Chief>'s
-   notes", off by default. **Import** creates what's ticked; **Don't
-   import** creates nothing. Logins arrive as secure cards in each agent's
-   chat that don't wake it (`secrets::Request::quiet`): an imported agent
-   first runs when the user messages it.
+4. `finish` posts the review card: each agent ticked, with its role and the
+   first lines of its instructions in view (**Show all** for the rest), its
+   memory, routines (paused) and the logins it asks for a click away; a
+   name already taken (or a lookalike of one) comes in as "<Name> (from
+   Grok)" unless the user picks **Replace**, which lists what it does to
+   that agent: new instructions (the diff), a fresh conversation (memory
+   kept), its running routines paused, its project unbound, its
+   Always-allow rules removed, and its saved logins removed unless "Keep its
+   saved logins" is ticked (off by default). The managing agent's notes are
+   an optional "Add to <Chief>'s notes", off by default. **Import** creates
+   what's ticked; **Don't import** creates nothing. Only the Mac's card
+   imports: the phone's says "Review on your Mac". Logins arrive as secure
+   cards in each agent's chat that don't wake it
+   (`secrets::Request::quiet`): an imported agent first runs when the user
+   messages it.
 
 The one-shot `import_agents` tool (`{source, agents: [{name, role,
 instructions, memory, is_main, routines}]}`) goes through the same Start and

@@ -742,6 +742,32 @@ fn report_panic(message: &str, location: Option<&str>, backtrace: &str) {
     let _ = handle.join();
 }
 
+/// A string-slicing panic without the string. The standard library quotes
+/// up to 256 characters of the string it was slicing ("byte index 25 is not
+/// a char boundary; it is inside 'İ' (bytes 24..26) of `Finance works…`"),
+/// which can be anything: a message from another assistant, an agent's
+/// instructions. What failed and where is kept; the text never reaches the
+/// crash log or the report.
+fn without_sliced_text(message: &str) -> String {
+    let slicing = [
+        "byte index ",
+        "begin <= end ",
+        "end byte index ",
+        "failed to slice string",
+    ]
+    .iter()
+    .any(|p| message.starts_with(p));
+    if !slicing {
+        return message.to_string();
+    }
+    let cut = [";", " of `", " when slicing `"]
+        .iter()
+        .filter_map(|m| message.find(m))
+        .min()
+        .unwrap_or(message.len());
+    format!("{} [string text removed]", &message[..cut])
+}
+
 /// Install a panic hook that reports to the admin agent, chaining the
 /// previously installed hook (Sentry's, when initialized) so both fire.
 /// Call after `logging::init_sentry()`.
@@ -754,6 +780,7 @@ pub fn install_panic_hook() {
             .map(|s| (*s).to_string())
             .or_else(|| payload.downcast_ref::<String>().cloned())
             .unwrap_or_else(|| "panic with non-string payload".to_string());
+        let message = without_sliced_text(&message);
         let location = info
             .location()
             .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()));
@@ -1058,6 +1085,33 @@ pub fn get_automatic_report_status() -> Result<AutomaticReportStatus, crate::err
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_slicing_panic_never_carries_the_string() {
+        let text = "Finance works from our İstanbul office. password: hunter22";
+        let caught = std::panic::catch_unwind(|| {
+            // Inside the two bytes of "İ".
+            let at = text.find('İ').unwrap() + 1;
+            text[at..].len()
+        });
+        let payload = caught.unwrap_err();
+        let raw = payload
+            .downcast_ref::<String>()
+            .cloned()
+            .unwrap_or_default();
+        assert!(raw.contains("İstanbul"), "the std message quotes it: {raw}");
+        let clean = super::without_sliced_text(&raw);
+        assert!(
+            !clean.contains("Istanbul") && !clean.contains("İstanbul"),
+            "{clean}"
+        );
+        assert!(!clean.contains("hunter22"), "{clean}");
+        assert!(clean.starts_with("byte index "), "{clean}");
+        // Other panics are left as they are.
+        assert_eq!(
+            super::without_sliced_text("called `Option::unwrap()` on a `None` value"),
+            "called `Option::unwrap()` on a `None` value"
+        );
+    }
 
     #[test]
     fn panic_crashlog_records_message_location_and_backtrace() {

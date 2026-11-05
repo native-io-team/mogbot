@@ -45,6 +45,7 @@ import { useHeightReveal } from './useAgentMotion';
 import { useCardGuard } from './useCardGuard';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import {
+  connectorTextParts,
   CONTEXT_SUGGEST_AT,
   contextPercent,
   describeScope,
@@ -712,11 +713,21 @@ export const ConnectorBubble = memo(function ConnectorBubble({
           </>
         )}
       </span>
+      {/* Plain text: never HTML or markdown, whatever the other assistant sent. */}
       <div
-        className={`agent-bubble agent-bubble--connector${outgoing ? ' agent-bubble--to-connector' : ''} agent-markdown`}
+        className={`agent-bubble agent-bubble--connector${outgoing ? ' agent-bubble--to-connector' : ''}`}
         onClick={onConnectorLinkClick}
+        data-plain
       >
-        <Prose text={message.text} />
+        {connectorTextParts(message.text).map((part, i) =>
+          'url' in part ? (
+            <a key={i} href={part.url} className="agent-connector__link">
+              {part.url}
+            </a>
+          ) : (
+            part.text
+          )
+        )}
       </div>
     </div>
   );
