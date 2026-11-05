@@ -131,6 +131,9 @@ these without updating that doc.
   approval broker (`agents/broker.rs`), which trusts only a live turn's `?turn=` id and stops a turn
   that reports `bypassPermissions` ([docs/agents.md](docs/agents.md), "Approvals"). Secrets go
   into the Keychain through a masked card, never the chat ("Secrets")
+- **Agents never hold an app's token.** A connection made on a login card is reached through the
+  bridge's relay (`agents/conn_relay.rs`), which adds the Keychain token and enforces the grant
+  for every engine ([docs/agents.md](docs/agents.md), "Grants, read vs send, and turns")
 - **Outside text is sealed.** Connector imports and "When…" checks run in a sealed headless call
   (no shell, no files, no web; read-only app tools only), and a turn answering outside text can't
   write its own memory or change the team without a card ([docs/agents.md](docs/agents.md),

@@ -36,6 +36,14 @@ pub fn agent_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}{AGENT_PATH}")
 }
 
+/// Path prefix of the connection relay (`conn_relay`): `/mcp/conn/<serverKey>`.
+pub const CONN_PATH: &str = "/mcp/conn/";
+
+/// A connection server's URL for a turn: the relay, never the app itself.
+pub fn connection_url(port: u16, server_key: &str) -> String {
+    format!("http://127.0.0.1:{port}{CONN_PATH}{server_key}")
+}
+
 pub fn import_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}{IMPORT_PATH}")
 }
@@ -65,8 +73,8 @@ pub fn claude_config(url: &str, secret: &str) -> String {
 }
 
 /// [`claude_config`] plus the agent's connection servers
-/// (`connections::TurnAccess::claude_servers`), each with its token as a
-/// header: in this 0600 file only, never on the command line.
+/// (`connections::TurnAccess::claude_servers`): the relay, with the turn's
+/// own secret as the header, never an app's token.
 pub fn claude_config_with(
     url: &str,
     secret: &str,

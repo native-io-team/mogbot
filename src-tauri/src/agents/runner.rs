@@ -3216,10 +3216,14 @@ async fn run_turn(
     let url = super::reach::agent_url(port);
     // The apps it was granted on login cards (tokens refreshed), the
     // claude.ai connectors it's kept from, and its browser (`connections`).
-    let access = super::connections::for_turn(&agent).await;
+    let access = super::connections::for_turn(&agent, port).await;
     let mcp_config = match engine {
         Engine::Claude => Some(super::reach::write_config(
-            &super::reach::claude_config_with(&url, turn.secret(), access.claude_servers()),
+            &super::reach::claude_config_with(
+                &url,
+                turn.secret(),
+                access.claude_servers(turn.secret()),
+            ),
         )?),
         Engine::Codex => None,
     };
@@ -3317,8 +3321,6 @@ async fn run_turn(
         // Read by `bearer_token_env_var`. Codex's default shell environment
         // policy leaves any `*TOKEN*` variable out of the commands it runs.
         cmd.env(super::reach::TOKEN_ENV, turn.secret());
-        // Each connection server's token, read by its `bearer_token_env_var`.
-        cmd.envs(access.codex_env());
     }
     cmd.env("PATH", crate::utils::get_extended_path())
         // Claude Code gives an MCP tool call ~60s by default, and the approval

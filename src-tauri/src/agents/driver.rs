@@ -179,8 +179,8 @@ impl Driver {
 /// away, and kept from the claude.ai connectors it isn't granted (added to
 /// the existing `--disallowedTools` list, which another flag always ends);
 /// Codex with one `-c` per connection server, before the trailing session
-/// and `-` of `exec`. Tokens never: those are in the 0600 config file
-/// (Claude Code) or the process's environment (Codex).
+/// and `-` of `exec`. Never a token: connection servers are the bridge's
+/// relay (`conn_relay`), reached with the turn's own bridge secret.
 fn with_access(
     driver: Driver,
     mut args: Vec<String>,
@@ -241,8 +241,7 @@ mod tests {
         let access = TurnAccess {
             servers: vec![TurnServer {
                 key: "linear".into(),
-                url: "https://mcp.linear.app/mcp".into(),
-                token: "tok_never_on_argv_123".into(),
+                url: "http://127.0.0.1:4321/mcp/conn/linear".into(),
             }],
             blocked: vec!["mcp__claude_ai_Gmail".into()],
             browser: false,
@@ -261,8 +260,8 @@ mod tests {
         assert_eq!(claude[at + 1], "mcp__claude_ai_Gmail");
         for driver in [Driver::ClaudePrint, Driver::CodexApp, Driver::CodexExec] {
             assert!(
-                !driver.args(&s).concat().contains("tok_never_on_argv"),
-                "{driver:?}"
+                !driver.args(&s).concat().contains("mcp.linear.app"),
+                "{driver:?} reaches the app only through the relay"
             );
         }
         let exec = Driver::CodexExec.args(&s);
@@ -275,7 +274,8 @@ mod tests {
         let app = Driver::CodexApp.args(&s);
         assert!(app
             .iter()
-            .any(|a| a.contains("SHIPSTUDIO_CONN_LINEAR_TOKEN")));
+            .any(|a| a.contains("mcp_servers.linear=")
+                && a.contains("SHIPSTUDIO_AGENTS_BRIDGE_TOKEN")));
         // Defaults: nothing changes.
         s.access = None;
         assert!(Driver::ClaudePrint

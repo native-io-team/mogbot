@@ -1864,12 +1864,45 @@ pub(super) async fn decide(
     input: &Value,
     why: Option<&str>,
 ) -> Decision {
+    let decision = decide_inner(app, caller, tool, input, why).await;
+    // The connection relay lets an allowed call through once, so it doesn't
+    // ask again (`conn_relay`).
+    if decision == Decision::Allow && super::connections::is_connection_tool(tool) {
+        super::connections::note_cleared(&caller.id, tool);
+    }
+    decision
+}
+
+/// A connection call the engine didn't ask about (`conn_relay`): the same
+/// decision, made here. `Err` is what the agent is told.
+pub(crate) async fn decide_relayed(
+    app: &AppHandle,
+    agent_id: &str,
+    tool: &str,
+    input: &Value,
+) -> Result<(), String> {
+    let caller = store::get(agent_id).map_err(|e| e.to_string())?;
+    match decide_inner(app, &caller, tool, input, None).await {
+        Decision::Allow => Ok(()),
+        Decision::Deny(why) => Err(why),
+    }
+}
+
+async fn decide_inner(
+    app: &AppHandle,
+    caller: &store::Agent,
+    tool: &str,
+    input: &Value,
+    why: Option<&str>,
+) -> Decision {
     if take_grant(&caller.id, tool, input) {
         return Decision::Allow;
     }
-    // A connection the user granted on a login card: reads go through,
-    // a read-only grant refuses the rest (`connections::gate`).
-    match super::connections::gate(&caller.id, tool) {
+    // A connection the user granted on a login card: reads go through
+    // (except in a turn answering outside text), a read-only grant refuses
+    // the rest (`connections::gate`).
+    let outside = runner::from_outside(&caller.id);
+    match super::connections::gate(&caller.id, tool, outside) {
         super::connections::Gate::Allow => return Decision::Allow,
         super::connections::Gate::Refuse(why) => return Decision::Deny(why),
         super::connections::Gate::Ask => {}

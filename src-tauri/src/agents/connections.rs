@@ -9,9 +9,9 @@
 //!   own OAuth client (`agents/oauth.rs`). Its tokens are in this Mac's
 //!   Keychain under an app-owned item (`<slug>-connection-<id>`), never in
 //!   this registry, an agent's folder, a chat log or anything sent to the
-//!   phone. Turns of the agents it's granted to get the server with the
-//!   token as a header: Claude Code in the turn's 0600 `--mcp-config` file,
-//!   Codex in an environment variable of the turn's process (`reach`).
+//!   phone. Turns never hold the token either: their server points at the
+//!   agent bridge's relay (`conn_relay`), authenticated by the turn's own
+//!   bridge secret, and the relay adds the token from the Keychain.
 //! - **claude.ai** ([`Kind::ClaudeAi`]): one of the user's claude.ai
 //!   connectors (Gmail, Google Calendar, Slack…). The sign-in is held by
 //!   claude.ai, not this Mac; Claude Code loads it into every turn of a
@@ -516,7 +516,10 @@ pub enum Gate {
     Refuse(String),
 }
 
-pub fn gate(agent_id: &str, tool: &str) -> Gate {
+/// `outside`: the turn is answering outside text (a "When…" routine's
+/// items, or a message carrying that taint). Its reads ask too: text from
+/// outside shouldn't make an agent read the user's accounts unasked.
+pub fn gate(agent_id: &str, tool: &str, outside: bool) -> Gate {
     let Some((server, name)) = split_tool(tool) else {
         return Gate::Ask;
     };
@@ -524,7 +527,10 @@ pub fn gate(agent_id: &str, tool: &str) -> Gate {
     let Some(c) = connections.iter().find(|c| c.server_key == server) else {
         return Gate::Ask;
     };
-    gate_for(c, agent_id, name)
+    match gate_for(c, agent_id, name) {
+        Gate::Allow if outside => Gate::Ask,
+        g => g,
+    }
 }
 
 fn gate_for(c: &Connection, agent_id: &str, tool: &str) -> Gate {
@@ -548,29 +554,18 @@ fn gate_for(c: &Connection, agent_id: &str, tool: &str) -> Gate {
 
 /* ------------------------------------------------------------- turns */
 
-/// One server a turn gets, with its token. Lives only as long as the turn's
-/// setup: the token goes into the 0600 config file or the process's
-/// environment, nowhere else.
-#[derive(Clone)]
+/// One server a turn gets: the bridge's relay for one connection. No token:
+/// the relay adds it (`conn_relay`); the turn authenticates with its own
+/// bridge secret.
+#[derive(Debug, Clone)]
 pub struct TurnServer {
     pub key: String,
     pub url: String,
-    pub token: String,
 }
 
-impl std::fmt::Debug for TurnServer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TurnServer")
-            .field("key", &self.key)
-            .field("url", &self.url)
-            .field("token", &"[redacted]")
-            .finish()
-    }
-}
-
-/// What a turn of `agent` can reach beyond its own tools: our servers with
-/// fresh tokens, the claude.ai connectors it must not see, and lines for
-/// its prompt.
+/// What a turn of `agent` can reach beyond its own tools: its connection
+/// servers (through the relay), the claude.ai connectors it must not see,
+/// and lines for its prompt.
 #[derive(Debug, Default)]
 pub struct TurnAccess {
     pub servers: Vec<TurnServer>,
@@ -581,9 +576,8 @@ pub struct TurnAccess {
 }
 
 impl TurnAccess {
-    /// Codex: one `-c` per server, its token read from an environment
-    /// variable whose name has `TOKEN` in it, so Codex's default shell
-    /// policy keeps it out of the commands it runs.
+    /// Codex: one `-c` per server, authenticated by the turn's bridge secret
+    /// (the same variable as our own server's).
     pub fn codex_config(&self) -> Vec<String> {
         self.servers
             .iter()
@@ -592,21 +586,15 @@ impl TurnAccess {
                     "mcp_servers.{}={{url={},bearer_token_env_var={}}}",
                     s.key,
                     toml(&s.url),
-                    toml(&env_name(&s.key))
+                    toml(super::reach::TOKEN_ENV)
                 )
             })
             .collect()
     }
 
-    pub fn codex_env(&self) -> Vec<(String, String)> {
-        self.servers
-            .iter()
-            .map(|s| (env_name(&s.key), s.token.clone()))
-            .collect()
-    }
-
-    /// Claude Code: the servers for the turn's `--mcp-config` file.
-    pub fn claude_servers(&self) -> serde_json::Map<String, serde_json::Value> {
+    /// Claude Code: the servers for the turn's `--mcp-config` file, each
+    /// with the turn's bridge secret (never an app's token).
+    pub fn claude_servers(&self, secret: &str) -> serde_json::Map<String, serde_json::Value> {
         self.servers
             .iter()
             .map(|s| {
@@ -615,7 +603,7 @@ impl TurnAccess {
                     serde_json::json!({
                         "type": "http",
                         "url": s.url,
-                        "headers": { "Authorization": format!("Bearer {}", s.token) },
+                        "headers": { "Authorization": format!("Bearer {secret}") },
                     }),
                 )
             })
@@ -627,14 +615,11 @@ fn toml(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_default()
 }
 
-pub fn env_name(key: &str) -> String {
-    format!("SHIPSTUDIO_CONN_{}_TOKEN", key.to_ascii_uppercase())
-}
-
-/// Everything a turn of `agent` gets. Refreshes tokens that are about to
-/// expire; a refresh the server refuses marks the connection as needing a
-/// new sign-in, and the turn goes without it (its prompt says so).
-pub async fn for_turn(agent: &store::Agent) -> TurnAccess {
+/// Everything a turn of `agent` gets, its servers on the bridge at `port`.
+/// Refreshes tokens that are about to expire, so the prompt is honest; a
+/// refresh the server refuses marks the connection as needing a new
+/// sign-in, and the turn goes without it (its prompt says so).
+pub async fn for_turn(agent: &store::Agent, port: u16) -> TurnAccess {
     let all = list().unwrap_or_default();
     let mut access = TurnAccess {
         browser: !agent.reach.browser_off,
@@ -660,7 +645,7 @@ pub async fn for_turn(agent: &store::Agent) -> TurnAccess {
                 c.account,
                 g.access.label()
             )),
-            (Kind::Oauth { server_url }, Some(g)) => {
+            (Kind::Oauth { .. }, Some(g)) => {
                 if c.needs_sign_in {
                     lines.push(format!(
                         "- {} ({}) needs signing in again. If you need it, ask with request_login for \"{}\".",
@@ -669,11 +654,10 @@ pub async fn for_turn(agent: &store::Agent) -> TurnAccess {
                     continue;
                 }
                 match fresh_token(c).await {
-                    Some(token) => {
+                    Some(_) => {
                         access.servers.push(TurnServer {
                             key: c.server_key.clone(),
-                            url: server_url.clone(),
-                            token,
+                            url: super::reach::connection_url(port, &c.server_key),
                         });
                         lines.push(line(c, g.access));
                     }
@@ -700,6 +684,155 @@ pub async fn for_turn(agent: &store::Agent) -> TurnAccess {
         );
     }
     access
+}
+
+/* ------------------------------------------------------------- relay */
+
+/// Where the relay sends one of an agent's calls, with the token it adds.
+/// Lives only for that one request.
+pub struct RelayTarget {
+    pub connection_id: String,
+    pub title: String,
+    pub account: String,
+    pub service: String,
+    pub access: Access,
+    pub url: String,
+    pub token: String,
+}
+
+impl std::fmt::Debug for RelayTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RelayTarget")
+            .field("connection_id", &self.connection_id)
+            .field("url", &self.url)
+            .field("token", &"[redacted]")
+            .finish()
+    }
+}
+
+/// The connection `key` for `agent_id`, if it's granted, signed in, and
+/// still the server the app's catalogue names (a registry edited to point
+/// elsewhere is refused, so a token only ever goes to its own app).
+pub async fn relay_target(agent_id: &str, key: &str) -> Result<RelayTarget, &'static str> {
+    let c = list()
+        .unwrap_or_default()
+        .into_iter()
+        .find(|c| c.server_key == key)
+        .ok_or("That app isn't connected.")?;
+    let access = c
+        .grant_for(agent_id)
+        .map(|g| g.access)
+        .ok_or("You weren't given this app. Ask with request_login.")?;
+    let Kind::Oauth { server_url } = &c.kind else {
+        return Err("That app isn't connected here.");
+    };
+    let catalogued = matches!(
+        super::logins::service(&c.service).map(|s| s.connector),
+        Some(super::logins::Connector::Oauth(u)) if u == server_url
+    );
+    if !catalogued || !server_url.starts_with("https://") {
+        return Err("That app isn't connected here.");
+    }
+    if c.needs_sign_in {
+        return Err("Its sign-in needs renewing. Ask with request_login to connect it again.");
+    }
+    let token = fresh_token(&c)
+        .await
+        .ok_or("Its sign-in needs renewing. Ask with request_login to connect it again.")?;
+    Ok(RelayTarget {
+        connection_id: c.id.clone(),
+        title: c.title.clone(),
+        account: c.account.clone(),
+        service: c.service.clone(),
+        access,
+        url: server_url.clone(),
+        token,
+    })
+}
+
+/// The app answered 401/403 through the relay: it needs signing in again.
+pub fn rejected(connection_id: &str) {
+    mark(connection_id, |c| c.needs_sign_in = true);
+}
+
+/// What the relay does with one tool call.
+#[derive(Debug, PartialEq)]
+pub enum RelayCall {
+    Pass,
+    Refuse(String),
+    /// Put it on a card (`mcp::decide`): the engine didn't ask.
+    Decide,
+}
+
+/// Tool calls `mcp::decide` allowed, for the relay to let through once.
+static CLEARED: LazyLock<Mutex<Vec<(String, String, std::time::Instant)>>> =
+    LazyLock::new(Default::default);
+const CLEARED_FOR: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
+/// Whether `tool` (`mcp__<key>__<name>`) is one of our connection servers'.
+pub fn is_connection_tool(tool: &str) -> bool {
+    let Some((server, _)) = split_tool(tool) else {
+        return false;
+    };
+    list()
+        .unwrap_or_default()
+        .iter()
+        .any(|c| c.server_key == server && matches!(c.kind, Kind::Oauth { .. }))
+}
+
+/// `mcp::decide` allowed this call: the relay lets it through once.
+pub fn note_cleared(agent_id: &str, tool: &str) {
+    let mut v = CLEARED.lock().unwrap_or_else(|e| e.into_inner());
+    let now = std::time::Instant::now();
+    v.retain(|(_, _, at)| now.duration_since(*at) < CLEARED_FOR);
+    v.push((agent_id.to_string(), tool.to_string(), now));
+}
+
+fn take_cleared(agent_id: &str, tool: &str) -> bool {
+    let mut v = CLEARED.lock().unwrap_or_else(|e| e.into_inner());
+    let now = std::time::Instant::now();
+    v.retain(|(_, _, at)| now.duration_since(*at) < CLEARED_FOR);
+    match v.iter().position(|(a, t, _)| a == agent_id && t == tool) {
+        Some(i) => {
+            v.remove(i);
+            true
+        }
+        None => false,
+    }
+}
+
+/// The grant, enforced at the relay whatever the engine: a read-only grant
+/// refuses a write; a plain read goes through; anything else (a write, or
+/// any call in a turn answering outside text) must have been allowed by the
+/// engine's approval, or it's put on a card. A take-over (`takeover`) is
+/// answered at the keyboard, so only the read-only rule applies there.
+pub fn relay_check(
+    agent_id: &str,
+    target: &RelayTarget,
+    tool_name: &str,
+    outside: bool,
+    takeover: bool,
+) -> RelayCall {
+    let key_tool = list()
+        .unwrap_or_default()
+        .into_iter()
+        .find(|c| c.id == target.connection_id)
+        .map(|c| format!("mcp__{}__{tool_name}", c.server_key))
+        .unwrap_or_default();
+    let read = reads_only(tool_name);
+    if target.access == Access::Read && !read {
+        return RelayCall::Refuse(format!(
+            "You may only read {} ({}): `{tool_name}` would change something. If the user wants you to, ask with request_login for \"{}\" with the abilities it needs, and they'll be asked on a card.",
+            target.title, target.account, target.service
+        ));
+    }
+    if take_cleared(agent_id, &key_tool) {
+        return RelayCall::Pass;
+    }
+    if takeover || (read && !outside) {
+        return RelayCall::Pass;
+    }
+    RelayCall::Decide
 }
 
 fn line(c: &Connection, access: Access) -> String {
@@ -946,9 +1079,9 @@ mod tests {
                 .enable_all()
                 .build()
                 .unwrap();
-            let h = rt.block_on(for_turn(&recruiter));
+            let h = rt.block_on(for_turn(&recruiter, 4321));
             assert_eq!(h.servers.len(), 1);
-            assert_eq!(h.servers[0].token, "lin_turn_token_998877");
+            assert_eq!(h.servers[0].url, "http://127.0.0.1:4321/mcp/conn/linear");
             assert!(
                 h.blocked.contains(&"mcp__claude_ai_Gmail".to_string()),
                 "{:?}",
@@ -956,29 +1089,28 @@ mod tests {
             );
             assert!(h.blocked.contains(&"mcp__figma".to_string()));
             assert!(h.prompt.contains("mcp__linear__*"));
-            assert!(
-                !h.prompt.contains("lin_turn_token"),
-                "the prompt never carries a token"
+            // The app's token is in nothing a turn is given: not its prompt,
+            // its config file, its command line or its environment.
+            let given = format!(
+                "{} {:?} {}",
+                h.prompt,
+                h.claude_servers("turn-secret"),
+                h.codex_config().concat()
             );
-            assert!(
-                !format!("{h:?}").contains("lin_turn_token"),
-                "nor does a log line"
-            );
+            assert!(!given.contains("lin_turn_token"), "{given}");
+            assert!(!format!("{h:?}").contains("lin_turn_token"));
+            assert!(given.contains("Bearer turn-secret"));
             let config = h.codex_config();
-            assert_eq!(config, vec![r#"mcp_servers.linear={url="https://mcp.linear.app/mcp",bearer_token_env_var="SHIPSTUDIO_CONN_LINEAR_TOKEN"}"#.to_string()]);
-            assert!(
-                !config.concat().contains("lin_turn_token"),
-                "argv never carries it"
-            );
-            assert_eq!(
-                h.codex_env(),
-                vec![(
-                    "SHIPSTUDIO_CONN_LINEAR_TOKEN".into(),
-                    "lin_turn_token_998877".into()
-                )]
-            );
+            assert_eq!(config, vec![r#"mcp_servers.linear={url="http://127.0.0.1:4321/mcp/conn/linear",bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN"}"#.to_string()]);
+            // The relay gets it, for a granted agent only.
+            let t = rt.block_on(relay_target(&recruiter.id, "linear")).unwrap();
+            assert_eq!(t.token, "lin_turn_token_998877");
+            assert_eq!(t.url, "https://mcp.linear.app/mcp");
+            assert!(!format!("{t:?}").contains("lin_turn_token"));
+            assert!(rt.block_on(relay_target(&social.id, "linear")).is_err());
+            assert!(rt.block_on(relay_target(&recruiter.id, "nope")).is_err());
 
-            let s = rt.block_on(for_turn(&social));
+            let s = rt.block_on(for_turn(&social, 4321));
             assert!(s.servers.is_empty());
             assert!(!s.blocked.contains(&"mcp__claude_ai_Gmail".to_string()));
             assert!(s.prompt.contains("mcp__claude_ai_Gmail__*"));
@@ -998,23 +1130,141 @@ mod tests {
             )
             .unwrap();
             grant(&c.id, "writer", Access::Full).unwrap();
-            assert_eq!(gate("reader", "mcp__linear__list_issues"), Gate::Allow);
-            assert_eq!(gate("reader", "mcp__linear__getIssue"), Gate::Allow);
-            assert!(matches!(
-                gate("reader", "mcp__linear__create_issue"),
-                Gate::Refuse(_)
-            ));
-            assert_eq!(gate("writer", "mcp__linear__create_issue"), Gate::Ask);
             assert_eq!(
-                gate("writer", "mcp__linear__search_documentation"),
+                gate("reader", "mcp__linear__list_issues", false),
                 Gate::Allow
             );
-            assert_eq!(gate("stranger", "mcp__linear__list_issues"), Gate::Ask);
-            assert_eq!(gate("reader", "Bash"), Gate::Ask);
-            assert_eq!(gate("reader", "mcp__other__list"), Gate::Ask);
+            assert_eq!(gate("reader", "mcp__linear__getIssue", false), Gate::Allow);
+            assert!(matches!(
+                gate("reader", "mcp__linear__create_issue", false),
+                Gate::Refuse(_)
+            ));
+            assert_eq!(
+                gate("writer", "mcp__linear__create_issue", false),
+                Gate::Ask
+            );
+            assert_eq!(
+                gate("writer", "mcp__linear__search_documentation", false),
+                Gate::Allow
+            );
+            assert_eq!(
+                gate("stranger", "mcp__linear__list_issues", false),
+                Gate::Ask
+            );
+            assert_eq!(gate("reader", "Bash", false), Gate::Ask);
+            assert_eq!(gate("reader", "mcp__other__list", false), Gate::Ask);
             assert!(!reads_only("send_email"));
             assert!(!reads_only("update"));
             assert!(reads_only("search_threads"));
+        });
+    }
+
+    #[test]
+    fn outside_text_makes_reads_ask() {
+        with_root(|_| {
+            add_and_grant(
+                "linear",
+                "Linear",
+                "",
+                oauth("https://mcp.linear.app/mcp"),
+                "reader",
+                Access::Read,
+            )
+            .unwrap();
+            assert_eq!(gate("reader", "mcp__linear__list_issues", true), Gate::Ask);
+            assert!(matches!(
+                gate("reader", "mcp__linear__create_issue", true),
+                Gate::Refuse(_)
+            ));
+        });
+    }
+
+    #[test]
+    fn the_relay_enforces_the_grant_whatever_the_engine() {
+        with_root(|_| {
+            let c = add_and_grant(
+                "linear",
+                "Linear",
+                "",
+                oauth("https://mcp.linear.app/mcp"),
+                "reader",
+                Access::Read,
+            )
+            .unwrap();
+            grant(&c.id, "writer", Access::Full).unwrap();
+            let target = |_agent: &str, access: Access| RelayTarget {
+                connection_id: c.id.clone(),
+                title: "Linear".into(),
+                account: "Linear".into(),
+                service: "linear".into(),
+                access,
+                url: "https://mcp.linear.app/mcp".into(),
+                token: "t".into(),
+            };
+            let r = target("reader", Access::Read);
+            assert_eq!(
+                relay_check("reader", &r, "list_issues", false, false),
+                RelayCall::Pass
+            );
+            assert!(matches!(
+                relay_check("reader", &r, "create_issue", false, false),
+                RelayCall::Refuse(_)
+            ));
+            // Even cleared, a read-only grant never writes.
+            note_cleared("reader", "mcp__linear__create_issue");
+            assert!(matches!(
+                relay_check("reader", &r, "create_issue", false, false),
+                RelayCall::Refuse(_)
+            ));
+            let w = target("writer", Access::Full);
+            // Not asked by the engine (Codex exec): a card here.
+            assert_eq!(
+                relay_check("writer", &w, "create_issue", false, false),
+                RelayCall::Decide
+            );
+            // Asked and allowed: through once.
+            note_cleared("writer", "mcp__linear__create_issue");
+            assert_eq!(
+                relay_check("writer", &w, "create_issue", false, false),
+                RelayCall::Pass
+            );
+            assert_eq!(
+                relay_check("writer", &w, "create_issue", false, false),
+                RelayCall::Decide
+            );
+            // Outside text: reads ask too.
+            assert_eq!(
+                relay_check("writer", &w, "list_issues", true, false),
+                RelayCall::Decide
+            );
+            // A take-over answers at the keyboard.
+            assert_eq!(
+                relay_check("writer", &w, "create_issue", false, true),
+                RelayCall::Pass
+            );
+            assert!(is_connection_tool("mcp__linear__list_issues"));
+            assert!(!is_connection_tool("mcp__other__list"));
+        });
+    }
+
+    #[test]
+    fn a_token_only_goes_to_its_own_apps_server() {
+        with_root(|_| {
+            let c = add_and_grant(
+                "linear",
+                "Linear",
+                "",
+                oauth("https://evil.example/mcp"),
+                "a",
+                Access::Full,
+            )
+            .unwrap();
+            store_tokens(&c.id, &tokens_for("lin_elsewhere_1")).unwrap();
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            assert!(rt.block_on(relay_target("a", "linear")).is_err());
         });
     }
 

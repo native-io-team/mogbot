@@ -930,14 +930,30 @@ accounts, grants; never a token). Each lists the agents that may use it:
 
 What a turn gets (`connections::for_turn`, before the process starts):
 
-- **Ours**: the server with a fresh token as an `Authorization` header, in
-  the turn's 0600 `--mcp-config` file (Claude Code) or in an environment
-  variable named by `bearer_token_env_var` (Codex; the name contains
-  `TOKEN`, so Codex's shell policy keeps it out of commands). A token about
-  to expire is refreshed first; a refresh the server refuses marks the
-  connection "needs signing in again" and the turn goes without it (its
-  prompt says so). Never on argv: `driver::tests` checks every engine's
-  command line.
+- **Ours**: the server is the agent bridge's **connection relay**
+  (`agents/conn_relay.rs`, `http://127.0.0.1:<port>/mcp/conn/<serverKey>`),
+  reached with the turn's own bridge secret (the `--mcp-config` file's
+  header for Claude Code; `bearer_token_env_var` naming the bridge's
+  variable for Codex). The relay checks the caller's grant, takes a fresh
+  token from the Keychain and adds it to the request it forwards to the
+  app; the token never leaves the app's process. It forwards only to the
+  server the catalogue names for that service (a `connections.json` edited
+  to point elsewhere is refused), follows no redirects, passes no
+  `www-authenticate` back, and marks a 401/403 as "needs signing in
+  again". A token about to expire is refreshed first; a refresh the server
+  refuses marks the connection the same way and the turn goes without it
+  (its prompt says so).
+- **The relay enforces the grant, whatever the engine**: a read-only
+  grant refuses a non-read `tools/call`; a write (and, in a turn answering
+  outside text, any call) goes through only if `mcp::decide` already
+  allowed it (the engine's approval, noted once per call), otherwise the
+  relay puts it on a card itself. So Codex's `exec` fallback, which has no
+  approval channel, can't write through a connection unasked. A take-over
+  is answered at the keyboard, so only the read-only rule applies there.
+- **Outside text**: in a turn answering a "When…" routine's items (or a
+  message carrying that taint), connection reads ask on a card too
+  (`connections::gate(.., outside)`): outside text can't make an agent
+  read the user's accounts unasked.
 - **claude.ai connectors** load into every Claude Code turn of a claude.ai
   account, so a grant is enforced the other way round: once one is
   connected through a card, every agent *without* a grant gets
@@ -992,6 +1008,8 @@ more: …" (`retire_stale`).
 - **Pending secret cards** an older build (or the import) raised for
   something with a connector or a site ("gmail_work", "linkedin_token",
   "x_token") are moved onto login cards at launch (`migrate_pending`,
+  matched by the card's *name* only, never its purpose, so "openai_key, to
+  summarise into Notion" stays a key;
   idempotent): the old card is marked expired, "Moved to a sign-in card
   for Gmail: no password needed.", and a login card replaces it, `quiet`
   if the old one was (an import's). A second old card for the same service
@@ -1022,14 +1040,16 @@ more: …" (`retire_stale`).
   never hold one (tests grep the whole agents folder after storing one).
   Every access and refresh token is added to redaction at store and at
   launch, so a token an agent prints is scrubbed from what we write.
-- **Tokens in flight to a turn**: in a 0600 file in a 0700 folder (Claude
-  Code), or the process's environment (Codex) — the same exposure as the
-  bridge secret (`reach.rs`). Residual: the agent's own process can read
-  its config file or environment, and a turn that prints a token sends it
-  to the model and Claude Code's transcript, as with secrets. A grant is
-  therefore "this agent may use this account", not a sandbox.
+- **Tokens in flight to a turn**: none. A turn holds only its bridge
+  secret (0600 file / process environment, `reach.rs`), which is revoked
+  when the turn ends and works only on this Mac's loopback, through the
+  relay's checks. Residual: during a turn, the agent's own process can
+  read that secret and call the relay directly, which is no more than the
+  turn could do through its tools anyway; the app's responses are seen by
+  the model like any tool result.
 - **The OAuth flow**: HTTPS-only discovery, authorization, token and
-  registration endpoints; PKCE S256 (a server without it is refused); a
+  registration endpoints; PKCE S256 (a server whose metadata doesn't list
+  S256 is refused, as the MCP spec requires); a
   random `state` checked on a one-shot 127.0.0.1 listener that ignores
   anything else that knocks; the server as `resource` (RFC 8707) so the
   token is audience-bound; ten-minute limit; Cancel aborts the listener.
@@ -1039,7 +1059,10 @@ more: …" (`retire_stale`).
 - **Who can start a sign-in**: only a paired, Mac-identity-verified phone
   or the desk, on a card an agent raised; `option` must be one of that
   card's. An agent can't connect anything itself: it can only raise the
-  card. A turn answering outside text (a "When…" routine) can raise one
+  card. Its ways in come only from the built-in catalogue (`logins::SERVICES`:
+  server URLs, sites); nothing the agent passes becomes a URL, client id or
+  redirect, so a planted instruction can't put an attacker's OAuth app on
+  a card. A turn answering outside text (a "When…" routine) can raise one
   too; it still needs the user's tap.
 - **Read vs send** is decided from tool names. A server whose write tool
   is called `get_and_send` would be let through on a read grant; unknown
@@ -1072,9 +1095,11 @@ more: …" (`retire_stale`).
 - Claude in Chrome in `--print`: verified that its tools load when the
   extension is connected (see `claude.rs`); `--no-chrome` removing them, and
   the helper-file check as "installed", are not verified.
-- Codex's `-c mcp_servers.<key>={url, bearer_token_env_var}` for a
-  third-party server is the same shape as ours (verified on 0.166 for
-  ours), not tried against a vendor's server.
+- The connection relay is unit-tested (grant rules, routing, the token
+  never in anything a turn is given), not run against a vendor's server:
+  its streamed (SSE) answers and session headers are passed through as
+  the MCP spec describes, unobserved end to end. Codex and Claude Code
+  reach it exactly as they reach our own server (verified shapes).
 
 ## Steering a working agent
 

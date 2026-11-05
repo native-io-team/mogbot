@@ -1332,7 +1332,9 @@ fn record_card(app: &AppHandle, agent: &Agent, r: LoginRequest) -> Result<(), Co
 /// `None` keeps it a secret card: a real API key, or a service we don't know.
 pub fn from_secret(agent: &Agent, request: &secrets::Request) -> Option<LoginRequest> {
     let text = format!("{} {}", request.name, request.purpose);
-    let s = match_service(&request.name).or_else(|| match_service(&text))?;
+    // By its name only: a purpose names where the work goes ("an OpenAI
+    // key, to summarise into Notion"), not what the credential is for.
+    let s = match_service(&request.name)?;
     let has_way = s.connector != Connector::None || s.site.is_some();
     if !has_way {
         return None;
@@ -2207,6 +2209,13 @@ mod tests {
                 "api_key",
                 false,
             );
+            let openai = old_secret_card(
+                &finance,
+                "openai_key",
+                "Summarise the books into Notion and Slack",
+                "api_key",
+                false,
+            );
 
             assert_eq!(migrate_pending(None), 3);
             assert_eq!(migrate_pending(None), 0, "idempotent");
@@ -2227,6 +2236,14 @@ mod tests {
             // Not a service: stays a secret card.
             assert_eq!(
                 store::find_approval(&recruiter.id, &os)
+                    .unwrap()
+                    .unwrap()
+                    .status,
+                ApprovalStatus::Pending
+            );
+            // A key named for something else isn't moved by its purpose.
+            assert_eq!(
+                store::find_approval(&finance.id, &openai)
                     .unwrap()
                     .unwrap()
                     .status,

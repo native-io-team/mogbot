@@ -463,12 +463,13 @@ impl std::fmt::Debug for Prepared {
 /// Discovery, registration with `redirect`, PKCE and the authorization URL.
 pub async fn prepare(server_url: &str, redirect: &str) -> Result<Prepared, CommandError> {
     let found = discover(server_url).await?;
-    if !found.meta.code_challenge_methods_supported.is_empty()
-        && !found
-            .meta
-            .code_challenge_methods_supported
-            .iter()
-            .any(|m| m == "S256")
+    // A server that doesn't say it supports S256 is refused (the MCP
+    // authorization spec: clients MUST refuse when it's absent).
+    if !found
+        .meta
+        .code_challenge_methods_supported
+        .iter()
+        .any(|m| m == "S256")
     {
         return Err(CommandError::expected(
             "That app's sign-in doesn't support a safe browser sign-in (PKCE), so it isn't used.",

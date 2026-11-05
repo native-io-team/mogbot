@@ -75,9 +75,7 @@ export async function openHere(url: string): Promise<void> {
   await Linking.openURL(url);
 }
 
-export type SheetTarget =
-  | { agentId: string; requestId: string }
-  | { key: string; skip?: string[] };
+export type SheetTarget = { agentId: string; requestId: string } | { key: string; skip?: string[] };
 
 /**
  * Sign in on this phone, in the provider's own page in the system sign-in
@@ -117,8 +115,17 @@ export async function signInWithSheet(
     );
     return 'cancelled';
   }
-  // Straight to the Mac, once: never stored, logged or shown.
-  await t.request('agents.loginPhoneFinish', { flowId: begun.flowId, callbackUrl: result.url });
+  // Straight to the Mac, once: never stored, logged or shown. The sheet may
+  // have been open a while, so the connection is checked again first.
+  const after = currentTransport();
+  const late = after
+    ? secretRouteProblem(
+        after.state.kind === 'connected' ? after.route : null,
+        after.identityVerified
+      )
+    : 'Not paired';
+  if (!after || late) throw new Error(late ?? 'Not paired');
+  await after.request('agents.loginPhoneFinish', { flowId: begun.flowId, callbackUrl: result.url });
   return 'sent';
 }
 

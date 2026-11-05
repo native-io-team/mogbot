@@ -831,9 +831,9 @@ fn apply_one(
             // A login by name that means an app (gmail_work, linkedin) is
             // a login card: connect it, never a password. Anything else, a
             // real API key, stays a secure input card.
-            let named = format!("{} {}", login.name, login.purpose);
+            // By its name only: the purpose says where work goes, not what
+            // the credential is (`logins::from_secret`).
             match super::logins::match_service(&login.name)
-                .or_else(|| super::logins::match_service(&named))
                 .filter(|s| !(s.key.is_some() && login.kind == "api_key"))
             {
                 Some(service) => {

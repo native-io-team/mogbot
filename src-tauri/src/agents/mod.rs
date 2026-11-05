@@ -34,6 +34,7 @@
 //! - [`search`]: find a message across every conversation
 //! - [`secrets`]: credentials an agent asked for, kept in the Keychain, never shown to it
 //! - [`logins`]: login cards (`request_login`), the team's list, what an agent can reach
+//! - [`conn_relay`]: a turn reaches a connected app through the bridge, never holding its token
 //! - [`connections`]: accounts connected through them, per-agent grants, what a turn gets
 //! - [`oauth`]: signing in to a remote MCP server ourselves (PKCE, loopback)
 //! - [`templates`]: ready-made agents (role templates) the Chief and the New agent dialog offer
@@ -52,6 +53,7 @@ pub mod capacity;
 pub mod claude;
 pub mod codex;
 pub mod codex_app;
+pub mod conn_relay;
 pub mod connections;
 pub mod connector;
 pub mod context;
