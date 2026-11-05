@@ -111,3 +111,5 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Securit
 objc2 = "0.5"
 objc2-foundation = { version = "0.2", features = ["NSString", "NSGeometry", "NSData"] }
 block2 = "0.5"
+security-framework = "3.7"
+core-foundation = "0.10"

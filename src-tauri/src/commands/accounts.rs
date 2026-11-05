@@ -158,43 +158,26 @@ fn write_to_keychain(account_id: &str, key: &str, value: &str) -> Result<(), Com
 /// Store `value` under (`service`, `key`). Shared with Agents' secrets
 /// (`agents::secrets`), which keep their own service namespace per agent.
 pub(crate) fn keychain_write(service: &str, key: &str, value: &str) -> Result<(), CommandError> {
-    use std::io::Write;
-    use std::process::Stdio;
-
     if !KEYCHAIN_SUPPORTED {
         return Err(CommandError::expected(
             "Secrets are only stored on macOS at the moment: there's no credential vault on this platform yet.",
         ));
     }
-    // Pass the secret on stdin rather than as an argv entry — a CLI argument is
-    // visible to any user via `ps`/`/proc`, leaking the credential. With `-w`
-    // and no inline value, `security` prompts for the password and then a
-    // confirmation ("retype password"), reading both from stdin, so we send the
-    // value twice. Callers trim to a single line (no embedded newline), so the
-    // two reads each receive the full value.
-    let mut child = create_command("security")
-        .args(["add-generic-password", "-U", "-a", key, "-s", service, "-w"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Keychain write failed: {e}"))?;
-
-    child
-        .stdin
-        .take()
-        .ok_or_else(|| CommandError::from("Keychain write failed: no stdin handle"))?
-        .write_all(format!("{value}\n{value}\n").as_bytes())
-        .map_err(|e| format!("Keychain write failed: {e}"))?;
-
-    let status = child
-        .wait()
-        .map_err(|e| format!("Keychain write failed: {e}"))?;
-
-    if !status.success() {
-        return Err(format!("Failed to store credential '{key}' in keychain").into());
+    // `crate::keychain` writes with SecItemAdd, so only this app can read the
+    // item back without the user being asked (the `security` CLI it replaced
+    // left every secret readable by any process via `security -w`).
+    #[cfg(target_os = "macos")]
+    {
+        crate::keychain::write(service, key, value).map_err(|e| {
+            tracing::warn!(%service, error = %e, "[Keychain] write failed");
+            CommandError::from(format!("Failed to store credential '{key}' in keychain"))
+        })
     }
-    Ok(())
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (service, key, value);
+        Ok(())
+    }
 }
 
 fn read_from_keychain(account_id: &str, key: &str) -> Option<String> {
@@ -205,19 +188,17 @@ pub(crate) fn keychain_read(service: &str, key: &str) -> Option<String> {
     if !KEYCHAIN_SUPPORTED {
         return None;
     }
-    let output = create_command("security")
-        .args(["find-generic-password", "-a", key, "-s", service, "-w"])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
+    // Migrates an item the old CLI wrote on first read (`crate::keychain`).
+    #[cfg(target_os = "macos")]
+    {
+        crate::keychain::read(service, key)
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
     }
-    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if value.is_empty() {
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (service, key);
         None
-    } else {
-        Some(value)
     }
 }
 
@@ -229,9 +210,10 @@ pub(crate) fn keychain_delete(service: &str, key: &str) {
     if !KEYCHAIN_SUPPORTED {
         return;
     }
-    let _ = create_command("security")
-        .args(["delete-generic-password", "-a", key, "-s", service])
-        .status();
+    #[cfg(target_os = "macos")]
+    crate::keychain::delete(service, key);
+    #[cfg(not(target_os = "macos"))]
+    let _ = (service, key);
 }
 
 fn delete_all_account_credentials(account_id: &str) {
