@@ -324,6 +324,14 @@ pub struct AgentMessage {
     /// as a divider. Older builds show it as the plain note it also is.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub fresh: bool,
+    /// A result card (`share_result`, `agents/results.rs`): on an `agent`
+    /// message of its own, or on the turn's `changes` card when the turn
+    /// also changed a project. Older builds show the text and attachments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<super::results::ResultCard>,
+    /// On a user message: "Ask for changes" on this result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revises: Option<super::results::ResultRef>,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -1421,6 +1429,8 @@ mod tests {
                     client_id: None,
                     work: None,
                     fresh: false,
+                    result: None,
+                    revises: None,
                 })
                 .unwrap();
             }
@@ -1691,6 +1701,8 @@ mod tests {
                 client_id: None,
                 work: None,
                 fresh: false,
+                result: None,
+                revises: None,
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -1733,6 +1745,8 @@ mod tests {
             client_id: None,
             work: None,
             fresh: false,
+            result: None,
+            revises: None,
         }
     }
 
@@ -1955,6 +1969,7 @@ mod tests {
                 .map(|n| format!("m{n:02}"))
                 .chain((1..=4).map(|n| format!("s{n:02}")))
                 .chain((1..=4).map(|n| format!("p{n:02}")))
+                .chain((1..=3).map(|n| format!("r{n:02}")))
                 .chain(["m22".into()])
                 .collect();
             assert_eq!(ids, expected, "a line was dropped");
@@ -2017,6 +2032,26 @@ mod tests {
             assert_eq!(card("p03").choice.as_deref(), Some("Yes, proceed"));
             assert_eq!(status("req-prompt-expired"), ApprovalStatus::Expired);
             assert_eq!(card("p04").prompt.as_ref().unwrap().options.len(), 3);
+            // Result cards (`share_result`) and "Ask for changes".
+            use super::super::results::{ResultItem, ShotRole};
+            let first = by_id("r01").result.as_ref().unwrap();
+            assert_eq!((first.version, first.items.len()), (1, 2));
+            assert!(matches!(first.items[1], ResultItem::Link { .. }));
+            assert_eq!(first.not_verified.len(), 1);
+            assert_eq!(by_id("r02").revises.as_ref().unwrap().id, "res-oct");
+            let second = by_id("r03").result.as_ref().unwrap();
+            assert_eq!(by_id("r03").kind, MessageKind::Changes);
+            assert_eq!(
+                second.changes.as_deref(),
+                Some("EUR invoices use the October 31 rate")
+            );
+            assert!(matches!(
+                second.items[0],
+                ResultItem::File {
+                    role: Some(ShotRole::After),
+                    ..
+                }
+            ));
             assert_eq!(messages(CHIEF, 3).unwrap().len(), 3);
 
             // Answering a card and appending leave every existing line as it was.

@@ -14,6 +14,8 @@
 // Agents: identical to src/lib/agents.ts
 // ============================================================================
 
+import type { ResultCard, ResultRef } from './results';
+
 export interface AgentStatus {
   state: 'idle' | 'working' | 'waiting';
   activity: string | null;
@@ -397,6 +399,14 @@ export interface AgentMessage {
   work?: TurnWork;
   /** On a `note`: the conversation started fresh here (memory kept); a divider. */
   fresh?: boolean;
+  /**
+   * A result card (`share_result`): on an `agent` message of its own, or on
+   * the turn's `changes` card when the turn also changed a project. Older
+   * Macs never send it.
+   */
+  result?: ResultCard;
+  /** On a user message: "Ask for changes" on this result. */
+  revises?: ResultRef;
 }
 
 export interface ChangedFile {

@@ -4,7 +4,12 @@
  * everything else is a quiet line or a card.
  */
 
-import { splitQuotes, type Agent, type AgentMessage } from '@shipstudio/companion-protocol';
+import {
+  revisingLabel,
+  splitQuotes,
+  type Agent,
+  type AgentMessage,
+} from '@shipstudio/companion-protocol';
 import { memo } from 'react';
 import { type LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -25,6 +30,8 @@ import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
 import { LiveWork, WorkLine } from './work';
 import { CopyActions } from './copy';
+import { ResultCardView, useCanRevise } from './result';
+import { setComposer } from '../lib/drafts';
 import { useApp } from '../lib/store';
 
 const enter = FadeInDown.duration(220).springify().damping(18);
@@ -34,6 +41,7 @@ export const MessageRow = memo(function MessageRow({
   agent,
   queued,
   liveCopy,
+  newestResult = true,
   onError,
   onLongPress,
 }: {
@@ -42,6 +50,8 @@ export const MessageRow = memo(function MessageRow({
   queued: boolean;
   /** The newest change card of the agent's open copy: it offers Keep / Discard. */
   liveCopy?: boolean;
+  /** This message carries the newest version of its result card. */
+  newestResult?: boolean;
   onError: (text: string) => void;
   /** Copy, Quote, Select Text: words only, so only user and agent messages. */
   onLongPress?: (message: AgentMessage) => void;
@@ -49,6 +59,39 @@ export const MessageRow = memo(function MessageRow({
   const styles = useStyles();
   const colors = useColors();
   const hold = onLongPress && message.text.trim() ? () => onLongPress(message) : undefined;
+  const canRevise = useCanRevise();
+  const askForChanges = canRevise
+    ? (ref: { id: string; version: number; title: string }) =>
+        setComposer(message.agentId, { revising: ref })
+    : undefined;
+  if (message.result && (message.kind === 'agent' || message.kind === 'changes')) {
+    const copy = liveCopy ? message.changes?.copy : undefined;
+    return (
+      <View style={styles.agentRow}>
+        <ResultCardView
+          message={message}
+          card={message.result}
+          agent={agent}
+          newest={newestResult || !!copy}
+          onAskForChanges={newestResult ? askForChanges : undefined}
+          onError={onError}
+        >
+          {message.changes && (newestResult || copy) && <SystemLine message={message} />}
+          {copy && message.changes && (
+            <CopyActions
+              agent={agent}
+              copy={copy}
+              project={message.changes.project}
+              leftOut={message.changes.leftOut}
+              warning={message.changes.warning}
+              onError={onError}
+            />
+          )}
+        </ResultCardView>
+        {message.work && <WorkLine message={message} work={message.work} onError={onError} />}
+      </View>
+    );
+  }
   switch (message.kind) {
     case 'user':
       return (
@@ -68,6 +111,13 @@ export const MessageRow = memo(function MessageRow({
               accessibilityHint={hold ? 'Hold for Copy, Quote and Select Text' : undefined}
               style={({ pressed }) => [styles.userBubble, pressed && styles.held]}
             >
+              {message.revises && (
+                <View style={[styles.bubbleQuote, { marginBottom: space.xs }]}>
+                  <T variant="small" color={colors.textSecondary} numberOfLines={2}>
+                    {revisingLabel(message.revises)}
+                  </T>
+                </View>
+              )}
               <Bubble text={message.text} />
             </Pressable>
           )}

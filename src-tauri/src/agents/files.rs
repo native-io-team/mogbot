@@ -101,7 +101,8 @@ pub struct SharedFile {
 pub fn list(agent_id: &str) -> Result<Vec<SharedFile>, CommandError> {
     let mut files: Vec<SharedFile> = store::messages(agent_id, usize::MAX)?
         .into_iter()
-        .filter(|m| matches!(m.kind, MessageKind::User | MessageKind::Agent))
+        // A result card's files ride on the turn's change card when it had one.
+        .filter(|m| matches!(m.kind, MessageKind::User | MessageKind::Agent) || m.result.is_some())
         .flat_map(|m| {
             let from = if m.kind == MessageKind::User {
                 Sender::User

@@ -442,6 +442,13 @@ export interface AgentMessage {
   work?: TurnWork;
   /** On a `note`: the conversation started fresh here; drawn as a divider. */
   fresh?: boolean;
+  /**
+   * A result card (`share_result`, `agents/results.rs`): on an `agent`
+   * message of its own, or on the turn's `changes` card.
+   */
+  result?: ResultCard;
+  /** On a user message: "Ask for changes" on this result. */
+  revises?: ResultRef;
 }
 
 /** Mirrors `project::ChangedFile`: line counts are absent for a binary file. */
@@ -837,13 +844,16 @@ export const sendAgentMessage = (
   agentId: string,
   text: string,
   attachments: OutgoingAttachment[] = [],
-  mentions: string[] = []
+  mentions: string[] = [],
+  /** "Ask for changes": the id of the result this message revises. */
+  revises?: string
 ) =>
   invoke<AgentMessage>('agents_send', {
     agentId,
     text,
     attachments: attachments.length ? attachments : undefined,
     mentions: mentions.length ? mentions : undefined,
+    revises,
   });
 export const inspectFiles = (paths: string[]) =>
   invoke<FileInfo[]>('agents_inspect_files', { paths });
@@ -1744,6 +1754,23 @@ export {
   splitQuotes,
   type BubblePart,
 } from '../../packages/companion-protocol/src/quotes';
+
+import type { ResultCard, ResultRef } from '../../packages/companion-protocol/src/results';
+export type {
+  ResultCard,
+  ResultItem,
+  ResultRef,
+  ShotRole,
+} from '../../packages/companion-protocol/src/results';
+export {
+  beforeAfter,
+  changesLine,
+  itemName,
+  listedItems,
+  newestResults,
+  revisingLabel,
+  supersededLine,
+} from '../../packages/companion-protocol/src/results';
 
 /** "9:24 AM": a message's time, on hover. */
 export function formatClock(ts: number): string {

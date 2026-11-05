@@ -278,6 +278,13 @@ pub struct HelloFrame {
 /// `hello.features`: the app shows a running turn's steps (`status.work`).
 pub const FEATURE_LIVE_WORK: &str = "work.live";
 
+/// `welcome.features`: `agents.send` takes `revises` (a result card's "Ask
+/// for changes", `agents/results.rs`).
+pub const MAC_FEATURE_REVISE_RESULTS: &str = "results.revise";
+
+/// Everything `welcome.features` lists.
+pub const MAC_FEATURES: &[&str] = &[MAC_FEATURE_REVISE_RESULTS];
+
 /// Phone → Mac. Unknown frame types are ignored, as the protocol promises.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "t", rename_all = "lowercase")]
@@ -398,6 +405,10 @@ pub enum ServerFrame {
         /// is empty.
         #[serde(skip_serializing_if = "Option::is_none")]
         time_zone: Option<String>,
+        /// What this Mac does beyond its methods (`MAC_FEATURES`), so a newer
+        /// app offers only what it can carry out. Older Macs send none.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        features: Vec<&'static str>,
     },
     Refused {
         reason: RefusedReason,

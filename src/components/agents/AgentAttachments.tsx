@@ -209,42 +209,58 @@ export function MessageAttachments({ agent, attachments, side = 'user' }: Messag
           ))}
         </div>
       )}
-      <ModalFrame
-        isOpen={viewing !== null}
-        onClose={() => setViewing(null)}
-        title={viewing?.name ?? ''}
-        className="agent-lightbox"
-        headerActions={
-          viewing && (
-            <>
-              <Button
-                variant="ghost"
-                size="compact"
-                leftIcon={<ExternalLinkIcon size={14} />}
-                onClick={() => void open(viewing)}
-              >
-                Open
-              </Button>
-              <Button
-                variant="ghost"
-                size="compact"
-                leftIcon={<FolderOpenIcon size={14} />}
-                onClick={() => void open(viewing, true)}
-              >
-                Show in Finder
-              </Button>
-            </>
-          )
-        }
-      >
-        {viewing && (
-          <img
-            className="agent-lightbox__image"
-            src={attachmentUrl(agent.home, viewing)}
-            alt={viewing.name}
-          />
-        )}
-      </ModalFrame>
+      <AttachmentLightbox agent={agent} viewing={viewing} onClose={() => setViewing(null)} />
     </div>
+  );
+}
+
+/** An image at full size, with Open and Show in Finder. */
+export function AttachmentLightbox({
+  agent,
+  viewing,
+  onClose,
+}: {
+  agent: Agent;
+  viewing: Attachment | null;
+  onClose: () => void;
+}) {
+  const open = useAttachmentOpener(agent.id);
+  return (
+    <ModalFrame
+      isOpen={viewing !== null}
+      onClose={onClose}
+      title={viewing?.name ?? ''}
+      className="agent-lightbox"
+      headerActions={
+        viewing && (
+          <>
+            <Button
+              variant="ghost"
+              size="compact"
+              leftIcon={<ExternalLinkIcon size={14} />}
+              onClick={() => void open(viewing)}
+            >
+              Open
+            </Button>
+            <Button
+              variant="ghost"
+              size="compact"
+              leftIcon={<FolderOpenIcon size={14} />}
+              onClick={() => void open(viewing, true)}
+            >
+              Show in Finder
+            </Button>
+          </>
+        )
+      }
+    >
+      {viewing && (
+        <img
+          className="agent-lightbox__image"
+          src={attachmentUrl(agent.home, viewing)}
+          alt={viewing.name}
+        />
+      )}
+    </ModalFrame>
   );
 }

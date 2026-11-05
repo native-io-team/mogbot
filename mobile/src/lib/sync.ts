@@ -18,6 +18,7 @@ import type {
   MacStatus,
   ProjectSummary,
   Result,
+  ResultRef,
 } from '@shipstudio/companion-protocol';
 
 export interface Chat {
@@ -43,6 +44,8 @@ export interface PendingSend {
   attachments?: PendingAttachment[];
   /** Agent ids @mentioned, sent with the text. */
   mentions?: string[];
+  /** "Ask for changes": the result it revises (its id goes with the send). */
+  revises?: ResultRef;
 }
 
 export interface PendingAttachment {

@@ -8,7 +8,7 @@
  * (`embedded`), where it draws its own header instead of the stack's.
  */
 
-import type { Agent, AgentMessage } from '@shipstudio/companion-protocol';
+import { newestResults, type Agent, type AgentMessage } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -223,6 +223,8 @@ export function ChatView({
     }
     return null;
   }, [messages, agent?.copy?.id]);
+  // Each result's newest version is drawn in full; older ones fold.
+  const newestResult = useMemo(() => new Set(newestResults(messages).values()), [messages]);
   const pinQuestion = !!card?.approval && pinFor === card.id;
   const reportPin = useCallback(
     (cardId: string, needsPin: boolean) =>
@@ -422,6 +424,7 @@ export function ChatView({
                   item={item}
                   agent={agent}
                   liveCopyCard={liveCopyCard}
+                  newestResult={newestResult}
                   onError={showError}
                   onLongPress={onMessageAction}
                   onDraftHeight={setDraftHeight}
@@ -574,6 +577,7 @@ function ItemView({
   item,
   agent,
   liveCopyCard,
+  newestResult,
   onError,
   onLongPress,
   onDraftHeight,
@@ -582,6 +586,7 @@ function ItemView({
   item: Item;
   agent: Agent;
   liveCopyCard?: string | null;
+  newestResult?: Set<string>;
   onError: (t: string) => void;
   onLongPress: (m: AgentMessage) => void;
   onDraftHeight: (height: number) => void;
@@ -595,6 +600,7 @@ function ItemView({
         agent={agent}
         queued={isQueued(item.message, agent)}
         liveCopy={item.message.id === liveCopyCard}
+        newestResult={!item.message.result || !!newestResult?.has(item.message.id)}
         onError={onError}
         onLongPress={onLongPress}
       />

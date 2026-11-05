@@ -152,6 +152,7 @@ pub async fn agents_send(
     attachments: Option<Vec<attachments::OutgoingAttachment>>,
     mentions: Option<Vec<String>>,
     client_id: Option<String>,
+    revises: Option<String>,
 ) -> Result<store::AgentMessage, CommandError> {
     let text = text.trim().to_string();
     let incoming = attachments.unwrap_or_default();
@@ -161,6 +162,20 @@ pub async fn agents_send(
     let recipient = store::get(&agent_id)?;
     let home = store::agent_home(&agent_id)?;
     let mut message = runner::new_message(&agent_id, store::MessageKind::User, text.clone());
+    // "Ask for changes": pinned to the result as the log has it, never as
+    // the client named it, and refused if it isn't in this conversation.
+    if let Some(id) = revises.filter(|r| !r.trim().is_empty()) {
+        let log_of = agent_id.clone();
+        let log = tokio::task::spawn_blocking(move || store::messages(&log_of, usize::MAX))
+            .await
+            .map_err(agents::err_other)??;
+        message.revises = Some(agents::results::reference(&log, id.trim()).ok_or_else(|| {
+            agents::err_invalid(
+                "revises",
+                "That result isn't in this conversation any more.",
+            )
+        })?);
+    }
     // A phone's send id, echoed so its optimistic bubble reconciles by id.
     message.client_id = client_id.filter(|c| !c.is_empty());
     // Only real agents, other than the recipient, once each; anything else is dropped.
@@ -183,11 +198,21 @@ pub async fn agents_send(
     // The log keeps what the user typed; the agent also gets where the files are.
     let block = attachments::prompt_block(&store::agent_home(&agent_id)?, &message.attachments);
     let names: Vec<String> = message.mentions.iter().map(|m| m.name.clone()).collect();
-    let prompt = [text, prompts::mentions(&names, recipient.is_main), block]
-        .into_iter()
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n");
+    let revising = message
+        .revises
+        .as_ref()
+        .map(agents::results::revising_prompt)
+        .unwrap_or_default();
+    let prompt = [
+        revising,
+        text,
+        prompts::mentions(&names, recipient.is_main),
+        block,
+    ]
+    .into_iter()
+    .filter(|part| !part.is_empty())
+    .collect::<Vec<_>>()
+    .join("\n\n");
     let message = runner::record(&app, message)?;
     runner::enqueue(&app, &agent_id, prompt, runner::From::User);
     agents::tray::mark_used(&app);

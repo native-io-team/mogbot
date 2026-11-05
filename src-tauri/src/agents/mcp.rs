@@ -17,6 +17,7 @@ use tokio::sync::oneshot;
 use super::engine::Engine;
 use super::files;
 use super::permissions;
+use super::results;
 use super::runner::{self, From, Status};
 use super::schedule;
 use super::store::{self, AgentRef, Approval, ApprovalStatus, MessageKind};
@@ -204,6 +205,36 @@ const TOOLS: &[Tool] = &[
         }),
     },
     Tool {
+        name: "share_result",
+        description: "Hand back a finished piece of work as ONE result card at the end of your reply: a title, a short summary, the files you made (documents, CSVs, screenshots), the links you produced or relied on, what you checked, and what you did NOT verify. Call it once, when the work is done, instead of listing deliverables in prose. Be honest: list only checks you actually ran in `checked`, and put anything you assumed, couldn't test or couldn't reach in `not_verified` (the user sees it prominently). Files must exist in your own folder or one of the user's projects; they're copied into the chat. When the user asks for changes to a result, revise it: call this again with `revises` (the result's id) and `changes` (one line on what changed), and the same card becomes the next version. A second call in the same turn replaces the first.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "title": { "type": "string", "description": "A few words naming what you made (\"Q3 invoice summary\")." },
+                "summary": { "type": "string", "description": "Two or three sentences: what it is and what it's for." },
+                "items": {
+                    "type": "array",
+                    "description": "What the result is made of, most important first. Each has a `path` (a file: absolute, ~/…, or relative to your folder) or a `url` (http/https), an optional short `label`, and for screenshots an optional `role` of \"before\" or \"after\".",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "path": { "type": "string" },
+                            "url": { "type": "string" },
+                            "label": { "type": "string" },
+                            "role": { "type": "string", "enum": ["before", "after"] }
+                        }
+                    }
+                },
+                "checked": { "type": "array", "items": { "type": "string" }, "description": "Checks you actually ran, one short line each." },
+                "not_verified": { "type": "array", "items": { "type": "string" }, "description": "What you didn't or couldn't verify, one short line each. Leave nothing out to look better." },
+                "revises": { "type": "string", "description": "The id of a result you're revising (given when the user asks for changes)." },
+                "changes": { "type": "string", "description": "When revising: one line on what changed since the last version." }
+            },
+            "required": ["title", "summary"]
+        }),
+    },
+    Tool {
         name: "schedule_check_in",
         description: "Have the app wake you later with a note to yourself: use it whenever you tell the user you'll check back, follow up or remind them, so that actually happens. Once (\"tomorrow at 9:00\", \"in 2 hours\", \"friday 14:30\") or as a routine (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\"), in the user's local time. It only fires while the app is open; the answer says exactly when and what happens if it's closed. Tell the user that time.",
         main_only: false,
@@ -369,6 +400,7 @@ async fn call(app: &AppHandle, caller: &store::Agent, name: &str, args: &Value) 
         "list_agents" => list_agents(caller),
         "message_agent" => message_agent(app, caller, args),
         "share_file" => share_file(app, caller, args).await,
+        "share_result" => share_result(caller, args).await,
         "create_agent" => create_agent(app, caller, args).await,
         "update_agent" => update_agent(app, caller, args).await,
         "delete_agent" => delete_agent(app, caller, args).await,
@@ -509,11 +541,9 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
 
 /// Copy a file the agent made into its chat as a message from it. Only files
 /// in its own home or one of the user's projects (see `files::shareable`).
-async fn share_file(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
-    let Ok(home) = store::agent_home(&caller.id) else {
-        return error("Couldn't find your folder.");
-    };
-    let mut roots = vec![home.clone()];
+/// Where an agent may hand files from: its own home, and the user's projects.
+async fn share_roots(home: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut roots = vec![home.to_path_buf()];
     if let Ok(projects) = crate::commands::projects::list_projects().await {
         roots.extend(
             projects
@@ -521,6 +551,14 @@ async fn share_file(app: &AppHandle, caller: &store::Agent, args: &Value) -> Val
                 .map(|p| std::path::PathBuf::from(p.path)),
         );
     }
+    roots
+}
+
+async fn share_file(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+    let Ok(home) = store::agent_home(&caller.id) else {
+        return error("Couldn't find your folder.");
+    };
+    let roots = share_roots(&home).await;
     let source = match files::shareable(arg(args, "path").unwrap_or(""), &home, &roots) {
         Ok(source) => source,
         Err(e) => return error(e),
@@ -544,6 +582,35 @@ async fn share_file(app: &AppHandle, caller: &store::Agent, args: &Value) -> Val
             ))
         }
         Ok(Err(e)) => error(e.to_string()),
+        Err(e) => error(e.to_string()),
+    }
+}
+
+/// Stage the turn's result card (`agents/results.rs`). Everything is checked
+/// and every file copied before anything is staged; the card itself is
+/// recorded when the turn ends, so the reply ends on it.
+async fn share_result(caller: &store::Agent, args: &Value) -> Value {
+    let draft = match results::parse(args) {
+        Ok(draft) => draft,
+        Err(e) => return error(e),
+    };
+    let Ok(home) = store::agent_home(&caller.id) else {
+        return error("Couldn't find your folder.");
+    };
+    let roots = share_roots(&home).await;
+    let agent_id = caller.id.clone();
+    let built =
+        tokio::task::spawn_blocking(move || results::prepare(&agent_id, &home, &roots, draft))
+            .await;
+    match built {
+        Ok(Ok(message)) => {
+            let Some(card) = message.result.clone() else {
+                return error("Nothing was shared.");
+            };
+            let replaced = results::stage(message);
+            text(results::staged_reply(&card, replaced))
+        }
+        Ok(Err(e)) => error(e),
         Err(e) => error(e.to_string()),
     }
 }
@@ -1516,6 +1583,7 @@ mod tests {
             .collect();
         assert!(names.contains(&"message_agent".to_string()));
         assert!(names.contains(&"share_file".to_string()));
+        assert!(names.contains(&"share_result".to_string()));
         assert!(!names.contains(&"create_agent".to_string()));
         assert!(!names.contains(&"delete_agent".to_string()));
     }

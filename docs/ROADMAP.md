@@ -15,7 +15,10 @@ infrastructure where a good one exists.
    files and screenshots: preview, before/after, sources, what wasn't
    verified, then Open PR (approval-gated) / Ask for changes / Open. Raised
    again by the audits: today work comes back as prose plus a timeline,
-   not as something reviewable.
+   not as something reviewable. *In progress*: `share_result` cards with
+   versions and Ask for changes on desk and phone
+   ([agents.md](agents.md), "Result cards"); a PR from a non-copy result
+   and recordings are not built.
 3. **A git worktree per task** for project-bound agents: no trampling, and
    every task becomes a branch you can PR, merge or discard. *In progress.*
 4. **"Take over" a live session.** From the timeline, open the session or

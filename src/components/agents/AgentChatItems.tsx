@@ -41,6 +41,7 @@ import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { ImportReviewCard } from './ImportReviewCard';
 import { useLiveWork, WorkTimeline } from './AgentWork';
+import { RevisesBar } from './AgentResult';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
@@ -421,6 +422,7 @@ export const UserBubble = memo(function UserBubble({
         <div className="agent-chat__line">
           {actions}
           <div className="agent-bubble agent-bubble--user">
+            {message.revises && <RevisesBar revises={message.revises} />}
             {splitQuotes(message.text).map((part, i) =>
               part.kind === 'quote' ? (
                 <blockquote key={i} className="agent-bubble__quote">
