@@ -19,6 +19,7 @@ import {
   StyleSheet,
   View,
   type ScrollViewProps,
+  type FlatListProps,
 } from 'react-native';
 import { KeyboardChatScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import Animated, {
@@ -64,9 +65,12 @@ import { PathContext } from './Markdown';
 import { PaneContext, type Pane } from './ApprovalCard';
 import { showActions } from './menu';
 import { SelectSheet } from './SelectSheet';
-import { Button, Icon, IconButton, useRipple, T } from './ui';
+import { Button, Dot, Icon, IconButton, useRipple, T } from './ui';
 
 const NONE: never[] = [];
+const NO_KEYS: ReadonlySet<string> = new Set();
+/** A card counts as seen once its top is on screen: its title is the question. */
+const VIEWABILITY = { itemVisiblePercentThreshold: 10 };
 
 /** Rows glide to where a growing or collapsing neighbour puts them: nothing jumps. */
 const glide = LinearTransition.duration(220);
@@ -176,6 +180,11 @@ export function ChatView({
   const [selecting, setSelecting] = useState<AgentMessage | null>(null);
   // A search hit to land on: paged in, scrolled to, and lit up once.
   const [target, setTarget] = useState<string | null>(null);
+  // The rows on screen: "Needs your OK ↓" says nothing while its card is one of them.
+  const [inView, setInView] = useState<ReadonlySet<string>>(NO_KEYS);
+  const onViewable = useRef<NonNullable<FlatListProps<Item>['onViewableItemsChanged']>>(
+    ({ viewableItems }) => setInView(new Set(viewableItems.map((v) => v.key)))
+  ).current;
 
   // On screen: the Mac clears its unread and holds this agent's alerts.
   useFocusEffect(
@@ -371,7 +380,10 @@ export function ChatView({
 
   const header = <Header agent={agent} />;
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
-  const urgentBelow = away && (needsYouHere(agent, chat?.messages) || asking);
+  const urgentBelow =
+    away &&
+    (needsYouHere(agent, chat?.messages) || asking) &&
+    !messages.some((m) => m.approval?.status === 'pending' && inView.has(m.id));
 
   return (
     <View style={{ flex: 1 }}>
@@ -479,6 +491,8 @@ export function ChatView({
               keyboardShouldPersistTaps="handled"
               onEndReached={older}
               onEndReachedThreshold={0.6}
+              onViewableItemsChanged={onViewable}
+              viewabilityConfig={VIEWABILITY}
               onScroll={(e) => {
                 const y = e.nativeEvent.contentOffset.y;
                 const isAway = y > 360;
@@ -535,14 +549,20 @@ export function ChatView({
             }
             android_ripple={ripple}
             onPress={() => list.current?.scrollToOffset({ offset: 0, animated: true })}
-            style={[styles.jump, urgentBelow && styles.jumpUrgent]}
+            // Neutral like any jump control: an amber dot says it's waiting on you, not a fill.
+            style={styles.jump}
           >
+            {urgentBelow && (
+              <View style={{ marginLeft: space.xs }}>
+                <Dot color={colors.accentWarning} />
+              </View>
+            )}
             {(urgentBelow || newReply) && (
               <T
                 variant="small"
-                color={urgentBelow ? colors.onWarning : colors.textPrimary}
+                color={colors.textPrimary}
                 maxFontSizeMultiplier={chromeScale}
-                style={{ marginLeft: space.xs }}
+                style={!urgentBelow && { marginLeft: space.xs }}
               >
                 {urgentBelow ? 'Needs your OK' : 'New reply'}
               </T>
@@ -550,7 +570,7 @@ export function ChatView({
             <Icon
               name="arrow.down"
               size={iconSize.body}
-              color={urgentBelow ? colors.onWarning : colors.textPrimary}
+              color={colors.textPrimary}
               fallback={<T>↓</T>}
             />
           </Pressable>
@@ -829,7 +849,6 @@ const useStyles = makeStyles((colors) => ({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
   },
-  jumpUrgent: { backgroundColor: colors.accentWarning, borderColor: colors.accentWarning },
   toast: {
     position: 'absolute',
     left: space.lg,

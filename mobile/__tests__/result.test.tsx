@@ -114,11 +114,9 @@ describe('the result card on the phone', () => {
 
   it('folds an older version to a line', async () => {
     await show(v1, { newest: false, onAskForChanges: jest.fn() });
-    expect(
-      screen.getByText('October invoice summary · v1 · a newer version is below')
-    ).toBeTruthy();
+    expect(screen.getByText('October invoice summary · v1 · earlier version')).toBeTruthy();
     expect(screen.queryByText('Not verified')).toBeNull();
-    await fireEvent.press(screen.getByText(/a newer version is below/));
+    await fireEvent.press(screen.getByText(/earlier version/));
     expect(screen.getByText('Not verified')).toBeTruthy();
     // An earlier version is for reading: it can't be revised.
     expect(screen.queryByText('Ask for changes')).toBeNull();

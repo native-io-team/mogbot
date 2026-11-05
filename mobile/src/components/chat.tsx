@@ -16,7 +16,7 @@ import { memo, useState } from 'react';
 import { type LayoutChangeEvent, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { engineName, failureLine, folderName, formatClock, sessionLabel } from '../lib/agents';
+import { engineName, failureLine, folderName, formatClock } from '../lib/agents';
 import { drivenWait } from '../lib/bars';
 import { haptic } from '../lib/haptics';
 import { discardPending, editPending, resend } from '../lib/session';
@@ -32,6 +32,7 @@ import { AgentAvatar, Spinner } from './agent';
 import { ApprovalCard, ReviewOnMacCard } from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
+import { useTaskName } from './session';
 import { LiveWork, WorkLine } from './work';
 import { CopyCard } from './copy';
 import { ResultCardView, useCanRevise } from './result';
@@ -156,12 +157,9 @@ export const MessageRow = memo(function MessageRow({
               onError={onError}
             />
           )}
-          {message.stopped && (
-            <T variant="caption" color={colors.textSecondary}>
-              Stopped
-            </T>
-          )}
           {message.work && <WorkLine message={message} work={message.work} onError={onError} />}
+          {/* A stopped turn ends in a Line, as every turn that didn't finish does. */}
+          {message.stopped && <Line text="Stopped" />}
         </Pressable>
       );
     case 'approval':
@@ -318,7 +316,7 @@ function SessionCard({
   const project = useApp(
     (s) => s.projects?.find((p) => p.path === mark.project)?.name ?? folderName(mark.project)
   );
-  const tab = sessionLabel(mark);
+  const tab = useTaskName(mark.sessionId);
   const open = mark.sessionId
     ? () => {
         router.push({
@@ -504,7 +502,7 @@ function FailureCard({
       meta={formatClock(message.ts)}
       // The message doesn't record what it ran on, and the agent may have
       // switched engines since: only where, which doesn't change.
-      source={project ? `in ${project}` : undefined}
+      source={project ? `In ${project}` : undefined}
       note={
         !latest
           ? undefined

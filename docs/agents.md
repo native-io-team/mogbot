@@ -1893,7 +1893,7 @@ prompt (`prompts::FILES`) tells it to for deliverables, never for chat.
   unrelated result. Retry on a failed ask keeps its `revises`. A revision keeps the id, becomes version
   n+1, and must say what changed (`changes`), shown as "Changes since v1: …".
   The log stays append-only: the older version is still there, folded to
-  "<title> · v1 · a newer version is below" (`newestResults`), and opens on
+  "<title> · v1 · earlier version" (`newestResults`), and opens on
   click, for reading only, with its change receipt (See changes, the diff)
   when it rode on a change card.
 - **Checks are the agent's.** The list is headed "It says it checked"

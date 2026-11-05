@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from '../../components/agent';
 import { DiffLines } from '../../components/diff';
 import { useNow } from '../../components/ConnectionPill';
-import { SessionState, tabName } from '../../components/session';
+import { SessionState, useTaskName } from '../../components/session';
 import { Button, Icon, T } from '../../components/ui';
 import { useAccent } from '../../lib/accent';
 import { formatAgo } from '../../lib/agents';
@@ -108,7 +108,8 @@ export default function Session() {
       .finally(() => setBusy(null));
   };
 
-  const title = [project, data ? tabName(data.session) : tab].filter(Boolean).join(' · ');
+  const name = useTaskName(id);
+  const title = [project, name === 'Task' && tab ? tab : name].filter(Boolean).join(' · ');
   const sendable = !!text.trim() && connected && !data?.session.question;
   const question = data?.session.question;
   // What it's asking about (an edit's diff, a command), read off its screen.
@@ -276,10 +277,8 @@ export default function Session() {
               value={text}
               onChangeText={setText}
               editable={!question}
-              placeholder={
-                question ? 'Answer the question above first' : `Message ${tabName(data.session)}`
-              }
-              label={`Message ${tabName(data.session)}`}
+              placeholder={question ? 'Answer the question above first' : 'Message this task'}
+              label="Message this task"
             >
               <RoundButton
                 label="Send"

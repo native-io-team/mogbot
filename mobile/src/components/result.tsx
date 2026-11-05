@@ -33,8 +33,8 @@ import { alpha, iconSize, radius, space } from '../lib/theme';
 import { useApp, useServed } from '../lib/store';
 import { Attachments } from './attachments';
 import { useCopyParts, type CopyProps } from './copy';
-import { ACTION_ROW, Card, Line, OFFLINE_NOTE } from './surfaces';
-import { Button, Icon, T } from './ui';
+import { Card, Line, OFFLINE_NOTE, TextAction } from './surfaces';
+import { Icon, T } from './ui';
 
 /** The Mac takes `revises` on a send: only then is "Ask for changes" offered. */
 export const useCanRevise = () => useServed('agents.send', MAC_FEATURES.reviseResults);
@@ -200,19 +200,20 @@ export function ResultCardView({
       />
     );
   }
+  // A text action, as Review changes is: not an answer, so it never sits
+  // among them as a button. Beside a copy's answers it takes the line above
+  // them, at the start, so Discard / Keep changes keep their full width.
   const ask = newest && onAskForChanges && (
-    <Button
-      title="Ask for changes"
-      variant="ghost"
-      icon="bubble.left"
-      disabled={!connected}
-      // Beside a copy's answers it takes a row of its own, so Keep stays last.
-      style={parts ? [ACTION_ROW, { justifyContent: 'flex-end' }] : undefined}
-      onPress={() => {
-        haptic.light();
-        onAskForChanges(refOf(card));
-      }}
-    />
+    <View style={parts ? { flexBasis: '100%' } : undefined}>
+      <TextAction
+        label="Ask for changes"
+        disabled={!connected}
+        onPress={() => {
+          haptic.light();
+          onAskForChanges(refOf(card));
+        }}
+      />
+    </View>
   );
   return (
     <Card

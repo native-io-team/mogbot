@@ -25,7 +25,7 @@ export function secretRouteProblem(
 ): string | null {
   if (!route) return 'Saving a secret needs your Mac. It stays here until then.';
   if (route.kind !== 'tailscale' || !/^https:\/\//i.test(route.url)) {
-    return 'Secrets only go over Tailscale, which encrypts them all the way to your Mac. Connect over Tailscale, or save it at your desk.';
+    return 'Secrets only go over Tailscale, which encrypts them all the way to your Mac. Save it on your Mac: it’s waiting there too.';
   }
   if (!identityVerified) {
     return 'This connection hasn’t proved it’s the Mac you paired with, so secrets stay here. Save it at your desk instead.';

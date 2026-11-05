@@ -16,7 +16,7 @@ import {
   nextNeedsYou,
   ON_MAC_LINE,
   pendingApproval,
-  sessionLabel,
+  taskName,
   subtitle,
   waitingOnMac,
 } from '../src/lib/agents';
@@ -243,9 +243,36 @@ describe('Send, tapped twice', () => {
 });
 
 describe('words', () => {
-  it('calls a project’s agent tab a task, never its engine and a number', () => {
-    expect(sessionLabel({ tab: 2 })).toBe('Task 2');
-    expect(sessionLabel({ cli: 'codex', tab: 1 })).toBe('Task 1');
-    expect(sessionLabel({ cli: 'claude' })).toBe('Task');
+  it('names a task by what it was asked, never a tab number or its engine', () => {
+    const mark = (id: string, ts: number, event: 'started' | 'sent', text: string) =>
+      ({
+        id,
+        agentId: 'site',
+        ts,
+        kind: 'session',
+        text,
+        session: { project: '/p', event, sessionId: 'pty-1', tab: 2, cli: 'claude' },
+      }) as AgentMessage;
+    const chats = (...messages: AgentMessage[]) => ({ site: { messages } });
+    expect(
+      taskName('pty-1', chats(mark('a', 1, 'started', 'Make the hero bigger\nand bolder')))
+    ).toBe('Make the hero bigger');
+    // The desk's started mark may carry no prompt: the first message sent names it.
+    expect(
+      taskName(
+        'pty-1',
+        chats(mark('a', 1, 'started', ''), mark('b', 2, 'sent', 'Tighten the hero'))
+      )
+    ).toBe('Tighten the hero');
+    const long = 'Tighten the hero spacing below 640px and keep the call to action above the fold';
+    const cut = taskName('pty-1', chats(mark('a', 1, 'started', long)));
+    expect(cut.endsWith('…')).toBe(true);
+    expect(cut.length).toBeLessThanOrEqual(61);
+    const at = new Date(2026, 10, 5, 6, 28).getTime();
+    expect(taskName('pty-1', chats(mark('a', at, 'started', '')))).toMatch(/^Task started 6:28/);
+    expect(taskName('pty-1', {})).toBe('Task');
+    expect(taskName(undefined, chats(mark('a', 1, 'started', 'x')))).toBe('Task');
+    for (const name of [taskName('pty-1', {}), cut])
+      expect(name).not.toMatch(/Task \d|Claude Code \d/);
   });
 });

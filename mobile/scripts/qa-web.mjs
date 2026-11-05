@@ -24,7 +24,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -62,13 +62,35 @@ const log = (...a) => console.log('[qa:web]', ...a);
 // ---- Processes ---------------------------------------------------------------------
 
 const children = new Set();
-const work = mkdtempSync(path.join(tmpdir(), 'qa-web-'));
+/**
+ * A unix socket's path is capped at 104 bytes on macOS, and tsx's IPC pipe
+ * and Chrome's singleton socket are made under TMPDIR: a long one (a
+ * sandbox's, a CI runner's) fails both before anything starts. Then the
+ * run works in a short folder and hands its children a TMPDIR inside it
+ * (Metro's cache with it, so such a run bundles cold). A short TMPDIR is
+ * left alone.
+ */
+// Chrome adds ~43 bytes under it (`.com.google.Chrome.XXXXXX/SingletonSocket`), tsx ~20.
+const LONG_TMP = tmpdir().length > 60;
+function workDir() {
+  if (LONG_TMP) {
+    try {
+      return mkdtempSync('/tmp/qa-web-');
+    } catch {
+      /* not writable here: try the long one */
+    }
+  }
+  return mkdtempSync(path.join(tmpdir(), 'qa-web-'));
+}
+const work = workDir();
 const mockState = path.join(work, 'mock');
+const childTmp = LONG_TMP && work.startsWith('/tmp/') ? path.join(work, 't') : tmpdir();
+if (childTmp !== tmpdir()) mkdirSync(childTmp);
 
 function run(name, cmd, argv, env = {}) {
   const child = spawn(cmd, argv, {
     cwd: ROOT,
-    env: { ...process.env, ...env },
+    env: { ...process.env, TMPDIR: childTmp, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true, // its own group, so the whole tree goes on stop
   });

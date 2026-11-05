@@ -110,9 +110,9 @@ export function itemName(item: ResultItem): string {
   }
 }
 
-/** The line a "folded" older version shows. */
+/** The line a "folded" older version shows: short enough for one line on a phone. */
 export function supersededLine(card: ResultCard): string {
-  return `${card.title} · v${card.version} · a newer version is below`;
+  return `${card.title} · v${card.version} · earlier version`;
 }
 
 /** The chip above the composer, and the quote bar on the message it sends. */
