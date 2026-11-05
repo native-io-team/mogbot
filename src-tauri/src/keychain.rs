@@ -22,6 +22,9 @@
 pub const MARKER: &str = "dashbot-v2";
 
 #[cfg(target_os = "macos")]
+// Only for the local `security` tool (old items): synchronous callers, no
+// network, answers in milliseconds.
+#[allow(clippy::disallowed_methods)]
 mod imp {
     use super::MARKER;
     use core_foundation::data::CFData;
@@ -157,14 +160,31 @@ mod imp {
             use std::io::Write;
             if self.file.is_some() {
                 return self
-                    .cli(&["add-generic-password", "-U", "-a", account, "-s", service, "-w", value])
+                    .cli(&[
+                        "add-generic-password",
+                        "-U",
+                        "-a",
+                        account,
+                        "-s",
+                        service,
+                        "-w",
+                        value,
+                    ])
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
                     .status()
                     .is_ok_and(|s| s.success());
             }
             let Ok(mut child) = self
-                .cli(&["add-generic-password", "-U", "-a", account, "-s", service, "-w"])
+                .cli(&[
+                    "add-generic-password",
+                    "-U",
+                    "-a",
+                    account,
+                    "-s",
+                    service,
+                    "-w",
+                ])
                 .stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
@@ -211,7 +231,9 @@ mod imp {
                 return;
             }
             match self.add_ours(service, account, value) {
-                Ok(()) => tracing::info!(%service, "[Keychain] migrated an item to app-only access"),
+                Ok(()) => {
+                    tracing::info!(%service, "[Keychain] migrated an item to app-only access")
+                }
                 Err(e) => {
                     let restored = self.write_legacy(service, account, value);
                     tracing::warn!(%service, error = %e, restored, "[Keychain] migration failed; old item restored");
@@ -254,6 +276,7 @@ pub fn delete(service: &str, account: &str) {
 }
 
 #[cfg(all(test, target_os = "macos"))]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use std::process::Command;
@@ -276,7 +299,10 @@ mod tests {
                 .success();
             assert!(ok, "create-keychain");
             // No auto-lock during the test.
-            let _ = Command::new("security").arg("set-keychain-settings").arg(&path).status();
+            let _ = Command::new("security")
+                .arg("set-keychain-settings")
+                .arg(&path)
+                .status();
             Self { _dir: dir, path }
         }
 
@@ -299,7 +325,10 @@ mod tests {
 
     impl Drop for TempKeychain {
         fn drop(&mut self) {
-            let _ = Command::new("security").arg("delete-keychain").arg(&self.path).status();
+            let _ = Command::new("security")
+                .arg("delete-keychain")
+                .arg(&self.path)
+                .status();
         }
     }
 
@@ -326,7 +355,10 @@ mod tests {
         let me = std::env::current_exe().unwrap();
         let me = me.to_string_lossy();
         assert!(dump.contains(MARKER), "marker comment missing:\n{dump}");
-        assert!(dump.contains(me.as_ref()), "this binary isn't trusted:\n{dump}");
+        assert!(
+            dump.contains(me.as_ref()),
+            "this binary isn't trusted:\n{dump}"
+        );
         assert!(
             !dump.contains("/usr/bin/security"),
             "the security CLI is trusted:\n{dump}"
@@ -363,7 +395,11 @@ mod tests {
     #[test]
     #[ignore]
     fn round_trip_in_the_login_keychain_with_a_temporary_item() {
-        let service = format!("{}-keychain-selftest-{}", crate::brand::SLUG, std::process::id());
+        let service = format!(
+            "{}-keychain-selftest-{}",
+            crate::brand::SLUG,
+            std::process::id()
+        );
         write(&service, "probe", "temporary").unwrap();
         assert_eq!(read(&service, "probe").as_deref(), Some("temporary"));
         delete(&service, "probe");

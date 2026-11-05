@@ -561,9 +561,13 @@ pub fn secure_files() {
             if set_mode(dir, 0o700).is_ok() {
                 *fixed += 1;
             }
-            let Ok(entries) = std::fs::read_dir(dir) else { return };
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
             for entry in entries.flatten() {
-                let Ok(kind) = entry.file_type() else { continue };
+                let Ok(kind) = entry.file_type() else {
+                    continue;
+                };
                 let path = entry.path();
                 if kind.is_dir() {
                     walk(&path, fixed);
