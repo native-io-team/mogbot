@@ -161,7 +161,9 @@ export const phoneInstallScenarios: Scenario[] = [
       'a quiet "Install it yourself (advanced)" disclosure, open because there is no official ' +
       'build yet, over "Build it on this Mac" in a solid card: one line on what happens, one on ' +
       'what it needs (Xcode and an Apple ID; a free ID’s build stops after 7 days), and a ' +
-      'primary "Set up".',
+      'primary "Set up". Between them, a solid card “And Tailscale on the iPhone”: install it and ' +
+      'sign in with the same account as this Mac, why pairing waits for it, and a “Get Tailscale ' +
+      'on the App Store ↗” link.',
     {}
   ),
   install(
@@ -201,7 +203,9 @@ export const phoneInstallScenarios: Scenario[] = [
     'Install — on the phone, with its expiry',
     'Every row green. Right: a green tick, "The app is on Julian’s iPhone", "Works until ' +
       '<a week from now>" and that Reinstall needs no agent, the Untrusted Developer fix in ' +
-      'small grey text, and "Open on phone" / "Pair it now".',
+      'small grey text, “Before you pair: Install Tailscale on your phone and sign in with the ' +
+      'same account as this Mac.” with a “Get Tailscale on the App Store ↗” link, and "Open on ' +
+      'phone" / "Pair it now".',
     {
       companion_install_ios_status: { ...XCODE_OK, devices: [IPHONE] },
       companion_install_ios_app: {

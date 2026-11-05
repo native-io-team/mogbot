@@ -1901,7 +1901,7 @@ async fn capture(
         Some(full) => {
             let id = shots::store(full);
             match super::tailscale::status().await {
-                super::tailscale::TailscaleState::Connected { dns_name } => {
+                super::tailscale::TailscaleState::Connected { dns_name, .. } => {
                     Some(shots::public_url(&dns_name, &id))
                 }
                 _ => None,

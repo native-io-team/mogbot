@@ -266,6 +266,36 @@ CA and no trust-on-first-use.
    the hosts it signs (`checkMac`). Only then does the phone send
    `POST /v1/pair` (JSON only) with the code, its name, model, an X25519
    public key and another fresh 32-byte **challenge**.
+
+   **The phone says only what has happened** (`pairWith`'s `onStep`):
+   "Reaching *Mac*…" while `/v1/identity` is out, and "Allow on your Mac"
+   only once the Mac has proved itself and `/v1/pair` has gone. A tailnet
+   host the phone can't reach doesn't fail, it hangs, so the identity
+   request gets 12 s (`IDENTITY_TIMEOUT_MS`), and one more try on a fresh
+   connection if that ran out (a first request over a DERP relay, or a
+   phone whose Tailscale is waking on demand, can be slow but working; a
+   fast failure isn't retried), and is then diagnosed
+   (`diagnose`: a `*.ts.net` name that doesn't resolve is "this phone isn't
+   on your Mac's tailnet", anything else "can't reach *Mac*"), each naming
+   the host and the checks: Tailscale connected here, signed in to the same
+   account as the Mac. The pairing request keeps the desk's 120 s plus 15
+   (`PAIR_TIMEOUT_MS`), then says "No answer from *Mac*" rather than
+   waiting forever.
+
+   **Tailscale on the phone is said before the scan, on both sides.** The
+   phone's welcome opens on a "Before you scan" card (installed, connected,
+   same account as the Mac; Get / Open Tailscale). On the desk the code's
+   first step is "Install Tailscale on your phone and sign in as
+   *login*", with Tailscale's App Store and Google Play links, the login
+   read from `tailscale status --json` (`User[Self.UserID].LoginName`;
+   none for a tagged machine, and then "the same account as this Mac"),
+   never guessed. The "Get the phone app" flow lists it too. The code
+   isn't shown until this Mac's own Tailscale is up. While a code is out,
+   the first `/v1/identity` that reaches the Mac shows "A device reached
+   this Mac at *time*. Waiting for it to send the code…" under the code
+   (`PairingView.reachedAt`, once per code). It is unauthenticated, so it
+   says "a device", never "your phone"; its absence while the phone spins
+   is the tell that the phone isn't on the tailnet.
 3. **Mac:** "Allow **Julian's iPhone** to use your agents?" with the model,
    when it asked, the code's last four characters and the tailnet user
    `tailscale serve` named (`Tailscale-User-Login`), open for 120 s. The

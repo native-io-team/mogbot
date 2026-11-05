@@ -26,6 +26,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
+import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -380,6 +381,69 @@ const FIND_SCROLLER = `(() => {
 
 const shots = [];
 const wanted = (name) => !ONLY || name.startsWith(ONLY);
+
+/**
+ * The pairing screens before anything is paired, in each theme: the welcome
+ * ("Before you scan"), "Reaching <Mac>…" against a server that never
+ * answers, and the failure that follows (identity timeout, then the
+ * diagnosis). `d` is the mock's own link, with its route swapped.
+ */
+async function prePairShots(page, d) {
+  const silent = http.createServer(() => {
+    // Never answers: a tailnet host this phone can't reach.
+  });
+  await new Promise((r) => silent.listen(0, '127.0.0.1', r));
+  const link = JSON.parse(Buffer.from(d, 'base64url').toString());
+  link.routes = [{ kind: 'tailscale', url: `http://localhost:${silent.address().port}` }];
+  const unreachable = Buffer.from(JSON.stringify(link)).toString('base64url');
+  try {
+    for (const theme of THEMES) {
+      await setTheme(page, theme);
+      if (wanted(`pair-start-${theme}`)) {
+        await page.goto(`${WEB}/pair`);
+        await page.waitFor(
+          `document.body.innerText.includes('Before you scan')`,
+          180_000,
+          'the welcome'
+        );
+        await sleep(800);
+        await capture(page, `pair-start-${theme}`, {
+          route: '/pair',
+          check:
+            '“Before you scan” card above Scan: three lines (installed, connected, same account), why, and a Get/Open Tailscale button',
+          theme,
+        });
+      }
+      if (!wanted(`pair-reaching-${theme}`) && !wanted(`pair-unreachable-${theme}`)) continue;
+      await page.goto(`${WEB}/pair?d=${unreachable}`);
+      await page.waitFor(
+        `[...document.querySelectorAll('body *')].some((e) => e.innerText?.trim() === 'Pair')`,
+        180_000,
+        'the confirm screen'
+      );
+      await sleep(500);
+      await page.clickText('Pair');
+      await page.waitFor(`document.body.innerText.includes('Reaching')`, 10_000, 'Reaching');
+      await sleep(600);
+      await capture(page, `pair-reaching-${theme}`, {
+        route: '/pair?d=… (Mac never answers)',
+        check: '“Reaching <Mac>…” with a spinner, the host, “Nothing has been sent to it yet”; never “Allow on your Mac”',
+        theme,
+      });
+      await page.waitFor(`document.body.innerText.includes('Try again')`, 30_000, 'the failure');
+      await sleep(600);
+      await capture(page, `pair-unreachable-${theme}`, {
+        route: '/pair?d=… (Mac never answers)',
+        check: '“Can’t reach <Mac>”, the host, what to check (Tailscale on, same account), Open Tailscale and Try again',
+        theme,
+      });
+    }
+  } finally {
+    silent.closeAllConnections();
+    silent.close();
+    await setTheme(page, THEMES[0]);
+  }
+}
 
 async function capture(page, name, { route, check, theme }) {
   const file = path.join(OUT, `${name}.png`);
@@ -807,9 +871,14 @@ async function main() {
   const page = await openTab();
   await setTheme(page, THEMES[0]);
 
-  // Pair through the real confirm screen.
+  // Before pairing: the welcome with "Before you scan", then a Mac that
+  // never answers (a silent server in the link's place): "Reaching…" while
+  // it waits, then the reason, never a spinner forever.
   const link = await (await fetch(`${MOCK}/dev/link`)).text();
   const d = new URL(link.replace(/^[^:]+:\/\//, 'http://x/')).searchParams.get('d');
+  await prePairShots(page, d);
+
+  // Pair through the real confirm screen.
   await page.goto(`${WEB}/pair?d=${d}`);
   await page.waitFor(
     `[...document.querySelectorAll('body *')].some((e) => e.innerText?.trim() === 'Pair')`,

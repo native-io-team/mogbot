@@ -809,7 +809,7 @@ fn start_publish_watch(port: u16) {
             if current != generation {
                 return;
             }
-            let tailscale::TailscaleState::Connected { dns_name } = tailscale::status().await
+            let tailscale::TailscaleState::Connected { dns_name, .. } = tailscale::status().await
             else {
                 continue;
             };

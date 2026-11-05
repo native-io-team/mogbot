@@ -347,6 +347,137 @@ describe('pairing', () => {
     await old.close();
   });
 
+  // The bug a real phone hit: "Allow on your Mac" before anything had
+  // reached it. The desk is asking only once the code has gone.
+  it('says it is asking the desk only after the Mac proved itself and the code went', async () => {
+    const mock = createMockServer({ quiet: true, allowAfterMs: 0 });
+    await mock.listen();
+    const link = parsePairingLink(mock.pairingLink(), { allowHost: () => true })!;
+    const order: string[] = [];
+    await pairWith(link, {
+      ...deps,
+      fetch: (input, init) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        order.push(`fetch ${new URL(url).pathname}`);
+        return fetch(input, init);
+      },
+      onStep: (step) => order.push(`step ${step}`),
+    });
+    expect(order).toEqual(['step reaching', 'fetch /v1/identity', 'fetch /v1/pair', 'step asking']);
+    await mock.close();
+  });
+
+  it('never says the desk is asking when the Mac could not prove itself', async () => {
+    const mock = createMockServer({ quiet: true, allowAfterMs: 0 });
+    await mock.listen();
+    const link = parsePairingLink(mock.pairingLink(), { allowHost: () => true })!;
+    const steps: string[] = [];
+    const forged = { ...link, fingerprint: mockIdentity().fingerprint };
+    expect(await failure(pairWith(forged, { ...deps, onStep: (s) => steps.push(s) }))).toBe(
+      'not_your_mac'
+    );
+    expect(steps).toEqual(['reaching']);
+    await mock.close();
+  });
+
+  // An unreachable tailnet host doesn't fail fast: it hangs. It gets
+  // seconds, then the reason, never a spinner forever.
+  it('gives up on a Mac that never answers, and says why', async () => {
+    const silent = http.createServer(() => {
+      // Never answers.
+    });
+    const url = await new Promise<string>((resolve) =>
+      silent.listen(0, '127.0.0.1', () =>
+        resolve(`http://127.0.0.1:${(silent.address() as { port: number }).port}`)
+      )
+    );
+    const mock = createMockServer({ quiet: true });
+    const real = parsePairingLink(mock.pairingLink(), { allowHost: () => true })!;
+    const link = { ...real, routes: [{ kind: 'tailscale' as const, url }] };
+    const diagnosed: string[] = [];
+    const steps: string[] = [];
+    const started = Date.now();
+    const err = await pairWith(link, {
+      ...deps,
+      identityTimeoutMs: 300,
+      onStep: (s) => steps.push(s),
+      diagnose: (u) => {
+        diagnosed.push(u);
+        return Promise.resolve({ kind: 'tailscale_off' as const });
+      },
+    }).catch((e: PairError) => e.failure);
+    expect(err).toEqual({ kind: 'tailscale_off' });
+    expect(diagnosed).toEqual([url]);
+    expect(steps).toEqual(['reaching']);
+    expect(Date.now() - started).toBeLessThan(5000);
+    // With no diagnosis to give: unreachable.
+    const plain = await pairWith(link, {
+      ...deps,
+      identityTimeoutMs: 300,
+      diagnose: undefined,
+    }).catch((e: PairError) => e.failure);
+    expect(plain).toEqual({ kind: 'mac_unreachable' });
+    silent.closeAllConnections();
+    await new Promise<void>((r) => silent.close(() => r()));
+  });
+
+  it('a slow first try over a relay is tried again, not called unreachable', async () => {
+    const mock = createMockServer({ quiet: true, allowAfterMs: 50 });
+    await mock.listen();
+    const link = parsePairingLink(mock.pairingLink(), { allowHost: () => true })!;
+    let calls = 0;
+    // The first identity request stalls (a relay still being set up); the
+    // second goes straight through.
+    const stalling: typeof fetch = (input, init) => {
+      calls += 1;
+      if (calls === 1 && String(input).endsWith('/v1/identity')) {
+        return new Promise((_, reject) =>
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+        );
+      }
+      return deps.fetch(input, init);
+    };
+    const paired = await pairWith(link, { ...deps, fetch: stalling, identityTimeoutMs: 300 });
+    expect(paired.token).toBeTruthy();
+    expect(calls).toBe(3);
+    await mock.close();
+  });
+
+  it('stops waiting on the desk a little after its window, and says so', async () => {
+    // A desk that never decides inside the phone's (shortened) window.
+    const mock = createMockServer({ quiet: true, allowAfterMs: 800 });
+    await mock.listen();
+    const link = parsePairingLink(mock.pairingLink(), { allowHost: () => true })!;
+    const steps: string[] = [];
+    const err = await pairWith(link, {
+      ...deps,
+      pairTimeoutMs: 300,
+      onStep: (s) => steps.push(s),
+    }).catch((e: PairError) => e.failure);
+    expect(err).toEqual({ kind: 'no_answer' });
+    expect(steps).toEqual(['reaching', 'asking']);
+    // Let the mock desk's own 800 ms decision run out before closing it, so
+    // its timer doesn't outlive the suite.
+    await new Promise((r) => setTimeout(r, 600));
+    await mock.close();
+  });
+
+  it('a cancel is a cancel, not a failure to explain', async () => {
+    const mock = createMockServer({ quiet: true, allowAfterMs: 800 });
+    await mock.listen();
+    const link = parsePairingLink(mock.pairingLink(), { allowHost: () => true })!;
+    const controller = new AbortController();
+    const going = pairWith(link, {
+      ...deps,
+      signal: controller.signal,
+      onStep: (s) => s === 'asking' && setTimeout(() => controller.abort(), 50),
+    });
+    const err = await going.catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(PairError);
+    await new Promise((r) => setTimeout(r, 800)); // the mock desk's decision timer
+    await mock.close();
+  });
+
   it('round-trips a link with exactly one route', () => {
     const mock = createMockServer({ quiet: true });
     const text = formatPairingLink({
