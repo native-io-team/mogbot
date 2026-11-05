@@ -2364,6 +2364,7 @@
 }
 
 .agent-bubble--to-connector {
+  max-width: min(calc(var(--agents-prose-measure) - var(--spacing-xl)), 100%);
   background: transparent;
   border-style: dashed;
 }
@@ -2424,4 +2425,15 @@
   .agent-import-talk__dot {
     animation: none;
   }
+}
+
+/* Another assistant asking to start an import: what it means, in prose. */
+.agent-approval__detail--prose {
+  max-height: none;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--font-size-body-md);
+  white-space: pre-wrap;
+  color: var(--text-secondary);
 }

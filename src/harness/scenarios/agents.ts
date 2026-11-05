@@ -223,17 +223,23 @@ const otherAgent = (
   ...over,
 });
 
-/** An import conversation with Grok over the connector (`agents_import_talk`). */
+/** An import with Grok over the connector (`agents_import_talk`, a `connector::Gate`). */
 const IMPORT_TALK = {
   id: 'talk1',
   source: 'Grok',
   chiefId: 'chief',
-  state: 'active',
+  state: 'interviewing',
   startedAt: now - 6 * MIN,
   lastAt: now - MIN,
   exchanges: 4,
-  agents: ['Finance', 'Travel'],
+  staged: ['Finance', 'Travel'],
+  imported: [] as string[],
+  busy: false,
 };
+const gateWith = (talk: Record<string, unknown> | null, armed = false) => ({
+  armed,
+  talk: talk ? { ...IMPORT_TALK, ...talk } : null,
+});
 
 /** The other app on this Mac with a team of five: two new, the Chief to merge, one done, one blocked. */
 const OTHER_APP_PREVIEW = {
@@ -423,12 +429,32 @@ export const msg = (
   ...over,
 });
 
-/** Grok's side is `from_agent` with a `connector:` peer, as `agents/connector.rs` records it. */
+/**
+ * Grok's side is `from_agent` with a `connector:` peer, and the sealed
+ * interview's replies are `sent_to_agent` to the same peer, as
+ * `agents/connector.rs` records them.
+ */
 const GROK = { peer: { id: 'connector:Grok', name: 'Grok' } };
+
+/** The consent card (`connector::ask_consent`). */
+const consentCard = (status: 'pending' | 'allowed') =>
+  msg('approval', '', 7, {
+    approval: {
+      requestId: 'consent1',
+      title: 'Grok wants to bring its agents over',
+      detail:
+        'It will talk to a separate, sealed copy of Chief of Staff that can only stage agents for you to review. It can’t see your chats, files or other agents, and nothing is created until you press Import.\n\nIts first message: “Hi, I’m Grok. I run three agents for Sam: Main (manages the others), Finance (spending and invoices) and Travel (trips and bookings).”',
+      status,
+      connector: { kind: 'consent', talkId: 'talk1', source: 'Grok' },
+    },
+  });
+const CONSENT_CARD = consentCard('pending');
+
 const IMPORT_TALK_CHAT = [
+  consentCard('allowed'),
   msg(
     'note',
-    'Grok started importing your agents over the connector. Stop it any time above the composer.',
+    'Grok is talking to a sealed interview, separate from your chat. Nothing is created until you review it. Stop it any time.',
     6
   ),
   msg(
@@ -438,28 +464,98 @@ const IMPORT_TALK_CHAT = [
     GROK
   ),
   msg(
-    'agent',
-    'Thanks, Grok. Main merges into me. Let’s start with Finance: its full instructions as you were briefed, what it remembers about Sam, its routines with when they run, and the logins it relies on (names only).',
-    5
+    'sent_to_agent',
+    'Thanks, Grok. Let’s start with Finance: its full instructions as you were briefed, what it remembers about Sam, its routines with when they run, and the logins it relies on (names only).',
+    5,
+    GROK
   ),
   msg(
     'from_agent',
-    'Finance instructions: “Track every expense in the books sheet, chase invoices after 14 days, ask before paying anything.” It remembers: accountant is Lena; invoices go out on the 1st; reports in EUR. Routines: every weekday at 9am, check for new invoices. Logins: Stripe, the bank.',
+    'Finance instructions: “Track every expense in the books sheet, chase invoices after 14 days, ask before paying anything.” It remembers: accountant is Lena; invoices go out on the 1st; reports in EUR. Routines: every weekday at 9am, check for new invoices. Logins: Stripe, the bank. More on it [in my docs](https://example.com/finance).',
     3,
     GROK
   ),
-  msg('note', 'Created Finance · Tracks spending and chases invoices', 2, {
-    peer: { id: 'finance', name: 'Finance' },
-  }),
   msg(
-    'agent',
-    'Finance is here, with its routine paused until you turn it off on your side. Sam will be asked for the Stripe key and bank login in Finance’s chat. Now Travel: same four things, please.',
-    2
+    'sent_to_agent',
+    'Finance is staged for Sam’s review, routine paused, Stripe and the bank as logins Sam enters here. Now Travel: same four things, please.',
+    2,
+    GROK
   ),
   msg(
     'from_agent',
     'Travel instructions: “Plan trips door to door, prefer trains under 4 hours, aisle seats.” It remembers: passport renewal due March; loyalty with TAP. Routines: every Friday at 5pm, check next week’s flights. No logins.',
     1,
+    GROK
+  ),
+];
+
+/** The review card (`connector::post_review`): Finance clashes with yours, Travel is new. */
+const REVIEW = {
+  proposals: [
+    {
+      key: 'p1',
+      name: 'Finance',
+      role: 'Tracks spending and chases invoices',
+      instructions:
+        'Track every expense in the books sheet.\nChase invoices after 14 days.\nAsk before paying anything.',
+      memory: '- Accountant is Lena\n- Invoices go out on the 1st\n- Reports in EUR',
+      routines: [
+        {
+          when: 'every weekday at 9am',
+          what: 'Check for new invoices',
+          schedule: 'every weekday at 09:00',
+        },
+      ],
+      logins: [
+        { name: 'stripe_key', purpose: 'Reads invoices and payouts', kind: 'api_key' },
+        { name: 'bank_login', purpose: 'Reads statements', kind: 'password' },
+      ],
+      clash: {
+        agentId: 'finance',
+        role: 'Keeps the books',
+        instructions:
+          'Keep the books in the shared sheet.\nChase invoices after 14 days.\nAsk before paying anything.',
+      },
+    },
+    {
+      key: 'p2',
+      name: 'Travel',
+      role: 'Trips and bookings',
+      instructions: 'Plan trips door to door.\nPrefer trains under 4 hours, aisle seats.',
+      memory: '- Passport renewal due March\n- Loyalty with TAP',
+      routines: [
+        {
+          when: 'every friday at 5pm',
+          what: 'Check next week’s flights',
+          schedule: 'every Friday at 17:00',
+        },
+      ],
+      logins: [],
+    },
+  ],
+  chiefNotes: '- Sam prefers short replies\n- Mornings are for focus work',
+  summary: 'Two agents: Finance and Travel. Main manages them; its notes are offered to you.',
+};
+
+const REVIEW_CARD = (status = 'pending', choice?: string) =>
+  msg('approval', '', 0, {
+    approval: {
+      requestId: 'review1',
+      title: 'Bring in 2 agents from Grok',
+      detail:
+        'Finance · Tracks spending and chases invoices (name taken here: comes in as a copy)\nTravel · Trips and bookings\nNothing is created until you import.',
+      status,
+      choice,
+      connector: { kind: 'review', talkId: 'talk1', source: 'Grok', review: REVIEW },
+    },
+  });
+
+const REVIEW_CHAT = [
+  ...IMPORT_TALK_CHAT,
+  msg(
+    'sent_to_agent',
+    'Both are staged. Sam is reviewing them now; nothing is created until Sam presses Import.',
+    0,
     GROK
   ),
 ];
@@ -1934,7 +2030,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import',
     title: 'Agents — import, remote access off (talk over the connector)',
     looksRightWhen:
-      'Opens on the conversation path even with remote access off: the lede, then step 1 “Connect it to Dashbot” current with “Set up Remote access…”; step 2’s message waits with a secondary Copy message; step 3 “Watch it in Chief of Staff’s chat” muted. Footer: “Can’t connect? Paste a reply instead” on the left, Done on the right.',
+      'Opens on the conversation path even with remote access off: the lede and the “It can / It can’t” box, then step 1 “Connect your assistant” current with “Set up Remote access…”; step 2 “Start, then send it a message” with Start disabled until it’s connected; step 3 “Allow it, then review in Chief of Staff’s chat” muted. Footer: “Can’t connect? Paste a reply instead” on the left, Done on the right.',
     command: 'agents.import',
     requires: '.agents-import-steps',
     clipSelector: '.agents-import',
@@ -2137,25 +2233,38 @@ export const agentsScenarios: Scenario[] = [
   },
   {
     id: 'agents-import-connected',
-    title: 'Agents — import, remote access on (connected assistant)',
+    title: 'Agents — import, remote access on, before Start',
     looksRightWhen:
-      'No other app here, so no segments: one path. The lede says the other assistant moves its agents by talking to Chief of Staff over the Dashbot connector, and you watch it in the chat. Step 1 “Connect it to Dashbot” is ticked with “Remote access is on”; step 2 is current with the message (it names import_conversation) and a primary Copy message; step 3 “Watch it in Chief of Staff’s chat” says logins are asked for on secure cards and has a quiet “Open Chief of Staff”. Footer: a text link “Can’t connect? Paste a reply instead” on the left, Done on the right.',
+      'No other app here, so no segments: one path. The lede says the other assistant answers a short interview run as Chief of Staff and you review every agent before anything is created. Under it, a recessed two-column box: “It can” (answer questions about its agents; stage them for your review) and “It can’t” (see your chats, files, memory or other agents; create or change anything; start without you). Step 1 is ticked with “Remote access is on”; step 2 “Start, then send it a message” says Start allows one import, with a primary Start button; no message is shown yet. Step 3 “Allow it, then review in Chief of Staff’s chat”.',
     command: 'agents.import',
-    requires: '.agents-import-message',
+    requires: '[data-testid="agents-import-start"]',
     clipSelector: '.agents-import',
     commands: { get_remote_access_status: remoteStatus({ enabled: true, serverRunning: true }) },
   },
   {
-    id: 'agents-import-connector-live',
-    title: 'Agents — import, a conversation over the connector going on',
+    id: 'agents-import-started',
+    title: 'Agents — import, armed with Start',
     looksRightWhen:
-      'As agents-import-connected, but Grok is already talking to the Chief: step 2 is folded and ticked with “Sent”; step 3 is current and reads, with a softly breathing blue dot, “Chief of Staff is talking to Grok · Finance and Travel are here so far”, and “Open Chief of Staff” is now the primary button.',
+      'As agents-import-connected, after Start: step 2 now reads “Send it this message” with the message (it names import_conversation and says the import ends in your review) and a primary Copy message. The footer gained a quiet Cancel beside Done.',
+    command: 'agents.import',
+    requires: '.agents-import-message',
+    clipSelector: '.agents-import',
+    commands: {
+      get_remote_access_status: remoteStatus({ enabled: true, serverRunning: true }),
+      agents_import_talk: gateWith(null, true),
+    },
+  },
+  {
+    id: 'agents-import-connector-live',
+    title: 'Agents — import, the interview going on',
+    looksRightWhen:
+      'As agents-import-started, but Grok is already talking: step 2 is folded and ticked with “Sent”; step 3 is current and reads, with a softly breathing blue dot, “Grok is answering Chief of Staff’s questions · Finance and Travel staged”, and “Open Chief of Staff” is the primary button. The footer has Stop import beside Done.',
     command: 'agents.import',
     requires: '.agents-import-watch__live',
     clipSelector: '.agents-import',
     commands: {
       get_remote_access_status: remoteStatus({ enabled: true, serverRunning: true }),
-      agents_import_talk: IMPORT_TALK,
+      agents_import_talk: gateWith({}),
     },
   },
   {
@@ -2171,26 +2280,118 @@ export const agentsScenarios: Scenario[] = [
     commands: {},
   },
   {
-    id: 'agents-import-talk',
-    title: 'Agents — an import conversation with Grok, live in the Chief’s chat',
+    id: 'agents-import-consent',
+    title: 'Agents — another assistant asks to start an import',
     looksRightWhen:
-      'The Chief’s chat. A quiet note that Grok started importing over the connector. Grok’s lines sit on the left, each labelled “From Grok · via connector” over an outlined recessed bubble — never mistakable for the Chief’s plain prose or your grey bubble. The Chief’s questions answer between them; “Created Finance · Tracks spending…” is a centred note with Finance as a link, and Finance is in the sidebar. The Chief is working (“Bringing Travel over”). Above the composer a recessed bar with a breathing blue dot: “Importing from Grok over the connector · Finance is here so far” and a “Stop import” text button.',
+      'The Chief’s chat ends on an approval card titled “Grok wants to bring its agents over”: it says Grok talks to a separate, sealed copy of Chief of Staff that can only stage agents, can’t see chats, files or other agents, and nothing is created until you press Import; then Grok’s first message in quotes. Deny (no ellipsis: no note to write) and Allow. Above the composer a recessed bar with an amber dot: “Grok wants to bring its agents over” / “Allow or deny it on the card above. Nothing has been shared.” and a red Stop import button. No “Coming from Grok Bot…” note in the sidebar.',
     command: 'agents.open',
-    requires: '.agent-import-talk',
+    requires: '.agent-import-talk[data-state="awaiting_consent"]',
+    commands: {
+      agents_overview: overview([{ ...TEAM[0], pendingApprovals: 1 }]),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? [...CHIEF_CHAT.slice(0, 2), CONSENT_CARD] : messagesFor(args),
+      agents_import_talk: gateWith({ state: 'awaiting_consent', staged: [], exchanges: 1 }),
+    },
+  },
+  {
+    id: 'agents-import-talk',
+    title: 'Agents — the sealed import interview, live in the Chief’s chat',
+    looksRightWhen:
+      'The Chief’s chat. The answered consent card (“Allowed”), then a quiet note that Grok is talking to a sealed interview separate from your chat. Grok’s lines sit on the left, labelled “From Grok · via connector” over outlined recessed bubbles (its link styled as a link). Each reply to Grok is indented further right, labelled “To Grok · from the import interview” over a dashed, unfilled bubble: never mistakable for the Chief talking to you. The Chief’s row reads “Talking to Grok (import)”. Above the composer: “Importing from Grok · Finance staged for review”, a muted line that what you type here stays between you and Chief of Staff, and a red Stop import button. No import note in the sidebar.',
+    command: 'agents.open',
+    requires: '.agent-import-talk[data-state="interviewing"]',
     commands: {
       agents_overview: overview([
-        { ...TEAM[0], status: status('working', 'Bringing Travel over') },
-        agent('finance', 'Finance', {
-          shape: 1,
-          color: 'orange',
-          minutesAgo: 1,
-          role: 'Tracks spending and chases invoices',
-          preview: 'Created by Chief of Staff',
-        }),
+        { ...TEAM[0], status: status('working', 'Talking to Grok (import)') },
+        TEAM.find((a) => a.id === 'finance') ?? TEAM[1],
       ]),
       agents_messages: (args: Record<string, unknown>) =>
         args.agentId === 'chief' ? IMPORT_TALK_CHAT : messagesFor(args),
-      agents_import_talk: { ...IMPORT_TALK, agents: ['Finance'] },
+      agents_import_talk: gateWith({ staged: ['Finance'], busy: true }),
+    },
+  },
+  {
+    id: 'agents-import-review',
+    title: 'Agents — the review card: Grok’s agents, staged',
+    looksRightWhen:
+      'After the conversation, one card titled “Bring in 2 agents from Grok” with a download mark. A muted lede: nothing is created until you import, only what’s ticked; routines paused, logins on secure cards, no permissions. Grok’s summary in italics. Two ticked rows on hairlines: “Finance (from Grok)” with a quiet “Name taken here” chip, its role, and muted counts (chars of instructions · 3 memories · 1 routine (paused) · 2 logins); “Travel”. Then an unticked “Add to Chief of Staff’s notes” with what Grok’s managing agent knew in a short recessed box. Footer: Don’t import, primary Import 2 agents. The bar above the composer has an amber dot: “Grok’s agents are ready for you to review”.',
+    command: 'agents.open',
+    requires: '[data-testid="agent-import-review"]',
+    commands: {
+      agents_overview: overview([
+        { ...TEAM[0], pendingApprovals: 1 },
+        TEAM.find((a) => a.id === 'finance') ?? TEAM[1],
+      ]),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? [...REVIEW_CHAT, REVIEW_CARD()] : messagesFor(args),
+      agents_import_talk: gateWith({ state: 'review' }),
+    },
+  },
+  {
+    id: 'agents-import-review-replace',
+    title: 'Agents — the review card, replacing your Finance',
+    looksRightWhen:
+      'As agents-import-review with Finance opened: a segmented pair “Add as Finance (from Grok)” | “Replace your Finance”, Replace chosen. An amber line: your Finance’s instructions become these, memory kept, “Always allow” rules removed. A recessed monospace diff: “− Keep the books in the shared sheet.” in red, “+ Track every expense in the books sheet.” in green, the unchanged lines plain. Then Instructions, What it remembers, “Routines · arrive paused” (every weekday at 09:00 · Check for new invoices) and “Logins it asks for · on secure cards, never here” (stripe_key, bank_login). The name chip now reads “Replaces your Finance” in amber.',
+    command: 'agents.open',
+    requires: '.agent-import-review__diff',
+    steps: [
+      { click: '.agent-import-review__agent:first-child .agent-import-review__summary' },
+      { click: '.agent-import-review__clash .segmented-control button:last-child' },
+    ],
+    commands: {
+      agents_overview: overview([
+        { ...TEAM[0], pendingApprovals: 1 },
+        TEAM.find((a) => a.id === 'finance') ?? TEAM[1],
+      ]),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? [...REVIEW_CHAT, REVIEW_CARD()] : messagesFor(args),
+      agents_import_talk: gateWith({ state: 'review' }),
+    },
+  },
+  {
+    id: 'agents-import-review-done',
+    title: 'Agents — the review card, imported',
+    looksRightWhen:
+      'The same card, answered: no checkboxes ticked, no buttons, and at its foot a check mark with “Imported Finance (from Grok), Travel”. Under it a quiet note: imported from Grok, Finance (from Grok) and Travel, they start when you message them, routines paused. No bar above the composer; the sidebar lists Finance (from Grok) and Travel.',
+    command: 'agents.open',
+    requires: '.agent-import-review__outcome',
+    commands: {
+      agents_overview: overview([
+        TEAM[0],
+        TEAM.find((a) => a.id === 'finance') ?? TEAM[1],
+        agent('finance-grok', 'Finance (from Grok)', {
+          shape: 2,
+          color: 'orange',
+          minutesAgo: 0,
+          role: 'Tracks spending and chases invoices',
+          preview: 'Imported from Grok. It starts when you message it; its routines are paused.',
+          sessionId: null,
+        }),
+        agent('travel', 'Travel', {
+          shape: 3,
+          color: 'blue',
+          minutesAgo: 0,
+          role: 'Trips and bookings',
+          preview: 'Imported from Grok. It starts when you message it; its routines are paused.',
+          sessionId: null,
+        }),
+      ]),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief'
+          ? [
+              ...REVIEW_CHAT,
+              REVIEW_CARD('allowed', 'Imported Finance (from Grok), Travel'),
+              msg(
+                'note',
+                'Imported from Grok: Finance (from Grok), Travel. They start when you message them; routines are paused.',
+                0
+              ),
+            ]
+          : messagesFor(args),
+      agents_import_talk: gateWith({
+        state: 'imported',
+        imported: ['Finance (from Grok)', 'Travel'],
+      }),
     },
   },
   {

@@ -524,9 +524,9 @@ pub(crate) fn admit(
             return Err(ended_answer(ended));
         }
         if !state.armed {
-            return Err(format!(
-                "STATUS: not_started\n\nThe user hasn't started an import. Imports only begin from the app.\n\nNEXT: Tell the user to open Agents → Import agents on their computer, choose From another assistant, and press Start, then ask you again. Don't call import_conversation until they say they have."
-            ));
+            return Err(
+                "STATUS: not_started\n\nThe user hasn't started an import. Imports only begin from the app.\n\nNEXT: Tell the user to open Agents → Import agents on their computer, choose From another assistant, and press Start, then ask you again. Don't call import_conversation until they say they have.".into(),
+            );
         }
         if message.is_empty() {
             return Err("STATUS: not_started\n\nThere's no import going yet.\n\nNEXT: Call import_conversation again with a message saying who you are and listing the agents you run for the user.".into());
@@ -564,7 +564,9 @@ pub(crate) fn admit(
         });
         return Ok(Admit::AskConsent { talk_id: id });
     };
-    let talk = state.talk.as_mut().expect("live talk");
+    let Some(talk) = state.talk.as_mut() else {
+        return Err("STATUS: stopped\n\nThe import ended.\n\nNEXT: Tell the user it ended.".into());
+    };
     if !t.source.eq_ignore_ascii_case(source) {
         return Err(format!(
             "STATUS: refused\n\nAn import from {} is already going; this connector carries one at a time.\n\nNEXT: Tell the user another import is in progress in the app.",

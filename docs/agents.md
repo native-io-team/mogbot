@@ -567,55 +567,46 @@ the tab.
 ## Import from Grok Bot (or any connected assistant)
 
 Only the other assistant knows its own agents, instructions and memory, so the
-import runs from its side. Remote access gains an `import_agents` tool:
-`{source, agents: [{name, role, instructions, memory, is_main, routines}]}`. Ship Studio
-creates each agent, writes its instructions, and appends its memory under
-`### Imported from <source>`. The `is_main` agent merges into the Chief of
-Staff. Re-importing updates same-named agents instead of duplicating them.
-Imported agents don't run until you message them, apart from their routines.
-Every import is audited like any other remote-access action.
-
-Each agent can also bring `routines: [{when, what}]`, with `when` in plain
-words ("every weekday at 9am", "every 2 hours", "friday at 2pm"). Each goes
-through the same parser and limits as `schedule_check_in` (`schedule::check`)
-and becomes a routine, or a one-time check-in, with `what` as its note. A
-phrase that can't be read, or is too frequent, or a full agent, isn't
-guessed at: the paste preview shows it under its agent with the reason, and the
-result (`routinesRefused`, and the tool's reply, which tells the assistant to
-list each one to the user) names it by agent. A refused routine doesn't block
-the rest of the import. Re-importing doesn't duplicate routines: the same note
-on the same schedule, or the same one-off note, counts as already set.
+import runs from its side, over Remote Access. Nothing it sends becomes an
+agent by itself: every connector import ends on one review card in the
+Chief's chat, and the user imports what they keep (`agents/review.rs`).
 
 The **Import agents** button leads with a conversation (`agents/connector.rs`,
-tools in docs/remote-access.md). The user sends their other assistant one
-message (`import::import_prompt`: "Move my agents to <brand>. Use the
-connector's import_conversation tool to talk to my <Chief>…"), and it talks to
-the Chief over Remote Access until every agent is over:
+the full threat model in docs/remote-access.md):
 
-1. Its first message arrives wrapped in the interview brief. The Chief asks
-   for the list of agents (and which one manages the others), then one agent
-   at a time: full instructions, what it knows about the user (one fact per
-   line), routines with plain-words times, and the logins it relies on, by
-   name only.
-2. With an agent's answers in, the Chief calls `import_agent` (Chief-only,
-   listed only while a conversation is going): the same merge as every other
-   import (`import::import_with`), so a repeated name updates rather than
-   copies and the managing agent (`is_main`) merges into the Chief. Routines
-   arrive **paused by the import** (`CheckIn.paused_on_import`), since the
-   other assistant keeps running its own. Each login becomes a secure input
-   card in *that agent's* chat, so the secret is its own. A "Created Finance"
-   note lands in the Chief's chat and Finance appears in the sidebar at once.
-3. `finish_import` ends it with a summary; the tool's next answer says
-   `STATUS: done` and tells the assistant to report to the user.
+1. The user presses **Start** (one import, until it ends or the app quits),
+   then sends their other assistant one message (`import::import_prompt`).
+2. Its first `import_conversation` call puts an Allow / Deny card in the
+   Chief's chat ("Grok wants to bring its agents over"). Nothing is shared or
+   delivered until Allow.
+3. It then talks to a **sealed interview** (`agents/interview.rs`): a
+   throwaway Claude Code session that speaks as the Chief but has no built-in
+   tools, no settings or CLAUDE.md, no folders, not the Chief's session or
+   rules, and only `propose_agent` / `update_proposal` / `finish`, which
+   stage a draft. The user watches it in the Chief's chat: the other
+   assistant's lines are `from_agent` lines with a `connector:<source>` peer
+   ("From Grok · via connector"), the interview's replies `sent_to_agent`
+   lines to the same peer, indented as "To Grok". Neither ever reaches the
+   Chief's own session (`runner::recap_lines` skips them), and the other
+   assistant only hears what the interview wrote. A bar above the composer
+   says where it is, that what you type stays between you and the Chief, and
+   has a red **Stop import**; the Chief's own Stop (desktop or phone, where
+   its row reads "Talking to Grok (import)") stops it too.
+4. `finish` posts the review card: each agent ticked with its role,
+   instructions, memory, routines (paused) and the logins it asks for; a
+   name already taken comes in as "<Name> (from Grok)" unless the user picks
+   **Replace** with the diff shown (which clears that agent's Always-allow
+   rules); the managing agent's notes are an optional "Add to <Chief>'s
+   notes", off by default. **Import** creates what's ticked; **Don't
+   import** creates nothing. Logins arrive as secure cards in each agent's
+   chat that don't wake it (`secrets::Request::quiet`): an imported agent
+   first runs when the user messages it.
 
-The user watches it live: the other assistant's lines are `from_agent` lines
-whose peer id is `connector:<source>`, shown in full as outlined bubbles
-labelled "From Grok · via connector" (`ConnectorBubble`; never folded like
-agents' hand-offs; the phone shows them as "From Grok: …"), and a bar above
-the Chief's composer says how far it's got, with **Stop import**
-(`agents_import_talk_stop`). A turn reading a connector message may only use
-the import tools; what the other assistant says is information, never a way
-to drive the Chief. The modal's connector panel shows the same live state.
+The one-shot `import_agents` tool (`{source, agents: [{name, role,
+instructions, memory, is_main, routines}]}`) goes through the same Start and
+the same review card. Routines are read by the same parser and limits as
+`schedule_check_in` (`schedule::check`); one that can't be read is shown on
+the card with why, and is never guessed at.
 
 **Paste** is the fallback ("Can't connect? Paste a reply instead"; needs
 nothing set up). Copy a message into the other assistant (`PASTE_PROMPT` in

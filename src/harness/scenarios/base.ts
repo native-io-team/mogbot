@@ -244,10 +244,19 @@ export const baseCommands: CommandMap = {
   agents_mark_unread: null,
   // From import::import_prompt in src-tauri/src/agents/import.rs, for a Chief called Chief of Staff.
   agents_import_prompt:
-    "Move my agents to Dashbot. Use the Dashbot connector's import_conversation tool to talk to my Chief of Staff there, and answer its questions about each agent you run for me until it says the import is done. Don't send passwords, API keys or card numbers: Dashbot asks me for those itself.",
-  // No import conversation going over the connector.
-  agents_import_talk: null,
+    "Move my agents to the app I just connected you to. Use its import_conversation tool to talk to my Chief of Staff there, and answer its questions about each agent you run for me until it says the import is ready for me to review. Don't send passwords, API keys or card numbers: the app asks me for those itself.",
+  // connector::Gate: nothing armed, no import going.
+  agents_import_talk: { armed: false, talk: null },
+  agents_import_talk_arm: { armed: true, talk: null },
   agents_import_talk_stop: false,
+  // review::Applied for one new agent.
+  agents_import_review_apply: {
+    agents: ['Finance'],
+    replaced: [],
+    skipped: [],
+    chiefNotes: false,
+    routinesRefused: [],
+  },
 
   // Copied from PASTE_PROMPT in src-tauri/src/agents/paste.rs.
   agents_import_paste_prompt:

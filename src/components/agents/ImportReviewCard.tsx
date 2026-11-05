@@ -104,7 +104,7 @@ function ProposalRow({ proposal: p, source, kept, choice, disabled, onKeep, onCh
           <span className="agent-import-review__counts">
             {[
               p.instructions && `${p.instructions.length.toLocaleString()} chars of instructions`,
-              memory.length && plural(memory.length, 'memory'),
+              memory.length && `${memory.length} ${memory.length === 1 ? 'memory' : 'memories'}`,
               p.routines.length && `${plural(p.routines.length, 'routine')} (paused)`,
               p.logins.length && plural(p.logins.length, 'login'),
             ]
@@ -274,21 +274,23 @@ export const ImportReviewCard = memo(function ImportReviewCard({
         {review?.summary && pending && (
           <p className="agent-import-review__summary-text">“{review.summary}”</p>
         )}
-        <ul className="agent-import-review__agents">
-          {proposals.map((p) => (
-            <ProposalRow
-              key={p.key}
-              proposal={p}
-              source={card.source}
-              kept={pending ? !!kept[p.key] : false}
-              choice={choice[p.key] ?? 'copy'}
-              disabled={!pending || busy}
-              onKeep={(v) => setKept((k) => ({ ...k, [p.key]: v }))}
-              onChoice={(c) => setChoice((x) => ({ ...x, [p.key]: c }))}
-            />
-          ))}
-        </ul>
-        {review?.chiefNotes && (
+        {pending && (
+          <ul className="agent-import-review__agents">
+            {proposals.map((p) => (
+              <ProposalRow
+                key={p.key}
+                proposal={p}
+                source={card.source}
+                kept={pending ? !!kept[p.key] : false}
+                choice={choice[p.key] ?? 'copy'}
+                disabled={!pending || busy}
+                onKeep={(v) => setKept((k) => ({ ...k, [p.key]: v }))}
+                onChoice={(c) => setChoice((x) => ({ ...x, [p.key]: c }))}
+              />
+            ))}
+          </ul>
+        )}
+        {pending && review?.chiefNotes && (
           <div className="agent-import-review__notes">
             <Checkbox
               checked={pending && notes}

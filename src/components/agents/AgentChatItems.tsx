@@ -1006,7 +1006,14 @@ export const ApprovalCard = memo(function ApprovalCard({
             ))}
           </dl>
         ) : (
-          approval.detail && <pre className="agent-approval__detail">{approval.detail}</pre>
+          approval.detail &&
+          (plainDeny ? (
+            <p className="agent-approval__detail agent-approval__detail--prose">
+              {approval.detail}
+            </p>
+          ) : (
+            <pre className="agent-approval__detail">{approval.detail}</pre>
+          ))
         )}
         {long && (
           <TextButton
@@ -1017,7 +1024,7 @@ export const ApprovalCard = memo(function ApprovalCard({
             {showAll ? 'Show less' : 'Show all'}
           </TextButton>
         )}
-        {pending && paused && (
+        {pending && paused && !plainDeny && (
           <p className="agent-approval__note">
             It paused here for you. Allow it and it picks up where it left off.
           </p>
