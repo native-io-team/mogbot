@@ -80,6 +80,9 @@ pub(crate) fn audit_detail(tool: &str, args: &Value) -> String {
     let field = |k: &str| args.get(k).and_then(Value::as_str).unwrap_or("");
     match tool {
         "message_agent" => super::preview(field("message")),
+        "import_conversation" => {
+            format!("{}: {}", field("source"), super::preview(field("message")))
+        }
         "close_agent" => format!("tab {}", field("tab")),
         "start_agent" => super::preview(field("prompt")),
         "press_key" => format!("key {}", field("key")),

@@ -138,6 +138,22 @@ const TOOLS: &[ToolDef] = &[
         }),
     },
     ToolDef {
+        name: "import_conversation",
+        title: "Move agents here, in conversation",
+        effect: Effect::Acts,
+        open_world: false,
+        description: "The way to move the user's agents from you into this app: a conversation with their Chief of Staff here, who asks you about each agent and brings it over as its answers are in. Use it when the user asks to import, move or copy their agents or setup here. Start with `message` saying who you are and listing the agents you run for the user; each call delivers your message, waits for the Chief's reply, and returns it with STATUS and NEXT lines. Answer its questions by calling this again with your reply, until STATUS is done. Call it with no message to keep waiting while STATUS is working. Never send passwords, API keys, tokens or card numbers: the app asks the user for logins itself. The user watches the conversation in the app and can stop it.",
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "description": "Your product name, e.g. \"Grok\". Shown to the user." },
+                "message": { "type": "string", "description": "What you say to the Chief of Staff. Omit to wait for its reply to your last message." },
+                "wait_seconds": { "type": "integer", "description": "Seconds to wait for the reply (default 40, max 50)." }
+            },
+            "required": ["source"]
+        }),
+    },
+    ToolDef {
         name: "create_project",
         title: "Create a project",
         effect: Effect::Acts,
@@ -524,6 +540,9 @@ pub async fn call(app: &tauri::AppHandle, config: &RemoteConfig, name: &str, arg
     if name == "import_agents" {
         return import_agents(app, &args);
     }
+    if name == "import_conversation" {
+        return import_conversation(app, &args).await;
+    }
     call_in(app, &config.projects, name, args).await
 }
 
@@ -601,6 +620,29 @@ fn import_agents(app: &tauri::AppHandle, args: &Value) -> Value {
                 false,
             );
             error(format!("Import failed: {e}"))
+        }
+    }
+}
+
+async fn import_conversation(app: &tauri::AppHandle, args: &Value) -> Value {
+    use crate::agents::connector;
+    let field = |k: &str| args.get(k).and_then(Value::as_str).unwrap_or("");
+    let wait = Duration::from_secs(
+        args.get("wait_seconds")
+            .and_then(Value::as_u64)
+            .unwrap_or(connector::DEFAULT_WAIT_SECS)
+            .min(connector::MAX_WAIT_SECS),
+    );
+    match connector::converse(app, field("source"), field("message"), wait).await {
+        Ok(answer) => text(answer),
+        Err(e) => {
+            super::audit(
+                "import_conversation",
+                None,
+                format!("refused: {}", e.lines().next().unwrap_or("")),
+                false,
+            );
+            error(e)
         }
     }
 }

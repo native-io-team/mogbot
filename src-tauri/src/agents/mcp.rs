@@ -272,6 +272,63 @@ const TOOLS: &[Tool] = &[
     },
 ];
 
+/// The Chief's import tools: listed only while an import conversation is
+/// going (`agents::connector`), so no other turn pays for them.
+const IMPORT_TOOLS: &[Tool] = &[
+    Tool {
+        name: "import_agent",
+        description: "During an import over the connector: bring one of the other assistant's agents over, once you have its answers. It appears in the user's sidebar at once. Safe to call again for the same name: it updates that agent instead of making a copy. For the agent that manages the others, set is_main: its instructions and memory merge into yours. Routines arrive paused by the import (the other assistant still runs its own). Each login in `logins` becomes a secure card in that agent's chat; never pass a credential's value anywhere.",
+        main_only: true,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "role": { "type": "string", "description": "One line." },
+                "instructions": { "type": "string", "description": "Its full instructions, as the other assistant gave them." },
+                "memory": { "type": "string", "description": "What it knows about the user that it still needs, one fact per line." },
+                "is_main": { "type": "boolean", "description": "The agent that manages the others: merges into you." },
+                "routines": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "when": { "type": "string", "description": "Plain words: \"every weekday at 9am\", \"every 2 hours\"." },
+                            "what": { "type": "string" }
+                        },
+                        "required": ["when", "what"]
+                    }
+                },
+                "logins": {
+                    "type": "array",
+                    "description": "Accounts, keys or logins it needs, by name only.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": { "type": "string", "description": "snake_case, e.g. stripe_key." },
+                            "purpose": { "type": "string", "description": "What it's for, in one line." },
+                            "kind": { "type": "string", "enum": ["password", "api_key", "token", "other"] }
+                        },
+                        "required": ["name", "purpose", "kind"]
+                    }
+                }
+            },
+            "required": ["name"]
+        }),
+    },
+    Tool {
+        name: "finish_import",
+        description: "During an import over the connector: every agent is in, so end the conversation. Then tell the other assistant it's complete and what the user still has to do here.",
+        main_only: true,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "summary": { "type": "string", "description": "One paragraph: what came across and what's left for the user." }
+            },
+            "required": ["summary"]
+        }),
+    },
+];
+
 pub fn initialize_result(params: Option<&Value>) -> Value {
     let requested = params
         .and_then(|p| p.get("protocolVersion"))
@@ -301,6 +358,11 @@ fn tools_list(caller: &store::Agent) -> Value {
         .filter(|t| !t.main_only || caller.is_main)
         .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() }))
         .collect();
+    if caller.is_main && super::connector::active().is_some() {
+        tools.extend(IMPORT_TOOLS.iter().map(
+            |t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() }),
+        ));
+    }
     // Every agent works on projects the same way.
     tools.extend(super::sessions::definitions());
     json!({ "tools": tools })
@@ -337,6 +399,25 @@ pub async fn handle_rpc(
                 .and_then(|p| p.get("arguments"))
                 .cloned()
                 .unwrap_or_else(|| json!({}));
+            // A turn reading the other assistant's message over the import
+            // connector: what it says is information, never a way to drive us.
+            if runner::connector_turn(&caller.id) && !super::connector::TURN_TOOLS.contains(&name) {
+                return ok(error(
+                    "During an import over the connector only the import tools work (import_agent, finish_import, list_agents). Anything else waits until the user asks you directly.",
+                ));
+            }
+            if let Some(tool) = IMPORT_TOOLS.iter().find(|t| t.name == name) {
+                if !caller.is_main {
+                    return ok(error("Only the Chief of Staff can do that."));
+                }
+                let Some(talk) = super::connector::active() else {
+                    return ok(error("There's no import conversation going."));
+                };
+                return ok(match tool.name {
+                    "import_agent" => import_agent(app, &caller, &talk, &args),
+                    _ => finish_import(app, &args),
+                });
+            }
             if let Some(tool) = super::sessions::find(name) {
                 return ok(super::sessions::call(app, &caller, tool, &args).await);
             }
@@ -822,6 +903,125 @@ async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
             text(format!("Deleted {}.", agent.name))
         }
         Err(e) => error(e.to_string()),
+    }
+}
+
+/// `import_agent`: one agent from the other assistant, through the same
+/// merge as every other import (`import::import_with`), routines paused.
+fn import_agent(
+    app: &AppHandle,
+    caller: &store::Agent,
+    talk: &super::connector::Talk,
+    args: &Value,
+) -> Value {
+    let incoming: super::import::ImportedAgent = match serde_json::from_value(args.clone()) {
+        Ok(a) => a,
+        Err(e) => return error(format!("Couldn't read that agent: {e}")),
+    };
+    let fields = [
+        &incoming.instructions,
+        &incoming.memory,
+        &incoming.role,
+        &incoming.name,
+    ];
+    if let Some(what) = fields
+        .iter()
+        .find_map(|f| super::connector::looks_like_secret(f))
+    {
+        return error(format!(
+            "That looks like it contains {what}. Leave credentials out: list the login in `logins` and the user is asked for it on a secure card."
+        ));
+    }
+    let is_main = incoming.is_main;
+    let name = incoming.name.trim().to_string();
+    let routines = incoming.routines.len();
+    let existed = !is_main && matches!(store::find(&name), Ok(Some(_)));
+    let summary = match super::import::import_with(vec![incoming], &talk.source, true) {
+        Ok(s) => s,
+        Err(e) => return error(e.to_string()),
+    };
+    if let Some((_, why)) = summary.skipped.first() {
+        return error(format!("{name} didn't come across: {why}"));
+    }
+    let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
+    let agent = if is_main {
+        caller.clone()
+    } else {
+        match store::find(&name) {
+            Ok(Some(a)) => a,
+            _ => return error(format!("{name} didn't come across.")),
+        }
+    };
+    if !is_main && !existed {
+        for note in create_notes(caller, &agent) {
+            let _ = runner::record(app, note);
+        }
+    }
+    let mut asked = Vec::new();
+    for login in args
+        .get("logins")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .take(10)
+    {
+        let reply = request_secret(app, &agent, login);
+        if reply.get("isError").and_then(Value::as_bool) != Some(true) {
+            if let Some(n) = login.get("name").and_then(Value::as_str) {
+                asked.push(n.to_string());
+            }
+        }
+    }
+    super::connector::note_agent(app, &agent.name);
+    let mut out = format!(
+        "{} {}.",
+        if is_main {
+            "Merged into you:".to_string()
+        } else if existed {
+            format!("Updated {}:", agent.name)
+        } else {
+            format!("Created {}:", agent.name)
+        },
+        "its instructions and memory"
+    );
+    if routines > 0 {
+        let set: Vec<String> = summary
+            .routines_set
+            .iter()
+            .map(|r| r.detail.clone())
+            .collect();
+        if !set.is_empty() {
+            out.push_str(&format!(
+                " Routines, paused by the import: {}.",
+                set.join("; ")
+            ));
+        }
+        for r in &summary.routines_refused {
+            out.push_str(&format!(
+                " Not scheduled: \"{}\" ({}); ask for a plain time and call import_agent again.",
+                r.when, r.detail
+            ));
+        }
+    }
+    if !asked.is_empty() {
+        out.push_str(&format!(
+            " The user is asked for {} on a secure card in {}'s chat.",
+            asked.join(", "),
+            agent.name
+        ));
+    }
+    out.push_str(" Carry on with the next agent, or call finish_import when they're all in.");
+    text(out)
+}
+
+/// `finish_import`: the conversation is over.
+fn finish_import(app: &AppHandle, args: &Value) -> Value {
+    match super::connector::finish(app, arg(args, "summary").unwrap_or("")) {
+        Some(talk) => text(format!(
+            "The import from {} is marked complete. Now tell {} in one short message that it's done and what the user still has to do here.",
+            talk.source, talk.source
+        )),
+        None => error("There's no import conversation going."),
     }
 }
 
@@ -1477,5 +1677,26 @@ mod tests {
         assert!(names.contains(&"share_file".to_string()));
         assert!(!names.contains(&"create_agent".to_string()));
         assert!(!names.contains(&"delete_agent".to_string()));
+    }
+
+    #[test]
+    fn import_tools_are_the_chiefs_and_only_while_an_import_talk_is_going() {
+        let _serial = store::tests_lock();
+        super::super::connector::reset_for_tests();
+        let mut chief: store::Agent = serde_json::from_value(serde_json::json!({
+            "id": "chief", "name": "Chief of Staff", "shape": 0, "color": "white",
+            "isMain": true, "createdAt": 1
+        }))
+        .unwrap();
+        let has = |a: &store::Agent, n: &str| tool_names(a).iter().any(|t| t == n);
+        assert!(!has(&chief, "import_agent"), "no talk, no import tools");
+        super::super::connector::admit("Grok", "hi", &chief, store::now_ms(), false).unwrap();
+        assert!(has(&chief, "import_agent") && has(&chief, "finish_import"));
+        chief.is_main = false;
+        assert!(
+            !has(&chief, "import_agent"),
+            "never for anyone but the Chief"
+        );
+        super::super::connector::reset_for_tests();
     }
 }

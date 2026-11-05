@@ -41,13 +41,21 @@
   color: var(--text-secondary);
 }
 
-/* Paste a reply / Connected assistant: an underline pair under the title,
-   the divider doubling as the header's bottom edge. */
+/* From <the other app> / From another assistant: a segmented pair under the
+   title, inset like the body, so the two read as one choice of source. */
 .agents-import__tabs {
   display: flex;
-  width: 100%;
-  padding: 0 var(--spacing-xl);
-  border-bottom: var(--border-width-default) solid var(--border-subtle);
+  margin: var(--spacing-2xs) var(--spacing-xl) 0;
+}
+
+.agents-import__tabs > * {
+  flex: 1;
+}
+
+/* The way back from the fallback path, under the lede. */
+.agents-import__switch {
+  margin-top: calc(var(--spacing-sm) * -1);
+  font-size: var(--font-size-body-md);
 }
 
 .agents-import__inline {
@@ -768,4 +776,106 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.agents-import-behind__title {
+  margin: 0 0 var(--spacing-2xs);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agents-import-behind strong {
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+/* The done state's notes sit left-aligned under the centred celebration. */
+.agents-import-done .agents-import-behind {
+  align-self: stretch;
+  margin-top: 0;
+  text-align: left;
+}
+
+/* "Keep their Always allow rules": one quiet choice, its box on the text's first line. */
+.agents-import-keep {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  cursor: pointer;
+}
+
+.agents-import-keep .checkbox {
+  margin-top: var(--spacing-3xs);
+}
+
+.agents-import-keep > span:last-child {
+  display: flex;
+  flex-direction: column;
+}
+
+.agents-import-keep__title {
+  color: var(--text-primary);
+}
+
+.agents-import-keep__hint {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* A copy from another drive: a bar and what it's on. */
+.agents-import-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* Step 3 of the connector path: where to watch it, and how far it's got. */
+.agents-import-watch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-body-md);
+}
+
+.agents-import-watch__live {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--text-primary);
+}
+
+.agents-import-watch__dot {
+  flex: none;
+  width: var(--spacing-xs);
+  height: var(--spacing-xs);
+  border-radius: var(--radius-pill);
+  background: var(--status-running);
+  animation: agents-import-live var(--agents-motion-typing-period) ease-in-out infinite;
+}
+
+.agents-import-watch__live[data-state='finished'] .agents-import-watch__dot {
+  background: var(--accent-success);
+  animation: none;
+}
+
+.agents-import-watch__live[data-state='stopped'] .agents-import-watch__dot {
+  background: var(--text-muted);
+  animation: none;
+}
+
+@keyframes agents-import-live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agents-import-watch__dot {
+    animation: none;
+  }
 }

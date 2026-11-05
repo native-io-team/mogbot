@@ -42,6 +42,7 @@ pub mod capacity;
 pub mod claude;
 pub mod codex;
 pub mod codex_app;
+pub mod connector;
 pub mod decisions;
 pub mod driver;
 pub mod engine;

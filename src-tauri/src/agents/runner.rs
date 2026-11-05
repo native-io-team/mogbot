@@ -96,6 +96,10 @@ struct Inbound {
     /// One of the agent's routines firing (see [`store::Agent::routine_model`]).
     #[serde(default)]
     routine: bool,
+    /// From another assistant over the import connector (`agents::connector`):
+    /// the turn that reads it may use only the import tools.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    connector: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -141,6 +145,8 @@ struct Runtime {
     owed: Vec<AgentRef>,
     /// Waiting for a free slot (or memory) before its turn can start.
     queued: bool,
+    /// The turn in progress reads a message from the import connector.
+    connector: bool,
 }
 
 static RUNTIMES: LazyLock<Mutex<HashMap<String, Runtime>>> =
@@ -181,6 +187,16 @@ pub fn in_turn(agent_id: &str) -> bool {
         .unwrap_or_else(|e| e.into_inner())
         .get(agent_id)
         .is_some_and(|r| r.running)
+}
+
+/// Whether the turn in progress (or about to start) reads a message that
+/// came over the import connector (`agents::connector`).
+pub fn connector_turn(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.connector)
 }
 
 /// Whether the agent's turn is waiting for a free slot rather than running.
@@ -567,6 +583,24 @@ pub fn enqueue(app: &AppHandle, agent_id: &str, text: String, from: From) {
             from,
             reply: false,
             routine: false,
+            connector: false,
+        },
+    );
+}
+
+/// Queue a message another assistant sent over the import connector. It
+/// starts a chain like the user's own message does (hop 0, owed to nobody);
+/// what differs is which tools the turn reading it may use.
+pub fn enqueue_connector(app: &AppHandle, agent_id: &str, text: String) {
+    push(
+        app,
+        agent_id,
+        Inbound {
+            text,
+            from: From::User,
+            reply: false,
+            routine: false,
+            connector: true,
         },
     );
 }
@@ -581,6 +615,7 @@ pub fn enqueue_routine(app: &AppHandle, agent_id: &str, text: String) {
             from: From::User,
             reply: false,
             routine: true,
+            connector: false,
         },
     );
 }
@@ -595,6 +630,7 @@ pub fn enqueue_reply(app: &AppHandle, agent_id: &str, text: String, sender: Agen
             from: From::Agent { sender, hop },
             reply: true,
             routine: false,
+            connector: false,
         },
     );
 }
@@ -800,6 +836,7 @@ async fn drain(app: AppHandle, agent_id: String) {
                 runtime.hop = 0;
                 runtime.origin = None;
                 runtime.prompt = None;
+                runtime.connector = false;
                 drop(runtimes);
                 set_status(&app, &agent_id, Status::idle());
                 return;
@@ -807,6 +844,7 @@ async fn drain(app: AppHandle, agent_id: String) {
             let batch: Vec<Inbound> = runtime.queue.drain(..).collect();
             save_inbox(&agent_id, &runtime.queue);
             routine = batch.iter().all(|m| m.routine);
+            runtime.connector = batch.iter().any(|m| m.connector);
             // The turn inherits the deepest hop it is answering; a user message
             // in the batch resets the chain.
             runtime.origin = if batch.iter().any(|m| matches!(m.from, From::User)) {
@@ -1819,6 +1857,7 @@ mod tests {
                 from: From::User,
                 reply: false,
                 routine: false,
+                connector: false,
             },
             Inbound {
                 text: "Done Y".into(),
@@ -1831,6 +1870,7 @@ mod tests {
                 },
                 reply: false,
                 routine: false,
+                connector: false,
             },
         ];
         let prompt = compose(&batch);
@@ -1971,6 +2011,7 @@ mod tests {
                 from: From::User,
                 reply: false,
                 routine: false,
+                connector: false,
             },
             Inbound {
                 text: "Receipts filed.\nDetails follow".into(),
@@ -1983,6 +2024,7 @@ mod tests {
                 },
                 reply: true,
                 routine: false,
+                connector: false,
             },
         ]
         .into();

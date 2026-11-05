@@ -838,17 +838,24 @@ pub fn append_message(message: &AgentMessage) -> Result<(), CommandError> {
     append_line(&log_path(&message.agent_id)?, message)
 }
 
-/// Fold another conversation's lines (already JSON, one message each) into
-/// this agent's log in time order, and its card answers into
-/// `approvals.jsonl`. The one place a log is rewritten rather than appended
-/// to: an import merging a whole earlier conversation, which appended would
-/// read as if it all happened after this one. A line with no readable `ts`
-/// keeps its place after the line before it. Written atomically.
-pub fn merge_log_lines(
+/// Put another conversation's lines (already JSON, one message each) in
+/// front of this agent's log as one block, after `divider` (a note line
+/// saying where they came from), and its card answers into `approvals.jsonl`.
+/// The one place a log is rewritten rather than appended to: an import
+/// bringing a whole earlier conversation, which appended would read as if it
+/// all happened after this one, and which interleaved by time would
+/// alternate two unrelated conversations line by line.
+///
+/// Idempotent: a line whose `id` is already in the log is left out, an
+/// answer line already in `approvals.jsonl` isn't added again, and with
+/// nothing new the divider isn't written either. Returns how many lines
+/// were added. Written atomically.
+pub fn prepend_log_block(
     agent_id: &str,
+    divider: Option<String>,
     lines: Vec<String>,
     answers: Vec<String>,
-) -> Result<(), CommandError> {
+) -> Result<usize, CommandError> {
     let lock = log_lock(agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     let path = log_path(agent_id)?;
@@ -857,57 +864,62 @@ pub fn merge_log_lines(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(e) => return Err(super::err_io(e)),
     };
-    let keyed = |lines: Vec<String>| -> Vec<(i64, String)> {
-        let mut last = i64::MIN;
-        lines
-            .into_iter()
-            .filter(|l| !l.trim().is_empty())
-            .map(|l| {
-                if let Some(ts) = serde_json::from_str::<serde_json::Value>(&l)
-                    .ok()
-                    .and_then(|v| v.get("ts").and_then(serde_json::Value::as_i64))
-                {
-                    last = ts;
-                }
-                (last, l)
+    let id_of = |l: &str| {
+        serde_json::from_str::<serde_json::Value>(l)
+            .ok()
+            .and_then(|v| {
+                v.get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string)
             })
-            .collect()
     };
-    let mut ours = keyed(existing.lines().map(str::to_string).collect()).into_iter();
-    let mut theirs = keyed(lines).into_iter();
-    let (mut a, mut b) = (ours.next(), theirs.next());
-    let mut out = String::with_capacity(existing.len());
-    loop {
-        let take_ours = match (&a, &b) {
-            (None, None) => break,
-            (Some(_), None) => true,
-            (None, Some(_)) => false,
-            (Some((ta, _)), Some((tb, _))) => ta <= tb,
-        };
-        let line = if take_ours {
-            std::mem::replace(&mut a, ours.next())
-        } else {
-            std::mem::replace(&mut b, theirs.next())
-        };
-        if let Some((_, l)) = line {
-            out.push_str(l.trim_end_matches(['\r', '\n']));
+    let mut have: std::collections::HashSet<String> = existing.lines().filter_map(id_of).collect();
+    let fresh: Vec<String> = lines
+        .into_iter()
+        .map(|l| l.trim_end_matches(['\r', '\n']).to_string())
+        .filter(|l| !l.trim().is_empty())
+        .filter(|l| match id_of(l) {
+            Some(id) => have.insert(id),
+            None => !existing.lines().any(|e| e == l),
+        })
+        .collect();
+    if !fresh.is_empty() {
+        let mut out = String::with_capacity(existing.len());
+        if let Some(divider) = divider {
+            out.push_str(divider.trim_end_matches(['\r', '\n']));
             out.push('\n');
         }
+        for line in &fresh {
+            out.push_str(line);
+            out.push('\n');
+        }
+        for line in existing.lines().filter(|l| !l.trim().is_empty()) {
+            out.push_str(line);
+            out.push('\n');
+        }
+        write_atomic(&path, out.as_bytes())?;
     }
-    write_atomic(&path, out.as_bytes())?;
     if !answers.is_empty() {
         let answers_path = answers_path(agent_id)?;
         let mut raw = std::fs::read_to_string(&answers_path).unwrap_or_default();
+        let before: std::collections::HashSet<String> = raw.lines().map(str::to_string).collect();
+        let len = raw.len();
         if !raw.is_empty() && !raw.ends_with('\n') {
             raw.push('\n');
         }
-        for line in answers.iter().filter(|l| !l.trim().is_empty()) {
-            raw.push_str(line.trim_end_matches(['\r', '\n']));
+        for line in answers
+            .iter()
+            .map(|l| l.trim_end_matches(['\r', '\n']))
+            .filter(|l| !l.trim().is_empty() && !before.contains(*l))
+        {
+            raw.push_str(line);
             raw.push('\n');
         }
-        write_atomic(&answers_path, raw.as_bytes())?;
+        if raw.len() != len {
+            write_atomic(&answers_path, raw.as_bytes())?;
+        }
     }
-    Ok(())
+    Ok(fresh.len())
 }
 
 /// True for an empty file, or one whose last byte is a newline.

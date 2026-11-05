@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { CheckIcon, ChevronRightIcon, CopyIcon, WarningIcon } from '@/components/icons';
+import { CheckIcon, ChevronRightIcon, CopyIcon, InfoIcon, WarningIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useAgentsList } from '../../lib/agentsStore';
@@ -238,6 +238,28 @@ export function ImportProblems({ title, items }: { title: string; items: ReactNo
       <WarningIcon size={14} className="agents-import-problems__icon" />
       <div>
         <p className="agents-import-problems__title">{title}</p>
+        <ul>
+          {items.map((item, i) => (
+            <li key={i}>{item}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Informational, not a problem: what to know before the agents get going
+ * (paused routines, logins to enter again). Neutral, so it never reads as a
+ * warning next to the amber one above.
+ */
+export function ImportNotes({ title, items }: { title?: string; items: ReactNode[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="agents-import-behind">
+      <InfoIcon size={14} className="agents-import-behind__icon" />
+      <div>
+        {title && <p className="agents-import-behind__title">{title}</p>}
         <ul>
           {items.map((item, i) => (
             <li key={i}>{item}</li>

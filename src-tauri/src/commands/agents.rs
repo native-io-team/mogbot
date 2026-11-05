@@ -806,11 +806,33 @@ pub async fn agents_usage(agent_id: String) -> Result<usage::UsageSummary, Comma
     Ok(store::get(&agent_id)?.usage.summary(usage::today()))
 }
 
-/// What the user pastes into their other assistant to start an import.
+/// What the user sends their other assistant to start an import: one line
+/// asking it to talk to the Chief of Staff over the connector.
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_import_prompt() -> Result<String, CommandError> {
-    Ok(import::IMPORT_PROMPT.to_string())
+    let chief = store::list()?
+        .into_iter()
+        .find(|a| a.is_main)
+        .map(|a| a.name)
+        .unwrap_or_else(|| "Chief of Staff".into());
+    Ok(import::import_prompt(&chief))
+}
+
+/// The import conversation in progress (or just ended), for the bar above
+/// the Chief's composer; `None` when there isn't one.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_import_talk() -> Result<Option<agents::connector::Talk>, CommandError> {
+    Ok(agents::connector::current())
+}
+
+/// Stop the import conversation: the other assistant's next message is
+/// refused, and the Chief's turn reading it is stopped.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_import_talk_stop(app: AppHandle) -> Result<bool, CommandError> {
+    Ok(agents::connector::stop(&app))
 }
 
 /// What the user sends their other assistant to get its agents back as JSON
@@ -857,26 +879,53 @@ pub async fn agents_other_app_preview() -> Result<Option<agents::other_app::Prev
         .map_err(agents::err_other)?
 }
 
-/// Copy the other app's team in (`agents::other_app`). Never writes to its folder.
+/// Whether the other app has agents on this Mac, from its registry alone:
+/// what the palette asks at launch (the preview reads every agent's folder).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_other_app_exists() -> Result<bool, CommandError> {
+    tokio::task::spawn_blocking(agents::other_app::available)
+        .await
+        .map_err(agents::err_other)
+}
+
+/// How far an import's copy has got: `{agent, doneBytes, totalBytes}`.
+pub const EVENT_IMPORT_PROGRESS: &str = "agents://import-progress";
+
+/// Copy the other app's team in (`agents::other_app`). Never writes to its
+/// folder. Whatever came across is announced however the import ended, so
+/// the sidebar and an open chat never miss agents made before a failure.
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_other_app_import(
     app: AppHandle,
+    options: Option<agents::other_app::Options>,
 ) -> Result<agents::other_app::Summary, CommandError> {
-    let summary = tokio::task::spawn_blocking(|| {
+    let progress_app = app.clone();
+    let result = tokio::task::spawn_blocking(move || {
         let root = agents::other_app::find_source().ok_or_else(|| {
             CommandError::expected(format!(
                 "There are no {} agents on this Mac to import.",
                 agents::other_app::OTHER_APP_NAME
             ))
         })?;
-        agents::other_app::import_from(&root)
+        // A bar is only worth drawing every so often, not per file.
+        let mut last = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        let mut report = |p: &agents::other_app::Progress| {
+            if last.elapsed() >= std::time::Duration::from_millis(100)
+                || p.done_bytes >= p.total_bytes
+            {
+                last = std::time::Instant::now();
+                let _ = progress_app.emit(EVENT_IMPORT_PROGRESS, p);
+            }
+        };
+        agents::other_app::import_from(&root, options.unwrap_or_default(), &mut report)
     })
     .await
-    .map_err(agents::err_other)??;
+    .map_err(agents::err_other);
     let _ = app.emit(agents::runner::EVENT_REGISTRY, ());
     agents::tray::mark_used(&app);
-    Ok(summary)
+    result?
 }
 
 /// What a `when` phrase means, as the user types it in the schedule popover:

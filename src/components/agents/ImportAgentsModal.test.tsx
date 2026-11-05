@@ -10,7 +10,8 @@ vi.mock('../../lib/remoteAccess', () => ({
 vi.mock('../../lib/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/agents')>()),
   getImportPrompt: () => Promise.resolve('prompt'),
-  previewOtherAppImport: () => Promise.resolve(null),
+  getImportTalk: () => Promise.resolve(null),
+  previewOtherAppImport: () => Promise.resolve(other()),
 }));
 vi.mock('../../lib/agentsStore', () => ({
   useAgentsList: () => [{ id: 'chief', name: 'Chief of Staff', isMain: true }],
@@ -19,6 +20,8 @@ vi.mock('./ImportParts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./ImportParts')>()),
   ImportDone: () => <p>Imported</p>,
 }));
+
+let other: () => unknown = () => null;
 
 const RESULT: ImportResult = {
   summary: { created: ['Finance'], updated: [], skipped: [], routinesSet: [], routinesRefused: [] },
@@ -37,11 +40,48 @@ vi.mock('./ImportPastePanel', () => ({
 function renderModal() {
   render(
     <ModalProvider>
-      <ImportAgentsModal isOpen onClose={vi.fn()} onOpenAgent={vi.fn()} />
+      <ImportAgentsModal isOpen onClose={vi.fn()} onOpenAgent={vi.fn()} initialPath="paste" />
     </ModalProvider>
   );
   return screen.getByRole('button', { name: 'Finish' });
 }
+
+describe('ImportAgentsModal paths', () => {
+  it('leads with the conversation over the connector, with pasting one link away', async () => {
+    other = () => null;
+    render(
+      <ModalProvider>
+        <ImportAgentsModal isOpen onClose={vi.fn()} onOpenAgent={vi.fn()} />
+      </ModalProvider>
+    );
+    expect(await screen.findByText('Send it this message')).toBeInTheDocument();
+    // No other app here: no segments, one path.
+    expect(screen.queryByRole('tablist')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Can’t connect? Paste a reply instead' }));
+    expect(screen.getByRole('button', { name: 'Finish' })).toBeInTheDocument();
+  });
+
+  it('names the other app’s segment from its preview', async () => {
+    other = () => ({
+      appName: 'Elsewhere',
+      agents: [],
+      totalBytes: 0,
+      sameVolume: true,
+      enoughSpace: true,
+    });
+    render(
+      <ModalProvider>
+        <ImportAgentsModal isOpen onClose={vi.fn()} onOpenAgent={vi.fn()} />
+      </ModalProvider>
+    );
+    expect(await screen.findByRole('tab', { name: 'From Elsewhere' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'From another assistant' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    other = () => null;
+  });
+});
 
 describe('ImportAgentsModal done state', () => {
   it('opens quiet after a pointer import: focus on the body, not the button', () => {

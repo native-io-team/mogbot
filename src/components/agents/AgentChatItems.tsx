@@ -623,6 +623,36 @@ export const NoteLine = memo(function NoteLine({
   );
 });
 
+/**
+ * What another assistant said over the import connector (`agents/connector.rs`):
+ * the other half of the conversation the user is watching. On the left like
+ * the agent's own words, but outlined and labelled, so it never reads as
+ * either the agent or the user.
+ */
+export const ConnectorBubble = memo(function ConnectorBubble({
+  message,
+  arrived,
+}: { message: AgentMessage } & Arrival) {
+  const onKeyDown = useCopyOnKey(message.text);
+  return (
+    <div
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="agent-chat__row agent-chat__row--connector"
+      data-arrived={arrived || undefined}
+      data-message-ids={message.id}
+    >
+      <span className="agent-connector__who">
+        From {message.peer?.name ?? 'another assistant'}
+        <span className="agent-connector__via"> · via connector</span>
+      </span>
+      <div className="agent-bubble agent-bubble--connector agent-markdown">
+        <Prose text={message.text} />
+      </div>
+    </div>
+  );
+});
+
 export const DayDivider = memo(function DayDivider({ ts, arrived }: { ts: number } & Arrival) {
   return (
     <div className="agent-chat__divider" data-arrived={arrived || undefined}>

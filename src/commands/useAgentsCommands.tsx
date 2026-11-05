@@ -20,7 +20,7 @@ import { useOptionalToast } from '../contexts/ToastContext';
 import { setStayOn, type StayOnChange } from '../lib/remoteAccess';
 import { useAgentsSelector, type AgentsState } from '../lib/agentsStore';
 import type { AppView } from '../lib/types';
-import { AGENT_EVENTS, OTHER_APP_NAME, previewOtherAppImport, TEAM_ID } from '../lib/agents';
+import { AGENT_EVENTS, OTHER_APP_NAME, otherAppExists, TEAM_ID } from '../lib/agents';
 
 type AgentsIntent =
   | { kind: 'new' }
@@ -113,13 +113,14 @@ const STAY_ON_COMMANDS: { id: string; title: string; change: StayOnChange; done:
 export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => void }) {
   const agents = useAgentsSelector(selectAgents, sameNames);
   const { showToast } = useOptionalToast();
-  // Whether the other app has agents on this Mac, asked once: it gates the
-  // palette's "Import agents from …", which only means something then.
+  // Whether the other app has agents on this Mac, asked once from its
+  // registry alone (not the preview, which reads every agent's folder): it
+  // gates the palette's "Import agents from …", which only means something then.
   const [otherApp, setOtherApp] = useState(false);
   useEffect(() => {
     let live = true;
-    void previewOtherAppImport()
-      .then((p) => live && setOtherApp(!!p))
+    void otherAppExists()
+      .then((exists) => live && setOtherApp(exists))
       .catch(() => undefined);
     return () => {
       live = false;

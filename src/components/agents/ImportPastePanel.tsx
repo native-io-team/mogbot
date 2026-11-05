@@ -40,9 +40,11 @@ export interface ImportResult {
 interface ImportPastePanelProps {
   onCancel: () => void;
   onDone: (result: ImportResult) => void;
+  /** Under the lede: the way back to the main path, when this is the fallback. */
+  aside?: ReactNode;
 }
 
-export function ImportPastePanel({ onCancel, onDone }: ImportPastePanelProps) {
+export function ImportPastePanel({ onCancel, onDone, aside }: ImportPastePanelProps) {
   const [prompt, setPrompt] = useState('');
   const [copied, setCopied] = useState(false);
   const [showMessage, setShowMessage] = useState(false);
@@ -123,6 +125,7 @@ export function ImportPastePanel({ onCancel, onDone }: ImportPastePanelProps) {
           Bring your agents over with their instructions, memory and routines. It takes about two
           minutes, and they run on Claude Code on this Mac.
         </p>
+        {aside}
         <ol className="agents-import-steps">
           <ImportStep
             n={1}

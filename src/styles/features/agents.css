@@ -2290,3 +2290,84 @@
   background: var(--accent-warning);
   color: var(--text-on-accent);
 }
+
+/* ------------------------------------------------ import over the connector */
+
+/* The other assistant's side of an import (agents/connector.rs): on the left
+   like the agent's words, outlined and labelled so it reads as neither the
+   agent nor you. */
+.agent-chat__row--connector {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-2xs);
+}
+
+.agent-chat__messages > .agent-chat__row--connector,
+.agent-chat__row--connector + .agent-chat__row--agent,
+.agent-chat__row--agent + .agent-chat__row--connector {
+  margin-top: var(--spacing-lg);
+}
+
+.agent-connector__who {
+  padding-left: var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+}
+
+.agent-connector__via {
+  font-weight: var(--font-weight-body);
+  color: var(--text-muted);
+}
+
+.agent-bubble--connector {
+  max-width: min(var(--agents-prose-measure), 100%);
+  background: var(--surface-recessed);
+  border: var(--border-width-default) solid var(--border-subtle);
+}
+
+/* Above the Chief's composer while an import conversation is going. */
+.agent-import-talk {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: calc(100% - (var(--spacing-xl) * 2));
+  max-width: var(--agents-chat-width);
+  margin: 0 auto var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-md);
+  font-size: var(--font-size-body-md);
+  color: var(--text-secondary);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-card);
+}
+
+.agent-import-talk__dot {
+  flex: none;
+  width: var(--spacing-xs);
+  height: var(--spacing-xs);
+  border-radius: var(--radius-pill);
+  background: var(--status-running);
+  animation: agent-import-talk-live var(--agents-motion-typing-period) ease-in-out infinite;
+}
+
+.agent-import-talk__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-import-talk__text strong {
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+@keyframes agent-import-talk-live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-import-talk__dot {
+    animation: none;
+  }
+}

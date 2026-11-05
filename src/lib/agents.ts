@@ -621,6 +621,10 @@ export const AGENT_EVENTS = {
   draft: 'agents://draft',
   /** A notification was clicked; payload is the agent id to open. */
   open: 'agents://open',
+  /** The import conversation over the connector changed: an `ImportTalk` or null. */
+  importTalk: 'agents://import-talk',
+  /** How far a copy from the other app has got: `OtherAppProgress`. */
+  importProgress: 'agents://import-progress',
 } as const;
 
 export const getAgentsOverview = () => invoke<AgentsOverview>('agents_overview');
@@ -745,7 +749,34 @@ export const revokePermission = (agentId: string, ruleId: string) =>
   invoke<void>('agents_revoke_permission', { agentId, ruleId });
 export const focusAgent = (agentId: string | null) => invoke<void>('agents_focus', { agentId });
 export const markAgentUnread = (agentId: string) => invoke<void>('agents_mark_unread', { agentId });
+/** The one message that asks the other assistant to talk to the Chief over the connector. */
 export const getImportPrompt = () => invoke<string>('agents_import_prompt');
+
+/* ------------------------------------- import as a conversation (connector) */
+
+/** An import conversation with another assistant (`agents/connector.rs`). */
+export interface ImportTalk {
+  id: string;
+  /** The other assistant, as it named itself ("Grok"). */
+  source: string;
+  chiefId: string;
+  state: 'active' | 'finished' | 'stopped';
+  startedAt: number;
+  lastAt: number;
+  exchanges: number;
+  /** Agents brought over so far, in order. */
+  agents: string[];
+  summary?: string;
+}
+
+export const getImportTalk = () => invoke<ImportTalk | null>('agents_import_talk');
+export const stopImportTalk = () => invoke<boolean>('agents_import_talk_stop');
+
+/** The peer id prefix of a line the other assistant sent over the connector. */
+export const CONNECTOR_PEER = 'connector:';
+/** A line the other assistant sent over the connector, not one of your agents. */
+export const isConnectorLine = (m: Pick<AgentMessage, 'kind' | 'peer'>) =>
+  m.kind === 'from_agent' && !!m.peer?.id.startsWith(CONNECTOR_PEER);
 
 /** One agent a pasted reply would import (see `agents/paste.rs`). */
 export interface PasteImportAgent {
@@ -807,9 +838,10 @@ export const importPaste = (text: string) => invoke<ImportSummary>('agents_impor
 /* ------------------------------------------ import from the other app */
 
 /**
- * The app this one grew out of, by name: the one compat source for it in the
- * UI. Mirrors `OTHER_APP_NAME` in `src-tauri/src/agents/other_app.rs`, which
- * also knows where its agents live on disk.
+ * The app this one grew out of, by name, for the palette's title only: it is
+ * registered before any preview has been read. Everywhere else reads the
+ * preview's `appName`, from `OTHER_APP_NAME` in
+ * `src-tauri/src/agents/other_app.rs`, which also knows where its agents live.
  */
 export const OTHER_APP_NAME = 'Ship Studio';
 
@@ -832,6 +864,11 @@ export interface OtherAppAgent {
   routines: { schedule: string; what: string }[];
   /** Names of secrets it had saved there; they don't come across. */
   secrets: string[];
+  /** Its "Always allow" rules, in words. Left behind unless kept. */
+  rules: string[];
+  /** Bytes its folder takes. */
+  bytes: number;
+  /** Its folder; its copy in the other app works in the same one. */
   project?: string;
   projectMissing: boolean;
 }
@@ -840,6 +877,13 @@ export interface OtherAppPreview {
   appName: string;
   source?: string;
   agents: OtherAppAgent[];
+  /** Bytes an import would copy. */
+  totalBytes: number;
+  /** Same volume: the copy is a clone, instant and free. */
+  sameVolume: boolean;
+  freeBytes?: number;
+  /** False only when a copy to another volume wouldn't fit. */
+  enoughSpace: boolean;
 }
 
 export interface OtherAppSummary extends ImportSummary {
@@ -848,14 +892,27 @@ export interface OtherAppSummary extends ImportSummary {
   routinesPaused: number;
   messages: number;
   secretsLeft: { agent: string; secrets: string[] }[];
+  /** "Always allow" rules carried over, because the user kept them. */
+  rulesKept: { agent: string; rules: string[] }[];
+  /** "Always allow" rules left behind (the default). */
+  rulesLeft: { agent: string; rules: string[] }[];
   filesSkipped: string[];
+}
+
+export interface OtherAppProgress {
+  agent: string;
+  doneBytes: number;
+  totalBytes: number;
 }
 
 /** Null when the other app isn't on this Mac or has no agents. Reads only. */
 export const previewOtherAppImport = () =>
   invoke<OtherAppPreview | null>('agents_other_app_preview');
+/** Whether it has agents here, from its registry alone (cheap: for the palette). */
+export const otherAppExists = () => invoke<boolean>('agents_other_app_exists');
 /** Copies its team in; never writes to its folder. */
-export const importFromOtherApp = () => invoke<OtherAppSummary>('agents_other_app_import');
+export const importFromOtherApp = (options: { keepRules: boolean } = { keepRules: false }) =>
+  invoke<OtherAppSummary>('agents_other_app_import', { options });
 
 export const previewSchedule = (when: string) =>
   invoke<SchedulePreview>('agents_schedule_preview', { when });
@@ -1195,7 +1252,9 @@ export function buildChatItems(messages: AgentMessage[]): ChatItem[] {
     }
     lastTs = message.ts;
     const previous = items[items.length - 1];
-    if (isPeerLine(message) && message.peer) {
+    // The other assistant's side of an import is the conversation itself:
+    // shown in full, never folded away like agents' hand-offs.
+    if (isPeerLine(message) && message.peer && !isConnectorLine(message)) {
       if (previous?.type === 'peer-group' && previous.peer.id === message.peer.id) {
         previous.messages.push(message);
         continue;
