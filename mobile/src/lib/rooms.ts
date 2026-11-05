@@ -87,18 +87,89 @@ export function roomSuggestions(members: Agent[], query: string | null): AgentRe
   return list.filter((a) => a.name.toLowerCase().startsWith(q)).slice(0, 7);
 }
 
-/** "to Finance · Ops", or "to everyone" when the whole room was asked. */
-export function toLine(asked: AgentRef[] | undefined, memberCount: number): string | null {
-  if (!asked?.length) return null;
-  if (memberCount > 2 && asked.length === memberCount) return 'to everyone';
-  return `to ${asked.map((a) => a.name).join(' · ')}`;
+/**
+ * What a room is, under its first line. True to how a room turn runs
+ * (docs/agents.md, "Rooms"): it resumes the member's own engine session, so
+ * an agent answers here remembering its own chat, and what's said here is
+ * posted for every member. Never "sees only what's said here".
+ */
+export const ROOM_INTRO =
+  'Everything said here is posted for everyone in the room. Each agent keeps its own memory and remembers its own chat when it answers here.';
+
+/** "Finance", "Finance and Ops", "Finance, Ops and Design": as the desk joins names (`listNames`). */
+export function listNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
-/** "Finance, Ops & Chief of Staff": the room's people, as the row's second line falls back to. */
+/**
+ * Under your line: "To Finance and Ops", or "To everyone" when every member
+ * was asked, however many there are.
+ */
+export function toLine(asked: AgentRef[] | undefined, memberCount: number): string | null {
+  if (!asked?.length) return null;
+  if (memberCount > 1 && asked.length >= memberCount) return 'To everyone';
+  return `To ${listNames(asked.map((a) => a.name))}`;
+}
+
+/** "Finance, Ops and Chief of Staff": the room's people, as the row's second line falls back to. */
 export function memberNames(members: Pick<Agent, 'name'>[]): string {
-  const names = members.map((m) => m.name);
-  if (names.length <= 1) return names[0] ?? '';
-  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+  return listNames(members.map((m) => m.name));
+}
+
+/**
+ * The composer's foot line, word for word the desk's (`addressLine`): who
+ * will answer what you're typing, so nobody is surprised by who replies.
+ */
+export function addressLine(
+  room: Pick<RoomView, 'members' | 'lead'>,
+  members: Pick<Agent, 'id' | 'name'>[],
+  mentions: string[],
+  everyone: boolean
+): string {
+  const to = answerers(room, mentions, everyone);
+  if (to === 'ask') return 'Who should answer? @ someone';
+  const name = (id: string) => members.find((m) => m.id === id)?.name ?? '';
+  if (everyone) return `To everyone · ${to.length} replies`;
+  if (!mentions.some((m) => room.members.includes(m))) {
+    return `To ${name(to[0])} · @ someone else, or @everyone`;
+  }
+  return `To ${listNames(to.map(name))}`;
+}
+
+/**
+ * A line cut where it @mentions a member, by whole name (longest first, as
+ * the Mac's `rooms::mentioned_in` reads them), so the mention can be drawn in
+ * that member's colour. Never an email address, never a name inside a word.
+ */
+export function splitMentions(text: string, names: string[]): { text: string; name?: string }[] {
+  const sorted = names.filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!sorted.length || !text.includes('@')) return [{ text }];
+  const out: { text: string; name?: string }[] = [];
+  let plain = '';
+  let i = 0;
+  while (i < text.length) {
+    const before = i === 0 ? '' : text[i - 1];
+    if (text[i] === '@' && !/[\w.]/.test(before)) {
+      const rest = text.slice(i + 1);
+      const hit = sorted.find(
+        (n) =>
+          rest.slice(0, n.length).toLowerCase() === n.toLowerCase() &&
+          !/^[\w@-]/.test(rest.slice(n.length))
+      );
+      if (hit) {
+        if (plain) out.push({ text: plain });
+        plain = '';
+        out.push({ text: `@${rest.slice(0, hit.length)}`, name: hit });
+        i += hit.length + 1;
+        continue;
+      }
+    }
+    plain += text[i];
+    i++;
+  }
+  if (plain) out.push({ text: plain });
+  return out;
 }
 
 /** Members whose turn in progress answers in this room. */
@@ -181,6 +252,31 @@ export function roomItems(
   return out;
 }
 
+/**
+ * Each member's open copy of its project: the newest change card in this
+ * room for it offers Keep / Discard, as in that member's own chat (the
+ * desk's `RoomChat`). A member with no open copy, or whose copy's card
+ * isn't in the room, has none here.
+ */
+export function liveCopyCards(
+  members: Pick<Agent, 'id' | 'copy'>[],
+  messages: AgentMessage[]
+): Set<string> {
+  const live = new Set<string>();
+  for (const member of members) {
+    const copyId = member.copy?.id;
+    if (!copyId) continue;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.agentId === member.id && m.kind === 'changes' && m.changes?.copy?.id === copyId) {
+        live.add(m.id);
+        break;
+      }
+    }
+  }
+  return live;
+}
+
 /** The newest line of a run folded into an agent's own chat, and how many it stands for. */
 export interface RoomFold {
   roomId: string;
@@ -191,12 +287,17 @@ export interface RoomFold {
 /**
  * An agent's own chat with what it said in rooms folded: each run of lines
  * from one room becomes one "In <room>" line. A card still waiting on you
- * stays whole, so it can be answered from either chat.
+ * stays whole, so it can be answered from either chat, and so does a change
+ * card for the agent's open copy (`openCopy`), so Keep / Discard are here too.
  */
-export function foldRoomLines(messages: AgentMessage[]): (AgentMessage | RoomFold)[] {
+export function foldRoomLines(
+  messages: AgentMessage[],
+  openCopy?: string
+): (AgentMessage | RoomFold)[] {
   const out: (AgentMessage | RoomFold)[] = [];
   for (const m of messages) {
-    if (!m.room || m.approval?.status === 'pending') {
+    const copyCard = !!openCopy && m.kind === 'changes' && m.changes?.copy?.id === openCopy;
+    if (!m.room || m.approval?.status === 'pending' || copyCard) {
       out.push(m);
       continue;
     }

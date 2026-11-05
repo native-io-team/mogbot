@@ -10,7 +10,7 @@
 
 import type { Agent, RoomView } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Platform,
   RefreshControl,
@@ -30,10 +30,10 @@ import { QuotaLines } from '../../../components/QuotaLines';
 import { useQuotaLines } from '../../../lib/quota';
 import { AgentAccent } from '../../../lib/accent';
 import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
+import { TextAction } from '../../../components/surfaces';
 import { Button, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
 import {
-  attentionCounts,
   formatAgo,
   needsAttention,
   needsYou,
@@ -240,9 +240,6 @@ export default function Agents() {
         <>
           <ConnectionNotice />
           <Refused />
-          {live && !removed && (
-            <Summary onOpen={split ? (agentId) => setSelected(agentId) : undefined} />
-          )}
           {!removed && <QuotaLines lines={quota} style={styles.quota} />}
         </>
       }
@@ -251,7 +248,16 @@ export default function Agents() {
       }
       renderItem={({ item, index }) =>
         item.kind === 'header' ? (
-          <SectionHeader title={item.title} live={live} first={index === 0} />
+          <SectionHeader
+            title={item.title}
+            live={live}
+            first={index === 0}
+            action={
+              item.key === 'h-urgent' ? (
+                <OpenNext onOpen={split ? (agentId) => setSelected(agentId) : undefined} />
+              ) : undefined
+            }
+          />
         ) : item.kind === 'hidden' ? (
           <Pressable
             onPress={() => {
@@ -368,85 +374,70 @@ export default function Agents() {
 }
 
 /**
- * What's going on, in one line: "2 need you · 3 working", and Next, which
- * opens the first thing waiting on you at the card itself. Only while the
- * Mac is answering: offline the rows already say what was last known.
+ * "NEEDS YOU", or "AGENTS · AS OF 4 MIN AGO" when the Mac isn't answering,
+ * with an optional text action at the right.
  */
-function Summary({ onOpen }: { onOpen?: (agentId: string) => void }) {
-  const colors = useColors();
-  const styles = useStyles();
-  const router = useRouter();
-  const counts = useApp(useShallow((s) => attentionCounts(s.overview?.agents ?? [], s.chats)));
-  if (!counts.needYou && !counts.working) return null;
-  const parts = [
-    counts.needYou && `${counts.needYou} need${counts.needYou === 1 ? 's' : ''} you`,
-    counts.working && `${counts.working} working`,
-  ].filter(Boolean);
-  const next = () => {
-    const s = useApp.getState();
-    const target = nextNeedsYou(s.overview?.agents ?? [], s.chats);
-    if (!target) return;
-    haptic.select();
-    if (onOpen) return onOpen(target.agentId);
-    router.push({
-      pathname: '/chat/[id]',
-      params: { id: target.agentId, ...(target.messageId ? { at: target.messageId } : {}) },
-    });
-  };
-  return (
-    <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(150)}
-      layout={LinearTransition.duration(200)}
-      style={styles.summary}
-      accessibilityRole="summary"
-    >
-      {counts.needYou > 0 && (
-        <Icon
-          name="exclamationmark.triangle.fill"
-          size={iconSize.inline}
-          color={colors.accentWarning}
-        />
-      )}
-      <T
-        variant="subhead"
-        color={counts.needYou ? colors.textStrong : colors.textSecondary}
-        style={{ flex: 1 }}
-        maxFontSizeMultiplier={2}
-      >
-        {parts.join(' · ')}
-      </T>
-      {counts.needYou > 0 && (
-        <Button
-          title="Next"
-          size="compact"
-          variant="primary"
-          onPress={next}
-          accessibilityHint="Opens the first thing waiting on you"
-        />
-      )}
-    </Animated.View>
-  );
-}
-
-/** "NEEDS YOU", or "AGENTS · AS OF 4 MIN AGO" when the Mac isn't answering. */
-function SectionHeader({ title, live, first }: { title: string; live: boolean; first: boolean }) {
+function SectionHeader({
+  title,
+  live,
+  first,
+  action,
+}: {
+  title: string;
+  live: boolean;
+  first: boolean;
+  action?: ReactNode;
+}) {
   const colors = useColors();
   const styles = useStyles();
   useNow(30_000); // re-render to keep "as of" current
   const asOf = useApp((s) => (s.link.kind === 'reconnecting' ? s.link.lastSeenAt : s.syncedAt));
   const label = live || !asOf ? title : `${title} · as of ${formatAgo(asOf)}`;
   return (
-    <T
-      variant="caption"
-      color={colors.textMuted}
-      // A label belongs to the rows under it: close below, a clear gap above.
-      style={[styles.section, !first && styles.sectionNext]}
-      maxFontSizeMultiplier={chromeScale}
-      accessibilityRole="header"
-    >
-      {label.toUpperCase()}
-    </T>
+    // A label belongs to the rows under it: close below, a clear gap above.
+    <View style={[styles.section, !first && styles.sectionNext]}>
+      <T
+        variant="caption"
+        color={colors.textMuted}
+        style={styles.sectionLabel}
+        maxFontSizeMultiplier={chromeScale}
+        accessibilityRole="header"
+      >
+        {label.toUpperCase()}
+      </T>
+      {action}
+    </View>
+  );
+}
+
+/**
+ * Needs you's "Open next": straight to the first thing waiting on you, at
+ * the card itself. Home says "needs you" once, as this section; there's no
+ * summary card over it, and its rows carry no dot beside their words. Only
+ * while the Mac answers, and only when something can be answered here (an
+ * import to review waits on the Mac).
+ */
+function OpenNext({ onOpen }: { onOpen?: (agentId: string) => void }) {
+  const router = useRouter();
+  const next = useApp(
+    useShallow((s) =>
+      s.link.kind === 'connected' ? nextNeedsYou(s.overview?.agents ?? [], s.chats) : null
+    )
+  );
+  if (!next) return null;
+  return (
+    <TextAction
+      label="Open next"
+      hint="Opens the first thing waiting on you"
+      onPress={() => {
+        haptic.select();
+        if (onOpen) return onOpen(next.agentId);
+        router.push({
+          pathname: '/chat/[id]',
+          params: { id: next.agentId, ...(next.messageId ? { at: next.messageId } : {}) },
+        });
+      }}
+    />
   );
 }
 
@@ -543,11 +534,14 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
 
 const useStyles = makeStyles((colors) => ({
   section: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
     paddingHorizontal: space.lg,
     paddingTop: space.lg,
     paddingBottom: space.xs,
-    letterSpacing: 0.4,
   },
+  sectionLabel: { flex: 1, letterSpacing: 0.4 },
   sectionNext: { paddingTop: space.xl },
   quota: { paddingHorizontal: space.lg, paddingTop: space.md },
   headerButtons: { flexDirection: 'row', alignItems: 'center' },
@@ -557,21 +551,6 @@ const useStyles = makeStyles((colors) => ({
     gap: space.sm,
     padding: space.lg,
     minHeight: 48,
-  },
-  summary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    marginHorizontal: space.lg,
-    marginTop: space.md,
-    paddingLeft: space.lg,
-    paddingRight: space.md,
-    paddingVertical: space.sm,
-    minHeight: 56,
-    borderRadius: radius.card,
-    backgroundColor: colors.surfacePanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.cardBorder,
   },
   refused: {
     marginHorizontal: space.lg,

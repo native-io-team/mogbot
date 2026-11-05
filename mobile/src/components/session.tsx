@@ -7,6 +7,7 @@
 import type { SessionSummary } from '@shipstudio/companion-protocol';
 import { StyleSheet, View } from 'react-native';
 import { taskName } from '../lib/agents';
+import { plainActivity } from '../lib/taskScreen';
 import { useApp } from '../lib/store';
 import { iconSize, space } from '../lib/theme';
 import { useColors } from '../lib/appearance';
@@ -19,8 +20,11 @@ export const useTaskName = (sessionId: string | undefined) =>
 
 export function sessionStateText(s: SessionSummary): string {
   switch (s.state) {
-    case 'working':
-      return s.activity ?? 'Working…';
+    case 'working': {
+      // The spinner's words without its timer ("Checking the hero at 390px").
+      const doing = s.activity ? plainActivity(s.activity) : '';
+      return doing && doing.toLowerCase() !== 'working' ? `Working · ${doing}` : 'Working';
+    }
     case 'needs_decision':
       return s.question?.question ?? 'Needs your OK';
     case 'finished':

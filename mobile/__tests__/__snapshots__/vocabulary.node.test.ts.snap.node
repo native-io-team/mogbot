@@ -97,6 +97,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "Secrets only go over Tailscale, which encrypts them all the way to your Mac. Save it on your Mac: it’s waiting there too.",
   "Sent to a task in …",
   "Set up and changed on your Mac.",
+  "Shows the task's own screen, as your Mac has it",
   "Sign in to … on your Mac, then send it again.",
   "Signed out. Sign in on your Mac to keep your agents working",
   "Some files still have conflict markers in them (…). Nothing was kept. Finish choosing on your Mac, or ask … to.",

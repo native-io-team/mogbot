@@ -8,7 +8,7 @@
 
 import type { SessionScreen } from '@shipstudio/companion-protocol';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -17,10 +17,13 @@ import { Spinner } from '../../components/agent';
 import { DiffLines } from '../../components/diff';
 import { useNow } from '../../components/ConnectionPill';
 import { SessionState, useTaskName } from '../../components/session';
-import { Button, Icon, T } from '../../components/ui';
+import { Markdown } from '../../components/Markdown';
+import { TextAction } from '../../components/surfaces';
+import { Button, Dot, Icon, T } from '../../components/ui';
 import { useAccent } from '../../lib/accent';
 import { formatAgo } from '../../lib/agents';
 import { questionContext } from '../../lib/diff';
+import { readTaskScreen, type TaskReading } from '../../lib/taskScreen';
 import { haptic } from '../../lib/haptics';
 import {
   canCall,
@@ -31,7 +34,17 @@ import {
 } from '../../lib/session';
 import { useApp } from '../../lib/store';
 import { usePolling } from '../../lib/usePolling';
-import { chromeScale, fonts, iconSize, lineHeight, radius, space, type } from '../../lib/theme';
+import {
+  alpha,
+  chromeScale,
+  composer,
+  fonts,
+  iconSize,
+  lineHeight,
+  radius,
+  space,
+  type,
+} from '../../lib/theme';
 import { ComposerField, RoundButton } from '../../components/Composer';
 import { makeStyles, useColors } from '../../lib/appearance';
 
@@ -53,6 +66,8 @@ export default function Session() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The raw terminal is there, one tap away, but never what the screen leads with.
+  const [showTerminal, setShowTerminal] = useState(false);
   const connected = useApp((s) => s.link.kind === 'connected');
   const canAnswer = useApp((s) => canCall('sessions.key', s.welcome));
   // The project's path, from the list when we came from a chat's session card.
@@ -114,6 +129,14 @@ export default function Session() {
   const question = data?.session.question;
   // What it's asking about (an edit's diff, a command), read off its screen.
   const context = question && data ? questionContext(data.screen, question) : [];
+  // The screen read as a conversation; when it holds no words of the agent's
+  // own, the Mac's reading of its latest reply (already without the box).
+  const reading = useMemo(() => {
+    if (!data) return null;
+    const r = readTaskScreen(data.screen);
+    if (!r.said && data.reply) return { ...r, said: readTaskScreen(data.reply).said };
+    return r;
+  }, [data]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -194,8 +217,10 @@ export default function Session() {
                       {question.options.map((o) => (
                         <Button
                           key={o.key}
-                          title={o.key === 'enter' ? o.label : `${o.key}. ${o.label}`}
-                          variant={o.highlighted ? 'primary' : 'secondary'}
+                          // The option's words, not the key the terminal takes for it.
+                          title={o.label}
+                          // An answer: neutral, never the accent.
+                          variant={o.highlighted ? 'answer' : 'outline'}
                           lines={4}
                           busy={busy === o.key}
                           disabled={!connected || !!busy}
@@ -220,8 +245,7 @@ export default function Session() {
                             variant="small"
                             color={o.highlighted ? colors.textStrong : colors.textSecondary}
                           >
-                            {o.highlighted ? '❯ ' : '   '}
-                            {o.key}. {o.label}
+                            {o.label}
                           </T>
                         ))}
                       </View>
@@ -232,20 +256,32 @@ export default function Session() {
                   )}
                 </Animated.View>
               )}
-              {/*
-                The terminal at its own width, scrolled sideways: wrapped to a
-                phone's ~49 columns, an 80-column box turns into a staircase.
-              */}
-              <ScrollView
-                horizontal
-                style={styles.screenWell}
-                contentContainerStyle={styles.screenContent}
-                showsHorizontalScrollIndicator={false}
-              >
-                <T selectable style={styles.screen} color={colors.textPrimary}>
-                  {textGlyphs(data.screen.replace(/\s+$/, ''))}
-                </T>
-              </ScrollView>
+              <TaskConversation reading={reading} />
+              <View style={styles.terminalToggle}>
+                <TextAction
+                  label={showTerminal ? 'Hide terminal' : 'Show terminal'}
+                  hint="Shows the task's own screen, as your Mac has it"
+                  onPress={() => setShowTerminal((v) => !v)}
+                />
+              </View>
+              {showTerminal && (
+                <Animated.View entering={FadeIn.duration(150)} style={styles.screenWell}>
+                  {/*
+                    The terminal at its own width, scrolled sideways: wrapped to a
+                    phone's ~49 columns, an 80-column box turns into a staircase.
+                  */}
+                  <ScrollView
+                    horizontal
+                    contentContainerStyle={styles.screenContent}
+                    showsHorizontalScrollIndicator={false}
+                  >
+                    <T selectable style={styles.screen} color={colors.textPrimary}>
+                      {textGlyphs(data.screen.replace(/\s+$/, ''))}
+                    </T>
+                  </ScrollView>
+                  <EdgeFade />
+                </Animated.View>
+              )}
             </>
           )}
         </ScrollView>
@@ -304,6 +340,62 @@ export default function Session() {
   );
 }
 
+/** Steps shown in full; older ones fold into a count (the terminal has them all). */
+const STEPS_SHOWN = 5;
+
+/**
+ * The task as a conversation: what it was asked (your bubble), the steps it
+ * took in plain words, and what it said. Read off its screen
+ * (`readTaskScreen`), so a part with nothing behind it is left out.
+ */
+function TaskConversation({ reading }: { reading: TaskReading | null }) {
+  const colors = useColors();
+  const styles = useStyles();
+  if (!reading) return null;
+  const { asked, steps, said } = reading;
+  const earlier = Math.max(0, steps.length - STEPS_SHOWN);
+  return (
+    <View style={styles.conversation}>
+      {!!asked && (
+        <View style={styles.askedBubble}>
+          <T color={colors.textBody}>{asked}</T>
+        </View>
+      )}
+      {steps.length > 0 && (
+        <View style={styles.steps} accessibilityLabel={`Steps: ${steps.join('. ')}`}>
+          {earlier > 0 && (
+            <T variant="caption" color={colors.textMuted}>
+              {earlier === 1 ? '1 earlier step' : `${earlier} earlier steps`}
+            </T>
+          )}
+          {steps.slice(-STEPS_SHOWN).map((step, i) => (
+            <View key={`${i}:${step}`} style={styles.step}>
+              <Dot color={colors.textMuted} />
+              <T variant="small" color={colors.textSecondary} numberOfLines={2} style={{ flex: 1 }}>
+                {step}
+              </T>
+            </View>
+          ))}
+        </View>
+      )}
+      {!!said && <Markdown text={said} />}
+    </View>
+  );
+}
+
+/** The well's right edge fades out, so a line running past it reads as "scroll", not "cut". */
+function EdgeFade() {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View style={styles.fade} pointerEvents="none">
+      {[0.15, 0.35, 0.6, 0.85, 1].map((a) => (
+        <View key={a} style={{ flex: 1, backgroundColor: alpha(colors.surfacePanel, a) }} />
+      ))}
+    </View>
+  );
+}
+
 /** Claude Code's ⏺ and friends, as text: iOS would otherwise draw them as emoji. */
 const textGlyphs = (screen: string) => screen.replace(/([⏺⏸⏹✻✳])(?!\uFE0E)/g, '$1\uFE0E');
 
@@ -341,7 +433,31 @@ const useStyles = makeStyles((colors) => ({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderDefault,
   },
-  screenWell: { borderRadius: radius.card, backgroundColor: colors.surfacePanel },
+  screenWell: {
+    borderRadius: radius.card,
+    backgroundColor: colors.surfacePanel,
+    overflow: 'hidden',
+  },
+  fade: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: space.xl,
+    flexDirection: 'row',
+  },
+  terminalToggle: { alignItems: 'flex-start', paddingTop: space.xs },
+  conversation: { gap: space.md },
+  askedBubble: {
+    alignSelf: 'flex-end',
+    maxWidth: '78%',
+    backgroundColor: colors.surfaceBubble,
+    borderRadius: composer.corner,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  steps: { gap: space.xs },
+  step: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   screenContent: { padding: space.md },
   screen: {
     fontFamily: fonts.mono,

@@ -336,8 +336,13 @@ function RowBody({
               line
             )}
           </T>
+          {/*
+            Waiting on you is said once, in the row's words ("Needs your OK",
+            or that it waits on your Mac) under the Needs you header: no dot
+            beside them as well. Every other state keeps its mark.
+          */}
           <View style={styles.mark}>
-            <StatusMark agent={agent} live={live} onMac={onMac} />
+            {!needsYou(agent) && <StatusMark agent={agent} live={live} onMac={onMac} />}
           </View>
         </View>
         {stacked && time}

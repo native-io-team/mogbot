@@ -76,9 +76,10 @@ describe('the composer’s @ menu', () => {
       { id: 'a1', name: 'Finance' },
       { id: 'a2', name: 'Ops' },
     ];
-    expect(toLine(asked.slice(1), 2)).toBe('to Ops');
-    expect(toLine(asked, 2)).toBe('to Finance · Ops');
-    expect(toLine([...asked, { id: 'a3', name: 'Chief' }], 3)).toBe('to everyone');
+    expect(toLine(asked.slice(1), 2)).toBe('To Ops');
+    expect(toLine(asked, 3)).toBe('To Finance and Ops');
+    expect(toLine(asked, 2)).toBe('To everyone');
+    expect(toLine([...asked, { id: 'a3', name: 'Chief' }], 3)).toBe('To everyone');
     expect(toLine(undefined, 2)).toBeNull();
   });
 });

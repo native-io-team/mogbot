@@ -118,10 +118,10 @@ describe('a room’s thread', () => {
     await render(<RoomScreen id={room.id} />);
     // The header: the room and who is in it.
     expect(screen.getByText('Month end')).toBeTruthy();
-    expect(screen.getByText('Finance, Ops')).toBeTruthy();
+    expect(screen.getByText('Finance and Ops')).toBeTruthy();
     // Your line, and whom it went to.
     expect(screen.getByText('@everyone where are we on month end?')).toBeTruthy();
-    expect(screen.getByText('to Finance · Ops')).toBeTruthy();
+    expect(screen.getByText('To everyone')).toBeTruthy();
     // Each member named over its run; Ops's card and reply are one run.
     expect(screen.getAllByText('Finance')).toHaveLength(1);
     expect(screen.getAllByText('Ops')).toHaveLength(1);
@@ -131,6 +131,67 @@ describe('a room’s thread', () => {
     expect(screen.getAllByText(/Allow/).length).toBeGreaterThan(0);
     // The room's own note, as a quiet line.
     expect(screen.getByText(/nobody else was asked/)).toBeTruthy();
+  });
+
+  it('offers a member’s open copy Keep / Discard, and Ask for changes opens its own chat with the request', async () => {
+    const withCopy = agent({
+      id: 'a1',
+      name: 'Finance',
+      color: 'green',
+      copy: { id: 'copy_1', project: '/p/site', path: '/w/c', branch: 'b' } as never,
+    });
+    const lines: AgentMessage[] = [
+      {
+        id: 'c1',
+        agentId: 'a1',
+        room: room.id,
+        ts: 1,
+        kind: 'changes',
+        text: '',
+        changes: {
+          project: '/p/site',
+          files: [],
+          fileCount: 2,
+          added: 3,
+          removed: 1,
+          copy: { id: 'copy_1', path: '/w/c', branch: 'b' },
+        } as never,
+      },
+      {
+        id: 'r1',
+        agentId: 'a2',
+        room: room.id,
+        ts: 2,
+        kind: 'agent',
+        text: 'Done.',
+        result: { id: 'res', version: 1, title: 'October close', summary: 'Closed.' },
+      },
+    ];
+    setApp({
+      overview: { agents: [withCopy, ops], engineReady: true, engines: [] } as never,
+      welcome: {
+        methods: [
+          'rooms.list',
+          'rooms.send',
+          'agents.send',
+          'agents.keepCopy',
+          'agents.discardCopy',
+        ],
+        features: ['rooms', 'results.revise'],
+      } as unknown as WelcomeFrame,
+      chats: { [roomKey(room.id)]: { messages: lines, more: false, loaded: true } },
+    });
+    await render(<RoomScreen id={room.id} />);
+    expect(screen.getByText('Keep changes')).toBeTruthy();
+    expect(screen.getByText('Discard')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Ask for changes'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/chat/[id]', params: { id: 'a2' } });
+    const { getApp } = jest.requireActual<typeof import('../src/lib/store')>('../src/lib/store');
+    expect(getApp().composer.a2?.revising).toEqual({
+      id: 'res',
+      version: 1,
+      title: 'October close',
+    });
   });
 
   it('says plainly when the room is gone', async () => {
@@ -170,7 +231,7 @@ describe('the room’s composer', () => {
 
   it('asks who should answer when nobody is named and the room has no lead', async () => {
     await render(composer());
-    expect(screen.getByText('@mention who should answer, or @everyone')).toBeTruthy();
+    expect(screen.getByText('Who should answer? @ someone')).toBeTruthy();
     await fireEvent.changeText(screen.getByLabelText('Message Month end'), 'Where are we?');
     await act(async () => {
       await fireEvent.press(screen.getByLabelText('Send'));
@@ -195,7 +256,7 @@ describe('the room’s composer', () => {
         onSent={() => {}}
       />
     );
-    expect(screen.getByText('Finance answers unless you @mention someone')).toBeTruthy();
+    expect(screen.getByText('To Finance · @ someone else, or @everyone')).toBeTruthy();
     await fireEvent.changeText(screen.getByLabelText('Message Month end'), 'Status?');
     await act(async () => {
       await fireEvent.press(screen.getByLabelText('Send'));
