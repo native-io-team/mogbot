@@ -18,13 +18,14 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useNow } from '../components/ConnectionPill';
-import { Button, T } from '../components/ui';
+import { Button, T, SheetPage } from '../components/ui';
 import { describeError, schedule } from '../lib/session';
 import { useApp } from '../lib/store';
 import { WireFailure } from '../lib/transport';
 import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
-import { colors, fonts, radius, space, type } from '../lib/theme';
+import { fonts, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 
 type Reading =
   | { kind: 'empty' }
@@ -41,6 +42,9 @@ function previewLine(p: SchedulePreview, now = Date.now()): string {
 export default withAgentAccent(Schedule, 'agentId');
 
 function Schedule() {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const accent = useAccent();
   const router = useRouter();
   const { agentId, id } = useLocalSearchParams<{ agentId: string; id?: string }>();
@@ -101,75 +105,84 @@ function Schedule() {
 
   const ready = reading.kind === 'ok' && note.length > 0;
   return (
-    <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
-      <T variant="title" color={colors.textWhite}>
-        {editing
-          ? editing.repeat
-            ? 'Edit routine'
-            : 'Edit check-in'
-          : `Schedule ${agent?.name ?? ''}`}
-      </T>
-      <TextInput
-        autoFocus
-        value={text}
-        onChangeText={setText}
-        placeholder="every weekday 9am: brief me on the launch"
-        placeholderTextColor={colors.textMuted}
-        style={styles.input}
-        selectionColor={accent.accent}
-        keyboardAppearance="dark"
-        autoCapitalize="none"
-        returnKeyType="done"
-        multiline
-        submitBehavior="blurAndSubmit"
-        onSubmitEditing={() => ready && void save()}
-        accessibilityLabel="When, a colon, then what to do"
-      />
-      <View style={styles.reading}>
-        {reading.kind === 'ok' ? (
-          <Animated.View entering={FadeIn.duration(150)} style={{ gap: space['2xs'] }}>
-            <T variant="small" color={colors.textPrimary}>
-              {previewLine(reading.preview)}
-            </T>
-            {!note && (
-              <T variant="caption" color={colors.textMuted}>
-                Now a colon and what to do: “…: check the error rate”
+    <SheetPage>
+      <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
+        <T variant="title" color={colors.textStrong}>
+          {editing
+            ? editing.repeat
+              ? 'Edit routine'
+              : 'Edit check-in'
+            : `Schedule ${agent?.name ?? ''}`}
+        </T>
+        <TextInput
+          autoFocus
+          value={text}
+          onChangeText={setText}
+          placeholder="every weekday 9am: brief me on the launch"
+          placeholderTextColor={colors.textMuted}
+          style={styles.input}
+          selectionColor={accent.accent}
+          keyboardAppearance={appearance}
+          autoCapitalize="none"
+          returnKeyType="done"
+          multiline
+          submitBehavior="blurAndSubmit"
+          onSubmitEditing={() => ready && void save()}
+          accessibilityLabel="When, a colon, then what to do"
+        />
+        <View style={styles.reading}>
+          {reading.kind === 'ok' ? (
+            <Animated.View entering={FadeIn.duration(150)} style={{ gap: space['2xs'] }}>
+              <T variant="small" color={colors.textPrimary}>
+                {previewLine(reading.preview)}
               </T>
-            )}
-          </Animated.View>
-        ) : reading.kind === 'bad' ? (
+              {!note && (
+                <T variant="caption" color={colors.textMuted}>
+                  Now a colon and what to do: “…: check the error rate”
+                </T>
+              )}
+            </Animated.View>
+          ) : reading.kind === 'bad' ? (
+            <T variant="small" color={colors.accentErrorLight}>
+              {reading.reason}
+            </T>
+          ) : (
+            <T variant="caption" color={colors.textMuted}>
+              When it should happen, a colon, then what {agent?.name ?? 'the agent'} should do.
+            </T>
+          )}
+        </View>
+        {error && (
           <T variant="small" color={colors.accentErrorLight}>
-            {reading.reason}
-          </T>
-        ) : (
-          <T variant="caption" color={colors.textMuted}>
-            When it should happen, a colon, then what {agent?.name ?? 'the agent'} should do.
+            {error}
           </T>
         )}
-      </View>
-      {error && (
-        <T variant="small" color={colors.accentErrorLight}>
-          {error}
-        </T>
-      )}
-      <View style={styles.actions}>
-        <Button title="Cancel" variant="ghost" onPress={() => router.back()} style={{ flex: 1 }} />
-        <Button
-          title={editing ? 'Save' : 'Schedule'}
-          variant="primary"
-          disabled={!ready}
-          busy={saving}
-          onPress={() => void save()}
-          style={{ flex: 1 }}
-        />
-      </View>
-      {!!editing?.runs?.length && <RunHistory runs={editing.runs} />}
-    </ScrollView>
+        <View style={styles.actions}>
+          <Button
+            title="Cancel"
+            variant="ghost"
+            onPress={() => router.back()}
+            style={{ flex: 1 }}
+          />
+          <Button
+            title={editing ? 'Save' : 'Schedule'}
+            variant="primary"
+            disabled={!ready}
+            busy={saving}
+            onPress={() => void save()}
+            style={{ flex: 1 }}
+          />
+        </View>
+        {!!editing?.runs?.length && <RunHistory runs={editing.runs} />}
+      </ScrollView>
+    </SheetPage>
   );
 }
 
 /** Its last runs, newest first: when, and what came of it, in the desk's words. */
 function RunHistory({ runs }: { runs: CheckInRun[] }) {
+  const colors = useColors();
+  const styles = useStyles();
   const now = useNow(30_000);
   return (
     <View style={{ gap: space.xs, marginTop: space.sm }}>
@@ -207,16 +220,16 @@ function RunHistory({ runs }: { runs: CheckInRun[] }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   input: {
     fontFamily: fonts.regular,
     fontSize: type.body,
-    color: colors.textWhite,
-    backgroundColor: colors.surfaceApp,
-    borderRadius: radius.lg,
+    color: colors.textBody,
+    backgroundColor: colors.inputFill,
+    borderRadius: radius.inner,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    borderColor: colors.inputBorder,
     paddingHorizontal: space.md,
     paddingTop: space.md,
     paddingBottom: space.md,
@@ -225,13 +238,7 @@ const styles = StyleSheet.create({
   reading: { minHeight: 38, paddingHorizontal: space.xs },
   actions: { flexDirection: 'row', gap: space.sm },
   heading: { marginLeft: space.lg, letterSpacing: 0.4 },
-  list: {
-    backgroundColor: colors.surfaceApp,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    overflow: 'hidden',
-  },
+  list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
   run: { paddingHorizontal: space.lg, paddingVertical: space.sm + 2, gap: space['2xs'] },
-  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
-});
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
+}));

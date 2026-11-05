@@ -7,9 +7,10 @@
 import { NativeTabs } from 'expo-router/native-tabs';
 import { needsAttention } from '../../lib/agents';
 import { useApp } from '../../lib/store';
-import { colors } from '../../lib/theme';
+import { useColors } from '../../lib/appearance';
 
 export default function TabsLayout() {
+  const colors = useColors();
   // Counts only, so a streaming reply never re-renders the tab bar. A count
   // is live news, so it shows only while the Mac is answering: offline the
   // rows say "as of …", and a red number would claim more than is known.
@@ -25,7 +26,7 @@ export default function TabsLayout() {
       ) ?? 0
   );
   return (
-    <NativeTabs tintColor={colors.textWhite} iconColor={{ default: colors.textMuted }}>
+    <NativeTabs tintColor={colors.textStrong} iconColor={{ default: colors.textMuted }}>
       <NativeTabs.Trigger name="agents">
         <NativeTabs.Trigger.Icon
           sf={{

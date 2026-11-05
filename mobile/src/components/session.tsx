@@ -6,7 +6,8 @@
 
 import type { SessionSummary } from '@shipstudio/companion-protocol';
 import { StyleSheet, View } from 'react-native';
-import { colors, space } from '../lib/theme';
+import { iconSize, space } from '../lib/theme';
+import { useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { Dot, T } from './ui';
 
@@ -34,6 +35,7 @@ export function sessionStateText(s: SessionSummary): string {
 }
 
 export function SessionState({ session }: { session: SessionSummary }) {
+  const colors = useColors();
   const tone =
     session.state === 'needs_decision'
       ? colors.accentWarning
@@ -44,14 +46,11 @@ export function SessionState({ session }: { session: SessionSummary }) {
     <View style={styles.row}>
       <View style={styles.mark}>
         {session.state === 'working' ? (
-          <Spinner size={11} />
+          <Spinner size={iconSize.inline} />
         ) : session.state === 'needs_decision' ? (
-          <Dot color={colors.accentWarning} glow size={7} />
+          <Dot color={colors.accentWarning} glow />
         ) : (
-          <Dot
-            color={session.state === 'finished' ? colors.accentSuccess : colors.textMuted}
-            size={7}
-          />
+          <Dot color={session.state === 'finished' ? colors.accentSuccess : colors.textMuted} />
         )}
       </View>
       <T variant="small" color={tone} numberOfLines={1} style={{ flex: 1 }}>

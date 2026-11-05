@@ -7,14 +7,18 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
-import { Button, T } from '../components/ui';
+import { Button, T, SheetPage } from '../components/ui';
 import { haptic } from '../lib/haptics';
 import { describeError, startSession } from '../lib/session';
 import { useApp } from '../lib/store';
 import { useAccent } from '../lib/accent';
-import { colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 
 export default function Start() {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const accent = useAccent();
   const { project, name } = useLocalSearchParams<{ project: string; name: string }>();
   const router = useRouter();
@@ -46,58 +50,62 @@ export default function Start() {
   };
 
   return (
-    <View style={styles.content}>
-      <T variant="title" color={colors.textWhite}>
-        New task in {name}
-      </T>
-      <T variant="small" color={colors.textSecondary}>
-        {macName} starts an agent in this project on what you write here. It can take up to a minute
-        to begin.
-      </T>
-      <TextInput
-        autoFocus
-        multiline
-        value={prompt}
-        onChangeText={setPrompt}
-        placeholder="What should it do?"
-        placeholderTextColor={colors.textMuted}
-        style={styles.input}
-        keyboardAppearance="dark"
-        selectionColor={accent.accent}
-        accessibilityLabel="What the new task should do"
-      />
-      {error && (
-        <T variant="small" color={colors.accentErrorLight}>
-          {error}
+    <SheetPage>
+      <View style={styles.content}>
+        <T variant="title" color={colors.textStrong}>
+          New task in {name}
         </T>
-      )}
-      <Button
-        title={busy ? 'Starting…' : 'Start'}
-        variant="primary"
-        busy={busy}
-        disabled={!connected || !prompt.trim()}
-        onPress={start}
-      />
-      {!connected && (
-        <T variant="caption" color={colors.textSecondary}>
-          Starting a task needs {macName}.
+        <T variant="small" color={colors.textSecondary}>
+          {macName} starts an agent in this project on what you write here. It can take up to a
+          minute to begin.
         </T>
-      )}
-    </View>
+        <TextInput
+          autoFocus
+          multiline
+          value={prompt}
+          onChangeText={setPrompt}
+          placeholder="What should it do?"
+          placeholderTextColor={colors.textMuted}
+          style={styles.input}
+          keyboardAppearance={appearance}
+          selectionColor={accent.accent}
+          accessibilityLabel="What the new task should do"
+        />
+        {error && (
+          <T variant="small" color={colors.accentErrorLight}>
+            {error}
+          </T>
+        )}
+        <Button
+          title={busy ? 'Starting…' : 'Start'}
+          variant="primary"
+          busy={busy}
+          disabled={!connected || !prompt.trim()}
+          onPress={start}
+        />
+        {!connected && (
+          <T variant="caption" color={colors.textSecondary}>
+            Starting a task needs {macName}.
+          </T>
+        )}
+      </View>
+    </SheetPage>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md },
   input: {
     fontFamily: fonts.regular,
     fontSize: type.body,
     lineHeight: lineHeight(type.body, 1.35),
-    color: colors.textPrimary,
-    backgroundColor: colors.surfaceApp,
-    borderRadius: radius.lg,
+    color: colors.textBody,
+    backgroundColor: colors.inputFill,
+    borderRadius: radius.inner,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.inputBorder,
     padding: space.md,
     minHeight: 120,
     textAlignVertical: 'top',
   },
-});
+}));

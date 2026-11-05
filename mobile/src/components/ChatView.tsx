@@ -59,7 +59,8 @@ import {
 import { useAccent } from '../lib/accent';
 import { useApp } from '../lib/store';
 import { chatItems, sentAt, type Item } from '../lib/timeline';
-import { alpha, chromeScale, colors, radius, space } from '../lib/theme';
+import { alpha, avatarSize, chromeScale, iconSize, radius, space } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
 import { Composer } from './Composer';
@@ -68,7 +69,7 @@ import { PathContext } from './Markdown';
 import { PaneContext, type Pane } from './ApprovalCard';
 import { showActions } from './menu';
 import { SelectSheet } from './SelectSheet';
-import { Button, Icon, IconButton, ripple, T } from './ui';
+import { Button, Icon, IconButton, useRipple, T } from './ui';
 
 const NONE: never[] = [];
 
@@ -96,6 +97,9 @@ function PinnedQuestion({
   inset: { left: number; right: number };
   onPress: () => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   return (
     <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)}>
       <Pressable
@@ -109,9 +113,13 @@ function PinnedQuestion({
           { paddingLeft: space.lg + inset.left, paddingRight: space.lg + inset.right },
         ]}
       >
-        <Icon name="exclamationmark.triangle.fill" size={13} color={colors.accentWarning} />
+        <Icon
+          name="exclamationmark.triangle.fill"
+          size={iconSize.inline}
+          color={colors.accentWarning}
+        />
         <View style={{ flex: 1 }}>
-          <T variant="small" color={colors.textWhite} numberOfLines={1}>
+          <T variant="small" color={colors.textStrong} numberOfLines={1}>
             {title}
           </T>
           {line !== title && (
@@ -120,7 +128,7 @@ function PinnedQuestion({
             </T>
           )}
         </View>
-        <Icon name="chevron.down" size={11} color={colors.textMuted} />
+        <Icon name="chevron.down" size={iconSize.inline} color={colors.textMuted} />
       </Pressable>
     </Animated.View>
   );
@@ -138,6 +146,9 @@ export function ChatView({
   compose?: boolean;
   embedded?: boolean;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const accent = useAccent();
@@ -489,7 +500,7 @@ export function ChatView({
             {(urgentBelow || newReply) && (
               <T
                 variant="small"
-                color={urgentBelow ? colors.inkDark : colors.textPrimary}
+                color={urgentBelow ? colors.onWarning : colors.textPrimary}
                 maxFontSizeMultiplier={chromeScale}
                 style={{ marginLeft: space.xs }}
               >
@@ -498,8 +509,8 @@ export function ChatView({
             )}
             <Icon
               name="arrow.down"
-              size={15}
-              color={urgentBelow ? colors.inkDark : colors.textPrimary}
+              size={iconSize.body}
+              color={urgentBelow ? colors.onWarning : colors.textPrimary}
               fallback={<T>↓</T>}
             />
           </Pressable>
@@ -519,7 +530,7 @@ export function ChatView({
           ]}
           accessibilityLiveRegion="polite"
         >
-          <T variant="small" color={colors.textWhite}>
+          <T variant="small" color={colors.textStrong}>
             {toast}
           </T>
         </Animated.View>
@@ -563,6 +574,7 @@ function ItemView({
   onDraftHeight: (height: number) => void;
   lit?: boolean;
 }) {
+  const styles = useStyles();
   const body =
     item.kind === 'message' ? (
       <MessageRow
@@ -583,8 +595,15 @@ function ItemView({
     );
   // A run from one side sits close together; a new speaker gets room.
   const grouped = item.kind === 'message' && item.grouped;
+  // A meta line about the block above it (what changed, a session started)
+  // belongs to that block: it sits close under it, not a paragraph away.
+  const attached =
+    grouped &&
+    (item.message.kind === 'changes' ||
+      (item.message.kind === 'session' &&
+        (item.message.session?.event === 'started' || item.message.session?.event === 'sent')));
   return (
-    <View style={[styles.item, grouped && styles.itemGrouped]}>
+    <View style={[styles.item, grouped && styles.itemGrouped, attached && styles.itemAttached]}>
       {lit && <Glow />}
       {body}
     </View>
@@ -593,6 +612,7 @@ function ItemView({
 
 /** The row a search hit opened on: lit, then fading back. */
 function Glow() {
+  const styles = useStyles();
   const opacity = useSharedValue(1);
   useEffect(() => {
     opacity.set(withDelay(900, withTiming(0, { duration: 900 })));
@@ -611,6 +631,8 @@ function Header({
   /** Its reply is streaming in: the header says so, not the step before it. */
   writing: boolean;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const connected = useApp((s) => s.link.kind === 'connected');
   const engine = useApp((s) => engineLine(agent, s.overview?.engines));
   const line =
@@ -623,11 +645,11 @@ function Header({
           : { text: engine ?? (agent.role || 'Idle'), color: colors.textSecondary };
   return (
     <View style={styles.header}>
-      <AgentAvatar name={agent.name} color={agent.color} size={28} />
+      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.header} />
       <View style={{ flexShrink: 1 }}>
         <T
-          variant="subhead"
-          color={colors.textWhite}
+          variant="headline"
+          color={colors.textStrong}
           numberOfLines={1}
           maxFontSizeMultiplier={chromeScale}
         >
@@ -658,10 +680,12 @@ function Gone({
   macName: string;
   onBack: () => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.gone}>
       {!embedded && <Stack.Screen options={{ title: '' }} />}
-      <T variant="title" color={colors.textWhite} style={{ textAlign: 'center' }}>
+      <T variant="title" color={colors.textStrong} style={{ textAlign: 'center' }}>
         This agent was removed
       </T>
       <T color={colors.textSecondary} style={{ textAlign: 'center' }}>
@@ -672,7 +696,7 @@ function Gone({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: space.lg, paddingVertical: space.md },
   // Each cell is drawn upright, so paddingTop is the space between a row and
@@ -682,6 +706,7 @@ const styles = StyleSheet.create({
   // and still need air between them.
   item: { paddingTop: space.xl },
   itemGrouped: { paddingTop: space.md },
+  itemAttached: { paddingTop: space.tight },
   glow: {
     position: 'absolute',
     top: 0,
@@ -698,7 +723,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
+    borderBottomColor: colors.borderDefault,
   },
   pinned: {
     flexDirection: 'row',
@@ -709,22 +734,25 @@ const styles = StyleSheet.create({
     minHeight: 44,
     backgroundColor: colors.surfacePanel,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: alpha(colors.accentWarning, 0.45),
+    borderBottomColor: colors.borderDefault,
   },
   jumpWrap: { position: 'absolute', right: space.lg },
   jump: {
-    minWidth: 40,
-    height: 40,
+    minWidth: 44,
+    height: 44,
     paddingHorizontal: space.md,
-    borderRadius: 20,
+    borderRadius: radius.pill,
     flexDirection: 'row',
     gap: space.tight,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceControl,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    overflow: 'hidden',
+    borderColor: colors.cardBorder,
+    shadowColor: colors.black,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
   jumpUrgent: { backgroundColor: colors.accentWarning, borderColor: colors.accentWarning },
   toast: {
@@ -732,7 +760,7 @@ const styles = StyleSheet.create({
     left: space.lg,
     right: space.lg,
     padding: space.md,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     backgroundColor: colors.surfaceSelected,
   },
   gone: {
@@ -742,4 +770,4 @@ const styles = StyleSheet.create({
     padding: space.xl,
     gap: space.md,
   },
-});
+}));

@@ -10,7 +10,7 @@
 
 import type { Agent, AgentMessage, Approval, SecretRequest } from '@shipstudio/companion-protocol';
 import { type ComponentRef, useEffect, useRef, useState } from 'react';
-import { AppState, StyleSheet, TextInput, View } from 'react-native';
+import { AppState, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { haptic } from '../lib/haptics';
 import {
@@ -21,8 +21,9 @@ import {
   secretRouteProblem,
 } from '../lib/session';
 import { useApp } from '../lib/store';
-import { colors, fonts, radius, space, type } from '../lib/theme';
-import { ARM_MS, cardStyles, useArmed } from './ApprovalCard';
+import { CARD_TITLE_SCALE, fonts, iconSize, space } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { ARM_MS, Receipt, useCardStyles, useArmed } from './ApprovalCard';
 import { Button, Icon, T } from './ui';
 
 /** `$STRIPE_KEY`, or `$BANK_USERNAME, $BANK_PASSWORD`: what the agent gets. */
@@ -42,6 +43,10 @@ export function SecretCard({
   agent: Agent;
   onError: (text: string) => void;
 }) {
+  const cardStyles = useCardStyles();
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const pending = approval.status === 'pending';
   const armed = useArmed(pending);
   const link = useApp((s) => s.link);
@@ -107,129 +112,140 @@ export function SecretCard({
           : `Declined · ${agent.name} was told`
         : 'Not answered';
 
+  if (!pending) {
+    return (
+      <Receipt
+        icon="lock.fill"
+        title={`${agent.name} asked for “${request.name}”`}
+        outcome={
+          approval.status === 'allowed'
+            ? outcome.replace('Saved to your Mac’s Keychain', 'Saved')
+            : outcome
+        }
+        ok={approval.status === 'allowed'}
+      >
+        <T variant="small" color={colors.textSecondary}>
+          {request.purpose}
+        </T>
+        {approval.status === 'allowed' && (
+          <T variant="small" color={colors.textMuted}>
+            In your Mac’s Keychain
+          </T>
+        )}
+      </Receipt>
+    );
+  }
+
   return (
-    <Animated.View
-      layout={LinearTransition.duration(220)}
-      style={[cardStyles.card, pending && cardStyles.cardPending]}
-    >
-      <View style={styles.title}>
-        <Icon name="lock.fill" size={13} color={colors.textSecondary} />
-        <T
-          variant="subhead"
-          color={colors.textWhite}
-          maxFontSizeMultiplier={2}
-          style={{ flexShrink: 1 }}
-        >
-          {agent.name} asks for “{request.name}”
+    <Animated.View layout={LinearTransition.duration(220)} style={cardStyles.card}>
+      <View style={styles.head}>
+        <View style={styles.title}>
+          <Icon name="lock.fill" size={iconSize.inline} color={colors.textMuted} />
+          <T
+            variant="headline"
+            color={colors.textStrong}
+            maxFontSizeMultiplier={CARD_TITLE_SCALE}
+            style={{ flexShrink: 1 }}
+          >
+            {agent.name} asks for “{request.name}”
+          </T>
+        </View>
+        <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
+          {request.purpose}
         </T>
       </View>
-      <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>
-        {request.purpose}
-      </T>
-      {pending ? (
-        problem ? (
-          <View style={{ gap: space.sm }}>
-            <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>
-              {problem}
-            </T>
-            {link.kind === 'connected' && (
-              <Button title="Deny" busy={busy === 'deny'} onPress={() => void deny()} />
-            )}
-          </View>
-        ) : (
-          <Animated.View
-            entering={FadeIn.duration(ARM_MS)}
-            exiting={FadeOut.duration(120)}
-            pointerEvents={armed ? 'auto' : 'none'}
-            accessibilityElementsHidden={!armed}
-            importantForAccessibility={armed ? 'auto' : 'no-hide-descendants'}
-            style={{ gap: space.sm }}
-          >
-            {request.fields.map((field, i) => (
-              <View key={field.env} style={{ gap: space['2xs'] }}>
-                <T variant="caption" color={colors.textSecondary}>
-                  {field.label}
-                </T>
-                <TextInput
-                  ref={(r) => {
-                    inputs.current[i] = r;
-                  }}
-                  secureTextEntry
-                  // Not offered to the system's password manager: it would keep a copy.
-                  textContentType="none"
-                  autoComplete="off"
-                  importantForAutofill="no"
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  editable={!busy}
-                  keyboardAppearance="dark"
-                  accessibilityLabel={field.label}
-                  onChangeText={(v) => {
-                    values.current[i] = v;
-                    const has = v.trim().length > 0;
-                    setFilled((f) => (f[i] === has ? f : f.map((x, j) => (j === i ? has : x))));
-                  }}
-                  returnKeyType={i === request.fields.length - 1 ? 'done' : 'next'}
-                  onSubmitEditing={() =>
-                    i < request.fields.length - 1 ? inputs.current[i + 1]?.focus() : void save()
-                  }
-                  style={styles.input}
-                />
-              </View>
-            ))}
-            <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={2}>
-              Kept in your Mac’s Keychain for {agent.name} only. It gets {secretVars(request)},
-              never the value, and this phone keeps nothing.
-            </T>
-            {error && (
-              <T variant="small" color={colors.accentErrorLight}>
-                {error}
+      {problem ? (
+        <View style={{ gap: space.sm }}>
+          <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>
+            {problem}
+          </T>
+          {link.kind === 'connected' && (
+            <Button title="Deny" busy={busy === 'deny'} onPress={() => void deny()} />
+          )}
+        </View>
+      ) : (
+        <Animated.View
+          entering={FadeIn.duration(ARM_MS)}
+          exiting={FadeOut.duration(120)}
+          pointerEvents={armed ? 'auto' : 'none'}
+          accessibilityElementsHidden={!armed}
+          importantForAccessibility={armed ? 'auto' : 'no-hide-descendants'}
+          style={{ gap: space.md }}
+        >
+          {request.fields.map((field, i) => (
+            <View key={field.env} style={{ gap: space.tight }}>
+              <T
+                variant="small"
+                color={colors.textSecondary}
+                style={{ fontFamily: fonts.medium }}
+                maxFontSizeMultiplier={CARD_TITLE_SCALE}
+              >
+                {field.label}
               </T>
-            )}
-            <View style={cardStyles.actions}>
-              <Button
-                title="Deny"
-                busy={busy === 'deny'}
-                disabled={!!busy || link.kind !== 'connected'}
-                onPress={() => void deny()}
-                style={{ flex: 1 }}
-              />
-              <Button
-                title="Save"
-                variant="primary"
-                busy={busy === 'save'}
-                disabled={!!busy || !filled.every(Boolean)}
-                focusable={armed}
-                onPress={() => void save()}
-                style={{ flex: 1 }}
+              <TextInput
+                ref={(r) => {
+                  inputs.current[i] = r;
+                }}
+                secureTextEntry
+                // Not offered to the system's password manager: it would keep a copy.
+                textContentType="none"
+                autoComplete="off"
+                importantForAutofill="no"
+                autoCorrect={false}
+                autoCapitalize="none"
+                spellCheck={false}
+                editable={!busy}
+                keyboardAppearance={appearance}
+                accessibilityLabel={field.label}
+                onChangeText={(v) => {
+                  values.current[i] = v;
+                  const has = v.trim().length > 0;
+                  setFilled((f) => (f[i] === has ? f : f.map((x, j) => (j === i ? has : x))));
+                }}
+                returnKeyType={i === request.fields.length - 1 ? 'done' : 'next'}
+                onSubmitEditing={() =>
+                  i < request.fields.length - 1 ? inputs.current[i + 1]?.focus() : void save()
+                }
+                placeholderTextColor={colors.textMuted}
+                style={[cardStyles.input, styles.secret]}
               />
             </View>
-          </Animated.View>
-        )
-      ) : (
-        <Animated.View entering={FadeIn.duration(200).delay(100)}>
-          <T
-            variant="small"
-            color={approval.status === 'allowed' ? colors.accentSuccess : colors.textSecondary}
-          >
-            {outcome}
+          ))}
+          <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
+            Kept in your Mac’s Keychain for {agent.name} only. It gets {secretVars(request)}, never
+            the value, and this phone keeps nothing.
           </T>
+          {error && (
+            <T variant="small" color={colors.accentErrorLight}>
+              {error}
+            </T>
+          )}
+          <View style={cardStyles.actions}>
+            <Button
+              title="Deny"
+              busy={busy === 'deny'}
+              disabled={!!busy || link.kind !== 'connected'}
+              onPress={() => void deny()}
+              style={{ flex: 1 }}
+            />
+            <Button
+              title="Save"
+              variant="primary"
+              busy={busy === 'save'}
+              disabled={!!busy || !filled.every(Boolean)}
+              focusable={armed}
+              onPress={() => void save()}
+              style={{ flex: 1 }}
+            />
+          </View>
         </Animated.View>
       )}
     </Animated.View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
+  head: { gap: space['2xs'] },
   title: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
-  input: {
-    fontFamily: fonts.mono,
-    fontSize: type.body,
-    color: colors.textPrimary,
-    backgroundColor: colors.surfaceControl,
-    borderRadius: radius.card,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm + 2,
-  },
-});
+  secret: { fontFamily: fonts.mono },
+}));
