@@ -1258,6 +1258,10 @@ impl Backend for Stub {
         Ok(reach_fixture())
     }
 
+    async fn policy(&self, _agent_id: &str) -> Result<Value, CommandError> {
+        Ok(policy_fixture())
+    }
+
     async fn logins_team(&self, _since: Option<i64>) -> Result<Value, CommandError> {
         Ok(team_fixture())
     }
@@ -1677,6 +1681,97 @@ pub fn reach_fixture() -> Value {
     })
 }
 
+/// "What it can do", as `agents_policy` serializes it: an agent with its own
+/// browser setting and rule on a Balanced team. Built from the real types.
+pub fn policy_fixture() -> Value {
+    use crate::agents::policy::{self, Overrides, Preset, Saved};
+    let mut agent: crate::agents::store::Agent = serde_json::from_value(json!({
+        "id": AGENT, "name": "Finance", "shape": 0, "color": "red", "createdAt": 0
+    }))
+    .unwrap();
+    agent.project = Some("/u/Projects/client-site".into());
+    let mut saved = Saved {
+        version: 3,
+        team: Preset::Balanced.team(),
+        agents: Default::default(),
+    };
+    saved.team.rules.push("Never email clients".into());
+    saved.agents.insert(
+        AGENT.into(),
+        Overrides {
+            browser: Some(false),
+            folders: Some(vec![policy::Folder {
+                path: "/u/me/Invoices".into(),
+                write: false,
+            }]),
+            rules: vec!["Only touch the marketing site".into()],
+            ..Default::default()
+        },
+    );
+    serde_json::to_value(policy::agent_view(
+        &saved,
+        &agent,
+        crate::agents::independence::Level::Judgement,
+    ))
+    .unwrap()
+}
+
+/// A settings card as `propose_settings_change` raises it.
+pub fn settings_card() -> crate::agents::store::AgentMessage {
+    use crate::agents::policy::{Change, Target};
+    use crate::agents::policy_card::{Group, Proposal};
+    use crate::agents::store::{Approval, ApprovalStatus, MessageKind};
+    let mut m = crate::agents::runner::new_message(AGENT, MessageKind::Approval, "");
+    m.id = "m41".into();
+    m.ts = 1_762_290_100_000;
+    let proposal = Proposal {
+        targets: vec![Target::Agent {
+            agent_id: "hiring".into(),
+        }],
+        change: Change {
+            add_projects: vec!["/u/Projects/client-site".into()],
+            browser: Some(false),
+            ..Default::default()
+        },
+        version: 3,
+        groups: vec![Group {
+            who: "Hiring".into(),
+            agent_ids: vec!["hiring".into()],
+            changes: vec![
+                "Can now work in client-site (its own copy)".into(),
+                "Can no longer use your browser".into(),
+            ],
+        }],
+        why: Some("You asked for Hiring to help on the client's site".into()),
+        has_rules: true,
+    };
+    m.approval = Some(Approval {
+        request_id: "q13".into(),
+        title: "Change Hiring's settings?".into(),
+        detail:
+            "Hiring: Can now work in client-site (its own copy). Can no longer use your browser."
+                .into(),
+        summary: Some(
+            "Hiring: Can now work in client-site (its own copy). Can no longer use your browser."
+                .into(),
+        ),
+        status: ApprovalStatus::Pending,
+        tool: None,
+        input: None,
+        always: None,
+        always_allowed: false,
+        note: None,
+        prompt: None,
+        choice: None,
+        secret: None,
+        connector: None,
+        login: None,
+        set_aside: None,
+        settings: Some(proposal),
+    });
+    m
+}
+
 /// A login card as `request_login` raises it, with every way in, a sign-in
 /// under way (started from the phone) and a key field: the real Rust types,
 /// so the fixture is what the Mac sends.
@@ -1709,6 +1804,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
         secret: None,
         connector: None,
         set_aside: None,
+        settings: None,
         login: Some(LoginRequest {
             service: "gmail".into(),
             title: "Gmail".into(),

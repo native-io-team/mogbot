@@ -35,6 +35,7 @@ pub const METHODS: &[&str] = &[
     "agents.loginDecline",
     "agents.loginSaveKey",
     "agents.reach",
+    "agents.policy",
     "agents.loginsTeam",
     "agents.loginsConnect",
     "agents.loginDismiss",
@@ -100,6 +101,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.instructions",
     "agents.memory",
     "agents.reach",
+    "agents.policy",
     "agents.loginsTeam",
     "agents.usage",
     "agents.quota",
@@ -516,6 +518,8 @@ pub trait Backend: Send + Sync + 'static {
     ) -> Result<Value, CommandError>;
     /// `agents_reach`: what an agent can reach. Read-only on the phone.
     async fn reach(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_policy`: "What it can do". Read-only on the phone; changed in chat.
+    async fn policy(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_logins_team`: "What your team needs", one row per service.
     async fn logins_team(&self, since: Option<i64>) -> Result<Value, CommandError>;
     /// `agents_logins_connect`: one row's way in, for every agent on it but `skip`.
@@ -1654,6 +1658,10 @@ async fn run(
         "agents.reach" => {
             let p: AgentParam = parse(params)?;
             Ok(b.reach(&p.agent_id).await?)
+        }
+        "agents.policy" => {
+            let p: AgentParam = parse(params)?;
+            Ok(b.policy(&p.agent_id).await?)
         }
         "agents.loginsTeam" => {
             let p: TeamParams = parse(params)?;

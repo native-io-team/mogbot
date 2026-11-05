@@ -9,6 +9,7 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
 import type { Watch, WatchSource } from '../../packages/companion-protocol/src/model';
+import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
 
 export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
 
@@ -429,6 +430,8 @@ export interface Approval {
    * Nothing it asked for ran.
    */
   setAside?: string;
+  /** "Change this agent's settings?" (`propose_settings_change`): who, and what changes in plain words. Allow applies it. */
+  settings?: SettingsProposal;
 }
 
 /**

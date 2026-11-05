@@ -296,6 +296,7 @@ pub(crate) fn card(
         connector: None,
         login: None,
         set_aside: None,
+        settings: None,
     }
 }
 

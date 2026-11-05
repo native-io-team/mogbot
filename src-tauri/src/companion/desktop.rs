@@ -613,6 +613,10 @@ impl Backend for DesktopBackend {
         json(cmd::agents_reach(agent_id.to_string()).await?)
     }
 
+    async fn policy(&self, agent_id: &str) -> Result<Value, CommandError> {
+        json(cmd::agents_policy(agent_id.to_string()).await?)
+    }
+
     async fn logins_team(&self, since: Option<i64>) -> Result<Value, CommandError> {
         json(cmd::agents_logins_team(since).await?)
     }

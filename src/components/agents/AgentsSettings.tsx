@@ -8,6 +8,9 @@
  * - **Independence**: how much agents do on their own (Check with me often,
  *   Use good judgement, Go hard), and what always asks at every level
  *   (`AgentIndependenceSettings`, `agents/independence.rs`).
+ * - **What agents can do**: the team's defaults, the presets, and "Reset
+ *   everyone to …" (`AgentTeamPolicySettings`, `agents/policy.rs`). Chat is
+ *   the first way to change them; this is the second.
  * - **Engines and models**: the engine and model new agents start on, a
  *   real setting (`AgentDefaultsSettings`), and what routines run on.
  *   Existing agents keep theirs; nothing shown that wasn't read.
@@ -32,6 +35,7 @@ import { AgentDefaultsSettings } from './AgentDefaultsSettings';
 import { AgentAccounts } from './AgentAccounts';
 import { AgentUsageSettings } from './AgentsUsage';
 import { AgentIndependenceSettings } from './AgentIndependenceSettings';
+import { AgentTeamPolicySettings } from './AgentTeamPolicySettings';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
@@ -134,6 +138,8 @@ export function AgentsSettings({
       </section>
 
       <AgentIndependenceSettings />
+
+      <AgentTeamPolicySettings />
 
       {engines.length > 0 && hasDefaults && (
         <section className="settings-group" aria-labelledby="agents-settings-engines">

@@ -969,6 +969,14 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
                 setSelectedId(chief.id);
               }
         }
+        onAskInChat={(text) => {
+          // Settings change in chat: the Chief proposes it on a card.
+          const chief = agents.find((a) => a.isMain);
+          if (!chief) return;
+          setEditor({ open: false, agent: null });
+          setPrefill({ agentId: chief.id, text, n: Date.now() });
+          setSelectedId(chief.id);
+        }}
         onSetUpEngine={(engine, step) => setEngineSetup({ engine, step })}
       />
       <ChiefIdeasModal onPick={pickIdea} onReadyMade={() => openNew(ROLE_TEMPLATES[0]?.id)} />

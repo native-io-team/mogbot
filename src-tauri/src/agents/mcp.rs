@@ -335,6 +335,12 @@ const TOOLS: &[Tool] = &[
         }),
     },
     Tool {
+        name: super::policy_card::TOOL,
+        description: super::policy_card::DESCRIPTION,
+        main_only: false,
+        schema: super::policy_card::schema,
+    },
+    Tool {
         name: "approve",
         description: "Internal: Claude Code asks this before a tool call that needs the user's permission.",
         main_only: false,
@@ -548,6 +554,7 @@ async fn call(
         }
         "request_secret" => request_secret(app, caller, args),
         "request_login" => request_login(app, caller, args),
+        super::policy_card::TOOL => super::policy_card::propose(app, caller, turn, args).await,
         _ => error("Unknown tool"),
     }
 }
@@ -1692,6 +1699,7 @@ pub(super) fn new_card(
         connector: None,
         login: None,
         set_aside: None,
+        settings: None,
     }
 }
 
@@ -1945,6 +1953,15 @@ async fn decide_inner(
 ) -> Decision {
     if take_grant(&caller.id, tool, input) {
         return Decision::Allow;
+    }
+    // What the agent's settings allow (`policy`): a project or folder it
+    // may not use, an app or the browser it was kept from, is refused
+    // without a card; reading where it may read needs none.
+    let eff = super::policy::effective(caller);
+    match super::policy::verdict(&eff, caller, &super::policy::Places::current(), tool, input) {
+        Some(super::policy::Verdict::Allow) => return Decision::Allow,
+        Some(super::policy::Verdict::Deny(why)) => return Decision::Deny(why),
+        None => {}
     }
     // A connection the user granted on a login card: reads go through
     // (except in a turn answering outside text), a read-only grant refuses

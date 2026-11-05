@@ -621,7 +621,15 @@ export function createMockServer(opts: MockOptions = {}) {
   });
   messages.set(
     'fixtures',
-    (structuredClone(real.agentsMessages.messages) as AgentMessage[]).map((m) => ({
+    [
+      ...(structuredClone(real.agentsMessages.messages) as AgentMessage[]),
+      // "Change Hiring's settings?" (`propose_settings_change`), as the Mac sends it.
+      ...real.frames.flatMap((f) =>
+        f.t === 'evt' && f.event.type === 'agents.message' && f.event.message.approval?.settings
+          ? [structuredClone(f.event.message) as AgentMessage]
+          : []
+      ),
+    ].map((m) => ({
       ...m,
       agentId: 'fixtures',
     }))
@@ -1804,6 +1812,7 @@ export function createMockServer(opts: MockOptions = {}) {
       return secret;
     },
     'agents.reach': (p) => reachOf(String(p.agentId)),
+    'agents.policy': (p) => ({ ...structuredClone(real.agentsPolicy), agentId: String(p.agentId) }),
     'agents.loginsTeam': (p) => teamLogins(typeof p.since === 'number' ? p.since : undefined),
     'agents.loginsConnect': (p) => {
       const need = teamLogins().needs.find((n) => n.key === p.key);

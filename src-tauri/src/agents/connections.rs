@@ -107,8 +107,14 @@ pub struct Connection {
 }
 
 impl Connection {
+    /// Its grant to `agent_id`, if that agent's settings let it use this app
+    /// at all (`policy`): a grant the policy keeps it from counts as none, so
+    /// the relay refuses it and its turns don't load it.
     pub fn grant_for(&self, agent_id: &str) -> Option<&Grant> {
-        self.grants.iter().find(|g| g.agent_id == agent_id)
+        self.grants
+            .iter()
+            .find(|g| g.agent_id == agent_id)
+            .filter(|_| super::policy::connection_allowed(agent_id, &self.service, &self.title))
     }
 
     /// Where its sign-in is kept, in the UI's words.

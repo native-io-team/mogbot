@@ -14,6 +14,7 @@ export const MATERIAL: Partial<Record<SFName, string>> = {
   'arrow.up.right': 'open_in_new',
   'bubble.left': 'chat_bubble',
   'checkmark.shield': 'verified_user',
+  'slider.horizontal.3': 'tune',
   globe: 'public',
   'list.bullet': 'list',
   pencil: 'edit',

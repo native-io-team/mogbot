@@ -16,6 +16,8 @@
 //! - [`context`]: how full a conversation is, only as its engine reports it
 //! - [`mcp`]: the tools agents get (team, projects, management, approvals)
 //! - [`permissions`]: "Always allow" rules and how narrowly they match
+//! - [`policy`]: what each agent may do (projects, folders, apps, browser, independence, rules), and the team default
+//! - [`policy_card`]: "Change this agent's settings?", the card behind `propose_settings_change`
 //! - [`notify`]: macOS notifications and the Dock badge
 //! - [`tray`]: the menu-bar icon, and what a quit would interrupt
 //! - [`quick_entry`]: the system-wide shortcut and its floating composer
@@ -79,6 +81,8 @@ pub mod oauth;
 pub mod other_app;
 pub mod paste;
 pub mod permissions;
+pub mod policy;
+pub mod policy_card;
 pub mod procs;
 pub mod project;
 pub mod prompts;

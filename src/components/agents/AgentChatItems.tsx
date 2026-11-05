@@ -30,6 +30,7 @@ import {
   HistoryIcon,
   MoreHorizontalIcon,
   PinIcon,
+  SettingsSlidersIcon,
   ShieldCheckIcon,
   WarningIcon,
 } from '@/components/icons';
@@ -46,6 +47,7 @@ import { MentionText } from './AgentMentions';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
+import { AgentSettingsChange } from './AgentSettingsChange';
 import { AgentCard } from './AgentCard';
 import { ImportReviewCard } from './ImportReviewCard';
 import { ImportPlaybackCard } from './ImportPlaybackCard';
@@ -972,7 +974,10 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
     return <>Declined · “{approval.note}”</>;
   }
   if (approval.status === 'expired' && approval.setAside) {
-    return SET_ASIDE_OUTCOME;
+    return approval.settings ? `Not changed · ${approval.setAside}` : SET_ASIDE_OUTCOME;
+  }
+  if (approval.settings && approval.status === 'allowed') {
+    return 'Changed · from each agent’s next turn';
   }
   if (approval.choice && approval.status !== 'expired') {
     return `${STATUS_LABEL[approval.status as 'allowed' | 'denied']} · ${approval.choice}`;
@@ -1074,7 +1079,15 @@ export const ApprovalCard = memo(function ApprovalCard({
       <AgentCard
         className="agent-approval"
         data={{ status: approval.status, clamped: (long && !showAll) || undefined }}
-        icon={plainDeny ? <DownloadIcon size={14} /> : <ShieldCheckIcon size={14} />}
+        icon={
+          plainDeny ? (
+            <DownloadIcon size={14} />
+          ) : approval.settings ? (
+            <SettingsSlidersIcon size={14} />
+          ) : (
+            <ShieldCheckIcon size={14} />
+          )
+        }
         title={approval.title}
         meta={
           series && series.total > 1
@@ -1082,7 +1095,7 @@ export const ApprovalCard = memo(function ApprovalCard({
             : undefined
         }
         note={
-          pending && paused && !plainDeny
+          pending && paused && !plainDeny && !approval.settings
             ? 'It paused here for you. Allow it and it picks up where it left off.'
             : approval.status === 'expired'
               ? approval.setAside
@@ -1160,7 +1173,9 @@ export const ApprovalCard = memo(function ApprovalCard({
         outcomeTone={approval.status === 'allowed' ? 'done' : undefined}
         resolved={openedPending && !pending}
       >
-        {fields ? (
+        {approval.settings ? (
+          <AgentSettingsChange proposal={approval.settings} />
+        ) : fields ? (
           <dl className="agent-approval__fields">
             {fields.map(([label, value]) => (
               <div key={label} className="agent-approval__field">

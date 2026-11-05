@@ -547,6 +547,12 @@ pub async fn agents_update(
             a.work_directly = direct;
         }
     })?;
+    // "Work directly" is how it works in its project, in its settings now
+    // (`policy`); the field above is the mirror the copy code reads.
+    if let Some(direct) = input.work_directly {
+        let id = agent_id.clone();
+        blocking(move || agents::policy::set_direct(&id, direct)).await?;
+    }
     // The name and role are written into CLAUDE.md's heading, so any change
     // to them (or the instructions) rewrites it — memory is preserved.
     if input.instructions.is_some() || input.name.is_some() || input.role.is_some() {
@@ -911,6 +917,77 @@ pub async fn agents_reach_remove(
     Ok(reach)
 }
 
+/* --------------------------------------------------------- what it can do */
+
+/// "What it can do": one agent's settings in plain words (`agents/policy.rs`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_policy(agent_id: String) -> Result<agents::policy::AgentView, CommandError> {
+    blocking(move || {
+        let agent = store::get(&agent_id)?;
+        Ok(agents::policy::agent_view(
+            &agents::policy::load(),
+            &agent,
+            agents::independence::level(),
+        ))
+    })
+    .await
+}
+
+/// The team's defaults, the presets, and who has settings of its own.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_policy_team() -> Result<agents::policy::TeamView, CommandError> {
+    blocking(move || {
+        Ok(agents::policy::team_view(
+            &agents::policy::load(),
+            &store::list()?,
+            agents::independence::level(),
+        ))
+    })
+    .await
+}
+
+/// The user changing settings themselves on the desk: applied at once, with
+/// a line in that agent's chat. Folders are checked here as on a card.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_policy_set(
+    app: AppHandle,
+    target: agents::policy::Target,
+    mut change: agents::policy::Change,
+) -> Result<(), CommandError> {
+    for f in &mut change.add_folders {
+        f.path = agents::policy::clean_folder(&f.path).map_err(CommandError::expected)?;
+    }
+    if change.is_empty() {
+        return Ok(());
+    }
+    let app2 = app.clone();
+    blocking(move || {
+        let agents = store::list()?;
+        let before = agents::policy::load();
+        let level = agents::independence::level();
+        agents::policy::set(&target, &change, &agents)?;
+        let after = agents::policy::load();
+        let new_level = agents::independence::level();
+        for g in agents::policy_card::groups(&before, &after, &agents, level, new_level) {
+            for id in &g.agent_ids {
+                let line = format!("Settings changed by you: {}", g.changes.join(" · "));
+                let _ = runner::record(
+                    &app2,
+                    runner::new_message(id, store::MessageKind::Note, line),
+                );
+            }
+        }
+        Ok(())
+    })
+    .await?;
+    emit_registry(&app);
+    let _ = app.emit(agents::policy_card::EVENT, ());
+    Ok(())
+}
+
 /// Every connection on this Mac, with who may use it. Never a token.
 #[tauri::command]
 #[tracing::instrument]
@@ -972,6 +1049,10 @@ fn answer_card(
     // card is answered with it.
     if approval.prompt.is_some() {
         return agents::decisions::answer(app, &approval, allow, choice);
+    }
+    // "Change this agent's settings?": Allow applies it, here and only here.
+    if approval.settings.is_some() {
+        return agents::policy_card::answer_card(app, agent_id, &approval, allow, note);
     }
     if let Some(request) = &approval.secret {
         if allow {

@@ -2909,6 +2909,31 @@ fn is_missing_session(detail: &str) -> bool {
 }
 
 /// Folders an agent may work in without asking: every Ship Studio project.
+/// The folders a turn adds, by its settings: for a bound agent its home
+/// first (its memory), then what the policy lets it write, but never its
+/// working folder twice.
+fn policy_dirs(
+    layout: &super::project::Layout,
+    home: &std::path::Path,
+    allowed: Vec<String>,
+) -> Vec<String> {
+    let home = home.to_string_lossy().to_string();
+    let mut out = Vec::new();
+    if layout.project.is_some() {
+        out.push(home.clone());
+    }
+    let project = layout
+        .project
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string());
+    for d in allowed {
+        if Some(&d) != project.as_ref() && d != home && !out.contains(&d) {
+            out.push(d);
+        }
+    }
+    out
+}
+
 pub(super) fn work_dirs() -> Vec<String> {
     let mut dirs = Vec::new();
     if let Ok(root) = crate::utils::projects_root() {
@@ -2943,8 +2968,15 @@ pub(super) fn system_prompt_for(
     // How much to do on its own: the user's level, or the strictest for a
     // turn answering outside text. Fixed per level, so the cache holds.
     prompt.push_str("\n\n");
+    // Its own level when its settings give it one (`policy`).
     prompt.push_str(&super::independence::prompt_section(
-        super::independence::for_turn(super::independence::level(), from_outside(&agent.id)),
+        super::policy::independence_for(agent, from_outside(&agent.id)),
+    ));
+    // What it may do, the user's rules for it, and how to change either.
+    prompt.push_str("\n\n");
+    prompt.push_str(&super::policy::prompt_section(
+        &super::policy::effective(agent),
+        agent,
     ));
     if agent.is_main {
         if let Some(team) = store::list()
@@ -3242,7 +3274,7 @@ async fn run_turn(
     let url = super::reach::agent_url(port);
     // The apps it was granted on login cards (tokens refreshed), the
     // claude.ai connectors it's kept from, and its browser (`connections`).
-    let access = super::connections::for_turn(&agent, port).await;
+    let mut access = super::connections::for_turn(&agent, port).await;
     let mcp_config = match engine {
         Engine::Claude => Some(super::reach::write_config(
             &super::reach::claude_config_with(
@@ -3271,7 +3303,24 @@ async fn run_turn(
     // A value pasted into a message reaches the agent as its reference.
     let prompt = super::secrets::redact(&prompt).into_owned();
 
-    let layout = super::project::layout(&agent, &home, work_dirs());
+    // What its settings let it work in (`policy`): the folders it may
+    // write, and what stays read-only inside them.
+    let policy = super::policy::effective(&agent);
+    if let Some(why) = super::policy::own_refusal(&policy, &agent) {
+        return Err(CommandError::expected(why));
+    }
+    let mut layout = super::project::layout(&agent, &home, work_dirs());
+    let dirs = super::policy::turn_dirs(
+        &policy,
+        &agent,
+        &super::policy::Places::current(),
+        work_dirs(),
+        layout.copy.is_some(),
+    );
+    layout.add_dirs = policy_dirs(&layout, &home, dirs.add_dirs);
+    if engine == Engine::Claude {
+        access.blocked.extend(dirs.claude_deny);
+    }
     if let Some(project) = &layout.project {
         if !project.is_dir() {
             return Err(CommandError::expected(format!(
@@ -3316,8 +3365,22 @@ async fn run_turn(
             .map(std::path::PathBuf::from)
             .collect();
         roots.push(layout.cwd.clone());
-        super::reach::protected_paths(&roots)
+        let mut paths = super::reach::protected_paths(&roots);
+        paths.extend(dirs.read_only.iter().cloned());
+        paths
     });
+    // A Codex without permission profiles can't keep a folder it works in
+    // read-only: say so rather than let it write there.
+    if driver.engine() == Engine::Codex && !profiles && !dirs.read_only.is_empty() {
+        return Err(CommandError::expected(format!(
+            "{}'s settings keep {} read-only, and this version of Codex can't hold a folder it works in read-only. Update Codex, or ask in chat to let it work in its own copy.",
+            agent.name,
+            dirs.read_only
+                .first()
+                .map(|p| super::project::folder_name(&p.to_string_lossy()).to_string())
+                .unwrap_or_default()
+        )));
+    }
     let mcp_config_arg = mcp_config
         .as_ref()
         .map(super::reach::ConfigFile::arg)
@@ -4165,11 +4228,16 @@ mod tests {
             let root = tempfile::tempdir().unwrap();
             store::set_root_for_tests(Some(root.path().to_path_buf()));
             let prompt = system_prompt_for(&agent, std::path::Path::new("/h"), &layout);
+            let policy = super::super::policy::prompt_section(
+                &super::super::policy::effective(&agent),
+                &agent,
+            );
             store::set_root_for_tests(None);
-            prompt
+            (prompt, policy)
         };
-        // The same prompt, plus the app-owned usage and independence
-        // sections every agent gets.
+        let (prompt, policy) = prompt;
+        // The same prompt, plus the app-owned usage, independence and
+        // "What you may do" sections every agent gets.
         let usage = prompts::usage_section(super::super::usage_plan::Mode::Normal, false);
         let independence = super::super::independence::prompt_section(
             super::super::independence::Level::Judgement,
@@ -4177,7 +4245,7 @@ mod tests {
         assert_eq!(
             prompt,
             format!(
-                "{}\n\n{usage}\n\n{independence}",
+                "{}\n\n{usage}\n\n{independence}\n\n{policy}",
                 prompts::system_prompt(&agent, None)
             )
         );
@@ -4498,6 +4566,7 @@ mod tests {
                 connector: None,
                 login: None,
                 set_aside: None,
+                settings: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

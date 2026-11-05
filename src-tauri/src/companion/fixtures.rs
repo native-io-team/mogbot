@@ -136,6 +136,13 @@ fn frames() -> Vec<ServerFrame> {
             },
         ),
         (
+            Some(1),
+            // "Change Hiring's settings?" (`propose_settings_change`).
+            Event::Message {
+                message: serde_json::to_value(testkit::settings_card()).unwrap(),
+            },
+        ),
+        (
             Some(2),
             Event::Status {
                 agent_id: AGENT.into(),
@@ -552,6 +559,11 @@ async fn generate() -> String {
         "agentsReach",
         "Result<'agents.reach'>",
         call("agents.reach", json!({ "agentId": AGENT })).await,
+    );
+    out += &entry(
+        "agentsPolicy",
+        "Result<'agents.policy'>",
+        call("agents.policy", json!({ "agentId": AGENT })).await,
     );
     out += &entry(
         "agentsLoginsTeam",
