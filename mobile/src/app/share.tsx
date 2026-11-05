@@ -1,0 +1,263 @@
+/**
+ * "Send to agent…": what was shared into the app, and the agents to hand it
+ * to. Picking one puts it in that agent's composer (the words after what you
+ * had typed, the files uploaded to the Mac as attachments) and opens the
+ * chat, for you to add a line and send. Nothing is sent from here.
+ */
+
+import { MAX_ATTACHMENTS, type Agent } from '@shipstudio/companion-protocol';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { AgentAvatar } from '../components/agent';
+import { Button, SheetPage, T, useRipple } from '../components/ui';
+import { makeStyles, useColors } from '../lib/appearance';
+import { sortAgents } from '../lib/agents';
+import { addFile, setComposer } from '../lib/drafts';
+import { admit } from '../lib/files';
+import { haptic } from '../lib/haptics';
+import { canCall, describeError, upload } from '../lib/session';
+import { describeShare, fromParams, isEmptyShare, shareText } from '../lib/share';
+import { getApp, useApp } from '../lib/store';
+import { avatarSize, radius, space } from '../lib/theme';
+
+export default function Share() {
+  const colors = useColors();
+  const styles = useStyles();
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const payload = useMemo(() => fromParams(params), [params]);
+  const overview = useApp((s) => s.overview);
+  const connected = useApp((s) => s.link.kind === 'connected');
+  const canAttach = useApp((s) => canCall('agents.files', s.welcome));
+  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
+  const [busy, setBusy] = useState<{ agentId: string; note: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const agents = useMemo(
+    () => sortAgents(overview?.agents ?? []).filter((a) => !a.hidden),
+    [overview]
+  );
+  const files = payload.files ?? [];
+  const filesBlocked = files.length > 0 && (!connected || !canAttach);
+
+  const deliver = async (agent: Agent) => {
+    if (busy) return;
+    setError(null);
+    haptic.select();
+    const draft = getApp().composer[agent.id];
+    setComposer(agent.id, { text: shareText(payload, draft?.text ?? '') });
+    if (files.length && !filesBlocked) {
+      const room = MAX_ATTACHMENTS - (draft?.files?.length ?? 0);
+      const { kept, refused } = admit(files, room);
+      try {
+        for (const [i, file] of kept.entries()) {
+          setBusy({
+            agentId: agent.id,
+            note: kept.length > 1 ? `Uploading ${i + 1} of ${kept.length}…` : 'Uploading…',
+          });
+          await upload(file).then((ref) =>
+            addFile(agent.id, {
+              blobId: ref.blobId,
+              uri: file.uri,
+              name: ref.name,
+              mime: ref.mime,
+              size: ref.size,
+              stagedAt: Date.now(),
+            })
+          );
+        }
+      } catch (e) {
+        haptic.error();
+        setBusy(null);
+        setError(
+          `${describeError(e)} The words are in ${agent.name}’s chat; attach the rest there.`
+        );
+        return;
+      }
+      if (refused) setError(refused);
+    }
+    setBusy(null);
+    router.replace({ pathname: '/chat/[id]', params: { id: agent.id, compose: '1' } });
+  };
+
+  if (isEmptyShare(payload)) {
+    return (
+      <SheetPage>
+        <View style={styles.root}>
+          <T variant="title" color={colors.textStrong}>
+            Nothing to send
+          </T>
+          <T color={colors.textSecondary}>
+            What was shared didn’t reach the app. Share it again, or paste it into a chat.
+          </T>
+          <Button title="Close" onPress={() => router.back()} />
+        </View>
+      </SheetPage>
+    );
+  }
+
+  return (
+    <SheetPage>
+      <FlatList
+        data={agents}
+        keyExtractor={(a) => a.id}
+        contentContainerStyle={styles.list}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <T variant="title" color={colors.textStrong} accessibilityRole="header">
+              Send to agent…
+            </T>
+            <Preview payload={payload} />
+            {filesBlocked && (
+              <T variant="caption" color={colors.textSecondary}>
+                {connected
+                  ? `${macName} can’t take files from this phone yet, so only the words go.`
+                  : `Files need ${macName}: only the words go while it’s away.`}
+              </T>
+            )}
+            {error && (
+              <T variant="small" color={colors.accentErrorLight} accessibilityLiveRegion="polite">
+                {error}
+              </T>
+            )}
+            <T variant="caption" color={colors.textMuted} style={styles.eyebrow}>
+              PUT IT IN A CHAT FOR YOU TO SEND
+            </T>
+          </View>
+        }
+        ListEmptyComponent={
+          <T color={colors.textSecondary} style={styles.empty}>
+            {overview ? 'No agents yet.' : `Connecting to ${macName}…`}
+          </T>
+        }
+        renderItem={({ item, index }) => (
+          <AgentChoice
+            agent={item}
+            first={index === 0}
+            last={index === agents.length - 1}
+            note={busy?.agentId === item.id ? busy.note : null}
+            disabled={!!busy}
+            onPress={() => void deliver(item)}
+          />
+        )}
+      />
+    </SheetPage>
+  );
+}
+
+function Preview({ payload }: { payload: ReturnType<typeof fromParams> }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const files = payload.files ?? [];
+  return (
+    <View style={styles.preview} accessibilityLabel={`Shared: ${describeShare(payload)}`}>
+      <T variant="caption" color={colors.textMuted}>
+        {describeShare(payload)}
+      </T>
+      {payload.title && (
+        <T variant="headline" color={colors.textStrong} numberOfLines={2}>
+          {payload.title}
+        </T>
+      )}
+      {payload.url && (
+        <T variant="small" color={colors.textSecondary} numberOfLines={1}>
+          {payload.url}
+        </T>
+      )}
+      {payload.text && (
+        <T variant="small" color={colors.textPrimary} numberOfLines={4}>
+          {payload.text}
+        </T>
+      )}
+      {files.length > 0 && (
+        <T variant="small" color={colors.textSecondary} numberOfLines={2}>
+          {files.map((f) => f.name).join(', ')}
+        </T>
+      )}
+    </View>
+  );
+}
+
+function AgentChoice({
+  agent,
+  first,
+  last,
+  note,
+  disabled,
+  onPress,
+}: {
+  agent: Agent;
+  first: boolean;
+  last: boolean;
+  note: string | null;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Send to ${agent.name}`}
+      accessibilityHint="Puts it in the chat for you to send"
+      disabled={disabled}
+      onPress={onPress}
+      android_ripple={ripple}
+      style={({ pressed }) => [
+        styles.row,
+        first && styles.rowFirst,
+        last && styles.rowLast,
+        pressed && { backgroundColor: colors.surfaceGroupPressed },
+      ]}
+    >
+      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.header} />
+      <View style={styles.rowText}>
+        <T variant="headline" color={colors.textStrong} numberOfLines={1}>
+          {agent.name}
+        </T>
+        {(note || agent.role) && (
+          <T variant="caption" color={colors.textSecondary} numberOfLines={1}>
+            {note ?? agent.role}
+          </T>
+        )}
+      </View>
+      {!last && <View style={styles.divider} />}
+    </Pressable>
+  );
+}
+
+const useStyles = makeStyles((colors) => ({
+  root: { padding: space.lg, paddingTop: space.xl, gap: space.md },
+  list: { padding: space.lg, paddingTop: space.xl, paddingBottom: space['2xl'] },
+  header: { gap: space.md, marginBottom: space.sm },
+  eyebrow: { marginTop: space.sm, marginLeft: space.lg, letterSpacing: 0.4 },
+  preview: {
+    gap: space.xs,
+    padding: space.md,
+    borderRadius: radius.card,
+    backgroundColor: colors.surfaceGroup,
+  },
+  empty: { padding: space.lg },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    minHeight: 56,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    backgroundColor: colors.surfaceGroup,
+    overflow: 'hidden',
+  },
+  rowFirst: { borderTopLeftRadius: radius.card, borderTopRightRadius: radius.card },
+  rowLast: { borderBottomLeftRadius: radius.card, borderBottomRightRadius: radius.card },
+  rowText: { flex: 1, gap: space['2xs'] },
+  divider: {
+    position: 'absolute',
+    left: space.lg + avatarSize.header + space.md,
+    right: 0,
+    bottom: 0,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderDefault,
+  },
+}));

@@ -246,12 +246,23 @@ export default function Agents() {
           headerLargeStyle: { backgroundColor: colors.surfaceApp },
           headerLargeTitleStyle: { fontFamily: fonts.semibold, color: colors.textStrong },
           headerRight: () => (
-            <IconButton
-              name="gearshape"
-              label="Settings"
-              fallback="⚙"
-              onPress={() => router.push('/settings')}
-            />
+            <View style={styles.headerButtons}>
+              {/* Always offered: an older Mac's sheet hands the request to the Chief instead. */}
+              {overview && !removed && (
+                <IconButton
+                  name="square.and.pencil"
+                  label="New agent"
+                  fallback="+"
+                  onPress={() => router.push('/new-agent')}
+                />
+              )}
+              <IconButton
+                name="gearshape"
+                label="Settings"
+                fallback="⚙"
+                onPress={() => router.push('/settings')}
+              />
+            </View>
           ),
         }}
       />
@@ -437,6 +448,7 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
   const styles = useStyles();
   const router = useRouter();
   const p = pill(useLinkState());
+  const canCreate = useApp((s) => canCall('agents.create', s.welcome));
   if (hasOverview) {
     return (
       <Animated.View entering={FadeIn.duration(200)} style={styles.emptyCentered}>
@@ -444,9 +456,20 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
           No agents yet
         </T>
         <T color={colors.textSecondary} style={styles.centerText}>
-          On {macName}, open Agents and create one. It shows up here as soon as it exists.
+          {canCreate
+            ? `Say what one should do and ${macName} sets it up.`
+            : `On ${macName}, open Agents and create one. It shows up here as soon as it exists.`}
         </T>
-        <Button title="Connection details" onPress={() => router.push('/connection')} />
+        {canCreate ? (
+          <Button
+            title="New agent"
+            variant="primary"
+            icon="plus"
+            onPress={() => router.push('/new-agent')}
+          />
+        ) : (
+          <Button title="Connection details" onPress={() => router.push('/connection')} />
+        )}
       </Animated.View>
     );
   }
@@ -480,6 +503,7 @@ const useStyles = makeStyles((colors) => ({
     letterSpacing: 0.4,
   },
   sectionNext: { paddingTop: space.xl },
+  headerButtons: { flexDirection: 'row', alignItems: 'center' },
   hiddenToggle: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -13,7 +13,7 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
 use super::hub::HubItem;
-use super::router::{AgentToggles, ApprovalAnswer, Backend, ScheduleOp, SendExtras};
+use super::router::{AgentToggles, ApprovalAnswer, Backend, PhoneNewAgent, ScheduleOp, SendExtras};
 use super::wire::{ClaudeInfo, Event, Known, MacStatus, PowerInfo, Route, RouteKind};
 use super::{Companion, Registry, TAILNET_HTTPS_PORT};
 use crate::agents::{runner, store};
@@ -298,6 +298,35 @@ impl Backend for DesktopBackend {
 
     async fn start_fresh(&self, agent_id: &str) -> Result<Value, CommandError> {
         json(cmd::agents_start_fresh(self.app.clone(), agent_id.to_string()).await?)
+    }
+
+    async fn create_agent(&self, input: PhoneNewAgent) -> Result<Value, CommandError> {
+        use crate::agents::engine::{self, Engine};
+        // The desk's editor sends the engine it shows (`defaultEngine`), so a
+        // phone-made agent goes where a desk-made one would: Claude Code when
+        // it's ready, else the first engine that is.
+        let engine = match engine::default_for(&engine::overview().await) {
+            Engine::Claude => "claude",
+            Engine::Codex => "codex",
+        };
+        let color = match input.color {
+            Some(c) => c,
+            None => {
+                let taken: Vec<String> = store::list()?.into_iter().map(|a| a.color).collect();
+                super::router::free_color(&taken).to_string()
+            }
+        };
+        let input = cmd::CreateAgentInput {
+            name: input.name,
+            shape: None,
+            color: Some(color),
+            role: input.role,
+            instructions: String::new(),
+            engine: Some(engine.to_string()),
+            model: None,
+            project: None,
+        };
+        json(cmd::agents_create(self.app.clone(), input).await?)
     }
 
     async fn update_agent(

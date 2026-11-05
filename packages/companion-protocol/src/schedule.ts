@@ -143,3 +143,71 @@ export function sortCheckIns(checkIns: CheckIn[]): CheckIn[] {
     a.paused !== b.paused ? (a.paused ? 1 : -1) : a.nextAt - b.nextAt
   );
 }
+
+/**
+ * A schedule as the phone's picker holds it: a cadence and a time, never
+ * words. `routineWhenPhrase` writes it in the grammar the Mac reads, so the
+ * picker and the desk's one-line composer make the same check-in.
+ *
+ * - `days`: on those weekdays (0 = Sunday) at a time: every day, weekdays,
+ *   or every Monday and Thursday;
+ * - `every`: every so many minutes, from now;
+ * - `once`: on a local date (`YYYY-MM-DD`) at a time.
+ */
+export type RoutineWhen =
+  | { kind: 'days'; days: number[]; hour: number; minute: number }
+  | { kind: 'every'; minutes: number }
+  | { kind: 'once'; date: string; hour: number; minute: number };
+
+/** A local date as `YYYY-MM-DD`, the way the grammar writes one. */
+export function localDate(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** The local time `hour:minute` on a `YYYY-MM-DD` date. */
+export function localTs(date: string, hour: number, minute: number): number {
+  // Indexed, not destructured: under the app's Babel a destructure pulls in a
+  // runtime helper this package (which has no dependencies) can't resolve.
+  const ymd = date.split('-').map(Number);
+  return new Date(ymd[0], ymd[1] - 1, ymd[2], hour, minute).getTime();
+}
+
+/** The `when` words for the Mac: "every weekday at 09:00", "every 2 hours", "2026-11-20 09:00". */
+export function routineWhenPhrase(w: RoutineWhen): string {
+  if (w.kind === 'once') return `${w.date} ${pad2(w.hour)}:${pad2(w.minute)}`;
+  if (w.kind === 'every') return scheduleWhenPhrase({ repeat: w, nextAt: 0 });
+  const days = [...new Set(w.days)].sort((a, b) => a - b);
+  return scheduleWhenPhrase({ repeat: { ...w, days }, nextAt: 0 });
+}
+
+/** A check-in as the picker shows it, for Edit. */
+export function routineWhenOf(c: Pick<CheckIn, 'repeat' | 'nextAt'>): RoutineWhen {
+  const r = c.repeat;
+  if (r?.kind === 'every') return { kind: 'every', minutes: r.minutes };
+  if (r) return { kind: 'days', days: [...r.days], hour: r.hour, minute: r.minute };
+  const d = new Date(c.nextAt);
+  return { kind: 'once', date: localDate(c.nextAt), hour: d.getHours(), minute: d.getMinutes() };
+}
+
+/**
+ * What the picker will make, in the words the list shows it in:
+ * "Every weekday at 9:00 AM", "Every 2 hours", "Once · Tomorrow 9:00 AM".
+ */
+export function describeRoutineWhen(w: RoutineWhen, now = Date.now()): string {
+  if (w.kind === 'once') return `Once · ${formatWhen(localTs(w.date, w.hour, w.minute), now)}`;
+  if (w.kind === 'every') return describeRepeat(w);
+  return describeRepeat({ ...w, days: [...new Set(w.days)] });
+}
+
+/** The picker's echo, the check-in in one line: "Every weekday at 9:00 AM — Draft my day". */
+export function routineEcho(w: RoutineWhen, note: string, now = Date.now()): string {
+  const what = note.trim().replace(/\s+/g, ' ');
+  const when = describeRoutineWhen(w, now);
+  return what ? `${when} — ${what}` : when;
+}
+
+/** A once that's already past can't run: the picker says so before the Mac has to. */
+export function routineInPast(w: RoutineWhen, now = Date.now()): boolean {
+  return w.kind === 'once' && localTs(w.date, w.hour, w.minute) <= now;
+}

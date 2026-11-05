@@ -33,6 +33,7 @@ pub const METHODS: &[&str] = &[
     "agents.focus",
     "agents.markUnread",
     "agents.startFresh",
+    "agents.create",
     "agents.update",
     "agents.revokePermission",
     "agents.instructions",
@@ -145,6 +146,74 @@ pub struct AgentToggles {
 /// Instructions are a brief, not a document: the phone's editor stops here.
 const MAX_INSTRUCTIONS: usize = 20_000;
 
+/// What the phone may set on a new agent: what it should do, its name and
+/// its colour. Everything else is the desk's create path's own default: the
+/// engine the desk would pick, the engine's own model, no project, and no
+/// instructions beyond the role (the agent sheet edits those afterwards).
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PhoneNewAgent {
+    pub name: String,
+    #[serde(default)]
+    pub role: String,
+    #[serde(default)]
+    pub color: Option<String>,
+}
+
+/// "What should it do?" is one line, as the desk's field is.
+const MAX_ROLE: usize = 500;
+/// `store::validate_name`'s limit, checked here too so the refusal is the phone's.
+const MAX_NAME: usize = 40;
+
+/// The desk's editor starts a new agent on the first colour nobody wears
+/// yet, leaving white and gray for the user to pick (`freeColor` in
+/// AgentEditorModal.tsx). Purple when every colour is taken.
+pub fn free_color(taken: &[String]) -> &'static str {
+    crate::agents::store::COLORS
+        .iter()
+        .copied()
+        .find(|c| *c != "white" && *c != "gray" && !taken.iter().any(|t| t == c))
+        .unwrap_or("purple")
+}
+
+/// A name and a role, checked and tidied: one line each, no control
+/// characters, within the desk's limits, and a colour the desk draws.
+fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
+    let one_line = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if input
+        .name
+        .chars()
+        .chain(input.role.chars())
+        .any(|c| c.is_control() && !c.is_whitespace())
+    {
+        return Err(WireError::protocol(
+            ProtocolCode::Refused,
+            "A name or role can't contain control characters.",
+        ));
+    }
+    let name = one_line(&input.name);
+    let role = one_line(&input.role);
+    if name.is_empty() {
+        return Err(bad_params("Give the agent a name."));
+    }
+    if name.chars().count() > MAX_NAME {
+        return Err(bad_params(format!(
+            "Keep the name under {MAX_NAME} characters."
+        )));
+    }
+    if role.chars().count() > MAX_ROLE {
+        return Err(bad_params(format!(
+            "Say what it should do in under {MAX_ROLE} characters. The rest can go in its instructions."
+        )));
+    }
+    let color = match input.color.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(c) if crate::agents::store::COLORS.contains(&c) => Some(c.to_string()),
+        Some(c) => return Err(bad_params(format!("{c} isn't one of the agent colours."))),
+    };
+    Ok(PhoneNewAgent { name, role, color })
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ApprovalAnswer {
     pub agent_id: String,
@@ -193,6 +262,10 @@ pub trait Backend: Send + Sync + 'static {
     /// `agents_start_fresh`: a new conversation, memory kept. Returns the
     /// stored agent.
     async fn start_fresh(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_create` with what the phone may set, on the engine the desk
+    /// would pick (`engine::default_for`) and a free colour when none was
+    /// picked. Returns the stored agent.
+    async fn create_agent(&self, input: PhoneNewAgent) -> Result<Value, CommandError>;
     /// `agents_update` with only the toggles set; returns the stored agent.
     async fn update_agent(
         &self,
@@ -398,6 +471,14 @@ struct SessionParams {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CreateParams {
+    input: PhoneNewAgent,
+    #[serde(default)]
+    client_id: Option<String>,
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UpdateParams {
     agent_id: String,
@@ -535,6 +616,21 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             .chain(std::iter::once(field("agentId").to_string()))
             .collect::<Vec<_>>()
             .join(" ")
+        }
+        "agents.create" => {
+            let input = params.get("input").cloned().unwrap_or(Value::Null);
+            let text = |k: &str| {
+                input
+                    .get(k)
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .trim()
+                    .to_string()
+            };
+            match text("role").as_str() {
+                "" => preview(&format!("create {}", text("name"))),
+                role => preview(&format!("create {} — {role}", text("name"))),
+            }
         }
         "agents.answerApproval" => {
             let allow = params
@@ -795,6 +891,39 @@ async fn run(
                 fields.remove("usage");
             }
             Ok(stored)
+        }
+        "agents.create" => {
+            let p: CreateParams = parse(params).map_err(|_| {
+                bad_params(
+                    "From the phone, a new agent takes a name, what it should do and a colour.",
+                )
+            })?;
+            let input = check_new_agent(p.input)?;
+            let create = || async move {
+                // A `StoredAgent`, without lifetime usage, as `agents.update` returns.
+                let mut stored = b.create_agent(input).await?;
+                if let Some(fields) = stored.as_object_mut() {
+                    fields.remove("usage");
+                }
+                Ok(stored)
+            };
+            match p.client_id.map(|id| id.trim().to_string()) {
+                None => create().await,
+                Some(id) if id.is_empty() || id.len() > 128 => {
+                    Err(bad_params("clientId is at most 128 characters."))
+                }
+                // A retry after a dropped socket gets the agent the first one
+                // made, not a second (or "There's already an agent called …").
+                Some(id) => {
+                    c.sends
+                        .once(
+                            format!("{}:create:{id}", caller.device_id),
+                            now_ms(),
+                            create,
+                        )
+                        .await
+                }
+            }
         }
         "agents.update" => {
             let p: UpdateParams = parse(params).map_err(|_| {
@@ -1096,6 +1225,101 @@ mod tests {
             );
         }
         assert_eq!(stub.audited().len(), 4);
+    }
+
+    #[tokio::test]
+    async fn a_phone_creates_an_agent_once_per_client_id_and_it_is_audited() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let params = json!({
+            "input": { "name": "  Inbox ", "role": "Keeps my inbox\n down to what matters", "color": "teal" },
+            "clientId": "new-1",
+        });
+        let made = dispatch(&c, &me, "agents.create", params.clone())
+            .await
+            .unwrap();
+        assert_eq!(made["name"], "Inbox");
+        assert_eq!(made["role"], "Keeps my inbox down to what matters");
+        assert_eq!(made["color"], "teal");
+        assert!(made.get("usage").is_none(), "a StoredAgent has no usage");
+        // A retry after a dropped socket is the same agent, not a second.
+        let again = dispatch(&c, &me, "agents.create", params).await.unwrap();
+        assert_eq!(made, again);
+        assert_eq!(stub.created.lock().unwrap().len(), 1);
+        let audited = stub.audited();
+        assert_eq!(audited[0].1, "agents.create");
+        assert_eq!(
+            audited[0].2,
+            "create Inbox — Keeps my inbox down to what matters"
+        );
+        assert!(audited[0].3);
+        assert!(super::METHODS.contains(&"agents.create"));
+        assert!(!super::READ_ONLY_METHODS.contains(&"agents.create"));
+    }
+
+    #[tokio::test]
+    async fn a_phone_made_agent_takes_only_a_name_role_and_colour() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let create = |input: Value| dispatch(&c, &me, "agents.create", json!({ "input": input }));
+        // The engine, model and project stay the desk's.
+        for extra in [
+            json!({ "name": "Ops", "engine": "codex" }),
+            json!({ "name": "Ops", "model": "opus" }),
+            json!({ "name": "Ops", "project": "/etc" }),
+            json!({ "name": "Ops", "instructions": "x" }),
+        ] {
+            let refused = create(extra).await.unwrap_err();
+            assert!(refused.summary().contains("name, what it should do"));
+        }
+        assert!(create(json!({ "name": "   " }))
+            .await
+            .unwrap_err()
+            .summary()
+            .contains("Give the agent a name"));
+        assert!(create(json!({ "name": "x".repeat(41) })).await.is_err());
+        assert!(create(json!({ "name": "Ops", "role": "x".repeat(501) }))
+            .await
+            .is_err());
+        assert!(create(json!({ "name": "Ops", "color": "chartreuse" }))
+            .await
+            .unwrap_err()
+            .summary()
+            .contains("isn't one of the agent colours"));
+        assert!(create(json!({ "name": "Ops\u{1b}[2J" })).await.is_err());
+        // The desk's own refusal comes back as it is.
+        assert!(create(json!({ "name": "finance" }))
+            .await
+            .unwrap_err()
+            .summary()
+            .contains("already an agent called"));
+        assert!(stub.created.lock().unwrap().is_empty());
+        // No colour picked: the backend chooses, as the desk does.
+        let made = create(json!({ "name": "Ops" })).await.unwrap();
+        assert_eq!(stub.created.lock().unwrap()[0].color, None);
+        assert_eq!(made["role"], "");
+        // Refusals are audited too, as failures.
+        assert!(stub
+            .audited()
+            .iter()
+            .any(|(_, m, _, ok)| m == "agents.create" && !ok));
+    }
+
+    #[test]
+    fn a_new_agent_starts_on_the_first_colour_nobody_wears() {
+        let taken = |c: &[&str]| c.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(super::free_color(&[]), "brown");
+        assert_eq!(
+            super::free_color(&taken(&["white", "brown", "red"])),
+            "orange"
+        );
+        let all: Vec<String> = crate::agents::store::COLORS
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(super::free_color(&all), "purple");
     }
 
     #[tokio::test]

@@ -22,7 +22,16 @@ import {
   type Agent,
   type AgentRef,
 } from '@shipstudio/companion-protocol';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentRef,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import {
   Pressable,
   ScrollView,
@@ -32,6 +41,7 @@ import {
   useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native';
+import { dictationHint, useDictation } from '../lib/dictation';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -56,7 +66,7 @@ import { admit, pickDocuments, pickPhotos, takePhoto, type PickedFile } from '..
 import { haptic } from '../lib/haptics';
 import { OUTBOX_WAIT_MS } from '../lib/outbox';
 import { canCall, describeError, send, stop, upload } from '../lib/session';
-import { useApp } from '../lib/store';
+import { getApp, useApp } from '../lib/store';
 import {
   avatarSize,
   chromeScale,
@@ -108,6 +118,41 @@ export function Composer({
   const canAttach = useApp((s) => canCall('agents.files', s.welcome));
   const team = useApp((s) => s.overview?.agents ?? NONE);
   const seq = useRef(0);
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  const [micHint, setMicHint] = useState<string | null>(null);
+  const vocabulary = useMemo(() => team.map((a) => a.name), [team]);
+  const getDraft = useCallback(() => getApp().composer[agent.id]?.text ?? '', [agent.id]);
+  const putSpoken = useCallback(
+    (text: string) => {
+      const mentions = getApp().composer[agent.id]?.mentions ?? [];
+      setComposer(agent.id, { text, mentions: liveMentions(text, mentions) });
+    },
+    [agent.id]
+  );
+  const dictation = useDictation({ getDraft, setDraft: putSpoken, vocabulary, onProblem: onError });
+  const listening = dictation.phase !== 'idle';
+  // A hint stays a few seconds: it's an answer to a tap, not a state.
+  useEffect(() => {
+    if (!micHint) return;
+    const t = setTimeout(() => setMicHint(null), 5000);
+    return () => clearTimeout(t);
+  }, [micHint]);
+  const mic = () => {
+    if (listening) {
+      haptic.select();
+      dictation.stop();
+      return;
+    }
+    const hint = dictationHint(dictation.support);
+    if (hint) {
+      // No recognizer in this build: the keyboard has one.
+      if (dictation.support === 'no-module') input.current?.focus();
+      setMicHint(hint);
+      return;
+    }
+    haptic.select();
+    void dictation.start();
+  };
 
   const ready = draft.files ?? [];
   const uploading = staged.some((f) => !f.error);
@@ -209,6 +254,8 @@ export function Composer({
     const body = withQuotes(draft.quotes, draft.text.trim());
     const mentions = liveMentions(draft.text, draft.mentions).map((m) => m.id);
     const files = ready.map(({ stagedAt: _at, ...f }) => f);
+    // Words still on their way would land in the emptied draft.
+    dictation.cancel();
     clearComposer(agent.id);
     setStaged([]);
     onSent();
@@ -226,17 +273,21 @@ export function Composer({
     });
   };
 
-  const hint = !connected
-    ? hasContent
-      ? `Not connected · Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
-      : 'Not connected · what you type stays here'
-    : uploading
-      ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
-      : mode === 'queue'
-        ? waitingOnYou
-          ? `${agent.name} reads it after you answer above`
-          : `${agent.name} reads it when this turn ends`
-        : null;
+  const hint = listening
+    ? 'Listening on this phone · tap the mic when you’re done'
+    : micHint
+      ? micHint
+      : !connected
+        ? hasContent
+          ? `Not connected · Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
+          : 'Not connected · what you type stays here'
+        : uploading
+          ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
+          : mode === 'queue'
+            ? waitingOnYou
+              ? `${agent.name} reads it after you answer above`
+              : `${agent.name} reads it when this turn ends`
+            : null;
 
   return (
     <View
@@ -409,9 +460,23 @@ export function Composer({
           value={draft.text}
           autoFocus={autoFocus}
           onChangeText={setText}
-          placeholder={`Message ${agent.name}`}
+          placeholder={listening ? 'Listening…' : `Message ${agent.name}`}
           label={`Message ${agent.name}`}
+          inputRef={input}
         >
+          <RoundButton
+            key="mic"
+            label={listening ? 'Stop dictating' : 'Dictate'}
+            onPress={mic}
+            tone={listening ? 'accent' : 'off'}
+          >
+            <Icon
+              name={listening ? 'mic.fill' : 'mic'}
+              size={iconSize.body}
+              color={listening ? accent.onAccent : colors.textSecondary}
+              fallback={<T color={colors.textSecondary}>●</T>}
+            />
+          </RoundButton>
           {mode === 'queue' && !waitingOnYou && (
             <RoundButton
               label={`Stop ${agent.name}`}
@@ -498,6 +563,7 @@ export function ComposerField({
   label,
   autoFocus,
   editable = true,
+  inputRef,
   children,
 }: {
   value: string;
@@ -506,6 +572,7 @@ export function ComposerField({
   label: string;
   autoFocus?: boolean;
   editable?: boolean;
+  inputRef?: Ref<ComponentRef<typeof TextInput>>;
   children?: ReactNode;
 }) {
   const colors = useColors();
@@ -516,6 +583,7 @@ export function ComposerField({
   return (
     <View style={[field.field, { minHeight: size.field }]}>
       <TextInput
+        ref={inputRef}
         maxFontSizeMultiplier={chromeScale}
         value={value}
         autoFocus={autoFocus}
