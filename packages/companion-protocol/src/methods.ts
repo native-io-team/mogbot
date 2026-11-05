@@ -10,6 +10,9 @@
 import type { Cursor } from './frames';
 import type {
   AgentMessage,
+  AgentReach,
+  LoginPhoneBegin,
+  TeamLogins,
   AgentSecret,
   AgentsOverview,
   CheckIn,
@@ -38,6 +41,7 @@ import type {
   TeamSetupView,
   NewAgentInput,
   NewAgentDefaults,
+  AgentIndependence,
   NewAgentDefaultsChange,
   RoleTemplateSummary,
   UpdateAgentInput,
@@ -133,6 +137,64 @@ export interface Methods {
     params: { agentId: string; requestId: string; values: string[] };
     result: AgentSecret;
   };
+  /**
+   * Logins (Mac feature `logins`). The token is always made and kept on
+   * the Mac; the card's `login.flow` follows the sign-in on both devices.
+   * Without `onPhone`, Connect opens the sign-in in the Mac's browser. With
+   * `onPhone` (Mac feature `logins.phone`), the sign-in is on the phone:
+   * claude.ai there, or GitHub's device code shown in `login.flow`.
+   */
+  'agents.loginStart': {
+    params: { agentId: string; requestId: string; optionId: string; onPhone?: boolean };
+    result: null;
+  };
+  /**
+   * Mac feature `logins.phone`: an `oauth` way in, signed in on the phone's
+   * sign-in sheet. The Mac registers the companion app's redirect and keeps
+   * the PKCE verifier and `state`; the phone gets only the URL to open. One
+   * card, or a team row (`key`, `skip`) whose other cards get the same
+   * connection.
+   */
+  'agents.loginPhoneBegin': {
+    params:
+      | { agentId: string; requestId: string; optionId: string }
+      | { key: string; optionId: string; skip?: string[] };
+    result: LoginPhoneBegin;
+  };
+  /**
+   * The sheet's redirect, as it came back. Accepted once, within ten
+   * minutes, only from the device that began it; exchanged on the Mac, the
+   * token kept in its Keychain. Never logged.
+   */
+  'agents.loginPhoneFinish': {
+    params: { flowId: string; callbackUrl: string };
+    result: null;
+  };
+  'agents.loginCancel': { params: { agentId: string; requestId: string }; result: null };
+  'agents.loginDecline': {
+    params: { agentId: string; requestId: string; note?: string };
+    result: null;
+  };
+  /** A login card's API key (its `key` option), into the Mac's Keychain. As saveSecret. */
+  'agents.loginSaveKey': {
+    params: { agentId: string; requestId: string; value: string };
+    result: AgentSecret;
+  };
+  /** What an agent can reach: connections, browser, secrets. Read-only. */
+  'agents.reach': { params: { agentId: string }; result: AgentReach };
+  /**
+   * "What your team needs": every login card waiting, one row per service
+   * (Gmail + Calendar as one Google row), with each agent on it; `since`
+   * adds the ones answered since then, for "4 of 9 connected".
+   */
+  'agents.loginsTeam': { params: { since?: number }; result: TeamLogins };
+  /** One row's way in, for every agent on it but those in `skip` (agent ids). */
+  'agents.loginsConnect': {
+    params: { key: string; optionId: string; skip?: string[]; onPhone?: boolean };
+    result: null;
+  };
+  /** "Not needed": the card is put away and the agent isn't woken. */
+  'agents.loginDismiss': { params: { agentId: string; requestId: string }; result: null };
   /** `agents_memory`: the agent's `## Memory` entries. */
   'agents.memory': { params: { agentId: string }; result: MemoryView };
   /** `agents_memory_change`: add, edit or delete one entry. */
@@ -196,6 +258,16 @@ export interface Methods {
    * audited. Existing agents don't change. Newer Macs only.
    */
   'agents.setDefaults': { params: NewAgentDefaultsChange; result: NewAgentDefaults };
+  /**
+   * `agents_set_independence`: how much agents do on their own (Settings →
+   * Agents), read back from `agents.overview`'s `independence`. Audited.
+   * Changes what agents are told on their next turn, never what asks for the
+   * user's OK. Newer Macs only.
+   */
+  'agents.setIndependence': {
+    params: { level: AgentIndependence };
+    result: { level: AgentIndependence };
+  };
   /**
    * Each engine's usage accounts, in the order turns try them when one
    * reaches its usage limit (`agents::wallet`). Read-only: they are added
@@ -367,6 +439,8 @@ export const READ_ONLY_METHODS = [
   'agents.messages',
   'agents.instructions',
   'agents.memory',
+  'agents.reach',
+  'agents.loginsTeam',
   'agents.usage',
   'agents.quota',
   'agents.accounts',

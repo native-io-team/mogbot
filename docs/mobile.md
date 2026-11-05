@@ -145,6 +145,11 @@ inside it.
 - `agents.overview|messages|send|stop|interrupt|answerApproval|focus|markUnread`
   (`answerApproval` takes `choice` for a session's question)
 - `agents.saveSecret` (Tailscale only, never audited with a value), `agents.memory|memoryChange|memorySuggest`
+- Logins (Mac feature `logins`, docs/agents.md "Logins"): `agents.loginStart|loginCancel|loginDecline|loginDismiss`,
+  `agents.loginSaveKey` (as `saveSecret`), `agents.loginsTeam|loginsConnect` ("What your team needs"),
+  `agents.reach` (read-only); Mac feature `logins.phone`: `agents.loginPhoneBegin|loginPhoneFinish`
+  (the sign-in sheet; the finish goes only to an identity-verified Mac) and `onPhone` on
+  `agents.loginStart|loginsConnect`
 - `agents.update` (`pinned`, `muted`, `hidden`, `instructions`),
   `agents.instructions|usage|revokePermission|changeDiff`
 - `agents.files|fetchPath|search`, `agents.schedule.preview|create|update|pause|cancel|runNow`
@@ -478,6 +483,19 @@ sheet, files, a session, the diff and the photo viewer push over them. At
 - **A task's questions** (`PromptCard`): the question, whose task it is and
   where, the diff (tinted) or text it shows, and every option it offers,
   answered with `agents.answerApproval`'s `choice`; the same 400 ms guard.
+- **Login cards** (`approval.login`): which app, which account, read vs
+  send, and the ways in. With a Mac that has `logins.phone`, the sign-in
+  happens here, away from the Mac (docs/agents.md, "From the phone"): an
+  OAuth connector in the system sign-in sheet (`expo-web-browser`,
+  ephemeral; the one-time code goes to the Mac once and is never kept),
+  GitHub's one-time code (Copy code, Open GitHub), or claude.ai opened
+  here. The token is always made and kept in the Mac's Keychain. With an
+  older Mac, or a build without the sheet's native module, Connect starts
+  the sign-in on the Mac and the card says "Finish signing in on your Mac —
+  it's open there". It follows `login.flow` live, then shows the answer. A Mac without `logins` never sends one; a phone without it
+  sees Allow / Deny, and its Allow starts the first way in on the Mac.
+  "What your team needs" (`agents.loginsTeam`) and "What it can reach"
+  (`agents.reach`, read-only) are on the phone too.
 - **Secret cards** (`SecretCard`): masked fields straight to the Mac's
   Keychain via `agents.saveSecret`. Only over HTTPS on Tailscale, and only on
   a socket where the Mac proved the pinned identity (refused on the
@@ -651,26 +669,54 @@ The phone can start work as well as answer it. Each piece is gated by
   pending retry) and changes only the note, so "every 2 hours" isn't
   re-anchored to now and a one-off isn't moved; only a Mac that sends
   `timeZone` gets that, since an older one refuses an empty `when`.
-- **Dictation** (`lib/dictation.ts`, the mic in the composer). The phone's
-  own recognizer through expo-speech-recognition, with
-  `requiresOnDeviceRecognition`: a phone that can't recognise speech on the
-  device keeps the mic off and says so, rather than send audio to a server.
-  iOS enforces the flag. Android only builds an on-device recognizer from
-  API 33 (Android 13); on 12/12L the module falls back to the default
-  recognizer with "prefer offline", a hint, so there the mic is off
-  (`needs-network`) and its hint says why without promising anything.
-  Nothing is recorded to a file; words appear in the draft as you speak,
-  after what you'd typed, and are never sent on their own (Send drops any
-  still on their way). Typing while it listens stops it, so later words
-  can't overwrite what you typed (tap the mic to go on). The team's names
-  are passed as contextual strings.
+- **Dictation** (`lib/dictation.ts`, `components/Waveform.tsx`, the mic in
+  the composer). Tap the mic: a haptic, the keyboard steps away (and comes
+  back afterwards if it was up), and the field listens. The words stream into
+  it as you speak, the last few lighter while the recognizer is still
+  deciding them (`stablePrefix`: what a partial shares with the one before,
+  never its last word), with the recognizer's own punctuation. The mic's
+  place holds a waveform and the elapsed time, × takes the +'s place and ✓
+  takes Send's. **✓ keeps the words in the draft** to read and edit, as
+  ChatGPT's and Grok's dictation do; nothing is sent on its own (the desk's
+  rule too, and Send drops words still on their way). × puts the draft back
+  as it was. Tapping the words is ✓ and edit. After about 3 s of quiet
+  following speech it stops by itself (`AUTO_STOP_SILENCE_MS`), and gives up
+  after 8 s if it heard nothing (`NOTHING_HEARD_MS`), saying so.
+  **The waveform** is driven by the recognizer's own input level
+  (`volumechange`, every 50 ms) through a shared value: on the UI thread a
+  frame callback eases it (quick rise, slower fall), pushes a bar every
+  70 ms and slides the strip between pushes, so it scrolls at the display's
+  rate however the events arrive; bars settle to dots in silence
+  (`lib/waveform.ts`, geometry in `theme.waveform`). Under Reduce Motion a
+  thin meter fills with the level instead and nothing travels.
+  **Where the words are recognised:** on the phone whenever it can be
+  (`requiresOnDeviceRecognition`, iOS and Android 13+), else through the
+  platform's speech service, and then the line over the field says so
+  ("Recognised by Apple, off this phone"; on Android it names nobody, since
+  the service is whichever the phone has). An on-device start that fails
+  before hearing anything (model not downloaded, "Failed to initialize
+  recognizer") tries the platform's service once (`fallsBackToServer`). The
+  desk does the same (`commands/dictation.rs`).
+  **Problems** come back as one plain line over the field with a fix chip
+  (`problemCopy`): permission → Open Settings; no network, recognizer busy,
+  interrupted, didn't start, nothing heard → Try again. The mic is never left
+  dead: every path ends in idle. The phases are a pure reducer
+  (`dictationReducer`: idle → starting → listening → stopping → idle, ending
+  `done`, `cancelled`, `sent` or `error`). The team's names are passed as
+  contextual strings. Nothing is recorded to a file.
   **Expo Go has no recognizer module**, so there the mic focuses the field
   and points at the keyboard's own mic; a development or release build
   (`pnpm ios`, `expo run:ios --configuration Release`) has it. The config
   plugin adds the microphone and speech-recognition usage strings. iOS has
   one microphone string for the app (expo-camera and expo-image-picker
-  write it too), so it says only what the mic is for; the on-device claim
-  is in the speech-recognition string, which is iOS's and which iOS keeps.
+  write it too), so it says only what the mic is for; where the words are
+  recognised is in the speech-recognition string.
+  **The simulator's recognizer doesn't start** (iOS 27.2: "Failed to
+  initialize recognizer", on-device and server alike), so the flow there was
+  checked by feeding the native module's events (levels and partials) from
+  outside; the web QA build uses a scripted stand-in
+  (`dev/web/expo-speech-recognition.ts`). Real recognition, real levels and
+  the fallback need a phone.
 - **"Send to agent…"** (`app/share.tsx`, `lib/share.ts`). Something shared
   into the app (a page, text, photos, files) lists your agents, with the
   shared text in full; picking one puts the link and text in that agent's
@@ -866,8 +912,9 @@ on a fork's binary. For self-builders, Reinstall is the update.
   `start.node.test.ts` covers creating an agent, the routine picker's
   phrases (against the mock's parser and `routine-phrases.json`), the Mac's
   clock, and share payloads; `share.test.tsx` the share sheet (a crafted
-  `files=` link uploads nothing); `dictation.test.tsx` the mic against a
-  fake recognizer, including Android 12 and typing while it listens.
+  `files=` link uploads nothing); `dictation.test.tsx` the state machine on its own and the mic against a
+  fake recognizer (streaming, ✓, ×, send, silence, errors, the fallback,
+  Android 12); `waveform.node.test.ts` the level→bar mapping and easing.
 - **Rooms:** `rooms.test.ts` (routing, gating, store keys, folding, the
   room's list), `roomParity.test.ts` (open copies, the foot line, @mentions,
   the intro's claim), `roomView.test.tsx` (the thread, Keep / Discard and Ask
@@ -945,8 +992,10 @@ the share extension, the camera, real keyboard behaviour).
 - Native targets that need a dev build and an Apple team: a needs-you widget
   and a Live Activity per working turn. The "Send to agent…" extension is
   configured behind `SHIPSTUDIO_SHARE_EXTENSION=1` but not yet built or
-  tried on a device, and dictation's recognizer has only been exercised
-  against a fake in tests, not on a phone.
+  tried on a device. Dictation's live waveform, streaming words and
+  on-device → server fallback are checked on the simulator against fed
+  recognizer events and in tests; the real level, partials and fallback on a
+  phone are not yet.
 - Verification on Android hardware.
 - Rooms on the phone: creating, renaming, muting or deleting one, changing
   its members or lead, Stop for a room, attachments in a room, and opening a

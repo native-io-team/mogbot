@@ -459,6 +459,33 @@ async fn handle_http(
             };
             return handle_agents_http(app, caller.agent_id, caller.turn, req).await;
         }
+        Some(SecretRoute::Connection(key)) => {
+            // A connection the turn was granted: the relay adds the app's
+            // token, which the turn never holds (`agents::conn_relay`).
+            let caller = bearer_of(&req).and_then(|s| crate::agents::broker::caller(&s));
+            let Some(caller) = caller else {
+                return Ok(plain_response(StatusCode::NOT_FOUND, "Not found"));
+            };
+            let method = req.method().clone();
+            let headers = req.headers().clone();
+            let body = req.into_body().collect().await?.to_bytes();
+            if body.len() > MAX_BODY_BYTES {
+                return Ok(plain_response(
+                    StatusCode::PAYLOAD_TOO_LARGE,
+                    "Payload too large",
+                ));
+            }
+            return Ok(crate::agents::conn_relay::relay(
+                &app,
+                &caller.agent_id,
+                caller.turn,
+                &key,
+                &method,
+                &headers,
+                body,
+            )
+            .await);
+        }
         Some(SecretRoute::Import) => {
             // An import's sealed interview gets only its own three tools
             // (`agents::connector`), which checks the secret is its live one.
@@ -540,6 +567,8 @@ async fn handle_http(
 enum SecretRoute {
     Agent,
     Import,
+    /// `/mcp/conn/<serverKey>`: the connection relay.
+    Connection(String),
 }
 
 /// The paths answered by bearer secret rather than by the preview token.
@@ -547,7 +576,14 @@ fn route_secret_path(path: &str) -> Option<SecretRoute> {
     match path.trim_end_matches('/') {
         crate::agents::reach::AGENT_PATH => Some(SecretRoute::Agent),
         crate::agents::reach::IMPORT_PATH => Some(SecretRoute::Import),
-        _ => None,
+        p => p
+            .strip_prefix(crate::agents::reach::CONN_PATH)
+            .filter(|k| {
+                !k.is_empty()
+                    && k.len() <= 64
+                    && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            })
+            .map(|k| SecretRoute::Connection(k.to_string())),
     }
 }
 
@@ -1139,6 +1175,12 @@ mod tests {
         assert_eq!(route_secret_path("/mcp/agent"), Some(SecretRoute::Agent));
         assert_eq!(route_secret_path("/mcp/agent/"), Some(SecretRoute::Agent));
         assert_eq!(route_secret_path("/mcp/import"), Some(SecretRoute::Import));
+        assert_eq!(
+            route_secret_path("/mcp/conn/linear_work"),
+            Some(SecretRoute::Connection("linear_work".into()))
+        );
+        assert_eq!(route_secret_path("/mcp/conn/"), None);
+        assert_eq!(route_secret_path("/mcp/conn/../agent"), None);
         // The old shapes, which named the agent, are answered by nothing.
         assert_eq!(route_secret_path("/mcp/tok/agents/a1"), None);
         assert_eq!(route_secret_path("/mcp/agent/a1"), None);

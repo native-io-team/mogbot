@@ -21,7 +21,7 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
 import { AgentProjectField } from './AgentProject';
 import { AgentMemory } from './AgentMemory';
 import { AgentAvatar } from './AgentAvatar';
-import { AgentSecrets } from './AgentSecrets';
+import { AgentReach } from './AgentReach';
 import { AgentEngineField, AgentEngineMore } from './AgentEngine';
 import { useQuotaLines } from './AgentsQuota';
 import { ChevronRightIcon } from '@/components/icons';
@@ -582,7 +582,7 @@ export function AgentEditorModal({
           <UsageLines usage={usage} agent={agent} />
           <CanDo agent={agent} />
           <Permissions agent={agent} />
-          <AgentSecrets agent={agent} />
+          <AgentReach agent={agent} />
         </div>
       )}
       {/* With one engine there's no "Runs on": what protects it, and the way to add another, live down here. */}

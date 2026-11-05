@@ -226,6 +226,17 @@ pub fn run() {
                 }
                 // Agents' secrets, known to redaction before any turn runs.
                 let _ = tauri::async_runtime::spawn_blocking(agents::secrets::load_known).await;
+                // Connections' tokens too (`agents/connections.rs`).
+                let _ = tauri::async_runtime::spawn_blocking(agents::connections::load_known).await;
+                // Secret cards an older build raised for an app with a connector
+                // or a site become login cards (`agents/logins.rs`), once.
+                {
+                    let app = badge_app.clone();
+                    let _ = tauri::async_runtime::spawn_blocking(move || {
+                        agents::logins::migrate_pending(Some(&app))
+                    })
+                    .await;
+                }
                 // A turn the last run quit in the middle of: stop its process, say so.
                 agents::runner::recover_after_restart(&badge_app).await;
                 agents::notify::refresh_badge(&badge_app);
@@ -711,6 +722,8 @@ pub fn run() {
             commands::agents::agents_quit_check,
             commands::agents::agents_keep_running_in_background,
             commands::agents::agents_set_defaults,
+            commands::agents::agents_independence,
+            commands::agents::agents_set_independence,
             commands::agents::agents_desktop_settings,
             commands::agents::agents_set_desktop_settings,
             commands::agents::quick_entry_hide,
@@ -722,6 +735,18 @@ pub fn run() {
             commands::agents::agents_interrupt,
             commands::agents::agents_revoke_permission,
             commands::agents::agents_save_secret,
+            commands::agents::agents_login_start,
+            commands::agents::agents_login_cancel,
+            commands::agents::agents_login_decline,
+            commands::agents::agents_login_save_key,
+            commands::agents::agents_logins_team,
+            commands::agents::agents_login_dismiss,
+            commands::agents::agents_logins_connect,
+            commands::agents::agents_reach,
+            commands::agents::agents_reach_remove,
+            commands::agents::agents_connections,
+            commands::agents::agents_connection_rename,
+            commands::agents::agents_connection_delete,
             commands::agents::agents_add_secret,
             commands::agents::agents_revoke_secret,
             commands::agents::agents_focus,

@@ -173,6 +173,12 @@ fn remember(value: &str, reference: &str) {
     known.sort_by_key(|(v, _)| std::cmp::Reverse(v.len()));
 }
 
+/// A value that isn't one of an agent's secrets but must never be shown or
+/// written either (a connection's token, `connections.rs`).
+pub fn remember_external(value: &str, label: &str) {
+    remember(value, label);
+}
+
 /// At launch: every saved value, so redaction holds before any turn runs.
 pub fn load_known() {
     let Ok(agents) = store::list() else { return };
@@ -428,6 +434,16 @@ fn put(agent_id: &str, request: &Request, values: &[String]) -> Result<Secret, C
     Ok(secret)
 }
 
+/// Store a login card's key (`logins::save_key`): the same Keychain item
+/// and registry entry as a secret card's.
+pub fn put_for_card(
+    agent_id: &str,
+    request: &Request,
+    values: &[String],
+) -> Result<Secret, CommandError> {
+    put(agent_id, request, values)
+}
+
 /// The user saved the card `request_id`. Returns the secret and the card,
 /// now answered.
 pub fn save(
@@ -510,9 +526,11 @@ pub fn env_for(agent: &Agent) -> Vec<(String, String)> {
 pub const RULES: &str = "\
 ## Secrets
 
-When you need a password, API key, token or login, ask with `request_secret`: \
-the user types it into a secure card here, it goes into the macOS Keychain, \
-and you get an environment variable, never the value. Never ask the user to \
+`request_secret` is only for an API key or token made for programs (a \
+Stripe restricted key, an X API token): the user types it into a secure card \
+here, it goes into the macOS Keychain, and you get an environment variable, \
+never the value. For an account (email, Slack, LinkedIn, X, GitHub…) use \
+`request_login` instead, and never ask for a password. Never ask the user to \
 paste a credential in chat. Use a secret only through its variable \
 (`\"$STRIPE_KEY\"` in a command, or read from the environment in a script). \
 Never print, echo, log or write one to a file, and never put it in a message.";
@@ -659,6 +677,7 @@ mod tests {
             choice: None,
             secret: Some(request.clone()),
             connector: None,
+            login: None,
             set_aside: None,
         });
         store::append_message(&card).unwrap();

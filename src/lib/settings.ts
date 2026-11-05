@@ -357,7 +357,7 @@ export function clearSettingsTabOnOpen() {
  * it renders (⌘K → "Engine and model for new agents…" lands below the fold).
  * Taken once by the section itself.
  */
-export type SettingsSectionRequest = 'agent-defaults' | 'agent-usage';
+export type SettingsSectionRequest = 'agent-defaults' | 'agent-usage' | 'agent-independence';
 let settingsSectionOnOpen: SettingsSectionRequest | null = null;
 
 export function requestSettingsSectionOnOpen(section: SettingsSectionRequest) {

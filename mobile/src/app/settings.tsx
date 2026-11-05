@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Icon, Row, Section, T, tap } from '../components/ui';
 import { NewAgentDefaults } from '../components/NewAgentDefaults';
+import { IndependenceSetting } from '../components/IndependenceSetting';
 import { formatDate } from '../lib/agents';
 import { useQuotaLines } from '../lib/quota';
 import { useAccountLines } from '../lib/accounts';
@@ -15,7 +16,8 @@ import { appInfo } from '../lib/pairing';
 import { setPref } from '../lib/prefs';
 import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
 import { enableAlerts, unpair } from '../lib/session';
-import { useApp, type AppearancePref } from '../lib/store';
+import { MAC_FEATURES } from '@shipstudio/companion-protocol';
+import { useApp, useServed, type AppearancePref } from '../lib/store';
 import { useAccent, useSwitchColors } from '../lib/accent';
 import { brand } from '../lib/brand';
 import { useColors } from '../lib/appearance';
@@ -46,6 +48,7 @@ export default function Settings() {
   const accent = useAccent();
   const colors = useColors();
   const router = useRouter();
+  const servesTeam = useServed('agents.loginsTeam', MAC_FEATURES.logins);
   const credentials = useApp((s) => s.credentials);
   const connected = useApp((s) => s.link.kind === 'connected');
   // The route in use now, never assumed: nothing while it isn't connected.
@@ -173,7 +176,13 @@ export default function Settings() {
         </Section>
       )}
 
+      <IndependenceSetting />
       <NewAgentDefaults />
+      {servesTeam && (
+        <Section title="Logins" footer="The apps your agents asked for, one row each. Signing in happens on your Mac.">
+          <Row label="What your team needs" onPress={() => router.push('/logins')} last />
+        </Section>
+      )}
       {accounts.length > 0 && (
         <Section title="Accounts" footer={ACCOUNTS_FOOTER}>
           {accounts.map((line, i) => (

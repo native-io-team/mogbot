@@ -33,6 +33,7 @@ import { TakeoverProvider, useTakeover } from './AgentTakeover';
 import { ImportAgentsModal, type ImportPath } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
 import { ChiefIdeasModal } from './ChiefIdeasModal';
+import { TeamLoginsModal } from './TeamLogins';
 import { ProjectActionConfirmModal } from '../dashboard/ProjectActionConfirmModal';
 import { AccentScope } from '../../contexts/AccentScopeContext';
 import { Spinner } from '../primitives/Spinner';
@@ -107,6 +108,13 @@ import {
   type Room,
 } from '../../lib/agentRooms';
 import { kbd } from '../../lib/shortcuts';
+import {
+  onlySetupRequests,
+  setupHeldCounts,
+  useResumableTeamSetup,
+  useTeamSetup,
+  withoutHeldLogins,
+} from '../../lib/teamSetup';
 
 const SELECTED_KEY = 'shipstudio.agents.selected';
 
@@ -285,6 +293,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   /** "More ideas…" (and ⌘K): the gallery of things to ask the Chief. */
   const openModal = useOpenModal();
   const openIdeas = useCallback(() => openModal('chiefIdeas'), [openModal]);
+  const openLogins = useCallback(() => openModal('teamLogins'), [openModal]);
   /** A picked idea: the Chief's chat, with its brief typed out. */
   const pickIdea = useCallback(
     (idea: ChiefIdea) => {
@@ -386,6 +395,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     onOpenAgent: openAgent,
     onSearch: focusSearch,
     onIdeas: openIdeas,
+    onLogins: openLogins,
   });
 
   // The order you see in the sidebar, for previous / next.
@@ -440,11 +450,22 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [openAgent]);
 
+  // Logins "Setting up your team" holds live in its one card, not as an
+  // amber row per imported agent (What's in flight leaves them out too).
+  const setup = useResumableTeamSetup();
+  const listed = useMemo(() => withoutHeldLogins(agents, setup), [agents, setup]);
+
   // What the "Needs you" row counts: the agents What's in flight lists under Needs you.
-  const needsYouCount = agents.filter((a) => !a.hidden && needsAttention(a)).length;
+  const teamSetup = useTeamSetup();
+  const setupHeld = useMemo(() => setupHeldCounts(teamSetup), [teamSetup]);
+  // An agent being set up whose only requests are the checklist's logins is
+  // counted once, there, not again here.
+  const needsYouCount = listed.filter(
+    (a) => !a.hidden && needsAttention(a) && !onlySetupRequests(a, setupHeld)
+  ).length;
 
   // The oldest card waiting on you, on the first agent (sidebar order) with one.
-  const waitingOn = sortAgents(agents).find((a) => !a.hidden && needsYou(a)) ?? null;
+  const waitingOn = sortAgents(listed).find((a) => !a.hidden && needsYou(a)) ?? null;
   const topCard = useAgentsSelector((s) =>
     waitingOn
       ? (s.messages[waitingOn.id] ?? []).find((m) => m.approval?.status === 'pending')
@@ -821,7 +842,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
             }
             listContent={
               <AgentsSidebar
-                agents={agents}
+                agents={listed}
                 selectedId={room ? roomKey(room.id) : (selected?.id ?? null)}
                 showHidden={showHidden}
                 onToggleShowHidden={toggleShowHidden}
@@ -965,6 +986,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
         }}
       />
       <AgentAppsModal isOpen={appsOpen} onClose={() => setAppsOpen(false)} />
+      <TeamLoginsModal />
       {roomEditor.open && (
         <RoomEditorModal
           isOpen

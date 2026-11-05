@@ -2818,7 +2818,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-playback',
     title: 'Agents — import, the plan played back: anything missing?',
     looksRightWhen:
-      'The Chief’s chat ends on one card: download icon, “Here’s what your 2 agents will do for you”, a muted lede that this is what was understood from Grok and nothing is created yet. Then “Finance” in label weight over a bullet list in secondary text: its job, the weekday 09:00 routine (arrives paused), what it watches for, the apps it used with Grok, three “I’ll keep in mind” lines, the logins on secure cards, 37 past conversations. Then “Travel” with its own list. Then “Is there anything I’m missing?” over a two-line field with an example placeholder. Right-aligned: a secondary Add this (disabled while the field is empty), then a neutral That’s everything. The bar above the composer: amber dot, “Import from Grok · check the plan” / “Is anything missing? Nothing is created until you import.”',
+      'The Chief’s chat ends on one card: download icon, “Here’s what your 2 agents will do for you”, a muted lede that this is what was understood from Grok and nothing is created yet. Then “Finance” in label weight over a bullet list in secondary text: its job, the weekday 09:00 routine (arrives paused), what it watches for, the apps it used with Grok, three “I’ll keep in mind” lines, the logins it needs, connected on sign-in cards, 37 past conversations. Then “Travel” with its own list. Then “Is there anything I’m missing?” over a two-line field with an example placeholder. Right-aligned: a secondary Add this (disabled while the field is empty), then a neutral That’s everything. The bar above the composer: amber dot, “Import from Grok · check the plan” / “Is anything missing? Nothing is created until you import.”',
     command: 'agents.open',
     requires: '[data-testid="agent-import-playback"]',
     commands: {
@@ -2853,7 +2853,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-review-replace',
     title: 'Agents — the review card, replacing your Finance',
     looksRightWhen:
-      'As agents-import-review with Finance opened: a segmented pair “Add as Finance (from Grok)” | “Replace your Finance”, Replace chosen. An amber list says every consequence: its instructions become these and its memory is kept; its role becomes “Tracks spending and chases invoices” (now “Keeps the books”); it starts a fresh conversation; its 2 routines are paused; it’s no longer bound to acme-site; its 3 “Always allow” rules are removed; its saved logins are removed: STRIPE_KEY, GITHUB_TOKEN. Under it an unticked “Keep its saved logins”. A recessed monospace diff: “− Keep the books in the shared sheet.” in red, “+ Track every expense in the books sheet.” in green, the unchanged lines plain. Then What it remembers, “Routines · arrive paused” and “Logins it asks for · on secure cards, never here” (stripe_key, bank_login). The name chip now reads “Replaces your Finance” in amber.',
+      'As agents-import-review with Finance opened: a segmented pair “Add as Finance (from Grok)” | “Replace your Finance”, Replace chosen. An amber list says every consequence: its instructions become these and its memory is kept; its role becomes “Tracks spending and chases invoices” (now “Keeps the books”); it starts a fresh conversation; its 2 routines are paused; it’s no longer bound to acme-site; its 3 “Always allow” rules are removed; its saved logins are removed: STRIPE_KEY, GITHUB_TOKEN. Under it an unticked “Keep its saved logins”. A recessed monospace diff: “− Keep the books in the shared sheet.” in red, “+ Track every expense in the books sheet.” in green, the unchanged lines plain. Then What it remembers, “Routines · arrive paused” and “Logins it needs · you connect them on sign-in cards, never a password” (stripe_key, bank_login). The name chip now reads “Replaces your Finance” in amber.',
     command: 'agents.open',
     requires: '.agent-import-review__diff',
     steps: [
@@ -3333,12 +3333,12 @@ export const agentsScenarios: Scenario[] = [
   ),
   {
     id: 'agents-secrets-editor',
-    title: 'Agents — the Secrets list in Edit agent',
+    title: 'Agents — keys under “What it can reach” in Edit agent',
     looksRightWhen:
-      'Editing Finance, below Permissions: a Logins group listing each by what it’s for (no $VARIABLES or stored names on the row; those are in the row’s hover title), then “Added <when> · used <when>” (or “not used yet”), hairline-separated, each with a quiet Revoke on the right.',
+      'Editing Finance, below Permissions: a “What it can reach” group with “Keys in your Keychain” listing each key by what it’s for (no $VARIABLES or stored names on the row; those are in the row’s hover title), then “Used <when>” (or “Not used yet”), hairline-separated, each with a quiet Remove on the right.',
     openSelector: AGENTS_TAB,
     requires: '.agent-secrets__row',
-    clipSelector: '.agent-editor [role="group"][aria-label="Secrets"]',
+    clipSelector: '.agent-editor [role="group"][aria-label="What it can reach"]',
     steps: [
       { click: '[data-agent-id="finance"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
@@ -3372,6 +3372,27 @@ export const agentsScenarios: Scenario[] = [
       agents_instructions: 'Invoices, expenses and the books.',
       agents_usage: { week: totals(6, 120_000, 1.2, 9), allTime: totals(40, 900_000, 9.4, 70) },
       agents_revoke_secret: null,
+      agents_reach: {
+        connections: [],
+        browser: { on: true, sites: [], helperInstalled: true },
+        secrets: [
+          {
+            secretId: 's1',
+            name: 'stripe_key',
+            purpose: 'Read payouts to reconcile against the bank export',
+            variables: ['$STRIPE_KEY'],
+            lastUsedAt: now - 2 * 60 * MIN,
+          },
+          {
+            secretId: 's2',
+            name: 'bank',
+            purpose: 'Download monthly statements',
+            variables: ['$BANK_USERNAME', '$BANK_PASSWORD'],
+          },
+        ],
+        blockedApps: [],
+      },
+      agents_reach_remove: null,
     },
   },
   {

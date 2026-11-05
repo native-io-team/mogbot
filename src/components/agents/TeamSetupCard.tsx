@@ -7,7 +7,7 @@
  * own chat ticks it off here.
  *
  * Every step can be skipped and opened again; the first open one is
- * expanded. Progress counts steps ("2 of 4 done"), never requests. The
+ * expanded. Progress counts steps ("2 steps left"), never requests. The
  * agents stay quiet until the user says hi, one at a time.
  *
  * Seams: the Logins step lists each login and opens its secure card in
@@ -19,7 +19,7 @@
  * @module components/agents/TeamSetupCard
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CheckIcon, ChevronRightIcon, ListIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
@@ -48,6 +48,7 @@ import {
 import { AgentCard, AgentLine } from './AgentCard';
 import { AgentAvatar } from './AgentAvatar';
 import { ApprovalCard } from './AgentChatItems';
+import { TeamLogins } from './TeamLogins';
 
 interface TeamSetupCardProps {
   view: TeamSetupView;
@@ -341,16 +342,13 @@ function StepBody({
   }
 }
 
-/** One login: whose and what for, with its secure card opened in place. */
 /**
- * The Logins step: one row per service, whoever needs it ("bankline · Bookkeeper,
- * Payroll"), so a login several agents use is one row, not one per agent.
- * Add opens each agent's secure card for it, in place.
- *
- * Seam: this is the slot for the logins work's "What your team needs" list
- * (one Connect per service covering every agent, deduped, with "Not
- * needed"), which replaces this component whole when it lands; it takes the
- * same `logins` the checklist already reads.
+ * The Logins step. Apps an agent signs in to (login cards) are "What your
+ * team needs", scoped to the agents being set up: one Connect per service
+ * covers every agent on the row, with "Not needed" per agent. Keys and
+ * other secure inputs stay one row per service, whoever needs them
+ * ("Google — Gmail (2 accounts)", "Email drafts"), with each agent's secure
+ * card opened in place. A row is always named by the app, never a raw key.
  */
 export function SetupLogins({
   logins,
@@ -359,14 +357,23 @@ export function SetupLogins({
   logins: SetupLogin[];
   onOpenAgent?: (agentId: string) => void;
 }) {
-  const groups = groupLogins(logins);
-  if (groups.length === 0) return <p className="team-setup__empty">Every login is in.</p>;
+  const signIns = logins.filter((l) => l.kind === 'login');
+  const keys = logins.filter((l) => l.kind !== 'login');
+  const idList = [...new Set(signIns.map((l) => l.agentId))].sort().join(',');
+  const agentIds = useMemo(() => new Set(idList ? idList.split(',') : []), [idList]);
+  const groups = groupLogins(keys);
+  if (logins.length === 0) return <p className="team-setup__empty">Every login is in.</p>;
   return (
-    <ul className="team-setup__list">
-      {groups.map((g) => (
-        <LoginGroupRow key={g.key} name={g.name} items={g.items} onOpenAgent={onOpenAgent} />
-      ))}
-    </ul>
+    <>
+      {signIns.length > 0 && <TeamLogins agentIds={agentIds} empty="" />}
+      {groups.length > 0 && (
+        <ul className="team-setup__list">
+          {groups.map((g) => (
+            <LoginGroupRow key={g.key} name={g.name} items={g.items} onOpenAgent={onOpenAgent} />
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 

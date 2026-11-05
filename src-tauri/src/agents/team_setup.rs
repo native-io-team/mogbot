@@ -142,8 +142,124 @@ pub struct LoginItem {
     pub agent_id: String,
     pub agent_name: String,
     pub request_id: String,
+    /// What the agent called it (a secret's key, `gmail_native`): never a title.
     pub name: String,
     pub purpose: String,
+    /// The row it's on, in words: the app's name ("Gmail"), or the key made
+    /// readable ("Email drafts"). Never the raw key.
+    pub title: String,
+    /// Which row: the catalogue's family or service ("google", "github"),
+    /// else the readable title, lower-cased.
+    pub group: String,
+    /// The family's name when there's one ("Google"), for the row's heading.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
+    /// A login card (`request_login`, answered by "What your team needs")
+    /// or a secure input card (a key, answered in place).
+    pub kind: LoginKind,
+    /// Which account, when the card says ("work").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LoginKind {
+    Login,
+    Secret,
+}
+
+/// A key as words: "email_drafts" → "Email drafts", "slackWorkspaces" →
+/// "Slack workspaces". Never shown as the raw key.
+pub fn humanise(key: &str) -> String {
+    let mut words = String::new();
+    let mut prev_lower = false;
+    for c in key.trim().chars() {
+        if c == '_' || c == '-' || c == '.' || c.is_whitespace() {
+            if !words.ends_with(' ') && !words.is_empty() {
+                words.push(' ');
+            }
+            prev_lower = false;
+            continue;
+        }
+        if c.is_ascii_uppercase() && prev_lower {
+            words.push(' ');
+        }
+        prev_lower = c.is_ascii_lowercase() || c.is_ascii_digit();
+        words.push(c.to_ascii_lowercase());
+    }
+    let words = words.trim().to_string();
+    let mut chars = words.chars();
+    match chars.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
+        None => "A login".into(),
+    }
+}
+
+fn login_item(agent: &store::Agent, approval: store::Approval) -> Option<LoginItem> {
+    let base =
+        |name: String, purpose: String, title: String, group: String, family, kind, account| {
+            LoginItem {
+                agent_id: agent.id.clone(),
+                agent_name: agent.name.clone(),
+                request_id: approval.request_id.clone(),
+                name,
+                purpose,
+                title,
+                group,
+                family,
+                kind,
+                account,
+            }
+        };
+    if let Some(l) = &approval.login {
+        let (fam, fam_name) = super::logins::family(&l.service);
+        let group = if !fam.is_empty() {
+            fam.to_string()
+        } else if l.service == "other" {
+            l.title.to_ascii_lowercase()
+        } else {
+            l.service.clone()
+        };
+        return Some(base(
+            l.asked_as.clone().unwrap_or_else(|| l.service.clone()),
+            l.why.clone(),
+            l.title.clone(),
+            group,
+            (!fam_name.is_empty()).then(|| fam_name.to_string()),
+            LoginKind::Login,
+            l.account_hint.clone(),
+        ));
+    }
+    let s = approval.secret.as_ref()?;
+    let (title, group, family) = match super::logins::match_service(&s.name) {
+        Some(svc) => {
+            let (fam, fam_name) = super::logins::family(svc.id);
+            (
+                svc.title.to_string(),
+                if fam.is_empty() {
+                    svc.id.to_string()
+                } else {
+                    fam.to_string()
+                },
+                (!fam_name.is_empty()).then(|| fam_name.to_string()),
+            )
+        }
+        None => {
+            let t = humanise(&s.name);
+            let g = t.to_ascii_lowercase();
+            (t, g, None)
+        }
+    };
+    Some(base(
+        s.name.clone(),
+        s.purpose.clone(),
+        title,
+        group,
+        family,
+        LoginKind::Secret,
+        None,
+    ))
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -380,11 +496,12 @@ pub fn emit(app: &tauri::AppHandle) {
 
 /* ------------------------------------------------------------ reading */
 
-fn logins_of(agent_id: &str) -> Vec<(String, super::secrets::Request)> {
+/// An agent's waiting login and secure input cards.
+fn logins_of(agent_id: &str) -> Vec<store::Approval> {
     store::pending_approvals(agent_id)
         .unwrap_or_default()
         .into_iter()
-        .filter_map(|a| a.secret.map(|s| (a.request_id, s)))
+        .filter(|a| a.secret.is_some() || a.login.is_some())
         .collect()
 }
 
@@ -465,13 +582,7 @@ fn build(setup: &TeamSetup) -> SetupView {
         .flat_map(|a| {
             logins_of(&a.id)
                 .into_iter()
-                .map(|(request_id, s)| LoginItem {
-                    agent_id: a.id.clone(),
-                    agent_name: a.name.clone(),
-                    request_id,
-                    name: s.name,
-                    purpose: s.purpose,
-                })
+                .filter_map(|approval| login_item(a, approval))
         })
         .collect();
     if setup.had_logins || !logins.is_empty() {
@@ -718,7 +829,12 @@ pub fn read_agent_text(agent: &store::Agent) -> String {
     let pending = store::pending_approvals(&agent.id).unwrap_or_default();
     let asked: Vec<String> = pending
         .iter()
-        .filter_map(|a| a.secret.as_ref().map(|s| s.name.clone()))
+        .filter_map(|a| {
+            a.secret
+                .as_ref()
+                .map(|s| s.name.clone())
+                .or_else(|| a.login.as_ref().map(|l| l.title.clone()))
+        })
         .collect();
     out.push_str(&format!(
         "\nLogins saved: {}\nLogins it's waiting for (the user adds them from the card): {}\n",
@@ -735,7 +851,7 @@ pub fn read_agent_text(agent: &store::Agent) -> String {
     ));
     let requests: Vec<String> = pending
         .iter()
-        .filter(|a| a.secret.is_none())
+        .filter(|a| a.secret.is_none() && a.login.is_none())
         .map(|a| format!("- {}: {}", a.title, first_line(&a.detail)))
         .collect();
     if !requests.is_empty() {
@@ -973,6 +1089,25 @@ fn gaps_for(gaps: &[(String, Vec<String>)], name: &str, source: &str) -> Vec<Str
         })
         .map(|(_, l)| l.clone())
         .unwrap_or_default()
+}
+
+/// Logins the checklist holds, per agent, while it isn't finished (put away
+/// or not): the dock and phone badges leave them out, as the sidebar and
+/// What's in flight do, so an import of sixteen agents doesn't land as a
+/// badge of thirty. They are still one tap away in the checklist.
+pub fn held_logins() -> HashMap<String, u32> {
+    let Some(view) = view_any().filter(|v| !v.complete) else {
+        return HashMap::new();
+    };
+    held_in(&view)
+}
+
+fn held_in(view: &SetupView) -> HashMap<String, u32> {
+    let mut held: HashMap<String, u32> = HashMap::new();
+    for login in view.steps.iter().flat_map(|s| &s.logins) {
+        *held.entry(login.agent_id.clone()).or_default() += 1;
+    }
+    held
 }
 
 /// The agents a live setup covers (their requests fold into its card).
