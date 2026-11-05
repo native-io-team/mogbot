@@ -19,8 +19,10 @@ import type { Agent } from './agents';
 export interface QuitCheck {
   /** Mid-turn (or queued for a slot) and not waiting on you. */
   working: string[];
-  /** An approval card is open. */
+  /** An approval card is open. It survives a restart: said, never warned about. */
   waiting: string[];
+  /** A check-in is due within the next day; it can't run while the app is closed. */
+  scheduled?: string[];
 }
 
 /** A quit asked for from inside the page (the palette, a window close). */
@@ -52,9 +54,12 @@ export function nameList(names: string[]): string {
 }
 
 /**
- * What the quit dialog asks, or `null` when nothing would be interrupted and
- * the plain confirmation will do. Working agents lead; approvals waiting on
- * you are said after them, or lead when nothing is working.
+ * What the quit dialog asks, or `null` when quitting stops nothing and the
+ * plain confirmation will do. Only what actually stops is warned about: a
+ * turn in progress, and a check-in due while the app is closed (it runs
+ * late, on reopen). An open card doesn't stop — it's there when you reopen,
+ * and a late Allow picks the turn up — so it's said as reassurance, never
+ * as a reason to stay.
  */
 export function quitPrompt(
   check: QuitCheck | null,
@@ -62,13 +67,14 @@ export function quitPrompt(
 ): QuitPrompt | null {
   if (!check) return null;
   const working = check.working.length;
+  const scheduled = check.scheduled ?? [];
   const waiting = check.waiting.length;
-  if (working === 0 && waiting === 0) return null;
+  if (working === 0 && scheduled.length === 0) return null;
 
   const title =
     working > 0
       ? `${working} ${plural(working, 'agent is', 'agents are')} still working. Quit anyway?`
-      : `${waiting} ${plural(waiting, 'agent is', 'agents are')} waiting for your OK. Quit anyway?`;
+      : `${nameList(scheduled)} ${plural(scheduled.length, 'has a check-in', 'have check-ins')} coming up. Quit anyway?`;
 
   const lines: string[] = [];
   if (working > 0) {
@@ -76,11 +82,16 @@ export function quitPrompt(
       `Quitting stops ${nameList(check.working)} mid-turn; what ${plural(working, 'it has', 'they have')} done so far stays.`
     );
   }
-  if (waiting > 0) {
+  if (scheduled.length > 0) {
     lines.push(
       working > 0
-        ? `${nameList(check.waiting)} ${plural(waiting, 'is', 'are')} also waiting for your OK.`
-        : `Quitting stops ${nameList(check.waiting)} waiting on ${plural(waiting, 'its', 'their')} approval.`
+        ? `${nameList(scheduled)}’s check-ins won’t run while the app is closed; they run when you reopen it.`
+        : 'Check-ins don’t run while the app is closed; they run when you reopen it.'
+    );
+  }
+  if (waiting > 0) {
+    lines.push(
+      `${nameList(check.waiting)}’s ${plural(waiting, 'request', 'requests')} will still be here when you reopen.`
     );
   }
   return { title, body: lines.join(' '), offerBackground: backgroundAvailable };

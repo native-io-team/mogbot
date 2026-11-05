@@ -1961,11 +1961,12 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                 const settingsMenuOpen = props['aria-expanded'];
                 if (!settingsMenuOpen && labeledFooterActions) {
                   return (
+                    // A row like the Phone row above it: two links of equal rank, one weight.
                     <MenuButton
-                      variant="default"
+                      variant="ghost"
                       width="fill"
-                      className="workspace-sidebar-settings"
-                      leftIcon={<SettingsIcon size={12} />}
+                      className="workspace-sidebar-settings workspace-sidebar-settings--row"
+                      leftIcon={<SettingsIcon size={14} />}
                       title="Settings & Help"
                       aria-label="Settings & Help"
                       data-settings-menu-trigger="workspace"

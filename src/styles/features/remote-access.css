@@ -630,3 +630,7 @@
   background: transparent;
   border: 1px solid var(--text-muted);
 }
+
+.remote-indicator__glyph {
+  flex: none;
+}

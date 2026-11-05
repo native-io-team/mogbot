@@ -36,10 +36,13 @@ import { useImportGate } from './ImportConnectorPanel';
 import { talkIsLive } from '../../lib/agents';
 import { AgentMark } from './AgentSwitcher';
 import { useFlipReorder } from './useAgentMotion';
+import { useAgentsSelector } from '../../lib/agentsStore';
 import {
+  engineIsReady,
   failedTurn,
   failureLine,
   needsYou,
+  plainActivity,
   sortAgents,
   type Agent,
   type SearchHit,
@@ -63,11 +66,16 @@ interface AgentsSidebarProps {
   onOpenHit: (hit: SearchHit) => void;
   /** The hit last opened, marked as the row is. */
   currentHit?: string | null;
+  /** Agents waiting on you (a card, or a turn that didn't finish). */
+  needsYouCount: number;
+  /** What's in flight is the view on screen. */
+  inFlightOpen: boolean;
+  onOpenInFlight: () => void;
 }
 
 function subtitle(agent: Agent): string {
   if (needsYou(agent)) return 'Needs your OK';
-  if (agent.status.state === 'working') return agent.status.activity ?? 'Working…';
+  if (agent.status.state === 'working') return plainActivity(agent.status.activity) ?? 'Working…';
   const failure = failedTurn(agent);
   if (failure) return failureLine(failure, agent.preview);
   return agent.preview ?? agent.role ?? '';
@@ -143,13 +151,26 @@ export function AgentsSidebar({
   onOpenHit,
   currentHit,
   actions,
+  needsYouCount,
+  inFlightOpen,
+  onOpenInFlight,
 }: AgentsSidebarProps) {
   const searching = query.trim().length > 0;
+  // Bringing agents over is for someone whose agents can run: never while
+  // nothing can (signed out, nothing installed), when it would compete with
+  // the one thing they have to do.
+  const engineWorks = useAgentsSelector((s) =>
+    s.engines.length > 0
+      ? s.engines.some((e) => engineIsReady(e.id, s.engines, s.engineReady))
+      : s.engineReady
+  );
   const nudge = useImportNudge(
     agents.length,
     agents.some((a) => a.isMain && a.sessionId !== null)
   );
   const importing = talkIsLive(useImportGate().talk);
+  // An import already going needs no pitch for one.
+  const showNudge = nudge.visible && engineWorks && !importing;
   const { visible, hidden } = useMemo(() => {
     const sorted = sortAgents(agents);
     return {
@@ -193,6 +214,23 @@ export function AgentsSidebar({
         />
       ) : (
         <>
+          {/* What's in flight, said where you look: only while something waits on you. */}
+          {needsYouCount > 0 && (
+            <button
+              type="button"
+              tabIndex={0}
+              className={`agents-list__needs-you${inFlightOpen ? ' is-current' : ''}`}
+              aria-current={inFlightOpen ? 'page' : undefined}
+              onClick={onOpenInFlight}
+              title={`Open What’s in flight · ${kbd('mod', 'J')} jumps to the next one`}
+            >
+              <span className="agents-list__needs-you-mark" aria-hidden="true">
+                <span className="sidebar-row-dot dot-attention" />
+              </span>
+              <span className="agents-list__needs-you-label">Needs you · {needsYouCount}</span>
+              <ChevronRightIcon size={10} className="agents-list__needs-you-chevron" />
+            </button>
+          )}
           {visible.map(row)}
           {hidden.length > 0 && (
             <button
@@ -207,10 +245,7 @@ export function AgentsSidebar({
             </button>
           )}
           {showHidden && hidden.map(row)}
-          {/* An import already going needs no pitch for one. */}
-          {nudge.visible && !importing && (
-            <ImportNudge onImport={onImport} onDismiss={nudge.dismiss} />
-          )}
+          {showNudge && <ImportNudge onImport={onImport} onDismiss={nudge.dismiss} />}
           <div className="workspace-sidebar-active-actions">
             <Button
               variant="ghost"
@@ -225,7 +260,7 @@ export function AgentsSidebar({
             {/* Here for good once the note above is gone: people decide to
                 bring their agents over after they've tried it. While the note
                 shows, it is the way in, and a second button would only echo it. */}
-            {!nudge.visible && (
+            {engineWorks && !nudge.visible && (
               <Button
                 variant="ghost"
                 width="fill"
@@ -275,11 +310,12 @@ const AgentRow = memo(function AgentRow({
           <span className="agents-list__text">
             <span className="agents-list__name">
               <span className="agents-list__name-text">{agent.name}</span>
+              {/* Marks, not controls: small, faint, and not a target (the menu toggles them). */}
               {agent.pinned && (
-                <PinIcon size={12} className="agents-list__pin" aria-label="Pinned" />
+                <PinIcon size={10} className="agents-list__pin" aria-label="Pinned" />
               )}
               {agent.muted && (
-                <BellOffIcon size={12} className="agents-list__pin" aria-label="Muted" />
+                <BellOffIcon size={10} className="agents-list__pin" aria-label="Muted" />
               )}
               <AgentEngineBadge engine={agent.engine} />
             </span>

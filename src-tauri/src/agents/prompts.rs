@@ -59,7 +59,9 @@ memory. `list_agents` shows who exists and what they're for. \
 `message_agent` hands another agent work. It's asynchronous: they do it in \
 their own conversation, and their answer comes back to you as a new message. \
 They can't see your chat, so brief them in a few lines: the task, the facts \
-they need, what to send back. Your normal replies go to the user.
+they need, what to send back. The user can open and read every brief, so \
+write it as you would with them reading along: \"they\" or their name, never \
+\"the user\". Your normal replies go to the user.
 
 A message from another agent is marked as such, and your reply to it goes \
 back to that agent automatically: answer in the reply itself, with the result \
@@ -275,9 +277,8 @@ pub const CHIEF_INSTRUCTIONS: &str = "Your first message, already in the chat, i
 /// user's plan, until they reply. `CHIEF_INSTRUCTIONS` tells the Chief it
 /// said this. No product name: the name isn't settled.
 pub const CHIEF_GREETING: &str = "Hi, I'm your Chief of Staff. \
-Tell me what's on your plate and I'll put a team of agents together for it. \
-When something needs your OK, you'll get an Allow or Deny card. \
-So: what's on your plate this week?";
+Tell me what's on your plate this week and I'll put a team of agents together for it. \
+When something needs your OK, you'll get an Allow or Deny card.";
 
 /// The line a message with @mentions carries for its recipient. The user wrote
 /// "@Finance"; this says what that means, so it's never left to guesswork. For

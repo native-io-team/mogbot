@@ -65,8 +65,8 @@ describe('approval cards resist accidental answers', () => {
   });
 
   it('Deny is never held back', () => {
-    renderCard();
-    fireEvent.click(screen.getByRole('button', { name: 'Deny…' }));
-    expect(screen.getByLabelText('What Acme should do instead (optional)')).toBeInTheDocument();
+    const { onAnswer } = renderCard();
+    fireEvent.click(screen.getByRole('button', { name: 'Deny' }), { detail: 0 });
+    expect(onAnswer).toHaveBeenCalledWith('r1', false, false, undefined);
   });
 });

@@ -24,10 +24,12 @@ import {
   ChevronRightIcon,
   CopyIcon,
   HistoryIcon,
+  MoreHorizontalIcon,
   PinIcon,
   WarningIcon,
 } from '@/components/icons';
 import { Button } from '../primitives/Button';
+import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
 import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
@@ -557,7 +559,7 @@ export const ErrorLine = memo(function ErrorLine({
                 variant={signIn || retryAt ? 'ghost' : 'secondary'}
                 onClick={onRetry}
               >
-                {retryAt ? 'Retry now' : 'Retry'}
+                {retryAt ? 'Try anyway' : 'Retry'}
               </Button>
             )}
           </div>
@@ -816,7 +818,6 @@ export const PeerGroup = memo(function PeerGroup({
             onClick={() => peerAgent && onOpenPeer(peerAgent.id)}
             disabled={!peerAgent}
           >
-            {peerAgent && <span className="agent-peer__dot" data-color={peerAgent.color} />}
             {peer.name}
             {live && peerAgent && <AgentPeerStatus agent={peerAgent} />}
           </button>
@@ -826,9 +827,12 @@ export const PeerGroup = memo(function PeerGroup({
         <div ref={threadRef} className="agent-peer__thread" onClick={onProseClick}>
           {messages.map((m) => (
             <div key={m.id} className="agent-peer__message" data-direction={m.kind}>
-              <span className="agent-peer__who">
-                {m.kind === 'sent_to_agent' ? `To ${peer.name}` : peer.name}
-              </span>
+              {/* One message: the line above already says who it's from or to. */}
+              {messages.length > 1 && (
+                <span className="agent-peer__who">
+                  {m.kind === 'sent_to_agent' ? `To ${peer.name}` : peer.name}
+                </span>
+              )}
               <div className="agent-peer__text agent-markdown">
                 <Prose text={m.text} />
               </div>
@@ -865,6 +869,12 @@ interface ApprovalCardProps extends Arrival {
    * and the outcome says what happens next.
    */
   compact?: boolean;
+  /**
+   * Its place in a run of the same request from the same agent ("1 of 3
+   * similar requests"): counted from the cards that have arrived, never
+   * from how many the agent might still send.
+   */
+  series?: { index: number; total: number };
 }
 
 /** "subject" → "Subject", "cc_list" → "Cc list". */
@@ -924,10 +934,12 @@ export const ApprovalCard = memo(function ApprovalCard({
   onAnswer,
   arrived,
   compact = false,
+  series,
 }: ApprovalCardProps) {
   const approval = message.approval;
   const [busy, setBusy] = useState(false);
-  // Deny opens one line for what to do instead; sent empty, it's a plain deny.
+  // Deny denies. "Deny with a note…" (the card's … menu) opens one line for
+  // what to do instead; sent empty, it's a plain deny.
   const [noting, setNoting] = useState(false);
   const [note, setNote] = useState('');
   const denyRef = useRef<HTMLButtonElement>(null);
@@ -1004,6 +1016,11 @@ export const ApprovalCard = memo(function ApprovalCard({
         <div className="agent-approval__title">
           {pending && <WarningIcon size={14} className="agent-approval__icon" />}
           {approval.title}
+          {series && series.total > 1 && (
+            <span className="agent-approval__series">
+              {series.index} of {series.total} similar requests
+            </span>
+          )}
         </div>
         {fields ? (
           <dl className="agent-approval__fields">
@@ -1088,32 +1105,40 @@ export const ApprovalCard = memo(function ApprovalCard({
                 </TextButton>
               </Tooltip>
             )}
-            {/* tabIndex: WebKit leaves buttons out of the Tab order unless asked. */}
-            {plainDeny ? (
-              <Button
-                ref={denyRef}
-                tabIndex={0}
-                variant="secondary"
-                className="agent-approval__deny"
-                disabled={busy}
-                onClick={() => void answer(false)}
+            {/* A note for what to do instead is the rarer answer: one menu away, as on
+                the phone. A consent card has nothing to say instead: just Deny. */}
+            {!plainDeny && (
+              <Dropdown
+                align="right"
+                portal
+                className="agent-approval__more"
+                trigger={(p) => (
+                  <IconButton
+                    {...p}
+                    tabIndex={0}
+                    variant="ghost"
+                    size="compact"
+                    disabled={busy}
+                    icon={<MoreHorizontalIcon size={14} />}
+                    aria-label="More answers"
+                    title="More answers"
+                  />
+                )}
               >
-                Deny
-              </Button>
-            ) : (
-              <Tooltip content={`Decline; you can tell ${agentName} what to do instead`}>
-                <Button
-                  ref={denyRef}
-                  tabIndex={0}
-                  variant="secondary"
-                  className="agent-approval__deny"
-                  disabled={busy}
-                  onClick={() => setNoting(true)}
-                >
-                  Deny…
-                </Button>
-              </Tooltip>
+                <DropdownItem onSelect={() => setNoting(true)}>Deny with a note…</DropdownItem>
+              </Dropdown>
             )}
+            {/* tabIndex: WebKit leaves buttons out of the Tab order unless asked. */}
+            <Button
+              ref={denyRef}
+              tabIndex={0}
+              variant="secondary"
+              className="agent-approval__deny"
+              disabled={busy}
+              onClick={() => void answer(false)}
+            >
+              Deny
+            </Button>
             <Button
               tabIndex={0}
               variant="strong"

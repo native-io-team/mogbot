@@ -11,8 +11,10 @@
  * next agent that needs you (a card, or a turn that didn't finish); ⌘F
  * search, Esc to put it away; Esc twice in an empty composer stops a working
  * agent (AgentChat); ⌘K "Open <agent>", "Stop <agent>", "What's in flight"
- * (the cross-agent overview, also the bell beside the sidebar toggle), and Allow / Deny for
- * the oldest card waiting on you.
+ * (the cross-agent overview, also the "Needs you · N" row at the top of the
+ * agent list while anything does), Allow / Deny for the oldest card waiting
+ * on you, and the open agent's own actions (Edit, Pin, Mute, Hide, Mark as
+ * unread, Start fresh, Open project, Delete).
  *
  * @module components/agents/AgentsView
  */
@@ -63,21 +65,29 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 import { useAgentsIntents } from '../../commands/useAgentsCommands';
 import { useCommands } from '../../commands/useCommands';
 import {
-  ActivityIcon,
   AgentsModeIcon,
+  BellIcon,
+  BellOffIcon,
   CheckIcon,
   CloseIcon,
+  CommentIcon,
   EditFieldIcon,
+  EditIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FolderIcon,
+  PinIcon,
   ResetIcon,
+  TrashIcon,
 } from '@/components/icons';
-import { IconButton } from '../primitives/IconButton';
+import { useAgentProjects } from './AgentProject';
 import { kbd } from '../../lib/shortcuts';
 
 const SELECTED_KEY = 'shipstudio.agents.selected';
 
 function readSelected(): string | null {
   try {
-    // "What's in flight" (the bell, or ⌘K) is a detour, never where Agents reopens.
+    // "What's in flight" (the Needs you row, or ⌘K) is a detour, never where Agents reopens.
     const id = localStorage.getItem(SELECTED_KEY);
     return id === TEAM_ID ? null : id;
   } catch {
@@ -136,7 +146,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const [jump, setJump] = useState<{ agentId: string; messageId: string } | null>(null);
 
   const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
-  // "What's in flight" (the bell or ⌘K), else the last agent you had open, else the Chief of Staff.
+  // "What's in flight" (the Needs you row or ⌘K), else the last agent you had open, else the Chief of Staff.
   const teamOpen = selectedId === TEAM_ID;
   const selected = teamOpen
     ? null
@@ -207,6 +217,11 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     setImportOpen(true);
   }, []);
   const openApps = useCallback(() => setAppsOpen(true), []);
+  const openInFlight = useCallback(() => setSelectedId(TEAM_ID), []);
+  /** New agent's "Ask your Chief of Staff": the request, drafted in the Chief's composer. */
+  const [prefill, setPrefill] = useState<{ agentId: string; text: string; n: number } | null>(null);
+  // Delivered once: leaving that chat and coming back doesn't type it again.
+  if (prefill && selectedId !== prefill.agentId) setPrefill(null);
   // The sidebar's top field searches conversations. With no sidebar to hold
   // it (compact, or the rail collapsed) it comes up over the chat instead.
   const popoverSearch = isCompact || sidebarProps.isSidebarHidden;
@@ -337,7 +352,8 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [openAgent]);
 
-  const needsYouCount = agents.filter((a) => !a.hidden && needsYou(a)).length;
+  // What the "Needs you" row counts: the agents What's in flight lists under Needs you.
+  const needsYouCount = agents.filter((a) => !a.hidden && needsAttention(a)).length;
 
   // The oldest card waiting on you, on the first agent (sidebar order) with one.
   const waitingOn = sortAgents(agents).find((a) => !a.hidden && needsYou(a)) ?? null;
@@ -360,11 +376,34 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     [waitingOn, topCard, showToast]
   );
 
+  // Stable, so a status event re-renders only the sidebar row it changed.
+  const actions = useMemo(
+    () => ({
+      onTogglePin: (a: Agent) => void run(() => updateAgent(a.id, { pinned: !a.pinned })),
+      onToggleHidden: (a: Agent) => void run(() => updateAgent(a.id, { hidden: !a.hidden })),
+      onToggleMuted: (a: Agent) => void run(() => updateAgent(a.id, { muted: !a.muted })),
+      onMarkUnread: (a: Agent) => {
+        const { order, selected } = keys.current;
+        if (a.id === selected?.id) {
+          // Step off it, or opening it again would mark it read straight away.
+          const other = order.find((o) => o.id !== a.id);
+          if (other) setSelectedId(other.id);
+        }
+        void run(() => markAgentUnread(a.id));
+      },
+      onEdit: (a: Agent) => setEditor({ open: true, agent: a }),
+      onDelete: setDeleting,
+      onStartFresh: setFreshening,
+    }),
+    [run]
+  );
+  const agentProjects = useAgentProjects();
+
   useCommands(
     () => [
       {
         id: 'agents.nextNeedingYou',
-        title: 'Open the next agent that needs you',
+        title: 'Next agent that needs you',
         icon: <AgentsModeIcon size={14} />,
         category: 'navigation',
         shortcut: kbd('mod', 'J'),
@@ -407,6 +446,78 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
             },
           ]
         : []),
+      // The open agent's own actions: everything in its … menu, by name.
+      ...(selected
+        ? [
+            {
+              id: 'agents.edit',
+              title: `Edit ${selected.name}…`,
+              icon: <EditIcon size={14} />,
+              category: 'action' as const,
+              keywords: ['agents', 'settings', 'instructions', 'role', 'model', 'rename'],
+              run: () => actions.onEdit(selected),
+            },
+            {
+              id: 'agents.pin',
+              title: `${selected.pinned ? 'Unpin' : 'Pin'} ${selected.name}`,
+              icon: <PinIcon size={14} />,
+              category: 'action' as const,
+              keywords: ['agents', 'pin', 'top', 'favourite'],
+              run: () => actions.onTogglePin(selected),
+            },
+            {
+              id: 'agents.mute',
+              title: `${selected.muted ? 'Unmute' : 'Mute'} ${selected.name}`,
+              icon: selected.muted ? <BellIcon size={14} /> : <BellOffIcon size={14} />,
+              category: 'action' as const,
+              keywords: ['agents', 'notifications', 'quiet', 'silence'],
+              run: () => actions.onToggleMuted(selected),
+            },
+            {
+              id: 'agents.hide',
+              title: selected.hidden
+                ? `Show ${selected.name} in the sidebar`
+                : `Hide ${selected.name} from the sidebar`,
+              icon: selected.hidden ? <EyeIcon size={14} /> : <EyeOffIcon size={14} />,
+              category: 'action' as const,
+              keywords: ['agents', 'hide', 'archive', 'sidebar'],
+              run: () => actions.onToggleHidden(selected),
+            },
+            {
+              id: 'agents.markUnread',
+              title: `Mark ${selected.name} as unread`,
+              icon: <CommentIcon size={14} />,
+              category: 'action' as const,
+              keywords: ['agents', 'unread', 'later', 'remind'],
+              run: () => actions.onMarkUnread(selected),
+            },
+            ...(selected.project && agentProjects
+              ? [
+                  {
+                    id: 'agents.openProject',
+                    title: `Open ${selected.name}’s project`,
+                    icon: <FolderIcon size={14} />,
+                    category: 'action' as const,
+                    keywords: ['agents', 'project', 'workspace', 'preview', 'folder'],
+                    run: () => agentProjects.openProject(selected.project!),
+                  },
+                ]
+              : []),
+            ...(!selected.isMain
+              ? [
+                  {
+                    id: 'agents.delete',
+                    title: `Delete ${selected.name}…`,
+                    icon: <TrashIcon size={14} />,
+                    category: 'action' as const,
+                    keywords: ['agents', 'remove', 'delete'],
+                    // Asks first: the same confirm as the menu's Delete.
+                    run: () => actions.onDelete(selected),
+                  },
+                ]
+              : []),
+          ]
+        : []),
       ...(selected && canStartFresh(selected) && selected.status.state === 'idle'
         ? [
             {
@@ -430,7 +541,17 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
           run: () => setStopping(a),
         })),
     ],
-    [agents, waitingOn, topCard, answerTop, nextNeedingYou, openAgent, selected]
+    [
+      agents,
+      waitingOn,
+      topCard,
+      answerTop,
+      nextNeedingYou,
+      openAgent,
+      selected,
+      actions,
+      agentProjects,
+    ]
   );
 
   const confirmStop = async () => {
@@ -461,27 +582,6 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     setEditor({ open: false, agent: null });
   };
 
-  // Stable, so a status event re-renders only the sidebar row it changed.
-  const actions = useMemo(
-    () => ({
-      onTogglePin: (a: Agent) => void run(() => updateAgent(a.id, { pinned: !a.pinned })),
-      onToggleHidden: (a: Agent) => void run(() => updateAgent(a.id, { hidden: !a.hidden })),
-      onToggleMuted: (a: Agent) => void run(() => updateAgent(a.id, { muted: !a.muted })),
-      onMarkUnread: (a: Agent) => {
-        const { order, selected } = keys.current;
-        if (a.id === selected?.id) {
-          // Step off it, or opening it again would mark it read straight away.
-          const other = order.find((o) => o.id !== a.id);
-          if (other) setSelectedId(other.id);
-        }
-        void run(() => markAgentUnread(a.id));
-      },
-      onEdit: (a: Agent) => setEditor({ open: true, agent: a }),
-      onDelete: setDeleting,
-      onStartFresh: setFreshening,
-    }),
-    [run]
-  );
   const toggleShowHidden = useCallback(() => setShowHidden((v) => !v), []);
   const signIn = useCallback(
     (engine: AgentEngine) => setEngineSetup({ engine, step: 'sign-in' }),
@@ -495,13 +595,9 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
           <HomeSidebar
             {...sidebarProps}
             activeNav="agents"
-            navContent={
-              <InFlightButton
-                active={teamOpen}
-                needsYouCount={needsYouCount}
-                onOpen={() => setSelectedId(TEAM_ID)}
-              />
-            }
+            // Home, Workflows and the Inbox belong to the Projects side; What's
+            // in flight is the list's "Needs you" row, not an icon.
+            navContent={<></>}
             searchContent={
               <AgentsTopSearch
                 search={search}
@@ -519,6 +615,9 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
                 onSelect={setSelectedId}
                 onNew={openNew}
                 onImport={openImport}
+                needsYouCount={needsYouCount}
+                inFlightOpen={teamOpen}
+                onOpenInFlight={openInFlight}
                 actions={actions}
                 query={popoverSearch ? '' : query}
                 searchRef={searchRef}
@@ -594,6 +693,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
               {...actions}
               jumpTo={jump?.agentId === shown.id ? jump.messageId : null}
               onJumped={clearJump}
+              prefill={prefill?.agentId === shown.id ? prefill : null}
             />
           )}
         </main>
@@ -612,6 +712,17 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
         }}
         onDelete={setDeleting}
         onOpenApps={openApps}
+        onAskChief={
+          editor.agent
+            ? undefined
+            : () => {
+                const chief = agents.find((a) => a.isMain);
+                if (!chief) return;
+                setEditor({ open: false, agent: null });
+                setPrefill({ agentId: chief.id, text: 'Set up an agent that ', n: Date.now() });
+                setSelectedId(chief.id);
+              }
+        }
         onSetUpEngine={(engine, step) => setEngineSetup({ engine, step })}
       />
       <ImportAgentsModal
@@ -678,45 +789,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
 }
 
 /**
- * Beside the sidebar toggle: What's in flight, the overview of every agent,
- * with how many are waiting on you. Its own icon (activity, not the bell): on
- * the Projects side the bell is the Workflows inbox, and one icon meaning two
- * things would send people to the wrong place.
- */
-function InFlightButton({
-  active,
-  needsYouCount,
-  onOpen,
-}: {
-  active: boolean;
-  needsYouCount: number;
-  onOpen: () => void;
-}) {
-  const label =
-    needsYouCount > 0 ? `What’s in flight — ${needsYouCount} need you` : 'What’s in flight';
-  return (
-    <span className="workspace-sidebar-inbox">
-      <IconButton
-        variant="ghost"
-        className={`workspace-sidebar-home ${active ? 'is-active' : ''}`}
-        icon={<ActivityIcon size={12} />}
-        onClick={onOpen}
-        disabled={active}
-        aria-current={active ? 'page' : undefined}
-        title={label}
-        aria-label={label}
-      />
-      {needsYouCount > 0 && (
-        <span className="workspace-sidebar-inbox-badge agents-inflight-badge" aria-hidden>
-          {needsYouCount > 9 ? '9+' : needsYouCount}
-        </span>
-      )}
-    </span>
-  );
-}
-
-/**
- * Neither engine is on this computer: someone set up on Opencode, Cursor or
+ * Neither engine is on this Mac: someone set up on Opencode, Cursor or
  * their own agent. Their projects work as before; agents need one of these.
  */
 function NoEngine({
@@ -731,8 +804,8 @@ function NoEngine({
       <div className="agents-no-engine">
         <h2 className="agents-no-engine__title">Agents run on Claude Code or Codex</h2>
         <p className="agents-no-engine__body">
-          Each agent is a Claude Code or Codex session on this computer, on your own account. Set
-          one up and your Chief of Staff is ready to talk.
+          Each agent is a Claude Code or Codex session on this Mac, on your own account. Set one up
+          and your Chief of Staff is ready to talk.
         </p>
         <div className="agents-no-engine__actions">
           <Button variant="primary" onClick={() => onSetUp('claude')}>

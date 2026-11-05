@@ -98,8 +98,8 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
       logger.warn('Onboarding: failed to fetch setup status', { error: err });
       setError(
         err instanceof TimeoutError
-          ? 'Checking this computer took too long. Try again, and if it keeps happening, quit and reopen the app.'
-          : 'Couldn’t check this computer. Try again.'
+          ? 'Checking this Mac took too long. Try again, and if it keeps happening, quit and reopen the app.'
+          : 'Couldn’t check this Mac. Try again.'
       );
       return null;
     }
@@ -210,8 +210,7 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
             <h1>Your own team of AI agents</h1>
             <p className="onboarding-how">{HOW_IT_WORKS}</p>
             <p className="onboarding-reassurance">
-              Your agents run on this computer, on an AI account of your own. Pick one to start; you
-              can add the other later.
+              They run on this Mac, on your own AI account. Pick one; you can add the other later.
             </p>
           </div>
         )}

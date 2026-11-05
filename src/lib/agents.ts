@@ -227,9 +227,18 @@ export interface SchedulePreview {
 
 export type AgentEngine = 'claude' | 'codex';
 
-export interface ModelChoice {
+/** Mirrors `engine::ModelChoice`: a model as the engine lists it. */
+export interface EngineModel {
   value: string;
   label: string;
+}
+
+/** A model as the UI offers it. */
+export interface ModelChoice extends EngineModel {
+  /** What a person picks by: "Most capable", "Balanced", "Fastest". */
+  label: string;
+  /** The engine's own name for it, said small beside the label: "Opus". */
+  detail?: string;
 }
 
 /** Mirrors `engine::EngineInfo`: an engine an agent can run on, as found on this Mac. */
@@ -244,7 +253,7 @@ export interface EngineInfo {
    */
   asks?: boolean;
   /** The engine's own models, without Default. */
-  models: ModelChoice[];
+  models: EngineModel[];
 }
 
 export interface AgentsOverview {
@@ -632,12 +641,12 @@ export interface UpdateAgentInput {
  * The models an agent can run on: Claude Code's own `--model` aliases, which
  * always mean the current model of that family. Must match `MODELS` in store.rs.
  */
-export const AGENT_MODELS = [
+export const AGENT_MODELS: readonly ModelChoice[] = [
   { value: '', label: 'Default' },
-  { value: 'opus', label: 'Opus' },
-  { value: 'sonnet', label: 'Sonnet' },
-  { value: 'haiku', label: 'Haiku' },
-] as const;
+  { value: 'opus', label: 'Most capable', detail: 'Opus' },
+  { value: 'sonnet', label: 'Balanced', detail: 'Sonnet' },
+  { value: 'haiku', label: 'Fastest', detail: 'Haiku' },
+];
 
 export const ENGINE_LABEL: Record<AgentEngine, string> = { claude: 'Claude Code', codex: 'Codex' };
 
@@ -645,7 +654,13 @@ export const ENGINE_LABEL: Record<AgentEngine, string> = { claude: 'Claude Code'
 export function modelChoices(engine: AgentEngine, engines: EngineInfo[]): readonly ModelChoice[] {
   const listed = engines.find((e) => e.id === engine)?.models;
   if (engine === 'claude' && !listed?.length) return AGENT_MODELS;
-  return [AGENT_MODELS[0], ...(listed ?? [])];
+  // Claude Code's aliases are said by what they're for, the alias beside it.
+  const plain = (m: ModelChoice): ModelChoice => {
+    if (engine !== 'claude') return m;
+    const known = AGENT_MODELS.find((k) => k.value === m.value);
+    return known ? { ...known, detail: m.label } : m;
+  };
+  return [AGENT_MODELS[0], ...(listed ?? []).map(plain)];
 }
 
 export function modelLabel(
@@ -744,7 +759,7 @@ export function routineModelChoices(
     return [{ value: '', label: 'Same as its chats', hint: null }, ...models];
   }
   return [
-    { value: '', label: 'Automatic', hint: 'Haiku unless the agent has its own model' },
+    { value: '', label: 'Automatic', hint: 'Fastest (Haiku) unless the agent has its own model' },
     { value: 'same', label: 'Same as its chats', hint: null },
     ...models,
   ];
@@ -1481,8 +1496,65 @@ export function failureLine(failure: Failure, preview: string | null): string {
       : 'Usage limit reached';
   }
   if (failure.kind === 'signed_out') return 'Claude Code is signed out';
+  // The reason first: two lines in the sidebar, and the reason is what matters.
   const clause = (preview ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
-  return clause ? `Didn’t finish: ${clause}` : 'Didn’t finish';
+  return clause ? `${clause} · didn’t finish` : 'Didn’t finish';
+}
+
+const FILE_EXT =
+  /\.(tsx?|jsx?|mjs|cjs|css|scss|html?|mdx?|json|ya?ml|toml|rs|py|rb|go|swift|kt|java|svelte|vue|astro|txt|csv|sql|sh)$/i;
+
+/**
+ * "PricingTable.tsx" → "the pricing table"; "…/src/App.tsx" → "the app".
+ * The file's own name, said as words: a guess at nothing, a filename is
+ * just not how a person says what they're working on.
+ */
+export function plainFileName(path: string): string {
+  const base =
+    path
+      .replace(/[/\\]+$/, '')
+      .split(/[/\\]/)
+      .pop() ?? path;
+  const stem = base.replace(FILE_EXT, '');
+  const words = stem
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_.]+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (!words || words === 'index') return 'a file';
+  return `the ${words}`;
+}
+
+/**
+ * What an agent is doing, said the way a person would: the engine's activity
+ * line ("Editing PricingTable.tsx", "$ npm test", "Reading …/src/App.tsx")
+ * with file names, paths and commands put into words. A line that's already
+ * plain ("Drafting the reminders", "Messaging Finance") is left alone.
+ */
+export function plainActivity(activity: string | null | undefined): string | null {
+  const text = activity?.trim();
+  if (!text) return null;
+  if (text.startsWith('$ ')) return 'Running a command';
+  const verb = /^(Editing|Reading|Writing|Listing|Searching for|Fetching)\s+(.+)$/.exec(text);
+  if (!verb) return text;
+  const [, action, rest] = verb;
+  const fileish = /[/\\]/.test(rest) || FILE_EXT.test(rest);
+  switch (action) {
+    case 'Editing':
+    case 'Writing':
+      return fileish ? `Working on ${plainFileName(rest)}` : text;
+    case 'Reading':
+      return fileish ? `Reading ${plainFileName(rest)}` : text;
+    case 'Listing':
+    case 'Searching for':
+      return 'Looking through the files';
+    case 'Fetching': {
+      const host = /^https?:\/\/([^/\s]+)/.exec(rest)?.[1];
+      return host ? `Reading ${host.replace(/^www\./, '')}` : 'Reading a web page';
+    }
+    default:
+      return text;
+  }
 }
 
 /**
@@ -1499,7 +1571,7 @@ export type PeerState =
 export function peerState(agent: Agent, lastLine?: AgentMessage | null): PeerState {
   if (needsYou(agent)) return { kind: 'waiting', label: 'needs your OK' };
   if (agent.status.state === 'working') {
-    const activity = agent.status.activity?.trim();
+    const activity = plainActivity(agent.status.activity);
     return { kind: 'working', label: activity ? lowerFirst(activity) : 'working' };
   }
   if (failedTurn(agent) || lastLine?.kind === 'error')
@@ -1620,6 +1692,43 @@ export function formatDivider(ts: number, now = Date.now()): string {
   if (ts >= startOfToday.getTime()) return `Today ${time}`;
   if (ts >= startOfToday.getTime() - dayMs) return `Yesterday ${time}`;
   return `${SHORT_DAY.format(date)} ${time}`;
+}
+
+/**
+ * Runs of the same request ("Send an email · Gmail") with nothing of yours
+ * between them: each card's place in its run, for "2 of 3 similar requests".
+ * What the agent says between cards ("Here's the next one") doesn't break a
+ * run; anything you say, or anything else happening, does. Counted from the
+ * cards that are here, never from how many the agent might still send.
+ */
+export function approvalSeries(items: ChatItem[]): Map<string, { index: number; total: number }> {
+  const series = new Map<string, { index: number; total: number }>();
+  let run: string[] = [];
+  let title: string | null = null;
+  const close = () => {
+    if (run.length > 1) run.forEach((id, i) => series.set(id, { index: i + 1, total: run.length }));
+    run = [];
+    title = null;
+  };
+  for (const item of items) {
+    if (item.type === 'day') continue;
+    if (item.type !== 'message') {
+      close();
+      continue;
+    }
+    const m = item.message;
+    if (m.kind === 'agent' || m.kind === 'note') continue;
+    const a = m.approval;
+    if (m.kind !== 'approval' || !a || a.prompt || a.secret) {
+      close();
+      continue;
+    }
+    if (a.title !== title) close();
+    title = a.title;
+    run.push(m.id);
+  }
+  close();
+  return series;
 }
 
 /** The centred line for a collapsed run of agent-to-agent messages. */

@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { MobileIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { useOpenModal } from '../../contexts/ModalContext';
 import { useAsyncState } from '../../hooks/useAsyncState';
@@ -46,7 +47,7 @@ export function phoneIndicatorState(
     return {
       tone: 'ok',
       line: `${connected.name} connected`,
-      detail: 'Your phone is connected to this computer.',
+      detail: 'Your phone is connected to this Mac.',
       pair: false,
     };
   }
@@ -119,7 +120,12 @@ export function PhoneIndicator({ isSidebarHidden }: { isSidebarHidden: boolean }
       aria-label={`${state.line}. ${state.detail}`}
       data-testid="phone-indicator"
     >
-      <span className="remote-indicator__dot" aria-hidden />
+      {/* Not paired or off: a phone, not a hollow dot that reads as an unticked box. */}
+      {state.tone === 'off' ? (
+        <MobileIcon size={14} className="remote-indicator__glyph" aria-hidden />
+      ) : (
+        <span className="remote-indicator__dot" aria-hidden />
+      )}
       {!isSidebarHidden && <span className="remote-indicator__line">{state.line}</span>}
     </Button>
   );

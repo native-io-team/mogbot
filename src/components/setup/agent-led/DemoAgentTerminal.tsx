@@ -24,7 +24,7 @@ interface DemoLine {
 const SCRIPT: DemoLine[] = [
   {
     kind: 'agent',
-    text: "Hi! I'm your AI agent. I'll get this computer ready for your first project — sit back, I'll explain each step as I go.",
+    text: "Hi! I'm your AI agent. I'll get this Mac ready for your first project — sit back, I'll explain each step as I go.",
     delayMs: 600,
   },
   { kind: 'agent', text: 'First, checking what’s already installed…', delayMs: 1600 },

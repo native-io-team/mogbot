@@ -19,9 +19,8 @@ export const HARNESS_ROOT = '/Users/harness/ShipStudio';
 /** `prompts::CHIEF_GREETING`, verbatim: what a new Chief's chat opens on. */
 export const CHIEF_GREETING_TEXT =
   "Hi, I'm your Chief of Staff. " +
-  "Tell me what's on your plate and I'll put a team of agents together for it. " +
-  "When something needs your OK, you'll get an Allow or Deny card. " +
-  "So: what's on your plate this week?";
+  "Tell me what's on your plate this week and I'll put a team of agents together for it. " +
+  "When something needs your OK, you'll get an Allow or Deny card.";
 
 /** The greeting as `agents_messages` returns it. */
 export const chiefGreeting = (agentId: string, ts = 1_790_000_000_000) => ({
@@ -328,7 +327,7 @@ export const baseCommands: CommandMap = {
   // Settings → General's GPU row; the modal was never captured before.
   get_terminal_gpu_enabled: true,
   // The quit guard: nothing working, so ⌘Q asks the plain question.
-  agents_quit_check: { working: [], waiting: [] },
+  agents_quit_check: { working: [], waiting: [], scheduled: [] },
   agents_keep_running_in_background: null,
   // Settings → General: menu-bar icon and quick message, following Keep running (off).
   agents_desktop_settings: {

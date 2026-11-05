@@ -260,13 +260,10 @@ export const ChangeCard = memo(function ChangeCard({
       data-message-ids={message.id}
       data-copy={copy ? (offering ? 'live' : 'past') : undefined}
     >
+      {/* What changed, in a line; the receipt (branch, line counts, files) is
+          one click down, for whoever wants it. */}
       <div className="agent-changes__head">
-        <span className="agent-changes__summary">
-          {headline}
-          <span className="agent-changes__counts">
-            <LineCounts added={changes.added} removed={changes.removed} />
-          </span>
-        </span>
+        <span className="agent-changes__summary">{headline}</span>
         {offering && several && (
           <TextButton
             tabIndex={0}
@@ -274,20 +271,25 @@ export const ChangeCard = memo(function ChangeCard({
             aria-expanded={expanded}
             onClick={() => setExpanded((v) => !v)}
           >
-            {expanded ? 'Hide files' : count}
+            {expanded ? 'Hide changes' : count}
           </TextButton>
-        )}
-        {!copy && changes.branch && (
-          <Tooltip content="Branch when the turn ended">
-            <span className="agent-changes__branch">
-              <BranchIcon size={12} />
-              {changes.branch}
-            </span>
-          </Tooltip>
         )}
       </div>
       {expanded && (
         <ul className="agent-changes__files">
+          {((!copy && changes.branch) || Boolean(changes.added || changes.removed)) && (
+            <li className="agent-changes__more agent-changes__receipt">
+              {!copy && changes.branch && (
+                <span className="agent-changes__branch">
+                  <BranchIcon size={12} />
+                  {changes.branch}
+                </span>
+              )}
+              <span className="agent-changes__counts">
+                <LineCounts added={changes.added} removed={changes.removed} />
+              </span>
+            </li>
+          )}
           {changes.files.map((file) => (
             <li key={file.path}>
               <Tooltip content={`View the diff of ${file.path}`}>
@@ -335,21 +337,8 @@ export const ChangeCard = memo(function ChangeCard({
       )}
       {!offering && (
         <div className="agent-changes__actions">
-          {changes.files.length > 0 && (
-            <TextButton tabIndex={0} onClick={() => setViewing(changes.files[0])}>
-              View diff
-            </TextButton>
-          )}
-          {several && (
-            <TextButton
-              tabIndex={0}
-              className="agent-changes__toggle-files"
-              aria-expanded={expanded}
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {expanded ? 'Hide files' : 'Show files'}
-            </TextButton>
-          )}
+          {/* The result first: what it looks like now. A past copy's card is a
+              record: the copy it describes may be gone, so no preview. */}
           {ctx && !copy && (
             <TextButton
               tabIndex={0}
@@ -357,6 +346,16 @@ export const ChangeCard = memo(function ChangeCard({
               onClick={() => ctx.openProject(changes.project)}
             >
               Open preview
+            </TextButton>
+          )}
+          {changes.files.length > 0 && (
+            <TextButton
+              tabIndex={0}
+              className="agent-changes__toggle-files"
+              aria-expanded={several ? expanded : undefined}
+              onClick={() => (several ? setExpanded((v) => !v) : setViewing(changes.files[0]))}
+            >
+              {several && expanded ? 'Hide changes' : 'See changes'}
             </TextButton>
           )}
         </div>

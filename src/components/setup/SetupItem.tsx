@@ -33,6 +33,8 @@ interface SetupItemProps {
   isAnyActionInProgress?: boolean;
   /** Whether this item is optional and can be skipped */
   isOptional?: boolean;
+  /** Said while it's in progress, in place of the item's own message. */
+  progressText?: string;
 }
 
 function getStatusIcon(status: SetupItemStatus) {
@@ -83,7 +85,8 @@ function getActionButton(
   onAction: (() => void) | undefined,
   onSkip: (() => void) | undefined,
   isAnyActionInProgress: boolean | undefined,
-  isOptional: boolean | undefined
+  isOptional: boolean | undefined,
+  progressText?: string
 ): React.ReactNode {
   // Ready items show version/username
   if (item.status === 'ready') {
@@ -105,9 +108,9 @@ function getActionButton(
     return (
       <div className="setup-item-progress-container">
         <span className="setup-item-progress-text">
-          {SETUP_PROGRESS_MESSAGES[item.id] || 'Working...'}
+          {progressText ?? (SETUP_PROGRESS_MESSAGES[item.id] || 'Working...')}
         </span>
-        {BREW_PACKAGES.has(item.id) && (
+        {!progressText && BREW_PACKAGES.has(item.id) && (
           <span className="setup-item-progress-hint">This may take a few minutes</span>
         )}
       </div>
@@ -167,6 +170,7 @@ export function SetupItem({
   onSkip,
   isAnyActionInProgress,
   isOptional,
+  progressText,
 }: SetupItemProps) {
   const statusClass = `setup-item-status-${item.status.replace('_', '-')}`;
   const optionalClass = isOptional ? 'setup-item-optional' : '';
@@ -181,7 +185,15 @@ export function SetupItem({
         )}
       </div>
       <div className="setup-item-action">
-        {getActionButton(item, blockedBy, onAction, onSkip, isAnyActionInProgress, isOptional)}
+        {getActionButton(
+          item,
+          blockedBy,
+          onAction,
+          onSkip,
+          isAnyActionInProgress,
+          isOptional,
+          progressText
+        )}
       </div>
     </div>
   );

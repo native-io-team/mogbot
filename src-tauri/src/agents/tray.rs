@@ -55,6 +55,8 @@ pub struct Seen {
     pub running: bool,
     /// Its turn is waiting for a free slot, not running (`runner::queued`).
     pub queued: bool,
+    /// When its soonest check-in or routine that isn't paused is due, epoch ms.
+    pub next_check_in: Option<i64>,
 }
 
 impl Seen {
@@ -69,6 +71,12 @@ impl Seen {
             status: runner::status_of(&agent.id),
             running: runner::in_turn(&agent.id),
             queued: runner::queued(&agent.id),
+            next_check_in: agent
+                .check_ins
+                .iter()
+                .filter(|c| !c.paused)
+                .map(|c| c.next_at)
+                .min(),
         }
     }
 
@@ -210,26 +218,42 @@ fn truncate(text: &str) -> String {
 pub struct QuitCheck {
     /// Agents mid-turn (or queued for a slot) that aren't waiting on you.
     pub working: Vec<String>,
-    /// Agents with an approval card open.
+    /// Agents with an approval card open. Said, never warned about: a card
+    /// survives a restart and a late answer resumes the turn.
     pub waiting: Vec<String>,
+    /// Agents with a check-in due within [`SCHEDULED_WINDOW_MS`]: it can't
+    /// run while the app is closed (it runs late, on reopen).
+    pub scheduled: Vec<String>,
 }
 
+/// How far ahead a check-in counts as "due soon" when quitting.
+pub const SCHEDULED_WINDOW_MS: i64 = 24 * 60 * 60 * 1000;
+
 impl QuitCheck {
+    /// Nothing a quit would actually stop. Open cards don't count: they wait.
     pub fn quiet(&self) -> bool {
-        self.working.is_empty() && self.waiting.is_empty()
+        self.working.is_empty() && self.scheduled.is_empty()
     }
 }
 
 pub fn quit_check(seen: &[Seen]) -> QuitCheck {
-    let names = |pick: fn(&Seen) -> bool| {
+    quit_check_at(seen, store::now_ms())
+}
+
+pub fn quit_check_at(seen: &[Seen], now: i64) -> QuitCheck {
+    let names = |pick: &dyn Fn(&Seen) -> bool| {
         seen.iter()
             .filter(|s| pick(s))
             .map(|s| s.name.trim().to_string())
             .collect()
     };
     QuitCheck {
-        working: names(|s| s.running && !s.needs_you()),
-        waiting: names(Seen::needs_you),
+        working: names(&|s| s.running && !s.needs_you()),
+        waiting: names(&Seen::needs_you),
+        scheduled: names(&|s| {
+            s.next_check_in
+                .is_some_and(|at| at <= now + SCHEDULED_WINDOW_MS)
+        }),
     }
 }
 
@@ -510,6 +534,7 @@ mod tests {
             },
             running: state != "idle",
             queued: false,
+            next_check_in: None,
         }
     }
 
@@ -644,6 +669,23 @@ mod tests {
         assert_eq!(check.waiting, ["LEAD", "FIN"]);
         assert!(!check.quiet());
         assert!(quit_check(&[seen("x", "idle", None)]).quiet());
+    }
+
+    #[test]
+    fn open_cards_alone_dont_hold_a_quit_but_a_check_in_due_soon_does() {
+        let mut waiting = seen("lead", "idle", None);
+        waiting.pending_approvals = 1;
+        let check = quit_check_at(&[waiting.clone()], 1_000);
+        assert_eq!(check.waiting, ["LEAD"]);
+        assert!(check.quiet());
+
+        let mut soon = seen("fin", "idle", None);
+        soon.next_check_in = Some(1_000 + 60_000);
+        let mut later = seen("weekly", "idle", None);
+        later.next_check_in = Some(1_000 + SCHEDULED_WINDOW_MS + 1);
+        let check = quit_check_at(&[waiting, soon, later], 1_000);
+        assert_eq!(check.scheduled, ["FIN"]);
+        assert!(!check.quiet());
     }
 
     #[test]

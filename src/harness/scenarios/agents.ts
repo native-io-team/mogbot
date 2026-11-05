@@ -1451,7 +1451,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-team',
     title: 'Agents — a working team, Chief of Staff open',
     looksRightWhen:
-      'Agent list under the Projects | Agents toggle and conversation search (pinned first, then most recent), one hairline per row; the Chief of Staff conversation with its name centred in the header band. “2 messages with Acme Site” lines sit centred between bubbles. Acme Site shows what it is doing; Lead Gen shows it needs your OK; Finance shows unread.',
+      'Agent list under the Agents | Projects toggle and conversation search: an amber “Needs you · 1” row first, then the agents (pinned first, then most recent) with up to two-line previews; pin marks small and faint. The Chief of Staff conversation with its name and role centred in the header band, no engine control. “4 messages with Acme Site · working on the pricing table” sits centred, no empty slot after the dot. The chat ends with a quiet “Review Lead Gen’s request” chip. New agent / Import agents are short rows in secondary text, with no gap between them.',
     command: 'agents.open',
     requires: '.agent-chat .agent-bubble--agent',
     commands: {
@@ -1460,6 +1460,19 @@ export const agentsScenarios: Scenario[] = [
       agents_send: sendMessage,
       // ⌘F works here too, including at compact width.
       agents_search: searchFor,
+    },
+  },
+  {
+    id: 'agents-inline-request',
+    title: 'Agents — answering Lead Gen’s request from the Chief’s chat',
+    looksRightWhen:
+      'In the Chief of Staff chat, the “Review Lead Gen’s request” chip is open (chevron turned) and under it is Lead Gen’s own Allow / Deny card, compact, showing the email; Deny is one click, a … beside it holds “Deny with a note…”.',
+    command: 'agents.open',
+    requires: '.agent-requests .agent-approval',
+    steps: [{ click: '.agent-requests__chip' }],
+    commands: {
+      agents_overview: liveOverview,
+      agents_messages: messagesFor,
     },
   },
   {
@@ -1521,7 +1534,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-usage-limit',
     title: 'Agents — a usage limit with a reset time Claude Code reported',
     looksRightWhen:
-      'Finance’s chat ends in a quiet amber notice (not a red alarm): “Claude Code’s usage limit is reached. It resets at <time>.” with “Retry at <time>” and a ghost “Retry now”. Finance’s sidebar row reads “Usage limit · resets <time>” in muted text with an amber dot; Lead Gen’s row reads “Didn’t finish: …” in red with a red dot.',
+      'Finance’s chat ends in a quiet amber notice (not a red alarm): “Claude Code’s usage limit is reached. It resets at <time>.” with “Retry at <time>” and a ghost “Try anyway”. Finance’s sidebar row reads “Usage limit · resets <time>” in muted text with no dot (amber is for needs-you only); Lead Gen’s row reads “<reason> · didn’t finish” in red, over two lines if needed, with a red dot.',
     requires: '.agent-bubble--error[data-failure="usage_limit"]',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }],
@@ -1673,10 +1686,13 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-model-menu',
     title: 'Agents — model menu, with what routines run on',
     looksRightWhen:
-      'Clicking the model control in the Finance header opens a menu: Default (checked), Opus, Sonnet, Haiku; a divider; a quiet line “Routines run on Haiku”; then Automatic (checked), Same as its chats, Opus, Sonnet, Haiku.',
+      'Finance’s … menu ends with its model: a quiet “Model · runs on Claude Code” line, then Default (checked), Most capable (Opus), Balanced (Sonnet), Fastest (Haiku) with the engine’s names small; Finance has a routine, so a divider, “Routines run on Fastest”, then Automatic (checked), Same as its chats and the three models.',
     requires: '.agent-model-menu__heading',
     openSelector: AGENTS_TAB,
-    steps: [{ click: '[data-agent-id="finance"]' }, { click: '.agent-chat__model' }],
+    steps: [
+      { click: '[data-agent-id="finance"]' },
+      { click: '[aria-label="Actions for Finance"]' },
+    ],
     commands: {
       agents_overview: overview(),
       agents_messages: messagesFor,
@@ -1881,10 +1897,10 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-model-menu',
     title: 'Agents — the model menu in the chat header',
     looksRightWhen:
-      'A quiet “Default model” control sits between the schedule clock and the … menu; open, it lists Default, Opus, Sonnet and Haiku in plain text with a check on Default, and no item ringed or highlighted.',
+      'The header has no engine or model control: the … menu holds it. Open, the menu ends with “Model · runs on Claude Code” and Default (checked), Most capable, Balanced, Fastest, each with the engine’s own name small beside it; no item ringed or highlighted.',
     openSelector: AGENTS_TAB,
-    requires: '.ss-dropdown__item',
-    steps: [{ click: '.agent-chat__model' }],
+    requires: '.agent-model-menu__heading',
+    steps: [{ click: '[aria-label^="Actions for"]' }],
     commands: {
       agents_overview: overview(),
       agents_messages: messagesFor,
@@ -1966,9 +1982,9 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-codex-chat',
     title: 'Agents — an agent running on Codex',
     looksRightWhen:
-      'Research’s chat looks like every other agent’s: a quiet “Runs on Codex from its next message” note, the question, an unboxed prose reply, and the newest question with Research working under it (“$ rg -l "annual" pricing/”). The header’s model control reads “Codex · GPT-5.5”.',
+      'Research’s chat looks like every other agent’s: a quiet “Runs on Codex from its next message” note, the question, an unboxed prose reply, and the newest question with Research working under it (“$ rg -l "annual" pricing/”). The header shows Research’s name and status, no engine; its … menu says “Model · runs on Codex”.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-chat__model',
+    requires: '.agent-chat__header',
     steps: [{ click: '[data-agent-id="research"]' }],
     commands: {
       agents_overview: overview(CODEX_TEAM),
