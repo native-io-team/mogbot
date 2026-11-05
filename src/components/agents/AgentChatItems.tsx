@@ -530,7 +530,7 @@ export const ErrorLine = memo(function ErrorLine({
         {(signIn || onRetry) && (
           <div className="agent-bubble__remedy">
             {signIn && (
-              <Button tabIndex={0} size="compact" variant="secondary" onClick={onSignIn}>
+              <Button tabIndex={0} variant="secondary" onClick={onSignIn}>
                 Sign in to {ENGINE_LABEL[engine]}
               </Button>
             )}
@@ -543,7 +543,6 @@ export const ErrorLine = memo(function ErrorLine({
               ) : (
                 <Button
                   tabIndex={0}
-                  size="compact"
                   variant="secondary"
                   disabled={scheduling}
                   aria-busy={scheduling || undefined}
@@ -555,7 +554,6 @@ export const ErrorLine = memo(function ErrorLine({
             {onRetry && (
               <Button
                 tabIndex={0}
-                size="compact"
                 variant={signIn || retryAt ? 'ghost' : 'secondary'}
                 onClick={onRetry}
               >

@@ -98,10 +98,10 @@ export const baseCommands: CommandMap = {
     allReady: true,
     items: readySetupItems,
     optionalAuths: { githubAuthenticated: true },
-    detectedAgents: ['claude'],
+    detectedAgents: ['claude-code'],
   },
   get_onboarding_test_mode: { mock: false, forceOnboarding: false },
-  get_default_agent_id: 'claude',
+  get_default_agent_id: 'claude-code',
   get_reserved_port_for_window: null,
   get_shipstudio_dir: HARNESS_ROOT,
   get_log_path: '/Users/harness/Library/Logs/ShipStudio',
@@ -391,7 +391,8 @@ export const baseCommands: CommandMap = {
   // ---- agents -------------------------------------------------------------
   get_agents_status: [
     {
-      id: 'claude',
+      // The backend's agent id (`setup/agents.rs`), not the engine id 'claude'.
+      id: 'claude-code',
       displayName: 'Claude Code',
       binaryName: 'claude',
       installed: true,

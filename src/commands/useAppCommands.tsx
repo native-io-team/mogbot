@@ -17,6 +17,7 @@ import { basename } from '../lib/paths';
 import { requestPairOnOpen } from '../lib/companion';
 import { COMPANION_INSTALL_ENABLED, requestInstallOnOpen } from '../lib/companionInstall';
 import { fileManagerName } from '../lib/setup';
+import { BRAND } from '../lib/brand';
 import { requestSettingsTabOnOpen } from '../lib/settings';
 import {
   CodeIcon,
@@ -342,7 +343,7 @@ export function useAppCommands({
       },
       {
         id: 'app.quit',
-        title: 'Quit…',
+        title: `Quit ${BRAND.name}…`,
         icon: <SettingsIcon size={14} />,
         category: 'settings',
         keywords: ['exit', 'close', 'shut down'],
@@ -387,7 +388,7 @@ export function useAppCommands({
       },
       {
         id: 'companion.install',
-        title: 'Install the app on my iPhone or Android…',
+        title: 'Get the phone app…',
         icon: <MobileIcon size={14} />,
         category: 'settings',
         when: () => COMPANION_INSTALL_ENABLED,

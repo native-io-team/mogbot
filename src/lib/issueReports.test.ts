@@ -11,6 +11,7 @@ import {
 } from './issueReports';
 
 // Features brand.json can switch off are tested switched on.
+import { BRAND } from './brand';
 vi.mock('./brand', async (importOriginal) => {
   const { withAllLinks } = await import('../test/brandFixture');
   return withAllLinks(await importOriginal<typeof import('./brand')>());
@@ -75,7 +76,7 @@ describe('issue report drafts', () => {
     ]) {
       expect(body).toContain(heading);
     }
-    expect(body).toContain('**App version:** 1.4.0');
+    expect(body).toContain(`**${BRAND.name} version:** 1.4.0`);
     expect(body).toContain('**OS:** macOS');
     expect(body).toContain('**Architecture:** arm64');
     expect(body).toContain('**Install method:** Not provided');

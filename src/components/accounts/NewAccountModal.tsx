@@ -46,10 +46,13 @@ export function NewAccountModal({ isOpen, onClose, onCreated }: NewAccountModalP
   };
 
   return (
-    <ModalFrame isOpen={isOpen} onClose={handleClose} title="New Workspace">
+    <ModalFrame isOpen={isOpen} onClose={handleClose} title="New workspace">
       <div className="account-modal-body">
-        <div className="account-section-title">Name</div>
+        <label className="account-field-label" htmlFor="new-workspace-name">
+          Name
+        </label>
         <input
+          id="new-workspace-name"
           className="account-name-input"
           placeholder="e.g. Client B"
           value={name}
@@ -57,13 +60,11 @@ export function NewAccountModal({ isOpen, onClose, onCreated }: NewAccountModalP
           onKeyDown={(e) => e.key === 'Enter' && void handleCreate()}
           autoFocus
         />
-        <div className="account-section-title" style={{ marginTop: 'var(--spacing-md)' }}>
-          Color
-        </div>
+        <div className="account-field-label account-field-label--spaced">Color</div>
         <AccountColorPicker value={color} onChange={setColor} />
       </div>
-      <div className="account-detail-footer">
-        <Button variant="ghost" onClick={handleClose}>
+      <div className="account-detail-footer account-detail-footer--actions">
+        <Button variant="secondary" onClick={handleClose}>
           Cancel
         </Button>
         <Button

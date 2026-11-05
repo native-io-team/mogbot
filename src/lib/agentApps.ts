@@ -47,7 +47,13 @@ export const appStatusLabel = (status: string): string | null => STATUS_LABEL[st
 
 /** "claude.ai Google Drive" → "Google Drive": the connector, in its own name. */
 export function appTitle(app: Pick<AgentApp, 'name' | 'source'>): string {
-  return app.source === 'claudeAi' ? app.name.replace(/^claude\.ai\s+/, '') : app.name;
+  if (app.source === 'claudeAi') return app.name.replace(/^claude\.ai\s+/, '');
+  // Config keys are lowercase ids ("figma", "google-drive"); show them as names.
+  return app.name
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 }
 
 /** A URL's host ("mcp.figma.com"); a local server's command as it is. */

@@ -86,6 +86,23 @@
   font-size: var(--font-size-body-lg);
 }
 
+/* The plain quit question: nothing is running, so it is an ordinary dialog. */
+.quit-confirm-plain {
+  max-width: 400px;
+  width: 90%;
+}
+
+.quit-confirm-plain__body {
+  padding: var(--spacing-xl);
+}
+
+.quit-confirm-plain .quit-confirm-remote {
+  margin: 0;
+  color: var(--accent-warning);
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+}
+
 /* The quit guard: agents are working, so it says who stops and stacks its
    three choices like a macOS alert, the safe one first. */
 .quit-confirm-modal--guard {

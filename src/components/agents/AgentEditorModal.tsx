@@ -340,12 +340,12 @@ export function AgentEditorModal({
         {showAdvanced && (
           <div className="agent-editor__advanced-body">
             {/* One Tab stop; the arrows move focus and the choice together, as radios do. */}
-            <div className="agent-editor__label" role="group" aria-label="Colour">
-              Colour
+            <div className="agent-editor__label" role="group" aria-label="Color">
+              Color
               <div
                 className="agent-editor__colors"
                 role="radiogroup"
-                aria-label="Colour"
+                aria-label="Color"
                 onKeyDown={(e) => {
                   const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
                   if (!step) return;

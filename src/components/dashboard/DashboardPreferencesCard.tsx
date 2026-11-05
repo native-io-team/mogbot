@@ -6,7 +6,7 @@
 
 import { SettingsIcon } from '@/components/icons';
 import { MenuButton } from '../primitives/MenuButton';
-import { SettingsMenu } from '../SettingsMenu';
+import { SETTINGS_ONLY, SettingsMenu } from '../SettingsMenu';
 import { DashboardCardDisclosure } from './DashboardCardDisclosure';
 
 interface DashboardPreferencesCardProps {
@@ -33,7 +33,7 @@ export function DashboardPreferencesCard({
       title="Preferences"
       subtitle={
         <p className="dashboard-card-subtitle text-style-body-medium">
-          App settings, feedback, and release notes.
+          {SETTINGS_ONLY ? 'App settings.' : 'App settings, feedback, and release notes.'}
         </p>
       }
     >
@@ -63,7 +63,9 @@ export function DashboardPreferencesCard({
                   Settings &amp; Help
                 </div>
                 <div className="dashboard-card-row-status text-style-control">
-                  App settings, bug reports, feature requests, and updates
+                  {SETTINGS_ONLY
+                    ? 'Theme, accent, projects folder and more'
+                    : 'App settings, bug reports, feature requests, and updates'}
                 </div>
               </div>
             </MenuButton>

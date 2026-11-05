@@ -1218,6 +1218,7 @@ export {
   describeCheckInTime,
   describeRepeat,
   describeRun,
+  describeRunDetail,
   formatWhen,
   scheduleWhenPhrase,
   sortCheckIns,

@@ -4,7 +4,7 @@
  * Covers the main state matrix:
  *   - not installed             → Install button, no pill
  *   - installed / not signed in → Sign in button, kebab with Sign in + Uninstall
- *   - installed / signed in     → outlined "Installed" status, kebab
+ *   - installed / signed in     → quiet "Installed" status, kebab
  *   - ready / not default       → "Set as default" in the kebab menu
  *   - backend error on load     → toast, no rows
  */
@@ -183,16 +183,14 @@ describe('AgentsPanel', () => {
     expect(screen.queryByText('Installed')).not.toBeInTheDocument();
   });
 
-  it('renders an outlined "Installed" status for signed-in agents', async () => {
+  it('renders a quiet "Installed" status, not a button, for signed-in agents', async () => {
     mockInvoke('get_agents_status', [CLAUDE_DEFAULT, CODEX_READY]);
     render(<AgentsPanel />);
 
-    await waitFor(() =>
-      expect(screen.getAllByRole('button', { name: 'Installed' })).toHaveLength(2)
-    );
-    for (const status of screen.getAllByRole('button', { name: 'Installed' })) {
-      expect(status).toBeDisabled();
-      expect(status).toHaveClass('button--secondary');
+    await waitFor(() => expect(screen.getAllByText('Installed')).toHaveLength(2));
+    for (const status of screen.getAllByText('Installed')) {
+      expect(status).toHaveClass('agents-panel-status');
+      expect(status.closest('button')).toBeNull();
     }
   });
 
@@ -465,8 +463,9 @@ describe('AgentsPanel', () => {
 
     await waitFor(() => expect(screen.getByText('circa-team')).toBeInTheDocument());
     expect(screen.getByText('octocat@github.com')).toBeInTheDocument();
-    // Connected services show an outlined state label and a kebab, not Connect.
-    expect(screen.getAllByRole('button', { name: 'Connected' })).toHaveLength(2);
+    // Connected services show a quiet state label and a kebab, not Connect.
+    expect(screen.getAllByText('Connected')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Connected' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
   });
 

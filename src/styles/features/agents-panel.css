@@ -41,20 +41,23 @@
 .agents-panel-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
 }
 
+/* Rows inside the panel are separated by hairlines, not boxed one by one: a
+   card per row inside the panel's own card was one nesting level too many. */
 .agents-panel-row {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
-  padding: var(--spacing-md) var(--spacing-md) var(--spacing-md) var(--spacing-lg);
+  padding: var(--spacing-sm) 0;
   /* Figma-specific one-off: account rows use a 62px minimum rhythm. */
   min-height: 62px;
-  background: var(--surface-control);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  transition: border-color var(--transition);
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+  transition: background-color var(--transition);
+}
+
+.agents-panel-row:last-child {
+  border-bottom: none;
 }
 
 .agents-panel-row-icon {
@@ -297,17 +300,29 @@ button.dashboard-card-row {
 /* A reconnect is the only account state that changes the row itself. Valid
    connections use the same neutral surface as Figma, with an outlined label. */
 .agents-panel-row.needs-reconnect {
-  border-color: var(--accent-error);
-  box-shadow: inset 0 0 0 1px var(--accent-error);
+  margin: 0 calc(-1 * var(--spacing-sm));
+  padding-inline: var(--spacing-sm);
+  border-radius: var(--radius-card);
+  background: rgba(var(--accent-error-rgb), 0.08);
 }
 
-/* Figma's status control is the standard 30px secondary button with the card
-   border token, secondary text, and the shared button shadow. */
-.agents-panel-status-button.button:disabled {
-  opacity: 1;
-  cursor: default;
-  border-color: var(--border-subtle);
-  box-shadow: 0 calc(var(--stroke-1) / 2) var(--stroke-1) var(--color-black-o75);
+/* A state, not an action: quiet text with a dot, so it never reads as a button
+   beside the real Install / Sign in buttons. */
+.agents-panel-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0 var(--spacing-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-sm);
+  white-space: nowrap;
+}
+
+.agents-panel-status-dot {
+  width: 6px; /* css-ok: status dot */
+  height: 6px; /* css-ok: status dot */
+  border-radius: var(--radius-pill);
+  background: var(--accent-success);
 }
 
 /* Inline Reconnect button — red-tinted to read as "needs attention" without the

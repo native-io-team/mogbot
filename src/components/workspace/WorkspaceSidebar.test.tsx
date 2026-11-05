@@ -288,7 +288,7 @@ describe('WorkspaceSidebar project activity indicator', () => {
     expect(slack.closest('.workspace-sidebar-footer-actions')).toHaveClass('is-labeled');
   });
 
-  it('collapses an empty Active group by default', async () => {
+  it('says nothing is pinned or open in one line, without empty groups', async () => {
     sessionRegistry._resetForTests();
 
     render(
@@ -302,8 +302,8 @@ describe('WorkspaceSidebar project activity indicator', () => {
       { wrapper: Providers }
     );
 
-    const activeGroup = await screen.findByRole('button', { name: /Active/ });
-    expect(activeGroup).toHaveAttribute('aria-expanded', 'false');
+    expect(await screen.findByText('Projects you pin or open show up here.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Active/ })).not.toBeInTheDocument();
     expect(screen.queryByText('No active projects yet.')).not.toBeInTheDocument();
   });
 
@@ -324,7 +324,8 @@ describe('WorkspaceSidebar project activity indicator', () => {
       { wrapper: Providers }
     );
 
-    expect(await screen.findByRole('button', { name: /Active/ })).toBeInTheDocument();
+    expect(await screen.findByText('Projects you pin or open show up here.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open project' })).toBeInTheDocument();
   });
 
   it('shows the PixelLoader in a collapsed project row when a tab is thinking', async () => {
@@ -882,7 +883,7 @@ describe('WorkspaceSidebar project activity indicator', () => {
     expect(clientButton.querySelector('.workspace-switcher-option-dot')).toBeInTheDocument();
 
     await user.click(newWorkspaceButton);
-    expect(screen.getByRole('dialog', { name: 'New Workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'New workspace' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('e.g. Client B')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Close dialog' }));
 

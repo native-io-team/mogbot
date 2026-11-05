@@ -523,7 +523,7 @@ export function AgentsPanel() {
             const ready = agent.installed && agent.authed && !agent.needsReconnect;
             const isBusy = busy === agent.id;
             const menuOpen = openMenuId === agent.id;
-            // A valid connection is shown by the outlined Installed status;
+            // A valid connection is shown by the quiet Installed status;
             // attention still gets the red row state so a broken session is clear.
             const stateClass = agent.needsReconnect
               ? 'needs-reconnect'
@@ -550,7 +550,7 @@ export function AgentsPanel() {
                 <div className="agents-panel-row-actions">
                   {!agent.installed && agent.installSupported && (
                     <Button
-                      variant="primary"
+                      variant="secondary"
                       width="hug"
                       leftIcon={<DownloadIcon size={14} />}
                       onClick={() => openTerminal(agent, 'install')}
@@ -562,7 +562,7 @@ export function AgentsPanel() {
 
                   {agent.installed && !agent.authed && (
                     <Button
-                      variant="primary"
+                      variant="secondary"
                       width="hug"
                       leftIcon={<LoginIcon size={14} />}
                       onClick={() => startAuth(agent, false)}
@@ -586,14 +586,10 @@ export function AgentsPanel() {
                   )}
 
                   {ready && (
-                    <Button
-                      variant="secondary"
-                      width="hug"
-                      className="agents-panel-status-button"
-                      disabled
-                    >
+                    <span className="agents-panel-status">
+                      <span className="agents-panel-status-dot" aria-hidden />
                       Installed
-                    </Button>
+                    </span>
                   )}
 
                   {agent.installed && (
@@ -705,7 +701,7 @@ export function AgentsPanel() {
                     <div className="agents-panel-row-actions">
                       {!connected && (
                         <Button
-                          variant="primary"
+                          variant="secondary"
                           size="default"
                           width="hug"
                           leftIcon={<PlugIcon size={14} />}
@@ -716,14 +712,10 @@ export function AgentsPanel() {
                       )}
 
                       {connected && (
-                        <Button
-                          variant="secondary"
-                          width="hug"
-                          className="agents-panel-status-button"
-                          disabled
-                        >
+                        <span className="agents-panel-status">
+                          <span className="agents-panel-status-dot" aria-hidden />
                           Connected
-                        </Button>
+                        </span>
                       )}
 
                       {connected && (

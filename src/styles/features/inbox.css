@@ -483,14 +483,14 @@
 
 /* ---- handoff ---- */
 
+/* A section of the report, set off by a hairline rather than boxed: inside
+   the panel and the split pane, a card here was the third nesting level. */
 .inbox-handoff {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: var(--surface-panel);
-  border: var(--border-width-default) solid var(--border-default);
-  border-radius: var(--radius-card);
+  padding-top: var(--spacing-lg);
+  border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
 .inbox-handoff-header {

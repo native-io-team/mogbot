@@ -107,15 +107,10 @@ export function MessageCard({
   );
 }
 
-/** 2140 → "2.1k": the size of what came across, not a number to read. */
-const compact = (n: number) =>
-  new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
-
 function counts(agent: PasteImportAgent) {
   return [
-    agent.instructionsChars
-      ? `${compact(agent.instructionsChars)} chars of instructions`
-      : 'No instructions',
+    // Whether it brings instructions is the point; how many characters isn't.
+    agent.instructionsChars ? 'Instructions' : 'No instructions',
     agent.memoryLines
       ? `${agent.memoryLines.toLocaleString()} ${agent.memoryLines === 1 ? 'memory' : 'memories'}`
       : 'no memory',

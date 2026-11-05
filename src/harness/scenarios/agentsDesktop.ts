@@ -64,9 +64,9 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'agents-quit-plain',
     title: 'Quit — nothing working',
     looksRightWhen:
-      'A one-word question, “Quit?”, with Cancel and a neutral (not green) Quit side by side, Quit focused. No agent wording and no app name.',
+      'A standard dialog: the title “Quit <app name>?” in the header, one muted line that agents and routines don’t run while the app is closed, then Cancel and a neutral (not green) Quit right-aligned, Quit focused.',
     command: 'app.quit',
-    requires: '.quit-confirm-modal:not(.quit-confirm-modal--guard)',
+    requires: '.quit-confirm-plain',
     commands: {},
   },
   {

@@ -46,7 +46,7 @@ import { ModalFrame } from '../primitives/ModalFrame';
 import { Spinner } from '../primitives/Spinner';
 import { TextButton } from '../primitives/TextButton';
 import '../../styles/features/issue-reports.css';
-import { BRAND_LINKS } from '../../lib/brand';
+import { BRAND, BRAND_LINKS } from '../../lib/brand';
 import { ISSUE_REPO } from '../../lib/issueReports';
 
 // Each is nullable in brand.json; a null route isn't offered.
@@ -1295,7 +1295,7 @@ function BugReportFields({
           <div className="issue-report__environment-pair">
             <TextField
               field="app-version"
-              label="App version"
+              label={`${BRAND.name} version`}
               value={draft.appVersion}
               onChange={(value) => update('appVersion', value)}
               singleLine

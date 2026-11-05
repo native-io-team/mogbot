@@ -1669,12 +1669,15 @@
   text-overflow: ellipsis;
 }
 
+/* Two lines before it clips: "Didn't run · retrying tomorrow 9:07 AM" is the
+   whole point of the line, and one line cut it mid-time. */
 .agent-schedule__when {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .agent-schedule__item[data-paused] .agent-schedule__note {

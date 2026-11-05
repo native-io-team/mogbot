@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { BRAND_LINKS } from './brand';
+import { BRAND, BRAND_LINKS } from './brand';
 
 /** `owner/repo` public issues are filed against (`links.issueRepo` in brand.json). */
 export const ISSUE_REPO: string | null = BRAND_LINKS.issueRepo;
@@ -98,7 +98,7 @@ export function buildBugReportBody(draft: BugReportDraft, includeEvidence = true
     draft.reproductionSteps.trim(),
     '',
     '## Environment',
-    `- **App version:** ${version}`,
+    `- **${BRAND.name} version:** ${version}`,
     `- **OS:** ${os}`,
     `- **Architecture:** ${draft.architecture.trim() || 'Not provided'}`,
     `- **Install method:** ${installMethod}`,

@@ -103,6 +103,31 @@
   color: var(--text-primary);
 }
 
+/* New project lives in the shared ModalFrame (its header and scrim); this
+   only sets the width the three-column framework grid needs. */
+.modal-frame-content.create-project-modal {
+  width: 580px;
+}
+
+.create-project-modal .create-modal-content {
+  padding: var(--spacing-xl);
+}
+
+.create-project-modal .template-context {
+  margin-bottom: var(--spacing-lg);
+}
+
+/* What the project is for: four larger choices, two by two. */
+.stack-grid.stack-grid--outcomes {
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: var(--spacing-md);
+}
+
+.button.text-button.create-more-options {
+  margin-bottom: var(--spacing-md);
+  color: var(--text-secondary);
+}
+
 /* Tabs */
 .create-tabs {
   margin-bottom: 20px;

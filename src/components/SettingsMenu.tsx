@@ -16,7 +16,16 @@ interface SettingsMenuProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-/** Shared app-level menu for settings, feedback, and release notes. */
+/** True when Settings would be the menu's only item (no reports, no changelog). */
+export const SETTINGS_ONLY = !ISSUE_REPORTS_ENABLED && !HAS_CHANGELOG;
+
+const noopRef = () => {};
+
+/**
+ * Shared app-level menu for settings, feedback, and release notes. When the
+ * brand turns off everything but Settings, the trigger opens Settings itself:
+ * a menu of one is just an extra click.
+ */
 export function SettingsMenu({
   onOpenSettings,
   onOpenBugReports,
@@ -27,6 +36,19 @@ export function SettingsMenu({
   presentation = 'dropdown',
   onOpenChange,
 }: SettingsMenuProps) {
+  if (SETTINGS_ONLY) {
+    return (
+      <div className={['ss-dropdown', className].filter(Boolean).join(' ')}>
+        {renderTrigger({
+          ref: noopRef,
+          onClick: () => onOpenSettings(),
+          'aria-expanded': false,
+          'aria-haspopup': 'dialog',
+        })}
+      </div>
+    );
+  }
+
   return (
     <Dropdown
       className={className}

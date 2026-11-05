@@ -175,7 +175,7 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
       <ModalFrame
         isOpen={isOpen}
         onClose={onClose}
-        title="Install on my phone"
+        title="Get the phone app"
         className="phone-modal phone-modal--install"
       >
         <PhoneInstall
@@ -332,9 +332,11 @@ function AccessHeader({ step, busy, onEnable, onRetry }: HeaderProps) {
     return (
       <div className="phone-onbar">
         <span className="phone-dot" aria-hidden />
-        <span className="phone-onbar__text">
-          <span className="phone-onbar__title">On for your phones</span>
-          <span className="phone-onbar__url">{shortUrl(step.url)}</span>
+        <span
+          className="phone-onbar__text"
+          title={`Phones reach this Mac at ${shortUrl(step.url)}`}
+        >
+          <span className="phone-onbar__title">Phone access is on</span>
         </span>
         {turnOff}
       </div>

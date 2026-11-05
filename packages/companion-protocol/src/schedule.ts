@@ -26,6 +26,22 @@ export function describeRun(run: CheckInRun, now = Date.now()): string {
 }
 
 /**
+ * A run's failure detail in plain words. The detail is whatever the engine
+ * printed ("API Error: 529 overloaded"); the provider's status codes are
+ * said as what they mean, and anything unrecognised is shown as it came.
+ */
+export function describeRunDetail(detail: string): string {
+  const d = detail.trim();
+  if (/\b529\b|overloaded/i.test(d)) return 'The service was busy';
+  if (/\b429\b|rate.?limit/i.test(d)) return 'Too many requests at once';
+  if (/api error:?\s*5\d\d\b|internal server error|bad gateway|service unavailable/i.test(d))
+    return 'The service had a problem';
+  if (/timed? ?out|ETIMEDOUT/i.test(d)) return 'It took too long and was stopped';
+  if (/ECONNREFUSED|ENOTFOUND|ECONNRESET|network/i.test(d)) return 'Couldn’t reach the service';
+  return d;
+}
+
+/**
  * Formatters are built once: `toLocaleTimeString` with options builds a new
  * one per call, which over a few hundred rows was the costliest part of a
  * chat render.

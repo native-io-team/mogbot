@@ -4,7 +4,8 @@ import { appManagedWhere, appStatusLabel, appTarget, appTitle } from './agentApp
 describe('agent apps wording', () => {
   it('names a claude.ai connector by the app, and a server by its own name', () => {
     expect(appTitle({ name: 'claude.ai Google Drive', source: 'claudeAi' })).toBe('Google Drive');
-    expect(appTitle({ name: 'figma', source: 'user' })).toBe('figma');
+    expect(appTitle({ name: 'figma', source: 'user' })).toBe('Figma');
+    expect(appTitle({ name: 'google-drive', source: 'other' })).toBe('Google Drive');
   });
 
   it('shows a URL as its host and a command as written', () => {

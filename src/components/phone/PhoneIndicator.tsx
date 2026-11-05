@@ -36,7 +36,7 @@ export function phoneIndicatorState(
   if (devices.length === 0) {
     return {
       tone: 'off',
-      line: 'Put it on your phone',
+      line: 'Get the phone app',
       detail: 'Pair the companion app to talk to your agents from your phone.',
       pair: true,
     };
