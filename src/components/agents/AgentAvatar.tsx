@@ -72,6 +72,8 @@ interface AgentAvatarProps {
   size?: 'row' | 'field' | 'hero' | 'mini';
   /** Solid fill, for the agent you're looking at (like the current project's badge). */
   selected?: boolean;
+  /** Mid-turn: a ring in its colour that breathes, slowly (static with Reduce Motion). */
+  working?: boolean;
   className?: string;
 }
 
@@ -80,6 +82,7 @@ export function AgentAvatar({
   color,
   size = 'row',
   selected = false,
+  working = false,
   className,
 }: AgentAvatarProps) {
   // A string snapshot, so a streaming reply (which updates the store every
@@ -88,8 +91,8 @@ export function AgentAvatar({
   return (
     <span
       className={`agent-avatar agent-avatar--${size}${selected ? ' agent-avatar--selected' : ''}${
-        className ? ` ${className}` : ''
-      }`}
+        working ? ' agent-avatar--working' : ''
+      }${className ? ` ${className}` : ''}`}
       data-color={color}
       aria-hidden
     >

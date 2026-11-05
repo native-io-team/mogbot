@@ -55,6 +55,14 @@ pub const MAX_HOPS: u8 = 6;
 const TURN_TIMEOUT_SECS: u64 = 3 * 60 * 60;
 /// The chat's line for a turn stopped by [`TURN_TIMEOUT_SECS`].
 const TIMEOUT_NOTE: &str = "Stopped after 3 hours. Send a message to pick it back up.";
+/// What the line says between calls, once the one it named came back.
+const THINKING: &str = "Thinking";
+/// A command's process ended but the engine never moved on (`work::pulse`).
+const HUNG_NOTE: &str = "Stopped: the command it was running had ended, but it never moved on. Send a message to pick it back up.";
+/// How often a running turn is looked at for signs of life (`work::pulse`).
+const PULSE_EVERY: Duration = Duration::from_secs(15);
+/// How often what a running command printed is sent on, at most.
+const PEEK_EVERY: Duration = Duration::from_secs(1);
 /// With no tool call open, this long without a word from the CLI and the
 /// working line says it may be stuck (see [`quiet_line`]).
 const QUIET_MS: i64 = 10 * 60 * 1000;
@@ -3275,6 +3283,8 @@ async fn run_turn(
     // How this turn runs it (Codex speaks app-server when it can).
     let driver = Driver::pick(engine, &binary).await;
     driver.ready_as(account).await?;
+    // Only the app server streams what a command prints as it runs.
+    super::work::set_streams(agent_id, driver == Driver::CodexApp);
     super::wallet::prepare(account);
     let (port, _) = crate::agent_bridge::start_global_agent_bridge(app.clone())
         .await
@@ -3589,6 +3599,12 @@ async fn run_turn(
     let mut last_word = store::now_ms();
     let mut quiet_tick = tokio::time::interval(Duration::from_secs(60));
     quiet_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // Signs of life, looked at quietly (`work::liveness`), and a running
+    // command's output, sent on at most once a second.
+    let mut pulse_tick = tokio::time::interval(PULSE_EVERY);
+    pulse_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut peek_tick = tokio::time::interval(PEEK_EVERY);
+    peek_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     loop {
         tokio::select! {
@@ -3597,6 +3613,9 @@ async fn run_turn(
                 last_word = store::now_ms();
                 let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
                 let kind = value.get("type").and_then(|t| t.as_str());
+                // Claude Code's `tool_progress` says only that a tool is still
+                // running: alive, but not progress.
+                super::work::on_sign(agent_id, last_word, kind != Some("tool_progress"));
                 // A `result` can answer something queued ahead of the user's
                 // message (resumed after a Stop, Claude Code first answers the
                 // killed background task's notification, then the message):
@@ -3697,12 +3716,22 @@ async fn run_turn(
                             }
                         }
                         Step::Result(result) => {
+                            let before = super::work::live(agent_id).and_then(|w| w.doing);
                             super::work::on_result(agent_id, result);
                             // The step's outcome changed: the open list says so.
-                            let now = status_of(agent_id);
+                            let mut now = status_of(agent_id);
                             if now.state == "working" {
+                                // The line said that call; it's back, so the
+                                // agent is on to deciding what's next.
+                                let after = super::work::live(agent_id).and_then(|w| w.doing);
+                                if before.is_some() && after.is_none() && now.activity == before {
+                                    now.activity = Some(THINKING.into());
+                                }
                                 set_status(app, agent_id, now);
                             }
+                        }
+                        Step::Output { id, text } => {
+                            super::work::on_output(agent_id, &id, &text, store::now_ms());
                         }
                         Step::Usage(mut turn) => {
                             timing.cli_ms = turn.duration_ms;
@@ -3779,6 +3808,33 @@ async fn run_turn(
             _ = &mut drain_rest, if exited.is_some() || saw_result => break,
             _ = cancel.notified() => { stopped = Some(None); break; }
             _ = &mut deadline => { stopped = Some(Some(TIMEOUT_NOTE)); break; }
+            _ = peek_tick.tick() => {
+                if super::work::take_dirty(agent_id) {
+                    let now = status_of(agent_id);
+                    if now.state == "working" {
+                        set_status(app, agent_id, now);
+                    }
+                }
+            }
+            _ = pulse_tick.tick() => {
+                // The running command's process, only when there is one to find.
+                let rows = match super::work::step_needle(agent_id) {
+                    Some(_) => tokio::task::spawn_blocking(procs::snapshot).await.ok().flatten(),
+                    None => None,
+                };
+                let pulse = super::work::pulse(agent_id, store::now_ms(), rows.as_deref(), pid);
+                if pulse.hung {
+                    tracing::warn!("[Agents] {agent_id}: its command ended but the engine never moved on; stopping the turn");
+                    stopped = Some(Some(HUNG_NOTE));
+                    break;
+                }
+                let now = status_of(agent_id);
+                // Sent again while a call runs, so "Last activity" stays fresh.
+                let running = super::work::live(agent_id).is_some_and(|w| w.current.is_some());
+                if now.state == "working" && (pulse.changed || running) {
+                    set_status(app, agent_id, now);
+                }
+            }
             _ = quiet_tick.tick() => {
                 let now = status_of(agent_id);
                 let tool_open = super::work::live(agent_id).is_some_and(|w| w.doing.is_some());

@@ -2760,6 +2760,8 @@ export const frames = [
       "agents.send",
       "agents.stop",
       "agents.interrupt",
+      "agents.stopStep",
+      "agents.checkOn",
       "agents.answerApproval",
       "agents.saveSecret",
       "agents.loginStart",
@@ -3203,13 +3205,28 @@ export const frames = [
         "since": 1762290000000,
         "state": "working",
         "work": {
-          "doing": "Running npm test",
+          "current": {
+            "busy": true,
+            "canStop": true,
+            "kind": "command",
+            "label": "Running the Cypress tests",
+            "output": [
+              "  ✓ renders the pricing page (812ms)"
+            ],
+            "slow": "tests",
+            "startedAt": 1762290410000,
+            "streams": true
+          },
+          "doing": "Running the Cypress tests",
           "fileCount": 0,
+          "lastSignAt": 1762290500000,
+          "quietSince": 1762290420000,
           "startedAt": 1762290000000,
           "stepCount": 3,
           "steps": [
             {
               "at": 1762290010000,
+              "endedAt": 1762290011000,
               "kind": "read",
               "label": "Read App.tsx"
             },
@@ -3221,8 +3238,13 @@ export const frames = [
             },
             {
               "at": 1762290030000,
+              "endedAt": 1762290402000,
               "kind": "command",
-              "label": "Ran npm test"
+              "label": "Ran the tests",
+              "output": [
+                "Tests: 3 failed, 42 passed, 45 total"
+              ],
+              "summary": "42 passed, 3 failed"
             }
           ]
         }

@@ -29,6 +29,7 @@ fn done(id: &str, outcome: Outcome) -> CallResult {
     CallResult {
         id: id.into(),
         outcome,
+        output: None,
     }
 }
 
@@ -59,17 +60,17 @@ fn a_real_claude_turn_has_one_step_per_tool_call_and_its_result() {
         "one Bash call; stream events aren't steps"
     );
     assert_eq!(actions[0].kind, StepKind::Command);
-    assert_eq!(actions[0].label, "Ran echo");
-    assert_eq!(actions[0].doing, "Running echo");
+    assert_eq!(actions[0].label, "Printed a message");
+    assert_eq!(actions[0].doing, "Printing a message");
     assert_eq!(
         actions[0].id.as_deref(),
         Some("toolu_01Bx3SDHNvfg9pLufm1c4tQQ")
     );
     let results: Vec<CallResult> = lines(CLAUDE).flat_map(|v| claude_results(&v)).collect();
-    assert_eq!(
-        results,
-        [done("toolu_01Bx3SDHNvfg9pLufm1c4tQQ", Outcome::Done)]
-    );
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id, "toolu_01Bx3SDHNvfg9pLufm1c4tQQ");
+    assert_eq!(results[0].outcome, Outcome::Done);
+    assert_eq!(results[0].output.as_deref().map(str::trim), Some("hi"));
 }
 
 #[test]
@@ -86,9 +87,18 @@ fn claude_says_which_calls_failed_and_which_were_refused() {
     assert_eq!(
         claude_results(&line),
         [
-            done("a", Outcome::Failed),
-            done("b", Outcome::Declined),
-            done("c", Outcome::Done)
+            CallResult {
+                output: Some("old_string not found".into()),
+                ..done("a", Outcome::Failed)
+            },
+            CallResult {
+                output: Some("no".into()),
+                ..done("b", Outcome::Declined)
+            },
+            CallResult {
+                output: Some("ok".into()),
+                ..done("c", Outcome::Done)
+            },
         ]
     );
 }
@@ -109,7 +119,7 @@ fn a_real_codex_exec_turn_maps_onto_the_same_steps() {
             }
         }
     }
-    assert_eq!(labels, ["Ran echo", "Checked on the team"]);
+    assert_eq!(labels, ["Wrote note.txt", "Checked on the team"]);
     // Started and completed are one step, not two, and both came back fine.
     assert_eq!(live.work.step_count, 2);
     assert!(live.work.steps.iter().all(|s| s.outcome.is_none()));
@@ -142,7 +152,7 @@ fn a_real_codex_app_server_turn_maps_onto_the_same_steps() {
         }
     }
     assert_eq!(live.work.step_count, 1);
-    assert_eq!(live.work.steps[0].label, "Ran echo");
+    assert_eq!(live.work.steps[0].label, "Wrote ss-probe-esc.txt");
     assert!(live.calls.values().all(|c| c.settled));
 }
 
@@ -206,19 +216,19 @@ fn tool_calls_read_as_plain_past_tense_words() {
     );
     assert_eq!(
         d("Bash", json!({"command": "npm test -- PricingTable\nmore"})),
-        "Ran npm test"
+        "Ran the tests"
     );
     assert_eq!(
         d("Bash", json!({"command": "cd /p && npm run build"})),
-        "Ran npm run build"
+        "Built the project"
     );
     assert_eq!(
         d("Bash", json!({"command": "FOO=1 git push origin main"})),
-        "Ran git push"
+        "Pushed changes"
     );
     assert_eq!(
         d("Bash", json!({"command": "/usr/bin/curl -s https://x.io"})),
-        "Ran curl"
+        "Fetched x.io"
     );
     assert_eq!(
         d(&ours("message_agent"), json!({"agent": "Acme Site"})),
@@ -469,7 +479,7 @@ fn a_declined_call_says_so_and_a_failed_one_says_it_tried() {
         labels,
         [
             (
-                "Asked to run rm — you declined",
+                "Asked to delete build — you declined",
                 Some(StepOutcome::Declined)
             ),
             ("Tried to edit App.tsx", Some(StepOutcome::Failed)),
@@ -656,7 +666,7 @@ fn the_live_status_carries_what_is_running_only_while_it_runs() {
     begin(agent, 0);
     on_action(agent, call("Bash", "t", json!({"command": "npm test"})), 1);
     let w = live(agent).unwrap();
-    assert_eq!(w.doing.as_deref(), Some("Running npm test"));
+    assert_eq!(w.doing.as_deref(), Some("Running the tests"));
     assert!(w.files.is_empty());
     on_result(agent, done("t", Outcome::Done));
     assert_eq!(
@@ -692,6 +702,7 @@ fn kept_on_disk_beside_the_log_never_in_it() {
             label: "Read a.ts".into(),
             outcome: Some(StepOutcome::Failed),
             image: None,
+            ..WorkStep::blank()
         }],
         ..TurnWork::default()
     };

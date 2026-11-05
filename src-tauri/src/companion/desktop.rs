@@ -279,6 +279,14 @@ impl Backend for DesktopBackend {
         cmd::agents_interrupt(agent_id.to_string()).await
     }
 
+    async fn stop_step(&self, agent_id: &str) -> Result<String, CommandError> {
+        cmd::agents_stop_step(agent_id.to_string()).await
+    }
+
+    async fn check_on(&self, agent_id: &str) -> Result<String, CommandError> {
+        cmd::agents_check_on(agent_id.to_string()).await
+    }
+
     async fn answer_approval(&self, a: ApprovalAnswer) -> Result<(), CommandError> {
         cmd::agents_answer_approval(
             self.app.clone(),

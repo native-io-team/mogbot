@@ -28,6 +28,7 @@ import { TextButton } from '../primitives/TextButton';
 import { CompactModeToggle } from '../workspace/ModeToggle';
 import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
 import { AgentAvatar } from './AgentAvatar';
+import { AgentWorkingLine } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
 import { ApprovalCard, ErrorLine } from './AgentChatItems';
 import { AgentMark, AgentSwitcher } from './AgentSwitcher';
@@ -42,7 +43,6 @@ import {
   getAgentMessages,
   lastUserMessage,
   needsYou,
-  plainActivity,
   replyPreview,
   resendable,
   retryNote,
@@ -194,9 +194,11 @@ interface RowProps {
   agent: Agent;
   /** Said in a room: its name, after the agent's ("in Pricing launch"). */
   place?: string;
-  line: string;
+  line: ReactNode;
   meta?: ReactNode;
   state?: 'working' | 'waiting' | 'failed' | 'limited';
+  /** Mid-turn: its badge breathes. */
+  working?: boolean;
   onOpen: () => void;
   /** A row that folds what's under it: its chevron, and whether it's open. */
   fold?: { expanded: boolean; controls: string };
@@ -206,7 +208,7 @@ interface RowProps {
  * One line per agent: "Hiring · Send an email · 2m ago". The name, then what
  * it's about (it gives way first), then the time or a mark at the right.
  */
-function Row({ agent, place, line, meta, state, onOpen, fold }: RowProps) {
+function Row({ agent, place, line, meta, state, working, onOpen, fold }: RowProps) {
   return (
     <button
       type="button"
@@ -216,7 +218,7 @@ function Row({ agent, place, line, meta, state, onOpen, fold }: RowProps) {
       aria-expanded={fold?.expanded}
       aria-controls={fold?.expanded ? fold.controls : undefined}
     >
-      <AgentAvatar name={agent.name} color={agent.color} />
+      <AgentAvatar name={agent.name} color={agent.color} working={working} />
       <span className="agents-team__text">
         <span className="agents-team__name">
           <span className="agents-team__name-text">{agent.name}</span>
@@ -643,8 +645,9 @@ export function AgentsTeamView({
                 key={agent.id}
                 agent={agent}
                 place={roomName(agent.status.room)}
-                line={plainActivity(agent.status.activity) ?? 'Working…'}
+                line={<AgentWorkingLine agent={agent} />}
                 state="working"
+                working
                 meta={<PixelLoaderRings size="sm" label={`${agent.name} is working`} />}
                 onOpen={() => openWhere(agent, agent.status.room)}
               />

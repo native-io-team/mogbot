@@ -558,6 +558,26 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   ("new agents: engine codex"), and answers with an `agents.registry` event.
   On a Mac without the method the choice shows but isn't tappable. Existing
   agents keep theirs ([agents.md](agents.md), "Defaults for new agents").
+- **What it's doing right now** (`LiveStep` in `components/work.tsx`): while
+  a call runs, the working row says it in plain words with a live timer
+  ("Running the Cypress tests 5:32", the call's `status.work.current`); after
+  a minute on a known slow tool a quiet "Test runs usually take a few
+  minutes"; "Show output" opens the last lines the command printed (Codex
+  streams them; under Claude Code it says "Output appears when it
+  finishes"); after ten minutes "Stop this step" (`agents.stopStep`, the
+  turn carries on). Tapping the line says when it last showed life ("Last
+  activity 4s ago · using the CPU"). Once the Mac reports no progress
+  (`quietSince`) the line reads "No progress for 5 min" with a still clock,
+  "Check on it" (`agents.checkOn`: what the Mac can see, one line, never
+  interrupting) and Stop. Finished steps read "Ran the Cypress tests · 6m 12s
+  · 42 passed, 3 failed", and a long or failed command keeps "Show output".
+  On the list a working agent's avatar gets a ring in its colour that
+  breathes slowly (still under Reduce Motion) in place of the spinner, and
+  its line says the step and how long ("Running the Cypress tests · 5m");
+  the overview carries no steps, so until a live status arrives it is the
+  status's words and the turn's time. The words come from
+  `@shipstudio/companion-protocol`'s `work.ts`, shared with the desk; the
+  methods show only on a Mac that lists them.
 
 ### Rooms
 
@@ -996,7 +1016,10 @@ Chief mid-import with its live bar, the Designer working, the Import screen's
 counts, and an 8-frame close-up of the typing dots 150 ms apart with each dot's
 opacity per frame in the report), and an account in daily use
 (`--heavy`: 17 agents, ~40 cards waiting with logins and keys among them,
-paused routines, long chats, an import an hour in), live and offline. Out: `mobile/qa-shots/` (PNGs and
+paused routines, long chats, an import an hour in), live and offline, and
+what agents are doing (`--live-work`: QA 2 five minutes into a Cypress run
+with its output open, Finance gone quiet with "Check on it" answered, a
+finished Cypress step with its time, counts and output). Out: `mobile/qa-shots/` (PNGs and
 `report.md`, which lists each shot's route, what to check, console errors and
 any text cut off with an ellipsis). It exits non-zero when a screen failed or threw.
 

@@ -12,6 +12,7 @@ import Animated, {
   Easing,
   cancelAnimation,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withRepeat,
   withTiming,
@@ -73,6 +74,61 @@ export function AgentAvatar({
     </View>
   );
 }
+
+/** One breath of the working ring, ms: slow enough to sit in a list without drawing the eye. */
+const RING_BREATH_MS = 1600;
+
+/**
+ * A working agent's ring, laid over its avatar (the parent is the tile's
+ * size): its own colour, breathing slowly (opacity only, never size or
+ * position, so nothing in the row moves). Under Reduce Motion it is still.
+ */
+export function WorkingRing({
+  color,
+  size = avatarSize.list,
+}: {
+  color: string;
+  size?: (typeof avatarSize)[keyof typeof avatarSize];
+}) {
+  const styles = useStyles();
+  const appearance = useAppearance();
+  const still = useReducedMotion();
+  const breath = useSharedValue(0);
+  useEffect(() => {
+    if (still) return;
+    breath.set(
+      withRepeat(
+        withTiming(1, { duration: RING_BREATH_MS, easing: Easing.inOut(Easing.sin) }),
+        -1,
+        true
+      )
+    );
+    return () => cancelAnimation(breath);
+  }, [breath, still]);
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: still ? 0.7 : 0.35 + breath.value * 0.55,
+  }));
+  const ring = size + RING_GAP * 2;
+  return (
+    <Animated.View
+      testID="working-ring"
+      pointerEvents="none"
+      style={[
+        styles.ring,
+        {
+          width: ring,
+          height: ring,
+          borderRadius: squircle(ring),
+          borderColor: agentTint(color, appearance),
+        },
+        ringStyle,
+      ]}
+    />
+  );
+}
+
+/** How far the working ring sits outside the tile. */
+const RING_GAP = 3;
 
 /**
  * `live` false: the Mac isn't answering, so this is only the last thing it
@@ -162,6 +218,7 @@ export function Spinner({
 
 const useStyles = makeStyles((colors) => ({
   avatar: { alignItems: 'center', justifyContent: 'center' },
+  ring: { position: 'absolute', top: -RING_GAP, left: -RING_GAP, borderWidth: 2 },
   // A still ring: "it was working when we last heard".
   wasWorking: {
     width: iconSize.inline,
