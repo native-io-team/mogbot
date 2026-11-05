@@ -78,7 +78,9 @@ const NEEDED: &[(&str, &[&str])] = &[
 
 /// Whether this Codex's app-server speaks everything a turn needs: its own
 /// schema (`codex app-server generate-json-schema`, ~0.1s) lists every
-/// method. Asked once per binary, and again when it changes (an update).
+/// method. An answer is kept per binary until it changes (an update); a
+/// check that couldn't run (it timed out, didn't start, or was killed) is not
+/// an answer, so it says no for now and is asked again next time.
 /// Debug builds can force `exec` with `SHIPSTUDIO_AGENTS_CODEX_EXEC=1`, so
 /// the e2e suite still covers the fallback.
 pub async fn available(binary: &Path) -> bool {
@@ -94,24 +96,10 @@ pub async fn available(binary: &Path) -> bool {
             return *yes;
         }
     }
-    let out = std::env::temp_dir().join(format!(
-        "shipstudio-codex-schema-{}-{}",
-        std::process::id(),
-        super::store::new_id()
-    ));
-    let mut cmd = tokio::process::Command::new(binary);
-    cmd.args(["app-server", "generate-json-schema", "--out"])
-        .arg(&out)
-        .env("PATH", crate::utils::get_extended_path());
-    let ran = crate::external_command::run_with_timeout(cmd, "codex app-server schema", 15)
-        .await
-        .is_ok_and(|o| o.status.success());
-    let yes = ran
-        && NEEDED.iter().all(|(file, methods)| {
-            std::fs::read_to_string(out.join(file))
-                .is_ok_and(|schema| methods.iter().all(|m| schema.contains(&format!("\"{m}\""))))
-        });
-    let _ = std::fs::remove_dir_all(&out);
+    let Some(yes) = schema_lists_everything(binary).await else {
+        tracing::warn!("[Agents] Couldn't read Codex's app-server schema; asking again next turn");
+        return false;
+    };
     if !yes {
         tracing::info!(
             "[Agents] This Codex has no usable app-server; Codex agents run on `codex exec`"
@@ -122,6 +110,31 @@ pub async fn available(binary: &Path) -> bool {
         .unwrap_or_else(|e| e.into_inner())
         .insert(binary.to_path_buf(), (stamp, yes));
     yes
+}
+
+/// What the binary's own schema says, or None when it couldn't be read.
+async fn schema_lists_everything(binary: &Path) -> Option<bool> {
+    let out = std::env::temp_dir().join(format!(
+        "shipstudio-codex-schema-{}-{}",
+        std::process::id(),
+        super::store::new_id()
+    ));
+    let mut cmd = tokio::process::Command::new(binary);
+    cmd.args(["app-server", "generate-json-schema", "--out"])
+        .arg(&out)
+        .env("PATH", crate::utils::get_extended_path());
+    let ran = crate::external_command::run_with_timeout(cmd, "codex app-server schema", 15).await;
+    let yes = NEEDED.iter().all(|(file, methods)| {
+        std::fs::read_to_string(out.join(file))
+            .is_ok_and(|schema| methods.iter().all(|m| schema.contains(&format!("\"{m}\""))))
+    });
+    let _ = std::fs::remove_dir_all(&out);
+    match ran {
+        // An older Codex without the subcommand exits non-zero: an answer.
+        Ok(o) if o.status.code().is_some() => Some(o.status.success() && yes),
+        // Timed out, failed to start, or killed: says nothing about this Codex.
+        _ => None,
+    }
 }
 
 /// The command line: `app-server` with the same overrides `exec` gets.
@@ -209,6 +222,9 @@ impl Conversation {
             "cwd": cwd.to_string_lossy(),
             "approvalPolicy": "on-request",
             "sandbox": "workspace-write",
+            // Also on the command line; here too so the thread's own policy
+            // says it (thread/start echoes the policy it applied).
+            "config": { super::codex::NO_NETWORK: false },
             "developerInstructions": developer_instructions,
         });
         if let Some(model) = model {
@@ -671,6 +687,60 @@ pub async fn answer(app: &AppHandle, agent_id: &str, turn: u64, ask: Ask) -> Vec
     }
 }
 
+/// Stand-in Codex binaries for tests that need [`available`] to answer.
+#[cfg(test)]
+pub(crate) mod fake {
+    use std::path::{Path, PathBuf};
+
+    pub enum Kind {
+        /// Its schema lists every method a turn needs.
+        AppServer,
+        /// No `app-server` subcommand: exits 2, as an old Codex does.
+        ExecOnly,
+        /// The first check is killed mid-run; later ones are `AppServer`.
+        BreaksOnce,
+    }
+
+    /// A new folder in `dir`, for one stand-in each.
+    pub fn folder(dir: &Path, name: &str) -> PathBuf {
+        let path = dir.join(name);
+        std::fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    /// A `codex` shell script in `dir` that answers `app-server
+    /// generate-json-schema --out <dir>` the way `kind` says.
+    pub fn codex(dir: &Path, kind: Kind) -> PathBuf {
+        let mut schema = String::new();
+        for (file, methods) in super::NEEDED {
+            let listed: Vec<String> = methods.iter().map(|m| format!("\\\"{m}\\\"")).collect();
+            schema.push_str(&format!(
+                "printf '%s' \"{}\" > \"$4/{file}\"\n",
+                listed.join(",")
+            ));
+        }
+        let marker = dir.join("broke-once");
+        let body = match kind {
+            Kind::ExecOnly => {
+                "echo \"error: unrecognized subcommand 'app-server'\" >&2\nexit 2\n".to_string()
+            }
+            Kind::AppServer => format!("mkdir -p \"$4\"\n{schema}"),
+            Kind::BreaksOnce => format!(
+                "if [ ! -e '{m}' ]; then : > '{m}'; kill -9 $$; fi\nmkdir -p \"$4\"\n{schema}",
+                m = marker.display()
+            ),
+        };
+        let path = dir.join("codex");
+        std::fs::write(&path, format!("#!/bin/sh\n{body}")).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        path
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -703,6 +773,9 @@ mod tests {
         let args = args("http://127.0.0.1:9/mcp/t/agents/a?turn=7", &[]);
         assert!(args.iter().any(|a| a.starts_with("mcp_servers.")
             && a.contains(r#"url="http://127.0.0.1:9/mcp/t/agents/a?turn=7""#)));
+        assert!(args
+            .windows(2)
+            .any(|w| w == ["-c", "sandbox_workspace_write.network_access=false"]));
     }
 
     #[test]
@@ -715,6 +788,10 @@ mod tests {
         assert_eq!(start["method"], "thread/start");
         assert_eq!(start["params"]["approvalPolicy"], "on-request");
         assert_eq!(start["params"]["sandbox"], "workspace-write");
+        assert_eq!(
+            start["params"]["config"]["sandbox_workspace_write.network_access"],
+            false
+        );
         assert_eq!(start["params"]["model"], "gpt-5.5");
         assert_eq!(start["params"]["developerInstructions"], "Be brief.");
         let out = c.on_message(&json!({ "id": 2, "result": { "thread": { "id": "t1" } } }));
@@ -735,6 +812,10 @@ mod tests {
         let Out::Send(start) = &out[1] else { panic!() };
         assert_eq!(start["method"], "thread/resume");
         assert_eq!(start["params"]["threadId"], "t9");
+        assert_eq!(
+            start["params"]["config"]["sandbox_workspace_write.network_access"],
+            false
+        );
     }
 
     #[test]
@@ -897,5 +978,24 @@ mod tests {
             Some("send_email")
         );
         assert_eq!(quoted("no quotes"), None);
+    }
+
+    #[tokio::test]
+    async fn the_app_server_is_used_only_when_its_schema_lists_every_method() {
+        let dir = tempfile::tempdir().unwrap();
+        let yes = fake::codex(&fake::folder(dir.path(), "a"), fake::Kind::AppServer);
+        assert!(available(&yes).await);
+        let no = fake::codex(&fake::folder(dir.path(), "b"), fake::Kind::ExecOnly);
+        assert!(!available(&no).await);
+        // An old Codex's answer is kept: asking again gives the same.
+        assert!(!available(&no).await);
+    }
+
+    #[tokio::test]
+    async fn a_check_that_broke_is_not_kept_as_the_answer() {
+        let dir = tempfile::tempdir().unwrap();
+        let codex = fake::codex(dir.path(), fake::Kind::BreaksOnce);
+        assert!(!available(&codex).await, "nothing known yet, so no");
+        assert!(available(&codex).await, "asked again rather than cached");
     }
 }

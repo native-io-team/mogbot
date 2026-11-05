@@ -22,6 +22,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 
 use super::codex_app::Out;
+use super::driver::{Driver, TurnSpec};
 use super::engine::Engine;
 use super::notify;
 use super::procs;
@@ -1077,13 +1078,6 @@ fn is_missing_session(detail: &str) -> bool {
         || lower.contains("no rollout found")
 }
 
-fn mcp_config(url: &str) -> String {
-    serde_json::json!({
-        "mcpServers": { prompts::SERVER_KEY: { "type": "http", "url": url } }
-    })
-    .to_string()
-}
-
 /// Folders an agent may work in without asking: every Ship Studio project.
 fn work_dirs() -> Vec<String> {
     let mut dirs = Vec::new();
@@ -1186,51 +1180,6 @@ fn system_prompt_base(
             identity: &identity,
         }),
     )
-}
-
-/// Every argument a turn's `claude` process gets. The prompt goes on stdin.
-fn turn_args(
-    model: Option<&str>,
-    session_id: &str,
-    resuming: bool,
-    url: &str,
-    system_prompt: &str,
-    add_dirs: &[String],
-) -> Vec<String> {
-    let mut args: Vec<String> = [
-        "--print",
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--include-partial-messages",
-        // Claude in Chrome. Verified in --print on 2.1.318: its tools load and
-        // answer when the extension is connected. Its calls aren't allowed in
-        // advance, so they ask through `approve` like any other MCP tool.
-        "--chrome",
-    ]
-    .map(String::from)
-    .to_vec();
-    let session_flag = if resuming { "--resume" } else { "--session-id" };
-    args.extend([session_flag.to_string(), session_id.to_string()]);
-    args.extend([
-        "--permission-mode".into(),
-        "acceptEdits".into(),
-        "--permission-prompt-tool".into(),
-        prompts::approval_tool_id(),
-        "--mcp-config".into(),
-        mcp_config(url),
-        "--allowedTools".into(),
-        format!("mcp__{}", prompts::SERVER_KEY),
-        "--append-system-prompt".into(),
-        system_prompt.to_string(),
-    ]);
-    for dir in add_dirs {
-        args.extend(["--add-dir".to_string(), dir.clone()]);
-    }
-    if let Some(model) = model {
-        args.extend(["--model".to_string(), model.to_string()]);
-    }
-    args
 }
 
 /// Wait for `claude` to exit, at most [`EXIT_BOUND`] (a moment, once its
@@ -1354,10 +1303,9 @@ async fn run_turn(
     let binary = super::engine::binary(engine).await.ok_or_else(|| {
         CommandError::expected(format!("{} isn't installed, or Ship Studio can't find it. Install it, or move this agent to another engine in Edit agent, then send this again.", engine.label()))
     })?;
-    // Signed out, Codex retries for twenty seconds before saying so.
-    if engine == Engine::Codex && !super::engine::signed_in(engine).await {
-        return Err(CommandError::expected("Codex says: Not logged in."));
-    }
+    // How this turn runs it (Codex speaks app-server when it can).
+    let driver = Driver::pick(engine, &binary).await;
+    driver.ready().await?;
     let (port, token) = crate::agent_bridge::start_global_agent_bridge(app.clone())
         .await
         .map_err(super::err_other)?;
@@ -1369,11 +1317,9 @@ async fn run_turn(
         turn.id()
     );
 
-    // Codex names its own session (`thread.started`); Claude Code takes ours.
-    let (session_id, resuming) = match (&agent.session_id, engine) {
-        (Some(id), _) => (id.clone(), true),
-        (None, Engine::Claude) => (uuid::Uuid::new_v4().to_string(), false),
-        (None, Engine::Codex) => (String::new(), false),
+    let (session_id, resuming) = match &agent.session_id {
+        Some(id) => (id.clone(), true),
+        None => (driver.new_session(), false),
     };
     // First turn on a new engine: it starts blank, so it gets the conversation.
     let prompt = if agent.new_engine && !resuming {
@@ -1394,11 +1340,10 @@ async fn run_turn(
             )));
         }
     }
-    // Codex announces no tools, so its list is read before the turn instead.
-    // Codex speaks app-server when it can: streaming, cards, interrupt.
-    let app_server = engine == Engine::Codex && super::codex_app::available(&binary).await;
-    if engine == Engine::Codex {
-        let caps = super::codex::capabilities(&agent, &binary, store::now_ms(), app_server).await;
+    if let Some(caps) = driver
+        .capabilities_before(&agent, &binary, store::now_ms())
+        .await
+    {
         agent.capabilities = Some(caps.clone());
         let _ = store::update(agent_id, |a| a.capabilities = Some(caps));
     }
@@ -1416,24 +1361,14 @@ async fn run_turn(
         agent.model.as_deref()
     };
     let mut cmd = crate::utils::create_command(&binary);
-    match engine {
-        Engine::Claude => cmd.args(turn_args(
-            model,
-            &session_id,
-            resuming,
-            &url,
-            &system_prompt,
-            &layout.add_dirs,
-        )),
-        Engine::Codex if app_server => cmd.args(super::codex_app::args(&url, &layout.add_dirs)),
-        Engine::Codex => cmd.args(super::codex::args(
-            model,
-            resuming.then_some(session_id.as_str()),
-            &url,
-            &prompts::for_codex_exec(&system_prompt),
-            &layout.add_dirs,
-        )),
-    };
+    cmd.args(driver.args(&TurnSpec {
+        model,
+        session: &session_id,
+        resuming,
+        url: &url,
+        system_prompt: &system_prompt,
+        writable: &layout.add_dirs,
+    }));
     strip_session_env(&mut cmd);
     cmd.env("PATH", crate::utils::get_extended_path())
         // Claude Code gives an MCP tool call ~60s by default, and the approval
@@ -1466,20 +1401,15 @@ async fn run_turn(
     }
     let mut timing = Timing::spawned(began);
 
-    // What identifies this turn's process on its command line, for the next
-    // launch to recognise a leftover: the session, or for a new Codex session
-    // (no id until it starts) the agent's home, which is a writable root.
+    // What identifies this turn's process, for the next launch to recognise a leftover.
     let mut mark = read_mark(agent_id).unwrap_or_default();
     mark.pid = pid;
-    mark.session = match engine {
-        Engine::Claude => session_id.clone(),
-        Engine::Codex => home.to_string_lossy().into_owned(),
-    };
+    mark.session = driver.process_mark(&session_id, &home);
     write_mark(agent_id, mark);
 
     // An app-server conversation: stdin stays open for the turn, written by
     // one task (approval answers come from tasks of their own); `None` closes it.
-    let (writer, mut conversation) = if app_server {
+    let (writer, mut conversation) = if driver.converses() {
         let (conversation, first) = super::codex_app::Conversation::new(
             resuming.then_some(session_id.as_str()),
             &layout.cwd,
@@ -1584,7 +1514,7 @@ async fn run_turn(
                 // killed background task's notification, then the message):
                 // the model still talking means the turn isn't over, and the
                 // row that went idle at that `result` is working again.
-                if engine == Engine::Claude && saw_result && matches!(kind, Some("stream_event" | "assistant")) {
+                if driver == Driver::ClaudePrint && saw_result && matches!(kind, Some("stream_event" | "assistant")) {
                     drain_rest.as_mut().reset(tokio::time::Instant::now() + Duration::from_secs(3));
                     if status_of(agent_id).state == "idle" {
                         set_status(app, agent_id, Status { state: "working", activity: None, since: Some(started) });
@@ -1592,19 +1522,20 @@ async fn run_turn(
                 }
                 // Claude Code's init says how it is really running: a turn
                 // nothing would ask about is stopped before it acts.
-                if engine == Engine::Claude && kind == Some("system") {
+                if driver == Driver::ClaudePrint && kind == Some("system") {
                     if let Some(why) = super::broker::observe(app, agent_id, &value) {
                         stopped = Some(Some(why));
                         break;
                     }
                 }
-                let steps = match engine {
-                    Engine::Claude if kind == Some("stream_event") => {
+                let steps = match driver {
+                    Driver::ClaudePrint if kind == Some("stream_event") => {
                         drafts.on_stream_event(&value, store::new_id);
                         continue;
                     }
-                    Engine::Claude => stream::claude_steps(&value, &line, store::now_ms()),
-                    Engine::Codex => match conversation.as_mut() {
+                    Driver::ClaudePrint => stream::claude_steps(&value, &line, store::now_ms()),
+                    Driver::CodexExec => super::codex::steps(&value),
+                    Driver::CodexApp => match conversation.as_mut() {
                         Some(conversation) => {
                             let mut steps = Vec::new();
                             for out in conversation.on_message(&value) {
@@ -1935,7 +1866,7 @@ mod tests {
         assert_eq!(layout.cwd, std::path::PathBuf::from("/h"));
         let prompt = system_prompt_for(&agent, std::path::Path::new("/h"), &layout);
         assert_eq!(prompt, prompts::system_prompt(&agent, None));
-        let args = turn_args(
+        let args = super::super::claude::args(
             agent.model.as_deref(),
             "sid",
             true,
@@ -1993,7 +1924,7 @@ mod tests {
         let prompt = system_prompt_for(&agent, home.path(), &layout);
         assert!(prompt.contains("- Sam pays."));
         assert!(prompt.contains("You work in `/ext/site`"));
-        let args = turn_args(
+        let args = super::super::claude::args(
             agent.model.as_deref(),
             "sid",
             false,

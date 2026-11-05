@@ -24,6 +24,7 @@ import { useNow } from '../../components/ConnectionPill';
 import { Button, choose, Icon, Row, T } from '../../components/ui';
 import {
   describeScope,
+  engineCantAsk,
   engineLine,
   engineName,
   folderName,
@@ -66,6 +67,7 @@ export default function AgentSheet() {
   if (!agent) return null;
   const canSchedule = canCall('agents.schedule.create', welcome);
   const checkIns = sortCheckIns(agent.checkIns ?? []);
+  const cantAsk = engineCantAsk(agent, engines);
   const where = [engineLine(agent, engines), agent.project && folderName(agent.project)]
     .filter(Boolean)
     .join(' · ');
@@ -140,6 +142,11 @@ export default function AgentSheet() {
           <Row label="Runs on" value={engineName(agent)} />
           <Row label="Model" value={modelName(agent, engines)} last />
         </View>
+      )}
+      {!!cantAsk && (
+        <T variant="small" color={colors.textMuted} style={styles.note}>
+          {cantAsk}
+        </T>
       )}
 
       {usage && <Usage usage={usage} />}
@@ -437,6 +444,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   none: { padding: space.lg },
+  note: { marginHorizontal: space.lg },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
