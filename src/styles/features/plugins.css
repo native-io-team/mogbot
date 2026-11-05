@@ -220,9 +220,9 @@
 }
 
 .plugin-toggle-btn.enabled {
-  background: var(--accent-success);
-  border-color: var(--accent-success);
-  color: var(--text-inverse);
+  background: var(--accent-active);
+  border-color: var(--accent-active);
+  color: var(--text-on-accent);
 }
 
 .plugin-toggle-btn:hover {
@@ -281,7 +281,7 @@
 }
 
 .plugins-install-input:focus {
-  border-color: var(--accent-success);
+  border-color: var(--focus-ring);
 }
 
 .plugins-install-input::placeholder {

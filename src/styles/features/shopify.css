@@ -25,7 +25,7 @@
 
 .shopify-setup-input:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .shopify-setup-error {

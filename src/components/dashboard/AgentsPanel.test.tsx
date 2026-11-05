@@ -94,6 +94,7 @@ vi.mock('../icons', () => ({
   MoreHorizontalIcon: () => <span data-testid="more-horizontal-icon" />,
   PlugIcon: () => <span data-testid="plug-icon" />,
   VercelIcon: () => <span data-testid="vercel-icon" />,
+  WarningIcon: () => <span data-testid="warning-icon" />,
 }));
 
 import { AgentsPanel } from './AgentsPanel';

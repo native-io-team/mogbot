@@ -119,13 +119,13 @@
 }
 
 .notification-toggle input:checked + .notification-toggle-slider {
-  background: var(--info);
-  border-color: var(--info);
+  background: var(--accent-active);
+  border-color: var(--accent-active);
 }
 
 .notification-toggle input:checked + .notification-toggle-slider::before {
   transform: translateX(18px);
-  background: var(--text-inverse);
+  background: var(--text-on-accent);
 }
 
 /* Sound Picker */

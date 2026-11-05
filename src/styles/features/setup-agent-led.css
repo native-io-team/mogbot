@@ -246,9 +246,9 @@
 
 .agent-guided-complete {
   padding: var(--spacing-md);
-  border: 1px solid rgba(var(--accent-active-rgb), 0.4);
+  border: 1px solid color-mix(in srgb, var(--accent-success) 40%, transparent);
   border-radius: var(--radius-card);
-  background: rgba(var(--accent-active-rgb), 0.08);
+  background: color-mix(in srgb, var(--accent-success) 8%, transparent);
 }
 
 .agent-guided-complete p {
@@ -302,7 +302,7 @@
 
 .agent-setup-checklist-success-icon {
   flex-shrink: 0;
-  color: var(--button-primary-mid);
+  color: var(--accent-success);
 }
 
 .agent-setup-checklist-dot {

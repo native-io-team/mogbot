@@ -102,8 +102,8 @@
 }
 
 .ss-settings__text-input:focus-visible {
-  border-color: var(--accent-active);
-  outline: var(--border-width-default) solid var(--accent-active);
+  border-color: var(--focus-ring);
+  outline: var(--border-width-default) solid var(--focus-ring);
   outline-offset: var(--border-width-default);
 }
 

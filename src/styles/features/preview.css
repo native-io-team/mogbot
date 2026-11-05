@@ -400,7 +400,7 @@
 
 .preview-zoom input:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 /* Branch Switching Overlay */
@@ -666,13 +666,13 @@
 }
 
 .preview-logs-toggle-switch.is-on {
-  background: var(--accent-success);
-  border-color: var(--accent-success);
+  background: var(--accent-active);
+  border-color: var(--accent-active);
 }
 
 .preview-logs-toggle-switch.is-on::after {
   transform: translateX(10px);
-  background: var(--text-inverse);
+  background: var(--text-on-accent);
 }
 
 /* Collapsible dev server logs panel (bottom of preview) */
@@ -1020,7 +1020,7 @@
 }
 .preview-status__logs-body--interactive:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .preview-status__logs-hint {

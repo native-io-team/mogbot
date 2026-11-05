@@ -9,6 +9,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
+import { ErrorIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { asCommandError, formatCommandError } from '../../lib/errors';
@@ -86,7 +87,12 @@ export function RenameProjectModal({
           This renames the folder on disk. Git history, deployments, and project settings are
           preserved. If the project is running in the background, it will be stopped first.
         </p>
-        {error && <p className="form-error">{error}</p>}
+        {error && (
+          <p className="form-error">
+            <ErrorIcon size={12} className="inline-error-icon" />
+            {error}
+          </p>
+        )}
         <div className="modal-actions">
           <Button variant="secondary" type="button" onClick={onClose} disabled={loading}>
             Cancel

@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { CloseIcon } from '@/components/icons';
 import { IconButton } from './IconButton';
+import { usePortalAccentScope } from '../../contexts/AccentScopeContext';
 
 interface ModalFrameBaseProps {
   isOpen: boolean;
@@ -304,6 +305,7 @@ export function ModalFrame({
   const modalId = useId();
   const titleId = useId();
   const modalDepth = parentDepth + 1;
+  const accentScope = usePortalAccentScope();
   // The host is created idempotently before the portal is rendered so the
   // registration/focus effects run on the same commit as the dialog mount.
   const [portalRoot] = useState<HTMLDivElement | null>(() => ensureModalRoot());
@@ -431,6 +433,7 @@ export function ModalFrame({
       ref={overlayRef}
       className="modal-frame-overlay"
       data-modal-id={modalId}
+      {...accentScope}
       onMouseDown={(event: MouseEvent) => {
         pressBeganOnOverlay.current = isTopmost(modalId) && event.target === event.currentTarget;
       }}

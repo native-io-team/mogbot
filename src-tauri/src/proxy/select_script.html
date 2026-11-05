@@ -989,12 +989,14 @@ function onClick(e){if(canvasSuppressClick){canvasSuppressClick=false;e.preventD
    DOM, so the gesture never reparents, clones, hides, or styles an authored node:
    doing that behind React's back makes its next reconciliation remove a child
    from the wrong parent. The rendered source remains exactly where it started
-   and a green insertion line previews the guarded source move committed at drop. */
+   and an insertion line previews the guarded source move committed at drop. It is the
+   same fixed blue as the selection box, never the app accent: it is drawn on the
+   user's page, and a white accent on a white page would be invisible. */
 var canvasDragPending=null,canvasDrag=null,canvasSuppressClick=false,canvasMoveSeq=0;
 var CANVAS_DRAG_THRESHOLD=4,CANVAS_INSIDE_START=.35,CANVAS_INSIDE_END=.65;
 var CANVAS_INSIDE_HOLD_MS=500,CANVAS_INSIDE_FLASH_MS=150;
 var CANVAS_VOID={AREA:1,BASE:1,BR:1,COL:1,EMBED:1,HR:1,IMG:1,INPUT:1,LINK:1,META:1,PARAM:1,SOURCE:1,TRACK:1,WBR:1};
-var CANVAS_DROP_COLOR='rgba(70,231,111,.98)';
+var CANVAS_DROP_COLOR='rgba(0,125,240,.98)',CANVAS_DROP_HALO='rgba(0,125,240,.45)';
 
 function canvasRemoveChrome(d){if(d&&d.line&&d.line.parentNode)d.line.parentNode.removeChild(d.line);}
 
@@ -1004,7 +1006,7 @@ function canvasCancel(){var d=canvasDrag;if(!d){canvasDragPending=null;return;}c
 
 function canvasFinish(ok,moveId){var d=canvasDrag;if(!d||d.moveId!==moveId)return;canvasResetInside(d);canvasRemoveChrome(d);canvasDrag=null;document.documentElement.style.cursor=active?'crosshair':'';placeSet();postSelRect();}
 
-function canvasBegin(e,p){var source=p.source;var line=document.createElement('div');line.setAttribute('data-ss-overlay','1');line.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;display:none;background:'+CANVAS_DROP_COLOR+';box-shadow:0 0 0 '+(1/(ssBoxScale>0?ssBoxScale:1))+'px rgba(255,255,255,.9),0 0 '+(8/(ssBoxScale>0?ssBoxScale:1))+'px rgba(70,231,111,.45);transition-property:opacity;transition-duration:150ms;transition-timing-function:cubic-bezier(.2,0,0,1);';document.body.appendChild(line);canvasDrag={source:source,sourceSig:sig(source),parent:source.parentNode,next:source.nextSibling,line:line,target:null,targetSig:null,position:null,insideTarget:null,insideReady:false,insideTimer:0,insideFlashTimer:0,moveId:null};place(hoverBox,null);reportHover(null);document.documentElement.style.cursor='grabbing';}
+function canvasBegin(e,p){var source=p.source;var line=document.createElement('div');line.setAttribute('data-ss-overlay','1');line.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;display:none;background:'+CANVAS_DROP_COLOR+';box-shadow:0 0 0 '+(1/(ssBoxScale>0?ssBoxScale:1))+'px rgba(255,255,255,.9),0 0 '+(8/(ssBoxScale>0?ssBoxScale:1))+'px '+CANVAS_DROP_HALO+';transition-property:opacity;transition-duration:150ms;transition-timing-function:cubic-bezier(.2,0,0,1);';document.body.appendChild(line);canvasDrag={source:source,sourceSig:sig(source),parent:source.parentNode,next:source.nextSibling,line:line,target:null,targetSig:null,position:null,insideTarget:null,insideReady:false,insideTimer:0,insideFlashTimer:0,moveId:null};place(hoverBox,null);reportHover(null);document.documentElement.style.cursor='grabbing';}
 
 function canvasAxis(target){var parent=target&&target.parentElement;if(!parent)return'vertical';var cs=window.getComputedStyle(parent);if(cs.display.indexOf('flex')!==-1&&cs.flexDirection.indexOf('row')===0)return'horizontal';if(cs.display.indexOf('grid')!==-1){var prev=target.previousElementSibling,next=target.nextElementSibling,other=prev||next;if(other){var a=target.getBoundingClientRect(),b=other.getBoundingClientRect();if(Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>0)return'horizontal';}}return'vertical';}
 

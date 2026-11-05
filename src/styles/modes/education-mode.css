@@ -59,7 +59,7 @@
 }
 
 .education-tooltip-title svg {
-  color: var(--accent-active, var(--accent-success));
+  color: var(--accent-active);
 }
 
 .education-tooltip-description {

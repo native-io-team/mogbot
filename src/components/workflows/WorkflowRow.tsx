@@ -98,7 +98,11 @@ export function WorkflowRow({
       ? 'failed'
       : canAutoRun && !workflow.autoRun
         ? 'off'
-        : 'ok';
+        : // Green means a run went fine; a workflow that has never run has no
+          // result to show, so it keeps the neutral dot.
+          workflow.runs.length === 0
+          ? 'none'
+          : 'ok';
 
   const latest = progress.length > 0 ? progress[progress.length - 1] : null;
 

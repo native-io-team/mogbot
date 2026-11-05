@@ -67,12 +67,12 @@
     background var(--transition);
 }
 .preview-edit-toggle-switch.is-on {
-  background: var(--accent-success);
-  border-color: var(--accent-success);
+  background: var(--accent-active);
+  border-color: var(--accent-active);
 }
 .preview-edit-toggle-switch.is-on::after {
   transform: translateX(10px);
-  background: var(--text-inverse);
+  background: var(--text-on-accent);
 }
 
 .ss-edit-panel {
@@ -238,7 +238,7 @@
 }
 .ss-edit-panel__switch.is-on::after {
   transform: translateX(10px);
-  background: var(--text-inverse);
+  background: var(--text-on-accent);
 }
 
 /* Segmented control — a full-width 24px tray whose selected ToggleButton owns
@@ -440,7 +440,7 @@
 }
 .ss-edit-panel__noclass input:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 /* Set-vs-inherited indicator: a filled dot when the value is set on the active

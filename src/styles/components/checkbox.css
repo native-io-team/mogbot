@@ -56,7 +56,7 @@
 
 /* The ring goes on the drawn box, since the input it belongs to is invisible. */
 .checkbox__input:focus-visible + .checkbox__box {
-  outline: var(--stroke-2) solid var(--accent-active);
+  outline: var(--stroke-2) solid var(--focus-ring);
   outline-offset: var(--space-02);
 }
 

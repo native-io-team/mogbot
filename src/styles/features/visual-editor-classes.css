@@ -99,7 +99,7 @@
   border-radius: var(--radius-sm);
 }
 .ss-classedit__searchwrap:focus-within {
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 .ss-classedit__searchwrap svg {
   flex: 0 0 auto;

@@ -12,6 +12,39 @@
         background: #1e1e1e;
       }
     </style>
+    <!-- The accent (the Chief of Staff's colour) is read from the agent
+         registry once the app is running; src/lib/accent.ts caches the last
+         one here so every window paints in it from the first frame instead of
+         flashing the default and flipping. -->
+    <script>
+      try {
+        // Same rules as readCachedAccent in src/lib/accent.ts: every value must
+        // be well-formed or nothing is applied (accent.test.ts runs this).
+        var cachedAccent = JSON.parse(localStorage.getItem('app.accent') || 'null');
+        var hexVars = [
+          '--accent-user',
+          '--accent-on-user',
+          '--accent-user-hover',
+          '--accent-user-strong',
+          '--accent-user-start',
+          '--accent-user-end',
+        ];
+        var accentOk = !!cachedAccent && typeof cachedAccent === 'object';
+        for (var i = 0; accentOk && i < hexVars.length; i++) {
+          accentOk = /^#[0-9a-f]{6}$/i.test(String(cachedAccent[hexVars[i]]));
+        }
+        accentOk =
+          accentOk && /^\d{1,3}, \d{1,3}, \d{1,3}$/.test(String(cachedAccent['--accent-user-rgb']));
+        if (accentOk) {
+          var accentNames = hexVars.concat(['--accent-user-rgb']);
+          for (var j = 0; j < accentNames.length; j++) {
+            document.documentElement.style.setProperty(accentNames[j], cachedAccent[accentNames[j]]);
+          }
+        }
+      } catch (e) {
+        /* storage unavailable: the default accent shows until the registry loads */
+      }
+    </script>
   </head>
 
   <body>
