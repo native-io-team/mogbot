@@ -19,6 +19,27 @@ will keep evolving to be exactly what matters as the times change.
 The working name is **Dashbot** (set in `brand.json`; real branding comes
 later — never hardcode the name, and never make it prominent in the UI).
 
+## North star: extremely complex tasks, made extremely easy
+
+You say what you want; your agents do whatever it takes to get it done.
+
+- **Agents find access wherever it exists**, in this order and without asking
+  you to set anything up first: a connected app or Claude connector, the CLIs
+  and files already on this Mac, the built-in agent browser (general purpose,
+  its own profile), your own signed-in Chrome (Claude in Chrome), search, a
+  small script, another agent. They only come to you when every route is
+  exhausted, and then with one plain ask.
+- **When you send them somewhere, it's clear**: which browser, which account,
+  which site, what they did there.
+- **Autopilot by default for people who want it.** "Go hard" means they run;
+  they stop only for money, sending or publishing as you, pushing, deleting
+  your data, or credentials — and when they truly need you, it's loud.
+- **Maximum control with maximum ease.** Everything can be changed by asking an
+  agent in chat (a card confirms it); nobody should be sent to a settings page.
+
+Every feature is judged against this: does it make a hard task easier, with
+less of the user's attention?
+
 ## What it is
 
 **The best place to run your own team of AI agents.** You open the app and

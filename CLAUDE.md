@@ -4,6 +4,13 @@
 > step has a command, a check and what to tell the human. Don't improvise the setup.
 
 > **Start with [docs/MISSION.md](docs/MISSION.md), then [docs/ROADMAP.md](docs/ROADMAP.md).**
+> **North star: extremely complex tasks, made extremely easy.** Agents do whatever it takes:
+> they find access wherever it exists (connected app / Claude connector → CLIs and files on the
+> Mac → the built-in agent browser → the user's Chrome via Claude in Chrome → search, scripts,
+> other agents) and ask the user only when every route is exhausted, or before spending, sending
+> or publishing as them, pushing, deleting their data, or touching credentials. When they go
+> somewhere it is clear where and as whom. Every setting is changeable from chat. Judge every
+> change by: does this make a hard task easier, with less of the user's attention?
 > Dashbot is the working name (it lives only in `brand.json`; see "Brand and identity"). It is
 > the evolution of Ship Studio: an open-source app for running your own team of AI agents, on
 > desktop and phone. Grok Bot's experience, on Claude Code and Codex on your own machine, with
