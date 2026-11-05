@@ -356,7 +356,22 @@ export const composer = {
   send: 40,
   /** Send's inset from the field's edge. */
   inset: 4,
+  /**
+   * Between the field and the keyboard when it's up. With it down the field
+   * sits on the home indicator's inset; up, the sticky view gives that inset
+   * back down to this, so the field never touches the keys.
+   */
+  keyboardGap: 10,
 } as const;
+
+/**
+ * Where a conversation meets the composer (and the header): the words fade
+ * out over this height instead of stopping on a hard edge, in `fadeBands`
+ * steps of the chat's own background. The list keeps this much room at its
+ * newest end, so at the bottom the fade sits on empty space, never on the
+ * last message.
+ */
+export const chatFade = { height: 28, bands: 14 } as const;
 
 /**
  * The dictation waveform (`components/Waveform.tsx`), inside the field where

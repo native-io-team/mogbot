@@ -11,7 +11,7 @@
 import { newestResults, type Agent, type AgentMessage } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentProps, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   type FlatList,
   type LayoutChangeEvent,
@@ -63,7 +63,9 @@ import { setupAnchor, shows as showsSetup } from '../lib/teamSetup';
 import {
   alpha,
   avatarSize,
+  chatFade,
   chromeScale,
+  composer,
   fonts,
   iconSize,
   radius,
@@ -307,7 +309,11 @@ export function ChatView({
 
   // The pill and the toast ride the keyboard with the composer, as KeyboardStickyView does.
   const keyboard = useReanimatedKeyboardAnimation();
-  const lift = embedded ? 0 : insets.bottom;
+  // Up, the composer gives its home-indicator inset back to the keyboard, all
+  // but `keyboardGap`: the same few points above the keys as above the bar.
+  // The list's lift and the riders below use the same figure, so all of them
+  // move together, frame for frame with the keyboard.
+  const lift = embedded ? 0 : Math.max(0, Math.max(insets.bottom, space.sm) - composer.keyboardGap);
   const overKeyboard = useAnimatedStyle(() => ({
     transform: [
       {
@@ -378,13 +384,13 @@ export function ChatView({
       <KeyboardChatScrollView
         {...props}
         inverted
-        offset={embedded ? 0 : insets.bottom}
+        offset={lift}
         onContentInsetChange={(inset) => {
           insetTop.current = inset.top;
         }}
       />
     ),
-    [insets.bottom, embedded]
+    [lift]
   );
 
   const onMessageAction = useCallback(
@@ -629,7 +635,16 @@ export function ChatView({
             />
           </PaneContext.Provider>
         </PathContext.Provider>
+        {/* Under the header: older words fade up into it. */}
+        <EdgeFade edge="top" color={colors.surfaceApp} />
       </View>
+      {/* Above the composer, riding the keyboard with it: newest words fade down into it. */}
+      <EdgeFade
+        edge="bottom"
+        color={colors.surfaceApp}
+        bottom={composerHeight}
+        lifted={overKeyboard}
+      />
       {pill && (
         <Animated.View
           entering={ZoomIn.duration(160)}
@@ -698,7 +713,7 @@ export function ChatView({
           </T>
         </Animated.View>
       )}
-      <KeyboardStickyView offset={{ opened: embedded ? 0 : insets.bottom }}>
+      <KeyboardStickyView offset={{ opened: lift }}>
         <Composer
           agent={agent}
           autoFocus={compose}
@@ -893,9 +908,63 @@ function Gone({
   );
 }
 
+/**
+ * A soft edge where the list meets the composer or the header: the chat's
+ * background in `chatFade.bands` steps, opaque at the edge to clear inward.
+ * Bands of a solid colour rather than a gradient, so it needs no native
+ * module and draws the same on iOS, Android and the web. Never takes a tap.
+ */
+function EdgeFade({
+  edge,
+  color,
+  bottom = 0,
+  lifted,
+}: {
+  edge: 'top' | 'bottom';
+  color: string;
+  /** For the bottom edge: the composer's height, which it sits on. */
+  bottom?: number;
+  /** Rides the keyboard with the composer. */
+  lifted?: ComponentProps<typeof Animated.View>['style'];
+}) {
+  const bands = Array.from({ length: chatFade.bands }, (_, i) => {
+    // i = 0 at the edge. Eased, so the last steps into the words are gentlest.
+    const t = 1 - i / chatFade.bands;
+    return t * t;
+  });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[
+        fadeStyles.wrap,
+        edge === 'top' ? fadeStyles.top : [fadeStyles.bottom, { bottom }],
+        lifted,
+      ]}
+    >
+      {bands.map((opacity, i) => (
+        <View key={i} style={{ flex: 1, backgroundColor: color, opacity }} />
+      ))}
+    </Animated.View>
+  );
+}
+
+const fadeStyles = StyleSheet.create({
+  wrap: { position: 'absolute', height: chatFade.height },
+  top: { top: 0, left: 0, right: 0, flexDirection: 'column' },
+  bottom: { left: 0, right: 0, flexDirection: 'column-reverse' },
+});
+
 const useStyles = makeStyles((colors) => ({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { paddingHorizontal: space.lg, paddingVertical: space.md },
+  // Inverted, so paddingTop is the newest end: room for the fade above the
+  // composer, and paddingBottom the oldest, under the header's fade.
+  content: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.md + chatFade.height,
+    paddingBottom: space.md + chatFade.height,
+  },
   // Each cell is drawn upright, so paddingTop is the space between a row and
   // the older one above it: a grouped row (same side, same run) trims it.
   // A new speaker gets clear room; consecutive items from the same speaker
