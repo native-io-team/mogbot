@@ -34,7 +34,7 @@ export function ProjectListStatus({
     return (
       <div className="project-list-loading">
         <Spinner size="lg" />
-        <p className="text-style-body-medium">Loading projects...</p>
+        <p className="text-style-body-medium">Loading projects…</p>
         {cleanupStatus && (
           <p className="project-list-cleanup-status text-style-control">{cleanupStatus}</p>
         )}

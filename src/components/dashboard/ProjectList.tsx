@@ -572,7 +572,9 @@ export function ProjectList({
 
           <SearchAndSort
             title={currentFolderId ? 'Projects' : 'All projects'}
-            totalCount={totalCount}
+            // No count until the scan settles: a stale one beside the loading
+            // state says both "3 projects" and "don't know yet".
+            totalCount={loading || loadError ? 0 : totalCount}
             sortBy={sortBy}
             viewMode={projectViewMode}
             onSortChange={setSortBy}

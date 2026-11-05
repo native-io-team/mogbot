@@ -26,7 +26,7 @@ describe('ProjectListStatus', () => {
       />
     );
 
-    expect(screen.getByText('Loading projects...')).toBeInTheDocument();
+    expect(screen.getByText('Loading projects…')).toBeInTheDocument();
     expect(screen.getByText('Tidying up 3 removed projects')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
@@ -62,7 +62,7 @@ describe('ProjectListStatus', () => {
       />
     );
 
-    expect(screen.getByText('Loading projects...')).toBeInTheDocument();
+    expect(screen.getByText('Loading projects…')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(
       screen.queryByText('projects folder is on a disconnected volume')
