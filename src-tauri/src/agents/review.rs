@@ -667,6 +667,10 @@ pub struct Applied {
     pub chief_notes: bool,
     /// Routines that couldn't be set, by agent, with why.
     pub routines_refused: Vec<String>,
+    /// Each agent made or replaced, by id, with what it said it's missing
+    /// (the playback's gap lines): the start of "Setting up your team".
+    #[serde(skip)]
+    pub made: Vec<super::team_setup::Arrived>,
 }
 
 /// Why Import didn't go ahead, before anything was made.
@@ -720,9 +724,18 @@ pub fn apply(
         }
         chosen.push((p, Some(pick)));
     }
+    let plan = super::harvest::playback(&review, source);
     for (p, replace) in chosen {
         match apply_one(app, p, replace, source, &card.talk_id) {
-            Ok((name, replaced, refused)) => {
+            Ok((name, replaced, refused, agent_id)) => {
+                out.made.push(super::team_setup::Arrived {
+                    agent_id,
+                    gaps: plan
+                        .iter()
+                        .find(|a| a.key == p.key)
+                        .map(|a| super::team_setup::gap_lines(&a.lines))
+                        .unwrap_or_default(),
+                });
                 if replaced {
                     out.replaced.push(name.clone());
                 }
@@ -793,7 +806,7 @@ fn apply_one(
     replace: Option<&Pick>,
     source: &str,
     talk_id: &str,
-) -> Result<(String, bool, Vec<import::RoutineOutcome>), CommandError> {
+) -> Result<(String, bool, Vec<import::RoutineOutcome>, String), CommandError> {
     let routines: Vec<ImportedRoutine> = p
         .routines
         .iter()
@@ -870,13 +883,11 @@ fn apply_one(
                 if replace.is_some_and(|p| p.keep_logins) { "" } else { " and saved logins" }
             )
         } else {
-            format!(
-                "Imported from {source}. It starts when you message it; its routines are paused."
-            )
+            super::team_setup::import_note(source)
         };
         let _ = runner::record(app, runner::new_message(&agent.id, MessageKind::Note, note));
     }
-    Ok((agent.name, replaced, summary.routines_refused))
+    Ok((agent.name, replaced, summary.routines_refused, agent.id))
 }
 
 fn create(name: &str, p: &Proposal) -> Result<store::Agent, CommandError> {

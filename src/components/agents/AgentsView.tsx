@@ -108,6 +108,7 @@ import {
   type Room,
 } from '../../lib/agentRooms';
 import { kbd } from '../../lib/shortcuts';
+import { onlySetupRequests, setupHeldCounts, useTeamSetup } from '../../lib/teamSetup';
 
 const SELECTED_KEY = 'shipstudio.agents.selected';
 
@@ -444,7 +445,13 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   }, [openAgent]);
 
   // What the "Needs you" row counts: the agents What's in flight lists under Needs you.
-  const needsYouCount = agents.filter((a) => !a.hidden && needsAttention(a)).length;
+  const teamSetup = useTeamSetup();
+  const setupHeld = useMemo(() => setupHeldCounts(teamSetup), [teamSetup]);
+  // An agent being set up whose only requests are the checklist's logins is
+  // counted once, there, not again here.
+  const needsYouCount = agents.filter(
+    (a) => !a.hidden && needsAttention(a) && !onlySetupRequests(a, setupHeld)
+  ).length;
 
   // The oldest card waiting on you, on the first agent (sidebar order) with one.
   const waitingOn = sortAgents(agents).find((a) => !a.hidden && needsYou(a)) ?? null;

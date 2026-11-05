@@ -391,6 +391,12 @@ export interface Approval {
   /** An import connector card: another assistant asking to start, or its staged agents. */
   connector?: ConnectorCard;
   /**
+   * Closed by the app rather than answered (status `expired`), with the line
+   * saying why: a request from work that was replaced, such as the check-in
+   * after an import. Nothing it asked for ran.
+   */
+  setAside?: string;
+  /**
    * A login card (`request_login`): which app, what the agent may do, and the
    * ways in, best first. Every way in runs on the Mac (`agents.loginStart`);
    * `flow` is its live state. A Mac without the `logins` feature never sends it.
@@ -603,6 +609,85 @@ export interface ImportApplied {
   skipped: [string, string][];
   chiefNotes: boolean;
   routinesRefused: string[];
+}
+
+/**
+ * "Setting up your team" after an import (desktop `agents/team_setup.rs`):
+ * one checklist in the Chief's chat. Logins, routines to switch on, what the
+ * agents said they're missing, then saying hi to each, in that order. Read
+ * from the Mac every time; only the user's choices are kept there.
+ */
+export type TeamSetupStepId = 'logins' | 'routines' | 'missing' | 'hello';
+export type TeamSetupStepState = 'open' | 'done' | 'skipped';
+export type TeamSetupHelloState = 'quiet' | 'working' | 'said_hi';
+
+export interface TeamSetupLogin {
+  agentId: string;
+  agentName: string;
+  requestId: string;
+  /** What the agent called it (a secret's key): never shown as a title. */
+  name: string;
+  purpose: string;
+  /** The app's name ("Gmail"), or the key made readable ("Email drafts"). Absent from an older Mac. */
+  title?: string;
+  /** Which row ("google", "github", "email drafts"). */
+  group?: string;
+  /** The family's name ("Google"), when the row is one. */
+  family?: string;
+  /** A login card (connected from "What your team needs") or a secure input card. */
+  kind?: 'login' | 'secret';
+  /** Which account, when the card says. */
+  account?: string;
+}
+
+export interface TeamSetupRoutine {
+  agentId: string;
+  agentName: string;
+  checkInId: string;
+  /** "Every weekday at 09:00", as the Mac's schedule says it. */
+  when: string;
+  what: string;
+  on: boolean;
+}
+
+export interface TeamSetupGap {
+  agentId: string;
+  agentName: string;
+  lines: string[];
+}
+
+export interface TeamSetupHello {
+  agentId: string;
+  agentName: string;
+  color: string;
+  state: TeamSetupHelloState;
+}
+
+export interface TeamSetupStep {
+  id: TeamSetupStepId;
+  state: TeamSetupStepState;
+  logins?: TeamSetupLogin[];
+  routines?: TeamSetupRoutine[];
+  gaps?: TeamSetupGap[];
+  agents?: TeamSetupHello[];
+}
+
+export interface TeamSetupView {
+  id: string;
+  source: string;
+  steps: TeamSetupStep[];
+  /** Steps done or skipped. */
+  done: number;
+  total: number;
+  /** The first open step. */
+  current?: TeamSetupStepId;
+  complete: boolean;
+  /** How many agents it covers. */
+  agents: number;
+  /** Requests the update set aside, when it folded an earlier import in. */
+  setAside?: number;
+  /** Put away by the user (only when asked for with `any`). */
+  dismissed: boolean;
 }
 
 /**

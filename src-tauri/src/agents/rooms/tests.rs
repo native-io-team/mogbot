@@ -195,6 +195,7 @@ fn the_thread_reads_back_with_each_members_card_answers() {
             secret: None,
             connector: None,
             login: None,
+            set_aside: None,
             summary: None,
         });
         // The member's own log has the card, the room a copy.

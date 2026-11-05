@@ -418,6 +418,12 @@ export interface Approval {
   connector?: ConnectorCard;
   /** A login card (`request_login`): which app, what it may do, the ways in (`lib/agentLogins`). */
   login?: LoginRequest;
+  /**
+   * Closed by the app, not answered (status `expired`): the line saying why,
+   * e.g. a request from the check-in "Setting up your team" replaced.
+   * Nothing it asked for ran.
+   */
+  setAside?: string;
 }
 
 /**

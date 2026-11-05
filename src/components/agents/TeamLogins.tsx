@@ -39,6 +39,7 @@ import {
   listNames,
   needPrimary,
   progressLine,
+  scopeTeam,
   teamBusy,
   teamCardLine,
   teamLogins,
@@ -53,10 +54,17 @@ export interface TeamLoginsProps {
   since?: number;
   /** Every row is answered (fires once). */
   onDone?: () => void;
+  /** Only these agents' asks (the setup checklist's); a Connect skips the rest. */
+  agentIds?: ReadonlySet<string>;
+  /** Shown instead of the empty line when there's nothing to connect. */
+  empty?: string;
 }
 
-export function TeamLogins({ since, onDone }: TeamLoginsProps) {
-  const load = useCallback(() => teamLogins(since), [since]);
+export function TeamLogins({ since, onDone, agentIds, empty }: TeamLoginsProps) {
+  const load = useCallback(async () => {
+    const all = await teamLogins(since);
+    return agentIds ? scopeTeam(all, agentIds) : all;
+  }, [since, agentIds]);
   const { data: team, error, execute } = useAsyncState<Team>(load, { immediate: true });
   const refresh = useCallback(() => void execute(), [execute]);
   useEffect(() => {
@@ -89,9 +97,10 @@ export function TeamLogins({ since, onDone }: TeamLoginsProps) {
     );
   }
   if (team.total === 0) {
+    if (empty === '') return null;
     return (
       <p className="team-logins__empty">
-        Nothing to connect. When an agent needs an app, its sign-in card shows here.
+        {empty ?? 'Nothing to connect. When an agent needs an app, its sign-in card shows here.'}
       </p>
     );
   }
@@ -133,7 +142,10 @@ function NeedRow({ need, onChanged }: { need: TeamNeed; onChanged: () => void })
       setBusy(false);
     }
   };
-  const connect = (o: LoginOption) => run(() => connectTeamNeed(need.key, o.id, [...skipped]));
+  // Agents this list leaves off (`agentIds`) are skipped by its Connect too.
+  const hidden = (need as TeamNeed & { hidden?: string[] }).hidden ?? [];
+  const connect = (o: LoginOption) =>
+    run(() => connectTeamNeed(need.key, o.id, [...skipped, ...hidden]));
   const names = need.cards.map((c) => c.agentName);
 
   return (

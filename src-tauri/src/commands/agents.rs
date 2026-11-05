@@ -214,10 +214,23 @@ pub async fn agents_send(
         .as_ref()
         .map(agents::results::revising_prompt)
         .unwrap_or_default();
+    // The user messaged an imported agent themselves: they've met. The
+    // Chief is told where setting up the team stands.
+    if !recipient.is_main {
+        if let Ok(true) = agents::team_setup::mark_greeted(&agent_id) {
+            agents::team_setup::emit(&app);
+        }
+    }
+    let setup = if recipient.is_main {
+        agents::team_setup::chief_context().unwrap_or_default()
+    } else {
+        String::new()
+    };
     let prompt = [
         revising,
         text,
         prompts::mentions(&names, recipient.is_main),
+        setup,
         block,
     ]
     .into_iter()
@@ -1802,5 +1815,129 @@ pub async fn agents_account_remove(
         .await
         .map_err(agents::err_other)??;
     let _ = app.emit(EVENT_ACCOUNTS, ());
+    Ok(())
+}
+
+/* ------------------------------------------------- setting up your team */
+
+/// "Setting up your team" after an import (`agents::team_setup`): the
+/// checklist as the card shows it, or `None` when there's none to show.
+/// `any` includes one the user put away (its `dismissed` says so), for ⌘K
+/// and What's in flight to offer it again.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_team_setup(
+    any: Option<bool>,
+) -> Result<Option<agents::team_setup::SetupView>, CommandError> {
+    blocking(move || {
+        Ok(if any.unwrap_or(false) {
+            agents::team_setup::view_any()
+        } else {
+            agents::team_setup::view()
+        })
+    })
+    .await
+}
+
+/// Bring back a checklist the user put away.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_team_setup_reopen(app: AppHandle) -> Result<(), CommandError> {
+    blocking(agents::team_setup::reopen).await?;
+    agents::team_setup::emit(&app);
+    Ok(())
+}
+
+/// Mark a step done or skipped, or open it again.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_team_setup_step(
+    app: AppHandle,
+    step: agents::team_setup::StepId,
+    state: agents::team_setup::StepState,
+) -> Result<(), CommandError> {
+    blocking(move || agents::team_setup::set_step(step, state)).await?;
+    agents::team_setup::emit(&app);
+    Ok(())
+}
+
+/// Switch one of an imported agent's routines on or off from the card.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_team_setup_routine(
+    app: AppHandle,
+    agent_id: String,
+    check_in_id: String,
+    on: bool,
+) -> Result<(), CommandError> {
+    blocking(move || agents::team_setup::set_routine(&agent_id, &check_in_id, on)).await?;
+    let _ = app.emit(runner::EVENT_REGISTRY, ());
+    agents::team_setup::emit(&app);
+    Ok(())
+}
+
+/// "Say hi": the user's hello to one imported agent, which wakes it. One at
+/// a time: while another is still replying to its hello, this waits.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_team_setup_hello(
+    app: AppHandle,
+    agent_id: String,
+) -> Result<store::AgentMessage, CommandError> {
+    let agent = store::get(&agent_id)?;
+    let setup = agents::team_setup::load()
+        .filter(|s| s.agents.contains(&agent_id))
+        .ok_or_else(|| CommandError::expected("That agent isn't part of this setup."))?;
+    if let Some(busy) = setup
+        .agents
+        .iter()
+        .filter(|id| **id != agent_id && setup.greeted.contains(id))
+        .filter(|id| runner::is_working(id))
+        .find_map(|id| store::get(id).ok())
+    {
+        return Err(CommandError::expected(format!(
+            "{} is still replying. Say hi to {} once it's done.",
+            busy.name, agent.name
+        )));
+    }
+    let text = agents::team_setup::hello_text(&agent.name);
+    let sent = agents_send(app.clone(), agent_id, text, None, None, None, None).await?;
+    agents::team_setup::emit(&app);
+    Ok(sent)
+}
+
+/// Hand everything the agents said they're missing to the Chief in one
+/// message (the user's, shown in its chat), and tick the step.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_team_setup_missing(
+    app: AppHandle,
+) -> Result<store::AgentMessage, CommandError> {
+    let view = blocking(|| {
+        agents::team_setup::view()
+            .ok_or_else(|| CommandError::expected("There's nothing to set up."))
+    })
+    .await?;
+    let text = agents::team_setup::missing_text(&view)
+        .ok_or_else(|| CommandError::expected("Nobody said they're missing anything."))?;
+    let chief = blocking(agents::ensure_main).await?;
+    let sent = agents_send(app.clone(), chief.id, text, None, None, None, None).await?;
+    blocking(|| {
+        agents::team_setup::set_step(
+            agents::team_setup::StepId::Missing,
+            agents::team_setup::StepState::Done,
+        )
+    })
+    .await?;
+    agents::team_setup::emit(&app);
+    Ok(sent)
+}
+
+/// Put the checklist away; ⌘K and What's in flight bring it back.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_team_setup_dismiss(app: AppHandle) -> Result<(), CommandError> {
+    blocking(agents::team_setup::dismiss).await?;
+    agents::team_setup::emit(&app);
     Ok(())
 }

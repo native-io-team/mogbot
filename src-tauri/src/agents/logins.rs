@@ -1319,6 +1319,7 @@ fn record_card(app: &AppHandle, agent: &Agent, r: LoginRequest) -> Result<(), Co
         secret: None,
         connector: None,
         login: Some(r),
+        set_aside: None,
     });
     runner::record_own(app, card)?;
     store::refresh_pending(&agent.id);
@@ -1431,6 +1432,7 @@ pub fn migrate_pending(app: Option<&AppHandle>) -> usize {
                 secret: None,
                 connector: None,
                 login: Some(login),
+                set_aside: None,
             });
             let new = match app {
                 Some(app) => runner::record_own(app, card).map(|_| ()),
@@ -2160,6 +2162,7 @@ mod tests {
             secret: Some(request),
             connector: None,
             login: None,
+            set_aside: None,
         });
         // Written the way an older build wrote it: no `login` key at all.
         let line = serde_json::to_string(&card).unwrap();
@@ -2399,6 +2402,7 @@ mod tests {
             secret: None,
             connector: None,
             login: Some(r),
+            set_aside: None,
         });
         store::append_message(&card).unwrap();
         store::refresh_pending(&a.id);

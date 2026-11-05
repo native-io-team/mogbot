@@ -82,6 +82,12 @@ pub const METHODS: &[&str] = &[
     "agents.import.start",
     "agents.import.stop",
     "agents.import.review",
+    "agents.teamSetup",
+    "agents.teamSetup.step",
+    "agents.teamSetup.routine",
+    "agents.teamSetup.hello",
+    "agents.teamSetup.missing",
+    "agents.teamSetup.dismiss",
 ];
 
 /// `READ_ONLY_METHODS` in methods.ts (the served subset): not audited.
@@ -99,6 +105,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.accounts",
     "agents.usagePlan",
     "agents.import.status",
+    "agents.teamSetup",
     "agents.templates",
     "agents.changeDiff",
     "agents.files",
@@ -313,6 +320,32 @@ fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
     })
 }
 
+/// "Setting up your team" from the phone (`agents::team_setup`): the same
+/// commands the desk's card calls.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TeamSetupAction {
+    /// The checklist (`any` brings back one put away).
+    Get {
+        any: bool,
+    },
+    Step {
+        step: crate::agents::team_setup::StepId,
+        state: crate::agents::team_setup::StepState,
+    },
+    Routine {
+        agent_id: String,
+        check_in_id: String,
+        on: bool,
+    },
+    /// "Say hi": the user's hello, which wakes that one agent.
+    Hello {
+        agent_id: String,
+    },
+    /// Everything they said they're missing, to the Chief in one message.
+    Missing,
+    Dismiss,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ApprovalAnswer {
     pub agent_id: String,
@@ -426,6 +459,10 @@ pub trait Backend: Send + Sync + 'static {
         request_id: &str,
         keys: Vec<String>,
     ) -> Result<Value, CommandError>;
+    /// "Setting up your team": `agents_team_setup*`. `Get` answers the
+    /// checklist or `null`; `Hello` and `Missing` the message they sent;
+    /// the rest `null`.
+    async fn team_setup(&self, action: TeamSetupAction) -> Result<Value, CommandError>;
     /// `agents_revoke_permission`: an "Always allow" rule taken back.
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError>;
     /// `agents_login_start`: one of a login card's ways in, started on this
@@ -668,6 +705,28 @@ struct SetPushParams {
 #[serde(rename_all = "camelCase")]
 struct AgentParam {
     agent_id: String,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct TeamSetupGetParams {
+    #[serde(default)]
+    any: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TeamSetupStepParams {
+    step: crate::agents::team_setup::StepId,
+    state: crate::agents::team_setup::StepState,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TeamSetupRoutineParams {
+    agent_id: String,
+    check_in_id: String,
+    on: bool,
 }
 
 #[derive(Deserialize)]
@@ -1070,6 +1129,19 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         },
         "agents.fetchPath" => preview(field("path")),
         "agents.revokePermission" => format!("revoke {} {}", field("ruleId"), field("agentId")),
+        "agents.teamSetup.step" => format!("setup: {} {}", field("step"), field("state")),
+        "agents.teamSetup.routine" => {
+            let on = params.get("on").and_then(Value::as_bool) == Some(true);
+            format!(
+                "setup: switch {} {} {}",
+                if on { "on" } else { "off" },
+                field("checkInId"),
+                field("agentId")
+            )
+        }
+        "agents.teamSetup.hello" => format!("setup: said hi to {}", field("agentId")),
+        "agents.teamSetup.missing" => "setup: asked the Chief about what's missing".into(),
+        "agents.teamSetup.dismiss" => "setup: put away".into(),
         "sessions.start" => preview(&format!("{} — {}", field("project"), field("prompt"))),
         "preview.screenshot" => format!("{} {}", field("project"), field("device")),
         "agents.schedule.create" | "agents.schedule.update" => {
@@ -1452,6 +1524,42 @@ async fn run(
             }
             Ok(b.import_review(&p.agent_id, &p.request_id, p.keys).await?)
         }
+        "agents.teamSetup" => {
+            let p: TeamSetupGetParams = if params.is_null() {
+                TeamSetupGetParams::default()
+            } else {
+                parse(params)?
+            };
+            Ok(b.team_setup(TeamSetupAction::Get { any: p.any }).await?)
+        }
+        "agents.teamSetup.step" => {
+            let p: TeamSetupStepParams = parse(params).map_err(|_| {
+                bad_params("A step is logins, routines, missing or hello; its state open, done or skipped.")
+            })?;
+            Ok(b.team_setup(TeamSetupAction::Step {
+                step: p.step,
+                state: p.state,
+            })
+            .await?)
+        }
+        "agents.teamSetup.routine" => {
+            let p: TeamSetupRoutineParams = parse(params)?;
+            Ok(b.team_setup(TeamSetupAction::Routine {
+                agent_id: p.agent_id,
+                check_in_id: p.check_in_id,
+                on: p.on,
+            })
+            .await?)
+        }
+        "agents.teamSetup.hello" => {
+            let p: AgentParam = parse(params)?;
+            Ok(b.team_setup(TeamSetupAction::Hello {
+                agent_id: p.agent_id,
+            })
+            .await?)
+        }
+        "agents.teamSetup.missing" => Ok(b.team_setup(TeamSetupAction::Missing).await?),
+        "agents.teamSetup.dismiss" => Ok(b.team_setup(TeamSetupAction::Dismiss).await?),
         // The ready-made agents, without their briefings: the phone shows
         // the choice, the Mac fills the instructions in on create.
         "agents.templates" => Ok(templates_for_phone()),
@@ -2714,6 +2822,93 @@ mod tests {
             .await
             .is_err());
         assert_eq!(stub.typed.lock().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn setting_up_the_team_reaches_the_desk_and_only_reading_it_goes_unaudited() {
+        use crate::agents::team_setup::{StepId, StepState};
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let view = dispatch(&c, &me, "agents.teamSetup", Value::Null)
+            .await
+            .unwrap();
+        assert_eq!(view["steps"][0]["id"], "logins");
+        dispatch(&c, &me, "agents.teamSetup", json!({ "any": true }))
+            .await
+            .unwrap();
+        dispatch(
+            &c,
+            &me,
+            "agents.teamSetup.step",
+            json!({ "step": "routines", "state": "skipped" }),
+        )
+        .await
+        .unwrap();
+        assert!(dispatch(
+            &c,
+            &me,
+            "agents.teamSetup.step",
+            json!({ "step": "everything", "state": "done" })
+        )
+        .await
+        .is_err());
+        dispatch(
+            &c,
+            &me,
+            "agents.teamSetup.routine",
+            json!({ "agentId": "a2", "checkInId": "c1", "on": true }),
+        )
+        .await
+        .unwrap();
+        let sent = dispatch(
+            &c,
+            &me,
+            "agents.teamSetup.hello",
+            json!({ "agentId": AGENT }),
+        )
+        .await
+        .unwrap();
+        assert!(sent.get("id").is_some());
+        dispatch(&c, &me, "agents.teamSetup.missing", json!({}))
+            .await
+            .unwrap();
+        dispatch(&c, &me, "agents.teamSetup.dismiss", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(
+            *stub.team_setup.lock().unwrap(),
+            vec![
+                TeamSetupAction::Get { any: false },
+                TeamSetupAction::Get { any: true },
+                TeamSetupAction::Step {
+                    step: StepId::Routines,
+                    state: StepState::Skipped
+                },
+                TeamSetupAction::Routine {
+                    agent_id: "a2".into(),
+                    check_in_id: "c1".into(),
+                    on: true
+                },
+                TeamSetupAction::Hello {
+                    agent_id: AGENT.into()
+                },
+                TeamSetupAction::Missing,
+                TeamSetupAction::Dismiss,
+            ]
+        );
+        let audited: Vec<String> = stub
+            .audited()
+            .into_iter()
+            .map(|(_, m, d, _)| format!("{m}: {d}"))
+            .collect();
+        assert!(!audited.iter().any(|l| l.starts_with("agents.teamSetup:")));
+        assert!(audited
+            .iter()
+            .any(|l| l == "agents.teamSetup.routine: setup: switch on c1 a2"));
+        assert!(audited
+            .iter()
+            .any(|l| l.starts_with("agents.teamSetup.hello: setup: said hi to")));
     }
 
     #[test]

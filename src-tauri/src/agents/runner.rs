@@ -1380,6 +1380,26 @@ fn agent_inbound(text: String, sender: AgentRef, hop: u8, reply: bool, outside: 
 /// `from` is messaging `to`. If `from`'s turn is answering a request `to`
 /// sent, this message is that answer: it settles the debt, so the turn's
 /// final words aren't sent back as well. Returns whether it was an answer.
+/// Whether the turn in progress for `from` owes `to` an answer (`to` asked
+/// it something): a reply to it is an answer, not new work handed out.
+pub fn owes(from: &str, to: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(from)
+        .is_some_and(|r| r.owed.iter().any(|a| a.id == to))
+}
+
+/// Which turn this agent is on, counted per agent (0 before its first).
+pub fn turn_number(agent_id: &str) -> u64 {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .map(|r| r.turn_gen)
+        .unwrap_or(0)
+}
+
 pub fn settle(from: &str, to: &str) -> bool {
     let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     let Some(owed) = runtimes.get_mut(from).map(|r| &mut r.owed) else {
@@ -4464,6 +4484,7 @@ mod tests {
                 secret: None,
                 connector: None,
                 login: None,
+                set_aside: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

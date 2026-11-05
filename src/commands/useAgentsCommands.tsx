@@ -23,6 +23,7 @@ import { useAgentsSelector, type AgentsState } from '../lib/agentsStore';
 import type { AppView } from '../lib/types';
 import { AGENT_EVENTS, OTHER_APP_NAME, otherAppExists, TEAM_ID } from '../lib/agents';
 import { ROLE_TEMPLATES } from '../lib/agentTemplates';
+import { resumeTeamSetup, SETUP_TITLE, useResumableTeamSetup } from '../lib/teamSetup';
 
 type AgentsIntent =
   | { kind: 'new'; template?: string }
@@ -124,6 +125,9 @@ const STAY_ON_COMMANDS: { id: string; title: string; change: StayOnChange; done:
 export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => void }) {
   const agents = useAgentsSelector(selectAgents, sameNames);
   const { showToast } = useOptionalToast();
+  // "Setting up your team", offered while there's one to finish (put away or not).
+  const setup = useResumableTeamSetup();
+  const chiefId = agents.find((a) => a.isMain)?.id;
   // Whether the other app has agents on this Mac, asked once from its
   // registry alone (not the preview, which reads every agent's folder): it
   // gates the palette's "Import agents from …", which only means something then.
@@ -200,6 +204,25 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
           setView('agents');
         },
       })),
+      ...(setup && chiefId
+        ? [
+            {
+              id: 'agents.teamSetup',
+              title: `Continue ${SETUP_TITLE.toLowerCase()}`,
+              icon: <AgentsIcon size={14} />,
+              category: 'navigation' as const,
+              keywords: ['agents', 'import', 'setup', 'logins', 'routines', 'say hi', 'checklist'],
+              run: () => {
+                resumeTeamSetup()
+                  .then(() => {
+                    requestAgentsIntent({ kind: 'open', agentId: chiefId });
+                    setView('agents');
+                  })
+                  .catch((e: unknown) => showToast(String(e), 'error'));
+              },
+            },
+          ]
+        : []),
       {
         id: 'agents.team',
         title: 'What’s in flight',
@@ -341,6 +364,6 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         },
       })),
     ],
-    [setView, agents, showToast, otherApp]
+    [setView, agents, showToast, otherApp, setup, chiefId]
   );
 }

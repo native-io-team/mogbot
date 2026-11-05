@@ -41,6 +41,7 @@ import {
   type SearchHit,
   type SessionScreen,
   type SharedFile,
+  type TeamSetupView,
   type ClientFrame,
   type CompanionEvent,
   type IdentityRequest,
@@ -134,6 +135,12 @@ export interface MockOptions {
    * working, so the typing dots are on screen in both chats.
    */
   importing?: boolean;
+  /**
+   * Sixteen agents just imported from Grok Bot and "Setting up your team" in
+   * the Chief's chat: logins to add, routines arrived paused, what some said
+   * they're missing, a few already met.
+   */
+  teamSetup?: boolean;
   /** Answer CORS preflights and tag every response, for the web build (dev only). */
   cors?: boolean;
   /**
@@ -379,6 +386,208 @@ export function createMockServer(opts: MockOptions = {}) {
     }
   }
   if (opts.heavy) addHeavyAccount(agents, messages, agentBase(now), now);
+  // "Setting up your team": what the Mac's team_setup.rs answers after an import.
+  let teamSetup: TeamSetupView | null = null;
+  if (opts.teamSetup) {
+    const IMPORTED: [string, string, string][] = [
+      ['Newsletter', 'The monthly newsletter', 'orange'],
+      ['Garden Plan', 'The spring garden', 'teal'],
+      ['Inbox Watch', 'The shop inbox, one digest', 'purple'],
+      ['Events', 'Workshops and the weekly roundup', 'pink'],
+      ['Shop Site', 'Shop site fixes', 'blue'],
+      ['Recruiting', 'The recruiting pipeline', 'amber'],
+      ['Order QA', 'Checks every order batch', 'green'],
+      ['Photo Posts', 'Posts for sign-off', 'red'],
+      ['Kitchen Reno', 'The kitchen renovation', 'brown'],
+      ['Wholesale', 'Wholesale orders', 'teal'],
+      ['Support Desk', 'Customer support replies', 'blue'],
+      ['Catalog', 'The product catalog', 'purple'],
+      ['Studio', 'The kiln and class bookings', 'gray'],
+      ['Stockists', 'Stockist leads', 'orange'],
+      ['Trip Planner', 'The summer trip', 'green'],
+      ['Workshop', 'Builds shop features', 'red'],
+    ];
+    const chief = agents.find((a) => a.id === 'chief')!;
+    const sample = agents.find((a) => a.id === 'fin') ?? agents[1];
+    const made = IMPORTED.map(([name, role, color], i) => {
+      const id = `imp${i}`;
+      const a: Agent = {
+        ...structuredClone(sample),
+        id,
+        name,
+        role,
+        color,
+        pinned: false,
+        hidden: false,
+        unread: 0,
+        pendingApprovals: i < 5 ? 1 : 0,
+        checkIns: [],
+        status:
+          i === 6
+            ? { state: 'working', activity: 'Reading its notes', since: now }
+            : { state: 'idle', activity: null, since: null },
+        lastActivityAt: now - 10 * 60_000 + i,
+        preview:
+          'Imported from Grok Bot. It stays quiet until you say hi; its routines are paused.',
+      };
+      agents.push(a);
+      const lines: AgentMessage[] = [
+        {
+          id: `${id}_note`,
+          agentId: id,
+          ts: now - 10 * 60_000,
+          kind: 'note',
+          text: 'Imported from Grok Bot. It stays quiet until you say hi; its routines are paused.',
+        },
+      ];
+      if (i < 5)
+        lines.push({
+          id: `${id}_login`,
+          agentId: id,
+          ts: now - 10 * 60_000 + 1,
+          kind: 'approval',
+          text: '',
+          approval: {
+            requestId: `${id}_login`,
+            title: `Secure input · ${name.toLowerCase().replace(/\W+/g, '_')}`,
+            detail: '',
+            status: 'pending',
+            secret: {
+              name: `${name.toLowerCase().replace(/\W+/g, '_')}`,
+              purpose: `A login ${name} used with Grok Bot`,
+              kind: 'api_key',
+              fields: [{ label: 'Key', env: 'KEY' }],
+              reference: `secret:${id}/login`,
+            },
+          },
+        });
+      if (i === 0)
+        lines.push({
+          id: `${id}_aside`,
+          agentId: id,
+          ts: now - 8 * 60_000,
+          kind: 'approval',
+          text: '',
+          approval: {
+            requestId: `${id}_aside`,
+            title: 'Run a command',
+            detail: 'ls -la /workspace/newsletter/drafts/',
+            status: 'expired',
+            tool: 'Bash',
+            setAside:
+              'Set aside: this came from Chief of Staff checking in with every agent after the import. Nothing ran.',
+          },
+        });
+      messages.set(id, lines);
+      return a;
+    });
+    for (const m of messages.get('chief') ?? []) {
+      if (m.approval?.status === 'pending') m.approval.status = 'allowed';
+    }
+    chief.pendingApprovals = 0;
+    messages.get('chief')!.push({
+      id: 'chief_imported',
+      agentId: 'chief',
+      ts: now - 9 * 60_000,
+      kind: 'note',
+      text: `Imported from Grok Bot: ${made.map((a) => a.name).join(', ')}. They stay quiet until you've set them up, below; routines are paused.`,
+    });
+    const said = (i: number): 'quiet' | 'working' | 'said_hi' =>
+      i < 2 ? 'said_hi' : i === 6 ? 'working' : 'quiet';
+    teamSetup = {
+      id: 'setup_mock',
+      source: 'Grok Bot',
+      steps: [
+        {
+          id: 'logins',
+          state: 'open',
+          logins: made.slice(0, 5).map((a) => ({
+            agentId: a.id,
+            agentName: a.name,
+            requestId: `${a.id}_login`,
+            name: a.name.toLowerCase().replace(/\W+/g, '_'),
+            purpose: `A login ${a.name} used with Grok Bot`,
+          })),
+        },
+        {
+          id: 'routines',
+          state: 'open',
+          routines: [
+            [
+              'Inbox Watch',
+              'Every day at 08:20',
+              'Check the shop inbox and send the morning digest',
+            ],
+            ['Inbox Watch', 'Every weekday at 14:00', 'Report only new items that need you'],
+            ['Photo Posts', 'Every Monday at 09:00', 'Draft the week’s posts for sign-off'],
+            ['Events', 'Every weekday at 10:00', 'Answer new workshop questions'],
+          ].map(([who, when, what], i) => ({
+            agentId: made.find((a) => a.name === who)!.id,
+            agentName: who,
+            checkInId: `r${i}`,
+            when,
+            what,
+            on: i === 0,
+          })),
+        },
+        {
+          id: 'missing',
+          state: 'open',
+          gaps: [
+            {
+              agentId: made[2].id,
+              agentName: 'Inbox Watch',
+              lines: [
+                'When a DM mentions an invoice: forward it to Bookkeeper (ask me to set this up here once I’m in)',
+              ],
+            },
+            {
+              agentId: made[8].id,
+              agentName: 'Kitchen Reno',
+              lines: [
+                '“Every other Friday”: check the visa status. I can’t read that time, so it won’t be set: tell me when it should run',
+              ],
+            },
+          ],
+        },
+        {
+          id: 'hello',
+          state: 'open',
+          agents: made.map((a, i) => ({
+            agentId: a.id,
+            agentName: a.name,
+            color: a.color,
+            state: said(i),
+          })),
+        },
+      ],
+      done: 0,
+      total: 4,
+      current: 'logins',
+      complete: false,
+      agents: made.length,
+      setAside: 12,
+      dismissed: false,
+    };
+  }
+  /** Ticks, counts and the current step, as `team_setup::build` does. */
+  const settleSetup = () => {
+    if (!teamSetup) return;
+    const s = teamSetup;
+    const logins = s.steps.find((x) => x.id === 'logins');
+    if (logins && !logins.logins?.length && logins.state === 'open') logins.state = 'done';
+    const hello = s.steps.find((x) => x.id === 'hello');
+    if (hello?.agents?.every((a) => a.state === 'said_hi')) hello.state = 'done';
+    s.done = s.steps.filter((x) => x.state !== 'open').length;
+    s.total = s.steps.length;
+    s.current = s.steps.find((x) => x.state === 'open')?.id;
+    s.complete = s.done === s.total;
+  };
+  const setupChanged = () => {
+    settleSetup();
+    emit({ type: 'agents.registry', overview: overview() });
+  };
+
   // Every message kind exactly as the Mac serialises it, under one agent.
   const sample = structuredClone(real.agentsOverview.agents[0]) as Agent;
   agents.push({
@@ -1772,6 +1981,79 @@ export function createMockServer(opts: MockOptions = {}) {
       if (typeof p.codexModel === 'string') saved.codexModel = p.codexModel || null;
       emit({ type: 'agents.registry', overview: overview() });
       return defaults();
+    },
+    // "Setting up your team" (null without --team-setup, as a Mac with none answers).
+    'agents.teamSetup': (p) => {
+      if (teamSetup && p.any) teamSetup.dismissed = false;
+      return teamSetup && !teamSetup.dismissed ? structuredClone(teamSetup) : null;
+    },
+    'agents.teamSetup.step': (p) => {
+      const step = teamSetup?.steps.find((s) => s.id === p.step);
+      if (!step) return fail({ type: 'Other', message: 'There’s nothing to set up.' });
+      step.state = p.state as typeof step.state;
+      setupChanged();
+      return null;
+    },
+    'agents.teamSetup.routine': (p) => {
+      const r = teamSetup?.steps
+        .find((s) => s.id === 'routines')
+        ?.routines?.find((x) => x.checkInId === p.checkInId);
+      if (!r) return fail({ type: 'Other', message: 'That routine no longer exists.' });
+      r.on = !!p.on;
+      setupChanged();
+      return null;
+    },
+    'agents.teamSetup.hello': (p) => {
+      const hello = teamSetup?.steps.find((s) => s.id === 'hello');
+      const a = hello?.agents?.find((x) => x.agentId === p.agentId);
+      if (!a) return fail({ type: 'Other', message: 'That agent isn’t part of this setup.' });
+      const busy = hello?.agents?.find((x) => x.state === 'working');
+      if (busy)
+        return fail({
+          type: 'Other',
+          message: `${busy.agentName} is still replying. Say hi to ${a.agentName} once it’s done.`,
+        });
+      a.state = 'working';
+      setupChanged();
+      setTimeout(() => {
+        a.state = 'said_hi';
+        setupChanged();
+      }, 3000);
+      const m: AgentMessage = {
+        id: randomUUID(),
+        agentId: a.agentId,
+        ts: Date.now(),
+        kind: 'user',
+        text: `Hi ${a.agentName}, welcome. In a few lines: what will you handle for me here, and is there anything you still need from me?`,
+      };
+      messages.get(a.agentId)?.push(m);
+      emit({ type: 'agents.message', message: m });
+      return m;
+    },
+    'agents.teamSetup.missing': () => {
+      const step = teamSetup?.steps.find((s) => s.id === 'missing');
+      if (!step) return fail({ type: 'Other', message: 'Nobody said they’re missing anything.' });
+      step.state = 'done';
+      const m: AgentMessage = {
+        id: randomUUID(),
+        agentId: 'chief',
+        ts: Date.now(),
+        kind: 'user',
+        text: `A few of the agents I imported said they're missing something:\n${(step.gaps ?? [])
+          .map((g) => `\n${g.agentName}\n${g.lines.map((l) => `- ${l}`).join('\n')}`)
+          .join(
+            '\n'
+          )}\n\nSort out what you can yourself, and ask me only what you can't, all in one message.`,
+      };
+      messages.get('chief')?.push(m);
+      emit({ type: 'agents.message', message: m });
+      setupChanged();
+      return m;
+    },
+    'agents.teamSetup.dismiss': () => {
+      if (teamSetup) teamSetup.dismissed = true;
+      setupChanged();
+      return null;
     },
     // An import going on, as the phone's Import screen follows it.
     'agents.import.status': () => importStatus(),

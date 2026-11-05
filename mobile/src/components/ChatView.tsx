@@ -62,6 +62,7 @@ import { Composer } from './Composer';
 import { LinkProblem } from './ConnectionPill';
 import { Line } from './surfaces';
 import { RoomFoldRow } from './RoomRow';
+import { TeamSetupCard } from './TeamSetupCard';
 import { PathContext } from './Markdown';
 import { PaneContext, type Pane } from './ApprovalCard';
 import { showActions } from './menu';
@@ -513,6 +514,11 @@ export function ChatView({
               initialNumToRender={16}
               maxToRenderPerBatch={12}
               windowSize={13}
+              // The newest end of an inverted list: "Setting up your team" sits
+              // under the conversation in the Chief's chat, as on the desk.
+              ListHeaderComponent={
+                agent.isMain ? <TeamSetupCard chief={agent.name} onError={showError} /> : undefined
+              }
               ListFooterComponent={
                 chat?.loaded && !chat.more ? (
                   <Line text={`Start of your conversation with ${agent.name}`} />

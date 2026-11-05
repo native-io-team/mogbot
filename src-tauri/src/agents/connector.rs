@@ -951,7 +951,7 @@ pub fn apply_review(
     request_id: &str,
     picks: &Picks,
 ) -> Result<review::Applied, CommandError> {
-    let (card, applied, answered) = review::apply_card(Some(app), chief_id, request_id, picks)?;
+    let (card, mut applied, answered) = review::apply_card(Some(app), chief_id, request_id, picks)?;
     // Written home by now (or not kept): the staging copy goes.
     super::harvest::discard(&card.talk_id);
     if let Some(m) = answered {
@@ -974,7 +974,7 @@ pub fn apply_review(
         format!("Nothing imported from {}.", card.source)
     } else {
         format!(
-            "Imported from {}: {}. They start when you message them; routines are paused.",
+            "Imported from {}: {}. They stay quiet until you've set them up, below; routines are paused.",
             card.source,
             applied.agents.join(", ")
         )
@@ -992,6 +992,13 @@ pub fn apply_review(
         ));
     }
     note(app, chief_id, line);
+    // One checklist in this chat for what the team needs, instead of a
+    // request in every agent's.
+    match super::team_setup::start(&card.source, std::mem::take(&mut applied.made)) {
+        Ok(Some(_)) => super::team_setup::emit(app),
+        Ok(None) => {}
+        Err(e) => tracing::warn!("[Agents] Couldn't start setting up the team: {e}"),
+    }
     audit(&card.source, &applied_audit(&applied), true);
     let _ = app.emit(runner::EVENT_REGISTRY, ());
     super::notify::refresh_badge(app);

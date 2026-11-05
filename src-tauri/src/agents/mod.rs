@@ -37,6 +37,7 @@
 //! - [`conn_relay`]: a turn reaches a connected app through the bridge, never holding its token
 //! - [`connections`]: accounts connected through them, per-agent grants, what a turn gets
 //! - [`oauth`]: signing in to a remote MCP server ourselves (PKCE, loopback)
+//! - [`team_setup`]: "Setting up your team" after an import: one checklist, quiet agents, the fan-out cap
 //! - [`templates`]: ready-made agents (role templates) the Chief and the New agent dialog offer
 //! - [`stream`]: a reply while it is being written (drafts)
 //! - [`usage`]: tokens and cost per agent, from each turn's `result` event
@@ -97,6 +98,7 @@ pub mod store;
 pub mod stream;
 pub mod takeover;
 pub mod task;
+pub mod team_setup;
 pub mod templates;
 pub mod tray;
 pub mod usage;

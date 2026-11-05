@@ -119,6 +119,12 @@ fn subscribe(app: &AppHandle, c: &Arc<Companion>) {
             }
         });
     });
+    // "Setting up your team" changed: the phone re-reads its card on the
+    // registry event it already follows, so the desk's change is one.
+    let relay = app.clone();
+    app.listen_any(crate::agents::team_setup::EVENT, move |_| {
+        let _ = relay.emit(runner::EVENT_REGISTRY, ());
+    });
     let hub = c.clone();
     let pending = Arc::new(AtomicBool::new(false));
     app.listen_any(runner::EVENT_REGISTRY, move |_| {
@@ -626,6 +632,35 @@ impl Backend for DesktopBackend {
             request_id.to_string(),
         )
         .await
+    }
+
+    async fn team_setup(
+        &self,
+        action: super::router::TeamSetupAction,
+    ) -> Result<Value, CommandError> {
+        use super::router::TeamSetupAction as A;
+        let app = self.app.clone();
+        match action {
+            A::Get { any } => json(cmd::agents_team_setup(Some(any)).await?),
+            A::Step { step, state } => {
+                cmd::agents_team_setup_step(app, step, state).await?;
+                Ok(Value::Null)
+            }
+            A::Routine {
+                agent_id,
+                check_in_id,
+                on,
+            } => {
+                cmd::agents_team_setup_routine(app, agent_id, check_in_id, on).await?;
+                Ok(Value::Null)
+            }
+            A::Hello { agent_id } => json(cmd::agents_team_setup_hello(app, agent_id).await?),
+            A::Missing => json(cmd::agents_team_setup_missing(app).await?),
+            A::Dismiss => {
+                cmd::agents_team_setup_dismiss(app).await?;
+                Ok(Value::Null)
+            }
+        }
     }
 
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError> {

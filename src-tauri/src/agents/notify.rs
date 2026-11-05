@@ -394,6 +394,7 @@ mod tests {
             secret: None,
             connector: None,
             login: None,
+            set_aside: None,
         });
         message
     }
