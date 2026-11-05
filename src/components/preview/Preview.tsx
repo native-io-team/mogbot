@@ -108,6 +108,7 @@ import type { ProjectType } from '../../lib/static-server';
 import type { DevServerUnexpectedExit } from '../../hooks/useDevServer';
 import { isEditorFramework, resolveEditorMode } from '../../lib/editorGate';
 import { Tooltip } from '../primitives/Tooltip';
+import { BRAND } from '../../lib/brand';
 
 const BreakpointIcon = ({ type }: { type: Breakpoint }) => {
   if (type === 'full') return <FullBreakpointIcon />;
@@ -1257,7 +1258,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
       if (reason === 'blank-iframe') {
         prompt =
           `My project's dev server on http://localhost:${port} is up and responding, but ` +
-          `the page renders BLANK inside Ship Studio's embedded preview iframe. It may ` +
+          `the page renders BLANK inside ${BRAND.name}'s embedded preview iframe. It may ` +
           `still load fine in a regular browser tab — the failure is specific to being ` +
           `framed.\n\n` +
           (logs ? `Recent dev-server output:\n\n\`\`\`\n${logs}\n\`\`\`\n\n` : '') +
@@ -1274,17 +1275,17 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
           `Please find the cause and fix it so the page renders inside an iframe.`;
       } else if (isStaticProject) {
         prompt =
-          `My site preview isn't loading. Ship Studio is serving this project as static ` +
+          `My site preview isn't loading. ${BRAND.name} is serving this project as static ` +
           `files on http://localhost:${port} but nothing shows up. Please check the project ` +
           `has an index.html at its root (and any files it references) so the preview renders.`;
       } else if (serverProcessGone) {
         // The process demonstrably died out from under us — usually an agent
         // killed the port or crashed the build. Steer the agent AWAY from
         // spawning its own dev server: a second unmanaged server fighting
-        // Ship Studio's is exactly what breaks multi-agent workflows (#161).
+        // the app's is exactly what breaks multi-agent workflows (#161).
         const exitCode = devServerUnexpectedExit?.exitCode;
         prompt =
-          `Ship Studio runs and manages this project's dev server itself on port ${port}, ` +
+          `${BRAND.name} runs and manages this project's dev server itself on port ${port}, ` +
           `but the dev-server process just stopped unexpectedly` +
           `${typeof exitCode === 'number' ? ` (exit code ${exitCode})` : ''}.\n\n` +
           (logs
@@ -1293,12 +1294,12 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
           `Please find and fix the underlying cause (a crash, a broken build, a corrupted ` +
           `cache, something killing the process). IMPORTANT: do NOT start your own dev ` +
           `server (no \`npm run dev\` or similar) and do NOT kill or free port ${port} — ` +
-          `Ship Studio owns the dev server and I will restart it from the preview once ` +
+          `${BRAND.name} owns the dev server and I will restart it from the preview once ` +
           `the cause is fixed. If another process is already listening on port ${port}, ` +
           `tell me instead of killing it.`;
       } else {
         prompt =
-          `My dev server isn't coming up — Ship Studio is waiting on ` +
+          `My dev server isn't coming up — ${BRAND.name} is waiting on ` +
           `http://localhost:${port} but it never responds.\n\n` +
           (logs
             ? `Recent dev-server output:\n\n\`\`\`\n${logs}\n\`\`\`\n\n`
@@ -1306,7 +1307,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
           `Please work out why it won't start — a busy port, a crash, a missing ` +
           `dependency, or a wrong or missing dev script — and fix the cause. ` +
           `IMPORTANT: do NOT start a dev server yourself and do NOT kill or free ` +
-          `port ${port} — Ship Studio starts and manages the dev server on that port ` +
+          `port ${port} — ${BRAND.name} starts and manages the dev server on that port ` +
           `itself, and a second unmanaged server will fight it.`;
       }
       onSendToClaude(prompt);

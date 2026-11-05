@@ -105,7 +105,7 @@ export function ProjectSettingsModal({
     <ModalFrame
       isOpen
       onClose={onClose}
-      title="Project Settings"
+      title="Project settings"
       className="project-settings-content settings-form-content"
     >
       <>

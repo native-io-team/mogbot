@@ -16,7 +16,7 @@ export function FolderBreadcrumb({ folderName, onBack }: FolderBreadcrumbProps) 
     <div className="folder-breadcrumb">
       <button className="folder-breadcrumb-back text-style-control" onClick={onBack}>
         <ArrowLeftIcon size={14} />
-        All Projects
+        All projects
       </button>
       <span className="folder-breadcrumb-separator text-style-control">/</span>
       <span className="folder-breadcrumb-current text-style-h4">{folderName}</span>

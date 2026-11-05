@@ -30,7 +30,7 @@ export function Step1AccountSelection({
     <div className="create-modal-content">
       <div className="create-modal-header">
         <div>
-          <h2>Import Project</h2>
+          <h2>Import project</h2>
           <p>Select a GitHub account</p>
         </div>
         <button
@@ -79,7 +79,7 @@ export function Step1AccountSelection({
             <CollaboratorsIcon size={16} />
           </div>
           <div className="import-owner-info">
-            <span className="import-owner-name">Collaborator Access</span>
+            <span className="import-owner-name">Collaborator access</span>
             <span className="import-owner-type">Repos shared with you</span>
           </div>
         </button>

@@ -200,7 +200,7 @@ export function UpdateBanner() {
       logger.warn('[UpdateBanner] Restart failed', { error: detail });
       trackError('app_restart', err, 'Project Sidebar');
       setStatus('error');
-      setError(`Couldn't restart the app: ${detail}. Please quit and reopen Ship Studio manually.`);
+      setError(`Couldn't restart the app: ${detail}. Please quit and reopen the app manually.`);
     }
   }, []);
 
@@ -295,7 +295,7 @@ export function UpdateBanner() {
                   ? `Downloading version ${version}`
                   : status === 'error'
                     ? `Retry update to version ${version}`
-                    : `Update Ship Studio to version ${version}`
+                    : `Update to version ${version}`
             }
           >
             <span className="update-indicator-icon" aria-hidden="true">
@@ -352,7 +352,7 @@ export function UpdateBanner() {
       <ModalFrame
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={`What's New in v${version}`}
+        title={`What's new in v${version}`}
         className="update-details-modal"
         dismissable={status !== 'downloading'}
         showCloseButton={status !== 'downloading'}

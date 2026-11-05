@@ -59,7 +59,7 @@ interface ProjectsViewProps {
   pinnedSet?: ReadonlySet<string>;
   /** Toggle pin state for a project. */
   onTogglePin?: (projectPath: string, pinned: boolean) => void;
-  /** Open the workspace switcher (chip beside "All Projects"). */
+  /** Open the workspace switcher (chip beside "All projects"). */
   onSwitchAccount?: () => void;
 }
 

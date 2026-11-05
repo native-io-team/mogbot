@@ -25,16 +25,14 @@ vi.mock('../icons', () => ({
   PlusIcon: () => null,
   PullIcon: () => null,
   SearchIcon: () => null,
-  EyeOffIcon: () => null,
 }));
 
-import { DashboardHeader } from './DashboardHeader';
 import { DashboardSearch } from './DashboardSearch';
 import { SearchAndSort } from './SearchAndSort';
 
 function renderSearchAndSort(overrides: Partial<React.ComponentProps<typeof SearchAndSort>> = {}) {
   const props: React.ComponentProps<typeof SearchAndSort> = {
-    title: 'All Projects',
+    title: 'All projects',
     totalCount: 8,
     sortBy: 'last_opened',
     viewMode: 'grid' as ProjectViewMode,
@@ -57,22 +55,6 @@ describe('dashboard home layout pieces', () => {
     mocks.trackEvent.mockReset();
   });
 
-  it('renders a neutral headline with no logo', () => {
-    render(<DashboardHeader />);
-
-    expect(screen.queryByRole('img')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'What are we working on?' })).toBeInTheDocument();
-  });
-
-  it('routes the home screen header hide action', () => {
-    const onHide = vi.fn();
-    render(<DashboardHeader onHide={onHide} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Hide home screen header' }));
-
-    expect(onHide).toHaveBeenCalledOnce();
-  });
-
   it('opens the command palette from the standalone search', () => {
     render(<DashboardSearch />);
 
@@ -88,9 +70,9 @@ describe('dashboard home layout pieces', () => {
     expect(screen.getByText('8')).toBeInTheDocument();
     expect(screen.queryByText('(8)')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Project' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
-    fireEvent.click(screen.getByRole('button', { name: 'New Folder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New folder' }));
 
     expect(props.onCreateProject).toHaveBeenCalledOnce();
     expect(props.onImportProject).toHaveBeenCalledOnce();

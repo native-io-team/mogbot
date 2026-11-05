@@ -340,7 +340,7 @@ export function useAppCommands({
       },
       {
         id: 'app.quit',
-        title: 'Quit Ship Studio…',
+        title: 'Quit…',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
         keywords: ['exit', 'close', 'shut down'],
@@ -385,7 +385,7 @@ export function useAppCommands({
       },
       {
         id: 'companion.install',
-        title: 'Install Ship Studio on my iPhone or Android…',
+        title: 'Install the app on my iPhone or Android…',
         icon: <MobileIcon size={14} />,
         category: 'settings',
         when: () => COMPANION_INSTALL_ENABLED,

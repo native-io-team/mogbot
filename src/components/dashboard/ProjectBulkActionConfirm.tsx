@@ -50,7 +50,7 @@ export function ProjectBulkActionConfirm<T extends DashboardProject>({
       hint={
         isDelete
           ? `${selection} will be removed from disk. This cannot be undone.`
-          : `${selection} will stay on this computer and can be added again later with Import Project, Local Folder.`
+          : `${selection} will stay on this computer and can be added again later with Import project, Local folder.`
       }
       loading={loading}
       confirmLabel={isDelete ? 'Delete files' : 'Remove from projects'}

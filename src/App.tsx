@@ -92,7 +92,7 @@ try {
   logger.init();
   void trackEvent('app_launched', { $screen_name: 'Dashboard' });
 } catch (err) {
-  console.error('[Ship Studio] Module-scope init failed', err);
+  console.error('[app] Module-scope init failed', err);
 }
 
 /** Props for the App component */

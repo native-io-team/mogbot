@@ -33,12 +33,12 @@ export const educationContent: Record<string, EducationItem> = {
     description: `Quickly find any project by name. Press ${kbd('mod', 'K')} to jump straight to search from anywhere on this screen.`,
   },
   'import-button': {
-    title: 'Import Project',
+    title: 'Import project',
     description:
       'Bring in an existing project from GitHub. Your code will be downloaded so you can start working on it right away.',
   },
   'new-project-button': {
-    title: 'New Project',
+    title: 'New project',
     description:
       'Create a brand new website project. Choose from starter templates or start from scratch.',
   },
@@ -48,7 +48,7 @@ export const educationContent: Record<string, EducationItem> = {
       'Change how your projects are ordered — by when you last worked on them or by name.',
   },
   'new-folder-button': {
-    title: 'New Folder',
+    title: 'New folder',
     description:
       'Organize your projects into folders. Drag or move projects into folders to keep things tidy.',
   },
@@ -63,14 +63,9 @@ export const educationContent: Record<string, EducationItem> = {
       'The tools installed once on your machine and shared by every workspace — Homebrew, Node, Git, and the agent CLIs. Click to expand and check what is installed.',
   },
   'changelog-sidebar': {
-    title: "What's New",
+    title: "What's new",
     description:
       'See the latest updates and improvements. Click any version to install it if you want to try it.',
-  },
-  'github-calendar': {
-    title: 'Activity Calendar',
-    description:
-      "Your GitHub contribution history at a glance. Shows how active you've been over the past year.",
   },
   'slack-cta': {
     title: 'Community',
@@ -117,7 +112,7 @@ export const educationContent: Record<string, EducationItem> = {
   },
 
   'project-settings-button': {
-    title: 'Project Settings',
+    title: 'Project settings',
     description:
       'Configure settings specific to this project, like the dev server command and other project-level preferences.',
   },

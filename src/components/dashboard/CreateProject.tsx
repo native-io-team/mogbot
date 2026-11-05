@@ -290,7 +290,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
         <div className="create-modal-content">
           <div className="create-modal-header">
             <div>
-              <h2>New Project</h2>
+              <h2>New project</h2>
               <p>Select a starting point</p>
             </div>
             <button className="create-modal-close" onClick={onCancel} type="button">
@@ -301,10 +301,10 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
           <Tabs value={activeTab} onValueChange={(next) => setActiveTab(next as typeof activeTab)}>
             <TabsList className="create-tabs" variant="stretch" aria-label="Project source">
               <TabsTab value="scratch" className="create-tab">
-                Start from Scratch
+                Start from scratch
               </TabsTab>
               <TabsTab value="template" className="create-tab">
-                Start from Template
+                Start from template
               </TabsTab>
               <TabsTab value="url" className="create-tab">
                 From a URL
@@ -465,7 +465,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
       <div className="create-modal-content">
         <div className="create-modal-header">
           <div>
-            <h2>New Project</h2>
+            <h2>New project</h2>
             <p className="template-context">
               Using{' '}
               <strong>
@@ -489,7 +489,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
           }}
         >
           <label>
-            Project Name
+            Project name
             <input
               type="text"
               value={projectName}
@@ -515,7 +515,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
               Back
             </Button>
             <Button variant="primary" type="submit">
-              Create Project
+              Create project
             </Button>
           </div>
         </form>

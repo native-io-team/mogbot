@@ -6,10 +6,6 @@ import type { InboxItem } from '../../lib/workflows';
 import { peekHandoff, clearHandoff } from '../../lib/workflowHandoff';
 import * as store from '../../lib/workflowsStore';
 
-vi.mock('../../hooks/useDashboardVisibility', () => ({
-  useDashboardVisibility: () => ({ dashboardHeaderHidden: true, hideDashboardHeader: vi.fn() }),
-}));
-
 vi.mock('../dashboard/DashboardSearch', () => ({
   DashboardSearch: () => <div data-testid="search" />,
 }));

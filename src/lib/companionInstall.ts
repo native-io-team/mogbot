@@ -326,8 +326,8 @@ const sh = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 /**
  * The git repo the phone app is built from (`links.companionSource` in
- * brand.json) — this app's own, never Ship Studio's, or the phone would get
- * Ship Studio's companion. Null: release builds can't fetch the source, so
+ * brand.json) — this app's own, never the old app's, or the phone would get
+ * the wrong companion. Null: release builds can't fetch the source, so
  * the install flow is hidden. Dev builds build from this checkout's mobile/.
  */
 const REPO = BRAND_LINKS.companionSource;

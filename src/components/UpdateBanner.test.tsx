@@ -104,7 +104,7 @@ A second paragraph mentioning \`pages/\` and a [link](https://example.com).`;
       await screen.findByRole('button', { name: "View what's new in version 0.18.7" })
     );
 
-    const dialog = screen.getByRole('dialog', { name: "What's New in v0.18.7" });
+    const dialog = screen.getByRole('dialog', { name: "What's new in v0.18.7" });
     expect(
       within(dialog).getByRole('heading', { name: 'Visual editor breakthroughs' })
     ).toBeVisible();
@@ -124,12 +124,12 @@ A second paragraph mentioning \`pages/\` and a [link](https://example.com).`;
     const user = userEvent.setup();
     render(<UpdateBanner />);
 
-    await screen.findByRole('button', { name: 'Update Ship Studio to version 0.18.0' });
+    await screen.findByRole('button', { name: 'Update to version 0.18.0' });
     await user.click(screen.getByRole('button', { name: "View what's new in version 0.18.0" }));
 
     expect(downloadAndInstall).not.toHaveBeenCalled();
 
-    const dialog = screen.getByRole('dialog', { name: "What's New in v0.18.0" });
+    const dialog = screen.getByRole('dialog', { name: "What's new in v0.18.0" });
     expect(within(dialog).getByRole('heading', { name: 'Faster previews' })).toBeVisible();
     expect(within(dialog).getByText('Preview startup now avoids duplicate work.')).toBeVisible();
     expect(within(dialog).getByRole('button', { name: 'Later' })).toBeVisible();
@@ -157,9 +157,7 @@ A second paragraph mentioning \`pages/\` and a [link](https://example.com).`;
     const user = userEvent.setup();
     const { container } = render(<UpdateBanner />);
 
-    await user.click(
-      await screen.findByRole('button', { name: 'Update Ship Studio to version 0.18.0' })
-    );
+    await user.click(await screen.findByRole('button', { name: 'Update to version 0.18.0' }));
 
     expect(await screen.findByText('Downloading…')).toBeVisible();
     expect(screen.getByLabelText('37% downloaded')).toHaveTextContent('37%');
@@ -186,9 +184,7 @@ A second paragraph mentioning \`pages/\` and a [link](https://example.com).`;
 
     const user = userEvent.setup();
     render(<UpdateBanner />);
-    await user.click(
-      await screen.findByRole('button', { name: 'Update Ship Studio to version 0.18.0' })
-    );
+    await user.click(await screen.findByRole('button', { name: 'Update to version 0.18.0' }));
     await user.click(
       await screen.findByRole('button', { name: 'Restart to apply version 0.18.0' })
     );

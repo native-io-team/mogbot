@@ -100,8 +100,8 @@ export const appScenarios: Scenario[] = [
     startOn: 'projects',
     title: 'Dashboard — Preferences menu',
     looksRightWhen:
-      "The Preferences row opens a compact menu with App Settings, Report Bug, Feature Request, and What's New; the bug row uses the shared BugReportIcon.",
-    openSelector: '[data-education-id="settings-button"]',
+      'The Preferences row opens a compact menu. With no issue tracker or changelog configured in brand.json (the default), App settings is its only row; Report a bug, Request a feature and What’s new appear only when those links exist.',
+    openSelector: '[data-settings-menu-trigger="dashboard"]',
     requires: '.ss-dropdown__menu.settings-menu',
     clipSelector: '.ss-dropdown__menu.settings-menu',
     commands: {},
@@ -110,7 +110,7 @@ export const appScenarios: Scenario[] = [
     id: 'workspace-settings-menu',
     title: 'Workspace — Settings menu',
     looksRightWhen:
-      "The bottom-left Settings & Help control opens the same compact menu with App Settings, Report Bug, Feature Request, and What's New; the bug row uses the shared BugReportIcon.",
+      'The bottom-left Settings & Help control opens the same compact menu: App settings only by default, with Report a bug, Request a feature and What’s new appearing only when brand.json configures them.',
     project: WORKSPACE_PROJECT,
     openSelector: '[aria-label="Settings & Help"]',
     requires: '.ss-dropdown__menu.settings-menu',
@@ -212,14 +212,6 @@ export const appScenarios: Scenario[] = [
         ...projects,
       ],
     },
-  },
-  {
-    id: 'dashboard-calendar',
-    startOn: 'projects',
-    title: 'Dashboard — with the GitHub contributions calendar',
-    looksRightWhen:
-      'The calendar sits in the dashboard without pushing anything off-screen. Note: it fetches GitHub directly, so under the hermetic capture run it renders its failed/empty state and may differ between runs.',
-    commands: { get_calendar_hidden: false },
   },
   {
     id: 'onboarding-fresh',

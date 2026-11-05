@@ -111,7 +111,7 @@ export function ProjectTableView<TProject extends DashboardProject>({
           className="project-table-heading project-table-last-opened-heading"
           role="columnheader"
         >
-          Last Opened
+          Last opened
         </span>
         <span
           className="project-table-heading project-table-actions-heading"

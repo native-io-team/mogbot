@@ -89,7 +89,7 @@ window.__harness = {
   steps: stepLog,
 };
 
-document.title = `Ship Studio harness — ${scenario.id}`;
+document.title = `Harness — ${scenario.id}`;
 
 if (scenario.root === 'quick-entry') document.documentElement.dataset.window = 'quick-entry';
 

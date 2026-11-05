@@ -104,7 +104,7 @@ export function MoveFolderModal({
     <ModalFrame
       isOpen={isOpen}
       onClose={onClose}
-      title="Move to Folder"
+      title="Move to folder"
       className="move-folder-modal"
       dismissable={!selecting}
     >
@@ -125,7 +125,7 @@ export function MoveFolderModal({
               onClick={() => void handleSelect(null)}
               disabled={selecting || currentFolderId === null}
             >
-              <span className="move-folder-item-name">No Folder (Root)</span>
+              <span className="move-folder-item-name">No folder</span>
               {currentFolderId === null && <CheckIcon size={16} />}
             </button>
 
@@ -180,7 +180,7 @@ export function MoveFolderModal({
                 disabled={selecting}
               >
                 <PlusIcon size={16} />
-                <span className="move-folder-item-name">New Folder</span>
+                <span className="move-folder-item-name">New folder</span>
               </button>
             )}
           </div>

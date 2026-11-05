@@ -27,43 +27,6 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 
-/**
- * TODO(brand): temporary. These files are being rewritten on branches that
- * have not merged yet (accent/colour, agents-first onboarding); editing them
- * here would only conflict. Remove each entry once its branch lands and the
- * file is clean — the check reports entries that no longer need to be here.
- */
-const PENDING_ALLOWLIST = new Set([
-  'public/ship_studio_full.png',
-  'src/App.tsx',
-  'src/commands/useAppCommands.tsx',
-  'src/components/BootLoadingScreen.tsx',
-  'src/components/UpdateBanner.tsx',
-  'src/components/agents/AgentsStayOn.tsx',
-  'src/components/code/CodeViewer.tsx',
-  'src/components/dashboard/ProjectList.tsx',
-  'src/components/dashboard/SettingsModal.tsx',
-  'src/components/issue-reports/IssueReportModals.tsx',
-  'src/components/preview/Preview.tsx',
-  'src/components/setup/OnboardingScreen.tsx',
-  'src/components/setup/agent-led/AgentOnboardingScreen.tsx',
-  'src/components/setup/agent-led/DemoAgentTerminal.tsx',
-  'src/components/setup/agent-led/GuidedSetupPhase.tsx',
-  'src/components/setup/agent-led/SetupChecklist.tsx',
-  'src/harness/main.tsx',
-  'src/harness/scenarios/agents.ts',
-  'src/harness/scenarios/agentsProject.ts',
-  'src/harness/scenarios/base.ts',
-  'src/harness/scenarios/phoneInstall.ts',
-  'src/harness/scenarios/remote.ts',
-  'src/harness/scenarios/team.ts',
-  'src/lib/agentOnboarding.ts',
-  'src/lib/companionInstall.ts',
-  'src/lib/issueReports.ts',
-  'src/lib/plugins.ts',
-  'src/lib/setup.ts',
-]);
-
 const ALLOWED = [
   /OTHER_APP_NAME\s*=\s*(['"`])Ship ?Studio\1/g,
   /\.shipstudio(?:-team)?\b/gi,
@@ -133,7 +96,6 @@ function stripComments(src) {
 }
 
 const problems = [];
-const stillPending = new Set();
 
 for (const file of walk(join(root, 'src'))) {
   const path = rel(file);
@@ -142,10 +104,6 @@ for (const file of walk(join(root, 'src'))) {
   let text = stripComments(readFileSync(file, 'utf8'));
   for (const re of ALLOWED) text = text.replace(re, (m) => ' '.repeat(m.length));
   for (const m of text.matchAll(NAME)) {
-    if (PENDING_ALLOWLIST.has(path)) {
-      stillPending.add(path);
-      continue;
-    }
     const line = text.slice(0, m.index).split('\n').length;
     problems.push(`${path}:${line}: "${m[0].replace(/\s+/g, ' ')}"`);
   }
@@ -156,20 +114,8 @@ for (const dir of ['src', 'public']) {
     const path = rel(file);
     const base = path.split('/').pop();
     if (!FILE_NAME.test(base)) continue;
-    if (PENDING_ALLOWLIST.has(path)) {
-      stillPending.add(path);
-      continue;
-    }
     problems.push(`${path}: brand artwork/file named after the old app`);
   }
-}
-
-const stale = [...PENDING_ALLOWLIST].filter((p) => !stillPending.has(p));
-if (stale.length > 0) {
-  console.log(
-    '  (informational) clean now — remove from PENDING_ALLOWLIST in scripts/check-brand-copy.mjs:'
-  );
-  for (const p of stale) console.log(`    ${p}`);
 }
 
 if (problems.length > 0) {

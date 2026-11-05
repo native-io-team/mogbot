@@ -116,7 +116,7 @@ interface ProjectListProps {
   pinnedSet?: ReadonlySet<string>;
   /** Toggle pin state for a project. */
   onTogglePin?: (projectPath: string, pinned: boolean) => void | Promise<void>;
-  /** Open the workspace switcher (shown as a chip beside "All Projects"). */
+  /** Open the workspace switcher (shown as a chip beside "All projects"). */
   onSwitchAccount?: () => void;
 }
 
@@ -179,13 +179,7 @@ export function ProjectList({
   const changelogModal = useModal('changelog');
   const bugReportModal = useModal('bugReport');
   const featureRequestModal = useModal('featureRequest');
-  const {
-    slackCtaHidden,
-    hideSlackCta,
-    setDashboardHeaderHidden,
-    setCalendarHidden,
-    setSlackCtaHidden,
-  } = useDashboardVisibility();
+  const { slackCtaHidden, hideSlackCta, setSlackCtaHidden } = useDashboardVisibility();
 
   // Search and sort state
   // NOTE: search filtering now flows through the Cmd+K palette; this is kept
@@ -577,7 +571,7 @@ export function ProjectList({
           )}
 
           <SearchAndSort
-            title={currentFolderId ? 'Projects' : 'All Projects'}
+            title={currentFolderId ? 'Projects' : 'All projects'}
             totalCount={totalCount}
             sortBy={sortBy}
             viewMode={projectViewMode}
@@ -680,7 +674,7 @@ export function ProjectList({
           onClose={() => setRenamingFolder(null)}
           onCreate={handleRenameFolder}
           initialName={renamingFolder?.name || ''}
-          title="Rename Folder"
+          title="Rename folder"
           buttonLabel="Rename"
         />
 
@@ -729,13 +723,13 @@ export function ProjectList({
         {/* Delete Project Confirmation Modal */}
         {deleteConfirm && (
           <ProjectActionConfirmModal
-            title="Delete Files From Computer?"
+            title="Delete files from this computer?"
             body={
               <>
                 Permanently delete <strong>{deleteConfirm.name}</strong> from this computer?
               </>
             }
-            hint="This removes the local project folder and its files. Use Remove from Ship Studio if you only want to hide it from the app."
+            hint="This removes the local project folder and its files. Use Remove from projects if you only want to hide it from the app."
             loading={deleting}
             confirmLabel="Delete files"
             loadingLabel="Deleting..."
@@ -748,15 +742,15 @@ export function ProjectList({
         {/* Remove Project Confirmation Modal */}
         {removeConfirm && (
           <ProjectActionConfirmModal
-            title="Remove From Ship Studio?"
+            title="Remove from projects?"
             body={
               <>
-                Remove <strong>{removeConfirm.name}</strong> from Ship Studio?
+                Remove <strong>{removeConfirm.name}</strong> from your projects?
               </>
             }
-            hint="Your project folder and files will stay on this computer. You can add it back later with Import Project, Local Folder."
+            hint="Your project folder and files will stay on this computer. You can add it back later with Import project, Local folder."
             loading={removing}
-            confirmLabel="Remove from Ship Studio"
+            confirmLabel="Remove from projects"
             loadingLabel="Removing..."
             confirmVariant="primary"
             onCancel={() => setRemoveConfirm(null)}
@@ -767,7 +761,7 @@ export function ProjectList({
         {/* Delete Folder Confirmation Modal */}
         {deleteFolderConfirm && (
           <ProjectActionConfirmModal
-            title="Delete Folder?"
+            title="Delete folder?"
             body={
               <>
                 Delete the folder <strong>{deleteFolderConfirm.name}</strong>?
@@ -787,8 +781,6 @@ export function ProjectList({
         <SettingsModal
           isOpen={showSettings}
           onClose={() => setShowSettings(false)}
-          onDashboardHeaderHiddenChange={setDashboardHeaderHidden}
-          onCalendarHiddenChange={setCalendarHidden}
           onSlackCtaHiddenChange={setSlackCtaHidden}
           onProjectsRootChanged={() => void loadProjects()}
         />

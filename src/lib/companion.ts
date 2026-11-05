@@ -253,5 +253,4 @@ export const PUSH_COPY = {
     'Only a generic alert is sent, with no message, agent name or project. Apple or Google delivers it.',
   officialOnly:
     'Needs the official app from TestFlight or the App Store. A self-built app can’t receive push.',
-  unavailable: 'Not available in this build.',
 } as const;

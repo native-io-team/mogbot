@@ -2389,7 +2389,7 @@ function ProjectGroup({
         <ContextMenuContent aria-label={`Actions for ${row.fallbackName}`}>
           <ContextMenuItem onSelect={onOpenProjectSettings}>
             <SettingsIcon size={14} aria-hidden="true" />
-            <span>Project Settings</span>
+            <span>Project settings</span>
           </ContextMenuItem>
           <ContextMenuItem disabled={!onOpenRenameProject} onSelect={onOpenRenameProject}>
             <EditFieldIcon size={14} aria-hidden="true" />

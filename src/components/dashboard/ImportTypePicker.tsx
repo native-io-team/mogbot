@@ -26,14 +26,14 @@ export function ImportTypePicker({
   onClose,
 }: ImportTypePickerProps) {
   return (
-    <ModalFrame isOpen onClose={onClose} title="Import Project" className="import-picker-modal">
+    <ModalFrame isOpen onClose={onClose} title="Import project" className="import-picker-modal">
       <div className="import-picker-options">
         <button className="import-picker-card" onClick={onSelectGitHub}>
           <div className="import-picker-icon">
             <GitHubIcon size={28} />
           </div>
           <div className="import-picker-text">
-            <span className="import-picker-title">GitHub Repository</span>
+            <span className="import-picker-title">GitHub repository</span>
             <span className="import-picker-subtitle">Clone from GitHub</span>
           </div>
         </button>
@@ -42,7 +42,7 @@ export function ImportTypePicker({
             <FolderIcon size={28} />
           </div>
           <div className="import-picker-text">
-            <span className="import-picker-title">Local Folder</span>
+            <span className="import-picker-title">Local folder</span>
             <span className="import-picker-subtitle">
               Open an existing project from your computer
             </span>

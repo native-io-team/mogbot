@@ -94,7 +94,7 @@ export function SearchAndSort({
             data-education-id="new-project-button"
             onClick={onCreateProject}
           >
-            New Project
+            New project
           </Button>
 
           {onImportProject && (
@@ -126,8 +126,8 @@ export function SearchAndSort({
             className="new-folder-btn"
             data-education-id="new-folder-button"
             onClick={onNewFolder}
-            title="New Folder"
-            aria-label="New Folder"
+            title="New folder"
+            aria-label="New folder"
             icon={<FolderPlusIcon size={14} />}
           />
         </div>

@@ -100,7 +100,7 @@ export function Changelog({ className = '' }: ChangelogProps) {
   return (
     <div className={`changelog ${className}`} data-education-id="changelog-sidebar">
       <div className="changelog-header">
-        <h3>What's New</h3>
+        <h3>What's new</h3>
         <span className="changelog-subtitle">Recent updates</span>
       </div>
       <div className="changelog-list">
@@ -196,7 +196,7 @@ export function Changelog({ className = '' }: ChangelogProps) {
               )}
               {rewindStage === 'done' && (
                 <Button variant="primary" onClick={() => void handleRestart()}>
-                  Restart Now
+                  Restart now
                 </Button>
               )}
               {rewindStage === 'error' && (

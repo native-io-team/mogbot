@@ -26,33 +26,9 @@ export const KEEP_DEV_SERVERS_RUNNING_CHANGED_EVENT = 'keep-dev-servers-running-
 export const KEEP_DEV_SERVERS_RUNNING_LOCAL_CHANGED_EVENT =
   'shipstudio:keep-dev-servers-running-changed';
 
-/**
- * The app icons available for the macOS Dock. Both are PLACEHOLDERS
- * (scripts/generate-placeholder-icons.sh) until there is a real mark. The ids
- * are persisted, so "brand" stays the id of the default.
- */
-export const APP_ICON_OPTIONS = [
-  {
-    id: 'brand',
-    label: 'Dark',
-    src: '/app-icon-dark.png',
-  },
-  {
-    id: 'light',
-    label: 'Light',
-    src: '/app-icon-light.png',
-  },
-] as const;
-
-export type AppIcon = (typeof APP_ICON_OPTIONS)[number]['id'];
-
-function isAppIcon(value: string): value is AppIcon {
-  return APP_ICON_OPTIONS.some((option) => option.id === value);
-}
-
 /** Dashboard visibility preference changed by a settings control or inline action. */
 export interface DashboardVisibilityChangedDetail {
-  key: 'calendar' | 'slackCta' | 'dashboardHeader';
+  key: 'slackCta';
   hidden: boolean;
 }
 
@@ -62,29 +38,6 @@ function notifyDashboardVisibilityChanged(detail: DashboardVisibilityChangedDeta
       detail,
     })
   );
-}
-
-/**
- * Check if the GitHub contribution calendar is hidden on the dashboard.
- */
-export async function getCalendarHidden(): Promise<boolean> {
-  try {
-    return await invoke<boolean>('get_calendar_hidden');
-  } catch {
-    return false; // Default to visible
-  }
-}
-
-/**
- * Set whether the GitHub contribution calendar is hidden (persisted across sessions).
- */
-export async function setCalendarHidden(hidden: boolean): Promise<void> {
-  try {
-    await invoke('set_calendar_hidden', { hidden });
-    notifyDashboardVisibilityChanged({ key: 'calendar', hidden });
-  } catch {
-    // Silently fail
-  }
 }
 
 /**
@@ -108,40 +61,6 @@ export async function setSlackCtaHidden(hidden: boolean): Promise<void> {
   } catch {
     // Silently fail
   }
-}
-
-/** Check if the dashboard home header is hidden. */
-export async function getDashboardHeaderHidden(): Promise<boolean> {
-  try {
-    return await invoke<boolean>('get_dashboard_header_hidden');
-  } catch {
-    return false;
-  }
-}
-
-/** Set whether the dashboard home header is hidden (persisted across sessions). */
-export async function setDashboardHeaderHidden(hidden: boolean): Promise<void> {
-  try {
-    await invoke('set_dashboard_header_hidden', { hidden });
-    notifyDashboardVisibilityChanged({ key: 'dashboardHeader', hidden });
-  } catch {
-    // Silently fail
-  }
-}
-
-/** Get the persisted Dock icon choice. */
-export async function getAppIcon(): Promise<AppIcon> {
-  try {
-    const icon = await invoke<string>('get_app_icon');
-    return isAppIcon(icon) ? icon : 'brand';
-  } catch {
-    return 'brand';
-  }
-}
-
-/** Persist the Dock icon choice and update the native app icon immediately. */
-export async function setAppIcon(icon: AppIcon): Promise<void> {
-  await invoke('set_app_icon', { icon });
 }
 
 /**
@@ -415,7 +334,7 @@ export async function moveProjectsToRoot(from: string, to: string): Promise<Move
 }
 
 /** A Settings tab a command asked to land on, consumed when the modal opens. */
-export type SettingsTabRequest = 'general' | 'appearance' | 'experimental';
+export type SettingsTabRequest = 'general' | 'projects' | 'appearance' | 'experimental';
 let settingsTabOnOpen: SettingsTabRequest | null = null;
 
 /** Ask the next Settings open to show `tab` (e.g. ⌘K → "Accent color…"). */

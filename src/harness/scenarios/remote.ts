@@ -8,9 +8,10 @@
  */
 
 import type { Scenario } from '../types';
+import { BRAND } from '../../lib/brand';
 
 const DNS = 'studio-mac.tail1234.ts.net';
-const MASKED = `https://${DNS}/shipstudio/mcp/3f9c••••••••`;
+const MASKED = `https://${DNS}/${BRAND.slug}/mcp/3f9c••••••••`;
 const PROJECTS = [
   '/Users/harness/ShipStudio/acme-marketing',
   '/Users/harness/ShipStudio/client-portal',
@@ -193,9 +194,9 @@ export const remoteScenarios: Scenario[] = [
   ),
   remote(
     'remote-setup-5-retried',
-    'Remote access setup — still publishing, Ship Studio already asked Tailscale again',
+    'Remote access setup — still publishing, the app already asked Tailscale again',
     'The green "Remote access is on" bar with Turn off sits above the steps. Step 5 says it took ' +
-      'longer than usual and that Ship Studio asked Tailscale again, with the minutes so far and ' +
+      'longer than usual and that the app asked Tailscale again, with the minutes so far and ' +
       'an "Ask Tailscale again" button. This is the real first-run failure, now self-healing.',
     {
       ...ON,

@@ -5,14 +5,10 @@ import {
   DASHBOARD_VISIBILITY_CHANGED_EVENT,
   ELEMENT_BREADCRUMB_ENABLED_CHANGED_EVENT,
   KEEP_DEV_SERVERS_RUNNING_LOCAL_CHANGED_EVENT,
-  getAppIcon,
   getKeepDevServersRunning,
-  setCalendarHidden,
   setCompactWorkspaceToolbarEnabled,
-  setDashboardHeaderHidden,
   setElementBreadcrumbEnabled,
   setKeepDevServersRunning,
-  setAppIcon,
   setSlackCtaHidden,
 } from './settings';
 
@@ -28,24 +24,23 @@ describe('dashboard visibility settings', () => {
     invokeMock.mockResolvedValue(undefined);
   });
 
-  it.each([
-    ['calendar', 'set_calendar_hidden', setCalendarHidden],
-    ['slackCta', 'set_slack_cta_hidden', setSlackCtaHidden],
-    ['dashboardHeader', 'set_dashboard_header_hidden', setDashboardHeaderHidden],
-  ] as const)('notifies the home screen when %s is persisted', async (key, command, setter) => {
-    const listener = vi.fn();
-    window.addEventListener(DASHBOARD_VISIBILITY_CHANGED_EVENT, listener);
+  it.each([['slackCta', 'set_slack_cta_hidden', setSlackCtaHidden]] as const)(
+    'notifies the home screen when %s is persisted',
+    async (key, command, setter) => {
+      const listener = vi.fn();
+      window.addEventListener(DASHBOARD_VISIBILITY_CHANGED_EVENT, listener);
 
-    await setter(true);
+      await setter(true);
 
-    expect(invokeMock).toHaveBeenCalledWith(command, { hidden: true });
-    expect(listener).toHaveBeenCalledOnce();
-    expect(listener.mock.calls[0]?.[0]).toMatchObject({
-      detail: { key, hidden: true },
-    });
+      expect(invokeMock).toHaveBeenCalledWith(command, { hidden: true });
+      expect(listener).toHaveBeenCalledOnce();
+      expect(listener.mock.calls[0]?.[0]).toMatchObject({
+        detail: { key, hidden: true },
+      });
 
-    window.removeEventListener(DASHBOARD_VISIBILITY_CHANGED_EVENT, listener);
-  });
+      window.removeEventListener(DASHBOARD_VISIBILITY_CHANGED_EVENT, listener);
+    }
+  );
 });
 
 describe('workspace toolbar setting', () => {
@@ -91,34 +86,6 @@ describe('element breadcrumb setting', () => {
     expect(listener.mock.calls[0]?.[0]).toMatchObject({ detail: false });
 
     window.removeEventListener(ELEMENT_BREADCRUMB_ENABLED_CHANGED_EVENT, listener);
-  });
-});
-
-describe('app icon setting', () => {
-  const invokeMock = vi.mocked(invoke);
-
-  beforeEach(() => {
-    invokeMock.mockReset();
-    invokeMock.mockResolvedValue(undefined);
-  });
-
-  it('reads a valid persisted icon', async () => {
-    invokeMock.mockResolvedValueOnce('light');
-
-    await expect(getAppIcon()).resolves.toBe('light');
-    expect(invokeMock).toHaveBeenCalledWith('get_app_icon');
-  });
-
-  it('falls back to the brand icon for an unknown persisted value', async () => {
-    invokeMock.mockResolvedValueOnce('unknown');
-
-    await expect(getAppIcon()).resolves.toBe('brand');
-  });
-
-  it('persists the selected icon', async () => {
-    await setAppIcon('light');
-
-    expect(invokeMock).toHaveBeenCalledWith('set_app_icon', { icon: 'light' });
   });
 });
 
