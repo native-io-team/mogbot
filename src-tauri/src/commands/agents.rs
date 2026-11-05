@@ -118,7 +118,11 @@ pub async fn agents_with_projects() -> Result<Vec<AgentView>, CommandError> {
     blocking(|| {
         store::list()?
             .into_iter()
-            .filter(|a| a.project.is_some())
+            // Bound to a project, or with a turn working in one now
+            // (`agents::workplace`): the sidebar shows it there.
+            .filter(|a| {
+                a.project.is_some() || crate::agents::workplace::working_in(&a.id).is_some()
+            })
             .map(|agent| {
                 Ok(AgentView {
                     takeover: takeover::view(&agent.id),

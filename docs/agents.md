@@ -635,6 +635,31 @@ be confused with agent-to-agent `message_agent`:
   modal's activity list leaves those out.
 - **Bound agents** are still an option; sessions are the default.
 
+### Where it's working (`src-tauri/src/agents/workplace.rs`)
+
+An agent working in a codebase shows on the Projects side, whichever way it
+got there: its own commands (`cd ~/Desktop/Projects/site && npm run build`,
+`git -C …`, `--prefix`/`--cwd`/`--dir`), reading or editing files there, a
+project tool (`project`), or its binding. Each tool call's paths are walked up
+to the nearest folder with a `.git` **directory** (a `.git` file stops the
+walk); the home folder and above, a projects root, the app's own data and task
+copies (`.worktrees/`) never count. The folder rides on the live status as
+`TurnWork.project`, while the turn runs only.
+
+- **Registered and pinned once.** A repository the app doesn't list yet is
+  registered through `ensure_external_project_registered` (its "looks like a
+  project" check included) and pinned to the top of the sidebar the first time
+  it is found (`found-projects.json` beside the agents), so one the user
+  unpinned stays unpinned. `agents://project-found` re-reads pins and the list.
+- **Desk:** under the project's sidebar row, "Acme Site · Running the build"
+  (the working line's words, `atWorkText`); the row shows as working; an
+  unpinned project with an agent in it appears under Active. In the open
+  project, its Agents section lists agents at work there first. A line opens
+  the agent's chat.
+- **Phone:** the Projects tab lists the agent on that project's card with the
+  same words; those projects sort first after any waiting on a decision.
+- Agents' behaviour is unchanged: nothing here routes their work.
+
 ## What an agent can do (`src-tauri/src/agents/capabilities.rs`)
 
 Turns run with `--chrome`. Each turn's `system/init` lists the session's
