@@ -234,6 +234,8 @@ mod tests {
             client_id: None,
             work: None,
             fresh: false,
+            result: None,
+            revises: None,
             takeover: false,
         })
         .unwrap();
@@ -307,6 +309,8 @@ mod tests {
                 client_id: None,
                 work: None,
                 fresh: false,
+                result: None,
+                revises: None,
                 takeover: false,
             })
             .unwrap();
@@ -375,6 +379,8 @@ mod tests {
             client_id: None,
             work: None,
             fresh: false,
+            result: None,
+            revises: None,
             takeover: false,
         };
         assert!(match_message(&message, &terms("müller")).is_some());

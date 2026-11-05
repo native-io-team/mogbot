@@ -875,6 +875,136 @@ export const agentsMessages = {
           }
         ]
       }
+    },
+    {
+      "agentId": "a1",
+      "attachments": [
+        {
+          "mime": "application/pdf",
+          "name": "october-invoices.pdf",
+          "path": "attachments/m26/october-invoices.pdf",
+          "size": 48211
+        }
+      ],
+      "id": "m26",
+      "kind": "agent",
+      "result": {
+        "checked": [
+          "Totals match the bank export"
+        ],
+        "id": "res-oct",
+        "items": [
+          {
+            "file": {
+              "mime": "application/pdf",
+              "name": "october-invoices.pdf",
+              "path": "attachments/m26/october-invoices.pdf",
+              "size": 48211
+            },
+            "kind": "file",
+            "label": "Summary"
+          },
+          {
+            "kind": "link",
+            "label": "Source sheet",
+            "url": "https://docs.example.com/sheets/october"
+          }
+        ],
+        "notVerified": [
+          "Two EUR invoices use today's rate, not the invoice date's"
+        ],
+        "summary": "One page with every October invoice, grouped by client.",
+        "title": "October invoice summary",
+        "version": 1
+      },
+      "text": "One page with every October invoice, grouped by client.",
+      "ts": 1762290026000
+    },
+    {
+      "agentId": "a1",
+      "id": "m27",
+      "kind": "user",
+      "revises": {
+        "id": "res-oct",
+        "title": "October invoice summary",
+        "version": 1
+      },
+      "text": "Use the rate on each invoice's date",
+      "ts": 1762290027000
+    },
+    {
+      "agentId": "a1",
+      "attachments": [
+        {
+          "mime": "image/png",
+          "name": "before.png",
+          "path": "attachments/m28/before.png",
+          "size": 9000
+        },
+        {
+          "mime": "image/png",
+          "name": "after.png",
+          "path": "attachments/m28/after.png",
+          "size": 9100
+        }
+      ],
+      "changes": {
+        "added": 4,
+        "copy": {
+          "branch": "finance/invoice-totals-ab12",
+          "id": "copy-1",
+          "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12"
+        },
+        "fileCount": 1,
+        "files": [
+          {
+            "added": 4,
+            "path": "src/invoices.ts",
+            "removed": 2,
+            "status": "modified"
+          }
+        ],
+        "from": "abc123",
+        "project": "/Users/julian/ShipStudio/site",
+        "removed": 2,
+        "to": "fed321"
+      },
+      "id": "m28",
+      "kind": "changes",
+      "result": {
+        "changes": "EUR invoices use the rate on each invoice's date",
+        "checked": [
+          "Recomputed both EUR totals"
+        ],
+        "id": "res-oct",
+        "items": [
+          {
+            "file": {
+              "mime": "image/png",
+              "name": "before.png",
+              "path": "attachments/m28/before.png",
+              "size": 9000
+            },
+            "kind": "file",
+            "role": "before"
+          },
+          {
+            "file": {
+              "mime": "image/png",
+              "name": "after.png",
+              "path": "attachments/m28/after.png",
+              "size": 9100
+            },
+            "kind": "file",
+            "role": "after"
+          }
+        ],
+        "summary": "EUR invoices now use the rate on each invoice's date.",
+        "title": "October invoice summary",
+        "version": 2
+      },
+      "text": "Changed 1 file in a copy of site",
+      "ts": 1762290028000
     }
   ],
   "more": false
@@ -946,6 +1076,15 @@ export const agentsMemoryChange = {
 export const agentsMemorySuggest = "Invoices over $5k need my OK first." satisfies Result<'agents.memorySuggest'>;
 export const agentsFiles = [
   {
+    "from": "agent",
+    "messageId": "m26",
+    "mime": "application/pdf",
+    "name": "october-invoices.pdf",
+    "path": "attachments/m26/october-invoices.pdf",
+    "size": 48211,
+    "ts": 1762290026000
+  },
+  {
     "from": "user",
     "messageId": "m18",
     "mime": "image/png",
@@ -971,6 +1110,15 @@ export const agentsFetchPath = {
   "size": 4
 } satisfies Result<'agents.fetchPath'>;
 export const agentsSearch = [
+  {
+    "agentColor": "green",
+    "agentId": "a1",
+    "agentName": "Finance",
+    "kind": "changes",
+    "messageId": "m28",
+    "snippet": "Changed 1 file in a copy of site",
+    "ts": 1762290028000
+  },
   {
     "agentColor": "green",
     "agentId": "a1",
@@ -1576,7 +1724,10 @@ export const frames = [
     "identity": {
       "publicKey": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
       "signature": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
-    }
+    },
+    "features": [
+      "results.revise"
+    ]
   },
   {
     "t": "refused",

@@ -125,7 +125,15 @@ audited. `agents.fetchPath` copies at most 25 MB even if the file grows.
 `router::METHODS` is what the Mac serves and lists in `welcome.methods`; the
 phone hides anything not listed (`canCall`), so an older Mac just shows less.
 `welcome.timeZone` (optional) is the Mac's IANA zone, the clock routines are
-read on (see "Routines" below).
+read on (see "Routines" below). `welcome.features` (optional, `MAC_FEATURES`)
+says what the Mac does beyond its methods: `results.revise` means
+`agents.send` takes `revises`, so the phone offers **Ask for changes** on a
+result card only then. The card itself (`message.result`, see
+[agents.md](agents.md), "Result cards") is drawn by every phone that knows
+it (`components/result.tsx`): title, summary, Not verified, before/after,
+files (the chat's own attachment tiles), links (http/https only), Checked;
+older versions fold to a line. On a copy's live card Keep / Discard sit
+inside it.
 
 - `system.status`, `devices.self|unpairSelf|setPush`
 - `agents.overview|messages|send|stop|interrupt|answerApproval|focus|markUnread`

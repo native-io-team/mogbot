@@ -48,6 +48,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccent } from '../lib/accent';
 import { DRIVEN_LINE, drivenHint, needsYou, waitingOnMac } from '../lib/agents';
+import { RevisingChip } from './result';
 import { mentionQuery, sendMode, takeDraft } from '../lib/composer';
 import {
   addFile,
@@ -266,10 +267,12 @@ export function Composer({
     clearComposer(agent.id);
     setStaged([]);
     onSent();
-    send(agent.id, body, now && connected, undefined, files, mentions).catch((error: unknown) => {
-      haptic.error();
-      onError(describeError(error));
-    });
+    send(agent.id, body, now && connected, undefined, files, mentions, draft.revising).catch(
+      (error: unknown) => {
+        haptic.error();
+        onError(describeError(error));
+      }
+    );
   };
 
   const stopTurn = () => {
@@ -364,6 +367,12 @@ export function Composer({
             </Pressable>
           )}
         </Animated.View>
+      )}
+      {draft.revising && (
+        <RevisingChip
+          revising={draft.revising}
+          onRemove={() => setComposer(agent.id, { revising: undefined })}
+        />
       )}
       {draft.quotes.length > 0 && (
         <View style={styles.quotes}>

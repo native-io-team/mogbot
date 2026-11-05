@@ -10,6 +10,7 @@ import type {
   MethodName,
   Params,
   Result,
+  ResultRef,
 } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
@@ -296,7 +297,8 @@ export async function send(
   now = false,
   clientId?: string,
   attachments: PendingAttachment[] = [],
-  mentions: string[] = []
+  mentions: string[] = [],
+  revises?: ResultRef
 ) {
   const id = clientId ?? Crypto.randomUUID();
   const offline = getApp().link.kind !== 'connected';
@@ -312,6 +314,7 @@ export async function send(
         ...(offline ? { waiting: true } : {}),
         ...(attachments.length ? { attachments } : {}),
         ...(mentions.length ? { mentions } : {}),
+        ...(revises ? { revises } : {}),
       })
     );
   if (offline) return;
@@ -325,6 +328,7 @@ export async function send(
         ? { attachments: attachments.map((a) => ({ blobId: a.blobId })) }
         : {}),
       ...(mentions.length ? { mentions } : {}),
+      ...(revises ? { revises: revises.id } : {}),
     });
   } catch (error) {
     const retry = unreached(error);
@@ -349,7 +353,9 @@ async function flushOutbox() {
     for (const p of expire) update((s) => setPendingFailed(s, p.agentId, p.clientId, true));
     for (const p of flush) {
       if (getApp().link.kind !== 'connected') break;
-      await send(p.agentId, p.text, false, p.clientId, p.attachments, p.mentions).catch(() => {});
+      await send(p.agentId, p.text, false, p.clientId, p.attachments, p.mentions, p.revises).catch(
+        () => {}
+      );
     }
   } finally {
     flushing = false;

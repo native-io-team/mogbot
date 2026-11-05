@@ -88,6 +88,11 @@ export interface Methods {
       clientId: string;
       attachments?: { blobId: string }[];
       mentions?: string[];
+      /**
+       * "Ask for changes": the id of the result this message asks to revise.
+       * Send only to a Mac whose `welcome.features` has `results.revise`.
+       */
+      revises?: string;
     };
     result: AgentMessage;
   };

@@ -217,6 +217,7 @@ fn frames() -> Vec<ServerFrame> {
             public_key: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo".into(),
             signature: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345".into(),
         }),
+        features: super::wire::MAC_FEATURES.to_vec(),
     }];
     for (reason, message) in [
         (

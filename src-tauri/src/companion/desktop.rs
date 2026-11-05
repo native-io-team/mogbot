@@ -235,6 +235,7 @@ impl Backend for DesktopBackend {
                 attachments,
                 mentions,
                 extras.client_id,
+                extras.revises,
             )
             .await?,
         )

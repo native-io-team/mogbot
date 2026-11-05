@@ -1100,3 +1100,55 @@
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }
+
+/* The preview asked to send its error to the agent. This card is the gate: it
+   lives in the app above the iframe (which cannot draw over it) and nothing is
+   sent until the user clicks. See lib/previewErrorToAgent. */
+.preview-error-agent-chip {
+  position: absolute;
+  right: var(--spacing-md);
+  bottom: var(--spacing-md);
+  left: var(--spacing-md);
+  margin-left: auto;
+  max-width: var(--preview-error-copy-max-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-floating-panel);
+}
+
+.preview-error-agent-chip__title {
+  color: var(--text-primary);
+  font-size: var(--font-size-body-md);
+  font-weight: 600;
+}
+
+.preview-error-agent-chip__text {
+  margin: 0;
+  max-height: calc(var(--spacing-2xl) * 5);
+  overflow: auto;
+  padding: var(--spacing-sm);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.preview-error-agent-chip__hint {
+  color: var(--text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.preview-error-agent-chip__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}

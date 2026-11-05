@@ -228,6 +228,13 @@ fn tool_calls_read_as_plain_past_tense_words() {
         "Shared a file"
     );
     assert_eq!(
+        d(
+            &ours("share_result"),
+            json!({"title": "Secret plan", "summary": "x"})
+        ),
+        "Put together its result"
+    );
+    assert_eq!(
         d(&ours("schedule_check_in"), json!({})),
         "Scheduled a check-in"
     );
@@ -599,6 +606,45 @@ fn only_what_the_turn_said_is_an_anchor() {
     assert_eq!(anchor.id, "reply");
     assert_eq!(work.ended_at, Some(9));
     assert!(work.doing.is_none());
+}
+
+#[test]
+fn a_result_card_is_where_the_turn_ends() {
+    // Its own message is a reply: the timeline hangs under it.
+    let mut live = Live::default();
+    live.action(call("Read", "r", json!({"file_path": "/a.ts"})), 1);
+    live.message(&message(MessageKind::Agent, "reply"));
+    live.message(&message(MessageKind::Agent, "result"));
+    assert_eq!(settle(live, 9).unwrap().0.id, "result");
+
+    // Riding on the change card, the change card is the result; a plain
+    // change card never is.
+    let mut live = Live::default();
+    live.action(call("Read", "r", json!({"file_path": "/a.ts"})), 1);
+    live.message(&message(MessageKind::Agent, "reply"));
+    live.message(&message(MessageKind::Changes, "plain-changes"));
+    assert_eq!(settle(live, 9).unwrap().0.id, "reply");
+    let mut live = Live::default();
+    live.action(call("Read", "r", json!({"file_path": "/a.ts"})), 1);
+    live.message(&message(MessageKind::Agent, "reply"));
+    let mut card = message(MessageKind::Agent, "staged");
+    card.result = Some(super::super::results::ResultCard {
+        id: "r1".into(),
+        version: 1,
+        title: "t".into(),
+        summary: "s".into(),
+        items: Vec::new(),
+        checked: Vec::new(),
+        not_verified: Vec::new(),
+        changes: None,
+    });
+    let merged = super::super::results::ride_on(message(MessageKind::Changes, "c"), card);
+    assert_eq!(
+        (merged.id.as_str(), merged.kind),
+        ("staged", MessageKind::Changes)
+    );
+    live.message(&merged);
+    assert_eq!(settle(live, 9).unwrap().0.id, "staged");
 }
 
 #[test]

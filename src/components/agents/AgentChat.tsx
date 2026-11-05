@@ -76,6 +76,8 @@ import {
   WorkingIndicator,
 } from './AgentChatItems';
 import { AgentProjectChip, ChangeCard } from './AgentProject';
+import { ComposerRevising, ResultCardView } from './AgentResult';
+import { WorkTimeline } from './AgentWork';
 import { SessionCard } from './AgentSession';
 import {
   answerApproval,
@@ -85,6 +87,7 @@ import {
   newestPeerGroups,
   interruptAgent,
   isQueued,
+  retryExtras,
   retrySourceFor,
   resendable,
   retryNote,
@@ -94,6 +97,7 @@ import {
   plainActivity,
   approvalSeries,
   withQuotes,
+  newestResults,
   sendAgentMessage,
   sortAgents,
   stopAgent,
@@ -101,6 +105,7 @@ import {
   type AgentMessage,
   type AgentRef,
   type OutgoingAttachment,
+  type ResultRef,
   ENGINE_LABEL,
   engineCantAsk,
   engineIsReady,
@@ -184,6 +189,8 @@ interface Pending {
   files?: DraftAttachment[];
   /** A retry's files, already in the agent's home: sent again by path. */
   resend?: OutgoingAttachment[];
+  /** "Ask for changes": the result this message asks to revise. */
+  revises?: ResultRef;
 }
 
 function newPending(text: string, mentions: AgentRef[], extra: Partial<Pending> = {}): Pending {
@@ -388,6 +395,9 @@ export function AgentChat({
     []
   );
   const quoting = useQuoteSelection(scrollRef, sectionRef, insertQuote);
+  // "Ask for changes" on a result card: the next message revises it. It
+  // waits above the text like a quote, and goes with the send.
+  const [revising, setRevising] = useState<ResultRef | null>(null);
 
   useCommands(
     () => [
@@ -436,6 +446,7 @@ export function AgentChat({
         kind: 'user',
         text: p.text,
         mentions: p.mentions,
+        ...(p.revises ? { revises: p.revises } : {}),
       });
       if (p.failed) failed.add(p.key);
       else if (p.files) sending.set(p.key, p.files);
@@ -470,6 +481,8 @@ export function AgentChat({
     return null;
   }, [shown, copyId]);
   const copyAgent = liveCopyCard ? agent : undefined;
+  // Each result's newest version is drawn in full; older ones fold.
+  const newestResult = useMemo(() => new Set(newestResults(shown).values()), [shown]);
   /** Nothing yet but what the Chief said first: the user hasn't spoken. */
   const greetingOnly =
     agent.isMain &&
@@ -660,7 +673,13 @@ export function AgentChat({
   const deliver = async (entry: Pending, now = false) => {
     try {
       const ids = entry.mentions.map((m) => m.id);
-      const message = await sendAgentMessage(agent.id, entry.text, entry.resend, ids);
+      const message = await sendAgentMessage(
+        agent.id,
+        entry.text,
+        entry.resend,
+        ids,
+        entry.revises?.id
+      );
       setPending((list) => list.map((p) => (p.key === entry.key ? { ...p, id: message.id } : p)));
       upsertMessage(message);
       if (now) await interrupt();
@@ -681,12 +700,16 @@ export function AgentChat({
   ) => {
     atBottomRef.current = true;
     const text = withQuotes(quoted, typed);
-    const entry = newPending(text, mentionsIn(typed), { files });
+    const asked = revising;
+    const entry = newPending(text, mentionsIn(typed), {
+      files,
+      ...(asked ? { revises: asked } : {}),
+    });
     setPending((list) => [...list, entry]);
     try {
       const outgoing = await toOutgoing(files);
       const ids = entry.mentions.map((m) => m.id);
-      const message = await sendAgentMessage(agent.id, text, outgoing, ids);
+      const message = await sendAgentMessage(agent.id, text, outgoing, ids, asked?.id);
       setPending((list) =>
         list.map((p) => (p.key === entry.key ? { ...p, id: message.id, files: undefined } : p))
       );
@@ -696,6 +719,7 @@ export function AgentChat({
       setPending((list) => list.filter((p) => p.key !== entry.key));
       setDraft(typed);
       setQuotes(quoted);
+      setRevising(asked);
       attachments.setItems(files);
       showToast(formatCommandError(asCommandError(error)), 'error');
     }
@@ -718,10 +742,7 @@ export function AgentChat({
 
   const retryFailed = () => {
     if (!retrySource) return;
-    sendText(retrySource.text, false, {
-      mentions: retrySource.mentions ?? [],
-      resend: resendable(agent, retrySource),
-    });
+    sendText(retrySource.text, false, retryExtras(agent, retrySource));
   };
 
   /** "Retry at 3:00 PM": a one-time check-in at the reset, carrying what was asked and its files. */
@@ -751,13 +772,14 @@ export function AgentChat({
     const typed = draft.trim();
     setDraft('');
     setQuotes([]);
+    setRevising(null);
     if (staged.length > 0) {
       atBottomRef.current = true;
       attachments.setItems([]);
       void sendWithFiles(typed, quotes, staged, now && busy);
       return;
     }
-    sendText(withQuotes(quotes, typed), now && busy);
+    sendText(withQuotes(quotes, typed), now && busy, revising ? { revises: revising } : {});
   };
 
   // Stable, for the memoised rows.
@@ -768,6 +790,10 @@ export function AgentChat({
     void deliver(entry);
   });
   const interruptNow = useStableEvent(() => void interrupt());
+  const askForChanges = useStableEvent((ref: ResultRef) => {
+    setRevising(ref);
+    inputRef.current?.focus();
+  });
   const retryLast = useStableEvent(retryFailed);
   const retryLater = useStableEvent(retryAt);
   const onAnswer = useStableEvent(
@@ -875,6 +901,20 @@ export function AgentChat({
                 />
               );
             case 'agent':
+              if (m.result) {
+                return (
+                  <ResultCardView
+                    key={m.id}
+                    message={m}
+                    card={m.result}
+                    agent={rowAgent}
+                    newest={newestResult.has(m.id)}
+                    onAskForChanges={askForChanges}
+                    arrived={arrived}
+                    footer={m.work && <WorkTimeline work={m.work} agent={rowAgent} />}
+                  />
+                );
+              }
               return (
                 <AgentBubble
                   key={m.id}
@@ -937,6 +977,9 @@ export function AgentChat({
                   arrived={arrived}
                   agent={m.id === liveCopyCard ? copyAgent : undefined}
                   live={m.id === liveCopyCard}
+                  owner={rowAgent}
+                  newestResult={newestResult.has(m.id)}
+                  onAskForChanges={askForChanges}
                 />
               );
             case 'session':
@@ -993,6 +1036,8 @@ export function AgentChat({
       work,
       liveCopyCard,
       copyAgent,
+      newestResult,
+      askForChanges,
     ]
   );
 
@@ -1228,13 +1273,16 @@ export function AgentChat({
             <form
               className="agent-composer"
               data-dictation={dictation.phase}
-              data-has-attachments={staged.length > 0 || quotes.length > 0 || undefined}
+              data-has-attachments={
+                staged.length > 0 || quotes.length > 0 || revising !== null || undefined
+              }
               onSubmit={(e) => {
                 e.preventDefault();
                 send();
               }}
             >
               {mentionPicker.menu}
+              <ComposerRevising revising={revising} onRemove={() => setRevising(null)} />
               <ComposerQuotes quotes={quotes} onRemove={removeQuote} />
               <ComposerAttachments items={staged} onRemove={attachments.remove} />
               <TextArea

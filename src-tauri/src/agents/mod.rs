@@ -64,6 +64,7 @@ pub mod procs;
 pub mod project;
 pub mod prompts;
 pub mod quick_entry;
+pub mod results;
 pub mod review;
 pub mod runner;
 pub mod runs;
@@ -121,6 +122,8 @@ fn greet(agent_id: &str) {
         client_id: None,
         work: None,
         fresh: false,
+        result: None,
+        revises: None,
         takeover: false,
     };
     if let Err(e) = store::append_message(&message) {

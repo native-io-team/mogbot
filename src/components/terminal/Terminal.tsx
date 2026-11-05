@@ -18,7 +18,11 @@ import { createWebLinksAddon } from '../../lib/terminalLinks';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { attachWebglRenderer } from '../../lib/terminalWebgl';
-import { assertPromptReady, bracketedPrompt } from '../../lib/terminalPrompt';
+import {
+  assertPromptReady,
+  bracketedPrompt,
+  stripTerminalControls,
+} from '../../lib/terminalPrompt';
 import {
   openPtySession,
   attachPtySession,
@@ -385,7 +389,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
             // Focus terminal and paste the path
             term.focus();
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-            (term as any).paste(quotedPaths);
+            (term as any).paste(stripTerminalControls(quotedPaths));
           }
         }
       );
@@ -473,6 +477,17 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       textarea.addEventListener('focus', onTextareaFocus);
       textarea.addEventListener('blur', onTextareaBlur);
     }
+    // A native Cmd+V paste goes through xterm's own handler, which only maps
+    // newlines — ESC survives and `\x1b[201~` would end a bracketed paste early.
+    // Take text pastes over (capture phase, before xterm) and strip controls.
+    const onNativePaste = (event: ClipboardEvent) => {
+      const text = event.clipboardData?.getData('text/plain');
+      if (!text) return; // images etc. keep their default path
+      event.preventDefault();
+      event.stopPropagation();
+      term.paste(stripTerminalControls(text));
+    };
+    container.addEventListener('paste', onNativePaste, true);
 
     // Listen for terminal title changes to detect the agent's status from
     // the leading glyph Claude Code puts in its title (see lib/terminalTitle).
@@ -1026,7 +1041,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
                 const text = await readClipboardText();
                 if (text) {
                   term.focus();
-                  term.paste(text);
+                  term.paste(stripTerminalControls(text));
                   return;
                 }
                 const imagePath = await stageClipboardImage();
@@ -1035,7 +1050,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
                   // trailing space separates the path from what's typed next.
                   const quotedPath = imagePath.includes(' ') ? `"${imagePath}"` : imagePath;
                   term.focus();
-                  term.paste(`${quotedPath} `);
+                  term.paste(stripTerminalControls(`${quotedPath} `));
                 }
               } catch (err) {
                 logger.warn('[Terminal] Native clipboard paste failed', {
@@ -1047,7 +1062,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
                   const fallback = await navigator.clipboard.readText();
                   if (fallback) {
                     term.focus();
-                    term.paste(fallback);
+                    term.paste(stripTerminalControls(fallback));
                   }
                 } catch {
                   // Never throw from a key handler.
@@ -1142,6 +1157,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         textarea.removeEventListener('focus', onTextareaFocus);
         textarea.removeEventListener('blur', onTextareaBlur);
       }
+      container.removeEventListener('paste', onNativePaste, true);
       cleanup();
     };
     // `autoAcceptMode` is intentionally omitted — it's read from
@@ -1185,7 +1201,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         if (terminalRef.current) {
           terminalRef.current.focus();
           // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-          (terminalRef.current as any).paste(data);
+          (terminalRef.current as any).paste(stripTerminalControls(data));
         }
       },
       pastePrompt: async (data: string) => {
