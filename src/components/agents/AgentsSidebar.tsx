@@ -246,7 +246,7 @@ export function AgentsSidebar({
               <span className="agents-list__needs-you-mark" aria-hidden="true">
                 <span className="sidebar-row-dot dot-attention" />
               </span>
-              <span className="agents-list__needs-you-label">Needs you · {needsYouCount}</span>
+              <span className="agents-list__needs-you-label">Needs your OK · {needsYouCount}</span>
               <ChevronRightIcon size={10} className="agents-list__needs-you-chevron" />
             </button>
           )}

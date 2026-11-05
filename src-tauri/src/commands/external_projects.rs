@@ -42,11 +42,10 @@ fn summarize_names(names: &[String]) -> String {
     )
 }
 
-/// Grant the asset protocol (`convertFileSrc`) read access to a directory at
-/// runtime. The static scope in tauri.conf.json deliberately only covers the
-/// default ~/ShipStudio root; projects can live elsewhere on disk, so we widen
-/// the scope for each project root individually rather than exposing all of
-/// `$HOME`/`/Volumes` (which would let any main-frame script read ~/.ssh etc.).
+/// Grant the asset protocol (`convertFileSrc`) read access to a whole
+/// directory at runtime. Only for folders that hold nothing but what the
+/// webview shows (agents' `attachments/`): a project folder gets
+/// [`grant_image_scope`] instead.
 pub fn grant_asset_scope(app: &AppHandle, path: &Path) {
     use tauri::Manager;
     if path.is_dir() {
@@ -60,15 +59,111 @@ pub fn grant_asset_scope(app: &AppHandle, path: &Path) {
     }
 }
 
+/// Extensions the asset protocol may serve from a project: the same list as
+/// the static `$HOME/ShipStudio/**/*.<ext>` scope in tauri.conf.json.
+pub const IMAGE_EXTENSIONS: [&str; 12] = [
+    "png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "ico", "bmp", "tif", "tiff", "apng",
+];
+
+pub fn is_image_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| IMAGE_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+}
+
+/// How far [`image_files`] walks, so a huge folder can't stall startup.
+const IMAGE_SCAN_DEPTH: usize = 12;
+const IMAGE_SCAN_LIMIT: usize = 20_000;
+
+/// Image files under `root`, as the asset protocol may serve them: regular
+/// files only (a symlink named `x.png` pointing at `~/.ssh/id_rsa` is not an
+/// image of this project), never inside dependencies, `.git` or other hidden
+/// folders (`.shipstudio` excepted: migration captures live there).
+pub fn image_files(root: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut visited = 0usize;
+    walk_images(root, 0, &mut visited, &mut out);
+    out
+}
+
+fn walk_images(dir: &Path, depth: usize, visited: &mut usize, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        *visited += 1;
+        if *visited > IMAGE_SCAN_LIMIT {
+            return;
+        }
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        let path = entry.path();
+        if kind.is_file() {
+            if is_image_path(&path) {
+                out.push(path);
+            }
+        } else if kind.is_dir() && depth < IMAGE_SCAN_DEPTH {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            let skip = name == "node_modules" || (name.starts_with('.') && name != ".shipstudio");
+            if !skip {
+                walk_images(&path, depth + 1, visited, out);
+            }
+        }
+    }
+}
+
+/// Let the asset protocol serve one image file (never a folder): regular
+/// files with an image extension only.
+pub fn allow_image(app: &AppHandle, path: &Path) {
+    use tauri::Manager;
+    let is_regular = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file());
+    if !is_regular || !is_image_path(path) {
+        return;
+    }
+    if let Err(e) = app.asset_protocol_scope().allow_file(path) {
+        tracing::warn!(path = %path.display(), error = %e, "Failed to grant asset-protocol scope for an image");
+    }
+}
+
+/// The asset protocol for a project outside `~/ShipStudio`: its image files,
+/// like the static scope gives `~/ShipStudio`, never the whole folder (which
+/// would let any main-frame script read its `.env` and source). Images that
+/// appear later are granted where they are listed or shown
+/// (`list_assets`, `read_fidelity_runs`, `allow_project_image`).
+pub fn grant_image_scope(app: &AppHandle, root: &Path) {
+    for file in image_files(root) {
+        allow_image(app, &file);
+    }
+}
+
 /// Grant asset-protocol scope to every already-registered external project.
 /// Called once at startup so reopening an external project shows its thumbnails
 /// and assets without re-registering.
 pub fn grant_asset_scope_for_registered(app: &AppHandle) {
     if let Ok(cfg) = load_config() {
         for proj in &cfg.projects {
-            grant_asset_scope(app, Path::new(&proj.path));
+            grant_image_scope(app, Path::new(&proj.path));
         }
     }
+}
+
+/// One image the webview is about to show (a diff of an image, a capture
+/// made since the project was opened): served only if it's a regular image
+/// file inside a project this app may open.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn allow_project_image(app: AppHandle, path: String) -> Result<(), CommandError> {
+    let canonical = crate::utils::validate_project_path(&path)?;
+    if !is_image_path(&canonical) {
+        return Err(CommandError::Validation {
+            field: "path".into(),
+            reason: "Not an image".into(),
+        });
+    }
+    allow_image(&app, &canonical);
+    Ok(())
 }
 
 /// Get the path to the external projects config file
@@ -319,9 +414,9 @@ pub async fn register_external_project(app: AppHandle) -> Result<Option<String>,
 
     save_config(&config)?;
 
-    // Widen the asset-protocol scope to this newly-registered root so its
-    // thumbnails/assets render without a restart.
-    grant_asset_scope(&app, &canonical);
+    // Widen the asset-protocol scope to this newly-registered root's images
+    // so its thumbnails/assets render without a restart.
+    grant_image_scope(&app, &canonical);
 
     Ok(Some(canonical_str))
 }
@@ -519,6 +614,43 @@ pub async fn is_project_external(path: String) -> Result<bool, CommandError> {
 mod tests {
     use super::{is_any_of_roots, is_direct_child_of_any, looks_like_project_root};
     use std::fs;
+
+    #[test]
+    fn only_a_projects_image_files_are_served_never_its_secrets() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for (path, body) in [
+            ("public/logo.png", "png"),
+            ("public/Hero.JPG", "jpg"),
+            (".shipstudio/fidelity/home/reference.png", "png"),
+            (".env", "SECRET=1"),
+            ("src/app.ts", "code"),
+            ("node_modules/pkg/icon.png", "dep"),
+            (".git/x.png", "git"),
+            (".hidden/y.png", "hidden"),
+        ] {
+            let p = root.join(path);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, body).unwrap();
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(root.join(".env"), root.join("public/leak.png")).unwrap();
+        let mut found: Vec<String> = super::image_files(root)
+            .iter()
+            .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().into_owned())
+            .collect();
+        found.sort();
+        assert_eq!(
+            found,
+            vec![
+                ".shipstudio/fidelity/home/reference.png",
+                "public/Hero.JPG",
+                "public/logo.png",
+            ]
+        );
+        assert!(super::is_image_path(std::path::Path::new("a/b.SVG")));
+        assert!(!super::is_image_path(std::path::Path::new("a/.env")));
+    }
     use std::path::{Path, PathBuf};
 
     // Issue #747: the "already inside your projects folder, it will appear

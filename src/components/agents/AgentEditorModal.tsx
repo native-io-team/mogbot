@@ -68,7 +68,7 @@ function UsageLines({ usage, agent }: { usage: UsageSummary | null; agent: Agent
   const context = agent && formatContext(agent);
   if (!allTime && !context) return null;
   const priced = (t: UsageTotals | undefined) =>
-    !onPlan && t && t.pricedTurns > 0 ? COST_BASIS_NOTE : undefined;
+    !onPlan && t && t.pricedTurns + (t.pricedChecks ?? 0) > 0 ? COST_BASIS_NOTE : undefined;
   return (
     <dl className="agent-editor__usage">
       {allTime && (
@@ -397,7 +397,7 @@ export function AgentEditorModal({
         onSetUp={onSetUpEngine}
         note={
           switching &&
-          `Its next message starts a new ${ENGINE_LABEL[engine]} session, handed the recent conversation. Instructions and memory carry over.`
+          `Its next message starts fresh on ${ENGINE_LABEL[engine]}, handed the recent conversation. Instructions and memory carry over.`
         }
       />
 
@@ -534,8 +534,9 @@ export function AgentEditorModal({
           </p>
           <div className="agent-editor__rebind-actions">
             <Button
-              variant="primary"
+              variant="strong"
               size="compact"
+              data-allow
               disabled={settle.isLoading}
               onClick={() => void settle.execute('keep')}
             >

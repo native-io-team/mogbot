@@ -59,7 +59,7 @@ pub fn read_plugin_storage(
 ///
 /// Acquires a per-plugin lock to prevent concurrent read-modify-write races.
 #[tauri::command]
-#[tracing::instrument(fields(project = %project_path))]
+#[tracing::instrument(skip(data), fields(project = %project_path))]
 pub fn write_plugin_storage(
     plugin_id: String,
     project_path: String,
@@ -127,7 +127,9 @@ fn check_plugin_exists(plugin_id: &str, project_path: &str) -> Result<(), Comman
             "Plugin '{plugin_id}' not found"
         )));
     }
-    Ok(())
+    // A plugin that never loaded can't have asked for this; refuse anything
+    // naming one this app hasn't approved as it is now (`plugin_trust`).
+    super::require_trusted(project_path, plugin_id)
 }
 
 /// Join a plugin-supplied, project-relative path onto an already-validated
@@ -232,7 +234,8 @@ pub fn plugin_fs_read_text(
 ///
 /// Security: validates project_path, uses extended PATH, enforces configurable timeout (default 120s).
 #[tauri::command]
-#[tracing::instrument(fields(project = %project_path))]
+// `args` can carry a token (`vercel --token …`): the command name is enough.
+#[tracing::instrument(skip(args), fields(project = %project_path))]
 pub async fn exec_plugin_shell(
     plugin_id: String,
     project_path: String,
@@ -370,6 +373,13 @@ pub async fn link_dev_plugin(
     app: AppHandle,
     project_path: String,
 ) -> Result<Option<PluginInfo>, CommandError> {
+    // Developer mode is the user's explicit switch, never turned on as a
+    // side effect of linking (`plugin_trust`).
+    if !super::developer_mode() {
+        return Err(CommandError::expected(
+            "Linking a dev plugin needs plugin developer mode. Turn it on in the Plugin Manager first.",
+        ));
+    }
     let folder = app
         .dialog()
         .file()
@@ -455,6 +465,9 @@ pub async fn link_dev_plugin(
 
     registry.plugins.push(entry);
     write_registry(&project_path, &registry)?;
+    // The developer picked this folder themselves: it's approved as it is
+    // now (`plugin_trust`).
+    super::record_installed(&project_path, &manifest.id)?;
 
     Ok(Some(PluginInfo {
         manifest,
@@ -463,6 +476,7 @@ pub async fn link_dev_plugin(
         source_url: String::new(),
         is_dev: true,
         local_path,
+        trust: None,
     }))
 }
 
@@ -490,6 +504,7 @@ pub fn unlink_dev_plugin(project_path: String, plugin_id: String) -> Result<(), 
     // Remove from registry (does not touch local files)
     registry.plugins.retain(|e| e.plugin_id != plugin_id);
     write_registry(&project_path, &registry)?;
+    super::forget(&project_path, &plugin_id);
 
     // Clean up storage.json in project plugins dir if it exists
     let plugins_dir = get_plugins_dir(&project_path)?;

@@ -93,7 +93,7 @@ pub fn lines(engine: Engine, tools: &[&str], servers: &[Server]) -> Vec<Line> {
     if ours("session_start") {
         push(
             "Projects",
-            "Create projects, start and continue sessions in them, screenshot their previews, check git, push with your OK, and check deploys.".into(),
+            "Create projects, work in them, screenshot their previews, publish with your OK, and check whether it went live.".into(),
         );
     }
     if ours("create_agent") {

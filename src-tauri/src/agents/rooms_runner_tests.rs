@@ -20,6 +20,7 @@ fn direct(text: &str) -> Inbound {
         routine: false,
         ticket: None,
         room: None,
+        outside: false,
     }
 }
 

@@ -21,6 +21,7 @@ pub mod companion;
 pub mod error_reporting;
 pub mod errors;
 pub mod external_command;
+pub mod keychain;
 pub mod logging;
 pub mod navigation_guard;
 pub mod preview_isolation;
@@ -139,6 +140,10 @@ pub fn run() {
     // Initialize PostHog analytics (generates device_id on first launch)
     commands::analytics::init_analytics();
 
+    // A dev-server spawn through the PTY plugin is refused unless the
+    // project's commands are approved as they are now (dev_consent).
+    tauri_plugin_pty::set_dev_server_guard(commands::projects::guard_dev_server_spawn);
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(navigation_guard::init())
@@ -186,8 +191,15 @@ pub fn run() {
             // What the last run left mid-turn, noted before anything can
             // start a turn: those agents' turns wait for recovery below.
             agents::runner::prepare_recovery();
+            // Agent config files a crashed run left behind: their secrets are
+            // dead. Swept before recovery below can start a turn that writes one.
+            agents::reach::sweep();
             let badge_app = _app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                // Agents' folders owner-only (0700 / 0600), whatever an
+                // older build or an agent's own CLI left.
+                let _ =
+                    tauri::async_runtime::spawn_blocking(agents::store::harden_permissions).await;
                 let _ = tauri::async_runtime::spawn_blocking(agents::store::expire_stale_approvals)
                     .await;
                 // Agents' secrets, known to redaction before any turn runs.
@@ -198,6 +210,8 @@ pub fn run() {
             });
             // Agents' check-ins and routines: one tick a minute, only while open.
             agents::schedule::spawn(_app.handle().clone());
+            // "When…" routines: their checks, on their own minute tick.
+            agents::watch::spawn(_app.handle().clone());
 
             // Start the agent preview bridge (global loopback MCP server) at
             // launch so it's listening before any agent session spawns —
@@ -217,6 +231,11 @@ pub fn run() {
                     tracing::error!("[Power] Could not keep the Mac awake at launch: {}", e);
                 }
             }
+
+            // Dev-server approvals: owner-only, whatever an older build left.
+            commands::projects::harden_dev_consent_store();
+            // Plugin approvals: owner-only, likewise.
+            commands::plugins::harden_plugin_trust_store();
 
             // Remote access: if the user left it on, bring it back — a Mac that
             // restarted overnight should be reachable again once it's logged in.
@@ -305,19 +324,9 @@ pub fn run() {
             // (which would let any main-frame script read ~/.ssh, ~/.aws, etc.).
             commands::external_projects::grant_asset_scope_for_registered(_app.handle());
 
-            // Agents live in this app's own support folder (not the shared
-            // ~/ShipStudio), outside the static scope; their chats show the
-            // images attached in their homes.
-            {
-                use tauri::Manager;
-                if let Ok(root) = agents::store::agents_root() {
-                    if let Err(e) = _app.asset_protocol_scope().allow_directory(&root, true) {
-                        tracing::warn!(
-                            "[Agents] could not allow the agents folder for images: {e}"
-                        );
-                    }
-                }
-            }
+            // Agents' chat images: each agent's `attachments/` folder only,
+            // never the folder with its instructions and conversation.
+            agents::attachments::grant_asset_scope(_app.handle());
 
             // Build a custom menu on macOS that replaces Cmd+W (Close Window)
             // with a custom "Close Tab" action that emits an event to the frontend
@@ -705,6 +714,9 @@ pub fn run() {
             commands::agents::agents_schedule_pause,
             commands::agents::agents_schedule_update,
             commands::agents::agents_schedule_run_now,
+            commands::agents::agents_watch_create,
+            commands::agents::agents_watch_update,
+            commands::agents::agents_watch_check_now,
             commands::agents::agents_apps_list,
             commands::agents::agents_apps_add,
             commands::agents::agents_apps_remove,
@@ -750,6 +762,11 @@ pub fn run() {
             commands::projects::get_hide_main_branch_warning,
             commands::projects::set_hide_main_branch_warning,
             commands::projects::get_custom_dev_command,
+            commands::projects::get_dev_server_consent,
+            commands::projects::approve_dev_server,
+            commands::projects::plan_package_install,
+            commands::projects::plan_pending_install_scripts,
+            commands::projects::mark_install_scripts_ran,
             commands::projects::set_custom_dev_command,
             commands::projects::get_dev_server_port,
             commands::projects::set_dev_server_port,
@@ -945,6 +962,10 @@ pub fn run() {
             commands::plugins::update_plugin,
             commands::plugins::check_plugin_update,
             commands::plugins::read_plugin_bundle,
+            commands::plugins::approve_plugin,
+            commands::plugins::decline_plugin,
+            commands::plugins::get_plugin_developer_mode,
+            commands::plugins::set_plugin_developer_mode,
             commands::plugins::read_plugin_manifest,
             commands::plugins::toggle_plugin,
             commands::plugins::exec_plugin_shell,
@@ -1113,6 +1134,7 @@ pub fn run() {
             commands::health::get_package_json,
             // External Projects
             commands::external_projects::register_external_project,
+            commands::external_projects::allow_project_image,
             commands::external_projects::unregister_external_project,
             commands::external_projects::is_project_external,
             commands::external_projects::ensure_external_project_registered,

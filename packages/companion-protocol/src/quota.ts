@@ -199,11 +199,20 @@ export function apiPrice(usd: number): string {
  * price). Null when it hasn't run on its own this week.
  */
 export function routineWeekLine(t: UsageTotals | undefined, onPlan = false): string | null {
-  if (!t || t.turns === 0) return null;
-  if (t.pricedTurns === t.turns && !onPlan) {
-    return `${apiPrice(t.costUsd)} this week`;
+  if (!t || t.turns + (t.checks ?? 0) === 0) return null;
+  const checks = t.checks ? `${t.checks} check${t.checks === 1 ? '' : 's'} · ` : '';
+  if (fullyPriced(t) && !onPlan) {
+    return `${checks}${apiPrice(t.costUsd)} this week`;
   }
-  return `${tokenCount(t)} this week`;
+  return `${checks}${tokenCount(t)} this week`;
+}
+
+/**
+ * Every turn and every "When…" model check in `t` reported a price, so
+ * `costUsd` is the whole of it (a partial sum would read as the whole).
+ */
+export function fullyPriced(t: UsageTotals): boolean {
+  return t.pricedTurns + (t.pricedChecks ?? 0) === t.turns + (t.checks ?? 0);
 }
 
 /** Several weeks' totals as one; undefined for none. */
@@ -218,6 +227,8 @@ export function sumTotals(list: UsageTotals[]): UsageTotals | undefined {
     costUsd: a.costUsd + t.costUsd,
     pricedTurns: a.pricedTurns + t.pricedTurns,
     durationMs: a.durationMs + t.durationMs,
+    checks: (a.checks ?? 0) + (t.checks ?? 0),
+    pricedChecks: (a.pricedChecks ?? 0) + (t.pricedChecks ?? 0),
   }));
 }
 

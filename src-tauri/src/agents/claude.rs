@@ -6,20 +6,15 @@
 
 use super::prompts;
 
-/// The agent bridge as Claude Code's `--mcp-config`.
-pub(super) fn mcp_config(url: &str) -> String {
-    serde_json::json!({
-        "mcpServers": { prompts::SERVER_KEY: { "type": "http", "url": url } }
-    })
-    .to_string()
-}
-
 /// Every argument a turn's `claude` process gets. The prompt goes on stdin.
+/// `mcp_config` is the path of the turn's 0600 config file naming the agent
+/// bridge and its secret (`reach`): never the config itself, which `ps`
+/// would show to every account on the Mac.
 pub(super) fn args(
     model: Option<&str>,
     session_id: &str,
     resuming: bool,
-    url: &str,
+    mcp_config: &str,
     system_prompt: &str,
     add_dirs: &[String],
 ) -> Vec<String> {
@@ -44,7 +39,7 @@ pub(super) fn args(
         "--permission-prompt-tool".into(),
         prompts::approval_tool_id(),
         "--mcp-config".into(),
-        mcp_config(url),
+        mcp_config.to_string(),
         "--allowedTools".into(),
         format!("mcp__{}", prompts::SERVER_KEY),
         "--append-system-prompt".into(),
@@ -53,6 +48,10 @@ pub(super) fn args(
     for dir in add_dirs {
         args.extend(["--add-dir".to_string(), dir.clone()]);
     }
+    // Never write `.git` or `.shipstudio`, here or in any added folder. The
+    // list ends at the next flag, which always follows.
+    args.push("--disallowedTools".into());
+    args.extend(super::reach::claude_deny_rules(add_dirs));
     // Ship Studio's preview bridge is registered for the same projects; an
     // agent here drives our preview, never theirs.
     args.push(crate::preview_isolation::claude_flag());
@@ -84,11 +83,11 @@ const PRINT_ONLY_WITH_VALUE: [&str; 2] = ["--output-format", "--permission-promp
 pub(super) fn interactive_args(
     model: Option<&str>,
     session_id: &str,
-    url: &str,
+    mcp_config: &str,
     system_prompt: &str,
     add_dirs: &[String],
 ) -> Vec<String> {
-    let print = args(model, session_id, true, url, system_prompt, add_dirs);
+    let print = args(model, session_id, true, mcp_config, system_prompt, add_dirs);
     let mut out = Vec::with_capacity(print.len());
     let mut it = print.into_iter();
     while let Some(arg) = it.next() {
@@ -108,9 +107,9 @@ mod tests {
     #[test]
     fn taking_over_runs_the_turns_own_command_line_minus_print() {
         let dirs = vec!["/u/home".to_string(), "/u/ShipStudio".to_string()];
-        let url = "http://b/x?turn=3";
-        let turn = args(Some("opus"), "sid", true, url, "be you", &dirs);
-        let mine = interactive_args(Some("opus"), "sid", url, "be you", &dirs);
+        let config = "/s/agent-bridge/mcp-1.json";
+        let turn = args(Some("opus"), "sid", true, config, "be you", &dirs);
+        let mine = interactive_args(Some("opus"), "sid", config, "be you", &dirs);
 
         for flag in PRINT_ONLY {
             assert!(!mine.iter().any(|a| a == flag), "{flag} is print-only");
@@ -136,7 +135,10 @@ mod tests {
         assert_eq!(pair("--resume"), "sid");
         assert!(!mine.contains(&"--session-id".to_string()));
         assert_eq!(pair("--permission-mode"), "acceptEdits");
-        assert_eq!(pair("--mcp-config"), mcp_config(url));
+        assert_eq!(pair("--mcp-config"), config);
+        assert!(!mine.iter().any(|a| a.contains("Bearer")));
+        assert_eq!(pair("--disallowedTools"), "Edit(**/.git/**)");
+        assert!(mine.contains(&"Edit(//u/ShipStudio/**/.shipstudio/**)".to_string()));
         assert_eq!(
             pair("--allowedTools"),
             format!("mcp__{}", prompts::SERVER_KEY)

@@ -14,6 +14,7 @@
 
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
@@ -116,6 +117,11 @@ struct Inbound {
     /// batched with anything said anywhere else, and owes no agent an answer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     room: Option<super::rooms::RoomRef>,
+    /// It carries text from outside (a "When…" routine's items): the turn
+    /// that answers it can't change the team, set up routines or edit its
+    /// own memory without a card (`from_outside`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    outside: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -207,6 +213,8 @@ struct Runtime {
     turn_mixed: bool,
     /// The room the turn in progress answers in, if it was asked in one.
     room: Option<super::rooms::RoomRef>,
+    /// The turn in progress (or one it replaced) answers text from outside.
+    outside: bool,
 }
 
 /// Why a take-over can't start now.
@@ -442,7 +450,7 @@ fn read_mark(agent_id: &str) -> Option<TurnMark> {
 
 fn write_mark(agent_id: &str, mark: TurnMark) {
     if let (Some(path), Ok(json)) = (mark_path(agent_id), serde_json::to_vec(&mark)) {
-        let _ = std::fs::write(path, json);
+        let _ = super::store::write_private(&path, &json);
     }
 }
 
@@ -472,7 +480,7 @@ fn save_inbox(agent_id: &str, queue: &VecDeque<Inbound>) {
         super::secrets::redact_value(&mut v);
         serde_json::to_vec(&v)
     }) {
-        if let Err(e) = std::fs::write(&path, json) {
+        if let Err(e) = super::store::write_private(&path, &json) {
             tracing::warn!("[Agents] couldn't save {agent_id}'s queue: {e}");
         }
     }
@@ -1073,6 +1081,7 @@ pub fn enqueue(app: &AppHandle, agent_id: &str, text: String, from: From) {
             routine: false,
             ticket: None,
             room: None,
+            outside: false,
         },
     );
 }
@@ -1098,6 +1107,26 @@ pub fn enqueue_scheduled(
             routine,
             ticket: Some(ticket),
             room: None,
+            outside: false,
+        },
+    );
+}
+
+/// Queue a "When…" routine's wake: like a scheduled one, but what it
+/// carries came from outside (see [`from_outside`]).
+pub fn enqueue_from_outside(app: &AppHandle, agent_id: &str, text: String, ticket: String) {
+    push(
+        app,
+        agent_id,
+        Inbound {
+            id: String::new(),
+            text,
+            from: From::User,
+            reply: false,
+            routine: true,
+            ticket: Some(ticket),
+            room: None,
+            outside: true,
         },
     );
 }
@@ -1116,6 +1145,7 @@ pub fn enqueue_room(app: &AppHandle, agent_id: &str, text: String, room: super::
             routine: false,
             ticket: None,
             room: Some(room),
+            outside: false,
         },
     );
 }
@@ -1135,6 +1165,88 @@ pub fn queued_for_room(agent_id: &str, room_id: &str) -> bool {
     asked && (!in_this_room || r.queued)
 }
 
+/// Whether the agent's turn in progress answers text from outside (a
+/// "When…" routine's items), or replaced one that did. Such a turn needs a
+/// card to change the team, set up routines or edit its memory.
+pub fn from_outside(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.running && r.outside)
+}
+
+/// What a turn answering outside text adds to Claude Code's command line:
+/// its own CLAUDE.md (instructions and memory) can't be written. Bash still
+/// asks through `approve`, so nothing writes it without a card.
+pub fn outside_turn_args(home: &Path) -> Vec<String> {
+    let file = home.join("CLAUDE.md");
+    let file = file.to_string_lossy();
+    // `//` makes it an absolute path in a permission rule.
+    let rule = |tool: &str| format!("{tool}(/{file})");
+    vec![
+        "--disallowedTools".to_string(),
+        ["Edit", "Write", "MultiEdit", "NotebookEdit"]
+            .iter()
+            .map(|t| rule(t))
+            .collect::<Vec<_>>()
+            .join(","),
+    ]
+}
+
+/// Holds a turn's CLAUDE.md as it began, for a turn answering outside text:
+/// if the turn changed it anyway (Codex has no such rule; a Bash write the
+/// user allowed), it's put back when the turn ends, unless the app itself
+/// wrote it meanwhile (the user editing memory or instructions).
+pub struct MemorySeal {
+    agent_id: String,
+    path: std::path::PathBuf,
+    before: Option<Vec<u8>>,
+    writes: u64,
+    app: AppHandle,
+}
+
+impl MemorySeal {
+    pub fn hold(app: &AppHandle, agent_id: &str, home: &Path) -> MemorySeal {
+        let path = home.join("CLAUDE.md");
+        MemorySeal {
+            agent_id: agent_id.to_string(),
+            before: std::fs::read(&path).ok(),
+            writes: store::claude_md_writes(&path),
+            path,
+            app: app.clone(),
+        }
+    }
+}
+
+/// Put a CLAUDE.md back as it was before a turn answering outside text,
+/// if the turn changed it and the app itself didn't write it meanwhile.
+/// Returns whether it was put back.
+pub fn put_back_claude_md(path: &Path, before: Option<&[u8]>, writes_before: u64) -> bool {
+    let Some(before) = before else { return false };
+    if std::fs::read(path).ok().as_deref() == Some(before) {
+        return false;
+    }
+    if store::claude_md_writes(path) != writes_before {
+        tracing::info!(path = %path.display(), "[Agents] CLAUDE.md changed during an outside-text turn, by the app too: kept");
+        return false;
+    }
+    store::restore_claude_md(path, before).is_ok()
+}
+
+impl Drop for MemorySeal {
+    fn drop(&mut self) {
+        if put_back_claude_md(&self.path, self.before.as_deref(), self.writes) {
+            let line = new_message(
+                &self.agent_id,
+                MessageKind::Note,
+                "This turn answered a “When…” routine's items, which came from outside, and it changed its instructions or memory. That was put back. Ask it yourself if you want the change.",
+            );
+            let _ = record(&self.app, line);
+        }
+    }
+}
+
 /// Queue an agent's answer to a request `agent_id` sent it.
 pub fn enqueue_reply(app: &AppHandle, agent_id: &str, text: String, sender: AgentRef, hop: u8) {
     push(
@@ -1148,6 +1260,7 @@ pub fn enqueue_reply(app: &AppHandle, agent_id: &str, text: String, sender: Agen
             routine: false,
             ticket: None,
             room: None,
+            outside: false,
         },
     );
 }
@@ -1790,6 +1903,8 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     // Its cost is a routine's only if nothing else was in it, nor in the
     // interrupted turn it replaces (whose cost carries over in `turn_usage`).
     runtime.turn_mixed |= !routine;
+    // Outside text taints the turn, and the turn that replaces it.
+    runtime.outside |= batch.iter().any(|m| m.outside);
     let request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
     // The turn inherits the deepest hop it is answering; a user message
     // in the batch resets the chain.
@@ -1893,6 +2008,7 @@ fn finish_if_idle(agent_id: &str) -> Option<Idle> {
     runtime.interrupted = None;
     runtime.turn_usage = super::usage::UsageTotals::default();
     runtime.turn_mixed = false;
+    runtime.outside = false;
     Some(Idle {
         owed: std::mem::take(&mut runtime.owed),
         tickets: std::mem::take(&mut runtime.tickets),
@@ -2010,6 +2126,7 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     runtime.waits = 0;
     runtime.turn_usage = super::usage::UsageTotals::default();
     runtime.turn_mixed = false;
+    runtime.outside = false;
     runtime.status = Some(Status::idle());
     // Messages that arrived during the dead turn are newer than what killed
     // it: a new worker sends them (or the hand-back does, while someone
@@ -2743,16 +2860,22 @@ async fn run_turn(
     // How this turn runs it (Codex speaks app-server when it can).
     let driver = Driver::pick(engine, &binary).await;
     driver.ready().await?;
-    let (port, token) = crate::agent_bridge::start_global_agent_bridge(app.clone())
+    let (port, _) = crate::agent_bridge::start_global_agent_bridge(app.clone())
         .await
         .map_err(super::err_other)?;
-    // The turn's id rides on its URL: the approval broker refuses requests
-    // from any turn but this one, once it's over (`agents::broker`).
+    // The turn's secret names the agent and the turn, and dies with the
+    // turn: the approval broker refuses requests from any turn but this one,
+    // once it's over (`agents::broker`). It reaches the CLI by a 0600 file
+    // (Claude Code) or this process's environment (Codex), never argv.
     let turn = super::broker::open_turn(agent_id);
-    let url = format!(
-        "http://127.0.0.1:{port}/mcp/{token}/agents/{agent_id}?turn={}",
-        turn.id()
-    );
+    let url = super::reach::agent_url(port);
+    let mcp_config = match engine {
+        Engine::Claude => Some(super::reach::write_config(&super::reach::claude_config(
+            &url,
+            turn.secret(),
+        ))?),
+        Engine::Codex => None,
+    };
 
     let (session_id, resuming) = match &agent.session_id {
         Some(id) => (id.clone(), true),
@@ -2797,16 +2920,48 @@ async fn run_turn(
     } else {
         agent.model.as_deref()
     };
+    // Codex with permission profiles keeps every `.git` / `.shipstudio`
+    // folder it can reach read-only; Claude Code gets the same as deny rules.
+    let profiles =
+        driver.engine() == Engine::Codex && super::codex::profiles_supported(&binary).await;
+    let protected = profiles.then(|| {
+        let mut roots: Vec<std::path::PathBuf> = layout
+            .add_dirs
+            .iter()
+            .map(std::path::PathBuf::from)
+            .collect();
+        roots.push(layout.cwd.clone());
+        super::reach::protected_paths(&roots)
+    });
+    let mcp_config_arg = mcp_config
+        .as_ref()
+        .map(super::reach::ConfigFile::arg)
+        .unwrap_or_default();
     let mut cmd = crate::utils::create_command(&binary);
     cmd.args(driver.args(&TurnSpec {
         model,
         session: &session_id,
         resuming,
         url: &url,
+        mcp_config: &mcp_config_arg,
         system_prompt: &system_prompt,
         writable: &layout.add_dirs,
+        protected: protected.as_deref(),
     }));
+    // A "When…" routine's items came from outside: this turn can't write its
+    // own instructions or memory (Claude Code refuses the edit; for Codex,
+    // and for anything that gets past that, it's put back when the turn ends).
+    let outside = from_outside(agent_id);
+    if outside && engine == super::engine::Engine::Claude {
+        cmd.args(outside_turn_args(&home));
+    }
+    let _memory_seal = outside.then(|| MemorySeal::hold(app, agent_id, &home));
     strip_session_env(&mut cmd);
+    if engine == Engine::Codex {
+        // Read by `bearer_token_env_var`. Codex's default shell environment
+        // policy leaves any `*TOKEN*` variable out of the commands it runs.
+        cmd.env(super::reach::TOKEN_ENV, turn.secret());
+    }
     cmd.env("PATH", crate::utils::get_extended_path())
         // Claude Code gives an MCP tool call ~60s by default, and the approval
         // tool waits for a person. Verified: with the default, a card left for
@@ -2853,6 +3008,7 @@ async fn run_turn(
             model,
             &system_prompt,
             &prompt,
+            profiles,
         );
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Option<String>>();
         let mut stdin = child.stdin.take();
@@ -3362,6 +3518,7 @@ mod tests {
             routine: false,
             ticket: None,
             room: None,
+            outside: false,
         }
     }
 
@@ -3408,6 +3565,7 @@ mod tests {
                 routine: false,
                 ticket: None,
                 room: None,
+                outside: false,
             }),
             Ok(false)
         ));
@@ -3507,6 +3665,7 @@ mod tests {
                 routine: false,
                 ticket: None,
                 room: None,
+                outside: false,
             },
             Inbound {
                 id: String::new(),
@@ -3522,6 +3681,7 @@ mod tests {
                 routine: false,
                 ticket: None,
                 room: None,
+                outside: false,
             },
         ];
         let prompt = compose(&batch);
@@ -3579,7 +3739,7 @@ mod tests {
             "--permission-prompt-tool",
             "mcp__shipstudio_agents__approve",
             "--mcp-config",
-            r#"{"mcpServers":{"shipstudio_agents":{"type":"http","url":"http://x"}}}"#,
+            "http://x",
             "--allowedTools",
             "mcp__shipstudio_agents",
             "--append-system-prompt",
@@ -3588,12 +3748,26 @@ mod tests {
             "/u/ShipStudio",
             "--add-dir",
             "/ext/site",
+            "--disallowedTools",
+            "Edit(**/.git/**)",
+            "Edit(**/.shipstudio/**)",
+            "Edit(//u/ShipStudio/**/.git/**)",
+            "Edit(//u/ShipStudio/**/.shipstudio/**)",
+            "Edit(//ext/site/**/.git/**)",
+            "Edit(//ext/site/**/.shipstudio/**)",
             "--disallowedTools=mcp__shipstudio-preview",
             "--model",
             "opus",
         ]
         .map(String::from)
         .to_vec();
+        // The shell deny rules follow the file-tool ones, in the same list.
+        let mut expected = expected;
+        let at = expected
+            .iter()
+            .position(|a| a == "--disallowedTools=mcp__shipstudio-preview")
+            .unwrap();
+        expected.splice(at..at, super::super::reach::claude_bash_deny_rules());
         assert_eq!(args, expected);
     }
 
@@ -3665,6 +3839,7 @@ mod tests {
                 routine: false,
                 ticket: None,
                 room: None,
+                outside: false,
             },
             Inbound {
                 id: String::new(),
@@ -3680,6 +3855,7 @@ mod tests {
                 routine: false,
                 ticket: None,
                 room: None,
+                outside: false,
             },
         ]
         .into();
@@ -3830,6 +4006,7 @@ mod tests {
                     routine: false,
                     ticket: None,
                     room: None,
+                    outside: false,
                 });
             }
             assert!(begin_fresh(&a.id).is_err());
@@ -3849,6 +4026,7 @@ mod tests {
                 input: None,
                 always: None,
                 always_allowed: false,
+                summary: None,
                 note: None,
                 prompt: None,
                 choice: None,

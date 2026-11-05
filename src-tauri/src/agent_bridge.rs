@@ -12,6 +12,16 @@
 //! loopback ports can't guess the path, and any request carrying a browser
 //! `Origin` header is rejected outright (MCP CLI clients never send one).
 //!
+//! That token is the *preview* token only. Agents (`/mcp/agent`) and an
+//! import's interview (`/mcp/import`) are answered on paths that name no one
+//! and carry no secret: the caller is the `Authorization: Bearer` secret it
+//! sends, issued per turn and revoked when the turn ends (`agents::broker`,
+//! `agents::reach`). Until 2026-11 agents were reached at
+//! `/mcp/<token>/agents/<id>` on their command lines, where any local account
+//! could read it with `ps`; tokens issued before then are replaced once
+//! ([`PREVIEW_TOKEN_GENERATION`]), and the workspace re-registers the preview
+//! server under the new URL on its next attach.
+//!
 //! Tool calls are not executed here: each `tools/call` is forwarded to the
 //! window's frontend as an `agent-bridge-request` event, and the frontend
 //! (which owns the inspect store and the preview iframe) answers via the
@@ -104,6 +114,26 @@ static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 struct BridgeIdentity {
     token: Option<String>,
     port: Option<u16>,
+    /// Which [`PREVIEW_TOKEN_GENERATION`] issued `token`; absent before it.
+    #[serde(default)]
+    generation: Option<u32>,
+}
+
+/// Bumped to revoke every stored preview token once: a token from an older
+/// generation is replaced with a fresh one at the next start.
+const PREVIEW_TOKEN_GENERATION: u32 = 2;
+
+/// The stored token, unless it's from an older generation (or missing).
+fn current_token(identity: &BridgeIdentity) -> Option<String> {
+    identity
+        .token
+        .clone()
+        .filter(|t| !t.is_empty() && identity.generation == Some(PREVIEW_TOKEN_GENERATION))
+}
+
+/// A fresh preview token: 256 bits from the OS.
+fn new_preview_token() -> String {
+    crate::agents::broker::new_secret()
 }
 
 fn identity_path() -> Option<std::path::PathBuf> {
@@ -232,10 +262,7 @@ pub async fn start_global_agent_bridge(app: tauri::AppHandle) -> Result<(u16, St
     }
 
     let mut identity = read_identity();
-    let token = match identity.token.clone() {
-        Some(t) if !t.is_empty() => t,
-        _ => uuid::Uuid::new_v4().simple().to_string(),
-    };
+    let token = current_token(&identity).unwrap_or_else(new_preview_token);
 
     // Prefer the port from the last run so registered URLs stay valid.
     let mut listener = None;
@@ -263,9 +290,13 @@ pub async fn start_global_agent_bridge(app: tauri::AppHandle) -> Result<(u16, St
         .port();
 
     // Persist the stable identity for future runs.
-    if identity.token.as_deref() != Some(token.as_str()) || identity.port != Some(port) {
+    if identity.token.as_deref() != Some(token.as_str())
+        || identity.port != Some(port)
+        || identity.generation != Some(PREVIEW_TOKEN_GENERATION)
+    {
         identity.token = Some(token.clone());
         identity.port = Some(port);
+        identity.generation = Some(PREVIEW_TOKEN_GENERATION);
         write_identity(&identity);
     }
 
@@ -417,6 +448,28 @@ async fn handle_http(
         return Ok(plain_response(StatusCode::FORBIDDEN, "Forbidden"));
     }
 
+    // Agents and import interviews: who's calling is the bearer secret, and
+    // nothing else (`agents::reach`). No secret, or one that isn't live, gets
+    // the same bare 404 as a wrong path.
+    match route_secret_path(req.uri().path()) {
+        Some(SecretRoute::Agent) => {
+            let caller = bearer_of(&req).and_then(|s| crate::agents::broker::caller(&s));
+            let Some(caller) = caller else {
+                return Ok(plain_response(StatusCode::NOT_FOUND, "Not found"));
+            };
+            return handle_agents_http(app, caller.agent_id, caller.turn, req).await;
+        }
+        Some(SecretRoute::Import) => {
+            // An import's sealed interview gets only its own three tools
+            // (`agents::connector`), which checks the secret is its live one.
+            let Some(secret) = bearer_of(&req) else {
+                return Ok(plain_response(StatusCode::NOT_FOUND, "Not found"));
+            };
+            return handle_import_http(app, secret, req).await;
+        }
+        None => {}
+    }
+
     // Path shape: /mcp/<token>/<base64url(project path)>, or the literal
     // segment "active" for agents whose MCP config is global (Codex,
     // Opencode, Cursor) — resolved to the focused project per tool call.
@@ -424,18 +477,6 @@ async fn handle_http(
     let Some(segment) = req.uri().path().strip_prefix(&expected_prefix) else {
         return Ok(plain_response(StatusCode::NOT_FOUND, "Not found"));
     };
-    // An import's sealed interview gets only its own three tools, at
-    // /mcp/<token>/agents/import/<that import's secret> (`agents::connector`).
-    if let Some(secret) = segment.strip_prefix("agents/import/") {
-        let secret = secret.trim_end_matches('/').to_string();
-        return handle_import_http(app, secret, req).await;
-    }
-    // Agents get their own tool set at /mcp/<token>/agents/<agent-id>.
-    if let Some(agent_id) = segment.strip_prefix("agents/") {
-        let agent_id = agent_id.trim_end_matches('/').to_string();
-        let turn = crate::agents::broker::turn_from_query(req.uri().query());
-        return handle_agents_http(app, agent_id, turn, req).await;
-    }
     let project_path = if segment.trim_end_matches('/') == ACTIVE_PROJECT_SEGMENT {
         ACTIVE_PROJECT_SEGMENT.to_string()
     } else {
@@ -493,6 +534,29 @@ async fn handle_http(
             "Method not allowed",
         )),
     }
+}
+
+#[derive(Debug, PartialEq)]
+enum SecretRoute {
+    Agent,
+    Import,
+}
+
+/// The paths answered by bearer secret rather than by the preview token.
+fn route_secret_path(path: &str) -> Option<SecretRoute> {
+    match path.trim_end_matches('/') {
+        crate::agents::reach::AGENT_PATH => Some(SecretRoute::Agent),
+        crate::agents::reach::IMPORT_PATH => Some(SecretRoute::Import),
+        _ => None,
+    }
+}
+
+fn bearer_of(req: &Request<Incoming>) -> Option<String> {
+    let header = req
+        .headers()
+        .get(hyper::header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok());
+    crate::agents::reach::bearer(header).map(str::to_string)
 }
 
 /// Same transport rules as the preview tools, answered by `crate::agents::mcp`.
@@ -1068,6 +1132,41 @@ mod tests {
         assert!(url.starts_with("http://127.0.0.1:4123/mcp/abc123/"));
         let segment = url.rsplit('/').next().unwrap();
         assert_eq!(decode_project_segment(segment).as_deref(), Some(project));
+    }
+
+    #[test]
+    fn agents_and_imports_are_routed_by_path_alone() {
+        assert_eq!(route_secret_path("/mcp/agent"), Some(SecretRoute::Agent));
+        assert_eq!(route_secret_path("/mcp/agent/"), Some(SecretRoute::Agent));
+        assert_eq!(route_secret_path("/mcp/import"), Some(SecretRoute::Import));
+        // The old shapes, which named the agent, are answered by nothing.
+        assert_eq!(route_secret_path("/mcp/tok/agents/a1"), None);
+        assert_eq!(route_secret_path("/mcp/agent/a1"), None);
+        assert_eq!(route_secret_path("/mcp/agents"), None);
+    }
+
+    #[test]
+    fn a_preview_token_from_before_the_current_generation_is_replaced() {
+        let old = BridgeIdentity {
+            token: Some("0123456789abcdef0123456789abcdef".into()),
+            port: Some(4000),
+            generation: None,
+        };
+        assert_eq!(current_token(&old), None);
+        let current = BridgeIdentity {
+            generation: Some(PREVIEW_TOKEN_GENERATION),
+            ..old
+        };
+        assert_eq!(
+            current_token(&current).as_deref(),
+            Some("0123456789abcdef0123456789abcdef")
+        );
+        let fresh = new_preview_token();
+        assert_eq!(fresh.len(), 64);
+        assert_ne!(fresh, new_preview_token());
+        // An identity file from before generations still reads.
+        let legacy: BridgeIdentity = serde_json::from_str(r#"{"token":"abc","port":1}"#).unwrap();
+        assert_eq!(legacy.generation, None);
     }
 
     #[test]

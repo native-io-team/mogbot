@@ -522,6 +522,12 @@ impl Backend for DesktopBackend {
 
     async fn schedule(&self, op: ScheduleOp) -> Result<Value, CommandError> {
         let app = self.app.clone();
+        // The phone shows "When…" routines read-only: whatever it sends for
+        // one (Pause, Cancel, Run now, an edit) is refused here, not only
+        // hidden there.
+        if let Some((agent_id, id)) = op.target() {
+            refuse_watch_from_phone(agent_id, id)?;
+        }
         match op {
             ScheduleOp::Preview { when } => json(cmd::agents_schedule_preview(when).await?),
             ScheduleOp::Create {
@@ -943,4 +949,18 @@ pub async fn resume_on_launch(app: AppHandle) {
     if let Err(e) = bring_up(&app).await {
         tracing::error!("[Companion] Could not resume at launch: {}", e);
     }
+}
+
+/// A "When…" routine can't be changed from the phone (see `schedule`).
+pub(crate) fn refuse_watch_from_phone(agent_id: &str, id: &str) -> Result<(), CommandError> {
+    let is_watch = crate::agents::store::get(agent_id)
+        .ok()
+        .and_then(|a| a.check_ins.into_iter().find(|c| c.id == id))
+        .is_some_and(|c| c.watch.is_some());
+    if is_watch {
+        return Err(CommandError::expected(
+            "“When…” routines can be changed on the Mac only.",
+        ));
+    }
+    Ok(())
 }

@@ -156,68 +156,66 @@ fn write_to_keychain(account_id: &str, key: &str, value: &str) -> Result<(), Com
 }
 
 /// Store `value` under (`service`, `key`). Shared with Agents' secrets
-/// (`agents::secrets`), which keep their own service namespace per agent.
+/// (`agents::secrets`), which keep their own service namespace per agent,
+/// and the companion's identity key. How items are kept, and how older ones
+/// move over without ever being at risk, is [`crate::keychain`].
 pub(crate) fn keychain_write(service: &str, key: &str, value: &str) -> Result<(), CommandError> {
-    use std::io::Write;
-    use std::process::Stdio;
-
     if !KEYCHAIN_SUPPORTED {
         return Err(CommandError::expected(
             "Secrets are only stored on macOS at the moment: there's no credential vault on this platform yet.",
         ));
     }
-    // Pass the secret on stdin rather than as an argv entry — a CLI argument is
-    // visible to any user via `ps`/`/proc`, leaking the credential. With `-w`
-    // and no inline value, `security` prompts for the password and then a
-    // confirmation ("retype password"), reading both from stdin, so we send the
-    // value twice. Callers trim to a single line (no embedded newline), so the
-    // two reads each receive the full value.
-    let mut child = create_command("security")
-        .args(["add-generic-password", "-U", "-a", key, "-s", service, "-w"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Keychain write failed: {e}"))?;
-
-    child
-        .stdin
-        .take()
-        .ok_or_else(|| CommandError::from("Keychain write failed: no stdin handle"))?
-        .write_all(format!("{value}\n{value}\n").as_bytes())
-        .map_err(|e| format!("Keychain write failed: {e}"))?;
-
-    let status = child
-        .wait()
-        .map_err(|e| format!("Keychain write failed: {e}"))?;
-
-    if !status.success() {
-        return Err(format!("Failed to store credential '{key}' in keychain").into());
+    #[cfg(target_os = "macos")]
+    {
+        crate::keychain::write(service, key, value).map_err(|e| {
+            CommandError::from(format!(
+                "Failed to store credential '{key}' in keychain: {e}"
+            ))
+        })
     }
-    Ok(())
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (service, key, value);
+        Err(keychain_unsupported())
+    }
 }
 
 fn read_from_keychain(account_id: &str, key: &str) -> Option<String> {
     keychain_read(&keychain_service(account_id), key)
 }
 
-pub(crate) fn keychain_read(service: &str, key: &str) -> Option<String> {
-    if !KEYCHAIN_SUPPORTED {
-        return None;
-    }
-    let output = create_command("security")
-        .args(["find-generic-password", "-a", key, "-s", service, "-w"])
-        .output()
-        .ok()?;
+fn read_from_keychain_checked(account_id: &str, key: &str) -> crate::keychain::Read {
+    keychain_read_checked(&keychain_service(account_id), key)
+}
 
-    if !output.status.success() {
-        return None;
+/// The value under (`service`, `key`), or `None` for "no value" and "the
+/// Keychain didn't answer" alike. Where the two must be told apart (status
+/// shown to the user, the companion's identity key) use
+/// [`keychain_read_checked`].
+pub(crate) fn keychain_read(service: &str, key: &str) -> Option<String> {
+    match keychain_read_checked(service, key) {
+        crate::keychain::Read::Found(v) => Some(v),
+        crate::keychain::Read::NotFound => None,
+        crate::keychain::Read::Error(e) => {
+            tracing::warn!(service, error = %e, "[Keychain] read failed");
+            None
+        }
     }
-    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value)
+}
+
+/// Found / definitely not there / couldn't check.
+pub(crate) fn keychain_read_checked(service: &str, key: &str) -> crate::keychain::Read {
+    if !KEYCHAIN_SUPPORTED {
+        return crate::keychain::Read::Error("there's no Keychain on this platform".into());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        crate::keychain::read(service, key)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (service, key);
+        crate::keychain::Read::Error("there's no Keychain on this platform".into())
     }
 }
 
@@ -229,9 +227,12 @@ pub(crate) fn keychain_delete(service: &str, key: &str) {
     if !KEYCHAIN_SUPPORTED {
         return;
     }
-    let _ = create_command("security")
-        .args(["delete-generic-password", "-a", key, "-s", service])
-        .status();
+    #[cfg(target_os = "macos")]
+    if let Err(e) = crate::keychain::delete(service, key) {
+        tracing::warn!(service, error = %e, "[Keychain] delete failed");
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (service, key);
 }
 
 fn delete_all_account_credentials(account_id: &str) {
@@ -363,6 +364,10 @@ pub enum ClaudeConnState {
     Connected,
     /// Was connected but the token has expired — red stroke + inline Reconnect.
     NeedsReconnect,
+    /// The Keychain didn't answer (locked, refused): whether it's connected
+    /// isn't known. Never shown as "not connected", which would invite a
+    /// reconnect over a token that is fine.
+    KeychainUnavailable,
 }
 
 /// Resolved Claude identity for a workspace: connection state + the email to show.
@@ -385,12 +390,22 @@ pub async fn resolve_claude_identity(account_id: &str) -> ClaudeIdentity {
         return resolve_default_claude_identity().await;
     }
 
-    let Some(_token) = read_from_keychain(account_id, CLAUDE_TOKEN_KEY) else {
-        return ClaudeIdentity {
-            state: ClaudeConnState::NotConnected,
-            email: None,
-        };
-    };
+    match read_from_keychain_checked(account_id, CLAUDE_TOKEN_KEY) {
+        crate::keychain::Read::Found(_) => {}
+        crate::keychain::Read::NotFound => {
+            return ClaudeIdentity {
+                state: ClaudeConnState::NotConnected,
+                email: None,
+            }
+        }
+        crate::keychain::Read::Error(e) => {
+            tracing::warn!(account_id, error = %e, "[Keychain] couldn't check the Claude token");
+            return ClaudeIdentity {
+                state: ClaudeConnState::KeychainUnavailable,
+                email: None,
+            };
+        }
+    }
     let email = read_from_keychain(account_id, CLAUDE_EMAIL_KEY);
     // No expiry recorded (older connect): treat as still valid rather than
     // nagging the user with a false red (see should_inject_claude_token).
@@ -1001,6 +1016,7 @@ pub async fn get_account_credential_status(
                 .unwrap_or_else(|| "Connected".to_string()),
         ),
         ClaudeConnState::NeedsReconnect => Some("Reconnect needed".to_string()),
+        ClaudeConnState::KeychainUnavailable => Some("Couldn't check the Keychain".to_string()),
         ClaudeConnState::NotConnected => None,
     };
     let codex_auth_email = agent_connected("codex");
@@ -1039,18 +1055,37 @@ pub async fn get_account_credential_status(
         }
     };
 
+    // Presence of each credential, three-way: one the Keychain couldn't
+    // answer for is reported as such, not as "not set".
+    let mut keychain_unavailable = claude.state == ClaudeConnState::KeychainUnavailable;
+    let mut has = |key: &str| match read_from_keychain_checked(&id, key) {
+        crate::keychain::Read::Found(_) => true,
+        crate::keychain::Read::NotFound => false,
+        crate::keychain::Read::Error(_) => {
+            keychain_unavailable = true;
+            false
+        }
+    };
+    let has_anthropic_base_url = has("anthropic_base_url");
+    let has_vercel_token = has("vercel_token");
+    let has_cloudflare_api_token = has("cloudflare_api_token");
+    let has_netlify_auth_token = has("netlify_auth_token");
+    let has_git_name = has("git_name");
+    let has_git_email = has("git_email");
+
     Ok(AccountCredentialStatus {
         claude_auth_email,
         codex_auth_email,
         opencode_auth_email,
         github_auth_email,
         vercel_username,
-        has_anthropic_base_url: read_from_keychain(&id, "anthropic_base_url").is_some(),
-        has_vercel_token: read_from_keychain(&id, "vercel_token").is_some(),
-        has_cloudflare_api_token: read_from_keychain(&id, "cloudflare_api_token").is_some(),
-        has_netlify_auth_token: read_from_keychain(&id, "netlify_auth_token").is_some(),
-        has_git_name: read_from_keychain(&id, "git_name").is_some(),
-        has_git_email: read_from_keychain(&id, "git_email").is_some(),
+        has_anthropic_base_url,
+        has_vercel_token,
+        has_cloudflare_api_token,
+        has_netlify_auth_token,
+        has_git_name,
+        has_git_email,
+        keychain_unavailable,
     })
 }
 

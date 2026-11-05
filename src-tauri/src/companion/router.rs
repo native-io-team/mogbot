@@ -152,6 +152,19 @@ pub enum ScheduleOp {
     },
 }
 
+impl ScheduleOp {
+    /// The routine it acts on, when it names one.
+    pub fn target(&self) -> Option<(&str, &str)> {
+        match self {
+            ScheduleOp::Update { agent_id, id, .. }
+            | ScheduleOp::Pause { agent_id, id, .. }
+            | ScheduleOp::Cancel { agent_id, id }
+            | ScheduleOp::RunNow { agent_id, id } => Some((agent_id, id)),
+            ScheduleOp::Preview { .. } | ScheduleOp::Create { .. } => None,
+        }
+    }
+}
+
 /// What the phone may change about an agent: the row's own toggles, and
 /// its instructions (the agent sheet shows them, so it can correct them).
 /// Its name, role, model and project stay the desk's.

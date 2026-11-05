@@ -191,6 +191,7 @@ pub(crate) fn card(
         input: None,
         always: None,
         always_allowed: false,
+        summary: None,
         note: None,
         secret: None,
         prompt: Some(SessionPrompt {

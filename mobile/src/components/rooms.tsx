@@ -41,7 +41,7 @@ import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
 import { ComposerField, RoundButton } from './Composer';
-import { LinkBanner } from './ConnectionPill';
+import { RoomBars } from './ConversationBars';
 import { Icon, T, useRipple } from './ui';
 import { StackedAvatars } from './RoomRow';
 
@@ -179,7 +179,6 @@ function RoomChat({ id }: { id: string }) {
           headerTitle: () => <RoomHeader room={room} members={members} working={working.length} />,
         }}
       />
-      <LinkBanner />
       <Animated.FlatList
         ref={list}
         inverted
@@ -451,6 +450,7 @@ export function RoomComposer({
       style={[styles.composer, { paddingBottom: Math.max(insets.bottom, space.sm) }]}
       onLayout={(e) => onHeight?.(e.nativeEvent.layout.height)}
     >
+      <RoomBars />
       {asking ? (
         <Animated.View entering={FadeIn.duration(150)} style={{ gap: space.sm }}>
           <T variant="small" color={colors.textStrong} style={styles.askTitle}>

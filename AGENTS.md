@@ -7,6 +7,11 @@
 > or Codex on your own machine; consequential actions arrive as Allow / Deny cards; the phone
 > companion is a complete way in. Ship Studio's project workspace sits underneath. Not a coding tool.
 
+What an agent does today: works a task (in its own copy of a bound project), ends on one result
+card (Keep changes / Review changes / Preview / Discard, Ask for changes), shows a "what it did"
+timeline, runs routines on a schedule or "When…" something happens, and can be taken over by hand.
+Usage is shown only as the engines report it. Details: [docs/agents.md](docs/agents.md).
+
 The full guide is **[CLAUDE.md](CLAUDE.md)** — read it before writing code. It covers the
 architecture, the canonical patterns ("How to Do Things in Ship Studio"), the banned patterns,
 testing, and known gotchas. This file is the contract in brief.
@@ -40,7 +45,11 @@ testing, and known gotchas. This file is the contract in brief.
 8. **Every user-facing feature registers its actions in the Cmd+K palette** via `useCommands`.
 9. **Never assume data** — only display values that were explicitly returned or saved; never
    construct URLs, estimate numbers, or infer state from file existence.
-10. **Stay compatible with Ship Studio** — `~/ShipStudio` and in-project `.shipstudio/` are
+10. **Keep the security model** (CLAUDE.md, "Security model"): approvals through the broker,
+    outside text sealed, untrusted HTML only through `sanitizeMessageHtml`, the phone trusts only a
+    Mac that proved its pinned identity. Copy follows the coherence rules: Line / Card / Bar,
+    neutral affirmatives, one word per idea ([docs/agents.md](docs/agents.md), "Lines, cards and bars").
+11. **Stay compatible with Ship Studio** — `~/ShipStudio` and in-project `.shipstudio/` are
     shared; app state is ours (see CLAUDE.md, "Brand and identity").
 
 ## Layout in one breath

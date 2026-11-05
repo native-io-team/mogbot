@@ -156,6 +156,7 @@ fn chief_asks(text: &str) -> Inbound {
         routine: false,
         ticket: None,
         room: None,
+        outside: false,
     }
 }
 
@@ -168,6 +169,7 @@ fn user_says(text: &str) -> Inbound {
         routine: false,
         ticket: None,
         room: None,
+        outside: false,
     }
 }
 

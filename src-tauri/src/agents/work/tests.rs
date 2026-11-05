@@ -124,6 +124,7 @@ fn a_real_codex_app_server_turn_maps_onto_the_same_steps() {
         None,
         "",
         "run it",
+        false,
     )
     .0;
     let mut live = Live::default();

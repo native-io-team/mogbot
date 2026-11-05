@@ -43,6 +43,19 @@
   background: var(--surface-panel);
 }
 
+/* "Install it yourself (advanced)": the build route, one click down. */
+.text-button.button.phone-route__advanced {
+  align-self: flex-start;
+}
+
+.phone-route__chevron {
+  transition: transform var(--transition-interaction);
+}
+
+.phone-route__advanced[aria-expanded='true'] .phone-route__chevron {
+  transform: rotate(90deg);
+}
+
 .phone-route[data-unavailable] {
   background: transparent;
   border-style: dashed;

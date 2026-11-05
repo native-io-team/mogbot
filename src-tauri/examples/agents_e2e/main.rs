@@ -119,7 +119,7 @@ impl H {
     fn agent(&self, name: &str, role: &str, instructions: &str) -> store::Agent {
         // The same scenario on the other engine reuses its names: start clean.
         if let Ok(Some(old)) = store::find(name) {
-            runner::stop(&old.id);
+            runner::stop(&self.app, &old.id);
             let _ = store::delete(&old.id);
         }
         let a = store::create(store::NewAgent {
@@ -663,7 +663,9 @@ async fn turn_with_children(h: &H, name: &str, tag: u32) -> Result<store::Agent,
 async fn stop_tree(h: &H) -> Check {
     let a = turn_with_children(h, "Sleeper", 47471).await?;
     ensure(
-        cmd::agents_stop(a.id.clone()).await.unwrap_or(false),
+        cmd::agents_stop(h.app.clone(), a.id.clone())
+            .await
+            .unwrap_or(false),
         "stop found nothing to stop",
     )?;
     h.turn(&a.id).await?;
@@ -950,7 +952,9 @@ async fn stop(h: &H) -> Check {
     h.send(&a.id, story).await?;
     mid_reply().await?;
     ensure(
-        cmd::agents_stop(a.id.clone()).await.unwrap_or(false),
+        cmd::agents_stop(h.app.clone(), a.id.clone())
+            .await
+            .unwrap_or(false),
         "stop found nothing to stop",
     )?;
     h.turn(&a.id).await?;

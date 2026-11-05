@@ -1,3 +1,4 @@
+import type { PluginInfo } from '../../lib/plugins';
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
 import type { AgentConfig } from '../../lib/agent';
 import type { BranchInfo, PullRequestInfo } from '../../lib/branches';
@@ -219,6 +220,8 @@ interface BranchProps {
 interface PluginProps {
   loadedPlugins: LoadedPlugin[];
   pluginFailures: PluginFailure[];
+  /** Asked for by the project, not yet approved by this app: not loaded. */
+  pluginsPendingTrust: PluginInfo[];
   getSlotPlugins: (slotName: string) => LoadedPlugin[];
   reloadPlugins: () => Promise<void>;
 }

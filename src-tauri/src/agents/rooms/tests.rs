@@ -24,7 +24,6 @@ fn agent(name: &str, is_main: bool) -> store::Agent {
     .unwrap()
 }
 
-
 fn said_in(room: &str, agent_id: &str, kind: MessageKind, text: &str) -> AgentMessage {
     let mut m = runner::new_message(agent_id, kind, text);
     m.room = Some(room.into());
@@ -193,6 +192,7 @@ fn the_thread_reads_back_with_each_members_card_answers() {
             choice: None,
             secret: None,
             connector: None,
+            summary: None,
         });
         // The member's own log has the card, the room a copy.
         store::append_message(&card).unwrap();

@@ -48,6 +48,10 @@ pub async fn spawn_pty(
     let validated_cwd = validate_project_path(&options.cwd)?;
     let mut options = options;
     options.cwd = validated_cwd.to_string_lossy().to_string();
+    if let Some(root) = options.dev_server_root.as_deref() {
+        crate::commands::projects::guard_dev_server_spawn(root, Some(&options.cwd))
+            .map_err(CommandError::expected)?;
+    }
 
     let id = PTY_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
     let app_handle = app.clone();

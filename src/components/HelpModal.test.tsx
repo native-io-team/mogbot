@@ -7,6 +7,16 @@ vi.mock('../lib/claude', () => ({
   listAgentSkills: vi.fn(),
 }));
 
+vi.mock('../lib/agentsDesktop', () => ({
+  getDesktopSettings: vi.fn().mockResolvedValue({
+    supported: true,
+    menuBarIcon: true,
+    quickEntry: true,
+    shortcut: 'Ctrl+Alt+KeyM',
+    shortcutLabel: '⌃⌥M',
+  }),
+}));
+
 vi.mock('../lib/analytics', () => ({
   trackEvent: vi.fn(),
 }));
@@ -64,5 +74,17 @@ describe('HelpModal', () => {
     expect(commandsTab).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('/clear')).toBeVisible();
     expect(screen.getByText('Open command palette')).not.toBeVisible();
+  });
+
+  it('lists the Agents shortcuts first, with the quick-message key as the user set it', async () => {
+    render(<HelpModal />);
+    await screen.findByText('Quick message');
+    const titles = [...document.querySelectorAll('.help-section-title')].map((t) => t.textContent);
+    expect(titles[0]).toBe('Agents');
+    expect(screen.getByText('Next agent that needs your OK')).toBeVisible();
+    expect(screen.getByText('⌘J')).toHaveClass('workspace-sidebar-filter-shortcut');
+    expect(screen.getByText('⌘F')).toHaveClass('workspace-sidebar-filter-shortcut');
+    expect(screen.getByText('⌘⇧A')).toHaveClass('workspace-sidebar-filter-shortcut');
+    expect(screen.getByText('⌃⌥M')).toHaveClass('workspace-sidebar-filter-shortcut');
   });
 });

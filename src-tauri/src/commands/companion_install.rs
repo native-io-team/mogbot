@@ -632,7 +632,7 @@ pub async fn companion_install_android_app(serial: String) -> Result<InstalledAp
 
 /// A macOS notification, 24 h before a free team's build stops opening.
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, body))]
 pub async fn companion_install_remind(
     app: AppHandle,
     title: String,

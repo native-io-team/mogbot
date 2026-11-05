@@ -12,7 +12,8 @@
 //!   Code 2.1.318: without it the model quotes the user's ~/.claude/CLAUDE.md;
 //!   with it, it has none.
 //! - **Only our three tools** (`--strict-mcp-config` with one server, the
-//!   import's own URL): `propose_agent`, `update_proposal`, `finish`. They
+//!   import's own endpoint, its secret in a 0600 config file rather than on
+//!   the command line; `reach`): `propose_agent`, `update_proposal`, `finish`. They
 //!   stage a draft; nothing is created until the user reviews it
 //!   (`agents::review`). No `approve` tool, and `--permission-mode dontAsk`
 //!   with `--permission-prompts none`, so nothing can be granted mid-run.
@@ -89,13 +90,19 @@ impl Session {
     }
 }
 
-/// The MCP config: our one server, nothing else.
-pub fn mcp_config(url: &str) -> String {
-    serde_json::json!({ "mcpServers": { SERVER_KEY: { "type": "http", "url": url } } }).to_string()
+/// The MCP config: our one server, nothing else, reached with `secret`.
+pub fn mcp_config(url: &str, secret: &str) -> String {
+    serde_json::json!({ "mcpServers": { SERVER_KEY: {
+        "type": "http",
+        "url": url,
+        "headers": { "Authorization": format!("Bearer {secret}") },
+    } } })
+    .to_string()
 }
 
 /// Every argument an exchange's `claude` gets. The prompt goes on stdin.
-pub fn args(session: &Session, url: &str, system_prompt: &str) -> Vec<String> {
+/// `mcp_config` is the path of the file [`mcp_config`] was written to.
+pub fn args(session: &Session, mcp_config: &str, system_prompt: &str) -> Vec<String> {
     let mut args: Vec<String> = [
         "--print",
         "--output-format",
@@ -125,7 +132,7 @@ pub fn args(session: &Session, url: &str, system_prompt: &str) -> Vec<String> {
     args.extend([flag.to_string(), session.id.clone()]);
     args.extend([
         "--mcp-config".into(),
-        mcp_config(url),
+        mcp_config.to_string(),
         "--allowedTools".into(),
         TOOLS
             .iter()
@@ -215,7 +222,7 @@ pub fn session_began(line: &serde_json::Value) -> bool {
 pub async fn exchange(
     binary: &Path,
     session: &Session,
-    url: &str,
+    mcp_config: &str,
     system_prompt: &str,
     prompt: &str,
     cancel: Arc<Notify>,
@@ -224,7 +231,7 @@ pub async fn exchange(
     let result = run(
         binary,
         session,
-        url,
+        mcp_config,
         system_prompt,
         prompt,
         cancel,
@@ -237,7 +244,7 @@ pub async fn exchange(
 async fn run(
     binary: &Path,
     session: &Session,
-    url: &str,
+    mcp_config: &str,
     system_prompt: &str,
     prompt: &str,
     cancel: Arc<Notify>,
@@ -245,7 +252,7 @@ async fn run(
 ) -> Result<Outcome, Failed> {
     std::fs::create_dir_all(&session.dir).map_err(|e| Failed::Error(e.to_string()))?;
     let mut cmd = crate::utils::create_command(binary);
-    cmd.args(args(session, url, system_prompt));
+    cmd.args(args(session, mcp_config, system_prompt));
     super::runner::strip_session_env(&mut cmd);
     cmd.env("PATH", crate::utils::get_extended_path())
         .current_dir(&session.dir);
@@ -356,11 +363,7 @@ mod tests {
 
     #[test]
     fn the_interview_is_sealed() {
-        let a = args(
-            &session(false),
-            "http://127.0.0.1:1/mcp/t/agents/import/s",
-            "be brief",
-        );
+        let a = args(&session(false), "/s/agent-bridge/mcp-i.json", "be brief");
         // No built-in tools, and each one named as denied too.
         assert_eq!(value_after(&a, "--tools"), Some(""));
         let denied = value_after(&a, "--disallowedTools").unwrap();
@@ -388,9 +391,16 @@ mod tests {
             allowed,
             "mcp__dashbot_import__propose_agent,mcp__dashbot_import__update_proposal,mcp__dashbot_import__finish"
         );
-        let config = value_after(&a, "--mcp-config").unwrap();
-        let config: serde_json::Value = serde_json::from_str(config).unwrap();
-        assert_eq!(config["mcpServers"].as_object().unwrap().len(), 1);
+        // A file's path: its secret never reaches the command line.
+        assert_eq!(
+            value_after(&a, "--mcp-config"),
+            Some("/s/agent-bridge/mcp-i.json")
+        );
+        let config: serde_json::Value =
+            serde_json::from_str(&mcp_config("http://127.0.0.1:1/mcp/import", "s")).unwrap();
+        let servers = config["mcpServers"].as_object().unwrap();
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[SERVER_KEY]["headers"]["Authorization"], "Bearer s");
         // Our system prompt in place of Claude Code's, never appended to it.
         assert_eq!(value_after(&a, "--system-prompt"), Some("be brief"));
         assert!(!a.iter().any(|x| x == "--append-system-prompt"));

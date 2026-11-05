@@ -513,6 +513,12 @@
   min-width: 0;
 }
 
+.account-cred-keychain-note {
+  margin: 0 0 var(--spacing-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-sm);
+}
+
 .account-service-row .account-cred-status {
   flex: 1 1 auto;
 }

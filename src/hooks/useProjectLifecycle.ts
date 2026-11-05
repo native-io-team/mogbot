@@ -85,6 +85,12 @@ import { basename } from '../lib/paths';
 import type { AppView } from '../lib/types';
 import { preferredPortForProject } from '../lib/ports';
 import { BRAND } from '../lib/brand';
+import {
+  devServerConsentStore,
+  getDevServerConsent,
+  markInstallScriptsRan,
+  planPackageInstall,
+} from '../lib/devServerConsent';
 
 export interface UseProjectLifecycleParams {
   currentProject: Project | null;
@@ -202,6 +208,8 @@ export function useProjectLifecycle({
     packageManager: string;
     cwd: string;
     args: string[];
+    /** Lifecycle scripts run (the project was approved): the skip marker clears on success. */
+    runsScripts?: boolean;
   } | null>(null);
   const [installTerminalExited, setInstallTerminalExited] = useState(false);
 
@@ -823,14 +831,36 @@ export function useProjectLifecycle({
     void handleSelectProject(project, { skipWorkspaceGate: true });
   };
 
+  // Installing runs the project's lifecycle scripts (and its dependencies'),
+  // so it needs the same OK as the dev server: until then the Preview asks,
+  // and approving it runs the install (dev_consent.rs).
   const handleRunInstall = (projectPath: string, packageManager: string) => {
-    setInstallTerminalConfig({
-      projectPath,
-      packageManager,
-      cwd: projectPath,
-      args: ['install'],
-    });
-    setInstallTerminalExited(false);
+    void (async () => {
+      try {
+        const consent = await getDevServerConsent(projectPath);
+        if (consent.state !== 'approved') {
+          devServerConsentStore.set(projectPath, {
+            consent,
+            resume: () => handleRunInstall(projectPath, packageManager),
+          });
+          return;
+        }
+        const plan = await planPackageInstall(projectPath, packageManager);
+        setInstallTerminalConfig({
+          projectPath,
+          packageManager,
+          cwd: projectPath,
+          args: plan.args,
+          runsScripts: plan.runsScripts,
+        });
+        setInstallTerminalExited(false);
+      } catch (err) {
+        showToast(
+          `Couldn't start the install: ${formatCommandError(asCommandError(err))}`,
+          'error'
+        );
+      }
+    })();
   };
 
   const handleCloseInstallTerminal = () => {
@@ -887,6 +917,13 @@ export function useProjectLifecycle({
         'error'
       );
       return; // keep overlay open so user can read stderr + close manually
+    }
+    if (cfg.runsScripts) {
+      await markInstallScriptsRan(cfg.projectPath).catch((err: unknown) =>
+        logger.warn('[Install] Could not clear the skipped-scripts marker', {
+          error: formatCommandError(asCommandError(err)),
+        })
+      );
     }
     void trackEvent('install_dependencies_succeeded', {
       package_manager: cfg.packageManager,

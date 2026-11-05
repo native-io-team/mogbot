@@ -631,7 +631,8 @@ pub fn change(agent_id: &str, change: &Change) -> Result<View, CommandError> {
     let raw = read_file(&path)?;
     let (next, removed) = apply(&raw, change)?;
     let tmp = path.with_extension("md.tmp");
-    std::fs::write(&tmp, next.as_bytes()).map_err(super::err_io)?;
+    store::note_claude_md_write(&path);
+    store::write_private(&tmp, next.as_bytes()).map_err(super::err_io)?;
     std::fs::rename(&tmp, &path).map_err(super::err_io)?;
     Ok(View {
         entries: entries(&next),

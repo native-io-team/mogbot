@@ -10,9 +10,11 @@
 
 import { useMemo } from 'react';
 import { PluginsDropdown } from './PluginsDropdown';
+import { PluginTrustPrompt } from './PluginTrustPrompt';
 import { useModal } from '../../contexts/ModalContext';
 import { HOSTING_PLUGIN_IDS } from '../workspace/WorkspaceHeader';
 import type { LoadedPlugin, PluginFailure } from '../../hooks/usePlugins';
+import type { PluginInfo } from '../../lib/plugins';
 import type { PluginThemeData } from '../../contexts/PluginContext';
 import type { ComponentProps } from 'react';
 
@@ -20,7 +22,13 @@ type DropdownProps = ComponentProps<typeof PluginsDropdown>;
 
 interface WorkspacePluginsSlotProps {
   /** The plugin prop group, passed whole rather than unpacked at the call site. */
-  plugins: { loadedPlugins: LoadedPlugin[]; pluginFailures: PluginFailure[] };
+  plugins: {
+    loadedPlugins: LoadedPlugin[];
+    pluginFailures: PluginFailure[];
+    /** Asked for by the project, not yet approved here (see PluginTrustPrompt). */
+    pluginsPendingTrust?: PluginInfo[];
+    reloadPlugins?: () => Promise<void>;
+  };
   pluginProject: DropdownProps['pluginProject'];
   pluginActions: DropdownProps['pluginActions'];
   pluginTheme: PluginThemeData;
@@ -32,7 +40,8 @@ export function WorkspacePluginsSlot({
   pluginActions,
   pluginTheme,
 }: WorkspacePluginsSlotProps) {
-  const { loadedPlugins, pluginFailures } = plugins;
+  const { loadedPlugins, pluginFailures, pluginsPendingTrust = [], reloadPlugins } = plugins;
+  const projectPath = pluginProject?.path;
   // Opened through ModalContext rather than a callback threaded down from the
   // workspace — the documented way a component reaches a modal.
   const pluginManagerModal = useModal('pluginManager');
@@ -48,14 +57,24 @@ export function WorkspacePluginsSlot({
   }, [loadedPlugins]);
 
   return (
-    <PluginsDropdown
-      plugins={regular}
-      failures={pluginFailures}
-      hostingPluginCount={hostingCount}
-      pluginProject={pluginProject}
-      pluginActions={pluginActions}
-      pluginTheme={pluginTheme}
-      onOpenPluginManager={pluginManagerModal.open}
-    />
+    <div className="plugin-trust-anchor">
+      <PluginsDropdown
+        plugins={regular}
+        failures={pluginFailures}
+        hostingPluginCount={hostingCount}
+        pluginProject={pluginProject}
+        pluginActions={pluginActions}
+        pluginTheme={pluginTheme}
+        onOpenPluginManager={pluginManagerModal.open}
+      />
+      {projectPath && pluginsPendingTrust.length > 0 && reloadPlugins && (
+        <PluginTrustPrompt
+          key={pluginsPendingTrust[0].manifest.id}
+          projectPath={projectPath}
+          pending={pluginsPendingTrust}
+          onDecided={reloadPlugins}
+        />
+      )}
+    </div>
   );
 }

@@ -21,6 +21,16 @@ import {
   localPathFromHref,
   PROSE_PATH,
   describeCheckInTime,
+  describeEvery,
+  watchCappedToday,
+  fullyPriced,
+  routineWeekLine,
+  describeWatchSource,
+  describeWatchStatus,
+  describeWatchTitle,
+  watchUsesModel,
+  type CheckIn,
+  type Watch,
   describeRepeat,
   describeRun,
   describeRunDetail,
@@ -871,5 +881,120 @@ describe('routine models', () => {
     expect(routineModelChoices('claude', [{ value: '', label: 'Default' }])[0].label).toBe(
       'Automatic'
     );
+  });
+});
+
+describe('"When…" routines in words', () => {
+  const now = new Date(2026, 10, 5, 15, 0).getTime();
+  const min = 60_000;
+  const watch = (over: Partial<Watch> = {}): Watch => ({
+    source: { kind: 'github_mentions' },
+    everyMinutes: 10,
+    lastFound: 0,
+    failures: 0,
+    ...over,
+  });
+  const row = (w: Watch, extra: Partial<CheckIn> = {}): CheckIn => ({
+    id: 'w1',
+    note: 'Triage it',
+    nextAt: now,
+    createdAt: 0,
+    paused: false,
+    watch: w,
+    ...extra,
+  });
+
+  it('says what it waits for', () => {
+    expect(describeWatchTitle({ kind: 'github_mentions' })).toBe(
+      'When someone mentions you on GitHub'
+    );
+    expect(describeWatchSource({ kind: 'new_file', folder: '/Users/j/Downloads/inv' })).toBe(
+      'a new file appears in /Users/j/Downloads/inv'
+    );
+    expect(describeWatchSource({ kind: 'custom', check: 'a new email from Dana.' })).toBe(
+      'a new email from Dana'
+    );
+    expect(watchUsesModel({ kind: 'linear_assigned' })).toBe(true);
+    expect(watchUsesModel({ kind: 'new_file', folder: '/x' })).toBe(false);
+    expect([1, 10, 60, 240].map(describeEvery)).toEqual([
+      'every minute',
+      'every 10 min',
+      'every hour',
+      'every 4 hours',
+    ]);
+  });
+
+  it('words a row from what the Mac recorded only', () => {
+    expect(describeWatchStatus(row(watch()), now)).toBe(
+      'Checks every 10 min · first check soon, to note what’s already there'
+    );
+    const checked = watch({ baselineAt: now - 60 * min, lastCheckedAt: now - 3 * min });
+    expect(describeWatchStatus(row(checked), now)).toBe(
+      'Checks every 10 min · checked 3 min ago · nothing new yet'
+    );
+    const found = { ...checked, lastFound: 2, lastFoundAt: new Date(2026, 10, 5, 14, 0).getTime() };
+    expect(describeWatchStatus(row(found), now)).toMatch(
+      /^Checks every 10 min · checked 3 min ago · last found 2 today /
+    );
+    expect(
+      describeWatchStatus(
+        row(watch({ failures: 2, lastError: 'GitHub CLI isn’t signed in.' })),
+        now
+      )
+    ).toBe('Last check failed: GitHub CLI isn’t signed in.');
+    expect(
+      describeWatchStatus(
+        row(watch({ pausedNote: 'Paused after 5 checks in a row failed: x' }), { paused: true }),
+        now
+      )
+    ).toBe('Paused after 5 checks in a row failed: x');
+    expect(describeWatchStatus(row(watch(), { paused: true }), now)).toBe(
+      'Paused · checks every 10 min'
+    );
+  });
+
+  it('says when today’s model checks are done, and an unconfirmed empty first check', () => {
+    const day = (ts: number) => {
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const capped = watch({
+      source: { kind: 'linear_assigned' },
+      baselineAt: now - 60 * min,
+      dayChecks: { day: day(now), checks: 24 },
+    });
+    expect(watchCappedToday(capped, now)).toBe(true);
+    expect(describeWatchStatus(row(capped), now)).toBe(
+      'Made today’s 24 checks · checks again tomorrow'
+    );
+    // Yesterday's count doesn't hold today back.
+    const yesterday = { ...capped, dayChecks: { day: '2001-01-01', checks: 24 } };
+    expect(watchCappedToday(yesterday, now)).toBe(false);
+    expect(describeWatchStatus(row(watch({ emptyAnswers: 1 })), now)).toBe(
+      'Checks every 10 min · found nothing yet; the next check confirms that before anything starts work'
+    );
+  });
+
+  it('counts model checks apart from turns, priced only when every one was', () => {
+    const t = {
+      turns: 0,
+      inputTokens: 9000,
+      outputTokens: 1000,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costUsd: 0.168,
+      pricedTurns: 0,
+      durationMs: 0,
+      checks: 40,
+      pricedChecks: 40,
+    };
+    expect(routineWeekLine(t)).toBe('40 checks · $0.17 at API prices this week');
+    // On a plan the price isn't the bill.
+    expect(routineWeekLine(t, true)).toBe('40 checks · 10k tokens this week');
+    expect(routineWeekLine({ ...t, pricedChecks: 39 })).toBe('40 checks · 10k tokens this week');
+    expect(formatUsage({ ...t, turns: 2, pricedTurns: 2 })).toBe(
+      '$0.17 at API prices · 10k tokens · 2 turns · 40 checks'
+    );
+    expect(fullyPriced({ ...t, turns: 1, pricedTurns: 0 })).toBe(false);
   });
 });

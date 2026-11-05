@@ -10,6 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CheckIcon, ChevronRightIcon, CopyIcon, InfoIcon, WarningIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { Checkbox } from '../primitives/Checkbox';
+import { TextButton } from '../primitives/TextButton';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useAgentsList } from '../../lib/agentsStore';
 import type { ImportSummary, PasteImportAgent, PasteImportPreview } from '../../lib/agents';
@@ -318,6 +319,43 @@ export function ImportProblems({ title, items }: { title: string; items: ReactNo
   );
 }
 
+/** What to say when the pasted reply can't be read: the way out, not a JSON debugger. */
+export const PASTE_FORMAT_PROBLEM =
+  'That reply isn’t in the format we asked for — copy the message again and ask your assistant to reply with just the code block.';
+
+/**
+ * A pasted reply that can't come across as it is. One plain sentence with
+ * the way out; the line-by-line reasons (a trailing comma at line 14, a
+ * field that should be true or false) are for whoever wants them, behind
+ * "Show details".
+ */
+export function PasteProblems({ problems }: { problems: string[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="agents-import-problems" role="alert">
+      <WarningIcon size={14} className="agents-import-problems__icon" />
+      <div>
+        <p className="agents-import-problems__title">{PASTE_FORMAT_PROBLEM}</p>
+        <TextButton
+          tabIndex={0}
+          className="agents-import-problems__toggle"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? 'Hide details' : 'Show details'}
+        </TextButton>
+        {open && (
+          <ul className="agents-import-problems__details">
+            {problems.map((item, i) => (
+              <li key={i}>{item}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Informational, not a problem: what to know before the agents get going
  * (paused routines, logins to enter again). Neutral, so it never reads as a
@@ -346,21 +384,7 @@ export function ImportPreview({ preview }: { preview: PasteImportPreview }) {
   const refused = agents.reduce((n, a) => n + a.routines.filter((r) => r.refused).length, 0);
   return (
     <div className="agents-import-preview" aria-live="polite">
-      {problems.length > 0 && (
-        <ImportProblems
-          title={
-            problems.length === 1
-              ? 'One thing to fix before this can come across'
-              : `${problems.length} things to fix before this can come across`
-          }
-          items={[
-            ...problems,
-            <span key="hint" className="agents-import-problems__hint">
-              Easiest fix: send these lines to your assistant and paste its new reply.
-            </span>,
-          ]}
-        />
-      )}
+      {problems.length > 0 && <PasteProblems problems={problems} />}
       {agents.length > 0 && (
         <>
           <p className="agents-import-preview__found">

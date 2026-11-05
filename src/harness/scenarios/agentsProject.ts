@@ -325,7 +325,9 @@ const CHIEF_SESSION_CHAT = [
   msg('approval', '', 2, {
     approval: {
       requestId: 'req-push',
-      title: 'Push acme-marketing',
+      title: 'Publish acme-marketing',
+      summary:
+        'Publishes 1 change to acme/marketing: “Bigger hero headline”. Saves the unsaved edit to Hero.tsx first.',
       detail:
         'Branch feat/pricing-page → origin (https://github.com/acme/marketing.git)\n\nCommits:\n9f3c2e1 Bigger hero headline\n\nCommitted first:\n M src/components/Hero.tsx',
       status: 'pending',
@@ -339,7 +341,7 @@ const CAPABILITIES = {
     {
       what: 'Projects',
       detail:
-        'Create projects, start and continue sessions in them, screenshot their previews, check git, push with your OK, and check deploys.',
+        'Create projects, work in them, screenshot their previews, publish with your OK, and check whether it went live.',
     },
     { what: 'The team', detail: 'Create, brief, message and manage the other agents.' },
     {
@@ -490,7 +492,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-session-prompt-owner',
     title: 'Agents — the session’s own chat: trust answered, an edit to allow',
     looksRightWhen:
-      'Acme Site’s chat: the Chief’s brief, “Started a session in demo-site”, the trust card resolved to a quiet “Allowed · Yes, I trust this folder”, then a pending card “Do you want to make this edit to index.html?” with the muted source “Acme Site · in demo-site”, the edit’s text, and the session’s own extra choice “Yes, allow all edits during this session” beside Deny / Allow.',
+      'Acme Site’s chat: the Chief’s brief, “Started work in demo-site”, the trust card resolved to a quiet “Allowed · Yes, I trust this folder”, then a pending card “Do you want to make this edit to index.html?” with the muted source “Acme Site · in demo-site”, the edit’s text, and the session’s own extra choice “Yes, allow all edits during this session” beside Deny / Allow.',
     requires: '.agent-approval[data-prompt="permission"]',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="acme"]' }],
@@ -774,9 +776,24 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-project-sessions',
     title: 'Agents — the Chief working on a project through its session',
     looksRightWhen:
-      'The Chief’s chat: a quiet left-aligned line with a terminal icon “Started a session in acme-marketing” and “Open session”; a card “acme-marketing · Claude Code 1” with the session’s reply as plain text and “Open session”; a card “acme-marketing · desktop” with the screenshot inline and “Open preview”; the Chief’s own short reply; later “Sent to acme-marketing · Claude Code 1”, its reply card, and a pending push card “Push acme-marketing” listing the branch, origin URL, commit and the file committed first, with Deny / Allow and no “Always allow”.',
+      'The Chief’s chat: a quiet left-aligned line with a terminal icon “Started work in acme-marketing” and “Open in acme-marketing”; a card titled “acme-marketing” with the reply as plain text and “Open in acme-marketing” right-aligned; a card “acme-marketing · desktop” with the screenshot inline and “Open preview”; the Chief’s own short reply; later “Sent to acme-marketing”, its reply card, and a pending card “Publish acme-marketing” whose body is one plain sentence (“Publishes 1 change to acme/marketing: “Bigger hero headline”. Saves the unsaved edit to Hero.tsx first.”) with a quiet “Details” that reveals the branch, remote and commit, then Deny / Allow and no “Always allow”.',
     command: 'agents.open',
     requires: '.agent-session-card img',
+    commands: {
+      agents_overview: overview(),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? CHIEF_SESSION_CHAT : messagesFor(args),
+    },
+  },
+  {
+    id: 'agents-project-push-details',
+    title: 'Agents — the publish card, with its details open',
+    looksRightWhen:
+      'Clipped to the card “Publish acme-marketing”: one plain sentence (“Publishes 1 change to acme/marketing: “Bigger hero headline”. Saves the unsaved edit to Hero.tsx first.”), “Hide details” and, under it, the raw lines (branch → origin, the commit, the file committed first) in the monospace detail box; Deny / Allow, Allow neutral.',
+    command: 'agents.open',
+    requires: '.agent-approval .agent-approval__detail',
+    clipSelector: '.agent-approval',
+    steps: [{ click: '.agent-approval .agent-approval__show-all' }],
     commands: {
       agents_overview: overview(),
       agents_messages: (args: Record<string, unknown>) =>
@@ -787,7 +804,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-project-session-shot',
     title: 'Agents — a session’s reply and its screenshot',
     looksRightWhen:
-      'The first half of the Chief’s session work: “Started a session in acme-marketing” with Open session, the reply card, then a card “acme-marketing · desktop” with the screenshot as an inline thumbnail and “Open preview”, then the Chief’s two-sentence reply.',
+      'The first half of the Chief’s session work: “Started work in acme-marketing” with “Open in acme-marketing”, the reply card, then a card “acme-marketing · desktop” with the screenshot as an inline thumbnail and “Open preview”, then the Chief’s two-sentence reply.',
     command: 'agents.open',
     requires: '.agent-session-card img',
     commands: {

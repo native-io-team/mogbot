@@ -66,6 +66,7 @@ pub mod project;
 pub mod prompts;
 pub mod quick_entry;
 pub mod quota;
+pub mod reach;
 pub mod results;
 pub mod review;
 pub mod rooms;
@@ -81,6 +82,8 @@ pub mod takeover;
 pub mod task;
 pub mod tray;
 pub mod usage;
+pub mod watch;
+pub mod watch_seal;
 pub mod work;
 
 use crate::errors::CommandError;

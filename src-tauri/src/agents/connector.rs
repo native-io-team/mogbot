@@ -568,7 +568,7 @@ pub(crate) fn admit(
             staged: Vec::new(),
             imported: Vec::new(),
             busy: false,
-            secret: uuid::Uuid::new_v4().simple().to_string(),
+            secret: super::broker::new_secret(),
             held: Some(message.to_string()),
             draft: Review::default(),
             outbox: Vec::new(),
@@ -1110,14 +1110,17 @@ async fn run_exchange(app: &AppHandle, t: &Talk, prompt: &str) -> interview::Exc
     let Some(binary) = interview::binary().await else {
         return failed("Claude Code isn't installed.".into());
     };
-    let (port, token) = match crate::agent_bridge::start_global_agent_bridge(app.clone()).await {
+    let (port, _) = match crate::agent_bridge::start_global_agent_bridge(app.clone()).await {
         Ok(bridge) => bridge,
         Err(e) => return failed(e.to_string()),
     };
-    let url = format!(
-        "http://127.0.0.1:{port}/mcp/{token}/agents/import/{}",
-        t.secret
-    );
+    // The import's secret goes in a 0600 file, never on the command line;
+    // the file goes when the exchange does.
+    let config = interview::mcp_config(&super::reach::import_url(port), &t.secret);
+    let config = match super::reach::write_config(&config) {
+        Ok(file) => file,
+        Err(e) => return failed(e.to_string()),
+    };
     let chief = store::get(&t.chief_id)
         .map(|c| c.name)
         .unwrap_or_else(|_| "Chief of Staff".into());
@@ -1135,7 +1138,15 @@ async fn run_exchange(app: &AppHandle, t: &Talk, prompt: &str) -> interview::Exc
             result: Err(interview::Failed::Stopped),
         };
     };
-    interview::exchange(&binary, &session, &url, &system, prompt, t.cancel.clone()).await
+    interview::exchange(
+        &binary,
+        &session,
+        &config.arg(),
+        &system,
+        prompt,
+        t.cancel.clone(),
+    )
+    .await
 }
 
 /* --------------------------------------------------- the interview's tools */
@@ -1395,7 +1406,8 @@ fn post_review(app: &AppHandle, talk_id: &str) {
     emit(app, Some(&t.chief_id));
 }
 
-/// The interview's MCP endpoint (`/mcp/<bridge token>/agents/import/<secret>`).
+/// The interview's MCP endpoint (`/mcp/import`, with the import's secret as
+/// its bearer; `reach`).
 pub async fn handle_rpc(
     app: &AppHandle,
     secret: &str,

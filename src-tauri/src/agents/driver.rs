@@ -39,11 +39,17 @@ pub struct TurnSpec<'a> {
     /// The session to resume, or for a new one what [`Driver::new_session`] gave.
     pub session: &'a str,
     pub resuming: bool,
-    /// The agent bridge's MCP URL for this agent and turn.
+    /// The agents endpoint of the bridge. It names no one: the turn's
+    /// secret does (`reach`).
     pub url: &'a str,
+    /// Claude Code: the path of the turn's 0600 `--mcp-config` file.
+    pub mcp_config: &'a str,
     pub system_prompt: &'a str,
     /// Folders it may work in without asking, besides its cwd.
     pub writable: &'a [String],
+    /// Codex with permission profiles: the `.git` / `.shipstudio` folders
+    /// its commands may not write (`reach::protected_paths`).
+    pub protected: Option<&'a [std::path::PathBuf]>,
 }
 
 impl Driver {
@@ -100,18 +106,19 @@ impl Driver {
                 spec.model,
                 spec.session,
                 spec.resuming,
-                spec.url,
+                spec.mcp_config,
                 spec.system_prompt,
                 spec.writable,
             ),
             // Model, session and instructions go in `thread/start` instead.
-            Driver::CodexApp => super::codex_app::args(spec.url, spec.writable),
+            Driver::CodexApp => super::codex_app::args(spec.url, spec.writable, spec.protected),
             Driver::CodexExec => super::codex::args(
                 spec.model,
                 spec.resuming.then_some(spec.session),
                 spec.url,
                 &super::prompts::for_codex_exec(spec.system_prompt),
                 spec.writable,
+                spec.protected,
             ),
         }
     }
@@ -160,8 +167,10 @@ mod tests {
             session,
             resuming,
             url: "http://x",
+            mcp_config: "/s/mcp.json",
             system_prompt: "be useful",
             writable,
+            protected: None,
         }
     }
 

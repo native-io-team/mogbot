@@ -293,21 +293,41 @@ pub fn resolve(home: &Path, rel: &str) -> Result<PathBuf, CommandError> {
 }
 
 /// The chat shows attachments through the asset protocol. The static scope
-/// can't cover the agents folder (it's dot-prefixed, and the projects root is
-/// configurable), so grant it at runtime, once per root.
+/// can't cover the agents folder (it's in app support, and the projects root
+/// is configurable), so grant it at runtime: each agent's `attachments/`
+/// folder only, never its home. CLAUDE.md, messages.jsonl and agents.json sit
+/// beside them, and any script in the main frame could otherwise read them.
+/// Called on every overview, so an agent created since gets its grant.
 pub fn grant_asset_scope(app: &tauri::AppHandle) {
-    use std::sync::Mutex;
-    static GRANTED: Mutex<Option<PathBuf>> = Mutex::new(None);
+    use std::collections::HashSet;
+    use std::sync::{LazyLock, Mutex};
+    static GRANTED: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default);
     let Ok(root) = super::store::agents_root() else {
         return;
     };
     let mut granted = GRANTED.lock().unwrap_or_else(|e| e.into_inner());
-    if granted.as_ref() == Some(&root) {
-        return;
+    for dir in attachment_dirs(&root) {
+        if granted.contains(&dir) {
+            continue;
+        }
+        if super::store::ensure_private_dir(&dir).is_err() {
+            continue;
+        }
+        crate::commands::external_projects::grant_asset_scope(app, &dir);
+        granted.insert(dir);
     }
-    let _ = std::fs::create_dir_all(&root);
-    crate::commands::external_projects::grant_asset_scope(app, &root);
-    *granted = Some(root);
+}
+
+/// `<root>/<agent id>/attachments` for every agent folder under `root`.
+fn attachment_dirs(root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .map(|e| e.path().join("attachments"))
+        .collect()
 }
 
 /// Remove `attachments/<id>/` folders the chat log never mentions: the
@@ -347,6 +367,21 @@ pub fn sweep_unreferenced(home: &Path, log: &str, older_than: std::time::SystemT
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_attachment_folders_are_offered_to_the_asset_protocol() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("a1")).unwrap();
+        std::fs::create_dir_all(root.join("b2/attachments")).unwrap();
+        std::fs::write(root.join("agents.json"), "{}").unwrap();
+        let mut dirs = attachment_dirs(root);
+        dirs.sort();
+        assert_eq!(
+            dirs,
+            vec![root.join("a1/attachments"), root.join("b2/attachments")]
+        );
+    }
+
     use super::*;
 
     #[cfg(unix)]

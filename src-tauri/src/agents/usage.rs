@@ -38,6 +38,15 @@ pub struct UsageTotals {
     /// Wall-clock time of the turns, as the CLI timed them.
     #[serde(default)]
     pub duration_ms: u64,
+    /// "When…" routines' model checks (`watch`): headless calls, not turns,
+    /// so they never inflate `turns`. Their tokens and cost are in the
+    /// totals above.
+    #[serde(default)]
+    pub checks: u32,
+    /// Checks that reported a cost. `cost_usd` is the whole story only when
+    /// `priced_turns + priced_checks == turns + checks`.
+    #[serde(default)]
+    pub priced_checks: u32,
 }
 
 impl UsageTotals {
@@ -54,6 +63,19 @@ impl UsageTotals {
         self.cost_usd += other.cost_usd;
         self.priced_turns = self.priced_turns.saturating_add(other.priced_turns);
         self.duration_ms = self.duration_ms.saturating_add(other.duration_ms);
+        self.checks = self.checks.saturating_add(other.checks);
+        self.priced_checks = self.priced_checks.saturating_add(other.priced_checks);
+    }
+
+    /// One turn's numbers recounted as a model check's.
+    pub fn as_check(&self) -> UsageTotals {
+        UsageTotals {
+            turns: 0,
+            priced_turns: 0,
+            checks: self.turns.max(1),
+            priced_checks: self.priced_turns,
+            ..self.clone()
+        }
     }
 }
 
@@ -106,7 +128,7 @@ pub fn summarize(agent: &super::store::Agent, today: NaiveDate) -> UsageSummary 
             id: c.id.clone(),
             week: c.usage.summary(today).week,
         })
-        .filter(|r| r.week.turns > 0)
+        .filter(|r| r.week.turns > 0 || r.week.checks > 0)
         .collect();
     summary
 }
@@ -129,6 +151,7 @@ pub fn from_result(value: &serde_json::Value) -> Option<UsageTotals> {
             .get("duration_ms")
             .and_then(|v| v.as_u64())
             .unwrap_or(0),
+        ..Default::default()
     })
 }
 
@@ -144,7 +167,7 @@ fn in_window(key: &str, today: NaiveDate) -> bool {
 
 impl AgentUsage {
     pub fn is_empty(&self) -> bool {
-        self.all_time.turns == 0 && self.days.is_empty()
+        self.all_time.turns == 0 && self.all_time.checks == 0 && self.days.is_empty()
     }
 
     pub fn record(&mut self, turn: &UsageTotals, today: NaiveDate) {

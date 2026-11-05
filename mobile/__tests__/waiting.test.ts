@@ -243,8 +243,9 @@ describe('Send, tapped twice', () => {
 });
 
 describe('words', () => {
-  it('calls a project’s agent tab a task when the Mac doesn’t say which engine', () => {
+  it('calls a project’s agent tab a task, never its engine and a number', () => {
     expect(sessionLabel({ tab: 2 })).toBe('Task 2');
-    expect(sessionLabel({ cli: 'codex', tab: 1 })).toBe('Codex 1');
+    expect(sessionLabel({ cli: 'codex', tab: 1 })).toBe('Task 1');
+    expect(sessionLabel({ cli: 'claude' })).toBe('Task');
   });
 });

@@ -324,7 +324,7 @@ pub struct CreateAgentInput {
 }
 
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, input))]
 pub async fn agents_create(
     app: AppHandle,
     input: CreateAgentInput,
@@ -394,7 +394,7 @@ pub struct UpdateAgentInput {
 }
 
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, input), fields(agent = %agent_id))]
 pub async fn agents_update(
     app: AppHandle,
     agent_id: String,
@@ -700,7 +700,7 @@ pub async fn agents_interrupt(agent_id: String) -> Result<bool, CommandError> {
 /// `always`: allow, and keep allowing what the card offered to (its stored
 /// scope, never one the caller supplies).
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, note))]
 pub async fn agents_answer_approval(
     app: AppHandle,
     agent_id: String,
@@ -916,7 +916,7 @@ pub async fn agents_add_secret(
 
 /// Delete a secret from the Keychain and from the agent.
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, secret_id), fields(agent = %agent_id))]
 pub async fn agents_revoke_secret(
     app: AppHandle,
     agent_id: String,
@@ -1050,7 +1050,7 @@ pub async fn agents_import_talk_stop(app: AppHandle) -> Result<bool, CommandErro
 
 /// Import what the user kept on a review card (`agents::review`).
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, picks))]
 pub async fn agents_import_review_apply(
     app: AppHandle,
     agent_id: String,
@@ -1192,6 +1192,7 @@ pub async fn agents_schedule_create(
     note: String,
 ) -> Result<schedule::CheckIn, CommandError> {
     let created = schedule::create(&agent_id, &when, &note)?;
+    agents::mcp::created_routine_line(&app, &agent_id, &created.check_in);
     emit_registry(&app);
     Ok(created.check_in)
 }
@@ -1245,6 +1246,49 @@ pub async fn agents_schedule_run_now(
     id: String,
 ) -> Result<(), CommandError> {
     schedule::run_now(&app, &agent_id, &id)
+}
+
+/// Add a "When…" routine: `source` is `watch::Source` (`{ kind, folder?, check?, app? }`).
+#[tauri::command]
+#[tracing::instrument(skip(app, note))]
+pub async fn agents_watch_create(
+    app: AppHandle,
+    agent_id: String,
+    source: agents::watch::Source,
+    every_minutes: u32,
+    note: String,
+) -> Result<schedule::CheckIn, CommandError> {
+    let created = agents::watch::create(&agent_id, source, every_minutes, &note)?;
+    agents::mcp::created_routine_line(&app, &agent_id, &created.check_in);
+    emit_registry(&app);
+    Ok(created.check_in)
+}
+
+/// Change what a "When…" routine waits for, how often it checks, and what it does.
+#[tauri::command]
+#[tracing::instrument(skip(app, note))]
+pub async fn agents_watch_update(
+    app: AppHandle,
+    agent_id: String,
+    id: String,
+    source: agents::watch::Source,
+    every_minutes: u32,
+    note: String,
+) -> Result<schedule::CheckIn, CommandError> {
+    let edited = agents::watch::edit(&agent_id, &id, source, every_minutes, &note)?;
+    emit_registry(&app);
+    Ok(edited)
+}
+
+/// Check a "When…" routine now; the agent is woken only if something's new.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_watch_check_now(
+    app: AppHandle,
+    agent_id: String,
+    id: String,
+) -> Result<agents::watch::CheckOutcome, CommandError> {
+    agents::watch::check_now(&app, &agent_id, &id).await
 }
 
 /// The apps agents can use: Claude Code's MCP servers, and a short list to add.

@@ -9,28 +9,28 @@ infrastructure where a good one exists.
 
 1. **Phone in two taps.** TestFlight / App Store and push via Expo's push
    service; building with Xcode becomes the advanced path. **Needs the
-   owner**: an Apple developer account, and approval to publish. Until then
-   the install cards say "Not available yet" (see [mobile.md](mobile.md)).
-2. **Result cards you can review and send back.** One card for changes,
-   files and screenshots: preview, before/after, sources, what wasn't
-   verified, then Open PR (approval-gated) / Ask for changes / Open. Raised
-   again by the audits: today work comes back as prose plus a timeline,
-   not as something reviewable. *In progress*: `share_result` cards with
-   versions and Ask for changes on desk and phone
-   ([agents.md](agents.md), "Result cards"); a PR from a non-copy result
-   and recordings are not built.
-3. **A git worktree per task** for project-bound agents: no trampling, and
-   every task becomes a branch you can PR, merge or discard. *In progress.*
-4. **"Take over" a browser tab.** Driving the agent's own session in a
-   terminal is built ([agents.md](agents.md), "Take over"); stepping into the
-   Chrome tab it drives is not. Codex take-over is unverified on a real thread.
-5. **"When…" routines.** Event-started work (a Linear issue assigned, a
-   GitHub mention) via polling routines through the user's own connectors —
-   no hosted webhooks.
-6. **A first run that lands one real win.** Role templates, inline connect,
+   owner**: TestFlight needs the owner's Apple developer account, and
+   approval to publish. Until then the install cards say "Not available
+   yet" (see [mobile.md](mobile.md)).
+2. **Phone: real-device verification.** The share extension, dictation's
+   real recognizer, notification click-through and Android hardware have
+   only been tried in tests or the simulator ([mobile.md](mobile.md), "Not
+   built").
+3. **"Take over" a browser tab.** Driving the agent's own session in a
+   terminal is done; stepping into the Chrome tab it drives is not. Codex
+   take-over is unverified on a real thread.
+4. **A first run that lands one real win.** Role templates, inline connect,
    "drop a document" first task.
-7. **Import the team from Ship Studio on this Mac** (read-only), so moving
-   over is one step. *In progress.*
+5. **Global defaults for engine and model.** Settings → Agents states the
+   rule and where to change it per agent; a real default needs a backend
+   setting.
+6. **Watch claude.ai connectors.** Linear or Gmail set up as claude.ai
+   connectors can't be watched by a "When…" check (the sealed call loads
+   only apps configured in Claude Code itself), and connector checks are
+   not yet verified on a live Linear or Gmail account
+   ([agents.md](agents.md), "When… routines").
+7. **Results, the rest.** A PR straight from a non-copy result, and
+   recordings.
 
 Small wins: save-as-skill, sections in the agent list, duplicate agent,
 reply to a single message.
@@ -41,6 +41,31 @@ reply to a single message.
   room's lead; agents bring each other in with @Name, at most 8 agent turns
   per message; cards, timelines and results inline under the agent; on the
   phone for apps that say they show rooms ([agents.md](agents.md), "Rooms").
+- **Result cards you can review and send back** — one card per piece of
+  work (files, links, before/after, "It says it checked", what wasn't
+  verified); Ask for changes makes a new version; desk and phone
+  ([agents.md](agents.md), "Result cards").
+- **A copy of the project per task** — a project-bound agent works in its own
+  worktree on its own branch; Keep changes / Review changes / Preview /
+  Discard, and ⋯ → Open a pull request ([agents.md](agents.md), "A copy of
+  the project per task").
+- **Take over** — step into an agent's own session in a terminal, then Hand
+  back, from the menu, the working line and ⌘K; the phone shows it
+  ([agents.md](agents.md), "Take over").
+- **"When…" routines** — GitHub mentions and assignments, new files in a
+  folder, Linear and free-form connector checks; sealed, capped, and asking
+  before they change the team. The desktop schedules with the phone's
+  routine picker; the phone shows "When…" routines read-only.
+- **Import** — from Ship Studio on this Mac, and a sealed connector interview
+  ending on one review card.
+- **Nothing goes silent** — panics, stops, restarts and cut-off turns end in
+  a line that says so, and delegators are told.
+- **Security, first pass** — one strict sanitizer with images as links, a
+  navigation guard and an open allowlist; the phone's Mac-proves-first
+  pairing with a pinned identity in the Keychain, always confirmed on the
+  desk, and DoS limits.
+- **Coherence** — Line / Card / Bar, neutral affirmatives and one
+  vocabulary, on desktop and phone; Settings → Agents as the first tab.
 
 - **Usage before the wall** — cost per agent and per routine this week, and
   the plan's usage ("Claude usage 85% · resets Sat", amber from 90%) only as

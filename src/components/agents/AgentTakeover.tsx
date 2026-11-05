@@ -361,7 +361,7 @@ export function TakeoverTerminal({ takeover }: { takeover: AgentTakeover }) {
       <AttachedTerminal
         sessionId={takeover.ptySession}
         isActive
-        failureLabel="Couldn’t show the session"
+        failureLabel="Couldn’t show the conversation"
         className="agent-takeover-terminal__xterm"
       />
     </div>

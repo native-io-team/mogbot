@@ -273,6 +273,24 @@ const TOOLS: &[Tool] = &[
         }),
     },
     Tool {
+        name: "watch_for",
+        description: "Start work when something happens, instead of at a time: a \"When…\" routine. The app checks every few minutes from this Mac (no webhooks) and wakes you with what's new, once per item; its first check only notes what's already there. Sources: github_mentions (someone @mentions the user on GitHub; uses the gh CLI, free), github_assigned (an issue or pull request is assigned to them; gh, free), new_file (a file appears in `folder`; free), linear_assigned (a Linear issue is assigned to them; through the Linear app set up in Claude Code), custom (anything else, in `check`, like \"a new email from dana@acme.com\", through the one app named in `app`: its name as set up in Claude Code, the middle part of its tools' names, e.g. `gmail` for mcp__gmail__search; claude.ai connectors can't be used). linear_assigned and custom cost a short Claude Code call per check (at least 15 minutes apart, at most 24 a day), read-only and sealed to that app; the user is asked to allow one before it's set up. It only runs while the app is open. Cancel with cancel_check_in; list_check_ins shows it.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "enum": ["github_mentions", "github_assigned", "new_file", "linear_assigned", "custom"] },
+                "folder": { "type": "string", "description": "new_file: the folder's full path (~/ is fine)." },
+                "check": { "type": "string", "description": "custom: what to look out for, in plain words." },
+                "app": { "type": "string", "description": "custom: the app to check through, by its name in Claude Code." },
+                "every_minutes": { "type": "integer", "description": "How often to check. Default 10 (30 for linear_assigned and custom). At least 1 for new_file, 5 for GitHub, 15 for app checks." },
+                "note": { "type": "string", "description": "What to do when it happens, written to your future self: specific enough to act on with no other context." },
+                "agent": { "type": "string", "description": "Chief of Staff only: set it for another agent (name or id)." }
+            },
+            "required": ["source", "note"]
+        }),
+    },
+    Tool {
         name: "request_secret",
         description: "Ask the user for a password, API key, token or login through a secure card in this chat. They type it into a masked field; it goes into the macOS Keychain for you alone, and you get an environment variable and a reference, never the value. Always use this for credentials: never ask the user to paste one in chat. It returns at once: stop and tell the user in one line what it's for; you'll be woken when they save or decline it.",
         main_only: false,
@@ -383,6 +401,22 @@ pub async fn handle_rpc(
             if name == "approve" {
                 return ok(approve(app, &caller, turn, &args).await);
             }
+            // A turn answering a "When…" routine's items (outside text)
+            // needs the user's OK to change the team or set up a routine.
+            // `delete_agent` asks anyway; `watch_for` asks in `check_ins`,
+            // with what the routine costs on the same card.
+            if needs_card_in_routine_turn(name)
+                && name != "delete_agent"
+                && name != "watch_for"
+                && runner::from_outside(&caller.id)
+                && super::broker::is_live(&caller.id, turn)
+            {
+                let (title, detail) = outside_card(name, &args);
+                let answer = ask_user(app, &caller, title, detail, None).await;
+                if let Some(refused) = refused_reply(&answer, "do it") {
+                    return ok(error(refused));
+                }
+            }
             ok(call(app, &caller, turn, name, &args).await)
         }
         _ => fail(-32601, &format!("Method not found: {method}")),
@@ -411,17 +445,175 @@ async fn call(
         "create_agent" => create_agent(app, caller, args).await,
         "update_agent" => update_agent(app, caller, args).await,
         "delete_agent" => delete_agent(app, caller, args).await,
-        "schedule_check_in" | "list_check_ins" | "cancel_check_in" => {
-            check_ins(app, caller, name, args)
+        "schedule_check_in" | "list_check_ins" | "cancel_check_in" | "watch_for" => {
+            check_ins(app, caller, turn, name, args).await
         }
         "request_secret" => request_secret(app, caller, args),
         _ => error("Unknown tool"),
     }
 }
 
+/// The tools a turn answering outside text (a "When…" routine's items)
+/// can't use without the user's OK: they change the team, or set up work
+/// that runs later on its own.
+pub fn needs_card_in_routine_turn(tool: &str) -> bool {
+    matches!(
+        tool,
+        "create_agent" | "update_agent" | "delete_agent" | "watch_for" | "schedule_check_in"
+    )
+}
+
+/// The card for one of those, in a turn answering outside text.
+fn outside_card(tool: &str, args: &Value) -> (String, String) {
+    let why = "This turn is working on a “When…” routine's items, which came from outside, so it asks first.";
+    let who = arg(args, "agent")
+        .or(arg(args, "name"))
+        .unwrap_or("an agent");
+    let title = match tool {
+        "create_agent" => format!("Create {who}"),
+        "update_agent" => format!("Change {who}"),
+        "schedule_check_in" => format!(
+            "Set up a routine: {}",
+            short_line(arg(args, "when").unwrap_or("at a time"))
+        ),
+        _ => "Go ahead".to_string(),
+    };
+    let what = match tool {
+        "schedule_check_in" => arg(args, "note").map(short_line),
+        "update_agent" => {
+            arg(args, "instructions").map(|i| format!("New instructions: {}", short_line(i)))
+        }
+        "create_agent" => arg(args, "role").map(short_line),
+        _ => None,
+    };
+    let detail = match what {
+        Some(w) => format!("{w}\n\n{why}"),
+        None => why.to_string(),
+    };
+    (title, detail)
+}
+
+fn short_line(text: &str) -> String {
+    let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if line.chars().count() <= 200 {
+        line
+    } else {
+        line.chars().take(199).collect::<String>() + "…"
+    }
+}
+
+/// The card for a "When…" routine an agent wants: what it waits for, how
+/// often, and for a model check what that costs, from what checks on this
+/// Mac have measured (never estimated from nothing).
+pub fn watch_card(
+    agent: &str,
+    source: &super::watch::Source,
+    every: u32,
+    note: &str,
+    measured: Option<&super::usage::UsageTotals>,
+    on_plan: bool,
+) -> (String, String) {
+    use super::watch::{describe, Source, DEFAULT_MAX_CHECKS_PER_DAY};
+    let app = match source {
+        Source::LinearAssigned => "Linear".to_string(),
+        Source::Custom { app, .. } => app.clone(),
+        _ => String::new(),
+    };
+    let when = format!("When {}, {}", describe(source), short_line(note));
+    if !source.uses_model() {
+        return (
+            format!("Let {agent} set up a “When…” routine?"),
+            format!("{when}.\n\nChecked every {every} min from this Mac; checks are free."),
+        );
+    }
+    let per_day = (24 * 60 / every.max(1)).min(DEFAULT_MAX_CHECKS_PER_DAY);
+    let cost = match measured.filter(|m| m.checks > 0) {
+        Some(m) => {
+            let n = f64::from(m.checks);
+            let tokens =
+                (m.input_tokens + m.output_tokens + m.cache_read_tokens + m.cache_write_tokens)
+                    as f64
+                    / n;
+            if m.priced_checks == m.checks && !on_plan {
+                let each = m.cost_usd / n;
+                format!(
+                    "Checks on this Mac this week averaged {} at API prices each, so up to about {} a day.",
+                    usd(each),
+                    usd(each * f64::from(per_day))
+                )
+            } else {
+                format!(
+                    "Checks on this Mac this week averaged {} tokens each, so up to about {} tokens a day.",
+                    compact(tokens),
+                    compact(tokens * f64::from(per_day))
+                )
+            }
+        }
+        None => {
+            "No check has been measured on this Mac yet, so what one costs isn't known.".to_string()
+        }
+    };
+    (
+        format!("Let {agent} check {app} every {every} min?"),
+        format!(
+            "{when}.\n\nEach check is one short Claude Code call on Haiku that can only read {app}: up to {per_day} a day. {cost}"
+        ),
+    )
+}
+
+fn usd(v: f64) -> String {
+    if v < 0.01 {
+        "<$0.01".to_string()
+    } else {
+        format!("${v:.2}")
+    }
+}
+
+fn compact(n: f64) -> String {
+    if n < 1000.0 {
+        format!("{}", n.round() as u64)
+    } else if n < 1_000_000.0 {
+        format!("{}k", (n / 1000.0).round() as u64)
+    } else {
+        format!("{:.1}M", n / 1_000_000.0)
+    }
+}
+
+/// What model checks have measured this week, over every agent's routines.
+fn measured_checks() -> Option<super::usage::UsageTotals> {
+    let today = super::usage::today();
+    let mut total = super::usage::UsageTotals::default();
+    for agent in store::list().ok()? {
+        for c in agent.check_ins.iter().filter(|c| c.watch.is_some()) {
+            let week = c.usage.summary(today).week;
+            total.checks += week.checks;
+            total.priced_checks += week.priced_checks;
+            total.cost_usd += week.cost_usd;
+            total.input_tokens += week.input_tokens;
+            total.output_tokens += week.output_tokens;
+            total.cache_read_tokens += week.cache_read_tokens;
+            total.cache_write_tokens += week.cache_write_tokens;
+        }
+    }
+    (total.checks > 0).then_some(total)
+}
+
+/// Claude has reported a plan (Pro or Max): its prices aren't the bill.
+fn on_claude_plan() -> bool {
+    super::quota::shown(&super::quota::load(), store::now_ms())
+        .iter()
+        .any(|q| q.engine == super::engine::Engine::Claude)
+}
+
 /// The schedule tools. An agent manages its own; the Chief of Staff may also
 /// manage another agent's by naming it.
-fn check_ins(app: &AppHandle, caller: &store::Agent, name: &str, args: &Value) -> Value {
+async fn check_ins(
+    app: &AppHandle,
+    caller: &store::Agent,
+    turn: Option<u64>,
+    name: &str,
+    args: &Value,
+) -> Value {
     let target = match arg(args, "agent") {
         None => caller.clone(),
         Some(t) => match store::find(t) {
@@ -445,7 +637,54 @@ fn check_ins(app: &AppHandle, caller: &store::Agent, name: &str, args: &Value) -
             arg(args, "when").unwrap_or(""),
             arg(args, "note").unwrap_or(""),
         )
-        .map(|c| whose(c.summary)),
+        .map(|c| {
+            created_routine_line(app, &target.id, &c.check_in);
+            whose(c.summary)
+        }),
+        "watch_for" => {
+            let source = match watch_source(args) {
+                Ok(s) => s,
+                Err(e) => return error(e.to_string()),
+            };
+            let every = args.get("every_minutes").and_then(Value::as_u64).map_or(
+                if source.uses_model() {
+                    super::watch::DEFAULT_MODEL_EVERY_MINUTES
+                } else {
+                    super::watch::DEFAULT_EVERY_MINUTES
+                },
+                |m| m.min(u64::from(u32::MAX)) as u32,
+            );
+            let note = arg(args, "note").unwrap_or("");
+            // Refuse what won't validate before asking anyone about it.
+            if let Err(e) = super::watch::validate(source.clone(), every) {
+                return error(e.into_error().to_string());
+            }
+            // A model check spends the user's usage every time it runs, and
+            // outside text mustn't set up work on its own: the user says yes.
+            let outside =
+                runner::from_outside(&caller.id) && super::broker::is_live(&caller.id, turn);
+            if source.uses_model() || outside {
+                let (title, mut detail) = watch_card(
+                    &target.name,
+                    &source,
+                    every,
+                    note,
+                    measured_checks().as_ref(),
+                    on_claude_plan(),
+                );
+                if outside {
+                    detail.push_str("\n\nThis turn is working on a “When…” routine's items, which came from outside, so it asks first.");
+                }
+                let answer = ask_user(app, caller, title, detail, None).await;
+                if let Some(refused) = refused_reply(&answer, "set it up") {
+                    return error(refused);
+                }
+            }
+            super::watch::create(&target.id, source, every, note).map(|c| {
+                created_routine_line(app, &target.id, &c.check_in);
+                whose(c.summary)
+            })
+        }
         "cancel_check_in" => schedule::cancel(&target.id, arg(args, "id").unwrap_or(""))
             .map(|c| whose(format!("Cancelled: {}", c.note))),
         _ => return text(whose(schedule::list_text(&target))),
@@ -456,6 +695,46 @@ fn check_ins(app: &AppHandle, caller: &store::Agent, name: &str, args: &Value) -
             text(summary)
         }
         Err(e) => error(e.to_string()),
+    }
+}
+
+/// A line in the chat whenever an agent sets up a routine, so none is ever
+/// created out of sight.
+pub fn created_routine_line(app: &AppHandle, agent_id: &str, c: &schedule::CheckIn) {
+    let text = routine_line_text(c);
+    let _ = runner::record(app, runner::new_message(agent_id, MessageKind::Note, text));
+}
+
+pub fn routine_line_text(c: &schedule::CheckIn) -> String {
+    match &c.watch {
+        Some(w) => format!(
+            "Set up a “When…” routine: when {}, {} · {}",
+            super::watch::describe(&w.source),
+            short_line(&c.note),
+            super::watch::cost_words(w)
+        ),
+        None => format!("Set up a routine: {}", short_line(&c.note)),
+    }
+}
+
+/// `watch_for`'s source, from its flat arguments.
+fn watch_source(args: &Value) -> Result<super::watch::Source, crate::errors::CommandError> {
+    use super::watch::Source;
+    match arg(args, "source").unwrap_or("") {
+        "github_mentions" => Ok(Source::GithubMentions),
+        "github_assigned" => Ok(Source::GithubAssigned),
+        "linear_assigned" => Ok(Source::LinearAssigned),
+        "new_file" => Ok(Source::NewFile {
+            folder: arg(args, "folder").unwrap_or("").to_string(),
+        }),
+        "custom" => Ok(Source::Custom {
+            check: arg(args, "check").unwrap_or("").to_string(),
+            app: arg(args, "app").unwrap_or("").to_string(),
+        }),
+        other => Err(super::err_invalid(
+            "source",
+            format!("There's no source called {other:?}. Use github_mentions, github_assigned, new_file, linear_assigned or custom."),
+        )),
     }
 }
 
@@ -1012,6 +1291,29 @@ pub(super) async fn ask_user(
     detail: String,
     call: Option<(&str, &Value)>,
 ) -> Answer {
+    ask(app, caller, title, None, detail, call).await
+}
+
+/// `ask_user` for a card whose detail is raw (a push): it leads with `summary`
+/// and keeps the detail behind Details. Never tied to a tool call.
+pub(super) async fn ask_user_with_summary(
+    app: &AppHandle,
+    caller: &store::Agent,
+    title: String,
+    summary: String,
+    detail: String,
+) -> Answer {
+    ask(app, caller, title, Some(summary), detail, None).await
+}
+
+async fn ask(
+    app: &AppHandle,
+    caller: &store::Agent,
+    title: String,
+    summary: Option<String>,
+    detail: String,
+    call: Option<(&str, &Value)>,
+) -> Answer {
     let request_id = store::new_id();
     let (tx, rx) = oneshot::channel();
     PENDING_APPROVALS
@@ -1020,7 +1322,9 @@ pub(super) async fn ask_user(
         .insert(request_id.clone(), tx);
 
     let mut card = runner::new_message(&caller.id, MessageKind::Approval, "");
-    card.approval = Some(new_card(request_id.clone(), title, detail, call));
+    let mut approval = new_card(request_id.clone(), title, detail, call);
+    approval.summary = summary;
+    card.approval = Some(approval);
     let _ = runner::record(app, card);
     store::refresh_pending(&caller.id);
     super::notify::refresh_badge(app);
@@ -1105,6 +1409,7 @@ pub(super) fn new_card(
         input: call.map(|(_, input)| input.clone()),
         always: call.and_then(|(tool, input)| permissions::suggest(tool, input)),
         always_allowed: false,
+        summary: None,
         note: None,
         prompt: None,
         choice: None,

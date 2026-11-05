@@ -34,18 +34,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  askingLine,
-  DRIVEN_LINE,
-  engineLine,
-  isQueued,
-  needsYou,
-  needsYouHere,
-  ON_MAC_LINE,
-  pendingApproval,
-  waitingOnMac,
-  workingLine,
-} from '../lib/agents';
+import { askingLine, isQueued, needsYouHere, pendingApproval } from '../lib/agents';
 import { messageActions, plainText, type MessageAction } from '../lib/actions';
 import { announce } from '../lib/a11y';
 import { addQuote } from '../lib/drafts';
@@ -69,7 +58,6 @@ import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
 import { Composer } from './Composer';
 import { RoomFoldRow } from './RoomRow';
-import { LinkBanner } from './ConnectionPill';
 import { PathContext } from './Markdown';
 import { PaneContext, type Pane } from './ApprovalCard';
 import { showActions } from './menu';
@@ -366,8 +354,7 @@ export function ChatView({
     );
   }
 
-  const onMac = waitingOnMac(agent, chat?.messages);
-  const header = <Header agent={agent} asking={asking} onMac={onMac} writing={!!draft?.text} />;
+  const header = <Header agent={agent} />;
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
   const urgentBelow = away && (needsYouHere(agent, chat?.messages) || asking);
 
@@ -405,7 +392,6 @@ export function ChatView({
           }}
         />
       )}
-      <LinkBanner />
       <View style={{ flex: 1 }} onLayout={(e) => setRoomHeight(e.nativeEvent.layout.height)}>
         {pinQuestion && card?.approval && (
           <PinnedQuestion
@@ -658,37 +644,14 @@ function Glow() {
   return <Animated.View pointerEvents="none" style={[styles.glow, style]} />;
 }
 
-function Header({
-  agent,
-  asking,
-  onMac,
-  writing,
-}: {
-  agent: Agent;
-  asking: boolean;
-  /** All it's waiting on is answered on the Mac (an import to review). */
-  onMac: boolean;
-  /** Its reply is streaming in: the header says so, not the step before it. */
-  writing: boolean;
-}) {
+/**
+ * Identity only: who this is (name and role). What it's doing is said once in
+ * its row on the list and once in the conversation (a bar, the working line,
+ * a card), never a third time up here.
+ */
+function Header({ agent }: { agent: Agent }) {
   const colors = useColors();
   const styles = useStyles();
-  const connected = useApp((s) => s.link.kind === 'connected');
-  const engine = useApp((s) => engineLine(agent, s.overview?.engines));
-  // Driven on the Mac beats everything: the Mac is where it's answered now.
-  const line = agent.takeover
-    ? { text: DRIVEN_LINE, color: colors.textSecondary }
-    : asking
-      ? { text: 'Needs your OK', color: colors.accentWarning }
-      : onMac
-        ? { text: ON_MAC_LINE, color: colors.textSecondary }
-        : needsYou(agent)
-          ? { text: 'Needs your OK', color: colors.accentWarning }
-          : writing
-            ? { text: 'Writing…', color: colors.textSecondary }
-            : agent.status.state === 'working'
-              ? { text: workingLine(agent, true), color: colors.textSecondary }
-              : { text: engine ?? (agent.role || 'Idle'), color: colors.textSecondary };
   return (
     <View style={styles.header}>
       <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.header} />
@@ -701,16 +664,16 @@ function Header({
         >
           {agent.name}
         </T>
-        <Animated.View key={line.text} entering={FadeIn.duration(180)}>
+        {!!agent.role && (
           <T
             variant="caption"
-            color={connected ? line.color : colors.textMuted}
+            color={colors.textSecondary}
             numberOfLines={1}
             maxFontSizeMultiplier={chromeScale}
           >
-            {line.text}
+            {agent.role}
           </T>
-        </Animated.View>
+        )}
       </View>
     </View>
   );

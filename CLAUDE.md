@@ -15,10 +15,18 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - **Chief of Staff** - Exists from first launch and speaks first (a stored greeting, no model turn). It creates, briefs, delegates to, keeps track of and deletes the other agents; you can talk only to it
 - **Named agents** - Persistent, each with its own colour, instructions, memory it maintains, routines and check-ins, apps, and optionally a bound project. Each runs on **Claude Code or Codex** (chosen per agent) on this Mac, on the user's own accounts
 - **Approvals** - Anything consequential (spending, sending, changing what others see) arrives as an Allow / Deny card; secrets go into a masked card and the Keychain, never the chat
-- **"What it did"** - A folded timeline under each reply: observed steps and outcomes, screenshots, live while the turn runs
-- **Start fresh, keep memory** - A new conversation that keeps what the agent remembers, plus an honest context meter
-- **Phone** - The companion app (`mobile/`, [docs/mobile.md](docs/mobile.md)) is the primary way in away from the desk: chats, approvals, the timeline, and starting things (new agents, routines, dictation, Send to agent). It pairs by QR and talks to this Mac over the user's own Tailscale
-- **Import** - Bring agents over from Grok Bot or any other assistant, with their memory and routines (paste, or over Remote Access)
+- **Result cards** - A finished piece of work comes back as one card (`share_result`): files and links, before/after, "It says it checked" and what wasn't verified, in the agent's own words. **Ask for changes** makes a new version
+- **A copy per task** - A project-bound agent works in its own git worktree, never the user's folder; its card offers Keep changes / Review changes / Preview / Discard
+- **Take over** - Step into an agent's own engine session in a terminal and drive it by hand, then Hand back
+- **"What it did"** - A folded timeline under each reply: observed steps and honest outcomes in plain labels, screenshots, live while the turn runs
+- **Start fresh, keep memory** - A new conversation that keeps what the agent remembers, plus a context meter showing only what the engine reported
+- **Usage before the wall** - Cost per agent and per routine this week (tokens, not list-price dollars, on Pro/Max), and the plan's usage only when the engine reports it
+- **Routines** - On a schedule (one picker on desk and phone), or **"When…"** something happens: GitHub mentions/assignments, new files in a folder, or a connector check that runs sealed (read-only tools, no shell or files), with caps and an approval before it changes the team
+- **Nothing goes silent** - A panicked, stopped or cut-off turn always ends in a line saying so, and delegators are told
+- **Phone** - The companion app (`mobile/`, [docs/mobile.md](docs/mobile.md)) is the primary way in away from the desk: chats, approvals, result cards, the timeline, and starting things (new agents, routines, dictation, Send to agent). It pairs by QR and talks to this Mac over the user's own Tailscale
+- **Import** - From Ship Studio on this Mac (a preview, then a copy), or from Grok Bot or any other assistant over Remote Access: a sealed interview that ends on one review card in the Chief's chat
+- **Settings → Agents** - The first tab: keeping this Mac on, which engine new agents start on, notifications, phone and other assistants
+- **One look** - Every non-message surface is a Line, a Card or a Bar; affirmative answers are neutral, never accent; one word per idea (see [docs/agents.md](docs/agents.md), "Lines, cards and bars"), on desk and phone
 
 **Projects underneath.** When work becomes a site or an app it lives in the workspace inherited from Ship Studio, which agents create, run sessions in and push from (with approval):
 
@@ -107,6 +115,36 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
   tauri.conf.json / Cargo.toml / package.json identity (and that `plugins.updater` exists exactly
   when `links.updates` is set), the phone build's `COMPANION_BUNDLE_ID` handoff, and regenerates
   `packages/companion-protocol/src/brand.gen.ts` and `index.html` with `--write`
+
+## Security model
+
+The short version; each line links where the detail and the threat model live. Don't weaken any of
+these without updating that doc.
+
+- **Approvals are the wall.** Agents run in `acceptEdits`; everything else goes through the
+  approval broker (`agents/broker.rs`), which trusts only a live turn's `?turn=` id and stops a turn
+  that reports `bypassPermissions` ([docs/agents.md](docs/agents.md), "Approvals"). Secrets go
+  into the Keychain through a masked card, never the chat ("Secrets")
+- **Outside text is sealed.** Connector imports and "When…" checks run in a sealed headless call
+  (no shell, no files, no web; read-only app tools only), and a turn answering outside text can't
+  write its own memory or change the team without a card ([docs/agents.md](docs/agents.md),
+  "When… routines"; [docs/remote-access.md](docs/remote-access.md), "Importing agents as a
+  conversation")
+- **The webview never loads untrusted content.** One strict sanitizer for agent and Inbox HTML,
+  images shown as link chips, a navigation guard, preview text reaching an agent only through a
+  confirmed chip, an open allowlist for agent files (see "What stands in for a CSP" below)
+- **The phone pairs to *your* Mac.** The Mac proves its pinned Ed25519 identity (Keychain) before
+  the phone sends any secret; every pairing is confirmed on the desk; tokens are stored hashed;
+  per-device and per-source limits bound what a stranger can cost
+  ([docs/mobile.md](docs/mobile.md), "Pairing", "Auth, revocation and audit")
+- **Remote Access** is a separate server from the agent bridge (which is loopback only): masked
+  token copied from Rust, text only to agent tabs, push behind a PIN the assistant never sees,
+  everything audited ([docs/remote-access.md](docs/remote-access.md), "Security")
+- **Hardening on foundation:** per-turn bridge secrets never on argv (`agents/reach.rs`), agent
+  writes to `.git` / `.shipstudio` denied, consent before installing or running a project's own
+  scripts (fingerprinted; installs use `--ignore-scripts` until approved), Keychain items copied to
+  app-owned `#v2` entries and verified before a legacy one is removed, and a plugin trust store
+  (bundle SHA-256 + source)
 
 ## Architecture
 
@@ -477,12 +515,17 @@ Answers: **can I run my work through a team of agents, the way I do in Grok Bot,
 
 1. Agents is the primary view (`AppView` `'agents'`): launch and the end of onboarding land there (`postSetupViewFor` in `useAppSetup.ts`; a project window still opens its workspace), and Projects is the sidebar toggle or ⌘K. The Chief of Staff exists from first open (`ensure_main`) and its chat opens on a stored greeting (`CHIEF_GREETING`). The bell beside the sidebar toggle opens What's in flight, with how many agents need you; the Phone row at the foot of the sidebar is the companion app (remote access shows there only while on)
 2. An agent is a registry entry plus a home folder: `CLAUDE.md` (instructions + a `## Memory` section it maintains) and `messages.jsonl` (what the user was shown). The chat log is ours, never reconstructed from Claude's transcript
-3. Each turn is one engine process in the agent's home — `claude --print --resume`, or Codex on its app-server (`exec` as the fallback), chosen per agent (`agents/engine.rs`) — with the agent tools on the agent bridge at `/mcp/<token>/agents/<id>`. Text blocks become bubbles; tool calls update the "working" line and become the observed steps of the "what it did" timeline (`agents/work.rs`), stored beside the log, never in it. No process per idle agent
+3. Each turn is one engine process in the agent's home — `claude --print --resume`, or Codex on its app-server (`exec` as the fallback), chosen per agent (`agents/engine.rs`) — with the agent tools on the agent bridge at `/mcp/agent`, the caller named only by a per-turn bearer secret that never touches argv (`agents/reach.rs`). Turns may not write any `.git` or `.shipstudio` folder (deny rules / a Codex permissions profile). Text blocks become bubbles; tool calls update the "working" line and become the observed steps of the "what it did" timeline (`agents/work.rs`), stored beside the log, never in it. No process per idle agent
 4. `message_agent` is asynchronous and capped at 6 agent-to-agent hops per user message. Management tools are Chief-only; `delete_agent` asks the user first
 5. Approvals: `acceptEdits` plus `--permission-prompt-tool` → an Allow / Deny card. Claude Code's ~60s MCP timeout is raised with `MCP_TOOL_TIMEOUT`, or a waiting card times out as "the tool is hanging"; never remove it
-6. Import: Remote Access's `import_agents` tool (or a paste) brings another assistant's agents over; the main one merges into the Chief
+6. Import: from Ship Studio on this Mac (`agents/other_app.rs`, a read-only preview then a copy), or over Remote Access's `import_conversation` (`agents/connector.rs`): consent card, a sealed interview (`agents/interview.rs`), then one review card (`agents/review.rs`). Nothing becomes an agent until the user imports it; the main one merges into the Chief
 7. Start fresh (`agents_start_fresh`) begins a new session and keeps memory; the context meter shows only a reading the engine reported (`agents/context.rs`)
-8. The phone drives the same commands through the companion server (`src-tauri/src/companion/`): chats, approval cards, the timeline and starting things all work there (see docs/mobile.md)
+8. Deliverables end on one result card (`agents/results.rs`, `share_result`): only files that resolve inside the home or a project, secret files refused, lists refused rather than trimmed, checks headed "It says it checked". Ask for changes revises it (v2, with what changed)
+9. A bound agent's turn runs in its own copy (`agents/task.rs`: a locked worktree under `<projects root>/.worktrees/`, its own branch and dev port). Keep only into the branch it came from; a copy left unchanged is removed
+10. Take over (`agents/takeover.rs`) claims the agent under the inbox lock: no turn starts, queued messages wait, routines due are skipped and recorded, until Hand back
+11. Routines (`agents/schedule.rs`) and "When…" routines (`agents/watch.rs`, sealed by `agents/watch_seal.rs`): polling checks from this Mac, no webhooks; first check is a baseline, nothing fires twice, one firing at a time. A turn answering outside text can't write its own `CLAUDE.md` and needs a card to change the team
+12. Usage (`agents/usage.rs`, `agents/quota.rs`): only what the engines report, never estimated; no reading, no line
+13. The phone drives the same commands through the companion server (`src-tauri/src/companion/`): chats, approval and result cards, the timeline and starting things all work there (see docs/mobile.md)
 
 Full design and limits: [docs/agents.md](docs/agents.md).
 
