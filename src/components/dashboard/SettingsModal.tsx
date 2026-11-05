@@ -56,7 +56,8 @@ import {
   listMovableProjects,
   moveProjectsToRoot,
   type MovableProjects,
-  takeSettingsTabOnOpen,
+  peekSettingsTabOnOpen,
+  clearSettingsTabOnOpen,
 } from '../../lib/settings';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { isMac } from '../../lib/setup';
@@ -126,8 +127,6 @@ export function SettingsModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    const requestedTab = takeSettingsTabOnOpen();
-    if (requestedTab) setActiveSettingsTab(requestedTab);
     let cancelled = false;
     void (async () => {
       const [
@@ -186,8 +185,10 @@ export function SettingsModal({
     };
   }, [isOpen]);
 
+  // Opens on General, unless a command asked for a tab (⌘K → "Accent color…").
   useEffect(() => {
-    if (isOpen) setActiveSettingsTab('general');
+    if (isOpen) setActiveSettingsTab(peekSettingsTabOnOpen() ?? 'general');
+    else clearSettingsTabOnOpen();
   }, [isOpen]);
 
   // Keep either Settings modal instance in sync with inline home-screen hide

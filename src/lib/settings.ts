@@ -424,8 +424,12 @@ export function requestSettingsTabOnOpen(tab: SettingsTabRequest) {
   settingsTabOnOpen = tab;
 }
 
-export function takeSettingsTabOnOpen(): SettingsTabRequest | null {
-  const tab = settingsTabOnOpen;
+/** The requested tab, if any. Read on open; cleared on close (so a StrictMode
+ *  double-run of the open effect still sees it). */
+export function peekSettingsTabOnOpen(): SettingsTabRequest | null {
+  return settingsTabOnOpen;
+}
+
+export function clearSettingsTabOnOpen() {
   settingsTabOnOpen = null;
-  return tab;
 }
