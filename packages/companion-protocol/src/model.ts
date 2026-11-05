@@ -562,6 +562,38 @@ export interface UsageTotals {
 export interface UsageSummary {
   week: UsageTotals;
   allTime: UsageTotals;
+  /** Each routine that ran on its own this week. Newer Macs only. */
+  routines?: RoutineUsage[];
+}
+
+/** One routine's week, from turns that ran nothing but it. */
+export interface RoutineUsage {
+  /** The check-in's id. */
+  id: string;
+  week: UsageTotals;
+}
+
+/**
+ * One window of an engine's plan (Claude Code's `five_hour` / `seven_day`,
+ * Codex's `primary` / `secondary`), exactly as the engine last reported it.
+ */
+export interface QuotaWindow {
+  kind: string;
+  /** 0–100; absent when the engine said only that it's used up. */
+  usedPercent?: number;
+  /** When it resets, epoch ms. */
+  resetsAt?: number;
+  windowMinutes?: number;
+  /** The engine said it's used up. */
+  limited: boolean;
+  /** When the engine reported it, epoch ms. */
+  observedAt: number;
+}
+
+/** An engine's plan, only ever as the engine reported it. Never estimated. */
+export interface Quota {
+  engine: AgentEngine;
+  windows: QuotaWindow[];
 }
 
 export interface PasteImportAgent {

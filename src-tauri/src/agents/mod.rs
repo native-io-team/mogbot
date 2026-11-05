@@ -64,6 +64,7 @@ pub mod procs;
 pub mod project;
 pub mod prompts;
 pub mod quick_entry;
+pub mod quota;
 pub mod review;
 pub mod runner;
 pub mod runs;

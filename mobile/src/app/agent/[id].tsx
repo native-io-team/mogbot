@@ -10,7 +10,9 @@
 
 import {
   describeCheckInTime,
+  routineWeekLine,
   sortCheckIns,
+  sumTotals,
   type Agent,
   type CheckIn,
   type PermissionRule,
@@ -256,6 +258,7 @@ function AgentSheet() {
                 <CheckInRow
                   agent={agent}
                   checkIn={c}
+                  spent={routineWeekLine(usage?.routines?.find((r) => r.id === c.id)?.week)}
                   last={i === checkIns.length - 1}
                   // Offline its menu's actions would all fail: it waits for the Mac.
                   enabled={canSchedule && live}
@@ -273,12 +276,15 @@ function AgentSheet() {
 function CheckInRow({
   agent,
   checkIn: c,
+  spent,
   last,
   enabled,
   onError,
 }: {
   agent: Agent;
   checkIn: CheckIn;
+  /** "$0.84 this week", when it ran on its own this week (as its engine reported). */
+  spent: string | null;
   last: boolean;
   enabled: boolean;
   onError: (text: string | null) => void;
@@ -341,6 +347,11 @@ function CheckInRow({
         <T variant="caption" color={colors.textSecondary}>
           {describeCheckInTime(c, now)}
         </T>
+        {!!spent && (
+          <T variant="caption" color={colors.textMuted}>
+            {spent}
+          </T>
+        )}
       </View>
       {busy ? (
         <Spinner />
@@ -541,6 +552,7 @@ function Conversation({
 function Usage({ usage }: { usage: UsageSummary }) {
   const colors = useColors();
   const styles = useStyles();
+  const routines = routineWeekLine(sumTotals((usage.routines ?? []).map((r) => r.week)));
   return (
     <>
       <SectionTitle title="Usage" style={styles.sectionTitle} />
@@ -562,6 +574,11 @@ function Usage({ usage }: { usage: UsageSummary }) {
           </View>
         ))}
       </View>
+      {!!routines && (
+        <T variant="small" color={colors.textMuted} style={styles.note}>
+          Its routines this week: {routines.replace(/ this week$/, '')}.
+        </T>
+      )}
     </>
   );
 }

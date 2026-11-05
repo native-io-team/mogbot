@@ -24,19 +24,21 @@ infrastructure where a good one exists.
 5. **"When…" routines.** Event-started work (a Linear issue assigned, a
    GitHub mention) via polling routines through the user's own connectors —
    no hosted webhooks.
-6. **Usage before the wall.** Measured cost per agent and routine; quota
-   only if the CLI reports it — never estimated.
-7. **A first run that lands one real win.** Role templates, inline connect,
+6. **A first run that lands one real win.** Role templates, inline connect,
    "drop a document" first task.
-8. **Import the team from Ship Studio on this Mac** (read-only), so moving
+7. **Import the team from Ship Studio on this Mac** (read-only), so moving
    over is one step. *In progress.*
-9. **Rooms.** Group chats with 2–6 agents, @one or @everyone.
+8. **Rooms.** Group chats with 2–6 agents, @one or @everyone.
 
 Small wins: save-as-skill, sections in the agent list, duplicate agent,
 reply to a single message.
 
 ## Done
 
+- **Usage before the wall** — cost per agent and per routine this week, and
+  the plan's usage ("Claude usage 85% · resets Sat", amber from 90%) only as
+  Claude Code / Codex report it, on desktop and phone. Codex's plan reading is
+  unverified on a signed-in account ([agents.md](agents.md)).
 - **"What it did" timeline under each reply** — folded summary, observed
   steps and outcomes, screenshots, live while working, on desktop and phone.
   ("Take over" split out above.)

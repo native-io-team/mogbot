@@ -41,6 +41,7 @@ pub const METHODS: &[&str] = &[
     "agents.memoryChange",
     "agents.memorySuggest",
     "agents.usage",
+    "agents.quota",
     "agents.changeDiff",
     "agents.keepCopy",
     "agents.discardCopy",
@@ -71,6 +72,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.memory",
     "agents.memorySuggest",
     "agents.usage",
+    "agents.quota",
     "agents.changeDiff",
     "agents.files",
     "agents.search",
@@ -292,6 +294,8 @@ pub trait Backend: Send + Sync + 'static {
     async fn instructions(&self, agent_id: &str) -> Result<String, CommandError>;
     /// `agents_usage`: this week and all time.
     async fn usage(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_quota`: each engine's plan, as it last reported it.
+    async fn quota(&self) -> Result<Value, CommandError>;
     /// `agents_revoke_permission`: an "Always allow" rule taken back.
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError>;
     /// `agents_change_diff`: one file of a change card.
@@ -997,6 +1001,7 @@ async fn run(
             let p: AgentParam = parse(params)?;
             Ok(b.usage(&p.agent_id).await?)
         }
+        "agents.quota" => Ok(b.quota().await?),
         "agents.revokePermission" => {
             let p: RuleParams = parse(params)?;
             b.revoke_permission(&p.agent_id, &p.rule_id).await?;

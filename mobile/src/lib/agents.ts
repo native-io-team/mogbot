@@ -15,6 +15,7 @@ import type {
   SessionMark,
   UsageTotals,
 } from '@shipstudio/companion-protocol';
+import { resetPhrase } from '@shipstudio/companion-protocol';
 import { diffLineKind } from './diff';
 
 /** Pinned first, then most recently active. */
@@ -42,7 +43,7 @@ export const needsAttention = (agent: Agent) => needsYou(agent) || failedTurn(ag
 export function failureLine(failure: Failure, preview: string | null, engine?: string): string {
   if (failure.kind === 'usage_limit') {
     return failure.resetsAt
-      ? `Usage limit · resets ${formatClock(failure.resetsAt)}`
+      ? `Usage limit · resets ${resetPhrase(failure.resetsAt)}`
       : 'Usage limit reached';
   }
   if (failure.kind === 'signed_out') return `${engine ?? 'Its engine'} is signed out`;

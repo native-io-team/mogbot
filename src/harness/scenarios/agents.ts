@@ -1443,6 +1443,49 @@ const composerScenario = (lines: number): Scenario => ({
   },
 });
 
+/* ------------------------------------------------- usage before the wall */
+
+/** A plan window as `agents_quota` returns it (agents::quota::QuotaWindow). */
+const quotaWindow = (over: Record<string, unknown>) => ({
+  kind: 'seven_day',
+  limited: false,
+  observedAt: now - 12 * MIN,
+  ...over,
+});
+/** Saturday-ish: a weekly window that resets in a couple of days, on the hour. */
+const WEEKLY_RESET = Math.ceil((now + 2.4 * 24 * 60 * MIN) / (60 * MIN)) * 60 * MIN;
+const weeklyResetWords = `${new Date(WEEKLY_RESET).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${new Date(WEEKLY_RESET).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+const claudeQuota = (usedPercent: number) => [
+  {
+    engine: 'claude',
+    windows: [
+      quotaWindow({ usedPercent, resetsAt: WEEKLY_RESET }),
+      quotaWindow({ kind: 'five_hour', usedPercent: 22, resetsAt: now + 3 * 60 * MIN }),
+    ],
+  },
+];
+/** The weekly limit hit: what a `rejected` rate_limit_event leaves. */
+const weeklyLimitOverview = () => ({
+  ...failingOverview(),
+  agents: failingOverview().agents.map((a) =>
+    a.id === 'finance'
+      ? {
+          ...a,
+          preview: `Claude Code’s usage limit is reached. It resets on ${weeklyResetWords}.`,
+          failure: { kind: 'usage_limit', resetsAt: WEEKLY_RESET },
+        }
+      : a
+  ),
+});
+const WEEKLY_LIMIT_CHAT = [
+  LIMIT_CHAT[0],
+  // As failure::describe_now words it from the reset Claude Code reported.
+  msg('error', `Claude Code’s usage limit is reached. It resets on ${weeklyResetWords}.`, 5, {
+    agentId: 'finance',
+    failure: { kind: 'usage_limit', resetsAt: WEEKLY_RESET },
+  }),
+];
+
 export const agentsScenarios: Scenario[] = [
   composerScenario(1),
   composerScenario(3),
@@ -1553,6 +1596,91 @@ export const agentsScenarios: Scenario[] = [
         createdAt: now,
         paused: false,
       }),
+    },
+  },
+  {
+    id: 'agents-quota-calm',
+    title: 'Agents — plan usage Claude Code reported, below 90%',
+    looksRightWhen:
+      'At the foot of the sidebar, above the phone row, one quiet muted line: “Claude usage 85% · resets <weekday>” (the fuller of the two windows Claude Code reported, never the 5-hour 22%). Nothing about Codex: it reported nothing. The rest of the sidebar is unchanged.',
+    command: 'agents.open',
+    requires: '.agents-quota__line[data-tone="calm"]',
+    commands: {
+      agents_overview: liveOverview,
+      agents_messages: messagesFor,
+      agents_quota: claudeQuota(85),
+    },
+  },
+  {
+    id: 'agents-quota-warning',
+    title: 'Agents — plan usage at 93%, in What’s in flight',
+    looksRightWhen:
+      'What’s in flight ends with the same line as the sidebar foot, both in amber: “Claude usage 93% · resets <weekday>”. Hovering it says which window and when Claude Code reported it. A Codex line “Codex usage 40% · resets …” sits under it, muted.',
+    command: 'agents.team',
+    requires: '.agents-quota--team .agents-quota__line[data-tone="warning"]',
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      agents_quota: [
+        ...claudeQuota(93),
+        {
+          engine: 'codex',
+          windows: [
+            quotaWindow({
+              kind: 'secondary',
+              usedPercent: 40,
+              windowMinutes: 10080,
+              resetsAt: WEEKLY_RESET + 24 * 60 * MIN,
+            }),
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: 'agents-quota-limited',
+    title: 'Agents — the weekly limit hit: the same reset everywhere',
+    looksRightWhen:
+      'Finance’s chat ends in the quiet usage-limit notice with “Retry <weekday> <time>” (a day, not just a clock time, since it resets days from now) and “Try anyway”. Finance’s sidebar row reads “Usage limit · resets <weekday> <time>” muted. The sidebar foot reads “Claude usage limit · resets <weekday>” in amber.',
+    openSelector: AGENTS_TAB,
+    requires: '.agents-quota__line[data-tone="limited"]',
+    steps: [{ click: '[data-agent-id="finance"]' }],
+    commands: {
+      agents_overview: weeklyLimitOverview,
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'finance'
+          ? WEEKLY_LIMIT_CHAT
+          : args.agentId === 'leadgen'
+            ? LEADGEN_FAILED
+            : messagesFor(args),
+      agents_quota: [
+        {
+          engine: 'claude',
+          windows: [quotaWindow({ usedPercent: 100, limited: true, resetsAt: WEEKLY_RESET })],
+        },
+      ],
+    },
+  },
+  {
+    id: 'agents-schedule-spent',
+    title: 'Agents — what each routine cost this week',
+    looksRightWhen:
+      'Finance’s schedule popover. Under the weekday brief’s time, a quieter “$0.84 this week”; under the one-time check-in, “38k tokens this week” (it ran on a turn that reported no price). The paused Monday routine shows no cost line at all: it hasn’t run on its own this week.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-schedule__spent',
+    steps: [{ click: '[data-agent-id="finance"]' }, { click: '.agent-chat__scheduled' }],
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      agents_schedule_preview: schedulePreview,
+      agents_usage: {
+        week: totals(14, 412_000, 3.81, 22),
+        allTime: totals(161, 5_930_000, 47.2, 274),
+        routines: [
+          { id: 'ci2', week: totals(3, 96_000, 0.84, 4) },
+          { id: 'ci1', week: { ...totals(1, 38_000, 0, 1), pricedTurns: 0 } },
+        ],
+      },
     },
   },
   {
@@ -1792,7 +1920,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-edit-usage',
     title: 'Agents — editing an agent: model and usage',
     looksRightWhen:
-      'The editor shows a Default / Opus / Sonnet / Haiku control with Sonnet chosen, and under it quiet This week / All time lines: cost, tokens, turns and time, as reported.',
+      'The editor shows a Default / Opus / Sonnet / Haiku control with Sonnet chosen, and under it quiet This week / Its routines / All time lines: cost, tokens, turns and time, as reported; Its routines reads “$0.84 this week”.',
     openSelector: AGENTS_TAB,
     requires: '.agent-editor__usage',
     steps: [
@@ -1808,6 +1936,7 @@ export const agentsScenarios: Scenario[] = [
       agents_usage: {
         week: totals(14, 412_000, 3.81, 22),
         allTime: totals(161, 5_930_000, 47.2, 274),
+        routines: [{ id: 'ci2', week: totals(3, 96_000, 0.84, 4) }],
       },
     },
   },

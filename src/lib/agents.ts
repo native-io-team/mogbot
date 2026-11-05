@@ -820,6 +820,38 @@ export interface UsageTotals {
 export interface UsageSummary {
   week: UsageTotals;
   allTime: UsageTotals;
+  /** Each routine that ran on its own this week. Newer Macs only. */
+  routines?: RoutineUsage[];
+}
+
+/** One routine's week, from turns that ran nothing but it. */
+export interface RoutineUsage {
+  /** The check-in's id. */
+  id: string;
+  week: UsageTotals;
+}
+
+/**
+ * One window of an engine's plan (Claude Code's `five_hour` / `seven_day`,
+ * Codex's `primary` / `secondary`), exactly as the engine last reported it.
+ */
+export interface QuotaWindow {
+  kind: string;
+  /** 0–100; absent when the engine said only that it's used up. */
+  usedPercent?: number;
+  /** When it resets, epoch ms. */
+  resetsAt?: number;
+  windowMinutes?: number;
+  /** The engine said it's used up. */
+  limited: boolean;
+  /** When the engine reported it, epoch ms. */
+  observedAt: number;
+}
+
+/** An engine's plan, only ever as the engine reported it. Never estimated. */
+export interface Quota {
+  engine: AgentEngine;
+  windows: QuotaWindow[];
 }
 
 export const AGENT_EVENTS = {
@@ -828,6 +860,8 @@ export const AGENT_EVENTS = {
   registry: 'agents://registry',
   /** A reply being written: `{ agentId, id, text }`, the text so far. */
   draft: 'agents://draft',
+  /** An engine reported its plan's limits; read `agents_quota` again. */
+  quota: 'agents://quota',
   /** A notification was clicked; payload is the agent id to open. */
   open: 'agents://open',
   /** The import over the connector changed: an `ImportGate`. */
@@ -1404,6 +1438,23 @@ export {
 
 export const searchAgents = (query: string) => invoke<SearchHit[]>('agents_search', { query });
 export const getAgentUsage = (agentId: string) => invoke<UsageSummary>('agents_usage', { agentId });
+/** Each engine's plan as it last reported it; empty when none has (`agents::quota`). */
+export const getQuotas = () => invoke<Quota[]>('agents_quota');
+
+// The plan's limits and a routine's week, worded once for the desk and the phone.
+export {
+  COST_BASIS_NOTE,
+  QUOTA_WARN_PERCENT,
+  quotaLines,
+  resetDay,
+  resetPhrase,
+  retryPhrase,
+  routineWeekLine,
+  sumTotals,
+  type QuotaLine,
+  type QuotaTone,
+} from '../../packages/companion-protocol/src/quota';
+import { resetPhrase as resetWords } from '../../packages/companion-protocol/src/quota';
 
 /**
  * A hit's snippet cut to start a few words before its first match, so the
@@ -1555,7 +1606,7 @@ export const needsAttention = (agent: Agent) => needsYou(agent) || failedTurn(ag
 export function failureLine(failure: Failure, preview: string | null): string {
   if (failure.kind === 'usage_limit') {
     return failure.resetsAt
-      ? `Usage limit · resets ${formatClock(failure.resetsAt)}`
+      ? `Usage limit · resets ${resetWords(failure.resetsAt)}`
       : 'Usage limit reached';
   }
   if (failure.kind === 'signed_out') return 'Claude Code is signed out';

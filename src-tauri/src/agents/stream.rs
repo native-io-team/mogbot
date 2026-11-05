@@ -36,6 +36,8 @@ pub enum Step {
     /// What became of a tool call, matched to its step by id.
     Result(super::work::CallResult),
     Usage(UsageTotals),
+    /// How much of the plan is left, as the engine reported it (`super::quota`).
+    Quota(super::quota::Quota),
     /// How full the conversation is, as the engine reported it.
     Context(super::context::ContextFill),
     /// The turn ended in an error, in the engine's words.
@@ -81,6 +83,9 @@ pub fn claude_steps(value: &Value, now: i64) -> Vec<Step> {
                     .into_iter()
                     .map(Step::Result),
             );
+        }
+        Some("rate_limit_event") => {
+            out.extend(super::quota::from_claude(value, now).map(Step::Quota));
         }
         Some("result") => {
             out.extend(super::usage::from_result(value).map(Step::Usage));

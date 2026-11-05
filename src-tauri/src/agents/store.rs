@@ -486,7 +486,7 @@ fn recover_registry(path: &Path, why: &str) -> Result<Registry, CommandError> {
     Ok(recovered)
 }
 
-fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), CommandError> {
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), CommandError> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| super::err_io(e.to_string()))?;
     }

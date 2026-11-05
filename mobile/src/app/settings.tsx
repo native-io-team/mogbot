@@ -6,6 +6,7 @@ import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Icon, Row, Section, T, tap } from '../components/ui';
+import { useQuotaLines } from '../lib/quota';
 import { appInfo } from '../lib/pairing';
 import { setPref } from '../lib/prefs';
 import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
@@ -101,6 +102,7 @@ export default function Settings() {
       ]
     );
 
+  const quota = useQuotaLines();
   const { version, build } = appInfo();
   const updateLabel =
     update.kind === 'checking'
@@ -132,6 +134,19 @@ export default function Settings() {
         <Row label="Connection details" onPress={() => router.push('/connection')} />
         <Row label="Forget this Mac" destructive onPress={confirmUnpair} last />
       </Section>
+
+      {quota.length > 0 && (
+        <Section title="Plan usage">
+          {quota.map((line, i) => (
+            <Row
+              key={line.engine}
+              label={line.text}
+              detail={line.detail}
+              last={i === quota.length - 1}
+            />
+          ))}
+        </Section>
+      )}
 
       <Section
         title="Alerts"

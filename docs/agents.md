@@ -880,6 +880,45 @@ the same predicate as replies, and is recorded after the wake starts, so it
 falls inside the turn. Notifications use the same predicate, so a check-in
 and its answer post one notification per turn.
 
+## Usage before the wall (`agents/usage.rs`, `agents/quota.rs`)
+
+Grok Bot's bots went silent at the usage limit. Here the limit is said
+before it arrives, and only from what the engines report: nothing is ever
+estimated, and no reading means no line.
+
+**Cost, per agent and per routine.** Each turn's `result` (Claude Code:
+`usage`, `total_cost_usd`) or `turn/completed` (Codex: tokens only) is added
+to the agent's last 7 days. A turn whose batch was nothing but routine
+firings, all of one routine, is also charged to that routine
+(`runs::charged_to`); a turn shared with a person's message or with a second
+routine is charged to neither, because one turn's cost can't be split
+honestly. The schedule popover and the phone's routine rows say "$0.84 this
+week" when every run was priced, else "38k tokens this week". Claude Code's
+`modelUsage[*].costBasis` is `"list"`: the dollar figure is at API list
+prices, not a Pro/Max bill, and the tooltip says so.
+
+**The plan's limits.** Verified on Claude Code 2.1.318 (a subscription, a
+Haiku "say ok" turn, $0.004): every stream-json turn emits a
+`rate_limit_event` whose `rate_limit_info.unifiedWindows.<window>` carries
+`utilization` (0–1), `resetsAt` (epoch s) and `status` (`allowed`,
+`allowed_warning` past 75%, `rejected`); an `allowed` event may omit the
+top-level `utilization` (`testdata/claude-rate-limit.jsonl`). Codex 0.166's
+app-server has `account/rateLimits/read` and the sparse
+`account/rateLimits/updated` (`primary` / `secondary`: `usedPercent`,
+`windowDurationMins`, `resetsAt`); it is asked once per turn. **Unverified
+against a signed-in Codex account**: on this machine the read answered
+"authentication required", which is ignored. Readings are merged per window
+into `quota.json` and a window past its reset is dropped (`agents_quota`).
+
+The sidebar foot, the foot of What's in flight, and the phone's agent list
+and Settings show "Claude usage 85% · resets Sat" for the fullest window,
+amber from 90%, and "Claude usage limit · resets Sat" for a used-up one. A
+usage-limit failure whose message gave no reset takes the engine's reported
+one (`failure::with_reported_reset`), and every reset days away is said with
+its day ("Usage limit · resets Sat 2:00 PM", "Retry Sat 2:00 PM"), never a
+bare clock time. The wording lives once, in
+`packages/companion-protocol/src/quota.ts`, for the desk and the phone.
+
 ## Apps agents can use (`src-tauri/src/agents/apps.rs`)
 
 Every turn is a `claude` process, and Claude Code loads the user's MCP servers

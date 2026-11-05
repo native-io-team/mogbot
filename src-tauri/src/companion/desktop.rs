@@ -368,6 +368,10 @@ impl Backend for DesktopBackend {
         json(cmd::agents_usage(agent_id.to_string()).await?)
     }
 
+    async fn quota(&self) -> Result<Value, CommandError> {
+        json(cmd::agents_quota().await?)
+    }
+
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError> {
         cmd::agents_revoke_permission(self.app.clone(), agent_id.to_string(), rule_id.to_string())
             .await

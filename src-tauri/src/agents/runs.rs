@@ -32,6 +32,7 @@ use tauri::AppHandle;
 use super::failure::{self, Failure};
 use super::schedule::{CheckIn, ROUTINE_GRACE_MS};
 use super::store::{self, MessageKind};
+use super::usage::UsageTotals;
 
 const MINUTE_MS: i64 = 60_000;
 /// Runs kept per check-in.
@@ -307,12 +308,34 @@ fn take(agent_id: &str, prompt: &str) -> Vec<Ticket> {
     mine
 }
 
-/// A turn ended. Settle the scheduled runs it answered.
-pub fn turn_ended(app: &AppHandle, agent_id: &str, prompt: &str) {
+/// The routine a turn's cost belongs to: the one thing it ran. A turn that
+/// answered two routines' firings (or a routine and anything else, which
+/// `spent` being `None` says) is charged to neither, because there is no
+/// honest way to split one turn's reported cost between them.
+pub fn charged_to(tickets: &[Ticket], spent: Option<&UsageTotals>) -> Option<String> {
+    spent.filter(|s| s.turns > 0)?;
+    let mut ids = tickets
+        .iter()
+        .filter_map(|t| t.check_ins.first().map(|c| c.id.as_str()));
+    let first = ids.next()?;
+    ids.all(|id| id == first).then(|| first.to_string())
+}
+
+/// A turn ended. Settle the scheduled runs it answered. `spent`: what the
+/// turn cost, when everything it answered was a routine firing.
+pub fn turn_ended(app: &AppHandle, agent_id: &str, prompt: &str, spent: Option<&UsageTotals>) {
     let mine = take(agent_id, prompt);
     let Some(since) = mine.iter().map(|t| t.fired_at).min() else {
         return;
     };
+    if let (Some(id), Some(spent)) = (charged_to(&mine, spent), spent) {
+        let today = super::usage::today();
+        let _ = store::update(agent_id, |agent| {
+            if let Some(c) = agent.check_ins.iter_mut().find(|c| c.id == id) {
+                c.usage.record(spent, today);
+            }
+        });
+    }
     let now = store::now_ms();
     // The turn's failure is its newest line, when that's an error after it fired.
     let newest = store::messages(agent_id, 1)
@@ -488,6 +511,67 @@ mod tests {
             "repeat": if repeat { serde_json::json!({"kind": "every", "minutes": 60}) } else { serde_json::Value::Null }
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn a_turn_is_charged_to_a_routine_only_when_it_ran_that_routine_alone() {
+        let spent = UsageTotals {
+            turns: 1,
+            cost_usd: 0.42,
+            priced_turns: 1,
+            ..Default::default()
+        };
+        let one = ticket(1);
+        assert_eq!(
+            charged_to(std::slice::from_ref(&one), Some(&spent)),
+            Some("c1".into())
+        );
+        // A retry of the same routine in the same turn is still that routine.
+        assert_eq!(
+            charged_to(&[one.clone(), ticket(2)], Some(&spent)),
+            Some("c1".into())
+        );
+        // Two routines in one turn: neither, the cost can't be split honestly.
+        let mut other = ticket(1);
+        other.check_ins[0].id = "c2".into();
+        assert_eq!(charged_to(&[one.clone(), other], Some(&spent)), None);
+        // Mixed with a person's message (the runner passes no cost), or nothing reported.
+        assert_eq!(charged_to(std::slice::from_ref(&one), None), None);
+        assert_eq!(
+            charged_to(std::slice::from_ref(&one), Some(&UsageTotals::default())),
+            None
+        );
+        assert_eq!(charged_to(&[], Some(&spent)), None);
+    }
+
+    #[test]
+    fn a_routines_week_is_kept_beside_its_runs() {
+        let mut c = check_in("Brief me", true);
+        assert!(c.usage.is_empty());
+        let day = chrono::NaiveDate::from_ymd_opt(2026, 11, 3).unwrap();
+        let spent = UsageTotals {
+            turns: 1,
+            cost_usd: 0.5,
+            priced_turns: 1,
+            input_tokens: 100,
+            ..Default::default()
+        };
+        c.usage.record(&spent, day);
+        c.usage.record(&spent, day);
+        let json = serde_json::to_value(&c).unwrap();
+        assert!(json.get("usage").is_some());
+        let back: CheckIn = serde_json::from_value(json).unwrap();
+        let week = back.usage.summary(day).week;
+        assert_eq!(
+            (week.turns, week.priced_turns, week.input_tokens),
+            (2, 2, 200)
+        );
+        assert!((week.cost_usd - 1.0).abs() < 1e-9);
+        // A routine that never ran writes no usage at all (older builds read the same file).
+        assert!(serde_json::to_value(check_in("x", true))
+            .unwrap()
+            .get("usage")
+            .is_none());
     }
 
     fn ticket(attempt: u32) -> Ticket {

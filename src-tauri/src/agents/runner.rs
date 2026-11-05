@@ -37,6 +37,8 @@ pub const EVENT_REGISTRY: &str = "agents://registry";
 /// A reply being written: `{agentId, id, text}`, the text so far. The message
 /// that completes it arrives on [`EVENT_MESSAGE`] with the same id.
 pub const EVENT_DRAFT: &str = "agents://draft";
+/// An engine reported how much of the plan is left (`super::quota`).
+pub const EVENT_QUOTA: &str = "agents://quota";
 
 /// How often a growing draft is sent to the UI: smooth to the eye, and a
 /// burst of tiny deltas costs one event rather than dozens.
@@ -159,6 +161,9 @@ struct Runtime {
     /// The user is driving the agent's session in a terminal (`takeover`):
     /// no turn starts, and what arrives waits in the queue until hand-back.
     driven: bool,
+    /// What the turn in progress has cost so far, as its engine reported it
+    /// (a session retry is a second report): what a routine it ran is charged.
+    turn_usage: super::usage::UsageTotals,
 }
 
 /// Why a take-over can't start now.
@@ -1160,6 +1165,7 @@ async fn drain(app: AppHandle, agent_id: String) {
             }
             runtime.cancel = Some(Arc::new(Notify::new()));
             runtime.interrupt = false;
+            runtime.turn_usage = super::usage::UsageTotals::default();
             let prompt = compose(&batch);
             runtime.prompt = Some(prompt.clone());
             match runtime.interrupted.take() {
@@ -1247,9 +1253,26 @@ async fn drain(app: AppHandle, agent_id: String) {
         if let Some(error) = failed {
             return_results(&app, &agent_id, since, error);
         }
-        // A scheduled run that failed is retried, or reported (`agents::runs`).
-        super::runs::turn_ended(&app, &agent_id, &prompt);
+        // A scheduled run that failed is retried, or reported (`agents::runs`);
+        // a turn that only ran routines is charged to them.
+        let spent = routine.then(|| take_turn_usage(&agent_id));
+        super::runs::turn_ended(&app, &agent_id, &prompt, spent.as_ref());
         notify::turn_ended(&app, &agent_id);
+    }
+}
+
+fn take_turn_usage(agent_id: &str) -> super::usage::UsageTotals {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    runtimes
+        .get_mut(agent_id)
+        .map(|r| std::mem::take(&mut r.turn_usage))
+        .unwrap_or_default()
+}
+
+fn add_turn_usage(agent_id: &str, turn: &super::usage::UsageTotals) {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(r) = runtimes.get_mut(agent_id) {
+        r.turn_usage.add(turn);
     }
 }
 
@@ -1975,8 +1998,17 @@ async fn run_turn(
                                 turn.duration_ms = u64::try_from(store::now_ms() - started).unwrap_or(0);
                             }
                             let today = super::usage::today();
+                            add_turn_usage(agent_id, &turn);
                             let id = agent_id.to_string();
                             let _ = tokio::task::spawn_blocking(move || store::update(&id, |a| a.usage.record(&turn, today))).await;
+                        }
+                        Step::Quota(reading) => {
+                            let changed = tokio::task::spawn_blocking(move || super::quota::record(reading, store::now_ms()))
+                                .await
+                                .unwrap_or(false);
+                            if changed {
+                                let _ = app.emit(EVENT_QUOTA, ());
+                            }
                         }
                         Step::Context(fill) if reading.armed => {
                             let (id, on) = (agent_id.to_string(), this_session.clone());

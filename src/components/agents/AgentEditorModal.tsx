@@ -24,6 +24,7 @@ import { AgentEngineField, AgentEngineMore } from './AgentEngine';
 import { ChevronRightIcon } from '@/components/icons';
 import {
   AGENT_COLORS,
+  COST_BASIS_NOTE,
   type AgentColor,
   type AgentEngine,
   createAgent,
@@ -38,11 +39,14 @@ import {
   getAgentUsage,
   modelChoices,
   revokePermission,
+  routineWeekLine,
   SCOPE_KIND_LABEL,
+  sumTotals,
   updateAgent,
   type Agent,
   type PermissionRule,
   type UsageSummary,
+  type UsageTotals,
 } from '../../lib/agents';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAgentsSelector } from '../../lib/agentsStore';
@@ -56,16 +60,25 @@ import { AccentScope } from '../../contexts/AccentScopeContext';
 function UsageLines({ usage, agent }: { usage: UsageSummary | null; agent: Agent | null }) {
   const week = usage && formatUsage(usage.week);
   const allTime = usage && formatUsage(usage.allTime);
+  const routines = routineWeekLine(sumTotals((usage?.routines ?? []).map((r) => r.week)));
   const context = agent && formatContext(agent);
   if (!allTime && !context) return null;
+  const priced = (t: UsageTotals | undefined) =>
+    t && t.pricedTurns > 0 ? COST_BASIS_NOTE : undefined;
   return (
     <dl className="agent-editor__usage">
       {allTime && (
         <>
           <dt>This week</dt>
-          <dd>{week ?? 'No turns'}</dd>
+          <dd title={priced(usage?.week)}>{week ?? 'No turns'}</dd>
+          {routines && (
+            <>
+              <dt>Its routines</dt>
+              <dd>{routines}</dd>
+            </>
+          )}
           <dt>All time</dt>
-          <dd>{allTime}</dd>
+          <dd title={priced(usage?.allTime)}>{allTime}</dd>
         </>
       )}
       {context && (

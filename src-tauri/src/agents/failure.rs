@@ -41,16 +41,43 @@ impl Failure {
     };
 }
 
-/// The chat line and its tag for a failed turn, on this Mac's clock.
+/// The chat line and its tag for a failed turn, on this Mac's clock. A
+/// usage limit whose message gave no reset time takes the one the engine
+/// last reported for its used-up window (`super::quota`), if any.
 pub fn describe_now(engine: Engine, detail: &str) -> (String, Failure) {
     let zone = iana_time_zone::get_timezone().ok();
-    describe(
-        engine,
-        detail,
-        &chrono::Local,
-        zone.as_deref(),
-        super::store::now_ms(),
-    )
+    let now = super::store::now_ms();
+    let described = describe(engine, detail, &chrono::Local, zone.as_deref(), now);
+    let reported = super::quota::limited_until(&super::quota::load(), engine, now);
+    with_reported_reset(engine, described, reported, &chrono::Local, now)
+}
+
+/// `describe`'s answer, given the reset time the engine's quota reading
+/// says (only used when the message itself named none).
+pub fn with_reported_reset<Tz: TimeZone>(
+    engine: Engine,
+    (text, failure): (String, Failure),
+    reported: Option<i64>,
+    tz: &Tz,
+    now: i64,
+) -> (String, Failure)
+where
+    Tz::Offset: std::fmt::Display,
+{
+    match (failure.kind, failure.resets_at, reported) {
+        (FailureKind::UsageLimit, None, Some(at)) if at > now => (
+            format!(
+                "{}'s usage limit is reached. It resets {}.",
+                engine.label(),
+                clock_phrase(tz, at, now)
+            ),
+            Failure {
+                kind: FailureKind::UsageLimit,
+                resets_at: Some(at),
+            },
+        ),
+        _ => (text, failure),
+    }
 }
 
 pub fn describe<Tz: TimeZone>(
@@ -292,6 +319,48 @@ where
 mod tests {
     use super::*;
     use chrono::{FixedOffset, Utc};
+
+    #[test]
+    fn a_limit_without_a_time_takes_the_engines_reported_reset() {
+        let bare = describe(
+            Engine::Claude,
+            "Claude AI usage limit reached",
+            &Utc,
+            None,
+            NOW,
+        );
+        assert_eq!(bare.1.resets_at, None);
+        let at = NOW + 3 * 3_600_000;
+        let (text, failure) =
+            with_reported_reset(Engine::Claude, bare.clone(), Some(at), &Utc, NOW);
+        assert_eq!(failure.resets_at, Some(at));
+        assert!(
+            text.starts_with("Claude Code's usage limit is reached. It resets "),
+            "{text}"
+        );
+        // A time the message gave wins; a reported reset already past is no help.
+        let timed = describe(
+            Engine::Claude,
+            "Claude AI usage limit reached|1793620800",
+            &Utc,
+            None,
+            NOW,
+        );
+        assert_eq!(
+            with_reported_reset(Engine::Claude, timed.clone(), Some(at), &Utc, NOW),
+            timed
+        );
+        assert_eq!(
+            with_reported_reset(Engine::Claude, bare.clone(), Some(NOW - 1), &Utc, NOW),
+            bare
+        );
+        // Not a usage limit: untouched.
+        let other = describe(Engine::Claude, "boom", &Utc, None, NOW);
+        assert_eq!(
+            with_reported_reset(Engine::Claude, other.clone(), Some(at), &Utc, NOW),
+            other
+        );
+    }
 
     #[test]
     fn only_failures_that_heal_on_their_own_are_temporary() {
