@@ -81,7 +81,7 @@ afterEach(() => {
 });
 
 describe('a change card for a copy of the project', () => {
-  it('says the changes are ready, in plain words, with Keep · Review · Preview · Discard', async () => {
+  it('says the changes are ready, in plain words, with Keep · Review changes · Preview · Discard', async () => {
     backend();
     show({ agent: agent(), live: true });
     await act(() => Promise.resolve());
@@ -89,7 +89,10 @@ describe('a change card for a copy of the project', () => {
     expect(
       screen.getByText('On a copy of acme-site · acme-site itself is unchanged')
     ).toBeInTheDocument();
-    for (const name of ['Keep changes', 'Review', 'Preview', 'Discard']) {
+    expect(screen.getByRole('button', { name: 'Keep changes' }).className).toMatch(
+      /button--strong/
+    );
+    for (const name of ['Keep changes', 'Review changes', 'Preview', 'Discard']) {
       expect(screen.getByRole('button', { name })).toBeEnabled();
     }
     // No git words on the card.
@@ -116,6 +119,18 @@ describe('a change card for a copy of the project', () => {
     expect(screen.getByText('Acme Site is working on a copy of acme-site')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Keep changes' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Discard' })).toBeDisabled();
+  });
+
+  it('waits while you drive it by hand: the copy may be mid-edit in the terminal', async () => {
+    backend();
+    const driven = agent();
+    driven.takeover = { ptySession: 'p', cli: 'claude', since: 1 } as unknown as Agent['takeover'];
+    show({ agent: driven, live: true });
+    await act(() => Promise.resolve());
+    expect(screen.getByRole('button', { name: 'Keep changes' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Discard' })).toBeDisabled();
+    // Looking is fine; only keeping and throwing away wait for the hand-back.
+    expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled();
   });
 
   it('asks before discarding, then discards that copy', async () => {
@@ -172,8 +187,8 @@ describe('a change card for a copy of the project', () => {
     await act(() => Promise.resolve());
     expect(screen.getByText('Changed 2 files in a copy of acme-site')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Keep changes' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'See changes' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open preview' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Review changes' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
   });
 
   it('offers working directly only once a project is picked', async () => {
@@ -190,7 +205,7 @@ describe('a change card for a copy of the project', () => {
     expect(onDirect).toHaveBeenCalledWith(true);
   });
 
-  it('asks before keeping into a branch the copy wasn’t made from, naming both', async () => {
+  it('asks before keeping into a version the copy wasn’t made from, without naming either', async () => {
     const calls = backend((args) =>
       (args as { into?: string }).into === 'feature'
         ? { outcome: 'kept', files: 2, branch: 'feature' }
@@ -201,11 +216,11 @@ describe('a change card for a copy of the project', () => {
       await Promise.resolve();
       fireEvent.click(screen.getByRole('button', { name: 'Keep changes' }));
     });
-    expect(screen.getByText(otherBranchNote('acme-site', 'feature', 'main'))).toBeInTheDocument();
-    expect(otherBranchNote('acme-site', 'feature', 'main')).toMatch(/on feature now.*from main/);
+    expect(screen.getByText(otherBranchNote('acme-site', 'main'))).toBeInTheDocument();
+    expect(otherBranchNote('acme-site', 'main')).not.toMatch(/feature|main|branch/);
     await act(async () => {
       await Promise.resolve();
-      fireEvent.click(screen.getByRole('button', { name: 'Keep into feature' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Keep there too' }));
     });
     const keeps = calls.filter((c) => c.cmd === 'agents_copy_keep').map((c) => c.args);
     expect(keeps).toEqual([
@@ -268,11 +283,9 @@ describe('a change card for a copy of the project', () => {
   });
 
   it('says where Keep puts the changes', () => {
-    expect(keepHint('Acme Site', 'acme-site', 'main')).toBe(
-      "Brings these changes into acme-site: adds Acme Site's commits to main"
-    );
+    expect(keepHint('Acme Site', 'acme-site')).toBe('Brings Acme Site’s changes into acme-site');
     expect(keptToast('acme-site', { outcome: 'kept', files: 2, branch: 'main' })).toBe(
-      'Kept the changes in acme-site (main)'
+      'Kept the changes in acme-site'
     );
     expect(
       keptToast('acme-site', {

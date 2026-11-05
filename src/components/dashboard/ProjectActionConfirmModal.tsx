@@ -9,7 +9,7 @@ interface ProjectActionConfirmModalProps {
   loading: boolean;
   confirmLabel: string;
   loadingLabel: string;
-  confirmVariant: 'primary' | 'danger';
+  confirmVariant: 'primary' | 'danger' | 'strong';
   /** The dismiss button; "Cancel" unless the choice is better named. */
   cancelLabel?: string;
   onCancel: () => void;

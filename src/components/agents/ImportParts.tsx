@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CheckIcon, ChevronRightIcon, CopyIcon, InfoIcon, WarningIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
+import { Checkbox } from '../primitives/Checkbox';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useAgentsList } from '../../lib/agentsStore';
 import type { ImportSummary, PasteImportAgent, PasteImportPreview } from '../../lib/agents';
@@ -107,6 +108,101 @@ export function MessageCard({
   );
 }
 
+export type ImportChipKind = 'new' | 'main' | 'update' | 'skip' | 'taken' | 'replace';
+
+/**
+ * One agent an import would bring, wherever an import is reviewed (pasted,
+ * from the other app here, or proposed by another assistant over the
+ * connector): avatar, name and its chip, role, counts, and the detail one
+ * click down under the same section labels. Chips are neutral; only words
+ * tell them apart.
+ */
+export function ImportAgentRow({
+  name,
+  avatarName,
+  color,
+  chip,
+  role,
+  counts,
+  away,
+  select,
+  inline,
+  detail,
+}: {
+  name: string;
+  /** Whose badge it wears (the main one wears the Chief's). */
+  avatarName?: string;
+  color: string;
+  chip?: { kind: ImportChipKind; label: string };
+  role?: string;
+  counts?: ReactNode;
+  /** Present but not coming: quieter. */
+  away?: boolean;
+  /** Ticked to import (the connector's review): the box before the row. */
+  select?: { checked: boolean; disabled?: boolean; label: string; onChange: (v: boolean) => void };
+  /** Always in view under the row (the instructions it would run). */
+  inline?: ReactNode;
+  /** What opening the row shows; rendered only when open. */
+  detail: () => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <li
+      className="agents-import-agent"
+      data-open={open || undefined}
+      data-away={away || (select && !select.checked) || undefined}
+    >
+      <div className="agents-import-agent__line">
+        {select && (
+          <Checkbox
+            checked={select.checked}
+            disabled={select.disabled}
+            onChange={select.onChange}
+            label={select.label}
+            className="agents-import-agent__check"
+          />
+        )}
+        {/* A large disclosure surface, not an action: a raw button by design. */}
+        <button
+          type="button"
+          className="agents-import-agent__row"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          <AgentAvatar name={avatarName ?? name} color={color} />
+          <span className="agents-import-agent__text">
+            <span className="agents-import-agent__name">
+              <span className="agents-import-agent__name-text">{name}</span>
+              {chip && (
+                <span className="agents-import-chip" data-kind={chip.kind}>
+                  {chip.label}
+                </span>
+              )}
+            </span>
+            {role && <span className="agents-import-agent__role">{role}</span>}
+            {counts && <span className="agents-import-agent__counts">{counts}</span>}
+          </span>
+          <ChevronRightIcon size={12} className="agents-import-agent__chevron" />
+        </button>
+      </div>
+      {inline && <div className="agents-import-agent__inline">{inline}</div>}
+      <div className="agents-import-agent__reveal">
+        <div>{open && <div className="agents-import-agent__detail">{detail()}</div>}</div>
+      </div>
+    </li>
+  );
+}
+
+/** One labelled part of an agent's detail: the same labels on every import. */
+export function ImportSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h4>{title}</h4>
+      {children}
+    </section>
+  );
+}
+
 function counts(agent: PasteImportAgent) {
   return [
     // Whether it brings instructions is the point; how many characters isn't.
@@ -120,32 +216,28 @@ function counts(agent: PasteImportAgent) {
     .join(' · ');
 }
 
-function Chip({ agent }: { agent: PasteImportAgent }) {
-  const [kind, label] = agent.isMain
-    ? ['main', 'Merges into Chief of Staff']
+function chipFor(
+  agent: PasteImportAgent,
+  mainName: string
+): { kind: ImportChipKind; label: string } {
+  return agent.isMain
+    ? { kind: 'main', label: `Merges into ${mainName}` }
     : agent.existing
-      ? ['update', 'Updates']
-      : ['new', 'New'];
-  return (
-    <span className="agents-import-chip" data-kind={kind}>
-      {label}
-    </span>
-  );
+      ? { kind: 'update', label: 'Updates' }
+      : { kind: 'new', label: 'New' };
 }
 
 function AgentDetail({ agent }: { agent: PasteImportAgent }) {
   return (
-    <div className="agents-import-agent__detail">
-      <section>
-        <h4>Instructions</h4>
+    <>
+      <ImportSection title="Instructions">
         {agent.instructions ? (
           <p className="agents-import-agent__instructions">{agent.instructions}</p>
         ) : (
           <p className="agents-import-agent__none">None came across.</p>
         )}
-      </section>
-      <section>
-        <h4>Memory</h4>
+      </ImportSection>
+      <ImportSection title="Memory">
         {agent.memory.length ? (
           <ul className="agents-import-agent__memory">
             {agent.memory.map((m, i) => (
@@ -155,7 +247,7 @@ function AgentDetail({ agent }: { agent: PasteImportAgent }) {
         ) : (
           <p className="agents-import-agent__none">Nothing remembered yet.</p>
         )}
-      </section>
+      </ImportSection>
       {agent.routines.length > 0 && (
         <section>
           <h4>Routines</h4>
@@ -179,49 +271,33 @@ function AgentDetail({ agent }: { agent: PasteImportAgent }) {
           </ul>
         </section>
       )}
-    </div>
+    </>
   );
 }
 
 function AgentRow({ agent, mainName }: { agent: PasteImportAgent; mainName: string }) {
-  const [open, setOpen] = useState(false);
   const refused = agent.routines.filter((r) => r.refused).length;
   return (
-    <li className="agents-import-agent" data-open={open || undefined}>
-      {/* A large disclosure surface, not an action: a raw button by design. */}
-      <button
-        type="button"
-        className="agents-import-agent__row"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <AgentAvatar
-          // The main one becomes the Chief of Staff, so it wears that badge.
-          name={agent.isMain ? mainName : agent.name}
-          color={agent.color ?? 'gray'}
-        />
-        <span className="agents-import-agent__text">
-          <span className="agents-import-agent__name">
-            <span className="agents-import-agent__name-text">{agent.name}</span>
-            <Chip agent={agent} />
-          </span>
-          {agent.role && <span className="agents-import-agent__role">{agent.role}</span>}
-          <span className="agents-import-agent__counts">
-            {counts(agent)}
-            {refused > 0 && (
-              <span className="agents-import-agent__warn">
-                {' · '}
-                {refused === 1 ? '1 won’t be set' : `${refused} won’t be set`}
-              </span>
-            )}
-          </span>
-        </span>
-        <ChevronRightIcon size={12} className="agents-import-agent__chevron" />
-      </button>
-      <div className="agents-import-agent__reveal">
-        <div>{open && <AgentDetail agent={agent} />}</div>
-      </div>
-    </li>
+    <ImportAgentRow
+      name={agent.name}
+      // The main one becomes the Chief of Staff, so it wears that badge.
+      avatarName={agent.isMain ? mainName : agent.name}
+      color={agent.color ?? 'gray'}
+      chip={chipFor(agent, mainName)}
+      role={agent.role || undefined}
+      counts={
+        <>
+          {counts(agent)}
+          {refused > 0 && (
+            <span className="agents-import-agent__warn">
+              {' · '}
+              {refused === 1 ? '1 won’t be set' : `${refused} won’t be set`}
+            </span>
+          )}
+        </>
+      }
+      detail={() => <AgentDetail agent={agent} />}
+    />
   );
 }
 

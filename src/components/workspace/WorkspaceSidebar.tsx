@@ -163,6 +163,8 @@ interface Props {
    * search, footer) and shows its agent list here, so it reads as the same app.
    */
   listContent?: ReactNode;
+  /** Agents mode's quiet line at the foot (the plan's usage), above the phone row. */
+  footerContent?: ReactNode;
   /** Open the Workflows page. Hides the nav button when omitted. */
   onGoWorkflows?: () => void;
   /** Open the Inbox. Hides the nav button when omitted. */
@@ -422,6 +424,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   searchContent,
   navContent,
   listContent,
+  footerContent,
   onGoHome,
   onOpenProjectPicker,
   isSidebarHidden,
@@ -1830,6 +1833,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
 
         <div className="workspace-sidebar-footer">
           <UpdateBanner />
+          {footerContent}
           <PhoneIndicator isSidebarHidden={isSidebarHidden ?? false} />
           <RemoteAccessIndicator isSidebarHidden={isSidebarHidden ?? false} />
           <div

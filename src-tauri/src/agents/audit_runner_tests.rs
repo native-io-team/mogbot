@@ -336,3 +336,56 @@ fn going_idle_and_pushing_never_strand_a_message() {
     assert!(!RUNTIMES.lock().unwrap().get(id).unwrap().running);
     RUNTIMES.lock().unwrap().remove(id);
 }
+
+/// An interrupted routine turn's cost carries over to the turn that replaces
+/// it, so the routine is charged all of it; a person's message anywhere in
+/// that chain means it isn't a routine's cost at all.
+#[test]
+fn an_interrupted_routines_cost_carries_over_and_a_person_unmakes_it() {
+    scratch(|| {
+        let a = agent("Pat");
+        let routine = || {
+            let mut wake = user("[Scheduled check-in you set: brief]");
+            wake.routine = true;
+            wake.ticket = Some("t-1".into());
+            wake
+        };
+        let cost = |usd: f64| super::super::usage::UsageTotals {
+            turns: 1,
+            priced_turns: 1,
+            cost_usd: usd,
+            ..Default::default()
+        };
+        let push = |m: Inbound| {
+            let mut rt = RUNTIMES.lock().unwrap();
+            let r = rt.entry(a.id.clone()).or_default();
+            r.running = true;
+            r.queue.push_back(m);
+        };
+        // Interrupted part-way, then replaced by another routine firing.
+        push(routine());
+        take_batch(&a.id).unwrap();
+        add_turn_usage(&a.id, &cost(0.25));
+        push(routine());
+        take_batch(&a.id).unwrap();
+        add_turn_usage(&a.id, &cost(0.5));
+        let (spent, mixed) = take_turn_usage(&a.id);
+        assert!(!mixed);
+        assert_eq!(spent.turns, 2);
+        assert!((spent.cost_usd - 0.75).abs() < 1e-9);
+        // Settled: the next turn starts from nothing.
+        assert_eq!(take_turn_usage(&a.id).0.turns, 0);
+
+        // A routine interrupted by a person's message: nobody's routine.
+        push(routine());
+        take_batch(&a.id).unwrap();
+        add_turn_usage(&a.id, &cost(0.25));
+        push(user("what's up?"));
+        take_batch(&a.id).unwrap();
+        let (_, mixed) = take_turn_usage(&a.id);
+        assert!(mixed);
+        assert!(!take_turn_usage(&a.id).1, "reset once settled");
+        clear_mark(&a.id);
+        RUNTIMES.lock().unwrap().remove(&a.id);
+    });
+}

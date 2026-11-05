@@ -15,6 +15,8 @@ import type {
   SessionMark,
   UsageTotals,
 } from '@shipstudio/companion-protocol';
+import { apiPrice, resetPhrase, tokenCount } from '@shipstudio/companion-protocol';
+import { drivenLine } from './bars';
 import { diffLineKind } from './diff';
 
 /** Pinned first, then most recently active. */
@@ -42,7 +44,7 @@ export const needsAttention = (agent: Agent) => needsYou(agent) || failedTurn(ag
 export function failureLine(failure: Failure, preview: string | null, engine?: string): string {
   if (failure.kind === 'usage_limit') {
     return failure.resetsAt
-      ? `Usage limit · resets ${formatClock(failure.resetsAt)}`
+      ? `Usage limit · resets ${resetPhrase(failure.resetsAt)}`
       : 'Usage limit reached';
   }
   if (failure.kind === 'signed_out') return `${engine ?? 'Its engine'} is signed out`;
@@ -101,10 +103,24 @@ export function engineCantAsk(agent: Agent, engines: EngineInfo[] | undefined): 
   return `${info.label} can't stop to ask you here, so anything that needs your OK is refused. Updating ${info.label} fixes this.`;
 }
 
+/** The same, as a bar's two lines. */
+export function engineCantAskBar(
+  agent: Agent,
+  engines: EngineInfo[] | undefined
+): { title: string; detail: string } | null {
+  const info = engines?.find((e) => e.id === agent.engine);
+  if (!engineCantAsk(agent, engines) || !info) return null;
+  return {
+    title: `${info.label} can’t stop to ask you here`,
+    detail: `Anything that needs your OK is refused. Updating ${info.label} fixes this.`,
+  };
+}
+
 /** The row's second line, as the sidebar writes it. */
 export function subtitle(agent: Agent): string {
-  if (agent.takeover) return DRIVEN_LINE;
+  // A request outranks driving, as on the desk: the row's words and its amber dot agree.
   if (needsYou(agent)) return 'Needs your OK';
+  if (agent.takeover) return drivenLine(agent.name);
   if (agent.status.state === 'working') return workingLine(agent);
   const failure = failedTurn(agent);
   if (failure) return failureLine(failure, agent.preview, engineName(agent));
@@ -114,8 +130,8 @@ export function subtitle(agent: Agent): string {
 export type LineState = 'waiting' | 'working' | 'failed' | 'limited' | undefined;
 
 export function lineState(agent: Agent): LineState {
-  if (agent.takeover) return 'working';
   if (needsYou(agent)) return 'waiting';
+  if (agent.takeover) return 'working';
   if (agent.status.state === 'working') return 'working';
   const failure = failedTurn(agent);
   if (failure) return failure.kind === 'usage_limit' ? 'limited' : 'failed';
@@ -129,17 +145,6 @@ export function isQueued(message: Pick<AgentMessage, 'kind' | 'ts'>, agent: Agen
   if (agent.takeover) return message.ts > agent.takeover.since;
   const { state, since } = agent.status;
   return state !== 'idle' && since != null && message.ts > since;
-}
-
-/**
- * Someone is driving the agent's session by hand in a terminal on the Mac
- * (desktop "Take over"). The phone shows it; taking over is the Mac's.
- */
-export const DRIVEN_LINE = 'Being driven on your Mac';
-
-/** The composer's line while it's driven on the Mac: the same words as the row. */
-export function drivenHint(): string {
-  return `${DRIVEN_LINE} · what you send waits`;
 }
 
 /** "Chief of Staff" → "CS", "Agent 3" → "A3", "Finance" → "FI". */
@@ -204,13 +209,16 @@ export function describeScope(scope: PermissionScope, agentName: string, revocab
 
 /**
  * Messages it worked on and their cost, as the Mac counts them: in a
- * person's words, not turns and tokens. Cost only for the ones it could price.
+ * person's words, not turns. Cost only for the ones it could price, said as
+ * a list price ("at API prices"); on a Claude plan (`onPlan`) that price
+ * isn't the bill, so its tokens instead.
  */
-export function usageLine(t: UsageTotals): string {
+export function usageLine(t: UsageTotals, onPlan = false): string {
   if (!t.turns) return 'Nothing yet';
-  const cost =
-    t.pricedTurns > 0
-      ? `$${t.costUsd.toFixed(2)}${t.pricedTurns < t.turns ? ` for ${t.pricedTurns} of them` : ''}`
+  const cost = onPlan
+    ? tokenCount(t)
+    : t.pricedTurns > 0
+      ? `${apiPrice(t.costUsd)}${t.pricedTurns < t.turns ? ` for ${t.pricedTurns} of them` : ''}`
       : null;
   return [`${t.turns} message${t.turns === 1 ? '' : 's'}`, cost].filter(Boolean).join(' · ');
 }
@@ -219,20 +227,13 @@ export function formatClock(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-const CLI_NAMES: Record<string, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'Opencode',
-};
-
 /**
- * "Claude Code 1": the tab as the project's tab bar names it, or "Task 1"
- * when the Mac didn't say which engine. In the app's words a project's
- * agent tab is a task; "session" stays an internal name.
+ * "Task 1": a project's agent tab, in the app's words. Never the engine and
+ * a number ("Claude Code 1"): which engine runs it is for settings and
+ * errors, and "session" stays an internal name.
  */
 export function sessionLabel(mark: Pick<SessionMark, 'cli' | 'tab'>): string {
-  const cli = (mark.cli && CLI_NAMES[mark.cli]) ?? mark.cli ?? 'Task';
-  return mark.tab ? `${cli} ${mark.tab}` : cli;
+  return mark.tab ? `Task ${mark.tab}` : 'Task';
 }
 
 /** A project path's last folder: what the desktop calls a project with no name. */

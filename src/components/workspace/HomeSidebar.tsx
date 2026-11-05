@@ -21,6 +21,8 @@ interface HomeSidebarProps {
   activeNav: 'home' | 'workflows' | 'inbox' | 'agents';
   /** Agents mode shows its agent list in place of the projects. */
   listContent?: ReactNode;
+  /** Agents mode's line at the sidebar's foot. */
+  footerContent?: ReactNode;
   onGoHome: () => void;
   onGoWorkflows: () => void;
   onGoInbox: () => void;
@@ -59,6 +61,7 @@ export function HomeSidebar({
   searchContent,
   navContent,
   listContent,
+  footerContent,
   isSidebarHidden,
   onToggleSidebar,
   onOpenProjectPicker,
@@ -88,6 +91,7 @@ export function HomeSidebar({
       searchContent={searchContent}
       navContent={navContent}
       listContent={listContent}
+      footerContent={footerContent}
       onOpenProjectPicker={onOpenProjectPicker}
       isSidebarHidden={isSidebarHidden}
       onToggleSidebar={onToggleSidebar}

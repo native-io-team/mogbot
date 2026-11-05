@@ -158,10 +158,12 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
     if (code && pairing && !pairing.active) setCode(null);
   }, [code, pairing]);
 
-  const decide = (allow: boolean) => {
-    const name = pairing?.request?.name ?? 'The phone';
+  const decide = (allow: boolean, replace: string[]) => {
+    const request = pairing?.request;
+    if (!request) return;
+    const name = request.device.name;
     void run('decide', async () => {
-      await decidePairing(allow);
+      await decidePairing(request.id, allow, replace);
       if (allow) showToast(`${name} is paired.`, 'success');
     });
   };
@@ -235,7 +237,7 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
             {phoneStep(s).kind === 'ready' && (
               <section className="phone-section">
                 {pairing?.request ? (
-                  <PairConfirm device={pairing.request} busy={busy} onDecide={decide} />
+                  <PairConfirm request={pairing.request} busy={busy} onDecide={decide} />
                 ) : showingCode && code ? (
                   <PairCode
                     code={code}

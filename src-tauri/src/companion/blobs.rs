@@ -14,9 +14,9 @@
 //! A blob belongs to the device that made it; no other device can read,
 //! send or even learn of it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 
@@ -68,6 +68,45 @@ pub struct Blobs {
     /// Removed with the store (tests); the desktop's folder is kept.
     temporary: bool,
     map: Mutex<HashMap<String, Blob>>,
+    /// Room held for uploads still arriving, by reservation id: counted in
+    /// the budget from before the first byte is read, so many at once can't
+    /// each see room that only one of them has.
+    reserved: Arc<Mutex<HashMap<String, Held>>>,
+    /// Devices revoked while this ran: nothing more is staged for them, even
+    /// by an upload that was already on its way.
+    gone: Mutex<HashSet<String>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Held {
+    device_id: String,
+    bytes: u64,
+}
+
+/// Room for one incoming file, held in the budget until it is committed or
+/// dropped. Dropping it (the upload failed, the phone went away, the request
+/// was cancelled) gives the room back and removes the partial file.
+pub struct Reservation {
+    id: String,
+    device_id: String,
+    /// Where the bytes go while they arrive.
+    pub path: PathBuf,
+    /// The most this upload may write.
+    pub max: u64,
+    reserved: Arc<Mutex<HashMap<String, Held>>>,
+    committed: bool,
+}
+
+impl Drop for Reservation {
+    fn drop(&mut self) {
+        self.reserved
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.id);
+        if !self.committed {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
 }
 
 /// A user-facing refusal: too big, too many, not found.
@@ -82,15 +121,14 @@ pub fn too_big_message(name: &str) -> String {
     )
 }
 
+const FULL: &str =
+    "Too many files are waiting to be sent from this phone. Send or wait an hour, then try again.";
+
 impl Blobs {
     pub fn new(dir: PathBuf) -> Self {
         // Whatever an earlier run staged has expired with it.
         let _ = std::fs::remove_dir_all(&dir);
-        Blobs {
-            dir,
-            temporary: false,
-            map: Mutex::new(HashMap::new()),
-        }
+        Self::at(dir, false)
     }
 
     /// A store in its own temporary folder, removed on drop (tests).
@@ -99,15 +137,37 @@ impl Blobs {
             "ss-companion-blobs-{}",
             uuid::Uuid::new_v4().simple()
         ));
+        Self::at(dir, true)
+    }
+
+    fn at(dir: PathBuf, temporary: bool) -> Self {
         Blobs {
             dir,
-            temporary: true,
+            temporary,
             map: Mutex::new(HashMap::new()),
+            reserved: Arc::new(Mutex::new(HashMap::new())),
+            gone: Mutex::new(HashSet::new()),
         }
+    }
+
+    /// The staging folder (tests check nothing is left in it).
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Blob>> {
         self.map.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn lock_reserved(&self) -> std::sync::MutexGuard<'_, HashMap<String, Held>> {
+        self.reserved.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn is_gone(&self, device_id: &str) -> bool {
+        self.gone
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(device_id)
     }
 
     fn ensure_dir(&self) -> Result<(), CommandError> {
@@ -136,52 +196,95 @@ impl Blobs {
         }
     }
 
-    /// Room for `size` more bytes for this device, or the sentence why not.
-    fn admit(&self, device_id: &str, size: u64) -> Result<(), CommandError> {
-        let map = self.lock();
-        let mine = map.values().filter(|b| b.device_id == device_id);
-        let (count, bytes) = mine.fold((0usize, 0u64), |(n, t), b| (n + 1, t + b.size));
-        if count >= MAX_BLOBS_PER_DEVICE || bytes + size > MAX_BYTES_PER_DEVICE {
-            return Err(expected(
-                "Too many files are waiting to be sent from this phone. Send or wait an hour, then try again.",
-            ));
-        }
-        Ok(())
-    }
-
-    fn insert(
+    /// Hold room for up to `max` bytes for this device, or say why not.
+    /// The check and the hold happen under one lock (the staged map's, then
+    /// the held map's, always in that order), so concurrent uploads can't
+    /// all squeeze through on the same free space.
+    pub fn reserve(
         &self,
         device_id: &str,
+        max: u64,
+        now: u64,
+    ) -> Result<Reservation, CommandError> {
+        self.sweep(now);
+        if self.is_gone(device_id) {
+            return Err(expected("This phone isn't paired any more."));
+        }
+        self.ensure_dir()?;
+        let map = self.lock();
+        let mut reserved = self.lock_reserved();
+        let (count, bytes) = map
+            .values()
+            .filter(|b| b.device_id == device_id)
+            .map(|b| b.size)
+            .chain(
+                reserved
+                    .values()
+                    .filter(|h| h.device_id == device_id)
+                    .map(|h| h.bytes),
+            )
+            .fold((0usize, 0u64), |(n, t), size| (n + 1, t + size));
+        if count >= MAX_BLOBS_PER_DEVICE || bytes + max > MAX_BYTES_PER_DEVICE {
+            return Err(expected(FULL));
+        }
+        let id = format!("blob_{}", uuid::Uuid::new_v4().simple());
+        reserved.insert(
+            id.clone(),
+            Held {
+                device_id: device_id.to_string(),
+                bytes: max,
+            },
+        );
+        Ok(Reservation {
+            path: self.dir.join(&id),
+            id,
+            device_id: device_id.to_string(),
+            max,
+            reserved: self.reserved.clone(),
+            committed: false,
+        })
+    }
+
+    /// The bytes are all in `reservation.path` (at most `max` of them):
+    /// make it a blob. Refused, and the file removed, if the device was
+    /// revoked while it arrived.
+    pub fn commit(
+        &self,
+        mut reservation: Reservation,
         name: &str,
         mime: String,
-        write: impl FnOnce(&Path) -> std::io::Result<u64>,
+        size: u64,
         now: u64,
     ) -> Result<Blob, CommandError> {
-        self.ensure_dir()?;
-        let id = format!("blob_{}", uuid::Uuid::new_v4().simple());
-        let path = self.dir.join(&id);
-        let size = match write(&path) {
-            Ok(size) => size,
-            Err(e) => {
-                let _ = std::fs::remove_file(&path);
-                return Err(e.into());
-            }
-        };
+        if size > reservation.max {
+            return Err(expected(too_big_message(&attachments::sanitize_name(name))));
+        }
+        restrict(&reservation.path)?;
         let blob = Blob {
-            id: id.clone(),
-            device_id: device_id.to_string(),
+            id: reservation.id.clone(),
+            device_id: reservation.device_id.clone(),
             name: attachments::sanitize_name(name),
             mime,
             size,
-            path,
+            path: reservation.path.clone(),
             created: now,
         };
-        self.lock().insert(id, blob.clone());
+        {
+            let mut map = self.lock();
+            // Checked under the staged map's lock, which `forget_device`
+            // also takes: a revoke either sees this blob and removes it, or
+            // happened first and this one never lands.
+            if self.is_gone(&blob.device_id) {
+                return Err(expected("This phone isn't paired any more."));
+            }
+            map.insert(blob.id.clone(), blob.clone());
+            reservation.committed = true;
+        }
         Ok(blob)
     }
 
-    /// Stage bytes the phone uploaded. `mime` is the upload's Content-Type,
-    /// trusted only when it's a plain `type/subtype`.
+    /// Stage bytes already in memory (`agents.send` tests, small writes).
+    /// `mime` is trusted only when it's a plain `type/subtype`.
     pub fn put(
         &self,
         device_id: &str,
@@ -190,37 +293,19 @@ impl Blobs {
         bytes: &[u8],
         now: u64,
     ) -> Result<Blob, CommandError> {
-        self.sweep(now);
-        let name = attachments::sanitize_name(name);
+        let clean = attachments::sanitize_name(name);
         if bytes.len() as u64 > MAX_FILE_BYTES {
-            return Err(expected(too_big_message(&name)));
+            return Err(expected(too_big_message(&clean)));
         }
-        self.admit(device_id, bytes.len() as u64)?;
-        let mime = mime
-            .map(|m| {
-                m.split(';')
-                    .next()
-                    .unwrap_or("")
-                    .trim()
-                    .to_ascii_lowercase()
-            })
-            .filter(|m| is_plain_mime(m) && m != "application/octet-stream")
-            .unwrap_or_else(|| attachments::mime_for(&name).to_string());
-        self.insert(
-            device_id,
-            &name,
-            mime,
-            |path| {
-                write_private(path, bytes)?;
-                Ok(bytes.len() as u64)
-            },
-            now,
-        )
+        let reservation = self.reserve(device_id, bytes.len() as u64, now)?;
+        write_private(&reservation.path, bytes)?;
+        let mime = upload_mime(mime, &clean);
+        self.commit(reservation, name, mime, bytes.len() as u64, now)
     }
 
-    /// Copy a file on the Mac in for this device to download.
+    /// Copy a file on the Mac in for this device to download. The copy stops
+    /// at the size limit even if the file grows while it's read.
     pub fn produce(&self, device_id: &str, source: &Path, now: u64) -> Result<Blob, CommandError> {
-        self.sweep(now);
         let name = source
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -229,19 +314,14 @@ impl Blobs {
         if size > MAX_FILE_BYTES {
             return Err(expected(too_big_message(&name)));
         }
-        self.admit(device_id, size)?;
+        // Held at the most a file can be while it copies, so a file that
+        // grows meanwhile still fits what was held.
+        let reservation = self.reserve(device_id, MAX_FILE_BYTES, now)?;
+        let Some(copied) = copy_bounded(source, &reservation.path, MAX_FILE_BYTES)? else {
+            return Err(expected(too_big_message(&name)));
+        };
         let mime = attachments::mime_for(&name).to_string();
-        self.insert(
-            device_id,
-            &name,
-            mime,
-            |path| {
-                let n = std::fs::copy(source, path)?;
-                restrict(path)?;
-                Ok(n)
-            },
-            now,
-        )
+        self.commit(reservation, &name, mime, copied, now)
     }
 
     /// This device's blob, if it has one by that id and it hasn't expired.
@@ -264,16 +344,62 @@ impl Blobs {
         }
     }
 
-    /// Every blob a revoked device left behind.
+    /// A device was revoked: every blob it left behind goes now, and nothing
+    /// more is staged for it (an upload still arriving is refused when it
+    /// finishes, and its partial file removed).
     pub fn forget_device(&self, device_id: &str) {
-        let ids: Vec<String> = self
-            .lock()
-            .values()
-            .filter(|b| b.device_id == device_id)
-            .map(|b| b.id.clone())
-            .collect();
-        self.consume(&ids);
+        let gone: Vec<Blob> = {
+            let mut map = self.lock();
+            self.gone
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(device_id.to_string());
+            let ids: Vec<String> = map
+                .values()
+                .filter(|b| b.device_id == device_id)
+                .map(|b| b.id.clone())
+                .collect();
+            ids.iter().filter_map(|id| map.remove(id)).collect()
+        };
+        for b in gone {
+            let _ = std::fs::remove_file(&b.path);
+        }
     }
+}
+
+/// An upload's Content-Type, trusted only when it's a plain `type/subtype`;
+/// otherwise what the name says.
+pub fn upload_mime(mime: Option<&str>, name: &str) -> String {
+    mime.map(|m| {
+        m.split(';')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase()
+    })
+    .filter(|m| is_plain_mime(m) && m != "application/octet-stream")
+    .unwrap_or_else(|| attachments::mime_for(name).to_string())
+}
+
+/// Copy at most `limit` bytes; `None` if there was more than that.
+fn copy_bounded(source: &Path, dest: &Path, limit: u64) -> std::io::Result<Option<u64>> {
+    use std::io::Read;
+    let from = std::fs::File::open(source)?;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut to = opts.open(dest)?;
+    let n = std::io::copy(&mut from.take(limit + 1), &mut to)?;
+    if n > limit {
+        drop(to);
+        let _ = std::fs::remove_file(dest);
+        return Ok(None);
+    }
+    Ok(Some(n))
 }
 
 impl Drop for Blobs {
@@ -351,8 +477,82 @@ mod tests {
         }
         assert!(b.put("d", "a.txt", None, b"x", 0).is_err());
         assert!(b.put("other", "a.txt", None, b"x", 0).is_ok());
+        let staged: Vec<String> = b
+            .lock()
+            .values()
+            .filter(|x| x.device_id == "d")
+            .map(|x| x.id.clone())
+            .collect();
+        b.consume(&staged);
+        assert!(
+            b.put("d", "a.txt", None, b"x", 0).is_ok(),
+            "room again once sent"
+        );
+    }
+
+    #[test]
+    fn concurrent_reservations_cant_overrun_the_budget() {
+        let b = std::sync::Arc::new(Blobs::temporary());
+        let handles: Vec<_> = (0..80)
+            .map(|_| {
+                let b = b.clone();
+                std::thread::spawn(move || b.reserve("d", 4 * 1024 * 1024, 0).ok())
+            })
+            .collect();
+        let held: Vec<Reservation> = handles
+            .into_iter()
+            .filter_map(|h| h.join().unwrap())
+            .collect();
+        assert_eq!(held.len(), MAX_BLOBS_PER_DEVICE, "never more than the cap");
+        // Room comes back when they're dropped (a failed or cancelled upload).
+        drop(held);
+        assert!(b.reserve("d", 1, 0).is_ok());
+    }
+
+    #[test]
+    fn a_reservation_counts_its_size_before_any_byte_arrives() {
+        let b = Blobs::temporary();
+        let _big = b.reserve("d", MAX_BYTES_PER_DEVICE - 10, 0).unwrap();
+        assert!(b.reserve("d", 11, 0).is_err());
+        assert!(b.reserve("d", 10, 0).is_ok());
+    }
+
+    #[test]
+    fn an_upload_that_finishes_after_revoke_is_thrown_away() {
+        let b = Blobs::temporary();
+        let r = b.reserve("d", 10, 0).unwrap();
+        write_private(&r.path, b"half").unwrap();
+        let path = r.path.clone();
+        let staged = b.put("d", "x.txt", None, b"x", 0).unwrap();
         b.forget_device("d");
-        assert!(b.put("d", "a.txt", None, b"x", 0).is_ok());
+        assert!(
+            !staged.path.exists(),
+            "what it had staged is deleted at once"
+        );
+        assert!(b.commit(r, "a.txt", "text/plain".into(), 4, 0).is_err());
+        assert!(!path.exists(), "its partial file is gone");
+        assert!(b.reserve("d", 1, 0).is_err(), "nothing more for it");
+    }
+
+    #[test]
+    fn a_dropped_reservation_removes_its_partial_file() {
+        let b = Blobs::temporary();
+        let r = b.reserve("d", 10, 0).unwrap();
+        write_private(&r.path, b"partial").unwrap();
+        let path = r.path.clone();
+        drop(r);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn a_fetched_copy_stops_at_the_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("big.bin");
+        std::fs::write(&src, vec![0u8; 100]).unwrap();
+        let dest = dir.path().join("copy");
+        assert_eq!(copy_bounded(&src, &dest, 100).unwrap(), Some(100));
+        assert_eq!(copy_bounded(&src, &dest, 99).unwrap(), None);
+        assert!(!dest.exists(), "an over-long copy leaves nothing");
     }
 
     #[cfg(unix)]

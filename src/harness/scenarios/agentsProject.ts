@@ -71,7 +71,7 @@ const COPY = {
 };
 
 /** Acme Site with its own open copy of acme-marketing. */
-const copyTeam = (state: 'idle' | 'working' = 'idle') =>
+export const copyTeam = (state: 'idle' | 'working' = 'idle') =>
   boundTeam({
     acme: {
       copy: {
@@ -115,7 +115,7 @@ const PRICING_FILES = [
   { path: 'src/components/PricingCard.tsx', status: 'added', added: 64 },
 ];
 
-const ACME_COPY_CHAT = [
+export const ACME_COPY_CHAT = [
   msg('user', 'The pricing cards overlap on mobile. Can you fix it?', 30, { agentId: 'acme' }),
   msg(
     'agent',
@@ -404,7 +404,7 @@ const CHIEF_DELEGATED_PROMPT = [
   trustCard('chief'),
   msg(
     'from_agent',
-    'demo-site’s new session is waiting for Claude Code to be allowed in the folder. Allow it on the card above.',
+    'demo-site is waiting for Claude Code to be allowed in the folder. It needs your OK first.',
     1,
     { peer: { id: 'acme', name: 'Acme Site' } }
   ),
@@ -471,13 +471,18 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-session-prompt-chief',
     title: 'Agents — a delegated session’s question, answerable in the Chief’s chat',
     looksRightWhen:
-      'The Chief’s chat: the user’s ask, “Handed to Acme Site.”, the hand-off line, then a card “Let Claude Code work in demo-site?” with “Acme Site’s session in demo-site · Claude Code 1” under it, the explanation, and Deny / Allow. Acme Site’s message below says to allow it on the card above. Both Chief and Acme Site rows say they need your OK.',
+      'The Chief’s chat: the user’s ask, “Handed to Acme Site.”, the hand-off line. Acme Site’s question is not a second full card in the conversation: at the foot, the one chip every other agent’s request uses, “Review Acme Site’s request”, opened here, showing the same card in place — a folder icon, “Let Claude Code work in demo-site?”, the muted source “Acme Site · in demo-site” (no tab number, no engine name), the explanation, then Deny / a neutral Allow on the right. Both Chief and Acme Site rows say they need your OK.',
     command: 'agents.open',
-    requires: '.agent-approval[data-prompt="trust"]',
+    requires: '.agent-requests .agent-approval[data-prompt="trust"]',
+    steps: [{ click: '.agent-requests__chip' }],
     commands: {
       agents_overview: promptTeam(),
       agents_messages: (args: Record<string, unknown>) =>
-        args.agentId === 'chief' ? CHIEF_DELEGATED_PROMPT : messagesFor(args),
+        args.agentId === 'chief'
+          ? CHIEF_DELEGATED_PROMPT
+          : args.agentId === 'acme'
+            ? [...ACME_PROMPTS.slice(0, 2), trustCard('acme')]
+            : messagesFor(args),
       agents_answer_approval: null,
     },
   },
@@ -485,7 +490,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-session-prompt-owner',
     title: 'Agents — the session’s own chat: trust answered, an edit to allow',
     looksRightWhen:
-      'Acme Site’s chat: the Chief’s brief, “Started a session in demo-site”, the trust card resolved to a quiet “Allowed · Yes, I trust this folder”, then a pending card “Do you want to make this edit to index.html?” with “Its session in demo-site · Claude Code 1”, the edit’s text, and the session’s own extra choice “Yes, allow all edits during this session” beside Deny / Allow.',
+      'Acme Site’s chat: the Chief’s brief, “Started a session in demo-site”, the trust card resolved to a quiet “Allowed · Yes, I trust this folder”, then a pending card “Do you want to make this edit to index.html?” with the muted source “Acme Site · in demo-site”, the edit’s text, and the session’s own extra choice “Yes, allow all edits during this session” beside Deny / Allow.',
     requires: '.agent-approval[data-prompt="permission"]',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="acme"]' }],
@@ -513,7 +518,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-copy-ready',
     title: 'Agents — work done on a copy of the project, ready to keep',
     looksRightWhen:
-      'Acme Site’s header chip reads “acme-marketing copy” (“copy” muted). The first reply’s folded line opens to nothing yet; the earlier card reads “Changed 2 files in a copy of acme-marketing” (no line counts) with only “See changes” and no preview (a record). The newest card reads “Changes are ready” with “3 files” on the right, the quiet line “On a copy of acme-marketing · acme-marketing itself is unchanged”, then a primary “Keep changes” button, “Review”, “Preview” (globe), “Discard”, and a ⋯ menu (Open a pull request). No branch names, no “merge”, no “worktree” anywhere.',
+      'Acme Site’s header chip reads “acme-marketing copy” (“copy” muted). The earlier card is a one-line record: folder icon, “Changed 2 files in a copy of acme-marketing”, “Review changes” on the right, no preview. The newest card: folder icon, “Changes are ready” with “3 files” on the right, the muted line “On a copy of acme-marketing · acme-marketing itself is unchanged”, then, right-aligned: ⋯ (Open a pull request) on the far left, Discard, Preview (globe), a secondary Review changes and a neutral Keep changes last. No branch names, no “merge”, no “worktree” anywhere.',
     requires: '.agent-changes[data-copy="live"]',
     ...openAcme,
     commands: {
@@ -558,7 +563,7 @@ export const agentsProjectScenarios: Scenario[] = [
     openSelector: AGENTS_TAB,
     steps: [
       { click: '[data-agent-id="acme"]' },
-      { click: '.agent-copy__actions button:nth-of-type(4)' },
+      { click: '.agent-copy__actions button', text: 'Discard' },
     ],
     commands: {
       agents_overview: overview(copyTeam()),
@@ -575,7 +580,7 @@ export const agentsProjectScenarios: Scenario[] = [
     openSelector: AGENTS_TAB,
     steps: [
       { click: '[data-agent-id="acme"]' },
-      { click: '.agent-copy__actions button:first-of-type' },
+      { click: '.agent-copy__actions button', text: 'Keep changes' },
     ],
     commands: {
       agents_overview: overview(copyTeam()),
@@ -588,12 +593,12 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-copy-other-branch',
     title: 'Agents — Keep asks before keeping into a different branch',
     looksRightWhen:
-      'After Keep changes, the newest card says “acme-marketing is on feature/pricing now, but these changes were made from main. Keeping them in feature/pricing also brings along whatever main has that feature/pricing doesn’t.”, then a primary “Keep into feature/pricing” and “Cancel”. Nothing was kept yet.',
+      'After Keep changes, the newest card says “acme-marketing has moved on to another version since these changes were started. Keeping them there also brings along anything from the version they started from that it doesn’t have yet.” — no branch names — with Cancel and a neutral “Keep there too” on the right.',
     requires: '.agent-copy[data-state="other-branch"]',
     openSelector: AGENTS_TAB,
     steps: [
       { click: '[data-agent-id="acme"]' },
-      { click: '.agent-copy__actions button:first-of-type' },
+      { click: '.agent-copy__actions button', text: 'Keep changes' },
     ],
     commands: {
       agents_overview: overview(copyTeam()),
@@ -611,7 +616,7 @@ export const agentsProjectScenarios: Scenario[] = [
     openSelector: AGENTS_TAB,
     steps: [
       { click: '[data-agent-id="acme"]' },
-      { click: '.agent-copy__actions button:first-of-type' },
+      { click: '.agent-copy__actions button', text: 'Keep changes' },
     ],
     commands: {
       agents_overview: overview(copyTeam()),
@@ -713,7 +718,7 @@ export const agentsProjectScenarios: Scenario[] = [
     steps: [
       { click: '[data-agent-id="acme"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(6)' },
+      { click: '[role="menuitem"]', text: 'Edit agent' },
       { click: '.agent-editor__more' },
       { click: '.agent-editor__project' },
     ],
@@ -800,7 +805,7 @@ export const agentsProjectScenarios: Scenario[] = [
     requires: '.agent-editor__can-do',
     steps: [
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(6)' },
+      { click: '[role="menuitem"]', text: 'Edit agent' },
     ],
     commands: {
       agents_overview: overview(
@@ -815,8 +820,8 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-waiting-for-slot',
     title: 'Agents — a turn queued behind the cap on concurrent turns',
     looksRightWhen:
-      'Finance’s header reads “Waiting for a free slot” (not “Working”), and its chat ends with the dots and “Waiting for a free slot (3 agents already working)”. Nothing shows a timer.',
-    requires: '.agent-chat__status',
+      'Finance’s sidebar row reads the queued state (not “Working”), and its chat ends with the dots and “Waiting for a free slot (3 agents already working)”. The header shows only its name and role. Nothing shows a timer.',
+    requires: '.agent-chat__row--working',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }],
     commands: {

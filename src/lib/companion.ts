@@ -38,10 +38,24 @@ export interface PairRequestDevice {
   build: 'official' | 'self';
 }
 
+/** `pairing::RequestView`: one phone's request, answered by its `id`. */
+export interface PairRequestView {
+  id: string;
+  /** Name and model as the phone gave them, cleaned of invisible and control characters. */
+  device: PairRequestDevice;
+  requestedAt: number;
+  /** The last four characters of the code it used, as the phone shows them too. */
+  codeHint: string;
+  /** The tailnet user `tailscale serve` named, when it named one. */
+  login?: string;
+  /** Paired phones with the same name and model: offered for replacing, never replaced unasked. */
+  replaces: Device[];
+}
+
 export interface PairingView {
   active: boolean;
   expiresAt?: number;
-  request?: PairRequestDevice;
+  request?: PairRequestView;
 }
 
 /** A phone's latest action, from the shared audit log. */
@@ -96,7 +110,13 @@ export const startPairing = () => invoke<PairingCode>('companion_pair_start');
 
 export const cancelPairing = () => invoke<void>('companion_pair_cancel');
 
-export const decidePairing = (allow: boolean) => invoke<void>('companion_pair_decide', { allow });
+/**
+ * Allow or Deny the request the panel is showing (by id, so a click can't
+ * land on another phone that asked meanwhile). `replace` names paired
+ * phones to remove on Allow, from that request's `replaces`.
+ */
+export const decidePairing = (requestId: string, allow: boolean, replace: string[] = []) =>
+  invoke<void>('companion_pair_decide', { requestId, allow, replace });
 
 export const removePhone = (deviceId: string) =>
   invoke<PhoneStatus>('companion_revoke', { deviceId });

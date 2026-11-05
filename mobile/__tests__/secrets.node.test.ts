@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { createMockServer } from '../dev/mock-server';
-import { until } from './helpers';
+import { provenBy, until } from './helpers';
 
 // What would reach the disk: every write captured instead.
 const written: string[] = [];
@@ -31,7 +31,7 @@ jest.mock('../src/lib/persist', () => ({
 }));
 
 // jest.mock is hoisted above these, so they load with it in place.
-import { toCache } from '../src/lib/cache';
+import { toCache, toOutbox } from '../src/lib/cache';
 import { flushDrafts } from '../src/lib/drafts';
 import { secretRouteProblem, sendSecret } from '../src/lib/secrets';
 import { getApp } from '../src/lib/store';
@@ -119,13 +119,15 @@ class SelfSignedOk extends WebSocket {
   beforeAll(async () => {
     const url = await mock.listen();
     expect(url).toMatch(/^https:/);
+    const { token } = mock.issueToken();
     t = new DirectTransport({
       routes: [{ kind: 'tailscale', url }],
-      token: mock.issueToken().token,
+      token,
       app: { version: '0.1.0', runtimeVersion: 'test' },
       getResume: () => state.cursor ?? undefined,
       foreground: true,
       WebSocketImpl: SelfSignedOk as unknown as typeof globalThis.WebSocket,
+      ...provenBy(mock),
     });
     t.onEvent((e: CompanionEvent, c?: Cursor) => {
       frames.push(JSON.stringify(e));
@@ -139,26 +141,42 @@ class SelfSignedOk extends WebSocket {
     await mock.close();
   });
 
-  it('only goes over HTTPS on Tailscale', () => {
-    expect(secretRouteProblem({ kind: 'tailscale', url: 'https://mac.tail1.ts.net:47443' })).toBe(
-      null
-    );
-    expect(secretRouteProblem({ kind: 'tailscale', url: 'http://mac.tail1.ts.net:47443' })).toMatch(
+  it('only goes over HTTPS on Tailscale, to the Mac this phone pinned', () => {
+    const ts = { kind: 'tailscale', url: 'https://mac.tail1.ts.net:47443' } as const;
+    expect(secretRouteProblem(ts, true)).toBe(null);
+    expect(
+      secretRouteProblem({ kind: 'tailscale', url: 'http://mac.tail1.ts.net:47443' }, true)
+    ).toMatch(/only go over Tailscale/);
+    expect(secretRouteProblem({ kind: 'lan', url: 'https://192.168.1.20:47444' }, true)).toMatch(
       /only go over Tailscale/
     );
-    expect(secretRouteProblem({ kind: 'lan', url: 'https://192.168.1.20:47444' })).toMatch(
-      /only go over Tailscale/
-    );
-    expect(secretRouteProblem(null)).toMatch(/needs your Mac/);
+    expect(secretRouteProblem(null, true)).toMatch(/needs your Mac/);
+    // A Tailscale route whose welcome wasn't signed by the pinned key.
+    expect(secretRouteProblem(ts, false)).toMatch(/hasn’t proved it’s the Mac you paired with/);
+    expect(t.identityVerified).toBe(true);
   });
 
   it('is refused before it leaves the phone on any other route', async () => {
     const request = jest.fn();
-    const plain = { state: t.state, route: { kind: 'tailscale', url: 'http://x' }, request };
+    const unproven = { state: t.state, route: t.route, identityVerified: false, request };
+    await expect(sendSecret(unproven as never, 'fin', 'req_secret', [VALUE])).rejects.toThrow(
+      /hasn’t proved/
+    );
+    const plain = {
+      state: t.state,
+      route: { kind: 'tailscale', url: 'http://x' },
+      identityVerified: true,
+      request,
+    };
     await expect(sendSecret(plain as never, 'fin', 'req_secret', [VALUE])).rejects.toThrow(
       /only go over Tailscale/
     );
-    const offline = { state: { kind: 'connecting', attempt: 1 }, route: t.route, request };
+    const offline = {
+      state: { kind: 'connecting', attempt: 1 },
+      route: t.route,
+      identityVerified: true,
+      request,
+    };
     await expect(sendSecret(offline as never, 'fin', 'req_secret', [VALUE])).rejects.toThrow(
       /needs your Mac/
     );
@@ -184,6 +202,7 @@ class SelfSignedOk extends WebSocket {
     await flushDrafts();
     const kept = [
       JSON.stringify(toCache(state)),
+      JSON.stringify(toOutbox(state)),
       JSON.stringify(state.pending),
       JSON.stringify(getApp()),
       ...written,

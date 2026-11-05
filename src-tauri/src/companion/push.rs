@@ -767,6 +767,8 @@ mod tests {
                 },
                 String::new(),
                 1,
+                &[],
+                None,
             )
             .unwrap();
         (c, relay, record.id)

@@ -25,7 +25,7 @@ import {
 } from '@shipstudio/companion-protocol';
 import { WebSocket } from 'ws';
 import { createMockServer } from '../dev/mock-server';
-import { until } from './helpers';
+import { until, provenBy } from './helpers';
 import { chiefRequest, freeColor, suggestAgentName } from '../src/lib/newAgent';
 import { newPicker, onceDays, pickerOf, toggleDay, whenOf } from '../src/lib/routine';
 import {
@@ -327,6 +327,7 @@ describe('starting things on the mock Mac', () => {
       getResume: () => state.cursor ?? undefined,
       foreground: true,
       WebSocketImpl: WebSocket as unknown as typeof globalThis.WebSocket,
+      ...provenBy(mock),
     });
     t.onEvent((e: CompanionEvent, c?: Cursor) => {
       state = applyEvent(state, e, c);

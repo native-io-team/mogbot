@@ -3,8 +3,10 @@
  * agent ends a piece of work on. Title, summary, what it didn't verify (up
  * front, when it said), before/after, the files and links it produced, what
  * it checked, and the actions: Open on each item, Ask for changes on the
- * card. A project copy's card is the same card with Keep / Review / Preview /
- * Discard inside it (`ChangeCard` passes them in as children).
+ * card. Drawn on the shared `AgentCard`, so it reads as the same surface as a
+ * request or a copy. A project copy's card is the same card with Keep /
+ * Review / Preview / Discard inside it (`ChangeCard` passes them in as
+ * children), and then Ask for changes sits in that row instead.
  *
  * Only the newest version of a result is drawn in full; an older one folds to
  * a line pointing at it, and opens if you want to compare.
@@ -22,10 +24,12 @@ import {
   CloseIcon,
   CommentIcon,
   ExternalLinkIcon,
+  FileTextIcon,
   GlobeIcon,
   WarningIcon,
 } from '@/components/icons';
 import { IconButton } from '../primitives/IconButton';
+import { AgentCard } from './AgentCard';
 import { TextButton } from '../primitives/TextButton';
 import { AttachmentLightbox, FileGlyph, kindLabel, useAttachmentOpener } from './AgentAttachments';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -267,25 +271,30 @@ export const ResultCardView = memo(function ResultCardView({
       data-arrived={arrived || undefined}
       data-message-ids={message.id}
     >
-      <article
+      <AgentCard
+        as="article"
         className="agent-result"
-        data-past={!newest || undefined}
-        data-unverified={(card.notVerified?.length ?? 0) > 0 || undefined}
+        data={{ past: !newest || undefined, unverified: (card.notVerified?.length ?? 0) > 0 }}
         aria-label={`Result: ${card.title}`}
-      >
-        <header className="agent-result__head">
-          <h3 className="agent-result__title">{card.title}</h3>
-          {card.version > 1 && <span className="agent-result__version">v{card.version}</span>}
-          {!newest && (
-            <TextButton tabIndex={0} onClick={() => setOpened(false)}>
-              Fold
-            </TextButton>
-          )}
-        </header>
-        <ResultBody agent={agent} card={card} />
-        {children}
-        {newest && onAskForChanges && !actionsInside && (
-          <div className="agent-result__actions">
+        icon={<FileTextIcon size={14} />}
+        title={card.title}
+        meta={
+          (card.version > 1 || !newest) && (
+            <span className="agent-result__meta">
+              {card.version > 1 && <span className="agent-result__version">v{card.version}</span>}
+              {!newest && (
+                <TextButton tabIndex={0} onClick={() => setOpened(false)}>
+                  Fold
+                </TextButton>
+              )}
+            </span>
+          )
+        }
+        // A copy's card carries its own actions row; Ask for changes is in it.
+        actions={
+          newest &&
+          onAskForChanges &&
+          !actionsInside && (
             <TextButton
               tabIndex={0}
               leftIcon={<CommentIcon size={12} />}
@@ -293,9 +302,12 @@ export const ResultCardView = memo(function ResultCardView({
             >
               Ask for changes
             </TextButton>
-          </div>
-        )}
-      </article>
+          )
+        }
+      >
+        <ResultBody agent={agent} card={card} />
+        {children}
+      </AgentCard>
       {footer}
     </div>
   );

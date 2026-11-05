@@ -116,10 +116,18 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
  * as a fast one instead of a half-painted one.
  */
 /** Wait for a selector to exist, or give up after `timeoutMs`. */
-async function waitFor(selector: string, timeoutMs = 8000): Promise<HTMLElement | null> {
+async function waitFor(
+  selector: string,
+  timeoutMs = 8000,
+  text?: string
+): Promise<HTMLElement | null> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const el = document.querySelector<HTMLElement>(selector);
+    const el = text
+      ? ([...document.querySelectorAll<HTMLElement>(selector)].find((e) =>
+          (e.textContent ?? '').includes(text)
+        ) ?? null)
+      : document.querySelector<HTMLElement>(selector);
     if (el) return el;
     if (Date.now() > deadline) return null;
     await new Promise((r) => setTimeout(r, 100));
@@ -173,12 +181,29 @@ async function runSteps(): Promise<void> {
   ];
 
   for (const step of steps) {
+    if (step.key) {
+      const parts = step.key.split('+');
+      const key = parts[parts.length - 1];
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key,
+          metaKey: parts.includes('mod'),
+          shiftKey: parts.includes('shift'),
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      stepLog.push(`pressed ${step.key}`);
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 50)));
+      continue;
+    }
     const selector = step.click ?? step.hover ?? step.fill ?? step.select;
     if (!selector) continue;
-    const el = await waitFor(selector);
+    const el = await waitFor(selector, undefined, step.text);
+    const named = step.text ? `${selector} “${step.text}”` : selector;
     if (!el) {
-      stepLog.push(`never appeared: ${selector}`);
-      console.error(`[harness] step never appeared: ${selector}`);
+      stepLog.push(`never appeared: ${named}`);
+      console.error(`[harness] step never appeared: ${named}`);
       return;
     }
     if (step.click) {

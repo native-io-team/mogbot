@@ -1,7 +1,11 @@
-//! What each agent's turns cost, as Claude Code reports it.
+//! What each agent's turns cost, as its engine reports it, per agent and per
+//! routine (a turn that ran one routine alone is also charged to it:
+//! `runs::charged_to`).
 //!
-//! The source is the stream's final `result` event: `usage` (token counts),
-//! `total_cost_usd` and `duration_ms`. Only those numbers are kept. Nothing is estimated: a turn
+//! Claude Code's source is the stream's final `result` event: `usage` (token
+//! counts), `total_cost_usd` and `duration_ms`. Its `modelUsage[*].costBasis`
+//! is `"list"`: the cost is at API list prices, which on a Pro/Max plan is
+//! not what the user is billed. Codex reports tokens only. Only those numbers are kept. Nothing is estimated: a turn
 //! that reports no cost adds tokens only, and a window containing such a turn
 //! shows no dollar figure at all rather than a partial one.
 
@@ -37,7 +41,7 @@ pub struct UsageTotals {
 }
 
 impl UsageTotals {
-    fn add(&mut self, other: &UsageTotals) {
+    pub fn add(&mut self, other: &UsageTotals) {
         self.turns = self.turns.saturating_add(other.turns);
         self.input_tokens = self.input_tokens.saturating_add(other.input_tokens);
         self.output_tokens = self.output_tokens.saturating_add(other.output_tokens);
@@ -80,6 +84,31 @@ pub struct UsageSummary {
     /// Today and the six days before it.
     pub week: UsageTotals,
     pub all_time: UsageTotals,
+    /// This week, per routine that ran on its own in it (a share of `week`).
+    pub routines: Vec<RoutineUsage>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineUsage {
+    /// The check-in's id.
+    pub id: String,
+    pub week: UsageTotals,
+}
+
+/// One agent's summary, with each routine's week beside it.
+pub fn summarize(agent: &super::store::Agent, today: NaiveDate) -> UsageSummary {
+    let mut summary = agent.usage.summary(today);
+    summary.routines = agent
+        .check_ins
+        .iter()
+        .map(|c| RoutineUsage {
+            id: c.id.clone(),
+            week: c.usage.summary(today).week,
+        })
+        .filter(|r| r.week.turns > 0)
+        .collect();
+    summary
 }
 
 /// One turn's numbers from a `result` event. `None` when the event carries
@@ -114,6 +143,10 @@ fn in_window(key: &str, today: NaiveDate) -> bool {
 }
 
 impl AgentUsage {
+    pub fn is_empty(&self) -> bool {
+        self.all_time.turns == 0 && self.days.is_empty()
+    }
+
     pub fn record(&mut self, turn: &UsageTotals, today: NaiveDate) {
         self.all_time.add(turn);
         let key = day_key(today);
@@ -136,6 +169,7 @@ impl AgentUsage {
         UsageSummary {
             week,
             all_time: self.all_time.clone(),
+            routines: Vec::new(),
         }
     }
 }

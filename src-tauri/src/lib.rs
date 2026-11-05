@@ -704,6 +704,7 @@ pub fn run() {
             commands::agents::agents_apps_remove,
             commands::agents::agents_search,
             commands::agents::agents_usage,
+            commands::agents::agents_quota,
             commands::workflows::list_all_workflows,
             commands::workflows::save_workflow_file,
             commands::workflows::delete_workflow_file,

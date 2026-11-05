@@ -29,6 +29,7 @@ import { DiffModal } from '../branches/DiffModal';
 import { CopyActions, copyLine } from './AgentCopy';
 import { ResultCardView } from './AgentResult';
 import { WorkTimeline } from './AgentWork';
+import { AgentCard } from './AgentCard';
 import { listProjects } from '../../lib/project';
 import {
   folderName,
@@ -264,31 +265,56 @@ export const ChangeCard = memo(function ChangeCard({
     : copy
       ? `Changed ${count} in a copy of ${project}`
       : `Changed ${count} in ${project}`;
+  const toggle =
+    changes.files.length > 0 && (several || !offering) ? (
+      <TextButton
+        tabIndex={0}
+        className="agent-changes__toggle-files"
+        aria-expanded={several ? expanded : undefined}
+        onClick={() => (several ? setExpanded((v) => !v) : setViewing(changes.files[0]))}
+      >
+        {several && expanded ? 'Hide changes' : offering ? count : 'Review changes'}
+      </TextButton>
+    ) : null;
   const result = message.result;
   const inResult = Boolean(result && owner);
   const body = (
-    <div
+    <AgentCard
       className="agent-changes"
-      data-in-result={inResult || undefined}
-      data-arrived={inResult ? undefined : arrived || undefined}
-      data-message-ids={inResult ? undefined : message.id}
-      data-copy={copy ? (offering ? 'live' : 'past') : undefined}
+      data={{
+        'in-result': inResult || undefined,
+        arrived: inResult ? undefined : arrived || undefined,
+        'message-ids': inResult ? undefined : message.id,
+        copy: copy ? (offering ? 'live' : 'past') : undefined,
+      }}
+      icon={<FolderIcon size={14} />}
+      title={headline}
+      // A live copy's file count sits by its title. A record is one line:
+      // its quiet ways to look (Preview, Review changes) by the title too.
+      meta={
+        offering ? (
+          toggle
+        ) : (
+          <span className="agent-changes__record-actions">
+            {/* What it looks like now. A past copy's card is a record: the
+                copy it describes may be gone, so no preview. */}
+            {ctx && !copy && (
+              <TextButton
+                tabIndex={0}
+                leftIcon={<GlobeIcon size={12} />}
+                onClick={() => ctx.openProject(changes.project)}
+              >
+                Preview
+              </TextButton>
+            )}
+            {toggle}
+          </span>
+        )
+      }
+      source={offering && agent ? copyLine(agent.name, project, working) : undefined}
     >
-      {/* What changed, in a line; the receipt (branch, line counts, files) is
-          one click down, for whoever wants it. */}
-      <div className="agent-changes__head">
-        <span className="agent-changes__summary">{headline}</span>
-        {offering && several && (
-          <TextButton
-            tabIndex={0}
-            className="agent-changes__toggle-files"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? 'Hide changes' : count}
-          </TextButton>
-        )}
-      </div>
+      {/* The receipt (branch, line counts, files) is one click down, for
+          whoever wants it. */}
       {expanded && (
         <ul className="agent-changes__files">
           {((!copy && changes.branch) || Boolean(changes.added || changes.removed)) && (
@@ -338,47 +364,19 @@ export const ChangeCard = memo(function ChangeCard({
         <p className="agent-copy__left-out">{leftOutLine(changes.leftOut)}</p>
       )}
       {offering && copy && agent && (
-        <>
-          <p className="agent-copy__line">{copyLine(agent.name, project, working)}</p>
-          <CopyActions
-            agent={agent}
-            copy={copy}
-            project={project}
-            onReview={changes.files.length > 0 ? () => setViewing(changes.files[0]) : undefined}
-            onPreview={ctx?.openProject}
-            onAskForChanges={
-              result && newestResult && onAskForChanges
-                ? () =>
-                    onAskForChanges({ id: result.id, version: result.version, title: result.title })
-                : undefined
-            }
-          />
-        </>
-      )}
-      {!offering && (
-        <div className="agent-changes__actions">
-          {/* The result first: what it looks like now. A past copy's card is a
-              record: the copy it describes may be gone, so no preview. */}
-          {ctx && !copy && (
-            <TextButton
-              tabIndex={0}
-              leftIcon={<GlobeIcon size={12} />}
-              onClick={() => ctx.openProject(changes.project)}
-            >
-              Open preview
-            </TextButton>
-          )}
-          {changes.files.length > 0 && (
-            <TextButton
-              tabIndex={0}
-              className="agent-changes__toggle-files"
-              aria-expanded={several ? expanded : undefined}
-              onClick={() => (several ? setExpanded((v) => !v) : setViewing(changes.files[0]))}
-            >
-              {several && expanded ? 'Hide changes' : 'See changes'}
-            </TextButton>
-          )}
-        </div>
+        <CopyActions
+          agent={agent}
+          copy={copy}
+          project={project}
+          onReview={changes.files.length > 0 ? () => setViewing(changes.files[0]) : undefined}
+          onPreview={ctx?.openProject}
+          onAskForChanges={
+            result && newestResult && onAskForChanges
+              ? () =>
+                  onAskForChanges({ id: result.id, version: result.version, title: result.title })
+              : undefined
+          }
+        />
       )}
       {viewing && (
         <DiffModal
@@ -390,7 +388,7 @@ export const ChangeCard = memo(function ChangeCard({
           onClose={() => setViewing(null)}
         />
       )}
-    </div>
+    </AgentCard>
   );
   if (!result || !owner) return body;
   // One card: the result, with what the turn changed (and the copy's

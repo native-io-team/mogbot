@@ -1,7 +1,7 @@
 import type { Agent } from '@shipstudio/companion-protocol';
 import { withQuotes } from '@shipstudio/companion-protocol';
 import { agentActions, messageActions, plainText, toggleFor } from '../src/lib/actions';
-import { CACHED_MESSAGES, fromCache, toCache } from '../src/lib/cache';
+import { CACHED_MESSAGES, fromCache, toCache, toOutbox } from '../src/lib/cache';
 import { EMPTY_DRAFT, liveMentions, putDraft } from '../src/lib/drafts';
 import { OUTBOX_WAIT_MS, outboxPlan, restorePending, unreached } from '../src/lib/outbox';
 import { emptySync, type PendingSend } from '../src/lib/sync';
@@ -9,7 +9,8 @@ import { chatItems, dayLabel, timeLabel } from '../src/lib/timeline';
 import { WireFailure } from '../src/lib/transport';
 import { looksLikePath, splitStable } from '../src/components/Markdown';
 import { mentionQuery, sendMode } from '../src/lib/composer';
-import { DRIVEN_LINE, drivenHint, subtitle } from '../src/lib/agents';
+import { subtitle } from '../src/lib/agents';
+import { drivenBar, drivenLine, drivenWait } from '../src/lib/bars';
 import { agent, msg } from './helpers';
 
 const pend = (clientId: string, ts: number, extra: Partial<PendingSend> = {}): PendingSend => ({
@@ -103,11 +104,13 @@ describe('offline cache', () => {
     expect(cached.chats.a.messages[0].id).toBe('m5');
     expect(cached.chats.a.more).toBe(true);
     expect(cached.chats.empty).toBeUndefined();
-    expect(Object.keys(cached.pending)).toEqual(['a']);
+    // The outbox is a file of its own (kept where the OS never clears it).
+    expect(cached.pending).toBeUndefined();
+    expect(Object.keys(toOutbox(s).pending)).toEqual(['a']);
     const back = fromCache(JSON.parse(JSON.stringify(cached)) as typeof cached)!;
     expect(back.cursor).toEqual({ epoch: 'e', seq: 9 });
     expect(back.chats!.a.loaded).toBe(false);
-    expect(back.pending!.a[0].waiting).toBe(true);
+    expect(restorePending(toOutbox(s).pending).a[0].waiting).toBe(true);
     expect(fromCache({ ...cached, v: 99 })).toBeNull();
   });
 });
@@ -268,9 +271,15 @@ describe('driven on the Mac', () => {
     expect(sendMode(driven(), true)).toBe('queue');
   });
 
-  it('says it one way everywhere: the row, the header, the composer', () => {
-    expect(DRIVEN_LINE).toBe('Being driven on your Mac');
-    expect(subtitle(driven())).toBe(DRIVEN_LINE);
-    expect(drivenHint()).toBe('Being driven on your Mac · what you send waits');
+  it('says it one way everywhere: the row and the bar, in the desk’s words', () => {
+    const a = driven();
+    expect(drivenLine(a.name)).toBe(`You’re driving ${a.name} on your Mac`);
+    expect(subtitle(a)).toBe(drivenLine(a.name));
+    expect(drivenBar(a)?.title).toBe(drivenLine(a.name));
+    expect(drivenWait(a.name)).toBe(`sends when you hand ${a.name} back`);
+  });
+
+  it('a request outranks driving in the row, as on the desk', () => {
+    expect(subtitle({ ...driven(), pendingApprovals: 1 })).toBe('Needs your OK');
   });
 });

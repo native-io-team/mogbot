@@ -11,7 +11,7 @@
 import type { Agent, AgentMessage, Approval, SecretRequest } from '@shipstudio/companion-protocol';
 import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { AppState, TextInput, View } from 'react-native';
-import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import {
@@ -22,10 +22,11 @@ import {
   secretRouteProblem,
 } from '../lib/session';
 import { useApp } from '../lib/store';
-import { CARD_TITLE_SCALE, fonts, iconSize, space } from '../lib/theme';
+import { CARD_TITLE_SCALE, fonts, space } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
-import { ARM_MS, Eyebrow, Receipt, useCardStyles, useArmed } from './ApprovalCard';
-import { Button, Icon, T } from './ui';
+import { ARM_MS, Receipt, useCardStyles, useArmed } from './ApprovalCard';
+import { ACTION, Card, CardActions } from './surfaces';
+import { Button, T } from './ui';
 
 /** `$STRIPE_KEY`, or `$BANK_USERNAME, $BANK_PASSWORD`: what the agent gets. */
 export const secretVars = (s: Pick<SecretRequest, 'fields'>) =>
@@ -58,7 +59,7 @@ export function SecretCard({
   const values = useRef<string[]>(request.fields.map(() => ''));
   const inputs = useRef<(ComponentRef<typeof TextInput> | null)[]>([]);
   const route = link.kind === 'connected' ? (currentTransport()?.route ?? null) : null;
-  const problem = secretRouteProblem(route);
+  const problem = secretRouteProblem(route, currentTransport()?.identityVerified ?? false);
 
   const wipe = () => {
     values.current = request.fields.map(() => '');
@@ -141,31 +142,26 @@ export function SecretCard({
   }
 
   return (
-    <Animated.View layout={LinearTransition.duration(220)} style={cardStyles.card}>
-      <View style={cardStyles.head}>
-        <Eyebrow />
-        <View style={styles.title}>
-          <Icon name="lock.fill" size={iconSize.inline} color={colors.textMuted} />
-          <T
-            variant="headline"
-            color={colors.textStrong}
-            maxFontSizeMultiplier={CARD_TITLE_SCALE}
-            style={{ flexShrink: 1 }}
-          >
-            {agent.name} asks for “{request.name}”
-          </T>
-        </View>
-        <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          {request.purpose}
-        </T>
-      </View>
+    <Card
+      icon="lock.fill"
+      title={`${agent.name} asks for “${request.name}”`}
+      source={request.purpose}
+    >
       {problem ? (
-        <View style={{ gap: space.sm }}>
+        <View style={{ gap: space.md }}>
           <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>
             {problem}
           </T>
           {link.kind === 'connected' && (
-            <Button title="Deny" busy={busy === 'deny'} onPress={() => void deny()} />
+            <CardActions>
+              <Button
+                title="Deny"
+                variant="outline"
+                busy={busy === 'deny'}
+                onPress={() => void deny()}
+                style={ACTION}
+              />
+            </CardActions>
           )}
         </View>
       ) : (
@@ -216,7 +212,13 @@ export function SecretCard({
               />
             </View>
           ))}
-          <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
+          {/* The card's note: what happens to it, before the answers. */}
+          <T
+            variant="small"
+            color={colors.textMuted}
+            maxFontSizeMultiplier={CARD_TITLE_SCALE}
+            testID="card-note"
+          >
             Kept in your Mac’s Keychain for {agent.name} only. It gets {secretVars(request)}, never
             the value, and this phone keeps nothing.
           </T>
@@ -225,13 +227,14 @@ export function SecretCard({
               {error}
             </T>
           )}
-          <View style={cardStyles.actions}>
+          <CardActions>
             <Button
               title="Deny"
+              variant="outline"
               busy={busy === 'deny'}
               disabled={!!busy || link.kind !== 'connected'}
               onPress={() => void deny()}
-              style={{ flex: 1 }}
+              style={ACTION}
             />
             <Button
               title="Save"
@@ -241,16 +244,15 @@ export function SecretCard({
               disabled={!!busy || !filled.every(Boolean)}
               focusable={armed}
               onPress={() => void save()}
-              style={{ flex: 1 }}
+              style={ACTION}
             />
-          </View>
+          </CardActions>
         </Animated.View>
       )}
-    </Animated.View>
+    </Card>
   );
 }
 
 const useStyles = makeStyles(() => ({
-  title: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   secret: { fontFamily: fonts.mono },
 }));

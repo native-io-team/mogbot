@@ -53,7 +53,10 @@ commit.
 | --- | --- |
 | `mod.rs` | Config and the device registry (`companion.json`, 0600), lifecycle, limits |
 | `server.rs` | The listener, HTTP routes, WebSocket upgrade and socket loop |
-| `pairing.rs` | Codes, the desk confirmation, token issue |
+| `pairing.rs` | Codes, the desk confirmation (by request id), token issue, per-source backoff |
+| `identity.rs` | The Mac's Ed25519 identity key: the pairing link's fingerprint, and the proofs it gives before any secret is sent (`/v1/identity`, the socket's `identity` frame, pairing answers), each covering the hosts it serves on |
+| `keystore.rs` | Where that key is kept: the login Keychain (moved there once from `companion.json`) |
+| `limits.rs` | The connection gate (strangers evicted first, authenticated sockets never), per-source caps, Host/Origin checks, failed-connection audit folding |
 | `hub.rs` | Event journal, fan-out, draft appends |
 | `router.rs` | `method` → command function; `METHODS` and `READ_ONLY_METHODS` |
 | `desktop.rs` | The bridge to the running app: events in, status and projects out |
@@ -102,11 +105,26 @@ another device's blob or a path outside the agent's `attachments/` is a bare
 **Heartbeat:** the Mac pings every 15 s; the phone treats 40 s of silence as
 a dead link, which catches sleep and Wi-Fi handoffs faster than TCP.
 
-**Limits:** 600 requests a minute per device, of which at most 10 may
-create an agent (`MAX_AGENTS_CREATED_PER_MINUTE`; a retry answered from the
-`clientId` cache doesn't count); 4 sockets per device, 16 in
-all; 1 MB frames; 25 MB a file and 10 files a message (`MAX_ATTACHMENT*`);
-30 staged files or 300 MB per device; a 10 s wait for `hello`.
+**Limits:** 600 requests a minute per device, socket and HTTP together,
+of which at most 10 may create an agent (`MAX_AGENTS_CREATED_PER_MINUTE`;
+a retry answered from the `clientId` cache doesn't count); 4 sockets per
+device, 16 in all; 1 MB frames; 25 MB a file and 10 files a message
+(`MAX_ATTACHMENT*`); 30 staged files or 300 MB per device, held before an
+upload's first byte is read; 3 uploads at once per device; a 10 s wait for
+each of `challenge` and `hello`. Before any of that (`limits.rs`): at most
+64 connections open at once, so a flood can't take the desktop app's file
+descriptors. Of those, at most 48 may be **strangers** (anything that hasn't
+authenticated: a socket before its hello checks out, a plain request); when
+a new one arrives with 48 open, the oldest stranger is closed to make room,
+and a socket that authenticated (or a pair request holding a live code) is
+never evicted, so a flood can't keep a paired phone out. Each source may
+have at most 4 sockets before their hello (`MAX_PREHELLO_PER_SOURCE`) and
+32 requests in flight (an open socket counts as one); 10 s for headers,
+10 s for the whole pair body, and no 30 s gap in an upload. Uploads go straight to disk with a running cap,
+never whole into memory. Thumbnails are refused (422) for images over
+40 MP by their own header, before decoding; two decode at a time, and the
+last 128 are cached. `agents.memorySuggest` runs two at a time and is
+audited. `agents.fetchPath` copies at most 25 MB even if the file grows.
 
 ### Methods
 
@@ -175,6 +193,15 @@ and both sides ignore unknown fields and events. The Mac keeps speaking the
 previous version for at least a release. A mismatch is refused with the side
 to update named: "Update <name> on …" or "Update this app".
 
+**Version 2** made the Mac prove itself first (below). Nothing had shipped
+on 1, so the Mac stopped answering it: an app on 1 sends its hello first and
+is told to update without its token being read. An app on 2 that reaches a
+Mac on 1 sees its challenge closed without a word; it then asks
+`POST /v1/identity`, which a Mac on 1 doesn't have, and a 404 there says
+"Update the app on your Mac" instead of reconnecting forever. A pairing link
+without a fingerprint (a Mac from before identity keys) says the same rather
+than "that isn't a pairing code".
+
 ### Keeping the types honest
 
 Rust is the truth; the desktop's `src/lib/agents.ts` mirrors it by hand and
@@ -216,43 +243,144 @@ CA and no trust-on-first-use.
 
 1. **Mac:** Phone panel → **Pair a phone** (or Cmd+K). A one-time code
    (128-bit, 5 minutes, single use) is shown as a QR code of
-   `<companion.scheme>://pair?d=…` (`dashbot-companion` today) carrying the code, server id, Mac name
-   and routes, and no long-lived secret (`PairingLink`).
-2. **Phone:** scan in the app or with the Camera, or paste the link. It sends
-   `POST /v1/pair` with its name, model and an X25519 public key.
-3. **Mac:** "Allow **Julian's iPhone** to use your agents?" with Allow and
-   Deny, open for 120 s. This is what makes a QR code photographed over your
-   shoulder useless, and the device's name and model make a stranger's phone
-   stand out.
-4. **On Allow** the Mac returns a 256-bit token and keeps only its SHA-256.
-   The phone keeps it in `expo-secure-store` (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`,
-   so never in a backup).
-5. **Pairing again** with the same server replaces that Mac on the phone, and
-   the Mac revokes the phone's old token, so devices don't stack up.
+   `<companion.scheme>://pair?d=…` (`dashbot-companion` today) carrying the code, server id, Mac name,
+   **exactly one route** and the **fingerprint of the Mac's identity key**,
+   and no long-lived secret (`PairingLink`). No code is shown unless that
+   key is kept in the Keychain: a phone must never pin a key the Mac is
+   about to lose.
+2. **Phone:** scan in the app or with the Camera, or paste the link. A link
+   is untrusted input (any page or message can open one), so the phone
+   **always asks first**: "Pair with *Julian's MacBook Pro*? at
+   *julians-mbp.tail1234.ts.net:47443*", the code's last four characters,
+   and, when a Mac is already paired, "This replaces *that Mac*". A
+   Tailscale route must be `https://<name>.ts.net[:port]`
+   (`parsePairingLink`); a link with more than one route is refused, so the
+   host shown is the only one tried. A link naming the paired Mac's id with
+   a different fingerprint stops there: "This isn't your Mac". "Already
+   paired with" is said only when the fingerprint matches the pinned one.
+   On Pair, the **Mac proves itself first**: `POST /v1/identity` with a
+   fresh challenge; the answer must be signed by the key the link
+   fingerprinted, for that server id, with the host the phone reached among
+   the hosts it signs (`checkMac`). Only then does the phone send
+   `POST /v1/pair` (JSON only) with the code, its name, model, an X25519
+   public key and another fresh 32-byte **challenge**.
+3. **Mac:** "Allow **Julian's iPhone** to use your agents?" with the model,
+   when it asked, the code's last four characters and the tailnet user
+   `tailscale serve` named (`Tailscale-User-Login`), open for 120 s. The
+   name and model are cleaned of control, bidi and zero-width characters and
+   cut to 40. This is what makes a QR code photographed over your shoulder
+   useless. The answer is for that request's id, so a click can't land on a
+   phone that asked meanwhile. If a paired phone has the same name, platform
+   and model, the prompt says so and offers **Allow, keep both** or **Allow
+   and replace**: nothing is removed unless the desk says so.
+4. **On Allow** the Mac returns a 256-bit token, keeps only its SHA-256, and
+   signs the challenge, its hosts and the new device id with its identity
+   key (`pairProofMessage`). The phone keeps the answer only if that checks
+   out for the host it reached, **pins** the fingerprint, and keeps only the
+   route that answered. It keeps the token in `expo-secure-store`
+   (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`, so never in a backup).
+5. **Pairing again** with the same server replaces that Mac on the phone.
 
-Codes are compared in constant time; a wrong one gets a bare 404 after 400 ms,
-and five failures burn the code.
+Codes are compared in constant time; a wrong one gets a bare 404 after
+400 ms. Wrong codes slow down their own source (three free, then a wait
+that doubles from 1 s to 5 minutes), never the code: 128 bits can't be
+guessed, and burning the code would only let anyone who can reach the port
+spoil the real phone's pairing.
+
+**The Mac's identity.** `identity.rs` has an Ed25519 key, kept in the login
+Keychain (`keystore.rs`); a key an earlier build left in `companion.json` is
+moved there once, and the file's copy is emptied only after the Keychain
+gives it back. TLS is the `*.ts.net` certificate, which a Funnel host has
+too, so the pinned key is what tells *your* Mac from another.
+
+**The Mac proves itself before any secret is sent.** On every socket the
+phone's first frame is `challenge` (fresh random bytes, no token). The Mac
+answers `identity`: its server id and the hosts `tailscale serve` publishes
+it on, signed with the challenge (`macProofMessage`,
+`<scheme>:identity:v2\n…`; each signed message has its own prefix, so a
+pairing proof is never a socket proof). The phone sends `hello` with its
+token only when that is the pinned key, the pinned server id, and the host
+this socket reached is in the signed list. Otherwise it stops for good,
+having sent only the challenge:
+
+- another key, nothing signed, or a host the Mac didn't sign (a relay on
+  another `*.ts.net` name passing the real Mac's answers along) → "This
+  isn't your Mac … this phone sent it nothing private";
+- another server id → "pair again": either the Mac lost its key and started
+  over (below), or it isn't the Mac; either way nothing was sent.
+
+Before the proof, only refusals that can honestly come first (versions, a
+locked Keychain) are heeded; "removed" or "not paired" from a server that
+hasn't proved itself is ignored, so a stranger can't talk the phone into
+forgetting its Mac. Secret cards still check `identityVerified`.
+
+**Losing the key.** If the Keychain can't be read (locked, refusing), the
+Mac doesn't make a new key: sockets are refused `unavailable` ("unlock your
+Mac") and retried, and no pairing code is offered. Only when the key is
+definitely gone does it make a new one, and if phones were paired it
+**starts over**: a new server id, every phone revoked. Those phones see the
+new id and say "pair again" instead of "this isn't your Mac". A key the
+Keychain won't keep is used for this launch only and no code is shown.
+
+**No trust on first use.** The app hadn't shipped, so there is no unpinned
+pairing to carry: a pairing from before identity keys is never used (it
+says "pair again", and a forget queued for it is never offered to a
+server), and every link must carry a fingerprint.
 
 ## Auth, revocation and audit
 
 - HTTP sends `Authorization: Bearer`; the socket sends the token in its first
   frame (`hello.token`), never in the URL, so no log records it.
-- The token is re-checked on every frame. **Revoke** in the Phone panel
-  deletes the hash and closes that device's sockets at once; the phone says
-  "This Mac removed this phone" and offers to pair again.
+- **Browsers and other names are refused** before anything else: a request
+  with an `Origin` that isn't the server's own (React Native's WebSocket
+  sends the server's own; its `fetch` none) and any `Host` but a `*.ts.net`
+  name or loopback (DNS rebinding) get a bare 403. `/v1/pair` takes only
+  `application/json`, which a page can't send cross-origin without asking.
+- **Tailnet user.** The `Tailscale-User-Login` that `tailscale serve` set
+  at pairing is kept on the device, and every later request with that
+  token must carry the same user: a different user, or none at all (a
+  tagged node holding a stolen token), is refused. A phone paired with no
+  user (over loopback, in development) takes any. This trusts `tailscale
+  serve` to strip a client's own `Tailscale-User-*` headers, which is
+  documented behaviour but not tested here against a real tailscaled.
+- The device is re-checked on every frame (a re-pair mints a new id, so this
+  is the token check). **Revoke** in the Phone panel deletes the hash and
+  closes that device's sockets at once, **aborts the requests those sockets
+  had running**, stops an upload mid-body, and deletes its staged files
+  right away; the phone says "This Mac removed this phone" and offers to
+  pair again. An ordinary disconnect lets running requests finish (a send
+  the phone retries by `clientId` is better done once than cut in half).
 - **Forget this Mac** on the phone sends `devices.unpairSelf`. Offline, the
   revoke is queued in the keychain and finished on the next launch or
-  network change, and the phone says the Mac keeps it until then.
+  network change, and the phone says the Mac keeps it until then. The queue
+  is one entry per pairing (server id *and* device id), so finishing an old
+  forget never touches a newer pairing with the same Mac, and nothing it
+  does saves credentials. An entry is done when the Mac confirms, says the
+  token is gone, or turns out not to be that Mac (`not_your_mac`, a new
+  server id), so an old token isn't offered to whoever answers forever.
 - Turning the companion off stops the listener and removes the serve handler;
   paired devices are kept.
-- **Audit:** every action goes through `remote_access::audit_as` into
-  `remote_audit.jsonl` as `"Phone · <device>"`, with the method and a
-  preview, never a token. The Phone panel shows each phone's latest action.
+- **Audit:** every action goes into `companion_audit.jsonl` (its own file,
+  apart from Remote Access's) as `"Phone · <device>"`, with the method and a
+  preview, never a token. Past 1 MB it rotates to `.1`, keeping the last two
+  files. Failed connections are folded to one line per source per minute
+  ("199 more failed connections from … in the last minute"), so a flood of
+  bad hellos can't roll out the record of what a real token did. The Phone
+  panel shows each phone's latest action.
+- **What a token reaches.** A device token is the user's agents: every paired
+  phone sees every agent, and `agents.fetchPath` hands it any file under a
+  registered project or agent home (`.env`, `.git/config` included), with no
+  agent involved. That is by design; it is why the token lives only in the
+  keychain and why pairing needs the desk. Attachments are served only from
+  `attachments/`, never through a symlink.
 - **Text refusals:** `agents.send`, `sessions.send` and `sessions.start` apply
   Remote Access's `sanitize_message` / `check_message_kind`: no control
   characters, no leading `!`, `/` commands only from the allowlist, at most
-  20k characters, and an opening prompt never starting with `-`. Sessions only
-  ever reach agent tabs. A refusal comes back as `Protocol/refused` with the
+  20k characters, and an opening prompt never starting with `-`. An agent's
+  instructions (`agents.update`) and a routine's note
+  (`agents.schedule.*`), which become its words later with nobody watching,
+  are refused on the same rules rather than cleaned. Sessions only ever
+  reach agent tabs. A refusal comes back as `Protocol/refused` with the
   sentence to show.
 
 ## The app
@@ -274,17 +402,42 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   reading holds still while you're scrolled up or a long reply grows, and the
   jump button says "New reply" when one finished below. Hold a message to
   copy, quote or select text; paths in a reply open through `agents.fetchPath`.
+- **Lines, cards and bars** (`components/surfaces.tsx`, the desk's
+  `AgentCard.tsx`; docs/agents.md "Lines, cards and bars"). Everything in a
+  chat that isn't something someone said is one of three. A **Line** is one
+  quiet centred sentence that wraps: a note ("Started fresh · memory kept", a
+  take-over that closed), a routine's run, a time between messages, a usage
+  limit. A **Card** is the one anatomy every request and result shares —
+  icon and title (a quiet meta such as "v2" at the right), a muted source
+  line ("Acme Site · in acme-site"), the body, a muted note, then the answers
+  right-aligned with the single affirmative last, in the neutral `answer`
+  style (never the agent's colour); the rest are `outline`. Approvals, a
+  task's question, secrets, results, a copy's Keep / Discard, an import to
+  review on the Mac and a real failure all use it; answered, a card becomes
+  its outcome line. A **Bar** is this conversation's state, directly above
+  the composer in a fixed order (`lib/bars.ts`): the Mac out of reach, you
+  driving the agent on your Mac, an import, "Changes to …" for the message
+  being written, what the engine can't do. At most two show; the rest fold
+  into "N more". The chat header is identity only (name and role): status is
+  in the list row and in the conversation, never a third time up there.
+  `__tests__/surfaces.test.tsx` holds the anatomy and the order;
+  `__tests__/vocabulary.node.test.ts` reads every user-facing string out of
+  the source and fails on the desk's retired words ("session", "Waiting for
+  your decision", "via connector", "Claude Code 1", the noun "take-over",
+  "Denied" — answered requests are "Declined"), with a snapshot of the rest.
 - **Approvals** (`ApprovalCard`): the exact command, scrolling sideways rather
-  than re-wrapped; Deny / Allow / Always allow (with `describeScope`'s
-  sentence) / Deny with note. The answers are inert for 400 ms after the card
-  lands, the desk's anti-misclick; Allow is the one tap the app must never
-  take by accident.
-- **Session questions** (`PromptCard`): the question, whose session it is,
-  the diff (tinted) or text it shows, and every option it offers, answered
-  with `agents.answerApproval`'s `choice`; the same 400 ms guard.
+  than re-wrapped; ⋯ · Deny · Allow, with Always allow (with
+  `describeScope`'s sentence) and Deny with note behind ⋯. The answers are
+  inert for 400 ms after the card lands, the desk's anti-misclick; Allow is
+  the one tap the app must never take by accident.
+- **A task's questions** (`PromptCard`): the question, whose task it is and
+  where, the diff (tinted) or text it shows, and every option it offers,
+  answered with `agents.answerApproval`'s `choice`; the same 400 ms guard.
 - **Secret cards** (`SecretCard`): masked fields straight to the Mac's
-  Keychain via `agents.saveSecret`. Only over HTTPS on Tailscale (refused on
-  the phone before sending, and by the Mac for any other route); the value
+  Keychain via `agents.saveSecret`. Only over HTTPS on Tailscale, and only on
+  a socket where the Mac proved the pinned identity (refused on the
+  phone before sending; the Mac has no route check, since every socket
+  reaches it the same way); the value
   lives in a ref, is wiped on save, backgrounding and unmount, and never
   reaches the store, cache, drafts, outbox, notifications or logs
   (`__tests__/secrets.node.test.ts`).
@@ -295,8 +448,7 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   Drafts, including uploaded files (kept 55 min), survive leaving the chat and
   a cold start (`lib/drafts.ts`). A mic in the field dictates into the draft
   (see "Dictation" below).
-- **Agent sheet.** "Claude · Opus" / "Codex · …" (also in the chat
-  header), Runs on and Model read-only, Memory (view, edit, forget with
+- **Agent sheet.** "Claude · Opus" / "Codex · …", Runs on and Model read-only, Memory (view, edit, forget with
   Undo, add; "Remember This" in a message's menu), Instructions (view and edit), pin/mute/hide, check-ins and
   routines (create and edit with the picker below, past runs, pause, run now,
   cancel), usage, and "Allowed without asking" with Revoke.
@@ -426,14 +578,35 @@ latency, last seen, likely causes from the last status); Mac awake
 server answered, since silence looks the same either way); Claude Code
 installed and signed in (a `signed_out` turn makes it a problem whatever the
 check says); each agent's capabilities; this device. Screens say nothing
-while all is well and show the pill or a banner when something isn't.
+while all is well and show the pill when something isn't; in a chat it is the
+first bar above the composer ("Saved messages shown"), after a 2 s grace.
 
 ### Offline cache and outbox
 
-One JSON file per Mac (`cache-<serverId>.json`, `lib/cache.ts`) holds the
-overview, Mac status, projects, the last 400 messages of each opened chat,
-the outbox and the cursor, written together so replay after a restart starts
-exactly where the copy ends. Downloads are cached by blob id or agent + path.
+Two places, by what losing the file costs (`lib/persist.ts`):
+
+- **The chat history copy** (`cache-<serverId>.json`) is in the caches
+  folder (iOS `Library/Caches`, Android's cache dir). The OS may clear it
+  when the phone is nearly full; it all comes back from the Mac. Backups
+  don't copy it.
+- **What only the phone has**: the outbox (`outbox-<serverId>.json`),
+  drafts and preferences, in iOS `Library/Application Support` (Android's
+  files dir), which the OS never clears. expo-file-system 58 can't set
+  `NSURLIsExcludedFromBackupKey`, so these few kilobytes of the user's own
+  words are in device backups; the token (keychain) and secrets (never
+  written) are not.
+
+Files an earlier version left (everything in Documents, then everything in
+caches) move once per file: copy, read the copy back, and only when it
+matches delete the original. A file that didn't copy stays where it was and
+is tried again next launch; the old folder goes only when it's empty. The
+Application Support path is built from the caches path, since
+expo-file-system has no constant for it; that it resolves on a real device
+is not yet verified.
+
+The copy (`lib/cache.ts`) holds the overview, Mac status, projects, the last
+400 messages of each opened chat and the cursor, written together so replay
+after a restart starts exactly where the copy ends. Downloads are cached by blob id or agent + path.
 While disconnected, status marks go grey, headers say "as of …" and actions
 are disabled. A message sent offline waits ("Waiting for …") and goes by
 itself, idempotent by `clientId`, for **10 minutes** (`OUTBOX_WAIT_MS`);

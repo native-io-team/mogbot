@@ -156,7 +156,7 @@ export default function Session() {
           {gone && (
             <Animated.View entering={FadeIn} style={styles.card}>
               <T variant="headline" color={colors.textStrong}>
-                This session isn’t open on your Mac any more
+                This task isn’t open on your Mac any more
               </T>
               <T variant="small" color={colors.textSecondary}>
                 {gone}

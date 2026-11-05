@@ -1008,6 +1008,7 @@ dependencies = [
  "qrcodegen",
  "regex",
  "reqwest 0.12.28",
+ "ring",
  "security-framework",
  "semver",
  "sentry",

@@ -1,9 +1,11 @@
 /**
- * The result card (`share_result`), as the desk draws it: title, summary,
- * what the agent didn't verify (up front, tinted, only when it said), a
- * before/after pair, its files and links, what it checked, and "Ask for
- * changes". A project copy's card is the same card with Keep / Discard
- * inside it (passed in as `children`).
+ * The result card (`share_result`), on the shared card as the desk draws it:
+ * a document icon, the title with its version, what changed since the last
+ * one, then the summary, what the agent didn't verify (up front, tinted,
+ * only when it said), a before/after pair, its files and links, what it
+ * says it checked, and "Ask for changes". A project copy's card is the same
+ * card with the copy's note and Discard / Keep changes in its answer row
+ * (`copy`), never a second card inside it.
  *
  * Only the newest version of a result is drawn in full; an older one folds
  * to a line. Nothing here fills a list the agent didn't give.
@@ -16,11 +18,10 @@ import {
   itemName,
   listedItems,
   MAC_FEATURES,
-  revisingLabel,
   supersededLine,
   type Agent,
   type AgentMessage,
-  type ResultCard as Card,
+  type ResultCard,
   type ResultItem,
   type ResultRef,
 } from '@shipstudio/companion-protocol';
@@ -31,7 +32,8 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { alpha, iconSize, radius, space } from '../lib/theme';
 import { useApp } from '../lib/store';
 import { Attachments } from './attachments';
-import { useCardStyles } from './ApprovalCard';
+import { useCopyParts, type CopyProps } from './copy';
+import { ACTION_ROW, Card } from './surfaces';
 import { Button, Icon, T } from './ui';
 
 /** The Mac takes `revises` on a send: only then is "Ask for changes" offered. */
@@ -42,7 +44,7 @@ export const useCanRevise = () =>
       !!s.welcome?.features?.includes(MAC_FEATURES.reviseResults)
   );
 
-export const refOf = (card: Card): ResultRef => ({
+export const refOf = (card: ResultCard): ResultRef => ({
   id: card.id,
   version: card.version,
   title: card.title,
@@ -93,7 +95,7 @@ function Body({
   agentId,
   onError,
 }: {
-  card: Card;
+  card: ResultCard;
   agentId: string;
   onError: (t: string) => void;
 }) {
@@ -103,16 +105,10 @@ function Body({
   const items = listedItems(card.items);
   const files = items.flatMap((i) => (i.kind === 'file' ? [i.file] : []));
   const links = items.filter((i): i is Extract<ResultItem, { kind: 'link' }> => i.kind === 'link');
-  const changes = changesLine(card);
   const notVerified = card.notVerified ?? [];
   const checked = card.checked ?? [];
   return (
     <>
-      {changes && (
-        <T variant="small" color={colors.textSecondary}>
-          {changes}
-        </T>
-      )}
       {!!card.summary && <T color={colors.textBody}>{card.summary}</T>}
       {notVerified.length > 0 && (
         <View
@@ -181,22 +177,25 @@ export function ResultCardView({
   newest,
   onAskForChanges,
   children,
+  copy,
   onError,
 }: {
   message: AgentMessage;
-  card: Card;
+  card: ResultCard;
   agent: Agent;
   newest: boolean;
   /** Absent when this Mac can't take a revision. */
   onAskForChanges?: (ref: ResultRef) => void;
-  /** A project copy's part (Keep / Discard). */
+  /** Lines that belong to the work (what changed in the copy). */
   children?: ReactNode;
+  /** A project copy's part: its note, and Discard / Keep changes. */
+  copy?: CopyProps;
   onError: (t: string) => void;
 }) {
   const colors = useColors();
   const styles = useStyles();
-  const cardStyles = useCardStyles();
   const [opened, setOpened] = useState(false);
+  const parts = useCopyParts(copy ?? null);
   if (!newest && !opened) {
     return (
       <Pressable
@@ -212,79 +211,45 @@ export function ResultCardView({
       </Pressable>
     );
   }
+  const ask = newest && onAskForChanges && (
+    <Button
+      title="Ask for changes"
+      variant="ghost"
+      icon="bubble.left"
+      // Beside a copy's answers it takes a row of its own, so Keep stays last.
+      style={parts ? [ACTION_ROW, { justifyContent: 'flex-end' }] : undefined}
+      onPress={() => {
+        haptic.light();
+        onAskForChanges(refOf(card));
+      }}
+    />
+  );
   return (
-    <View
-      style={[cardStyles.card, !newest && { opacity: 0.85 }]}
+    <Card
+      icon="doc.text"
+      title={card.title}
+      meta={card.version > 1 ? `v${card.version}` : undefined}
+      source={changesLine(card) ?? undefined}
+      note={parts?.note}
+      actions={
+        ask || parts ? (
+          <>
+            {ask}
+            {parts?.actions}
+          </>
+        ) : undefined
+      }
+      style={!newest && { opacity: 0.85 }}
       accessibilityLabel={`Result: ${card.title}`}
       testID={`result-${message.id}`}
     >
-      <View style={styles.head}>
-        <T variant="headline" style={{ flex: 1 }}>
-          {card.title}
-        </T>
-        {card.version > 1 && (
-          <View style={styles.version}>
-            <T variant="caption" color={colors.textSecondary}>
-              v{card.version}
-            </T>
-          </View>
-        )}
-      </View>
       <Body card={card} agentId={agent.id} onError={onError} />
       {children}
-      {newest && onAskForChanges && (
-        <Button
-          title="Ask for changes"
-          variant="secondary"
-          size="compact"
-          icon="bubble.left"
-          style={{ alignSelf: 'flex-start' }}
-          onPress={() => {
-            haptic.light();
-            onAskForChanges(refOf(card));
-          }}
-        />
-      )}
-    </View>
-  );
-}
-
-/** Above the composer: what the message being written asks to change. */
-export function RevisingChip({
-  revising,
-  onRemove,
-}: {
-  revising: ResultRef;
-  onRemove: () => void;
-}) {
-  const colors = useColors();
-  const styles = useStyles();
-  return (
-    <View style={styles.chip}>
-      <Icon name="bubble.left" size={iconSize.inline} color={colors.textMuted} />
-      <T variant="small" color={colors.textSecondary} numberOfLines={1} style={{ flex: 1 }}>
-        {revisingLabel(revising)}
-      </T>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Don't ask for changes"
-        hitSlop={16}
-        onPress={onRemove}
-      >
-        <Icon name="xmark" size={iconSize.inline} color={colors.textMuted} fallback={<T>×</T>} />
-      </Pressable>
-    </View>
+    </Card>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
-  head: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
-  version: {
-    paddingHorizontal: space.tight,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
-  },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   strong: { fontWeight: '600' as const, color: colors.textPrimary },
   unverified: {
@@ -304,13 +269,4 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfaceControl,
   },
   past: { flexDirection: 'row', alignItems: 'center', gap: space.tight, paddingVertical: space.xs },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.tight,
-    paddingVertical: space.xs,
-    paddingLeft: space.sm,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.textMuted,
-  },
 }));

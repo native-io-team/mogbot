@@ -369,6 +369,10 @@ impl Backend for DesktopBackend {
         json(cmd::agents_usage(agent_id.to_string()).await?)
     }
 
+    async fn quota(&self) -> Result<Value, CommandError> {
+        json(cmd::agents_quota().await?)
+    }
+
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError> {
         cmd::agents_revoke_permission(self.app.clone(), agent_id.to_string(), rule_id.to_string())
             .await
@@ -580,12 +584,20 @@ impl Backend for DesktopBackend {
         computer_name()
     }
 
+    fn serve_hosts(&self) -> Vec<String> {
+        routes()
+            .iter()
+            .filter(|r| r.kind == RouteKind::Tailscale)
+            .filter_map(|r| super::identity::host_of(&r.url))
+            .collect()
+    }
+
     fn app_version(&self) -> String {
         self.app.package_info().version.to_string()
     }
 
     fn audit(&self, actor: &str, tool: &str, detail: String, ok: bool) {
-        crate::remote_access::audit_as(Some(actor), tool, None, detail, ok);
+        crate::remote_access::companion_audit(actor, tool, detail, ok);
     }
 
     fn changed(&self) {

@@ -248,7 +248,7 @@ pub fn interview_status(agent_id: &str) -> Option<runner::Status> {
     let t = state.talk.as_ref()?;
     (t.chief_id == agent_id && t.state == TalkState::Interviewing).then(|| runner::Status {
         state: "working",
-        activity: Some(format!("Talking to {} (import)", t.source)),
+        activity: Some(format!("Bringing in agents from {}", t.source)),
         since: Some(t.started_at),
         work: None,
     })
@@ -800,8 +800,7 @@ fn ask_consent(app: &AppHandle, chief: &store::Agent, talk_id: &str, first: &str
         store::new_id(),
         format!("{source} wants to bring its agents over"),
         format!(
-            "It will talk to a separate, sealed copy of {} that can only stage agents for you to review. It can't see your chats, files or other agents, and nothing is created until you press Import.\n\nIts first message: “{}{}”",
-            chief.name,
+            "It will talk to a separate, sealed conversation that can only stage agents for you to review. It can't see your chats, files or other agents, and nothing is created until you import.\n\nIts first message: “{}{}”",
             preview,
             if first.chars().count() > 400 { "…" } else { "" }
         ),
@@ -868,7 +867,7 @@ pub fn answer_card(
                 note(
                     app,
                     chief_id,
-                    format!("{} is talking to a sealed interview, separate from your chat. Nothing is created until you review it. Stop it any time.", card.source),
+                    format!("{} is talking to a separate, sealed conversation, not this chat. Nothing is created until you review it. Stop it any time.", card.source),
                 );
                 audit(&card.source, "the user allowed the import", true);
                 if let Some(first) = held {
@@ -1950,7 +1949,7 @@ mod tests {
         interviewing();
         let s = interview_status("chief").unwrap();
         assert_eq!(s.state, "working");
-        assert_eq!(s.activity.as_deref(), Some("Talking to Grok (import)"));
+        assert_eq!(s.activity.as_deref(), Some("Bringing in agents from Grok"));
         assert!(interview_status("someone-else").is_none());
         reset_for_tests();
     }

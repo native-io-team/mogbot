@@ -91,6 +91,9 @@ tauri-plugin-notification = "2"
 data-encoding = "2"
 qrcodegen = "1.8"
 async-trait = "0.1"
+# The companion's Mac identity: an Ed25519 key whose public half rides in the
+# pairing QR code and signs every welcome, so the phone can pin it.
+ring = "0.17"
 # Agents' quick entry: a system-wide hotkey (default ⌥Space) that opens the
 # floating composer over any app (src/agents/quick_entry.rs).
 tauri-plugin-global-shortcut = "2"

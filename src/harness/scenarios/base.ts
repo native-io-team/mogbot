@@ -20,7 +20,7 @@ export const HARNESS_ROOT = '/Users/harness/ShipStudio';
 export const CHIEF_GREETING_TEXT =
   "Hi, I'm your Chief of Staff. " +
   "Tell me what's on your plate this week and I'll put a team of agents together for it. " +
-  "When something needs your OK, you'll get an Allow or Deny card.";
+  "When something needs your OK, I'll ask first, and you Allow or Deny it.";
 
 /** The greeting as `agents_messages` returns it. */
 export const chiefGreeting = (agentId: string, ts = 1_790_000_000_000) => ({
@@ -239,6 +239,8 @@ export const baseCommands: CommandMap = {
       durationMs: 0,
     },
   },
+  // No engine has reported its plan: no usage line anywhere (agents::quota).
+  agents_quota: [],
   agents_focus: null,
   agents_mark_unread: null,
   // From import::import_prompt in src-tauri/src/agents/import.rs, for a Chief called Chief of Staff.

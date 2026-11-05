@@ -251,12 +251,11 @@ pub fn early_exit_line(
     } else {
         format!("after {}", took(ms))
     };
-    let code = match exit_code {
-        Some(c) if c != 0 => format!(" (exit code {c})"),
-        _ => String::new(),
-    };
+    // Whether it failed decides that this note is written (`ended_early`);
+    // the code itself is the engine's business, never the user's.
+    let _ = exit_code;
     let mut line = format!(
-        "{} closed {when}{code}, so the take-over ended and {name} has its session back.",
+        "{} closed {when}, so you're back in the chat and {name} carries on from here.",
         engine.label()
     );
     if tail.is_empty() {
@@ -813,7 +812,7 @@ fn clear_mark(agent_id: &str) {
 
 /// The note a take-over the app closed during leaves at the next launch.
 pub fn closed_line(name: &str) -> String {
-    format!("The app closed while you were driving {name} in a terminal, so that take-over ended. {name} has its session back.")
+    format!("The app closed while you were driving {name} in a terminal, so you're back in the chat. {name} carries on from here.")
 }
 
 /// At launch: a take-over the last run never handed back. Its CLI can
@@ -1029,7 +1028,7 @@ mod tests {
         ];
         let line = early_exit_line(Engine::Claude, "Finance", 3_400, Some(1), &tail);
         assert!(
-            line.starts_with("Claude Code closed after 3 seconds (exit code 1), so the take-over ended and Finance has its session back."),
+            line.starts_with("Claude Code closed after 3 seconds, so you're back in the chat and Finance carries on from here."),
             "{line}"
         );
         assert!(
@@ -1053,7 +1052,7 @@ mod tests {
         let quiet = early_exit_line(Engine::Codex, "Ops", 400, Some(0), &[]);
         assert_eq!(
             quiet,
-            "Codex closed after a second, so the take-over ended and Ops has its session back. It printed nothing."
+            "Codex closed after a second, so you're back in the chat and Ops carries on from here. It printed nothing."
         );
     }
 
@@ -1114,7 +1113,7 @@ mod tests {
         store::set_root_for_tests(None);
         assert_eq!(
             closed_line("Finance"),
-            "The app closed while you were driving Finance in a terminal, so that take-over ended. Finance has its session back."
+            "The app closed while you were driving Finance in a terminal, so you're back in the chat. Finance carries on from here."
         );
     }
 

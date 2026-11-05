@@ -10,7 +10,10 @@
 
 import {
   describeCheckInTime,
+  onClaudePlan,
+  routineWeekLine,
   sortCheckIns,
+  sumTotals,
   type Agent,
   type CheckIn,
   type PermissionRule,
@@ -22,6 +25,7 @@ import { Alert, Pressable, ScrollView, Switch, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { AgentAvatar, Spinner } from '../../components/agent';
 import { announce } from '../../lib/a11y';
+import { useQuotaLines } from '../../lib/quota';
 import { useNow } from '../../components/ConnectionPill';
 import { choose } from '../../components/menu';
 import { Button, Icon, InsetDivider, Row, SectionTitle, SheetPage, T } from '../../components/ui';
@@ -88,6 +92,8 @@ function AgentSheet() {
       on = false;
     };
   }, [id, servesUsage, live]);
+  // On a Claude plan a dollar figure is a list price, not the bill: tokens instead.
+  const onPlan = onClaudePlan(useQuotaLines());
   if (!agent) return null;
   const canSchedule = canCall('agents.schedule.create', welcome);
   const checkIns = sortCheckIns(agent.checkIns ?? []);
@@ -203,7 +209,7 @@ function AgentSheet() {
           </T>
         )}
 
-        {usage && <Usage usage={usage} />}
+        {usage && <Usage usage={usage} onPlan={onPlan} />}
 
         {!!agent.permissions?.length && (
           <>
@@ -256,6 +262,7 @@ function AgentSheet() {
                 <CheckInRow
                   agent={agent}
                   checkIn={c}
+                  spent={routineWeekLine(usage?.routines?.find((r) => r.id === c.id)?.week, onPlan)}
                   last={i === checkIns.length - 1}
                   // Offline its menu's actions would all fail: it waits for the Mac.
                   enabled={canSchedule && live}
@@ -273,12 +280,15 @@ function AgentSheet() {
 function CheckInRow({
   agent,
   checkIn: c,
+  spent,
   last,
   enabled,
   onError,
 }: {
   agent: Agent;
   checkIn: CheckIn;
+  /** "$0.84 at API prices this week" or "96k tokens this week", when it ran on its own this week (as its engine reported). */
+  spent: string | null;
   last: boolean;
   enabled: boolean;
   onError: (text: string | null) => void;
@@ -341,6 +351,11 @@ function CheckInRow({
         <T variant="caption" color={colors.textSecondary}>
           {describeCheckInTime(c, now)}
         </T>
+        {!!spent && (
+          <T variant="caption" color={colors.textMuted}>
+            {spent}
+          </T>
+        )}
       </View>
       {busy ? (
         <Spinner />
@@ -538,9 +553,10 @@ function Conversation({
   );
 }
 
-function Usage({ usage }: { usage: UsageSummary }) {
+function Usage({ usage, onPlan }: { usage: UsageSummary; onPlan: boolean }) {
   const colors = useColors();
   const styles = useStyles();
+  const routines = routineWeekLine(sumTotals((usage.routines ?? []).map((r) => r.week)), onPlan);
   return (
     <>
       <SectionTitle title="Usage" style={styles.sectionTitle} />
@@ -555,13 +571,18 @@ function Usage({ usage }: { usage: UsageSummary }) {
             <View style={{ flex: 1, gap: space['2xs'] }}>
               <T color={colors.textPrimary}>{label}</T>
               <T variant="small" color={colors.textSecondary}>
-                {usageLine(totals)}
+                {usageLine(totals, onPlan)}
               </T>
             </View>
             {i === 0 && <InsetDivider />}
           </View>
         ))}
       </View>
+      {!!routines && (
+        <T variant="small" color={colors.textMuted} style={styles.note}>
+          Its routines this week: {routines.replace(/ this week$/, '')}.
+        </T>
+      )}
     </>
   );
 }

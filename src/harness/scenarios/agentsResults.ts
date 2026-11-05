@@ -262,7 +262,7 @@ export const agentsResultsScenarios: Scenario[] = [
     openSelector: AGENTS_TAB,
     steps: [
       open('finance'),
-      { click: '.agent-result__actions button' },
+      { click: '.agent-result > .agent-card__actions button' },
       {
         fill: '.agent-composer__input',
         value: 'Use the rate on each invoice’s date for the EUR ones.',

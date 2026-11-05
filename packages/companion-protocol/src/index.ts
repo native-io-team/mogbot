@@ -14,4 +14,5 @@ export * from './version';
 export * from './schedule';
 export * from './memory';
 export * from './quotes';
+export * from './quota';
 export * from './results';

@@ -11,6 +11,9 @@
 
 import {
   formatPairingLink,
+  hostOf,
+  macProofMessage,
+  pairProofMessage,
   negotiate,
   HEARTBEAT_MS,
   HTTP,
@@ -32,6 +35,8 @@ import {
   type SharedFile,
   type ClientFrame,
   type CompanionEvent,
+  type IdentityRequest,
+  type IdentityResponse,
   type Cursor,
   type Device,
   type JournaledEvent,
@@ -44,7 +49,14 @@ import {
   type ServerFrame,
   type WireError,
 } from '@shipstudio/companion-protocol';
-import { randomBytes, randomUUID } from 'node:crypto';
+import {
+  createHash,
+  generateKeyPairSync,
+  randomBytes,
+  randomUUID,
+  sign as edSign,
+  type KeyObject,
+} from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
@@ -81,6 +93,35 @@ export interface MockOptions {
    * `takeover` is set exactly as the Mac's overview carries it.
    */
   takeover?: boolean;
+  /**
+   * Sign its proofs and pairing answers with this key instead of the mock's
+   * own: a server that *says* it's the Mac but isn't (tests).
+   */
+  impostorKey?: KeyObject;
+  /**
+   * The hosts it signs as its own (default: its own URL's). A relay test
+   * points the phone at another host and lets this one say where it is.
+   */
+  hosts?: string[];
+  /** The id it answers with (default `srv_mock`): a Mac that started over. */
+  serverId?: string;
+  /** A Mac from before protocol 2: closes a challenge without a word, no `/v1/identity`. */
+  protocolOne?: boolean;
+}
+
+/** An Ed25519 identity, as the Mac's `identity.rs` keeps one. */
+export function mockIdentity(privateKey?: KeyObject) {
+  const key = privateKey ?? generateKeyPairSync('ed25519').privateKey;
+  const raw = Buffer.from(key.export({ format: 'jwk' }).x as string, 'base64url');
+  return {
+    privateKey: key,
+    publicKey: raw.toString('base64url'),
+    fingerprint: createHash('sha256').update(raw).digest().subarray(0, 16).toString('base64url'),
+    prove: (message: string) => ({
+      publicKey: raw.toString('base64url'),
+      signature: edSign(null, Buffer.from(message), key).toString('base64url'),
+    }),
+  };
 }
 
 interface Conn {
@@ -110,7 +151,12 @@ export function createMockServer(opts: MockOptions = {}) {
     // eslint-disable-next-line no-console -- a dev server talks on stdout
     if (!opts.quiet) console.log('[mock]', ...a);
   };
-  const serverId = 'srv_mock';
+  const serverId = opts.serverId ?? 'srv_mock';
+  /** The hosts it serves on, as it signs them; known once it listens. */
+  let hosts: string[] = opts.hosts ?? [];
+  // The key the pairing link names; `impostorKey` signs instead when set.
+  const identity = mockIdentity();
+  const signer = opts.impostorKey ? mockIdentity(opts.impostorKey) : identity;
   let epoch = randomUUID();
   let seq = 0;
   let journal: { seq: number; event: JournaledEvent }[] = [];
@@ -1204,6 +1250,9 @@ export function createMockServer(opts: MockOptions = {}) {
 
   function onConnection(ws: WebSocket) {
     let conn: Conn | null = null;
+    /** The protocol version, once this socket's challenge was answered. */
+    let proven = 0;
+    const send_ = (frame: ServerFrame) => ws.send(JSON.stringify(frame));
     ws.on('message', (raw) => {
       let frame: ClientFrame;
       try {
@@ -1212,8 +1261,6 @@ export function createMockServer(opts: MockOptions = {}) {
         return;
       }
       if (!conn) {
-        if (frame.t !== 'hello') return ws.close();
-        const entry = [...devices.values()].find((d) => d.token === frame.token);
         const refuse = (
           reason: 'unauthorized' | 'revoked' | 'update_app' | 'update_mac',
           message: string
@@ -1221,14 +1268,30 @@ export function createMockServer(opts: MockOptions = {}) {
           ws.send(JSON.stringify({ t: 'refused', reason, message } satisfies ServerFrame));
           ws.close();
         };
+        // The Mac proves itself first: a challenge in, its signed identity out.
+        if (!proven) {
+          if (frame.t !== 'challenge' || opts.protocolOne) return ws.close();
+          const n = negotiate(frame.protocol, SUPPORTED);
+          if (!n.ok) {
+            return n.update === 'app'
+              ? refuse('update_app', realRefusal('update_app'))
+              : refuse('update_mac', realRefusal('update_mac'));
+          }
+          proven = n.version;
+          send_({
+            t: 'identity',
+            protocol: n.version,
+            serverId,
+            hosts,
+            identity: signer.prove(macProofMessage(frame.challenge, serverId, hosts)),
+          });
+          return;
+        }
+        if (frame.t !== 'hello') return ws.close();
+        const entry = [...devices.values()].find((d) => d.token === frame.token);
         if (!entry) return refuse('unauthorized', realRefusal('unauthorized'));
         if (entry.revoked) return refuse('revoked', realRefusal('revoked'));
-        const n = negotiate(frame.protocol, SUPPORTED);
-        if (!n.ok) {
-          return n.update === 'app'
-            ? refuse('update_app', realRefusal('update_app'))
-            : refuse('update_mac', realRefusal('update_mac'));
-        }
+        const n = { version: proven };
         conn = {
           ws,
           deviceId: entry.device.id,
@@ -1316,6 +1379,25 @@ export function createMockServer(opts: MockOptions = {}) {
   // ---- HTTP: pairing ---------------------------------------------------------------------
 
   async function onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+    if (req.method === 'POST' && req.url === HTTP.identity && !opts.protocolOne) {
+      const body = JSON.parse(await readBody(req)) as IdentityRequest;
+      const n = negotiate(body.protocol, SUPPORTED);
+      const answer: IdentityResponse = n.ok
+        ? {
+            ok: true,
+            protocol: n.version,
+            serverId,
+            hosts,
+            identity: signer.prove(macProofMessage(body.challenge, serverId, hosts)),
+          }
+        : {
+            ok: false,
+            reason: n.update === 'app' ? 'update_app' : 'update_mac',
+            message: realRefusal(n.update === 'app' ? 'update_app' : 'update_mac'),
+          };
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(answer));
+      return;
+    }
     if (req.method === 'POST' && req.url === HTTP.pair) {
       const body = JSON.parse(await readBody(req)) as PairRequest;
       if (!codes.has(body.code)) {
@@ -1327,7 +1409,15 @@ export function createMockServer(opts: MockOptions = {}) {
       log(`pairing request from ${body.device.name}; allowing in ${opts.allowAfterMs ?? 1500} ms`);
       await new Promise((r) => setTimeout(r, opts.allowAfterMs ?? 1500));
       const { token, deviceId } = issueToken(body.device.name, body.device.platform);
-      const answer: PairResponse = { ok: true, deviceId, token, serverId, serverPublicKey: 'mock' };
+      const answer: PairResponse = {
+        ok: true,
+        deviceId,
+        token,
+        serverId,
+        serverPublicKey: 'mock',
+        hosts,
+        identity: signer.prove(pairProofMessage(body.challenge, serverId, hosts, deviceId)),
+      };
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(answer));
       return;
     }
@@ -1415,7 +1505,14 @@ export function createMockServer(opts: MockOptions = {}) {
   function pairingLink() {
     const code = randomBytes(16).toString('hex').toUpperCase().slice(0, 26);
     codes.add(code);
-    return formatPairingLink({ v: 1, code, serverId, name: MAC_NAME, routes: status.routes });
+    return formatPairingLink({
+      v: 1,
+      code,
+      serverId,
+      name: MAC_NAME,
+      routes: status.routes,
+      fingerprint: identity.fingerprint,
+    });
   }
 
   /** Pair a device without the QR dance (tests). */
@@ -1454,6 +1551,7 @@ export function createMockServer(opts: MockOptions = {}) {
           const { port } = server.address() as { port: number };
           const own = `${opts.tls ? 'https' : 'http'}://localhost:${port}`;
           status.routes = [{ kind: 'tailscale', url: opts.publicUrl ?? own }];
+          if (!opts.hosts) hosts = [hostOf(opts.publicUrl ?? own) ?? 'localhost'];
           resolve(own);
         });
       }),
@@ -1466,6 +1564,9 @@ export function createMockServer(opts: MockOptions = {}) {
       }),
     pairingLink,
     issueToken,
+    /** The fingerprint its pairing links carry. */
+    fingerprint: identity.fingerprint,
+    serverId,
     /** Kill every socket without a close handshake, as sleep or a Wi-Fi handoff would. */
     dropAll: () => conns.forEach((c) => c.ws.terminate()),
     /** The app restarted: a new epoch, so phones get a snapshot. */

@@ -6,6 +6,7 @@ import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Icon, Row, Section, T, tap } from '../components/ui';
+import { useQuotaLines } from '../lib/quota';
 import { appInfo } from '../lib/pairing';
 import { setPref } from '../lib/prefs';
 import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
@@ -81,7 +82,9 @@ export default function Settings() {
       `Forget ${credentials?.name ?? 'this Mac'}?`,
       connected
         ? 'This phone stops reaching your agents, and the Mac removes it from its paired devices. You can pair again any time.'
-        : `This phone stops reaching your agents now. ${macName} can’t be reached, so it keeps this phone in its paired devices until it can: the next time this phone reaches it, it asks the Mac to remove it. You can also remove it on the Mac, in Settings → Phone.`,
+        : !credentials?.fingerprint
+          ? `This phone stops reaching your agents now. This pairing is from before the app checked your Mac’s identity, so this phone won’t contact ${macName} to remove it: remove it on the Mac, in Settings → Phone.`
+          : `This phone stops reaching your agents now. ${macName} can’t be reached, so it keeps this phone in its paired devices until it can: the next time this phone reaches it, it asks the Mac to remove it. You can also remove it on the Mac, in Settings → Phone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -101,6 +104,7 @@ export default function Settings() {
       ]
     );
 
+  const quota = useQuotaLines();
   const { version, build } = appInfo();
   const updateLabel =
     update.kind === 'checking'
@@ -132,6 +136,21 @@ export default function Settings() {
         <Row label="Connection details" onPress={() => router.push('/connection')} />
         <Row label="Forget this Mac" destructive onPress={confirmUnpair} last />
       </Section>
+
+      {quota.length > 0 && (
+        <Section title="Plan usage">
+          {quota.map((line, i) => (
+            <Row
+              key={line.engine}
+              label={line.text}
+              detail={line.detail}
+              // Amber from 90% and at the limit, as on the agents list.
+              warning={line.tone !== 'calm'}
+              last={i === quota.length - 1}
+            />
+          ))}
+        </Section>
+      )}
 
       <Section
         title="Alerts"

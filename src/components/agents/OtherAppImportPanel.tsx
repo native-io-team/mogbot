@@ -19,7 +19,6 @@
 
 import { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { ChevronRightIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { Checkbox } from '../primitives/Checkbox';
 import { Progress } from '../primitives/Progress';
@@ -34,8 +33,14 @@ import {
   type OtherAppProgress,
   type OtherAppSummary,
 } from '../../lib/agents';
-import { AgentAvatar } from './AgentAvatar';
-import { ImportNotes, listOf, plural } from './ImportParts';
+import {
+  ImportAgentRow,
+  ImportNotes,
+  ImportSection,
+  listOf,
+  plural,
+  type ImportChipKind,
+} from './ImportParts';
 import type { ImportResult } from './ImportPastePanel';
 
 /** Which of its agents an import would bring (new ones, and the Chief's merge). */
@@ -66,16 +71,19 @@ export function importLabel(coming: OtherAppAgent[], mainName: string): string {
   return 'Nothing to import';
 }
 
-function chip(plan: OtherAppAgent['plan'], mainName: string): [string, string] {
+function chip(
+  plan: OtherAppAgent['plan'],
+  mainName: string
+): { kind: ImportChipKind; label: string } {
   switch (plan) {
     case 'merge':
-      return ['main', `Merges into ${mainName}`];
+      return { kind: 'main', label: `Merges into ${mainName}` };
     case 'new':
-      return ['new', 'New'];
+      return { kind: 'new', label: 'New' };
     case 'imported':
-      return ['update', 'Already here'];
+      return { kind: 'update', label: 'Already here' };
     default:
-      return ['skip', 'Stays behind'];
+      return { kind: 'skip', label: 'Stays behind' };
   }
 }
 
@@ -103,28 +111,25 @@ function Detail({
 }) {
   const coming = agent.plan === 'new' || agent.plan === 'merge';
   return (
-    <div className="agents-import-agent__detail">
+    <>
       {agent.reason && <p className="agents-import-agent__none">{agent.reason}</p>}
       {coming && agent.messages > 0 && (
-        <section>
-          <h4>Conversation</h4>
+        <ImportSection title="Conversation">
           <p>
             {agent.isMain
-              ? `Shown in ${mainName}’s chat under “From ${appName}”. ${mainName} keeps its own session, so it gets a recap of the most recent part to read, not the whole thread.`
-              : `Its chat history comes with it. It starts a new session here and picks up from its most recent messages.`}
+              ? `Shown in ${mainName}’s chat under “From ${appName}”. ${mainName} keeps its own conversation, so it gets a recap of the most recent part to read, not the whole thread.`
+              : `Its chat history comes with it. It starts a new conversation here and picks up from its most recent messages.`}
           </p>
-        </section>
+        </ImportSection>
       )}
-      <section>
-        <h4>Instructions</h4>
+      <ImportSection title="Instructions">
         {agent.instructions ? (
           <p className="agents-import-agent__instructions">{agent.instructions}</p>
         ) : (
           <p className="agents-import-agent__none">None written.</p>
         )}
-      </section>
-      <section>
-        <h4>Memory</h4>
+      </ImportSection>
+      <ImportSection title="Memory">
         {agent.memory.length ? (
           <ul className="agents-import-agent__memory">
             {agent.memory.map((m, i) => (
@@ -134,10 +139,9 @@ function Detail({
         ) : (
           <p className="agents-import-agent__none">Nothing remembered yet.</p>
         )}
-      </section>
+      </ImportSection>
       {agent.routines.length > 0 && (
-        <section>
-          <h4>Routines, arriving paused</h4>
+        <ImportSection title="Routines · arrive paused">
           <ul className="agents-import-agent__routines">
             {agent.routines.map((r, i) => (
               <li key={i}>
@@ -147,17 +151,15 @@ function Detail({
               </li>
             ))}
           </ul>
-        </section>
+        </ImportSection>
       )}
       {agent.rules.length > 0 && (
-        <section>
-          <h4>Always allows</h4>
+        <ImportSection title="Always allow rules">
           <p>{listOf(agent.rules)}</p>
-        </section>
+        </ImportSection>
       )}
       {(agent.project || agent.projectMissing) && (
-        <section>
-          <h4>Project</h4>
+        <ImportSection title="Project">
           {agent.project ? (
             <>
               <p>{agent.project}</p>
@@ -170,9 +172,9 @@ function Detail({
               Its project folder isn’t on this Mac any more; it works on its own.
             </p>
           )}
-        </section>
+        </ImportSection>
       )}
-    </div>
+    </>
   );
 }
 
@@ -185,49 +187,32 @@ function Row({
   appName: string;
   mainName: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [kind, label] = chip(agent.plan, mainName);
   const away = agent.plan === 'imported' || agent.plan === 'skip';
   return (
-    <li className="agents-import-agent" data-open={open || undefined} data-away={away || undefined}>
-      {/* A large disclosure surface, not an action: a raw button by design. */}
-      <button
-        type="button"
-        className="agents-import-agent__row"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <AgentAvatar name={agent.isMain ? mainName : agent.name} color={agent.color} />
-        <span className="agents-import-agent__text">
-          <span className="agents-import-agent__name">
-            <span className="agents-import-agent__name-text">{agent.name}</span>
-            <span className="agents-import-chip" data-kind={kind}>
-              {label}
-            </span>
-          </span>
-          {agent.role && <span className="agents-import-agent__role">{agent.role}</span>}
-          <span className="agents-import-agent__counts">
-            {agent.plan === 'skip' && agent.reason ? (
-              <span className="agents-import-agent__warn">{agent.reason}</span>
-            ) : (
-              <>
-                {counts(agent)}
-                {agent.secrets.length > 0 && (
-                  <span className="agents-import-agent__warn">
-                    {' · '}
-                    {plural(agent.secrets.length, 'secret')} to re-enter
-                  </span>
-                )}
-              </>
+    <ImportAgentRow
+      name={agent.name}
+      avatarName={agent.isMain ? mainName : agent.name}
+      color={agent.color}
+      chip={chip(agent.plan, mainName)}
+      role={agent.role || undefined}
+      away={away}
+      counts={
+        agent.plan === 'skip' && agent.reason ? (
+          <span className="agents-import-agent__warn">{agent.reason}</span>
+        ) : (
+          <>
+            {counts(agent)}
+            {agent.secrets.length > 0 && (
+              <span className="agents-import-agent__warn">
+                {' · '}
+                {plural(agent.secrets.length, 'login')} to re-enter
+              </span>
             )}
-          </span>
-        </span>
-        <ChevronRightIcon size={12} className="agents-import-agent__chevron" />
-      </button>
-      <div className="agents-import-agent__reveal">
-        <div>{open && <Detail agent={agent} appName={appName} mainName={mainName} />}</div>
-      </div>
-    </li>
+          </>
+        )
+      }
+      detail={() => <Detail agent={agent} appName={appName} mainName={mainName} />}
+    />
   );
 }
 
@@ -239,7 +224,7 @@ export function DoneExtra({ summary }: { summary: OtherAppSummary }) {
   const items = [
     ...summary.secretsLeft.map((s) => (
       <>
-        <strong>{s.agent}</strong> will ask you again for {listOf(s.secrets)}: saved secrets stay in{' '}
+        <strong>{s.agent}</strong> will ask you again for {listOf(s.secrets)}: saved logins stay in{' '}
         {summary.appName}.
       </>
     )),
@@ -330,7 +315,7 @@ export function OtherAppImportPanel({ preview, onCancel, onDone }: OtherAppImpor
     ...(secrets.length
       ? [
           <>
-            Saved secrets stay in {appName}: credentials aren’t copied between apps.{' '}
+            Saved logins stay in {appName}: credentials aren’t copied between apps.{' '}
             {listOf(secrets.map((a) => (a.isMain ? mainName : a.name)))} will ask you to enter{' '}
             {secrets.length === 1 && secrets[0].secrets.length === 1 ? 'it' : 'them'} again here.
           </>,
@@ -434,7 +419,7 @@ export function OtherAppImportPanel({ preview, onCancel, onDone }: OtherAppImpor
           Cancel
         </Button>
         <Button
-          variant="primary"
+          variant="strong"
           disabled={!coming.length || !preview.enoughSpace || importer.isLoading}
           onClick={() => void importer.execute()}
         >

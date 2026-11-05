@@ -96,6 +96,10 @@ describe('ImportReviewCard', () => {
     // The Chief's notes are off by default.
     expect(screen.getByRole('checkbox', { name: 'Add to Ada’s notes' })).not.toBeChecked();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Import Travel' }));
+    // The affirmative answer is neutral, as Allow is: never the accent.
+    expect(screen.getByRole('button', { name: 'Import 1 agent' }).className).toMatch(
+      /button--strong/
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Import 1 agent' }));
     await waitFor(() =>
       expect(apply).toHaveBeenCalledWith('chief', 'r1', {
