@@ -472,7 +472,7 @@ export function WorkingRow({ label }: { label: string }) {
 const useStyles = makeStyles((colors) => ({
   userRow: { alignItems: 'flex-end', gap: space.xs, paddingLeft: '18%' },
   userBubble: {
-    backgroundColor: colors.surfaceSelected,
+    backgroundColor: colors.surfaceBubble,
     borderRadius: radius.lg + 6,
     paddingHorizontal: space.md + 2,
     paddingVertical: space.sm + 1,

@@ -24,6 +24,8 @@ export interface Palette {
   surfaceControl: string;
   surfaceControlHover: string;
   surfaceSelected: string;
+  /** Your own messages. Dark lifts them to the selected grey; light keeps them a quiet step off white, as iMessage's grey is. */
+  surfaceBubble: string;
   /** The strongest text: titles, names, what must be read first. White in dark, near-black in light. */
   textStrong: string;
   /** What people read: message bodies, a step stronger than the chrome. */
@@ -79,6 +81,7 @@ const dark: Palette = {
   surfaceControl: '#282828', // --surface-control (gray-850)
   surfaceControlHover: '#303030', // --surface-control-hover (gray-800)
   surfaceSelected: '#393939', // --surface-selected (gray-750)
+  surfaceBubble: '#393939',
   textStrong: '#ffffff',
   // Between --color-gray-100 and -200: a whole reply in #bcbcbc read dim next
   // to Grok's and iMessage's near-white bodies. Chrome keeps textPrimary.
@@ -127,6 +130,7 @@ const light: Palette = {
   surfaceControl: '#ebebeb',
   surfaceControlHover: '#e3e3e3',
   surfaceSelected: '#dcdcdc',
+  surfaceBubble: '#ededed',
   textStrong: '#0f0f0f',
   textBody: '#1c1c1c',
   textPrimary: '#383838',
