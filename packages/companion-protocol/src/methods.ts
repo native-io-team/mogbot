@@ -32,6 +32,7 @@ import type {
   SharedFile,
   StoredAgent,
   NewAgentInput,
+  RoleTemplateSummary,
   UpdateAgentInput,
   UsageSummary,
   Quota,
@@ -157,7 +158,10 @@ export interface Methods {
    * Macs only: check `welcome.methods`.
    */
   'agents.create': {
-    params: { input: Pick<NewAgentInput, 'name' | 'role' | 'color'>; clientId?: string };
+    params: {
+      input: Pick<NewAgentInput, 'name' | 'role' | 'color' | 'template'>;
+      clientId?: string;
+    };
     result: StoredAgent;
   };
   /**
@@ -176,6 +180,12 @@ export interface Methods {
    * their reset left out. Empty when no engine has said. Newer Macs only.
    */
   'agents.quota': { params: Record<string, never>; result: Quota[] };
+  /**
+   * The ready-made agents the phone's New agent sheet offers. `template` on
+   * `agents.create` takes one's id, and the Mac fills in its briefing. A Mac
+   * that lists this method accepts `template`. Newer Macs only.
+   */
+  'agents.templates': { params: Record<string, never>; result: RoleTemplateSummary[] };
   'agents.files': { params: { agentId: string }; result: SharedFile[] };
   'agents.changeDiff': {
     params: { agentId: string; messageId: string; path: string };
@@ -291,6 +301,7 @@ export const READ_ONLY_METHODS = [
   'agents.memory',
   'agents.usage',
   'agents.quota',
+  'agents.templates',
   'agents.files',
   'agents.changeDiff',
   'agents.search',

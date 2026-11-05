@@ -395,15 +395,21 @@ impl Backend for DesktopBackend {
                 super::router::free_color(&taken).to_string()
             }
         };
+        // A ready-made agent brings its briefing; the role is what the phone sent.
+        let template = input
+            .template
+            .as_deref()
+            .and_then(crate::agents::templates::find);
         let input = cmd::CreateAgentInput {
             name: input.name,
             shape: None,
             color: Some(color),
             role: input.role,
-            instructions: String::new(),
+            instructions: template.map(|t| t.instructions()).unwrap_or_default(),
             engine: Some(engine.to_string()),
             model: None,
             project: None,
+            template: template.map(|t| t.id.clone()),
         };
         json(cmd::agents_create(self.app.clone(), input).await?)
     }

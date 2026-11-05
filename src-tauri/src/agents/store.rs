@@ -126,6 +126,10 @@ pub struct Agent {
     /// The values are in the Keychain (see `secrets`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub secrets: Vec<super::secrets::Secret>,
+    /// The ready-made agent it was made from (`templates`), for its chat's
+    /// first-open buttons. Its instructions are its own from then on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
     /// Fields a newer Ship Studio wrote that this build doesn't know: kept
     /// and written back as they were, so running an older build never
     /// strips what a newer one saved.
@@ -795,6 +799,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         new_engine: false,
         context: None,
         routine_model: None,
+        template: None,
         muted: false,
         check_ins: Vec::new(),
         usage: Default::default(),

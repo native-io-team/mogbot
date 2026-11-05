@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::agents::{
     self, apps, attachments, engine, files, import, mcp, memory, notify, paste, project, prompts,
-    runner, schedule, search, secrets, store, takeover, usage,
+    runner, schedule, search, secrets, store, takeover, templates, usage,
 };
 use crate::errors::CommandError;
 use engine::Engine;
@@ -321,6 +321,10 @@ pub struct CreateAgentInput {
     /// A project path from `list_projects`; omitted or empty leaves it unbound.
     #[serde(default)]
     pub project: Option<String>,
+    /// The ready-made agent it started from (`agents::templates`). The
+    /// caller sends the instructions it showed; this only marks the agent.
+    #[serde(default)]
+    pub template: Option<String>,
 }
 
 #[tauri::command]
@@ -346,6 +350,17 @@ pub async fn agents_create(
         Some(p) => project::resolve(p).await?.map(|p| p.path),
         None => None,
     };
+    let template = match input.template.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(id) => Some(
+            templates::find(id)
+                .ok_or_else(|| {
+                    agents::err_invalid("template", "That ready-made agent doesn't exist.")
+                })?
+                .id
+                .clone(),
+        ),
+    };
     let agent = store::create(store::NewAgent {
         name: input.name,
         role: input.role,
@@ -354,11 +369,16 @@ pub async fn agents_create(
         color: input.color,
         is_main: false,
     })?;
-    let agent = if model.is_some() || project.is_some() || engine != Engine::default() {
+    let agent = if model.is_some()
+        || project.is_some()
+        || template.is_some()
+        || engine != Engine::default()
+    {
         store::update(&agent.id, |a| {
             a.engine = engine;
             a.model = model;
             a.project = project;
+            a.template = template;
         })?
     } else {
         agent

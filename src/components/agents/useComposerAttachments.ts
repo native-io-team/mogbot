@@ -141,10 +141,16 @@ export function useComposerAttachments(onError: (message: string) => void) {
     [add, onError]
   );
 
-  const pick = useCallback(async () => {
-    const picked = await open({ multiple: true, title: 'Attach files' });
-    if (picked) await addPaths(Array.isArray(picked) ? picked : [picked]);
-  }, [addPaths]);
+  /** True when something was picked (a cancelled dialog is false). */
+  const pick = useCallback(
+    async ({ title = 'Attach files' }: { title?: string } = {}) => {
+      const picked = await open({ multiple: true, title });
+      if (!picked || (Array.isArray(picked) && picked.length === 0)) return false;
+      await addPaths(Array.isArray(picked) ? picked : [picked]);
+      return true;
+    },
+    [addPaths]
+  );
 
   const remove = useCallback((id: string) => {
     setItems((current) => current.filter((item) => item.id !== id));

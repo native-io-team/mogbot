@@ -556,7 +556,7 @@ export async function setAgentToggles(
  * the first tap made instead of a second one.
  */
 export async function createAgent(
-  input: { name: string; role: string; color?: string },
+  input: { name: string; role: string; color?: string; template?: string },
   clientId: string = Crypto.randomUUID()
 ) {
   const stored = await call('agents.create', { input, clientId });

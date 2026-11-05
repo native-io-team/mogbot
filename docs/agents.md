@@ -23,10 +23,10 @@ greeting, `prompts::CHIEF_GREETING`, appended by `ensure_main` when it creates
 the Chief: what it can do (create agents, delegate, approvals, projects, the
 phone) and a question. It is stored, not generated, so nothing runs on the
 user's plan until they reply, and `CHIEF_INSTRUCTIONS` tells the Chief it said
-it. Three starters sit under it until the user's first message; while the
-greeting is all there is, it and the starters sit in the middle of the page as
-an empty state (`data-greeting` on the message column), not at the foot of an
-empty screen.
+it. Three starters sit under it until the user's first message (see "A
+first real result", below); while the greeting is all there is, it and the
+starters sit in the middle of the page as an empty state (`data-greeting` on
+the message column), not at the foot of an empty screen.
 
 In Agents mode the sidebar's top row is the toggle (Home, Workflows and the
 Inbox belong to the Projects side). **What's in flight** — the one name for
@@ -42,6 +42,75 @@ from another assistant, appears there only while it is on and is otherwise
 reached from the Phone panel's last line or ⌘K. In a project's workspace
 sidebar, agents bound to that project are listed above its terminal
 Sessions; clicking one opens its chat.
+
+## A first real result, and ready-made agents (`agents/templates.rs`)
+
+The first few minutes should end in something useful, not a blank chat. The
+Chief's three starters each lead to real work on this Mac with no other
+account, and none sends anything by itself:
+
+- **Summarise a document…** opens the file picker; the picked file is staged
+  in the composer with the request typed out ("Summarise this for me: the main
+  points, any dates or decisions, and anything I need to do."). The user
+  presses Send. Dropping a file on the chat works the same way.
+- **Research a question…** types "Research this for me: " for the user to
+  finish. Web research runs on the engine's own tools and account. On
+  Claude Code every web search and every page opened is a tool call the
+  approval broker asks about, so a first research turn can raise several
+  Allow cards. The Chief and the Research assistant are told to say so
+  before they start ("I'll ask before searching the web"), and a search's
+  card offers **Always allow web searches** (a `Tool` rule on `WebSearch`,
+  `permissions::suggest`); a page's card offers its one host, so each new
+  site still asks once. On Codex, web search is Codex's own built-in tool
+  (seen as `webSearch` items): it doesn't come through the broker, so it
+  runs without a card. There is no WebFetch on Codex; a command that
+  reaches the network is sandboxed and asks to escalate, with a card.
+  Whether a user's Codex has web search turned on (and live or cached) is
+  Codex's own setting, which the app doesn't read, so Research there may
+  find it can't search and says so, per its briefing. The briefings tell a
+  Codex agent not to promise cards it won't raise. Not verified: a live
+  Codex research turn.
+- **Ready-made agents…** opens New agent on the first ready-made agent.
+
+`CHIEF_INSTRUCTIONS` (a new Chief's only) tells it a first message may be one
+of these: do the task first, from the document or real sources, never pad what
+it couldn't read, then offer the matching ready-made agent in one line.
+
+**Ready-made agents** (role templates) are one catalogue,
+`src-tauri/src/agents/templates.json`: Research assistant, Inbox triage and
+Weekly review, each a name, role, colour, briefing and its own starters. The
+backend reads it (`templates.rs`) and the desktop imports the same file
+(`lib/agentTemplates.ts`), so what the dialog shows is what the agent gets.
+
+- **The Chief** sees a "Ready-made agents" section in its prompt
+  (`templates::chief_section`) and creates one with `create_agent`'s
+  `template`: the template brings the role, briefing and colour; `role` and
+  `color` override, and `instructions` is *added* under "About the user",
+  never instead of the briefing. Only `name` is required.
+- **New agent** starts with "Start from" (Blank and each template, a
+  `SegmentedControl`). Picking one fills in the name, role and briefing, all
+  editable; switching replaces only fields still showing the last template's
+  words. ⌘K has one "New agent: <title>…" per template
+  (`agents.template.<id>`).
+- **The agent** records `template` (registry field, omitted when none). Its
+  first open shows the template's starters instead of the generic ones, also
+  when the Chief made it and its chat holds only "Created by" notes.
+- **Inline connect, only where honest.** Only Inbox needs anything (`needs:
+  "mail"`): it reads email through an app the user connects. The dialog and
+  the agent's first open say so in one line ("It reads your email through an
+  app you connect, such as Gmail.") with **Connect an app…** opening Apps
+  (Claude Code agents; on Codex the line says to connect it in Codex). Nothing
+  claims an app is or isn't connected: the engine lists its apps only once a
+  turn starts. The briefing tells the agent to check, say so in one line and
+  stop if it has none, and never invent a message.
+- **Phone**: `agents.templates` (read-only; a Mac that serves it accepts
+  `template` on `agents.create`) lists them without briefings; New agent shows
+  "Start from" chips and the Mac fills in the briefing. The phone's Chief chat
+  has no starters, and apps are connected on the Mac.
+
+Not verified: a real turn on each template (briefing quality is untested
+against live models; `scripts/agents-e2e.sh behaviour` doesn't cover it yet),
+and Inbox against a live Gmail connector.
 
 ## What an agent is
 
@@ -335,7 +404,7 @@ those turns exposed is replaced once at the next launch.)
 | `share_file` | all | hands the user a file it made: copied into its `attachments/`, posted as its own message with a file card |
 | `share_result` | all | ends a piece of work on one result card: files, links, what it checked and did not verify; revisions become v2 (below, "Result cards") |
 | `request_secret` | all | a secure input card for a password, key, token or login; the agent gets `$VAR` and a reference, never the value (below) |
-| `create_agent` | Chief | name, role, instructions, optional `project` and `first_task` |
+| `create_agent` | Chief | name, role, instructions, optional `template`, `project` and `first_task` |
 | `update_agent` | Chief | name / role / instructions / project (memory kept) |
 | `delete_agent` | Chief | puts an Allow / Deny card in the Chief's chat first |
 | `approve` | CLI only | the permission prompt tool (below) |
@@ -2027,6 +2096,8 @@ can't trample each other. The UI says "a copy of acme-site", "Keep changes",
 - `pnpm vitest run src/lib/agentRooms.test.ts src/components/agents/RoomChat.test.tsx` and `node scripts/harness-capture.mjs agents-room`: the room view, composer mentions, Who should answer?, an approval in a room, the fold line, New room.
 - `cargo test --lib agents::results`: share_result validation and size caps, files that must exist in the agent's own files (all or nothing), versioning and Ask for changes targets, one card per turn.
 - `pnpm vitest run src/components/agents/AgentResult.test.tsx` and `mobile/__tests__/result.test.tsx`: the card on desk and phone, folding, Ask for changes.
+- `cargo test --lib agents::templates` and `pnpm vitest run src/components/agents/AgentTemplates.test.tsx`: the catalogue, the Chief's section, `create_agent`'s schema, the dialog's fill-in and swap rules; `mobile/__tests__/start.node.test.ts`: the phone's list and create.
+- `node scripts/harness-capture.mjs agents-first-win` / `agents-template-`: the three starters' results (document staged, research typed, New agent on Research), a first result, Inbox in the dialog with its connect line, and a Chief-made Inbox's first open.
 - `node scripts/harness-capture.mjs agents-result`: v1, asking, v2, not verified, a copy's card with before/after.
 - `pnpm vitest run src/lib/agents.test.ts`: chat grouping, dividers, ordering.
 - `scripts/agents-e2e.sh [scenario…]` (opt-in, real turns, on Haiku): `src-tauri/examples/agents_e2e/main.rs` drives the real

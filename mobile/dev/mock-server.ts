@@ -1201,14 +1201,28 @@ export function createMockServer(opts: MockOptions = {}) {
         ...(session.state === 'finished' ? { reply: lastReply(screen) } : {}),
       } satisfies SessionScreen;
     },
-    // The router's rules (router.rs `check_new_agent`): a name, a role and a colour only.
+    // The ready-made agents, as the Mac serializes them.
+    'agents.templates': () => real.agentsTemplates,
+    // The router's rules (router.rs `check_new_agent`): a name, a role, a colour and a template only.
     'agents.create': (p, c) => {
       const input = (p.input ?? {}) as Record<string, unknown>;
-      if (Object.keys(input).some((k) => !['name', 'role', 'color'].includes(k))) {
+      if (Object.keys(input).some((k) => !['name', 'role', 'color', 'template'].includes(k))) {
         return fail({
           type: 'Protocol',
           code: 'bad_params',
-          message: 'From the phone, a new agent takes a name, what it should do and a colour.',
+          message:
+            'From the phone, a new agent takes a name, what it should do, a colour and a ready-made agent to start from.',
+        });
+      }
+      const template =
+        typeof input.template === 'string' && input.template.trim()
+          ? real.agentsTemplates.find((t) => t.id === String(input.template).trim())
+          : undefined;
+      if (typeof input.template === 'string' && input.template.trim() && !template) {
+        return fail({
+          type: 'Protocol',
+          code: 'bad_params',
+          message: `${input.template} isn't one of the ready-made agents.`,
         });
       }
       const text = (v: unknown) =>
@@ -1250,6 +1264,7 @@ export function createMockServer(opts: MockOptions = {}) {
         muted: false,
         status: { state: 'idle', activity: null, since: null },
         home: `/Users/you/ShipStudio/.agents/${id}`,
+        ...(template ? { template: template.id } : {}),
       };
       agents.push(made);
       messages.set(id, []);

@@ -153,7 +153,13 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const { showToast } = useOptionalToast();
   const takeover = useTakeover();
   const [selectedId, setSelectedId] = useState<string | null>(readSelected);
-  const [editor, setEditor] = useState<{ open: boolean; agent: Agent | null; tab?: EditorTab }>({
+  const [editor, setEditor] = useState<{
+    open: boolean;
+    agent: Agent | null;
+    tab?: EditorTab;
+    /** Creating: the ready-made agent it opens on. */
+    template?: string;
+  }>({
     open: false,
     agent: null,
   });
@@ -253,7 +259,10 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     [showToast]
   );
 
-  const openNew = useCallback(() => setEditor({ open: true, agent: null }), []);
+  const openNew = useCallback(
+    (template?: string) => setEditor({ open: true, agent: null, template }),
+    []
+  );
   const openImport = useCallback(() => {
     setImportPath(null);
     setImportOpen(true);
@@ -769,7 +778,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
                 showHidden={showHidden}
                 onToggleShowHidden={toggleShowHidden}
                 onSelect={setSelectedId}
-                onNew={openNew}
+                onNew={() => openNew()}
                 onImport={openImport}
                 needsYouCount={needsYouCount}
                 inFlightOpen={teamOpen}
@@ -856,6 +865,8 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
               }
               onSignIn={() => signIn(shown.engine)}
               onImport={openImport}
+              onNewAgent={openNew}
+              onOpenApps={openApps}
               onEscape={escapeSearch}
               compact={
                 isCompact
@@ -876,10 +887,15 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
       </div>
 
       <AgentEditorModal
-        key={editor.open ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}` : 'closed'}
+        key={
+          editor.open
+            ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}-${editor.template ?? ''}`
+            : 'closed'
+        }
         isOpen={editor.open}
         agent={editor.agent}
         initialTab={editor.tab}
+        initialTemplate={editor.template}
         takenColors={agents.map((a) => a.color)}
         onClose={() => setEditor({ open: false, agent: null })}
         onSaved={(id) => {

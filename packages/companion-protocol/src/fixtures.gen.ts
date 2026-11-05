@@ -2031,6 +2031,32 @@ export const agentsCreate = {
   "unread": 0,
   "workDirectly": true
 } satisfies Result<'agents.create'>;
+export const agentsTemplates = [
+  {
+    "color": "blue",
+    "id": "research",
+    "name": "Research",
+    "needs": null,
+    "role": "Looks things up and comes back with a short brief, every claim linked to its source.",
+    "title": "Research assistant"
+  },
+  {
+    "color": "teal",
+    "id": "inbox",
+    "name": "Inbox",
+    "needs": "mail",
+    "role": "Goes through your email and tells you what needs you, what can wait and what is noise.",
+    "title": "Inbox triage"
+  },
+  {
+    "color": "amber",
+    "id": "weekly-review",
+    "name": "Weekly Review",
+    "needs": null,
+    "role": "Looks back at your week with you and lines up the next one.",
+    "title": "Weekly review"
+  }
+] satisfies Result<'agents.templates'>;
 export const sessionsSend = {
   "sessionId": "pty-1"
 } satisfies Result<'sessions.send'>;
@@ -2073,6 +2099,7 @@ export const frames = [
       "agents.markUnread",
       "agents.startFresh",
       "agents.create",
+      "agents.templates",
       "agents.update",
       "agents.revokePermission",
       "agents.instructions",

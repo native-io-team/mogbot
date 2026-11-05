@@ -34,6 +34,7 @@ pub const METHODS: &[&str] = &[
     "agents.markUnread",
     "agents.startFresh",
     "agents.create",
+    "agents.templates",
     "agents.update",
     "agents.revokePermission",
     "agents.instructions",
@@ -76,6 +77,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.memory",
     "agents.usage",
     "agents.quota",
+    "agents.templates",
     "agents.changeDiff",
     "agents.files",
     "agents.search",
@@ -181,9 +183,11 @@ pub struct AgentToggles {
 const MAX_INSTRUCTIONS: usize = 20_000;
 
 /// What the phone may set on a new agent: what it should do, its name and
-/// its colour. Everything else is the desk's create path's own default: the
-/// engine the desk would pick, the engine's own model, no project, and no
-/// instructions beyond the role (the agent sheet edits those afterwards).
+/// its colour, and optionally the ready-made agent it starts from (whose
+/// briefing then becomes its instructions). Everything else is the desk's
+/// create path's own default: the engine the desk would pick, the engine's
+/// own model, no project, and no instructions beyond the role or template
+/// (the agent sheet edits those afterwards).
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PhoneNewAgent {
@@ -192,6 +196,9 @@ pub struct PhoneNewAgent {
     pub role: String,
     #[serde(default)]
     pub color: Option<String>,
+    /// An id from `agents.templates`.
+    #[serde(default)]
+    pub template: Option<String>,
 }
 
 /// "What should it do?" is one line, as the desk's field is.
@@ -208,6 +215,26 @@ pub fn free_color(taken: &[String]) -> &'static str {
         .copied()
         .find(|c| *c != "white" && *c != "gray" && !taken.iter().any(|t| t == c))
         .unwrap_or("purple")
+}
+
+/// `agents.templates`: each ready-made agent as the phone's New agent sheet
+/// offers it.
+fn templates_for_phone() -> Value {
+    Value::Array(
+        crate::agents::templates::all()
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "id": t.id,
+                    "title": t.title,
+                    "name": t.name,
+                    "role": t.role,
+                    "color": t.color,
+                    "needs": t.needs,
+                })
+            })
+            .collect(),
+    )
 }
 
 /// A name and a role, checked and tidied: one line each, no control
@@ -245,7 +272,23 @@ fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
         Some(c) if crate::agents::store::COLORS.contains(&c) => Some(c.to_string()),
         Some(c) => return Err(bad_params(format!("{c} isn't one of the agent colours."))),
     };
-    Ok(PhoneNewAgent { name, role, color })
+    let template = match input.template.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(id) => match crate::agents::templates::find(id) {
+            Some(t) => Some(t.id.clone()),
+            None => {
+                return Err(bad_params(format!(
+                    "{id} isn't one of the ready-made agents."
+                )))
+            }
+        },
+    };
+    Ok(PhoneNewAgent {
+        name,
+        role,
+        color,
+        template,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1083,7 +1126,7 @@ async fn run(
         "agents.create" => {
             let p: CreateParams = parse(params).map_err(|_| {
                 bad_params(
-                    "From the phone, a new agent takes a name, what it should do and a colour.",
+                    "From the phone, a new agent takes a name, what it should do, a colour and a ready-made agent to start from.",
                 )
             })?;
             let input = check_new_agent(p.input)?;
@@ -1165,6 +1208,9 @@ async fn run(
             Ok(b.usage(&p.agent_id).await?)
         }
         "agents.quota" => Ok(b.quota().await?),
+        // The ready-made agents, without their briefings: the phone shows
+        // the choice, the Mac fills the instructions in on create.
+        "agents.templates" => Ok(templates_for_phone()),
         "agents.revokePermission" => {
             let p: RuleParams = parse(params)?;
             b.revoke_permission(&p.agent_id, &p.rule_id).await?;
@@ -1601,6 +1647,49 @@ mod tests {
             .audited()
             .iter()
             .any(|(_, m, _, ok)| m == "agents.create" && !ok));
+    }
+
+    #[tokio::test]
+    async fn a_phone_can_start_from_a_ready_made_agent() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        // What the sheet offers: every template, without its briefing.
+        let list = dispatch(&c, &me, "agents.templates", json!({}))
+            .await
+            .unwrap();
+        let list = list.as_array().unwrap();
+        assert_eq!(list.len(), crate::agents::templates::all().len());
+        assert!(list.iter().all(|t| t.get("instructions").is_none()));
+        assert!(list
+            .iter()
+            .any(|t| t["id"] == "inbox" && t["needs"] == "mail"));
+        assert!(READ_ONLY_METHODS.contains(&"agents.templates"));
+        // An unknown one is refused before the desk sees it.
+        let refused = dispatch(
+            &c,
+            &me,
+            "agents.create",
+            json!({ "input": { "name": "Ops", "template": "astrologer" } }),
+        )
+        .await
+        .unwrap_err();
+        assert!(refused
+            .summary()
+            .contains("isn't one of the ready-made agents"));
+        assert!(stub.created.lock().unwrap().is_empty());
+        dispatch(
+            &c,
+            &me,
+            "agents.create",
+            json!({ "input": { "name": "Research", "role": "Looks things up", "template": " research " } }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            stub.created.lock().unwrap()[0].template.as_deref(),
+            Some("research")
+        );
     }
 
     #[tokio::test]

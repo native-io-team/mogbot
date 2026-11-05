@@ -108,6 +108,8 @@ export interface Agent {
   model: string | null;
   /** What its routines run on; omitted when automatic. */
   routineModel?: string;
+  /** The ready-made agent it was made from (`agents.templates`), if any. */
+  template?: string;
   muted: boolean;
   checkIns?: CheckIn[];
   /**
@@ -619,6 +621,20 @@ export interface NewAgentInput {
   engine?: AgentEngine;
   model?: string;
   project?: string;
+  template?: string;
+}
+
+/** A ready-made agent, as `agents.templates` offers it (its briefing stays on the Mac). */
+export interface RoleTemplateSummary {
+  id: string;
+  /** What the picker calls it ("Research assistant"). */
+  title: string;
+  /** The agent's name unless the user picks another. */
+  name: string;
+  role: string;
+  color: string;
+  /** What it can't work without: `mail` is an email app connected on the Mac. */
+  needs: 'mail' | null;
 }
 
 export interface UpdateAgentInput {
