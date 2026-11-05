@@ -672,6 +672,8 @@ pub fn run() {
             commands::agents::agents_import_prompt,
             commands::agents::agents_import_talk,
             commands::agents::agents_import_talk_stop,
+            commands::agents::agents_import_talk_arm,
+            commands::agents::agents_import_review_apply,
             commands::agents::agents_import_paste_prompt,
             commands::agents::agents_import_paste_preview,
             commands::agents::agents_import_paste,

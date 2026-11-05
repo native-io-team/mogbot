@@ -212,6 +212,37 @@ export interface Approval {
   prompt?: SessionPrompt;
   /** The option picked on a `prompt` card. */
   choice?: string;
+  /** An import connector card: another assistant asking to start, or its staged agents. */
+  connector?: ConnectorCard;
+}
+
+/**
+ * An import over the connector (desktop `agents/review.rs`). On the phone a
+ * consent card is Allow / Deny; a review card's Allow imports every agent as
+ * new (a taken name comes in as a copy), with no notes for the Chief.
+ */
+export interface ConnectorCard {
+  kind: 'consent' | 'review';
+  talkId: string;
+  source: string;
+  review?: ImportReview;
+}
+
+export interface ImportReview {
+  proposals: ImportProposal[];
+  chiefNotes?: string;
+  summary?: string;
+}
+
+export interface ImportProposal {
+  key: string;
+  name: string;
+  role: string;
+  instructions: string;
+  memory: string;
+  routines: { when: string; what: string; schedule?: string; refused?: string }[];
+  logins: { name: string; purpose: string; kind: string }[];
+  clash?: { agentId: string; role: string; instructions: string };
 }
 
 /** One answer a session's question offers, as the session shows it. */

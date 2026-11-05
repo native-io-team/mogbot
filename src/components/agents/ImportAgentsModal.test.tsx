@@ -54,7 +54,7 @@ describe('ImportAgentsModal paths', () => {
         <ImportAgentsModal isOpen onClose={vi.fn()} onOpenAgent={vi.fn()} />
       </ModalProvider>
     );
-    expect(await screen.findByText('Send it this message')).toBeInTheDocument();
+    expect(await screen.findByText('Start, then send it a message')).toBeInTheDocument();
     // No other app here: no segments, one path.
     expect(screen.queryByRole('tablist')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Can’t connect? Paste a reply instead' }));

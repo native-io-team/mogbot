@@ -147,7 +147,7 @@ fn outcome(agent: &str, r: &ImportedRoutine, detail: String) -> RoutineOutcome {
 /// One already there (a re-import) counts as set, not as a second copy.
 /// With `pause`, each new one arrives paused by the import (see
 /// `CheckIn::paused_on_import`): the source keeps running its own copy.
-fn add_routines(
+pub(crate) fn add_routines(
     agent: &store::Agent,
     routines: &[ImportedRoutine],
     pause: bool,

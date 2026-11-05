@@ -848,7 +848,8 @@ export function AgentChat({
             case 'check_in':
               return <CheckInLine key={m.id} message={m} arrived={arrived} />;
             case 'from_agent':
-              // Only the import connector's lines stand alone (`buildChatItems`).
+            case 'sent_to_agent':
+              // Only an import conversation's lines stand alone (`buildChatItems`).
               return <ConnectorBubble key={m.id} message={m} arrived={arrived} />;
             case 'note':
               return (

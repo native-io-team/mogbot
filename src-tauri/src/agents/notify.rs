@@ -387,6 +387,7 @@ mod tests {
             prompt: None,
             choice: None,
             secret: None,
+            connector: None,
         });
         message
     }

@@ -204,6 +204,7 @@ pub(crate) fn card(
             chats,
         }),
         choice: None,
+        connector: None,
     }
 }
 

@@ -263,6 +263,11 @@ pub struct Approval {
     /// sends the value to the Keychain, never into this log.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secret: Option<super::secrets::Request>,
+    /// One of the import connector's cards (`agents/review.rs`): another
+    /// assistant asking to start an import, or the agents it proposed,
+    /// staged for the user to review. Nothing is created until they answer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connector: Option<super::review::ConnectorCard>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1278,9 +1283,11 @@ pub fn expire_stale_approvals() {
             continue;
         };
         // A secure input card needs nobody waiting: saving it later still works.
+        // An import's review card carries everything it shows, so it can
+        // still be imported (or not) after a restart.
         for a in stale
             .into_iter()
-            .filter(|a| a.tool.is_none() && a.secret.is_none())
+            .filter(|a| a.tool.is_none() && a.secret.is_none() && !super::review::is_review(a))
         {
             let _ = set_approval_status(&agent.id, &a.request_id, ApprovalStatus::Expired);
         }
@@ -1448,6 +1455,7 @@ mod tests {
                         prompt: None,
                         choice: None,
                         secret: None,
+                        connector: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -1648,6 +1656,7 @@ mod tests {
                     prompt: None,
                     choice: None,
                     secret: None,
+                    connector: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -1743,6 +1752,7 @@ mod tests {
                 prompt: None,
                 choice: None,
                 secret: None,
+                connector: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

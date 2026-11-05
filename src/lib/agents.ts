@@ -291,6 +291,8 @@ export interface Approval {
   prompt?: SessionPrompt;
   /** The option picked on a `prompt` card. */
   choice?: string;
+  /** An import connector card: another assistant asking to start, or its staged agents. */
+  connector?: ConnectorCard;
 }
 
 /**
@@ -638,7 +640,7 @@ export const AGENT_EVENTS = {
   draft: 'agents://draft',
   /** A notification was clicked; payload is the agent id to open. */
   open: 'agents://open',
-  /** The import conversation over the connector changed: an `ImportTalk` or null. */
+  /** The import over the connector changed: an `ImportGate`. */
   importTalk: 'agents://import-talk',
   /** How far a copy from the other app has got: `OtherAppProgress`. */
   importProgress: 'agents://import-progress',
@@ -788,29 +790,109 @@ export const getImportPrompt = () => invoke<string>('agents_import_prompt');
 
 /* ------------------------------------- import as a conversation (connector) */
 
-/** An import conversation with another assistant (`agents/connector.rs`). */
+/** An import with another assistant over the connector (`agents/connector.rs`). */
 export interface ImportTalk {
   id: string;
   /** The other assistant, as it named itself ("Grok"). */
   source: string;
   chiefId: string;
-  state: 'active' | 'finished' | 'stopped';
+  /**
+   * `awaiting_consent`: the card asking you is up. `interviewing`: the sealed
+   * interview is going. `review`: the staged agents wait on your card. The rest
+   * are how it ended.
+   */
+  state:
+    | 'awaiting_consent'
+    | 'interviewing'
+    | 'review'
+    | 'imported'
+    | 'declined'
+    | 'denied'
+    | 'stopped';
   startedAt: number;
   lastAt: number;
   exchanges: number;
-  /** Agents brought over so far, in order. */
-  agents: string[];
+  /** Agents staged for your review so far (nothing is created yet). */
+  staged: string[];
+  /** Agents you imported from the review. */
+  imported: string[];
+  /** The interview is writing its answer. */
+  busy: boolean;
+}
+
+/** Whether an import may begin (you pressed Start), and the one going on. */
+export interface ImportGate {
+  armed: boolean;
+  talk: ImportTalk | null;
+}
+
+/** An import that is still going (not ended one way or another). */
+export const talkIsLive = (t: ImportTalk | null | undefined): t is ImportTalk =>
+  !!t && (t.state === 'awaiting_consent' || t.state === 'interviewing' || t.state === 'review');
+
+export const getImportTalk = () => invoke<ImportGate>('agents_import_talk');
+/** Start: one import over the connector may begin (it still asks on a card first). */
+export const armImportTalk = () => invoke<ImportGate>('agents_import_talk_arm');
+export const stopImportTalk = () => invoke<boolean>('agents_import_talk_stop');
+
+/** An import connector card, carried on an approval (`agents/review.rs`). */
+export interface ConnectorCard {
+  kind: 'consent' | 'review';
+  talkId: string;
+  source: string;
+  review?: ImportReview;
+}
+
+/** What the other assistant proposed, staged for you. Nothing exists until you import. */
+export interface ImportReview {
+  proposals: ImportProposal[];
+  /** What its managing agent knew, offered as notes for your Chief. Off unless ticked. */
+  chiefNotes?: string;
   summary?: string;
 }
 
-export const getImportTalk = () => invoke<ImportTalk | null>('agents_import_talk');
-export const stopImportTalk = () => invoke<boolean>('agents_import_talk_stop');
+export interface ImportProposal {
+  key: string;
+  name: string;
+  role: string;
+  instructions: string;
+  memory: string;
+  routines: { when: string; what: string; schedule?: string; refused?: string }[];
+  logins: { name: string; purpose: string; kind: string }[];
+  /** An agent here already has this name: what it is now, for the diff. */
+  clash?: { agentId: string; role: string; instructions: string };
+}
 
-/** The peer id prefix of a line the other assistant sent over the connector. */
+/** What you kept on the review card. */
+export interface ImportPicks {
+  agents: { key: string; replace: boolean }[];
+  chiefNotes: boolean;
+}
+
+export interface ImportApplied {
+  agents: string[];
+  replaced: string[];
+  skipped: [string, string][];
+  chiefNotes: boolean;
+  routinesRefused: string[];
+}
+
+export const applyImportReview = (agentId: string, requestId: string, picks: ImportPicks) =>
+  invoke<ImportApplied>('agents_import_review_apply', { agentId, requestId, picks });
+
+/** The peer id prefix of a line in an import conversation. */
 export const CONNECTOR_PEER = 'connector:';
-/** A line the other assistant sent over the connector, not one of your agents. */
+/** A line of an import conversation (the other assistant's, or to it), not one of your agents. */
 export const isConnectorLine = (m: Pick<AgentMessage, 'kind' | 'peer'>) =>
-  m.kind === 'from_agent' && !!m.peer?.id.startsWith(CONNECTOR_PEER);
+  (m.kind === 'from_agent' || m.kind === 'sent_to_agent') &&
+  !!m.peer?.id.startsWith(CONNECTOR_PEER);
+
+/**
+ * "Finance (from Grok)": the name a clashing agent comes in under unless
+ * you choose Replace (`review::unique_name`; the backend picks the final one).
+ */
+export const copyName = (name: string, source: string) =>
+  `${name.slice(0, 20)} (from ${source.slice(0, 14)})`;
 
 /** One agent a pasted reply would import (see `agents/paste.rs`). */
 export interface PasteImportAgent {

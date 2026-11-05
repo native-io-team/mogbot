@@ -518,8 +518,12 @@ pub async fn agents_busy() -> Result<usize, CommandError> {
 
 #[tauri::command]
 #[tracing::instrument]
-pub async fn agents_stop(agent_id: String) -> Result<bool, CommandError> {
-    Ok(runner::stop(&agent_id))
+pub async fn agents_stop(app: AppHandle, agent_id: String) -> Result<bool, CommandError> {
+    let stopped = runner::stop(&agent_id);
+    // The Chief's Stop (here and on the phone) also stops an import it's
+    // running; only the import's own messages go, never the user's.
+    let import = store::get(&agent_id).is_ok_and(|a| a.is_main) && agents::connector::stop(&app);
+    Ok(stopped || import)
 }
 
 /// Start the agent's next message in a new conversation: its instructions
@@ -582,6 +586,10 @@ fn answer_card(
         .ok_or_else(|| CommandError::expected("That request no longer exists."))?;
     if approval.status != store::ApprovalStatus::Pending {
         return Err(CommandError::expected("That request was already answered."));
+    }
+    // The import connector's own cards: consent, and the staged agents.
+    if approval.connector.is_some() {
+        return agents::connector::answer_card(app, agent_id, &approval, allow);
     }
     // A session's question: keys to the session, and every chat holding the
     // card is answered with it.
@@ -683,12 +691,15 @@ fn decline_secret(
     store::refresh_pending(agent_id);
     emit_registry(app);
     notify::refresh_badge(app);
-    runner::enqueue(
-        app,
-        agent_id,
-        secrets::denied_prompt(request, note),
-        runner::From::User,
-    );
+    // An imported agent's login card: declining doesn't wake it either.
+    if !request.quiet {
+        runner::enqueue(
+            app,
+            agent_id,
+            secrets::denied_prompt(request, note),
+            runner::From::User,
+        );
+    }
     Ok(())
 }
 
@@ -706,17 +717,36 @@ pub async fn agents_save_secret(
         let (agent_id, request_id) = (agent_id.clone(), request_id.clone());
         blocking(move || secrets::save(&agent_id, &request_id, &values)).await?
     };
+    // A login asked for on an imported agent's behalf doesn't wake it: its
+    // instructions came from another assistant, so it starts when the user
+    // first messages it, not unattended with the new secret in hand.
+    let quiet = card
+        .as_ref()
+        .and_then(|m| m.approval.as_ref())
+        .and_then(|a| a.secret.as_ref())
+        .is_some_and(|r| r.quiet);
     if let Some(message) = card {
         let _ = app.emit(runner::EVENT_MESSAGE, &message);
     }
     emit_registry(&app);
     notify::refresh_badge(&app);
-    runner::enqueue(
-        &app,
-        &agent_id,
-        secrets::saved_prompt(&secret),
-        runner::From::User,
-    );
+    if quiet {
+        let _ = runner::record(
+            &app,
+            runner::new_message(
+                &agent_id,
+                store::MessageKind::Note,
+                format!("Saved {}. It's used from your first message.", secret.name),
+            ),
+        );
+    } else {
+        runner::enqueue(
+            &app,
+            &agent_id,
+            secrets::saved_prompt(&secret),
+            runner::From::User,
+        );
+    }
     Ok(secret)
 }
 
@@ -834,20 +864,43 @@ pub async fn agents_import_prompt() -> Result<String, CommandError> {
     Ok(import::import_prompt(&chief))
 }
 
-/// The import conversation in progress (or just ended), for the bar above
-/// the Chief's composer; `None` when there isn't one.
+/// Whether an import over the connector may begin, and the one in progress
+/// (or just ended), for the modal and the bar above the Chief's composer.
 #[tauri::command]
 #[tracing::instrument]
-pub async fn agents_import_talk() -> Result<Option<agents::connector::Talk>, CommandError> {
-    Ok(agents::connector::current())
+pub async fn agents_import_talk() -> Result<agents::connector::Gate, CommandError> {
+    Ok(agents::connector::gate())
 }
 
-/// Stop the import conversation: the other assistant's next message is
-/// refused, and the Chief's turn reading it is stopped.
+/// The user pressed Start: one import over the connector may begin (it
+/// still asks on a card in the Chief's chat first).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_import_talk_arm(
+    app: AppHandle,
+) -> Result<agents::connector::Gate, CommandError> {
+    agents::connector::arm(&app)
+}
+
+/// Stop the import: the interview ends, the other assistant's queued
+/// message is dropped, and nothing more is accepted until Start again.
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_import_talk_stop(app: AppHandle) -> Result<bool, CommandError> {
     Ok(agents::connector::stop(&app))
+}
+
+/// Import what the user kept on a review card (`agents::review`).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_import_review_apply(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+    picks: agents::review::Picks,
+) -> Result<agents::review::Applied, CommandError> {
+    blocking(move || agents::connector::apply_review(&app, &agent_id, &request_id, Some(&picks)))
+        .await
 }
 
 /// What the user sends their other assistant to get its agents back as JSON

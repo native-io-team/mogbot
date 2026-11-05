@@ -1,32 +1,62 @@
 /**
  * The bar above the Chief's composer while another assistant is importing
- * its agents over the connector (`agents/connector.rs`): who, how far, and
- * Stop. Gone when there's no conversation going.
+ * its agents over the connector (`agents/connector.rs`): where it's got to,
+ * that the interview is separate from this chat, and a real Stop. Gone when
+ * there's no import going.
  *
  * @module components/agents/ImportTalkBar
  */
 
-import { TextButton } from '../primitives/TextButton';
+import { Button } from '../primitives/Button';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { stopImportTalk } from '../../lib/agents';
+import { stopImportTalk, talkIsLive, type ImportTalk } from '../../lib/agents';
 import { listOf } from './ImportParts';
-import { useImportTalk } from './ImportConnectorPanel';
+import { useImportGate } from './ImportConnectorPanel';
+
+/** The bar's two lines for each live state. */
+export function barLines(talk: ImportTalk, chief: string): { title: string; detail: string } {
+  switch (talk.state) {
+    case 'awaiting_consent':
+      return {
+        title: `${talk.source} wants to bring its agents over`,
+        detail: 'Allow or deny it on the card above. Nothing has been shared.',
+      };
+    case 'review':
+      return {
+        title: `${talk.source}’s agents are ready for you to review`,
+        detail: 'Nothing is created until you press Import on the card.',
+      };
+    default:
+      return {
+        title: `Importing from ${talk.source}${
+          talk.staged.length ? ` · ${listOf(talk.staged)} staged for review` : ''
+        }`,
+        detail: `${talk.source} talks to a sealed interview, not this chat: what you type here stays between you and ${chief}.`,
+      };
+  }
+}
 
 export function ImportTalkBar({ chief }: { chief: string }) {
-  const talk = useImportTalk();
+  const { talk } = useImportGate();
   const { showToast } = useOptionalToast();
-  if (!talk || talk.state !== 'active') return null;
-  const so = talk.agents.length
-    ? `${listOf(talk.agents)} ${talk.agents.length === 1 ? 'is' : 'are'} here so far`
-    : `${chief} is asking about its agents`;
+  if (!talkIsLive(talk)) return null;
+  const { title, detail } = barLines(talk, chief);
   return (
-    <p className="agent-import-talk" role="status" data-testid="agent-import-talk">
+    <div
+      className="agent-import-talk"
+      role="status"
+      data-testid="agent-import-talk"
+      data-state={talk.state}
+    >
       <span className="agent-import-talk__dot" aria-hidden />
       <span className="agent-import-talk__text">
-        <strong>Importing from {talk.source}</strong> over the connector · {so}
+        <strong>{title}</strong>
+        <span className="agent-import-talk__detail">{detail}</span>
       </span>
-      <TextButton
+      <Button
+        variant="danger"
+        size="compact"
         onClick={() => {
           stopImportTalk().catch((e: unknown) =>
             showToast(formatCommandError(asCommandError(e)), 'error')
@@ -34,7 +64,7 @@ export function ImportTalkBar({ chief }: { chief: string }) {
         }}
       >
         Stop import
-      </TextButton>
-    </p>
+      </Button>
+    </div>
   );
 }

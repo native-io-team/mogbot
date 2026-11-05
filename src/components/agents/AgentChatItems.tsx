@@ -37,6 +37,7 @@ import type { DraftAttachment } from './useComposerAttachments';
 import { MentionText } from './AgentMentions';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
+import { ImportReviewCard } from './ImportReviewCard';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
@@ -640,29 +641,57 @@ export const NoteLine = memo(function NoteLine({
 });
 
 /**
- * What another assistant said over the import connector (`agents/connector.rs`):
- * the other half of the conversation the user is watching. On the left like
- * the agent's own words, but outlined and labelled, so it never reads as
- * either the agent or the user.
+ * Links in the other assistant's words: web links open in the system
+ * browser, never in the app's own webview; anything else (a local path, a
+ * custom scheme) is inert. Unlike the agents' own prose, nothing here is
+ * trusted to open a file on this Mac.
+ */
+function onConnectorLinkClick(event: MouseEvent<HTMLElement>) {
+  const anchor = (event.target as HTMLElement).closest('a');
+  const href = anchor?.getAttribute('href');
+  if (!href) return;
+  event.preventDefault();
+  if (/^https?:/i.test(href)) void openUrl(href);
+}
+
+/**
+ * One line of an import conversation (`agents/connector.rs`). The other
+ * assistant's words sit on the left, outlined and labelled "From Grok · via
+ * connector"; what the sealed interview wrote back to it is indented under
+ * them as "To Grok", so neither reads as the Chief talking to you, or as you.
  */
 export const ConnectorBubble = memo(function ConnectorBubble({
   message,
   arrived,
 }: { message: AgentMessage } & Arrival) {
   const onKeyDown = useCopyOnKey(message.text);
+  const source = message.peer?.name ?? 'another assistant';
+  const outgoing = message.kind === 'sent_to_agent';
   return (
     <div
       tabIndex={-1}
       onKeyDown={onKeyDown}
-      className="agent-chat__row agent-chat__row--connector"
+      className={`agent-chat__row agent-chat__row--connector${outgoing ? ' agent-chat__row--to-connector' : ''}`}
       data-arrived={arrived || undefined}
       data-message-ids={message.id}
     >
       <span className="agent-connector__who">
-        From {message.peer?.name ?? 'another assistant'}
-        <span className="agent-connector__via"> · via connector</span>
+        {outgoing ? (
+          <>
+            To {source}
+            <span className="agent-connector__via"> · from the import interview</span>
+          </>
+        ) : (
+          <>
+            From {source}
+            <span className="agent-connector__via"> · via connector</span>
+          </>
+        )}
       </span>
-      <div className="agent-bubble agent-bubble--connector agent-markdown">
+      <div
+        className={`agent-bubble agent-bubble--connector${outgoing ? ' agent-bubble--to-connector' : ''} agent-markdown`}
+        onClick={onConnectorLinkClick}
+      >
         <Prose text={message.text} />
       </div>
     </div>
@@ -903,6 +932,20 @@ export const ApprovalCard = memo(function ApprovalCard({
       <SecretCard message={message} agentName={agentName} onAnswer={onAnswer} arrived={arrived} />
     );
   }
+  if (approval.connector?.kind === 'review') {
+    return (
+      <ImportReviewCard
+        message={message}
+        card={approval.connector}
+        chiefName={agentName}
+        arrived={arrived}
+        onAnswer={(id, allow) => onAnswer(id, allow)}
+      />
+    );
+  }
+  // Another assistant asking to start an import: a plain yes or no, so Deny
+  // doesn't open the "what instead" line.
+  const plainDeny = approval.connector?.kind === 'consent';
   const pending = approval.status === 'pending';
   const fields = approvalFields(approval.tool, approval.input);
   const answer = async (allow: boolean, always = false, why?: string) => {
@@ -1006,18 +1049,31 @@ export const ApprovalCard = memo(function ApprovalCard({
               </Tooltip>
             )}
             {/* tabIndex: WebKit leaves buttons out of the Tab order unless asked. */}
-            <Tooltip content={`Decline; you can tell ${agentName} what to do instead`}>
+            {plainDeny ? (
               <Button
                 ref={denyRef}
                 tabIndex={0}
                 variant="secondary"
                 className="agent-approval__deny"
                 disabled={busy}
-                onClick={() => setNoting(true)}
+                onClick={() => void answer(false)}
               >
-                Deny…
+                Deny
               </Button>
-            </Tooltip>
+            ) : (
+              <Tooltip content={`Decline; you can tell ${agentName} what to do instead`}>
+                <Button
+                  ref={denyRef}
+                  tabIndex={0}
+                  variant="secondary"
+                  className="agent-approval__deny"
+                  disabled={busy}
+                  onClick={() => setNoting(true)}
+                >
+                  Deny…
+                </Button>
+              </Tooltip>
+            )}
             <Button
               tabIndex={0}
               variant="strong"

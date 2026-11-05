@@ -2350,6 +2350,18 @@
   border: var(--border-width-default) solid var(--border-subtle);
 }
 
+/* What the sealed interview wrote back: indented under the other
+   assistant's line, dashed rather than solid, so a reply to Grok never
+   passes for the Chief talking to you. */
+.agent-chat__row--to-connector {
+  padding-left: var(--spacing-xl);
+}
+
+.agent-bubble--to-connector {
+  background: transparent;
+  border-style: dashed;
+}
+
 /* Above the Chief's composer while an import conversation is going. */
 .agent-import-talk {
   display: flex;
@@ -2380,8 +2392,20 @@
 }
 
 .agent-import-talk__text strong {
+  display: block;
   font-weight: var(--font-weight-label);
   color: var(--text-primary);
+}
+
+.agent-import-talk__detail {
+  display: block;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-import-talk[data-state='awaiting_consent'] .agent-import-talk__dot,
+.agent-import-talk[data-state='review'] .agent-import-talk__dot {
+  background: var(--accent-warning);
 }
 
 @keyframes agent-import-talk-live {

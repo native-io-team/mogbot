@@ -1,16 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ModalProvider } from '../../contexts/ModalContext';
-import type { ImportTalk } from '../../lib/agents';
+import type { ImportGate, ImportTalk } from '../../lib/agents';
 import { ImportConnectorPanel, talkLine } from './ImportConnectorPanel';
-import { ImportTalkBar } from './ImportTalkBar';
+import { barLines, ImportTalkBar } from './ImportTalkBar';
 
-let talk: ImportTalk | null = null;
+let gate: ImportGate = { armed: false, talk: null };
 const stopImportTalk = vi.fn(() => Promise.resolve(true));
+const armImportTalk = vi.fn(() => Promise.resolve<ImportGate>({ armed: true, talk: null }));
 vi.mock('../../lib/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/agents')>()),
-  getImportPrompt: () => Promise.resolve('Move my agents to Dashbot. Use import_conversation.'),
-  getImportTalk: () => Promise.resolve(talk),
+  getImportPrompt: () => Promise.resolve('Move my agents. Use import_conversation.'),
+  getImportTalk: () => Promise.resolve(gate),
+  armImportTalk: () => armImportTalk(),
   stopImportTalk: () => stopImportTalk(),
 }));
 vi.mock('../../lib/agentsStore', () => ({
@@ -21,11 +23,13 @@ const TALK: ImportTalk = {
   id: 't',
   source: 'Grok',
   chiefId: 'chief',
-  state: 'active',
+  state: 'interviewing',
   startedAt: 0,
   lastAt: 0,
   exchanges: 4,
-  agents: ['Finance', 'Travel'],
+  staged: ['Finance', 'Travel'],
+  imported: [],
+  busy: false,
 };
 
 function renderPanel(over: Partial<Parameters<typeof ImportConnectorPanel>[0]> = {}) {
@@ -45,59 +49,90 @@ function renderPanel(over: Partial<Parameters<typeof ImportConnectorPanel>[0]> =
 }
 
 describe('ImportConnectorPanel', () => {
-  it('gives one message to send, says where to watch, and keeps pasting as the fallback', async () => {
-    talk = null;
+  it('says what the other assistant can and can’t do, and needs Start before the message', async () => {
+    gate = { armed: false, talk: null };
     const props = renderPanel();
+    expect(screen.getByText('See your chats, files, memory or other agents')).toBeInTheDocument();
+    expect(
+      screen.getByText('Create or change anything: you import what you keep')
+    ).toBeInTheDocument();
+    // No message to copy until Start.
+    expect(screen.queryByText(/import_conversation/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    expect(armImportTalk).toHaveBeenCalled();
     expect(await screen.findByText(/import_conversation/)).toBeInTheDocument();
-    expect(screen.getByText('Watch it in Ada’s chat')).toBeInTheDocument();
-    expect(screen.getByText(/Logins are asked for here, on secure cards/)).toBeInTheDocument();
+    expect(screen.getByText('Allow it, then review in Ada’s chat')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open Ada' }));
     expect(props.onOpenAgent).toHaveBeenCalledWith('chief');
     fireEvent.click(screen.getByRole('button', { name: 'Can’t connect? Paste a reply instead' }));
     expect(props.onPaste).toHaveBeenCalled();
   });
 
-  it('asks for Remote access first when it is off', async () => {
-    talk = null;
+  it('can’t start without Remote access', async () => {
+    gate = { armed: false, talk: null };
     renderPanel({ connected: false });
     expect(
       await screen.findByRole('button', { name: 'Set up Remote access…' })
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
   });
 
-  it('shows the conversation going on, live', async () => {
-    talk = TALK;
+  it('shows the import going on, with Stop', async () => {
+    gate = { armed: false, talk: TALK };
     renderPanel();
     expect(
-      await screen.findByText('Ada is talking to Grok · Finance and Travel are here so far')
+      await screen.findByText('Grok is answering Ada’s questions · Finance and Travel staged')
     ).toBeInTheDocument();
     expect(screen.getByText('Sent')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop import' }));
+    await waitFor(() => expect(stopImportTalk).toHaveBeenCalled());
   });
 });
 
 describe('talkLine', () => {
-  it('says how far it got in each state', () => {
-    expect(talkLine({ ...TALK, agents: [] }, 'Ada')).toBe('Ada is talking to Grok · no agents yet');
-    expect(talkLine({ ...TALK, state: 'finished' }, 'Ada')).toBe(
-      'Grok is done: 2 agents brought over'
+  it('says how far it got in each state, and never that anything was created before import', () => {
+    expect(talkLine({ ...TALK, staged: [] }, 'Ada')).toBe('Grok is answering Ada’s questions');
+    expect(talkLine({ ...TALK, state: 'awaiting_consent' }, 'Ada')).toBe(
+      'Grok is asking to start: answer the card in Ada’s chat'
     );
-    expect(talkLine({ ...TALK, state: 'stopped' }, 'Ada')).toBe('You stopped the import from Grok');
+    expect(talkLine({ ...TALK, state: 'review' }, 'Ada')).toBe(
+      '2 agents ready for your review in Ada’s chat'
+    );
+    expect(talkLine({ ...TALK, state: 'imported', imported: ['Finance'] }, 'Ada')).toBe(
+      'Imported Finance'
+    );
+    expect(talkLine({ ...TALK, state: 'stopped' }, 'Ada')).toBe(
+      'You stopped the import from Grok. Nothing was created'
+    );
   });
 });
 
 describe('ImportTalkBar', () => {
-  it('shows only while a conversation is going, and stops it', async () => {
-    talk = TALK;
+  it('shows while an import is going, says the interview is separate, and stops it', async () => {
+    stopImportTalk.mockClear();
+    gate = { armed: false, talk: TALK };
     render(<ImportTalkBar chief="Ada" />);
-    expect(await screen.findByText('Importing from Grok')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Importing from Grok · Finance and Travel staged for review')
+    ).toBeInTheDocument();
+    expect(screen.getByText(/what you type here stays between you and Ada/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Stop import' }));
     expect(stopImportTalk).toHaveBeenCalled();
   });
 
-  it('is gone when there is none', async () => {
-    talk = { ...TALK, state: 'finished' };
+  it('is gone once it has ended', async () => {
+    gate = { armed: false, talk: { ...TALK, state: 'imported' } };
     const { container } = render(<ImportTalkBar chief="Ada" />);
     await Promise.resolve();
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('words each live state', () => {
+    expect(barLines({ ...TALK, state: 'awaiting_consent' }, 'Ada').detail).toMatch(
+      /Nothing has been shared/
+    );
+    expect(barLines({ ...TALK, state: 'review' }, 'Ada').detail).toMatch(
+      /Nothing is created until you press Import/
+    );
   });
 });
