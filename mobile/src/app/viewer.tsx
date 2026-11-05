@@ -15,6 +15,7 @@ import { Spinner } from '../components/agent';
 import { T } from '../components/ui';
 import { share } from '../lib/files';
 import { attachmentSource, describeError, download } from '../lib/session';
+import { IMAGE_UNAVAILABLE } from '../components/attachments';
 import { alpha, iconSize, radius, space, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 
@@ -71,6 +72,7 @@ export default function Viewer() {
           contentFit="contain"
           transition={150}
           accessibilityLabel={name}
+          onError={() => setError(`${IMAGE_UNAVAILABLE}: ${name}`)}
         />
       </ScrollView>
       {/* A photo sits on black in either appearance, so the clock is white over it. */}

@@ -930,7 +930,7 @@ pub fn created_routine_line(app: &AppHandle, agent_id: &str, c: &schedule::Check
 pub fn routine_line_text(c: &schedule::CheckIn) -> String {
     match &c.watch {
         Some(w) => format!(
-            "Set up a “When…” routine: when {}, {} · {}",
+            "Set up a “When…” routine for when {}: {} · {}",
             super::watch::describe(&w.source),
             short_line(&c.note),
             super::watch::cost_words(w)
@@ -1897,14 +1897,23 @@ pub(super) fn mcp_title(tool: &str) -> String {
     let Some((server, name)) = tool.strip_prefix("mcp__").and_then(|t| t.split_once("__")) else {
         return format!("Use {tool}");
     };
-    // "tabs_context_mcp": the server's own suffix isn't a word anyone says.
+    if let Some(title) = browser_tool_title(server, name) {
+        return format!("{title} · {}", service_name(server));
+    }
+    // "tabs_context_mcp", "javascript_tool": the server's own suffix and the
+    // word "tool" aren't words anyone says.
     let words: Vec<String> = split_words(name)
         .into_iter()
-        .filter(|w| w != "mcp")
+        .filter(|w| w != "mcp" && w != "tool")
         .collect();
     let Some((verb, object)) = words.split_first() else {
         return format!("Use {tool}");
     };
+    // Not every tool's name starts with a verb ("tabs_context"): those read
+    // "Use tabs context", never "Tabs a context".
+    if !object.is_empty() && !TOOL_VERBS.contains(&verb.as_str()) {
+        return format!("Use {} · {}", words.join(" "), service_name(server));
+    }
     let mut phrase = capitalize(verb);
     if !object.is_empty() {
         let last = object.last().map(String::as_str).unwrap_or("");
@@ -1929,6 +1938,44 @@ pub(super) fn mcp_title(tool: &str) -> String {
         phrase.push_str(&object.join(" "));
     }
     format!("{phrase} · {}", service_name(server))
+}
+
+/// Verbs an MCP tool's name usually starts with. A name that starts with
+/// anything else is a noun phrase, said as "Use …".
+const TOOL_VERBS: [&str; 44] = [
+    "add", "append", "archive", "ask", "cancel", "check", "click", "close", "comment", "create",
+    "delete", "download", "draft", "edit", "fetch", "fill", "find", "get", "invite", "label",
+    "list", "load", "mark", "merge", "move", "open", "post", "publish", "query", "read", "remove",
+    "reply", "run", "save", "schedule", "search", "send", "set", "share", "start", "stop",
+    "submit", "update", "upload",
+];
+
+/// The browser extension's tools, in what they do to the page. Its names are
+/// nouns ("computer", "javascript_tool", "tabs_context_mcp"), which the verb
+/// rule turned into "Javascript a tool" and "Tabs a context".
+fn browser_tool_title(server: &str, name: &str) -> Option<&'static str> {
+    if !matches!(
+        server.to_ascii_lowercase().as_str(),
+        "claude-in-chrome" | "claude_in_chrome" | "chrome"
+    ) {
+        return None;
+    }
+    Some(match name {
+        "computer" => "Click and type in the browser",
+        "navigate" => "Open a page",
+        "javascript_tool" => "Run a script on the page",
+        "tabs_context_mcp" | "tabs_context" => "See its browser tabs",
+        "tabs_create_mcp" | "tabs_create" => "Open a tab",
+        "read_page" | "get_page_text" => "Read the page",
+        "find" => "Find something on the page",
+        "form_input" => "Fill in a form",
+        "read_console_messages" => "Read the page's console",
+        "read_network_requests" => "Read the page's network requests",
+        "upload_image" => "Upload an image",
+        "resize_window" => "Resize the browser window",
+        "gif_creator" => "Record the screen",
+        _ => return None,
+    })
 }
 
 /// An MCP server's name as a person would say it: `claude_ai_Gmail` →
@@ -2630,6 +2677,26 @@ mod tests {
         );
         assert_eq!(title("mcp__linear__search"), "Search · Linear");
         assert_eq!(title("SomethingElse"), "Use SomethingElse");
+        // Real cards read "Javascript a tool · Chrome" and "Tabs a context
+        // mcp · Chrome".
+        assert_eq!(
+            title("mcp__claude-in-chrome__javascript_tool"),
+            "Run a script on the page · Chrome"
+        );
+        assert_eq!(
+            title("mcp__claude-in-chrome__tabs_context_mcp"),
+            "See its browser tabs · Chrome"
+        );
+        assert_eq!(
+            title("mcp__claude-in-chrome__navigate"),
+            "Open a page · Chrome"
+        );
+        // A noun-first name elsewhere is "Use …", never a made-up verb.
+        assert_eq!(
+            title("mcp__acme__ticket_history"),
+            "Use ticket history · Acme"
+        );
+        assert_eq!(title("mcp__acme__render_tool"), "Render · Acme");
     }
 
     #[test]

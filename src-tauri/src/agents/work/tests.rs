@@ -220,6 +220,44 @@ fn tool_calls_read_as_plain_past_tense_words() {
         d("Bash", json!({"command": "/usr/bin/curl -s https://x.io"})),
         "Ran curl"
     );
+    // Real timelines read "Ran for" and "Asked to run 1": a loop header, and
+    // the `1` of a `2>&1`, were taken for the program.
+    assert_eq!(
+        d(
+            "Bash",
+            json!({"command": "for n in 12 14; do gh pr view $n; done"})
+        ),
+        "Ran gh pr"
+    );
+    assert_eq!(
+        d(
+            "Bash",
+            json!({"command": "for f in a b\ndo\n  cat \"$f\"\ndone"})
+        ),
+        "Ran cat"
+    );
+    assert_eq!(
+        d(
+            "Bash",
+            json!({"command": "if [ -f x.log ]; then tail x.log; fi"})
+        ),
+        "Ran tail"
+    );
+    assert_eq!(d("Bash", json!({"command": "cd /p; 2>&1 ls"})), "Ran ls");
+    assert_eq!(
+        d("Bash", json!({"command": "for x in 1 2; do :; done"})),
+        "Ran a command"
+    );
+    // The Chief reading the team was a row of "Used a tool".
+    assert_eq!(
+        d(&ours("read_agent"), json!({"agent": "Finance"})),
+        "Caught up on Finance's chat"
+    );
+    assert_eq!(d(&ours("request_login"), json!({})), "Asked you to sign in");
+    assert_eq!(
+        d(&ours("pause_agent"), json!({"agent": "Finance"})),
+        "Paused Finance"
+    );
     assert_eq!(
         d(&ours("message_agent"), json!({"agent": "Acme Site"})),
         "Messaged Acme Site"
@@ -455,6 +493,15 @@ fn a_declined_call_says_so_and_a_failed_one_says_it_tried() {
     live.action(call("Edit", "e2", json!({"file_path": "/p/Hero.tsx"})), 3);
     live.action(call("Write", "w1", json!({"file_path": "/p/New.tsx"})), 4);
     // Declined on the card, then its error comes back: still declined.
+    let mut card = message(MessageKind::Approval, "card-rm");
+    card.approval = Some(super::super::mcp::new_card(
+        "card-rm".into(),
+        "Run a command".into(),
+        "rm -rf build".into(),
+        None,
+    ));
+    live.message(&card);
+    live.answer("card-rm", ApprovalStatus::Denied);
     live.result(done("rm", Outcome::Declined));
     live.result(done("rm", Outcome::Failed));
     live.result(done("e1", Outcome::Failed));
@@ -475,6 +522,7 @@ fn a_declined_call_says_so_and_a_failed_one_says_it_tried() {
             ("Tried to edit App.tsx", Some(StepOutcome::Failed)),
             ("Edited Hero.tsx", None),
             ("Wrote New.tsx", None),
+            ("You declined: Run a command", Some(StepOutcome::Declined)),
         ]
     );
     // Only the edit that came back counts; the write hasn't come back yet.
@@ -777,4 +825,29 @@ fn an_older_build_reads_a_message_carrying_work() {
     let work: TurnWork = serde_json::from_str(raw).unwrap();
     assert_eq!(work.steps[0].kind, StepKind::Tool);
     assert_eq!(work.steps[0].outcome, None);
+}
+
+#[test]
+fn a_call_refused_without_your_answer_never_says_you_declined() {
+    // Real timelines: "Asked for your OK: Run a command" (never answered;
+    // the card was set aside) beside "Asked to run ls — you declined".
+    let mut live = Live::default();
+    let mut card = message(MessageKind::Approval, "c1");
+    card.approval = Some(super::super::mcp::new_card(
+        "c1".into(),
+        "Run a command".into(),
+        "ls".into(),
+        None,
+    ));
+    live.action(call("Bash", "ls", json!({"command": "ls /tmp/plan"})), 1);
+    live.message(&card);
+    live.result(done("ls", Outcome::Declined));
+    let labels: Vec<&str> = live.work.steps.iter().map(|s| s.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        [
+            "Asked to run ls — it wasn't allowed",
+            "Asked for your OK: Run a command"
+        ]
+    );
 }

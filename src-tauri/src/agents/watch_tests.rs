@@ -960,7 +960,7 @@ fn review_4_every_new_routine_leaves_a_chat_line() {
     c.watch.as_mut().unwrap().every_minutes = 30;
     assert_eq!(
         routine_line_text(&c),
-        "Set up a “When…” routine: when a new email from Dana, Triage it · checks every 30 min, each a short Claude Code call (at most 24 a day)"
+        "Set up a “When…” routine for when a new email from Dana: Triage it · checks every 30 min, each a short Claude Code call (at most 24 a day)"
     );
     let gh = watch_check_in(Source::GithubMentions);
     assert!(routine_line_text(&gh).ends_with("checks every 10 min, free"));

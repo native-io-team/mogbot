@@ -246,6 +246,12 @@ fn resolve(c: &Companion, device: &DeviceRecord, path: &str) -> Option<Served> {
     let (agent, rel) = rest.split_once("/attachments/")?;
     let agent = urlencoding::decode(agent).ok()?;
     let mut segments = vec!["attachments".to_string()];
+    // Phone builds before the protocol fix asked for
+    // `…/attachments/attachments/<id>/<name>` (the attachment's own path,
+    // which starts with `attachments/`, under the route's prefix), and every
+    // image there was a 404. Read that the same way; no message id is ever
+    // called `attachments`.
+    let rel = rel.strip_prefix("attachments/").unwrap_or(rel);
     for raw in rel.split('/') {
         let seg = urlencoding::decode(raw).ok()?.into_owned();
         // `attachments::resolve` refuses these too; a decoded slash would

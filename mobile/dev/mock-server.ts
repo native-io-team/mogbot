@@ -2792,9 +2792,13 @@ export function createMockServer(opts: MockOptions = {}) {
       res.writeHead(404).end();
       return true;
     }
+    // The Mac's route: the attachment's own path (`attachments/<id>/<name>`)
+    // under the agent. A doubled `attachments/attachments/…` (what phone
+    // builds before this fix asked for) is read the same way, as the Mac does.
+    const rest = attachment?.[2].replace(/^attachments\//, '');
     const found = attachment
       ? files.get(
-          `${decodeURIComponent(attachment[1])}:${attachment[2]
+          `${decodeURIComponent(attachment[1])}:attachments/${rest!
             .split('/')
             .map(decodeURIComponent)
             .join('/')}`

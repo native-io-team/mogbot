@@ -32,11 +32,16 @@ import { IconButton } from '../primitives/IconButton';
 import { AgentCard } from './AgentCard';
 import { WorkTimeline } from './AgentWork';
 import { TextButton } from '../primitives/TextButton';
-import { AttachmentLightbox, FileGlyph, kindLabel, useAttachmentOpener } from './AgentAttachments';
+import {
+  AttachmentImage,
+  AttachmentLightbox,
+  FileGlyph,
+  kindLabel,
+  useAttachmentOpener,
+} from './AgentAttachments';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
-  attachmentUrl,
   beforeAfter,
   CHECKED_HEADING,
   changesLine,
@@ -98,7 +103,7 @@ function Shot({
         aria-label={`View ${caption}: ${file.name}`}
         title={file.name}
       >
-        <img src={attachmentUrl(agent.home, file)} alt={file.name} loading="lazy" />
+        <AttachmentImage agent={agent} attachment={file} />
       </button>
       <figcaption>{caption}</figcaption>
     </figure>
