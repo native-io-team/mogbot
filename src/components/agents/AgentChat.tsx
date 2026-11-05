@@ -105,6 +105,7 @@ import {
   retryNote,
   whenAt,
   mentionedAgents,
+  isImportInterviewActivity,
   plainActivity,
   approvalSeries,
   withQuotes,
@@ -1187,7 +1188,12 @@ export const AgentChat = memo(function AgentChat({
   // of it, and a growing reply re-renders only its own bubble.
   const rowsPaused = agent.status.state === 'idle';
   const checkIns = agent.checkIns;
-  const activity = plainActivity(agent.status.activity);
+  // Mid-import the bar above the composer says what's happening: the
+  // working line keeps its dots and doesn't repeat it.
+  const activity =
+    agent.isMain && isImportInterviewActivity(agent.status.activity)
+      ? null
+      : plainActivity(agent.status.activity);
   const work = agent.status.work;
   const history = useMemo(
     () =>
@@ -1584,7 +1590,7 @@ export const AgentChat = memo(function AgentChat({
                   />
                 ),
               },
-              { id: 'import', node: agent.isMain && <ImportTalkBar chief={agent.name} /> },
+              { id: 'import', node: agent.isMain && <ImportTalkBar /> },
               {
                 id: 'engine',
                 node: engineReady && cantAsk && (

@@ -122,62 +122,30 @@
   border-style: dashed;
 }
 
-/* Above the Chief's composer while an import conversation is going. */
-.agent-import-talk {
+/* The import bar's one line while the interview runs (ImportTalkBar, inside
+   a ConversationBar): who, then the counts. One line however long the source's
+   name, so the bar never changes height; the counts are tabular so a number
+   ticking up doesn't shift what follows it. */
+.agent-import-talk__line {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--spacing-sm);
-  width: calc(100% - (var(--spacing-xl) * 2));
-  max-width: var(--agents-chat-width);
-  margin: 0 auto var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-md);
-  font-size: var(--font-size-body-md);
-  color: var(--text-secondary);
-  background: var(--surface-recessed);
-  border-radius: var(--radius-card);
-}
-
-.agent-import-talk__dot {
-  flex: none;
-  width: var(--spacing-xs);
-  height: var(--spacing-xs);
-  border-radius: var(--radius-pill);
-  background: var(--status-running);
-  animation: agent-import-talk-live var(--agents-motion-typing-period) ease-in-out infinite;
-}
-
-.agent-import-talk__text {
-  flex: 1;
   min-width: 0;
+  white-space: nowrap;
 }
 
-.agent-import-talk__text strong {
-  display: block;
-  font-weight: var(--font-weight-label);
-  color: var(--text-primary);
+.agent-import-talk__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.agent-import-talk__detail {
-  display: block;
+.agent-import-talk__counts {
+  flex: none;
   font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-body);
+  font-variant-numeric: tabular-nums;
   color: var(--text-muted);
-}
-
-.agent-import-talk[data-state='awaiting_consent'] .agent-import-talk__dot,
-.agent-import-talk[data-state='review'] .agent-import-talk__dot {
-  background: var(--accent-warning);
-}
-
-@keyframes agent-import-talk-live {
-  50% {
-    opacity: 0.35;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .agent-import-talk__dot {
-    animation: none;
-  }
 }
 
 /* Another assistant asking to start an import: what it means, in prose. */

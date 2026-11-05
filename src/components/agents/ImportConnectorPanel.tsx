@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
+import { TypingDots } from '../primitives/TypingDots';
 import { useOpenModal } from '../../contexts/ModalContext';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
@@ -209,7 +210,11 @@ export function ImportConnectorPanel({
             <div className="agents-import-watch">
               {talk ? (
                 <p className="agents-import-watch__live" data-state={talk.state}>
-                  <span className="agents-import-watch__dot" aria-hidden />
+                  {talk.state === 'interviewing' ? (
+                    <TypingDots className="agents-import-watch__dots" />
+                  ) : (
+                    <span className="agents-import-watch__dot" aria-hidden />
+                  )}
                   {talkLine(talk, chief)}
                 </p>
               ) : (
