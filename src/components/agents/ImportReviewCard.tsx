@@ -12,7 +12,8 @@
  * the user picks Replace, which lists every consequence first (new
  * instructions as a diff, a fresh conversation, routines paused, project
  * unbound, Always-allow rules and, unless kept, saved logins removed);
- * routines arrive paused; logins are asked for on secure cards; no
+ * routines arrive paused; logins become sign-in cards (connect, never a
+ * password), set up together in "What your team needs"; no
  * permissions come across; the Chief's own notes are an optional item, off
  * unless ticked. Only this card imports: the phone shows "Review on your Mac".
  *
@@ -26,6 +27,7 @@ import { Checkbox } from '../primitives/Checkbox';
 import { TextButton } from '../primitives/TextButton';
 import { SegmentedControl } from '../primitives/SegmentedControl';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { requestAgentsIntent } from '../../commands/useAgentsCommands';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
@@ -381,7 +383,7 @@ function ProposalRow({
             </ImportSection>
           )}
           {p.logins.length > 0 && (
-            <ImportSection title="Logins it asks for · on secure cards, never here">
+            <ImportSection title="Logins it needs · you connect them on sign-in cards, never a password">
               <ul className="agents-import-agent__memory">
                 {p.logins.map((l) => (
                   <li key={l.name}>
@@ -521,6 +523,12 @@ export const ImportReviewCard = memo(function ImportReviewCard({
             <span className="agent-import-review__outcome" data-status={approval.status}>
               {approval.status === 'allowed' && <CheckIcon size={12} />}
               {outcome}
+              {approval.status === 'allowed' && (
+                // Every app the imported agents need, one row each, in one place.
+                <TextButton tabIndex={0} onClick={() => requestAgentsIntent({ kind: 'logins' })}>
+                  Set up logins
+                </TextButton>
+              )}
             </span>
           )
         }
@@ -529,7 +537,8 @@ export const ImportReviewCard = memo(function ImportReviewCard({
         {pending && (
           <p className="agent-import-review__lede">
             Read each agent’s instructions before you import. Only what’s ticked is created.
-            Routines arrive paused, logins are asked for securely, and no permissions come across.
+            Routines arrive paused, logins are connected on sign-in cards (never a password), and no
+            permissions come across.
           </p>
         )}
         {review?.summary && pending && (

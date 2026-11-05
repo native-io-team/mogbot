@@ -314,7 +314,7 @@ pub fn preamble(a: &Arrival) -> String {
         None => format!("- No files or past conversations came over from {source}."),
     });
     lines.push("- The user's projects: find one with project_list and work in it through its session (session_message). Don't go looking for them on disk.".into());
-    lines.push("- Logins: when you need an account, ask for it with request_secret (a secure card), or ask the user to connect the app. Never ask for a password in the chat.".into());
+    lines.push("- Logins: when you need an account (email, Slack, LinkedIn, X, GitHub…), ask for it with request_login: one card where the user connects it, from their desk or phone, and it stays in this Mac's Keychain. request_secret is only for an API key made for programs. Never ask for a password, or for a login or code in the chat.".into());
     if !a.tools.is_empty() {
         let list: Vec<String> = a
             .tools

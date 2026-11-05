@@ -49,7 +49,8 @@ export type ModalId =
   | 'remoteAccess'
   | 'phone'
   | 'projectTools'
-  | 'chiefIdeas';
+  | 'chiefIdeas'
+  | 'teamLogins';
 
 interface ModalContextValue {
   isOpen: (id: ModalId) => boolean;

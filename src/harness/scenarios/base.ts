@@ -217,6 +217,14 @@ export const baseCommands: CommandMap = {
   agents_search: [],
   // The palette sweep now starts in Agents, where ⌘K → Apps opens this.
   agents_apps_list: { connected: [], suggestions: [] },
+  // Edit agent's "What it can reach", and ⌘K → "Set up logins for agents…".
+  agents_reach: {
+    connections: [],
+    browser: { on: true, sites: [], helperInstalled: true },
+    secrets: [],
+    blockedApps: [],
+  },
+  agents_logins_team: { needs: [], done: 0, total: 0 },
   agents_usage: {
     week: {
       turns: 0,

@@ -23,6 +23,12 @@ import {
   type Agent,
   type AgentMessage,
   type AgentSecret,
+  type AgentReach,
+  type LoginOption,
+  type LoginRequest,
+  type TeamCard,
+  type TeamLogins,
+  type TeamNeed,
   type AgentsOverview,
   type NewAgentDefaults,
   type Alert,
@@ -134,7 +140,80 @@ export interface MockOptions {
    * minutes after pairing, and the shortest list Home can have.
    */
   solo?: boolean;
+  /** How long a sign-in "on the Mac" takes before the card says it's connected. */
+  loginAfterMs?: number;
 }
+
+// ---- Login cards (desktop `agents/logins.rs`) ----------------------------------------
+
+const LOGIN_OPTIONS: Record<string, LoginOption> = {
+  gmail: {
+    id: 'claude_ai',
+    method: 'claude_ai',
+    label: 'Connect Gmail',
+    detail:
+      'Uses claude.ai’s Gmail connector, which keeps the sign-in with your Claude account. If it isn’t added yet, claude.ai opens in your Mac’s browser to add it. Never a password.',
+  },
+  browser: {
+    id: 'browser',
+    method: 'browser',
+    label: 'Use my browser',
+    detail:
+      'Works in your own Chrome on your Mac, where you’re already signed in, through Claude in Chrome. It asks you before every click, post, send or payment; it never sees your password.',
+  },
+  calendar: {
+    id: 'claude_ai',
+    method: 'claude_ai',
+    label: 'Connect Google Calendar',
+    detail: 'Uses claude.ai’s Google Calendar connector. Never a password.',
+  },
+};
+
+/** A login card as `request_login` raises it. */
+export function loginCard(
+  agentName: string,
+  service: 'gmail' | 'linkedin' | 'google_calendar',
+  extra: Partial<LoginRequest> = {}
+): LoginRequest {
+  const base: Record<string, LoginRequest> = {
+    gmail: {
+      service: 'gmail',
+      title: 'Gmail',
+      why: 'Read the invoices that arrive by email',
+      abilities: [{ id: 'read', label: 'Read and search your email' }],
+      options: [LOGIN_OPTIONS.gmail, LOGIN_OPTIONS.browser],
+      noConnector:
+        'Google only lets apps it has approved use Gmail’s own connector, so Gmail comes through claude.ai’s connector or your browser.',
+    },
+    linkedin: {
+      service: 'linkedin',
+      title: 'LinkedIn',
+      askedAs: 'linkedin token',
+      why: 'Post the release notes on the company page',
+      abilities: [
+        { id: 'read', label: 'Read your feed, profile and messages' },
+        { id: 'write', label: 'Post and send messages — it asks you on a card each time' },
+      ],
+      options: [LOGIN_OPTIONS.browser],
+      noConnector: 'LinkedIn has no connector agents can sign in to.',
+    },
+    google_calendar: {
+      service: 'google_calendar',
+      title: 'Google Calendar',
+      why: 'Find a free hour for the regression review',
+      abilities: [{ id: 'read', label: 'See your calendar' }],
+      options: [LOGIN_OPTIONS.calendar, LOGIN_OPTIONS.browser],
+    },
+  };
+  void agentName;
+  return { ...base[service], ...extra };
+}
+
+const LOGIN_TITLES: Record<string, string> = {
+  gmail: 'Gmail',
+  google_calendar: 'Google Calendar',
+  linkedin: 'LinkedIn',
+};
 
 /** The key in `file`, or a new one written there. */
 function persistentKey(file: string): KeyObject {
@@ -969,6 +1048,119 @@ export function createMockServer(opts: MockOptions = {}) {
     emit({ type: 'agents.registry', overview: overview() });
   }
 
+  const loginTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const loginCardOf = (agentId: string, requestId: string) =>
+    (messages.get(agentId) ?? []).find((m) => m.approval?.requestId === requestId && m.approval.login);
+
+  function completeLogin(agentId: string, requestId: string, option: LoginOption) {
+    const card = loginCardOf(agentId, requestId);
+    const login = card?.approval?.login;
+    if (!card?.approval || !login || card.approval.status !== 'pending') return;
+    const choice =
+      option.method === 'browser'
+        ? `Using your browser · ${login.service === 'linkedin' ? 'www.linkedin.com' : 'mail.google.com'}`
+        : `Connected · ${login.title} (work@acme.com)`;
+    putMessage({ ...card, approval: { ...card.approval, status: 'allowed', choice, login: { ...login, flow: undefined } } });
+    settle(agentId);
+  }
+
+  function answerLogin(agentId: string, requestId: string, status: 'denied', note?: string) {
+    const card = loginCardOf(agentId, requestId);
+    if (!card?.approval?.login || card.approval.status !== 'pending') {
+      return fail({ type: 'Other', message: 'That card was already answered.' });
+    }
+    clearTimeout(loginTimers.get(requestId));
+    putMessage({
+      ...card,
+      approval: { ...card.approval, status, ...(note ? { note } : {}), login: { ...card.approval.login, flow: undefined } },
+    });
+    settle(agentId);
+    return null;
+  }
+
+  /** What an agent can reach: its connected login cards, its browser, its secrets. */
+  function reachOf(agentId: string): AgentReach {
+    const a = agent(agentId);
+    const answered = (messages.get(agentId) ?? []).filter(
+      (m) => m.approval?.login && m.approval.status === 'allowed'
+    );
+    const connections = answered
+      .filter((m) => m.approval!.choice?.startsWith('Connected'))
+      .map((m) => ({
+        connectionId: `conn_${m.approval!.login!.service}`,
+        service: m.approval!.login!.service,
+        title: m.approval!.login!.title,
+        account: 'work@acme.com',
+        access: m.approval!.login!.abilities.some((x) => x.id === 'write') ? ('full' as const) : ('read' as const),
+        kept: 'Connected on claude.ai; the sign-in is held there',
+        needsSignIn: false,
+        lastUsedAt: Date.now() - 3_600_000,
+      }));
+    const sites = answered
+      .map((m) => m.approval!.choice ?? '')
+      .filter((c) => c.startsWith('Using your browser · '))
+      .map((c) => c.slice('Using your browser · '.length));
+    return {
+      connections,
+      ...(a?.engine === 'codex' ? {} : { browser: { on: true, sites, helperInstalled: true } }),
+      secrets: (a?.secrets ?? []).map((x) => ({
+        secretId: x.id,
+        name: x.name,
+        purpose: x.purpose,
+        variables: x.fields.map((f) => `$${f.env}`),
+        ...(x.lastUsedAt ? { lastUsedAt: x.lastUsedAt } : {}),
+      })),
+      blockedApps: [],
+    };
+  }
+
+  /** "What your team needs", grouped as the Mac groups it (Google's three as one row). */
+  function teamLogins(since?: number): TeamLogins {
+    const needs: TeamNeed[] = [];
+    for (const a of agents) {
+      for (const m of messages.get(a.id) ?? []) {
+        const ap = m.approval;
+        const l = ap?.login;
+        if (!ap || !l) continue;
+        const state: TeamCard['state'] =
+          ap.status === 'pending' ? 'waiting' : ap.status === 'allowed' ? 'connected' : ap.status === 'denied' ? 'skipped' : 'covered';
+        if (state !== 'waiting' && (since === undefined || m.ts < since)) continue;
+        const google = ['gmail', 'google_calendar', 'google_drive'].includes(l.service);
+        const key = google ? 'google' : l.service;
+        let need = needs.find((n) => n.key === key);
+        if (!need) {
+          need = { key, title: google ? 'Google' : l.title, services: [], options: [], cards: [], done: false };
+          needs.push(need);
+        }
+        if (!need.services.includes(l.service)) need.services.push(l.service);
+        if (state === 'waiting') {
+          for (const o of l.options) if (o.method !== 'existing' && !need.options.some((x) => x.id === o.id)) need.options.push(o);
+          need.noConnector ??= l.noConnector;
+        }
+        need.cards.push({
+          agentId: a.id,
+          agentName: a.name,
+          requestId: ap.requestId,
+          service: l.service,
+          title: l.title,
+          abilities: l.abilities,
+          state,
+          ...(ap.choice || ap.note ? { outcome: ap.choice ?? ap.note } : {}),
+          ...(l.askedAs ? { askedAs: l.askedAs } : {}),
+          ...(state === 'waiting' && l.flow ? { flow: l.flow } : {}),
+        });
+      }
+    }
+    for (const n of needs) {
+      n.done = n.cards.every((c) => c.state !== 'waiting');
+      if (n.services.length > 1) {
+        n.title = `${n.title} · ${n.services.map((x) => (LOGIN_TITLES[x] ?? x).replace('Google ', '')).join(' + ')}`;
+      }
+    }
+    needs.sort((x, y) => Number(x.done) - Number(y.done));
+    return { needs, done: needs.filter((n) => n.done).length, total: needs.length };
+  }
+
   type Handler = (p: Record<string, unknown>, c: Conn) => unknown;
   class Failure extends Error {
     constructor(readonly wire: WireError) {
@@ -1193,6 +1385,94 @@ export function createMockServer(opts: MockOptions = {}) {
       putMessage({ ...card, approval: { ...card.approval, status: 'allowed' } });
       settle(agentId);
       return secret;
+    },
+    // Logins: every way in "runs on the Mac". A start waits `loginAfterMs`
+    // (the user signing in at the desk), then the card says it's connected,
+    // as the real Mac's card does when its sign-in finishes.
+    'agents.loginStart': (p) => {
+      const agentId = String(p.agentId);
+      const card = loginCardOf(agentId, String(p.requestId));
+      const login = card?.approval?.login;
+      if (!card?.approval || !login || card.approval.status !== 'pending') {
+        return fail({ type: 'Other', message: 'That card was already answered.' });
+      }
+      const option = login.options.find((o) => o.id === p.optionId);
+      if (!option) return fail({ type: 'Validation', field: 'option', reason: 'Not one of its choices.' });
+      if (option.method === 'key') return fail({ type: 'Other', message: 'Type the key into the card’s field.' });
+      if (option.method === 'existing' || option.method === 'browser') {
+        completeLogin(agentId, card.approval.requestId, option);
+        return null;
+      }
+      putMessage({
+        ...card,
+        approval: {
+          ...card.approval,
+          login: {
+            ...login,
+            flow: {
+              state: 'waiting',
+              option: option.id,
+              message: `${login.title}’s sign-in is open in your Mac’s browser.`,
+              startedAt: Date.now(),
+              fromPhone: true,
+            },
+          },
+        },
+      });
+      const timer = setTimeout(() => completeLogin(agentId, card.approval!.requestId, option), opts.loginAfterMs ?? 4000);
+      loginTimers.set(card.approval.requestId, timer);
+      return null;
+    },
+    'agents.loginCancel': (p) => {
+      const agentId = String(p.agentId);
+      const card = loginCardOf(agentId, String(p.requestId));
+      if (!card?.approval?.login) return fail({ type: 'Other', message: 'No such card.' });
+      clearTimeout(loginTimers.get(card.approval.requestId));
+      putMessage({
+        ...card,
+        approval: {
+          ...card.approval,
+          login: {
+            ...card.approval.login,
+            flow: { state: 'cancelled', option: card.approval.login.flow?.option ?? '', startedAt: Date.now() },
+          },
+        },
+      });
+      return null;
+    },
+    'agents.loginDecline': (p) => answerLogin(String(p.agentId), String(p.requestId), 'denied', typeof p.note === 'string' && p.note ? p.note : undefined),
+    'agents.loginDismiss': (p) => answerLogin(String(p.agentId), String(p.requestId), 'denied', 'Not needed'),
+    // The value goes nowhere, as with saveSecret.
+    'agents.loginSaveKey': (p) => {
+      const agentId = String(p.agentId);
+      const card = loginCardOf(agentId, String(p.requestId));
+      const key = card?.approval?.login?.key;
+      if (!card?.approval || !key || card.approval.status !== 'pending') {
+        return fail({ type: 'Other', message: 'This card doesn’t take a key.' });
+      }
+      if (typeof p.value !== 'string' || !p.value.trim()) {
+        return fail({ type: 'Validation', field: 'value', reason: 'Type the key.' });
+      }
+      const secret: AgentSecret = { ...key, id: `sec_${randomUUID().slice(0, 6)}`, createdAt: Date.now() };
+      const a = agent(agentId)!;
+      a.secrets = [...(a.secrets ?? []), secret];
+      putMessage({ ...card, approval: { ...card.approval, status: 'allowed', choice: `Saved a key · ${key.name}`, login: { ...card.approval.login!, flow: undefined } } });
+      settle(agentId);
+      return secret;
+    },
+    'agents.reach': (p) => reachOf(String(p.agentId)),
+    'agents.loginsTeam': (p) => teamLogins(typeof p.since === 'number' ? p.since : undefined),
+    'agents.loginsConnect': (p) => {
+      const need = teamLogins().needs.find((n) => n.key === p.key);
+      if (!need) return fail({ type: 'Other', message: 'Nothing is waiting for that any more.' });
+      const skip = Array.isArray(p.skip) ? p.skip.map(String) : [];
+      for (const c of need.cards) {
+        if (c.state !== 'waiting' || skip.includes(c.agentId)) continue;
+        const card = loginCardOf(c.agentId, c.requestId);
+        if (!card?.approval?.login?.options.some((o) => o.id === p.optionId)) continue;
+        methods['agents.loginStart']!({ agentId: c.agentId, requestId: c.requestId, optionId: p.optionId }, null as never);
+      }
+      return null;
     },
     'agents.memory': (p) => ({ entries: structuredClone(memories.get(String(p.agentId)) ?? []) }),
     'agents.memoryChange': (p) => {
@@ -2175,11 +2455,12 @@ function seedAgents(now: number): Agent[] {
     base('fin', 'Finance', 'Invoices and spend', 'green', {
       lastActivityAt: now - 3 * 3_600_000,
       failure: { kind: 'usage_limit', resetsAt: now + 2 * 3_600_000 },
-      pendingApprovals: 1,
+      pendingApprovals: 2,
       preview: 'Usage limit reached.',
     }),
     base('qa', 'QA 2', 'Regression checks', 'amber', {
       lastActivityAt: now - 26 * 3_600_000,
+      pendingApprovals: 2,
       preview: 'All 48 checks passed on main.',
     }),
     // On Codex, and queued behind the cap on concurrent turns.
@@ -2338,6 +2619,21 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
   } else if (a.id === 'qa') {
     add({ ts: a.lastActivityAt - 3 * 3_600_000, kind: 'user', text: 'Run the full suite.' });
     add({ ts: a.lastActivityAt - 3 * 3_600_000 + 60_000, kind: 'agent', text: 'Running it now.' });
+    // Login cards, as `request_login` raises them: one connected, one signing
+    // in on the Mac (started from a phone), one with only the browser.
+    add({
+      ts: a.lastActivityAt - 2.5 * 3_600_000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_login_cal',
+        title: 'QA 2 needs your Google Calendar',
+        detail: 'Find a free hour for the regression review',
+        status: 'allowed',
+        choice: 'Connected · Google Calendar (work@acme.com)',
+        login: loginCard(a.name, 'google_calendar'),
+      },
+    });
     // Where a new conversation began: the divider the chat centres.
     add({
       ts: a.lastActivityAt - 2 * 3_600_000,
@@ -2347,6 +2643,40 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
     });
     add({ ts: a.lastActivityAt - 60_000, kind: 'user', text: 'Status?' });
     add({ ts: a.lastActivityAt, kind: 'agent', text: a.preview ?? 'Done.' });
+    add({
+      ts: a.lastActivityAt + 1000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_login_gmail_qa',
+        title: 'QA 2 needs your Gmail (work)',
+        detail: 'Read the bug reports customers email in',
+        status: 'pending',
+        login: loginCard(a.name, 'gmail', {
+          accountHint: 'work',
+          why: 'Read the bug reports customers email in',
+          flow: {
+            state: 'waiting',
+            option: 'claude_ai',
+            message: 'claude.ai’s connectors are open in your Mac’s browser. Add Gmail there; this card notices when it’s connected.',
+            startedAt: a.lastActivityAt + 2000,
+            fromPhone: true,
+          },
+        }),
+      },
+    });
+    add({
+      ts: a.lastActivityAt + 3000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_login_linkedin',
+        title: 'QA 2 needs your LinkedIn',
+        detail: 'Post the release notes on the company page',
+        status: 'pending',
+        login: loginCard(a.name, 'linkedin'),
+      },
+    });
   } else if (a.id === 'design') {
     add({ ts: now - 30 * 60_000, kind: 'user', text: 'Export the new icon set to the site.' });
     add({
@@ -2396,6 +2726,18 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
           fields: [{ label: 'API key', env: 'STRIPE_KEY' }],
           reference: 'secret:finance/stripe_key',
         },
+      },
+    });
+    add({
+      ts: now - 48 * 60_000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_login_gmail',
+        title: 'Finance needs your Gmail',
+        detail: 'Read the invoices that arrive by email',
+        status: 'pending',
+        login: loginCard(a.name, 'gmail', { askedAs: 'gmail native' }),
       },
     });
   } else {

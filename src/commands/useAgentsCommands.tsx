@@ -30,6 +30,7 @@ type AgentsIntent =
   | { kind: 'apps' }
   | { kind: 'search' }
   | { kind: 'ideas' }
+  | { kind: 'logins' }
   | { kind: 'open'; agentId: string };
 let pendingIntent: AgentsIntent | null = null;
 const intentListeners = new Set<(intent: AgentsIntent) => void>();
@@ -54,8 +55,10 @@ export function useAgentsIntents(handlers: {
   onSearch: () => void;
   /** The gallery of things to ask the Chief. */
   onIdeas: () => void;
+  /** "What your team needs": every login waiting, one row per app. */
+  onLogins?: () => void;
 }) {
-  const { onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch, onIdeas } = handlers;
+  const { onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch, onIdeas, onLogins } = handlers;
   useEffect(() => {
     const listener = (intent: AgentsIntent) => {
       if (intent.kind === 'new') onNewAgent(intent.template);
@@ -63,6 +66,7 @@ export function useAgentsIntents(handlers: {
       else if (intent.kind === 'apps') onApps();
       else if (intent.kind === 'search') onSearch();
       else if (intent.kind === 'ideas') onIdeas();
+      else if (intent.kind === 'logins') onLogins?.();
       else onOpenAgent(intent.agentId);
     };
     intentListeners.add(listener);
@@ -74,7 +78,7 @@ export function useAgentsIntents(handlers: {
     return () => {
       intentListeners.delete(listener);
     };
-  }, [onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch, onIdeas]);
+  }, [onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch, onIdeas, onLogins]);
 }
 
 /** What the "Open <agent>" commands name: a status or a new message doesn't change them. */
@@ -257,6 +261,29 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         keywords: ['agents', 'migrate', 'bring over', 'team', 'move', 'copy'],
         run: () => {
           requestAgentsIntent({ kind: 'import', from: 'otherApp' });
+          setView('agents');
+        },
+      },
+      {
+        id: 'agents.logins',
+        title: 'Set up logins for agents…',
+        icon: <PlugIcon size={14} />,
+        category: 'navigation',
+        keywords: [
+          'agents',
+          'logins',
+          'sign in',
+          'connect',
+          'accounts',
+          'gmail',
+          'slack',
+          'linkedin',
+          'github',
+          'what your team needs',
+          'passwords',
+        ],
+        run: () => {
+          requestAgentsIntent({ kind: 'logins' });
           setView('agents');
         },
       },

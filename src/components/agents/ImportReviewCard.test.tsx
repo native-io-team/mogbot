@@ -114,7 +114,7 @@ describe('ImportReviewCard', () => {
     render(<ImportReviewCard message={message()} card={CARD} chiefName="Ada" onAnswer={vi.fn()} />);
     fireEvent.click(screen.getByText('Finance (from Grok)'));
     expect(
-      screen.getByText('Logins it asks for · on secure cards, never here')
+      screen.getByText('Logins it needs · you connect them on sign-in cards, never a password')
     ).toBeInTheDocument();
     expect(screen.getByText('every weekday at 09:00')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Replace your Finance' }));

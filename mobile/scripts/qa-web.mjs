@@ -637,6 +637,43 @@ const LIVE = [
     pages: 3,
     check: 'Chief sheet',
   },
+  {
+    name: 'login-choose',
+    route: '/chat/fin',
+    ready: 'Finance',
+    act: scrollToText('Connect Gmail'),
+    check:
+      'Login card: "Finance needs your Gmail", asked-as line, what it can do, the no-connector line, Not now + Connect Gmail (neutral), Use my browser below with what it means; no password field',
+  },
+  {
+    name: 'login-on-mac',
+    route: '/chat/qa',
+    ready: 'QA 2',
+    check:
+      'Gmail card: "Finish signing in on your Mac — it’s open there." with the Mac’s live line and Cancel; LinkedIn card below leads with Use my browser and says LinkedIn has no connector',
+  },
+  {
+    name: 'login-connected',
+    route: '/chat/qa',
+    ready: 'QA 2',
+    act: scrollToText('Started fresh · memory kept'),
+    check: 'Answered login card as a receipt line: Connected · QA 2 needs your Google Calendar',
+  },
+  {
+    name: 'team-logins',
+    route: '/logins',
+    ready: 'What your team needs',
+    pages: 2,
+    check:
+      'One row per service: Google · Gmail + Calendar used by Finance and QA 2 (one signing in on the Mac), LinkedIn browser-only; progress line; Not needed per agent',
+  },
+  {
+    name: 'reach',
+    route: '/agent/qa',
+    ready: 'QA 2',
+    act: scrollToText('WHAT IT CAN REACH'),
+    check: 'What it can reach: Google Calendar connection, your browser, read-only with "Change this on your Mac."',
+  },
   { name: 'memory', route: '/memory?id=site', ready: 'Memory', check: 'Placeholder not clipped' },
   { name: 'instructions', route: '/instructions?id=site', check: 'Instructions editor' },
   { name: 'files', route: '/files/site', check: 'Files list' },
