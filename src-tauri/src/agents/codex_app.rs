@@ -47,7 +47,8 @@ const START: u64 = 2;
 const TURN: u64 = 3;
 const INTERRUPT: u64 = 4;
 /// `account/rateLimits/read`: the plan's windows, as Codex reports them
-/// (`super::quota`). Its error (an API-key login, an older Codex) is ignored.
+/// (`super::quota`). Refused for authentication (an API-key login) clears
+/// the reading; any other error (an older Codex) is ignored.
 const RATE_LIMITS: u64 = 5;
 
 /// Every method this needs from the installed Codex, by the schema file
@@ -313,6 +314,14 @@ impl Conversation {
         if let Some(message) = str_at(msg, "/error/message") {
             return match id {
                 INITIALIZE | START | TURN => self.end([Step::Failed(message.to_string())]),
+                // Refused for authentication (an API-key login): there is no
+                // plan to read, so any reading kept from another login goes.
+                // Any other refusal (an older Codex) says nothing either way.
+                RATE_LIMITS if message.to_lowercase().contains("authentication") => {
+                    vec![Out::Step(Step::Quota(super::quota::none(
+                        super::engine::Engine::Codex,
+                    )))]
+                }
                 _ => Vec::new(),
             };
         }
@@ -886,9 +895,15 @@ mod tests {
         let out = c.on_message(&json!({ "id": 1, "result": {} }));
         assert!(matches!(&out[2], Out::Send(v) if v["method"] == "account/rateLimits/read"));
         // Signed in with an API key (seen live on 0.166): refused, and the turn goes on.
+        // That says there is no plan here: a reading kept from another login is cleared.
         let refused = c.on_message(&json!({ "id": RATE_LIMITS, "error": { "code": -32600, "message": "codex account authentication required to read rate limits" } }));
-        assert!(refused.is_empty());
+        assert!(
+            matches!(&refused[..], [Out::Step(Step::Quota(q))] if q.engine == super::super::engine::Engine::Codex && q.windows.is_empty())
+        );
         assert!(!c.over());
+        // Any other refusal (an older Codex without the method) says nothing.
+        let older = c.on_message(&json!({ "id": RATE_LIMITS, "error": { "code": -32601, "message": "method not found" } }));
+        assert!(older.is_empty());
         // The read's answer and the unprompted update, neither naming a thread.
         let snap = json!({ "primary": { "usedPercent": 91, "windowDurationMins": 300, "resetsAt": 1793880000 }, "secondary": null });
         let read = c.on_message(&json!({ "id": RATE_LIMITS, "result": { "rateLimits": snap } }));

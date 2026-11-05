@@ -414,8 +414,11 @@ export function Row({
   detail,
   disabled,
   selected,
+  warning,
 }: {
   label: string;
+  /** Needs attention (a plan's usage at 90% or its limit): the label in amber. */
+  warning?: boolean;
   /** A line under the label saying what it does. */
   detail?: string;
   value?: string;
@@ -441,7 +444,9 @@ export function Row({
     ? colors.textMuted
     : destructive
       ? colors.accentErrorLight
-      : colors.textBody;
+      : warning
+        ? colors.accentWarning
+        : colors.textBody;
   // A value too long to sit beside its label goes under it, rather than
   // squeezing the label onto two lines.
   const long = value != null && value.length > LONG_VALUE;

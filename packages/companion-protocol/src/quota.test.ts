@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  apiPrice,
+  onClaudePlan,
   quotaLines,
+  readPhrase,
   resetDay,
   resetPhrase,
   retryPhrase,
@@ -95,6 +98,35 @@ describe('quotaLines', () => {
     expect(bare.text).toBe('Claude usage limit reached');
   });
 
+  it('says how old a reading is: its day in the tooltip, its age on the line after 6 h', () => {
+    // An hour old, today: the time alone, and no age on the line.
+    const [fresh] = quotaLines([claude(win({ usedPercent: 34, resetsAt: saturday }))], NOW);
+    expect(fresh.detail).toMatch(/reported it at \d/);
+    expect(fresh.text).not.toMatch(/read/);
+    // Seven hours old, still today: the line says when.
+    const [today] = quotaLines(
+      [claude(win({ usedPercent: 34, resetsAt: saturday, observedAt: NOW - 7 * HOUR }))],
+      NOW
+    );
+    expect(today.text).toMatch(/^Claude usage 34% · resets Sat · read 7:00/);
+    // Read Tuesday: the day, in both.
+    const tuesday = new Date(2026, 10, 3, 15, 0).getTime();
+    const [old] = quotaLines(
+      [claude(win({ usedPercent: 34, resetsAt: saturday, observedAt: tuesday }))],
+      NOW
+    );
+    expect(old.text).toMatch(/· read Tue$/);
+    expect(old.detail).toMatch(/reported it Tue at 3:00/);
+    expect(readPhrase(NOW - 24 * HOUR, NOW)).toMatch(/^yesterday at 2:00/);
+    expect(readPhrase(new Date(2026, 9, 20, 9, 0).getTime(), NOW)).toMatch(/^on Oct 20 at 9:00/);
+    // A used-up window stays used up until its reset: no age needed.
+    const [limit] = quotaLines(
+      [claude(win({ limited: true, resetsAt: saturday, observedAt: tuesday }))],
+      NOW
+    );
+    expect(limit.text).not.toMatch(/read/);
+  });
+
   it('drops windows past their reset, and names each engine', () => {
     expect(quotaLines([claude(win({ usedPercent: 99, resetsAt: NOW - 1 }))], NOW)).toEqual([]);
     const lines = quotaLines(
@@ -130,12 +162,24 @@ describe('routineWeekLine', () => {
     ...over,
   });
   it('a cost only when every run reported one, else tokens, else nothing', () => {
-    expect(routineWeekLine(t({}))).toBe('$0.84 this week');
-    expect(routineWeekLine(t({ costUsd: 0.004 }))).toBe('<$0.01 this week');
+    expect(routineWeekLine(t({}))).toBe('$0.84 at API prices this week');
+    expect(routineWeekLine(t({ costUsd: 0.004 }))).toBe('<$0.01 at API prices this week');
     expect(routineWeekLine(t({ pricedTurns: 0, costUsd: 0 }))).toBe('38k tokens this week');
     expect(routineWeekLine(t({ pricedTurns: 1 }))).toBe('38k tokens this week');
     expect(routineWeekLine(t({ turns: 0 }))).toBeNull();
     expect(routineWeekLine(undefined)).toBeNull();
+  });
+
+  it('on a Claude plan, tokens instead of a list price that is not the bill', () => {
+    expect(routineWeekLine(t({}), true)).toBe('38k tokens this week');
+    expect(apiPrice(0.84)).toBe('$0.84 at API prices');
+    const plan = quotaLines(
+      [claude(win({ usedPercent: 20, resetsAt: new Date(2026, 10, 7, 10, 0).getTime() }))],
+      NOW
+    );
+    expect(onClaudePlan(plan)).toBe(true);
+    expect(onClaudePlan([])).toBe(false);
+    expect(onClaudePlan([{ engine: 'codex' }])).toBe(false);
   });
 
   it('sums routines, keeping an unpriced one from passing as priced', () => {

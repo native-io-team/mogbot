@@ -23,6 +23,13 @@ const WEEKDAY_CLOCK = new Intl.DateTimeFormat(undefined, {
 });
 const DATE = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+/**
+ * A reading older than this says how old it is on the line itself ("· read
+ * Tue"): a weekly figure stands until its reset, and use of the same plan in
+ * the CLI or on the web since then isn't in it.
+ */
+export const QUOTA_STALE_MS = 6 * HOUR_MS;
 
 /** Whole days from today to `at`'s day, on this device's calendar. */
 function daysAhead(at: number, now: number): number {
@@ -32,6 +39,10 @@ function daysAhead(at: number, now: number): number {
 }
 
 /**
+ * The one rule for naming a day, everywhere a reset is said (here, the
+ * Retry button, and the Mac's own sentences in `failure::clock_phrase`):
+ * today, "tomorrow", the weekday within the week, else the date.
+ *
  * When a limit lifts, for a sentence: "3:00 PM" today, "tomorrow 3:00 PM",
  * "Sat 10:00 AM" within the week, else "Nov 14". A weekly limit must never
  * read as a time today.
@@ -55,6 +66,24 @@ export function resetDay(at: number, now = Date.now()): string {
   if (days <= 0) return CLOCK.format(at);
   if (days === 1) return 'tomorrow';
   if (days < 7) return WEEKDAY.format(at);
+  return DATE.format(at);
+}
+
+/** When a reading was taken, for the tooltip: "at 3:00 PM" today, else with its day. */
+export function readPhrase(at: number, now = Date.now()): string {
+  const ago = -daysAhead(at, now);
+  if (ago <= 0) return `at ${CLOCK.format(at)}`;
+  if (ago === 1) return `yesterday at ${CLOCK.format(at)}`;
+  if (ago < 7) return `${WEEKDAY.format(at)} at ${CLOCK.format(at)}`;
+  return `on ${DATE.format(at)} at ${CLOCK.format(at)}`;
+}
+
+/** The same, shortest, for the line: "9:00 AM", "yesterday", "Tue", "Oct 28". */
+export function readDay(at: number, now = Date.now()): string {
+  const ago = -daysAhead(at, now);
+  if (ago <= 0) return CLOCK.format(at);
+  if (ago === 1) return 'yesterday';
+  if (ago < 7) return WEEKDAY.format(at);
   return DATE.format(at);
 }
 
@@ -96,7 +125,7 @@ export function quotaLines(quotas: Quota[], now = Date.now()): QuotaLine[] {
     const name = ENGINE_SHORT[q.engine] ?? q.engine;
     const full = ENGINE_FULL[q.engine] ?? q.engine;
     const read = (w: QuotaWindow) =>
-      `As ${full} reported it at ${CLOCK.format(w.observedAt)}, for its ${windowName(w)} limit. ` +
+      `As ${full} reported it ${readPhrase(w.observedAt, now)}, for its ${windowName(w)} limit. ` +
       'Use of the same plan anywhere else counts too.';
     const out = windows.filter(usedUp).sort((a, b) => (b.resetsAt ?? 0) - (a.resetsAt ?? 0))[0];
     if (out) {
@@ -118,15 +147,28 @@ export function quotaLines(quotas: Quota[], now = Date.now()): QuotaLine[] {
     // Floored: "90%" never shows on a window that hasn't reached it.
     const shown = Math.max(0, Math.floor(fullest.usedPercent));
     const reset = fullest.resetsAt ? ` · resets ${resetDay(fullest.resetsAt, now)}` : '';
+    // An old figure says so on the line, not only in the tooltip (which the
+    // phone doesn't have). A used-up window needs no age: it stays used up
+    // until its reset, which the line names.
+    const age =
+      now - fullest.observedAt > QUOTA_STALE_MS
+        ? ` · read ${readDay(fullest.observedAt, now)}`
+        : '';
     lines.push({
       engine: q.engine,
-      text: `${name} usage ${shown}%${reset}`,
+      text: `${name} usage ${shown}%${reset}${age}`,
       tone: fullest.usedPercent >= QUOTA_WARN_PERCENT ? 'warning' : 'calm',
       detail: read(fullest),
       percent: shown,
     });
   }
   return lines;
+}
+
+/** "38k tokens": every token a run reported, cache included. */
+export function tokenCount(t: UsageTotals): string {
+  const n = t.inputTokens + t.outputTokens + t.cacheReadTokens + t.cacheWriteTokens;
+  return `${compactTokens(n)} tokens`;
 }
 
 function compactTokens(n: number): string {
@@ -136,17 +178,32 @@ function compactTokens(n: number): string {
 }
 
 /**
- * A routine's week in a few words: "$0.84 this week" when every run was
- * priced, else its tokens ("38k tokens this week", Codex reports no price).
- * Null when it hasn't run on its own this week.
+ * Whether Claude has reported a plan (Pro or Max): a current Claude reading.
+ * On a plan, Claude Code's dollar figure is a list price, not the user's
+ * bill, so costs are said in tokens instead (`routineWeekLine`, the editor's
+ * and the phone's usage).
  */
-export function routineWeekLine(t: UsageTotals | undefined): string | null {
+export function onClaudePlan(lines: Pick<QuotaLine, 'engine'>[]): boolean {
+  return lines.some((l) => l.engine === 'claude');
+}
+
+/** A Claude Code price, said as what it is: "$0.84 at API prices". */
+export function apiPrice(usd: number): string {
+  return `${usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`} at API prices`;
+}
+
+/**
+ * A routine's week in a few words: "$0.84 at API prices this week" when
+ * every run was priced and Claude reported no plan, else its tokens ("38k
+ * tokens this week": a plan's figure isn't a bill, and Codex reports no
+ * price). Null when it hasn't run on its own this week.
+ */
+export function routineWeekLine(t: UsageTotals | undefined, onPlan = false): string | null {
   if (!t || t.turns === 0) return null;
-  if (t.pricedTurns === t.turns) {
-    return `${t.costUsd < 0.01 ? '<$0.01' : `$${t.costUsd.toFixed(2)}`} this week`;
+  if (t.pricedTurns === t.turns && !onPlan) {
+    return `${apiPrice(t.costUsd)} this week`;
   }
-  const tokens = t.inputTokens + t.outputTokens + t.cacheReadTokens + t.cacheWriteTokens;
-  return `${compactTokens(tokens)} tokens this week`;
+  return `${tokenCount(t)} this week`;
 }
 
 /** Several weeks' totals as one; undefined for none. */

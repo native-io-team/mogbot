@@ -920,14 +920,23 @@ estimated, and no reading means no line.
 
 **Cost, per agent and per routine.** Each turn's `result` (Claude Code:
 `usage`, `total_cost_usd`) or `turn/completed` (Codex: tokens only) is added
-to the agent's last 7 days. A turn whose batch was nothing but routine
-firings, all of one routine, is also charged to that routine
-(`runs::charged_to`); a turn shared with a person's message or with a second
-routine is charged to neither, because one turn's cost can't be split
-honestly. The schedule popover and the phone's routine rows say "$0.84 this
-week" when every run was priced, else "38k tokens this week". Claude Code's
-`modelUsage[*].costBasis` is `"list"`: the dollar figure is at API list
-prices, not a Pro/Max bill, and the tooltip says so.
+to the agent's last 7 days. A turn that finished having run nothing but
+routine firings, all of one routine (every check-in each of its tickets
+names), is also charged to that routine (`runs::charged_to`, inside the
+id-based settlement of `runs::turn_ended`); a turn shared with a person's
+message or with a second routine is charged to neither, because one turn's
+cost can't be split honestly. An interrupted turn's cost carries over to the
+turn that replaces it, as its tickets do, so the routine is charged all of
+it; a person's message anywhere in that chain unmakes it. A turn that fails
+or is stopped is charged to the agent only.
+
+Claude Code's `modelUsage[*].costBasis` is `"list"`: its dollar figure is at
+API list prices, not a Pro/Max bill. So once Claude has reported a plan (a
+current Claude reading, `onClaudePlan`), every Claude cost on the desk and
+the phone is said in tokens instead ("96k tokens this week"). Without one (an
+API-key login) the figure is shown and says what it is, visibly: "$0.84 at
+API prices this week", "$3.81 at API prices · 412k tokens · …". Codex
+reports no price, so it is always tokens.
 
 **The plan's limits.** Verified on Claude Code 2.1.318 (a subscription, a
 Haiku "say ok" turn, $0.004): every stream-json turn emits a
@@ -939,17 +948,39 @@ app-server has `account/rateLimits/read` and the sparse
 `account/rateLimits/updated` (`primary` / `secondary`: `usedPercent`,
 `windowDurationMins`, `resetsAt`); it is asked once per turn. **Unverified
 against a signed-in Codex account**: on this machine the read answered
-"authentication required", which is ignored. Readings are merged per window
-into `quota.json` and a window past its reset is dropped (`agents_quota`).
+"authentication required". Codex keeps a limit per model too, each snapshot
+naming its `limitId`; only `codex` (or a snapshot naming none) is read, so
+another model's limit never shows as "Codex usage".
+
+Readings go into `quota.json` (`agents_quota`), and a window past its reset
+is dropped. A Claude event is the account's whole picture and replaces
+Claude's reading; Codex's sparse updates merge per window. A reading never
+outlives the login it came from: it is cleared when a turn fails signed out,
+when Codex refuses the read for authentication, and when a Claude event names
+no window and no limit type (no plan on this login). The top-level
+`rateLimitType` of an event without `unifiedWindows` is read only when it is
+a known plan window, never e.g. `overage`.
 
 The sidebar foot, the foot of What's in flight, and the phone's agent list
 and Settings show "Claude usage 85% · resets Sat" for the fullest window,
-amber from 90%, and "Claude usage limit · resets Sat" for a used-up one. A
-usage-limit failure whose message gave no reset takes the engine's reported
-one (`failure::with_reported_reset`), and every reset days away is said with
-its day ("Usage limit · resets Sat 2:00 PM", "Retry Sat 2:00 PM"), never a
-bare clock time. The wording lives once, in
-`packages/companion-protocol/src/quota.ts`, for the desk and the phone.
+amber from 90% (Settings' rows too), and "Claude usage limit · resets Sat"
+for a used-up one. A figure stands until its reset even when no turn has run
+since, and use elsewhere isn't in it, so a reading's age is said: the tooltip
+names its day when it isn't today ("reported it Tue at 3:00 PM"), and once it
+is more than 6 hours old the line itself says so ("Claude usage 34% · resets
+Sat · read Tue"; the phone has no tooltip). The figure is kept rather than
+hidden: it is still the latest the engine said, now labelled as such. A
+used-up window needs no age, since it stays used up until the reset it names.
+
+A usage-limit failure whose message gave no reset takes the engine's reported
+one (`failure::with_reported_reset`). Every reset is said by one rule for the
+day: today a clock time, then "tomorrow", the weekday within the week, the
+date beyond it. The chat's sentence ("It resets Sat at 2:00 PM.",
+`failure::clock_phrase`), the button ("Retry Sat 2:00 PM"), the sidebar row
+("Usage limit · resets Sat 2:00 PM") and the foot ("resets Sat") all name
+the same day. The wording lives once, in
+`packages/companion-protocol/src/quota.ts`, for the desk and the phone, and
+in `clock_phrase` for the Mac's own sentences.
 
 ## Apps agents can use (`src-tauri/src/agents/apps.rs`)
 

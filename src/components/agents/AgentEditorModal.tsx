@@ -21,6 +21,7 @@ import { AgentMemory } from './AgentMemory';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentSecrets } from './AgentSecrets';
 import { AgentEngineField, AgentEngineMore } from './AgentEngine';
+import { useQuotaLines } from './AgentsQuota';
 import { ChevronRightIcon } from '@/components/icons';
 import {
   AGENT_COLORS,
@@ -38,6 +39,7 @@ import {
   getAgentInstructions,
   getAgentUsage,
   modelChoices,
+  onClaudePlan,
   revokePermission,
   routineWeekLine,
   SCOPE_KIND_LABEL,
@@ -58,13 +60,15 @@ import { AccentScope } from '../../contexts/AccentScopeContext';
  * turn. Then how full its conversation is, only when the engine said.
  */
 function UsageLines({ usage, agent }: { usage: UsageSummary | null; agent: Agent | null }) {
-  const week = usage && formatUsage(usage.week);
-  const allTime = usage && formatUsage(usage.allTime);
-  const routines = routineWeekLine(sumTotals((usage?.routines ?? []).map((r) => r.week)));
+  // On a Claude plan a dollar figure is a list price, not the bill: tokens instead.
+  const onPlan = onClaudePlan(useQuotaLines());
+  const week = usage && formatUsage(usage.week, onPlan);
+  const allTime = usage && formatUsage(usage.allTime, onPlan);
+  const routines = routineWeekLine(sumTotals((usage?.routines ?? []).map((r) => r.week)), onPlan);
   const context = agent && formatContext(agent);
   if (!allTime && !context) return null;
   const priced = (t: UsageTotals | undefined) =>
-    t && t.pricedTurns > 0 ? COST_BASIS_NOTE : undefined;
+    !onPlan && t && t.pricedTurns > 0 ? COST_BASIS_NOTE : undefined;
   return (
     <dl className="agent-editor__usage">
       {allTime && (

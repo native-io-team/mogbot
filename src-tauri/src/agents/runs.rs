@@ -551,6 +551,13 @@ mod tests {
         let mut other = ticket(1);
         other.check_ins[0].id = "c2".into();
         assert_eq!(charged_to(&[one.clone(), other], Some(&spent)), None);
+        // One ticket naming two check-ins (a one-time firing's `also`): every
+        // one counts, not just the first.
+        let mut two = ticket(1);
+        let mut also = check_in("Also this", true);
+        also.id = "c9".into();
+        two.check_ins.push(also);
+        assert_eq!(charged_to(std::slice::from_ref(&two), Some(&spent)), None);
         // Mixed with a person's message (the runner passes no cost), or nothing reported.
         assert_eq!(charged_to(std::slice::from_ref(&one), None), None);
         assert_eq!(

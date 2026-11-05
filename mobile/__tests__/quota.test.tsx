@@ -1,6 +1,8 @@
 import { quotaLines, routineWeekLine, type QuotaLine } from '@shipstudio/companion-protocol';
 import { render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { QuotaLines } from '../src/components/QuotaLines';
+import { Row } from '../src/components/ui';
 import { failureLine } from '../src/lib/agents';
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
 
@@ -18,7 +20,13 @@ describe('usage before the wall, on the phone', () => {
     expect(lines[1].text).toMatch(/^Codex usage limit · resets /);
     // After every reset, nothing is left to say.
     expect(quotaLines(real.agentsQuota, 1_762_500_000_000)).toEqual([]);
-    expect(routineWeekLine(real.agentsUsage.routines?.[0]?.week)).toBe('$0.30 this week');
+    expect(routineWeekLine(real.agentsUsage.routines?.[0]?.week)).toBe(
+      '$0.30 at API prices this week'
+    );
+    // With a Claude plan reading, never a dollar figure.
+    expect(routineWeekLine(real.agentsUsage.routines?.[0]?.week, true)).toMatch(
+      /^\d+(\.\d)?k? tokens this week$/
+    );
   });
 
   it('shows nothing without a reading, and amber from 90%', async () => {
@@ -34,6 +42,17 @@ describe('usage before the wall, on the phone', () => {
     await render(<QuotaLines lines={[line]} />);
     const text = screen.getByText('Claude usage 93% · resets Sat');
     expect(text.props.accessibilityLabel).toMatch(/weekly limit/);
+  });
+
+  it('a Settings “Plan usage” row turns amber like the agents list', async () => {
+    const color = (label: string) =>
+      StyleSheet.flatten(screen.getByText(label).props.style)?.color as string | undefined;
+    await render(<Row label="Claude usage 34% · resets Sat" />);
+    const calm = color('Claude usage 34% · resets Sat');
+    await render(<Row label="Claude usage 93% · resets Sat" warning />);
+    const amber = color('Claude usage 93% · resets Sat');
+    expect(amber).toBeTruthy();
+    expect(amber).not.toBe(calm);
   });
 
   it('a weekly usage limit names its day, never just a clock time', () => {

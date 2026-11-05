@@ -322,8 +322,12 @@ describe('formatUsage', () => {
   });
 
   it('prints only what was reported', () => {
-    expect(formatUsage(totals({}))).toBe('$0.42 · 40k tokens · 2 turns · 3 min');
+    expect(formatUsage(totals({}))).toBe('$0.42 at API prices · 40k tokens · 2 turns · 3 min');
     expect(formatUsage(totals({ turns: 0 }))).toBeNull();
+  });
+
+  it('on a Claude plan, leaves out the list price: it is not the bill', () => {
+    expect(formatUsage(totals({}), true)).toBe('40k tokens · 2 turns · 3 min');
   });
 
   it('drops the cost when any turn reported none, rather than under-reporting it', () => {

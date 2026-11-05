@@ -1457,7 +1457,9 @@ export const getQuotas = () => invoke<Quota[]>('agents_quota');
 
 // The plan's limits and a routine's week, worded once for the desk and the phone.
 export {
+  apiPrice,
   COST_BASIS_NOTE,
+  onClaudePlan,
   QUOTA_WARN_PERCENT,
   quotaLines,
   resetDay,
@@ -1468,7 +1470,10 @@ export {
   type QuotaLine,
   type QuotaTone,
 } from '../../packages/companion-protocol/src/quota';
-import { resetPhrase as resetWords } from '../../packages/companion-protocol/src/quota';
+import {
+  apiPrice as apiPriceWords,
+  resetPhrase as resetWords,
+} from '../../packages/companion-protocol/src/quota';
 
 /**
  * A hit's snippet cut to start a few words before its first match, so the
@@ -1512,11 +1517,12 @@ function duration(ms: number): string {
 }
 
 /**
- * "$0.42 · 38k tokens · 6 turns · 4 min", from what Claude Code reported.
- * The cost is left out unless every turn reported one: a partial sum would
- * read as the whole. Null when there were no turns.
+ * "$0.42 at API prices · 38k tokens · 6 turns · 4 min", from what Claude Code
+ * reported. The cost is left out unless every turn reported one (a partial
+ * sum would read as the whole), and on a Claude plan (`onPlan`), where it is
+ * a list price and not the bill. Null when there were no turns.
  */
-export function formatUsage(totals: UsageTotals): string | null {
+export function formatUsage(totals: UsageTotals, onPlan = false): string | null {
   if (totals.turns === 0) return null;
   const tokens =
     totals.inputTokens + totals.outputTokens + totals.cacheReadTokens + totals.cacheWriteTokens;
@@ -1525,8 +1531,8 @@ export function formatUsage(totals: UsageTotals): string | null {
     `${totals.turns} ${totals.turns === 1 ? 'turn' : 'turns'}`,
   ];
   if (totals.durationMs > 0) parts.push(duration(totals.durationMs));
-  if (totals.pricedTurns === totals.turns) {
-    parts.unshift(totals.costUsd < 0.01 ? '<$0.01' : `$${totals.costUsd.toFixed(2)}`);
+  if (totals.pricedTurns === totals.turns && !onPlan) {
+    parts.unshift(apiPriceWords(totals.costUsd));
   }
   return parts.join(' · ');
 }

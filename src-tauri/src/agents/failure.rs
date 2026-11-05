@@ -384,7 +384,11 @@ fn next_clock_time<Tz: TimeZone>(tz: &Tz, words: &str, now: i64) -> Option<i64> 
     schedule::resolve(tz, today + Duration::days(1), hour, minute)
 }
 
-/// "at 3:00 PM", "tomorrow at 3:00 PM", "on Nov 7 at 3:00 PM".
+/// "at 3:00 PM", "tomorrow at 3:00 PM", "Sat at 3:00 PM" within the week,
+/// else "on Nov 14". The same rule for naming a day as everywhere else a
+/// reset is said (`resetPhrase` in the companion protocol's quota.ts: the
+/// Retry button, the sidebar), so the chat's sentence and the button beside
+/// it never disagree about the day.
 pub fn clock_phrase<Tz: TimeZone>(tz: &Tz, at: i64, now: i64) -> String
 where
     Tz::Offset: std::fmt::Display,
@@ -398,9 +402,10 @@ where
     let time = then.format("%-I:%M %p").to_string();
     let days = (then.date_naive() - today.date_naive()).num_days();
     match days {
-        0 => format!("at {time}"),
+        ..=0 => format!("at {time}"),
         1 => format!("tomorrow at {time}"),
-        _ => format!("on {} {} at {time}", then.format("%b"), then.day()),
+        2..=6 => format!("{} at {time}", then.format("%a")),
+        _ => format!("on {} {}", then.format("%b"), then.day()),
     }
 }
 
@@ -549,6 +554,27 @@ mod tests {
 
     /// Mon 2 Nov 2026, 10:00 UTC.
     const NOW: i64 = 1_793_613_600_000;
+
+    #[test]
+    fn a_reset_names_its_day_as_the_button_does() {
+        // 2026-11-05 14:00 UTC, a Thursday.
+        let now = Utc
+            .with_ymd_and_hms(2026, 11, 5, 14, 0, 0)
+            .unwrap()
+            .timestamp_millis();
+        let at = |d: u32, h: u32| {
+            Utc.with_ymd_and_hms(2026, 11, d, h, 0, 0)
+                .unwrap()
+                .timestamp_millis()
+        };
+        assert_eq!(clock_phrase(&Utc, at(5, 17), now), "at 5:00 PM");
+        assert_eq!(clock_phrase(&Utc, at(6, 9), now), "tomorrow at 9:00 AM");
+        // Within the week: its weekday, never a date (the Retry button says "Sat").
+        assert_eq!(clock_phrase(&Utc, at(7, 14), now), "Sat at 2:00 PM");
+        assert_eq!(clock_phrase(&Utc, at(11, 9), now), "Wed at 9:00 AM");
+        // A week or more away: the date.
+        assert_eq!(clock_phrase(&Utc, at(12, 9), now), "on Nov 12");
+    }
 
     #[test]
     fn a_local_clock_time_becomes_a_reset_time() {

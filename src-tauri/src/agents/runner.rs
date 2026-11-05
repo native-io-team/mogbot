@@ -2016,6 +2016,12 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             Err(err) => {
                 let engine = store::get(&agent_id).map(|a| a.engine).unwrap_or_default();
                 let (text, failure) = super::failure::describe_now(engine, &err.to_string());
+                // Signed out: the plan reading kept belonged to a login that isn't here.
+                if failure.kind == super::failure::FailureKind::SignedOut
+                    && super::quota::clear(engine, store::now_ms())
+                {
+                    let _ = app.emit(EVENT_QUOTA, ());
+                }
                 let mut line = new_message(&agent_id, MessageKind::Error, text.clone());
                 line.failure = Some(failure);
                 let _ = record(&app, line);

@@ -142,6 +142,8 @@ export default function Settings() {
               key={line.engine}
               label={line.text}
               detail={line.detail}
+              // Amber from 90% and at the limit, as on the agents list.
+              warning={line.tone !== 'calm'}
               last={i === quota.length - 1}
             />
           ))}
