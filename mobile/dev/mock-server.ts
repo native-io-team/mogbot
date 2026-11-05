@@ -495,9 +495,27 @@ export function createMockServer(opts: MockOptions = {}) {
     });
     const said = (i: number): 'quiet' | 'working' | 'said_hi' =>
       i < 2 ? 'said_hi' : i === 6 ? 'working' : 'quiet';
+    // The conversation goes on after the import: the card stays where it was posted.
+    messages.get('chief')!.push(
+      {
+        id: 'chief_after_1',
+        agentId: 'chief',
+        ts: now - 3 * 60_000,
+        kind: 'user',
+        text: 'Thanks. I’ll do the logins tonight. What’s on for tomorrow?',
+      },
+      {
+        id: 'chief_after_2',
+        agentId: 'chief',
+        ts: now - 2 * 60_000,
+        kind: 'agent',
+        text: 'Tomorrow is quiet: the kiln firing at 10 and the wholesale call at 3.',
+      }
+    );
     teamSetup = {
       id: 'setup_mock',
       source: 'Grok Bot',
+      postedAt: now - 9 * 60_000,
       steps: [
         {
           id: 'logins',

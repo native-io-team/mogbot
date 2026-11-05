@@ -660,6 +660,7 @@ pub fn team_setup_fixture() -> crate::agents::team_setup::SetupView {
     SetupView {
         id: "setup1".into(),
         source: "Grok".into(),
+        posted_at: 1_700_000_000_000,
         steps: vec![logins, routines, missing, hi],
         done: 2,
         total: 4,

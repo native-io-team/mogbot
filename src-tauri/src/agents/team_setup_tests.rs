@@ -256,6 +256,9 @@ fn a_second_import_joins_the_same_checklist() {
     let second = start("Grok", vec![arrived(&b, &["x"])]).unwrap().unwrap();
     assert_eq!(first.id, second.id);
     assert_eq!(second.agents, vec![a.id.clone(), b.id.clone()]);
+    // The card stays where it was first posted in the Chief's chat.
+    assert_eq!(second.posted_at, first.posted_at);
+    assert_eq!(view().unwrap().posted_at, first.started_at);
     // Someone new reopens Say hi.
     assert!(!second.steps.contains_key(&StepId::Hello));
     // One that was finished is done with: the next import starts its own.
@@ -365,6 +368,10 @@ fn the_upgrade_folds_an_older_import_in_and_sets_aside_the_fan_out_once() {
 
     let done = upgrade(&chief).unwrap().unwrap();
     assert_eq!(done.agents, 2);
+    // The card sits under the upgrade's line ("below"), where it was posted.
+    let chief_log = store::messages(&chief.id, usize::MAX).unwrap();
+    let line = chief_log.iter().rev().find(|m| m.text == UPGRADE_LINE).unwrap();
+    assert_eq!(view_any().unwrap().posted_at, line.ts);
     let mut set: Vec<&str> = done.set_aside.iter().map(|(_, id)| id.as_str()).collect();
     set.sort();
     assert_eq!(set, vec!["car-fan", "fan"]);
@@ -414,6 +421,35 @@ fn the_upgrade_does_nothing_without_an_import() {
     assert!(upgrade(&chief).unwrap().is_none());
     assert!(load().is_none());
     assert!(view().is_none());
+    store::set_root_for_tests(None);
+}
+
+#[test]
+fn a_setup_kept_by_an_earlier_build_keeps_the_place_it_was_posted() {
+    let (_serial, _dir) = root();
+    let chief = crate::agents::ensure_main().unwrap();
+    let a = agent("Bookkeeper");
+    let now = store::now_ms();
+    // Upgraded by a build that pinned the card at the foot: no `postedAt`.
+    say(&chief.id, now - 60_000, json!({ "kind": "note", "text": UPGRADE_LINE }));
+    say(&chief.id, now - 1_000, json!({ "kind": "user", "text": "Morning" }));
+    let kept = TeamSetup {
+        id: "old".into(),
+        source: "Grok Bot".into(),
+        started_at: now - 3_600_000,
+        agents: vec![a.id.clone()],
+        upgraded: true,
+        ..TeamSetup::default()
+    };
+    save(&kept).unwrap();
+    assert!(!std::fs::read_to_string(path().unwrap()).unwrap().contains("postedAt"));
+    // Under the upgrade's line, not under "Morning"; and written down once.
+    assert_eq!(view().unwrap().posted_at, now - 60_000);
+    assert_eq!(load().unwrap().posted_at, Some(now - 60_000));
+
+    // One from an import: at the import.
+    save(&TeamSetup { upgraded: false, posted_at: None, ..kept }).unwrap();
+    assert_eq!(view().unwrap().posted_at, now - 3_600_000);
     store::set_root_for_tests(None);
 }
 

@@ -122,6 +122,11 @@ pub struct TeamSetup {
     /// Requests the upgrade set aside (for the line in the Chief's chat).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub set_aside: u32,
+    /// When the card was posted in the Chief's chat. Kept from builds that
+    /// pinned the card under the newest message: those read it once from
+    /// the chat ([`posted_at_of`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub posted_at: Option<i64>,
 }
 
 fn is_zero(n: &u32) -> bool {
@@ -323,6 +328,10 @@ pub struct StepView {
 pub struct SetupView {
     pub id: String,
     pub source: String,
+    /// When the card was posted in the Chief's chat (the import's end, or
+    /// the upgrade's line): where it sits in that conversation, like a
+    /// message, however much is said after it.
+    pub posted_at: i64,
     pub steps: Vec<StepView>,
     /// Steps done or skipped.
     pub done: usize,
@@ -387,12 +396,16 @@ pub fn start(source: &str, arrived: Vec<Arrived>) -> Result<Option<TeamSetup>, C
     let mut setup = match load().filter(TeamSetup::is_live) {
         // A second import before the first was set up: one checklist.
         Some(live) => live,
-        None => TeamSetup {
-            id: store::new_id(),
-            source: source.to_string(),
-            started_at: store::now_ms(),
-            ..TeamSetup::default()
-        },
+        None => {
+            let now = store::now_ms();
+            TeamSetup {
+                id: store::new_id(),
+                source: source.to_string(),
+                started_at: now,
+                posted_at: Some(now),
+                ..TeamSetup::default()
+            }
+        }
     };
     for a in arrived {
         if !setup.agents.contains(&a.agent_id) {
@@ -546,7 +559,7 @@ pub fn set_routine(agent_id: &str, check_in_id: &str, on: bool) -> Result<(), Co
 /// The checklist now, or `None` when there's nothing to show (never set up,
 /// put away, or finished and put away).
 pub fn view() -> Option<SetupView> {
-    let setup = load()?;
+    let setup = with_posted_at(load()?);
     if setup.dismissed {
         return None;
     }
@@ -564,7 +577,7 @@ pub fn view() -> Option<SetupView> {
 
 /// The checklist even when it's put away (⌘K, What's in flight).
 pub fn view_any() -> Option<SetupView> {
-    let setup = load()?;
+    let setup = with_posted_at(load()?);
     Some(build(&setup))
 }
 
@@ -654,6 +667,7 @@ fn build(setup: &TeamSetup) -> SetupView {
     SetupView {
         id: setup.id.clone(),
         source: setup.source.clone(),
+        posted_at: setup.posted_at.unwrap_or(setup.started_at),
         current: steps
             .iter()
             .find(|s| s.state == StepState::Open)
@@ -1013,13 +1027,50 @@ pub fn upgrade(chief: &store::Agent) -> Result<Option<Upgraded>, CommandError> {
         }
     }
     setup.set_aside = out.set_aside.len() as u32;
+    // The card goes under this line ("below"), where it was posted.
+    let line = runner_note(&chief.id, UPGRADE_LINE.to_string());
+    setup.posted_at = Some(line.ts);
     save(&setup)?;
-    let line = runner_note(
-        &chief.id,
-        "What your team needs to get going is in one place now, below. Nothing it asked for has run.".to_string(),
-    );
     store::append_message(&line)?;
     Ok(Some(out))
+}
+
+/// The upgrade's line in the Chief's chat, above the card.
+const UPGRADE_LINE: &str =
+    "What your team needs to get going is in one place now, below. Nothing it asked for has run.";
+
+/// A setup kept before `posted_at` existed gets it once, from the chat: an
+/// upgraded one sits under the upgrade's line, any other at its import.
+fn with_posted_at(mut setup: TeamSetup) -> TeamSetup {
+    if setup.posted_at.is_some() {
+        return setup;
+    }
+    let at = posted_at_of(&setup);
+    setup.posted_at = Some(at);
+    let _ = change(|s| {
+        if s.id == setup.id && s.posted_at.is_none() {
+            s.posted_at = Some(at);
+        }
+    });
+    setup
+}
+
+fn posted_at_of(setup: &TeamSetup) -> i64 {
+    if !setup.upgraded {
+        return setup.started_at;
+    }
+    let chief = store::list()
+        .ok()
+        .and_then(|all| all.into_iter().find(|a| a.is_main));
+    chief
+        .and_then(|c| store::messages(&c.id, usize::MAX).ok())
+        .and_then(|log| {
+            log.iter()
+                .rev()
+                .find(|m| m.kind == MessageKind::Note && m.text == UPGRADE_LINE)
+                .map(|m| m.ts)
+        })
+        .unwrap_or(setup.started_at)
 }
 
 fn runner_note(agent_id: &str, text: String) -> AgentMessage {

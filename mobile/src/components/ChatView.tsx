@@ -53,7 +53,8 @@ import {
 } from '../lib/session';
 import { useAccent } from '../lib/accent';
 import { useApp } from '../lib/store';
-import { chatItems, sentAt, type Item } from '../lib/timeline';
+import { SETUP_KEY, chatItems, sentAt, withSetupCard, type Item } from '../lib/timeline';
+import { setupAnchor, shows as showsSetup } from '../lib/teamSetup';
 import { alpha, avatarSize, chromeScale, iconSize, radius, space, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
@@ -218,10 +219,14 @@ export function ChatView({
   }, [connected, chat?.loaded, id, showError, agent]);
 
   const messages = chat?.messages ?? NONE;
-  const items = useMemo<Item[]>(
-    () => (agent ? chatItems(agent, messages, pending, draft) : []),
-    [agent, messages, draft, pending]
-  );
+  // "Setting up your team" is a row like a message, where it was posted.
+  const setup = useApp((s) => (agent?.isMain && showsSetup(s.teamSetup) ? s.teamSetup : null));
+  const setupAt = useMemo(() => (setup ? setupAnchor(setup, messages) : null), [setup, messages]);
+  const items = useMemo<Item[]>(() => {
+    if (!agent) return [];
+    const rows = chatItems(agent, messages, pending, draft);
+    return setup && chat?.loaded ? withSetupCard(rows, setupAt, !!chat.more) : rows;
+  }, [agent, messages, draft, pending, setup, setupAt, chat?.loaded, chat?.more]);
   // In a pane too short for a whole card, the question it's asking stays
   // pinned at the top, so the answers at the bottom never stand alone. Only
   // a card this phone can answer: an import's review is answered on the Mac.
@@ -311,6 +316,22 @@ export function ChatView({
       .catch((e: unknown) => showError(describeError(e)))
       .finally(() => setLoadingOlder(false));
   }, [chat, loadingOlder, connected, id, showError]);
+
+  // The bar's Continue: to the card where it was posted (paging back to it
+  // if it's older than what's loaded), lit once.
+  const [findSetup, setFindSetup] = useState(false);
+  const setupShown = items.some((i) => i.key === SETUP_KEY);
+  useEffect(() => {
+    if (!findSetup) return;
+    if (setupShown) {
+      setFindSetup(false);
+      setTarget(SETUP_KEY);
+      const timer = setTimeout(() => setTarget((t) => (t === SETUP_KEY ? null : t)), 2000);
+      return () => clearTimeout(timer);
+    }
+    if (chat?.more) older();
+    else setFindSetup(false);
+  }, [findSetup, setupShown, chat?.more, older]);
 
   const renderScroll = useCallback(
     (props: ScrollViewProps) => (
@@ -514,11 +535,6 @@ export function ChatView({
               initialNumToRender={16}
               maxToRenderPerBatch={12}
               windowSize={13}
-              // The newest end of an inverted list: "Setting up your team" sits
-              // under the conversation in the Chief's chat, as on the desk.
-              ListHeaderComponent={
-                agent.isMain ? <TeamSetupCard chief={agent.name} onError={showError} /> : undefined
-              }
               ListFooterComponent={
                 chat?.loaded && !chat.more ? (
                   <Line text={`Start of your conversation with ${agent.name}`} />
@@ -618,6 +634,7 @@ export function ChatView({
           onHeight={setComposerHeight}
           side={side}
           onSent={() => list.current?.scrollToOffset({ offset: 0, animated: true })}
+          onOpenSetup={() => setFindSetup(true)}
         />
       </KeyboardStickyView>
       <SelectSheet
@@ -676,6 +693,8 @@ function ItemView({
       <DraftRow id={item.key} text={item.text} onHeight={onDraftHeight} />
     ) : item.kind === 'room' ? (
       <RoomFoldRow fold={item.fold} />
+    ) : item.kind === 'setup' ? (
+      <TeamSetupCard chief={agent.name} onError={onError} />
     ) : (
       <WorkingRow label={item.label} agent={agent} onError={onError} />
     );

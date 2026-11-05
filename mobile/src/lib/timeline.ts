@@ -20,7 +20,38 @@ export type Item =
   | { kind: 'draft'; key: string; text: string }
   | { kind: 'working'; key: string; label: string }
   /** What the agent said in a room, folded into one line that opens the room. */
-  | { kind: 'room'; key: string; fold: RoomFold };
+  | { kind: 'room'; key: string; fold: RoomFold }
+  /** "Setting up your team", where it was posted in the Chief's chat. */
+  | { kind: 'setup'; key: typeof SETUP_KEY };
+
+/** The setup card's row: one per chat, so its key is fixed. */
+export const SETUP_KEY = 'team-setup';
+
+const itemTs = (item: Item): number | null =>
+  item.kind === 'message' ? item.message.ts : item.kind === 'room' ? item.fold.last.ts : null;
+
+/**
+ * The list with "Setting up your team" at its place, newest first: under
+ * (newer than) everything said up to `anchor`, when it was posted, and above
+ * what came after, the time line that opens it included. Never pinned under
+ * the newest message. Left out while its place is older than what's loaded
+ * (`more`); with no time known, it goes under the newest message.
+ */
+export function withSetupCard(items: Item[], anchor: number | null, more: boolean): Item[] {
+  const card: Item = { kind: 'setup', key: SETUP_KEY };
+  const first = items.findIndex((i) => itemTs(i) !== null);
+  if (first < 0) return more ? items : [...items, card];
+  if (anchor === null) {
+    // No time known (an older Mac, its import out of reach): under the newest message.
+    return [...items.slice(0, first), card, ...items.slice(first)];
+  }
+  const at = items.findIndex((i) => {
+    const ts = itemTs(i);
+    return ts !== null && ts <= anchor;
+  });
+  if (at < 0) return more ? items : [...items, card];
+  return [...items.slice(0, at), card, ...items.slice(at)];
+}
 
 /** Messages closer than this, from the same side, are one run: drawn close together. */
 const RUN_MS = 5 * 60_000;

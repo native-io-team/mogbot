@@ -7,6 +7,7 @@
  */
 
 import type {
+  AgentMessage,
   TeamSetupHello,
   TeamSetupLogin,
   TeamSetupStep,
@@ -78,6 +79,37 @@ export function stateWord(step: TeamSetupStep): string | null {
   if (step.state === 'done') return 'Done';
   if (step.state === 'skipped') return 'Skipped';
   return null;
+}
+
+/** The bar above the Chief's composer while some is left: the desk's words. */
+export const SETUP_BAR_TITLE = 'A few things to finish setting up your team';
+
+/**
+ * Where the card was posted, as a time: what the Mac says, else (an older
+ * Mac) the import's end — its review card and the line after it. `null`
+ * when neither is known.
+ */
+export function setupAnchor(
+  view: Pick<TeamSetupView, 'postedAt'>,
+  messages: readonly AgentMessage[]
+): number | null {
+  if (view.postedAt) return view.postedAt;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].approval?.connector?.kind !== 'review') continue;
+    let ts = messages[i].ts;
+    for (let j = i + 1; j < messages.length && messages[j].kind === 'note'; j++)
+      ts = messages[j].ts;
+    return ts;
+  }
+  return null;
+}
+
+/** The bar while some is left ("2 of 4 done"); none once it's done or put away. */
+export function setupBar(
+  v: TeamSetupView | null | undefined
+): { tone: 'waiting'; title: string; detail: string } | null {
+  if (!shows(v) || v.complete) return null;
+  return { tone: 'waiting', title: SETUP_BAR_TITLE, detail: progress(v) };
 }
 
 /** Whether the card draws anything (a Mac that has none says `null`). */

@@ -1,9 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { SetupStep, TeamSetupView } from '../../lib/teamSetup';
-import { onlySetupRequests, quietAgentIds, setupHeldCounts } from '../../lib/teamSetup';
+import {
+  onlySetupRequests,
+  quietAgentIds,
+  setupAnchorTs,
+  setupHeldCounts,
+  setupItemIndex,
+} from '../../lib/teamSetup';
 import { scopeTeam, type TeamLogins } from '../../lib/agentLogins';
-import type { Agent } from '../../lib/agents';
+import { buildChatItems, type Agent, type AgentMessage, type ChatItem } from '../../lib/agents';
 import { SetupLogins, TeamSetupCard } from './TeamSetupCard';
 import { SET_ASIDE_OUTCOME } from './AgentChatItems';
 
@@ -179,7 +185,7 @@ describe('TeamSetupCard', () => {
         chief="Chief of Staff"
       />
     );
-    expect(screen.getByText(/Your team is set up/)).toBeInTheDocument();
+    expect(screen.getByText(/Done · Your team is set up/)).toBeInTheDocument();
     expect(screen.queryByText('Setting up your team')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
     await waitFor(() => expect(calls.dismiss).toHaveBeenCalled());
@@ -329,5 +335,84 @@ describe('quietAgentIds', () => {
 describe('a request set aside', () => {
   it('reads as set aside, not as unanswered', () => {
     expect(SET_ASIDE_OUTCOME).toBe('Set aside · nothing ran');
+  });
+});
+
+describe('where the card sits in the Chief’s chat', () => {
+  // Fictional times: a quiet afternoon, minutes apart.
+  const t0 = new Date(2026, 2, 4, 14, 0).getTime();
+  const min = 60_000;
+  const msg = (id: string, at: number, extra: Partial<AgentMessage> = {}): AgentMessage =>
+    ({ id, ts: t0 + at * min, kind: 'user', text: id, ...extra }) as AgentMessage;
+  const ids = (items: ChatItem[]) =>
+    items.map((i) => (i.type === 'day' ? 'day' : i.type === 'message' ? i.message.id : 'group'));
+  const placed = (items: ChatItem[], at: number) => {
+    const out = ids(items);
+    out.splice(at, 0, 'CARD');
+    return out;
+  };
+
+  it('stays where it was posted while newer messages arrive under it', () => {
+    const before = [msg('review', 0, { kind: 'approval' }), msg('imported', 1, { kind: 'note' })];
+    const anchor = t0 + 1 * min;
+    let items = buildChatItems(before);
+    expect(placed(items, setupItemIndex(items, anchor))).toEqual([
+      'day',
+      'review',
+      'imported',
+      'CARD',
+    ]);
+    // You send a message: yours is the newest thing, under the card.
+    items = buildChatItems([...before, msg('hi', 3), msg('reply', 4, { kind: 'agent' })]);
+    expect(placed(items, setupItemIndex(items, anchor))).toEqual([
+      'day',
+      'review',
+      'imported',
+      'CARD',
+      'hi',
+      'reply',
+    ]);
+  });
+
+  it('sits above the time line that opens what came after it', () => {
+    const items = buildChatItems([msg('imported', 0, { kind: 'note' }), msg('later', 60 * 24)]);
+    expect(placed(items, setupItemIndex(items, t0))).toEqual([
+      'day',
+      'imported',
+      'CARD',
+      'day',
+      'later',
+    ]);
+  });
+
+  it('is not drawn while its place is above the lines loaded so far', () => {
+    const items = buildChatItems([msg('much later', 90)]);
+    expect(setupItemIndex(items, t0, true)).toBe(-1);
+    // Everything loaded: it is simply first.
+    expect(setupItemIndex(items, t0, false)).toBe(0);
+  });
+
+  it('uses the Mac’s time, else the end of the import (an older Mac)', () => {
+    const log = [
+      msg('earlier', 0),
+      msg('review', 5, {
+        kind: 'approval',
+        approval: { connector: { kind: 'review' } } as AgentMessage['approval'],
+      }),
+      msg('imported', 6, { kind: 'note' }),
+      msg('hi', 9),
+    ];
+    expect(setupAnchorTs({ postedAt: t0 + 2 * min }, log)).toBe(t0 + 2 * min);
+    expect(setupAnchorTs({}, log)).toBe(t0 + 6 * min);
+    expect(setupAnchorTs({}, [msg('hi', 1)])).toBeNull();
+    const items = buildChatItems(log);
+    expect(placed(items, setupItemIndex(items, setupAnchorTs({}, log)))).toEqual([
+      'day',
+      'earlier',
+      'review',
+      'imported',
+      'CARD',
+      'hi',
+    ]);
   });
 });

@@ -683,6 +683,11 @@ export interface TeamSetupStep {
 export interface TeamSetupView {
   id: string;
   source: string;
+  /**
+   * When it was posted (the import's end): its place in the Chief's
+   * conversation, like a message's. Older Macs don't say.
+   */
+  postedAt?: number;
   steps: TeamSetupStep[];
   /** Steps done or skipped. */
   done: number;

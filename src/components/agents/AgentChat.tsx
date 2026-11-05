@@ -142,8 +142,11 @@ import {
   progressLine,
   quietAgentIds,
   SETUP_BAR_TITLE,
+  setupAnchorTs,
+  setupItemIndex,
   showTeamSetup,
   useTeamSetup,
+  useTeamSetupReveal,
 } from '../../lib/teamSetup';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { useAccentScope } from '../../lib/accent';
@@ -767,6 +770,12 @@ export const AgentChat = memo(function AgentChat({
     }
     return ids;
   }, [listed, setupHere]);
+  // The card sits where it was posted, like a message: everything said
+  // after it comes below it (-1: above the lines loaded so far).
+  const setupAt = useMemo(
+    () => (setupHere ? setupItemIndex(items, setupAnchorTs(setupHere, listed), hasOlder) : -1),
+    [setupHere, items, listed, hasOlder]
+  );
   // The agents still being set up: their requests open the checklist, not
   // the requests panel.
   const setupBarTarget = useMemo(
@@ -984,6 +993,45 @@ export const AgentChat = memo(function AgentChat({
     inputRef.current?.focus({ preventScroll: true });
     onJumped?.();
   }, [jumpTo, messages, hasOlder, agent.id, onJumped, items, startIndex]);
+
+  // Continue (the bar, ⌘K, What's in flight): go to the card where it was
+  // posted, mounting or loading back to it first, and flash it.
+  const setupReveal = useTeamSetupReveal(agent.isMain);
+  const setupRevealed = useRef(0);
+  useLayoutEffect(() => {
+    const ask = setupReveal.ask;
+    if (!ask || setupRevealed.current === ask || !setupHere) return;
+    const row = messagesRef.current?.querySelector<HTMLElement>('[data-team-setup]');
+    if (!row) {
+      if (setupAt >= 0 && setupAt < startIndex) {
+        const id = items.slice(setupAt).map(itemMessageId).find(Boolean);
+        if (id) {
+          setMountFrom(id);
+          return;
+        }
+      }
+      if (setupAt < 0 && hasOlder) {
+        void loadOlderMessages(agent.id);
+        return;
+      }
+      setupRevealed.current = ask;
+      setupReveal.done();
+      return;
+    }
+    setupRevealed.current = ask;
+    setupReveal.done();
+    atBottomRef.current = false;
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.removeAttribute('data-flash');
+    void row.offsetWidth;
+    row.setAttribute('data-flash', '');
+    const clear = (e: AnimationEvent) => {
+      if (e.animationName !== 'agents-motion-flash') return;
+      row.removeAttribute('data-flash');
+      row.removeEventListener('animationend', clear);
+    };
+    row.addEventListener('animationend', clear);
+  }, [setupReveal, setupHere, setupAt, startIndex, items, hasOlder, agent.id]);
 
   const scrollToBottom = () => {
     const el = scrollRef.current;
@@ -1399,9 +1447,16 @@ export const AgentChat = memo(function AgentChat({
   );
   // The working line goes in after: what it's doing changes every step, and
   // must not rebuild the history around it.
+  // "Setting up your team", at its place in the history (never pinned under
+  // the newest line), then the working line.
+  const setupRow = setupHere && setupAt >= startIndex && (
+    <TeamSetupCard key="team-setup" view={setupHere} chief={agent.name} onOpenAgent={onOpenAgent} />
+  );
+  const withSetup = withIndicatorAt(setupAt - startIndex, history, setupRow);
+  const workingAt = Math.max(0, queuedFrom - startIndex);
   const rows = withIndicatorAt(
-    Math.max(0, queuedFrom - startIndex),
-    history,
+    setupRow && setupAt - startIndex <= workingAt ? workingAt + 1 : workingAt,
+    withSetup,
     indicator.mounted && (
       <WorkingIndicator
         key="working"
@@ -1562,9 +1617,6 @@ export const AgentChat = memo(function AgentChat({
             {/* A ready-made agent the Chief just made: only "Created by" so
               far, so its own starters sit under it until the user speaks. */}
             {templateFirstOpen && engineReady && templateStarters}
-            {setupHere && (
-              <TeamSetupCard view={setupHere} chief={agent.name} onOpenAgent={onOpenAgent} />
-            )}
             {items.length > 0 && (
               <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
             )}
