@@ -1,7 +1,7 @@
-# Ship Studio for iPhone and Android
+# The phone app (iPhone and Android)
 
-The mobile companion: your agents, chats and approvals from Ship Studio on your
-Mac, over your own Tailscale tailnet. The Mac does the work; the phone is a
+The mobile companion: your agents, chats and approvals from the desktop app on
+your Mac, over your own Tailscale tailnet. The Mac does the work; the phone is a
 thin client. Design and protocol: [docs/mobile.md](../docs/mobile.md); wire
 types: [packages/companion-protocol](../packages/companion-protocol/src/index.ts).
 
@@ -24,7 +24,7 @@ npx expo start --dev-client     # afterwards: just the bundler
 Expo SDK 58 needs **Xcode 26.4 or later** to build the dev client. With an
 older Xcode, run the JS in Expo Go instead (no native build; the app's modules
 are all in Expo Go): `npx expo start --go --ios`. Expo Go can't receive the
-`shipstudio-companion://` scheme, so open pairing links as
+companion scheme (`companion.scheme` in `brand.json`), so open pairing links as
 `exp://<your-ip>:8081/--/pair?d=…` (the `d=` part of the mock's link).
 
 The mock prints two one-time commands: trust its self-signed certificate in the
@@ -43,7 +43,7 @@ up (paging).
 
 Build a development client onto a plugged-in iPhone (`pnpm ios --device`), or a
 Release build that needs no bundler (`npx expo run:ios --device --configuration
-Release`). Pair it with Ship Studio (Settings → Phone → Pair a phone) with
+Release`). Pair it with the desktop app (the Phone row at the foot of the sidebar → Pair a phone) with
 Tailscale on, on both the Mac and the phone.
 
 To use the mock from a phone, serve it on your tailnet:
