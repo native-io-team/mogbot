@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  allowAllCards,
+  allowAllLine,
   groupLine,
   groupRequests,
   requestsCounts,
@@ -195,5 +197,44 @@ describe('login cards in the requests bar', () => {
     expect(s.logins).toBe(2);
     expect(requestsDetail(s)).toBe('2 logins to add');
     expect(groupLine(s.groups[0])).toBe('2 logins: Gmail, Linear');
+  });
+});
+
+describe('Allow all', () => {
+  it('answers pending Allow cards only, never logins, secrets, questions or imports', () => {
+    const cards = [
+      card('a', { tool: 'Bash', detail: 'ls -la ~/Notes' }),
+      card('a', { tool: 'Bash', detail: 'mkdir ~/Notes/new' }),
+      card('a', { tool: 'Edit', title: 'Edit a file', detail: '~/Notes/a.md' }),
+      card('a', { tool: 'mcp__gmail__send_email', title: 'Send an email · Gmail' }),
+      card('a', { status: 'allowed' }),
+      login('a', 'fictional_token'),
+      card('a', {
+        title: 'Fictional needs your Gmail',
+        login: { service: 'gmail', title: 'Gmail', why: 'x', abilities: [], options: [] } as never,
+      }),
+      card('a', { prompt: { kind: 'trust', question: 'Trust demo-site?' } as never }),
+      card('a', { connector: { kind: 'consent' } as never }),
+    ];
+    const allowed = allowAllCards(cards);
+    expect(allowed.map((m) => m.approval!.detail)).toEqual([
+      'ls -la ~/Notes',
+      'mkdir ~/Notes/new',
+      '~/Notes/a.md',
+      'npm test',
+    ]);
+    expect(allowAllLine(allowed)).toBe(
+      'Allow 4 requests? 2 commands, 1 file change, Send an email · Gmail'
+    );
+  });
+
+  it('counts a repeated connector tool or confirmation in its own words', () => {
+    const sends = [1, 2].map(() =>
+      card('a', { tool: 'mcp__gmail__send_email', title: 'Send an email · Gmail' })
+    );
+    expect(allowAllLine(sends)).toBe('Allow 2 requests? Send an email · Gmail ×2');
+    expect(allowAllLine([card('a', { title: 'Delete Florist' })])).toBe(
+      'Allow 1 request? Delete Florist'
+    );
   });
 });

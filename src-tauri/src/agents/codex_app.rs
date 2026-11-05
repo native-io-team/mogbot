@@ -1035,6 +1035,70 @@ mod tests {
         assert!(ask.call.is_none() && ask.refuse.as_deref().is_some_and(|r| r.contains("Sign in")));
     }
 
+    /// Codex's requests reach `mcp::decide` as the same calls Claude Code
+    /// makes, so the independence level answers them the same way.
+    #[test]
+    fn codex_requests_are_classified_like_claude_code_calls() {
+        use super::super::autoallow::{classify, Class, Ctx};
+        let own = "/Users/fictional/Library/Application Support/App/agents/a1";
+        let ctx = Ctx {
+            home: "/Users/fictional".into(),
+            own_home: own.into(),
+            cwd: own.into(),
+            scratch: vec![own.into()],
+            app_data: vec!["/Users/fictional/Library/Application Support/App".into()],
+        };
+        let (mut c, _) = conversation(None);
+        started(&mut c);
+        let mut id = 10;
+        let mut ask_for = |command: &str| {
+            id += 1;
+            let out = c.on_message(
+                &json!({ "method": "item/commandExecution/requestApproval", "id": id, "params": {
+                "threadId": "t1", "turnId": "u1", "itemId": "x", "command": command } }),
+            );
+            let Out::Ask(ask) = &out[0] else { panic!() };
+            let (tool, input) = ask.call.clone().unwrap();
+            classify(&tool, &input, &ctx)
+        };
+        for (command, claude, expected) in [
+            (
+                "/bin/zsh -lc 'ls -la ~/SomeFolder'",
+                "ls -la ~/SomeFolder",
+                Class::Read,
+            ),
+            (
+                "/bin/zsh -lc 'mkdir -p ~/Projects/x'",
+                "mkdir -p ~/Projects/x",
+                Class::Change,
+            ),
+            (
+                "/bin/zsh -lc 'git push origin main'",
+                "git push origin main",
+                Class::Ask,
+            ),
+            (
+                "/bin/zsh -lc 'rm -rf ~/Documents'",
+                "rm -rf ~/Documents",
+                Class::Ask,
+            ),
+        ] {
+            let claude = classify("Bash", &json!({ "command": claude }), &ctx);
+            assert_eq!(claude, expected, "{command}");
+            assert_eq!(ask_for(command), expected, "{command}");
+        }
+        // A file change names its path, judged like an Edit.
+        c.on_message(&json!({ "method": "item/started", "params": { "threadId": "t1", "item": {
+            "type": "fileChange", "id": "f9", "changes": [{ "path": "/Users/fictional/Documents/a.md", "kind": "add", "diff": "" }], "status": "inProgress" } } }));
+        let out = c.on_message(
+            &json!({ "method": "item/fileChange/requestApproval", "id": 99, "params": {
+            "threadId": "t1", "turnId": "u1", "itemId": "f9", "startedAtMs": 0 } }),
+        );
+        let Out::Ask(ask) = &out[0] else { panic!() };
+        let (tool, input) = ask.call.clone().unwrap();
+        assert_eq!(classify(&tool, &input, &ctx), Class::Change);
+    }
+
     #[test]
     fn file_changes_and_extra_access_get_cards() {
         let (mut c, _) = conversation(None);

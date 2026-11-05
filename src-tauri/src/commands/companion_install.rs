@@ -746,7 +746,7 @@ mod tests {
             {
                 "identifier": "A1",
                 "connectionProperties": { "pairingState": "paired", "transportType": "wired", "tunnelState": "connected" },
-                "deviceProperties": { "name": "Julian’s iPhone", "developerModeStatus": "disabled", "osVersionNumber": "26.1" },
+                "deviceProperties": { "name": "Sam’s iPhone", "developerModeStatus": "disabled", "osVersionNumber": "26.1" },
                 "hardwareProperties": { "platform": "iOS", "udid": "00008140-001", "marketingName": "iPhone 16 Pro", "reality": "physical" }
             },
             {
@@ -769,7 +769,7 @@ mod tests {
                 "hardwareProperties": { "platform": "iOS", "udid": "F0ED6581-24FE-4761-9267-0993A5EB27FC", "reality": "simulated" }
             },
             {
-                "identifier": "D9365757-35EA-5C91-8B97-D01B61F65328",
+                "identifier": "A1B2C3D4-0000-4000-8000-00000000AB12",
                 "connectionProperties": { "pairingState": "paired", "transportType": "wired" },
                 "deviceProperties": { "name": "No hardware id" },
                 "hardwareProperties": { "platform": "iOS", "reality": "physical" }
@@ -780,7 +780,7 @@ mod tests {
         assert_eq!(devices[0].udid, "00008140-001");
         assert_eq!(devices[0].hardware_udid.as_deref(), Some("00008140-001"));
         // devicectl can still reach it by its CoreDevice id; xcodebuild can't.
-        assert_eq!(devices[2].udid, "D9365757-35EA-5C91-8B97-D01B61F65328");
+        assert_eq!(devices[2].udid, "A1B2C3D4-0000-4000-8000-00000000AB12");
         assert_eq!(devices[2].hardware_udid, None);
         assert!(devices[0].connected && devices[0].paired);
         assert_eq!(devices[0].developer_mode, "disabled");

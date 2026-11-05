@@ -193,3 +193,77 @@
   gap: var(--spacing-md);
   margin-top: var(--spacing-xs);
 }
+
+/* The Logins step after the reach check (`TeamSetupReach.tsx`). */
+.team-setup__reach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.team-setup__check,
+.team-setup__consent {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.team-setup__receipts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+}
+
+.team-setup__receipt-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.team-setup__receipt-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-xs);
+}
+
+/* "Let agents use your browser": the guided card. */
+.browser-setup__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.browser-setup__step {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.browser-setup__step[data-done] .team-setup__mark {
+  color: var(--surface-panel);
+  background: var(--text-secondary);
+  border-color: var(--text-secondary);
+}
+
+.browser-setup-modal .browser-setup {
+  width: 100%;
+  max-width: none;
+}

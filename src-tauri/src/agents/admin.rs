@@ -142,7 +142,21 @@ pub enum Kind {
 
 /// What a pending card is, for an admin, and (for the user's) why it's theirs.
 /// `tainted`: the asking agent's turn answers text from outside this app.
+/// Without the asking agent's context, the conservative reading only.
 pub fn classify(card: &Approval, tainted: bool) -> (Kind, &'static str) {
+    classify_in(card, tainted, None)
+}
+
+/// [`classify`] with the asking agent's turn context: local work is exactly
+/// what "Go hard" answers on its own (`autoallow::classify`'s Read and
+/// Change), never more. Without a context, [`local_call`]'s narrower list.
+pub fn classify_in(
+    card: &Approval,
+    tainted: bool,
+    ctx: Option<&super::autoallow::Ctx>,
+) -> (Kind, &'static str) {
+    // Recorded on the card when it was raised: work on outside text.
+    let tainted = tainted || card.from_outside == Some(true);
     if card.login.is_some() || card.secret.is_some() {
         return (Kind::Login, "it's a login or key");
     }
@@ -158,9 +172,21 @@ pub fn classify(card: &Approval, tainted: bool) -> (Kind, &'static str) {
             "it came from work on text from outside this app",
         );
     }
-    match local_call(tool, input) {
-        Ok(()) => (Kind::Local, ""),
-        Err(why) => (Kind::Yours, why),
+    let narrow = local_call(tool, input);
+    let Some(ctx) = ctx else {
+        return match narrow {
+            Ok(()) => (Kind::Local, ""),
+            Err(why) => (Kind::Yours, why),
+        };
+    };
+    match super::autoallow::classify(tool, input, ctx) {
+        super::autoallow::Class::Read | super::autoallow::Class::Change => (Kind::Local, ""),
+        super::autoallow::Class::Ask => (
+            Kind::Yours,
+            narrow
+                .err()
+                .unwrap_or("it reaches past local work on this Mac"),
+        ),
     }
 }
 
@@ -656,6 +682,30 @@ pub fn judge(
     target_tainted: bool,
     answer: Answer,
 ) -> Result<Kind, String> {
+    judge_in(
+        caller_id,
+        admin,
+        outside,
+        target_id,
+        card,
+        target_tainted,
+        None,
+        answer,
+    )
+}
+
+/// [`judge`], with the asking agent's turn context (`classify_in`).
+#[allow(clippy::too_many_arguments)]
+pub fn judge_in(
+    caller_id: &str,
+    admin: bool,
+    outside: bool,
+    target_id: &str,
+    card: &Approval,
+    target_tainted: bool,
+    ctx: Option<&super::autoallow::Ctx>,
+    answer: Answer,
+) -> Result<Kind, String> {
     if !admin {
         return Err("Only an admin can answer other agents' requests. The user makes an agent an admin in its settings.".into());
     }
@@ -668,7 +718,7 @@ pub fn judge(
     if card.status != ApprovalStatus::Pending {
         return Err("That request was already answered.".into());
     }
-    let (kind, why) = classify(card, target_tainted);
+    let (kind, why) = classify_in(card, target_tainted, ctx);
     match (answer, kind) {
         (Answer::Allow | Answer::Deny, Kind::Local) => Ok(kind),
         (Answer::NotNeeded | Answer::MaybeLater, Kind::Login) => Ok(kind),
@@ -925,8 +975,9 @@ fn team_requests(caller: &store::Agent) -> Value {
     let mut lines = Vec::new();
     for a in agents.iter().filter(|a| a.id != caller.id) {
         let tainted = runner::from_outside(&a.id);
+        let ctx = super::autoallow::Ctx::for_agent(a);
         for card in store::pending_approvals(&a.id).unwrap_or_default() {
-            let (kind, why) = classify(&card, tainted);
+            let (kind, why) = classify_in(&card, tainted, ctx.as_ref());
             let may = match kind {
                 Kind::Local => "you may: allow or deny (local work)".to_string(),
                 Kind::Login => "you may: not_needed or maybe_later (a login)".to_string(),
@@ -977,13 +1028,15 @@ fn answer_request(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value
         Err(e) => return error(e),
     };
     let tainted = runner::from_outside(&target.id);
-    if let Err(why) = judge(
+    let ctx = super::autoallow::Ctx::for_agent(&target);
+    if let Err(why) = judge_in(
         &caller.id,
         is_admin(caller),
         runner::from_outside(&caller.id),
         &target.id,
         &card,
         tainted,
+        ctx.as_ref(),
         answer,
     ) {
         return error(why);

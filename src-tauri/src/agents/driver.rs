@@ -113,7 +113,9 @@ impl Driver {
         let args = self.base_args(spec);
         match spec.access {
             Some(access) => with_access(self, args, access),
-            None => args,
+            // Fail closed: a turn nobody worked out the reach of gets no
+            // browser.
+            None => with_access(self, args, &super::connections::TurnAccess::default()),
         }
     }
 
@@ -276,11 +278,11 @@ mod tests {
             .iter()
             .any(|a| a.contains("mcp_servers.linear=")
                 && a.contains("SHIPSTUDIO_AGENTS_BRIDGE_TOKEN")));
-        // Defaults: nothing changes.
+        // No reach worked out: no browser.
         s.access = None;
         assert!(Driver::ClaudePrint
             .args(&s)
-            .contains(&"--chrome".to_string()));
+            .contains(&"--no-chrome".to_string()));
     }
 
     #[tokio::test]

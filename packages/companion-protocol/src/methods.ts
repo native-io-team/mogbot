@@ -380,6 +380,16 @@ export interface Methods {
   'agents.teamSetup.missing': { params: Record<string, never>; result: AgentMessage };
   /** Put it away; `agents.teamSetup` with `any` brings it back. */
   'agents.teamSetup.dismiss': { params: Record<string, never>; result: null };
+  /**
+   * A row nothing on the Mac reached: `connect` raises one sign-in card and
+   * starts its best way in on the Mac; `not_needed` puts it away.
+   */
+  'agents.teamSetup.later': {
+    params: { key: string; action: 'connect' | 'not_needed'; onPhone?: boolean };
+    result: { agentId: string; requestId: string } | null;
+  };
+  /** Check again what the team can already reach (progress arrives on the checklist). */
+  'agents.teamSetup.check': { params: Record<string, never>; result: number };
   'agents.import.pastePrompt': { params: Record<string, never>; result: string };
   'agents.import.pastePreview': { params: { text: string }; result: PasteImportPreview };
   'agents.import.paste': { params: { text: string }; result: ImportSummary };

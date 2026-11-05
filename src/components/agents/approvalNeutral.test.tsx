@@ -76,14 +76,14 @@ const cards: [string, Approval][] = [
 describe('the phone pairing and the editor answer neutrally too', () => {
   const request = (replaces: Device[]): PairRequestView => ({
     id: 'p1',
-    device: { name: 'Julian’s iPhone', platform: 'ios', appVersion: '1.0', build: 'official' },
+    device: { name: 'Sam’s iPhone', platform: 'ios', appVersion: '1.0', build: 'official' },
     requestedAt: Date.now(),
     codeHint: 'AB12',
     replaces,
   });
   const paired = {
     id: 'd1',
-    name: 'Julian’s iPhone',
+    name: 'Sam’s iPhone',
     platform: 'ios',
     appVersion: '1.0',
     build: 'official',

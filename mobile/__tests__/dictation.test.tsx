@@ -1,7 +1,8 @@
 /**
  * Dictation: on the phone's own recognizer when it can be, words streaming
- * into the draft after what was typed, ✓ keeps them, × puts the draft back,
- * and never a send. The state machine is walked on its own (idle → starting
+ * into the draft after what was typed, Stop keeps them to edit, Send keeps
+ * exactly what's on screen and stops at once, × puts the draft back, and
+ * never a send of its own. The state machine is walked on its own (idle → starting
  * → listening → stopping → idle, and every way out), then the hook against a
  * fake recognizer with the native module's shape (expo-speech-recognition).
  */
@@ -128,6 +129,44 @@ describe('the state machine', () => {
     expect(run([{ type: 'result', transcript: 'late', isFinal: true }], s)).toBe(s);
   });
 
+  it('on Send keeps exactly the words on screen, the partial too, and takes nothing after', () => {
+    const s = run([
+      { type: 'request', draft: 'Typed' },
+      { type: 'began' },
+      { type: 'result', transcript: 'and said', isFinal: true },
+      { type: 'result', transcript: 'this too', isFinal: false },
+      { type: 'send' },
+    ]);
+    expect(s).toMatchObject({ phase: 'idle', outcome: 'sent', problem: null });
+    expect(draftText(s)).toBe('Typed and said this too');
+    // The recognizer's last words after the abort change nothing.
+    expect(
+      run(
+        [
+          { type: 'result', transcript: 'late', isFinal: true },
+          { type: 'error', code: 'aborted' },
+          { type: 'end' },
+        ],
+        s
+      )
+    ).toBe(s);
+    // Send does nothing when nothing is listening.
+    expect(run([{ type: 'send' }])).toBe(DICTATION_IDLE);
+  });
+
+  it('treats the silence after speech as Stop: the words stay to edit, nothing is sent', () => {
+    const s = run([
+      { type: 'request', draft: '' },
+      { type: 'began' },
+      { type: 'result', transcript: 'draft the email', isFinal: false },
+      // What the silence timer applies.
+      { type: 'stop' },
+      { type: 'end' },
+    ]);
+    expect(s).toMatchObject({ phase: 'idle', outcome: 'done' });
+    expect(draftText(s)).toBe('draft the email');
+  });
+
   it('ends on an error with a problem, keeping the words that were on screen', () => {
     const s = run([
       { type: 'request', draft: '' },
@@ -172,7 +211,7 @@ describe('the state machine', () => {
     expect(run([{ type: 'request', draft: '' }], refused).problem).toBeNull();
   });
 
-  it('can be told ✓ before the recognizer has started', () => {
+  it('can be told Stop before the recognizer has started', () => {
     const s = run([{ type: 'request', draft: '' }, { type: 'stop' }]);
     expect(s.phase).toBe('stopping');
     // `began` no longer moves it on: the hook stops the recognizer instead.
@@ -268,7 +307,7 @@ describe('silence', () => {
 });
 
 describe('the hook', () => {
-  it('listens on the device, streams words into the draft, ✓ keeps them, and never sends', async () => {
+  it('listens on the device, streams words into the draft, Stop keeps them, and never sends', async () => {
     const r = fakeRecognizer();
     const { hook, draft } = await setup(r, 'Ask Inbox');
     await act(async () => {
@@ -288,7 +327,7 @@ describe('the hook', () => {
     );
     await act(() => r.fire('result', { isFinal: false, results: [{ transcript: 'today' }] }));
     expect(draft()).toBe('Ask Inbox to archive receipts today');
-    await act(() => hook.result.current.done());
+    await act(() => hook.result.current.stop());
     expect(r.stop).toHaveBeenCalled();
     expect(hook.result.current.phase).toBe('idle');
     expect(hook.result.current.outcome).toBe('done');
@@ -347,6 +386,23 @@ describe('the hook', () => {
     expect(hook.result.current.outcome).toBe('cancelled');
   });
 
+  it('Send keeps what is on screen, aborts the recognizer, and takes no late words', async () => {
+    const r = fakeRecognizer();
+    const { hook, draft } = await setup(r, 'Ask Inbox');
+    await act(async () => {
+      await hook.result.current.start();
+    });
+    await act(() => r.fire('result', { isFinal: false, results: [{ transcript: 'to archive' }] }));
+    await act(() => hook.result.current.send());
+    expect(r.abort).toHaveBeenCalled();
+    expect(r.stop).not.toHaveBeenCalled();
+    expect(hook.result.current).toMatchObject({ phase: 'idle', outcome: 'sent', problem: null });
+    // The draft the composer sends is the one that was on screen.
+    expect(draft()).toBe('Ask Inbox to archive');
+    await act(() => r.fire('result', { isFinal: true, results: [{ transcript: 'late' }] }));
+    expect(draft()).toBe('Ask Inbox to archive');
+  });
+
   it('drops words still on their way once the draft is sent', async () => {
     const r = fakeRecognizer();
     const { hook, draft } = await setup(r);
@@ -371,7 +427,7 @@ describe('the hook', () => {
     await act(() => r.fire('volumechange', { value: -2 }));
     expect(levels[0]).toBeGreaterThan(0.5);
     expect(levels[1]).toBe(0);
-    await act(() => hook.result.current.done());
+    await act(() => hook.result.current.stop());
     expect(levels.at(-1)).toBe(0);
   });
 

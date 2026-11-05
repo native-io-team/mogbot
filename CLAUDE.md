@@ -129,11 +129,24 @@ these without updating that doc.
 - **Logins never carry a password.** Tokens only in the Keychain (`<slug>-connection-<id>`), reaching a turn through its 0600 config file or its environment, never argv, a log or the phone; the phone may run a provider's sign-in sheet but gets only the URL and a one-time code, relayed once to the Mac that holds the PKCE verifier (`agents/login_relay.rs`); read grants refuse writes and full grants ask for every write ([docs/agents.md](docs/agents.md), "Logins", "Threat model additions")
 - **Approvals are the wall.** An admin agent can answer only another agent's *local* requests (`admin::classify`, tested), never its own, never in a turn answering outside text. Agents run in `acceptEdits`; everything else goes through the
   approval broker (`agents/broker.rs`), which trusts only a live turn's `?turn=` id and stops a turn
-  that reports `bypassPermissions` ([docs/agents.md](docs/agents.md), "Approvals"). Secrets go
+  that reports `bypassPermissions` ([docs/agents.md](docs/agents.md), "Approvals"). The only
+  cards answered for the user are local ones their independence level covers
+  (`agents/autoallow.rs`, an allow-list in `mcp::decide` for Claude Code and Codex alike): reads
+  at "Use good judgement", reads plus local work in the home at "Go hard", and no more than reads
+  for a turn answering outside text. Sending, pushing, publishing, network transfers, installs,
+  `sudo`, deleting the user's files and anything touching credentials always get a card, and each
+  auto-answer leaves a line in "What it did" ("How much agents do on their own"). Secrets go
   into the Keychain through a masked card, never the chat ("Secrets")
 - **Agents never hold an app's token.** A connection made on a login card is reached through the
   bridge's relay (`agents/conn_relay.rs`), which adds the Keychain token and enforces the grant
   for every engine ([docs/agents.md](docs/agents.md), "Grants, read vs send, and turns")
+- **Just try, then one ask.** `request_login` runs the access chain first (a connection, this
+  Mac's sign-in, the user's browser), dedupes asks team-wide and allows one at a time; imports ask
+  for nothing up front ([docs/agents.md](docs/agents.md), "Just try first", "Checking what your
+  team can already reach")
+- **The browser is the user.** Claude in Chrome only after the guided setup verified it, per
+  agent, never for outside-text turns; reads on the agent's own sites are free, anything else asks
+  ([docs/agents.md](docs/agents.md), "Your browser")
 - **Outside text is sealed.** Connector imports and "When…" checks run in a sealed headless call
   (no shell, no files, no web; read-only app tools only), and a turn answering outside text can't
   write its own memory or change the team without a card ([docs/agents.md](docs/agents.md),

@@ -37,7 +37,7 @@ function renderFooter() {
       if (cmd === 'companion_status') {
         return {
           enabled: true,
-          devices: [{ id: 'd1', name: 'Julian’s iPhone', lastSeenAt: NOW - 60 * 60_000 }],
+          devices: [{ id: 'd1', name: 'Sam’s iPhone', lastSeenAt: NOW - 60 * 60_000 }],
         };
       }
       if (cmd === 'get_remote_access_brief') {

@@ -3249,7 +3249,10 @@ async fn run_turn(
     let url = super::reach::agent_url(port);
     // The apps it was granted on login cards (tokens refreshed), the
     // claude.ai connectors it's kept from, and its browser (`connections`).
-    let access = super::connections::for_turn(&agent, port).await;
+    // A "When…" routine's items came from outside: such a turn gets no
+    // browser, and can't write its own instructions or memory (below).
+    let outside = from_outside(agent_id);
+    let access = super::connections::for_turn(&agent, port, outside).await;
     let mcp_config = match engine {
         Engine::Claude => Some(super::reach::write_config(
             &super::reach::claude_config_with(
@@ -3344,7 +3347,6 @@ async fn run_turn(
     // A "When…" routine's items came from outside: this turn can't write its
     // own instructions or memory (Claude Code refuses the edit; for Codex,
     // and for anything that gets past that, it's put back when the turn ends).
-    let outside = from_outside(agent_id);
     if outside && engine == super::engine::Engine::Claude {
         cmd.args(outside_turn_args(&home));
     }
@@ -4505,6 +4507,8 @@ mod tests {
                 connector: None,
                 login: None,
                 set_aside: None,
+                from_outside: None,
+                front: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

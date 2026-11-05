@@ -197,6 +197,50 @@ fn a_request_from_tainted_work_is_always_the_users() {
     assert_eq!(classify(&bash("ls"), true).0, Kind::Yours);
 }
 
+#[test]
+fn with_its_context_local_work_is_exactly_what_go_hard_answers() {
+    let home = std::path::PathBuf::from("/Users/sam");
+    let own = home.join("Library/Application Support/Dashbot/agents/ledger");
+    let ctx = crate::agents::autoallow::Ctx {
+        home: home.clone(),
+        own_home: own.clone(),
+        cwd: own.clone(),
+        scratch: vec![own.clone()],
+        app_data: vec![home.join("Library/Application Support/Dashbot")],
+    };
+    let local = |c: &Approval| classify_in(c, false, Some(&ctx)).0;
+    assert_eq!(local(&bash("ls -la ~/Downloads/KiteExport")), Kind::Local);
+    assert_eq!(local(&bash("mkdir ~/Kite/drafts")), Kind::Local);
+    for c in [
+        bash("git push origin main"),
+        bash("curl -d x=1 https://hooks.example.test"),
+        bash("rm -rf ~/Kite"),
+        bash("cat ~/.ssh/id_ed25519"),
+        card(
+            "mcp__gmail__send_email",
+            json!({ "to": "dana@example.test" }),
+        ),
+        card("mcp__stripe__create_payment", json!({ "amount": 10 })),
+    ] {
+        assert_eq!(local(&c), Kind::Yours, "{:?}", c.input);
+    }
+    // A card raised while its agent answered outside text stays the user's.
+    let mut tainted = bash("ls ~/Kite");
+    tainted.from_outside = Some(true);
+    assert_eq!(local(&tainted), Kind::Yours);
+    assert!(judge_in(
+        "chief",
+        true,
+        false,
+        "ledger",
+        &tainted,
+        false,
+        Some(&ctx),
+        Answer::Allow
+    )
+    .is_err());
+}
+
 /* -------------------------------------------------------------- judge */
 
 #[test]

@@ -431,6 +431,11 @@ export interface Approval {
    * Nothing it asked for ran.
    */
   setAside?: string;
+  /**
+   * "Bring your work Chrome window to the front so I can use it": answered
+   * with Check again (allow) or Not now, never a login.
+   */
+  front?: { site: string; account?: string };
 }
 
 /**

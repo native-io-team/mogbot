@@ -250,7 +250,7 @@ export function ApprovalCard({
     );
   }
 
-  const consent = approval.connector?.kind === 'consent';
+  const consent = approval.connector?.kind === 'consent' || !!approval.front;
   const actions = noting ? (
     <>
       <Button title="Cancel" variant="outline" onPress={() => setNoting(false)} style={ACTION} />
@@ -285,7 +285,7 @@ export function ApprovalCard({
         />
       )}
       <Button
-        title="Deny"
+        title={approval.front ? 'Not now' : 'Deny'}
         variant="outline"
         busy={busy === 'deny'}
         disabled={off}
@@ -294,7 +294,7 @@ export function ApprovalCard({
         style={ACTION}
       />
       <Button
-        title="Allow"
+        title={approval.front ? 'Check again' : 'Allow'}
         variant="answer"
         busy={busy === 'allow'}
         disabled={off}
