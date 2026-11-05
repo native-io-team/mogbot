@@ -473,6 +473,16 @@ impl Backend for DesktopBackend {
         json(cmd::agents_set_defaults(self.app.clone(), change).await?)
     }
 
+    async fn set_independence(
+        &self,
+        level: crate::agents::independence::Level,
+    ) -> Result<Value, CommandError> {
+        let level = serde_json::to_value(level).map_err(crate::agents::err_other)?;
+        let level = level.as_str().unwrap_or_default().to_string();
+        let level = cmd::agents_set_independence(self.app.clone(), level).await?;
+        Ok(serde_json::json!({ "level": level }))
+    }
+
     async fn accounts(&self) -> Result<Value, CommandError> {
         json(cmd::agents_accounts().await?)
     }

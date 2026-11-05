@@ -1856,6 +1856,13 @@ pub(super) enum Decision {
     Deny(String),
 }
 
+/// Whether a standing "Always allow" rule the user chose covers this call.
+/// With a one-time grant from a late Allow, the only way past a card: no
+/// setting (the independence level included) opens another.
+fn always_allowed(caller: &store::Agent, tool: &str, input: &Value) -> bool {
+    permissions::matching(&caller.permissions, tool, input).is_some()
+}
+
 /// Decide a tool call the engine wants the user's OK for: a one-time grant
 /// from a late Allow, a standing "Always allow" rule, or else a card. Shared
 /// by Claude Code's permission prompt tool and Codex's approval requests.
@@ -1870,7 +1877,7 @@ pub(super) async fn decide(
     if take_grant(&caller.id, tool, input) {
         return Decision::Allow;
     }
-    if permissions::matching(&caller.permissions, tool, input).is_some() {
+    if always_allowed(caller, tool, input) {
         // Nothing happens invisibly: each one leaves a quiet line in the chat.
         let line = format!("{} · always allowed", one_line(tool, input));
         let _ = runner::record_in_turn(
@@ -2048,6 +2055,56 @@ mod tests {
         ];
         let scope = open[0].always.clone().unwrap();
         assert_eq!(covered_by(&scope, &open, "a"), vec!["b".to_string()]);
+    }
+
+    /// "Go hard" changes what agents are told, never the wall: a call that
+    /// spends, sends, publishes, pushes or deletes still gets a card, and
+    /// the only ways past one are the user's own grant or Always-allow rule.
+    #[test]
+    fn spend_and_send_cards_still_appear_at_go_hard() {
+        use super::super::independence::{self, Level};
+        let _serial = store::tests_lock();
+        let root = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(root.path().to_path_buf()));
+        independence::set_level(Level::GoHard, 1).unwrap();
+        assert_eq!(independence::level(), Level::GoHard);
+        let agent = named("fin-gohard", "Finance");
+        let calls = [
+            (
+                "mcp__gmail__send_email",
+                json!({ "to": "sam@example.test", "body": "Hi" }),
+            ),
+            ("mcp__stripe__create_payment", json!({ "amount": 4900 })),
+            (
+                "mcp__slack__post_message",
+                json!({ "channel": "#general", "text": "Done" }),
+            ),
+            ("Bash", json!({ "command": "git push origin main" })),
+            ("Bash", json!({ "command": "rm -rf ~/Documents/old" })),
+            (
+                "WebFetch",
+                json!({ "url": "https://example.test/checkout" }),
+            ),
+        ];
+        for (tool, input) in &calls {
+            assert!(!take_grant(&agent.id, tool, input), "{tool}");
+            assert!(
+                !always_allowed(&agent, tool, input),
+                "{tool} goes to a card"
+            );
+        }
+        store::set_root_for_tests(None);
+
+        // Nothing on the approval path reads the level.
+        for source in [
+            include_str!("mcp.rs"),
+            include_str!("broker.rs"),
+            include_str!("permissions.rs"),
+            include_str!("codex_app.rs"),
+        ] {
+            let code = source.split("#[cfg(test)]").next().unwrap();
+            assert!(!code.contains("independence::"));
+        }
     }
 
     #[test]

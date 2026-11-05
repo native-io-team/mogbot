@@ -312,7 +312,12 @@ export interface AgentsOverview {
   engines: EngineInfo[];
   /** What new agents start on. Optional for the phone's older Macs (see the protocol). */
   defaults?: NewAgentDefaults;
+  /** How much agents do on their own (`agents::independence`). */
+  independence?: AgentIndependence;
 }
+
+/** Mirrors `agents::independence::Level`; worded in `lib/agentIndependence`. */
+export type AgentIndependence = 'often' | 'judgement' | 'go_hard';
 
 export type MessageKind =
   | 'user'

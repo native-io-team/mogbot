@@ -147,6 +147,7 @@
 @import './features/agents-attachments.css';
 @import './features/agents-control.css';
 @import './features/agents-when.css';
+@import './features/agents-independence.css';
 @import './features/agents-project.css';
 @import './features/agents-work.css';
 @import './features/agents-results.css';

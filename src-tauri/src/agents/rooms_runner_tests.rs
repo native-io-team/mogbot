@@ -472,3 +472,48 @@ fn a_message_from_an_outside_turn_taints_the_agent_it_reaches() {
         RUNTIMES.lock().unwrap().remove(id);
     });
 }
+
+/// Every agent's prompt carries the user's independence level, built from
+/// code each turn (so an imported agent gets it with no file touched), and
+/// a turn answering outside text gets the strictest level whatever they chose.
+#[test]
+fn the_independence_level_reaches_every_turn_and_outside_text_is_strict() {
+    use crate::agents::independence::{self, Level};
+    scratch(|| {
+        let home = tempfile::tempdir().unwrap();
+        let agent: store::Agent = serde_json::from_value(serde_json::json!({
+            "id": "ind-1", "name": "Imported", "shape": 0, "color": "red", "createdAt": 0
+        }))
+        .unwrap();
+        let layout = crate::agents::project::layout(&agent, home.path(), vec![]);
+        let prompt = || system_prompt_for(&agent, home.path(), &layout);
+        assert!(prompt().contains(&independence::prompt_section(Level::Judgement)));
+
+        independence::set_level(Level::GoHard, 1).unwrap();
+        let go_hard = prompt();
+        assert!(go_hard.contains(&independence::prompt_section(Level::GoHard)));
+        assert_eq!(go_hard, prompt(), "the same every turn: the cache holds");
+
+        // A "When…" routine's items, carried in through a room.
+        let room = RoomRef {
+            room_id: "launch".into(),
+            hop: 1,
+            asker: Asker::Agent { name: "Ops".into() },
+        };
+        queue(
+            &agent.id,
+            vec![room_inbound("@Imported look".into(), room, true)],
+        );
+        take_batch(&agent.id).unwrap();
+        assert!(from_outside(&agent.id));
+        let sealed = prompt();
+        assert!(sealed.contains(&independence::prompt_section(Level::Often)));
+        assert!(!sealed.contains(&independence::prompt_section(Level::GoHard)));
+        RUNTIMES.lock().unwrap().remove(&agent.id);
+        assert_eq!(
+            prompt(),
+            go_hard,
+            "the next ordinary turn is back to theirs"
+        );
+    });
+}

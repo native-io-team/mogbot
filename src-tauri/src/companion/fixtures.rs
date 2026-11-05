@@ -438,6 +438,11 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "agentsSetIndependence",
+        "Result<'agents.setIndependence'>",
+        call("agents.setIndependence", json!({ "level": "go_hard" })).await,
+    );
+    out += &entry(
         "agentsImportStatus",
         "Result<'agents.import.status'>",
         call("agents.import.status", json!({})).await,

@@ -349,6 +349,28 @@ export function useAppCommands({
         },
       },
       {
+        id: 'agents.independence',
+        title: 'How independent your agents are…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: [
+          'independence',
+          'autonomy',
+          'trust',
+          'ask',
+          'permission',
+          'check with me',
+          'good judgement',
+          'go hard',
+          'on their own',
+        ],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-independence');
+          openModal('settings');
+        },
+      },
+      {
         id: 'agents.newAgentDefaults',
         title: 'Engine and model for new agents…',
         icon: <SettingsIcon size={14} />,

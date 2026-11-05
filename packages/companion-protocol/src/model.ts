@@ -325,7 +325,15 @@ export interface AgentsOverview {
   engines: EngineInfo[];
   /** What new agents start on. Optional: a Mac from before it sends none. */
   defaults?: NewAgentDefaults;
+  /** How much agents do on their own. Optional: a Mac from before it sends none. */
+  independence?: AgentIndependence;
 }
+
+/**
+ * Mirrors `agents::independence::Level`: how much the user's agents do on
+ * their own. It changes what they're told, never what asks for an Allow.
+ */
+export type AgentIndependence = 'often' | 'judgement' | 'go_hard';
 
 export type MessageKind =
   | 'user'

@@ -310,6 +310,9 @@ export const baseCommands: CommandMap = {
     now: 0,
   },
   agents_set_usage_mode: null,
+  // How much agents do on their own (`agents::independence`): never chosen.
+  agents_independence: 'judgement',
+  agents_set_independence: (args: Record<string, unknown>) => args.level,
   agents_spare_add: { id: 'h1', text: 'x', addedBy: 'you', addedAt: 0, state: 'waiting' },
   agents_spare_remove: null,
   agents_focus: null,

@@ -205,6 +205,20 @@ export const agentsDesktopScenarios: Scenario[] = [
     },
   },
   {
+    id: 'settings-agents-independence',
+    title: 'Settings — how independent agents are, set to Go hard',
+    looksRightWhen:
+      'Opened from ⌘K “How independent your agents are…”, scrolled to Independence: the question “How much should your agents do on their own?”, then three choices with one line each — Check with me often, Use good judgement, Go hard — get it done (selected: a stronger neutral border and a faint tint, never the accent) — and under them “You’ll always be asked before anything that spends money, sends as you, or deletes.”',
+    command: 'agents.independence',
+    requires:
+      '.agent-independence-settings .independence-choice__option[data-level="go_hard"][aria-checked="true"]',
+    clipSelector: 'section[aria-labelledby="agents-settings-independence"]',
+    commands: {
+      agents_overview: { ...overview(TEAM), independence: 'go_hard' },
+      agents_desktop_settings: DESKTOP_SETTINGS,
+    },
+  },
+  {
     id: 'settings-agents-defaults',
     title: 'Settings — new agents start on Codex, on GPT-5.5',
     looksRightWhen:
