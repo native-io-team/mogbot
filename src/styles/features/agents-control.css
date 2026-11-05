@@ -488,3 +488,67 @@
   text-decoration: underline;
   text-underline-offset: var(--spacing-2xs);
 }
+
+/* Login cards (`AgentLoginCard`): what it may do, the ways in, a sign-in under way. */
+.agent-login__abilities {
+  margin: 0;
+  padding-left: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+}
+
+.agent-login__flow {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-md);
+  color: var(--text-secondary);
+}
+
+.agent-login__flow > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.agent-login__flow > :first-child:not(span) {
+  flex: 0 0 auto;
+  margin-top: var(--spacing-2xs);
+}
+
+.agent-login__flow[data-failed] {
+  color: var(--accent-error);
+}
+
+.agent-login__from-phone {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-login__others {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-login__other {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-2xs);
+}
+
+.agent-login__other-detail {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+}

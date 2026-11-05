@@ -36,6 +36,14 @@ pub fn agent_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}{AGENT_PATH}")
 }
 
+/// Path prefix of the connection relay (`conn_relay`): `/mcp/conn/<serverKey>`.
+pub const CONN_PATH: &str = "/mcp/conn/";
+
+/// A connection server's URL for a turn: the relay, never the app itself.
+pub fn connection_url(port: u16, server_key: &str) -> String {
+    format!("http://127.0.0.1:{port}{CONN_PATH}{server_key}")
+}
+
 pub fn import_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}{IMPORT_PATH}")
 }
@@ -62,6 +70,27 @@ pub fn claude_config(url: &str, secret: &str) -> String {
         }
     })
     .to_string()
+}
+
+/// [`claude_config`] plus the agent's connection servers
+/// (`connections::TurnAccess::claude_servers`): the relay, with the turn's
+/// own secret as the header, never an app's token.
+pub fn claude_config_with(
+    url: &str,
+    secret: &str,
+    extra: serde_json::Map<String, serde_json::Value>,
+) -> String {
+    let mut config: serde_json::Value =
+        serde_json::from_str(&claude_config(url, secret)).unwrap_or_default();
+    if let Some(servers) = config.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
+        for (key, value) in extra {
+            // Ours can't be shadowed by a connection that happens to share its name.
+            if key != SERVER_KEY {
+                servers.insert(key, value);
+            }
+        }
+    }
+    config.to_string()
 }
 
 /// A config file that lives as long as this does.

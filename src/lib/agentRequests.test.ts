@@ -159,3 +159,21 @@ describe('the words', () => {
     expect(groupLine(s.groups[0])).toBe('Let Claude Code work in demo-site?');
   });
 });
+
+describe('login cards in the requests bar', () => {
+  it('counts a login card as a login and names its app', () => {
+    const a = agent('rec', 'Recruiter');
+    const gmail = card('rec', {
+      title: 'Recruiter needs your Gmail',
+      login: { service: 'gmail', title: 'Gmail', why: 'x', abilities: [], options: [] } as never,
+    });
+    const linear = card('rec', {
+      title: 'Recruiter needs your Linear',
+      login: { service: 'linear', title: 'Linear', why: 'x', abilities: [], options: [] } as never,
+    });
+    const s = groupRequests([a], { rec: [gmail, linear] }, new Set());
+    expect(s.logins).toBe(2);
+    expect(requestsDetail(s)).toBe('2 logins to add');
+    expect(groupLine(s.groups[0])).toBe('2 logins: Gmail, Linear');
+  });
+});

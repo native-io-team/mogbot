@@ -8,6 +8,7 @@
 
 import type {
   TeamSetupHello,
+  TeamSetupLogin,
   TeamSetupStep,
   TeamSetupStepId,
   TeamSetupView,
@@ -77,3 +78,49 @@ export function stateWord(step: TeamSetupStep): string | null {
 /** Whether the card draws anything (a Mac that has none says `null`). */
 export const shows = (v: TeamSetupView | null | undefined): v is TeamSetupView =>
   !!v && !v.dismissed && v.steps.length > 0;
+
+/** A key as words: "email_drafts" → "Email drafts" (as the Mac's `team_setup::humanise`). */
+export function humanise(key: string): string {
+  const words = key
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[\s_.-]+/)
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return words ? words[0].toUpperCase() + words.slice(1) : 'A login';
+}
+
+/** A login's row title: never the raw key. */
+export const loginTitle = (l: TeamSetupLogin) => l.title ?? humanise(l.name);
+
+/**
+ * Logins by service, whoever needs them, headed by the app's name, never a
+ * key ("Google — Gmail (2 accounts)", "GitHub (2 accounts)", "Email drafts").
+ * The desk's `groupLogins`, the same rows.
+ */
+export function groupLogins(
+  logins: TeamSetupLogin[]
+): { key: string; name: string; items: TeamSetupLogin[] }[] {
+  const groups = new Map<string, { key: string; family?: string; items: TeamSetupLogin[] }>();
+  for (const l of logins) {
+    const key = (l.group ?? loginTitle(l)).trim().toLowerCase();
+    const g = groups.get(key) ?? { key, family: l.family, items: [] };
+    g.items.push(l);
+    groups.set(key, g);
+  }
+  return [...groups.values()].map((g) => {
+    const byTitle = new Map<string, Set<string>>();
+    for (const l of g.items) {
+      const t = loginTitle(l);
+      const accounts = byTitle.get(t) ?? new Set<string>();
+      accounts.add((l.account ?? l.name).trim().toLowerCase());
+      byTitle.set(t, accounts);
+    }
+    const joined = [...byTitle]
+      .map(([t, a]) => (a.size > 1 ? `${t} (${a.size} accounts)` : t))
+      .join(', ');
+    const name = g.family && joined !== g.family ? `${g.family} — ${joined}` : joined;
+    return { key: g.key, name, items: g.items };
+  });
+}

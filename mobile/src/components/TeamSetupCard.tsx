@@ -12,7 +12,7 @@
 
 import type { TeamSetupStep, TeamSetupStepId, TeamSetupView } from '@shipstudio/companion-protocol';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
 import { useSwitchColors } from '../lib/accent';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -24,6 +24,7 @@ import {
   SET_ASIDE_NOTE,
   SETUP_TITLE,
   anyReplying,
+  groupLogins,
   helloWord,
   openStep,
   progress,
@@ -37,6 +38,7 @@ import { iconSize, space, PRESSED } from '../lib/theme';
 import { AgentAvatar, Spinner } from './agent';
 import { Card, CardActions, Line } from './surfaces';
 import { Button, Icon, T } from './ui';
+import { TeamLoginsList } from './teamLogins';
 
 export function TeamSetupCard({
   chief,
@@ -257,31 +259,7 @@ function StepItems({
     router.push({ pathname: '/chat/[id]', params: { id: agentId } });
   switch (step.id) {
     case 'logins':
-      return (
-        <View style={styles.items}>
-          {(step.logins ?? []).map((l) => (
-            <View key={l.requestId} style={styles.item}>
-              <View style={{ flex: 1 }}>
-                <T variant="small" color={colors.textStrong}>
-                  {l.agentName} · {l.name}
-                </T>
-                {!!l.purpose && (
-                  <T variant="caption" color={colors.textMuted}>
-                    {l.purpose}
-                  </T>
-                )}
-              </View>
-              <Button
-                title="Add"
-                variant="secondary"
-                size="compact"
-                onPress={() => openChat(l.agentId)}
-                accessibilityHint={`Opens ${l.agentName}’s chat, where the login goes in`}
-              />
-            </View>
-          ))}
-        </View>
-      );
+      return <SetupLogins logins={step.logins ?? []} onOpenChat={openChat} />;
     case 'routines':
       return (
         <View style={styles.items}>
@@ -414,3 +392,57 @@ const useStyles = makeStyles((colors) => ({
   item: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   group: { gap: space['2xs'] },
 }));
+
+/**
+ * The Logins step: apps an agent signs in to are "What your team needs",
+ * for these agents only (one Connect per service); keys and other secure
+ * inputs are one row per service, named by the app, never a raw key, each
+ * agent's card a tap away in its chat.
+ */
+function SetupLogins({
+  logins,
+  onOpenChat,
+}: {
+  logins: NonNullable<TeamSetupStep['logins']>;
+  onOpenChat: (agentId: string) => void;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const signIns = logins.filter((l) => l.kind === 'login');
+  const idList = [...new Set(signIns.map((l) => l.agentId))].sort().join(',');
+  const agentIds = useMemo(() => new Set(idList ? idList.split(',') : []), [idList]);
+  const groups = groupLogins(logins.filter((l) => l.kind !== 'login'));
+  return (
+    <View style={styles.items}>
+      {signIns.length > 0 && <TeamLoginsList agentIds={agentIds} embedded />}
+      {groups.map((g) => (
+        <View key={g.key} testID={`setup-login-${g.key}`}>
+          <T variant="small" color={colors.textStrong}>
+            {g.name}
+          </T>
+          {g.items.map((l) => (
+            <View key={l.requestId} style={styles.item}>
+              <View style={{ flex: 1 }}>
+                <T variant="caption" color={colors.textSecondary}>
+                  {l.agentName}
+                </T>
+                {!!l.purpose && (
+                  <T variant="caption" color={colors.textMuted}>
+                    {l.purpose}
+                  </T>
+                )}
+              </View>
+              <Button
+                title="Add"
+                variant="secondary"
+                size="compact"
+                onPress={() => onOpenChat(l.agentId)}
+                accessibilityHint={`Opens ${l.agentName}’s chat, where the login goes in`}
+              />
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}

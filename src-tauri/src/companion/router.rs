@@ -30,6 +30,16 @@ pub const METHODS: &[&str] = &[
     "agents.interrupt",
     "agents.answerApproval",
     "agents.saveSecret",
+    "agents.loginStart",
+    "agents.loginCancel",
+    "agents.loginDecline",
+    "agents.loginSaveKey",
+    "agents.reach",
+    "agents.loginsTeam",
+    "agents.loginsConnect",
+    "agents.loginDismiss",
+    "agents.loginPhoneBegin",
+    "agents.loginPhoneFinish",
     "agents.focus",
     "agents.markUnread",
     "agents.startFresh",
@@ -88,6 +98,8 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.messages",
     "agents.instructions",
     "agents.memory",
+    "agents.reach",
+    "agents.loginsTeam",
     "agents.usage",
     "agents.quota",
     "agents.accounts",
@@ -453,6 +465,62 @@ pub trait Backend: Send + Sync + 'static {
     async fn team_setup(&self, action: TeamSetupAction) -> Result<Value, CommandError>;
     /// `agents_revoke_permission`: an "Always allow" rule taken back.
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError>;
+    /// `agents_login_start`: one of a login card's ways in, started on this
+    /// Mac (its browser opens here; the token is made and kept here). The
+    /// card follows it on both devices.
+    async fn login_start(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+        option_id: &str,
+        on_phone: bool,
+    ) -> Result<(), CommandError>;
+    /// `login_relay::begin`: a phone sign-in sheet's URL, the PKCE verifier
+    /// and `state` kept on this Mac, bound to `device_id`.
+    async fn login_phone_begin(
+        &self,
+        device_id: &str,
+        target: crate::agents::login_relay::Target,
+        option_id: &str,
+    ) -> Result<Value, CommandError>;
+    /// `login_relay::finish`: the sheet's one-time code, from the device
+    /// that started it, exchanged and kept here.
+    async fn login_phone_finish(
+        &self,
+        device_id: &str,
+        flow_id: &str,
+        callback: &str,
+    ) -> Result<(), CommandError>;
+    /// `agents_login_cancel`: stop a sign-in under way.
+    async fn login_cancel(&self, agent_id: &str, request_id: &str) -> Result<(), CommandError>;
+    /// `agents_login_decline`.
+    async fn login_decline(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+        note: Option<String>,
+    ) -> Result<(), CommandError>;
+    /// `agents_login_save_key`: a login card's API key into the Keychain.
+    async fn login_save_key(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+        value: String,
+    ) -> Result<Value, CommandError>;
+    /// `agents_reach`: what an agent can reach. Read-only on the phone.
+    async fn reach(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_logins_team`: "What your team needs", one row per service.
+    async fn logins_team(&self, since: Option<i64>) -> Result<Value, CommandError>;
+    /// `agents_logins_connect`: one row's way in, for every agent on it but `skip`.
+    async fn logins_connect(
+        &self,
+        key: &str,
+        option_id: &str,
+        skip: Vec<String>,
+        on_phone: bool,
+    ) -> Result<(), CommandError>;
+    /// `agents_login_dismiss`: "Not needed".
+    async fn login_dismiss(&self, agent_id: &str, request_id: &str) -> Result<(), CommandError>;
     /// `agents_change_diff`: one file of a change card.
     async fn change_diff(
         &self,
@@ -746,6 +814,70 @@ struct SessionSendParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct LoginParams {
+    agent_id: String,
+    request_id: String,
+    #[serde(default)]
+    option_id: String,
+    #[serde(default)]
+    note: Option<String>,
+    /// The sign-in is on the phone (claude.ai there, a device code), so the
+    /// Mac doesn't open its own browser. Older phones omit it.
+    #[serde(default)]
+    on_phone: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PhoneBeginParams {
+    option_id: String,
+    #[serde(default)]
+    agent_id: Option<String>,
+    #[serde(default)]
+    request_id: Option<String>,
+    /// A team row instead of one card.
+    #[serde(default)]
+    key: Option<String>,
+    #[serde(default)]
+    skip: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PhoneFinishParams {
+    flow_id: String,
+    /// The redirect the sign-in sheet came back with. Never logged.
+    callback_url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TeamParams {
+    #[serde(default)]
+    since: Option<i64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TeamConnectParams {
+    key: String,
+    option_id: String,
+    #[serde(default)]
+    skip: Vec<String>,
+    #[serde(default)]
+    on_phone: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LoginKeyParams {
+    agent_id: String,
+    request_id: String,
+    value: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RuleParams {
     agent_id: String,
     rule_id: String,
@@ -948,6 +1080,32 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         }
         // Names the card, never a value: `values` is not read here.
         "agents.saveSecret" => format!("saved a secret for {}", field("agentId")),
+        "agents.loginStart" => format!(
+            "started signing in ({}) for {}",
+            field("optionId"),
+            field("agentId")
+        ),
+        "agents.loginCancel" => format!("stopped signing in for {}", field("agentId")),
+        "agents.loginsConnect" => format!(
+            "connected {} ({}) for the team",
+            field("key"),
+            field("optionId")
+        ),
+        "agents.loginDismiss" => format!("not needed: a login for {}", field("agentId")),
+        "agents.loginDecline" => format!("declined a login for {}", field("agentId")),
+        // Never the sign-in's URL or its code: only that it happened.
+        "agents.loginPhoneBegin" => format!(
+            "started signing in on the phone ({}) for {}",
+            field("optionId"),
+            if field("key").is_empty() {
+                field("agentId")
+            } else {
+                field("key")
+            }
+        ),
+        "agents.loginPhoneFinish" => "finished signing in on the phone".into(),
+        // Never the value.
+        "agents.loginSaveKey" => format!("saved a key for {}", field("agentId")),
         "agents.memoryChange" => {
             let change = params.get("change").cloned().unwrap_or(Value::Null);
             let text = change.get("text").and_then(Value::as_str).unwrap_or("");
@@ -1405,6 +1563,96 @@ async fn run(
         // The ready-made agents, without their briefings: the phone shows
         // the choice, the Mac fills the instructions in on create.
         "agents.templates" => Ok(templates_for_phone()),
+        "agents.loginStart" => {
+            let p: LoginParams = parse(params)?;
+            if p.option_id.is_empty() || p.option_id.len() > 200 {
+                return Err(bad_params(
+                    "Which way in? optionId is one of the card's options.",
+                ));
+            }
+            b.login_start(&p.agent_id, &p.request_id, &p.option_id, p.on_phone)
+                .await?;
+            Ok(Value::Null)
+        }
+        "agents.loginPhoneBegin" => {
+            let p: PhoneBeginParams = parse(params)?;
+            if p.option_id.is_empty() || p.option_id.len() > 200 || p.skip.len() > 200 {
+                return Err(bad_params("Which card, and which way in?"));
+            }
+            let target = match (p.agent_id, p.request_id, p.key) {
+                (Some(agent_id), Some(request_id), None) => {
+                    crate::agents::login_relay::Target::Card {
+                        agent_id,
+                        request_id,
+                    }
+                }
+                (None, None, Some(key)) if !key.is_empty() => {
+                    crate::agents::login_relay::Target::Team { key, skip: p.skip }
+                }
+                _ => {
+                    return Err(bad_params(
+                        "Name one card (agentId, requestId) or one row (key).",
+                    ))
+                }
+            };
+            Ok(b.login_phone_begin(&caller.device_id, target, &p.option_id)
+                .await?)
+        }
+        "agents.loginPhoneFinish" => {
+            let p: PhoneFinishParams = parse(params)
+                .map_err(|_| bad_params("A sign-in's answer needs flowId and callbackUrl."))?;
+            if p.flow_id.is_empty() || p.flow_id.len() > 100 || p.callback_url.len() > 8192 {
+                return Err(bad_params("That isn't a sign-in's answer."));
+            }
+            b.login_phone_finish(&caller.device_id, &p.flow_id, &p.callback_url)
+                .await?;
+            Ok(Value::Null)
+        }
+        "agents.loginCancel" => {
+            let p: LoginParams = parse(params)?;
+            b.login_cancel(&p.agent_id, &p.request_id).await?;
+            Ok(Value::Null)
+        }
+        "agents.loginDecline" => {
+            let p: LoginParams = parse(params)?;
+            let note = p.note.map(|n| n.chars().take(500).collect::<String>());
+            b.login_decline(&p.agent_id, &p.request_id, note).await?;
+            Ok(Value::Null)
+        }
+        "agents.loginSaveKey" => {
+            // As saveSecret: the phone's pinned-identity check keeps it on this Mac.
+            let p: LoginKeyParams = parse(params)
+                .map_err(|_| bad_params("A key needs agentId, requestId and value."))?;
+            if p.value.trim().is_empty() || p.value.chars().count() > MAX_SECRET_CHARS {
+                return Err(bad_params(
+                    "That doesn't look like a key this card asked for.",
+                ));
+            }
+            Ok(b.login_save_key(&p.agent_id, &p.request_id, p.value)
+                .await?)
+        }
+        "agents.reach" => {
+            let p: AgentParam = parse(params)?;
+            Ok(b.reach(&p.agent_id).await?)
+        }
+        "agents.loginsTeam" => {
+            let p: TeamParams = parse(params)?;
+            Ok(b.logins_team(p.since).await?)
+        }
+        "agents.loginsConnect" => {
+            let p: TeamConnectParams = parse(params)?;
+            if p.key.is_empty() || p.option_id.is_empty() || p.skip.len() > 200 {
+                return Err(bad_params("Which row, and which way in?"));
+            }
+            b.logins_connect(&p.key, &p.option_id, p.skip, p.on_phone)
+                .await?;
+            Ok(Value::Null)
+        }
+        "agents.loginDismiss" => {
+            let p: LoginParams = parse(params)?;
+            b.login_dismiss(&p.agent_id, &p.request_id).await?;
+            Ok(Value::Null)
+        }
         "agents.revokePermission" => {
             let p: RuleParams = parse(params)?;
             b.revoke_permission(&p.agent_id, &p.rule_id).await?;
@@ -1673,6 +1921,164 @@ mod tests {
             );
         }
         assert_eq!(stub.audited().len(), 3);
+    }
+
+    /// The phone answers a login card: Connect starts it on the Mac, the
+    /// team list connects a row, "Not needed" puts one away, a key never
+    /// reaches the audit, and "What it can reach" is read-only.
+    #[tokio::test]
+    async fn a_login_card_is_answered_from_the_phone_and_runs_on_the_mac() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let card = json!({ "agentId": AGENT, "requestId": "q12", "optionId": "claude_ai" });
+        assert_eq!(
+            dispatch(&c, &me, "agents.loginStart", card).await.unwrap(),
+            Value::Null
+        );
+        // A way in must be named.
+        assert!(dispatch(
+            &c,
+            &me,
+            "agents.loginStart",
+            json!({ "agentId": AGENT, "requestId": "q12" })
+        )
+        .await
+        .is_err());
+        dispatch(
+            &c,
+            &me,
+            "agents.loginCancel",
+            json!({ "agentId": AGENT, "requestId": "q12" }),
+        )
+        .await
+        .unwrap();
+        dispatch(
+            &c,
+            &me,
+            "agents.loginsConnect",
+            json!({ "key": "google", "optionId": "claude_ai", "skip": ["agent_c"] }),
+        )
+        .await
+        .unwrap();
+        dispatch(
+            &c,
+            &me,
+            "agents.loginDismiss",
+            json!({ "agentId": AGENT, "requestId": "q20" }),
+        )
+        .await
+        .unwrap();
+        dispatch(
+            &c,
+            &me,
+            "agents.loginSaveKey",
+            json!({ "agentId": AGENT, "requestId": "q12", "value": "xai-secret-value-123" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            stub.logins.lock().unwrap().as_slice(),
+            [
+                "start q12 claude_ai",
+                "cancel q12",
+                "team google claude_ai",
+                "dismiss q20",
+                "key q12"
+            ]
+        );
+        let team = dispatch(&c, &me, "agents.loginsTeam", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(team["needs"][0]["title"], "Google · Gmail + Calendar");
+        let reach = dispatch(&c, &me, "agents.reach", json!({ "agentId": AGENT }))
+            .await
+            .unwrap();
+        assert_eq!(reach["connections"][0]["account"], "work@acme.com");
+        let audited = stub.audited();
+        assert!(audited
+            .iter()
+            .all(|(_, _, detail, _)| !detail.contains("xai-secret-value")));
+        // Reads aren't audited; every change is.
+        assert!(!audited
+            .iter()
+            .any(|(_, m, _, _)| m == "agents.reach" || m == "agents.loginsTeam"));
+        assert!(audited.iter().any(|(_, m, _, _)| m == "agents.loginStart"));
+        assert!(!serde_json::to_string(&reach)
+            .unwrap()
+            .to_lowercase()
+            .contains("token\""));
+    }
+
+    /// Signing in on the phone itself: the sheet is begun for the caller's
+    /// own device, its answer is relayed with the caller's device id, and
+    /// neither the URL nor the code ever reaches the audit.
+    #[tokio::test]
+    async fn a_phone_sign_in_is_bound_to_its_device_and_never_audited_with_its_code() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let begun = dispatch(
+            &c,
+            &me,
+            "agents.loginPhoneBegin",
+            json!({ "agentId": AGENT, "requestId": "q12", "optionId": "oauth" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(begun["redirectUri"], "dashbot-companion://oauth");
+        dispatch(
+            &c,
+            &me,
+            "agents.loginPhoneBegin",
+            json!({ "key": "linear", "optionId": "oauth", "skip": ["agent_c"] }),
+        )
+        .await
+        .unwrap();
+        // One card or one row, never both or neither.
+        for bad in [
+            json!({ "optionId": "oauth" }),
+            json!({ "agentId": AGENT, "requestId": "q12", "key": "linear", "optionId": "oauth" }),
+            json!({ "agentId": AGENT, "requestId": "q12" }),
+        ] {
+            assert!(dispatch(&c, &me, "agents.loginPhoneBegin", bad)
+                .await
+                .is_err());
+        }
+        let code = "SplxlOBeZQQYbYS6WxSbIA";
+        dispatch(
+            &c,
+            &me,
+            "agents.loginPhoneFinish",
+            json!({ "flowId": "flow1",
+                    "callbackUrl": format!("dashbot-companion://oauth?code={code}&state=s") }),
+        )
+        .await
+        .unwrap();
+        // claude.ai or GitHub's device code on the phone: the Mac's browser stays shut.
+        dispatch(
+            &c,
+            &me,
+            "agents.loginStart",
+            json!({ "agentId": AGENT, "requestId": "q12", "optionId": "gh", "onPhone": true }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            stub.logins.lock().unwrap().as_slice(),
+            [
+                "sheet q12 oauth by dev_a",
+                "sheet linear oauth by dev_a",
+                "finish flow1 by dev_a",
+                "start q12 gh on phone",
+            ]
+        );
+        for (_, _, detail, _) in stub.audited() {
+            assert!(
+                !detail.contains(code) && !detail.contains("state=") && !detail.contains("://"),
+                "{detail}"
+            );
+        }
     }
 
     #[tokio::test]

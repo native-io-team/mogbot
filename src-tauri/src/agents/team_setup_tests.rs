@@ -416,3 +416,54 @@ fn the_upgrade_does_nothing_without_an_import() {
     assert!(view().is_none());
     store::set_root_for_tests(None);
 }
+
+#[test]
+fn the_logins_step_names_apps_by_service_never_by_raw_key() {
+    let (_serial, _dir) = root();
+    crate::agents::ensure_main().unwrap();
+    let mailroom = agent("Mailroom");
+    let books = agent("Books");
+    // An import's quiet secret cards, keyed the way an assistant names them.
+    say(&mailroom.id, 1, login_card("s1", "gmail_personal"));
+    say(&mailroom.id, 2, login_card("s2", "email_drafts"));
+    say(&books.id, 3, login_card("s3", "ledgerApp_owner"));
+    // And a login card, as `request_login` makes it.
+    let ask = crate::agents::logins::Ask {
+        service: "google_calendar".into(),
+        why: "Book interviews".into(),
+        quiet: true,
+        ..Default::default()
+    };
+    let r = crate::agents::logins::build(&books, &ask).unwrap();
+    say(
+        &books.id,
+        4,
+        json!({ "kind": "approval", "approval": {
+            "requestId": "l1", "title": "Books needs your Google Calendar", "detail": "",
+            "status": "pending", "login": r } }),
+    );
+    start("Grok", vec![arrived(&mailroom, &[]), arrived(&books, &[])]).unwrap();
+    let v = view().unwrap();
+    let logins = &step_of(&v, StepId::Logins).logins;
+    let by = |id: &str| logins.iter().find(|l| l.request_id == id).unwrap();
+    assert_eq!(by("s1").title, "Gmail");
+    assert_eq!(by("s1").group, "google");
+    assert_eq!(by("s1").family.as_deref(), Some("Google"));
+    assert_eq!(by("s2").title, "Email drafts");
+    assert_eq!(by("s2").kind, LoginKind::Secret);
+    assert_eq!(by("s3").title, "Ledger app owner");
+    assert_eq!(by("l1").title, "Google Calendar");
+    assert_eq!(by("l1").group, "google");
+    assert_eq!(by("l1").kind, LoginKind::Login);
+    for l in logins.iter() {
+        assert!(!l.title.contains('_'), "{}", l.title);
+    }
+}
+
+#[test]
+fn keys_read_as_words() {
+    assert_eq!(humanise("slack_workspaces"), "Slack workspaces");
+    assert_eq!(humanise("emailDrafts"), "Email drafts");
+    assert_eq!(humanise("x-api.token"), "X api token");
+    assert_eq!(humanise("  "), "A login");
+}

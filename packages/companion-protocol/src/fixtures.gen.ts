@@ -470,9 +470,12 @@ export const agentsTeamSetup = {
         {
           "agentId": "a1",
           "agentName": "Finance",
+          "group": "wise",
+          "kind": "secret",
           "name": "wise",
           "purpose": "Read balances and pay invoices",
-          "requestId": "s1"
+          "requestId": "s1",
+          "title": "Wise"
         }
       ],
       "state": "open"
@@ -1581,6 +1584,179 @@ export const agentsSaveSecret = {
   "purpose": "Reconcile payouts",
   "reference": "secret:finance/stripe_key"
 } satisfies Result<'agents.saveSecret'>;
+export const agentsReach = {
+  "blockedApps": [],
+  "browser": {
+    "helperInstalled": true,
+    "on": true,
+    "sites": [
+      "www.linkedin.com"
+    ]
+  },
+  "connections": [
+    {
+      "access": "full",
+      "account": "work@acme.com",
+      "connectionId": "c1",
+      "kept": "Connected on claude.ai; the sign-in is held there",
+      "lastUsedAt": 1760000000000,
+      "needsSignIn": false,
+      "service": "gmail",
+      "title": "Gmail"
+    }
+  ],
+  "secrets": [
+    {
+      "name": "x_key",
+      "purpose": "Post to X",
+      "secretId": "s1",
+      "variables": [
+        "$X_KEY"
+      ]
+    }
+  ]
+} satisfies Result<'agents.reach'>;
+export const agentsLoginsTeam = {
+  "done": 1,
+  "needs": [
+    {
+      "cards": [
+        {
+          "abilities": [
+            {
+              "id": "read",
+              "label": "Read and search your email"
+            }
+          ],
+          "agentId": "a1",
+          "agentName": "Finance",
+          "askedAs": "gmail work",
+          "requestId": "q20",
+          "service": "gmail",
+          "state": "waiting",
+          "title": "Gmail"
+        },
+        {
+          "abilities": [
+            {
+              "id": "read",
+              "label": "Read and search your email"
+            }
+          ],
+          "agentId": "agent_b",
+          "agentName": "Mailroom",
+          "requestId": "q21",
+          "service": "gmail",
+          "state": "connected",
+          "title": "Gmail"
+        },
+        {
+          "abilities": [
+            {
+              "id": "read",
+              "label": "Read and search your email"
+            }
+          ],
+          "agentId": "agent_c",
+          "agentName": "Calendar",
+          "outcome": "Not needed",
+          "requestId": "q22",
+          "service": "google_calendar",
+          "state": "skipped",
+          "title": "Google Calendar"
+        }
+      ],
+      "done": false,
+      "key": "google",
+      "noConnector": "Google only lets apps it has approved use Gmail's own connector.",
+      "options": [
+        {
+          "detail": "Connect Linear, on this Mac.",
+          "id": "oauth",
+          "label": "Connect Linear",
+          "method": "oauth"
+        },
+        {
+          "detail": "Connect Gmail, on this Mac.",
+          "id": "claude_ai",
+          "label": "Connect Gmail",
+          "method": "claude_ai"
+        },
+        {
+          "detail": "Use GitHub on this Mac, on this Mac.",
+          "id": "gh",
+          "label": "Use GitHub on this Mac",
+          "method": "gh"
+        },
+        {
+          "detail": "Use my browser, on this Mac.",
+          "id": "browser",
+          "label": "Use my browser",
+          "method": "browser"
+        },
+        {
+          "detail": "Enter an API key, on this Mac.",
+          "id": "key",
+          "label": "Enter an API key",
+          "method": "key"
+        }
+      ],
+      "services": [
+        "gmail",
+        "google_calendar"
+      ],
+      "title": "Google · Gmail + Calendar"
+    },
+    {
+      "cards": [
+        {
+          "abilities": [
+            {
+              "id": "read",
+              "label": "Read and search your email"
+            }
+          ],
+          "agentId": "agent_d",
+          "agentName": "Release",
+          "requestId": "q23",
+          "service": "github",
+          "state": "covered",
+          "title": "GitHub"
+        }
+      ],
+      "done": true,
+      "key": "github",
+      "options": [],
+      "services": [
+        "github"
+      ],
+      "title": "GitHub"
+    }
+  ],
+  "total": 2
+} satisfies Result<'agents.loginsTeam'>;
+export const agentsLoginStart = null satisfies Result<'agents.loginStart'>;
+export const agentsLoginPhoneBegin = {
+  "agentId": "a1",
+  "flowId": "flow1",
+  "redirectUri": "dashbot-companion://oauth",
+  "requestId": "q12",
+  "url": "https://auth.linear.app/authorize?client_id=c&code_challenge=x&state=s"
+} satisfies Result<'agents.loginPhoneBegin'>;
+export const agentsLoginSaveKey = {
+  "createdAt": 0,
+  "fields": [
+    {
+      "env": "X_KEY",
+      "label": "X API bearer token"
+    }
+  ],
+  "id": "s1",
+  "kind": "api_key",
+  "name": "x_key",
+  "purpose": "Post",
+  "reference": "secret:social/x_key"
+} satisfies Result<'agents.loginSaveKey'>;
 export const agentsMemory = {
   "entries": [
     {
@@ -2389,6 +2565,16 @@ export const frames = [
       "agents.interrupt",
       "agents.answerApproval",
       "agents.saveSecret",
+      "agents.loginStart",
+      "agents.loginCancel",
+      "agents.loginDecline",
+      "agents.loginSaveKey",
+      "agents.reach",
+      "agents.loginsTeam",
+      "agents.loginsConnect",
+      "agents.loginDismiss",
+      "agents.loginPhoneBegin",
+      "agents.loginPhoneFinish",
       "agents.focus",
       "agents.markUnread",
       "agents.startFresh",
@@ -2442,7 +2628,9 @@ export const frames = [
     "features": [
       "results.revise",
       "routines.when",
-      "rooms"
+      "rooms",
+      "logins",
+      "logins.phone"
     ]
   },
   {
@@ -2645,6 +2833,107 @@ export const frames = [
         "kind": "approval",
         "text": "",
         "ts": 1762290005000
+      }
+    }
+  },
+  {
+    "t": "evt",
+    "seq": 1,
+    "event": {
+      "type": "agents.message",
+      "message": {
+        "agentId": "a1",
+        "approval": {
+          "detail": "Read invoices that arrive by email",
+          "login": {
+            "abilities": [
+              {
+                "id": "read",
+                "label": "Read and search your email"
+              },
+              {
+                "id": "write",
+                "label": "Draft and send email — it asks you on a card each time"
+              }
+            ],
+            "accountHint": "work",
+            "askedAs": "gmail work",
+            "flow": {
+              "fromPhone": true,
+              "message": "claude.ai's connectors are open in this Mac's browser.",
+              "onPhone": true,
+              "option": "claude_ai",
+              "startedAt": 1762290000000,
+              "state": "waiting",
+              "userCode": "9985-8448",
+              "verificationUri": "https://github.com/login/device"
+            },
+            "key": {
+              "fields": [
+                {
+                  "env": "GMAIL_KEY",
+                  "label": "API key"
+                }
+              ],
+              "kind": "api_key",
+              "name": "gmail_key",
+              "purpose": "Read invoices",
+              "reference": "secret:finance/gmail_key"
+            },
+            "noConnector": "Google only lets apps it has approved use Gmail's own connector.",
+            "options": [
+              {
+                "connectionId": "c1",
+                "detail": "Use work@acme.com, on this Mac.",
+                "id": "existing:c1",
+                "label": "Use work@acme.com",
+                "method": "existing"
+              },
+              {
+                "detail": "Connect Linear, on this Mac.",
+                "id": "oauth",
+                "label": "Connect Linear",
+                "method": "oauth"
+              },
+              {
+                "detail": "Connect Gmail, on this Mac.",
+                "id": "claude_ai",
+                "label": "Connect Gmail",
+                "method": "claude_ai"
+              },
+              {
+                "detail": "Use GitHub on this Mac, on this Mac.",
+                "id": "gh",
+                "label": "Use GitHub on this Mac",
+                "method": "gh"
+              },
+              {
+                "detail": "Use my browser, on this Mac.",
+                "id": "browser",
+                "label": "Use my browser",
+                "method": "browser"
+              },
+              {
+                "detail": "Enter an API key, on this Mac.",
+                "id": "key",
+                "label": "Enter an API key",
+                "method": "key"
+              }
+            ],
+            "quiet": true,
+            "replaces": "q8",
+            "service": "gmail",
+            "title": "Gmail",
+            "why": "Read invoices that arrive by email"
+          },
+          "requestId": "q12",
+          "status": "pending",
+          "title": "Finance needs your Gmail (work)"
+        },
+        "id": "m40",
+        "kind": "approval",
+        "text": "",
+        "ts": 1762290000000
       }
     }
   },

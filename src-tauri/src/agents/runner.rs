@@ -3234,11 +3234,17 @@ async fn run_turn(
     // (Claude Code) or this process's environment (Codex), never argv.
     let turn = super::broker::open_turn(agent_id);
     let url = super::reach::agent_url(port);
+    // The apps it was granted on login cards (tokens refreshed), the
+    // claude.ai connectors it's kept from, and its browser (`connections`).
+    let access = super::connections::for_turn(&agent, port).await;
     let mcp_config = match engine {
-        Engine::Claude => Some(super::reach::write_config(&super::reach::claude_config(
-            &url,
-            turn.secret(),
-        ))?),
+        Engine::Claude => Some(super::reach::write_config(
+            &super::reach::claude_config_with(
+                &url,
+                turn.secret(),
+                access.claude_servers(turn.secret()),
+            ),
+        )?),
         Engine::Codex => None,
     };
 
@@ -3284,6 +3290,10 @@ async fn run_turn(
         system_prompt.push_str("\n\n");
         system_prompt.push_str(&have);
     }
+    if !access.prompt.is_empty() {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(&access.prompt);
+    }
     let model = if routine {
         agent.routine_model()
     } else {
@@ -3316,6 +3326,7 @@ async fn run_turn(
         system_prompt: &system_prompt,
         writable: &layout.add_dirs,
         protected: protected.as_deref(),
+        access: Some(&access),
     }));
     // A "When…" routine's items came from outside: this turn can't write its
     // own instructions or memory (Claude Code refuses the edit; for Codex,
@@ -4472,6 +4483,7 @@ mod tests {
                 choice: None,
                 secret: None,
                 connector: None,
+                login: None,
                 set_aside: None,
             });
             store::append_message(&card).unwrap();
