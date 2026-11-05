@@ -743,7 +743,7 @@ impl Refused {
         match self {
             Refused::Invalid { why, .. } => plain_reason(why),
             Refused::Full => {
-                format!("the agent already has {MAX_PER_AGENT} check-ins and routines.")
+                format!("the agent already has {MAX_PER_AGENT} routines.")
             }
             Refused::Duplicate => "it's already set.".into(),
             Refused::Store(e) => e.to_string(),
@@ -927,9 +927,7 @@ fn edit_in<Tz: TimeZone>(
             .iter()
             .any(|c| c.id != id && same_schedule(c, &edited));
         if clash {
-            outcome = Err(CommandError::expected(
-                "That check-in is already scheduled.",
-            ));
+            outcome = Err(CommandError::expected("That routine is already scheduled."));
             return;
         }
         agent.check_ins[i] = edited.clone();

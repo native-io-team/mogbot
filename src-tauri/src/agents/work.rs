@@ -526,15 +526,15 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
         ),
         "schedule_check_in" => act(
             StepKind::Plan,
-            "Scheduled a check-in",
-            "Scheduling a check-in",
-            "schedule a check-in",
+            "Scheduled a routine",
+            "Scheduling a routine",
+            "schedule a routine",
         ),
         "list_check_ins" => act(
             StepKind::Plan,
-            "Looked at its check-ins",
-            "Looking at its check-ins",
-            "look at its check-ins",
+            "Looked at its routines",
+            "Looking at its routines",
+            "look at its routines",
         ),
         "watch_for" => act(
             StepKind::Plan,
@@ -544,9 +544,9 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
         ),
         "cancel_check_in" => act(
             StepKind::Plan,
-            "Cancelled a check-in",
-            "Cancelling a check-in",
-            "cancel a check-in",
+            "Cancelled a routine",
+            "Cancelling a routine",
+            "cancel a routine",
         ),
         "request_secret" => act(
             StepKind::Message,

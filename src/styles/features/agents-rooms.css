@@ -2,65 +2,16 @@
    The room is neutral; each agent's run of lines carries its own colour under
    its name. Everything else is the agent chat's own surfaces. */
 
-/* ------------------------------------------------------------ stacked badges */
+/* ------------------------------------------------------------ badges */
 
+/* A room's members, in its header and empty state: up to three faces side by
+   side, then "+N". Never overlapped: a face cut by the next one loses its
+   second initial, and two rooms' stacks then read the same. */
 .agent-room-avatars {
   display: inline-flex;
   flex: 0 0 auto;
+  gap: var(--spacing-3xs);
   align-items: center;
-}
-
-.agent-room-avatars .agent-avatar {
-  /* A hairline of the surface between badges, so the stack reads as three. */
-  box-shadow: 0 0 0 var(--border-width-emphasis) var(--surface-panel);
-}
-
-.agent-room-avatars .agent-avatar + .agent-avatar,
-.agent-room-avatars .agent-avatar + .agent-room-avatars__more {
-  margin-left: calc(var(--spacing-xs) * -1);
-}
-
-/* In a row (the sidebar, the header) a room's badge is a pair, the first
-   two members, one over the other's corner: the footprint of one agent's
-   badge, so room rows line up with agent rows. */
-.agent-room-avatars--row {
-  position: relative;
-  width: var(--size-sidebar-project-shortcut);
-  height: var(--size-sidebar-project-shortcut);
-}
-
-.agent-room-avatars--row .agent-avatar {
-  --agent-avatar-size: calc(var(--size-sidebar-project-shortcut) * 0.6);
-  border-radius: var(--radius-sm);
-  position: absolute;
-  font-size: var(--font-size-caption);
-  letter-spacing: 0;
-}
-
-.agent-room-avatars--row .agent-avatar:first-child {
-  top: 0;
-  left: 0;
-}
-
-.agent-room-avatars--row .agent-avatar + .agent-avatar {
-  right: 0;
-  bottom: 0;
-  margin-left: 0;
-}
-
-.agent-room-avatars__more {
-  margin-left: calc(var(--spacing-xs) * -1);
-}
-
-/* In a row, the stack takes the place of one row badge: same footprint. */
-.agent-room-avatars--row {
-  width: var(--size-sidebar-project-shortcut);
-  justify-content: flex-start;
-  overflow: hidden;
-}
-
-.agent-room-avatars--row .agent-avatar + .agent-avatar {
-  margin-left: calc(var(--spacing-sm) * -1);
 }
 
 .agent-room-avatars__more {
@@ -75,12 +26,31 @@
   color: var(--text-secondary);
   background: var(--surface-control);
   border-radius: var(--radius-sm);
-  box-shadow: 0 0 0 var(--border-width-emphasis) var(--surface-panel);
 }
 
-.agents-list__row.is-current .agent-room-avatars .agent-avatar,
-.agents-list__row.is-current .agent-room-avatars__more {
-  box-shadow: 0 0 0 var(--border-width-emphasis) var(--surface-selected);
+/* A room's own badge in the list: its initials on an outlined neutral tile,
+   in an agent badge's footprint, so room rows line up with agent rows and a
+   room never passes for an agent (an agent's tile is filled with its colour). */
+.agent-room-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--size-sidebar-project-shortcut);
+  height: var(--size-sidebar-project-shortcut);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-heading);
+  line-height: 1;
+  color: var(--text-secondary);
+  border: var(--border-width-default) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  user-select: none;
+}
+
+.agent-room-mark--selected {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
 }
 
 /* ------------------------------------------------------------ sidebar */
@@ -109,10 +79,6 @@
 
 .agent-room__title {
   gap: var(--spacing-sm);
-}
-
-.agent-room__title .agent-room-avatars .agent-avatar {
-  box-shadow: 0 0 0 var(--border-width-emphasis) var(--surface-app);
 }
 
 .agent-room__heading {
@@ -163,6 +129,17 @@
 .agent-room__speaker > .agent-note {
   align-self: flex-start;
   text-align: left;
+}
+
+/* Only there to find the prose whose @names it tints: no box of its own. */
+.agent-room__prose {
+  display: contents;
+}
+
+/* "Acme Site stopped before finishing its reply.": the room's own centred
+   line, with the name in its colour. */
+.agent-room__member-note .agent-mention {
+  font-weight: var(--font-weight-body);
 }
 
 /* Your line, and who it was for, against the right edge. */
@@ -281,11 +258,17 @@
   text-overflow: ellipsis;
 }
 
-.agent-room-avatars--wide .agent-avatar {
+.agent-room__empty .agent-room-avatars .agent-avatar {
   --agent-avatar-size: var(--control-height-standard);
   font-size: var(--font-size-body-sm);
   border-radius: var(--radius-control);
-  box-shadow: 0 0 0 var(--border-width-emphasis) var(--surface-app);
+}
+
+.agent-room__empty .agent-room-avatars__more {
+  height: var(--control-height-standard);
+  min-width: var(--control-height-standard);
+  font-size: var(--font-size-body-sm);
+  border-radius: var(--radius-control);
 }
 
 /* In an agent's own chat: what it said in a room, as one line. */
@@ -312,6 +295,7 @@
 .agent-room-editor__lead {
   margin: 0 0 var(--spacing-sm);
   font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
   color: var(--text-secondary);
 }
 
@@ -375,8 +359,13 @@
 }
 
 .agent-room-editor__leads {
-  flex-wrap: wrap;
   align-self: flex-start;
+  max-width: 100%;
+}
+
+.agent-room-editor__lead-select {
+  align-self: flex-start;
+  min-width: calc(var(--control-height-standard) * 7);
 }
 
 .agent-room-editor__error {
@@ -394,8 +383,16 @@
   flex: 0 0 auto;
 }
 
+/* The first working row keeps the thread's rhythm: a speaker's gap, no more. */
 .agent-room__working > .agent-room__speaker:first-child {
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-xl);
+}
+
+/* One set of dots per member: the working line's ⋯ (its session, take over)
+   belongs to that agent's own chat, and beside the typing dots it read as a
+   second set. */
+.agent-room__working .agent-working__more {
+  display: none;
 }
 
 .agent-room__working .agent-room__turns {
@@ -404,4 +401,34 @@
 
 .modal-frame-content.agent-room-editor {
   width: min(480px, 90vw);
+}
+
+/* ------------------------------------------------------------ elsewhere */
+
+/* @everyone in a room's mention menu: the whole room, a group glyph on a
+   neutral tile, never someone's initials. */
+.agent-mention-menu__group {
+  color: var(--text-secondary);
+}
+
+/* What's in flight: "in Pricing launch" after the name, when it was said in
+   a room. Quiet; the row opens the room. */
+.agents-team__place {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: var(--font-weight-body);
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* A room's row: one line of preview at most (two made each row a block). */
+.agents-list__row--room .agents-list__preview {
+  -webkit-line-clamp: 1;
+}
+
+/* The working rows' first speaker carries the thread's gap; the group adds none. */
+.agent-chat__messages > .agent-room__working {
+  margin-top: 0;
 }

@@ -17,35 +17,41 @@ import {
 } from '../primitives/ContextMenu';
 import { TextButton } from '../primitives/TextButton';
 import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentAvatar, agentInitials } from './AgentAvatar';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { needsYou, type Agent, type AgentMessage } from '../../lib/agents';
-import { roomActivity, roomKey, roomMembers, type Room } from '../../lib/agentRooms';
+import { listNames, roomActivity, roomKey, roomMembers, type Room } from '../../lib/agentRooms';
 
-/** Up to three members' badges, overlapping; "+2" for the rest. */
-export function RoomAvatars({
-  members,
-  size = 'row',
-}: {
-  members: Pick<Agent, 'id' | 'name' | 'color'>[];
-  /** `row`: a pair in one badge's footprint. `wide`: up to three side by side. */
-  size?: 'row' | 'wide';
-}) {
-  const shown = members.slice(0, size === 'row' ? 2 : 3);
+/** Faces a room's stack shows before "+N". */
+const ROOM_FACES = 3;
+
+/**
+ * Up to three members' badges side by side, overlapping a little, and "+2"
+ * for the rest: the room's header and its empty state, where there is room
+ * for faces.
+ */
+export function RoomAvatars({ members }: { members: Pick<Agent, 'id' | 'name' | 'color'>[] }) {
+  const shown = members.slice(0, ROOM_FACES);
   const more = members.length - shown.length;
   return (
-    <span className={`agent-room-avatars agent-room-avatars--${size}`} aria-hidden>
-      {shown.map((m) =>
-        size === 'row' ? (
-          // Two badges in one badge's footprint: a letter each is what fits.
-          <span key={m.id} className="agent-avatar agent-room-avatars__tile" data-color={m.color}>
-            {m.name.trim().charAt(0).toUpperCase()}
-          </span>
-        ) : (
-          <AgentAvatar key={m.id} name={m.name} color={m.color} size="mini" />
-        )
-      )}
-      {more > 0 && size === 'wide' && <span className="agent-room-avatars__more">+{more}</span>}
+    <span className="agent-room-avatars" aria-hidden>
+      {shown.map((m) => (
+        <AgentAvatar key={m.id} name={m.name} color={m.color} size="mini" />
+      ))}
+      {more > 0 && <span className="agent-room-avatars__more">+{more}</span>}
+    </span>
+  );
+}
+
+/**
+ * A room's own badge in the list: its initials on an outlined, neutral tile,
+ * in an agent badge's footprint. Two rooms with the same members still look
+ * different, and a room never passes for an agent (whose tile is filled).
+ */
+export function RoomMark({ name, selected = false }: { name: string; selected?: boolean }) {
+  return (
+    <span className={`agent-room-mark${selected ? ' agent-room-mark--selected' : ''}`} aria-hidden>
+      {agentInitials(name)}
     </span>
   );
 }
@@ -64,7 +70,7 @@ function roomSubtitle(room: Room, members: Agent[]): { text: string; state?: str
   if (working.length === 1) return { text: `${working[0].name} is replying…`, state: 'working' };
   if (working.length > 1) return { text: `${working.length} are replying…`, state: 'working' };
   if (waiting.length > 0) return { text: `${waiting[0].name} will reply next`, state: 'working' };
-  return { text: room.preview ?? `${members.length} agents` };
+  return { text: room.preview?.trim() || listNames(members.map((m) => m.name)) };
 }
 
 export const RoomRow = memo(function RoomRow({
@@ -83,6 +89,9 @@ export const RoomRow = memo(function RoomRow({
   const line = roomSubtitle(room, members);
   const { working } = roomActivity(room, members);
   const asking = members.some((m) => needsYou(m) && m.status.room === room.id);
+  // A quiet room is one line, as a channel is: its newest words only while
+  // they're unread, or while something is happening there.
+  const showLine = Boolean(line.state) || (room.unread > 0 && !current);
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -90,11 +99,12 @@ export const RoomRow = memo(function RoomRow({
           type="button"
           tabIndex={-1}
           className={`agents-list__row agents-list__row--room${current ? ' is-current' : ''}`}
+          data-quiet={showLine ? undefined : true}
           data-agent-id={roomKey(room.id)}
           aria-current={current ? 'true' : undefined}
           onClick={() => onSelect(roomKey(room.id))}
         >
-          <RoomAvatars members={members} />
+          <RoomMark name={room.name} selected={current} />
           <span className="agents-list__text">
             <span className="agents-list__name">
               <span className="agents-list__name-text">{room.name}</span>
@@ -102,9 +112,11 @@ export const RoomRow = memo(function RoomRow({
                 <BellOffIcon size={10} className="agents-list__pin" aria-label="Muted" />
               )}
             </span>
-            <span className="agents-list__preview" data-state={line.state}>
-              {line.text}
-            </span>
+            {showLine && (
+              <span className="agents-list__preview" data-state={line.state}>
+                {line.text}
+              </span>
+            )}
           </span>
           <span className="agents-list__status">
             {asking ? (

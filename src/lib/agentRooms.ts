@@ -12,7 +12,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { Agent, AgentMessage, AgentRef, ResultRef } from './agents';
+import type { Agent, AgentMessage, AgentRef, OutgoingAttachment, ResultRef } from './agents';
 import { mentionedAgents } from './agents';
 
 export const MIN_ROOM_MEMBERS = 2;
@@ -72,13 +72,15 @@ export const sendRoomMessage = (
   roomId: string,
   text: string,
   mentions: string[],
-  everyone: boolean
+  everyone: boolean,
+  attachments: OutgoingAttachment[] = []
 ) =>
   invoke<RoomSent>('agents_room_send', {
     roomId,
     text,
     mentions: mentions.length ? mentions : undefined,
     everyone: everyone || undefined,
+    attachments: attachments.length ? attachments : undefined,
   });
 export const focusRoom = (roomId: string | null) => invoke<void>('agents_room_focus', { roomId });
 export const stopRoom = (roomId: string) => invoke<number>('agents_room_stop', { roomId });
@@ -133,6 +135,17 @@ export function listNames(names: string[]): string {
 }
 
 /**
+ * Under a message you sent: who it was for. "To everyone" when it asked every
+ * member the room has (any size, @everyone or each by name), otherwise
+ * "To Finance and Ops".
+ */
+export function askedLine(asked: AgentRef[], memberIds: string[]): string {
+  const ids = new Set(asked.map((a) => a.id));
+  const everyone = memberIds.length >= MIN_ROOM_MEMBERS && memberIds.every((id) => ids.has(id));
+  return everyone ? 'To everyone' : `To ${listNames(asked.map((a) => a.name))}`;
+}
+
+/**
  * The composer's foot line: who will answer what you're typing. Shown so
  * nobody is surprised by who replies (or how many turns it can cost).
  */
@@ -174,9 +187,14 @@ export function sortRooms(rooms: Room[]): Room[] {
   return [...rooms].sort((a, b) => b.lastActivityAt - a.lastActivityAt);
 }
 
-/** A name for a room before it's named, as the backend writes it. */
+/**
+ * A name for a room before it's named, as the backend writes it: "Finance &
+ * Ops", "Finance, Ops & Design", then "Finance & 3 others" rather than a
+ * sentence of names.
+ */
 export function defaultRoomName(names: string[]): string {
   if (names.length <= 1) return names[0] ?? 'Room';
+  if (names.length > 3) return `${names[0]} & ${names.length - 1} others`;
   return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
 }
 

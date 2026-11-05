@@ -648,7 +648,7 @@ async fn check_ins(
         Some(t) => match store::find(t) {
             Ok(Some(a)) if a.id == caller.id || caller.is_main => a,
             Ok(Some(_)) => {
-                return error("You can only schedule your own check-ins. Ask the Chief of Staff.")
+                return error("You can only schedule your own routines. Ask the Chief of Staff.")
             }
             _ => return error(format!("There's no agent called {t}.")),
         },

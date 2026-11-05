@@ -76,7 +76,7 @@ pub async fn agents_room_messages(
 /// Say something in a room: to the agents in `mentions`, everyone, or the
 /// room's lead. Refused (nothing recorded) when that's nobody.
 #[tauri::command]
-#[tracing::instrument(skip(app, text))]
+#[tracing::instrument(skip(app, text, attachments))]
 pub async fn agents_room_send(
     app: AppHandle,
     room_id: String,
@@ -84,6 +84,7 @@ pub async fn agents_room_send(
     mentions: Option<Vec<String>>,
     everyone: Option<bool>,
     client_id: Option<String>,
+    attachments: Option<Vec<crate::agents::attachments::OutgoingAttachment>>,
 ) -> Result<rooms::Sent, CommandError> {
     let app2 = app.clone();
     blocking(move || {
@@ -94,6 +95,7 @@ pub async fn agents_room_send(
             &mentions.unwrap_or_default(),
             everyone.unwrap_or(false),
             client_id,
+            attachments.unwrap_or_default(),
         )
     })
     .await

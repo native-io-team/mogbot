@@ -15,17 +15,30 @@
  *   0.00  no hit
  */
 
+/**
+ * Lowercased, with curly quotes made straight (and other compatibility
+ * forms folded), so "what's" finds "What’s in flight" whichever apostrophe
+ * either side was typed with.
+ */
+export function normalizeForMatch(text: string): string {
+  return text
+    .normalize('NFKC')
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u02BC]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
+    .toLowerCase();
+}
+
 export function scoreMatch(query: string, title: string, keywords?: string[]): number {
   if (!query) return 0.5; // Neutral when query is empty — ordering defers to frecency.
-  const q = query.toLowerCase().trim();
+  const q = normalizeForMatch(query).trim();
   if (!q) return 0.5;
 
-  const titleScore = scoreAgainst(q, title.toLowerCase());
+  const titleScore = scoreAgainst(q, normalizeForMatch(title));
   if (titleScore > 0) return titleScore;
 
   if (keywords?.length) {
     for (const kw of keywords) {
-      const s = scoreAgainst(q, kw.toLowerCase());
+      const s = scoreAgainst(q, normalizeForMatch(kw));
       if (s > 0) return Math.min(s, 0.5); // cap keyword hits
     }
   }
