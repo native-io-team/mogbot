@@ -2441,7 +2441,7 @@
       "owner": "global/component",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 6
+      "consumerCount": 7
     },
     {
       "name": "--compact-topbar-macos-padding-start",
@@ -2450,7 +2450,7 @@
       "owner": "global/component",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 3
+      "consumerCount": 4
     },
     {
       "name": "--compact-topbar-cluster-gap",
@@ -6158,7 +6158,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 819
+      "consumerCount": 821
     },
     {
       "name": "--spacing-md",
