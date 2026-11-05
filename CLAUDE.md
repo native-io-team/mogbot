@@ -140,9 +140,11 @@ these without updating that doc.
 - **Remote Access** is a separate server from the agent bridge (which is loopback only): masked
   token copied from Rust, text only to agent tabs, push behind a PIN the assistant never sees,
   everything audited ([docs/remote-access.md](docs/remote-access.md), "Security")
-- **Not on foundation yet** (in progress on a branch): per-turn bridge secrets off the command
-  line, denying agent writes to `.git` / `.shipstudio`, consent before running a project's own
-  dev-server commands, and app-owned Keychain items
+- **Hardening on foundation:** per-turn bridge secrets never on argv (`agents/reach.rs`), agent
+  writes to `.git` / `.shipstudio` denied, consent before installing or running a project's own
+  scripts (fingerprinted; installs use `--ignore-scripts` until approved), Keychain items copied to
+  app-owned `#v2` entries and verified before a legacy one is removed, and a plugin trust store
+  (bundle SHA-256 + source)
 
 ## Architecture
 
