@@ -34,6 +34,8 @@ pub enum Step {
     /// the line under its name says while it runs.
     Action(super::work::Action),
     Usage(UsageTotals),
+    /// How full the conversation is, as the engine reported it.
+    Context(super::context::ContextFill),
     /// The turn ended in an error, in the engine's words.
     Failed(String),
     /// The turn's result is in.

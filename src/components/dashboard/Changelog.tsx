@@ -191,12 +191,12 @@ export function Changelog({ className = '' }: ChangelogProps) {
               )}
               {isWorking && (
                 <Button variant="secondary" disabled>
-                  Please wait...
+                  Installing…
                 </Button>
               )}
               {rewindStage === 'done' && (
                 <Button variant="primary" onClick={() => void handleRestart()}>
-                  Restart Now
+                  Restart now
                 </Button>
               )}
               {rewindStage === 'error' && (

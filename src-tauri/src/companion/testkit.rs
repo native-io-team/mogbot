@@ -56,6 +56,7 @@ pub fn stored_agent() -> Agent {
             "pendingApprovals": 1,
             "engine": "claude",
             "model": "opus",
+            "context": { "used": 30_099, "window": 200_000, "at": 1_762_290_000_000_i64 },
             "muted": false,
             "checkIns": [
                 { "id": "c1", "note": "Check the invoices", "repeat": { "kind": "days", "days": [1, 3], "hour": 9, "minute": 30 }, "nextAt": 1_762_300_000_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": false,
@@ -370,6 +371,8 @@ pub struct Stub {
     pub focus: Mutex<Vec<(String, Option<String>)>>,
     pub answers: Mutex<Vec<ApprovalAnswer>>,
     pub toggles: Mutex<Vec<(String, AgentToggles)>>,
+    /// Agents started fresh, by id.
+    pub fresh: Mutex<Vec<String>>,
     /// What reached a session: `(session id, text or "key:<key>")`.
     pub typed: Mutex<Vec<(String, String)>>,
     /// Permission rules revoked, by id.
@@ -393,6 +396,7 @@ impl Stub {
             focus: Mutex::new(Vec::new()),
             answers: Mutex::new(Vec::new()),
             toggles: Mutex::new(Vec::new()),
+            fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
             secrets_saved: AtomicUsize::new(0),
@@ -593,6 +597,16 @@ impl Backend for Stub {
         Ok(())
     }
 
+    async fn start_fresh(&self, agent_id: &str) -> Result<Value, CommandError> {
+        if agent_id != AGENT {
+            return Err(CommandError::expected("No such agent."));
+        }
+        self.fresh.lock().unwrap().push(agent_id.to_string());
+        let mut agent = stored_agent();
+        agent.start_fresh();
+        Ok(serde_json::to_value(agent).unwrap())
+    }
+
     async fn update_agent(
         &self,
         agent_id: &str,
@@ -765,7 +779,7 @@ impl Backend for Stub {
         let screen = session_screen();
         if screen.session.session_id != session_id {
             return Err(CommandError::expected(
-                "That session isn't open in Ship Studio any more.",
+                "That session isn't open in the app any more.",
             ));
         }
         Ok(serde_json::to_value(screen).unwrap())

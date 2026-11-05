@@ -139,6 +139,11 @@ export function DevServerStatus({
     stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
   };
 
+  // Nothing has failed during the warm-up, so there is nothing to fix yet. Once
+  // it drags on, the agent is a fair second option beside Stop.
+  const offerAgent =
+    onFixWithAgent !== undefined && (phase !== 'loading' || retryCount > WARMUP_ATTEMPTS);
+
   return (
     <div className={`preview-status preview-status--${phase}`}>
       {phase === 'loading' ? (
@@ -163,9 +168,9 @@ export function DevServerStatus({
         {processGone
           ? `The dev-server process is no longer running${
               typeof exitCode === 'number' ? ` (exit code ${exitCode})` : ''
-            }. Something outside Ship Studio stopped it — often an AI agent in the terminal ` +
+            }. Something outside the app stopped it — often an AI agent in the terminal ` +
             `running its own dev server or killing the port. ` +
-            `${onRestartServer ? 'Restart it to let Ship Studio take back over.' : 'Restart it from the toolbar to take back over.'}` +
+            `${onRestartServer ? 'Restart it to take back over.' : 'Restart it from the toolbar to take back over.'}` +
             `${lastLogLine ? ` Last output: “${lastLogLine}”.` : ''}`
           : phase === 'error' && !isStaticProject
             ? lastLogLine
@@ -200,10 +205,10 @@ export function DevServerStatus({
             Retry
           </Button>
         )}
-        {onFixWithAgent && (
+        {offerAgent && (
           <Button
             variant={
-              phase !== 'loading' && processGone && onRestartServer ? 'secondary' : 'primary'
+              phase === 'loading' || (processGone && onRestartServer) ? 'secondary' : 'primary'
             }
             onClick={onFixWithAgent}
           >

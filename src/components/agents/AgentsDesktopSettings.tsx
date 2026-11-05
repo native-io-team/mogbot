@@ -86,9 +86,9 @@ export function AgentsDesktopSettings() {
         <div className="settings-row-info">
           <span className="settings-row-label">Agents in the menu bar</span>
           <span className="settings-row-description">
-            Shows the agents that need you and the ones working, and keeps Ship Studio a click away
-            with its window closed. On by default once you've used Agents, or while Keep running
-            when closed is on.
+            Shows the agents that need you and the ones working, and keeps the app a click away with
+            its window closed. On by default once you've used Agents, or while Keep running when
+            closed is on.
           </span>
         </div>
         <Toggle

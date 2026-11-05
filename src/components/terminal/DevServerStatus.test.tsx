@@ -55,6 +55,11 @@ describe('DevServerStatus', () => {
     expect(props.onFixWithAgent).toHaveBeenCalledOnce();
   });
 
+  it('holds the agent button back during the warm-up, before anything has failed', () => {
+    renderStatus({ phase: 'loading', retryCount: 3 });
+    expect(screen.queryByText('Fix with agent')).not.toBeInTheDocument();
+  });
+
   it('omits the agent button when no handler is wired', () => {
     renderStatus({ phase: 'error', onFixWithAgent: undefined });
     expect(screen.queryByText('Fix with agent')).not.toBeInTheDocument();

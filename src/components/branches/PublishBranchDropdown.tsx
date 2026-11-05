@@ -445,7 +445,7 @@ export function PublishBranchDropdown({
           {/* Synced State */}
           {publishState.status === 'idle' && !canSync && (
             <>
-              <div className="publish-success">
+              <div className="publish-success publish-success--neutral">
                 <SuccessIcon />
                 <span>Nothing to push — {where} is up to date</span>
               </div>

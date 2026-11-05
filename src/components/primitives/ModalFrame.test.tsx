@@ -100,6 +100,34 @@ describe('ModalFrame', () => {
     expect(screen.getByRole('button', { name: /close/i })).not.toHaveFocus();
   });
 
+  it('skips the header close button when nothing asked for focus', () => {
+    const { rerender } = render(
+      <ModalFrame isOpen={false} onClose={vi.fn()} title="Help" showCloseButton>
+        <button type="button">Shortcuts</button>
+      </ModalFrame>
+    );
+    rerender(
+      <ModalFrame isOpen onClose={vi.fn()} title="Help" showCloseButton>
+        <button type="button">Shortcuts</button>
+      </ModalFrame>
+    );
+    expect(screen.getByRole('button', { name: 'Shortcuts' })).toHaveFocus();
+  });
+
+  it('focuses the dialog itself rather than the close button when the body has no control', () => {
+    const { rerender } = render(
+      <ModalFrame isOpen={false} onClose={vi.fn()} title="Notice" showCloseButton>
+        <p>Nothing to do here.</p>
+      </ModalFrame>
+    );
+    rerender(
+      <ModalFrame isOpen onClose={vi.fn()} title="Notice" showCloseButton>
+        <p>Nothing to do here.</p>
+      </ModalFrame>
+    );
+    expect(screen.getByRole('dialog')).toHaveFocus();
+  });
+
   it("honours [data-autofocus] for a target that cannot use React's prop", () => {
     // React renders no `autofocus` attribute for `autoFocus`, so the attribute
     // selector this used to rely on matched nothing. `data-autofocus` does get

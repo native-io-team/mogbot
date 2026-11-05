@@ -35,6 +35,7 @@ import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import {
   answerApproval,
+  canStartFresh,
   deleteAgent,
   focusAgent,
   markAgentUnread,
@@ -42,6 +43,7 @@ import {
   needsYou,
   noEngineInstalled,
   sortAgents,
+  startAgentFresh,
   stopAgent,
   TEAM_ID,
   updateAgent,
@@ -66,6 +68,7 @@ import {
   CheckIcon,
   CloseIcon,
   EditFieldIcon,
+  ResetIcon,
 } from '@/components/icons';
 import { IconButton } from '../primitives/IconButton';
 import { kbd } from '../../lib/shortcuts';
@@ -205,6 +208,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   /** The search hit last opened, marked in the results. */
   const [currentHit, setCurrentHit] = useState<string | null>(null);
   const [stopping, setStopping] = useState<Agent | null>(null);
+  const [freshening, setFreshening] = useState<Agent | null>(null);
   const searchOpen = query.trim().length > 0 || (popoverSearch && popoverOpen);
   const closeSearch = useCallback(() => {
     setPopoverOpen(false);
@@ -394,6 +398,18 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
             },
           ]
         : []),
+      ...(selected && canStartFresh(selected) && selected.status.state === 'idle'
+        ? [
+            {
+              id: 'agents.startFresh',
+              title: `Start ${selected.name} fresh…`,
+              icon: <ResetIcon size={14} />,
+              category: 'action' as const,
+              keywords: ['agents', 'new conversation', 'reset', 'clear', 'context', 'session'],
+              run: () => setFreshening(selected),
+            },
+          ]
+        : []),
       ...agents
         .filter((a) => a.status.state !== 'idle')
         .map((a) => ({
@@ -417,6 +433,13 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     } catch (err) {
       showToast(formatCommandError(asCommandError(err)), 'error');
     }
+  };
+
+  const confirmFresh = async () => {
+    if (!freshening) return;
+    const agent = freshening;
+    setFreshening(null);
+    await run(() => startAgentFresh(agent.id));
   };
 
   const confirmDelete = async () => {
@@ -446,6 +469,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
       },
       onEdit: (a: Agent) => setEditor({ open: true, agent: a }),
       onDelete: setDeleting,
+      onStartFresh: setFreshening,
     }),
     [run]
   );
@@ -606,6 +630,24 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
           confirmVariant="danger"
           onCancel={() => setStopping(null)}
           onConfirm={() => void confirmStop()}
+        />
+      )}
+      {freshening && (
+        <ProjectActionConfirmModal
+          title={`Start ${freshening.name} fresh?`}
+          body={
+            <p>
+              Its next message starts a new conversation. Its instructions and memory carry over;
+              anything it only knew from this conversation doesn’t.
+            </p>
+          }
+          hint="This chat stays here to scroll back through."
+          loading={false}
+          confirmLabel="Start fresh"
+          loadingLabel="Starting fresh…"
+          confirmVariant="primary"
+          onCancel={() => setFreshening(null)}
+          onConfirm={() => void confirmFresh()}
         />
       )}
       {deleting && (

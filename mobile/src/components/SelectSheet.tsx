@@ -7,12 +7,13 @@
 import type { AgentMessage } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
-import { Modal, StyleSheet, TextInput, View } from 'react-native';
+import { Modal, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccent } from '../lib/accent';
 import { plainText } from '../lib/actions';
 import { haptic } from '../lib/haptics';
-import { colors, fonts, lineHeight, space, type } from '../lib/theme';
+import { fonts, lineHeight, space, type } from '../lib/theme';
+import { makeStyles, useColors } from '../lib/appearance';
 import { Button, T } from './ui';
 
 export function SelectSheet({
@@ -24,6 +25,8 @@ export function SelectSheet({
   onClose: () => void;
   onQuote: (text: string) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const accent = useAccent();
   const insets = useSafeAreaInsets();
   const text = message ? (message.kind === 'agent' ? plainText(message.text) : message.text) : '';
@@ -40,7 +43,7 @@ export function SelectSheet({
     >
       <View style={[styles.page, { paddingBottom: insets.bottom + space.md }]}>
         <View style={styles.head}>
-          <T variant="subhead" color={colors.textWhite}>
+          <T variant="subhead" color={colors.textStrong}>
             Select Text
           </T>
           <Button title="Done" variant="ghost" size="compact" onPress={onClose} />
@@ -81,7 +84,7 @@ export function SelectSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   page: { flex: 1, backgroundColor: colors.surfacePanel, paddingTop: space.md },
   head: {
     flexDirection: 'row',
@@ -100,4 +103,4 @@ const styles = StyleSheet.create({
   },
   hint: { paddingHorizontal: space.lg, paddingVertical: space.sm },
   actions: { flexDirection: 'row', gap: space.sm, paddingHorizontal: space.lg },
-});
+}));

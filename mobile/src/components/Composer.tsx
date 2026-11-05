@@ -57,11 +57,21 @@ import { haptic } from '../lib/haptics';
 import { OUTBOX_WAIT_MS } from '../lib/outbox';
 import { canCall, describeError, send, stop, upload } from '../lib/session';
 import { useApp } from '../lib/store';
-import { chromeScale, colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import {
+  avatarSize,
+  chromeScale,
+  composer,
+  fonts,
+  iconSize,
+  radius,
+  space,
+  type,
+} from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AgentAvatar } from './agent';
 import { StagedTile, type Staged } from './attachments';
 import { choose } from './menu';
-import { Icon, ripple, T } from './ui';
+import { Icon, useRipple, T } from './ui';
 
 const NONE: Agent[] = [];
 
@@ -85,6 +95,11 @@ export function Composer({
   /** Kept clear at each side: a phone in landscape has its notch there. */
   side?: { left: number; right: number };
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const field = useFieldStyles();
+  const size = useComposerSize();
+  const ripple = useRipple();
   const accent = useAccent();
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
@@ -229,8 +244,8 @@ export function Composer({
         styles.wrap,
         {
           paddingBottom: Math.max(insets.bottom, space.sm),
-          paddingLeft: space.md + side.left,
-          paddingRight: space.md + side.right,
+          paddingLeft: space.lg + side.left,
+          paddingRight: space.lg + side.right,
         },
       ]}
       onLayout={(e: LayoutChangeEvent) => onHeight?.(e.nativeEvent.layout.height)}
@@ -252,7 +267,7 @@ export function Composer({
                 onPress={() => pickMention(a)}
                 style={({ pressed }) => [styles.suggestion, pressed && styles.pressed]}
               >
-                <AgentAvatar name={a.name} color={a.color} size={22} />
+                <AgentAvatar name={a.name} color={a.color} size={avatarSize.group} />
                 <T variant="small" color={colors.textPrimary} maxFontSizeMultiplier={chromeScale}>
                   {a.name}
                 </T>
@@ -281,7 +296,7 @@ export function Composer({
               hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
               style={({ pressed }) => [styles.nowChip, pressed && styles.pressed]}
             >
-              <T variant="caption" color={colors.textWhite} maxFontSizeMultiplier={chromeScale}>
+              <T variant="caption" color={colors.textStrong} maxFontSizeMultiplier={chromeScale}>
                 Send now
               </T>
             </Pressable>
@@ -304,12 +319,17 @@ export function Composer({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Remove quote"
-                hitSlop={14}
+                hitSlop={16}
                 onPress={() =>
                   setComposer(agent.id, { quotes: draft.quotes.filter((_, j) => j !== i) })
                 }
               >
-                <Icon name="xmark" size={11} color={colors.textMuted} fallback={<T>×</T>} />
+                <Icon
+                  name="xmark"
+                  size={iconSize.inline}
+                  color={colors.textMuted}
+                  fallback={<T>×</T>}
+                />
               </Pressable>
             </Animated.View>
           ))}
@@ -362,37 +382,36 @@ export function Composer({
             accessibilityLabel="Attach files"
             disabled={!connected || attached >= MAX_ATTACHMENTS}
             onPress={attach}
-            style={styles.hit}
+            hitSlop={4}
           >
             {({ pressed }) => (
               <View
                 style={[
-                  styles.round,
-                  styles.attach,
-                  (!connected || attached >= MAX_ATTACHMENTS) && styles.off,
+                  field.attach,
+                  { width: size.field, height: size.field, borderRadius: size.field / 2 },
+                  (!connected || attached >= MAX_ATTACHMENTS) && field.off,
                   pressed && { backgroundColor: colors.surfaceControlHover },
                 ]}
               >
-                <Icon name="plus" size={17} color={colors.textPrimary} fallback={<T>+</T>} />
+                <Icon
+                  name="plus"
+                  size={iconSize.body}
+                  color={colors.textPrimary}
+                  fallback={<T>+</T>}
+                />
               </View>
             )}
           </Pressable>
         )}
-        <View style={styles.field}>
-          <TextInput
-            // A new text size remounts the field, so it never keeps a stale height.
-            key={`input-${fontScale}`}
-            value={draft.text}
-            autoFocus={autoFocus}
-            onChangeText={setText}
-            placeholder={`Message ${agent.name}`}
-            placeholderTextColor={colors.textMuted}
-            multiline
-            style={styles.input}
-            selectionColor={accent.accent}
-            keyboardAppearance="dark"
-            accessibilityLabel={`Message ${agent.name}`}
-          />
+        <ComposerField
+          // A new text size remounts the field, so it never keeps a stale height.
+          key={`input-${fontScale}`}
+          value={draft.text}
+          autoFocus={autoFocus}
+          onChangeText={setText}
+          placeholder={`Message ${agent.name}`}
+          label={`Message ${agent.name}`}
+        >
           {mode === 'queue' && !waitingOnYou && (
             <RoundButton
               label={`Stop ${agent.name}`}
@@ -414,32 +433,33 @@ export function Composer({
               <View style={styles.stopSquare} />
             </RoundButton>
           ) : mode === 'queue' ? (
-            <Animated.View key="queue" entering={ZoomIn.duration(160)}>
+            <Animated.View key="queue" entering={ZoomIn.duration(160)} style={field.roundSlot}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Queue: ${agent.name} reads it when this turn ends`}
                 disabled={!canSend}
                 onPress={() => submit(false)}
-                style={styles.hit}
+                hitSlop={8}
               >
                 {({ pressed }) => (
                   <View
                     style={[
-                      styles.queue,
+                      field.queue,
+                      { height: size.send, borderRadius: size.send / 2 },
                       { backgroundColor: accent.accent },
-                      !canSend && styles.off,
+                      !canSend && field.off,
                       pressed && { transform: [{ scale: 0.95 }] },
                     ]}
                   >
                     <T
                       variant="small"
                       color={accent.onAccent}
-                      style={{ fontFamily: fonts.semibold }}
+                      style={{ fontFamily: fonts.medium }}
                       maxFontSizeMultiplier={chromeScale}
                     >
                       Queue
                     </T>
-                    <Icon name="arrow.up" size={13} color={accent.onAccent} />
+                    <Icon name="arrow.up" size={iconSize.inline} color={accent.onAccent} />
                   </View>
                 )}
               </Pressable>
@@ -454,20 +474,71 @@ export function Composer({
             >
               <Icon
                 name="arrow.up"
-                size={16}
+                size={iconSize.body}
                 color={canSend ? accent.onAccent : colors.textMuted}
                 fallback={<T color={canSend ? accent.onAccent : colors.textMuted}>↑</T>}
               />
             </RoundButton>
           )}
-        </View>
+        </ComposerField>
       </View>
     </View>
   );
 }
 
-/** A 34pt circle inside a 44pt target. */
-function RoundButton({
+/**
+ * The field itself, shared with a session's composer: a 36pt pill at one
+ * line that keeps its 18pt corner as it grows to six, then scrolls inside.
+ * Its buttons (`children`) sit inside it at the right, on the last line.
+ */
+export function ComposerField({
+  value,
+  onChangeText,
+  placeholder,
+  label,
+  autoFocus,
+  editable = true,
+  children,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  label: string;
+  autoFocus?: boolean;
+  editable?: boolean;
+  children?: ReactNode;
+}) {
+  const colors = useColors();
+  const field = useFieldStyles();
+  const appearance = useAppearance();
+  const accent = useAccent();
+  const size = useComposerSize();
+  return (
+    <View style={[field.field, { minHeight: size.field }]}>
+      <TextInput
+        maxFontSizeMultiplier={chromeScale}
+        value={value}
+        autoFocus={autoFocus}
+        editable={editable}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        multiline
+        style={[field.input, { maxHeight: size.maxHeight }]}
+        selectionColor={accent.accent}
+        keyboardAppearance={appearance}
+        accessibilityLabel={label}
+      />
+      {children}
+    </View>
+  );
+}
+
+/**
+ * A 28pt circle inside the field, 4pt in from its edge and its last line, in
+ * a 44pt target. Filled with the accent only when there's something to send.
+ */
+export function RoundButton({
   label,
   disabled,
   onPress,
@@ -480,25 +551,34 @@ function RoundButton({
   tone: 'accent' | 'quiet' | 'off';
   children: ReactNode;
 }) {
+  const colors = useColors();
+  const field = useFieldStyles();
   const accent = useAccent();
+  const { send } = useComposerSize();
   return (
-    <Animated.View entering={ZoomIn.duration(160)}>
+    <Animated.View entering={ZoomIn.duration(160)} style={field.roundSlot}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityState={{ disabled: !!disabled }}
         disabled={disabled}
         onPress={onPress}
-        style={styles.hit}
+        hitSlop={8}
       >
         {({ pressed }) => (
           <View
             style={[
-              styles.round,
+              field.round,
+              { width: send, height: send, borderRadius: send / 2 },
               {
-                backgroundColor: tone === 'accent' ? accent.accent : colors.surfaceSelected,
+                backgroundColor:
+                  tone === 'accent'
+                    ? accent.accent
+                    : tone === 'quiet'
+                      ? colors.surfaceSelected
+                      : 'transparent',
               },
-              disabled && tone !== 'off' && styles.off,
+              disabled && tone !== 'off' && field.off,
               pressed && { transform: [{ scale: 0.92 }] },
             ]}
           >
@@ -510,16 +590,86 @@ function RoundButton({
   );
 }
 
-/** A one-line field: its line plus its vertical padding and hairline borders. */
-const FIELD_MIN =
-  lineHeight(type.body, 1.35) + space.md * 2 + StyleSheet.hairlineWidth * 2;
+/** The + is exactly as tall as a one-line field. */
+export const FIELD_MIN = composer.height;
 
-const styles = StyleSheet.create({
-  wrap: {
+/**
+ * The field's geometry at the reader's text size. Its words follow Dynamic
+ * Type only as far as chrome does (`chromeScale`, as iMessage caps its own),
+ * and the field, the + and send grow with them in step, so one line stays a
+ * pill with its buttons on it at every size.
+ */
+export function useComposerSize() {
+  const { fontScale } = useWindowDimensions();
+  const k = Math.min(Math.max(fontScale, 1), chromeScale);
+  const line = composer.line * k;
+  const field = Math.round(line + composer.padV * 2);
+  return {
+    field,
+    maxHeight: Math.round(line * composer.maxLines + composer.padV * 2),
+    send: field - composer.inset * 2,
+  };
+}
+
+const useFieldStyles = makeStyles((colors) => ({
+  field: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    minHeight: FIELD_MIN,
+    backgroundColor: colors.composerFill,
+    borderRadius: composer.corner,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.composerBorder,
+    paddingLeft: composer.padLeft - StyleSheet.hairlineWidth,
+  },
+  input: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: type.body,
+    lineHeight: composer.line,
+    color: colors.textBody,
+    // Six lines, then it scrolls inside: the field never takes over the chat.
+    maxHeight: composer.line * composer.maxLines + composer.padV * 2,
+    paddingTop: composer.padV - StyleSheet.hairlineWidth,
+    paddingBottom: composer.padV - StyleSheet.hairlineWidth,
+    paddingRight: composer.padRight,
+  },
+  roundSlot: { marginRight: composer.inset, marginBottom: composer.inset },
+  round: {
+    width: composer.send,
+    height: composer.send,
+    borderRadius: composer.send / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  queue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    height: composer.send,
     paddingHorizontal: space.md,
+    borderRadius: composer.send / 2,
+  },
+  attach: {
+    width: composer.attach,
+    height: composer.attach,
+    borderRadius: composer.attach / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.composerFill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.composerBorder,
+  },
+  off: { opacity: 0.4 },
+}));
+
+const useStyles = makeStyles((colors) => ({
+  wrap: {
+    paddingHorizontal: space.lg,
     paddingTop: space.sm,
     backgroundColor: colors.surfaceApp,
-    gap: space.tight,
+    gap: space.sm,
   },
   hintRow: {
     flexDirection: 'row',
@@ -542,12 +692,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    minHeight: 40,
+    minHeight: 36,
     paddingHorizontal: space.md,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfacePanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceControl,
     overflow: 'hidden',
   },
   quotes: { gap: space.xs },
@@ -555,61 +703,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    marginLeft: space['2xl'] + space.md,
+    // Its text under the field's: past the + and the gap, less its own rule and inset.
+    marginLeft: composer.attach + space.sm + composer.padLeft - space.md - 2,
     marginRight: space.md,
     paddingLeft: space.md,
     paddingVertical: space.xs,
     borderLeftWidth: 2,
     borderLeftColor: colors.borderStrong,
   },
-  row: { flexDirection: 'row', alignItems: 'flex-end', gap: space.xs },
-  hit: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  // The + is a circle exactly as tall as the one-line field beside it.
-  attach: {
-    width: FIELD_MIN,
-    height: FIELD_MIN,
-    borderRadius: FIELD_MIN / 2,
-    backgroundColor: colors.surfacePanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-  },
-  off: { opacity: 0.4 },
+  row: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },
   tray: { gap: space.sm, paddingTop: space.tight, paddingHorizontal: space.xs },
-  field: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: colors.surfacePanel,
-    borderRadius: radius.lg + 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    paddingLeft: space.lg,
-    paddingRight: space['2xs'],
+  stopSquare: {
+    width: 10,
+    height: 10,
+    borderRadius: radius.sm / 2,
+    backgroundColor: colors.textPrimary,
   },
-  input: {
-    flex: 1,
-    fontFamily: fonts.regular,
-    fontSize: type.body,
-    lineHeight: lineHeight(type.body, 1.35),
-    color: colors.textPrimary,
-    maxHeight: lineHeight(type.body, 1.35) * 6 + space.md,
-    paddingTop: space.md,
-    paddingBottom: space.md,
-  },
-  round: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  queue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    height: 34,
-    paddingHorizontal: space.md,
-    borderRadius: 17,
-  },
-  stopSquare: { width: 11, height: 11, borderRadius: 2, backgroundColor: colors.textPrimary },
-});
+}));

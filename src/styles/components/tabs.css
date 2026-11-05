@@ -53,19 +53,47 @@
   color: var(--text-primary);
 }
 
+/* Underline: text tabs for navigating a large surface (a panel header, a
+   big modal's sections). Quiet by design — no list surface, no rule of its
+   own (the owner draws one hairline if it needs an edge), muted inactive
+   labels, and a 2px bar that spans the active label's TEXT, not the whole
+   hit area. The hit area stays generous (8px each side, 4px apart) so the
+   tabs are easy to click without looking spaced out. */
 .tabs__list--appearance-underline {
-  gap: 0;
+  --tabs-underline-inset: var(--spacing-sm);
+  gap: var(--spacing-xs);
   padding: 0;
   background: transparent;
   border: none;
   border-radius: 0;
 }
 
+.tabs__list--appearance-underline .tabs__tab.button {
+  padding-inline: var(--tabs-underline-inset);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color var(--transition-interaction);
+}
+
 .tabs__list--appearance-underline .tabs__tab.button,
 .tabs__list--appearance-underline .tabs__tab.button:hover:not(:disabled) {
   background: transparent;
-  border-radius: 0;
   box-shadow: none;
+}
+
+.tabs__list--appearance-underline .tabs__tab.button:hover:not(:disabled):not(.is-active) {
+  color: var(--text-secondary);
+}
+
+.tabs__list--appearance-underline .tabs__tab.button.is-active {
+  color: var(--text-primary);
+}
+
+/* The focus ring sits inside the tab, clear of the bar, so the list never
+   clips it and a fill-width tab does not turn into a heavy box. */
+.tabs__list--appearance-underline .tabs__tab.button:focus-visible {
+  outline-offset: calc(var(--spacing-xs) * -1);
 }
 
 .tabs__list--appearance-underline .tabs__indicator {
@@ -78,12 +106,15 @@
   content: '';
   position: absolute;
   right: 0;
-  bottom: calc(var(--stroke-1) * -1);
+  bottom: 0;
   left: 0;
   height: var(--stroke-2);
-  border-radius: var(--radius-2) var(--radius-2) 0 0;
+  border-radius: var(--border-width-emphasis) var(--border-width-emphasis) 0 0;
   background: var(--text-primary);
 }
+
+/* The bar is measured from the label (TabsList), so fill-width tabs keep a
+   label-width bar too. */
 
 .tabs__tab.button--icon-only {
   width: var(--button-height);

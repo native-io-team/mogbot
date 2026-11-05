@@ -44,6 +44,8 @@ import { useHeightReveal } from './useAgentMotion';
 import { useCardGuard } from './useCardGuard';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import {
+  CONTEXT_SUGGEST_AT,
+  contextPercent,
   describeScope,
   ENGINE_LABEL,
   errorRemedy,
@@ -612,6 +614,20 @@ export const NoteLine = memo(function NoteLine({
   /** Whose home a timeline's screenshots live in; without it, no timeline. */
   agent?: Agent;
 } & Arrival) {
+  // Where a new conversation began: a divider, since what's above it is history to the agent.
+  if (message.fresh) {
+    return (
+      <div
+        className="agent-fresh"
+        role="separator"
+        aria-label={message.text}
+        data-arrived={arrived || undefined}
+        data-message-ids={message.id}
+      >
+        {message.text}
+      </div>
+    );
+  }
   // "Created Finance": the agent it names is a link, while that agent exists.
   const name = message.peer?.name;
   const at = name && onOpenPeer ? message.text.indexOf(name) : -1;
@@ -1197,6 +1213,31 @@ export function WorkingIndicator({
         </div>
         {live.toggle}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The chat's gentle nudge once its engine reports the conversation nearly
+ * full. Shown only from a real reading, never from a guess, and only while
+ * idle: a turn in progress is still using the conversation it would leave.
+ */
+export function FreshHint({ agent, onStartFresh }: { agent: Agent; onStartFresh: () => void }) {
+  const percent = contextPercent(agent);
+  if (percent === null || percent < CONTEXT_SUGGEST_AT || agent.status.state !== 'idle') {
+    return null;
+  }
+  return (
+    <div className="agent-note agent-fresh-hint">
+      This conversation is getting long — {agent.name} may lose track of early details.{' '}
+      <TextButton
+        tabIndex={0}
+        variant="primary"
+        className="agent-fresh-hint__action"
+        onClick={onStartFresh}
+      >
+        Start fresh (memory is kept)
+      </TextButton>
     </div>
   );
 }

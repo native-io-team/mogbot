@@ -45,6 +45,7 @@ import {
 } from '../../lib/agentsDesktop';
 import { blockedCopy, dictationVocabulary, openPrivacySettings } from '../../lib/dictation';
 import { asCommandError, formatCommandError } from '../../lib/errors';
+import { BRAND } from '../../lib/brand';
 
 /** How long "Sent" stays up before the window hides itself. */
 export const SENT_LINGER_MS = 2400;
@@ -321,8 +322,8 @@ export function QuickEntry() {
           <p className="quick-entry__note" role={problem || blocked ? 'alert' : undefined}>
             {problem ?? blocked?.message ?? (
               <>
-                Screenshots need Screen Recording permission. macOS asks the first time; allow Ship
-                Studio, then try again.
+                Screenshots need Screen Recording permission. macOS asks the first time; allow{' '}
+                {BRAND.name}, then try again.
               </>
             )}
             {!problem && blocked?.settings && (

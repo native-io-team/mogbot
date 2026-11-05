@@ -77,9 +77,10 @@ pub fn apply_app_icon(app: &AppHandle, icon: &str) -> Result<(), CommandError> {
 #[cfg(target_os = "macos")]
 fn app_icon_bytes(icon: &str) -> &'static [u8] {
     match icon {
-        "dark" => include_bytes!("../../../public/ShipStudio_IconDark.png"),
-        "light" => include_bytes!("../../../public/ShipStudio_IconLight.png"),
-        _ => include_bytes!("../../../public/ShipStudio_IconBrand.png"),
+        // Placeholder icons (scripts/generate-placeholder-icons.sh). "brand" and
+        // the legacy "dark" are the same black icon; only "light" differs.
+        "light" => include_bytes!("../../../public/app-icon-light.png"),
+        _ => include_bytes!("../../../public/app-icon-dark.png"),
     }
 }
 

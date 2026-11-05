@@ -680,7 +680,7 @@ function DeleteVariableModal({
         {analyzing && <p>Searching the project for usages…</p>}
         {!analyzing && analysisError && (
           <>
-            <p>Ship Studio couldn’t verify where this variable is used.</p>
+            <p>Couldn’t verify where this variable is used.</p>
             <p className="text-style-hint">{analysisError.message}</p>
           </>
         )}

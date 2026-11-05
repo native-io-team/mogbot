@@ -23,7 +23,7 @@ const MAX_AGENTS: usize = 50;
 const MAX_NAME_CHARS: usize = 40;
 
 /// What the user sends their other assistant to get its agents back as JSON.
-pub const PASTE_PROMPT: &str = r#"I'm moving my agents to Ship Studio. Please give me a complete copy of every agent you run for me, including the main one that manages the others.
+pub const PASTE_PROMPT: &str = r#"I'm moving my agents to a new app on my computer. Please give me a complete copy of every agent you run for me, including the main one that manages the others.
 
 Reply with one ```json code block in exactly this shape:
 

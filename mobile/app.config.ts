@@ -27,6 +27,7 @@ const appleTeamId = process.env.APPLE_TEAM_ID;
 const updatesUrl = process.env.UPDATES_URL ?? (projectId ? `https://u.expo.dev/${projectId}` : '');
 
 const SURFACE_APP = '#141414'; // --surface-app
+const SURFACE_APP_LIGHT = '#ffffff'; // the light palette's surfaceApp (src/lib/theme.ts)
 const CAMERA =
   'Used to scan the pairing code on your Mac, and to take photos you send to your agents.';
 
@@ -39,8 +40,10 @@ export default (): ExpoConfig => ({
   version: '0.1.0',
   // Landscape and iPad: the Agents list and a chat sit side by side when there's room.
   orientation: 'default',
+  // Placeholder: a black tile with a white ring, until real branding lands.
   icon: './assets/icon.png',
-  userInterfaceStyle: 'dark',
+  web: { favicon: './assets/favicon.png' },
+  userInterfaceStyle: 'automatic',
   backgroundColor: SURFACE_APP,
   runtimeVersion: { policy: 'fingerprint' },
   updates: projectId
@@ -58,7 +61,7 @@ export default (): ExpoConfig => ({
   },
   android: {
     package: bundleId,
-    adaptiveIcon: { foregroundImage: './assets/icon.png', backgroundColor: SURFACE_APP },
+    adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: SURFACE_APP },
     predictiveBackGestureEnabled: true,
   },
   plugins: [
@@ -67,7 +70,13 @@ export default (): ExpoConfig => ({
     'expo-font',
     [
       'expo-splash-screen',
-      { image: './assets/splash-icon.png', imageWidth: 96, backgroundColor: SURFACE_APP },
+      {
+        image: './assets/splash-icon.png',
+        imageWidth: 96,
+        // The app opens in the appearance the phone is in, so the splash does too.
+        backgroundColor: SURFACE_APP_LIGHT,
+        dark: { image: './assets/splash-icon.png', backgroundColor: SURFACE_APP },
+      },
     ],
     [
       'expo-camera',
@@ -77,7 +86,8 @@ export default (): ExpoConfig => ({
         recordAudioAndroid: false,
       },
     ],
-    ['expo-notifications', { color: '#46e76f' }],
+    // Placeholder art (assets/*.png are generated, neutral, unbranded) until real branding lands.
+    ['expo-notifications', { icon: './assets/notification-icon.png', color: '#0a0a0a' }],
     [
       'expo-image-picker',
       {

@@ -99,10 +99,10 @@ const TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "import_agents",
-        title: "Import agents into Ship Studio",
+        title: "Import agents",
         effect: Effect::Acts,
         open_world: false,
-        description: "Bring the user's agent setup from you into Ship Studio Agents, where the same agents run on Claude Code on this computer. Call it only when the user asks to import or move their agents/setup to Ship Studio. Send every agent: its name, a one-line role, its full instructions (as you were briefed), and what it remembers that it still needs, one fact per line. Mark the agent that manages the others is_main (it merges into Ship Studio's Chief of Staff). Include each agent's routines (anything it does on a schedule: automations, reminders, recurring check-ins) as {when, what}, with `when` in plain words such as \"every weekday at 9am\", \"every monday at 8:30am\", \"every 2 hours\" or \"friday at 2pm\". The reply lists any routine whose time Ship Studio couldn't read; tell the user about each one. Never include passwords, API keys, tokens or card numbers. Safe to call again: same-named agents are updated, not duplicated. Imported agents don't start working until the user messages them.",
+        description: "Bring the user's agent setup from you into Agents on the user's computer, where the same agents run on Claude Code or Codex. Call it only when the user asks to import or move their agents/setup to their computer. Send every agent: its name, a one-line role, its full instructions (as you were briefed), and what it remembers that it still needs, one fact per line. Mark the agent that manages the others is_main (it merges into the Chief of Staff there). Include each agent's routines (anything it does on a schedule: automations, reminders, recurring check-ins) as {when, what}, with `when` in plain words such as \"every weekday at 9am\", \"every monday at 8:30am\", \"every 2 hours\" or \"friday at 2pm\". The reply lists any routine whose time The app couldn't read; tell the user about each one. Never include passwords, API keys, tokens or card numbers. Safe to call again: same-named agents are updated, not duplicated. Imported agents don't start working until the user messages them.",
         schema: || json!({
             "type": "object",
             "properties": {
@@ -142,7 +142,7 @@ const TOOLS: &[ToolDef] = &[
         title: "Create a project",
         effect: Effect::Acts,
         open_world: true,
-        description: "Create a brand-new project in Ship Studio from one of its starter templates, share it for remote access, and open it. Takes a minute or two (download, then installing packages). Then use message_agent on it to have the agent build what the user wants.",
+        description: "Create a brand-new project on the computer from one of its starter templates, share it for remote access, and open it. Takes a minute or two (download, then installing packages). Then use message_agent on it to have the agent build what the user wants.",
         schema: || json!({
             "type": "object",
             "properties": {
@@ -161,7 +161,7 @@ const TOOLS: &[ToolDef] = &[
         title: "Switch project",
         effect: Effect::Reads,
         open_world: false,
-        description: "Switch Ship Studio on the computer to one of the shared projects, so its workspace, agents and preview are the ones showing. Agent tools work without it, and screenshots do it themselves when the project's dev server isn't running — call it when the user asks to switch, or to warm up a project's preview before showing it.",
+        description: "Switch the app on the computer to one of the shared projects, so its workspace, agents and preview are the ones showing. Agent tools work without it, and screenshots do it themselves when the project's dev server isn't running — call it when the user asks to switch, or to warm up a project's preview before showing it.",
         schema: || json!({
             "type": "object",
             "properties": { "project": project_prop() },
@@ -254,7 +254,7 @@ const TOOLS: &[ToolDef] = &[
         title: "Close an agent tab",
         effect: Effect::Destructive,
         open_world: false,
-        description: "Close an agent tab, ending that agent — like clicking its × in Ship Studio. Confirm with the user which tab first, unless they named it. The project's last remaining tab can't be closed.",
+        description: "Close an agent tab, ending that agent — like clicking its × in the app. Confirm with the user which tab first, unless they named it. The project's last remaining tab can't be closed.",
         schema: || json!({
             "type": "object",
             "properties": {
@@ -959,7 +959,7 @@ const NEXT_DECISION: &str = "NEXT: Ask the user now, in one short sentence, what
 /// For Ship Studio's own agents a question is never theirs to answer: the
 /// user gets a card for it (`agents/decisions.rs`), and this is what an agent
 /// reads when the user hasn't answered it yet.
-const NEXT_DECISION_AGENTS: &str = "NEXT: Ship Studio has put this question in front of the user as a card in the chat, with these options. Only the user can answer it, on the card; you can't, and neither can another agent passing on their reply. Tell them in one short line what it's asking and to answer it on the card above, then stop. When they answer, you'll be woken to carry on.";
+const NEXT_DECISION_AGENTS: &str = "NEXT: The app has put this question in front of the user as a card in the chat, with these options. Only the user can answer it, on the card; you can't, and neither can another agent passing on their reply. Tell them in one short line what it's asking and to answer it on the card above, then stop. When they answer, you'll be woken to carry on.";
 
 fn next_decision() -> &'static str {
     if for_agents() {
@@ -1100,7 +1100,8 @@ async fn computer_status(config: &RemoteConfig) -> Value {
     let p = power::read_power().await;
     let lid = power::lid_closed_mode_active().await;
     let mut out = vec![format!(
-        "Ship Studio {} is running and reachable.",
+        "{} {} is running and reachable.",
+        crate::brand::NAME,
         env!("CARGO_PKG_VERSION")
     )];
     out.push(match (p.on_ac, p.battery_percent) {
@@ -1143,9 +1144,9 @@ async fn git_line(project: &str) -> String {
 
 fn no_projects() -> &'static str {
     if for_agents() {
-        "The user has no Ship Studio projects yet. create_project makes one."
+        "The user has no projects yet. create_project makes one."
     } else {
-        "No projects are shared for remote access. The user turns this on per project in Ship Studio → Remote access."
+        "No projects are shared for remote access. The user turns this on per project in Remote access on the computer."
     }
 }
 
@@ -1164,7 +1165,7 @@ async fn list_projects(projects: &[String]) -> Value {
             project
         ));
         if sessions.is_empty() {
-            out.push("  no tabs open (not open in Ship Studio right now)".into());
+            out.push("  no tabs open (not open in the app right now)".into());
         }
         for (i, s) in sessions.iter().enumerate() {
             let line = tab_line(i + 1, s);
@@ -1645,7 +1646,7 @@ pub(crate) async fn start_agent_with(
     let session_id = uuid::Uuid::new_v4().to_string();
     let payload = json!({ "projectPath": project, "prompt": prompt, "sessionId": session_id });
     app.emit_to(&window_for(project), "remote-start-agent", payload)
-        .map_err(|e| format!("Couldn't reach the Ship Studio window: {e}"))?;
+        .map_err(|e| format!("Couldn't reach the app window: {e}"))?;
 
     let deadline = tokio::time::Instant::now() + START_AGENT_TIMEOUT;
     while tokio::time::Instant::now() < deadline {
@@ -1659,7 +1660,7 @@ pub(crate) async fn start_agent_with(
             return Ok((i + 1, s.session_id.clone()));
         }
     }
-    Err("Ship Studio didn't start a new agent tab within a minute. The project may have hit its tab limit (5 tabs), or its agent may not be installed. Check list_projects; the user may need to look when they're back.".into())
+    Err("The app didn't start a new agent tab within a minute. The project may have hit its tab limit (5 tabs), or its agent may not be installed. Check list_projects; the user may need to look when they're back.".into())
 }
 
 async fn start_agent(app: &tauri::AppHandle, project: &str, args: &Value) -> Value {
@@ -1705,12 +1706,12 @@ async fn close_agent(app: &tauri::AppHandle, project: &str, args: &Value) -> Val
     }
     if sessions.len() <= 1 {
         return error(format!(
-            "Tab {n} is the project's only tab, and Ship Studio always keeps one open. To start that conversation fresh, use message_agent with \"/clear\"."
+            "Tab {n} is the project's only tab, and the app always keeps one open. To start that conversation fresh, use message_agent with \"/clear\"."
         ));
     }
     let payload = json!({ "projectPath": project, "sessionId": tab.session_id });
     if let Err(e) = app.emit_to(&window_for(project), "remote-close-agent", payload) {
-        return error(format!("Couldn't reach the Ship Studio window: {e}"));
+        return error(format!("Couldn't reach the app window: {e}"));
     }
     let deadline = tokio::time::Instant::now() + CLOSE_AGENT_TIMEOUT;
     while tokio::time::Instant::now() < deadline {
@@ -1726,7 +1727,7 @@ async fn close_agent(app: &tauri::AppHandle, project: &str, args: &Value) -> Val
         }
     }
     error(format!(
-        "Tab {n} didn't close. If it's the project's only tab, Ship Studio keeps it open — use message_agent with \"/clear\" to start that conversation fresh instead."
+        "Tab {n} didn't close. If it's the project's only tab, the app keeps it open — use message_agent with \"/clear\" to start that conversation fresh instead."
     ))
 }
 
@@ -1772,7 +1773,7 @@ async fn ensure_preview(app: &tauri::AppHandle, project: &str) -> Result<(), Str
         "remote-show-project",
         json!({ "projectPath": project }),
     )
-    .map_err(|e| format!("Couldn't reach the Ship Studio window: {e}"))?;
+    .map_err(|e| format!("Couldn't reach the app window: {e}"))?;
     let deadline = tokio::time::Instant::now() + OPEN_PREVIEW_TIMEOUT;
     while tokio::time::Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(500)).await;
@@ -1781,7 +1782,7 @@ async fn ensure_preview(app: &tauri::AppHandle, project: &str) -> Result<(), Str
         }
     }
     Err(format!(
-        "Ship Studio didn't open {}'s preview within {} seconds. The window may be stuck on a dialog, or it may be a native mobile project, which has no web preview.",
+        "The app didn't open {}'s preview within {} seconds. The window may be stuck on a dialog, or it may be a native mobile project, which has no web preview.",
         project_name(project),
         OPEN_PREVIEW_TIMEOUT.as_secs()
     ))
@@ -1790,7 +1791,7 @@ async fn ensure_preview(app: &tauri::AppHandle, project: &str) -> Result<(), Str
 async fn open_project(app: &tauri::AppHandle, project: &str) -> Value {
     match ensure_preview(app, project).await {
         Ok(()) => text(format!(
-            "Ship Studio is showing {} now. Its dev server may still be starting; preview_screenshot waits for it.",
+            "The app is showing {} now. Its dev server may still be starting; preview_screenshot waits for it.",
             project_name(project)
         )),
         Err(e) => error(e),
@@ -2339,14 +2340,14 @@ async fn create_project(app: &tauri::AppHandle, args: &Value) -> Value {
     });
     match tokio::time::timeout(INSTALL_WAIT, done_rx).await {
         Ok(Ok(Ok(()))) => text(format!(
-            "Created {name} from the {} starter, shared it for remote access, and opened it in Ship Studio. Its dev server is starting. Use message_agent with project \"{name}\" to have the agent build what the user wants, then show_progress.",
+            "Created {name} from the {} starter, shared it for remote access, and opened it on the computer. Its dev server is starting. Use message_agent with project \"{name}\" to have the agent build what the user wants, then show_progress.",
             template.id
         )),
         Ok(Ok(Err(e))) => text(format!(
             "Created {name} and opened it, but installing its packages failed: {e}\nAsk the agent in it (message_agent, project \"{name}\") to run the install and fix what it reports."
         )),
         _ => text(format!(
-            "Created {name} and shared it for remote access. Its packages are still installing; Ship Studio opens it when they're done. Give it a minute, then use message_agent with project \"{name}\"."
+            "Created {name} and shared it for remote access. Its packages are still installing; the app opens it when they're done. Give it a minute, then use message_agent with project \"{name}\"."
         )),
     }
 }
@@ -2656,7 +2657,7 @@ pub(crate) async fn push_frozen(
 
 async fn prepare_push(project: &str) -> Value {
     match super::push_pin_state(&super::read_config()) {
-        super::PushPinState::NotSet => return error("Pushing from remote access is off. The user can turn it on by setting a push PIN in Ship Studio → Remote access, at the computer."),
+        super::PushPinState::NotSet => return error("Pushing from remote access is off. The user can turn it on by setting a push PIN in Remote access on the computer, at the computer."),
         super::PushPinState::Locked => return error("Remote pushing is locked after too many wrong PINs. It stays locked until the user sets a new PIN at the computer."),
         super::PushPinState::Set => {}
     }
@@ -2737,7 +2738,7 @@ async fn confirm_push(project: &str, args: &Value) -> Value {
         &pending.branch,
         &head,
         &tree,
-        "Update from Ship Studio remote access",
+        "Save changes from remote access",
     )
     .await
     {
@@ -2971,7 +2972,7 @@ pub(crate) fn session_screen(projects: &[String], session_id: &str) -> Result<Sc
             reply: (!reply.trim().is_empty()).then_some(reply),
         });
     }
-    Err("That session isn't open in Ship Studio any more.".into())
+    Err("That session isn't open in the app any more.".into())
 }
 
 #[cfg(test)]

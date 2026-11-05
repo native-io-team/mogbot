@@ -7,7 +7,7 @@
 
 import type { Agent } from '@shipstudio/companion-protocol';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -18,7 +18,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { distinctInitials, failedTurn, needsYou, teamNames, waitingForSlot } from '../lib/agents';
 import { useApp } from '../lib/store';
-import { agentTints, colors, fonts, mix, radius } from '../lib/theme';
+import { avatarSize, fonts, iconSize, mix, squircle } from '../lib/theme';
+import { agentTint } from '../lib/accent';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { Dot, T } from './ui';
 
 /** A string snapshot, so a streaming reply never re-renders a badge. */
@@ -28,14 +30,17 @@ const useTeamNames = () =>
 export function AgentAvatar({
   name,
   color,
-  size = 36,
+  size = avatarSize.header,
 }: {
   name: string;
   color: string;
-  size?: number;
+  size?: (typeof avatarSize)[keyof typeof avatarSize];
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const names = useTeamNames();
-  const tint = agentTints[color] ?? colors.textMuted;
+  const tint = agentTint(color, appearance);
   return (
     <View
       style={[
@@ -43,7 +48,7 @@ export function AgentAvatar({
         {
           width: size,
           height: size,
-          borderRadius: size > 40 ? radius.lg : radius.card,
+          borderRadius: squircle(size),
           // color-mix(tint 24%, --surface-control) / color-mix(tint 70%, --text-primary)
           backgroundColor: mix(tint, colors.surfaceControl, 0.24),
         },
@@ -75,6 +80,8 @@ export function AgentAvatar({
  * see.
  */
 export function StatusMark({ agent, live = true }: { agent: Agent; live?: boolean }) {
+  const colors = useColors();
+  const styles = useStyles();
   const failure = failedTurn(agent);
   if (!live) {
     if (agent.status.state === 'working') return <View style={styles.wasWorking} />;
@@ -97,18 +104,20 @@ export function StatusMark({ agent, live = true }: { agent: Agent; live?: boolea
       <Dot color={failure.kind === 'usage_limit' ? colors.accentWarning : colors.accentError} />
     );
   }
-  if (agent.unread > 0) return <Dot color={colors.textWhite} />;
+  if (agent.unread > 0) return <Dot color={colors.textStrong} />;
   return null;
 }
 
 /** A small arc that turns: the working state, quiet enough to sit in a list. */
 export function Spinner({
-  size = 12,
-  color = colors.textSecondary,
+  size = iconSize.inline,
+  color,
 }: {
-  size?: number;
+  size?: (typeof iconSize)[keyof typeof iconSize];
   color?: string;
 }) {
+  const colors = useColors();
+  color ??= colors.textSecondary;
   const turn = useSharedValue(0);
   useEffect(() => {
     turn.set(withRepeat(withTiming(1, { duration: 900, easing: Easing.linear }), -1));
@@ -133,15 +142,15 @@ export function Spinner({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   avatar: { alignItems: 'center', justifyContent: 'center' },
   // A still ring: "it was working when we last heard".
   wasWorking: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: iconSize.inline,
+    height: iconSize.inline,
+    borderRadius: iconSize.inline / 2,
     borderWidth: 1.5,
     borderColor: colors.textMuted,
   },
   queued: { borderColor: colors.textSecondary, borderStyle: 'dashed' },
-});
+}));

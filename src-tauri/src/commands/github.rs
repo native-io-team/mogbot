@@ -611,9 +611,9 @@ pub async fn push_to_github(options: PushToGitHubOptions) -> Result<String, Comm
     git_stage_and_commit(
         &validated_path,
         if had_commits {
-            "Update from Ship Studio"
+            "Save changes"
         } else {
-            "Initial commit from Ship Studio"
+            "Initial commit"
         },
     )?;
 
@@ -626,12 +626,7 @@ pub async fn push_to_github(options: PushToGitHubOptions) -> Result<String, Comm
 
     if !has_commits {
         let output = crate::utils::git_command_in(&validated_path)?
-            .args([
-                "commit",
-                "--allow-empty",
-                "-m",
-                "Initial commit from Ship Studio",
-            ])
+            .args(["commit", "--allow-empty", "-m", "Initial commit"])
             .output()
             .map_err(CommandError::from)?;
 

@@ -796,30 +796,37 @@ export function WorkspaceLayoutMenuNew() {
         <WorkspaceLayoutScopeSelector />
         <DropdownDivider />
         <div className="workspace-layout-menu__scroll-body" data-layout-scroll-body="true">
-          <div
-            className="workspace-layout-menu__canvas"
-            data-layout-outline="true"
-            role="group"
-            aria-label="Workspace columns"
-          >
-            {renderSide('left', leftColumns)}
-            {preview && (
-              <DragSortItem
-                key={preview.id}
-                id={PREVIEW}
-                group={COLUMN_SORT_GROUP}
-                index={columnSortIds.indexOf(PREVIEW)}
-                label="Preview"
-                disabled
-                targetDisabled
-                className="workspace-layout-menu__column workspace-layout-menu__column--preview"
-                data-layout-preview-divider="true"
-                aria-label="Preview divider"
-              >
-                <span className="workspace-layout-menu__preview-label">Preview</span>
-              </DragSortItem>
-            )}
-            {renderSide('right', rightColumns)}
+          {/* The canvas clips horizontally, which makes it a scroll container, and a
+              scroll container in a flex column may shrink below its content: with a
+              tall left side it squeezed the Right label under Floating. This plain
+              wrapper is not a scroll container, so it keeps its content's height and
+              the scroll body scrolls instead. */}
+          <div>
+            <div
+              className="workspace-layout-menu__canvas"
+              data-layout-outline="true"
+              role="group"
+              aria-label="Workspace columns"
+            >
+              {renderSide('left', leftColumns)}
+              {preview && (
+                <DragSortItem
+                  key={preview.id}
+                  id={PREVIEW}
+                  group={COLUMN_SORT_GROUP}
+                  index={columnSortIds.indexOf(PREVIEW)}
+                  label="Preview"
+                  disabled
+                  targetDisabled
+                  className="workspace-layout-menu__column workspace-layout-menu__column--preview"
+                  data-layout-preview-divider="true"
+                  aria-label="Preview divider"
+                >
+                  <span className="workspace-layout-menu__preview-label">Preview</span>
+                </DragSortItem>
+              )}
+              {renderSide('right', rightColumns)}
+            </div>
           </div>
 
           <div className="workspace-layout-menu__section">Floating</div>

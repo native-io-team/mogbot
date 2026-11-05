@@ -2,6 +2,7 @@
 
 import type { Scenario } from '../types';
 import { rejectsWith } from '../reject';
+import { BRAND_LINKS } from '../../lib/brand';
 
 const completeBugSteps = [
   { fill: 'input[data-issue-field="title"]', value: '[Bug] Toolbar stops updating' },
@@ -61,7 +62,7 @@ const completeFeatureSteps = [
   { click: 'button[data-issue-action="evidence-next"]' },
 ];
 
-export const issueReportScenarios: Scenario[] = [
+const allIssueReportScenarios: Scenario[] = [
   {
     id: 'issue-report-form',
     command: 'issueReports.bugReport',
@@ -129,7 +130,7 @@ export const issueReportScenarios: Scenario[] = [
       submit_github_issue: {
         status: 'created',
         number: 42,
-        issueUrl: 'https://github.com/ship-studio/ship-studio/issues/42',
+        issueUrl: 'https://github.com/example/app/issues/42',
         login: 'harness-user',
       },
     },
@@ -173,3 +174,12 @@ export const issueReportScenarios: Scenario[] = [
     },
   },
 ];
+
+/**
+ * Issue reporting exists only when brand.json names a repo to file against
+ * (`links.issueRepo`); with it null the menu rows and the form are hidden, so
+ * these would photograph a screen that cannot open. Skipped rather than faked.
+ */
+export const issueReportScenarios: Scenario[] = BRAND_LINKS.issueRepo
+  ? allIssueReportScenarios
+  : [];
