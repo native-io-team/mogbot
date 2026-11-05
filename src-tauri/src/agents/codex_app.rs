@@ -421,10 +421,10 @@ impl Conversation {
                 let n = |k: &str| last.get(k).and_then(Value::as_u64).unwrap_or(0);
                 // Codex's input count includes what was read from cache; ours doesn't.
                 let cached = n("cachedInputTokens");
-                self.usage.input_tokens += n("inputTokens").saturating_sub(cached);
-                self.usage.output_tokens += n("outputTokens");
-                self.usage.cache_read_tokens += cached;
-                self.usage.cache_write_tokens += n("cacheWriteInputTokens");
+                self.usage.input_tokens = self.usage.input_tokens.saturating_add(n("inputTokens").saturating_sub(cached));
+                self.usage.output_tokens = self.usage.output_tokens.saturating_add(n("outputTokens"));
+                self.usage.cache_read_tokens = self.usage.cache_read_tokens.saturating_add(cached);
+                self.usage.cache_write_tokens = self.usage.cache_write_tokens.saturating_add(n("cacheWriteInputTokens"));
                 super::context::from_codex_app(
                     params,
                     self.model.as_deref(),

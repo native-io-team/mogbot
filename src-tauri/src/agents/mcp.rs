@@ -17,7 +17,7 @@ use tokio::sync::oneshot;
 use super::engine::Engine;
 use super::files;
 use super::permissions;
-use super::runner::{self, From, Status};
+use super::runner::{self, From};
 use super::schedule;
 use super::store::{self, AgentRef, Approval, ApprovalStatus, MessageKind};
 use crate::errors::CommandError;
@@ -817,9 +817,12 @@ async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if let Some(refused) = refused_reply(&answer, "delete it") {
         return error(refused);
     }
-    runner::stop(&agent.id);
+    runner::stop(app, &agent.id);
+    // What its dying turn records lands before its folder goes.
+    runner::wait_until_idle(&agent.id, std::time::Duration::from_secs(3)).await;
     match store::delete(&agent.id) {
         Ok(_) => {
+            runner::forget(&agent.id);
             // Its copy's folder goes; a branch with work on it stays.
             if let Some(copy) = agent.copy.clone() {
                 tauri::async_runtime::spawn(super::task::abandon(copy));
@@ -921,17 +924,8 @@ pub(super) async fn ask_user(
     let _ = runner::record(app, card);
     store::refresh_pending(&caller.id);
     super::notify::refresh_badge(app);
-    let before = runner::status_of(&caller.id);
-    runner::set_status(
-        app,
-        &caller.id,
-        Status {
-            state: "waiting",
-            activity: Some("Waiting for your OK".into()),
-            since: before.since,
-            work: None,
-        },
-    );
+    // "Waiting for your OK" until this card and any other open one are answered.
+    let wait = runner::begin_wait(app, &caller.id);
 
     let waited = tokio::time::timeout(approval_wait(), rx)
         .await
@@ -960,20 +954,9 @@ pub(super) async fn ask_user(
     }
     let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
     super::notify::refresh_badge(app);
-    // Back to work, unless the turn already ended under the card (Stop, or
-    // the user interrupted it): then it isn't ours to change.
-    if runner::status_of(&caller.id).state == "waiting" {
-        runner::set_status(
-            app,
-            &caller.id,
-            Status {
-                state: "working",
-                activity: None,
-                since: before.since,
-                work: None,
-            },
-        );
-    }
+    // Back to work, unless another card is still open, or the turn already
+    // ended under this one (Stop, or the user interrupted it).
+    drop(wait);
     answer
 }
 

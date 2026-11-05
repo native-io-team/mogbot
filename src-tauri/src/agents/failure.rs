@@ -102,7 +102,80 @@ where
             },
         );
     }
+    // A per-minute rate limit (an API 429) is a blip, not the usage limit:
+    // it says so, and stays a plain failure the user can retry.
+    if is_rate_limited(&lower) {
+        return (
+            format!("{who} is being rate-limited right now. Try again in a minute."),
+            Failure::OTHER,
+        );
+    }
     (detail.to_string(), Failure::OTHER)
+}
+
+/// Agents' own words for the CLI failures people hit that aren't the usage
+/// limit or a sign-in (those are [`describe`]'s): the remedy in this app's
+/// terms, never another feature's copy ("AI generation") or a terminal to
+/// live in. `None` for anything else, which is shown as the CLI said it.
+pub fn cli_failure(who: &str, detail: &str) -> Option<String> {
+    let lower = detail.to_lowercase();
+    let has = |words: &[&str]| words.iter().any(|w| lower.contains(w));
+    let text = if has(&["usage credits", "usage-credits"]) {
+        format!("{who} needs usage credits for the model this agent uses. Add credits to your account, or pick another model in Edit agent, then send this again.")
+    } else if has(&["not supported when using codex with a chatgpt account"]) {
+        format!("{who} is set to a model your ChatGPT plan doesn't include. Pick another model in Edit agent, then send this again.")
+    } else if has(&["selected model is at capacity"]) {
+        "The model this agent uses is at capacity right now. Try again in a few minutes, or pick another model in Edit agent.".to_string()
+    } else if has(&["failed to load skill"]) {
+        format!("{who} couldn't load one of your installed skills: its SKILL.md is missing a required field. Fix or remove that skill, then send this again.")
+    } else if has(&[
+        "has not been trusted",
+        "hastrustdialogaccepted",
+        "workspace trust required",
+        "do you trust the contents of this directory",
+    ]) {
+        format!("{who} hasn't been allowed to work in this folder yet, so it won't start here. Open the project, start {who} there once and accept its trust question, then send this again.")
+    } else if has(&[
+        "failed to refresh oauth token",
+        "another claude code process is refreshing it",
+    ]) {
+        format!("{who} couldn't refresh its sign-in because another {who} was doing the same. Try again in a minute.")
+    } else if has(&["api key has expired"]) {
+        format!("{who}'s API key has expired. Make a new one with your provider and update it in {who}'s settings, then send this again.")
+    } else if has(&["subscription access", "ask your admin"]) {
+        format!("Your organization has turned off subscription access to {who}. Use an API key instead, or ask your admin to turn it back on.")
+    } else if has(&[
+        "permission allow rule",
+        "permission deny rule",
+        "wildcard before the rest of the command",
+    ]) {
+        format!("{who} refused to start because a permission rule in this project's .claude/settings.json (or settings.local.json) is invalid: it has a wildcard before the rest of the command. Fix or remove that rule, then send this again.")
+    } else if has(&["failed to load models cache", "codex_models_manager::cache"]) {
+        format!("{who}'s list of models is out of date. Delete ~/.codex/models_cache.json, then send this again.")
+    } else if lower.contains("no stdin data received")
+        && lower.contains("input must be provided either through stdin")
+    {
+        format!("{who} started too slowly to read the message. Send it again.")
+    } else {
+        return None;
+    };
+    Some(text)
+}
+
+/// An API 429 or the CLI saying it's being rate-limited, in either engine's
+/// wording ("rate_limit_error", Codex's "Rate limit exceeded, retry later").
+fn is_rate_limited(lower: &str) -> bool {
+    [
+        "rate limit",
+        "rate_limit",
+        "rate-limit",
+        "too many requests",
+        "api error: 429",
+        "status 429",
+        "status: 429",
+    ]
+    .iter()
+    .any(|w| lower.contains(w))
 }
 
 /// A failure that heals on its own, so a scheduled run is worth trying again:
@@ -146,9 +219,12 @@ pub fn is_temporary(detail: &str, failure: &Failure) -> bool {
                     "temporarily unavailable",
                     // Codex, when its connection to OpenAI drops mid-turn.
                     "stream disconnected",
+                    // `cli_failure`'s own sentence for a slow cold start.
+                    "started too slowly",
                 ]
                 .iter()
                 .any(|w| lower.contains(w))
+                || is_rate_limited(&lower)
         }
     }
 }
@@ -159,7 +235,6 @@ fn is_usage_limit(lower: &str) -> bool {
         "usage limit",
         "session limit",
         "weekly limit",
-        "rate limit",
         "hour limit",
     ]
     .iter()
@@ -178,6 +253,9 @@ fn is_signed_out(lower: &str) -> bool {
         "isn't signed in anymore",
         "not logged in",
         "invalid api key",
+        // Codex's refresh-token rotation failing: only signing in again fixes it.
+        "failed to refresh token",
+        "refresh_token_reused",
     ]
     .iter()
     .any(|w| lower.contains(w))

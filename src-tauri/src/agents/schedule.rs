@@ -1121,7 +1121,9 @@ where
     // answer when the turn ends, rather than one for each.
     let prompt = wake_prompt(tz, firing, now);
     // Before the wake, so even the quickest turn finds its ticket.
+    let ticket = store::new_id();
     runs::issue(runs::Ticket {
+        id: ticket.clone(),
         agent_id: firing.agent_id.clone(),
         prompt: prompt.clone(),
         check_ins: std::iter::once(&firing.check_in)
@@ -1137,11 +1139,8 @@ where
             .map_or(firing.check_in.next_at, |r| r.due_at),
         manual: firing.manual,
     });
-    if firing.check_in.repeat.is_some() {
-        runner::enqueue_routine(app, &firing.agent_id, prompt);
-    } else {
-        runner::enqueue(app, &firing.agent_id, prompt, runner::From::User);
-    }
+    let routine = firing.check_in.repeat.is_some();
+    runner::enqueue_scheduled(app, &firing.agent_id, prompt, routine, ticket);
     runner::record(app, line).map(|_| ())
 }
 

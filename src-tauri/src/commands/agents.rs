@@ -541,9 +541,16 @@ pub async fn agents_memory_suggest(text: String) -> Result<String, CommandError>
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_delete(app: AppHandle, agent_id: String) -> Result<(), CommandError> {
-    runner::stop(&agent_id);
     let copy = store::get(&agent_id).ok().and_then(|a| a.copy);
+    if store::get(&agent_id).is_ok_and(|a| a.is_main) {
+        return Err(CommandError::expected("The Chief of Staff can't be deleted."));
+    }
+    runner::stop(&app, &agent_id);
+    // What its dying turn records lands before its folder goes (and a line
+    // recorded after that is refused: `store::append_message`).
+    runner::wait_until_idle(&agent_id, std::time::Duration::from_secs(3)).await;
     store::delete(&agent_id)?;
+    runner::forget(&agent_id);
     // Its copy's folder goes; a branch with work on it stays.
     if let Some(copy) = copy {
         tauri::async_runtime::spawn(agents::task::abandon(copy));
@@ -563,7 +570,7 @@ pub async fn agents_busy() -> Result<usize, CommandError> {
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_stop(app: AppHandle, agent_id: String) -> Result<bool, CommandError> {
-    let stopped = runner::stop(&agent_id);
+    let stopped = runner::stop(&app, &agent_id);
     // The Chief's Stop (here and on the phone) also stops an import it's
     // running; only the import's own messages go, never the user's.
     let import = store::get(&agent_id).is_ok_and(|a| a.is_main) && agents::connector::stop(&app);

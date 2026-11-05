@@ -38,14 +38,14 @@ pub struct UsageTotals {
 
 impl UsageTotals {
     fn add(&mut self, other: &UsageTotals) {
-        self.turns += other.turns;
-        self.input_tokens += other.input_tokens;
-        self.output_tokens += other.output_tokens;
-        self.cache_read_tokens += other.cache_read_tokens;
-        self.cache_write_tokens += other.cache_write_tokens;
+        self.turns = self.turns.saturating_add(other.turns);
+        self.input_tokens = self.input_tokens.saturating_add(other.input_tokens);
+        self.output_tokens = self.output_tokens.saturating_add(other.output_tokens);
+        self.cache_read_tokens = self.cache_read_tokens.saturating_add(other.cache_read_tokens);
+        self.cache_write_tokens = self.cache_write_tokens.saturating_add(other.cache_write_tokens);
         self.cost_usd += other.cost_usd;
-        self.priced_turns += other.priced_turns;
-        self.duration_ms += other.duration_ms;
+        self.priced_turns = self.priced_turns.saturating_add(other.priced_turns);
+        self.duration_ms = self.duration_ms.saturating_add(other.duration_ms);
     }
 }
 

@@ -48,6 +48,11 @@ pub const MAX_HOPS: u8 = 6;
 
 /// A turn that runs this long is stopped. Long enough to babysit a CI run.
 const TURN_TIMEOUT_SECS: u64 = 3 * 60 * 60;
+/// The chat's line for a turn stopped by [`TURN_TIMEOUT_SECS`].
+const TIMEOUT_NOTE: &str = "Stopped after 3 hours. Send a message to pick it back up.";
+/// With no tool call open, this long without a word from the CLI and the
+/// working line says it may be stuck (see [`quiet_line`]).
+const QUIET_MS: i64 = 10 * 60 * 1000;
 
 /// After `claude` closes its output, how long it gets to exit (and its
 /// stderr to close) before it is stopped: a CLI that hangs on the way out
@@ -96,6 +101,10 @@ struct Inbound {
     /// One of the agent's routines firing (see [`store::Agent::routine_model`]).
     #[serde(default)]
     routine: bool,
+    /// The scheduled run this wakes the agent for (`runs::Ticket::id`): the
+    /// turn that answers it settles it by this id, however that turn ends.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ticket: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -156,6 +165,14 @@ struct Runtime {
     owed: Vec<AgentRef>,
     /// Waiting for a free slot (or memory) before its turn can start.
     queued: bool,
+    /// Scheduled runs the turn in progress answers (an interrupted turn's
+    /// carry over to the turn that replaces it). Settled when it ends.
+    tickets: Vec<String>,
+    /// Which turn this is, counted per agent: a card's wait belongs to one.
+    turn_gen: u64,
+    /// Approval cards the turn in progress is waiting on right now. The
+    /// status stays "waiting" until every one of them is answered.
+    waits: u32,
 }
 
 static RUNTIMES: LazyLock<Mutex<HashMap<String, Runtime>>> =
@@ -375,47 +392,147 @@ fn resent_note(queued: &[Inbound]) -> String {
     )
 }
 
+/// What the last run left behind, taken at launch before any turn can start:
+/// the agents whose turn it cut off (a `turn.json`) or who had messages
+/// waiting (an `inbox.json`), with those messages. `None` until taken.
+static LEFTOVERS: LazyLock<Mutex<Option<HashMap<String, Vec<Inbound>>>>> =
+    LazyLock::new(|| Mutex::new(None));
+/// Woken each time one agent's leftovers have been dealt with.
+static RECOVERED: LazyLock<Notify> = LazyLock::new(Notify::new);
+
+/// At launch, synchronously, before anything can start a turn: note which
+/// agents the last run left mid-turn or with messages waiting. Their
+/// waiting messages go back on their queues (and stay on disk), and their
+/// turns hold until [`recover_after_restart`] has dealt with each, so
+/// recovery never mistakes a turn started in this run for a leftover, and
+/// never sends a message twice. Taken once; a second call does nothing.
+pub fn prepare_recovery() {
+    let mut leftovers = LEFTOVERS.lock().unwrap_or_else(|e| e.into_inner());
+    if leftovers.is_some() {
+        return;
+    }
+    let mut found = HashMap::new();
+    for agent in store::list().unwrap_or_default() {
+        let marked = mark_path(&agent.id).is_some_and(|p| p.exists());
+        let queued = take_inbox(&agent.id);
+        if !marked && queued.is_empty() {
+            continue;
+        }
+        if !queued.is_empty() {
+            let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+            let runtime = runtimes.entry(agent.id.clone()).or_default();
+            for (i, message) in queued.iter().enumerate() {
+                runtime.queue.insert(i, message.clone());
+            }
+            // Still on disk, should the app close again before they're sent.
+            save_inbox(&agent.id, &runtime.queue);
+        }
+        found.insert(agent.id, queued);
+    }
+    *leftovers = Some(found);
+}
+
+/// Whether `agent_id` still has leftovers from the last run to deal with.
+fn awaiting_recovery(agent_id: &str) -> bool {
+    LEFTOVERS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .is_some_and(|l| l.contains_key(agent_id))
+}
+
+/// Hold a turn until the last run's leftovers for this agent are dealt with.
+async fn wait_for_recovery(agent_id: &str) {
+    loop {
+        let woken = RECOVERED.notified();
+        tokio::pin!(woken);
+        woken.as_mut().enable();
+        if !awaiting_recovery(agent_id) {
+            return;
+        }
+        woken.await;
+    }
+}
+
+/// This agent's leftovers are dealt with: its turns may start.
+fn recovered(agent_id: &str) {
+    if let Some(l) = LEFTOVERS.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        l.remove(agent_id);
+    }
+    RECOVERED.notify_waiters();
+}
+
 /// At launch: a turn the last run left mid-flight is over. Its Claude Code
 /// process can outlive the app (a quit doesn't run our cleanup), and would
 /// keep writing the same session as the next turn, so it is stopped; and the
 /// chat says the turn ended, instead of a message sitting there unanswered.
+/// Only what [`prepare_recovery`] found is touched: nothing this run started.
 pub async fn recover_after_restart(app: &AppHandle) {
+    prepare_recovery();
     // Copies whose folder went, or that no agent holds any more.
     super::task::sweep().await;
-    let Ok(agents) = store::list() else { return };
-    for agent in agents {
-        if let Some(path) = mark_path(&agent.id).filter(|p| p.exists()) {
-            let mark = read_mark(&agent.id).unwrap_or_default();
-            if let Some(pid) = mark.pid {
-                if !mark.session.is_empty() {
-                    stop_orphan(pid, &mark.session).await;
-                }
+    let found: Vec<(String, Vec<Inbound>)> = LEFTOVERS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .map(|l| l.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+        .unwrap_or_default();
+    for (agent_id, queued) in found {
+        recover_one(app, &agent_id, &queued).await;
+        recovered(&agent_id);
+        // Nothing has asked it to run since launch: send what was waiting.
+        kick(app, &agent_id);
+    }
+}
+
+/// Start a worker for an agent with messages queued and none running.
+fn kick(app: &AppHandle, agent_id: &str) {
+    let start = {
+        let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+        runtimes.get_mut(agent_id).is_some_and(|r| {
+            let idle_with_work = !r.running && !r.queue.is_empty();
+            if idle_with_work {
+                r.running = true;
             }
-            let _ = std::fs::remove_file(&path);
-            // Same order as a turn that ends: its changes, then its error line,
-            // which tags the agent as needing you (Retry re-sends).
-            if let (Some(project), Some(tree)) = (mark.project, mark.tree) {
-                record_changes(app, &agent.id, project.into(), tree).await;
+            idle_with_work
+        })
+    };
+    if start {
+        let app = app.clone();
+        let agent_id = agent_id.to_string();
+        tauri::async_runtime::spawn(async move { drain(app, agent_id).await });
+    }
+}
+
+/// One agent the last run left mid-turn, or with messages waiting.
+async fn recover_one(app: &AppHandle, agent_id: &str, queued: &[Inbound]) {
+    if let Some(path) = mark_path(agent_id).filter(|p| p.exists()) {
+        let mark = read_mark(agent_id).unwrap_or_default();
+        if let Some(pid) = mark.pid {
+            if !mark.session.is_empty() {
+                stop_orphan(pid, &mark.session).await;
             }
-            let text = "The app closed while this agent was working, so that turn didn't finish. Retry to send it again.";
-            let mut line = new_message(&agent.id, MessageKind::Error, text);
-            line.failure = Some(super::failure::Failure::OTHER);
-            let _ = record(app, line);
         }
-        // What was queued behind it was never started: it runs now, once,
-        // and the chat says which messages were sent again. (The interrupted
-        // turn itself is not re-run: it may have done half its work.)
-        let queued = take_inbox(&agent.id);
-        if queued.is_empty() {
-            continue;
+        let _ = std::fs::remove_file(&path);
+        // Same order as a turn that ends: its changes, then its error line,
+        // which tags the agent as needing you (Retry re-sends).
+        if let (Some(project), Some(tree)) = (mark.project, mark.tree) {
+            record_changes(app, agent_id, project.into(), tree).await;
         }
+        let text = "The app closed while this agent was working, so that turn didn't finish. Retry to send it again.";
+        let mut line = new_message(agent_id, MessageKind::Error, text);
+        line.failure = Some(super::failure::Failure::OTHER);
+        let _ = record(app, line);
+    }
+    // What was queued behind it was never started: it runs now, once (it is
+    // already back on the queue), and the chat says which messages were sent
+    // again. The interrupted turn itself is not re-run: it may have done half
+    // its work.
+    if !queued.is_empty() {
         let _ = record(
             app,
-            new_message(&agent.id, MessageKind::Note, resent_note(&queued)),
+            new_message(agent_id, MessageKind::Note, resent_note(queued)),
         );
-        for message in queued {
-            push(app, &agent.id, message);
-        }
     }
 }
 
@@ -483,7 +600,10 @@ fn record_as(
 ) -> Result<AgentMessage, CommandError> {
     let message = super::secrets::redact_message(message);
     if let Err(e) = store::append_message(&message) {
-        unsaved(app, &message, &e);
+        // A deleted agent's dying turn: nothing to show, nowhere to show it.
+        if !store::is_gone(&message.agent_id) {
+            unsaved(app, &message, &e);
+        }
         return Err(e);
     }
     // A step of the turn's timeline (an approval card, a screenshot), or the
@@ -655,12 +775,21 @@ pub fn enqueue(app: &AppHandle, agent_id: &str, text: String, from: From) {
             from,
             reply: false,
             routine: false,
+            ticket: None,
         },
     );
 }
 
-/// Queue the turn one of the agent's routines wakes it for.
-pub fn enqueue_routine(app: &AppHandle, agent_id: &str, text: String) {
+/// Queue the turn a check-in wakes the agent for: one of its routines
+/// (`routine`), or a one-time check-in. `ticket` is the scheduled run it
+/// answers (`runs::issue`), settled however the turn ends.
+pub fn enqueue_scheduled(
+    app: &AppHandle,
+    agent_id: &str,
+    text: String,
+    routine: bool,
+    ticket: String,
+) {
     push(
         app,
         agent_id,
@@ -668,7 +797,8 @@ pub fn enqueue_routine(app: &AppHandle, agent_id: &str, text: String) {
             text,
             from: From::User,
             reply: false,
-            routine: true,
+            routine,
+            ticket: Some(ticket),
         },
     );
 }
@@ -683,6 +813,7 @@ pub fn enqueue_reply(app: &AppHandle, agent_id: &str, text: String, sender: Agen
             from: From::Agent { sender, hop },
             reply: true,
             routine: false,
+            ticket: None,
         },
     );
 }
@@ -720,22 +851,101 @@ fn push(app: &AppHandle, agent_id: &str, inbound: Inbound) {
     }
 }
 
-/// Stop the turn in progress and drop anything queued behind it.
-pub fn stop(agent_id: &str) -> bool {
+/// Stop the turn in progress and drop anything queued behind it. Nothing
+/// dropped goes unanswered: another agent's request is told it was stopped
+/// before it started, and a scheduled run settles as stopped.
+pub fn stop(app: &AppHandle, agent_id: &str) -> bool {
+    let (stopped, dropped) = stop_queue(agent_id);
+    tell_dropped(app, agent_id, dropped);
+    stopped
+}
+
+/// [`stop`]'s part under the lock: what it dropped, and whether a turn (or
+/// a wait for a slot) was told to stop.
+fn stop_queue(agent_id: &str) -> (bool, Vec<Inbound>) {
     let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     let Some(runtime) = runtimes.get_mut(agent_id) else {
-        return false;
+        return (false, Vec::new());
     };
-    runtime.queue.clear();
+    let dropped: Vec<Inbound> = runtime.queue.drain(..).collect();
     save_inbox(agent_id, &runtime.queue);
     runtime.interrupt = false;
-    match &runtime.cancel {
+    let stopped = match &runtime.cancel {
         Some(cancel) => {
             cancel.notify_one();
             true
         }
         None => false,
+    };
+    (stopped, dropped)
+}
+
+/// Who is owed word about messages a Stop dropped before they started:
+/// each agent that asked (once each, not for its own replies), and each
+/// scheduled run.
+fn dropped_debts(dropped: &[Inbound]) -> (Vec<(AgentRef, u8)>, Vec<String>) {
+    let mut askers: Vec<(AgentRef, u8)> = Vec::new();
+    for m in dropped {
+        if let (From::Agent { sender, hop }, false) = (&m.from, m.reply) {
+            if !askers.iter().any(|(a, _)| a.id == sender.id) {
+                askers.push((sender.clone(), *hop));
+            }
+        }
     }
+    let tickets = dropped.iter().filter_map(|m| m.ticket.clone()).collect();
+    (askers, tickets)
+}
+
+fn tell_dropped(app: &AppHandle, agent_id: &str, dropped: Vec<Inbound>) {
+    let (askers, tickets) = dropped_debts(&dropped);
+    if !tickets.is_empty() {
+        super::runs::turn_ended(app, agent_id, &tickets, Some("Stopped"));
+    }
+    if askers.is_empty() {
+        return;
+    }
+    let Ok(me) = store::get(agent_id) else { return };
+    let text = format!(
+        "{} was stopped before it started on your request.",
+        me.name
+    );
+    let sender = AgentRef {
+        id: me.id.clone(),
+        name: me.name.clone(),
+    };
+    for (to, hop) in askers {
+        let hop = hop.saturating_add(1);
+        if hop > MAX_HOPS || store::get(&to.id).is_err() {
+            continue;
+        }
+        let mut line = new_message(&to.id, MessageKind::FromAgent, text.clone());
+        line.peer = Some(sender.clone());
+        let _ = record(app, line);
+        enqueue_reply(app, &to.id, text.clone(), sender.clone(), hop);
+    }
+}
+
+/// After a Stop: wait (at most `bound`) for the agent's worker to finish,
+/// so what the dying turn records lands before, say, its folder is deleted.
+pub async fn wait_until_idle(agent_id: &str, bound: Duration) -> bool {
+    let until = tokio::time::Instant::now() + bound;
+    loop {
+        if !is_working(agent_id) {
+            return true;
+        }
+        if tokio::time::Instant::now() >= until {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// The agent is gone: so is what the runner kept for it.
+pub fn forget(agent_id: &str) {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(agent_id);
 }
 
 /// The divider a fresh start leaves in the chat.
@@ -757,8 +967,12 @@ pub fn start_fresh(app: &AppHandle, agent_id: &str) -> Result<store::Agent, Comm
 /// conversation: never a turn that read the old session and writes it back
 /// under a divider saying it's gone. Two at once record one divider.
 fn begin_fresh(agent_id: &str) -> Result<(store::Agent, AgentMessage), CommandError> {
-    let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    // Read before the inbox lock, which every agent's status waits on. A
+    // card is only ever raised by a running turn, which the busy check
+    // below refuses, so nothing can slip in between.
     let name = store::get(agent_id)?.name;
+    let waiting_on_you = !store::pending_approvals(agent_id)?.is_empty();
+    let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     let mine = runtimes.get(agent_id);
     // A running or waiting turn is in the old conversation, and would record
     // it again when its session is confirmed.
@@ -768,7 +982,7 @@ fn begin_fresh(agent_id: &str) -> Result<(store::Agent, AgentMessage), CommandEr
         )));
     }
     // A card still waiting belongs to a turn in the old conversation.
-    if !store::pending_approvals(agent_id)?.is_empty() {
+    if waiting_on_you {
         return Err(CommandError::expected(format!(
             "{name} is waiting on your answer to a request. Answer it first, then start fresh."
         )));
@@ -847,6 +1061,86 @@ fn take_interrupt(agent_id: &str) -> bool {
         activity.as_deref(),
     ));
     true
+}
+
+/// A card the turn in progress is waiting on: the status says "Needs your
+/// OK" until this and every other open card of the same turn is answered
+/// (two at once: parallel tool calls, or a session question and a
+/// permission card). Dropped when the wait ends.
+pub struct WaitGuard {
+    app: AppHandle,
+    agent_id: String,
+    turn: u64,
+    since: Option<i64>,
+}
+
+/// Put the agent in "waiting" for a card, counted (see [`WaitGuard`]).
+pub fn begin_wait(app: &AppHandle, agent_id: &str) -> WaitGuard {
+    let before = status_of(agent_id);
+    let turn = open_wait(agent_id);
+    set_status(
+        app,
+        agent_id,
+        Status {
+            state: "waiting",
+            activity: Some("Waiting for your OK".into()),
+            since: before.since,
+            work: None,
+        },
+    );
+    WaitGuard {
+        app: app.clone(),
+        agent_id: agent_id.to_string(),
+        turn,
+        since: before.since,
+    }
+}
+
+/// Count one more open card for the turn in progress; returns that turn.
+fn open_wait(agent_id: &str) -> u64 {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let runtime = runtimes.entry(agent_id.to_string()).or_default();
+    runtime.waits = runtime.waits.saturating_add(1);
+    runtime.turn_gen
+}
+
+/// One of `turn`'s cards is settled. True when it was the last one and the
+/// status still says "waiting": back to work. A card from a turn that has
+/// since ended (or been replaced) changes nothing.
+fn close_wait(agent_id: &str, turn: u64) -> bool {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(runtime) = runtimes.get_mut(agent_id) else {
+        return false;
+    };
+    if runtime.turn_gen != turn {
+        return false;
+    }
+    runtime.waits = runtime.waits.saturating_sub(1);
+    runtime.waits == 0
+        && runtime
+            .status
+            .as_ref()
+            .is_some_and(|s| s.state == "waiting")
+}
+
+impl Drop for WaitGuard {
+    fn drop(&mut self) {
+        // Back to work, unless another card is still open, or the turn already
+        // ended under the card (Stop, or the user interrupted it): then it
+        // isn't ours to change.
+        if close_wait(&self.agent_id, self.turn) {
+            set_status(
+                &self.app,
+                &self.agent_id,
+                Status {
+                    state: "working",
+                    activity: None,
+                    since: self.since,
+                    work: None,
+                },
+            );
+        }
+    }
 }
 
 /// A free turn slot, waiting (and saying so) while every slot is taken.
@@ -940,78 +1234,239 @@ async fn wait_for_memory(app: &AppHandle, agent_id: &str) -> bool {
     }
 }
 
+/// What a turn is handed: its batch of messages, composed.
+struct Batch {
+    prompt: String,
+    routine: bool,
+    /// The first message's text: what a bound agent's copy is named after.
+    request: String,
+}
+
+/// Take everything queued as the next turn, or `None` when the queue was
+/// emptied meanwhile (a Stop). The turn's mark is written *before* the
+/// batch leaves the queue (and `inbox.json`), so there is no moment when a
+/// quit would leave neither: the next launch always says the turn didn't
+/// finish.
+fn take_batch(agent_id: &str) -> Option<Batch> {
+    write_mark(agent_id, TurnMark::default());
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let runtime = runtimes.entry(agent_id.to_string()).or_default();
+    if runtime.queue.is_empty() {
+        drop(runtimes);
+        clear_mark(agent_id);
+        return None;
+    }
+    let batch: Vec<Inbound> = runtime.queue.drain(..).collect();
+    save_inbox(agent_id, &runtime.queue);
+    let routine = batch.iter().all(|m| m.routine);
+    let request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
+    // The turn inherits the deepest hop it is answering; a user message
+    // in the batch resets the chain.
+    runtime.origin = if batch.iter().any(|m| matches!(m.from, From::User)) {
+        None
+    } else {
+        batch.iter().rev().find_map(|m| match &m.from {
+            From::Agent { sender, .. } => Some(sender.id.clone()),
+            From::User => None,
+        })
+    };
+    runtime.hop = if batch.iter().any(|m| matches!(m.from, From::User)) {
+        0
+    } else {
+        batch
+            .iter()
+            .filter_map(|m| match &m.from {
+                From::Agent { hop, .. } => Some(*hop),
+                From::User => None,
+            })
+            .max()
+            .unwrap_or(0)
+    };
+    // An interrupted turn's debts carry over to the turn that replaces it.
+    for m in &batch {
+        if let (From::Agent { sender, .. }, false) = (&m.from, m.reply) {
+            if !runtime.owed.iter().any(|a| a.id == sender.id) {
+                runtime.owed.push(sender.clone());
+            }
+        }
+    }
+    // So do its scheduled runs: settled when this turn ends.
+    runtime
+        .tickets
+        .extend(batch.iter().filter_map(|m| m.ticket.clone()));
+    runtime.turn_gen = runtime.turn_gen.wrapping_add(1);
+    runtime.waits = 0;
+    runtime.cancel = Some(Arc::new(Notify::new()));
+    runtime.interrupt = false;
+    let prompt = compose(&batch);
+    runtime.prompt = Some(prompt.clone());
+    let prompt = match runtime.interrupted.take() {
+        Some(preamble) => format!("{preamble}{prompt}"),
+        None => prompt,
+    };
+    Some(Batch {
+        prompt,
+        routine,
+        request,
+    })
+}
+
+/// The queue is empty: the worker is done. Decided under the same lock
+/// `push` checks `running` under, so a message pushed now either is seen
+/// here or starts a new worker. Returns what an interrupted turn that was
+/// never replaced (the queue was stopped) still owes, to settle.
+fn finish_if_idle(agent_id: &str) -> Option<(Vec<AgentRef>, Vec<String>)> {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let runtime = runtimes.entry(agent_id.to_string()).or_default();
+    if !runtime.queue.is_empty() {
+        return None;
+    }
+    runtime.running = false;
+    runtime.queued = false;
+    runtime.cancel = None;
+    runtime.hop = 0;
+    runtime.origin = None;
+    runtime.prompt = None;
+    runtime.interrupted = None;
+    Some((
+        std::mem::take(&mut runtime.owed),
+        std::mem::take(&mut runtime.tickets),
+    ))
+}
+
+fn take_tickets(agent_id: &str) -> Vec<String> {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    runtimes
+        .get_mut(agent_id)
+        .map(|r| std::mem::take(&mut r.tickets))
+        .unwrap_or_default()
+}
+
+/// The words for an agent that delegated to a turn that was stopped.
+fn stopped_reason(note: Option<&str>) -> String {
+    match note {
+        None => "it was stopped before it finished.".to_string(),
+        Some(TIMEOUT_NOTE) => "it ran out of time (3 hours) before it finished.".to_string(),
+        Some(note) => note.to_string(),
+    }
+}
+
+/// Resets a worker that died mid-turn (a panic anywhere in it), so the
+/// agent isn't left "working" with every later message queued behind a
+/// worker that no longer exists. Disarmed on every way out but a panic.
+struct DrainGuard {
+    app: Option<AppHandle>,
+    agent_id: String,
+    armed: bool,
+    /// A batch was taken off the queue since this worker started: anything
+    /// queued now is newer, so a fresh worker is worth starting for it.
+    progressed: bool,
+}
+
+const PANIC_LINE: &str = "Something went wrong running this agent, so that turn didn't finish. Send your message again.";
+
+impl Drop for DrainGuard {
+    fn drop(&mut self) {
+        // A worker dropped without panicking is the runtime shutting down
+        // (the app quitting): its mark stays for the next launch to report.
+        if !self.armed || !std::thread::panicking() || QUITTING.load(Ordering::SeqCst) {
+            return;
+        }
+        tracing::error!("[Agents] {}'s turn panicked; resetting it", self.agent_id);
+        let reset = reset_after_panic(&self.agent_id, self.progressed);
+        clear_mark(&self.agent_id);
+        let Some(app) = &self.app else { return };
+        set_status(app, &self.agent_id, Status::idle());
+        let mut line = new_message(&self.agent_id, MessageKind::Error, PANIC_LINE);
+        line.failure = Some(super::failure::Failure::OTHER);
+        let _ = record(app, line);
+        super::work::finish(app, &self.agent_id, store::now_ms());
+        for to in reset.owed {
+            tell_couldnt_finish(app, &self.agent_id, &to, "something went wrong running it.");
+        }
+        if !reset.tickets.is_empty() {
+            super::runs::turn_ended(app, &self.agent_id, &reset.tickets, None);
+        }
+        if reset.restart {
+            let app = app.clone();
+            let agent_id = self.agent_id.clone();
+            tauri::async_runtime::spawn(async move { drain(app, agent_id).await });
+        }
+    }
+}
+
+/// What a panicked worker left, after its runtime was reset.
+struct PanicReset {
+    owed: Vec<AgentRef>,
+    tickets: Vec<String>,
+    /// Messages are still queued and a new worker was claimed for them.
+    restart: bool,
+}
+
+fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let runtime = runtimes.entry(agent_id.to_string()).or_default();
+    runtime.queued = false;
+    runtime.cancel = None;
+    runtime.interrupt = false;
+    runtime.interrupted = None;
+    runtime.hop = 0;
+    runtime.origin = None;
+    runtime.prompt = None;
+    runtime.waits = 0;
+    runtime.status = Some(Status::idle());
+    // Messages that arrived during the dead turn are newer than what killed
+    // it: a new worker sends them. If it died before taking anything, they
+    // are what killed it, and are dropped (the error line says to resend).
+    let restart = progressed && !runtime.queue.is_empty();
+    if !restart {
+        runtime.queue.clear();
+        save_inbox(agent_id, &runtime.queue);
+    }
+    runtime.running = restart;
+    PanicReset {
+        owed: std::mem::take(&mut runtime.owed),
+        tickets: std::mem::take(&mut runtime.tickets),
+        restart,
+    }
+}
+
 async fn drain(app: AppHandle, agent_id: String) {
+    let mut guard = DrainGuard {
+        app: Some(app.clone()),
+        agent_id: agent_id.clone(),
+        armed: true,
+        progressed: false,
+    };
+    // What the last run left for this agent is dealt with first.
+    wait_for_recovery(&agent_id).await;
     loop {
-        let has_work = {
-            let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
-            runtimes.get(&agent_id).is_some_and(|r| !r.queue.is_empty())
-        };
-        let _permit = if has_work {
-            set_queued(&agent_id, true);
-            let permit = wait_for_slot(&app, &agent_id).await;
-            set_queued(&agent_id, false);
-            permit
-        } else {
-            None
-        };
-        let routine: bool;
-        let request: String;
-        let prompt: String = {
-            let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
-            let runtime = runtimes.entry(agent_id.clone()).or_default();
-            if runtime.queue.is_empty() {
-                runtime.running = false;
-                runtime.cancel = None;
-                runtime.hop = 0;
-                runtime.origin = None;
-                runtime.prompt = None;
-                drop(runtimes);
-                set_status(&app, &agent_id, Status::idle());
-                return;
+        if let Some((owed, tickets)) = finish_if_idle(&agent_id) {
+            guard.armed = false;
+            set_status(&app, &agent_id, Status::idle());
+            // An interrupted turn whose replacement never ran (stopped).
+            for to in owed {
+                tell_couldnt_finish(&app, &agent_id, &to, "it was stopped before it finished.");
             }
-            let batch: Vec<Inbound> = runtime.queue.drain(..).collect();
-            save_inbox(&agent_id, &runtime.queue);
-            routine = batch.iter().all(|m| m.routine);
-            request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
-            // The turn inherits the deepest hop it is answering; a user message
-            // in the batch resets the chain.
-            runtime.origin = if batch.iter().any(|m| matches!(m.from, From::User)) {
-                None
-            } else {
-                batch.iter().rev().find_map(|m| match &m.from {
-                    From::Agent { sender, .. } => Some(sender.id.clone()),
-                    From::User => None,
-                })
-            };
-            runtime.hop = if batch.iter().any(|m| matches!(m.from, From::User)) {
-                0
-            } else {
-                batch
-                    .iter()
-                    .filter_map(|m| match &m.from {
-                        From::Agent { hop, .. } => Some(*hop),
-                        From::User => None,
-                    })
-                    .max()
-                    .unwrap_or(0)
-            };
-            // An interrupted turn's debts carry over to the turn that replaces it.
-            for m in &batch {
-                if let (From::Agent { sender, .. }, false) = (&m.from, m.reply) {
-                    if !runtime.owed.iter().any(|a| a.id == sender.id) {
-                        runtime.owed.push(sender.clone());
-                    }
-                }
+            if !tickets.is_empty() {
+                super::runs::turn_ended(&app, &agent_id, &tickets, Some("Stopped"));
             }
-            runtime.cancel = Some(Arc::new(Notify::new()));
-            runtime.interrupt = false;
-            let prompt = compose(&batch);
-            runtime.prompt = Some(prompt.clone());
-            match runtime.interrupted.take() {
-                Some(preamble) => format!("{preamble}{prompt}"),
-                None => prompt,
-            }
+            return;
+        }
+        set_queued(&agent_id, true);
+        let permit = wait_for_slot(&app, &agent_id).await;
+        set_queued(&agent_id, false);
+        // No slot: the wait was stopped. Whatever arrived since is decided again.
+        let Some(_permit) = permit else { continue };
+        let Some(batch) = take_batch(&agent_id) else {
+            continue;
         };
+        guard.progressed = true;
+        let Batch {
+            prompt,
+            routine,
+            request,
+        } = batch;
         // A bound agent works in its own copy of its project (`task`): the
         // open one, or one made now. Refused (too many copies, no disk) is
         // the turn's failure; it never falls back to the user's folder.
@@ -1026,17 +1481,17 @@ async fn drain(app: AppHandle, agent_id: String) {
             Ok(_) => turn_start(&agent_id).await,
             Err(_) => None,
         };
-        write_mark(
-            &agent_id,
-            TurnMark {
-                pid: None,
-                session: String::new(),
-                project: start
-                    .as_ref()
-                    .map(|(p, _)| p.to_string_lossy().into_owned()),
-                tree: start.as_ref().map(|(_, t)| t.clone()),
-            },
-        );
+        if let Some((project, tree)) = &start {
+            write_mark(
+                &agent_id,
+                TurnMark {
+                    pid: None,
+                    session: String::new(),
+                    project: Some(project.to_string_lossy().into_owned()),
+                    tree: Some(tree.clone()),
+                },
+            );
+        }
         let since = store::now_ms();
         super::work::begin(&agent_id, since);
         if let Some(copy) = &made {
@@ -1052,6 +1507,7 @@ async fn drain(app: AppHandle, agent_id: String) {
         };
         if QUITTING.load(Ordering::SeqCst) {
             // The app is going: the mark stays, for the next launch to report.
+            guard.armed = false;
             return;
         }
         clear_mark(&agent_id);
@@ -1069,16 +1525,21 @@ async fn drain(app: AppHandle, agent_id: String) {
         if result.is_ok() {
             super::work::finish(&app, &agent_id, store::now_ms());
         }
-        let failed = match result {
+        // How the scheduled runs it answered settle: `None` reads the turn's
+        // own last line (an error, or not).
+        let mut settle_as: Option<&str> = None;
+        match result {
             Ok(Ended::Interrupted) => {
+                // Its debts and scheduled runs carry over to the next turn.
                 notify::turn_ended(&app, &agent_id);
                 continue;
             }
-            Ok(Ended::Stopped) => {
-                take_owed(&agent_id);
-                None
+            Ok(Ended::Stopped(note)) => {
+                // Whoever delegated this hears it was stopped, rather than nothing.
+                return_results(&app, &agent_id, since, Some(stopped_reason(note)));
+                settle_as = Some(note.unwrap_or("Stopped"));
             }
-            Ok(Ended::Finished) => Some(None),
+            Ok(Ended::Finished) => return_results(&app, &agent_id, since, None),
             Err(err) => {
                 let engine = store::get(&agent_id).map(|a| a.engine).unwrap_or_default();
                 let (text, failure) = super::failure::describe_now(engine, &err.to_string());
@@ -1086,16 +1547,34 @@ async fn drain(app: AppHandle, agent_id: String) {
                 line.failure = Some(failure);
                 let _ = record(&app, line);
                 super::work::finish(&app, &agent_id, store::now_ms());
-                Some(Some(text))
+                return_results(&app, &agent_id, since, Some(text));
             }
-        };
-        if let Some(error) = failed {
-            return_results(&app, &agent_id, since, error);
         }
         // A scheduled run that failed is retried, or reported (`agents::runs`).
-        super::runs::turn_ended(&app, &agent_id, &prompt);
+        let tickets = take_tickets(&agent_id);
+        if !tickets.is_empty() {
+            super::runs::turn_ended(&app, &agent_id, &tickets, settle_as);
+        }
         notify::turn_ended(&app, &agent_id);
     }
+}
+
+/// Tell one agent that delegated to `agent_id` that it couldn't finish.
+fn tell_couldnt_finish(app: &AppHandle, agent_id: &str, to: &AgentRef, why: &str) {
+    let Ok(me) = store::get(agent_id) else { return };
+    let hop = current_hop(agent_id).saturating_add(1);
+    if hop > MAX_HOPS || store::get(&to.id).is_err() {
+        return;
+    }
+    let text = format!("{} couldn't finish: {why}", me.name);
+    let sender = AgentRef {
+        id: me.id.clone(),
+        name: me.name.clone(),
+    };
+    let mut line = new_message(&to.id, MessageKind::FromAgent, text.clone());
+    line.peer = Some(sender.clone());
+    let _ = record(app, line);
+    enqueue_reply(app, &to.id, text, sender, hop);
 }
 
 fn take_owed(agent_id: &str) -> Vec<AgentRef> {
@@ -1463,14 +1942,29 @@ impl Timing {
     }
 }
 
+/// The working line for a turn the CLI has said nothing in for a while,
+/// with no tool call open (a long build is not silence): honest that it may
+/// be stuck, so the user can Stop it. `None` while it isn't quiet that long.
+fn quiet_line(who: &str, last_word: i64, now: i64, tool_open: bool) -> Option<String> {
+    let quiet = now.saturating_sub(last_word);
+    if tool_open || quiet < QUIET_MS {
+        return None;
+    }
+    let minutes = quiet / 60_000;
+    Some(format!(
+        "No word from {who} for {minutes} min. It may be stuck; Stop it if it doesn't move on."
+    ))
+}
+
 /// How a turn that didn't fail ended.
 #[derive(Debug, PartialEq)]
 enum Ended {
     Finished,
     /// Stopped for a newer message, which the next turn reads.
     Interrupted,
-    /// Stopped by the user (or the time limit).
-    Stopped,
+    /// Stopped by the user (`None`), or by us: the time limit, or a turn
+    /// whose permissions can't be trusted (the line the chat was given).
+    Stopped(Option<&'static str>),
 }
 
 /// Run one turn. `retry_fresh` lets a vanished session be replaced once.
@@ -1623,11 +2117,17 @@ async fn run_turn(
     } else {
         // A CLI that dies on startup closes stdin before reading it. Its exit
         // status and stderr say why; a "Broken pipe" here would only hide that.
+        // Written from a task of its own: a prompt bigger than the pipe, to a
+        // CLI not reading yet, would otherwise block here, before Stop and
+        // the deadline are watched.
         if let Some(mut stdin) = child.stdin.take() {
-            if let Err(e) = stdin.write_all(prompt.as_bytes()).await {
-                tracing::warn!("[Agents] couldn't hand {agent_id} its prompt: {e}");
-            }
-            drop(stdin);
+            let (id, prompt) = (agent_id.to_string(), prompt.clone());
+            tokio::spawn(async move {
+                if let Err(e) = stdin.write_all(prompt.as_bytes()).await {
+                    tracing::warn!("[Agents] couldn't hand {id} its prompt: {e}");
+                }
+                drop(stdin);
+            });
         }
         (None, None)
     };
@@ -1704,11 +2204,17 @@ async fn run_turn(
     let mut exited: Option<std::io::Result<std::process::ExitStatus>> = None;
     let drain_rest = tokio::time::sleep(Duration::from_secs(TURN_TIMEOUT_SECS));
     tokio::pin!(drain_rest);
+    // A hung CLI (a dead connection after sleep, a stalled MCP server) says
+    // nothing for hours. Wall-clock time, so a sleep counts as time passed.
+    let mut last_word = store::now_ms();
+    let mut quiet_tick = tokio::time::interval(Duration::from_secs(60));
+    quiet_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     loop {
         tokio::select! {
             line = lines.next_line() => {
                 let Ok(Some(line)) = line else { break };
+                last_word = store::now_ms();
                 let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
                 let kind = value.get("type").and_then(|t| t.as_str());
                 // A `result` can answer something queued ahead of the user's
@@ -1865,7 +2371,18 @@ async fn run_turn(
             }
             _ = &mut drain_rest, if exited.is_some() || saw_result => break,
             _ = cancel.notified() => { stopped = Some(None); break; }
-            _ = &mut deadline => { stopped = Some(Some("Stopped after 3 hours. Send a message to pick it back up.")); break; }
+            _ = &mut deadline => { stopped = Some(Some(TIMEOUT_NOTE)); break; }
+            _ = quiet_tick.tick() => {
+                let now = status_of(agent_id);
+                let tool_open = super::work::live(agent_id).is_some_and(|w| w.doing.is_some());
+                if now.state == "working" {
+                    if let Some(line) = quiet_line(engine.label(), last_word, store::now_ms(), tool_open) {
+                        if now.activity.as_deref() != Some(line.as_str()) {
+                            set_status(app, agent_id, Status { state: "working", activity: Some(line), since: Some(started), work: None });
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1950,7 +2467,7 @@ async fn run_turn(
             }
             None => {}
         }
-        return Ok(Ended::Stopped);
+        return Ok(Ended::Stopped(note));
     }
 
     let missing_session =
@@ -1970,6 +2487,7 @@ async fn run_turn(
     }
 
     if let Some(err) = result_error {
+        let err = super::failure::cli_failure(engine.label(), &err).unwrap_or(err);
         return Err(CommandError::expected(err));
     }
     if !saw_result {
@@ -1978,9 +2496,9 @@ async fn run_turn(
             _ => stderr_text,
         };
         let detail = unfinished_turn(engine, status.success(), stderr_text);
-        if let Some(err) = crate::commands::ai::classify_agent_cli_failure(engine.label(), &detail)
-        {
-            return Err(err);
+        // Agents' own words for what it can name (never PR generation's).
+        if let Some(text) = super::failure::cli_failure(engine.label(), &detail) {
+            return Err(CommandError::expected(text));
         }
         return Err(CommandError::expected(
             crate::external_command::truncate_output(detail.trim()),
@@ -2106,6 +2624,7 @@ mod tests {
                 from: From::User,
                 reply: false,
                 routine: false,
+                ticket: None,
             },
             Inbound {
                 text: "Done Y".into(),
@@ -2118,6 +2637,7 @@ mod tests {
                 },
                 reply: false,
                 routine: false,
+                ticket: None,
             },
         ];
         let prompt = compose(&batch);
@@ -2258,6 +2778,7 @@ mod tests {
                 from: From::User,
                 reply: false,
                 routine: false,
+                ticket: None,
             },
             Inbound {
                 text: "Receipts filed.\nDetails follow".into(),
@@ -2270,6 +2791,7 @@ mod tests {
                 },
                 reply: true,
                 routine: false,
+                ticket: None,
             },
         ]
         .into();
@@ -2417,6 +2939,7 @@ mod tests {
                     },
                     reply: false,
                     routine: false,
+                    ticket: None,
                 });
             }
             assert!(begin_fresh(&a.id).is_err());
@@ -2550,3 +3073,7 @@ mod tests {
         assert_eq!(recap_lines(&log), vec!["User: Hi"]);
     }
 }
+
+#[cfg(test)]
+#[path = "audit_runner_tests.rs"]
+mod audit_runner_tests;

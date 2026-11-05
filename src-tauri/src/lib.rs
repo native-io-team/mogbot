@@ -181,6 +181,9 @@ pub fn run() {
             // "pending" from the last run has nobody waiting on it any more;
             // the Dock badge starts from what's left once those expire.
             agents::notify::init(_app.handle());
+            // What the last run left mid-turn, noted before anything can
+            // start a turn: those agents' turns wait for recovery below.
+            agents::runner::prepare_recovery();
             let badge_app = _app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let _ = tauri::async_runtime::spawn_blocking(agents::store::expire_stale_approvals)
