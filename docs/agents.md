@@ -1450,6 +1450,73 @@ cards.
   persisted field, a naming flow, collapse state, and a story for how they
   sit with the recency sort. Worth doing as its own slice once the list is
   long enough to want them.
+## Rooms (`src-tauri/src/agents/rooms.rs`)
+
+A room is one visible thread shared by you and two to six agents. It is a
+conversation, not a merged agent: each member keeps its own session and
+memory, and a message in the room becomes a turn in each addressed member's
+own inbox.
+
+- **Who answers.** The members you @mention; every member for `@everyone`;
+  otherwise the room's **lead** (the Chief of Staff when it is a member, or
+  whoever the room's settings name). With no mention and no lead nothing is
+  sent: the composer asks "Who should answer?" with a chip per member and
+  Everyone. The composer's foot line always says who will answer before you
+  send ("To Finance and Ops", "To everyone · 4 replies"). Your line records
+  who it was for (`mentions`) and shows "To …" under it.
+- **What a member sees.** Its turn's prompt is written when the turn starts
+  (`rooms::prompt`), from the room as it is then: who is here, the newest 20
+  lines (each clipped to 1,200 characters, at most 8,000 in all), and, said
+  in so many words, how many of how many it is shown. It is told its reply is
+  posted for everyone, to answer for itself, and how to bring someone in.
+- **Agents bringing each other in.** A finished reply that @mentions another
+  member (`rooms::mentioned_in`: whole names, longest first, never an email
+  address, never `@everyone`) asks that member next, one hop further. Each
+  user message starts a round; at most **8 agent turns** per round (the
+  addressed members included) and the runner's 6-hop cap. Past either, nobody
+  else is asked and the room says so once. The room shows "3 of 8 replies for
+  this message" while it runs. `message_agent` still works from a room turn
+  (for work outside the room) under its own hop rules.
+- **One place per turn.** A room ask carries `room` on the queued message
+  (`runner::Inbound`). `take_batch` takes only a run of messages said in the
+  same place, so a room turn is never folded into the agent's own chat (or
+  another room) and vice versa; the rest waits for the next turn, in order. A
+  room ask owes no agent an answer. While it runs, `Runtime.room` is set and
+  `Status.room` says so, so the room shows its members' working lines and
+  drafts and no one else's. A member busy elsewhere shows as "will reply
+  after what it's doing now" (`RoomView.waiting`).
+- **Where lines live.** Everything a room turn records (reply, cards, notes,
+  errors, change cards; never your own lines, another agent's request or a
+  check-in) is tagged `room` in the member's own log and copied into
+  `agents/rooms/<id>/messages.jsonl`. A room's page applies each member's
+  card answers and timelines from that member's home, so Allow / Deny,
+  "Worked … · N steps" and result cards work in the room exactly as in the
+  agent's chat. The agent's own chat folds its room lines into one line
+  ("2 replies in Pricing launch", a link to the room); a card still waiting
+  on you stays a card there too. The room's row, not the agent's, gets the
+  preview and the unread count; the agent's row still shows a failure.
+- **Accent.** A room is neutral (the monochrome accent); each member's run of
+  lines opens with its badge and name in its own colour.
+- **Managing.** "New room" at the foot of the agent list (once there are two
+  agents), ⌘K → New room…, Open <room>, <room>: members and name…,
+  Mute/Unmute, Delete…. Rooms sit in a "Rooms" section of the list with a
+  paired badge. Mute stops the unread count. Deleting a room removes its
+  thread and never an agent; deleting an agent takes it out of its rooms
+  (and as lead). "Stop replies here" (`agents_room_stop`) drops only what
+  was asked in the room and stops a turn answering there; anything said to
+  the agent elsewhere stays queued.
+- **Search** scans room threads too; a room hit opens the room. A room line
+  is found once, in its room, not again in the member's log.
+- **Phone.** Rooms list and room chat (read, send with @mentions and
+  @everyone, Who should answer?) for apps that say `hello.features: ["rooms"]`;
+  older phones see no rooms and no room-only lines (docs/mobile.md).
+- **Not built.** Attachments and quotes in a room composer; jumping to a
+  search hit's exact line in a room; OS notifications for room replies (cards
+  still notify, as the agent's); a user "leave" separate from delete (a room
+  with one person in it has nothing to leave; "leave" is an agent leaving,
+  via members). No real agent turns were run in a room for this slice: the
+  routing is unit-tested and the UI is harness-tested on fixtures.
+
 ## Files back from agents (`src-tauri/src/agents/files.rs`)
 
 - `share_file {path, caption?}` takes `~/…`, an absolute path, or one relative
@@ -1724,6 +1791,8 @@ can't trample each other. The UI says "a copy of acme-site", "Keep changes",
   kind users have on disk must load, and a write must keep what a newer build
   added), process trees, share-path validation (traversal, symlinks), prompts framing, activity labels, MCP
   tool visibility, approval descriptions, import merge rules, memory parse and write-back (odd markdown included), the retry schedule and run settling, broker admission and the init check, memory-scaled slots.
+- `cargo test --lib agents::rooms agents::runner::rooms_runner_tests`: who answers, mentions in replies, the turn and hop caps, a turn taking one place at a time, a room's Stop leaving the agent's own queue alone, the thread's card answers, the prompt's bounded and honest window, delete and leave, search.
+- `pnpm vitest run src/lib/agentRooms.test.ts src/components/agents/RoomChat.test.tsx` and `node scripts/harness-capture.mjs agents-room`: the room view, composer mentions, Who should answer?, an approval in a room, the fold line, New room.
 - `cargo test --lib agents::results`: share_result validation and size caps, files that must exist in the agent's own files (all or nothing), versioning and Ask for changes targets, one card per turn.
 - `pnpm vitest run src/components/agents/AgentResult.test.tsx` and `mobile/__tests__/result.test.tsx`: the card on desk and phone, folding, Ask for changes.
 - `node scripts/harness-capture.mjs agents-result`: v1, asking, v2, not verified, a copy's card with before/after.

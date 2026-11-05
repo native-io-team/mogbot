@@ -140,6 +140,7 @@
 @import './features/agents-project.css';
 @import './features/agents-work.css';
 @import './features/agents-results.css';
+@import './features/agents-rooms.css';
 @import './features/agents-takeover.css';
 @import './features/agents-quota.css';
 @import './features/agents-import.css';

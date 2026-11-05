@@ -19,7 +19,9 @@ import type {
   ProjectSummary,
   Result,
   ResultRef,
+  RoomView,
 } from '@shipstudio/companion-protocol';
+import { chatKeysOf, pendingKeyOf } from './rooms';
 
 export interface Chat {
   /** Oldest first. */
@@ -33,7 +35,12 @@ export interface Chat {
 /** A message the user sent that the Mac hasn't confirmed yet. */
 export interface PendingSend {
   clientId: string;
+  /** The chat it shows in: an agent's id, or `room:<id>` for a room (with `roomId`). */
   agentId: string;
+  /** Said in this room: sent with `rooms.send`. */
+  roomId?: string;
+  /** @everyone, in a room. */
+  everyone?: boolean;
   text: string;
   ts: number;
   /** The Mac said no, or it waited too long: shown as "Not sent · Send". */
@@ -82,6 +89,8 @@ export interface SyncState {
   syncedAt: number | null;
   /** Open projects and their sessions; null until the Mac has said. */
   projects: ProjectSummary[] | null;
+  /** Every room, on a Mac that does rooms; null until it has said. */
+  rooms: RoomView[] | null;
 }
 
 export const emptySync = (): SyncState => ({
@@ -94,6 +103,7 @@ export const emptySync = (): SyncState => ({
   pending: {},
   syncedAt: null,
   projects: null,
+  rooms: null,
 });
 
 const emptyChat = (): Chat => ({ messages: [], more: true, loaded: false });
@@ -123,12 +133,17 @@ function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState
   switch (event.type) {
     case 'agents.message': {
       const m = event.message;
-      const chat = s.chats[m.agentId] ?? emptyChat();
+      // A line said in a room goes in the room's thread and its agent's own chat.
+      const chats = { ...s.chats };
+      for (const key of chatKeysOf(m)) {
+        const chat = chats[key] ?? emptyChat();
+        chats[key] = { ...chat, messages: upsert(chat.messages, m) };
+      }
       const drafts = { ...s.drafts };
-      if (drafts[m.agentId]?.id === m.id) delete drafts[m.agentId];
+      if (m.agentId && drafts[m.agentId]?.id === m.id) delete drafts[m.agentId];
       return {
         ...s,
-        chats: { ...s.chats, [m.agentId]: { ...chat, messages: upsert(chat.messages, m) } },
+        chats,
         seqs: { ...s.seqs, [m.id]: cursor?.seq ?? Number.MAX_SAFE_INTEGER },
         drafts,
         pending: settlePending(s.pending, m),
@@ -143,6 +158,8 @@ function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState
     }
     case 'agents.registry':
       return { ...s, overview: event.overview };
+    case 'rooms.changed':
+      return { ...s, rooms: event.rooms };
     case 'system.status':
       return { ...s, mac: event.status };
     case 'agents.draft':
@@ -192,13 +209,14 @@ export function settlePending(
   pending: SyncState['pending'],
   m: AgentMessage
 ): SyncState['pending'] {
-  const list = pending[m.agentId];
+  const key = pendingKeyOf(m);
+  const list = pending[key];
   if (m.kind !== 'user' || !list?.length) return pending;
   const at = m.clientId
     ? list.findIndex((p) => p.clientId === m.clientId)
     : list.findIndex((p) => p.text === m.text);
   if (at === -1) return pending;
-  return { ...pending, [m.agentId]: list.filter((_, i) => i !== at) };
+  return { ...pending, [key]: list.filter((_, i) => i !== at) };
 }
 
 function applyDraft(
@@ -245,16 +263,17 @@ export function addPending(s: SyncState, p: PendingSend): SyncState {
 
 /** The Mac answered a send: drop the pending copy and keep the real one. */
 export function confirmSend(s: SyncState, clientId: string, message: AgentMessage): SyncState {
-  const list = (s.pending[message.agentId] ?? []).filter((p) => p.clientId !== clientId);
-  const chat = s.chats[message.agentId] ?? emptyChat();
+  const key = pendingKeyOf(message);
+  const list = (s.pending[key] ?? []).filter((p) => p.clientId !== clientId);
+  const chat = s.chats[key] ?? emptyChat();
   // The event usually got here first and is at least as new; only fill a gap.
   const known = chat.messages.some((m) => m.id === message.id);
   return {
     ...s,
-    pending: { ...s.pending, [message.agentId]: list },
+    pending: { ...s.pending, [key]: list },
     chats: known
       ? s.chats
-      : { ...s.chats, [message.agentId]: { ...chat, messages: upsert(chat.messages, message) } },
+      : { ...s.chats, [key]: { ...chat, messages: upsert(chat.messages, message) } },
   };
 }
 

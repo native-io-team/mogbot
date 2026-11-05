@@ -641,6 +641,7 @@ mod tests {
             result: None,
             revises: None,
             takeover: false,
+            room: None,
         };
         let request_id = store::new_id();
         card.approval = Some(Approval {

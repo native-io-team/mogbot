@@ -68,6 +68,7 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
 import { Composer } from './Composer';
+import { RoomFoldRow } from './RoomRow';
 import { LinkBanner } from './ConnectionPill';
 import { PathContext } from './Markdown';
 import { PaneContext, type Pane } from './ApprovalCard';
@@ -624,6 +625,8 @@ function ItemView({
       <PendingRow pending={item.pending} />
     ) : item.kind === 'draft' ? (
       <DraftRow id={item.key} text={item.text} onHeight={onDraftHeight} />
+    ) : item.kind === 'room' ? (
+      <RoomFoldRow fold={item.fold} />
     ) : (
       <WorkingRow label={item.label} agent={agent} onError={onError} />
     );

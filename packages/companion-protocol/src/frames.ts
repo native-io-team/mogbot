@@ -94,6 +94,8 @@ export interface HelloFrame {
 export const FEATURES = {
   /** The steps of a turn still running, on `agents.status` (`status.work`). */
   liveWork: 'work.live',
+  /** Rooms: `rooms.changed` events and room-only lines (an empty `agentId`). */
+  rooms: 'rooms',
 } as const;
 export type Feature = (typeof FEATURES)[keyof typeof FEATURES];
 
@@ -158,6 +160,8 @@ export interface WelcomeFrame {
 export const MAC_FEATURES = {
   /** `agents.send` takes `revises`: a result card's "Ask for changes". */
   reviseResults: 'results.revise',
+  /** Rooms: the `rooms.*` methods and `rooms.changed`. */
+  rooms: 'rooms',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

@@ -29,6 +29,7 @@
 //! - [`task`]: a copy of the project (a git worktree) per task, kept or discarded
 //! - [`procs`]: a turn's whole process tree, so Stop and quit leave nothing running
 //! - [`prompts`]: voice and role
+//! - [`rooms`]: group conversations of 2–6 agents, @one or @everyone
 //! - [`search`]: find a message across every conversation
 //! - [`secrets`]: credentials an agent asked for, kept in the Keychain, never shown to it
 //! - [`stream`]: a reply while it is being written (drafts)
@@ -67,6 +68,7 @@ pub mod quick_entry;
 pub mod quota;
 pub mod results;
 pub mod review;
+pub mod rooms;
 pub mod runner;
 pub mod runs;
 pub mod schedule;
@@ -126,6 +128,7 @@ fn greet(agent_id: &str) {
         result: None,
         revises: None,
         takeover: false,
+        room: None,
     };
     if let Err(e) = store::append_message(&message) {
         tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");

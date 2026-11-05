@@ -112,6 +112,10 @@ struct Inbound {
     /// turn that answers it settles it by this id, however that turn ends.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     ticket: Option<String>,
+    /// Asked in a room (`agents::rooms`): the turn replies there, is never
+    /// batched with anything said anywhere else, and owes no agent an answer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    room: Option<super::rooms::RoomRef>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -126,6 +130,11 @@ pub struct Status {
     /// Filled in by [`set_status`] and [`status_of`]; older clients ignore it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub work: Option<super::work::TurnWork>,
+    /// The room the turn in progress answers in (`agents::rooms`), so a
+    /// room shows its own members' working lines and drafts and nobody
+    /// else's. Filled in like `work`; absent for a turn in the agent's own chat.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub room: Option<String>,
 }
 
 impl Status {
@@ -136,6 +145,7 @@ impl Status {
             activity: Some(activity),
             since: Some(store::now_ms()),
             work: None,
+            room: None,
         }
     }
 
@@ -145,6 +155,7 @@ impl Status {
             activity: None,
             since: None,
             work: None,
+            room: None,
         }
     }
 }
@@ -194,6 +205,8 @@ struct Runtime {
     /// Something other than a routine firing was in the turn in progress
     /// (or in a turn it replaced): its cost is nobody's routine's.
     turn_mixed: bool,
+    /// The room the turn in progress answers in, if it was asked in one.
+    room: Option<super::rooms::RoomRef>,
 }
 
 /// Why a take-over can't start now.
@@ -313,6 +326,19 @@ fn with_work(agent_id: &str, status: &mut Status) {
         "idle" => None,
         _ => super::work::live(agent_id),
     };
+    status.room = match status.state {
+        "idle" => None,
+        _ => turn_room(agent_id).map(|r| r.room_id),
+    };
+}
+
+/// The room the turn in progress (or about to start) answers in.
+pub fn turn_room(agent_id: &str) -> Option<super::rooms::RoomRef> {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .and_then(|r| r.room.clone())
 }
 
 /// Who handed this agent the turn it is running: another agent's id, or
@@ -799,7 +825,11 @@ fn record_as(
     message: AgentMessage,
     alert: bool,
 ) -> Result<AgentMessage, CommandError> {
-    let message = super::secrets::redact_message(message);
+    let mut message = super::secrets::redact_message(message);
+    // Said by a turn answering in a room: it belongs to that room's thread.
+    if message.room.is_none() && said_in_turn(message.kind) {
+        message.room = turn_room(&message.agent_id).map(|r| r.room_id);
+    }
     if let Err(e) = store::append_message(&message) {
         // A deleted agent's dying turn: nothing to show, nowhere to show it.
         if !store::is_gone(&message.agent_id) {
@@ -822,6 +852,9 @@ fn announce(
     message: AgentMessage,
     alert: bool,
 ) -> Result<AgentMessage, CommandError> {
+    if message.room.is_some() {
+        return announce_in_room(app, message, alert);
+    }
     // Anything the agent says (or a check-in firing) while it isn't on screen
     // notifies. Approvals aren't unread: they're counted as pending until answered.
     let wants_user = message.kind.wants_user() && !notify::on_screen(app, &message.agent_id);
@@ -852,6 +885,63 @@ fn announce(
     });
     let _ = app.emit(EVENT_MESSAGE, &message);
     let _ = app.emit(EVENT_REGISTRY, ());
+    if wants_user {
+        if let (Ok(agent), true) = (&updated, alert) {
+            notify::message_recorded(app, agent, &message, in_turn(&message.agent_id));
+        }
+        notify::refresh_badge(app);
+    }
+    Ok(message)
+}
+
+/// What only a turn says (or leaves, like its approval cards and notes):
+/// while that turn answers in a room, these are the room's. Never the
+/// user's own lines, another agent's request, or a check-in firing, which
+/// can land in an agent's chat while it is busy in a room.
+fn said_in_turn(kind: MessageKind) -> bool {
+    matches!(
+        kind,
+        MessageKind::Agent
+            | MessageKind::SentToAgent
+            | MessageKind::Approval
+            | MessageKind::Error
+            | MessageKind::Note
+            | MessageKind::Changes
+            | MessageKind::Session
+    )
+}
+
+/// `announce` for a line said in a room: copied into the room's thread,
+/// whose row (not the agent's) gets the preview and the unread count. The
+/// agent's row still carries a failure (its turn didn't finish), and an
+/// approval still notifies, since the agent is blocked on it either way.
+fn announce_in_room(
+    app: &AppHandle,
+    message: AgentMessage,
+    alert: bool,
+) -> Result<AgentMessage, CommandError> {
+    let room = message.room.clone().unwrap_or_default();
+    let room_on_screen = notify::on_screen(app, &format!("room:{room}"));
+    super::rooms::mirror(app, &message, room_on_screen);
+    let failure = match message.kind {
+        MessageKind::Error => Some(Some(
+            message
+                .failure
+                .clone()
+                .unwrap_or(super::failure::Failure::OTHER),
+        )),
+        MessageKind::Agent => Some(None),
+        _ => None,
+    };
+    let updated = match failure {
+        Some(failure) => store::update(&message.agent_id, |agent| agent.failure = failure),
+        None => store::get(&message.agent_id),
+    };
+    let _ = app.emit(EVENT_MESSAGE, &message);
+    let _ = app.emit(EVENT_REGISTRY, ());
+    let wants_user = message.kind == MessageKind::Approval
+        && !room_on_screen
+        && !notify::on_screen(app, &message.agent_id);
     if wants_user {
         if let (Ok(agent), true) = (&updated, alert) {
             notify::message_recorded(app, agent, &message, in_turn(&message.agent_id));
@@ -965,6 +1055,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         result: None,
         revises: None,
         takeover: false,
+        room: None,
     }
 }
 
@@ -981,6 +1072,7 @@ pub fn enqueue(app: &AppHandle, agent_id: &str, text: String, from: From) {
             reply: false,
             routine: false,
             ticket: None,
+            room: None,
         },
     );
 }
@@ -1005,8 +1097,42 @@ pub fn enqueue_scheduled(
             reply: false,
             routine,
             ticket: Some(ticket),
+            room: None,
         },
     );
+}
+
+/// Queue a turn for a member of a room: asked there by the user, or brought
+/// in by another member's @mention (`agents::rooms`).
+pub fn enqueue_room(app: &AppHandle, agent_id: &str, text: String, room: super::rooms::RoomRef) {
+    push(
+        app,
+        agent_id,
+        Inbound {
+            id: String::new(),
+            text,
+            from: From::User,
+            reply: false,
+            routine: false,
+            ticket: None,
+            room: Some(room),
+        },
+    );
+}
+
+/// Whether the agent has been asked in this room and hasn't started on it:
+/// it's busy with something else, or waiting for a slot.
+pub fn queued_for_room(agent_id: &str, room_id: &str) -> bool {
+    let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(r) = runtimes.get(agent_id) else {
+        return false;
+    };
+    let in_this_room = r.room.as_ref().is_some_and(|x| x.room_id == room_id);
+    let asked = r
+        .queue
+        .iter()
+        .any(|m| m.room.as_ref().is_some_and(|x| x.room_id == room_id));
+    asked && (!in_this_room || r.queued)
 }
 
 /// Queue an agent's answer to a request `agent_id` sent it.
@@ -1021,6 +1147,7 @@ pub fn enqueue_reply(app: &AppHandle, agent_id: &str, text: String, sender: Agen
             reply: true,
             routine: false,
             ticket: None,
+            room: None,
         },
     );
 }
@@ -1150,6 +1277,32 @@ pub fn stop(app: &AppHandle, agent_id: &str) -> bool {
     let (stopped, dropped) = stop_queue(agent_id, false);
     tell_dropped(app, agent_id, dropped, Dropped::Stopped);
     stopped
+}
+
+/// Stop only what this agent was doing for a room: what was asked of it
+/// there and hasn't started is dropped, and a turn answering there is
+/// stopped. Anything said to it elsewhere stays queued and runs next.
+pub fn stop_in_room(agent_id: &str, room_id: &str) -> bool {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(runtime) = runtimes.get_mut(agent_id) else {
+        return false;
+    };
+    let here = |m: &Inbound| m.room.as_ref().is_some_and(|r| r.room_id == room_id);
+    let before = runtime.queue.len();
+    runtime.queue.retain(|m| !here(m));
+    let dropped = runtime.queue.len() < before;
+    if dropped {
+        save_inbox(agent_id, &runtime.queue);
+    }
+    let running_here = runtime.room.as_ref().is_some_and(|r| r.room_id == room_id);
+    if running_here {
+        if let Some(cancel) = &runtime.cancel {
+            runtime.interrupt = false;
+            cancel.notify_one();
+            return true;
+        }
+    }
+    dropped
 }
 
 /// [`stop`] for an agent about to be deleted: from now on nothing more is
@@ -1431,6 +1584,7 @@ pub fn begin_wait(app: &AppHandle, agent_id: &str) -> WaitGuard {
             activity: Some("Waiting for your OK".into()),
             since: before.since,
             work: None,
+            room: None,
         },
     );
     WaitGuard {
@@ -1482,6 +1636,7 @@ impl Drop for WaitGuard {
                     activity: None,
                     since: self.since,
                     work: None,
+                    room: None,
                 },
             );
         }
@@ -1514,6 +1669,7 @@ async fn wait_for_slot(app: &AppHandle, agent_id: &str) -> Option<OwnedSemaphore
             )),
             since: None,
             work: None,
+            room: None,
         },
     );
     loop {
@@ -1560,6 +1716,7 @@ async fn wait_for_memory(app: &AppHandle, agent_id: &str) -> bool {
                 )),
                 since: None,
                 work: None,
+                room: None,
             },
         );
         tokio::select! {
@@ -1585,6 +1742,8 @@ struct Batch {
     routine: bool,
     /// The first message's text: what a bound agent's copy is named after.
     request: String,
+    /// Asked in a room: the prompt is the room's, written as the turn starts.
+    room: Option<RoomBatch>,
 }
 
 /// Take everything queued as the next turn, or `None` when the queue was
@@ -1600,15 +1759,33 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     }
     // Under the lock, like the inbox write below, so the two land in order
     // and name the same messages.
+    // One conversation per turn: what was said in a room is answered there,
+    // and never folded into a turn answering the agent's own chat (or
+    // another room). The rest waits for the next turn, in order.
+    let take = same_place_prefix(&runtime.queue);
     write_mark(
         agent_id,
         TurnMark {
-            batch: runtime.queue.iter().map(|m| m.id.clone()).collect(),
+            batch: runtime
+                .queue
+                .iter()
+                .take(take)
+                .map(|m| m.id.clone())
+                .collect(),
             ..TurnMark::default()
         },
     );
-    let batch: Vec<Inbound> = runtime.queue.drain(..).collect();
+    let batch: Vec<Inbound> = runtime.queue.drain(..take).collect();
     save_inbox(agent_id, &runtime.queue);
+    runtime.room = batch.first().and_then(|m| m.room.clone()).map(|mut room| {
+        // The deepest hop the turn answers, like an agent's request.
+        room.hop = batch
+            .iter()
+            .filter_map(|m| m.room.as_ref().map(|r| r.hop))
+            .max()
+            .unwrap_or(room.hop);
+        room
+    });
     let routine = batch.iter().all(|m| m.routine);
     // Its cost is a routine's only if nothing else was in it, nor in the
     // interrupted turn it replaces (whose cost carries over in `turn_usage`).
@@ -1654,15 +1831,46 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     runtime.interrupt = false;
     let prompt = compose(&batch);
     runtime.prompt = Some(prompt.clone());
-    let prompt = match runtime.interrupted.take() {
-        Some(preamble) => format!("{preamble}{prompt}"),
-        None => prompt,
-    };
+    let preamble = runtime.interrupted.take().unwrap_or_default();
+    let room = runtime.room.clone();
+    let prompt = format!("{preamble}{prompt}");
     Some(Batch {
         prompt,
         routine,
         request,
+        room: room.map(|room| RoomBatch {
+            room,
+            preamble,
+            asked: batch
+                .iter()
+                .filter_map(|m| {
+                    m.room
+                        .as_ref()
+                        .map(|r| (r.from_name.clone(), m.text.clone()))
+                })
+                .collect(),
+        }),
     })
+}
+
+/// How many of the queue's first messages were said in the same place (the
+/// agent's own chat, or one room): what one turn takes.
+fn same_place_prefix(queue: &VecDeque<Inbound>) -> usize {
+    let place = |m: &Inbound| m.room.as_ref().map(|r| r.room_id.clone());
+    let Some(first) = queue.front().map(place) else {
+        return 0;
+    };
+    queue.iter().take_while(|m| place(m) == first).count()
+}
+
+/// A turn asked in a room: its prompt is written when it starts, from the
+/// room as it is then (`rooms::prompt`), not when it was queued.
+struct RoomBatch {
+    room: super::rooms::RoomRef,
+    /// What an interrupted turn left for this one to be told first.
+    preamble: String,
+    /// Who asked (a name; empty for the user) and what they said, in order.
+    asked: Vec<(String, String)>,
 }
 
 /// The queue is empty: the worker is done. Decided under the same lock
@@ -1678,6 +1886,7 @@ fn finish_if_idle(agent_id: &str) -> Option<Idle> {
     runtime.running = false;
     runtime.queued = false;
     runtime.cancel = None;
+    runtime.room = None;
     let hop = std::mem::take(&mut runtime.hop);
     runtime.origin = None;
     runtime.prompt = None;
@@ -1930,7 +2139,21 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             prompt,
             routine,
             request,
+            room,
         } = batch;
+        let room_ref = room.as_ref().map(|r| r.room.clone());
+        let prompt = match room {
+            // A room deleted while this waited: nothing to answer, nowhere to say it.
+            Some(r) => match super::rooms::prompt(&agent_id, &r.room, &r.asked) {
+                Some(text) => format!("{}{text}", r.preamble),
+                None => {
+                    clear_mark(&agent_id);
+                    clear_room(&agent_id);
+                    continue;
+                }
+            },
+            None => prompt,
+        };
         // A bound agent works in its own copy of its project (`task`): the
         // open one, or one made now. Refused (too many copies, no disk) is
         // the turn's failure; it never falls back to the user's folder.
@@ -2004,6 +2227,10 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         match result {
             Ok(Ended::Interrupted) => {
                 // Its debts and scheduled runs carry over to the next turn.
+                if let Some(room) = &room_ref {
+                    super::rooms::turn_ended(&app, &agent_id, room, since, false);
+                }
+                clear_room(&agent_id);
                 notify::turn_ended(&app, &agent_id);
                 continue;
             }
@@ -2037,7 +2264,23 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         if !tickets.is_empty() {
             super::runs::turn_ended(&app, &agent_id, &tickets, settle_as, spent.as_ref());
         }
+        // A room hears who the reply brought in next (its @mentions).
+        if let Some(room) = &room_ref {
+            super::rooms::turn_ended(&app, &agent_id, room, since, finished);
+        }
+        clear_room(&agent_id);
         notify::turn_ended(&app, &agent_id);
+    }
+}
+
+/// The turn's room is over: what is recorded from now on is the agent's own.
+fn clear_room(agent_id: &str) {
+    if let Some(r) = RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get_mut(agent_id)
+    {
+        r.room = None;
     }
 }
 
@@ -2675,6 +2918,7 @@ async fn run_turn(
             activity: None,
             since: Some(started),
             work: None,
+            room: None,
         },
     );
 
@@ -2739,7 +2983,7 @@ async fn run_turn(
                 if driver == Driver::ClaudePrint && saw_result && matches!(kind, Some("stream_event" | "assistant")) {
                     drain_rest.as_mut().reset(tokio::time::Instant::now() + Duration::from_secs(3));
                     if status_of(agent_id).state == "idle" {
-                        set_status(app, agent_id, Status { state: "working", activity: None, since: Some(started), work: None });
+                        set_status(app, agent_id, Status { state: "working", activity: None, since: Some(started), work: None, room: None });
                     }
                 }
                 // Claude Code's init says how it is really running: a turn
@@ -2816,13 +3060,13 @@ async fn run_turn(
                         }
                         Step::Activity(activity) => {
                             if status_of(agent_id).state != "waiting" {
-                                set_status(app, agent_id, Status { state: "working", activity: Some(activity), since: Some(started), work: None });
+                                set_status(app, agent_id, Status { state: "working", activity: Some(activity), since: Some(started), work: None, room: None });
                             }
                         }
                         Step::Action(action) => {
                             let doing = super::work::on_action(agent_id, action, store::now_ms());
                             if status_of(agent_id).state != "waiting" {
-                                set_status(app, agent_id, Status { state: "working", activity: Some(doing), since: Some(started), work: None });
+                                set_status(app, agent_id, Status { state: "working", activity: Some(doing), since: Some(started), work: None, room: None });
                             }
                         }
                         Step::Result(result) => {
@@ -2901,7 +3145,7 @@ async fn run_turn(
                 if now.state == "working" {
                     if let Some(line) = quiet_line(engine.label(), last_word, store::now_ms(), tool_open) {
                         if now.activity.as_deref() != Some(line.as_str()) {
-                            set_status(app, agent_id, Status { state: "working", activity: Some(line), since: Some(started), work: None });
+                            set_status(app, agent_id, Status { state: "working", activity: Some(line), since: Some(started), work: None, room: None });
                         }
                     }
                 }
@@ -3117,6 +3361,7 @@ mod tests {
             reply: false,
             routine: false,
             ticket: None,
+            room: None,
         }
     }
 
@@ -3162,6 +3407,7 @@ mod tests {
                 reply: false,
                 routine: false,
                 ticket: None,
+                room: None,
             }),
             Ok(false)
         ));
@@ -3260,6 +3506,7 @@ mod tests {
                 reply: false,
                 routine: false,
                 ticket: None,
+                room: None,
             },
             Inbound {
                 id: String::new(),
@@ -3274,6 +3521,7 @@ mod tests {
                 reply: false,
                 routine: false,
                 ticket: None,
+                room: None,
             },
         ];
         let prompt = compose(&batch);
@@ -3416,6 +3664,7 @@ mod tests {
                 reply: false,
                 routine: false,
                 ticket: None,
+                room: None,
             },
             Inbound {
                 id: String::new(),
@@ -3430,6 +3679,7 @@ mod tests {
                 reply: true,
                 routine: false,
                 ticket: None,
+                room: None,
             },
         ]
         .into();
@@ -3579,6 +3829,7 @@ mod tests {
                     reply: false,
                     routine: false,
                     ticket: None,
+                    room: None,
                 });
             }
             assert!(begin_fresh(&a.id).is_err());
@@ -3802,3 +4053,7 @@ mod audit_runner_tests;
 #[cfg(test)]
 #[path = "review_runner_tests.rs"]
 mod review_runner_tests;
+
+#[cfg(test)]
+#[path = "rooms_runner_tests.rs"]
+mod rooms_runner_tests;

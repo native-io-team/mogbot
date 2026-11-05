@@ -531,6 +531,7 @@ mod tests {
                 activity: activity.map(str::to_string),
                 since: None,
                 work: None,
+                room: None,
             },
             running: state != "idle",
             queued: false,

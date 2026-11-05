@@ -23,7 +23,7 @@ import {
   sessionLabel,
 } from '../lib/agents';
 import { haptic } from '../lib/haptics';
-import { discardPending, editPending, send } from '../lib/session';
+import { discardPending, editPending, resend } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
 import { alpha, chromeScale, composer, fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -517,14 +517,7 @@ export function PendingRow({ pending }: { pending: PendingSend }) {
                 label="Send"
                 onPress={() => {
                   haptic.light();
-                  void send(
-                    pending.agentId,
-                    pending.text,
-                    false,
-                    pending.clientId,
-                    pending.attachments,
-                    pending.mentions
-                  ).catch(() => {});
+                  void resend(pending).catch(() => {});
                 }}
               />
             )

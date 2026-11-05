@@ -8,6 +8,7 @@
  * | `agents.status`   | `agents://status`   | latest per agent               |
  * | `agents.registry` | `agents://registry` | latest only                    |
  * | `agents.draft`    | `agents://draft`    | never (ephemeral)              |
+ * | `rooms.changed`   | `agents://rooms`    | latest only                    |
  * | `projects.changed`| (polled session state) | latest per project          |
  * | `system.status`   | (power, Claude, routes) | latest only                |
  *
@@ -23,6 +24,7 @@ import type {
   Alert,
   MacStatus,
   ProjectSummary,
+  RoomView,
 } from './model';
 
 /** Journaled: carries a `seq` and is replayed on resume. */
@@ -34,6 +36,12 @@ export type JournaledEvent =
   | { type: 'agents.message'; message: AgentMessage }
   | { type: 'agents.status'; agentId: string; status: AgentStatus }
   | { type: 'agents.registry'; overview: AgentsOverview }
+  /**
+   * The rooms changed (created, renamed, members, a new line, read): every
+   * room. Only to an app whose hello said `rooms`. It carries the list, so
+   * the phone needn't ask `rooms.list` per change.
+   */
+  | { type: 'rooms.changed'; rooms: RoomView[] }
   | { type: 'projects.changed'; project: ProjectSummary }
   | { type: 'projects.removed'; path: string }
   | { type: 'system.status'; status: MacStatus };

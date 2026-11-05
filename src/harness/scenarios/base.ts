@@ -242,6 +242,9 @@ export const baseCommands: CommandMap = {
   // No engine has reported its plan: no usage line anywhere (agents::quota).
   agents_quota: [],
   agents_focus: null,
+  // Rooms: none until someone makes one (`./agentsRooms`).
+  agents_rooms: [],
+  agents_room_focus: null,
   agents_mark_unread: null,
   // From import::import_prompt in src-tauri/src/agents/import.rs, for a Chief called Chief of Staff.
   agents_import_prompt:

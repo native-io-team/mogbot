@@ -8,7 +8,7 @@
  * screen (iPad, or a big phone in landscape) the chat opens beside the list.
  */
 
-import type { Agent } from '@shipstudio/companion-protocol';
+import type { Agent, RoomView } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -23,6 +23,8 @@ import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { AgentRow } from '../../../components/AgentRow';
+import { RoomRow } from '../../../components/RoomRow';
+import { roomsOffered, sortRooms } from '../../../lib/rooms';
 import { Spinner } from '../../../components/agent';
 import { ChatView } from '../../../components/ChatView';
 import { QuotaLines } from '../../../components/QuotaLines';
@@ -45,6 +47,7 @@ import {
   canCall,
   describeError,
   markUnread,
+  refreshRooms,
   setAgentToggles,
   unpair,
 } from '../../../lib/session';
@@ -55,6 +58,7 @@ import { makeStyles, useColors } from '../../../lib/appearance';
 type Row =
   | { kind: 'header'; key: string; title: string }
   | { kind: 'agent'; key: string; agent: Agent }
+  | { kind: 'room'; key: string; room: RoomView }
   | { kind: 'hidden'; key: string; count: number };
 
 /** Wide enough for a list and a chat side by side. */
@@ -105,6 +109,8 @@ export default function Agents() {
       markUnread: canCall('agents.markUnread', s.welcome),
     }))
   );
+  // Rooms only from a Mac that does them (`welcome.features`): an older one shows none.
+  const rooms = useApp((s) => (roomsOffered(s.welcome) ? s.rooms : null));
   const [showHidden, setShowHidden] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [undo, setUndo] = useState<{ text: string; run: () => void } | null>(null);
@@ -125,16 +131,21 @@ export default function Agents() {
       out.push({ kind: 'header', key: 'h-urgent', title: 'Needs you' });
       urgent.forEach(add);
       if (rest.length) out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
-    } else if (!live && rest.length) {
+    } else if ((!live || rooms?.length) && rest.length) {
+      // Offline (to say "as of"), or with Rooms below: the agents get their own label.
       out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
     }
     rest.forEach(add);
+    if (rooms?.length) {
+      out.push({ kind: 'header', key: 'h-rooms', title: 'Rooms' });
+      for (const room of sortRooms(rooms)) out.push({ kind: 'room', key: `room:${room.id}`, room });
+    }
     if (hidden.length) {
       out.push({ kind: 'hidden', key: 'hidden', count: hidden.length });
       if (showHidden) hidden.forEach(add);
     }
     return out;
-  }, [overview, showHidden, removed, live]);
+  }, [overview, showHidden, removed, live, rooms]);
 
   const flash = useCallback((text: string, run?: () => void) => {
     const entry = { text, run: run ?? (() => {}) };
@@ -175,6 +186,7 @@ export default function Agents() {
     setRefreshing(true);
     try {
       setApp({ overview: await call('agents.overview', {}) });
+      if (roomsOffered(useApp.getState().welcome)) await refreshRooms();
     } catch (e) {
       setError(describeError(e));
     } finally {
@@ -244,6 +256,8 @@ export default function Agents() {
               Hidden ({item.count})
             </T>
           </Pressable>
+        ) : item.kind === 'room' ? (
+          <RoomRow room={item.room} live={live} />
         ) : (
           <AgentRow
             agent={item.agent}

@@ -54,6 +54,10 @@ pub const METHODS: &[&str] = &[
     "agents.schedule.pause",
     "agents.schedule.cancel",
     "agents.schedule.runNow",
+    "rooms.list",
+    "rooms.messages",
+    "rooms.send",
+    "rooms.focus",
     "projects.list",
     "sessions.read",
     "sessions.send",
@@ -76,6 +80,8 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.files",
     "agents.search",
     "agents.schedule.preview",
+    "rooms.list",
+    "rooms.messages",
     "projects.list",
     "sessions.read",
 ];
@@ -102,6 +108,16 @@ pub struct SendExtras {
     pub client_id: Option<String>,
     /// "Ask for changes": the result this message asks to revise.
     pub revises: Option<String>,
+}
+
+/// What `rooms.send` carries besides the room and the text.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RoomSend {
+    /// Agent ids the user @mentioned.
+    pub mentions: Vec<String>,
+    /// `@everyone`: every member answers.
+    pub everyone: bool,
+    pub client_id: Option<String>,
 }
 
 /// The schedule commands, one variant each.
@@ -334,6 +350,25 @@ pub trait Backend: Send + Sync + 'static {
     ) -> Result<std::path::PathBuf, CommandError>;
     async fn search(&self, query: String) -> Result<Value, CommandError>;
     async fn schedule(&self, op: ScheduleOp) -> Result<Value, CommandError>;
+    /// `agents_rooms`: every room, with what is happening in it now.
+    async fn rooms(&self) -> Result<Value, CommandError>;
+    /// A page of a room's thread, oldest first, ending just before `before`.
+    /// The flag: older lines exist.
+    async fn room_messages(
+        &self,
+        room_id: &str,
+        limit: usize,
+        before: Option<&str>,
+    ) -> Result<(Vec<Value>, bool), CommandError>;
+    /// `agents_room_send`: returns `{message, asked}`.
+    async fn room_send(
+        &self,
+        room_id: &str,
+        text: String,
+        send: RoomSend,
+    ) -> Result<Value, CommandError>;
+    /// `agents_room_focus` for a socket instead of a window.
+    async fn room_focus(&self, label: &str, room_id: Option<String>) -> Result<(), CommandError>;
     /// Every project as `ProjectSummary[]`.
     async fn projects(&self) -> Result<Value, CommandError>;
     /// One agent tab's screen as a `SessionScreen`.
@@ -613,6 +648,32 @@ struct SendParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct RoomMessagesParams {
+    room_id: String,
+    limit: Option<usize>,
+    before: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RoomSendParams {
+    room_id: String,
+    text: String,
+    client_id: String,
+    #[serde(default)]
+    mentions: Vec<String>,
+    #[serde(default)]
+    everyone: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RoomFocusParams {
+    room_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ApprovalParams {
     agent_id: String,
     request_id: String,
@@ -656,6 +717,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
     let preview = crate::remote_access::preview;
     match method {
         "agents.send" | "sessions.send" => preview(field("text")),
+        "rooms.send" => preview(&format!("in a room: {}", field("text"))),
+        "rooms.focus" => field("roomId").to_string(),
         "sessions.key" => format!("pressed {}", field("key")),
         "agents.memorySuggest" => format!(
             "suggest a memory from {} chars",
@@ -871,6 +934,42 @@ async fn run(
                     Ok(sent)
                 })
                 .await
+        }
+        "rooms.list" => Ok(b.rooms().await?),
+        "rooms.messages" => {
+            let p: RoomMessagesParams = parse(params)?;
+            let as_of = c.hub.cursor();
+            let limit = p.limit.unwrap_or(MESSAGES_DEFAULT).clamp(1, MESSAGES_MAX);
+            let (messages, more) = b
+                .room_messages(&p.room_id, limit, p.before.as_deref())
+                .await?;
+            Ok(json!({ "messages": messages, "asOf": as_of, "more": more }))
+        }
+        "rooms.send" => {
+            let p: RoomSendParams = parse(params)?;
+            let client_id = p.client_id.trim().to_string();
+            if client_id.is_empty() || client_id.len() > 128 {
+                return Err(bad_params("clientId is required (at most 128 characters)."));
+            }
+            let key = format!("{}:room:{client_id}", caller.device_id);
+            c.sends
+                .once(key, now_ms(), || async move {
+                    // The same refusals as a message to one agent.
+                    let text = crate::remote_access::tools::clean_agent_text(&p.text, "message")
+                        .map_err(|reason| WireError::protocol(ProtocolCode::Refused, reason))?;
+                    let send = RoomSend {
+                        mentions: p.mentions,
+                        everyone: p.everyone,
+                        client_id: Some(client_id),
+                    };
+                    Ok(b.room_send(&p.room_id, text, send).await?)
+                })
+                .await
+        }
+        "rooms.focus" => {
+            let p: RoomFocusParams = parse(params)?;
+            b.room_focus(&caller.label, p.room_id).await?;
+            Ok(Value::Null)
         }
         "agents.stop" => {
             let p: AgentParam = parse(params)?;

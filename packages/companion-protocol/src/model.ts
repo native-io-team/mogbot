@@ -22,6 +22,8 @@ export interface AgentStatus {
   since: number | null;
   /** The turn's timeline so far, while it isn't idle; older Macs omit it. */
   work?: TurnWork;
+  /** The room the turn in progress answers in; absent for the agent's own chat. */
+  room?: string;
 }
 
 /**
@@ -427,6 +429,38 @@ export interface AgentMessage {
   revises?: ResultRef;
   /** On a `note` (an `error` from older Macs): a take-over's terminal closed by itself; not a turn's failure. */
   takeover?: boolean;
+  /**
+   * Said in a room, not the agent's own chat: the room's id. A line only the
+   * room has (the user's message, a room note) has an empty `agentId`.
+   */
+  room?: string;
+}
+
+/**
+ * A group conversation of 2–6 agents (`agents::rooms`). Each member keeps its
+ * own session and memory; the room is a shared thread.
+ */
+export interface Room {
+  id: string;
+  name: string;
+  /** Agent ids, in the order they were added. */
+  members: string[];
+  /** Who answers a message that mentions nobody; absent: ask who should. */
+  lead?: string;
+  muted: boolean;
+  createdAt: number;
+  lastActivityAt: number;
+  preview?: string;
+  unread: number;
+}
+
+/** A room with what is happening in it now. */
+export interface RoomView extends Room {
+  /** Agent turns the newest user message has set off, and the most it may. */
+  turnsUsed: number;
+  turnCap: number;
+  /** Members asked here whose turn hasn't started (busy elsewhere, or waiting for a slot). */
+  waiting: string[];
 }
 
 export interface ChangedFile {
@@ -556,6 +590,9 @@ export interface SearchHit {
   kind: MessageKind;
   peerName?: string;
   snippet: string;
+  /** Said in a room: the hit opens the room. `agent*` is who said it (empty for the user's line). */
+  roomId?: string;
+  roomName?: string;
 }
 
 export interface UsageTotals {

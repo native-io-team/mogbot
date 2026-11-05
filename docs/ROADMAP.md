@@ -31,12 +31,16 @@ infrastructure where a good one exists.
    "drop a document" first task.
 7. **Import the team from Ship Studio on this Mac** (read-only), so moving
    over is one step. *In progress.*
-8. **Rooms.** Group chats with 2–6 agents, @one or @everyone.
 
 Small wins: save-as-skill, sections in the agent list, duplicate agent,
 reply to a single message.
 
 ## Done
+
+- **Rooms** — group conversations with 2–6 agents: @one, @everyone, or the
+  room's lead; agents bring each other in with @Name, at most 8 agent turns
+  per message; cards, timelines and results inline under the agent; on the
+  phone for apps that say they show rooms ([agents.md](agents.md), "Rooms").
 
 - **Usage before the wall** — cost per agent and per routine this week, and
   the plan's usage ("Claude usage 85% · resets Sat", amber from 90%) only as

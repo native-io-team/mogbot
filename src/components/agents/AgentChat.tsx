@@ -80,6 +80,7 @@ import { AgentProjectChip, ChangeCard } from './AgentProject';
 import { ComposerRevising, ResultCardView } from './AgentResult';
 import { WorkTimeline } from './AgentWork';
 import { SessionCard } from './AgentSession';
+import { RoomFoldLine } from './AgentRoomParts';
 import {
   answerApproval,
   buildChatItems,
@@ -544,7 +545,7 @@ export function AgentChat({
     for (let i = items.length - 1; i >= 0; i--) {
       const item = items[i];
       if (item.type === 'day') continue;
-      if (item.type === 'peer-group' || !isQueued(item.message, agent)) break;
+      if (item.type !== 'message' || !isQueued(item.message, agent)) break;
       from = i;
     }
     // Leave a day divider that opens the run above the indicator, with its day.
@@ -560,7 +561,7 @@ export function AgentChat({
       const item = items[index];
       if (!item) return false;
       if (item.type === 'day') return arrivedAt(index + 1);
-      return isArrived(item.type === 'peer-group' ? item.messages[0].id : item.message.id);
+      return isArrived(item.type === 'message' ? item.message.id : item.messages[0].id);
     },
     [items, isArrived]
   );
@@ -577,9 +578,9 @@ export function AgentChat({
     ? ''
     : lastItem.type === 'day'
       ? `day-${lastItem.ts}`
-      : lastItem.type === 'peer-group'
-        ? lastItem.messages[0].id
-        : lastItem.message.id;
+      : lastItem.type === 'message'
+        ? lastItem.message.id
+        : lastItem.messages[0].id;
   const lastKeyRef = useRef(lastKey);
   useLayoutEffect(() => {
     const isNew = lastKeyRef.current !== lastKey;
@@ -875,6 +876,17 @@ export function AgentChat({
           if (item.type === 'day')
             return <DayDivider key={`day-${item.ts}`} ts={item.ts} arrived={arrivedAt(index)} />;
           const arrived = arrivedAt(index);
+          if (item.type === 'room') {
+            return (
+              <RoomFoldLine
+                key={item.messages[0].id}
+                roomId={item.roomId}
+                messages={item.messages}
+                arrived={arrived}
+                onOpenRoom={onOpenAgent}
+              />
+            );
+          }
           if (item.type === 'peer-group') {
             return (
               <PeerGroup

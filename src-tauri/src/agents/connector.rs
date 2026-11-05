@@ -251,6 +251,7 @@ pub fn interview_status(agent_id: &str) -> Option<runner::Status> {
         activity: Some(format!("Bringing in agents from {}", t.source)),
         since: Some(t.started_at),
         work: None,
+        room: None,
     })
 }
 

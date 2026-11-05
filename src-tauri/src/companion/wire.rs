@@ -324,8 +324,31 @@ pub const FEATURE_LIVE_WORK: &str = "work.live";
 /// for changes", `agents/results.rs`).
 pub const MAC_FEATURE_REVISE_RESULTS: &str = "results.revise";
 
+/// `hello.features`: the app shows rooms, so it gets `rooms.changed` and the
+/// lines only a room has (an empty `agentId`).
+pub const FEATURE_ROOMS: &str = "rooms";
+
+/// `welcome.features`: the `rooms.*` methods and `rooms.changed`.
+pub const MAC_FEATURE_ROOMS: &str = "rooms";
+
 /// Everything `welcome.features` lists.
-pub const MAC_FEATURES: &[&str] = &[MAC_FEATURE_REVISE_RESULTS];
+pub const MAC_FEATURES: &[&str] = &[MAC_FEATURE_REVISE_RESULTS, MAC_FEATURE_ROOMS];
+
+/// What one connected app said it shows (`hello.features`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Shows {
+    pub live_work: bool,
+    pub rooms: bool,
+}
+
+impl Shows {
+    pub fn from_hello(features: &[String]) -> Self {
+        Shows {
+            live_work: features.iter().any(|f| f == FEATURE_LIVE_WORK),
+            rooms: features.iter().any(|f| f == FEATURE_ROOMS),
+        }
+    }
+}
 
 /// Phone → Mac. Unknown frame types are ignored, as the protocol promises.
 #[derive(Debug, Clone, Deserialize)]
@@ -517,6 +540,9 @@ pub enum Event {
     Status { agent_id: String, status: Value },
     #[serde(rename = "agents.registry")]
     Registry { overview: Value },
+    /// Every room, after any change (`agents://rooms`).
+    #[serde(rename = "rooms.changed")]
+    Rooms { rooms: Value },
     #[serde(rename = "system.status")]
     System { status: MacStatus },
     #[serde(rename = "projects.changed")]
@@ -583,6 +609,35 @@ pub fn without_live_work(mut event: Event) -> Event {
     event
 }
 
+/// A line only a room has: the user's message there, or a room note. It
+/// names no agent, so an app without rooms would have nowhere to put it.
+pub fn is_room_only(message: &Value) -> bool {
+    message.get("room").is_some_and(|r| !r.is_null())
+        && message
+            .get("agentId")
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
+}
+
+/// An event as this app gets it, or `None` when it wouldn't show it: rooms
+/// (and their room-only lines) only to an app that said it shows rooms; a
+/// running turn's steps only to one that shows those. A member's own line
+/// said in a room still reaches an older app, in that agent's chat.
+pub fn for_app(event: Event, shows: Shows) -> Option<Event> {
+    if !shows.rooms {
+        match &event {
+            Event::Rooms { .. } => return None,
+            Event::Message { message } if is_room_only(message) => return None,
+            _ => {}
+        }
+    }
+    Some(if shows.live_work {
+        event
+    } else {
+        without_live_work(event)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -598,6 +653,37 @@ mod tests {
         assert_eq!(
             shown["agents"][0]["takeover"],
             serde_json::json!({ "since": 5, "cli": "claude-code", "project": "/p" })
+        );
+    }
+
+    #[test]
+    fn an_app_without_rooms_gets_no_room_events_or_room_only_lines() {
+        let old = Shows {
+            live_work: true,
+            rooms: false,
+        };
+        let new = Shows {
+            live_work: true,
+            rooms: true,
+        };
+        let rooms = Event::Rooms {
+            rooms: serde_json::json!([]),
+        };
+        assert_eq!(for_app(rooms.clone(), old), None);
+        assert_eq!(for_app(rooms.clone(), new), Some(rooms));
+        let users_line = Event::Message {
+            message: serde_json::json!({"id": "m1", "agentId": "", "room": "r1", "kind": "user"}),
+        };
+        assert_eq!(for_app(users_line.clone(), old), None);
+        assert!(for_app(users_line, new).is_some());
+        // A member's reply in a room still shows in its own chat on an older app.
+        let reply = Event::Message {
+            message: serde_json::json!({"id": "m2", "agentId": "a1", "room": "r1", "kind": "agent"}),
+        };
+        assert!(for_app(reply, old).is_some());
+        assert_eq!(
+            Shows::from_hello(&["rooms".into(), "work.live".into()]),
+            new
         );
     }
 

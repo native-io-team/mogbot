@@ -589,8 +589,8 @@ where
     );
     c.backend.changed();
 
-    let live_work = hello.features.iter().any(|f| f == wire::FEATURE_LIVE_WORK);
-    let ended = connected(&c, &mut ws, &caller, protocol, &hello, live_work).await;
+    let shows = wire::Shows::from_hello(&hello.features);
+    let ended = connected(&c, &mut ws, &caller, protocol, &hello, shows).await;
     tracing::debug!(device = %record.id, ?ended, "[Companion] socket closed");
 
     c.close_conn(conn);
@@ -766,7 +766,7 @@ async fn connected<S>(
     caller: &Caller,
     protocol: u32,
     hello: &wire::HelloFrame,
-    live_work: bool,
+    shows: wire::Shows,
 ) -> Ended
 where
     S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
@@ -797,10 +797,8 @@ where
     let caught_up = match plan {
         Resume::Replay { events, cursor } => {
             for (seq, event) in events {
-                let event = if live_work {
-                    event
-                } else {
-                    wire::without_live_work(event)
+                let Some(event) = wire::for_app(event, shows) else {
+                    continue;
                 };
                 if !send(
                     ws,
@@ -863,7 +861,7 @@ where
         c,
         ws,
         caller,
-        live_work,
+        shows,
         &mut rx,
         &mut drafts,
         &done_tx,
@@ -883,7 +881,7 @@ async fn serve_frames<S>(
     c: &Arc<Companion>,
     ws: &mut S,
     caller: &Caller,
-    live_work: bool,
+    shows: wire::Shows,
     rx: &mut broadcast::Receiver<HubItem>,
     drafts: &mut Drafts,
     done_tx: &mpsc::UnboundedSender<(u64, Result<Value, wire::WireError>)>,
@@ -958,7 +956,7 @@ where
             item = rx.recv() => {
                 match item {
                     Ok(item) => {
-                        if let Some(ended) = forward(ws, drafts, caller, item, live_work).await {
+                        if let Some(ended) = forward(ws, drafts, caller, item, shows).await {
                             return ended;
                         }
                     }
@@ -973,7 +971,7 @@ where
             Some((id, result)) = done_rx.recv() => {
                 // Events the request caused go out before its response.
                 while let Ok(item) = rx.try_recv() {
-                    if let Some(ended) = forward(ws, drafts, caller, item, live_work).await {
+                    if let Some(ended) = forward(ws, drafts, caller, item, shows).await {
                         return ended;
                     }
                 }
@@ -1018,7 +1016,7 @@ async fn forward<S>(
     drafts: &mut Drafts,
     caller: &Caller,
     item: HubItem,
-    live_work: bool,
+    shows: wire::Shows,
 ) -> Option<Ended>
 where
     S: SinkExt<Message> + Unpin,
@@ -1030,11 +1028,7 @@ where
                     drafts.finished(id);
                 }
             }
-            let event = if live_work {
-                event
-            } else {
-                wire::without_live_work(event)
-            };
+            let event = wire::for_app(event, shows)?;
             event_frame(Some(seq), event)
         }
         HubItem::Draft { agent_id, id, text } => {
