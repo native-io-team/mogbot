@@ -231,6 +231,7 @@ export const agentsOverview = {
   "engineReady": true,
   "engines": [
     {
+      "asks": true,
       "id": "claude",
       "installed": true,
       "label": "Claude Code",
@@ -247,6 +248,7 @@ export const agentsOverview = {
       "signedIn": true
     },
     {
+      "asks": true,
       "id": "codex",
       "installed": true,
       "label": "Codex",
@@ -1641,6 +1643,7 @@ export const frames = [
         "engineReady": true,
         "engines": [
           {
+            "asks": true,
             "id": "claude",
             "installed": true,
             "label": "Claude Code",
@@ -1657,6 +1660,7 @@ export const frames = [
             "signedIn": true
           },
           {
+            "asks": true,
             "id": "codex",
             "installed": true,
             "label": "Codex",
@@ -1951,6 +1955,7 @@ export const frames = [
         "engineReady": true,
         "engines": [
           {
+            "asks": true,
             "id": "claude",
             "installed": true,
             "label": "Claude Code",
@@ -1967,6 +1972,7 @@ export const frames = [
             "signedIn": true
           },
           {
+            "asks": true,
             "id": "codex",
             "installed": true,
             "label": "Codex",

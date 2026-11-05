@@ -27,6 +27,7 @@ const appleTeamId = process.env.APPLE_TEAM_ID;
 const updatesUrl = process.env.UPDATES_URL ?? (projectId ? `https://u.expo.dev/${projectId}` : '');
 
 const SURFACE_APP = '#141414'; // --surface-app
+const SURFACE_APP_LIGHT = '#ffffff'; // the light palette's surfaceApp (src/lib/theme.ts)
 const CAMERA =
   'Used to scan the pairing code on your Mac, and to take photos you send to your agents.';
 
@@ -67,7 +68,13 @@ export default (): ExpoConfig => ({
     'expo-font',
     [
       'expo-splash-screen',
-      { image: './assets/splash-icon.png', imageWidth: 96, backgroundColor: SURFACE_APP },
+      {
+        image: './assets/splash-icon.png',
+        imageWidth: 96,
+        // The app opens in the appearance the phone is in, so the splash does too.
+        backgroundColor: SURFACE_APP_LIGHT,
+        dark: { image: './assets/splash-icon.png', backgroundColor: SURFACE_APP },
+      },
     ],
     [
       'expo-camera',
