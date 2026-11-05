@@ -65,6 +65,7 @@ import {
   ApprovalCard,
   DayDivider,
   CheckInLine,
+  ConnectorBubble,
   ErrorLine,
   FreshHint,
   NoteLine,
@@ -108,6 +109,7 @@ import {
   useAgentsSelector,
 } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
+import { ImportTalkBar } from './ImportTalkBar';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
@@ -847,6 +849,10 @@ export function AgentChat({
               );
             case 'check_in':
               return <CheckInLine key={m.id} message={m} arrived={arrived} />;
+            case 'from_agent':
+            case 'sent_to_agent':
+              // Only an import conversation's lines stand alone (`buildChatItems`).
+              return <ConnectorBubble key={m.id} message={m} arrived={arrived} />;
             case 'note':
               return (
                 <NoteLine
@@ -1094,6 +1100,8 @@ export function AgentChat({
               <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
             </p>
           )}
+
+          {agent.isMain && <ImportTalkBar chief={agent.name} />}
 
           {engineReady && cantAsk && (
             <p className="agent-composer__notice" data-testid="agent-cant-ask">

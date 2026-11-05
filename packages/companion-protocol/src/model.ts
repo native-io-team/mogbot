@@ -275,6 +275,50 @@ export interface Approval {
   prompt?: SessionPrompt;
   /** The option picked on a `prompt` card. */
   choice?: string;
+  /** An import connector card: another assistant asking to start, or its staged agents. */
+  connector?: ConnectorCard;
+}
+
+/**
+ * An import over the connector (desktop `agents/review.rs`). On the phone a
+ * consent card is Allow / Deny. A review card can't be answered there: it
+ * says "Review on your Mac", where each agent's instructions are on screen
+ * before Import (the desktop refuses an Allow sent for one).
+ */
+export interface ConnectorCard {
+  kind: 'consent' | 'review';
+  talkId: string;
+  source: string;
+  review?: ImportReview;
+}
+
+export interface ImportReview {
+  proposals: ImportProposal[];
+  chiefNotes?: string;
+  summary?: string;
+}
+
+export interface ImportProposal {
+  key: string;
+  name: string;
+  role: string;
+  instructions: string;
+  memory: string;
+  routines: { when: string; what: string; schedule?: string; refused?: string }[];
+  logins: { name: string; purpose: string; kind: string }[];
+  clash?: ImportClash;
+}
+
+export interface ImportClash {
+  agentId: string;
+  name?: string;
+  role: string;
+  instructions: string;
+  logins?: string[];
+  project?: string;
+  activeRoutines?: number;
+  rules?: number;
+  conversation?: boolean;
 }
 
 /** One answer a session's question offers, as the session shows it. */

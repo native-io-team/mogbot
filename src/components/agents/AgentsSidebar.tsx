@@ -32,6 +32,8 @@ import { AgentEngineBadge } from './AgentEngine';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { AgentsSearchResults } from './AgentsSearchResults';
 import { ImportNudge, useImportNudge } from './ImportNudge';
+import { useImportGate } from './ImportConnectorPanel';
+import { talkIsLive } from '../../lib/agents';
 import { AgentMark } from './AgentSwitcher';
 import { useFlipReorder } from './useAgentMotion';
 import {
@@ -147,6 +149,7 @@ export function AgentsSidebar({
     agents.length,
     agents.some((a) => a.isMain && a.sessionId !== null)
   );
+  const importing = talkIsLive(useImportGate().talk);
   const { visible, hidden } = useMemo(() => {
     const sorted = sortAgents(agents);
     return {
@@ -204,7 +207,10 @@ export function AgentsSidebar({
             </button>
           )}
           {showHidden && hidden.map(row)}
-          {nudge.visible && <ImportNudge onImport={onImport} onDismiss={nudge.dismiss} />}
+          {/* An import already going needs no pitch for one. */}
+          {nudge.visible && !importing && (
+            <ImportNudge onImport={onImport} onDismiss={nudge.dismiss} />
+          )}
           <div className="workspace-sidebar-active-actions">
             <Button
               variant="ghost"

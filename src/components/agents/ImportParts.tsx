@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { CheckIcon, ChevronRightIcon, CopyIcon, WarningIcon } from '@/components/icons';
+import { CheckIcon, ChevronRightIcon, CopyIcon, InfoIcon, WarningIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useAgentsList } from '../../lib/agentsStore';
@@ -18,7 +18,7 @@ export const plural = (n: number, word: string) =>
   `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 
 /** "and"-joined, the way a person lists names: "A", "A and B", "A, B and C". */
-const listOf = (names: string[]) =>
+export const listOf = (names: string[]) =>
   names.length < 2
     ? names.join('')
     : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
@@ -247,6 +247,28 @@ export function ImportProblems({ title, items }: { title: string; items: ReactNo
   );
 }
 
+/**
+ * Informational, not a problem: what to know before the agents get going
+ * (paused routines, logins to enter again). Neutral, so it never reads as a
+ * warning next to the amber one above.
+ */
+export function ImportNotes({ title, items }: { title?: string; items: ReactNode[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="agents-import-behind">
+      <InfoIcon size={14} className="agents-import-behind__icon" />
+      <div>
+        {title && <p className="agents-import-behind__title">{title}</p>}
+        <ul>
+          {items.map((item, i) => (
+            <li key={i}>{item}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export function ImportPreview({ preview }: { preview: PasteImportPreview }) {
   const { agents, problems, source, blocks } = preview;
   const mainName = useAgentsList().find((a) => a.isMain)?.name ?? 'Chief of Staff';
@@ -294,11 +316,14 @@ export function ImportPreview({ preview }: { preview: PasteImportPreview }) {
 
 interface ImportDoneProps {
   summary: ImportSummary;
-  agents: PasteImportAgent[];
+  /** Only `name`, `isMain` and `color` are read. */
+  agents: Pick<PasteImportAgent, 'name' | 'isMain' | 'color'>[];
+  /** What this path has to say beyond the shared summary. */
+  extra?: ReactNode;
 }
 
 /** A short celebration, what happened in one line, and what to do next. */
-export function ImportDone({ summary, agents }: ImportDoneProps) {
+export function ImportDone({ summary, agents, extra }: ImportDoneProps) {
   const team = useAgentsList();
   const mainName = team.find((a) => a.isMain)?.name ?? 'Chief of Staff';
   const skipped = new Set(summary.skipped.map(([name]) => name));
@@ -358,6 +383,7 @@ export function ImportDone({ summary, agents }: ImportDoneProps) {
           ]}
         />
       )}
+      {extra}
       <p className="agents-import-done__next">
         <strong>Say hi to your team.</strong> They start when you message them; routines run while
         the app is open.

@@ -567,43 +567,120 @@ the tab.
 ## Import from Grok Bot (or any connected assistant)
 
 Only the other assistant knows its own agents, instructions and memory, so the
-import runs from its side. Remote access gains an `import_agents` tool:
-`{source, agents: [{name, role, instructions, memory, is_main, routines}]}`. Ship Studio
-creates each agent, writes its instructions, and appends its memory under
-`### Imported from <source>`. The `is_main` agent merges into the Chief of
-Staff. Re-importing updates same-named agents instead of duplicating them.
-Imported agents don't run until you message them, apart from their routines.
-Every import is audited like any other remote-access action.
+import runs from its side, over Remote Access. Nothing it sends becomes an
+agent by itself: every connector import ends on one review card in the
+Chief's chat, and the user imports what they keep (`agents/review.rs`).
 
-Each agent can also bring `routines: [{when, what}]`, with `when` in plain
-words ("every weekday at 9am", "every 2 hours", "friday at 2pm"). Each goes
-through the same parser and limits as `schedule_check_in` (`schedule::check`)
-and becomes a routine, or a one-time check-in, with `what` as its note. A
-phrase that can't be read, or is too frequent, or a full agent, isn't
-guessed at: the paste preview shows it under its agent with the reason, and the
-result (`routinesRefused`, and the tool's reply, which tells the assistant to
-list each one to the user) names it by agent. A refused routine doesn't block
-the rest of the import. Re-importing doesn't duplicate routines: the same note
-on the same schedule, or the same one-off note, counts as already set.
+The **Import agents** button leads with a conversation (`agents/connector.rs`,
+the full threat model in docs/remote-access.md):
 
-The **Import agents** button in Agents mode offers two paths, as tabs:
+1. The user presses **Start** (one import, until it ends or the app quits),
+   then sends their other assistant one message (`import::import_prompt`).
+2. Its first `import_conversation` call puts an Allow / Deny card in the
+   Chief's chat ("Grok wants to bring its agents over"). Nothing is shared or
+   delivered until Allow.
+3. It then talks to a **sealed interview** (`agents/interview.rs`): a
+   throwaway Claude Code session that speaks as the Chief but has no built-in
+   tools, no settings or CLAUDE.md, no folders, not the Chief's session or
+   rules, and only `propose_agent` / `update_proposal` / `finish`, which
+   stage a draft. The user watches it in the Chief's chat: the other
+   assistant's lines are `from_agent` lines with a `connector:<source>` peer
+   ("From Grok · via connector"), the interview's replies `sent_to_agent`
+   lines to the same peer, indented as "To Grok". Neither ever reaches the
+   Chief's own session (`runner::recap_lines` skips them), and the other
+   assistant only hears what the interview wrote. A bar above the composer
+   says where it is, that what you type stays between you and the Chief, and
+   has a red **Stop import**; the Chief's own Stop (desktop or phone, where
+   its row reads "Talking to Grok (import)") stops it too.
+4. `finish` posts the review card: each agent ticked, with its role and the
+   first lines of its instructions in view (**Show all** for the rest), its
+   memory, routines (paused) and the logins it asks for a click away; a
+   name already taken (or a lookalike of one) comes in as "<Name> (from
+   Grok)" unless the user picks **Replace**, which lists what it does to
+   that agent: new instructions (the diff), a fresh conversation (memory
+   kept), its running routines paused, its project unbound, its
+   Always-allow rules removed, and its saved logins removed unless "Keep its
+   saved logins" is ticked (off by default). The managing agent's notes are
+   an optional "Add to <Chief>'s notes", off by default. **Import** creates
+   what's ticked; **Don't import** creates nothing. Only the Mac's card
+   imports: the phone's says "Review on your Mac". Logins arrive as secure
+   cards in each agent's chat that don't wake it
+   (`secrets::Request::quiet`): an imported agent first runs when the user
+   messages it.
 
-- **Paste** (the default while remote access is off; needs nothing set up).
-  Copy a message into the other assistant (`PASTE_PROMPT` in
-  `src-tauri/src/agents/paste.rs`) asking for every agent as a ```json block
-  in the same `{source, agents}` shape, in full and with no credentials, split
-  into numbered whole-agent blocks if it's long. Paste the whole reply back:
-  every ```json block (or bare JSON) is found and merged, and the preview lists
-  each agent and whether it is new, updates an existing one, or merges into the
-  Chief. Anything wrong (a trailing comma and its line, a cut-off block, a
-  missing name, a non-text field, a duplicate, two mains) is listed by block,
-  agent and field and blocks the import; nothing is repaired except curly
-  quotes used as JSON quotes. Import runs the same `import::import()`.
-- **Connected assistant** (the default once remote access is on): the one
-  message that makes it call `import_agents`, and a link to Remote access setup.
+The one-shot `import_agents` tool (`{source, agents: [{name, role,
+instructions, memory, is_main, routines}]}`) goes through the same Start and
+the same review card. Routines are read by the same parser and limits as
+`schedule_check_in` (`schedule::check`); one that can't be read is shown on
+the card with why, and is never guessed at.
+
+**Paste** is the fallback ("Can't connect? Paste a reply instead"; needs
+nothing set up). Copy a message into the other assistant (`PASTE_PROMPT` in
+`src-tauri/src/agents/paste.rs`) asking for every agent as a ```json block in
+the `{source, agents}` shape, in full and with no credentials, split into
+numbered whole-agent blocks if it's long. Paste the whole reply back: every
+```json block (or bare JSON) is found and merged, and the preview lists each
+agent and whether it is new, updates an existing one, or merges into the
+Chief. Anything wrong (a trailing comma and its line, a cut-off block, a
+missing name, a non-text field, a duplicate, two mains) is listed by block,
+agent and field and blocks the import; nothing is repaired except curly
+quotes used as JSON quotes. Import runs the same `import::import()`.
 
 What doesn't come across: the other platform's own connectors (its Gmail,
 Calendar…). Here, agents use what this Mac and Claude Code are connected to.
+
+### From Ship Studio on this Mac (`src-tauri/src/agents/other_app.rs`)
+
+When the app this one grew out of has agents on this Mac, **Import agents**
+gains a segmented choice, "From Ship Studio" | "From another assistant" (and
+⌘K gains "Import agents from Ship Studio…", gated by the cheap
+`agents_other_app_exists`, which reads only its registry). The name is
+`OTHER_APP_NAME` in `other_app.rs`; the modal reads it from the preview's
+`appName`, and the TS copy is used only for the palette title. Its agents are found
+under its projects folder (`<its projects root>/.shipstudio/agents`, the root
+read from its own `app_state.json`), else `~/ShipStudio/.shipstudio/agents`.
+
+Both apps use the same layout, so it's a copy, not a translation. The tab
+previews every agent (new, merges into the Chief, already here, or stays
+behind and why), with its instructions, memory, message and file counts,
+routines and project, then **Import** copies:
+
+| Comes across | How |
+| --- | --- |
+| Registry entry | same id (so agent-to-agent lines still point at the right agent), name, role, avatar, engine, model, routine model, pinned/hidden/muted, usage, unknown fields. "Always allow" rules only if the user ticks "Keep their rules" (listed per agent in the preview; off by default, since they pre-approve tool calls) |
+| Home | whole folder: CLAUDE.md (instructions + memory), `messages.jsonl`, `approvals.jsonl`, `attachments/`, anything else it kept there. Symlinks are never followed or copied |
+| Project binding | kept when the folder still exists; otherwise dropped and said in its chat |
+| Routines | kept, **paused**, so nothing runs in both apps while both are open |
+| Chief of Staff | merged by `import.rs`'s rules: ours keeps its name, role, avatar, engine and session; theirs adds its instructions under `### From Ship Studio` (unless they're the stock Chief's), its memory section under `### Imported from Ship Studio`, its conversation as **one block before ours** under a "From Ship Studio" divider note (`store::prepend_log_block`, never interleaved), its files (an existing name here wins, reported), its routines (paused) and, if kept, its rules, without doubling any. Since our Chief keeps its own session, a recap of the other Chief's last 24 messages is written to `history-from-ship-studio.md` in its home and named in its memory; the chat note says "Merged in", not "Brought over" |
+
+Not copied, on purpose: **saved secrets** (values in its Keychain items,
+`ship-studio-agent-<id>`; reading them would raise Keychain prompts owned by
+the other app and copy credentials without the user choosing to: the tab and
+the agent's chat name which secrets stayed behind, and the agent asks again
+with `request_secret`); **sessions** (tied to the folder they ran in; the
+agent starts fresh and is handed the recent conversation, `new_engine`);
+**a turn in flight** (`turn.json`, `inbox.json`). Waiting approval cards are
+expired, except secure input cards, which still work here.
+
+It's read-only: nothing under the other app's folder is written, moved or
+deleted (the Rust test hashes the whole source tree before and after; an
+agent home that is itself a symlink is skipped, not followed). It's
+idempotent and safe to retry: `agents/imports.json` records each source id it
+brought over, so importing again skips them ("Already here"; a bare id
+collision says so instead); the Chief's merge skips lines by id, memory by
+block, files by name and routines/rules by value, so a merge that failed part
+way is simply run again; a folder left between moving a home in and
+registering it, or an `.import-*` staging folder, is ours and is cleared. One
+import runs at a time (a static mutex). One agent failing is reported by name
+and the rest carry on; the registry event fires however it ended, and the
+modal reloads the Chief's chat. The preview counts conversation only (not
+cards or notes), sizes each agent, and says when a bound agent shares its
+project folder with its Ship Studio twin and that paused routines' twins keep
+running there. Across volumes (APFS clones within one) the copy checks free
+space first, refuses with both sizes if it won't fit, and reports progress
+(`agents://import-progress`). An agent whose name is taken here
+stays behind until one is renamed; a newer build's entry this one can't read
+is listed, not guessed at.
 
 ## Check-ins and routines (`src-tauri/src/agents/schedule.rs`)
 

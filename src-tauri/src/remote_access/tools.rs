@@ -102,7 +102,7 @@ const TOOLS: &[ToolDef] = &[
         title: "Import agents",
         effect: Effect::Acts,
         open_world: false,
-        description: "Bring the user's agent setup from you into Agents on the user's computer, where the same agents run on Claude Code or Codex. Call it only when the user asks to import or move their agents/setup to their computer. Send every agent: its name, a one-line role, its full instructions (as you were briefed), and what it remembers that it still needs, one fact per line. Mark the agent that manages the others is_main (it merges into the Chief of Staff there). Include each agent's routines (anything it does on a schedule: automations, reminders, recurring check-ins) as {when, what}, with `when` in plain words such as \"every weekday at 9am\", \"every monday at 8:30am\", \"every 2 hours\" or \"friday at 2pm\". The reply lists any routine whose time The app couldn't read; tell the user about each one. Never include passwords, API keys, tokens or card numbers. Safe to call again: same-named agents are updated, not duplicated. Imported agents don't start working until the user messages them.",
+        description: "Send the user's whole agent setup in one go, for them to review in Agents on their computer. Prefer import_conversation; use this only when the user asks for a one-shot import. It works only after the user pressed Start in the app's Import agents. Send every agent: its name, a one-line role, its full instructions (as you were briefed), and what it remembers that it still needs, one fact per line. Mark the agent that manages the others is_main (what it knows is offered to the user as notes). Include each agent's routines as {when, what}, with `when` in plain words such as \"every weekday at 9am\" or \"every 2 hours\". Never include passwords, API keys, tokens or card numbers. Nothing is created until the user reviews the agents and presses Import.",
         schema: || json!({
             "type": "object",
             "properties": {
@@ -135,6 +135,22 @@ const TOOLS: &[ToolDef] = &[
                 }
             },
             "required": ["source", "agents"]
+        }),
+    },
+    ToolDef {
+        name: "import_conversation",
+        title: "Move agents here, in conversation",
+        effect: Effect::Acts,
+        open_world: false,
+        description: "The way to move the user's agents from you into this app: a short interview with their Chief of Staff here, who asks about each agent and stages it for the user to review. It works only after the user pressed Start in the app's Import agents, and the user is asked to allow it first. Start with `message` saying who you are and listing the agents you run for the user; each call delivers your message, waits for the reply, and returns it with STATUS and NEXT lines. Answer its questions by calling this again with your reply, until STATUS is in_review, then call with no message to hear what the user imported. Call it with no message to keep waiting while STATUS is working or waiting_on_user. Never send passwords, API keys, tokens or card numbers: the app asks the user for logins itself. The user watches the conversation and can stop it.",
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "description": "Your product name, e.g. \"Grok\". Shown to the user." },
+                "message": { "type": "string", "description": "What you say to the Chief of Staff. Omit to wait for its reply to your last message." },
+                "wait_seconds": { "type": "integer", "description": "Seconds to wait for the reply (default 40, max 50)." }
+            },
+            "required": ["source"]
         }),
     },
     ToolDef {
@@ -524,6 +540,9 @@ pub async fn call(app: &tauri::AppHandle, config: &RemoteConfig, name: &str, arg
     if name == "import_agents" {
         return import_agents(app, &args);
     }
+    if name == "import_conversation" {
+        return import_conversation(app, &args).await;
+    }
     call_in(app, &config.projects, name, args).await
 }
 
@@ -568,40 +587,32 @@ pub(crate) async fn call_in(
 // ============================================================================
 
 fn import_agents(app: &tauri::AppHandle, args: &Value) -> Value {
-    let source = args
-        .get("source")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    let agents: Vec<crate::agents::import::ImportedAgent> =
-        match serde_json::from_value(args.get("agents").cloned().unwrap_or(Value::Null)) {
-            Ok(list) => list,
-            Err(e) => {
-                return error(format!(
-                "`agents` should be a list of {{name, role, instructions, memory, is_main, routines: [{{when, what}}]}}: {e}"
-            ))
-            }
-        };
-    let count = agents.len();
-    match crate::agents::import::import_and_notify(app, agents, &source) {
-        Ok(summary) => {
-            super::audit(
-                "import_agents",
-                None,
-                format!("{count} agent(s) from {source}"),
-                true,
-            );
-            text(summary.describe(&source))
-        }
-        Err(e) => {
-            super::audit(
-                "import_agents",
-                None,
-                format!("{count} agent(s) from {source}: {e}"),
-                false,
-            );
-            error(format!("Import failed: {e}"))
-        }
+    let source = args.get("source").and_then(Value::as_str).unwrap_or("");
+    let Some(agents) = args.get("agents").and_then(Value::as_array) else {
+        return error("`agents` should be a list of {name, role, instructions, memory, is_main, routines: [{when, what}]}.");
+    };
+    // Staged for the user's review, like the conversation: nothing is created
+    // until they press Import (`agents::connector`). The server writes the
+    // call to the audit log, refusals included, so it isn't written here too.
+    match crate::agents::connector::stage_one_shot(app, source, agents) {
+        Ok(answer) => text(answer),
+        Err(e) => error(e),
+    }
+}
+
+async fn import_conversation(app: &tauri::AppHandle, args: &Value) -> Value {
+    use crate::agents::connector;
+    let field = |k: &str| args.get(k).and_then(Value::as_str).unwrap_or("");
+    let wait = Duration::from_secs(
+        args.get("wait_seconds")
+            .and_then(Value::as_u64)
+            .unwrap_or(connector::DEFAULT_WAIT_SECS)
+            .min(connector::MAX_WAIT_SECS),
+    );
+    // Audited once, by the server, like every call (refusals included).
+    match connector::converse(app, field("source"), field("message"), wait).await {
+        Ok(answer) => text(answer),
+        Err(e) => error(e),
     }
 }
 

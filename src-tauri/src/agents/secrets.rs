@@ -81,6 +81,11 @@ pub struct Request {
     pub kind: Kind,
     pub fields: Vec<Field>,
     pub reference: String,
+    /// Asked for an agent the import connector brought in (`agents/review.rs`):
+    /// saving or declining it doesn't wake the agent, whose instructions came
+    /// from outside. It starts when the user first messages it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub quiet: bool,
 }
 
 /// A saved secret, on the agent's registry entry. Never its value.
@@ -362,6 +367,7 @@ pub fn build_request(
         purpose: purpose.chars().take(300).collect(),
         kind,
         fields,
+        quiet: false,
     })
 }
 
@@ -647,6 +653,7 @@ mod tests {
             prompt: None,
             choice: None,
             secret: Some(request.clone()),
+            connector: None,
         });
         store::append_message(&card).unwrap();
         (request_id, request)
@@ -770,6 +777,7 @@ mod tests {
             kind: s.kind,
             fields: s.fields.clone(),
             reference: s.reference.clone(),
+            quiet: false,
         }
     }
 

@@ -354,6 +354,8 @@ export interface Approval {
   prompt?: SessionPrompt;
   /** The option picked on a `prompt` card. */
   choice?: string;
+  /** An import connector card: another assistant asking to start, or its staged agents. */
+  connector?: ConnectorCard;
 }
 
 /**
@@ -703,6 +705,10 @@ export const AGENT_EVENTS = {
   draft: 'agents://draft',
   /** A notification was clicked; payload is the agent id to open. */
   open: 'agents://open',
+  /** The import over the connector changed: an `ImportGate`. */
+  importTalk: 'agents://import-talk',
+  /** How far a copy from the other app has got: `OtherAppProgress`. */
+  importProgress: 'agents://import-progress',
 } as const;
 
 export const getAgentsOverview = () => invoke<AgentsOverview>('agents_overview');
@@ -844,7 +850,165 @@ export function contextPercent(agent: Pick<Agent, 'context'>): number | null {
   if (!fill || fill.window <= 0) return null;
   return Math.min(100, Math.round((fill.used / fill.window) * 100));
 }
+/** The one message that asks the other assistant to talk to the Chief over the connector. */
 export const getImportPrompt = () => invoke<string>('agents_import_prompt');
+
+/* ------------------------------------- import as a conversation (connector) */
+
+/** An import with another assistant over the connector (`agents/connector.rs`). */
+export interface ImportTalk {
+  id: string;
+  /** The other assistant, as it named itself ("Grok"). */
+  source: string;
+  chiefId: string;
+  /**
+   * `awaiting_consent`: the card asking you is up. `interviewing`: the sealed
+   * interview is going. `review`: the staged agents wait on your card. The rest
+   * are how it ended.
+   */
+  state:
+    | 'awaiting_consent'
+    | 'interviewing'
+    | 'review'
+    | 'imported'
+    | 'declined'
+    | 'denied'
+    | 'stopped';
+  startedAt: number;
+  lastAt: number;
+  exchanges: number;
+  /** Agents staged for your review so far (nothing is created yet). */
+  staged: string[];
+  /** Agents you imported from the review. */
+  imported: string[];
+  /** The interview is writing its answer. */
+  busy: boolean;
+}
+
+/** Whether an import may begin (you pressed Start), and the one going on. */
+export interface ImportGate {
+  armed: boolean;
+  talk: ImportTalk | null;
+}
+
+/** An import that is still going (not ended one way or another). */
+export const talkIsLive = (t: ImportTalk | null | undefined): t is ImportTalk =>
+  !!t && (t.state === 'awaiting_consent' || t.state === 'interviewing' || t.state === 'review');
+
+export const getImportTalk = () => invoke<ImportGate>('agents_import_talk');
+/** Start: one import over the connector may begin (it still asks on a card first). */
+export const armImportTalk = () => invoke<ImportGate>('agents_import_talk_arm');
+export const stopImportTalk = () => invoke<boolean>('agents_import_talk_stop');
+
+/** An import connector card, carried on an approval (`agents/review.rs`). */
+export interface ConnectorCard {
+  kind: 'consent' | 'review';
+  talkId: string;
+  source: string;
+  review?: ImportReview;
+}
+
+/** What the other assistant proposed, staged for you. Nothing exists until you import. */
+export interface ImportReview {
+  proposals: ImportProposal[];
+  /** What its managing agent knew, offered as notes for your Chief. Off unless ticked. */
+  chiefNotes?: string;
+  summary?: string;
+}
+
+export interface ImportProposal {
+  key: string;
+  name: string;
+  role: string;
+  instructions: string;
+  memory: string;
+  routines: { when: string; what: string; schedule?: string; refused?: string }[];
+  logins: { name: string; purpose: string; kind: string }[];
+  /** An agent here already has this name (or one that looks like it): what it is now. */
+  clash?: ImportClash;
+}
+
+/** The agent here a proposal's name is taken by, with everything Replace would change. */
+export interface ImportClash {
+  agentId: string;
+  /** Its name here: it may only look like the proposal's ("Ѕite" with a Cyrillic Ѕ). */
+  name?: string;
+  role: string;
+  instructions: string;
+  /** Its saved logins, by name: removed on Replace unless you keep them. */
+  logins?: string[];
+  /** The project it's bound to (a path): unbound on Replace. */
+  project?: string;
+  /** Routines that would run: paused on Replace. */
+  activeRoutines?: number;
+  /** Its "Always allow" rules: removed on Replace. */
+  rules?: number;
+  /** It has a conversation going: Replace starts it fresh, memory kept. */
+  conversation?: boolean;
+}
+
+/** What you kept on the review card. */
+export interface ImportPicks {
+  agents: {
+    key: string;
+    replace: boolean;
+    /** Replace only: keep the replaced agent's saved logins. Off unless ticked. */
+    keepLogins?: boolean;
+    /** Replace only: the agent as the card showed it; Import refuses if it changed since. */
+    seen?: ImportClash;
+  }[];
+  chiefNotes: boolean;
+}
+
+export interface ImportApplied {
+  agents: string[];
+  replaced: string[];
+  skipped: [string, string][];
+  chiefNotes: boolean;
+  routinesRefused: string[];
+}
+
+export const applyImportReview = (agentId: string, requestId: string, picks: ImportPicks) =>
+  invoke<ImportApplied>('agents_import_review_apply', { agentId, requestId, picks });
+
+/** A review card's agents with each clash read again against the agents here now. */
+export const currentImportReview = (agentId: string, requestId: string) =>
+  invoke<ImportReview>('agents_import_review_current', { agentId, requestId });
+
+/** The peer id prefix of a line in an import conversation. */
+export const CONNECTOR_PEER = 'connector:';
+/** A line of an import conversation (the other assistant's, or to it), not one of your agents. */
+export const isConnectorLine = (m: Pick<AgentMessage, 'kind' | 'peer'>) =>
+  (m.kind === 'from_agent' || m.kind === 'sent_to_agent') &&
+  !!m.peer?.id.startsWith(CONNECTOR_PEER);
+
+/**
+ * An import conversation's line, as plain text with its web links found:
+ * nothing in it is read as HTML or markdown (it comes from the internet,
+ * through an assistant that can be prompt-injected), and only `http(s)://`
+ * becomes a link. Trailing punctuation stays text ("see https://x.ai.").
+ */
+export function connectorTextParts(text: string): ({ text: string } | { url: string })[] {
+  const parts: ({ text: string } | { url: string })[] = [];
+  const re = /\bhttps?:\/\/[^\s<>"'`]+/gi;
+  let last = 0;
+  for (const match of text.matchAll(re)) {
+    const url = match[0].replace(/[.,;:!?)\]}]+$/, '');
+    const at = match.index ?? 0;
+    if (at > last) parts.push({ text: text.slice(last, at) });
+    parts.push({ url });
+    last = at + url.length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last) });
+  return parts;
+}
+
+/**
+ * "Finance (from Grok)": the name a clashing agent comes in under unless
+ * you choose Replace (`review::unique_name`; the backend picks the final one).
+ */
+export const copyName = (name: string, source: string) =>
+  `${name.slice(0, 20)} (from ${source.slice(0, 14)})`;
 
 /** One agent a pasted reply would import (see `agents/paste.rs`). */
 export interface PasteImportAgent {
@@ -903,6 +1067,85 @@ export const getPasteImportPrompt = () => invoke<string>('agents_import_paste_pr
 export const previewPasteImport = (text: string) =>
   invoke<PasteImportPreview>('agents_import_paste_preview', { text });
 export const importPaste = (text: string) => invoke<ImportSummary>('agents_import_paste', { text });
+/* ------------------------------------------ import from the other app */
+
+/**
+ * The app this one grew out of, by name, for the palette's title only: it is
+ * registered before any preview has been read. Everywhere else reads the
+ * preview's `appName`, from `OTHER_APP_NAME` in
+ * `src-tauri/src/agents/other_app.rs`, which also knows where its agents live.
+ */
+export const OTHER_APP_NAME = 'Ship Studio';
+
+/** What happens to one of its agents (`other_app::Plan`). */
+export type OtherAppPlan = 'new' | 'merge' | 'imported' | 'skip';
+
+export interface OtherAppAgent {
+  sourceId: string;
+  name: string;
+  role: string;
+  color: string;
+  isMain: boolean;
+  plan: OtherAppPlan;
+  /** Why it's skipped, or that it's already here. */
+  reason?: string;
+  instructions: string;
+  memory: string[];
+  messages: number;
+  attachments: number;
+  routines: { schedule: string; what: string }[];
+  /** Names of secrets it had saved there; they don't come across. */
+  secrets: string[];
+  /** Its "Always allow" rules, in words. Left behind unless kept. */
+  rules: string[];
+  /** Bytes its folder takes. */
+  bytes: number;
+  /** Its folder; its copy in the other app works in the same one. */
+  project?: string;
+  projectMissing: boolean;
+}
+
+export interface OtherAppPreview {
+  appName: string;
+  source?: string;
+  agents: OtherAppAgent[];
+  /** Bytes an import would copy. */
+  totalBytes: number;
+  /** Same volume: the copy is a clone, instant and free. */
+  sameVolume: boolean;
+  freeBytes?: number;
+  /** False only when a copy to another volume wouldn't fit. */
+  enoughSpace: boolean;
+}
+
+export interface OtherAppSummary extends ImportSummary {
+  appName: string;
+  already: string[];
+  routinesPaused: number;
+  messages: number;
+  secretsLeft: { agent: string; secrets: string[] }[];
+  /** "Always allow" rules carried over, because the user kept them. */
+  rulesKept: { agent: string; rules: string[] }[];
+  /** "Always allow" rules left behind (the default). */
+  rulesLeft: { agent: string; rules: string[] }[];
+  filesSkipped: string[];
+}
+
+export interface OtherAppProgress {
+  agent: string;
+  doneBytes: number;
+  totalBytes: number;
+}
+
+/** Null when the other app isn't on this Mac or has no agents. Reads only. */
+export const previewOtherAppImport = () =>
+  invoke<OtherAppPreview | null>('agents_other_app_preview');
+/** Whether it has agents here, from its registry alone (cheap: for the palette). */
+export const otherAppExists = () => invoke<boolean>('agents_other_app_exists');
+/** Copies its team in; never writes to its folder. */
+export const importFromOtherApp = (options: { keepRules: boolean } = { keepRules: false }) =>
+  invoke<OtherAppSummary>('agents_other_app_import', { options });
+
 export const previewSchedule = (when: string) =>
   invoke<SchedulePreview>('agents_schedule_preview', { when });
 export const createCheckIn = (agentId: string, when: string, note: string) =>
@@ -1249,7 +1492,9 @@ export function buildChatItems(messages: AgentMessage[]): ChatItem[] {
     }
     lastTs = message.ts;
     const previous = items[items.length - 1];
-    if (isPeerLine(message) && message.peer) {
+    // The other assistant's side of an import is the conversation itself:
+    // shown in full, never folded away like agents' hand-offs.
+    if (isPeerLine(message) && message.peer && !isConnectorLine(message)) {
       if (previous?.type === 'peer-group' && previous.peer.id === message.peer.id) {
         previous.messages.push(message);
         continue;

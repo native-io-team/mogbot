@@ -12,7 +12,7 @@ import { BROADER, broaderCaption, moreMessage, promptAnswers } from '../src/lib/
 import { readBrand } from '../src/lib/brand';
 import { agentTints, APPEARANCES, contrast, luminance, palettes } from '../src/lib/theme';
 import { PromptCard } from '../src/components/PromptCard';
-import { ARM_MS, useArmed } from '../src/components/ApprovalCard';
+import { ARM_MS, ReviewOnMacCard, useArmed } from '../src/components/ApprovalCard';
 import { Text } from 'react-native';
 import { agent } from './helpers';
 
@@ -248,6 +248,25 @@ describe('PromptCard', () => {
     const answers = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel as string);
     expect(answers).toEqual(['Deny', 'Allow', 'More answers']);
     expect(screen.queryByText('Yes, allow all edits during this session')).toBeNull();
+  });
+});
+
+describe('an import review card', () => {
+  const approval = {
+    requestId: 'r1',
+    title: 'Bring in 2 agents from Grok',
+    detail:
+      "Finance · Money\nTravel · Trips\nReview on your Mac: each agent's instructions are shown there, and nothing is created until you import them.",
+    status: 'pending',
+    connector: { kind: 'review', talkId: 't', source: 'Grok' },
+  } as Approval;
+
+  it('names the agents and sends you to the Mac, with nothing to press', async () => {
+    await render(<ReviewOnMacCard approval={approval} />);
+    expect(screen.getByText('Finance · Money')).toBeTruthy();
+    expect(screen.getByText(/Review on your Mac: each agent’s instructions/)).toBeTruthy();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.queryByText('Allow')).toBeNull();
   });
 });
 

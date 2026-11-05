@@ -829,6 +829,16 @@ async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
 /// agent (see `commands::agents::agents_save_secret`), so a card answered
 /// tomorrow works as well as one answered now.
 fn request_secret(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+    request_secret_as(app, caller, args, false)
+}
+
+/// A secure input card for an agent the import connector brought in: saving
+/// or declining it doesn't wake the agent (`secrets::Request::quiet`).
+pub(crate) fn request_secret_quiet(app: &AppHandle, agent: &store::Agent, args: &Value) -> Value {
+    request_secret_as(app, agent, args, true)
+}
+
+fn request_secret_as(app: &AppHandle, caller: &store::Agent, args: &Value, quiet: bool) -> Value {
     let labels: Vec<String> = args
         .get("fields")
         .and_then(Value::as_array)
@@ -839,7 +849,7 @@ fn request_secret(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value
                 .collect()
         })
         .unwrap_or_default();
-    let request = match super::secrets::build_request(
+    let mut request = match super::secrets::build_request(
         caller,
         arg(args, "name").unwrap_or(""),
         arg(args, "purpose").unwrap_or(""),
@@ -849,6 +859,7 @@ fn request_secret(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value
         Ok(r) => r,
         Err(e) => return error(e.to_string()),
     };
+    request.quiet = quiet;
     let open = store::pending_approvals(&caller.id).unwrap_or_default();
     if open
         .iter()
@@ -1006,6 +1017,7 @@ pub(super) fn new_card(
         prompt: None,
         choice: None,
         secret: None,
+        connector: None,
     }
 }
 

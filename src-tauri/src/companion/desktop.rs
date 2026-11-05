@@ -241,7 +241,7 @@ impl Backend for DesktopBackend {
     }
 
     async fn stop(&self, agent_id: &str) -> Result<bool, CommandError> {
-        cmd::agents_stop(agent_id.to_string()).await
+        cmd::agents_stop(self.app.clone(), agent_id.to_string()).await
     }
 
     async fn interrupt(&self, agent_id: &str) -> Result<bool, CommandError> {

@@ -87,6 +87,10 @@ pub struct CheckIn {
     pub created_at: i64,
     #[serde(default)]
     pub paused: bool,
+    /// Paused by an import (so a routine doesn't run in two apps at once),
+    /// not by the user. Cleared when it's resumed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paused_on_import: bool,
     /// Its last runs, oldest first (`agents::runs`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub runs: Vec<runs::Run>,
@@ -801,6 +805,7 @@ where
         next_at,
         created_at: now,
         paused: false,
+        paused_on_import: false,
         runs: Vec::new(),
         retry: None,
         extra: Default::default(),
@@ -963,10 +968,10 @@ pub fn list_text(agent: &store::Agent) -> String {
                 Some(r) => format!("{}, next {}", describe(r), format_time(&tz, c.next_at)),
                 None => format_time(&tz, c.next_at),
             };
-            let paused = if c.paused {
-                " [paused by the user]"
-            } else {
-                ""
+            let paused = match (c.paused, c.paused_on_import) {
+                (true, true) => " [paused by the import, until the user turns it on]",
+                (true, false) => " [paused by the user]",
+                _ => "",
             };
             format!("- {} · {when}{paused}: {}", c.id, c.note)
         })
@@ -1007,6 +1012,7 @@ pub fn set_paused(agent_id: &str, id: &str, paused: bool) -> Result<(), CommandE
                 }
             }
             c.paused = paused;
+            c.paused_on_import = false;
         }
     })?;
     if found {
@@ -1410,6 +1416,7 @@ mod tests {
             next_at,
             created_at: 0,
             paused: false,
+            paused_on_import: false,
             runs: Vec::new(),
             retry: None,
             extra: Default::default(),

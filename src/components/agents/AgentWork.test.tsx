@@ -62,7 +62,12 @@ describe('the timeline under a reply', () => {
     const honest: TurnWork = {
       ...work,
       steps: [
-        { at: 1_000_000 + 2_000, kind: 'command', label: 'Asked to run rm — you declined', outcome: 'declined' },
+        {
+          at: 1_000_000 + 2_000,
+          kind: 'command',
+          label: 'Asked to run rm — you declined',
+          outcome: 'declined',
+        },
         { at: 1_000_000 + 3_000, kind: 'edit', label: 'Tried to edit Hero.tsx', outcome: 'failed' },
         { at: 1_000_000 + 4_000, kind: 'approval', label: 'You allowed: Run a command' },
       ],

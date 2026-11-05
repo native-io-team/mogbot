@@ -37,6 +37,7 @@ import type { DraftAttachment } from './useComposerAttachments';
 import { MentionText } from './AgentMentions';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
+import { ImportReviewCard } from './ImportReviewCard';
 import { useLiveWork, WorkTimeline } from './AgentWork';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
@@ -44,6 +45,7 @@ import { useHeightReveal } from './useAgentMotion';
 import { useCardGuard } from './useCardGuard';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import {
+  connectorTextParts,
   CONTEXT_SUGGEST_AT,
   contextPercent,
   describeScope,
@@ -663,6 +665,74 @@ export const NoteLine = memo(function NoteLine({
   );
 });
 
+/**
+ * Links in the other assistant's words: web links open in the system
+ * browser, never in the app's own webview; anything else (a local path, a
+ * custom scheme) is inert. Unlike the agents' own prose, nothing here is
+ * trusted to open a file on this Mac.
+ */
+function onConnectorLinkClick(event: MouseEvent<HTMLElement>) {
+  const anchor = (event.target as HTMLElement).closest('a');
+  const href = anchor?.getAttribute('href');
+  if (!href) return;
+  event.preventDefault();
+  if (/^https?:/i.test(href)) void openUrl(href);
+}
+
+/**
+ * One line of an import conversation (`agents/connector.rs`). The other
+ * assistant's words sit on the left, outlined and labelled "From Grok · via
+ * connector"; what the sealed interview wrote back to it is indented under
+ * them as "To Grok", so neither reads as the Chief talking to you, or as you.
+ */
+export const ConnectorBubble = memo(function ConnectorBubble({
+  message,
+  arrived,
+}: { message: AgentMessage } & Arrival) {
+  const onKeyDown = useCopyOnKey(message.text);
+  const source = message.peer?.name ?? 'another assistant';
+  const outgoing = message.kind === 'sent_to_agent';
+  return (
+    <div
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className={`agent-chat__row agent-chat__row--connector${outgoing ? ' agent-chat__row--to-connector' : ''}`}
+      data-arrived={arrived || undefined}
+      data-message-ids={message.id}
+    >
+      <span className="agent-connector__who">
+        {outgoing ? (
+          <>
+            To {source}
+            <span className="agent-connector__via"> · from the import interview</span>
+          </>
+        ) : (
+          <>
+            From {source}
+            <span className="agent-connector__via"> · via connector</span>
+          </>
+        )}
+      </span>
+      {/* Plain text: never HTML or markdown, whatever the other assistant sent. */}
+      <div
+        className={`agent-bubble agent-bubble--connector${outgoing ? ' agent-bubble--to-connector' : ''}`}
+        onClick={onConnectorLinkClick}
+        data-plain
+      >
+        {connectorTextParts(message.text).map((part, i) =>
+          'url' in part ? (
+            <a key={i} href={part.url} className="agent-connector__link">
+              {part.url}
+            </a>
+          ) : (
+            part.text
+          )
+        )}
+      </div>
+    </div>
+  );
+});
+
 export const DayDivider = memo(function DayDivider({ ts, arrived }: { ts: number } & Arrival) {
   return (
     <div className="agent-chat__divider" data-arrived={arrived || undefined}>
@@ -897,6 +967,20 @@ export const ApprovalCard = memo(function ApprovalCard({
       <SecretCard message={message} agentName={agentName} onAnswer={onAnswer} arrived={arrived} />
     );
   }
+  if (approval.connector?.kind === 'review') {
+    return (
+      <ImportReviewCard
+        message={message}
+        card={approval.connector}
+        chiefName={agentName}
+        arrived={arrived}
+        onAnswer={(id, allow) => onAnswer(id, allow)}
+      />
+    );
+  }
+  // Another assistant asking to start an import: a plain yes or no, so Deny
+  // doesn't open the "what instead" line.
+  const plainDeny = approval.connector?.kind === 'consent';
   const pending = approval.status === 'pending';
   const fields = approvalFields(approval.tool, approval.input);
   const answer = async (allow: boolean, always = false, why?: string) => {
@@ -933,7 +1017,14 @@ export const ApprovalCard = memo(function ApprovalCard({
             ))}
           </dl>
         ) : (
-          approval.detail && <pre className="agent-approval__detail">{approval.detail}</pre>
+          approval.detail &&
+          (plainDeny ? (
+            <p className="agent-approval__detail agent-approval__detail--prose">
+              {approval.detail}
+            </p>
+          ) : (
+            <pre className="agent-approval__detail">{approval.detail}</pre>
+          ))
         )}
         {long && (
           <TextButton
@@ -944,7 +1035,7 @@ export const ApprovalCard = memo(function ApprovalCard({
             {showAll ? 'Show less' : 'Show all'}
           </TextButton>
         )}
-        {pending && paused && (
+        {pending && paused && !plainDeny && (
           <p className="agent-approval__note">
             It paused here for you. Allow it and it picks up where it left off.
           </p>
@@ -1000,18 +1091,31 @@ export const ApprovalCard = memo(function ApprovalCard({
               </Tooltip>
             )}
             {/* tabIndex: WebKit leaves buttons out of the Tab order unless asked. */}
-            <Tooltip content={`Decline; you can tell ${agentName} what to do instead`}>
+            {plainDeny ? (
               <Button
                 ref={denyRef}
                 tabIndex={0}
                 variant="secondary"
                 className="agent-approval__deny"
                 disabled={busy}
-                onClick={() => setNoting(true)}
+                onClick={() => void answer(false)}
               >
-                Deny…
+                Deny
               </Button>
-            </Tooltip>
+            ) : (
+              <Tooltip content={`Decline; you can tell ${agentName} what to do instead`}>
+                <Button
+                  ref={denyRef}
+                  tabIndex={0}
+                  variant="secondary"
+                  className="agent-approval__deny"
+                  disabled={busy}
+                  onClick={() => setNoting(true)}
+                >
+                  Deny…
+                </Button>
+              </Tooltip>
+            )}
             <Button
               tabIndex={0}
               variant="strong"

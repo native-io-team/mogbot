@@ -110,20 +110,27 @@ impl ImportSummary {
 }
 
 /// Append imported memory under the agent's `## Memory` section.
-fn add_memory(id: &str, memory: &str, source: &str) -> Result<(), CommandError> {
+pub(crate) fn add_memory(id: &str, memory: &str, source: &str) -> Result<(), CommandError> {
     let memory = memory.trim();
     if memory.is_empty() {
         return Ok(());
     }
     let path = store::agent_home(id)?.join("CLAUDE.md");
     let mut content = std::fs::read_to_string(&path).unwrap_or_default();
+    let block = format!("### Imported from {source}\n\n{memory}\n");
+    // The same block from the same source is already there: an import that
+    // is run again (or retried after failing part way) doesn't double it.
+    if content.contains(&block) {
+        return Ok(());
+    }
     if super::memory::section_start(&content).is_none() {
         content.push_str(&format!("\n{}\n", super::memory::HEADING));
     }
     if !content.ends_with('\n') {
         content.push('\n');
     }
-    content.push_str(&format!("\n### Imported from {source}\n\n{memory}\n"));
+    content.push('\n');
+    content.push_str(&block);
     std::fs::write(&path, content).map_err(super::err_io)
 }
 
@@ -138,7 +145,14 @@ fn outcome(agent: &str, r: &ImportedRoutine, detail: String) -> RoutineOutcome {
 
 /// Schedule each routine with the same parser and limits as `schedule_check_in`.
 /// One already there (a re-import) counts as set, not as a second copy.
-fn add_routines(agent: &store::Agent, routines: &[ImportedRoutine], summary: &mut ImportSummary) {
+/// With `pause`, each new one arrives paused by the import (see
+/// `CheckIn::paused_on_import`): the source keeps running its own copy.
+pub(crate) fn add_routines(
+    agent: &store::Agent,
+    routines: &[ImportedRoutine],
+    pause: bool,
+    summary: &mut ImportSummary,
+) {
     let tz = chrono::Local;
     for r in routines {
         // A one-off's time is relative ("in 3 days"), so a re-import would
@@ -157,6 +171,27 @@ fn add_routines(agent: &store::Agent, routines: &[ImportedRoutine], summary: &mu
             }
         }
         match schedule::create_in(&tz, &agent.id, &r.when, &r.what, store::now_ms()) {
+            Ok(made) if pause => {
+                let id = made.check_in.id.clone();
+                let _ = store::update(&agent.id, |a| {
+                    if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == id) {
+                        c.paused = true;
+                        c.paused_on_import = true;
+                    }
+                });
+                summary.routines_set.push(outcome(
+                    &agent.name,
+                    r,
+                    format!(
+                        "{} (paused by the import)",
+                        schedule::describe_schedule(
+                            &tz,
+                            made.check_in.repeat.as_ref(),
+                            made.check_in.next_at,
+                        )
+                    ),
+                ))
+            }
             Ok(made) => summary.routines_set.push(outcome(
                 &agent.name,
                 r,
@@ -183,6 +218,16 @@ fn add_routines(agent: &store::Agent, routines: &[ImportedRoutine], summary: &mu
 }
 
 pub fn import(agents: Vec<ImportedAgent>, source: &str) -> Result<ImportSummary, CommandError> {
+    import_with(agents, source, false)
+}
+
+/// As [`import`], with every routine that comes across paused by the import
+/// (the conversation import: the other assistant keeps running its own).
+pub fn import_with(
+    agents: Vec<ImportedAgent>,
+    source: &str,
+    pause_routines: bool,
+) -> Result<ImportSummary, CommandError> {
     let source = if source.trim().is_empty() {
         "another assistant"
     } else {
@@ -219,7 +264,7 @@ pub fn import(agents: Vec<ImportedAgent>, source: &str) -> Result<ImportSummary,
                         is_main: false,
                     })?;
                     add_memory(&created.id, &incoming.memory, source)?;
-                    add_routines(&created, &incoming.routines, &mut summary);
+                    add_routines(&created, &incoming.routines, pause_routines, &mut summary);
                     summary.created.push(name);
                     continue;
                 }
@@ -246,7 +291,7 @@ pub fn import(agents: Vec<ImportedAgent>, source: &str) -> Result<ImportSummary,
             store::write_instructions(&store::agent_home(&updated.id)?, &updated, &instructions)?;
         }
         add_memory(&updated.id, &incoming.memory, source)?;
-        add_routines(&updated, &incoming.routines, &mut summary);
+        add_routines(&updated, &incoming.routines, pause_routines, &mut summary);
         summary.updated.push(updated.name);
     }
     Ok(summary)
@@ -263,8 +308,15 @@ pub fn import_and_notify(
     Ok(summary)
 }
 
-/// The words the user pastes into their other assistant to start an import.
-pub const IMPORT_PROMPT: &str = "Import my setup into the app I just connected you to. Use its import_agents tool: send every agent I have with you, each with its name, a one-line role, its full instructions, and everything you remember that it needs (one fact per line). Mark the agent that manages the others as the main one. Include each agent's routines and automations, with when each runs in plain words (\"every weekday at 9am\", \"every 2 hours\") and what it does then. Leave out passwords, API keys and card numbers.";
+/// The one message the user sends their other assistant to start an import:
+/// a conversation over the connector (`agents::connector`), which the other
+/// assistant drives because MCP only goes from it to us. Name-free: the
+/// assistant knows the connector it was just given.
+pub fn import_prompt(chief: &str) -> String {
+    format!(
+        "Move my agents to the app I just connected you to. Use its import_conversation tool to talk to my {chief} there, and answer its questions about each agent you run for me until it says the import is ready for me to review. Don't send passwords, API keys or card numbers: the app asks me for those itself."
+    )
+}
 
 #[cfg(test)]
 mod tests {
@@ -412,5 +464,35 @@ mod tests {
         assert!(instructions.contains("Log every expense."));
 
         store::set_root_for_tests(None);
+    }
+
+    #[test]
+    fn a_conversation_import_pauses_routines_and_says_so() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let mut agent = incoming("Finance", false);
+        agent.routines = vec![routine("every weekday at 9am", "Check invoices.")];
+        let summary = import_with(vec![agent.clone()], "Grok", true).unwrap();
+        let made = store::find("Finance").unwrap().unwrap();
+        assert!(made.check_ins[0].paused && made.check_ins[0].paused_on_import);
+        assert!(summary.routines_set[0]
+            .detail
+            .contains("paused by the import"));
+        assert!(schedule::list_text(&made).contains("paused by the import"));
+        // Again: the memory block isn't doubled.
+        import_with(vec![agent], "Grok", true).unwrap();
+        let md = std::fs::read_to_string(store::agent_home(&made.id).unwrap().join("CLAUDE.md"))
+            .unwrap();
+        assert_eq!(md.matches("### Imported from Grok").count(), 1);
+        store::set_root_for_tests(None);
+    }
+
+    #[test]
+    fn the_message_to_send_names_the_conversation_tool() {
+        let prompt = import_prompt("Chief of Staff");
+        assert!(prompt.contains("import_conversation"));
+        assert!(!prompt.contains(crate::brand::NAME));
+        assert!(prompt.contains("Chief of Staff"));
     }
 }

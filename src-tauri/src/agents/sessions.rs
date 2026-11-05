@@ -673,6 +673,7 @@ mod tests {
         for remote_only in [
             "computer_status",
             "import_agents",
+            "import_conversation",
             "prepare_push",
             "confirm_push",
         ] {

@@ -27,7 +27,7 @@ import { AgentChat } from './AgentChat';
 import { AgentsTeamView } from './AgentsTeamView';
 import { AgentEditorModal, type EditorTab } from './AgentEditorModal';
 import { AgentProjectsProvider } from './AgentProject';
-import { ImportAgentsModal } from './ImportAgentsModal';
+import { ImportAgentsModal, type ImportPath } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
 import { ProjectActionConfirmModal } from '../dashboard/ProjectActionConfirmModal';
 import { Spinner } from '../primitives/Spinner';
@@ -125,6 +125,8 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     agent: null,
   });
   const [importOpen, setImportOpen] = useState(false);
+  /** The path the palette asked for, for this opening. */
+  const [importPath, setImportPath] = useState<ImportPath | null>(null);
   const [appsOpen, setAppsOpen] = useState(false);
   const [deleting, setDeleting] = useState<Agent | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -196,7 +198,14 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   );
 
   const openNew = useCallback(() => setEditor({ open: true, agent: null }), []);
-  const openImport = useCallback(() => setImportOpen(true), []);
+  const openImport = useCallback(() => {
+    setImportPath(null);
+    setImportOpen(true);
+  }, []);
+  const openImportFrom = useCallback((from?: 'otherApp') => {
+    setImportPath(from ?? null);
+    setImportOpen(true);
+  }, []);
   const openApps = useCallback(() => setAppsOpen(true), []);
   // The sidebar's top field searches conversations. With no sidebar to hold
   // it (compact, or the rail collapsed) it comes up over the chat instead.
@@ -270,7 +279,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const clearJump = useCallback(() => setJump(null), []);
   useAgentsIntents({
     onNewAgent: openNew,
-    onImportAgents: openImport,
+    onImportAgents: openImportFrom,
     onApps: openApps,
     onOpenAgent: openAgent,
     onSearch: focusSearch,
@@ -607,6 +616,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
       />
       <ImportAgentsModal
         isOpen={importOpen}
+        initialPath={importPath}
         onClose={(imported) => {
           setImportOpen(false);
           // The note that opened it may have gone with the import; land in the chat.

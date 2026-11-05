@@ -812,6 +812,7 @@ impl Backend for Stub {
                     next_at,
                     created_at: now,
                     paused: false,
+                    paused_on_import: false,
                     runs: Vec::new(),
                     retry: None,
                     extra: Default::default(),
