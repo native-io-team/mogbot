@@ -148,20 +148,21 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "create_agent",
-        description: "Create a new agent with a standing responsibility. It appears in the user's sidebar immediately. Optionally hand it a first task.",
+        description: "Create a new agent with a standing responsibility. It appears in the user's sidebar immediately. Optionally hand it a first task. With `template`, it starts from one of the ready-made agents: its role, briefing and colour, which `role` and `color` override and `instructions` adds to.",
         main_only: true,
         schema: || json!({
             "type": "object",
             "properties": {
                 "name": { "type": "string", "description": "Short, human: \"Finance\", \"Acme Site\", \"Hiring\"." },
-                "role": { "type": "string", "description": "One line: what this agent is responsible for." },
-                "instructions": { "type": "string", "description": "A briefing, as if for a new hire: context, standing rules, who's who, where things live." },
+                "template": { "type": "string", "enum": super::templates::ids(), "description": "Optional: a ready-made agent to start from." },
+                "role": { "type": "string", "description": "One line: what this agent is responsible for. Required unless you use a template." },
+                "instructions": { "type": "string", "description": "A briefing, as if for a new hire: context, standing rules, who's who, where things live. Required unless you use a template; with one, what you know about the user, added to its briefing." },
                 "color": { "type": "string", "enum": store::COLORS },
                 "project": { "type": "string", "description": "Optional: bind it to one of the user's projects (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
                 "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on Claude Code, or on Codex when Claude Code isn't set up. Only when the user asks for it; it must be installed and signed in." },
                 "first_task": { "type": "string", "description": "Optional message to start it on right away." }
             },
-            "required": ["name", "role", "instructions"]
+            "required": ["name"]
         }),
     },
     Tool {
@@ -1017,6 +1018,30 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     let Some(name) = arg(args, "name") else {
         return error("`name` is required.");
     };
+    let template = match arg(args, "template") {
+        Some(id) => match super::templates::find(id) {
+            Some(t) => Some(t),
+            None => {
+                return error(format!(
+                    "There's no ready-made agent called {id}. The ones there are: {}.",
+                    super::templates::ids().join(", ")
+                ))
+            }
+        },
+        None => None,
+    };
+    let (role, instructions, color) = match template {
+        Some(t) => (
+            arg(args, "role").unwrap_or(&t.role).to_string(),
+            t.instructions_with(arg(args, "instructions")),
+            Some(arg(args, "color").unwrap_or(&t.color).to_string()),
+        ),
+        None => (
+            arg(args, "role").unwrap_or("").to_string(),
+            arg(args, "instructions").unwrap_or("").to_string(),
+            arg(args, "color").map(str::to_string),
+        ),
+    };
     let project = match arg(args, "project") {
         Some(q) => match super::project::resolve(q).await {
             Ok(p) => p,
@@ -1038,17 +1063,18 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     };
     let created = store::create(store::NewAgent {
         name: name.to_string(),
-        role: arg(args, "role").unwrap_or("").to_string(),
-        instructions: arg(args, "instructions").unwrap_or("").to_string(),
+        role,
+        instructions,
         shape: None,
-        color: arg(args, "color").map(str::to_string),
+        color,
         is_main: false,
     });
-    let created = created.and_then(|agent| match (&project, engine) {
-        (None, None) => Ok(agent),
+    let created = created.and_then(|agent| match (&project, engine, template) {
+        (None, None, None) => Ok(agent),
         _ => store::update(&agent.id, |a| {
             a.project = project.as_ref().map(|p| p.path.clone());
             a.engine = engine.unwrap_or_default();
+            a.template = template.map(|t| t.id.clone());
         }),
     });
     match created {
@@ -1884,6 +1910,7 @@ mod tests {
             new_engine: false,
             context: None,
             routine_model: None,
+            template: None,
             muted: false,
             check_ins: Vec::new(),
             usage: Default::default(),
@@ -1907,5 +1934,20 @@ mod tests {
         assert!(names.contains(&"share_result".to_string()));
         assert!(!names.contains(&"create_agent".to_string()));
         assert!(!names.contains(&"delete_agent".to_string()));
+    }
+
+    #[test]
+    fn the_chief_can_create_from_a_ready_made_agent() {
+        let tool = TOOLS.iter().find(|t| t.name == "create_agent").unwrap();
+        let schema = (tool.schema)();
+        // A name is all it must give: a template brings the role and briefing.
+        assert_eq!(schema["required"], json!(["name"]));
+        let offered: Vec<&str> = schema["properties"]["template"]["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(offered, super::super::templates::ids());
     }
 }

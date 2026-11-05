@@ -577,6 +577,11 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "agentsTemplates",
+        "Result<'agents.templates'>",
+        call("agents.templates", json!({})).await,
+    );
+    out += &entry(
         "sessionsSend",
         "Result<'sessions.send'>",
         call(

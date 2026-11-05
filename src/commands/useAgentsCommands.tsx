@@ -21,9 +21,10 @@ import { setStayOn, type StayOnChange } from '../lib/remoteAccess';
 import { useAgentsSelector, type AgentsState } from '../lib/agentsStore';
 import type { AppView } from '../lib/types';
 import { AGENT_EVENTS, OTHER_APP_NAME, otherAppExists, TEAM_ID } from '../lib/agents';
+import { ROLE_TEMPLATES } from '../lib/agentTemplates';
 
 type AgentsIntent =
-  | { kind: 'new' }
+  | { kind: 'new'; template?: string }
   | { kind: 'import'; from?: 'otherApp' }
   | { kind: 'apps' }
   | { kind: 'search' }
@@ -42,7 +43,8 @@ export function requestAgentsIntent(intent: AgentsIntent) {
 
 /** Agents mode consumes intents with this. */
 export function useAgentsIntents(handlers: {
-  onNewAgent: () => void;
+  /** `template`: open on that ready-made agent. */
+  onNewAgent: (template?: string) => void;
   /** `otherApp`: open on the other app's team when it's on this Mac. */
   onImportAgents: (from?: 'otherApp') => void;
   onApps: () => void;
@@ -52,7 +54,7 @@ export function useAgentsIntents(handlers: {
   const { onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch } = handlers;
   useEffect(() => {
     const listener = (intent: AgentsIntent) => {
-      if (intent.kind === 'new') onNewAgent();
+      if (intent.kind === 'new') onNewAgent(intent.template);
       else if (intent.kind === 'import') onImportAgents(intent.from);
       else if (intent.kind === 'apps') onApps();
       else if (intent.kind === 'search') onSearch();
@@ -156,6 +158,18 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
           setView('agents');
         },
       },
+      // One per ready-made agent: the New agent dialog, opened on it.
+      ...ROLE_TEMPLATES.map((t) => ({
+        id: `agents.template.${t.id}`,
+        title: `New agent: ${t.title}…`,
+        icon: <PlusIcon size={14} />,
+        category: 'navigation' as const,
+        keywords: ['agents', 'create', 'template', 'ready-made', t.name.toLowerCase()],
+        run: () => {
+          requestAgentsIntent({ kind: 'new', template: t.id });
+          setView('agents');
+        },
+      })),
       {
         id: 'agents.team',
         title: 'What’s in flight',

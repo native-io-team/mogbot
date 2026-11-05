@@ -44,7 +44,16 @@ import { TextArea } from '../primitives/TextField';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
-import { ConversationBar, ConversationBars } from './AgentCard';
+import { AgentLine, ConversationBar, ConversationBars } from './AgentCard';
+import {
+  needsLine,
+  RESEARCH_PROMPT,
+  ROLE_TEMPLATES,
+  SUMMARY_PROMPT,
+  templateOf,
+  type RoleTemplate,
+  type TemplateStarter,
+} from '../../lib/agentTemplates';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
@@ -124,27 +133,38 @@ import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 
 /**
- * The Chief's first open: one-click answers to its greeting. Importing isn't
- * the Chief's job (the other assistant does it), so that one opens the import
- * steps instead.
+ * The Chief's first open: three ways to a first real result, each working on
+ * this Mac with no other account. A document is picked and staged with the
+ * request typed out; a question is typed by the user after the words put in
+ * the composer; ready-made agents open the New agent dialog on them. Nothing
+ * is sent until the user presses Send. Importing isn't the Chief's job (the
+ * other assistant does it), so that one opens the import steps instead.
  */
-const STARTERS = ['Help me plan my week', 'Set up a daily brief', 'What can you do?'];
-
 function ChiefStarters({
-  onStart,
+  onDocument,
+  onResearch,
+  onReadyMade,
   onImport,
 }: {
-  onStart: (text: string) => void;
+  onDocument: () => void;
+  onResearch: () => void;
+  onReadyMade?: () => void;
   /** With no sidebar to hold the import note, the starters offer it. */
   onImport?: () => void;
 }) {
   return (
     <div className="agent-chat__starters">
-      {STARTERS.map((text) => (
-        <Button key={text} tabIndex={0} variant="secondary" onClick={() => onStart(text)}>
-          {text}
+      <Button tabIndex={0} variant="secondary" onClick={onDocument}>
+        Summarise a document…
+      </Button>
+      <Button tabIndex={0} variant="secondary" onClick={onResearch}>
+        Research a question…
+      </Button>
+      {onReadyMade && (
+        <Button tabIndex={0} variant="secondary" onClick={onReadyMade}>
+          Ready-made agents…
         </Button>
-      ))}
+      )}
       {onImport && (
         <Button tabIndex={0} variant="secondary" onClick={onImport}>
           Import agents…
@@ -155,6 +175,53 @@ function ChiefStarters({
 }
 /** Any other agent's first open: what to ask a new teammate. */
 const AGENT_STARTERS = ['What’s on your plate?', 'Check in with me tomorrow at 9'];
+
+/**
+ * A ready-made agent's first open: its own starters, and, for one that can't
+ * work alone, the one line saying what it needs with the way to connect it.
+ */
+function TemplateStarters({
+  template,
+  engine,
+  onStarter,
+  onOpenApps,
+}: {
+  template: RoleTemplate;
+  engine: Agent['engine'];
+  onStarter: (starter: TemplateStarter) => void;
+  onOpenApps?: () => void;
+}) {
+  const needs = needsLine(template, engine);
+  return (
+    <>
+      {needs && (
+        <AgentLine className="agent-chat__needs">
+          {needs}
+          {engine === 'claude' && onOpenApps && (
+            <>
+              {' '}
+              <TextButton tabIndex={0} onClick={onOpenApps}>
+                Connect an app…
+              </TextButton>
+            </>
+          )}
+        </AgentLine>
+      )}
+      <div className="agent-chat__starters agent-chat__starters--centred">
+        {template.starters.map((starter) => (
+          <Button
+            key={starter.label}
+            tabIndex={0}
+            variant="secondary"
+            onClick={() => onStarter(starter)}
+          >
+            {starter.label}
+          </Button>
+        ))}
+      </div>
+    </>
+  );
+}
 
 /** A second Esc within this long stops a working agent; the first only says so. */
 const ESC_CONFIRM_MS = 1500;
@@ -221,6 +288,10 @@ interface AgentChatProps extends AgentActions {
   onJumped?: () => void;
   /** Words put in the composer for you to finish ("Set up an agent that "); `n` asks again. */
   prefill?: { text: string; n: number } | null;
+  /** The New agent dialog, on a ready-made agent or none (the Chief's starter). */
+  onNewAgent?: (template?: string) => void;
+  /** "Apps your agents can use", for a ready-made agent that needs one. */
+  onOpenApps?: () => void;
 }
 
 /** Unsent composer text per agent, for the life of the window. */
@@ -238,6 +309,8 @@ export function AgentChat({
   jumpTo,
   onJumped,
   prefill,
+  onNewAgent,
+  onOpenApps,
   ...actions
 }: AgentChatProps) {
   // Everything in this conversation takes on the agent's colour.
@@ -531,6 +604,12 @@ export function AgentChat({
     shown.length > 0 &&
     shown.every((m) => m.kind === 'agent') &&
     agent.status.state === 'idle';
+  const templateFirstOpen =
+    !agent.isMain &&
+    agent.template !== undefined &&
+    shown.length > 0 &&
+    shown.every((m) => m.kind === 'note') &&
+    agent.status.state === 'idle';
   const livePeerLines = useMemo(() => newestPeerGroups(items), [items]);
   const similar = useMemo(() => approvalSeries(items), [items]);
   // Who this chat has worked with, and the cards already in it: for the
@@ -781,6 +860,43 @@ export function AgentChat({
     sendText(text);
     inputRef.current?.focus();
   };
+
+  /** Words in the composer, caret at the end, for the user to finish and send. */
+  const typeStarter = (text: string) => {
+    setDraft(text);
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.setSelectionRange(text.length, text.length);
+    });
+  };
+
+  /** "Summarise a document…": the picked file staged, the request typed out, nothing sent. */
+  const startWithDocument = () => {
+    pick({ title: 'Choose a document' })
+      .then((picked) => {
+        if (picked && !draftRef.current.trim()) typeStarter(SUMMARY_PROMPT);
+      })
+      .catch((error: unknown) => toastError(String(error)));
+  };
+  const chiefStarters = (
+    <ChiefStarters
+      onDocument={startWithDocument}
+      onResearch={() => typeStarter(RESEARCH_PROMPT)}
+      onReadyMade={onNewAgent && (() => onNewAgent(ROLE_TEMPLATES[0]?.id))}
+      onImport={compact ? onImport : undefined}
+    />
+  );
+  const template = agent.isMain ? null : templateOf(agent);
+  const templateStarters = template && (
+    <TemplateStarters
+      template={template}
+      engine={agent.engine}
+      onStarter={(s) => (s.send ? sendStarter(s.text) : typeStarter(s.text))}
+      onOpenApps={onOpenApps}
+    />
+  );
 
   const retryFailed = () => {
     if (!retrySource) return;
@@ -1186,12 +1302,7 @@ export function AgentChat({
                       Tell me what you’re working on and I’ll put a team together. I create agents,
                       hand them the work, and bring you what comes back.
                     </p>
-                    {engineReady && (
-                      <ChiefStarters
-                        onStart={sendStarter}
-                        onImport={compact ? onImport : undefined}
-                      />
-                    )}
+                    {engineReady && chiefStarters}
                   </>
                 ) : (
                   <>
@@ -1203,7 +1314,8 @@ export function AgentChat({
                     <TextButton tabIndex={0} onClick={() => actions.onEdit(agent)}>
                       View instructions
                     </TextButton>
-                    {engineReady && (
+                    {engineReady && templateStarters}
+                    {engineReady && !template && (
                       <div className="agent-chat__starters">
                         {AGENT_STARTERS.map((text) => (
                           <Button
@@ -1225,9 +1337,10 @@ export function AgentChat({
             )}
             {/* The Chief spoke first (its stored greeting); the ways in sit
               under it until the user says something. */}
-            {greetingOnly && engineReady && (
-              <ChiefStarters onStart={sendStarter} onImport={compact ? onImport : undefined} />
-            )}
+            {greetingOnly && engineReady && chiefStarters}
+            {/* A ready-made agent the Chief just made: only "Created by" so
+              far, so its own starters sit under it until the user speaks. */}
+            {templateFirstOpen && engineReady && templateStarters}
             {engineReady && (
               <AgentInlineRequests
                 agent={agent}

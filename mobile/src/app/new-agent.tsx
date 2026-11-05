@@ -4,6 +4,10 @@
  * you wrote, and Create says it before you tap). The Mac makes it with the
  * desk's own create path and engine rule, then its chat opens.
  *
+ * On a Mac that serves `agents.templates`, "Start from" offers its
+ * ready-made agents: one fills in what it does, its name and colour, and the
+ * Mac gives it that template's briefing.
+ *
  * Or hand it to the Chief of Staff: your request goes into the Chief's
  * composer, for you to read and send. That's also all an older Mac offers,
  * since it can't create agents for a phone.
@@ -11,10 +15,11 @@
 
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import type { RoleTemplateSummary } from '@shipstudio/companion-protocol';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { AgentAvatar } from '../components/agent';
-import { ColorSwatches } from '../components/pickers';
+import { Chip, ChipRow, ColorSwatches } from '../components/pickers';
 import { Button, SheetPage, T } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
 import { AccentProvider, useAccent } from '../lib/accent';
@@ -29,7 +34,7 @@ import {
   MAX_ROLE,
   suggestAgentName,
 } from '../lib/newAgent';
-import { canCall, createAgent, describeError } from '../lib/session';
+import { call, canCall, createAgent, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
 import { avatarSize, fonts, lineHeight, radius, space, type } from '../lib/theme';
 
@@ -44,6 +49,19 @@ export default function NewAgent() {
   const connected = useApp((s) => s.link.kind === 'connected');
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const canCreate = useApp((s) => canCall('agents.create', s.welcome));
+  const servesTemplates = useApp((s) => canCall('agents.templates', s.welcome));
+  const [templates, setTemplates] = useState<RoleTemplateSummary[]>([]);
+  const [template, setTemplate] = useState<RoleTemplateSummary | null>(null);
+  useEffect(() => {
+    if (!servesTemplates) return;
+    let live = true;
+    call('agents.templates', {})
+      .then((list) => live && setTemplates(list))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [servesTemplates]);
   const chief = chiefOf(agents);
   const taken = useMemo(() => (agents ?? []).map((a) => a.name), [agents]);
   const [role, setRole] = useState('');
@@ -52,6 +70,16 @@ export default function NewAgent() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const clientId = useRef(Crypto.randomUUID());
+
+  /** Another starting point: fields still showing the last one's words (or nothing) take its. */
+  const startFrom = (next: RoleTemplateSummary | null) => {
+    const untouched = (field: string, from: (t: RoleTemplateSummary) => string) =>
+      field.trim() === '' || (template !== null && field === from(template));
+    if (untouched(role, (t) => t.role)) setRole(next?.role ?? '');
+    if (untouched(name, (t) => t.name)) setName(next?.name ?? '');
+    if (next) setColor(next.color);
+    setTemplate(next);
+  };
 
   const suggested = suggestAgentName(role, taken);
   const finalName = name.trim() || suggested || '';
@@ -63,7 +91,10 @@ export default function NewAgent() {
     setBusy(true);
     setError(null);
     haptic.light();
-    createAgent({ name: finalName, role: role.trim(), color }, clientId.current)
+    createAgent(
+      { name: finalName, role: role.trim(), color, ...(template ? { template: template.id } : {}) },
+      clientId.current
+    )
       .then((stored) => {
         haptic.success();
         router.replace({ pathname: '/chat/[id]', params: { id: stored.id, compose: '1' } });
@@ -95,6 +126,32 @@ export default function NewAgent() {
             The app on {macName} needs updating to create agents from this phone. Your Chief of
             Staff can set one up for you.
           </T>
+        )}
+        {canCreate && templates.length > 0 && (
+          <View style={styles.field}>
+            <T variant="subhead" color={colors.textPrimary}>
+              Start from
+            </T>
+            <ChipRow label="Start from">
+              <Chip label="Blank" selected={!template} onPress={() => startFrom(null)} />
+              {templates.map((t) => (
+                <Chip
+                  key={t.id}
+                  label={t.name}
+                  accessibilityLabel={t.title}
+                  selected={template?.id === t.id}
+                  onPress={() => startFrom(t)}
+                />
+              ))}
+            </ChipRow>
+            {template && (
+              <T variant="caption" color={colors.textMuted}>
+                {template.needs === 'mail'
+                  ? `It reads your email through an app connected on ${macName}, such as Gmail. Apps are set up there.`
+                  : `It starts with ${macName}’s ready-made briefing for a ${template.title.toLowerCase()}.`}
+              </T>
+            )}
+          </View>
         )}
         <View style={styles.field}>
           <T variant="subhead" color={colors.textPrimary} nativeID="role-label">

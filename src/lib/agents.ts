@@ -122,6 +122,8 @@ export interface Agent {
   model: string | null;
   /** What its routines run on (see `routineModelOf`); omitted when automatic. */
   routineModel?: string;
+  /** The ready-made agent it was made from (`agentTemplates.ts`), if any. */
+  template?: string;
   /** No OS notifications; unread and the Dock badge still count it. */
   muted: boolean;
   /** Omitted by the backend when there are none. */
@@ -636,6 +638,8 @@ export interface NewAgentInput {
   model?: string;
   /** A project path from `list_projects`. */
   project?: string;
+  /** The ready-made agent it starts from; the instructions sent are what was shown. */
+  template?: string;
 }
 
 export interface UpdateAgentInput {

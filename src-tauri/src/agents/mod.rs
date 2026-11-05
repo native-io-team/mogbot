@@ -31,6 +31,7 @@
 //! - [`prompts`]: voice and role
 //! - [`search`]: find a message across every conversation
 //! - [`secrets`]: credentials an agent asked for, kept in the Keychain, never shown to it
+//! - [`templates`]: ready-made agents (role templates) the Chief and the New agent dialog offer
 //! - [`stream`]: a reply while it is being written (drafts)
 //! - [`usage`]: tokens and cost per agent, from each turn's `result` event
 //! - [`work`]: what a turn did, step by step, for the timeline under its reply
@@ -78,6 +79,7 @@ pub mod store;
 pub mod stream;
 pub mod takeover;
 pub mod task;
+pub mod templates;
 pub mod tray;
 pub mod usage;
 pub mod watch;

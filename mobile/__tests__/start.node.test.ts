@@ -369,6 +369,28 @@ describe('starting things on the mock Mac', () => {
     expect((refused as WireFailure).error).toMatchObject({ type: 'Protocol', code: 'bad_params' });
   });
 
+  it('offers the Mac’s ready-made agents and starts one from its template', async () => {
+    expect(t.welcome?.methods).toContain('agents.templates');
+    const list = await t.request('agents.templates', {});
+    expect(list.map((x) => x.id)).toEqual(['research', 'inbox', 'weekly-review']);
+    expect(list.find((x) => x.id === 'inbox')?.needs).toBe('mail');
+    const research = list[0];
+    const made = await t.request('agents.create', {
+      input: {
+        name: research.name,
+        role: research.role,
+        color: research.color,
+        template: 'research',
+      },
+      clientId: 'tpl-1',
+    });
+    expect(made).toMatchObject({ name: 'Research', template: 'research' });
+    const refused = await t
+      .request('agents.create', { input: { name: 'Stars', template: 'astrologer' } })
+      .catch((e: unknown) => e);
+    expect((refused as WireFailure).error).toMatchObject({ code: 'bad_params' });
+  });
+
   it('reads every phrase the picker writes', async () => {
     const base = newPicker();
     for (const s of [
