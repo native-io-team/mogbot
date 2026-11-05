@@ -657,6 +657,31 @@ export const CheckInLine = memo(function CheckInLine({
  * Something Ship Studio did for the agent, said quietly so it never happens
  * invisibly: "Allowed automatically: npm test · Always allowed".
  */
+/**
+ * A take-over's terminal that closed by itself: the sentence as a Line, and
+ * its last screen one click away rather than a terminal dump in the chat.
+ */
+function TakeoverEndedLine({
+  message,
+  arrived,
+  tail,
+}: { message: AgentMessage; tail: [string, string] } & Arrival) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="agent-note agent-note--takeover"
+      data-arrived={arrived || undefined}
+      data-message-ids={message.id}
+    >
+      {tail[0].replace(/\s*The last thing it showed:\s*$/, '')}{' '}
+      <TextButton tabIndex={0} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        {open ? 'Hide its last screen' : 'Show its last screen'}
+      </TextButton>
+      {open && <pre className="agent-bubble__screen agent-note__screen">{tail[1]}</pre>}
+    </div>
+  );
+}
+
 export const NoteLine = memo(function NoteLine({
   message,
   arrived,
@@ -685,18 +710,7 @@ export const NoteLine = memo(function NoteLine({
   // A take-over's terminal that closed by itself: quiet, as any note, with
   // what it last showed. The agent didn't fail, so nothing offers a Retry.
   const tail = screenTail(message);
-  if (tail) {
-    return (
-      <div
-        className="agent-note agent-note--takeover"
-        data-arrived={arrived || undefined}
-        data-message-ids={message.id}
-      >
-        {tail[0]}
-        <pre className="agent-bubble__screen agent-note__screen">{tail[1]}</pre>
-      </div>
-    );
-  }
+  if (tail) return <TakeoverEndedLine message={message} arrived={arrived} tail={tail} />;
   // "Created Finance": the agent it names is a link, while that agent exists.
   const name = message.peer?.name;
   const at = name && onOpenPeer ? message.text.indexOf(name) : -1;

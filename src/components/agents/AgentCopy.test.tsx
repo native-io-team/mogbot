@@ -89,6 +89,9 @@ describe('a change card for a copy of the project', () => {
     expect(
       screen.getByText('On a copy of acme-site · acme-site itself is unchanged')
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Keep changes' }).className).toMatch(
+      /button--strong/
+    );
     for (const name of ['Keep changes', 'Review changes', 'Preview', 'Discard']) {
       expect(screen.getByRole('button', { name })).toBeEnabled();
     }

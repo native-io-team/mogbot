@@ -81,6 +81,9 @@ describe('NoteLine', () => {
     const { container } = render(<NoteLine message={message} />);
     expect(container.querySelector('.agent-note--takeover')).not.toBeNull();
     expect(container.querySelector('.agent-bubble')).toBeNull();
+    // The sentence is a Line; the screen is one click away, not a dump in the chat.
+    expect(container.querySelector('pre')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show its last screen' }));
     expect(container.querySelector('pre')?.textContent).toBe('Trust it?\n❯ 2. No, exit');
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
   });

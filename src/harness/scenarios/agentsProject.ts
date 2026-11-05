@@ -518,7 +518,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-copy-ready',
     title: 'Agents — work done on a copy of the project, ready to keep',
     looksRightWhen:
-      'Acme Site’s header chip reads “acme-marketing copy” (“copy” muted). The first reply’s folded line opens to nothing yet; the earlier card reads “Changed 2 files in a copy of acme-marketing” (no line counts) with only “See changes” and no preview (a record). The newest card reads “Changes are ready” with “3 files” on the right, the quiet line “On a copy of acme-marketing · acme-marketing itself is unchanged”, then a primary “Keep changes” button, “Review”, “Preview” (globe), “Discard”, and a ⋯ menu (Open a pull request). No branch names, no “merge”, no “worktree” anywhere.',
+      'Acme Site’s header chip reads “acme-marketing copy” (“copy” muted). The earlier card is a one-line record: folder icon, “Changed 2 files in a copy of acme-marketing”, “Review changes” on the right, no preview. The newest card: folder icon, “Changes are ready” with “3 files” on the right, the muted line “On a copy of acme-marketing · acme-marketing itself is unchanged”, then, right-aligned: ⋯ (Open a pull request) on the far left, Discard, Preview (globe), a secondary Review changes and a neutral Keep changes last. No branch names, no “merge”, no “worktree” anywhere.',
     requires: '.agent-changes[data-copy="live"]',
     ...openAcme,
     commands: {
@@ -593,7 +593,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-copy-other-branch',
     title: 'Agents — Keep asks before keeping into a different branch',
     looksRightWhen:
-      'After Keep changes, the newest card says “acme-marketing is on feature/pricing now, but these changes were made from main. Keeping them in feature/pricing also brings along whatever main has that feature/pricing doesn’t.”, then a primary “Keep into feature/pricing” and “Cancel”. Nothing was kept yet.',
+      'After Keep changes, the newest card says “acme-marketing has moved on to another version since these changes were started. Keeping them there also brings along anything from the version they started from that it doesn’t have yet.” — no branch names — with Cancel and a neutral “Keep there too” on the right.',
     requires: '.agent-copy[data-state="other-branch"]',
     openSelector: AGENTS_TAB,
     steps: [

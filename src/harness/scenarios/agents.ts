@@ -1308,7 +1308,7 @@ const secretChat = (state: 'pending' | 'allowed' | 'denied') => [
   }),
   msg(
     'agent',
-    'I need a read-only Stripe key to pull the payouts. Pop it in the card above; I never see the key itself.',
+    'I need a read-only Stripe key to pull the payouts. I’ve asked for it securely: I never see the key itself.',
     5,
     { agentId: 'finance' }
   ),
@@ -2305,7 +2305,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-consent',
     title: 'Agents — another assistant asks to start an import',
     looksRightWhen:
-      'The Chief’s chat ends on an approval card titled “Grok wants to bring its agents over”: it says Grok talks to a separate, sealed copy of Chief of Staff that can only stage agents, can’t see chats, files or other agents, and nothing is created until you press Import; then Grok’s first message in quotes. Deny (no ellipsis: no note to write) and Allow. Above the composer a recessed bar with an amber dot: “Grok wants to bring its agents over” / “Allow or deny it on the card above. Nothing has been shared.” and a red Stop import button. No “Coming from Grok Bot…” note in the sidebar.',
+      'The Chief’s chat ends on a request card: download icon, “Grok wants to bring its agents over”, prose that Grok talks to a separate, sealed conversation that can only stage agents and can’t see chats, files or other agents, nothing created until you import; then Grok’s first message in quotes. Deny and a neutral Allow on the right. Above the composer one bar, amber dot: “Import from Grok · Needs your OK” / “Nothing has been shared yet.”, and a plain secondary Stop (not red). The bar never mentions “the card”.',
     command: 'agents.open',
     requires: '[data-testid="agent-import-talk"][data-state="awaiting_consent"]',
     commands: {
@@ -2319,7 +2319,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-talk',
     title: 'Agents — the sealed import interview, live in the Chief’s chat',
     looksRightWhen:
-      'The Chief’s chat. The answered consent card (“Allowed”), then a quiet note that Grok is talking to a sealed interview separate from your chat. Grok’s lines sit on the left, labelled “From Grok · via connector” over outlined recessed bubbles, in plain text exactly as sent: “**Main**” keeps its asterisks, “[in my docs](…)” its brackets, and the <img …> tag shows as text with no image; only the https addresses are underlined links. Each reply to Grok is indented further right, labelled “To Grok · from the import interview” over a dashed, unfilled bubble: never mistakable for the Chief talking to you. The Chief’s row reads “Talking to Grok (import)”. Above the composer: “Importing from Grok · Finance staged for review”, a muted line that what you type here stays between you and Chief of Staff, and a red Stop import button. No import note in the sidebar.',
+      'The Chief’s chat. The answered consent card (“Allowed”), then a quiet note that Grok is talking to a separate, sealed conversation, not this chat. Grok’s lines sit on the left labelled “From Grok” over outlined recessed bubbles, in plain text exactly as sent; replies to Grok are indented, labelled “To Grok · from the sealed conversation” over dashed bubbles. The Chief’s row reads “Bringing in agents from Grok”. Above the composer one bar with a live accent dot: “Importing from Grok · Finance staged for review”, a muted line that what you type here stays between you and Chief of Staff, and a secondary Stop.',
     command: 'agents.open',
     requires: '[data-testid="agent-import-talk"][data-state="interviewing"]',
     commands: {
@@ -2336,7 +2336,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-review',
     title: 'Agents — the review card: Grok’s agents, staged',
     looksRightWhen:
-      'After the conversation, one card titled “Bring in 2 agents from Grok” with a download mark. A muted lede: read each agent’s instructions before you import, they come from Grok; only what’s ticked is created; routines paused, logins on secure cards, no permissions. Grok’s summary in italics. Two ticked rows on hairlines: “Finance (from Grok)” with a quiet “Name taken here” chip, its role, and muted counts (3 memories · 1 routine (paused) · 2 logins), with no character count; under it, already in view, its three lines of instructions in a recessed monospace box. “Travel” the same, with its two lines. Then an unticked “Add to Chief of Staff’s notes” with what Grok’s managing agent knew in a short recessed box. Footer: Don’t import, primary Import 2 agents. The bar above the composer has an amber dot: “Grok’s agents are ready for you to review”.',
+      'One card: download icon, “Bring in 2 agents from Grok”. A muted lede: read each agent’s instructions before you import; only what’s ticked is created; routines paused, logins asked for securely, no permissions. Grok’s summary in italics. Two rows in the same row component as the Ship Studio import: tick box, avatar, “Finance (from Grok)” with a neutral “Name taken here” chip, role, muted counts; under it its instructions in a recessed box in proportional type. “Travel” with a neutral “New”. An unticked “Add to Chief of Staff’s notes”. Right-aligned: Don’t import, then a neutral Import 2 agents. The bar above the composer has an amber dot: “Import from Grok · ready to review” / “Nothing is created until you import.”, and the card’s buttons are fully in view above it.',
     command: 'agents.open',
     requires: '[data-testid="agent-import-review"]',
     commands: {
