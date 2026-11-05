@@ -54,7 +54,18 @@ user answers, on the desk or the phone. Three starters and **More ideas…**,
 from one catalogue (`lib/chiefIdeas.ts`). Each types a whole, specific brief
 with one blank at its end; none sends by itself.
 
-- **Ship fixes while I sleep…**: every night a fixer bound to the repo's
+The chips are **Brief me every morning…**, **Run an inbox triage crew…** and
+**Run my launch as a team…**: one per group, recognisable to someone who
+isn't a developer, and two of them need nothing set up, so the first result
+can land in the first minutes (the morning brief asks for its first one
+now). Ship fixes and client briefs were chips until a first-ten-minutes
+walk-through found them making the first screen read as a coding tool that
+asks for GitHub before showing anything; they are in the gallery.
+
+- **Brief me every morning…**: a researcher reads what's new on the topics
+  the user names and a writer boils it down to one short brief, every
+  weekday at 8am, the first one right away. Needs nothing set up.
+- **Ship fixes while I sleep…** (gallery): every night a fixer bound to the repo's
   project takes the top open GitHub issue and fixes it in its own copy, a
   reviewer checks it (`message_agent`), and the morning brings one change
   card with Keep / Review / Discard. Pushing waits for the user.
@@ -62,7 +73,7 @@ with one blank at its end; none sends by itself.
   Chief keeping the plan in a file, and a 9am weekday standup it collects
   and summarises. The Chief puts the three and itself in a room
   (`create_room`, see "Rooms"), so the user talks to the whole team at once.
-- **Turn client briefs into sites…**: `watch_for` `new_file` on a folder;
+- **Turn client briefs into sites…** (gallery): `watch_for` `new_file` on a folder;
   each brief becomes a project (`blank` needs nothing installed) whose
   session drafts the site, handed back with `share_result` naming the
   project.
@@ -460,7 +471,8 @@ those turns exposed is replaced once at the next launch.)
 | `project_*`, `session_*`, `preview_screenshot`, `git_status`, `push`, `deploy_status` | all | working on projects, below |
 | `share_file` | all | hands the user a file it made: copied into its `attachments/`, posted as its own message with a file card |
 | `share_result` | all | ends a piece of work on one result card: files, links, what it checked and did not verify; revisions become v2 (below, "Result cards") |
-| `request_secret` | all | a secure input card for a password, key, token or login; the agent gets `$VAR` and a reference, never the value (below) |
+| `request_login` | all | a login card: connect an app or account (Gmail, Slack, LinkedIn, GitHub…) on this Mac, never a password (below, "Logins") |
+| `request_secret` | all | a secure input card for an API key made for programs; the agent gets `$VAR` and a reference, never the value (below) |
 | `create_agent` | Chief | name, role, instructions, optional `template`, `project` and `first_task` |
 | `update_agent` | Chief | name / role / instructions / project (memory kept) |
 | `delete_agent` | Chief | puts an Allow / Deny card in the Chief's chat first |
@@ -645,6 +657,33 @@ never "session", in what people read; **Take over / Hand back** (no noun
 where the copy means this computer. No branch names, exit codes, tab
 numbers, "via connector" or "(import)" in anything a person reads.
 
+## How much agents do on their own
+
+One choice for the whole team (`agents/independence.rs`): **Check with me
+often**, **Use good judgement** (the default) or **Go hard — get it done**.
+Asked once in onboarding, after the engine is ready and before the hand-off
+(Skip keeps the default); kept in Settings → Agents → Independence, ⌘K "How
+independent your agents are…", and the phone's Settings
+(`agents.setIndependence`, audited; read from the overview's `independence`).
+Saved in `agents/independence.json`.
+
+It changes words, never the wall. The level is one short app-owned section of
+every agent's system prompt, built from code each turn (so existing and
+imported agents get it on their next turn, nothing in their CLAUDE.md is
+touched) and fixed per level (the prompt cache only breaks when the user
+changes it). Go hard tells an agent to finish what it was asked and, before
+asking the user to do anything, check whether they already asked for it and
+whether it has tried every way it has; it stops only for money, identity,
+sending or publishing as them, or deleting their data. No approval reads the
+level: every card appears at every level, and the only ways past one are
+still a one-time grant from a late Allow or an Always-allow rule the user
+chose (`mcp::decide`; a test holds it). Read-only commands already don't ask
+under `acceptEdits`, so no relaxation was added. A turn answering outside
+text (a "When…" routine's items, or anything carrying their taint through
+`message_agent` or a room) never runs at Go hard: it is capped at Use good
+judgement, so unattended routines still finish; the approval wall and the
+taint gate anything consequential.
+
 ## Approvals
 
 `acceptEdits` lets an agent edit files inside its home and every project
@@ -790,13 +829,324 @@ the prompt piped to the next turn, and the remote/agents audit log. Not covered:
 sends it to Claude as tool output and into Claude Code's own transcript; the
 prompt forbids printing one.
 
-Every agent is told to ask with `request_secret` and never to ask for a
-credential in chat. If the composer holds something key-shaped (Stripe,
+Every agent is told to ask for an account with `request_login` (below,
+"Logins"), to use `request_secret` only for an API key made for programs,
+and never to ask for a password or a credential in chat. If the composer holds something key-shaped (Stripe,
 GitHub, OpenAI, Anthropic, AWS, Slack, Google, JWT, `password=…`), a quiet
 line offers "Store it securely" (`agents_add_secret`), which replaces it in
 the draft with its variable; it never blocks sending. Edit agent → Secrets
 lists them with Revoke, which deletes the Keychain items; deleting an agent
 deletes its items too. macOS only, like workspace credentials.
+
+## Logins (`agents/logins.rs`, `agents/connections.rs`, `agents/oauth.rs`)
+
+Answers: **when an agent needs an account, can the user give it access in
+one tap, from the desk or the phone, without a password ever passing
+through a chat, and take it back later?**
+
+An agent calls `request_login {service, account_hint?, scopes?, why}`
+(every agent; the per-turn `## Logins` rules tell every agent, imported ones
+included, to use it and never to ask for a password). One card lands in its
+chat: "Recruiter needs your Gmail (work)", what it's for, what it will be able
+to do (read; and, when `scopes` asks for more, send/post/change, which
+"asks you on a card each time"), and the ways in, best first:
+
+| Tier | Way in | Where the sign-in is kept | Engines |
+| --- | --- | --- | --- |
+| 1 | **Use \<account>**: an account already connected for another agent | as below | as below |
+| 1 | **Connect** (ours, `oauth.rs`): the app's own OAuth in the Mac's browser | this Mac's Keychain, `<slug>-connection-<id>` | both |
+| 1 | **Connect** (claude.ai connector): opens claude.ai's connector settings in the Mac's browser if it isn't added yet; the card watches `claude mcp list` until it's connected | claude.ai | Claude Code |
+| 1 | **Use GitHub on this Mac**: the `gh` sign-in | `gh`'s own Keychain item | both |
+| 2 | **Use my browser**: Claude in Chrome, in the user's own Chrome where they're signed in; every click/post/send/pay asks | nowhere new | Claude Code |
+| 3 | **Enter an API key**: the masked field (`secrets.rs`), only where a key made for programs is a real way in (X API, Stripe restricted key, an app we don't know) | this Mac's Keychain | both |
+
+A service with no connector says so in one line on the card ("LinkedIn has
+no connector agents can sign in to."), instead of a password field. A Codex
+agent is told plainly what it can't use (claude.ai connectors and the
+browser are Claude Code's).
+
+### Which services have a real connector (checked 2026-11)
+
+From each vendor's published, unauthenticated metadata (an `initialize`
+answered 401 with `resource_metadata`, RFC 9728 → RFC 8414). Nothing was
+registered or signed in to while checking.
+
+| Service | What we offer | From the phone, away from the Mac | Why |
+| --- | --- | --- | --- |
+| Linear, Notion, Figma, Stripe, Vercel | our own OAuth | **the sign-in sheet** (a), token in the Mac's Keychain | remote MCP server, dynamic client registration, PKCE S256 |
+| Gmail, Google Calendar, Google Drive | claude.ai connector, else browser | **claude.ai on the phone** (same Claude account); held by claude.ai | Google publishes `gmailmcp.googleapis.com` etc., but registers no clients (an app must be approved by Google first, and Gmail's scopes are restricted) |
+| Slack | claude.ai connector, else browser | **claude.ai on the phone**; held by claude.ai | `mcp.slack.com` has OAuth but no registration: it signs in only apps registered with Slack |
+| GitHub | the `gh` sign-in | **GitHub's device code** (c), through `gh` on the Mac | `api.githubcopilot.com/mcp` has no registration; agents already use `gh` |
+| LinkedIn | browser only | a tap (uses the Mac's Chrome, already signed in) | no connector |
+| X | browser, or an X API token | a tap, or the key typed into the card | no connector; its API needs a developer account |
+
+The UI says when there's no connector (`no_connector` on the card), and a
+Codex agent is told what it can't use.
+
+### From the phone (`agents/login_relay.rs`)
+
+Owner requirement: access can be given **entirely from the phone, away
+from the Mac**, with the credential ending up only in the Mac's Keychain.
+The card shows on the phone (Mac feature `logins`); with Mac feature
+`logins.phone` each way in has a phone path (`phoneWay` in
+`mobile/src/lib/loginState.ts`). The options evaluated, per provider:
+
+- **(a) The sign-in sheet, code relayed to the Mac**: chosen for every
+  OAuth connector of our own. The Mac does discovery, registers a public
+  client with the redirect `<companion scheme>://oauth` (the companion
+  app's own scheme, from brand.json), and makes the PKCE verifier and
+  `state`, which never leave it (`agents.loginPhoneBegin` returns only the
+  authorization URL). The phone opens it in `expo-web-browser`'s
+  `openAuthSessionAsync` (ASWebAuthenticationSession), ephemeral, so no
+  cookie is kept. The sheet comes back with the one-time code; the phone
+  sends the redirect, once, over the paired connection
+  (`agents.loginPhoneFinish`, refused before sending unless the Mac proved
+  its pinned identity, as for a secret). The Mac exchanges it with its
+  verifier and stores the token. Nothing is persisted on the phone.
+- **(b) Redirect to the Mac's tailnet host**: not used. It needs the
+  provider to accept an `https://<mac>.ts.net` redirect registered per
+  Mac, a TLS listener for it, and the phone's browser on the tailnet; (a)
+  gives the same result with nothing listening.
+- **(c) Device code**: used for GitHub, through `gh auth login --web` on
+  the Mac (GitHub's device flow with `gh`'s own client; with no terminal
+  it prints the code and waits, observed on gh 2.95). The code is put on
+  the card (`flow.userCode`, `verificationUri`) for both devices, typed at
+  github.com/login/device anywhere; `gh` keeps the token in its own
+  Keychain item. Not offered for Google: its device flow excludes Gmail's
+  scopes and registers no client of ours.
+- **claude.ai connectors**: added on claude.ai on the phone
+  (`agents.loginStart` with `onPhone`: the Mac doesn't open its browser and
+  watches `claude mcp list`). The sign-in is held by claude.ai, never this
+  Mac or the phone, and the card says so.
+- **No sign-in** (an account already connected, the browser, a key): a
+  tap, or the masked field (as `saveSecret`), from either device.
+- **"Finish on your Mac"** is the fallback: an older Mac (no
+  `logins.phone`), an installed phone build without the sign-in sheet's
+  native module (it predates `expo-web-browser`; the phone checks
+  `requireOptionalNativeModule('ExpoWebBrowser')` and never imports it
+  otherwise), or a provider that refuses to register the app's redirect
+  (the card says so and offers the Mac).
+
+The card's live state (`login.flow`: starting / waiting / failed /
+cancelled, plus `fromPhone`, `onPhone`, `userCode`) is laid over the card
+wherever it's read (`logins::apply`) and re-emitted as the card on every
+change, so both devices follow it with no new event. Connected, declined
+and "Not needed" are the card's own answer (`status` + `choice` / `note`).
+A phone from before login cards sees a plain Allow / Deny card: its Allow
+starts the card's first way in on the Mac (`allow_from_old_client`), its
+Deny declines.
+
+#### The code relay's rules (`login_relay::Table::take`, tested)
+
+- Accepted only from the device id that began it (the paired device the
+  socket authenticated as); another paired device's answer is refused and
+  doesn't spend it.
+- Single use: any answer from its own device spends it, right or wrong.
+- Ten minutes, then it's refused and the card says it took too long.
+- Only on the exact registered redirect (scheme, host and path), only with
+  the `state` this Mac made; `error=access_denied` reads as declined.
+- One phone sign-in per card; Cancel, an answer, or a new one forgets it.
+- Never logged: the audit line is "finished signing in on the phone", the
+  router never echoes the URL, and the refusals carry no part of it.
+- Threat: a stolen code is useless without the verifier, which only this
+  Mac has; another app claiming the scheme doesn't receive it, since the
+  sheet hands its redirect back to the app that opened it; a forged
+  redirect fails `state`. A team row signed in on the phone grants the
+  row's other agents the same connection once it's in (`fan_out`).
+
+### Grants, read vs send, and turns
+
+A connection is one account at one service, in `connections.json` (names,
+accounts, grants; never a token). Each lists the agents that may use it:
+
+- **Read** grant: a tool whose name reads (`get_`, `list_`, `search_`,
+  `read`…, camelCase too) goes through with no card; anything else is
+  refused with a line telling the agent to ask for more on a card.
+- **Full** grant: reads go through; everything else asks on the usual
+  approval card, every time, unless the user chose Always allow for it.
+  Never-ask is not offered by the login card.
+
+What a turn gets (`connections::for_turn`, before the process starts):
+
+- **Ours**: the server is the agent bridge's **connection relay**
+  (`agents/conn_relay.rs`, `http://127.0.0.1:<port>/mcp/conn/<serverKey>`),
+  reached with the turn's own bridge secret (the `--mcp-config` file's
+  header for Claude Code; `bearer_token_env_var` naming the bridge's
+  variable for Codex). The relay checks the caller's grant, takes a fresh
+  token from the Keychain and adds it to the request it forwards to the
+  app; the token never leaves the app's process. It forwards only to the
+  server the catalogue names for that service (a `connections.json` edited
+  to point elsewhere is refused), follows no redirects, passes no
+  `www-authenticate` back, and marks a 401/403 as "needs signing in
+  again". A token about to expire is refreshed first; a refresh the server
+  refuses marks the connection the same way and the turn goes without it
+  (its prompt says so).
+- **The relay enforces the grant, whatever the engine**: a read-only
+  grant refuses a non-read `tools/call`; a write (and, in a turn answering
+  outside text, any call) goes through only if `mcp::decide` already
+  allowed it (the engine's approval, noted once per call), otherwise the
+  relay puts it on a card itself. So Codex's `exec` fallback, which has no
+  approval channel, can't write through a connection unasked. A take-over
+  is answered at the keyboard, so only the read-only rule applies there.
+- **Outside text**: in a turn answering a "When…" routine's items (or a
+  message carrying that taint), connection reads ask on a card too
+  (`connections::gate(.., outside)`): outside text can't make an agent
+  read the user's accounts unasked.
+- **claude.ai connectors** load into every Claude Code turn of a claude.ai
+  account, so a grant is enforced the other way round: once one is
+  connected through a card, every agent *without* a grant gets
+  `--disallowedTools mcp__claude_ai_<Name>`. Consequence, on purpose: an
+  agent that used the Gmail connector implicitly before stops seeing it
+  once Gmail is connected for someone else through a card; its "What it can
+  reach" shows nothing for Gmail and a new card gets it back in one click.
+- **Browser**: on by default, as before (`--chrome` on every Claude turn);
+  "Remove" in What it can reach runs that agent's turns with `--no-chrome`.
+  Sites given on cards are recorded and told to the agent; Claude in Chrome
+  itself isn't limited to them.
+- **Claude Code's own apps** (user scope, every agent): "Block for this
+  agent" adds `--disallowedTools mcp__<name>`.
+
+Taking over (`takeover.rs`) gives a Claude Code agent its connection
+servers and their prompt lines too; its blocks and `--no-chrome` aren't
+applied there (the person at the keyboard answers every prompt), and a
+Codex take-over gets no connection servers.
+
+### What it can reach
+
+`agents_reach` per agent (desk; read-only on the phone via `agents.reach`):
+connections (account, read / read-and-asks, where the sign-in is kept,
+needs-sign-in), the browser (and whether Claude in Chrome's helper is
+installed), secrets (variables), and blocked apps. Each is removed in one
+click (`agents_reach_remove`): a connection's grant (the connection stays
+for others; disconnecting it for everyone deletes its Keychain item), the
+browser, a site, a secret (its Keychain items), a block.
+
+### What your team needs (one screen, by service)
+
+`agents_logins_team(since?)` groups every waiting login card by service,
+and Gmail + Calendar + Drive as one "Google" row (added in one visit to
+claude.ai). Each row lists every agent that asked, with what it asked to
+do; one Connect answers them all: the first card of each service signs in,
+and when it's connected the others are granted the same connection
+(`connect_need`); the browser is given to each agent that can use it.
+Untick an agent to leave it out, or "Not needed" (`agents_login_dismiss`:
+declined with "Not needed", the agent isn't woken; it asks again if it
+really needs it). With `since`, rows answered since then are included, so
+the screen can say "4 of 9 connected". Identical asks are one line: three
+agents asking for a GitHub token are one GitHub row; one agent's two old
+LinkedIn cards are one line.
+
+**In "Setting up your team".** The checklist's Logins step hosts this list
+scoped to the agents being set up (`scopeTeam`, desk and phone; a Connect
+skips everyone else on the row). Secure input cards that aren't logins
+stay rows there, grouped by service and named by the app ("Google — Gmail
+(2 accounts)") or the key made readable (`team_setup::humanise`:
+"email_drafts" → "Email drafts"), never the raw key. An agent whose only
+requests are the checklist's isn't counted again in the sidebar's "Needs
+your OK · N" (`onlySetupRequests`).
+
+**Stale asks go away.** When an agent gets a service one way, its other
+pending asks for it (another login card, an old token card for X when it
+now posts through the browser) are marked expired with "Not needed any
+more: …" (`retire_stale`).
+
+### Upgrading what's already there
+
+- **Pending secret cards** an older build (or the import) raised for
+  something with a connector or a site ("gmail_work", "linkedin_token",
+  "x_token") are moved onto login cards at launch (`migrate_pending`,
+  matched by the card's *name* only, never its purpose, so "openai_key, to
+  summarise into Notion" stays a key;
+  idempotent): the old card is marked expired, "Moved to a sign-in card
+  for Gmail: no password needed.", and a login card replaces it, `quiet`
+  if the old one was (an import's). A second old card for the same service
+  folds into the first. A real API key (`stripe_key` as `api_key`) and a
+  name we can't place ("Acme OS recruiting tools") stay secret cards.
+- **Every agent's prompt** gets the new `## Logins` rules and the narrowed
+  `## Secrets` rules each turn: they're app-owned per-turn sections, not in
+  anyone's CLAUDE.md, so existing agents get them without their
+  instructions being touched. The Chief's default instructions name
+  `request_login` for setup; the previous default is in
+  `PAST_CHIEF_INSTRUCTIONS`, so `upgrade_chief` swaps it only where the
+  user hadn't edited it.
+- **Import**: a login by name that means a service becomes a quiet login
+  card (`review.rs`); anything else stays a quiet secret card.
+- Old data loads: `Approval.login`, `Agent.reach` are additive and skipped
+  when empty; a missing `connections.json` is no connections. The protocol
+  additions are optional fields and new methods behind `logins`.
+
+### Threat model additions
+
+- **Passwords.** None is ever asked for: no card has a password field for
+  a service we know, the tool descriptions and per-turn rules forbid
+  asking, and the composer's "Store it securely" hint still catches pasted
+  keys. A page that asks for a password inside the browser tier is the
+  agent's to stop at (told so); the user's browser keeps its own logins.
+- **Tokens at rest**: only in the Keychain, under app-owned items. The
+  registry, agent homes, chat logs, the phone, fixtures and the audit log
+  never hold one (tests grep the whole agents folder after storing one).
+  Every access and refresh token is added to redaction at store and at
+  launch, so a token an agent prints is scrubbed from what we write.
+- **Tokens in flight to a turn**: none. A turn holds only its bridge
+  secret (0600 file / process environment, `reach.rs`), which is revoked
+  when the turn ends and works only on this Mac's loopback, through the
+  relay's checks. Residual: during a turn, the agent's own process can
+  read that secret and call the relay directly, which is no more than the
+  turn could do through its tools anyway; the app's responses are seen by
+  the model like any tool result.
+- **The OAuth flow**: HTTPS-only discovery, authorization, token and
+  registration endpoints; PKCE S256 (a server whose metadata doesn't list
+  S256 is refused, as the MCP spec requires); a
+  random `state` checked on a one-shot 127.0.0.1 listener that ignores
+  anything else that knocks; the server as `resource` (RFC 8707) so the
+  token is audience-bound; ten-minute limit; Cancel aborts the listener.
+  The app is a public client (no secret). On the phone path the phone sees
+  the authorization URL and the one-time code, never the verifier or a
+  token (see "The code relay's rules").
+- **Who can start a sign-in**: only a paired, Mac-identity-verified phone
+  or the desk, on a card an agent raised; `option` must be one of that
+  card's. An agent can't connect anything itself: it can only raise the
+  card. Its ways in come only from the built-in catalogue (`logins::SERVICES`:
+  server URLs, sites); nothing the agent passes becomes a URL, client id or
+  redirect, so a planted instruction can't put an attacker's OAuth app on
+  a card. A turn answering outside text (a "When…" routine) can raise one
+  too; it still needs the user's tap.
+- **Read vs send** is decided from tool names. A server whose write tool
+  is called `get_and_send` would be let through on a read grant; unknown
+  shapes ask. On a Full grant every non-read call asks, so this only
+  matters for read grants.
+- **claude.ai connectors**: their tokens are Anthropic's and the user's
+  claude.ai account's, not this Mac's; the card says "the sign-in is held
+  there". Our grant is a `--disallowedTools` block, as strong as Claude
+  Code's own tool filtering.
+- **Account names** come from an OpenID `id_token`'s email, read without
+  verifying its signature: it only labels the row, it decides nothing.
+
+### Not verified
+
+- No phone sign-in has been run end to end: the relay rules, the redirect
+  parser and the mock round trip are tested, not a real sheet on a device,
+  and whether each vendor's registration accepts a custom-scheme redirect
+  is unobserved (if one refuses, the card falls back to the Mac).
+  `gh auth login --web` with no terminal was observed printing its code;
+  a full device sign-in through it wasn't completed. The installed phone
+  build lacks `expo-web-browser` until it's rebuilt, so it offers "Finish
+  on your Mac" for OAuth until then.
+- No Connect has been signed in end to end from this build: the OAuth code
+  is tested against RFC vectors, a loopback listener and the vendors' live
+  metadata (read-only), not a real authorization. Each vendor's consent
+  page, its registration answer and its tool names are unobserved.
+- The claude.ai path relies on `claude mcp list` naming connectors
+  "claude.ai <Name>" (observed for Google Drive and Claude Docs, not for
+  Gmail, Calendar or Slack, which aren't connected on the dev Mac).
+- Claude in Chrome in `--print`: verified that its tools load when the
+  extension is connected (see `claude.rs`); `--no-chrome` removing them, and
+  the helper-file check as "installed", are not verified.
+- The connection relay is unit-tested (grant rules, routing, the token
+  never in anything a turn is given), not run against a vendor's server:
+  its streamed (SSE) answers and session headers are passed through as
+  the MCP spec describes, unobserved end to end. Codex and Claude Code
+  reach it exactly as they reach our own server (verified shapes).
 
 ## Steering a working agent
 
@@ -1190,16 +1540,18 @@ chats.
   prompt says the same, and while a setup is open each user message to the
   Chief carries one line on where it stands.
 - **One checklist, one card** in the Chief's chat (`TeamSetupCard`, and on
-  the phone), updating in place, with a bar above the composer ("A few things
-  to finish setting up your team · 2 of 4 done", **Continue**). The card is
-  an item in the conversation like a message, at the point it was posted
+  the phone), updating in place, under "Your 16 agents from Grok Bot are
+  here, quiet until you say hi. These get them going.", with a bar above the
+  composer ("Your team is almost ready · 2 steps left", **Continue**). It
+  counts what's left, never "0 of 4 done", which reads as homework. The card
+  is an item in the conversation like a message, at the point it was posted
   (`postedAt`: the import's end, or under the upgrade's line; a setup kept
   by an earlier build reads it once from the Chief's chat; from an older
-  Mac, after the import's review card and its line), and scrolls up with the history as you talk:
-  what you send next is the newest thing, never the card. **Continue** goes
-  to it (mounting or paging back to it first) and flashes it; the bar goes
-  once it's done (`setupItemIndex` on the desk, `withSetupCard` on the
-  phone). Steps, in
+  Mac, after the import's review card and its line), and scrolls up with the
+  history as you talk: what you send next is the newest thing, never the
+  card. **Continue** goes to it (mounting or paging back to it first) and
+  flashes it; the bar goes once it's done (`setupItemIndex` on the desk,
+  `withSetupCard` on the phone). Steps, in
   order, each skippable and reopenable ("Open again"): **Add logins** (one
   row per service with the agents that need it; Add opens their secure
   cards in place), **Switch on routines** (each with when and what, a
@@ -1215,8 +1567,12 @@ chats.
 - **Only choices are kept** (`<agents root>/team-setup.json`: agents, who was
   greeted, gaps, steps done/skipped). Everything else is read from the store
   each time, so a login saved in an agent's own chat ticks it off here. Its
-  logins are left out of the requests bar's counts and What's in flight's
-  Needs your OK (the checklist holds them). A second import before the first
+  logins are left out of the requests bar's counts, What's in flight's
+  Needs your OK, the sidebar's rows and its "Needs your OK · N" row
+  (`withoutHeldLogins`), and the dock and phone push badges
+  (`team_setup::held_logins`): the checklist holds them, so an import of
+  sixteen agents isn't sixteen amber rows. The import's line in the Chief's
+  chat names four agents "and 12 more", not all sixteen. A second import before the first
   is finished joins the same checklist.
 - **Upgrade** (`team_setup::upgrade`, at launch, once): a team imported by
   an older build (its chats open on "Imported from X. It starts when you

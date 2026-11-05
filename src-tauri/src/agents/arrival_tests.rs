@@ -114,7 +114,7 @@ fn the_preamble_names_home_paths_imports_projects_logins_and_tools() {
         "none of them on this Mac: `/workspace/garden-redesign/`",
         "`imported/grok-bot/`",
         "project_list",
-        "request_secret",
+        "request_login",
         "Never ask for a password",
         "confirm_push → push",
         "x_search: not available here",

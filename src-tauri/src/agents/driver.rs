@@ -50,6 +50,10 @@ pub struct TurnSpec<'a> {
     /// Codex with permission profiles: the `.git` / `.shipstudio` folders
     /// its commands may not write (`reach::protected_paths`).
     pub protected: Option<&'a [std::path::PathBuf]>,
+    /// What it can reach (`connections::for_turn`): its browser, the
+    /// claude.ai connectors it's kept from, Codex's connection servers.
+    /// `None` is the defaults (browser on, nothing blocked or added).
+    pub access: Option<&'a super::connections::TurnAccess>,
 }
 
 impl Driver {
@@ -106,6 +110,14 @@ impl Driver {
 
     /// Every argument the turn's process gets.
     pub fn args(self, spec: &TurnSpec) -> Vec<String> {
+        let args = self.base_args(spec);
+        match spec.access {
+            Some(access) => with_access(self, args, access),
+            None => args,
+        }
+    }
+
+    fn base_args(self, spec: &TurnSpec) -> Vec<String> {
         match self {
             Driver::ClaudePrint => super::claude::args(
                 spec.model,
@@ -162,6 +174,49 @@ impl Driver {
     }
 }
 
+/// A turn's command line with what this agent can reach laid in:
+/// Claude Code without its browser (`--no-chrome`) when the user took it
+/// away, and kept from the claude.ai connectors it isn't granted (added to
+/// the existing `--disallowedTools` list, which another flag always ends);
+/// Codex with one `-c` per connection server, before the trailing session
+/// and `-` of `exec`. Never a token: connection servers are the bridge's
+/// relay (`conn_relay`), reached with the turn's own bridge secret.
+fn with_access(
+    driver: Driver,
+    mut args: Vec<String>,
+    access: &super::connections::TurnAccess,
+) -> Vec<String> {
+    match driver {
+        Driver::ClaudePrint => {
+            if !access.browser {
+                for a in args.iter_mut().filter(|a| a.as_str() == "--chrome") {
+                    *a = "--no-chrome".into();
+                }
+            }
+            if let Some(at) = args.iter().position(|a| a == "--disallowedTools") {
+                for (i, entry) in access.blocked.iter().enumerate() {
+                    args.insert(at + 1 + i, entry.clone());
+                }
+            }
+            args
+        }
+        Driver::CodexApp | Driver::CodexExec => {
+            let extra: Vec<String> = access
+                .codex_config()
+                .into_iter()
+                .flat_map(|c| ["-c".to_string(), c])
+                .collect();
+            let at = args
+                .iter()
+                .position(|a| a == "--skip-git-repo-check")
+                .map(|i| i + 1)
+                .unwrap_or(args.len());
+            args.splice(at..at, extra);
+            args
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,7 +231,56 @@ mod tests {
             system_prompt: "be useful",
             writable,
             protected: None,
+            access: None,
         }
+    }
+
+    #[test]
+    fn what_an_agent_can_reach_shapes_its_command_line_but_never_carries_a_token() {
+        use crate::agents::connections::{TurnAccess, TurnServer};
+        let access = TurnAccess {
+            servers: vec![TurnServer {
+                key: "linear".into(),
+                url: "http://127.0.0.1:4321/mcp/conn/linear".into(),
+            }],
+            blocked: vec!["mcp__claude_ai_Gmail".into()],
+            browser: false,
+            prompt: String::new(),
+        };
+        let writable: Vec<String> = Vec::new();
+        let mut s = spec("sid", true, &writable);
+        s.access = Some(&access);
+        let claude = Driver::ClaudePrint.args(&s);
+        assert!(claude.contains(&"--no-chrome".to_string()));
+        assert!(!claude.contains(&"--chrome".to_string()));
+        let at = claude
+            .iter()
+            .position(|a| a == "--disallowedTools")
+            .unwrap();
+        assert_eq!(claude[at + 1], "mcp__claude_ai_Gmail");
+        for driver in [Driver::ClaudePrint, Driver::CodexApp, Driver::CodexExec] {
+            assert!(
+                !driver.args(&s).concat().contains("mcp.linear.app"),
+                "{driver:?} reaches the app only through the relay"
+            );
+        }
+        let exec = Driver::CodexExec.args(&s);
+        assert_eq!(
+            exec.last().map(String::as_str),
+            Some("-"),
+            "exec still ends on stdin"
+        );
+        assert!(exec.iter().any(|a| a.starts_with("mcp_servers.linear=")));
+        let app = Driver::CodexApp.args(&s);
+        assert!(app
+            .iter()
+            .any(|a| a.contains("mcp_servers.linear=")
+                && a.contains("SHIPSTUDIO_AGENTS_BRIDGE_TOKEN")));
+        // Defaults: nothing changes.
+        s.access = None;
+        assert!(Driver::ClaudePrint
+            .args(&s)
+            .contains(&"--chrome".to_string()));
     }
 
     #[tokio::test]

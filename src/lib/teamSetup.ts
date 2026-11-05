@@ -13,7 +13,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { AGENT_EVENTS, type AgentMessage, type ChatItem } from './agents';
+import { AGENT_EVENTS, failedTurn, type Agent, type AgentMessage, type ChatItem } from './agents';
 
 export type SetupStepId = 'logins' | 'routines' | 'missing' | 'hello';
 export type SetupStepState = 'open' | 'done' | 'skipped';
@@ -23,9 +23,35 @@ export interface SetupLogin {
   agentId: string;
   agentName: string;
   requestId: string;
+  /** What the agent called it (a secret's key): never shown as a title. */
   name: string;
   purpose: string;
+  /** The app's name ("Gmail"), or the key made readable ("Email drafts"). */
+  title?: string;
+  /** Which row ("google", "github", "email drafts"). */
+  group?: string;
+  /** The family's name ("Google"), when the row is one. */
+  family?: string;
+  /** A login card (connected from "What your team needs") or a secure input card. */
+  kind?: 'login' | 'secret';
+  /** Which account, when the card says. */
+  account?: string;
 }
+
+/** A key as words: "email_drafts" → "Email drafts" (as the Mac's `team_setup::humanise`). */
+export function humanise(key: string): string {
+  const words = key
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[\s_.-]+/)
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return words ? words[0].toUpperCase() + words.slice(1) : 'A login';
+}
+
+/** A login's row title: never the raw key. */
+export const loginTitle = (l: SetupLogin) => l.title ?? humanise(l.name);
 
 export interface SetupRoutine {
   agentId: string;
@@ -191,14 +217,40 @@ export function resetTeamSetupForTests() {
   stop?.();
   current = null;
   loaded = false;
-  revealPending = false;
+  revealAsk = 0;
+}
+
+/**
+ * Logins the checklist holds, per agent. While a setup isn't finished they
+ * live in its one card, so the sidebar, its "Needs your OK · N" row and the
+ * dock badge leave them out: an import of sixteen agents should read as one
+ * thing to finish, not sixteen amber rows.
+ */
+export function heldLogins(view: TeamSetupView | null): Map<string, number> {
+  const held = new Map<string, number>();
+  if (!view || view.complete) return held;
+  for (const l of view.steps.flatMap((s) => s.logins ?? [])) {
+    held.set(l.agentId, (held.get(l.agentId) ?? 0) + 1);
+  }
+  return held;
+}
+
+/** The agents as the sidebar counts them: without the logins the checklist holds. */
+export function withoutHeldLogins(agents: Agent[], view: TeamSetupView | null): Agent[] {
+  const held = heldLogins(view);
+  if (held.size === 0) return agents;
+  return agents.map((a) => {
+    const n = held.get(a.id);
+    if (!n || !a.pendingApprovals) return a;
+    return { ...a, pendingApprovals: Math.max(0, a.pendingApprovals - n) };
+  });
 }
 
 /* ------------------------------------------------------------- the words */
 
 export const SETUP_TITLE = 'Setting up your team';
 /** The bar above the Chief's composer while there's some left. */
-export const SETUP_BAR_TITLE = 'A few things to finish setting up your team';
+export const SETUP_BAR_TITLE = 'Your team is almost ready';
 
 /*
  * Bringing the card into view (the bar's Continue, ⌘K, What's in flight).
@@ -207,39 +259,41 @@ export const SETUP_BAR_TITLE = 'A few things to finish setting up your team';
  * (`useTeamSetupReveal`). Asked before that chat is open, the ask waits for it.
  */
 let revealCount = 0;
-let revealPending = false;
-const revealers = new Set<(n: number) => void>();
+/** The ask waiting to be shown (0: none). */
+let revealAsk = 0;
+const revealers = new Set<() => void>();
 
 /** Bring the card into view and flash it. */
 export function showTeamSetup() {
   revealCount += 1;
-  revealPending = true;
-  if (revealers.size > 0) revealers.forEach((f) => f(revealCount));
+  revealAsk = revealCount;
+  if (revealers.size > 0) revealers.forEach((f) => f());
   else
     document
       .querySelector('[data-testid="team-setup"]')
       ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
+function subscribeReveal(f: () => void) {
+  revealers.add(f);
+  return () => {
+    revealers.delete(f);
+  };
+}
+
 /**
  * For the Chief's chat: a number that changes each time the card is asked
- * for (0 until it is), and `done` once it's been shown.
+ * for (0 while nothing is waiting), and `done` once it's been shown.
  */
 export function useTeamSetupReveal(enabled: boolean): { ask: number; done: () => void } {
-  const [ask, setAsk] = useState(() => (enabled && revealPending ? revealCount : 0));
-  useEffect(() => {
-    if (!enabled) return;
-    revealers.add(setAsk);
-    if (revealPending) setAsk(revealCount);
-    return () => {
-      revealers.delete(setAsk);
-    };
-  }, [enabled]);
+  const ask = useSyncExternalStore(subscribeReveal, () => (enabled ? revealAsk : 0));
   return { ask, done: revealDone };
 }
 
 function revealDone() {
-  revealPending = false;
+  if (revealAsk === 0) return;
+  revealAsk = 0;
+  revealers.forEach((f) => f());
 }
 
 /**
@@ -288,14 +342,20 @@ export function setupItemIndex(
   return at;
 }
 
-/** "2 of 4 done": steps, never requests. */
-export function progressLine(view: TeamSetupView): string {
-  return `${view.done} of ${view.total} done`;
+/**
+ * "2 steps left": steps, never requests, and what's left rather than "0 of 4
+ * done", which reads as homework not yet started.
+ */
+export function progressLine(view: Pick<TeamSetupView, 'done' | 'total'>): string {
+  const left = Math.max(0, view.total - view.done);
+  if (left === 0) return 'All done';
+  return `${left} ${left === 1 ? 'step' : 'steps'} left`;
 }
 
 /** The muted line under the title. */
 export function sourceLine(view: TeamSetupView): string {
-  return `A few things to finish for your agents from ${view.source}. They stay quiet until you say hi.`;
+  const who = view.agents > 1 ? `Your ${view.agents} agents` : 'Your agent';
+  return `${who} from ${view.source} ${view.agents > 1 ? 'are' : 'is'} here, quiet until you say hi. These get them going.`;
 }
 
 /** Each step's title, its line while open, and what it reads once done. */
@@ -339,18 +399,55 @@ export function stepStatus(step: SetupStep, chief: string): string {
   return '';
 }
 
-/** Logins by service, whoever needs them: one row for a login several agents use. */
+/**
+ * Logins by service, whoever needs them: one row for a login several agents
+ * use, headed by the app's name, never a key ("Google — Gmail (2 accounts),
+ * Google Calendar", "GitHub (2 accounts)", "Email drafts").
+ */
 export function groupLogins(
   logins: SetupLogin[]
 ): { key: string; name: string; items: SetupLogin[] }[] {
-  const groups = new Map<string, { key: string; name: string; items: SetupLogin[] }>();
+  const groups = new Map<string, { key: string; family?: string; items: SetupLogin[] }>();
   for (const l of logins) {
-    const key = l.name.trim().toLowerCase();
-    const g = groups.get(key) ?? { key, name: l.name, items: [] };
+    const key = (l.group ?? loginTitle(l)).trim().toLowerCase();
+    const g = groups.get(key) ?? { key, family: l.family, items: [] };
     g.items.push(l);
     groups.set(key, g);
   }
-  return [...groups.values()];
+  return [...groups.values()].map((g) => {
+    const byTitle = new Map<string, Set<string>>();
+    for (const l of g.items) {
+      const t = loginTitle(l);
+      const accounts = byTitle.get(t) ?? new Set<string>();
+      accounts.add((l.account ?? l.name).trim().toLowerCase());
+      byTitle.set(t, accounts);
+    }
+    const parts = [...byTitle].map(([t, accounts]) =>
+      accounts.size > 1 ? `${t} (${accounts.size} accounts)` : t
+    );
+    const joined = parts.join(', ');
+    const name = g.family && joined !== g.family ? `${g.family} — ${joined}` : joined;
+    return { key: g.key, name, items: g.items };
+  });
+}
+
+/** Everything it waits on is in the checklist: not counted again under Needs your OK. */
+export function onlySetupRequests(agent: Agent, held: ReadonlyMap<string, number>): boolean {
+  const pending = agent.pendingApprovals ?? 0;
+  return pending > 0 && (held.get(agent.id) ?? 0) >= pending && !failedTurn(agent);
+}
+
+/**
+ * The checklist's requests per agent: what it folds in, so the sidebar's
+ * "Needs your OK · N" doesn't count an agent whose only requests are there.
+ */
+export function setupHeldCounts(view: TeamSetupView | null): Map<string, number> {
+  const held = new Map<string, number>();
+  if (!view || view.complete) return held;
+  for (const l of view.steps.find((s) => s.id === 'logins')?.logins ?? []) {
+    held.set(l.agentId, (held.get(l.agentId) ?? 0) + 1);
+  }
+  return held;
 }
 
 /** Whether someone is replying to their hello right now (Say hi waits). */

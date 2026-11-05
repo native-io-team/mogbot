@@ -11,8 +11,10 @@
  * The app verifies; nothing self-certifies: an engine counts as set up when
  * the app's own checks say it is installed and signed in.
  *
- * States: loading → pick (grid → per-engine detail) → complete, which hands
- * off to Agents. A machine that already has an engine ready fast-paths to
+ * States: loading → pick (grid → per-engine detail) → independence → complete,
+ * which hands off to Agents. Independence asks how much agents do on their
+ * own (`IndependenceChoice`); skipping it keeps the default, "Use good
+ * judgement". A machine that already has an engine ready fast-paths to
  * complete — except under SHIPSTUDIO_FORCE_ONBOARDING, where the pick phase
  * is always shown so the flow can be eyeballed on a dev machine.
  */
@@ -25,6 +27,15 @@ import { AgentSetupDetail } from './AgentSetupDetail';
 import { useAgentSetupActions } from './useAgentSetupActions';
 import { Button } from '../../primitives/Button';
 import { Spinner } from '../../primitives/Spinner';
+import { IndependenceChoice } from '../../agents/IndependenceChoice';
+import {
+  DEFAULT_INDEPENDENCE,
+  INDEPENDENCE_QUESTION,
+  getIndependence,
+  setIndependence,
+  type AgentIndependence,
+} from '../../../lib/agentIndependence';
+import { asCommandError, formatCommandError } from '../../../lib/errors';
 import {
   SetupItem,
   FullSetupStatus,
@@ -44,7 +55,7 @@ import { withTimeout, TimeoutError } from '../../../lib/withTimeout';
 import { trackEvent, setActiveScreen } from '../../../lib/analytics';
 import { logger } from '../../../lib/logger';
 
-type Phase = 'loading' | 'pick' | 'complete';
+type Phase = 'loading' | 'pick' | 'independence' | 'complete';
 
 const SETUP_STATUS_TIMEOUT_MS = 15_000;
 
@@ -123,7 +134,7 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
       entry_path: entryPath,
       $screen_name: 'Onboarding',
     });
-    setPhase('complete');
+    setPhase('independence');
   }, []);
 
   // Initial load: test mode + status, then route.
@@ -191,6 +202,10 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
         <p>Getting things ready…</p>
       </div>
     );
+  }
+
+  if (phase === 'independence') {
+    return <IndependenceStep onDone={() => setPhase('complete')} />;
   }
 
   if (phase === 'complete') {
@@ -273,6 +288,72 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * How much agents do on their own, once the engine is ready and before the
+ * hand-off. Skip keeps whatever is saved (the default when nothing is).
+ */
+function IndependenceStep({ onDone }: { onDone: () => void }) {
+  const [level, setLevel] = useState<AgentIndependence>(DEFAULT_INDEPENDENCE);
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  // One chosen before (onboarding shown again) is what's offered.
+  const touched = useRef(false);
+  useEffect(() => {
+    let live = true;
+    getIndependence()
+      .then((saved) => {
+        if (live && !touched.current) setLevel(saved);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  useEffect(() => setActiveScreen('Onboarding - Independence'), []);
+
+  const pick = (next: AgentIndependence) => {
+    touched.current = true;
+    setLevel(next);
+  };
+  const save = async () => {
+    setSaving(true);
+    try {
+      await setIndependence(level);
+      onDone();
+    } catch (e) {
+      setProblem(formatCommandError(asCommandError(e)));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="onboarding-screen">
+      <div className="onboarding-content agent-onboarding-independence">
+        <div className="onboarding-header">
+          <h1>{INDEPENDENCE_QUESTION}</h1>
+          <p className="onboarding-reassurance">
+            It applies to every agent. You can change it in Settings → Agents.
+          </p>
+        </div>
+        <IndependenceChoice value={level} onChange={pick} disabled={saving} large />
+        {problem && (
+          <div className="onboarding-error" role="alert">
+            <p>{problem}</p>
+          </div>
+        )}
+        <div className="agent-onboarding-independence__actions">
+          <Button variant="ghost" onClick={onDone} disabled={saving}>
+            Skip
+          </Button>
+          <Button variant="primary" onClick={() => void save()} disabled={saving}>
+            {saving ? <Spinner size="sm" /> : 'Continue'}
+          </Button>
+        </div>
       </div>
     </div>
   );

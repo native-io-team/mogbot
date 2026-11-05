@@ -313,7 +313,7 @@ describe('Setting up your team, in the timeline', () => {
     expect(setupBar(v)).toEqual({
       tone: 'waiting',
       title: 'A few things to finish setting up your team',
-      detail: '1 of 3 done',
+      detail: '2 steps left',
     });
     expect(setupBar({ ...v, complete: true })).toBeNull();
     expect(setupBar({ ...v, dismissed: true })).toBeNull();

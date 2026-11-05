@@ -2940,6 +2940,12 @@ pub(super) fn system_prompt_for(
         super::usage_plan::mode().0,
         agent.is_main,
     ));
+    // How much to do on its own: the user's level, or the strictest for a
+    // turn answering outside text. Fixed per level, so the cache holds.
+    prompt.push_str("\n\n");
+    prompt.push_str(&super::independence::prompt_section(
+        super::independence::for_turn(super::independence::level(), from_outside(&agent.id)),
+    ));
     if agent.is_main {
         if let Some(team) = store::list()
             .ok()
@@ -3234,11 +3240,17 @@ async fn run_turn(
     // (Claude Code) or this process's environment (Codex), never argv.
     let turn = super::broker::open_turn(agent_id);
     let url = super::reach::agent_url(port);
+    // The apps it was granted on login cards (tokens refreshed), the
+    // claude.ai connectors it's kept from, and its browser (`connections`).
+    let access = super::connections::for_turn(&agent, port).await;
     let mcp_config = match engine {
-        Engine::Claude => Some(super::reach::write_config(&super::reach::claude_config(
-            &url,
-            turn.secret(),
-        ))?),
+        Engine::Claude => Some(super::reach::write_config(
+            &super::reach::claude_config_with(
+                &url,
+                turn.secret(),
+                access.claude_servers(turn.secret()),
+            ),
+        )?),
         Engine::Codex => None,
     };
 
@@ -3284,6 +3296,10 @@ async fn run_turn(
         system_prompt.push_str("\n\n");
         system_prompt.push_str(&have);
     }
+    if !access.prompt.is_empty() {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(&access.prompt);
+    }
     let model = if routine {
         agent.routine_model()
     } else {
@@ -3316,6 +3332,7 @@ async fn run_turn(
         system_prompt: &system_prompt,
         writable: &layout.add_dirs,
         protected: protected.as_deref(),
+        access: Some(&access),
     }));
     // A "When…" routine's items came from outside: this turn can't write its
     // own instructions or memory (Claude Code refuses the edit; for Codex,
@@ -4128,7 +4145,7 @@ mod tests {
         let chief_prompt = system_prompt_for(&chief, home.path(), &layout);
         store::set_root_for_tests(None);
 
-        assert!(agent_prompt.ends_with(&prompts::usage_section(mode, false)));
+        assert!(agent_prompt.contains(&prompts::usage_section(mode, false)));
         assert!(agent_prompt.contains("## Usage limits"));
         assert!(agent_prompt.contains("Use it all before reset"));
         assert!(!agent_prompt.contains("set_usage_mode"));
@@ -4151,11 +4168,18 @@ mod tests {
             store::set_root_for_tests(None);
             prompt
         };
-        // The same prompt, plus the app-owned usage section every agent gets.
+        // The same prompt, plus the app-owned usage and independence
+        // sections every agent gets.
         let usage = prompts::usage_section(super::super::usage_plan::Mode::Normal, false);
+        let independence = super::super::independence::prompt_section(
+            super::super::independence::Level::Judgement,
+        );
         assert_eq!(
             prompt,
-            format!("{}\n\n{usage}", prompts::system_prompt(&agent, None))
+            format!(
+                "{}\n\n{usage}\n\n{independence}",
+                prompts::system_prompt(&agent, None)
+            )
         );
         let args = super::super::claude::args(
             agent.model.as_deref(),
@@ -4472,6 +4496,7 @@ mod tests {
                 choice: None,
                 secret: None,
                 connector: None,
+                login: None,
                 set_aside: None,
             });
             store::append_message(&card).unwrap();

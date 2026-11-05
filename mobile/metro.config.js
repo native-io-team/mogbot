@@ -18,6 +18,7 @@ const WEB_STANDINS = {
   'react-native-keyboard-controller': 'keyboard-controller.tsx',
   'expo-file-system': 'expo-file-system.ts',
   'expo-file-system/legacy': 'expo-file-system-legacy.ts',
+  'expo-speech-recognition': 'expo-speech-recognition.ts',
 };
 const upstream = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {

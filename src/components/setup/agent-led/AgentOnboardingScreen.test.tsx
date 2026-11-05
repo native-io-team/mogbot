@@ -3,6 +3,8 @@
  * the hand-off; a fresh one sees the engine cards, each saying what pressing
  * it does; force mode always shows the pick; a card for an engine that isn't
  * ready opens its install → sign-in steps; a failed check offers a retry.
+ * Between a ready engine and the hand-off, one question: how much agents do
+ * on their own (Skip keeps the default).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -29,6 +31,12 @@ vi.mock('../CelebrationScreen', () => ({
   ),
 }));
 vi.mock('../OnboardingTerminal', () => ({ OnboardingTerminal: () => null }));
+const getIndependence = vi.hoisted(() => vi.fn());
+const setIndependence = vi.hoisted(() => vi.fn());
+vi.mock('../../../lib/agentIndependence', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../lib/agentIndependence')>();
+  return { ...actual, getIndependence, setIndependence };
+});
 
 import { AgentOnboardingScreen } from './AgentOnboardingScreen';
 
@@ -36,6 +44,14 @@ import { AgentOnboardingScreen } from './AgentOnboardingScreen';
 async function card(name: string): Promise<HTMLElement> {
   const label = await screen.findByText(name, { selector: '.agent-pick-card-name' });
   return label.closest('button') as HTMLElement;
+}
+
+/** The independence question, answered by skipping it. */
+async function skipIndependence() {
+  expect(
+    await screen.findByRole('heading', { name: 'How much should your agents do on their own?' })
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
 }
 
 const item = (id: string, status: SetupItem['status']): SetupItem => ({
@@ -55,13 +71,58 @@ describe('AgentOnboardingScreen', () => {
     getFullSetupStatus.mockReset();
     setDefaultAgentId.mockReset().mockResolvedValue(undefined);
     getOnboardingTestMode.mockReset().mockResolvedValue({ mock: false, forceOnboarding: false });
+    getIndependence.mockReset().mockResolvedValue('judgement');
+    setIndependence.mockReset().mockImplementation(async (level: string) => level);
   });
 
   it('goes straight to the hand-off when an engine is already ready', async () => {
     getFullSetupStatus.mockResolvedValue(machine({ codex: 'ready', codex_auth: 'ready' }));
     render(<AgentOnboardingScreen onComplete={vi.fn()} />);
+    await skipIndependence();
     expect(await screen.findByTestId('handoff')).toHaveTextContent('Codex');
     expect(setDefaultAgentId).toHaveBeenCalledWith('codex');
+    // Skipped: nothing saved, so the default stands.
+    expect(setIndependence).not.toHaveBeenCalled();
+  });
+
+  it('asks how much agents do on their own, defaulting to good judgement', async () => {
+    getFullSetupStatus.mockResolvedValue(machine({ claude: 'ready', claude_auth: 'ready' }));
+    render(<AgentOnboardingScreen onComplete={vi.fn()} />);
+    await screen.findByRole('heading', { name: 'How much should your agents do on their own?' });
+    expect(screen.queryByTestId('handoff')).not.toBeInTheDocument();
+    const radios = screen.getAllByRole('radio');
+    expect(radios.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Check with me often'),
+      expect.stringContaining('Use good judgement'),
+      expect.stringContaining('Go hard — get it done'),
+    ]);
+    expect(screen.getByRole('radio', { name: /Use good judgement/ })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    // Honest about what never changes.
+    expect(
+      screen.getByText(
+        'You’ll always be asked before anything that spends money, sends as you, or deletes.'
+      )
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: /Go hard/ }));
+    expect(screen.getByRole('radio', { name: /Go hard/ })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByTestId('handoff')).toHaveTextContent('Claude Code');
+    expect(setIndependence).toHaveBeenCalledWith('go_hard');
+  });
+
+  it('a choice that doesn’t save says so and stays, with Skip still there', async () => {
+    getFullSetupStatus.mockResolvedValue(machine({ claude: 'ready', claude_auth: 'ready' }));
+    setIndependence.mockRejectedValue({ type: 'Other', message: 'Disk full' });
+    render(<AgentOnboardingScreen onComplete={vi.fn()} />);
+    await screen.findByRole('heading', { name: 'How much should your agents do on their own?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Disk full');
+    expect(screen.queryByTestId('handoff')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(await screen.findByTestId('handoff')).toBeInTheDocument();
   });
 
   it('a fresh machine sees one line on how it works and two actionable cards', async () => {
@@ -82,6 +143,7 @@ describe('AgentOnboardingScreen', () => {
     const claude = await card('Claude Code');
     expect(claude).toHaveTextContent('Ready');
     fireEvent.click(claude);
+    await skipIndependence();
     expect(await screen.findByTestId('handoff')).toHaveTextContent('Claude Code');
   });
 

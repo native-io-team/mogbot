@@ -2,13 +2,14 @@
  * "Setting up your team" after an import, as the phone words it: one card in
  * the Chief's chat (desktop `agents/team_setup.rs`, docs/agents.md). The Mac
  * decides what each step holds and whether it's done; this only says it.
- * Plain and short, and never a count that alarms: "A few things to finish",
+ * Plain and short, and never a count that alarms: "2 steps left",
  * not "41 requests".
  */
 
 import type {
   AgentMessage,
   TeamSetupHello,
+  TeamSetupLogin,
   TeamSetupStep,
   TeamSetupStepId,
   TeamSetupView,
@@ -39,13 +40,18 @@ export function stepHint(step: TeamSetupStep, chief: string): string {
   }
 }
 
-/** "2 of 4 done", the card's quiet meta. */
-export const progress = (v: Pick<TeamSetupView, 'done' | 'total'>) =>
-  `${v.done} of ${v.total} done`;
+/** "2 steps left", the card's quiet meta: what's left, never requests. */
+export const progress = (v: Pick<TeamSetupView, 'done' | 'total'>) => {
+  const left = Math.max(0, v.total - v.done);
+  if (left === 0) return 'All done';
+  return `${left} ${left === 1 ? 'step' : 'steps'} left`;
+};
 
 /** The card's source line. */
-export const sourceLine = (v: Pick<TeamSetupView, 'source'>) =>
-  `A few things to finish setting up your team from ${v.source}`;
+export const sourceLine = (v: Pick<TeamSetupView, 'source' | 'agents'>) =>
+  `${v.agents > 1 ? `Your ${v.agents} agents` : 'Your agent'} from ${v.source} ${
+    v.agents > 1 ? 'are' : 'is'
+  } here, quiet until you say hi. These get them going.`;
 
 /** Set aside on the update: said once, quietly, never as a number. */
 export const SET_ASIDE_NOTE =
@@ -109,3 +115,49 @@ export function setupBar(
 /** Whether the card draws anything (a Mac that has none says `null`). */
 export const shows = (v: TeamSetupView | null | undefined): v is TeamSetupView =>
   !!v && !v.dismissed && v.steps.length > 0;
+
+/** A key as words: "email_drafts" → "Email drafts" (as the Mac's `team_setup::humanise`). */
+export function humanise(key: string): string {
+  const words = key
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[\s_.-]+/)
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return words ? words[0].toUpperCase() + words.slice(1) : 'A login';
+}
+
+/** A login's row title: never the raw key. */
+export const loginTitle = (l: TeamSetupLogin) => l.title ?? humanise(l.name);
+
+/**
+ * Logins by service, whoever needs them, headed by the app's name, never a
+ * key ("Google — Gmail (2 accounts)", "GitHub (2 accounts)", "Email drafts").
+ * The desk's `groupLogins`, the same rows.
+ */
+export function groupLogins(
+  logins: TeamSetupLogin[]
+): { key: string; name: string; items: TeamSetupLogin[] }[] {
+  const groups = new Map<string, { key: string; family?: string; items: TeamSetupLogin[] }>();
+  for (const l of logins) {
+    const key = (l.group ?? loginTitle(l)).trim().toLowerCase();
+    const g = groups.get(key) ?? { key, family: l.family, items: [] };
+    g.items.push(l);
+    groups.set(key, g);
+  }
+  return [...groups.values()].map((g) => {
+    const byTitle = new Map<string, Set<string>>();
+    for (const l of g.items) {
+      const t = loginTitle(l);
+      const accounts = byTitle.get(t) ?? new Set<string>();
+      accounts.add((l.account ?? l.name).trim().toLowerCase());
+      byTitle.set(t, accounts);
+    }
+    const joined = [...byTitle]
+      .map(([t, a]) => (a.size > 1 ? `${t} (${a.size} accounts)` : t))
+      .join(', ');
+    const name = g.family && joined !== g.family ? `${g.family} — ${joined}` : joined;
+    return { key: g.key, name, items: g.items };
+  });
+}

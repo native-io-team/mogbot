@@ -727,7 +727,7 @@ pub(crate) fn answer(status: Status, talk: &Talk, chief: &str, replies: &[String
         ),
         Status::InReview => "Every agent is staged. The user is reviewing them in the app and nothing is created until they press Import. Tell them that in one line, then call import_conversation with no message to hear what they imported.".to_string(),
         Status::Done => format!(
-            "The user imported {}. Tell them they're in Agents on their computer, that routines arrive paused (to turn on once they're off with you) and logins are asked for there on secure cards. Don't call import_conversation again.",
+            "The user imported {}. Tell them they're in Agents on their computer, that routines arrive paused (to turn on once they're off with you) and the accounts they need are connected there on sign-in cards (never a password). Don't call import_conversation again.",
             if talk.imported.is_empty() { "nothing".to_string() } else { talk.imported.join(", ") }
         ),
         Status::Declined => "The user looked at the agents and chose not to import them. Tell them it's cancelled and nothing came across. Don't try again unless they ask.".to_string(),
@@ -973,10 +973,12 @@ pub fn apply_review(
     let mut line = if applied.agents.is_empty() {
         format!("Nothing imported from {}.", card.source)
     } else {
+        // "Your team is here", not a wall of sixteen names: a few, then how
+        // many more. What's left to do is in the one list below.
         format!(
-            "Imported from {}: {}. They stay quiet until you've set them up, below; routines are paused.",
+            "Your team from {} is here: {}. They stay quiet until you say hi, and their routines are paused. The short list below gets them going.",
             card.source,
-            applied.agents.join(", ")
+            team_names(&applied.agents)
         )
     };
     if applied.chief_notes {
@@ -1938,6 +1940,24 @@ pub(crate) fn reset_for_tests() {
     state.talk = None;
 }
 
+/// "Newsletter, Garden Plan and Inbox Watch", or with more than five, the
+/// first four "and 12 more".
+fn team_names(names: &[String]) -> String {
+    const SHOWN: usize = 4;
+    match names {
+        [] => String::new(),
+        [one] => one.clone(),
+        _ if names.len() > SHOWN + 1 => {
+            format!(
+                "{} and {} more",
+                names[..SHOWN].join(", "),
+                names.len() - SHOWN
+            )
+        }
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1953,6 +1973,15 @@ mod tests {
 
     fn secret() -> String {
         lock().talk.as_ref().unwrap().secret.clone()
+    }
+
+    #[test]
+    fn a_big_team_is_named_in_a_few_names_not_a_wall() {
+        let names = |n: usize| (1..=n).map(|i| format!("A{i}")).collect::<Vec<_>>();
+        assert_eq!(team_names(&names(1)), "A1");
+        assert_eq!(team_names(&names(3)), "A1, A2 and A3");
+        assert_eq!(team_names(&names(5)), "A1, A2, A3, A4 and A5");
+        assert_eq!(team_names(&names(16)), "A1, A2, A3, A4 and 12 more");
     }
 
     /// Armed, asked, allowed: the interview is going.

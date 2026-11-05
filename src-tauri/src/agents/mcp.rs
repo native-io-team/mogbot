@@ -306,7 +306,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "request_secret",
-        description: "Ask the user for a password, API key, token or login through a secure card in this chat. They type it into a masked field; it goes into the macOS Keychain for you alone, and you get an environment variable and a reference, never the value. Always use this for credentials: never ask the user to paste one in chat. It returns at once: stop and tell the user in one line what it's for; you'll be woken when they save or decline it.",
+        description: "Ask the user for an API key or token made for programs (a Stripe restricted key, an X API token) through a secure card in this chat. They type it into a masked field; it goes into the macOS Keychain for you alone, and you get an environment variable and a reference, never the value. For an account (email, Slack, LinkedIn, X, GitHub, Linear…) use request_login instead; never ask for a password, here or in chat. It returns at once: stop and tell the user in one line what it's for; you'll be woken when they save or decline it.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -317,6 +317,21 @@ const TOOLS: &[Tool] = &[
                 "fields": { "type": "array", "items": { "type": "string" }, "description": "Optional: labels for a login with several parts, e.g. [\"Username\", \"Password\"]. Each becomes $NAME_USERNAME, $NAME_PASSWORD." }
             },
             "required": ["name", "purpose", "kind"]
+        }),
+    },
+    Tool {
+        name: "request_login",
+        description: "Ask the user to connect an app or account you need (Gmail, Google Calendar, Slack, LinkedIn, X, GitHub, Linear, Notion…). One card appears in this chat, on their phone too: it says which account and what you'll be able to do, and connects it the safest way there is: the app's own sign-in in their Mac's browser (you never see a password; the token stays in the Mac's Keychain), or their own signed-in browser for a site with no connector, where every post, send or payment asks them first. Never ask for a password or a login in chat. It returns at once: stop and tell the user in one line what it's for; you're woken when they connect it, with the tools to use, or decline.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "service": { "type": "string", "description": "The app or site, e.g. gmail, google_calendar, slack, linkedin, x, github, linear, notion, figma, stripe, vercel; or its name if it's something else." },
+                "account_hint": { "type": "string", "description": "Optional: which account, when it matters (\"work Gmail\", \"sam@acme.com\")." },
+                "scopes": { "type": "array", "items": { "type": "string" }, "description": "What you need: [\"read\"], or also [\"send\"], [\"post\"], [\"write\"]. Ask for the least that does the job." },
+                "why": { "type": "string", "description": "What you'll use it for, in one line. Shown on the card." }
+            },
+            "required": ["service", "why"]
         }),
     },
     Tool {
@@ -532,6 +547,7 @@ async fn call(
             check_ins(app, caller, turn, name, args).await
         }
         "request_secret" => request_secret(app, caller, args),
+        "request_login" => request_login(app, caller, args),
         _ => error("Unknown tool"),
     }
 }
@@ -1454,6 +1470,27 @@ async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     }
 }
 
+/// A login card (`agents/logins.rs`). Nothing waits on it: connecting or
+/// declining wakes the agent.
+fn request_login(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+    let ask = super::logins::Ask::from_args(args);
+    match super::logins::raise(app, caller, &ask) {
+        Ok(reply) => text(reply),
+        Err(e) => error(e.to_string()),
+    }
+}
+
+/// A login card for an agent the import brought in: answering it doesn't
+/// wake the agent.
+pub(crate) fn request_login_quiet(app: &AppHandle, agent: &store::Agent, args: &Value) -> Value {
+    let mut ask = super::logins::Ask::from_args(args);
+    ask.quiet = true;
+    match super::logins::raise(app, agent, &ask) {
+        Ok(reply) => text(reply),
+        Err(e) => error(e.to_string()),
+    }
+}
+
 /// A secure input card. Nothing waits on it: saving or declining wakes the
 /// agent (see `commands::agents::agents_save_secret`), so a card answered
 /// tomorrow works as well as one answered now.
@@ -1653,6 +1690,7 @@ pub(super) fn new_card(
         choice: None,
         secret: None,
         connector: None,
+        login: None,
         set_aside: None,
     }
 }
@@ -1856,6 +1894,13 @@ pub(super) enum Decision {
     Deny(String),
 }
 
+/// Whether a standing "Always allow" rule the user chose covers this call.
+/// With a one-time grant from a late Allow, the only way past a card: no
+/// setting (the independence level included) opens another.
+fn always_allowed(caller: &store::Agent, tool: &str, input: &Value) -> bool {
+    permissions::matching(&caller.permissions, tool, input).is_some()
+}
+
 /// Decide a tool call the engine wants the user's OK for: a one-time grant
 /// from a late Allow, a standing "Always allow" rule, or else a card. Shared
 /// by Claude Code's permission prompt tool and Codex's approval requests.
@@ -1867,10 +1912,50 @@ pub(super) async fn decide(
     input: &Value,
     why: Option<&str>,
 ) -> Decision {
+    let decision = decide_inner(app, caller, tool, input, why).await;
+    // The connection relay lets an allowed call through once, so it doesn't
+    // ask again (`conn_relay`).
+    if decision == Decision::Allow && super::connections::is_connection_tool(tool) {
+        super::connections::note_cleared(&caller.id, tool);
+    }
+    decision
+}
+
+/// A connection call the engine didn't ask about (`conn_relay`): the same
+/// decision, made here. `Err` is what the agent is told.
+pub(crate) async fn decide_relayed(
+    app: &AppHandle,
+    agent_id: &str,
+    tool: &str,
+    input: &Value,
+) -> Result<(), String> {
+    let caller = store::get(agent_id).map_err(|e| e.to_string())?;
+    match decide_inner(app, &caller, tool, input, None).await {
+        Decision::Allow => Ok(()),
+        Decision::Deny(why) => Err(why),
+    }
+}
+
+async fn decide_inner(
+    app: &AppHandle,
+    caller: &store::Agent,
+    tool: &str,
+    input: &Value,
+    why: Option<&str>,
+) -> Decision {
     if take_grant(&caller.id, tool, input) {
         return Decision::Allow;
     }
-    if permissions::matching(&caller.permissions, tool, input).is_some() {
+    // A connection the user granted on a login card: reads go through
+    // (except in a turn answering outside text), a read-only grant refuses
+    // the rest (`connections::gate`).
+    let outside = runner::from_outside(&caller.id);
+    match super::connections::gate(&caller.id, tool, outside) {
+        super::connections::Gate::Allow => return Decision::Allow,
+        super::connections::Gate::Refuse(why) => return Decision::Deny(why),
+        super::connections::Gate::Ask => {}
+    }
+    if always_allowed(caller, tool, input) {
         // Nothing happens invisibly: each one leaves a quiet line in the chat.
         let line = format!("{} · always allowed", one_line(tool, input));
         let _ = runner::record_in_turn(
@@ -2050,6 +2135,56 @@ mod tests {
         assert_eq!(covered_by(&scope, &open, "a"), vec!["b".to_string()]);
     }
 
+    /// "Go hard" changes what agents are told, never the wall: a call that
+    /// spends, sends, publishes, pushes or deletes still gets a card, and
+    /// the only ways past one are the user's own grant or Always-allow rule.
+    #[test]
+    fn spend_and_send_cards_still_appear_at_go_hard() {
+        use super::super::independence::{self, Level};
+        let _serial = store::tests_lock();
+        let root = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(root.path().to_path_buf()));
+        independence::set_level(Level::GoHard, 1).unwrap();
+        assert_eq!(independence::level(), Level::GoHard);
+        let agent = named("fin-gohard", "Finance");
+        let calls = [
+            (
+                "mcp__gmail__send_email",
+                json!({ "to": "sam@example.test", "body": "Hi" }),
+            ),
+            ("mcp__stripe__create_payment", json!({ "amount": 4900 })),
+            (
+                "mcp__slack__post_message",
+                json!({ "channel": "#general", "text": "Done" }),
+            ),
+            ("Bash", json!({ "command": "git push origin main" })),
+            ("Bash", json!({ "command": "rm -rf ~/Documents/old" })),
+            (
+                "WebFetch",
+                json!({ "url": "https://example.test/checkout" }),
+            ),
+        ];
+        for (tool, input) in &calls {
+            assert!(!take_grant(&agent.id, tool, input), "{tool}");
+            assert!(
+                !always_allowed(&agent, tool, input),
+                "{tool} goes to a card"
+            );
+        }
+        store::set_root_for_tests(None);
+
+        // Nothing on the approval path reads the level.
+        for source in [
+            include_str!("mcp.rs"),
+            include_str!("broker.rs"),
+            include_str!("permissions.rs"),
+            include_str!("codex_app.rs"),
+        ] {
+            let code = source.split("#[cfg(test)]").next().unwrap();
+            assert!(!code.contains("independence::"));
+        }
+    }
+
     #[test]
     fn only_tool_calls_can_be_always_allowed() {
         let input = json!({ "command": "npm test" });
@@ -2124,6 +2259,7 @@ mod tests {
             context: None,
             routine_model: None,
             template: None,
+            reach: Default::default(),
             muted: false,
             check_ins: Vec::new(),
             usage: Default::default(),

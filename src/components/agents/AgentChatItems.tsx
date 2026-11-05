@@ -45,6 +45,7 @@ import type { DraftAttachment } from './useComposerAttachments';
 import { MentionText } from './AgentMentions';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
+import { LoginCard } from './AgentLoginCard';
 import { AgentCard } from './AgentCard';
 import { ImportReviewCard } from './ImportReviewCard';
 import { ImportPlaybackCard } from './ImportPlaybackCard';
@@ -1027,6 +1028,9 @@ export const ApprovalCard = memo(function ApprovalCard({
         compact={compact}
       />
     );
+  }
+  if (approval.login) {
+    return <LoginCard message={message} agentName={agentName} arrived={arrived} />;
   }
   if (approval.secret) {
     return (

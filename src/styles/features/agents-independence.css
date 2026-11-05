@@ -1,0 +1,115 @@
+/* How much agents do on their own: IndependenceChoice.tsx (Settings → Agents
+   and onboarding). Semantic tokens only: both themes. The chosen option is
+   neutral (a stronger border), never the accent. */
+
+.independence-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.independence-choice__options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.independence-choice__option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: var(--border-width-default) solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--transition-interaction),
+    border-color var(--transition-interaction);
+}
+
+.independence-choice__option:hover:not(:disabled) {
+  background: var(--tint-subtle);
+}
+
+.independence-choice__option:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.independence-choice__option[aria-checked='true'] {
+  border-color: var(--border-strong);
+  background: var(--tint-subtle);
+  color: var(--text-primary);
+}
+
+.independence-choice__option:disabled {
+  cursor: default;
+  opacity: var(--button-disabled-opacity);
+}
+
+.independence-choice__label {
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+}
+
+.independence-choice__detail {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.independence-choice__always {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* Onboarding: roomier, bordered choices. */
+.independence-choice--large .independence-choice__options {
+  gap: var(--spacing-xs);
+}
+
+.independence-choice--large .independence-choice__option {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.independence-choice--large .independence-choice__option[aria-checked='true'] {
+  border-color: var(--border-strong);
+}
+
+.independence-choice--large .independence-choice__always {
+  text-align: center;
+}
+
+.agent-independence-settings__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.agent-independence-settings__question {
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+}
+
+/* The onboarding step (AgentOnboardingScreen's "independence" phase). */
+.agent-onboarding-independence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  width: 100%;
+  max-width: 460px; /* css-ok: matches the onboarding column */
+  margin: 0 auto;
+}
+
+.agent-onboarding-independence__actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-sm);
+}

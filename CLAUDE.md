@@ -18,6 +18,7 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - **Chief of Staff** - Exists from first launch and speaks first (a stored greeting, no model turn). It creates, briefs, delegates to, keeps track of and deletes the other agents; you can talk only to it
 - **Named agents** - Persistent, each with its own colour, instructions, memory it maintains, routines and check-ins, apps, and optionally a bound project. Each runs on **Claude Code or Codex** (chosen per agent) on this Mac, on the user's own accounts
 - **Approvals** - Anything consequential (spending, sending, changing what others see) arrives as an Allow / Deny card; secrets go into a masked card and the Keychain, never the chat
+- **Logins** - An agent that needs an account raises one login card (`request_login`): Connect (its own OAuth, token in this Mac's Keychain; or a claude.ai connector; or `gh`), else Use my browser (Claude in Chrome, every send asks), else an API key; never a password. Givable entirely from the phone (a provider's sign-in sheet whose code is relayed to the Mac, GitHub's device code, claude.ai there), the token always in the Mac's Keychain; per-agent grants, "What it can reach" on each agent, and "What your team needs" groups every ask by service (see docs/agents.md, "Logins")
 - **Result cards** - A finished piece of work comes back as one card (`share_result`): files and links, before/after, "It says it checked" and what wasn't verified, in the agent's own words. **Ask for changes** makes a new version
 - **A copy per task** - A project-bound agent works in its own git worktree, never the user's folder; its card offers Keep changes / Review changes / Preview / Discard
 - **Take over** - Step into an agent's own engine session in a terminal and drive it by hand, then Hand back
@@ -125,10 +126,14 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 The short version; each line links where the detail and the threat model live. Don't weaken any of
 these without updating that doc.
 
+- **Logins never carry a password.** Tokens only in the Keychain (`<slug>-connection-<id>`), reaching a turn through its 0600 config file or its environment, never argv, a log or the phone; the phone may run a provider's sign-in sheet but gets only the URL and a one-time code, relayed once to the Mac that holds the PKCE verifier (`agents/login_relay.rs`); read grants refuse writes and full grants ask for every write ([docs/agents.md](docs/agents.md), "Logins", "Threat model additions")
 - **Approvals are the wall.** Agents run in `acceptEdits`; everything else goes through the
   approval broker (`agents/broker.rs`), which trusts only a live turn's `?turn=` id and stops a turn
   that reports `bypassPermissions` ([docs/agents.md](docs/agents.md), "Approvals"). Secrets go
   into the Keychain through a masked card, never the chat ("Secrets")
+- **Agents never hold an app's token.** A connection made on a login card is reached through the
+  bridge's relay (`agents/conn_relay.rs`), which adds the Keychain token and enforces the grant
+  for every engine ([docs/agents.md](docs/agents.md), "Grants, read vs send, and turns")
 - **Outside text is sealed.** Connector imports and "When…" checks run in a sealed headless call
   (no shell, no files, no web; read-only app tools only), and a turn answering outside text can't
   write its own memory or change the team without a card ([docs/agents.md](docs/agents.md),

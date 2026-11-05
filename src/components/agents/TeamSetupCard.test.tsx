@@ -1,9 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { SetupStep, TeamSetupView } from '../../lib/teamSetup';
-import { quietAgentIds, setupAnchorTs, setupItemIndex } from '../../lib/teamSetup';
-import { buildChatItems, type AgentMessage, type ChatItem } from '../../lib/agents';
-import { TeamSetupCard } from './TeamSetupCard';
+import {
+  onlySetupRequests,
+  quietAgentIds,
+  setupAnchorTs,
+  setupHeldCounts,
+  setupItemIndex,
+} from '../../lib/teamSetup';
+import { scopeTeam, type TeamLogins } from '../../lib/agentLogins';
+import { buildChatItems, type Agent, type AgentMessage, type ChatItem } from '../../lib/agents';
+import { SetupLogins, TeamSetupCard } from './TeamSetupCard';
 import { SET_ASIDE_OUTCOME } from './AgentChatItems';
 
 const calls = vi.hoisted(() => ({
@@ -20,6 +27,14 @@ vi.mock('../../lib/teamSetup', async (importOriginal) => ({
   sayHiFromSetup: (a: string) => calls.hello(a),
   askChiefAboutMissing: () => calls.missing(),
   dismissTeamSetup: () => calls.dismiss(),
+}));
+
+const teamLoginsSeen = vi.hoisted(() => ({ ids: [] as string[][] }));
+vi.mock('./TeamLogins', () => ({
+  TeamLogins: ({ agentIds }: { agentIds?: ReadonlySet<string> }) => {
+    teamLoginsSeen.ids.push([...(agentIds ?? [])]);
+    return <div data-testid="team-logins">What your team needs</div>;
+  },
 }));
 
 const logins: SetupStep = {
@@ -93,9 +108,9 @@ describe('TeamSetupCard', () => {
       />
     );
     expect(screen.getByText('Setting up your team')).toBeInTheDocument();
-    expect(screen.getByText('1 of 4 done')).toBeInTheDocument();
+    expect(screen.getByText('3 steps left')).toBeInTheDocument();
     expect(
-      screen.getByText(/A few things to finish for your agents from Grok Bot/)
+      screen.getByText(/agents from Grok Bot are here, quiet until you say hi/)
     ).toBeInTheDocument();
     // Done reads as its outcome; routines (the first open step) is expanded.
     expect(screen.getByText('Logins added')).toBeInTheDocument();
@@ -155,7 +170,7 @@ describe('TeamSetupCard', () => {
 
   it('lists each login with whose it is', () => {
     render(<TeamSetupCard view={view([logins, hello(['quiet'])])} chief="Chief of Staff" />);
-    expect(screen.getByText('bankline')).toBeInTheDocument();
+    expect(screen.getByText('Bankline')).toBeInTheDocument();
     expect(screen.getByText('Bookkeeper')).toBeInTheDocument();
     expect(screen.getByText(/Keychain, never the chat/)).toBeInTheDocument();
   });
@@ -193,9 +208,118 @@ describe('groupLogins', () => {
       l('Recruiting', 'hirehub'),
     ]);
     expect(groups.map((g) => [g.name, g.items.length])).toEqual([
-      ['bankline', 2],
-      ['hirehub', 1],
+      ['Bankline', 2],
+      ['Hirehub', 1],
     ]);
+  });
+
+  it('names each row by its app, never a raw key, with accounts counted', async () => {
+    const { groupLogins } = await import('../../lib/teamSetup');
+    const l = (name: string, extra: Partial<import('../../lib/teamSetup').SetupLogin> = {}) => ({
+      agentId: 'a',
+      agentName: 'Mailroom',
+      requestId: name,
+      name,
+      purpose: '',
+      ...extra,
+    });
+    const g = groupLogins([
+      l('gmail_personal', { title: 'Gmail', group: 'google', family: 'Google' }),
+      l('gmail_shop', { title: 'Gmail', group: 'google', family: 'Google' }),
+      l('code_host_one', { title: 'GitHub', group: 'github' }),
+      l('code_host_two', { title: 'GitHub', group: 'github' }),
+      l('email_drafts'),
+      l('ledgerApp_owner'),
+    ]);
+    expect(g.map((r) => r.name)).toEqual([
+      'Google — Gmail (2 accounts)',
+      'GitHub (2 accounts)',
+      'Email drafts',
+      'Ledger app owner',
+    ]);
+    for (const r of g) expect(r.name).not.toMatch(/_/);
+  });
+});
+
+describe('SetupLogins', () => {
+  it('puts sign-ins in What your team needs for these agents, keys in rows by app', () => {
+    teamLoginsSeen.ids = [];
+    render(
+      <SetupLogins
+        logins={[
+          {
+            agentId: 'm',
+            agentName: 'Mailroom',
+            requestId: 'l1',
+            name: 'gmail_shop',
+            purpose: 'Read orders',
+            title: 'Gmail',
+            group: 'google',
+            family: 'Google',
+            kind: 'login',
+          },
+          {
+            agentId: 'b',
+            agentName: 'Books',
+            requestId: 's1',
+            name: 'email_drafts',
+            purpose: 'Drafts',
+            kind: 'secret',
+          },
+        ]}
+      />
+    );
+    expect(screen.getByTestId('team-logins')).toBeInTheDocument();
+    expect(teamLoginsSeen.ids[teamLoginsSeen.ids.length - 1]).toEqual(['m']);
+    expect(screen.getByText('Email drafts')).toBeInTheDocument();
+    expect(screen.queryByText('email_drafts')).not.toBeInTheDocument();
+    expect(screen.queryByText('gmail_shop')).not.toBeInTheDocument();
+  });
+});
+
+describe('scopeTeam', () => {
+  it('keeps only these agents, and a Connect skips the rest', () => {
+    const card = (agentId: string, state: 'waiting' | 'connected' = 'waiting') => ({
+      agentId,
+      agentName: agentId,
+      requestId: `r-${agentId}`,
+      service: 'gmail',
+      title: 'Gmail',
+      abilities: [],
+      state,
+    });
+    const team: TeamLogins = {
+      needs: [
+        {
+          key: 'google',
+          title: 'Google',
+          services: ['gmail'],
+          options: [],
+          cards: [card('m'), card('x')],
+          done: false,
+        },
+        { key: 'x', title: 'X', services: ['x'], options: [], cards: [card('x')], done: false },
+      ],
+      done: 0,
+      total: 2,
+    };
+    const scoped = scopeTeam(team, new Set(['m']));
+    expect(scoped.total).toBe(1);
+    expect(scoped.needs[0].cards.map((c) => c.agentId)).toEqual(['m']);
+    expect(scoped.needs[0].hidden).toEqual(['x']);
+  });
+});
+
+describe('the sidebar count', () => {
+  it('does not count an agent whose only requests are the checklist logins', () => {
+    const v = view([logins, hello(['quiet'])]);
+    const held = setupHeldCounts(v);
+    const agent = (pendingApprovals: number) =>
+      ({ id: 'f', pendingApprovals, status: { state: 'waiting' } }) as unknown as Agent;
+    expect(onlySetupRequests(agent(1), held)).toBe(true);
+    // Another request besides: still counted.
+    expect(onlySetupRequests(agent(2), held)).toBe(false);
+    expect(onlySetupRequests(agent(1), setupHeldCounts({ ...v, complete: true }))).toBe(false);
   });
 });
 

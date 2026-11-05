@@ -27,7 +27,8 @@ import { SheetTitle } from '../components/SheetTitle';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { call, describeError } from '../lib/session';
-import { useApp } from '../lib/store';
+import { MAC_FEATURES } from '@shipstudio/companion-protocol';
+import { useApp, useServed } from '../lib/store';
 import { space, typingDot } from '../lib/theme';
 import { TypingDots } from '../components/TypingDots';
 
@@ -80,6 +81,7 @@ export default function ImportScreen() {
   const styles = useStyles();
   const router = useRouter();
   const connected = useApp((s) => s.link.kind === 'connected');
+  const servesTeam = useServed('agents.loginsTeam', MAC_FEATURES.logins);
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const chief = useApp((s) => s.overview?.agents.find((a) => a.isMain));
   const chiefName = chief?.name ?? 'Chief of Staff';
@@ -234,6 +236,14 @@ export default function ImportScreen() {
           )}
           {(chief || status?.chiefId) && (
             <Button title={`Open ${chiefName}`} variant="outline" onPress={openChief} />
+          )}
+          {talk?.state === 'imported' && talk.imported.length > 0 && servesTeam && (
+            <Button
+              title="Give them what they need"
+              variant="answer"
+              icon="person.2"
+              onPress={() => router.push('/logins')}
+            />
           )}
         </View>
 
