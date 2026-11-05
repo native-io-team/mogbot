@@ -1,27 +1,32 @@
 /**
- * Keep / Discard under the newest change card of an agent's open copy of
- * its project (`agents/task.rs` on the Mac), in the card recipe every
- * answerable thing in the chat shares: Keep is the neutral answer (as Allow
- * is), never the agent's colour; Discard is outlined. Shown only when the Mac
- * serves `agents.keepCopy` (`welcome.methods`); older Macs leave the card a
- * line. What stopped a Keep comes from the agent's copy (`copy.stuck`), not
- * from this component, so it survives the row remounting.
+ * Keep / Discard for the newest change card of an agent's open copy of its
+ * project (`agents/task.rs` on the Mac), on the shared card: a folder, "Changes
+ * are ready", "On a copy of acme-site · acme-site itself is unchanged", then
+ * Discard (outline) and the neutral Keep changes last, never the agent's
+ * colour. Inside a result card (`result.tsx`) the same note and answers join
+ * that card instead of nesting a second one (`useCopyParts`).
  *
- * The words stay plain: "a copy of acme-site", "Keep changes", "Discard".
- * Preview and pull requests need the Mac's workspace, so they stay there.
+ * Shown only when the Mac serves `agents.keepCopy` (`welcome.methods`); older
+ * Macs leave the card a line. What stopped a Keep comes from the agent's copy
+ * (`copy.stuck`), not from this component, so it survives the row remounting.
+ *
+ * The words stay plain, as the desk's: "a copy of acme-site", "Keep changes",
+ * "Discard", "Keep there too". No version (branch) names. Preview and pull
+ * requests need the Mac's workspace, so they stay there.
  */
 
 import type { Agent, CopyRef, KeptCopy, LeftOut } from '@shipstudio/companion-protocol';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Alert, View } from 'react-native';
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import { describeError, discardCopy, keepCopy } from '../lib/session';
 import { useApp } from '../lib/store';
-import { CARD_TITLE_SCALE } from '../lib/theme';
+import { CARD_TITLE_SCALE, space } from '../lib/theme';
 import { useColors } from '../lib/appearance';
 import { folderName } from '../lib/agents';
-import { useCardStyles } from './ApprovalCard';
+import { drivenLine } from '../lib/bars';
+import { ACTION, Card } from './surfaces';
 import { Button, T } from './ui';
 
 /**
@@ -57,43 +62,34 @@ export function keptLine(project: string, agentName: string, kept: KeptCopy): st
   };
   switch (kept.outcome) {
     case 'kept':
-      return withLeftOut(`Kept the changes in ${project} (${kept.branch})`, kept.leftOut);
+      return withLeftOut(`Kept the changes in ${project}`, kept.leftOut);
     case 'nothing':
       return withLeftOut(`${project} already has these changes`, kept.leftOut);
     case 'conflict':
       return `Some of these changes overlap with edits made in ${project} since (${kept.files
         .slice(0, 3)
-        .join(', ')}). Choose which to keep on the Mac, or ask ${agentName} to sort it out.`;
+        .join(', ')}). Choose which to keep on your Mac, or ask ${agentName} to sort it out.`;
     case 'markers':
       return `Some files still have conflict markers in them (${kept.files
         .slice(0, 3)
-        .join(', ')}). Nothing was kept. Finish choosing on the Mac, or ask ${agentName} to.`;
+        .join(', ')}). Nothing was kept. Finish choosing on your Mac, or ask ${agentName} to.`;
     case 'otherBranch':
-      return `${project} is on ${kept.current} now${
-        kept.base ? `, not ${kept.base}` : ''
-      }. Nothing was kept.`;
+      return `${project} has moved on to another version since. Nothing was kept.`;
   }
 }
 
-/** The confirmation before keeping into another branch. Exported for tests. */
-export function otherBranchQuestion(
-  project: string,
-  current: string,
-  base: string | undefined
-): string {
+/**
+ * Why Keep is asking before it keeps into the version the project is on now,
+ * when that isn't the one the changes started from: the desk's words
+ * (`otherBranchNote`), with no version names. Exported for tests.
+ */
+export function otherBranchQuestion(project: string, base: string | undefined): string {
   return base
-    ? `${project} is on ${current} now, but these changes were made from ${base}. Keeping them in ${current} also brings along whatever ${base} has that ${current} doesn't.`
-    : `${project} is on ${current} now, but these changes weren't made from a branch. Keeping them in ${current} brings them, and the version they started from, into ${current}.`;
+    ? `${project} has moved on to another version since these changes were started. Keeping them there also brings along anything from the version they started from that it doesn’t have yet.`
+    : `${project} has moved on to another version since these changes were started. Keeping them there brings them, and the version they started from, along.`;
 }
 
-export function CopyActions({
-  agent,
-  copy,
-  project: projectPath,
-  leftOut,
-  warning,
-  onError,
-}: {
+export interface CopyProps {
   agent: Agent;
   copy: CopyRef;
   /** The project's folder, as the card names it. */
@@ -103,24 +99,39 @@ export function CopyActions({
   /** Why the copy's changes couldn't be saved this turn. */
   warning?: string;
   onError: (text: string) => void;
-}) {
-  const cardStyles = useCardStyles();
+}
+
+export interface CopyParts {
+  title: string;
+  source: string;
+  note: ReactNode;
+  /** Discard, then Keep changes last. */
+  actions: ReactNode;
+}
+
+/** The copy's part of a card: its words, its note, its answers. Null when the Mac can't keep. */
+export function useCopyParts(props: CopyProps | null): CopyParts | null {
   const colors = useColors();
   const served = useApp((s) => !!s.welcome?.methods.includes('agents.keepCopy'));
   const connected = useApp((s) => s.link.kind === 'connected');
+  const projectPath = props?.project ?? '';
   const project = useApp(
     (s) => s.projects?.find((p) => p.path === projectPath)?.name ?? folderName(projectPath)
   );
   const [busy, setBusy] = useState<'keep' | 'discard' | null>(null);
-  // One at a time: two taps in one frame both see the render before \`busy\`.
+  // One at a time: two taps in one frame both see the render before `busy`.
   const once = useInFlight();
-  if (!served) return null;
+  if (!props || !served) return null;
+  const { agent, copy, leftOut, warning, onError } = props;
   const working = agent.status.state !== 'idle';
+  // Driven by hand on the Mac: the copy may be mid-edit in the terminal, and
+  // the Mac refuses Keep and Discard until it's handed back.
+  const driven = Boolean(agent.takeover);
   // What stopped the last Keep lives on the Mac (the agent's copy), so it
   // survives this row remounting; a Keep that went through clears the copy,
   // and the Mac's note in the chat says what it did.
   const stuck = agent.copy?.id === copy.id ? agent.copy.stuck : undefined;
-  const off = !connected || working || busy !== null;
+  const off = !connected || working || driven || busy !== null;
 
   // The haptic says what the Mac did, so it waits for the Mac.
   const keep = (into?: string) =>
@@ -164,72 +175,91 @@ export function CopyActions({
       ]
     );
 
-  // On another branch now: the button names it, under a line naming both,
-  // so pressing it is the explicit choice.
+  // On another version now: the question names no versions, and pressing
+  // "Keep there too" is the explicit choice.
   const into = stuck?.outcome === 'otherBranch' ? stuck.current : undefined;
   const title = working
     ? 'Changes so far'
     : stuck
       ? stuck.outcome === 'otherBranch'
-        ? `Keep into ${stuck.current}?`
+        ? 'Keep there too?'
         : 'Not kept yet'
       : 'Changes are ready';
-  const note = stuck
+  const said = stuck
     ? stuck.outcome === 'otherBranch'
-      ? otherBranchQuestion(project, stuck.current, stuck.base)
+      ? otherBranchQuestion(project, stuck.base)
       : keptLine(project, agent.name, stuck)
     : null;
+  const left = leftOutLine(leftOut);
+  const wait = driven
+    ? `${drivenLine(agent.name)}: hand it back first.`
+    : !connected
+      ? 'Keep or discard these once your Mac is back.'
+      : null;
 
-  return (
-    <View style={cardStyles.card}>
-      <View style={cardStyles.head}>
-        <T variant="headline" color={colors.textStrong} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          {title}
-        </T>
-        <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          {working
-            ? `${agent.name} is working on a copy of ${project}`
-            : `On a copy of ${project} · ${project} itself is unchanged`}
-        </T>
+  const muted = (text: string) => (
+    <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
+      {text}
+    </T>
+  );
+  const note =
+    said || warning || left || wait ? (
+      <View style={{ gap: space.xs }}>
+        {said && (
+          <T variant="small" color={colors.textPrimary} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
+            {said}
+          </T>
+        )}
+        {warning ? (
+          <T variant="small" color={colors.accentWarning} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
+            {warning}
+          </T>
+        ) : null}
+        {left && muted(left)}
+        {wait && muted(wait)}
       </View>
-      {note ? (
-        <T variant="small" color={colors.textPrimary} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          {note}
-        </T>
-      ) : null}
-      {warning ? (
-        <T variant="small" color={colors.accentWarning} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          {warning}
-        </T>
-      ) : null}
-      {leftOutLine(leftOut) ? (
-        <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          {leftOutLine(leftOut)}
-        </T>
-      ) : null}
-      {!connected && (
-        <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          Keep or discard these once your Mac is back.
-        </T>
-      )}
-      <View style={cardStyles.actions}>
+    ) : null;
+
+  return {
+    title,
+    source: working
+      ? `${agent.name} is working on a copy of ${project}`
+      : `On a copy of ${project} · ${project} itself is unchanged`,
+    note,
+    actions: (
+      <>
         <Button
           title="Discard"
           variant="outline"
           busy={busy === 'discard'}
           disabled={off}
           onPress={discard}
-          style={{ flex: 1 }}
+          style={ACTION}
         />
         <Button
-          title={into ? `Keep into ${into}` : 'Keep changes'}
+          title={into ? 'Keep there too' : 'Keep changes'}
           variant="answer"
           busy={busy === 'keep'}
           disabled={off}
           onPress={() => void keep(into)}
-          style={{ flex: 1 }}
+          style={ACTION}
         />
-      </View>
-    </View>
+      </>
+    ),
+  };
+}
+
+/** A copy's card on its own, when the turn didn't share a result. */
+export function CopyCard(props: CopyProps) {
+  const parts = useCopyParts(props);
+  if (!parts) return null;
+  return (
+    <Card
+      icon="folder.fill"
+      title={parts.title}
+      source={parts.source}
+      note={parts.note}
+      actions={parts.actions}
+    />
   );
 }

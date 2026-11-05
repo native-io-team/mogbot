@@ -92,52 +92,11 @@ export function ConnectionNotice() {
 }
 
 /**
- * How long a link may be down before the chat says so, unless it's plainly a
- * problem: coming back to the app reconnects in about a second, and an amber
+ * How long a link may be down before the chat's bar says so
+ * (`ConversationBars`), unless it's plainly a problem: coming back to the app reconnects in about a second, and an amber
  * "Connecting…" flashing on every return said something was wrong when it wasn't.
  */
 export const BANNER_GRACE_MS = 2000;
-
-/** In a chat, only when something is wrong: a slim line under the header. */
-export function LinkBanner() {
-  const colors = useColors();
-  const styles = useStyles();
-  const router = useRouter();
-  const state = useLinkState();
-  const now = useNow(10_000);
-  const down = state.link.kind !== 'connected';
-  // The grace runs once per time the link goes down.
-  const [late, setLate] = useState(false);
-  useEffect(() => {
-    if (!down) return;
-    const timer = setTimeout(() => setLate(true), BANNER_GRACE_MS);
-    return () => {
-      clearTimeout(timer);
-      setLate(false);
-    };
-  }, [down]);
-  if (!down) return null;
-  const p = pill(state, now);
-  if (!late && p.tone !== 'problem') return null;
-  return (
-    <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityHint="Connection details"
-        onPress={() => router.push('/connection')}
-        style={styles.banner}
-      >
-        <T
-          variant="caption"
-          color={p.tone === 'problem' ? colors.accentErrorLight : colors.accentWarning}
-          maxFontSizeMultiplier={chromeScale}
-        >
-          {p.label} · saved messages shown
-        </T>
-      </Pressable>
-    </Animated.View>
-  );
-}
 
 const useStyles = makeStyles((colors) => ({
   notice: { paddingHorizontal: space.lg, paddingBottom: space.sm, alignItems: 'flex-start' },
@@ -153,15 +112,5 @@ const useStyles = makeStyles((colors) => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderDefault,
     maxWidth: 320,
-  },
-  banner: {
-    // A slim line to look at, a full target to tap.
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: space.lg,
-    paddingVertical: space.tight,
-    backgroundColor: colors.surfacePanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderDefault,
   },
 }));

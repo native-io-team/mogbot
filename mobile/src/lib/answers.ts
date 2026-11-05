@@ -23,7 +23,7 @@ export function broaderCaption(label: string): string {
   const forever = /\b(always|don.t ask again)\b/i.test(label);
   const edits = /\bedit/i.test(label);
   const what = edits ? 'make edits' : 'do this';
-  if (session) return `Lets it ${what} without asking for the rest of this session.`;
+  if (session) return `Lets it ${what} without asking for the rest of this task.`;
   if (forever) return `Lets it ${what} without asking again, not just this once.`;
   return 'Covers more than this one request.';
 }

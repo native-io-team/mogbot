@@ -402,14 +402,37 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   reading holds still while you're scrolled up or a long reply grows, and the
   jump button says "New reply" when one finished below. Hold a message to
   copy, quote or select text; paths in a reply open through `agents.fetchPath`.
+- **Lines, cards and bars** (`components/surfaces.tsx`, the desk's
+  `AgentCard.tsx`; docs/agents.md "Lines, cards and bars"). Everything in a
+  chat that isn't something someone said is one of three. A **Line** is one
+  quiet centred sentence that wraps: a note ("Started fresh · memory kept", a
+  take-over that closed), a routine's run, a time between messages, a usage
+  limit. A **Card** is the one anatomy every request and result shares —
+  icon and title (a quiet meta such as "v2" at the right), a muted source
+  line ("Acme Site · in acme-site"), the body, a muted note, then the answers
+  right-aligned with the single affirmative last, in the neutral `answer`
+  style (never the agent's colour); the rest are `outline`. Approvals, a
+  task's question, secrets, results, a copy's Keep / Discard, an import to
+  review on the Mac and a real failure all use it; answered, a card becomes
+  its outcome line. A **Bar** is this conversation's state, directly above
+  the composer in a fixed order (`lib/bars.ts`): the Mac out of reach, you
+  driving the agent on your Mac, an import, "Changes to …" for the message
+  being written, what the engine can't do. At most two show; the rest fold
+  into "N more". The chat header is identity only (name and role): status is
+  in the list row and in the conversation, never a third time up there.
+  `__tests__/surfaces.test.tsx` holds the anatomy and the order;
+  `__tests__/vocabulary.node.test.ts` reads every user-facing string out of
+  the source and fails on the desk's retired words ("session", "Waiting for
+  your decision", "via connector", "Claude Code 1", the noun "take-over",
+  "Denied" — answered requests are "Declined"), with a snapshot of the rest.
 - **Approvals** (`ApprovalCard`): the exact command, scrolling sideways rather
-  than re-wrapped; Deny / Allow / Always allow (with `describeScope`'s
-  sentence) / Deny with note. The answers are inert for 400 ms after the card
-  lands, the desk's anti-misclick; Allow is the one tap the app must never
-  take by accident.
-- **Session questions** (`PromptCard`): the question, whose session it is,
-  the diff (tinted) or text it shows, and every option it offers, answered
-  with `agents.answerApproval`'s `choice`; the same 400 ms guard.
+  than re-wrapped; ⋯ · Deny · Allow, with Always allow (with
+  `describeScope`'s sentence) and Deny with note behind ⋯. The answers are
+  inert for 400 ms after the card lands, the desk's anti-misclick; Allow is
+  the one tap the app must never take by accident.
+- **A task's questions** (`PromptCard`): the question, whose task it is and
+  where, the diff (tinted) or text it shows, and every option it offers,
+  answered with `agents.answerApproval`'s `choice`; the same 400 ms guard.
 - **Secret cards** (`SecretCard`): masked fields straight to the Mac's
   Keychain via `agents.saveSecret`. Only over HTTPS on Tailscale, and only on
   a socket where the Mac proved the pinned identity (refused on the
@@ -425,8 +448,7 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   Drafts, including uploaded files (kept 55 min), survive leaving the chat and
   a cold start (`lib/drafts.ts`). A mic in the field dictates into the draft
   (see "Dictation" below).
-- **Agent sheet.** "Claude · Opus" / "Codex · …" (also in the chat
-  header), Runs on and Model read-only, Memory (view, edit, forget with
+- **Agent sheet.** "Claude · Opus" / "Codex · …", Runs on and Model read-only, Memory (view, edit, forget with
   Undo, add; "Remember This" in a message's menu), Instructions (view and edit), pin/mute/hide, check-ins and
   routines (create and edit with the picker below, past runs, pause, run now,
   cancel), usage, and "Allowed without asking" with Revoke.
@@ -556,7 +578,8 @@ latency, last seen, likely causes from the last status); Mac awake
 server answered, since silence looks the same either way); Claude Code
 installed and signed in (a `signed_out` turn makes it a problem whatever the
 check says); each agent's capabilities; this device. Screens say nothing
-while all is well and show the pill or a banner when something isn't.
+while all is well and show the pill when something isn't; in a chat it is the
+first bar above the composer ("Saved messages shown"), after a 2 s grace.
 
 ### Offline cache and outbox
 
