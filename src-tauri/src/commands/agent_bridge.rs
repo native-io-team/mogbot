@@ -229,7 +229,7 @@ where
                 }
             }
             Err(e) => json!({ "type": "text", "text": format!(
-                "Screenshot was saved to {path} but Ship Studio couldn't read it back to return inline ({e}). Read that file to view it."
+                "Screenshot was saved to {path} but the app couldn't read it back to return inline ({e}). Read that file to view it."
             ) }),
         };
     }
@@ -299,7 +299,7 @@ pub async fn agent_bridge_respond_chunk(
                     e
                 );
                 agent_bridge::tool_error_result(&format!(
-                    "Ship Studio ran the tool but its result was corrupted on the way back ({e}). This is a Ship Studio bug, not a problem with the page. Retrying may help."
+                    "The app ran the tool but its result was corrupted on the way back ({e}). This is a bug in the app, not a problem with the page. Retrying may help."
                 ))
             }
         },
@@ -310,7 +310,7 @@ pub async fn agent_bridge_respond_chunk(
                 reason
             );
             agent_bridge::tool_error_result(&format!(
-                "Ship Studio ran the tool but couldn't hand its result back ({reason}). This is a Ship Studio bug, not a problem with the page. Retrying may help."
+                "The app ran the tool but couldn't hand its result back ({reason}). This is a bug in the app, not a problem with the page. Retrying may help."
             ))
         }
     };

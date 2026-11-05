@@ -131,6 +131,13 @@ export interface Methods {
    */
   'agents.focus': { params: { agentId: string | null }; result: null };
   'agents.markUnread': { params: { agentId: string }; result: null };
+  /**
+   * `agents_start_fresh`: its next message starts a new conversation, with
+   * its instructions and memory and no recap; the chat stays, with a `fresh`
+   * note as a divider. Refused (`expected`) while it's working. Newer Macs
+   * only: check `welcome.methods`.
+   */
+  'agents.startFresh': { params: { agentId: string }; result: StoredAgent };
   'agents.create': { params: { input: NewAgentInput }; result: StoredAgent };
   /**
    * From the phone, only the row's toggles (`pinned`, `muted`, `hidden`)

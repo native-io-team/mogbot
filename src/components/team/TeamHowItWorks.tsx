@@ -20,21 +20,21 @@
 /** The three writers, in the order they are trusted. */
 const WRITERS = [
   {
-    who: 'Ship Studio',
+    who: 'The app',
     what: 'Pushes, branches, PRs, deploys, workflow runs, comments',
     how: 'Written by the app itself, in Rust. Deterministic: it happens whether or not an agent is running.',
     tone: 'certain',
   },
   {
-    who: 'Your agent, in Ship Studio',
+    who: 'Your agent, in the app',
     what: 'What it changed and why, at the end of a session',
-    how: 'Through a Ship Studio tool the agent is given when it starts. Schema-checked, so it cannot write a malformed entry.',
+    how: 'Through a tool the agent is given when it starts. Schema-checked, so it cannot write a malformed entry.',
     tone: 'likely',
   },
   {
     who: 'Any agent, anywhere',
     what: 'The same session notes, outside the app',
-    how: 'Through a skill committed to the repo, so a teammate who clones it has the protocol whether or not they use Ship Studio.',
+    how: 'Through a skill committed to the repo, so a teammate who clones it has the protocol whether or not they use this app.',
     tone: 'best-effort',
   },
 ] as const;
@@ -44,8 +44,8 @@ export function TeamHowItWorks() {
   return (
     <section className="team-how" aria-label="How team activity works">
       <p className="team-how-lead">
-        There is no Ship Studio server, no account and no database. What people did is read out of
-        your git history, comments are small files in your own repo, and the network is{' '}
+        There is no server of ours, no account and no database. What people did is read out of your
+        git history, comments are small files in your own repo, and the network is{' '}
         <code>git fetch</code>. Everyone who can see the repository on GitHub can see this; everyone
         who cannot, cannot.
       </p>
@@ -76,9 +76,8 @@ export function TeamHowItWorks() {
             ))}
           </ul>
           <p className="team-how-note">
-            The app never depends on an agent remembering. If an agent writes nothing, Ship Studio
-            still records the session from what changed on disk. You lose the explanation, not the
-            entry.
+            The app never depends on an agent remembering. If an agent writes nothing, the app still
+            records the session from what changed on disk. You lose the explanation, not the entry.
           </p>
         </div>
       </div>
@@ -88,8 +87,8 @@ export function TeamHowItWorks() {
         <ul className="team-how-limit-list">
           <li>
             <strong>Not live.</strong> Nothing can notify you without a server, so news arrives when
-            Ship Studio next fetches, about once a minute while the app is open, and never while it
-            is closed.
+            the app next fetches, about once a minute while the app is open, and never while it is
+            closed.
           </li>
           <li>
             <strong>Not an audit log.</strong> Anyone who can push to this repository can edit or
@@ -99,7 +98,7 @@ export function TeamHowItWorks() {
           </li>
           <li>
             <strong>Not private.</strong> Anything written here is committed history that other
-            people fetch. Ship Studio never records IP addresses, locations, or anything about your
+            people fetch. The app never records IP addresses, locations, or anything about your
             machine. Only what happened to the code.
           </li>
         </ul>

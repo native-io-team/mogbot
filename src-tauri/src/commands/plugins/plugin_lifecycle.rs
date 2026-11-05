@@ -78,7 +78,7 @@ fn classify_remote_git_failure(stderr: &str) -> Option<CommandError> {
         || lower.contains("authentication failed")
     {
         return Some(CommandError::expected(
-            "This plugin's repository requires sign-in, and Ship Studio can't authenticate to \
+            "This plugin's repository requires sign-in, and the app can't authenticate to \
              it automatically. Use a plugin hosted in a public repository, or clone it yourself \
              and add it with Link Dev Plugin.",
         ));
@@ -223,7 +223,7 @@ fn resolve_git() -> Result<PathBuf, CommandError> {
         // A missing tool is an environment gap, not an app malfunction.
         CommandError::expected(
             "Git isn't installed or couldn't be located. Install Git (https://git-scm.com) \
-             and restart Ship Studio, then try again.",
+             and restart the app, then try again.",
         )
     })
 }

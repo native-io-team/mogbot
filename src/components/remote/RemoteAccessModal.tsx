@@ -15,6 +15,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Spinner } from '../primitives/Spinner';
+import { TextButton } from '../primitives/TextButton';
+import { useOpenModal } from '../../contexts/ModalContext';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { usePolling } from '../../hooks/usePolling';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -65,6 +67,7 @@ interface RemoteAccessModalProps {
 
 export function RemoteAccessModal({ isOpen, onClose }: RemoteAccessModalProps) {
   const { showToast } = useOptionalToast();
+  const openModal = useOpenModal();
   const status = useAsyncState<RemoteAccessStatus>(getRemoteAccessStatus);
   const projects = useAsyncState<DashboardProject[]>(getDashboardProjects);
   const audit = useAsyncState<AuditEntry[]>(loadAuditEntries);
@@ -155,9 +158,18 @@ export function RemoteAccessModal({ isOpen, onClose }: RemoteAccessModalProps) {
         ) : (
           <>
             <p className="remote-intro">
-              Keep your agents going from your phone, with any AI assistant that supports MCP
-              connectors — Grok, Claude, ChatGPT and more. It drives Ship Studio on this computer —
-              the same tabs, the same conversations — so everything is waiting when you’re back.
+              Drive your agents from another assistant — Grok, ChatGPT, Claude, or anything that
+              supports MCP connectors. It works on this computer — the same agents, the same
+              conversations — so everything is waiting when you’re back.{' '}
+              <TextButton
+                variant="accent"
+                onClick={() => {
+                  onClose();
+                  openModal('phone');
+                }}
+              >
+                For your phone, use the phone app.
+              </TextButton>
             </p>
             <RemoteOnBar ctl={ctl} />
             <RemoteSetup

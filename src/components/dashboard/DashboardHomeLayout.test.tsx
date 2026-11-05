@@ -57,26 +57,11 @@ describe('dashboard home layout pieces', () => {
     mocks.trackEvent.mockReset();
   });
 
-  it('renders the Ship Studio hero icon and copy', () => {
+  it('renders a neutral headline with no logo', () => {
     render(<DashboardHeader />);
 
-    expect(screen.getByRole('img', { name: 'Ship Studio' })).toHaveAttribute(
-      'src',
-      '/ShipStudio_IconBrand.png'
-    );
-    const logoButton = screen.getByRole('button', { name: 'Pulse Ship Studio logo' });
-    fireEvent.click(logoButton);
-    expect(logoButton).toHaveClass('dashboard-hero-icon-button--hover-suppressed');
-    expect(screen.getByRole('img', { name: 'Ship Studio' })).toHaveClass(
-      'dashboard-hero-icon--click-pulsing'
-    );
-    fireEvent.animationEnd(screen.getByRole('img', { name: 'Ship Studio' }));
-    expect(screen.getByRole('img', { name: 'Ship Studio' })).not.toHaveClass(
-      'dashboard-hero-icon--click-pulsing'
-    );
-    fireEvent.mouseLeave(logoButton);
-    expect(logoButton).not.toHaveClass('dashboard-hero-icon-button--hover-suppressed');
-    expect(screen.getByRole('heading', { name: 'What will you Ship today?' })).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What are we working on?' })).toBeInTheDocument();
   });
 
   it('routes the home screen header hide action', () => {

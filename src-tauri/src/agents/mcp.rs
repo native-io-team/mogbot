@@ -156,8 +156,8 @@ const TOOLS: &[Tool] = &[
                 "role": { "type": "string", "description": "One line: what this agent is responsible for." },
                 "instructions": { "type": "string", "description": "A briefing, as if for a new hire: context, standing rules, who's who, where things live." },
                 "color": { "type": "string", "enum": store::COLORS },
-                "project": { "type": "string", "description": "Optional: bind it to one Ship Studio project (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
-                "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code, the default) or `codex` (Codex, on the user's ChatGPT plan). Only when the user asks for it; it must be installed and signed in." },
+                "project": { "type": "string", "description": "Optional: bind it to one of the user's projects (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
+                "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on Claude Code, or on Codex when Claude Code isn't set up. Only when the user asks for it; it must be installed and signed in." },
                 "first_task": { "type": "string", "description": "Optional message to start it on right away." }
             },
             "required": ["name", "role", "instructions"]
@@ -205,7 +205,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "schedule_check_in",
-        description: "Have Ship Studio wake you later with a note to yourself: use it whenever you tell the user you'll check back, follow up or remind them, so that actually happens. Once (\"tomorrow at 9:00\", \"in 2 hours\", \"friday 14:30\") or as a routine (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\"), in the user's local time. It only fires while Ship Studio is open; the answer says exactly when and what happens if it's closed. Tell the user that time.",
+        description: "Have the app wake you later with a note to yourself: use it whenever you tell the user you'll check back, follow up or remind them, so that actually happens. Once (\"tomorrow at 9:00\", \"in 2 hours\", \"friday 14:30\") or as a routine (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\"), in the user's local time. It only fires while the app is open; the answer says exactly when and what happens if it's closed. Tell the user that time.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -651,7 +651,11 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
             Err(e) => return error(e.to_string()),
         },
         Some(Err(e)) => return error(e.to_string()),
-        None => None,
+        // Unpicked: one that can run here (Codex, when that's all there is).
+        None => match super::engine::default_for(&super::engine::overview().await) {
+            Engine::Claude => None,
+            other => Some(other),
+        },
     };
     let created = store::create(store::NewAgent {
         name: name.to_string(),
@@ -1452,6 +1456,7 @@ mod tests {
             engine: Default::default(),
             model: None,
             new_engine: false,
+            context: None,
             routine_model: None,
             muted: false,
             check_ins: Vec::new(),

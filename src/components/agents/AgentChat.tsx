@@ -42,7 +42,6 @@ import { AgentModelMenu } from './AgentModelMenu';
 import { TextArea } from '../primitives/TextField';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
-import { AgentsStayOnNote } from './AgentsStayOn';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
@@ -67,6 +66,7 @@ import {
   DayDivider,
   CheckInLine,
   ErrorLine,
+  FreshHint,
   NoteLine,
   PeerGroup,
   UserBubble,
@@ -113,10 +113,35 @@ import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 
 /**
- * First open: one-click ways in. Importing isn't the Chief's job (the other
- * assistant does it), so that one opens the import steps instead.
+ * The Chief's first open: one-click answers to its greeting. Importing isn't
+ * the Chief's job (the other assistant does it), so that one opens the import
+ * steps instead.
  */
-const STARTERS = ['Set up my team', 'What can you do?'];
+const STARTERS = ['Help me plan my week', 'Set up a daily brief', 'What can you do?'];
+
+function ChiefStarters({
+  onStart,
+  onImport,
+}: {
+  onStart: (text: string) => void;
+  /** With no sidebar to hold the import note, the starters offer it. */
+  onImport?: () => void;
+}) {
+  return (
+    <div className="agent-chat__starters">
+      {STARTERS.map((text) => (
+        <Button key={text} tabIndex={0} variant="secondary" onClick={() => onStart(text)}>
+          {text}
+        </Button>
+      ))}
+      {onImport && (
+        <Button tabIndex={0} variant="secondary" onClick={onImport}>
+          Import agents…
+        </Button>
+      )}
+    </div>
+  );
+}
 /** Any other agent's first open: what to ask a new teammate. */
 const AGENT_STARTERS = ['What’s on your plate?', 'Check in with me tomorrow at 9'];
 
@@ -215,6 +240,10 @@ export function AgentChat({
   const rawDraft = useAgentsSelector((s) => s.drafts[agent.id]);
   const engineReady = useAgentsSelector((s) =>
     engineIsReady(agent.engine, s.engines, s.engineReady)
+  );
+  /** Installed but signed out: the blocked composer offers sign-in, not an install. */
+  const engineInstalled = useAgentsSelector(
+    (s) => s.engines.find((e) => e.id === agent.engine)?.installed ?? false
   );
   // An engine whose turns can't stop to ask refuses instead: said where you talk to it.
   const cantAsk = useAgentsSelector((s) => engineCantAsk(agent.engine, s.engines));
@@ -394,6 +423,12 @@ export function AgentChat({
   }, [colorKey]);
 
   const items = useMemo(() => buildChatItems(shown), [shown]);
+  /** Nothing yet but what the Chief said first: the user hasn't spoken. */
+  const greetingOnly =
+    agent.isMain &&
+    shown.length > 0 &&
+    shown.every((m) => m.kind === 'agent') &&
+    agent.status.state === 'idle';
   const livePeerLines = useMemo(() => newestPeerGroups(items), [items]);
   const drivingId = useMemo(() => drivingBriefId(items, agent), [items, agent]);
   // Retry belongs to the newest failure only, and only if nothing was said
@@ -703,7 +738,9 @@ export function AgentChat({
     const previous = el.style.height;
     el.style.transition = 'none';
     el.style.height = 'auto';
-    const next = `${Math.min(el.scrollHeight, 180)}px`;
+    // The cap is CSS's (about eight lines); past it the field scrolls.
+    const cap = parseFloat(getComputedStyle(el).maxHeight) || 180;
+    const next = `${Math.min(el.scrollHeight, cap)}px`;
     el.style.height = previous || next;
     void el.offsetHeight;
     el.style.transition = '';
@@ -958,34 +995,23 @@ export function AgentChat({
                 {agent.isMain ? (
                   <>
                     <p className="agent-chat__empty-role">
-                      Your Chief of Staff builds and runs your team: it sets up agents for your
-                      projects, briefs them, and tracks their work.
+                      Tell me what you’re working on and I’ll put a team together. I create agents,
+                      hand them the work, and bring you what comes back.
                     </p>
                     {engineReady && (
-                      <div className="agent-chat__starters">
-                        {STARTERS.map((text) => (
-                          <Button
-                            key={text}
-                            tabIndex={0}
-                            variant="secondary"
-                            onClick={() => sendStarter(text)}
-                          >
-                            {text}
-                          </Button>
-                        ))}
-                        {/* The sidebar's import note is the way in; with no sidebar, this is. */}
-                        {compact && (
-                          <Button tabIndex={0} variant="secondary" onClick={onImport}>
-                            Import agents…
-                          </Button>
-                        )}
-                      </div>
+                      <ChiefStarters
+                        onStart={sendStarter}
+                        onImport={compact ? onImport : undefined}
+                      />
                     )}
-                    <AgentsStayOnNote />
                   </>
                 ) : (
                   <>
                     {agent.role && <p className="agent-chat__empty-role">{agent.role}</p>}
+                    <p className="agent-chat__empty-hint">
+                      It remembers what you tell it. Anything risky comes to you first, as an Allow
+                      or Deny card.
+                    </p>
                     <TextButton tabIndex={0} onClick={() => actions.onEdit(agent)}>
                       View instructions
                     </TextButton>
@@ -1008,6 +1034,14 @@ export function AgentChat({
               </div>
             ) : (
               rows
+            )}
+            {/* The Chief spoke first (its stored greeting); the ways in sit
+              under it until the user says something. */}
+            {greetingOnly && engineReady && (
+              <ChiefStarters onStart={sendStarter} onImport={compact ? onImport : undefined} />
+            )}
+            {items.length > 0 && (
+              <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
             )}
             {items.length === 0 && indicator.mounted && (
               <WorkingIndicator
@@ -1135,20 +1169,21 @@ export function AgentChat({
                     title="Attach files, or paste or drop them here"
                   />
                 )}
-                <div className="agent-composer__actions">
-                  {escArmed && working && !canSend && !dictating ? (
-                    <span className="agent-composer__hint" data-armed role="status">
-                      Esc again to stop {agent.name}
+                {/* Its own row above the text, so a long hint never squeezes it. */}
+                {escArmed && working && !canSend && !dictating ? (
+                  <span className="agent-composer__hint" data-armed role="status">
+                    Esc again to stop {agent.name}
+                  </span>
+                ) : (
+                  busy &&
+                  canSend &&
+                  !dictating && (
+                    <span className="agent-composer__hint" aria-hidden>
+                      ↵ queues · ⌘↵ interrupts and sends now
                     </span>
-                  ) : (
-                    busy &&
-                    canSend &&
-                    !dictating && (
-                      <span className="agent-composer__hint" aria-hidden>
-                        ↵ queues · ⌘↵ interrupts and sends now
-                      </span>
-                    )
-                  )}
+                  )
+                )}
+                <div className="agent-composer__actions">
                   <IconButton
                     ref={micRef}
                     tabIndex={0}
@@ -1199,12 +1234,12 @@ export function AgentChat({
             <div className="agent-composer agent-composer--blocked" role="status">
               <WarningIcon size={14} className="agent-composer__blocked-icon" />
               <span className="agent-composer__blocked-text">
-                {agent.engine === 'codex'
-                  ? `${agent.name} runs on Codex, which isn’t installed and signed in on this Mac.`
-                  : 'Agents run on Claude Code, which isn’t installed on this Mac yet.'}
+                {engineInstalled
+                  ? `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which is signed out on this Mac.`
+                  : `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which isn’t installed on this Mac yet.`}
               </span>
               <Button tabIndex={0} variant="primary" onClick={onSetUpEngine}>
-                Set up {ENGINE_LABEL[agent.engine]}
+                {engineInstalled ? 'Sign in' : `Set up ${ENGINE_LABEL[agent.engine]}`}
               </Button>
             </div>
           )}

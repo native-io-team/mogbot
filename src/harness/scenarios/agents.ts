@@ -21,7 +21,8 @@ const tomorrowAt = (hour: number, minute = 0) => {
 };
 
 /** The first-run way into import: the sidebar note's link, or with no sidebar the Chief's starter. */
-const IMPORT_STARTER = '.agents-import-nudge__action, .agent-chat__starters > button:last-child';
+const IMPORT_STARTER =
+  '.agents-import-nudge__action, .agents-list__import, .agent-chat__starters > button:last-child';
 
 /** A reply Grok Bot might paste back: prose around two numbered blocks. */
 const PASTED_REPLY = [
@@ -1020,6 +1021,35 @@ const QUEUED_CHAT = [
   msg('user', 'Also check the footer links once that’s done.', 0.5, { agentId: 'acme' }),
 ];
 
+/**
+ * Start fresh. Acme Site's conversation as its engine last reported it: the
+ * latest request carried 174k of a 200k window (87%, past the 85% nudge).
+ */
+const ACME_FULL = {
+  status: status('idle'),
+  context: { used: 174_000, window: 200_000, at: now - 19 * MIN },
+};
+
+/** The same chat after a fresh start: the history, the divider, then the new conversation. */
+const FRESH_CHAT = [
+  ...ACME_CHAT,
+  msg('note', 'Started fresh · memory kept', 12, { agentId: 'acme', fresh: true }),
+  msg('user', 'New one: the client wants a dark mode toggle in the header.', 11, {
+    agentId: 'acme',
+  }),
+  msg(
+    'agent',
+    'On it. I’ll use the brand’s dark palette from the guidelines and keep the 24px mobile gutters.',
+    10,
+    { agentId: 'acme' }
+  ),
+];
+const ACME_FRESH = {
+  status: status('idle'),
+  sessionId: 'session-2',
+  context: { used: 21_400, window: 200_000, at: now - 10 * MIN },
+};
+
 const acmeWith = (over: Record<string, unknown>) =>
   overview(TEAM.map((a) => (a.id === 'acme' ? { ...a, ...over } : a)));
 
@@ -1150,7 +1180,46 @@ const CONNECTED_APPS = [
   { name: 'playwright', target: 'npx @playwright/mcp@latest', status: 'error', source: 'other' },
 ];
 
+/** A chat with a long message of yours, to check the bubble wraps at ~70%. */
+const LONG_USER_CHAT = [
+  msg('user', 'Morning. What’s on fire?', 30),
+  msg('agent', 'Nothing’s on fire. Lead Gen is waiting for your OK on the first email.', 29),
+  msg(
+    'user',
+    'Thanks. Before Lead Gen sends anything, can you have it show me the three best leads with a line on why each one, and hold the rest until I have looked at those? Also remind me tomorrow at nine to check the Northwind invoice.',
+    28
+  ),
+];
+
+const COMPOSER_LINES = (n: number) =>
+  Array.from({ length: n }, (_, i) =>
+    i === 0 ? 'Draft the Northwind follow-up' : `and point ${i + 1} to cover in it`
+  ).join('\n');
+
+const composerScenario = (lines: number): Scenario => ({
+  id: `agents-composer-${lines}-line${lines === 1 ? '' : 's'}`,
+  title: `Agents — the composer at ${lines} line${lines === 1 ? '' : 's'}`,
+  looksRightWhen:
+    lines === 1
+      ? 'A slim one-row composer (~44px): paperclip left, the text, then mic and a filled send button right, all on one row; 12px-radius corners and a hairline border, the width of the message column. Your long message above is a bubble about 70% of the column wide, with even 12×8 padding and the same corners on every line.'
+      : lines === 3
+        ? 'The field has grown to three lines with the same 12px corners (no pill); paperclip, mic and send sit on the last line’s baseline row.'
+        : 'Ten lines typed: the field stops at about eight lines and scrolls; the icons stay on the bottom row; corners unchanged.',
+  command: 'agents.open',
+  requires: '.agent-composer__input',
+  clipSelector: '.agent-chat',
+  steps: [{ fill: '.agent-composer__input', value: COMPOSER_LINES(lines) }],
+  commands: {
+    agents_overview: overview([{ ...TEAM[0], preview: null }]),
+    agents_messages: (args: Record<string, unknown>) =>
+      args.agentId === 'chief' ? LONG_USER_CHAT : [],
+  },
+});
+
 export const agentsScenarios: Scenario[] = [
+  composerScenario(1),
+  composerScenario(3),
+  composerScenario(10),
   {
     id: 'agents-team',
     title: 'Agents — a working team, Chief of Staff open',
@@ -1605,6 +1674,7 @@ export const agentsScenarios: Scenario[] = [
     steps: [
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]:nth-child(6)' },
+      { click: '.agent-editor__more' },
       { click: '[aria-label="Runs on"] button:nth-child(2)' },
     ],
     commands: {
@@ -1681,21 +1751,32 @@ export const agentsScenarios: Scenario[] = [
   },
   {
     id: 'agents-first-run',
-    title: 'Agents — first open, only the Chief of Staff',
+    title: 'Agents — first open: the Chief of Staff says hello',
     looksRightWhen:
-      'One agent, the Chief of Staff: its avatar and name centred in an empty conversation, one sentence saying it builds and runs your team, and two one-click starters under it (Set up my team, What can you do?). Import is the sidebar note’s alone. Set apart below, one muted line (“Agents run on this Mac. Closing Ship Studio stops them, and sleep pauses them.”), three small ghost actions (Keep this Mac awake, Keep running when closed, Open at login), and the quieter “Around the clock?” line. The composer is ready.',
+      'The Chief’s chat opens on its greeting, a normal agent bubble: a hello, one line asking what you’re working on, four short bold-led points (agents for the work, Allow or Deny cards, projects, the phone) and a question. Under it, left-aligned with the conversation, three starters (Help me plan my week, Set up a daily brief, What can you do?). No power-management note and no import pitch in the sidebar yet. The composer is ready.',
     command: 'agents.open',
-    requires: '.agents-stay-on .button',
+    requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
   },
   {
-    id: 'agents-first-run-awake',
-    title: 'Agents — first open, kept awake and running when closed',
+    id: 'agents-first-run-empty',
+    title: 'Agents — a Chief with no greeting (an older chat, emptied)',
     looksRightWhen:
-      'As agents-first-run, but the note reads “Closing the window keeps them going; quitting stops them, and sleep pauses them.”, “Keep this Mac awake” and “Keep running when closed” show ticked and pressed, and “Open at login” is not.',
+      'Avatar and name centred, then one line in the Chief’s voice (“Tell me what you’re working on and I’ll put a team together…”) and the three starters under it. Nothing else.',
     command: 'agents.open',
-    requires: '.agents-stay-on',
+    requires: '.agent-chat__empty .agent-chat__starters',
+    commands: { agents_messages: [] },
+  },
+  {
+    id: 'agents-first-run-awake',
+    title: 'Agents — What’s in flight, with what keeps agents running',
+    looksRightWhen:
+      'At the foot of What’s in flight, once an agent is working or something is scheduled: “Agents run on this Mac. Closing the window keeps them going; quitting stops them, and sleep pauses them.”, “Keep this Mac awake” and “Keep running when closed” ticked and pressed, “Open at login” not, and the quieter “Around the clock?” line.',
+    command: 'agents.team',
+    requires: '.agents-team .agents-stay-on',
     commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
       get_stay_on: {
         supported: true,
         keepAwake: true,
@@ -1709,8 +1790,18 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-new',
     title: 'Agents — creating an agent',
     looksRightWhen:
-      'A badge beside the name field that updates as you type and pick a colour; eleven colours; the Default / Opus / Sonnet / Haiku control; role and instructions one link away.',
+      'Name first (with its badge), then “What should it do?” and “What should it know?”, a muted line saying you can just ask your Chief of Staff, and a collapsed “Advanced” link. No colours, models or projects until Advanced is opened.',
     command: 'agents.new',
+    requires: '.agent-editor__advanced',
+    commands: {},
+  },
+  {
+    id: 'agents-new-advanced',
+    title: 'Agents — creating an agent, Advanced open',
+    looksRightWhen:
+      'Advanced open under the brief: Colour (eleven swatches), Runs on, Model (Default / Opus / Sonnet / Haiku), Works in, Apps.',
+    // Steps run before a scenario's command, so the dialog is opened by its button.
+    steps: [{ click: '.agents-list__new' }, { click: '.agent-editor__more' }],
     requires: '.agent-editor__colors',
     commands: {},
   },
@@ -2026,17 +2117,129 @@ export const agentsScenarios: Scenario[] = [
     },
   },
   {
-    id: 'agents-no-engine',
-    title: 'Agents — Claude Code not installed',
+    id: 'agents-fresh-suggested',
+    title: 'Agents — a nearly full conversation suggests starting fresh',
     looksRightWhen:
-      'The composer’s slot says agents need Claude Code and offers to set it up; the header band is undisturbed and there is no send button.',
+      'Acme Site is idle. Under its last reply, one quiet centred line: “This conversation is getting long — Acme Site may lose track of early details. Start fresh (memory is kept)”, the last part an underlined, brighter link. Nothing else changed in the chat.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-fresh-hint',
+    steps: [{ click: '[data-agent-id="acme"]' }],
+    commands: {
+      agents_overview: acmeWith(ACME_FULL),
+      agents_messages: messagesFor,
+    },
+  },
+  {
+    id: 'agents-fresh-menu',
+    title: 'Agents — Start fresh in the agent’s … menu',
+    looksRightWhen:
+      'The header’s … menu is open. After “Edit agent…” comes “Start fresh (87% full)…” with a reload icon, then the divider, Hide from sidebar and Delete…',
+    openSelector: AGENTS_TAB,
+    requires: '.ss-dropdown__item',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__menu [aria-label^="Actions for"]' },
+    ],
+    commands: {
+      agents_overview: acmeWith(ACME_FULL),
+      agents_messages: messagesFor,
+    },
+  },
+  {
+    id: 'agents-fresh-confirm',
+    title: 'Agents — confirming a fresh start',
+    looksRightWhen:
+      'A small dialog: “Start Acme Site fresh?”, then that its next message starts a new conversation, its instructions and memory carry over, and anything it only knew from this conversation doesn’t. The hint says the chat stays. Cancel and a primary (not red) “Start fresh”.',
+    openSelector: AGENTS_TAB,
+    requires: '.modal-frame-content',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__menu [aria-label^="Actions for"]' },
+      { click: '[role="menuitem"]:nth-child(7)' },
+    ],
+    commands: {
+      agents_overview: acmeWith(ACME_FULL),
+      agents_messages: messagesFor,
+    },
+  },
+  {
+    id: 'agents-fresh-divider',
+    title: 'Agents — the chat after starting fresh',
+    looksRightWhen:
+      'Acme Site’s earlier conversation is all still there. Below it, a calm full-width divider: a hairline either side of “Started fresh · memory kept”. Under it the new conversation (the dark mode request and its reply). No “% full” nudge: the new conversation is small.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-fresh',
+    steps: [{ click: '[data-agent-id="acme"]' }],
+    commands: {
+      agents_overview: acmeWith(ACME_FRESH),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? FRESH_CHAT : messagesFor(args),
+    },
+  },
+  {
+    id: 'agents-fresh-meter',
+    title: 'Agents — how full the conversation is, in the editor',
+    looksRightWhen:
+      'Editing Acme Site: under This week / All time, a third quiet line “Conversation · 11% full · 21k of 200k tokens”. It is there only because the engine reported both numbers.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-editor__usage',
+    clipSelector: '.agent-editor__usage',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__menu [aria-label^="Actions for"]' },
+      { click: '[role="menuitem"]:nth-child(6)' },
+    ],
+    commands: {
+      agents_overview: acmeWith(ACME_FRESH),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? FRESH_CHAT : messagesFor(args),
+      agents_instructions: 'Own the Acme marketing site. Ask before anything ships.',
+      agents_usage: { week: totals(6, 120_000, 1.2, 9), allTime: totals(40, 900_000, 9.4, 70) },
+    },
+  },
+  {
+    id: 'agents-no-engine',
+    title: 'Agents — the Chief’s engine (Claude Code) isn’t installed',
+    looksRightWhen:
+      'Codex is here but Claude Code isn’t, and this Chief has a conversation on Claude Code. The composer’s slot says “Chief of Staff runs on Claude Code, which isn’t installed on this Mac yet.” with “Set up Claude Code”; the header band is undisturbed and there is no send button.',
     command: 'agents.open',
     requires: '.agent-composer--blocked',
     commands: {
-      // A fresh Mac: the Chief has no history, so its row has no preview either.
       agents_overview: {
         ...overview([{ ...TEAM[0], preview: null }]),
         engineReady: false,
+        engines: ENGINES.map((e) =>
+          e.id === 'claude' ? { ...e, installed: false, signedIn: false } : e
+        ),
+      },
+    },
+  },
+  {
+    id: 'agents-claude-signed-out',
+    title: 'Agents — Claude Code signed out',
+    looksRightWhen:
+      'Claude Code is installed but its sign-in lapsed: before anything is typed, the composer’s slot says “Chief of Staff runs on Claude Code, which is signed out on this Mac.” with a “Sign in” button. No send button.',
+    command: 'agents.open',
+    requires: '.agent-composer--blocked',
+    commands: {
+      agents_overview: {
+        ...overview([{ ...TEAM[0], preview: null }]),
+        engines: ENGINES.map((e) => (e.id === 'claude' ? { ...e, signedIn: false } : e)),
+      },
+    },
+  },
+  {
+    id: 'agents-no-engine-at-all',
+    title: 'Agents — set up on another agent CLI (no Claude Code or Codex)',
+    looksRightWhen:
+      'Someone set up on Opencode, Cursor or their own agent: Agents explains in one panel that agents run on Claude Code or Codex, with “Set up Claude Code” (primary) and “Set up Codex”, and a quiet link back to their projects. No chat, no composer.',
+    command: 'agents.open',
+    requires: '.agents-no-engine',
+    commands: {
+      agents_overview: {
+        ...overview([{ ...TEAM[0], preview: null }]),
+        engineReady: false,
+        engines: ENGINES.map((e) => ({ ...e, installed: false, signedIn: false })),
       },
     },
   },
@@ -2044,6 +2247,7 @@ export const agentsScenarios: Scenario[] = [
   // ---------------------------------------------------- the mode toggle
   {
     id: 'mode-toggle-home',
+    startOn: 'projects',
     title: 'Mode toggle — on the dashboard, an agent waiting',
     looksRightWhen:
       'A text-only “Projects | Agents” segmented control directly above Search, 30px tall like it, with exactly Search’s left and right edges. Projects is selected. A small amber badge sits in the Agents segment’s top-right corner and both labels are centred in their halves. No Agents row under Search and no + beside the toggle.',
@@ -2052,6 +2256,7 @@ export const agentsScenarios: Scenario[] = [
   },
   {
     id: 'mode-toggle-tooltip',
+    startOn: 'projects',
     title: 'Mode toggle — the Agents tooltip names who wants you',
     looksRightWhen: 'Hovering Agents shows “Lead Gen needs your OK · 1 unread (⌘⇧A)”.',
     requires: '.mode-toggle .mode-toggle__dot',
@@ -2093,6 +2298,7 @@ export const agentsScenarios: Scenario[] = [
   },
   {
     id: 'mode-toggle-collapsed',
+    startOn: 'projects',
     title: 'Mode toggle — collapsed sidebar',
     looksRightWhen:
       'In the rail the toggle is two stacked icons (folder, agents) in one 30px-wide segmented column, Projects selected, the amber badge on the agents icon’s corner. Search sits under it as an icon.',
@@ -2113,6 +2319,7 @@ export const agentsScenarios: Scenario[] = [
   },
   {
     id: 'mode-toggle-compact-home',
+    startOn: 'projects',
     title: 'Mode toggle — compact window, dashboard',
     looksRightWhen:
       'No sidebar below 750px, so the toggle is a folder | agents icon pair at the top-left, clear of the traffic lights, 24px tall like the compact top bar’s controls. Projects is selected; the amber badge straddles the agents segment’s corner.',

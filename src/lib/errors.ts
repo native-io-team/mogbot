@@ -187,7 +187,7 @@ const BACKEND_HUMANIZED_GIT_PHRASES = [
   "already merged, so there's nothing to close",
   // switch_branch's own friendly messages (issue #859): an old Git that
   // rejects `--end-of-options`, and a checkout blocked by an unresolved merge.
-  'your installed git is too old for ship studio',
+  'your installed git is too old',
   'resolve your current index first',
 ];
 
@@ -380,7 +380,7 @@ export function humanizeGitError(value: unknown, ctx: GitErrorContext = {}): str
     m.includes('pathspec') ||
     m.includes('unknown revision or path')
   ) {
-    return `${branch} no longer exists. It may have been deleted or renamed outside Ship Studio.`;
+    return `${branch} no longer exists. It may have been deleted or renamed outside the app.`;
   }
 
   // Not a git repo yet.

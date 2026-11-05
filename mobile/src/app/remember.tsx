@@ -7,17 +7,21 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
-import { Button, T } from '../components/ui';
+import { Button, T, SheetPage } from '../components/ui';
 import { haptic } from '../lib/haptics';
 import { changeMemory, describeError, suggestMemory } from '../lib/session';
 import { useApp } from '../lib/store';
 import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
-import { colors, fonts, radius, space, type } from '../lib/theme';
+import { fonts, radius, space, type } from '../lib/theme';
+import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 
 export default withAgentAccent(Remember);
 
 function Remember() {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const accent = useAccent();
   const { id, messageId } = useLocalSearchParams<{ id: string; messageId: string }>();
   const router = useRouter();
@@ -60,63 +64,70 @@ function Remember() {
   };
 
   return (
-    <View style={styles.root}>
-      <T variant="title" color={colors.textWhite}>
-        Remember this
-      </T>
-      <TextInput
-        autoFocus
-        multiline
-        value={text}
-        onChangeText={(t) => {
-          typed.current = true;
-          setText(t);
-        }}
-        maxLength={2_000}
-        placeholder={summarising ? 'Summarising…' : `What should ${name} remember?`}
-        placeholderTextColor={colors.textMuted}
-        keyboardAppearance="dark"
-        selectionColor={accent.accent}
-        accessibilityLabel={`What ${name} should remember`}
-        style={styles.input}
-      />
-      <T variant="caption" color={colors.textSecondary}>
-        Added to {name}’s memory, which it reads at the start of every conversation. Edit or forget
-        it any time from its sheet.
-      </T>
-      {error && (
-        <T variant="small" color={colors.accentErrorLight}>
-          {error}
+    <SheetPage>
+      <View style={styles.root}>
+        <T variant="title" color={colors.textStrong}>
+          Remember this
         </T>
-      )}
-      <View style={styles.actions}>
-        <Button title="Cancel" variant="ghost" onPress={() => router.back()} style={{ flex: 1 }} />
-        <Button
-          title="Remember"
-          variant="primary"
-          busy={busy}
-          disabled={!connected || !text.trim()}
-          onPress={() => void save()}
-          style={{ flex: 1 }}
+        <TextInput
+          autoFocus
+          multiline
+          value={text}
+          onChangeText={(t) => {
+            typed.current = true;
+            setText(t);
+          }}
+          maxLength={2_000}
+          placeholder={summarising ? 'Summarising…' : `What should ${name} remember?`}
+          placeholderTextColor={colors.textMuted}
+          keyboardAppearance={appearance}
+          selectionColor={accent.accent}
+          accessibilityLabel={`What ${name} should remember`}
+          style={styles.input}
         />
+        <T variant="caption" color={colors.textSecondary}>
+          Added to {name}’s memory, which it reads at the start of every conversation. Edit or
+          forget it any time from its sheet.
+        </T>
+        {error && (
+          <T variant="small" color={colors.accentErrorLight}>
+            {error}
+          </T>
+        )}
+        <View style={styles.actions}>
+          <Button
+            title="Cancel"
+            variant="ghost"
+            onPress={() => router.back()}
+            style={{ flex: 1 }}
+          />
+          <Button
+            title="Remember"
+            variant="primary"
+            busy={busy}
+            disabled={!connected || !text.trim()}
+            onPress={() => void save()}
+            style={{ flex: 1 }}
+          />
+        </View>
       </View>
-    </View>
+    </SheetPage>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { padding: space.lg, paddingTop: space.xl, gap: space.md },
   input: {
     fontFamily: fonts.regular,
     fontSize: type.body,
-    color: colors.textWhite,
-    backgroundColor: colors.surfaceApp,
-    borderRadius: radius.lg,
+    color: colors.textBody,
+    backgroundColor: colors.inputFill,
+    borderRadius: radius.inner,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    borderColor: colors.inputBorder,
     padding: space.md,
     minHeight: 96,
     textAlignVertical: 'top',
   },
   actions: { flexDirection: 'row', gap: space.sm },
-});
+}));

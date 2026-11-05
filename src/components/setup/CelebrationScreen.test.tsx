@@ -1,5 +1,5 @@
 /**
- * Tests for CelebrationScreen component.
+ * Tests for CelebrationScreen: the hand-off from onboarding to Agents.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -15,60 +15,39 @@ describe('CelebrationScreen', () => {
     vi.useRealTimers();
   });
 
-  it('renders "You\'re all set!" text', () => {
-    const onContinue = vi.fn();
-    render(<CelebrationScreen onContinue={onContinue} hostingConnected={true} />);
+  it('names the verified engine and hands off to the Chief of Staff', () => {
+    render(<CelebrationScreen onContinue={vi.fn()} engineName="Claude Code" />);
 
-    expect(screen.getByText("You're all set!")).toBeInTheDocument();
-    expect(screen.getByText('Everything is installed and connected')).toBeInTheDocument();
+    expect(screen.getByText("You're all set")).toBeInTheDocument();
+    expect(
+      screen.getByText('Claude Code is connected. Your Chief of Staff is waiting for you.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Meet your Chief of Staff' })).toBeInTheDocument();
   });
 
-  it('does not claim everything is connected when hosting was skipped', () => {
-    const onContinue = vi.fn();
-    render(<CelebrationScreen onContinue={onContinue} hostingConnected={false} />);
+  it('names no engine it did not verify', () => {
+    render(<CelebrationScreen onContinue={vi.fn()} engineName={null} />);
 
-    expect(screen.getByText('Your dev environment is ready')).toBeInTheDocument();
-    expect(screen.queryByText('Everything is installed and connected')).not.toBeInTheDocument();
+    expect(screen.getByText('Your Chief of Staff is waiting for you.')).toBeInTheDocument();
+    expect(screen.queryByText(/is connected/)).not.toBeInTheDocument();
   });
 
-  it('calls onContinue after 2500ms auto-timer', () => {
+  it('waits for the click rather than moving on by itself', () => {
     const onContinue = vi.fn();
-    render(<CelebrationScreen onContinue={onContinue} hostingConnected={true} />);
+    render(<CelebrationScreen onContinue={onContinue} engineName="Claude Code" />);
 
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
     expect(onContinue).not.toHaveBeenCalled();
 
-    act(() => {
-      vi.advanceTimersByTime(2500);
-    });
-
-    expect(onContinue).toHaveBeenCalledTimes(1);
-  });
-
-  it('click "Get Started" calls onContinue immediately', () => {
-    const onContinue = vi.fn();
-    render(<CelebrationScreen onContinue={onContinue} hostingConnected={true} />);
-
-    fireEvent.click(screen.getByText('Get Started'));
-    expect(onContinue).toHaveBeenCalledTimes(1);
-  });
-
-  it('fires onContinue exactly once when the button is clicked before the auto-timer', () => {
-    const onContinue = vi.fn();
-    render(<CelebrationScreen onContinue={onContinue} hostingConnected={true} />);
-
-    fireEvent.click(screen.getByText('Get Started'));
-    expect(onContinue).toHaveBeenCalledTimes(1);
-
-    // The pending auto-advance timer must not fire a second continue
-    act(() => {
-      vi.advanceTimersByTime(5000);
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Meet your Chief of Staff' }));
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
   it('fires onContinue exactly once on rapid double-click', () => {
     const onContinue = vi.fn();
-    render(<CelebrationScreen onContinue={onContinue} hostingConnected={true} />);
+    render(<CelebrationScreen onContinue={onContinue} engineName="Claude Code" />);
 
     const button = screen.getByRole('button');
     fireEvent.click(button);
@@ -76,35 +55,20 @@ describe('CelebrationScreen', () => {
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
-  it('fires onContinue exactly once when the auto-timer wins, then the button is clicked', () => {
-    const onContinue = vi.fn();
-    render(<CelebrationScreen onContinue={onContinue} hostingConnected={true} />);
-
-    act(() => {
-      vi.advanceTimersByTime(2500);
-    });
-    expect(onContinue).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByRole('button'));
-    expect(onContinue).toHaveBeenCalledTimes(1);
-  });
-
   it('shows a pending spinner on the button after clicking (completion can take seconds)', () => {
-    const onContinue = vi.fn();
-    render(<CelebrationScreen onContinue={onContinue} hostingConnected={true} />);
+    render(<CelebrationScreen onContinue={vi.fn()} engineName="Claude Code" />);
 
     const button = screen.getByRole('button');
     fireEvent.click(button);
 
     expect(button).toBeDisabled();
-    expect(screen.queryByText('Get Started')).not.toBeInTheDocument();
+    expect(screen.queryByText('Meet your Chief of Staff')).not.toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 
   it('animates in (visible class applied after 100ms)', () => {
-    const onContinue = vi.fn();
     const { container } = render(
-      <CelebrationScreen onContinue={onContinue} hostingConnected={true} />
+      <CelebrationScreen onContinue={vi.fn()} engineName="Claude Code" />
     );
 
     const screenEl = container.querySelector('.celebration-screen');

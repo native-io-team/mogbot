@@ -319,9 +319,13 @@ enum OsascriptOutcome {
 /// Message shown when macOS has blocked the Apple Event. Kept in one place so
 /// the read and control paths say the same thing.
 #[cfg(target_os = "macos")]
-const PERMISSION_DENIED_MESSAGE: &str =
-    "Ship Studio isn't allowed to control Spotify. Enable it in System Settings → \
-     Privacy & Security → Automation, under Ship Studio.";
+fn permission_denied_message() -> String {
+    format!(
+        "{name} isn't allowed to control Spotify. Enable it in System Settings → \
+         Privacy & Security → Automation, under {name}.",
+        name = crate::brand::NAME
+    )
+}
 
 #[cfg(target_os = "macos")]
 const NOT_RUNNING_MESSAGE: &str = "Spotify isn't running.";
@@ -430,7 +434,7 @@ async fn platform_control(action: String, value: Option<f64>) -> Result<(), Comm
     match run_osascript(&script, "osascript (spotify control)").await? {
         OsascriptOutcome::Ok(_) => Ok(()),
         OsascriptOutcome::PermissionDenied => {
-            Err(CommandError::expected(PERMISSION_DENIED_MESSAGE))
+            Err(CommandError::expected(permission_denied_message()))
         }
         OsascriptOutcome::NotRunning => Err(CommandError::expected(NOT_RUNNING_MESSAGE)),
     }

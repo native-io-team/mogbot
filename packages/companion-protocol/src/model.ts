@@ -52,6 +52,21 @@ export interface Agent {
   capabilities?: Capabilities;
   /** Secrets it has in the Keychain (names only); omitted when none. */
   secrets?: AgentSecret[];
+  /** Moved engines and not run there yet: its next turn starts a new conversation. */
+  newEngine?: boolean;
+  /** How full its conversation is, as its engine reported it; omitted when it doesn't say. */
+  context?: ContextFill;
+}
+
+/** Mirrors `context::ContextFill`: two numbers the engine reported, never estimated. */
+export interface ContextFill {
+  /** Tokens its latest request carried. */
+  used: number;
+  /** The model's context window. */
+  window: number;
+  at: number;
+  /** The engine's own id for the model that made the request, when it says. */
+  model?: string;
 }
 
 export interface Failure {
@@ -267,6 +282,8 @@ export interface AgentMessage {
    * Absent on everything else; older clients ignore it.
    */
   clientId?: string;
+  /** On a `note`: the conversation started fresh here (memory kept); a divider. */
+  fresh?: boolean;
 }
 
 export interface ChangedFile {

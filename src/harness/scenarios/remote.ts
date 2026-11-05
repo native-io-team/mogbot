@@ -245,12 +245,13 @@ export const remoteScenarios: Scenario[] = [
   ),
   {
     id: 'remote-indicator-off',
-    title: 'Sidebar — remote access never set up',
+    title: 'Sidebar — remote access never set up, no phone paired',
     looksRightWhen:
-      'At the foot of the sidebar, a hollow grey dot and "Remote access off", quieter than ' +
-      'everything around it. Clicking it opens Remote access setup.',
+      'At the foot of the sidebar, a hollow grey dot and "Put it on your phone" (the companion ' +
+      'app), quieter than everything around it, and no remote access row: remote access shows ' +
+      'there only while it is on. Clicking the phone row opens the Phone panel.',
     clipSelector: '.workspace-sidebar-footer',
-    requires: '[data-testid="remote-indicator"]',
+    requires: '[data-testid="phone-indicator"]',
     commands: {},
   },
   {

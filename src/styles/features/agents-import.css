@@ -41,13 +41,12 @@
   color: var(--text-secondary);
 }
 
-/* Paste a reply / Connected assistant: an underline pair under the title,
-   the divider doubling as the header's bottom edge. */
+/* Paste a reply / Connected assistant: two views of one small dialog, so a segmented
+   pair (Tabs' default appearance) with equal halves, set into the body with
+   the same inset as its content — not an underline strip on the header. */
 .agents-import__tabs {
   display: flex;
-  width: 100%;
-  padding: 0 var(--spacing-xl);
-  border-bottom: var(--border-width-default) solid var(--border-subtle);
+  margin: var(--spacing-lg) var(--spacing-xl) 0;
 }
 
 .agents-import__inline {

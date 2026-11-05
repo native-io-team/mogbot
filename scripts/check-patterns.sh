@@ -26,7 +26,7 @@ rule() {
   fi
 }
 
-echo "==> Ship Studio pattern-check"
+echo "==> Pattern check"
 echo
 
 # 1. New Result<T, String> in Rust command signatures (only warn — existing
@@ -211,6 +211,18 @@ if node scripts/check-modal-shells.mjs; then
   rule "component dialog/overlay recipes use ModalFrame or an explicit exception" 0
 else
   rule "component dialog/overlay recipes use ModalFrame or an explicit exception" 1
+fi
+echo
+
+# 6. The old app name in user-facing copy, and brand artwork named after it.
+# The name lives only in brand.json (CLAUDE.md, "Brand and identity"); copy
+# says "the app" or uses BRAND.name. Compat identifiers (.shipstudio/,
+# ~/ShipStudio, the plugin ABI) are allowed; see the script's header.
+echo "Checking for the old app name in user-facing copy and file names…"
+if node scripts/check-brand-copy.mjs; then
+  rule "no old app name in copy or file names" 0
+else
+  rule "no old app name in copy or file names" 1
 fi
 echo
 

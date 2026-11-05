@@ -310,7 +310,7 @@ export function LanguagesModal({ projectPath, onSendToClaude }: LanguagesModalPr
     void trackEvent('i18n_ai_fallback_used', { framework: status.framework });
     setPromptReview({
       description:
-        "Ship Studio couldn't edit this config automatically. This prompt asks your AI agent to make the change instead.",
+        "Couldn't edit this config automatically. This prompt asks your AI agent to make the change instead.",
       prompt: buildAiSetupPrompt(status),
     });
   };
@@ -410,7 +410,7 @@ export function LanguagesModal({ projectPath, onSendToClaude }: LanguagesModalPr
       {!promptReview && !isLoading && showSetupFlow && (
         <div className="languages-editor">
           <p className="languages-intro">
-            Your project uses the Next.js App Router. Ship Studio adds multilingual support with{' '}
+            Your project uses the Next.js App Router. Multilingual support comes from{' '}
             <strong>next-intl</strong> — pick your languages, then run a one-time setup with your AI
             agent:
           </p>

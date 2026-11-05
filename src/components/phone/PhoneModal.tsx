@@ -17,6 +17,8 @@ import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
 import { Checkbox } from '../primitives/Checkbox';
+import { TextButton } from '../primitives/TextButton';
+import { useOpenModal } from '../../contexts/ModalContext';
 import { CheckIcon, CloseIcon, ExternalLinkIcon } from '@/components/icons';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { usePolling } from '../../hooks/usePolling';
@@ -63,6 +65,7 @@ interface PhoneModalProps {
 
 export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
   const { showToast } = useOptionalToast();
+  const openModal = useOpenModal();
   const status = useAsyncState<PhoneStatus>(getPhoneStatus);
   const { execute: load, setData: setStatus } = status;
   const [code, setCode] = useState<PairingCode | null>(null);
@@ -261,6 +264,19 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
             )}
 
             {s.devices.length > 0 && <PhoneAbilities methods={s.methods} />}
+
+            {/* Remote access is the other way in: secondary, and said so. */}
+            <p className="phone-footnote">
+              Want to drive this from another assistant (ChatGPT, Claude, Grok…)?{' '}
+              <TextButton
+                onClick={() => {
+                  onClose();
+                  openModal('remoteAccess');
+                }}
+              >
+                Here’s how
+              </TextButton>
+            </p>
           </>
         )}
       </div>

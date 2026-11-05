@@ -35,6 +35,7 @@ import {
   modelChoices,
   engineIsReady,
   defaultEngine,
+  noEngineInstalled,
   engineCantAsk,
   engineProtections,
   engineUnavailable,
@@ -339,6 +340,21 @@ describe('formatUsage', () => {
     expect(modelLabel('gpt-5.5', modelChoices('codex', engines))).toBe('GPT-5.5');
     expect(engineIsReady('codex', engines, true)).toBe(false);
     expect(engineIsReady('claude', engines, true)).toBe(true);
+    // A signed-out Claude Code says so before a message fails on it.
+    const signedOut = engines.map((e) => (e.id === 'claude' ? { ...e, signedIn: false } : e));
+    expect(engineIsReady('claude', signedOut, true)).toBe(false);
+    // Before the engines load, the overview's Claude flag decides.
+    expect(engineIsReady('claude', [], true)).toBe(true);
+    expect(engineIsReady('codex', [], true)).toBe(false);
+    expect(defaultEngine(engines)).toBe('claude');
+    expect(defaultEngine(signedOut)).toBe('claude'); // nothing ready: Claude, which offers setup
+    const codexOnly = engines.map((e) =>
+      e.id === 'claude' ? { ...e, installed: false, signedIn: false } : { ...e, signedIn: true }
+    );
+    expect(defaultEngine(codexOnly)).toBe('codex');
+    expect(noEngineInstalled(codexOnly)).toBe(false);
+    expect(noEngineInstalled(engines.map((e) => ({ ...e, installed: false })))).toBe(true);
+    expect(noEngineInstalled([])).toBe(false);
   });
 
   it('says what an engine needs, and only claims protection the engine enforces', () => {

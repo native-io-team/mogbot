@@ -232,6 +232,19 @@
   color: var(--text-primary);
 }
 
+/* "Nothing to push" is a fact about git, not a success: in accent green it read as
+   "all good" directly above a failed deploy. The hosting row below carries the
+   status colour. Doubled class so it wins over states.css whatever the import order. */
+.publish-success.publish-success--neutral {
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-body);
+}
+
+.publish-success.publish-success--neutral svg {
+  color: var(--text-muted);
+}
+
 .publish-branch-body {
   padding: 0 16px 4px;
 }

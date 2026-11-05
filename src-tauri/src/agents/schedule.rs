@@ -650,7 +650,7 @@ where
         )
     } else if firing.late {
         format!(
-            " It was due {}, but Ship Studio wasn't running then, so it's late.",
+            " It was due {}, but the app wasn't running then, so it's late.",
             format_time(tz, c.next_at)
         )
     } else {
@@ -820,11 +820,11 @@ where
     let when_text = format_time(tz, check_in.next_at);
     let summary = match &check_in.repeat {
         None => format!(
-            "Scheduled for {when_text}, your user's local time (id {}). It fires only while Ship Studio is open on this Mac; if it's closed then, it runs as soon as Ship Studio reopens, marked late. Tell the user the time.",
+            "Scheduled for {when_text}, your user's local time (id {}). It fires only while the app is open on this Mac; if it's closed then, it runs as soon as the app reopens, marked late. Tell the user the time.",
             check_in.id
         ),
         Some(r) => format!(
-            "Routine set: {}, your user's local time. First run {when_text} (id {}). It runs only while Ship Studio is open on this Mac; a run missed while it's closed is skipped, not made up. Tell the user exactly this.",
+            "Routine set: {}, your user's local time. First run {when_text} (id {}). It runs only while the app is open on this Mac; a run missed while it's closed is skipped, not made up. Tell the user exactly this.",
             describe(r),
             check_in.id
         ),
@@ -1498,6 +1498,7 @@ mod tests {
             engine: Default::default(),
             model: None,
             new_engine: false,
+            context: None,
             routine_model: None,
             muted: false,
             check_ins,
@@ -1611,7 +1612,7 @@ mod tests {
             "{}",
             made.summary
         );
-        assert!(made.summary.contains("only while Ship Studio is open"));
+        assert!(made.summary.contains("only while the app is open"));
         let again = create_in(
             &Eastern,
             &agent.id,

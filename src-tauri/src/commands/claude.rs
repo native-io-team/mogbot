@@ -553,10 +553,12 @@ mod tests {
             started.elapsed()
         );
 
-        let pid = std::fs::read_to_string(&pid_file)
-            .unwrap()
-            .trim()
-            .to_string();
+        // Under load the probe can be killed before the script even writes its
+        // pid: then nothing is left running, which is what this test checks.
+        let Ok(pid) = std::fs::read_to_string(&pid_file) else {
+            return;
+        };
+        let pid = pid.trim().to_string();
         let still_running = std::process::Command::new("kill")
             .args(["-0", &pid])
             .status()

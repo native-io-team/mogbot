@@ -31,13 +31,16 @@ export function AgentModelMenu({ agent }: { agent: Agent }) {
   const engines = useAgentsSelector((s) => s.engines);
   const choices = modelChoices(agent.engine, engines);
   const current = agent.model ?? '';
-  // "Default" alone reads as a setting with no subject in a chat header.
-  const label =
-    agent.engine === 'codex'
+  // On its engine's default, the header names the engine ("Claude Code"):
+  // "Default model" is jargon, and the engine is the fact worth knowing.
+  const engineName =
+    engines.find((e) => e.id === agent.engine)?.label ??
+    (agent.engine === 'codex' ? 'Codex' : 'Claude Code');
+  const label = !agent.model
+    ? engineName
+    : agent.engine === 'codex'
       ? `Codex · ${modelLabel(agent.model, choices)}`
-      : agent.model
-        ? modelLabel(agent.model, choices)
-        : 'Default model';
+      : modelLabel(agent.model, choices);
   const routine = agent.routineModel ?? '';
   const save = async (change: UpdateAgentInput) => {
     try {

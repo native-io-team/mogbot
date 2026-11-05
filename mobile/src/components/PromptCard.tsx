@@ -15,14 +15,16 @@ import { diffLineKind } from '../lib/diff';
 import { haptic } from '../lib/haptics';
 import { answerApproval, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
-import { colors, space } from '../lib/theme';
+import { CARD_TITLE_SCALE, space } from '../lib/theme';
+import { useColors } from '../lib/appearance';
 import {
   ARM_MS,
-  cardStyles,
+  useCardStyles,
   Command,
   Eyebrow,
   FittedDetail,
   MoreAnswers,
+  Receipt,
   useArmed,
   useFitDetail,
   useShortPane,
@@ -46,6 +48,8 @@ export function PromptCard({
   agent: Agent;
   onError: (text: string) => void;
 }) {
+  const cardStyles = useCardStyles();
+  const colors = useColors();
   const [busy, setBusy] = useState<number | null>(null);
   const pending = approval.status === 'pending';
   const fit = useFitDetail(pending, message.id);
@@ -78,7 +82,9 @@ export function PromptCard({
   };
 
   const { deny, allow, more, listed } = promptAnswers(prompt);
-  const owner = prompt.owner.name === agent.name ? 'Its' : `${prompt.owner.name}’s`;
+  // Whose session it is, said plainly: "In acme-site · Claude Code 1", or
+  // "Designer’s session in acme-site · …" when it isn’t this chat’s agent’s.
+  const owner = prompt.owner.name === agent.name ? '' : `${prompt.owner.name}’s session `;
   // The tab as its own engine names it ("Codex 2"), when the Mac's project
   // list says which engine; the prompt itself doesn't carry it.
   const session = useApp((s) =>
@@ -94,44 +100,71 @@ export function PromptCard({
     return kind === 'add' || kind === 'del';
   });
 
+  const where = `${owner ? owner + 'in' : 'In'} ${project} · ${tab}`;
+  const detail =
+    !!approval.detail &&
+    (prompt.kind === 'trust' ? (
+      <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
+        {approval.detail}
+      </T>
+    ) : isDiff ? (
+      <DiffLines lines={lines} label="The change it’s asking about" />
+    ) : (
+      <Command text={approval.detail} lines={12} />
+    ));
+
+  if (!pending) {
+    return (
+      <Receipt
+        icon="terminal"
+        title={approval.title}
+        outcome={cardOutcome(approval)}
+        ok={approval.status === 'allowed'}
+      >
+        <T variant="caption" color={colors.textMuted}>
+          {where}
+        </T>
+        {detail}
+      </Receipt>
+    );
+  }
+
   return (
     <Animated.View
       layout={LinearTransition.duration(220)}
       onLayout={fit.onCardLayout}
-      style={[cardStyles.card, pending && cardStyles.cardPending]}
+      style={cardStyles.card}
     >
-      {!fit.pinned && (
+      {fit.pinned ? (
+        <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
+          {where}
+        </T>
+      ) : (
         // The pin above the chat shows the question while this can't fit whole.
-        <View onLayout={fit.onHeadLayout} style={{ gap: space.md }}>
-          {pending && <Eyebrow />}
-          <T variant="subhead" color={colors.textWhite} maxFontSizeMultiplier={2}>
-            {approval.title}
-          </T>
+        <View onLayout={fit.onHeadLayout} style={cardStyles.head}>
+          <Eyebrow />
+          <View style={{ gap: space['2xs'] }}>
+            <T
+              variant="headline"
+              color={colors.textStrong}
+              maxFontSizeMultiplier={CARD_TITLE_SCALE}
+            >
+              {approval.title}
+            </T>
+            <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
+              {where}
+            </T>
+          </View>
         </View>
       )}
-      <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={2}>
-        {owner} work in {project} · {tab}
-      </T>
       {/* Folder trust is the Mac's explanation, not the session's text: prose. */}
-      {!!approval.detail && (
-        <FittedDetail fit={fit}>
-          {prompt.kind === 'trust' ? (
-            <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>
-              {approval.detail}
-            </T>
-          ) : isDiff ? (
-            <DiffLines lines={lines} label="The change it’s asking about" />
-          ) : (
-            <Command text={approval.detail} lines={12} />
-          )}
-        </FittedDetail>
-      )}
-      {pending && !connected && (
-        <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>
+      {detail && <FittedDetail fit={fit}>{detail}</FittedDetail>}
+      {!connected && (
+        <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
           Answer it once your Mac is back. It stays open until then.
         </T>
       )}
-      {pending ? (
+      {
         <Animated.View
           entering={FadeIn.duration(ARM_MS)}
           exiting={FadeOut.duration(120)}
@@ -193,19 +226,12 @@ export function PromptCard({
               disabled={off}
               focusable={armed}
               onPress={() => void choose(index)}
+              // A choice in a menu reads left-aligned, not as a centred button that wrapped.
+              style={{ justifyContent: 'flex-start', paddingHorizontal: space.lg }}
             />
           ))}
         </Animated.View>
-      ) : (
-        <Animated.View entering={FadeIn.duration(200).delay(100)}>
-          <T
-            variant="small"
-            color={approval.status === 'allowed' ? colors.accentSuccess : colors.textSecondary}
-          >
-            {cardOutcome(approval)}
-          </T>
-        </Animated.View>
-      )}
+      }
     </Animated.View>
   );
 }

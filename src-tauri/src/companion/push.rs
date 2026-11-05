@@ -577,7 +577,7 @@ pub async fn set_push(
 pub async fn set_enabled(c: &Companion, enabled: bool) -> Result<(), CommandError> {
     let Some(relay) = c.push.relay() else {
         return Err(CommandError::expected(
-            "This build of Ship Studio has no push service.",
+            "This build of the app has no push service.",
         ));
     };
     c.registry.write(|s| s.push.enabled = enabled)?;

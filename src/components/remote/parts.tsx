@@ -96,11 +96,11 @@ export function ReadinessList({ ctl }: { ctl: RemoteCtl }) {
                 <Checkbox
                   checked={status.openAtLogin}
                   disabled={busy !== null || !status.openAtLoginAvailable}
-                  label="Reopen Ship Studio after a restart"
+                  label="Reopen the app after a restart"
                   onChange={(on) => void act('login', () => setOpenAtLogin(on))}
                 />
                 <span className="remote-toggle__text">
-                  Reopen Ship Studio after a restart
+                  Reopen the app after a restart
                   {!status.openAtLoginAvailable && (
                     <span className="remote-toggle__hint">Only in the installed app.</span>
                   )}
@@ -141,7 +141,7 @@ export function ConnectionPanel({ ctl }: { ctl: RemoteCtl }) {
         <>
           <p className="remote-note">
             Tailscale (free) gives this computer a private web address on <em>your</em> account.
-            Your assistant talks to it directly — nothing passes through Ship Studio’s servers.
+            Your assistant talks to it directly — nothing passes through servers we run.
           </p>
           <div className="remote-actions">
             <Button
@@ -254,7 +254,7 @@ export function ConnectionPanel({ ctl }: { ctl: RemoteCtl }) {
       const elapsed = step.minutes > 0 ? ` (${step.minutes} min so far)` : '';
       const message = {
         waiting: `Tailscale is making this address public — usually a minute or two${elapsed}. You can add the link to your assistant now; it starts working once this turns green.`,
-        retried: `That took longer than usual, so Ship Studio asked Tailscale again${elapsed}. It normally goes through within a couple of minutes of asking.`,
+        retried: `That took longer than usual, so the app asked Tailscale again${elapsed}. It normally goes through within a couple of minutes of asking.`,
         stuck: `Tailscale still hasn’t made this address public${elapsed}. Ask again below — if that doesn’t do it, the hold-up is on Tailscale’s side.`,
       }[step.stage];
       return (

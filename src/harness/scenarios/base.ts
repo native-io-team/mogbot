@@ -16,6 +16,22 @@ import type { CommandMap } from '../types';
 
 export const HARNESS_ROOT = '/Users/harness/ShipStudio';
 
+/** `prompts::CHIEF_GREETING`, verbatim: what a new Chief's chat opens on. */
+export const CHIEF_GREETING_TEXT =
+  "Hi, I'm your Chief of Staff. " +
+  "Tell me what's on your plate and I'll put a team of agents together for it. " +
+  "When something needs your OK, you'll get an Allow or Deny card. " +
+  "So: what's on your plate this week?";
+
+/** The greeting as `agents_messages` returns it. */
+export const chiefGreeting = (agentId: string, ts = 1_790_000_000_000) => ({
+  id: 'greeting',
+  agentId,
+  ts,
+  kind: 'agent' as const,
+  text: CHIEF_GREETING_TEXT,
+});
+
 /**
  * `DashboardProject` (see `src/lib/project.ts`) — every field the real command
  * returns, so the dashboard renders its full card rather than a card with
@@ -156,6 +172,8 @@ export const baseCommands: CommandMap = {
   // ---- agents -------------------------------------------------------------
   // Base layer: the nav badge subscribes to the agents store on every screen.
   agents_busy: 0,
+  // A project window's sidebar lists only the agents bound to folders.
+  agents_with_projects: [],
   agents_overview: {
     engineReady: true,
     agents: [
@@ -176,12 +194,30 @@ export const baseCommands: CommandMap = {
         pendingApprovals: 0,
         model: null,
         muted: false,
+        engine: 'claude',
         status: { state: 'idle', activity: null, since: null },
       },
     ],
+    engines: [
+      {
+        id: 'claude',
+        label: 'Claude Code',
+        installed: true,
+        signedIn: true,
+        models: [
+          { value: 'opus', label: 'Opus' },
+          { value: 'sonnet', label: 'Sonnet' },
+          { value: 'haiku', label: 'Haiku' },
+        ],
+      },
+    ],
   },
-  agents_messages: [],
+  // A new Chief opens on its stored greeting (`agents::ensure_main`).
+  agents_messages: (args: Record<string, unknown>) =>
+    args.agentId === 'chief' ? [chiefGreeting('chief')] : [],
   agents_search: [],
+  // The palette sweep now starts in Agents, where ⌘K → Apps opens this.
+  agents_apps_list: { connected: [], suggestions: [] },
   agents_usage: {
     week: {
       turns: 0,

@@ -4,7 +4,7 @@
  * missing, while the checklist beside it verifies with the app's own checks.
  *
  * The agent drives; the app verifies. Completion is decided exclusively by
- * `isAgentLedSetupComplete` over freshly polled items — never by the agent
+ * `areProjectToolsReady` over freshly polled items — never by the agent
  * declaring success.
  *
  * `agentBinaryId: null` is the "Other" path: a plain shell opens instead of
@@ -21,12 +21,11 @@ import { SetupItem } from '../../../lib/setup';
 import {
   buildGuidedSetupPrompt,
   ensureAgentWorkdir,
-  getMissingRequiredItems,
-  getReadyRequiredItems,
+  getMissingProjectTools,
+  getReadyProjectTools,
   guidedAgentSpawn,
-  isAgentLedSetupComplete,
+  areProjectToolsReady,
   otherAgentShellSpawn,
-  HostChoice,
 } from '../../../lib/agentOnboarding';
 import { logger } from '../../../lib/logger';
 import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard';
@@ -39,8 +38,8 @@ interface GuidedSetupPhaseProps {
   agentDisplayName: string;
   /** Live setup items — the owner polls these while this phase is mounted. */
   items: SetupItem[];
-  /** Hosting provider chosen in the hosting step (null = skipped). */
-  hostChoice: HostChoice | null;
+  /** The setup items this run installs and checks, in install order. */
+  toolIds: string[];
   /** Mock mode: play the scripted demo instead of spawning a real agent. */
   demoMode: boolean;
   /** Called when the user clicks Continue after everything is verified. */
@@ -51,7 +50,7 @@ export function GuidedSetupPhase({
   agentBinaryId,
   agentDisplayName,
   items,
-  hostChoice,
+  toolIds,
   demoMode,
   onVerified,
 }: GuidedSetupPhaseProps) {
@@ -59,16 +58,16 @@ export function GuidedSetupPhase({
   // as it stood when the session started. A restart recomputes it, so an
   // agent relaunched after partial progress only gets the remaining items.
   const missingRef = useRef<SetupItem[] | null>(null);
-  missingRef.current ??= getMissingRequiredItems(items);
+  missingRef.current ??= getMissingProjectTools(items, toolIds);
   const readyRef = useRef<SetupItem[] | null>(null);
-  readyRef.current ??= getReadyRequiredItems(items);
+  readyRef.current ??= getReadyProjectTools(items, toolIds);
   const [session, setSession] = useState(0);
   const [agentExit, setAgentExit] = useState<number | null>(null);
   const { copy, isCopied } = useCopyToClipboard();
 
   // Spawn the agent in ~/ShipStudio, never $HOME — scanning the home folder
   // trips macOS permission prompts (Photos/Desktop/Documents) attributed to
-  // Ship Studio, and the pending dialog freezes the agent mid-scan. The
+  // this app, and the pending dialog freezes the agent mid-scan. The
   // backend falls back to the OS temp dir on its own, so a rejection here
   // means the IPC call itself failed — retry once rather than ever spawning
   // in $HOME. `null` = still resolving (terminal not rendered yet).
@@ -85,12 +84,12 @@ export function GuidedSetupPhase({
   }, []);
 
   const isOther = agentBinaryId === null;
-  const complete = isAgentLedSetupComplete(items, agentBinaryId);
+  const complete = areProjectToolsReady(items, agentBinaryId, toolIds);
 
   const prompt = useMemo(
-    () => buildGuidedSetupPrompt(missingRef.current ?? [], hostChoice, readyRef.current ?? []),
+    () => buildGuidedSetupPrompt(missingRef.current ?? [], readyRef.current ?? [], toolIds),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session, hostChoice]
+    [session, toolIds]
   );
   const spawn = useMemo(
     () => (isOther ? otherAgentShellSpawn() : guidedAgentSpawn(agentBinaryId, prompt)),
@@ -121,7 +120,7 @@ export function GuidedSetupPhase({
         </h2>
         <p className="wizard-step-subtitle">
           {complete
-            ? 'All checks passed — you’re ready to start building.'
+            ? 'All checks passed. Your project is next.'
             : isOther
               ? 'Start your agent in this terminal, then paste the setup instructions below into it.'
               : 'Follow along in the terminal — your agent explains each step and will tell you if it needs anything (like a password or a browser sign-in).'}
@@ -140,7 +139,7 @@ export function GuidedSetupPhase({
       <div className="agent-guided-layout">
         <div className="agent-guided-terminal">
           {demoMode ? (
-            <DemoAgentTerminal hostChoice={hostChoice} />
+            <DemoAgentTerminal includeGitHub={toolIds.includes('gh_auth')} />
           ) : workdir !== null ? (
             <OnboardingTerminal
               key={session}
@@ -169,11 +168,11 @@ export function GuidedSetupPhase({
             items={items}
             agentBinaryId={agentBinaryId}
             agentDisplayName={agentDisplayName}
-            hostChoice={hostChoice}
+            toolIds={toolIds}
           />
           {complete && (
             <div className="agent-guided-complete">
-              <p>Every check passed — verified by Ship Studio itself, not just the agent.</p>
+              <p>Every check passed, verified by the app itself, not just the agent.</p>
               <Button variant="primary" block onClick={onVerified}>
                 Continue
               </Button>

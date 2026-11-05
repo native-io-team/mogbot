@@ -45,19 +45,11 @@
   display: contents;
 }
 
-.plugins-modal .modal-frame-header {
-  padding: 20px 24px 16px;
-}
+/* Header: the ModalFrame default, like MCP and Skills beside it. */
 
-.plugins-modal .modal-frame-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* Tab Bar */
+/* Tab Bar — same inset as MCP and Skills, clear of the header's rule. */
 .plugins-tabs {
-  margin: 0 24px 12px;
+  margin: var(--spacing-lg) var(--spacing-xl) var(--spacing-md);
 }
 
 .plugins-tabs .plugins-tab {
@@ -69,6 +61,19 @@
 .plugins-search {
   background: var(--surface-panel);
   margin: 0 var(--spacing-xl) var(--spacing-md);
+}
+
+/* Without the Library tab there is no tab bar; the search takes its place
+   under the header, at the same distance from the rule. */
+.plugins-modal .extension-manager-layout__tabs:empty {
+  display: none;
+}
+
+.plugins-modal
+  .extension-manager-layout__tabs:empty
+  + .extension-manager-layout__controls
+  .plugins-search {
+  margin-top: var(--spacing-lg);
 }
 
 /* Domain padding and minimum size; flex and scrolling live in extensions.css. */

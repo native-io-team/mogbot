@@ -1,5 +1,5 @@
 /**
- * Remote access — control Ship Studio from any MCP-capable AI assistant on
+ * Remote access — control this app from any MCP-capable AI assistant on
  * your phone while your Mac keeps doing the work.
  *
  * TypeScript mirror of `src-tauri/src/commands/remote_access.rs`, the invoke
@@ -45,7 +45,7 @@ export type PushPinState = 'notSet' | 'set' | 'locked';
 
 export interface PublishProgress {
   sinceMs: number | null;
-  /** Ship Studio already asked Tailscale again by itself. */
+  /** The app already asked Tailscale again by itself. */
   autoRetried: boolean;
   /** The background check stopped waiting; it's over to the user. */
   gaveUp: boolean;
@@ -244,7 +244,7 @@ export function readinessItems(s: ReadinessInput): ReadinessItem[] {
   items.push({
     id: 'app',
     state: 'ok',
-    title: 'Leave Ship Studio open',
+    title: 'Leave the app open',
     detail: 'Quitting it ends remote access. You’ll be asked first.',
   });
 

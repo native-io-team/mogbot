@@ -34,11 +34,15 @@ function writeDismissed() {
   }
 }
 
-/** Whether the note shows, and how to put it away for good. */
-export function useImportNudge(agentCount: number) {
+/**
+ * Whether the note shows, and how to put it away for good. It waits for the
+ * first exchange with the Chief (`afterFirstExchange`): a new user's first
+ * screen is a hello, not a migration pitch.
+ */
+export function useImportNudge(agentCount: number, afterFirstExchange: boolean) {
   const [dismissed, setDismissed] = useState(readDismissed);
   return {
-    visible: !dismissed && agentCount < SET_UP_TEAM_SIZE,
+    visible: afterFirstExchange && !dismissed && agentCount < SET_UP_TEAM_SIZE,
     dismiss: () => {
       writeDismissed();
       setDismissed(true);

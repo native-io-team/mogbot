@@ -3,22 +3,28 @@
  * long lines scroll sideways, so what's shown is exactly what changes.
  */
 
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { makeStyles, useColors } from '../lib/appearance';
 import { diffLineKind, type DiffLineKind } from '../lib/diff';
-import { alpha, colors, radius, space } from '../lib/theme';
+import { radius, space, type Palette } from '../lib/theme';
 import { T } from './ui';
 
-const tint: Record<DiffLineKind, { fg: string; bg?: string }> = {
-  add: { fg: colors.accentSuccess, bg: alpha(colors.accentSuccess, 0.1) },
-  del: { fg: colors.accentErrorLight, bg: alpha(colors.accentError, 0.1) },
+/** A line's ink and band, from the palette's own diff roles (tuned per appearance). */
+const tintOf = (colors: Palette): Record<DiffLineKind, { fg: string; bg?: string }> => ({
+  add: { fg: colors.diffAdd, bg: colors.diffAddBg },
+  del: { fg: colors.diffDel, bg: colors.diffDelBg },
   hunk: { fg: colors.textMuted },
   context: { fg: colors.textPrimary },
-};
+});
 
 export function DiffLines({ lines, label }: { lines: string[]; label?: string }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const tint = tintOf(colors);
   return (
     <View style={styles.box} accessibilityLabel={label}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      {/* The indicator shows, so a line running off the edge reads as one to scroll. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator>
         <View style={styles.inner}>
           {lines.map((line, i) => {
             const t = tint[diffLineKind(line)];
@@ -28,7 +34,7 @@ export function DiffLines({ lines, label }: { lines: string[]; label?: string })
                 variant="mono"
                 color={t.fg}
                 selectable
-                maxFontSizeMultiplier={2}
+                maxFontSizeMultiplier={1.5}
                 style={[styles.line, t.bg ? { backgroundColor: t.bg } : null]}
               >
                 {line || ' '}
@@ -41,8 +47,8 @@ export function DiffLines({ lines, label }: { lines: string[]; label?: string })
   );
 }
 
-const styles = StyleSheet.create({
-  box: { backgroundColor: colors.surfaceApp, borderRadius: radius.card, overflow: 'hidden' },
+const useStyles = makeStyles((colors) => ({
+  box: { backgroundColor: colors.surfaceApp, borderRadius: radius.inner, overflow: 'hidden' },
   inner: { paddingVertical: space.sm, minWidth: '100%' },
   line: { paddingHorizontal: space.md },
-});
+}));

@@ -409,6 +409,11 @@ export async function setAgentToggles(
   }
 }
 
+/** A new conversation from its next message; memory kept. The registry event redraws the sheet. */
+export async function startFresh(agentId: string) {
+  await call('agents.startFresh', { agentId });
+}
+
 export async function markUnread(agentId: string) {
   setApp((s) => ({
     overview: s.overview && {

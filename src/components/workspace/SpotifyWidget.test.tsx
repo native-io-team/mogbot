@@ -23,6 +23,7 @@ import { mockIPC } from '@tauri-apps/api/mocks';
 import { SpotifyWidget } from './SpotifyWidget';
 import { ToastContext } from '../../contexts/ToastContext';
 import type { SpotifyState } from '../../lib/spotify';
+import { BRAND } from '../../lib/brand';
 
 function state(overrides: Partial<SpotifyState> = {}): SpotifyState {
   return {
@@ -118,7 +119,7 @@ describe('SpotifyWidget', () => {
     render(<SpotifyWidget />);
 
     expect(
-      await screen.findByText(/macOS blocked Ship Studio from controlling Spotify/)
+      await screen.findByText(new RegExp(`macOS blocked ${BRAND.name} from controlling Spotify`))
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Privacy Settings' })).toBeInTheDocument();
     // Not the "ok" transport row.

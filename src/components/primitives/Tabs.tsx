@@ -190,10 +190,13 @@ export function TabsList({
       const listRect = list.getBoundingClientRect();
       const activeRect = active.getBoundingClientRect();
       const borderInset = list.clientLeft;
+      // Underline tabs draw their bar under the label, not the hit area: a
+      // fill-width tab would otherwise get a bar as wide as its column.
+      const span = (appearance === 'underline' && labelRect(active)) || activeRect;
       setIndicator({
-        left: activeRect.left - listRect.left - borderInset,
+        left: span.left - listRect.left - borderInset,
         top: activeRect.top - listRect.top - borderInset,
-        width: activeRect.width,
+        width: span.width,
         height: activeRect.height,
       });
     };
@@ -212,7 +215,7 @@ export function TabsList({
       resizeObserver?.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [activeValue, tabs]);
+  }, [activeValue, tabs, appearance]);
 
   return (
     <div
@@ -233,6 +236,16 @@ export function TabsList({
       />
     </div>
   );
+}
+
+/** The box the tab's content (icon and label) occupies, if the DOM can say. */
+function labelRect(tab: HTMLButtonElement): { left: number; width: number } | null {
+  if (typeof document.createRange !== 'function') return null;
+  const range = document.createRange();
+  range.selectNodeContents(tab);
+  if (typeof range.getBoundingClientRect !== 'function') return null;
+  const rect = range.getBoundingClientRect();
+  return rect.width > 0 ? { left: rect.left, width: rect.width } : null;
 }
 
 function tabsRefElement(value: TabValue, list: HTMLDivElement): HTMLButtonElement | null {

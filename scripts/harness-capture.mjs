@@ -61,6 +61,10 @@ const SKIP_COMMANDS = [
   'spotify.', // controls a third-party widget, nothing of ours to look at
   'settings.checkUpdates', // hits the updater, which is stubbed inert
   'nav.home', // just returns to the dashboard scenario
+  // Covered by the agents-apps scenarios, which mock agents_apps_list. TODO:
+  // add that fixture to scenarios/base.ts once the branches editing it have
+  // merged, then drop this skip.
+  'agents.apps',
 ];
 
 const args = process.argv.slice(2);
@@ -333,7 +337,16 @@ const CLIPPED_TEXT_PROBE = `(() => {
   return JSON.stringify(out);
 })()`;
 
-async function capture({ url, file, clipSelector, identity, label, requires, viewport }) {
+async function capture({
+  url,
+  file,
+  clipSelector,
+  openSelector,
+  identity,
+  label,
+  requires,
+  viewport,
+}) {
   const { page, targetId } = await newPage(url, viewport);
   try {
     const ready = await waitFor(page, 'window.__harnessReady', 25_000, `${file} to settle`)
@@ -358,6 +371,28 @@ async function capture({ url, file, clipSelector, identity, label, requires, vie
 
     let clip;
     let missingClip;
+    // A menu opened from a trigger below the fold renders off-screen: the
+    // harness clicks the trigger without scrolling to it, and a portalled,
+    // position: fixed menu does not move when scrolled. The clip below then
+    // photographs an empty rectangle. Re-open it with the trigger in view,
+    // as a person would, before measuring.
+    if (clipSelector && openSelector) {
+      const reopened = await page.eval(`(async () => {
+        const menu = document.querySelector(${JSON.stringify(clipSelector)});
+        const opener = document.querySelector(${JSON.stringify(openSelector)});
+        if (!menu || !opener) return false;
+        const r = menu.getBoundingClientRect();
+        if (r.top >= 0 && r.bottom <= innerHeight) return false;
+        opener.click();
+        await new Promise((res) => setTimeout(res, 150));
+        opener.scrollIntoView({ block: 'center', inline: 'nearest' });
+        await new Promise((res) => setTimeout(res, 150));
+        opener.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window, detail: 1 }));
+        await new Promise((res) => setTimeout(res, 300));
+        return true;
+      })()`);
+      if (reopened === 'true' || reopened === true) await sleep(200);
+    }
     if (clipSelector) {
       // Scroll it into view before measuring. `captureBeyondViewport` is off
       // below, so a clip rect outside the viewport is photographed as a black
@@ -609,7 +644,7 @@ async function main() {
   await waitFor(probe.page, 'window.__harness', 20_000, 'the harness module to load');
   const allScenarios = JSON.parse(
     await probe.page.eval(
-      'JSON.stringify(window.__harness.scenarios.map(s=>({id:s.id,title:s.title,looksRightWhen:s.looksRightWhen,clipSelector:s.clipSelector,requires:s.requires,command:s.command,viewport:s.viewport})))'
+      'JSON.stringify(window.__harness.scenarios.map(s=>({id:s.id,title:s.title,looksRightWhen:s.looksRightWhen,clipSelector:s.clipSelector,openSelector:s.openSelector,requires:s.requires,command:s.command,viewport:s.viewport})))'
     )
   );
   probe.page.close();
@@ -624,6 +659,7 @@ async function main() {
           (s.command ? `&command=${encodeURIComponent(s.command)}` : ''),
         file: path.join(outDir, `${s.id}.png`),
         clipSelector: s.clipSelector,
+        openSelector: s.openSelector,
         requires: s.requires,
         viewport: s.viewport,
         identity,

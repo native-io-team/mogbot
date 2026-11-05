@@ -404,6 +404,35 @@ fn build_extended_path() -> String {
     paths.join(get_path_separator())
 }
 
+/// Git that will actually run, found without running it.
+///
+/// On a Mac without the Command Line Tools, `/usr/bin/git` is a stub: running
+/// it (even `git --version`) pops Apple's "install developer tools" dialog.
+/// So the stub only counts when `xcode-select -p` names a developer directory
+/// that exists; `xcode-select -p` itself never opens the dialog.
+pub fn usable_git() -> Option<std::path::PathBuf> {
+    let path = find_executable("git")?;
+    #[cfg(target_os = "macos")]
+    if path == std::path::Path::new("/usr/bin/git") && !mac_developer_tools_installed() {
+        return None;
+    }
+    Some(path)
+}
+
+/// Whether the Command Line Tools (or Xcode) are installed, asked in a way
+/// that can't prompt for them.
+#[cfg(target_os = "macos")]
+pub fn mac_developer_tools_installed() -> bool {
+    Command::new("/usr/bin/xcode-select")
+        .arg("-p")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .is_some_and(|dir| !dir.is_empty() && std::path::Path::new(&dir).exists())
+}
+
 /// Build a `Command` for git, resolving the full binary path first.
 ///
 /// Spawning bare `"git"` can fail to resolve on Windows even when git is
@@ -439,7 +468,7 @@ pub fn git_command() -> Result<Command, crate::errors::CommandError> {
         // wizard handles, not an app malfunction.
         None => Err(crate::errors::CommandError::expected(
             "Git isn't installed or couldn't be located. Install Git \
-             (https://git-scm.com) and restart Ship Studio, then try again",
+             (https://git-scm.com) and restart the app, then try again",
         )),
     }
 }
@@ -635,11 +664,13 @@ pub fn git_environment_gap(stderr: &str) -> Option<crate::errors::CommandError> 
     if lower.contains("unable to read current working directory")
         && lower.contains("operation not permitted")
     {
-        return Some(crate::errors::CommandError::expected(
-            "Ship Studio isn't allowed to read this project's folder — macOS blocked access. \
+        return Some(crate::errors::CommandError::expected(format!(
+            "{} isn't allowed to read this project's folder — macOS blocked access. \
              Grant access in System Settings → Privacy & Security → Files & Folders (or give \
-             Ship Studio Full Disk Access), then try again.",
-        ));
+             {} Full Disk Access), then try again.",
+            crate::brand::NAME,
+            crate::brand::NAME
+        )));
     }
     // git's allocator giving up ("fatal: Out of memory, malloc failed (tried
     // to allocate N bytes)" — also "realloc failed" / "mmap failed" variants).
@@ -772,13 +803,14 @@ pub fn classify_fs_error(
 ) -> crate::errors::CommandError {
     if cfg!(target_os = "macos") && e.raw_os_error() == Some(1) {
         crate::errors::CommandError::expected(format!(
-            "Ship Studio isn't allowed to {action} ({}). Grant access in System Settings → \
+            "{} isn't allowed to {action} ({}). Grant access in System Settings → \
              Privacy & Security → Files & Folders (or Full Disk Access), then try again.",
+            crate::brand::NAME,
             path.display()
         ))
     } else if cfg!(windows) && e.raw_os_error() == Some(5) {
         crate::errors::CommandError::expected(format!(
-            "Ship Studio couldn't {action} ({}) — Windows denied access. The file may be \
+            "The app couldn't {action} ({}) — Windows denied access. The file may be \
              briefly locked by antivirus, another program, or cloud sync (e.g. OneDrive). \
              Try again in a moment.",
             path.display()
@@ -787,7 +819,7 @@ pub fn classify_fs_error(
         || (cfg!(windows) && e.raw_os_error() == Some(19))
     {
         crate::errors::CommandError::expected(format!(
-            "Ship Studio couldn't {action} ({}) — the disk or volume is read-only. Move \
+            "The app couldn't {action} ({}) — the disk or volume is read-only. Move \
              the project to a writable location, then try again.",
             path.display()
         ))
@@ -796,7 +828,7 @@ pub fn classify_fs_error(
         // by root after a `sudo` install), not a malfunction — give the fix and
         // skip telemetry, matching `opencode_config_save`'s #471 treatment.
         crate::errors::CommandError::expected(format!(
-            "Ship Studio isn't allowed to {action} ({}) — permission denied. The file or \
+            "The app isn't allowed to {action} ({}) — permission denied. The file or \
              folder is likely owned by another user. In a terminal, run: \
              sudo chown -R $(whoami) \"{}\" — then try again.",
             path.display(),
@@ -807,7 +839,7 @@ pub fn classify_fs_error(
         // cloud-sync provider's file-provider daemon didn't materialize the
         // file in time. Environment friction, not corruption (issue #758).
         crate::errors::CommandError::expected(format!(
-            "Ship Studio timed out trying to {action} ({}). The folder looks like it's on a \
+            "The app timed out trying to {action} ({}). The folder looks like it's on a \
              cloud drive (Google Drive, OneDrive, Dropbox, iCloud) that's still syncing — \
              wait for sync to finish and try again, or keep the project on your local disk.",
             path.display()
@@ -817,7 +849,7 @@ pub fn classify_fs_error(
         // file (iCloud Drive or another File Provider) before it materialized.
         // Same environment class as the ETIMEDOUT branch above (issue #948).
         crate::errors::CommandError::expected(format!(
-            "Ship Studio couldn't {action} ({}) — macOS canceled the read. The folder looks \
+            "The app couldn't {action} ({}) — macOS canceled the read. The folder looks \
              like it's on a cloud drive (iCloud, Google Drive, OneDrive, Dropbox) that hasn't \
              finished downloading the file — wait for sync to finish and try again, or keep the \
              project on your local disk.",
@@ -829,20 +861,20 @@ pub fn classify_fs_error(
         // ENOSPC / ERROR_DISK_FULL: the disk is full. An environment condition
         // with a user-side fix, not a malfunction (issue #846).
         crate::errors::CommandError::expected(format!(
-            "Ship Studio couldn't {action} ({}) — the disk is full. Free up some space, \
+            "The app couldn't {action} ({}) — the disk is full. Free up some space, \
              then try again.",
             path.display()
         ))
     } else if cfg!(windows) && e.raw_os_error() == Some(1224) {
         crate::errors::CommandError::expected(format!(
-            "Ship Studio couldn't {action} ({}) — another program currently has the file open \
+            "The app couldn't {action} ({}) — another program currently has the file open \
              (often a dev server, code editor, or antivirus). Close it or wait a moment, then \
              try again.",
             path.display()
         ))
     } else if cfg!(unix) && matches!(e.raw_os_error(), Some(23) | Some(24)) {
         crate::errors::CommandError::expected(format!(
-            "Ship Studio couldn't {action} ({}) — too many files are open right now. Close \
+            "The app couldn't {action} ({}) — too many files are open right now. Close \
              some other apps or terminal tabs, then try again.",
             path.display()
         ))
@@ -1320,7 +1352,7 @@ pub fn canonicalize_tagged(
             // malfunction: say so plainly and keep it out of telemetry
             // (issues #365/#372, same family as #300/#342).
             crate::errors::CommandError::expected(format!(
-                "The folder '{}' no longer exists — it may have been moved, renamed, or deleted outside Ship Studio",
+                "The folder '{}' no longer exists — it may have been moved, renamed, or deleted outside the app",
                 path.display()
             ))
         } else {

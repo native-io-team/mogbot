@@ -383,6 +383,17 @@
   width: 100%;
 }
 
+/* No community link (brand.json links.slack is null): Settings is the only
+   labelled action, so it takes the whole row instead of the right half. */
+.workspace-sidebar-footer-actions.is-labeled:not(:has(> .workspace-sidebar-support)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-sidebar-footer-actions.is-labeled:not(:has(> .workspace-sidebar-support))
+  > .workspace-sidebar-settings-menu:not(.is-open) {
+  grid-column: 1;
+}
+
 .workspace-sidebar-footer-actions.has-workspace-switcher > .workspace-switcher {
   grid-column: 1;
   grid-row: 1;

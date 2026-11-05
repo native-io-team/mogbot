@@ -158,7 +158,7 @@ fn browser_install_error(output: &std::process::Output) -> CommandError {
     ];
     if NETWORK_SIGNATURES.iter().any(|s| combined.contains(s)) {
         return CommandError::expected(
-            "The screenshot browser couldn't be downloaded — Ship Studio couldn't reach \
+            "The screenshot browser couldn't be downloaded — the app couldn't reach \
              Playwright's download server. Check your internet connection (including any VPN, \
              proxy, or firewall), then try again.",
         );
@@ -187,7 +187,7 @@ fn browser_install_error(output: &std::process::Output) -> CommandError {
     }
     if combined.contains("EACCES") || combined.contains("EPERM") {
         return CommandError::expected(
-            "The screenshot browser couldn't be downloaded — Ship Studio wasn't allowed to \
+            "The screenshot browser couldn't be downloaded — the app wasn't allowed to \
              write to Playwright's browser cache. Check the permissions on that folder \
              (~/Library/Caches/ms-playwright on macOS, %LOCALAPPDATA%\\ms-playwright on \
              Windows), then try again.",

@@ -73,6 +73,21 @@ export interface Agent {
   capabilities?: Capabilities;
   /** Secrets it has in the Keychain (names only); omitted when none. */
   secrets?: AgentSecret[];
+  /** Moved engines and not run there yet: its next turn starts a new conversation. */
+  newEngine?: boolean;
+  /** How full its conversation is, as its engine reported it; omitted when it doesn't say. */
+  context?: ContextFill;
+}
+
+/** Mirrors `context::ContextFill`: two numbers the engine reported, never estimated. */
+export interface ContextFill {
+  /** Tokens its latest request carried. */
+  used: number;
+  /** The model's context window. */
+  window: number;
+  at: number;
+  /** The engine's own id for the model that made the request, when it says. */
+  model?: string;
 }
 
 /** Mirrors `failure::Failure`: what kind of failure a turn ended in. */
@@ -164,7 +179,7 @@ export interface EngineInfo {
 
 export interface AgentsOverview {
   agents: Agent[];
-  /** Claude Code is installed (the default engine). */
+  /** Claude Code is installed. Per-agent readiness is `engineIsReady` over `engines`. */
   engineReady: boolean;
   engines: EngineInfo[];
 }
@@ -342,6 +357,8 @@ export interface AgentMessage {
   session?: SessionMark;
   /** On a user message sent from the phone: the `clientId` of its send (docs/mobile.md). */
   clientId?: string;
+  /** On a `note`: the conversation started fresh here; drawn as a divider. */
+  fresh?: boolean;
 }
 
 /** Mirrors `project::ChangedFile`: line counts are absent for a binary file. */
@@ -480,18 +497,34 @@ export function modelLabel(
 }
 
 /**
- * Whether an agent on this engine can be sent a message. Claude Code counts
- * once installed (a signed-out turn says so in the chat); Codex once its own
- * `login status` says it's signed in too.
+ * Whether an agent on this engine can be sent a message: its engine is
+ * installed and signed in, by that engine's own check (`engines`). Before the
+ * engines have loaded, Claude Code counts as `claudeInstalled` says.
  */
 export function engineIsReady(
   engine: AgentEngine,
   engines: EngineInfo[],
   claudeInstalled: boolean
 ): boolean {
-  if (engine === 'claude') return claudeInstalled;
   const info = engines.find((e) => e.id === engine);
-  return Boolean(info?.installed && info.signedIn);
+  if (info) return info.installed && info.signedIn;
+  return engine === 'claude' && claudeInstalled;
+}
+
+/** No engine Agents runs on is installed at all (Opencode-, Cursor- or "Other"-only). */
+export function noEngineInstalled(engines: EngineInfo[]): boolean {
+  return engines.length > 0 && engines.every((e) => !e.installed);
+}
+
+/**
+ * The engine a new agent goes on when nobody picked one: Claude Code when
+ * it's ready, else the first that is, else Claude Code. Mirrors
+ * `engine::default_for`.
+ */
+export function defaultEngine(engines: EngineInfo[]): AgentEngine {
+  const ready = engines.filter((e) => engineUnavailable(e) === null);
+  if (ready.some((e) => e.id === 'claude')) return 'claude';
+  return ready[0]?.id ?? 'claude';
 }
 
 /** What an engine needs before it can take an agent, or null when it can. */
@@ -499,11 +532,6 @@ export function engineUnavailable(info: EngineInfo): 'install' | 'sign-in' | nul
   if (!info.installed) return 'install';
   if (!info.signedIn) return 'sign-in';
   return null;
-}
-
-/** What a new agent runs on: the first engine that can take it, else Claude Code. */
-export function defaultEngine(engines: EngineInfo[]): AgentEngine {
-  return engines.find((e) => engineUnavailable(e) === null)?.id ?? 'claude';
 }
 
 /**
@@ -613,6 +641,11 @@ export const AGENT_EVENTS = {
 } as const;
 
 export const getAgentsOverview = () => invoke<AgentsOverview>('agents_overview');
+/**
+ * The agents bound to a project folder, straight from the registry: unlike
+ * the overview, this creates no Chief of Staff and probes no engine.
+ */
+export const getAgentsWithProjects = () => invoke<Agent[]>('agents_with_projects');
 /**
  * The newest `limit` lines, oldest first. `before`: only lines older than that
  * one (the next page up). `through`: reach back at least to that line.
@@ -729,6 +762,23 @@ export const revokePermission = (agentId: string, ruleId: string) =>
   invoke<void>('agents_revoke_permission', { agentId, ruleId });
 export const focusAgent = (agentId: string | null) => invoke<void>('agents_focus', { agentId });
 export const markAgentUnread = (agentId: string) => invoke<void>('agents_mark_unread', { agentId });
+/** A new conversation from its next message: instructions and memory carry over, the chat stays. */
+export const startAgentFresh = (agentId: string) =>
+  invoke<Agent>('agents_start_fresh', { agentId });
+
+/** Whether its next message would continue a conversation (one there is to leave). */
+export const canStartFresh = (agent: Pick<Agent, 'sessionId' | 'newEngine'>) =>
+  Boolean(agent.sessionId || agent.newEngine);
+
+/** From this full, the chat suggests starting fresh. */
+export const CONTEXT_SUGGEST_AT = 85;
+
+/** How full its conversation is, 0-100, or null when its engine didn't say. */
+export function contextPercent(agent: Pick<Agent, 'context'>): number | null {
+  const fill = agent.context;
+  if (!fill || fill.window <= 0) return null;
+  return Math.min(100, Math.round((fill.used / fill.window) * 100));
+}
 export const getImportPrompt = () => invoke<string>('agents_import_prompt');
 
 /** One agent a pasted reply would import (see `agents/paste.rs`). */
@@ -928,6 +978,14 @@ export function formatUsage(totals: UsageTotals): string | null {
     parts.unshift(totals.costUsd < 0.01 ? '<$0.01' : `$${totals.costUsd.toFixed(2)}`);
   }
   return parts.join(' · ');
+}
+
+/** "72% full · 144k of 200k tokens", or null when its engine didn't say. */
+export function formatContext(agent: Pick<Agent, 'context'>): string | null {
+  const percent = contextPercent(agent);
+  if (percent === null || !agent.context) return null;
+  const { used, window } = agent.context;
+  return `${percent < 1 ? '<1' : percent}% full · ${compact(used)} of ${compact(window)} tokens`;
 }
 
 /** Who said a hit's line, when it wasn't the agent itself. */

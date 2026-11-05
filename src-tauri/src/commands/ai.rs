@@ -23,7 +23,7 @@ const AGENT_CLI_TIMEOUT_SECS: u64 = 60;
 const COMMIT_MSG_CLI_TIMEOUT_SECS: u64 = 30;
 
 /// Fallback commit message used when AI generation is unavailable or fails.
-pub const DEFAULT_COMMIT_MESSAGE: &str = "Update from Ship Studio";
+pub const DEFAULT_COMMIT_MESSAGE: &str = "Save changes";
 
 /// Timeout for the fast local git context-gathering ops (branch name, commit
 /// log) — always cheap regardless of repo size.

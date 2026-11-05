@@ -360,7 +360,7 @@ export function ImportDone({ summary, agents }: ImportDoneProps) {
       )}
       <p className="agents-import-done__next">
         <strong>Say hi to your team.</strong> They start when you message them; routines run while
-        Ship Studio is open.
+        the app is open.
       </p>
     </div>
   );

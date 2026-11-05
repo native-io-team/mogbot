@@ -50,7 +50,7 @@ window.addEventListener('error', (event) => {
     // A backend-classified Expected value thrown synchronously is the same
     // non-bug it is on the rejection path (issue #916) — never file it.
     if (isExpectedCommandError(event.error)) {
-      console.warn('[Ship Studio] Uncaught Expected backend error — not reported:', msg);
+      console.warn('Uncaught Expected backend error — not reported:', msg);
       return;
     }
     // App bug (not third-party plugin code) — report to the admin agent.
@@ -63,7 +63,7 @@ window.addEventListener('error', (event) => {
   }
 
   event.preventDefault();
-  console.error('[Ship Studio] Plugin error caught by global handler:', msg);
+  console.error('Plugin error caught by global handler:', msg);
 
   // Identify and auto-remove the crashing plugin
   const blobUrl = event.filename?.startsWith('blob:') ? event.filename : null;
@@ -82,7 +82,7 @@ window.addEventListener('unhandledrejection', (event) => {
   switch (classifyRejection(reason)) {
     case 'plugin':
       event.preventDefault();
-      console.error('[Ship Studio] Plugin unhandled rejection caught by global handler:', reason);
+      console.error('Plugin unhandled rejection caught by global handler:', reason);
       return;
 
     case 'tauri-race':
@@ -95,7 +95,7 @@ window.addEventListener('unhandledrejection', (event) => {
       // with a user-side fix. Nobody caught the promise, which is worth a
       // local trace, but it is not a malfunction and must not be filed as
       // one (issue #916).
-      console.warn('[Ship Studio] Uncaught Expected backend error — not reported:', message);
+      console.warn('Uncaught Expected backend error — not reported:', message);
       return;
 
     case 'report':

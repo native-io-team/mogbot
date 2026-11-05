@@ -100,7 +100,7 @@ const MOBILE_SETUP: Record<Platform, { need: string; prompt: string }> = {
   ios: {
     need: 'Previewing iOS apps needs the Xcode command line tools and a Simulator.',
     prompt:
-      "I want to preview iOS apps in Ship Studio, but the iOS toolchain isn't set up on " +
+      "I want to preview iOS apps on this Mac, but the iOS toolchain isn't set up on " +
       'this Mac. Please do the heavy lifting to set it up: install the Xcode command line ' +
       'tools (`xcode-select --install`) if missing, verify `xcrun simctl list devices` ' +
       'works, and make sure at least one iOS Simulator runtime + device is available ' +
@@ -110,7 +110,7 @@ const MOBILE_SETUP: Record<Platform, { need: string; prompt: string }> = {
   android: {
     need: 'Previewing Android apps needs the Android SDK, a JDK, and an emulator (AVD).',
     prompt:
-      "I want to preview Android apps in Ship Studio, but the Android toolchain isn't set " +
+      "I want to preview Android apps on this Mac, but the Android toolchain isn't set " +
       'up on this Mac. Please do the heavy lifting end-to-end without making me fiddle with ' +
       'config: install the Android SDK command line tools (sdkmanager, platform-tools/adb, ' +
       'emulator), a recent system image, and a JDK 17 for Gradle; create an emulator (AVD); ' +
@@ -735,7 +735,7 @@ export function DeviceMirror({ projectName, projectPath, onSendToAgent }: Device
       : "Couldn't start the preview";
     const detail = setupPlatform
       ? MOBILE_SETUP[setupPlatform].need
-      : `Ship Studio couldn't start a ${PLATFORM_COPY[platform ?? 'ios'].surface} preview for ${projectName}.`;
+      : `Couldn't start a ${PLATFORM_COPY[platform ?? 'ios'].surface} preview for ${projectName}.`;
     return renderSetupCard(heading, detail, setupPlatform, errorMsg ?? undefined);
   }
 

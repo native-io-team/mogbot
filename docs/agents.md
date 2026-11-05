@@ -17,6 +17,23 @@ which. New agent is ⌘N, the row at the foot of the agent list, or ⌘K. In the
 collapsed rail the toggle is two stacked icons; below the compact breakpoint
 it is an icon pair at the top bar's leading edge.
 
+Agents is the primary view: the app opens on it (a project window opens its
+workspace instead), and onboarding ends there. A new Chief's chat opens on its
+greeting, `prompts::CHIEF_GREETING`, appended by `ensure_main` when it creates
+the Chief: what it can do (create agents, delegate, approvals, projects, the
+phone) and a question. It is stored, not generated, so nothing runs on the
+user's plan until they reply, and `CHIEF_INSTRUCTIONS` tells the Chief it said
+it. Three starters sit under it until the user's first message.
+
+In Agents mode the sidebar's top row is the toggle and a bell: What's in
+flight, badged amber with how many agents need you (Home, Workflows and the
+Inbox belong to the Projects side). Its foot has the Phone row (the companion
+app: pair, or which phone is connected); remote access, for driving the app
+from another assistant, appears there only while it is on and is otherwise
+reached from the Phone panel's last line or ⌘K. In a project's workspace
+sidebar, agents bound to that project are listed above its terminal
+Sessions; clicking one opens its chat.
+
 ## What an agent is
 
 | Piece | Where | Notes |
@@ -84,6 +101,39 @@ From the stream:
 A vanished session (`--resume` → "No conversation found") is replaced once with
 a fresh one. **Stop** ends the turn and drops the queue; it leaves a quiet
 "Stopped" note (your doing, not a failure). A turn is capped at 3 hours.
+
+**Start fresh, keep memory.** The agent menu, ⌘K and the phone's agent sheet
+offer "Start fresh" (`agents_start_fresh` / `agents.startFresh`): the next
+message begins a new conversation on the same engine, through the same path an
+engine switch takes. Instructions and `## Memory` carry over; the session
+doesn't, and nothing is recapped into the new one. The chat stays, with a
+"Started fresh · memory kept" note (`fresh: true`) drawn as a divider. It's
+refused while the agent is working, while a card in its chat waits on an
+answer, while another agent still owes it the answer to something it delegated
+(that answer would land in a conversation that never asked), and when its next
+message already starts a new conversation. The check and the reset happen under
+the inbox lock, so a message sent at the same moment either starts first (and
+the fresh start is refused) or starts in the new conversation; two at once
+record one divider. Any later recap (an engine switch, a vanished session) only
+carries what came after the last divider. The prompts tell agents this can
+happen, so anything they'll need later belongs in memory.
+
+**Context meter.** `agents/context.rs` stores one reading per agent
+(`Agent.context`: `used`, `window`, the engine's `model` id) from the engine's
+own numbers: Claude Code's last `assistant` `message.usage` against the
+`result` event's `modelUsage[*].contextWindow`, and Codex app-server's
+`thread/tokenUsage/updated` (`last` against `modelContextWindow`, less
+`reasoningOutputTokens`, which the next request doesn't carry — as Codex's own
+`tokens_in_context_window` counts it; Codex's "% left" also sets aside a fixed
+allowance, so it can read a point or two lower). `codex exec`
+reports no window, so it gives no reading, and the UI shows nothing; nothing is
+ever estimated. The editor shows "72% full · 144k of 200k tokens"; from 85% the
+chat suggests starting fresh. A turn on the agent's own model replaces the
+reading, or clears it when it gives none (stopped, timed out, an old Claude Code
+without `modelUsage`, a `codex exec` fallback, a vanished-session retry); a
+routine on another model (check-ins default to Haiku) leaves it alone, since
+that model's window isn't the conversation's. A fresh start, an engine switch
+or a model change clears it.
 
 **Process trees.** Each turn's `claude` leads its own process group
 (`agents::procs`). Stop, interrupt, the timeout and quitting walk its process
@@ -627,9 +677,11 @@ back from the thing itself:
   here shows in remote access's checklist too. Hidden in a dev build, which has
   no installed app to reopen.
 
-They are offered in two quiet places only: under the Chief of Staff's
-first-run starters, with a line that says what happens ("Closing Ship Studio
-stops them, and sleep pauses them.", or with Keep running on, "Closing the
+They are offered in two quiet places only, and only once they matter: at the
+foot of What's in flight while an agent is working or something is scheduled
+(not on a new user's first screen, which is the Chief's hello), with a line
+that says what happens ("Quitting the app stops them, and sleep pauses
+them.", or with Keep running on, "Closing the
 window keeps them going; quitting stops them, and sleep pauses them.") and one
 line suggesting an always-on Mac, such as a Mac mini or a cloud Mac, for
 round-the-clock agents; and as a "Keep this Mac awake" link at the end of the
