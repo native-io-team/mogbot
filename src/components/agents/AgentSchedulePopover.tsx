@@ -1,13 +1,19 @@
 /**
  * An agent's schedule, anchored to the chat header: the check-ins it set for
- * itself and the routines you gave it, and one line to add another.
+ * itself and the routines you gave it, and a picker to add another.
  *
  * The trigger reads "N scheduled", or is a quiet clock when there's nothing.
- * The composer takes "when: what" in one line and reads the time back as the
- * backend resolved it, so what you see is what will fire. Edit puts a row's
- * own words back in that composer; Run now wakes the agent with it at once,
- * leaving its next time alone. Changes apply at once and the list follows
- * the agent registry.
+ * Adding or editing is the phone's picker, not a grammar: When is a few
+ * chips (Every day / Weekdays / Weekly + days / Every few hours / Once with a
+ * date) and a time, What is one line, and above Schedule it says back what it
+ * will make ("Every weekday at 9:00 AM — Draft my day") with the first run as
+ * the backend resolved it, so what you save is what will fire. The picker
+ * writes the same `when` words the backend's grammar reads
+ * (`routineWhenPhrase`, packages/companion-protocol/src/routine-phrases.json),
+ * so a desk-made routine is a phone-made one.
+ *
+ * Run now wakes the agent with a row at once, leaving its next time alone.
+ * Changes apply at once and the list follows the agent registry.
  *
  * A routine that ran on its own this week says what it cost, as its engine
  * reported it: dollars "at API prices" when every run was priced and Claude
@@ -17,13 +23,14 @@
  * @module components/agents/AgentSchedulePopover
  */
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import {
   CloseIcon,
   EditFieldIcon,
   HistoryIcon,
   PauseIcon,
   PlayIcon,
+  PlusIcon,
   SkipNextIcon,
 } from '@/components/icons';
 import { Dropdown } from '../primitives/Dropdown';
@@ -31,7 +38,10 @@ import { IconButton } from '../primitives/IconButton';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
+import { ToggleButton } from '../primitives/ToggleButton';
+import { Tooltip } from '../primitives/Tooltip';
 import {
+  CADENCES,
   cancelCheckIn,
   COST_BASIS_NOTE,
   createCheckIn,
@@ -40,19 +50,31 @@ import {
   describeRun,
   describeRunDetail,
   formatWhen,
+  formatWhenInline,
   getAgentUsage,
+  INTERVALS,
+  intervalLabel,
+  newPicker,
   onClaudePlan,
+  onceDays,
   pauseCheckIn,
+  pickerOf,
   previewSchedule,
+  routineEcho,
+  routineInPast,
   routineWeekLine,
+  routineWhenOf,
+  routineWhenPhrase,
   runCheckInNow,
-  scheduleWhenPhrase,
   sortCheckIns,
-  splitScheduleInput,
+  toggleDay,
   updateCheckIn,
+  WEEK,
+  whenOf,
   type Agent,
   type CheckIn,
   type CheckInRun,
+  type PickerState,
   type SchedulePreview,
   type UsageSummary,
 } from '../../lib/agents';
@@ -69,12 +91,13 @@ function reasonOf(err: unknown): string {
   return text.split(' Examples:')[0];
 }
 
-/** "Every weekday at 9:00 AM, first tomorrow 9:00 AM" / "Tomorrow 9:00 AM". */
-function readBack(p: SchedulePreview): string {
-  if (!p.repeat) return formatWhen(p.nextAt);
-  const first = formatWhen(p.nextAt).replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase());
-  return `${describeRepeat(p.repeat)}, first ${first}`;
+/** The backend's reading: "First run tomorrow at 9:00 AM" / "Runs today at 5:00 PM". */
+function firstRun(p: SchedulePreview): string {
+  const when = formatWhenInline(p.nextAt);
+  return p.repeat ? `First run ${when}` : `Runs ${when}`;
 }
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
 
 interface AgentSchedulePopoverProps {
   agent: Agent;
@@ -99,7 +122,7 @@ export function AgentSchedulePopover({ agent, open, onOpenChange }: AgentSchedul
             variant="ghost"
             className="agent-chat__scheduled"
             leftIcon={<HistoryIcon size={12} />}
-            title="Scheduled check-ins"
+            title="Scheduled routines"
           >
             {count} scheduled
           </Button>
@@ -109,8 +132,8 @@ export function AgentSchedulePopover({ agent, open, onOpenChange }: AgentSchedul
             tabIndex={0}
             variant="ghost"
             icon={<HistoryIcon size={14} />}
-            title="Schedule a check-in"
-            aria-label={`Schedule a check-in for ${agent.name}`}
+            title="Schedule a routine"
+            aria-label={`Schedule a routine for ${agent.name}`}
           />
         )
       }
@@ -120,92 +143,33 @@ export function AgentSchedulePopover({ agent, open, onOpenChange }: AgentSchedul
   );
 }
 
-/** Mounted each time the popover opens, so it starts fresh with focus in the composer. */
+/** Mounted each time the popover opens, so it starts fresh. */
 function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
   const items = sortCheckIns(agent.checkIns ?? []);
-  const [text, setText] = useState('');
-  /** The row whose words are in the composer, if it's an edit. */
-  const [editing, setEditing] = useState<CheckIn | null>(null);
-  const [preview, setPreview] = useState<SchedulePreview | string | null>(null);
+  /** The picker: open for a new routine (`'new'`) or for a row's edit. */
+  const [composing, setComposing] = useState<CheckIn | 'new' | null>(() =>
+    items.length === 0 ? 'new' : null
+  );
+  const editing = composing && composing !== 'new' ? composing : null;
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { when, note } = splitScheduleInput(text);
-
-  // After the Dropdown's own focus handling, which would park it on the menu.
-  useEffect(() => inputRef.current?.focus(), []);
-
-  // Read the time back as it's typed, after a short pause.
-  useEffect(() => {
-    if (!when) return;
-    let live = true;
-    const timer = window.setTimeout(() => {
-      previewSchedule(when)
-        .then((p) => live && setPreview(p))
-        .catch((err) => live && setPreview(reasonOf(err)));
-    }, 250);
-    return () => {
-      live = false;
-      window.clearTimeout(timer);
-    };
-  }, [when]);
 
   // Each routine's week, read once per opening (it moves only when a run ends).
   const usage = useAsyncState<UsageSummary>(() => getAgentUsage(agent.id), { immediate: true });
   const weekOf = (id: string) => usage.data?.routines?.find((r) => r.id === id)?.week;
   const onPlan = onClaudePlan(useQuotaLines());
-  const { execute: run, isLoading: busy } = useAsyncState(async (change: () => Promise<void>) => {
-    setError(null);
-    try {
-      await change();
-      await refreshAgents();
-    } catch (err) {
-      setError(reasonOf(err));
+  const { execute: run, isLoading: busy } = useAsyncState(
+    async (change: () => Promise<void>): Promise<boolean> => {
+      setError(null);
+      try {
+        await change();
+        await refreshAgents();
+        return true;
+      } catch (err) {
+        setError(reasonOf(err));
+        return false;
+      }
     }
-  });
-
-  const parsed = when && preview !== null && typeof preview !== 'string' ? preview : null;
-  const canAdd = parsed !== null && note.length > 0 && !busy;
-
-  const reset = () => {
-    setEditing(null);
-    setText('');
-    setPreview(null);
-    setError(null);
-  };
-
-  const startEdit = (c: CheckIn) => {
-    setEditing(c);
-    setError(null);
-    setText(`${scheduleWhenPhrase(c)}: ${c.note}`);
-    inputRef.current?.focus();
-  };
-
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Escape' && editing) {
-      // Leave the edit, not the popover.
-      e.preventDefault();
-      e.stopPropagation();
-      reset();
-      return;
-    }
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    if (!canAdd) return;
-    void run(async () => {
-      if (editing) await updateCheckIn(agent.id, editing.id, when, note);
-      else await createCheckIn(agent.id, when, note);
-      reset();
-    });
-  };
-
-  const reason = when && typeof preview === 'string' ? preview : null;
-  const problem = error ?? reason;
-  const invalid = problem !== null;
-  let readback = 'Say when, then what to do. Return adds it.';
-  if (problem) readback = problem;
-  else if (parsed && !note) readback = `${readBack(parsed)} · then a colon and what to do`;
-  else if (parsed) readback = readBack(parsed);
-  else if (when) readback = '\u00a0';
+  );
 
   return (
     <div className="agent-schedule__body">
@@ -225,7 +189,10 @@ function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
                   onRan();
                 })
               }
-              onEdit={() => startEdit(c)}
+              onEdit={() => {
+                setError(null);
+                setComposing(c);
+              }}
               onTogglePause={() => void run(() => pauseCheckIn(agent.id, c.id, !c.paused))}
               onCancel={() => void run(() => cancelCheckIn(agent.id, c.id))}
             />
@@ -235,41 +202,284 @@ function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
         <p className="agent-schedule__empty">Nothing scheduled for {agent.name} yet.</p>
       )}
 
-      <div className="agent-schedule__composer">
-        <TextField
-          ref={inputRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder="e.g. every weekday 9am: brief me on Acme"
-          aria-label={
-            editing
-              ? `Edit “${editing.note}”: when, a colon, then what to do`
-              : 'New check-in: when, a colon, then what to do'
+      {composing ? (
+        <RoutinePicker
+          // A fresh picker for each row edited.
+          key={editing?.id ?? 'new'}
+          agent={agent}
+          editing={editing}
+          busy={busy}
+          error={error}
+          onCancel={
+            items.length > 0 || editing
+              ? () => {
+                  setError(null);
+                  setComposing(null);
+                }
+              : undefined
           }
-          invalid={invalid}
-          maxLength={640}
+          onSave={(phrase, note) =>
+            void run(async () => {
+              if (editing) await updateCheckIn(agent.id, editing.id, phrase, note);
+              else await createCheckIn(agent.id, phrase, note);
+            }).then((ok) => ok && setComposing(null))
+          }
         />
+      ) : (
+        <div className="agent-schedule__add">
+          <Button
+            tabIndex={0}
+            variant="secondary"
+            size="compact"
+            leftIcon={<PlusIcon size={12} />}
+            onClick={() => {
+              setError(null);
+              setComposing('new');
+            }}
+          >
+            New routine
+          </Button>
+          {error && (
+            <p className="agent-schedule__readback" data-invalid>
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+
+      <p className="agent-schedule__foot">
+        Runs only while the app is open and this Mac is awake; a missed routine runs once when it’s
+        back.
+        <KeepAwakeLink />
+      </p>
+    </div>
+  );
+}
+
+type Reading =
+  | { kind: 'reading' }
+  | { kind: 'ok'; preview: SchedulePreview }
+  | { kind: 'bad'; reason: string };
+
+/**
+ * When (chips and a time) and What (one line), the echo of what it will
+ * make, then Cancel / Schedule. The phone's picker, on the desk.
+ */
+function RoutinePicker({
+  agent,
+  editing,
+  busy,
+  error,
+  onCancel,
+  onSave,
+}: {
+  agent: Agent;
+  editing: CheckIn | null;
+  busy: boolean;
+  error: string | null;
+  /** Absent when there's nothing else to show (no routines yet). */
+  onCancel?: () => void;
+  /** `phrase` is empty for an edit that left When as it was. */
+  onSave: (phrase: string, note: string) => void;
+}) {
+  const [picker, setPicker] = useState<PickerState>(() =>
+    editing ? pickerOf(routineWhenOf(editing)) : newPicker()
+  );
+  // What When said when the picker opened: unchanged, it isn't re-sent, so
+  // "every 2 hours" isn't re-anchored to now by editing the note.
+  const [openedAs] = useState(() => (editing ? routineWhenPhrase(routineWhenOf(editing)) : null));
+  const [note, setNote] = useState(() => editing?.note ?? '');
+  const [answer, setAnswer] = useState<{ phrase: string; reading: Reading } | null>(null);
+  const noteRef = useRef<HTMLInputElement>(null);
+  const change = (patch: Partial<PickerState>) => setPicker((p) => ({ ...p, ...patch }));
+
+  // After the Dropdown's own focus handling, which would park it on the menu.
+  useEffect(() => noteRef.current?.focus(), []);
+
+  // The clock as the picker opened: it lives only while the popover is open.
+  const [now] = useState(() => Date.now());
+  const when = whenOf(picker);
+  const phrase = when ? routineWhenPhrase(when) : '';
+  const past = when ? routineInPast(when, now) : false;
+  const [keepDate] = useState(() => (editing && !editing.repeat ? picker.date : undefined));
+  const days = useMemo(() => onceDays(now, keepDate), [now, keepDate]);
+  const [intervals] = useState(() =>
+    INTERVALS.includes(picker.minutes) ? INTERVALS : [...INTERVALS, picker.minutes]
+  );
+
+  // The backend reads the words back: the first run, or why it can't.
+  useEffect(() => {
+    if (!phrase || past) return;
+    let live = true;
+    const timer = window.setTimeout(() => {
+      previewSchedule(phrase).then(
+        (preview) => live && setAnswer({ phrase, reading: { kind: 'ok', preview } }),
+        (err: unknown) =>
+          live && setAnswer({ phrase, reading: { kind: 'bad', reason: reasonOf(err) } })
+      );
+    }, 200);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [phrase, past]);
+
+  const reading: Reading = past
+    ? { kind: 'bad', reason: 'That time has passed. Pick a later one.' }
+    : answer?.phrase === phrase
+      ? answer.reading
+      : { kind: 'reading' };
+  const ready = reading.kind === 'ok' && note.trim().length > 0 && !busy;
+  const save = () => {
+    if (!ready) return;
+    onSave(editing && phrase === openedAs ? '' : phrase, note.trim());
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape' && onCancel) {
+      // Leave the picker, not the popover.
+      e.preventDefault();
+      e.stopPropagation();
+      onCancel();
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    save();
+  };
+  const timed = picker.cadence !== 'hours';
+
+  return (
+    <div
+      className="agent-schedule__picker"
+      role="group"
+      aria-label={editing ? 'Edit routine' : 'New routine'}
+    >
+      <div className="agent-schedule__field">
+        <span className="agent-schedule__label" id="agent-schedule-when">
+          When
+        </span>
+        <div className="agent-schedule__chips" role="group" aria-labelledby="agent-schedule-when">
+          {CADENCES.map((c) => (
+            <ToggleButton
+              key={c.value}
+              tabIndex={0}
+              size="compact"
+              variant="secondary"
+              pressed={picker.cadence === c.value}
+              onClick={() => change({ cadence: c.value })}
+            >
+              {c.label}
+            </ToggleButton>
+          ))}
+        </div>
+        {picker.cadence === 'weekly' && (
+          <div className="agent-schedule__chips" role="group" aria-label="On these days">
+            {WEEK.map((d) => (
+              <ToggleButton
+                key={d.day}
+                tabIndex={0}
+                size="compact"
+                variant="secondary"
+                aria-label={d.name}
+                pressed={picker.days.includes(d.day)}
+                onClick={() => change({ days: toggleDay(picker.days, d.day) })}
+              >
+                {d.short}
+              </ToggleButton>
+            ))}
+          </div>
+        )}
+        {picker.cadence === 'hours' && (
+          <div className="agent-schedule__chips" role="group" aria-label="Every">
+            {intervals.map((m) => (
+              <ToggleButton
+                key={m}
+                tabIndex={0}
+                size="compact"
+                variant="secondary"
+                pressed={picker.minutes === m}
+                onClick={() => change({ minutes: m })}
+              >
+                {intervalLabel(m)}
+              </ToggleButton>
+            ))}
+          </div>
+        )}
+        {picker.cadence === 'once' && (
+          <div className="agent-schedule__chips" role="group" aria-label="On">
+            {days.map((d) => (
+              <ToggleButton
+                key={d.date}
+                tabIndex={0}
+                size="compact"
+                variant="secondary"
+                pressed={picker.date === d.date}
+                onClick={() => change({ date: d.date })}
+              >
+                {d.label}
+              </ToggleButton>
+            ))}
+          </div>
+        )}
+        {timed && (
+          <label className="agent-schedule__time">
+            <span>At</span>
+            <TextField
+              type="time"
+              required
+              value={`${pad2(picker.hour)}:${pad2(picker.minute)}`}
+              onChange={(e) => {
+                const [h, m] = e.target.value.split(':').map(Number);
+                if (Number.isFinite(h) && Number.isFinite(m)) change({ hour: h, minute: m });
+              }}
+              onKeyDown={onKeyDown}
+              aria-label="At"
+            />
+          </label>
+        )}
+      </div>
+
+      <div className="agent-schedule__field">
+        <label className="agent-schedule__label" htmlFor="agent-schedule-what">
+          What
+        </label>
+        <TextField
+          id="agent-schedule-what"
+          ref={noteRef}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder="Draft my day"
+          aria-label={`What ${agent.name} should do`}
+          maxLength={600}
+        />
+      </div>
+
+      <div className="agent-schedule__echo" aria-live="polite">
+        {when && <p className="agent-schedule__echo-line">{routineEcho(when, note || '…')}</p>}
         <p
           className="agent-schedule__readback"
-          data-invalid={invalid || undefined}
-          aria-live="polite"
+          data-invalid={reading.kind === 'bad' || error ? true : undefined}
         >
-          {readback}
+          {error ??
+            (reading.kind === 'ok'
+              ? `${firstRun(reading.preview)}${note.trim() ? '' : ` · now say what ${agent.name} should do`}`
+              : reading.kind === 'bad'
+                ? reading.reason
+                : ' ')}
         </p>
       </div>
 
-      <p className="agent-schedule__foot">
-        {editing ? (
-          'Return saves the change; Esc leaves it as it was.'
-        ) : (
-          <>
-            Runs only while the app is open and this Mac is awake; a missed check-in runs once when
-            it’s back.
-            <KeepAwakeLink />
-          </>
+      <div className="agent-schedule__picker-actions">
+        {onCancel && (
+          <Button tabIndex={0} variant="ghost" size="compact" onClick={onCancel}>
+            Cancel
+          </Button>
         )}
-      </p>
+        <Button tabIndex={0} variant="primary" size="compact" disabled={!ready} onClick={save}>
+          {editing ? 'Save' : 'Schedule'}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -299,6 +509,9 @@ function ScheduleRow({
 }) {
   const runs = item.runs ?? [];
   const [showRuns, setShowRuns] = useState(false);
+  // A repeating routine on its schedule reads as two lines that each stay
+  // whole: how often, then "Next: tomorrow at 9:00 AM".
+  const plain = item.repeat && !item.paused && !item.retry;
   return (
     <li
       className="agent-schedule__item"
@@ -308,9 +521,16 @@ function ScheduleRow({
     >
       <div className="agent-schedule__text">
         <span className="agent-schedule__note">{item.note}</span>
-        <span className="agent-schedule__when" data-retrying={item.retry ? '' : undefined}>
-          {describeCheckInTime(item)}
-        </span>
+        {plain && item.repeat ? (
+          <>
+            <span className="agent-schedule__when">{describeRepeat(item.repeat)}</span>
+            <span className="agent-schedule__when">Next: {formatWhenInline(item.nextAt)}</span>
+          </>
+        ) : (
+          <span className="agent-schedule__when" data-retrying={item.retry ? '' : undefined}>
+            {describeCheckInTime(item)}
+          </span>
+        )}
         {spent && (
           <span className="agent-schedule__spent" title={priced ? COST_BASIS_NOTE : undefined}>
             {spent}
@@ -328,48 +548,52 @@ function ScheduleRow({
         )}
       </div>
       <div className="agent-schedule__actions">
-        <IconButton
-          tabIndex={0}
-          variant="ghost"
-          size="compact"
-          icon={<SkipNextIcon size={12} />}
-          onClick={onRunNow}
-          disabled={busy}
-          title="Run now"
-          aria-label={`Run “${item.note}” now`}
-        />
-        <IconButton
-          tabIndex={0}
-          variant="ghost"
-          size="compact"
-          icon={<EditFieldIcon size={12} />}
-          onClick={onEdit}
-          disabled={busy}
-          title="Edit"
-          aria-label={`Edit “${item.note}”`}
-        />
-        {item.repeat && (
+        <Tooltip content="Run now">
           <IconButton
             tabIndex={0}
             variant="ghost"
             size="compact"
-            icon={item.paused ? <PlayIcon size={12} /> : <PauseIcon size={12} />}
-            onClick={onTogglePause}
+            icon={<SkipNextIcon size={12} />}
+            onClick={onRunNow}
             disabled={busy}
-            title={item.paused ? 'Resume' : 'Pause'}
-            aria-label={item.paused ? `Resume “${item.note}”` : `Pause “${item.note}”`}
+            aria-label={`Run “${item.note}” now`}
           />
+        </Tooltip>
+        <Tooltip content="Edit">
+          <IconButton
+            tabIndex={0}
+            variant="ghost"
+            size="compact"
+            icon={<EditFieldIcon size={12} />}
+            onClick={onEdit}
+            disabled={busy}
+            aria-label={`Edit “${item.note}”`}
+          />
+        </Tooltip>
+        {item.repeat && (
+          <Tooltip content={item.paused ? 'Resume' : 'Pause'}>
+            <IconButton
+              tabIndex={0}
+              variant="ghost"
+              size="compact"
+              icon={item.paused ? <PlayIcon size={12} /> : <PauseIcon size={12} />}
+              onClick={onTogglePause}
+              disabled={busy}
+              aria-label={item.paused ? `Resume “${item.note}”` : `Pause “${item.note}”`}
+            />
+          </Tooltip>
         )}
-        <IconButton
-          tabIndex={0}
-          variant="ghost"
-          size="compact"
-          icon={<CloseIcon size={12} />}
-          onClick={onCancel}
-          disabled={busy}
-          title="Cancel"
-          aria-label={`Cancel “${item.note}”`}
-        />
+        <Tooltip content="Cancel this routine">
+          <IconButton
+            tabIndex={0}
+            variant="ghost"
+            size="compact"
+            icon={<CloseIcon size={12} />}
+            onClick={onCancel}
+            disabled={busy}
+            aria-label={`Cancel “${item.note}”`}
+          />
+        </Tooltip>
       </div>
       {showRuns && <RunHistory runs={runs} />}
     </li>

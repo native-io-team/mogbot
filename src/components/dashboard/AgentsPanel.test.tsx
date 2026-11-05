@@ -169,7 +169,7 @@ describe('AgentsPanel', () => {
 
     await waitFor(() => expect(screen.getByText('Opencode')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Install' })).toBeInTheDocument();
-    expect(screen.getByText('Not installed')).toBeInTheDocument();
+    expect(screen.getByText('Projects only · Not installed')).toBeInTheDocument();
     expect(screen.queryByText('Installed')).not.toBeInTheDocument();
   });
 
@@ -445,7 +445,7 @@ describe('AgentsPanel', () => {
     // Workspace badge names the active workspace.
     await waitFor(() => expect(screen.getAllByText(/Circa/).length).toBeGreaterThan(0));
     // The two section subheaders are present.
-    expect(screen.getByText('AGENTS')).toBeInTheDocument();
+    expect(screen.getByText('ENGINES')).toBeInTheDocument();
     expect(screen.getByText('SERVICES')).toBeInTheDocument();
     // The Services rows render for GitHub + Vercel.
     expect(screen.getByText('GitHub')).toBeInTheDocument();

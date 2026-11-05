@@ -577,6 +577,70 @@ pub fn push_card_detail(remote: &str, branch: &str, commits: &str, uncommitted: 
     detail
 }
 
+/// `https://github.com/acme/site.git` or `git@github.com:acme/site.git` →
+/// `acme/site`: where it goes, as people name a repository.
+pub fn repo_name(remote: &str) -> String {
+    let path = match remote.split_once("://") {
+        Some((_, rest)) => rest.split_once('/').map(|(_, p)| p).unwrap_or(rest),
+        None => remote.rsplit_once(':').map(|(_, p)| p).unwrap_or(remote),
+    };
+    let path = path.trim().trim_end_matches('/');
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
+    match parts.len() {
+        0 => remote.trim().to_string(),
+        1 => parts[0].to_string(),
+        n => format!("{}/{}", parts[n - 2], parts[n - 1]),
+    }
+}
+
+/// The sentence the push card leads with; the raw lines go behind Details.
+///
+/// `commits` is `git log --oneline` output for what goes (`new_branch`: the
+/// branch isn't on GitHub yet, so the log is only the recent history and is
+/// not counted). `uncommitted` is `git status --short`.
+pub fn push_card_summary(
+    remote: &str,
+    commits: &str,
+    new_branch: bool,
+    uncommitted: &str,
+) -> String {
+    let repo = repo_name(remote);
+    let subjects: Vec<&str> = commits
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('…') && *l != "(none yet)")
+        .map(|l| l.split_once(' ').map(|(_, s)| s.trim()).unwrap_or(l))
+        .collect();
+    let edits: Vec<&str> = uncommitted
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('…'))
+        .collect();
+    let mut sentence = if new_branch {
+        format!("Publishes this work to {repo} for the first time.")
+    } else {
+        match subjects.as_slice() {
+            [] => format!("Publishes to {repo}."),
+            [one] => format!("Publishes 1 change to {repo}: “{one}”."),
+            [latest, ..] => format!(
+                "Publishes {} changes to {repo}, the latest “{latest}”.",
+                subjects.len()
+            ),
+        }
+    };
+    match edits.as_slice() {
+        [] => {}
+        [one] => {
+            let path = one.get(3..).unwrap_or(one).trim();
+            let path = path.rsplit_once(" -> ").map(|(_, p)| p).unwrap_or(path);
+            let file = path.trim_matches('"').rsplit('/').next().unwrap_or(path);
+            sentence.push_str(&format!(" Saves the unsaved edit to {file} first."));
+        }
+        many => sentence.push_str(&format!(" Saves {} unsaved edits first.", many.len())),
+    }
+    sentence
+}
+
 const PUSH_COMMIT_MESSAGE: &str = "Save changes from an agent";
 
 async fn push(app: &AppHandle, caller: &store::Agent, project: &str) -> Value {
@@ -596,7 +660,9 @@ async fn push(app: &AppHandle, caller: &store::Agent, project: &str) -> Value {
         Ok(s) => s,
         Err(e) => return mcp_error(format!("git failed: {e}")),
     };
-    let commits = match shared::git(project, &["log", "--oneline", "@{u}..HEAD"]).await {
+    let upstream = shared::git(project, &["log", "--oneline", "@{u}..HEAD"]).await;
+    let new_branch = upstream.is_err();
+    let commits = match upstream {
         Ok(log) => shared::cap_lines(log.trim(), 20),
         // No upstream yet: the branch is created on origin.
         Err(_) => shared::cap_lines(
@@ -620,8 +686,11 @@ async fn push(app: &AppHandle, caller: &store::Agent, project: &str) -> Value {
     } else {
         commits
     };
-    let detail = push_card_detail(&remote, &branch, &commits, &shared::cap_lines(&status, 20));
-    let answer = mcp::ask_user(app, caller, format!("Push {name}"), detail, None).await;
+    let uncommitted = shared::cap_lines(&status, 20);
+    let summary = push_card_summary(&remote, &commits, new_branch, &uncommitted);
+    let detail = push_card_detail(&remote, &branch, &commits, &uncommitted);
+    let answer =
+        mcp::ask_user_with_summary(app, caller, format!("Publish {name}"), summary, detail).await;
     match answer {
         Answer::Allowed => {}
         Answer::Denied(None) => return mcp_error("The user said no. Don't push."),
@@ -788,6 +857,33 @@ mod tests {
         assert!(detail.contains("Commits:\na1b2c3 Bigger hero"));
         assert!(detail.contains("Committed first:\n M src/app/page.tsx"));
         assert!(!push_card_detail("r", "main", "c", "  ").contains("Committed first"));
+    }
+
+    #[test]
+    fn the_push_card_leads_with_a_plain_sentence() {
+        assert_eq!(repo_name("https://github.com/acme/site.git"), "acme/site");
+        assert_eq!(repo_name("git@github.com:acme/site.git"), "acme/site");
+        let one = push_card_summary(
+            "https://github.com/acme/marketing.git",
+            "9f3c2e1 Bigger hero headline",
+            false,
+            " M src/components/Hero.tsx",
+        );
+        assert_eq!(
+            one,
+            "Publishes 1 change to acme/marketing: “Bigger hero headline”. Saves the unsaved edit to Hero.tsx first."
+        );
+        let many = push_card_summary("git@github.com:a/b.git", "1 One\n2 Two\n3 Three", false, "");
+        assert_eq!(many, "Publishes 3 changes to a/b, the latest “One”.");
+        let first = push_card_summary("git@github.com:a/b.git", "1 One", true, " M x\n?? y");
+        assert_eq!(
+            first,
+            "Publishes this work to a/b for the first time. Saves 2 unsaved edits first."
+        );
+        // No branch names, commit ids or remotes in what people read first.
+        for s in [&one, &many, &first] {
+            assert!(!s.contains("9f3c2e1") && !s.contains("origin") && !s.contains("main"));
+        }
     }
 
     #[test]

@@ -153,9 +153,10 @@
 
 /* --------------------------------------------- a change card for a copy */
 
-/* The card's rarest action, alone on the left (as "Always allow" is). */
+/* The card's rarest action: the … sits with the other actions on the right,
+   as it does on an approval card. */
 .agent-copy__more {
-  margin-right: auto;
+  display: inline-flex;
 }
 
 .agent-changes__record-actions {
@@ -249,27 +250,27 @@
 
 .agent-peer__state .sidebar-row-pixel-loader,
 .agent-peer__state .pixel-loader {
-  color: var(--accent-success);
+  /* In progress is the running status, never green (that is "done"). */
+  color: var(--status-running);
 }
 
 /* ------------------------------------------------------- session lines */
 
-/* An agent working in a project's session (components/agents/AgentSession):
-   started / sent are one quiet line; a reply or screenshot reuses the change
-   card's surface. */
+/* An agent working in a project (components/agents/AgentSession): started /
+   sent are one quiet line; a reply or screenshot is an AgentCard. */
 .agent-session {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   align-self: flex-start;
-  gap: var(--spacing-md);
+  column-gap: var(--spacing-md);
   min-width: 0;
 }
 
+/* Lines wrap, never ellipsis (docs/agents.md, "Lines, cards and bars"). */
 .agent-session .agent-peer__line {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .agent-session-card__reply {

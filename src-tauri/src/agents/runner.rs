@@ -3598,6 +3598,7 @@ mod tests {
                 input: None,
                 always: None,
                 always_allowed: false,
+                summary: None,
                 note: None,
                 prompt: None,
                 choice: None,

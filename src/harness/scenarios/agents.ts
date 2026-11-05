@@ -876,6 +876,18 @@ const inspectFiles = (args: Record<string, unknown>) =>
   });
 const schedulePreview = (args: Record<string, unknown>) => {
   const when = String(args.when).toLowerCase();
+  // The picker's words (routine-phrases.json): "every 2 hours", "2026-11-20 09:00".
+  const hours = /^every (?:(\d+) )?(hour|hours|minutes)$/.exec(when);
+  if (hours) {
+    const n = Number(hours[1] ?? 1);
+    const minutes = hours[2] === 'minutes' ? n : n * 60;
+    return { nextAt: Date.now() + minutes * 60_000, repeat: { kind: 'every', minutes } };
+  }
+  const once = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(when);
+  if (once) {
+    const [, y, m, d, h, min] = once.map(Number);
+    return { nextAt: new Date(y, m - 1, d, h, min).getTime(), repeat: null };
+  }
   if (when.startsWith('every'))
     return {
       nextAt: tomorrowAt(9),
@@ -1506,7 +1518,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-team',
     title: 'Agents — a working team, Chief of Staff open',
     looksRightWhen:
-      'Agent list under the Agents | Projects toggle and conversation search: an amber “Needs you · 1” row first, then the agents (pinned first, then most recent) with up to two-line previews; pin marks small and faint. The Chief of Staff conversation with its name and role centred in the header band, no engine control. “4 messages with Acme Site · working on the pricing table” sits centred, no empty slot after the dot. The chat ends with a quiet “Review Lead Gen’s request” chip. New agent / Import agents are short rows in secondary text, with no gap between them.',
+      'Agent list under the Agents | Projects toggle and conversation search: an amber “Needs your OK · 1” row first, then the agents (pinned first, then most recent) with up to two-line previews; pin marks small and faint. The Chief of Staff conversation with its name and role centred in the header band, no engine control. “4 messages with Acme Site · working on the pricing table” sits centred, no empty slot after the dot. The chat ends with a quiet “Review Lead Gen’s request” chip. New agent / Import agents are short rows in secondary text, with no gap between them.',
     command: 'agents.open',
     requires: '.agent-chat .agent-bubble--agent',
     commands: {
@@ -1708,7 +1720,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-team-failures',
     title: 'Agents — What’s in flight lists turns that didn’t finish',
     looksRightWhen:
-      'Opened from ⌘K. Needs you lists Lead Gen (“Didn’t finish: …”, red dot) with its error and Retry, and Finance (“Usage limit · resets <time>”, amber dot) with the quiet notice, “Retry at <time>” and “Retry now”. Each card spans from the name to the meta edge.',
+      'Opened from ⌘K. Needs your OK lists Lead Gen (“Didn’t finish: …”, red dot) with its error and Retry, and Finance (“Usage limit · resets <time>”, amber dot) with the quiet notice, “Retry at <time>” and “Retry now”. Each card spans from the name to the meta edge.',
     command: 'agents.team',
     requires: '.agents-team .agent-bubble--error',
     commands: {
@@ -1817,13 +1829,14 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-scheduled',
     title: 'Agents — the schedule popover',
     looksRightWhen:
-      'Clicking “3 scheduled” in the Finance header opens a popover under it: the one-time check-in, the weekday routine with its next time, and the paused Monday routine muted and last, each note on its own line with the time quieter beneath. Below, one composer line with “every weekday 9am: brief me on Acme” typed and the time read back under it, then a one-sentence footnote (the app open and this Mac awake) ending in an inline “Keep this Mac awake” link.',
+      'Clicking “3 scheduled” in the Finance header opens a popover under it: the one-time check-in, the weekday routine with “Every weekday at 9:00 AM” and “Next: tomorrow at 9:00 AM” on two whole lines, and the paused Monday routine muted and last. “New routine” opens the picker below: When chips (Every day / Weekdays (selected) / Weekly / Every few hours / Once), “At 09:00”, What holding “Brief me on Acme”, then the echo “Every weekday at 9:00 AM — Brief me on Acme” with “First run tomorrow at 9:00 AM” under it, Cancel and Schedule right-aligned. No typed grammar anywhere. Then a one-sentence footnote ending in an inline “Keep this Mac awake” link.',
     requires: '.agent-schedule__foot .text-button',
     openSelector: AGENTS_TAB,
     steps: [
       { click: '[data-agent-id="finance"]' },
       { click: '.agent-chat__scheduled' },
-      { fill: '.agent-schedule__composer input', value: 'every weekday 9am: brief me on Acme' },
+      { click: '.agent-schedule__add button' },
+      { fill: '#agent-schedule-what', value: 'Brief me on Acme' },
     ],
     commands: {
       agents_overview: overview(),
@@ -1851,7 +1864,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-schedule-edit',
     title: 'Agents — editing a routine in the schedule popover',
     looksRightWhen:
-      'Each row carries Run now (bolt), Edit (pencil), Pause for routines, and Cancel, quiet until hovered. After Edit on the weekday brief, that row stays highlighted and the composer below holds “every weekday at 09:00: Brief me on…” with the time read back and “Return saves” under it.',
+      'Each row carries Run now, Edit, Pause for routines, and Cancel, each named in a tooltip on hover. After Edit on the weekday brief, that row stays highlighted and the picker below opens on it: Weekdays selected, At 09:00, What holding the brief’s own words, the echo of the routine and its first run, and Cancel / Save.',
     requires: '.agent-schedule__item[data-editing]',
     openSelector: AGENTS_TAB,
     steps: [
@@ -1894,14 +1907,15 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-schedule-empty',
     title: 'Agents — scheduling for an agent with nothing scheduled',
     looksRightWhen:
-      'The header shows a quiet clock button, not a chip. Open, it says nothing is scheduled yet, with the composer focused and its hint under it.',
+      'The header shows a quiet clock button, not a chip. Open, it says nothing is scheduled yet and the picker is already open (Weekdays, At 09:00) with What focused and empty, the echo ending in “…” and “now say what Lead Gen should do” under it; Schedule is disabled and there is no Cancel.',
     requires: '.agent-schedule__empty',
     openSelector: AGENTS_TAB,
     steps: [
       { click: '[data-agent-id="leadgen"]' },
-      { click: '.agent-chat__header [aria-label^="Schedule a check-in"]' },
+      { click: '.agent-chat__header [aria-label^="Schedule a routine"]' },
     ],
     commands: {
+      agents_schedule_preview: schedulePreview,
       agents_overview: overview(),
       agents_messages: messagesFor,
     },
@@ -2060,7 +2074,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-engine-picker',
     title: 'Agents — moving an agent to Codex in the editor',
     looksRightWhen:
-      'Editing the Chief of Staff: a “Runs on” control (Claude Code | Codex) above Model, with Codex chosen; under it one muted line saying its next message starts a new Codex session handed the recent conversation, instructions and memory carried over, then one saying its commands go ahead without asking but can only change files in your projects and its own folder and can’t reach the internet, going further asks first, and apps connected to Codex aren’t limited by this. Model now offers Default / GPT-5.6-Sol / GPT-5.5 with Default chosen. The Apps hint says a Codex agent uses the MCP servers set up in Codex, with no Manage apps button.',
+      'Editing the Chief of Staff: a “Runs on” control (Claude Code | Codex) above Model, with Codex chosen; under it one muted line saying its next message starts fresh on Codex, handed the recent conversation, instructions and memory carried over, then one saying its commands go ahead without asking but can only change files in your projects and its own folder and can’t reach the internet, going further asks first, and apps connected to Codex aren’t limited by this. Model now offers Default / GPT-5.6-Sol / GPT-5.5 with Default chosen. The Apps hint says a Codex agent uses the MCP servers set up in Codex, with no Manage apps button.',
     openSelector: AGENTS_TAB,
     requires: '[aria-label="Runs on"] [aria-pressed="true"]',
     clipSelector: '.agent-editor',
@@ -2146,7 +2160,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-first-run',
     title: 'Agents — first open: the Chief of Staff says hello',
     looksRightWhen:
-      'The Chief’s chat opens on its greeting, a normal agent bubble: a hello, one line asking what you’re working on, four short bold-led points (agents for the work, Allow or Deny cards, projects, the phone) and a question. Under it, left-aligned with the conversation, three starters (Help me plan my week, Set up a daily brief, What can you do?). No power-management note and no import pitch in the sidebar yet. The composer is ready.',
+      'The Chief’s chat opens on its greeting, centred on the page as an empty state: the greeting text block, its timestamp and the starters share one centre line. Under it, centred, three starters (Help me plan my week, Set up a daily brief, What can you do?). No power-management note and no import pitch in the sidebar yet. The composer is ready.',
     command: 'agents.open',
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
@@ -2275,7 +2289,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-paste-problems',
     title: 'Agents — import, a pasted reply with mistakes',
     looksRightWhen:
-      'A calm amber-edged note under the paste, not a red wall: a warning mark, “3 things to fix before this can come across”, each line naming the block, the agent and the field, and a muted last line saying the easiest fix is to send these to the assistant. The agents that did read fine are still listed below. Import stays disabled.',
+      'A calm amber-edged note under the paste, not a JSON debugger: a warning mark and one plain sentence (“That reply isn’t in the format we asked for — copy the message again and ask your assistant to reply with just the code block.”), then a quiet “Show details”. No line numbers, field names or “trailing comma” on screen until Show details is clicked. The agents that did read fine are still listed below. Import stays disabled.',
     requires: '.agents-import-problems',
     clipSelector: '.agents-import',
     openSelector: AGENTS_TAB,
@@ -2604,7 +2618,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-team-overview',
     title: 'Agents — What’s in flight (⌘K)',
     looksRightWhen:
-      'Opened from ⌘K; the agent list has no Team row and no row is selected. The header reads “What’s in flight”. The main column shows four sections in a fixed order: Needs you (Lead Gen, with its Gmail card answerable in place), Working now (Acme Site, “Editing PricingTable.tsx”, with the loader), Scheduled next (Finance’s two active check-ins, soonest first, the paused one absent), Recent replies (newest first, one plain line each, with times). Rows share the sidebar’s badge and type.',
+      'Opened from ⌘K; the agent list has no Team row and no row is selected. The header reads “What’s in flight”. The main column shows four sections in a fixed order: Needs your OK (Lead Gen, with its Gmail card answerable in place), Working now (Acme Site, “Editing PricingTable.tsx”, with the loader), Scheduled next (Finance’s two active check-ins, soonest first, the paused one absent), Recent replies (newest first, one plain line each, with times). Rows share the sidebar’s badge and type.',
     command: 'agents.team',
     requires: '.agents-team .agent-approval',
     commands: {

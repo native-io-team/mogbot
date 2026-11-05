@@ -578,6 +578,16 @@
   color: var(--text-muted);
 }
 
+/* "Show details": the line-by-line reasons, one click down. */
+.text-button.button.agents-import-problems__toggle {
+  margin-top: var(--spacing-xs);
+}
+
+.agents-import-problems__details {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
 /* -------------------------------------------------------------- done */
 
 .agents-import-done {

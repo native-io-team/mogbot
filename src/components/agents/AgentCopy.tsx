@@ -297,7 +297,7 @@ export function CopyActions({
     <div className="agent-card__actions agent-copy__actions">
       {onPreview && (
         <Dropdown
-          align="left"
+          align="right"
           className="agent-copy__more"
           trigger={(p) => (
             <MenuButton

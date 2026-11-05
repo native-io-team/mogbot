@@ -17,7 +17,7 @@ import { TextButton } from '../primitives/TextButton';
 import { SegmentedControl } from '../primitives/SegmentedControl';
 import { Spinner } from '../primitives/Spinner';
 import { OnboardingTerminal } from '../setup/OnboardingTerminal';
-import { ArrowLeftIcon, ExternalLinkIcon } from '@/components/icons';
+import { ArrowLeftIcon, ChevronRightIcon, ExternalLinkIcon } from '@/components/icons';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { usePolling } from '../../hooks/usePolling';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -92,6 +92,9 @@ interface ChoiceProps {
 
 function RouteChoice({ platform, onPlatform, onBuild, onBack }: ChoiceProps) {
   const official = platform === 'ios' ? TESTFLIGHT_URL : ANDROID_APK_URL;
+  // Building it yourself is the advanced route: folded away while there is an
+  // official build to get, open when it is the only way.
+  const [advanced, setAdvanced] = useState(!official);
   return (
     <div className="settings-modal-body phone-install">
       <div className="phone-install__bar">
@@ -130,19 +133,32 @@ function RouteChoice({ platform, onPlatform, onBuild, onBack }: ChoiceProps) {
         )}
       </div>
 
-      <div className="phone-route">
-        <div className="phone-route__body">
-          <span className="phone-route__title">Build it on this Mac</span>
-          <span className="phone-route__detail">
-            {platform === 'ios'
-              ? 'Your agent builds the app and installs it over a cable; the app checks each step itself. You need Xcode and an Apple ID. With a free Apple ID the app stops opening after 7 days, and Reinstall here fixes that in one click.'
-              : 'Your agent builds the app and installs it over a cable; the app checks each step itself. You turn on USB debugging on the phone. It doesn’t expire.'}
-          </span>
+      <TextButton
+        className="phone-route__advanced"
+        aria-expanded={advanced}
+        rightIcon={<ChevronRightIcon size={10} className="phone-route__chevron" />}
+        onClick={() => setAdvanced((v) => !v)}
+      >
+        Install it yourself (advanced)
+      </TextButton>
+      {advanced && (
+        <div className="phone-route">
+          <div className="phone-route__body">
+            <span className="phone-route__title">Build it on this Mac</span>
+            <span className="phone-route__detail">
+              Your agent builds the app and installs it over a cable, and this app checks each step.
+            </span>
+            <span className="phone-route__detail">
+              {platform === 'ios'
+                ? 'Needs Xcode and an Apple ID. With a free Apple ID the app stops opening after 7 days; Reinstall here fixes that in one click.'
+                : 'Needs USB debugging turned on on the phone. It doesn’t expire.'}
+            </span>
+          </div>
+          <Button variant="primary" data-install-route="build" onClick={onBuild}>
+            Set up
+          </Button>
         </div>
-        <Button variant="primary" data-install-route="build" onClick={onBuild}>
-          Set up
-        </Button>
-      </div>
+      )}
     </div>
   );
 }

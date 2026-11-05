@@ -66,7 +66,7 @@ import {
   retryPhrase,
   formatDivider,
   formatExactTime,
-  formatWhen,
+  formatWhenInline,
   isCodePath,
   localPathFromHref,
   openLocalPath,
@@ -648,7 +648,9 @@ export const CheckInLine = memo(function CheckInLine({
         {label}
         {mark?.manual && <span className="agent-checkin__late">· run now</span>}
         {mark?.late && (
-          <span className="agent-checkin__late">· late, was due {formatWhen(mark.dueAt)}</span>
+          <span className="agent-checkin__late">
+            · late, was due {formatWhenInline(mark.dueAt)}
+          </span>
         )}
       </span>
       <span className="agent-checkin__note">{message.text}</span>
@@ -1035,6 +1037,8 @@ export const ApprovalCard = memo(function ApprovalCard({
     setNoting(false);
   };
   const [showAll, setShowAll] = useState(!compact);
+  // A card with a plain summary (a push) keeps its raw lines behind Details.
+  const [details, setDetails] = useState(false);
   // Answered while on screen, so the buttons resolve into the outcome;
   // a card that loads already answered just shows it.
   const [openedPending] = useState(approval?.status === 'pending');
@@ -1185,6 +1189,23 @@ export const ApprovalCard = memo(function ApprovalCard({
               </div>
             ))}
           </dl>
+        ) : approval.summary ? (
+          <>
+            <p className="agent-approval__detail agent-approval__detail--prose">
+              {approval.summary}
+            </p>
+            {approval.detail && (
+              <TextButton
+                tabIndex={0}
+                className="agent-approval__show-all"
+                aria-expanded={details}
+                onClick={() => setDetails((v) => !v)}
+              >
+                {details ? 'Hide details' : 'Details'}
+              </TextButton>
+            )}
+            {details && <pre className="agent-approval__detail">{approval.detail}</pre>}
+          </>
         ) : (
           approval.detail &&
           (plainDeny ? (

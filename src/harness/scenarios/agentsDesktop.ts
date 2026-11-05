@@ -146,7 +146,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'agents-desktop-settings',
     title: 'Settings — Agents in the menu bar, Quick message',
     looksRightWhen:
-      'At the end of Settings → General, two rows in the same style as the others: “Agents in the menu bar” (off; on by default once Agents has been used, or while Keep running when closed is on) and “Quick message” (on), whose description names ⌥Space, @name, dictation and the Screen Recording prompt, with a small field showing ⌥Space under it.',
+      'Settings opens on its Agents tab; under “On this Mac”, two rows in the same style as the others, each with a one-line description: “Agents in the menu bar” (off) and “Quick message” (on), whose line names ⌥Space and @name, with a small field showing ⌥Space under it.',
     command: 'agents.desktopSettings',
     requires: '.agents-desktop-settings .agents-shortcut-field',
     clipSelector: '.agents-desktop-settings',
@@ -154,6 +154,25 @@ export const agentsDesktopScenarios: Scenario[] = [
       agents_desktop_settings: {
         supported: true,
         menuBarIcon: false,
+        quickEntry: true,
+        shortcut: 'Alt+Space',
+        shortcutLabel: '⌥Space',
+      },
+    },
+  },
+  {
+    id: 'settings-agents',
+    title: 'Settings — the Agents tab',
+    looksRightWhen:
+      'Settings opens on Agents, the first of five tabs (Agents, General, Projects, Appearance, Experimental). Four quiet groups, each a small muted heading: On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, each with a switch), Engines and models (“New agents start on Claude Code”, the engines’ states on one line, Models, Routines), Notifications (two plain rows), Away from your desk (Phone and Other assistants, each with Open). Every description is one short sentence; no paragraph anywhere.',
+    command: 'agents.desktopSettings',
+    requires: '.agents-settings .settings-group__title',
+    clipSelector: '.settings-modal',
+    commands: {
+      agents_overview: overview(),
+      agents_desktop_settings: {
+        supported: true,
+        menuBarIcon: true,
         quickEntry: true,
         shortcut: 'Alt+Space',
         shortcutLabel: '⌥Space',

@@ -3,7 +3,7 @@
   background: var(--surface-panel);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  width: 420px;
+  width: 460px;
   max-width: 90vw;
   max-height: 80vh;
   overflow-y: auto;
@@ -303,9 +303,33 @@
   font-size: var(--font-size-body-sm);
 }
 
-/* The agent rows lead General; the rest of the tab follows them. */
+/* Settings → Agents: a few quiet groups, each a small heading over its rows. */
+.agents-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.settings-group__title {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-heading);
+  color: var(--text-muted);
+}
+
 .agents-desktop-settings + .settings-section {
   margin-top: var(--spacing-lg);
+}
+
+/* Inside a group the group's own gap separates them. */
+.settings-group > .agents-desktop-settings + .settings-section {
+  margin-top: 0;
 }
 
 /* Accent color. Each swatch is its own accent scope (accentScopeProps), so it

@@ -97,6 +97,19 @@ export function formatWhen(ts: number, now = Date.now()): string {
 }
 
 /**
+ * `formatWhen` for the middle of a sentence: "today at 9:00 AM", "tomorrow
+ * at 9:00 AM", "Thu, Nov 6 at 9:00 AM" ("was due today at 9:00 AM", never
+ * "was due Today 9:00 AM").
+ */
+export function formatWhenInline(ts: number, now = Date.now()): string {
+  const when = formatWhen(ts, now);
+  const time = CLOCK.format(new Date(ts));
+  const day = when.slice(0, when.length - time.length).trim();
+  const lead = day === 'Today' || day === 'Tomorrow' ? day.toLowerCase() : day;
+  return `${lead} at ${time}`;
+}
+
+/**
  * The schedule composer takes one line, "when: what" — "every weekday 9am:
  * brief me on Acme". The split is the first colon followed by a space, so
  * clock times ("9:30") stay whole. No such colon yet: it's all "when".

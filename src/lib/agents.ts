@@ -307,18 +307,6 @@ export interface SessionMark {
   cli?: string;
 }
 
-const CLI_NAMES: Record<string, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'Opencode',
-};
-
-/** "Claude Code 1": the tab as the project's tab bar would name it. */
-export function sessionLabel(mark: SessionMark): string {
-  const cli = (mark.cli && CLI_NAMES[mark.cli]) ?? mark.cli ?? 'Session';
-  return mark.tab ? `${cli} ${mark.tab}` : cli;
-}
-
 /** Mirrors `capabilities::Capabilities`, from the agent's last turn. */
 export interface Capabilities {
   seenAt: number;
@@ -371,6 +359,8 @@ export interface Approval {
   requestId: string;
   title: string;
   detail: string;
+  /** A plain sentence the card leads with when `detail` is raw (a push); detail then sits behind Details. */
+  summary?: string;
   status: 'pending' | 'allowed' | 'denied' | 'expired';
   tool?: string;
   input?: unknown;
@@ -741,7 +731,7 @@ export function engineUnavailable(info: EngineInfo): 'install' | 'sign-in' | nul
  */
 export function engineProtections(engine: AgentEngine, info?: EngineInfo): string {
   if (engine === 'claude') {
-    return "Edits in your projects, and its tools in this app, go ahead. Anything else asks you first, unless you've already allowed it.";
+    return "It can edit your projects and use this app's tools on its own. Anything else asks you first, unless you've already allowed it.";
   }
   const limits =
     "Its commands go ahead without asking, but can only change files in your projects and its own folder, and can't reach the internet.";
@@ -1445,10 +1435,28 @@ export {
   describeRun,
   describeRunDetail,
   formatWhen,
+  formatWhenInline,
+  routineEcho,
+  routineInPast,
+  routineWhenOf,
+  routineWhenPhrase,
   scheduleWhenPhrase,
   sortCheckIns,
   splitScheduleInput,
 } from '../../packages/companion-protocol/src/schedule';
+// The routine picker, shared with the phone's schedule sheet.
+export {
+  CADENCES,
+  INTERVALS,
+  intervalLabel,
+  newPicker,
+  onceDays,
+  pickerOf,
+  toggleDay,
+  WEEK,
+  whenOf,
+  type PickerState,
+} from '../../packages/companion-protocol/src/routinePicker';
 
 export const searchAgents = (query: string) => invoke<SearchHit[]>('agents_search', { query });
 export const getAgentUsage = (agentId: string) => invoke<UsageSummary>('agents_usage', { agentId });

@@ -137,7 +137,8 @@ export function PairConfirm({ request, busy, onDecide }: ConfirmProps) {
               Allow, keep both
             </Button>
             <Button
-              variant="primary"
+              variant="strong"
+              data-allow
               disabled={busy !== null}
               onClick={() =>
                 onDecide(
@@ -150,7 +151,12 @@ export function PairConfirm({ request, busy, onDecide }: ConfirmProps) {
             </Button>
           </>
         ) : (
-          <Button variant="primary" disabled={busy !== null} onClick={() => onDecide(true, [])}>
+          <Button
+            variant="strong"
+            data-allow
+            disabled={busy !== null}
+            onClick={() => onDecide(true, [])}
+          >
             Allow
           </Button>
         )}
