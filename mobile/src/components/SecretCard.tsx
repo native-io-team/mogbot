@@ -157,7 +157,7 @@ export function SecretCard({
       <Card
         icon="lock.fill"
         title={`${agent.name} asks for “${request.name}”`}
-        source={project ? `For ${agent.name} · in ${project}` : `For ${agent.name}`}
+        source={project ? `In ${project}` : undefined}
         note={connected ? problem : OFFLINE_NOTE}
         actions={
           <Button
@@ -178,7 +178,7 @@ export function SecretCard({
     <Card
       icon="lock.fill"
       title={`${agent.name} asks for “${request.name}”`}
-      source={project ? `For ${agent.name} · in ${project}` : `For ${agent.name}`}
+      source={project ? `In ${project}` : undefined}
     >
       {purpose}
       <Animated.View

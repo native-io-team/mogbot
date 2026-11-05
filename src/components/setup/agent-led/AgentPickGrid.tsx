@@ -13,7 +13,7 @@
 import { ReactNode } from 'react';
 import { SetupItem } from '../../../lib/setup';
 import { isEnginePairReady, type AgentsEngineBinaryId } from '../../../lib/agentOnboarding';
-import { ClaudeIcon, CodexIcon } from '@/components/icons';
+import { ClaudeIcon, CodexIcon, ArrowRightIcon } from '@/components/icons';
 
 /** Card key: the engine's setup binary id. */
 export type AgentCardKey = AgentsEngineBinaryId;
@@ -55,9 +55,9 @@ function detectionState(items: SetupItem[], key: AgentCardKey): 'ready' | 'insta
 }
 
 const STATUS_LABELS: Record<'ready' | 'installed' | 'missing', string> = {
-  ready: 'Ready →',
-  installed: 'Sign in →',
-  missing: 'Install & sign in →',
+  ready: 'Ready',
+  installed: 'Sign in',
+  missing: 'Install & sign in',
 };
 
 interface AgentPickGridProps {
@@ -85,7 +85,10 @@ export function AgentPickGrid({ items, onSelect, disabled }: AgentPickGridProps)
             <span className="agent-pick-card-name">{card.name}</span>
             <span className="agent-pick-card-desc">{card.description}</span>
             <span className="agent-pick-card-account">{card.account}</span>
-            <span className={`agent-pick-card-status ${state}`}>{STATUS_LABELS[state]}</span>
+            <span className={`agent-pick-card-status ${state}`}>
+              {STATUS_LABELS[state]}
+              <ArrowRightIcon size={12} />
+            </span>
           </button>
         );
       })}

@@ -5,6 +5,9 @@ import type { AgentMessage, Approval } from '../../lib/agents';
 import { PairConfirm } from '../phone/PhonePairing';
 import type { Device, PairRequestView } from '../../lib/companion';
 import editorSource from './AgentEditorModal.tsx?raw';
+import chatItemsSource from './AgentChatItems.tsx?raw';
+import pluginGridSource from '../plugins/PluginStatusGrid.tsx?raw';
+import remoteSource from '../remote/RemoteAccessModal.tsx?raw';
 
 /**
  * The owner's rule: an answer on an approval or prompt card is never the
@@ -135,4 +138,70 @@ describe('approval and prompt answers are neutral', () => {
       expect(allow!.className).toMatch(/button--strong/);
     });
   }
+});
+
+describe('an action inside a status is neutral, never the accent', () => {
+  // The accent is the Chief's colour and means primary action; a retry in an
+  // alert or "Update available" in a status row is not that.
+  const cases: [string, string, string][] = [
+    ['“Try again” in the “Not sent.” alert', chatItemsSource, 'Try again\n'],
+    ['“Update available” on a plugin row', pluginGridSource, 'Update available\n'],
+    [
+      'the phone link in Remote access’s intro',
+      remoteSource,
+      'For your phone, use the phone app.\n',
+    ],
+  ];
+  for (const [name, source, label] of cases) {
+    it(name, () => {
+      const end = source.indexOf(label);
+      expect(end, label).toBeGreaterThan(0);
+      const button = source.slice(source.lastIndexOf('<TextButton', end), end);
+      expect(button).toMatch(/variant="strong"/);
+      expect(button).not.toMatch(/variant="accent"/);
+    });
+  }
+});
+
+describe('a session’s permission card body', () => {
+  const permission = (detail: string): Approval => ({
+    ...base,
+    title: 'Do you want to proceed?',
+    detail,
+    prompt: {
+      kind: 'permission',
+      project: '/Users/me/ShipStudio/site',
+      sessionId: 's1',
+      tab: 1,
+      question: 'Do you want to proceed?',
+      options: [
+        { label: 'Yes', keys: ['1'], role: 'allow' },
+        { label: 'No', keys: ['2'], role: 'deny' },
+      ],
+      owner: { id: 'acme', name: 'Acme' },
+      chats: ['acme'],
+    },
+  });
+  const body = (detail: string) => {
+    const { container } = render(
+      <ApprovalCard
+        message={message(permission(detail))}
+        agentName="Acme"
+        paused={false}
+        onAnswer={vi.fn()}
+      />
+    );
+    return container;
+  };
+
+  it('keeps a one-line command as code', () => {
+    const container = body('rm -rf build');
+    expect(container.querySelector('pre')?.textContent).toBe('rm -rf build');
+  });
+
+  it('says an edit as a sentence', () => {
+    const container = body('Edit index.html');
+    expect(container.querySelector('pre')).toBeNull();
+    expect(container.textContent).toContain('Edit index.html');
+  });
 });

@@ -12,7 +12,6 @@ import type {
   EngineInfo,
   Failure,
   PermissionScope,
-  SessionMark,
   UsageTotals,
 } from '@shipstudio/companion-protocol';
 import { apiPrice, resetPhrase, tokenCount } from '@shipstudio/companion-protocol';
@@ -67,7 +66,10 @@ export const waitingForSlot = (agent: Agent) =>
  */
 export function workingLine(agent: Agent, brief = false): string {
   if (waitingForSlot(agent)) {
-    return brief || !agent.status.activity ? 'Waiting for a free slot' : agent.status.activity;
+    // The same words as the row's (`rowLine`): one state, one wording.
+    return brief || !agent.status.activity
+      ? 'Waiting for a free slot'
+      : rowLine(agent.status.activity);
   }
   return agent.status.activity ?? 'Working…';
 }
@@ -131,11 +133,14 @@ export function subtitle(agent: Agent): string {
 /**
  * A list row's one line, cut where it can be read: the Mac's "Waiting for a
  * free slot (4 agents already working)" would be clipped inside its
- * parenthesis, so a row says "Waiting for a free slot · 4 busy".
+ * parenthesis, so it says "Waiting for a free slot · 4 others working", in
+ * the row and in the chat alike.
  */
 export function rowLine(line: string): string {
   const slot = /^(.*?)\s*\((\d+) agents? already working\)\s*$/.exec(line);
-  return slot ? `${slot[1]} · ${slot[2]} busy` : line;
+  if (!slot) return line;
+  const n = Number(slot[2]);
+  return `${slot[1]} · ${n} other${n === 1 ? '' : 's'} working`;
 }
 
 export type LineState = 'waiting' | 'working' | 'failed' | 'limited' | undefined;
@@ -160,9 +165,12 @@ export function isQueued(message: Pick<AgentMessage, 'kind' | 'ts'>, agent: Agen
 
 /** "Chief of Staff" → "CS", "Agent 3" → "A3", "Finance" → "FI". */
 export function agentInitials(name: string): string {
+  // Only letters and digits make initials: "Finance (from Grok)" is
+  // "Finance", never "F(". A trailing aside in brackets is dropped.
   const words = name
+    .replace(/\s*[([{].*$/u, '')
     .trim()
-    .split(/\s+/)
+    .split(/[^\p{L}\p{N}&]+/u)
     .filter(
       (w) => /[A-Za-z0-9]/.test(w) && !['of', 'the', 'and', 'for', '&'].includes(w.toLowerCase())
     );
@@ -249,12 +257,42 @@ export function formatClock(ts: number): string {
 }
 
 /**
- * "Task 1": a project's agent tab, in the app's words. Never the engine and
- * a number ("Claude Code 1"): which engine runs it is for settings and
- * errors, and "session" stays an internal name.
+ * A project's task, named by what it was asked: the first line of its
+ * opening prompt (the `started` mark's text, or the first message sent to
+ * it), trimmed; "Task started 6:28 AM" when only the start is known; "Task"
+ * when nothing is. Never a tab number ("Task 1") or the engine ("Claude Code
+ * 1"): neither says what it is, and "session" stays an internal name.
  */
-export function sessionLabel(mark: Pick<SessionMark, 'cli' | 'tab'>): string {
-  return mark.tab ? `Task ${mark.tab}` : 'Task';
+export function taskName(
+  sessionId: string | undefined,
+  chats: Record<string, { messages: AgentMessage[] }>
+): string {
+  if (!sessionId) return 'Task';
+  let started: AgentMessage | undefined;
+  let firstSent: AgentMessage | undefined;
+  for (const chat of Object.values(chats)) {
+    for (const m of chat.messages) {
+      const mark = m.session;
+      if (mark?.sessionId !== sessionId) continue;
+      if (mark.event === 'started' && (!started || m.ts < started.ts)) started = m;
+      if (mark.event === 'sent' && m.text.trim() && (!firstSent || m.ts < firstSent.ts))
+        firstSent = m;
+    }
+  }
+  const asked = firstLine(started?.text) || firstLine(firstSent?.text);
+  if (asked) return asked;
+  return started ? `Task started ${formatClock(started.ts)}` : 'Task';
+}
+
+const TASK_NAME_MAX = 60;
+
+/** A prompt's first line, cut at a word under 60 characters. */
+function firstLine(text: string | undefined): string {
+  const line = (text ?? '').trim().split('\n')[0].trim();
+  if (line.length <= TASK_NAME_MAX) return line;
+  const cut = line.slice(0, TASK_NAME_MAX);
+  const gap = cut.lastIndexOf(' ');
+  return `${(gap > 20 ? cut.slice(0, gap) : cut).replace(/[\s,.;:–—-]+$/, '')}…`;
 }
 
 /** A project path's last folder: what the desktop calls a project with no name. */
@@ -441,7 +479,13 @@ export function commandLine(command: string): string {
  * (`commandLine`), never a diff's `@@ -18,3 +18,3 @@` or a file header. An
  * edit says which file ("Wants to edit Header.tsx").
  */
-export function askingLine(approval: Pick<Approval, 'title' | 'detail' | 'tool'>): string {
+export function askingLine(
+  approval: Pick<Approval, 'title' | 'detail' | 'tool' | 'secret' | 'connector'>
+): string {
+  // These cards' titles are the request; their detail is the reassurance or
+  // the purpose under it, which cut short only says half.
+  if (approval.connector) return approval.title;
+  if (approval.secret) return `Asks for “${approval.secret.name}”`;
   if (approval.title === 'Run a command' && approval.detail?.trim())
     return commandLine(approval.detail);
   // A command whose title already says it in words: the title, never the command.

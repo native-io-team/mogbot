@@ -38,7 +38,7 @@ export function barLines(talk: ImportTalk, chief: string): { title: string; deta
         title: `Importing from ${talk.source}${
           talk.staged.length ? ` · ${listOf(talk.staged)} staged for review` : ''
         }`,
-        detail: `${talk.source} talks to a separate, sealed conversation, not this chat: what you type here stays between you and ${chief}.`,
+        detail: `${talk.source} talks to a separate conversation that can’t see your chats: what you type here stays between you and ${chief}.`,
       };
   }
 }

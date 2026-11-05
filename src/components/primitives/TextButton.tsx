@@ -1,7 +1,12 @@
 import { forwardRef } from 'react';
 import { Button, type ButtonProps } from './Button';
 
-export type TextButtonVariant = 'default' | 'primary' | 'accent' | 'danger';
+/**
+ * `accent` is the Chief's colour, so it means "the recommended action" and
+ * never status: an action inside an alert or a status line (Try again, Update
+ * available) is `strong`, readable and neutral.
+ */
+export type TextButtonVariant = 'default' | 'strong' | 'primary' | 'accent' | 'danger';
 
 /** Props for an inline text action that retains shared button semantics. */
 export interface TextButtonProps extends Omit<ButtonProps, 'variant' | 'size' | 'block'> {

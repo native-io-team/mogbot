@@ -6,14 +6,16 @@
 
 import type { SessionSummary } from '@shipstudio/companion-protocol';
 import { StyleSheet, View } from 'react-native';
-import { sessionLabel } from '../lib/agents';
+import { taskName } from '../lib/agents';
+import { useApp } from '../lib/store';
 import { iconSize, space } from '../lib/theme';
 import { useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { Dot, T } from './ui';
 
-/** "Claude Code 2", as the project's tab bar names the tab (one rule: `sessionLabel`). */
-export const tabName = (s: Pick<SessionSummary, 'cli' | 'tab'>) => sessionLabel(s);
+/** A task by what it was asked, from the chats that started it (one rule: `taskName`). */
+export const useTaskName = (sessionId: string | undefined) =>
+  useApp((s) => taskName(sessionId, s.chats));
 
 export function sessionStateText(s: SessionSummary): string {
   switch (s.state) {

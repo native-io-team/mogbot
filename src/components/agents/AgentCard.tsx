@@ -9,7 +9,7 @@
  * - **Card** (`AgentCard`): something that wants a decision or holds a
  *   result. Icon and title, a muted source line, the body, a muted note, then
  *   the actions right-aligned with the single affirmative last. Answered, it
- *   becomes its outcome line.
+ *   becomes its outcome line (title · outcome, "Show request" for the rest).
  * - **Bar** (`ConversationBar`, stacked by `ConversationBars`): the state of
  *   this conversation until it ends — you're driving it, an import is going.
  *   The reading column's width, directly above the composer, in a fixed
@@ -90,10 +90,46 @@ export function AgentCard({
   data,
   ...aria
 }: AgentCardProps) {
+  const [showRequest, setShowRequest] = useState(false);
+  // Answered, a card becomes its outcome line: the title and what was
+  // decided, with the request one click away. One answered while on screen
+  // (`resolved`) stays whole, so the answer eases in where it was given.
+  const answered = !!outcome && !resolved && !hasContent(actions);
   const dataAttrs = Object.fromEntries(
-    Object.entries(data ?? {}).map(([k, v]) => [`data-${k}`, v === true ? '' : v || undefined])
+    Object.entries({
+      ...data,
+      answered: answered || undefined,
+      open: (answered && showRequest) || undefined,
+    }).map(([k, v]) => [`data-${k}`, v === true ? '' : v || undefined])
   );
-  const body = (
+  const request = hasContent(children) || !!source || !!note;
+  const body = answered ? (
+    <>
+      <div className="agent-card__answered">
+        <span className="agent-card__answered-title">{title}</span>
+        <span className="agent-card__outcome agent-card__outcome--inline" data-tone={outcomeTone}>
+          {outcome}
+        </span>
+        {request && (
+          <TextButton
+            tabIndex={0}
+            className="agent-card__show-request"
+            aria-expanded={showRequest}
+            onClick={() => setShowRequest((v) => !v)}
+          >
+            {showRequest ? 'Hide request' : 'Show request'}
+          </TextButton>
+        )}
+      </div>
+      {showRequest && (
+        <div className="agent-card__request">
+          {source && <p className="agent-card__source">{source}</p>}
+          {children}
+          {note && <p className="agent-card__note">{note}</p>}
+        </div>
+      )}
+    </>
+  ) : (
     <>
       <div className="agent-card__title">
         {icon && (
@@ -195,10 +231,18 @@ export type BarId = (typeof BAR_ORDER)[number];
 export const MAX_BARS = 2;
 
 /**
+ * Bars that never fold: a key in the draft guards something the user is
+ * about to do and can't take back, so it shows whatever else is up, and
+ * takes its place in the two first.
+ */
+export const PINNED_BARS: readonly BarId[] = ['secret'];
+
+/**
  * The bars above the composer, in their fixed order. Past two, the rest fold
  * into one "N more" that opens them; the composer is never pushed off the
- * screen by its own notices. Each bar decides for itself whether it shows
- * (from its own store), so what's on screen is counted from the slots.
+ * screen by its own notices. A pinned bar (`PINNED_BARS`) is always shown.
+ * Each bar decides for itself whether it shows (from its own store), so
+ * what's on screen is counted from the slots.
  */
 export function ConversationBars({ bars }: { bars: BarSpec[] }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -209,12 +253,21 @@ export function ConversationBars({ bars }: { bars: BarSpec[] }) {
     const el = ref.current;
     if (!el) return;
     const apply = () => {
-      let shown = 0;
+      const slots = Array.from(el.children).filter(
+        (slot): slot is HTMLElement =>
+          slot instanceof HTMLElement && slot.classList.contains('agent-bars__slot')
+      );
+      const pinned = (slot: HTMLElement) =>
+        (PINNED_BARS as readonly string[]).includes(slot.dataset.bar ?? '');
+      // Pinned bars spend the budget first, so the rest fold around them.
+      let shown = slots.filter((slot) => pinned(slot) && slot.childElementCount > 0).length;
       let over = 0;
-      for (const slot of Array.from(el.children)) {
-        if (!(slot instanceof HTMLElement) || !slot.classList.contains('agent-bars__slot'))
-          continue;
+      for (const slot of slots) {
         const filled = slot.childElementCount > 0;
+        if (pinned(slot)) {
+          slot.hidden = !filled;
+          continue;
+        }
         const hide = !filled || (shown >= MAX_BARS && !expanded);
         if (filled && hide) over++;
         else if (filled) shown++;

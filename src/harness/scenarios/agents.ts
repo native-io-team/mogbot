@@ -443,7 +443,7 @@ const consentCard = (status: 'pending' | 'allowed') =>
       requestId: 'consent1',
       title: 'Grok wants to bring its agents over',
       detail:
-        'It will talk to a separate, sealed conversation that can only stage agents for you to review. It can’t see your chats, files or other agents, and nothing is created until you import.\n\nIts first message: “Hi, I’m Grok. I run three agents for Sam: Main (manages the others), Finance (spending and invoices) and Travel (trips and bookings).”',
+        'It will talk to a separate conversation that can only stage agents for you to review. It can’t see your chats, files or other agents, and nothing is created until you import.\n\nIts first message: “Hi, I’m Grok. I run three agents for Sam: Main (manages the others), Finance (spending and invoices) and Travel (trips and bookings).”',
       status,
       connector: { kind: 'consent', talkId: 'talk1', source: 'Grok' },
     },
@@ -454,7 +454,7 @@ const IMPORT_TALK_CHAT = [
   consentCard('allowed'),
   msg(
     'note',
-    'Grok is talking to a separate, sealed conversation, not this chat. Nothing is created until you review it. Stop it any time.',
+    'Grok is talking to a separate conversation that can’t see your chats, not this one. Nothing is created until you review it. Stop it any time.',
     6
   ),
   msg(
@@ -961,7 +961,7 @@ const CODEX_TEAM = [
         {
           what: 'On this Mac',
           detail:
-            "Run commands, read and edit files, use the web, send you files and schedule check-ins, in Codex's sandbox: your projects and its own folder, with no network for commands unless you allow it.",
+            "Run commands, read and edit files, use the web, send you files and schedule routines, in Codex's sandbox: your projects and its own folder, with no network for commands unless you allow it.",
         },
       ],
     },
@@ -1197,7 +1197,8 @@ const failingOverview = () => ({
             ...a,
             pendingApprovals: 0,
             status: status('idle'),
-            preview: 'Couldn’t start Claude Code: the agent’s folder is missing. Recreate it.',
+            preview:
+              'Claude Code stopped before it replied. Retry, and if it happens again, check it’s still signed in.',
             failure: { kind: 'other' },
           }
         : a
@@ -1205,16 +1206,21 @@ const failingOverview = () => ({
 });
 const LEADGEN_FAILED = [
   msg('user', 'Pull this week’s inbound leads into the sheet.', 3, { agentId: 'leadgen' }),
-  msg('error', 'Couldn’t start Claude Code: the agent’s folder is missing. Recreate it.', 2, {
-    agentId: 'leadgen',
-    failure: { kind: 'other' },
-  }),
+  msg(
+    'error',
+    'Claude Code stopped before it replied. Retry, and if it happens again, check it’s still signed in.',
+    2,
+    {
+      agentId: 'leadgen',
+      failure: { kind: 'other' },
+    }
+  ),
 ];
 
 /** Acme Site mid-turn: a call it was always allowed, then one it asks about. */
 const ALWAYS_CHAT = [
   msg('user', 'Run the tests before you push the pricing fix.', 6, { agentId: 'acme' }),
-  msg('note', 'Allowed automatically: npm run lint · Always allowed', 5, { agentId: 'acme' }),
+  msg('note', 'npm run lint · always allowed', 5, { agentId: 'acme' }),
   msg('approval', '', 4, {
     agentId: 'acme',
     approval: {
@@ -1395,12 +1401,13 @@ const totals = (turns: number, tokens: number, cost: number, minutes: number) =>
   durationMs: minutes * MIN,
 });
 
+// apps.rs's order: everyday tools first, the developer ones last.
 const SUGGESTED = [
-  ['linear', 'Linear', 'Issues, projects and cycles', 'https://mcp.linear.app/mcp'],
   ['notion', 'Notion', 'Pages and databases', 'https://mcp.notion.com/mcp'],
+  ['stripe', 'Stripe', 'Customers, payments and invoices', 'https://mcp.stripe.com'],
+  ['linear', 'Linear', 'Issues, projects and cycles', 'https://mcp.linear.app/mcp'],
   ['figma', 'Figma', 'Designs, frames and comments', 'https://mcp.figma.com/mcp'],
   ['sentry', 'Sentry', 'Errors and their stack traces', 'https://mcp.sentry.dev/mcp'],
-  ['stripe', 'Stripe', 'Customers, payments and invoices', 'https://mcp.stripe.com'],
   ['vercel', 'Vercel', 'Deployments, logs and projects', 'https://mcp.vercel.com'],
 ] as const;
 
@@ -1712,7 +1719,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-check-in',
     title: 'Agents — a scheduled check-in fired in the chat',
     looksRightWhen:
-      'The Finance chat shows a centred “Scheduled check-in · late, was due …” line with the note under it, then the reply. The header shows “3 scheduled” beside the … menu.',
+      'The Finance chat shows a centred “Scheduled · late, was due …” line (never “check-in”) with the note under it, then the reply. The header shows “3 scheduled” beside the … menu.',
     requires: '.agent-checkin',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }],
@@ -1739,7 +1746,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-usage-limit',
     title: 'Agents — a usage limit with a reset time Claude Code reported',
     looksRightWhen:
-      'Finance’s chat ends in a quiet amber notice (not a red alarm): “Claude Code’s usage limit is reached. It resets at <time>.” with “Retry at <time>” and a ghost “Try anyway”. Finance’s sidebar row reads “Usage limit · resets <time>” in muted text with no dot (amber is for needs-you only); Lead Gen’s row reads “<reason> · didn’t finish” in red, over two lines if needed, with a red dot.',
+      'Finance’s chat ends in a quiet amber notice (not a red alarm): “Claude Code’s usage limit is reached. It resets at <time>.” with one text action, “Retry at <time>”, in the agent’s readable accent (never paler than the text around it). Finance’s sidebar row reads “Usage limit · resets <time>” in muted text with no dot (amber is for needs-you only); Lead Gen’s row reads “<reason> · didn’t finish” in red, over two lines if needed, with a red dot.',
     requires: '.agent-bubble--error[data-failure="usage_limit"]',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }],
@@ -1803,7 +1810,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-quota-limited',
     title: 'Agents — the weekly limit hit: the same reset everywhere',
     looksRightWhen:
-      'Finance’s chat ends in the quiet usage-limit notice (“It resets <weekday> at <time>.”, the same weekday as everywhere else) with “Retry <weekday> <time>” (a day, not just a clock time, since it resets days from now) and “Try anyway”. Finance’s sidebar row reads “Usage limit · resets <weekday> <time>” muted. The sidebar foot reads “Claude usage limit · resets <weekday>” in amber.',
+      'Finance’s chat ends in the quiet usage-limit notice (“It resets <weekday> at <time>.”, the same weekday as everywhere else) with “Retry <weekday> <time>” (a day, not just a clock time, since it resets days from now) as its one action. Finance’s sidebar row reads “Usage limit · resets <weekday> <time>” muted. The sidebar foot reads “Claude usage limit · resets <weekday>” in amber.',
     openSelector: AGENTS_TAB,
     requires: '.agents-quota__line[data-tone="limited"]',
     steps: [{ click: '[data-agent-id="finance"]' }],
@@ -2002,7 +2009,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-schedule-edit',
     title: 'Agents — editing a routine in the schedule popover',
     looksRightWhen:
-      'Each row carries Run now, Edit, Pause for routines, and Cancel, each named in a tooltip on hover. After Edit on the weekday brief, that row stays highlighted and the picker below opens on it: Weekdays selected, At 09:00, What holding the brief’s own words, the echo of the routine and its first run, and Cancel / Save.',
+      'Each row carries a line of labelled text actions under its words: Run now, Edit, Pause for routines, and Delete in red. After Edit on the weekday brief, that row stays highlighted and the picker below opens on it: Weekdays selected, At 09:00, What holding the brief’s own words, the echo of the routine and its first run, and Cancel / Save.',
     requires: '.agent-schedule__item[data-editing]',
     openSelector: AGENTS_TAB,
     steps: [
@@ -2670,7 +2677,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-paste-fallback',
     title: 'Agents — import, pasting a reply instead (the fallback)',
     looksRightWhen:
-      'The paste path, reached from “Can’t connect? Paste a reply instead”: its lede, then a quiet text link “Talk over the connector instead” under it, then the two numbered steps (the message to copy, the paste field) and the footer with Cancel and a disabled Import.',
+      'The paste path, reached from “Can’t connect? Paste a reply instead”: its lede, then a quiet text link “Connect your assistant instead” under it, then the two numbered steps (the message to copy, the paste field) and the footer with Cancel and a disabled Import.',
     // Steps run before a palette command, so this walks in from the sidebar note.
     openSelector: AGENTS_TAB,
     requires: '.agents-import__paste',
@@ -2682,7 +2689,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-consent',
     title: 'Agents — another assistant asks to start an import',
     looksRightWhen:
-      'The Chief’s chat ends on a request card: download icon, “Grok wants to bring its agents over”, prose that Grok talks to a separate, sealed conversation that can only stage agents and can’t see chats, files or other agents, nothing created until you import; then Grok’s first message in quotes. Deny and a neutral Allow on the right. Above the composer one bar, amber dot: “Import from Grok · Needs your OK” / “Nothing has been shared yet.”, and a plain secondary Stop (not red). The bar never mentions “the card”.',
+      'The Chief’s chat ends on a request card: download icon, “Grok wants to bring its agents over”, prose that Grok talks to a separate conversation that can only stage agents and can’t see chats, files or other agents, nothing created until you import; then Grok’s first message in quotes. Deny and a neutral Allow on the right. Above the composer one bar, amber dot: “Import from Grok · Needs your OK” / “Nothing has been shared yet.”, and a plain secondary Stop (not red). The bar never mentions “the card”.',
     command: 'agents.open',
     requires: '[data-testid="agent-import-talk"][data-state="awaiting_consent"]',
     commands: {
@@ -2696,12 +2703,12 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-talk',
     title: 'Agents — the sealed import interview, live in the Chief’s chat',
     looksRightWhen:
-      'The Chief’s chat. The answered consent card (“Allowed”), then a quiet note that Grok is talking to a separate, sealed conversation, not this chat. Grok’s lines sit on the left labelled “From Grok” over outlined recessed bubbles, in plain text exactly as sent; replies to Grok are indented, labelled “To Grok · from the sealed conversation” over dashed bubbles. The Chief’s row reads “Bringing in agents from Grok”. Above the composer one bar with a live accent dot: “Importing from Grok · Finance staged for review”, a muted line that what you type here stays between you and Chief of Staff, and a secondary Stop.',
+      'The Chief’s chat. The answered consent card (“Allowed”), then a quiet note that Grok is talking to a separate conversation that can’t see your chats, not this one. Grok’s lines sit on the left labelled “From Grok” over outlined recessed bubbles, in plain text exactly as sent; replies to Grok are indented, labelled “To Grok · from the import conversation” over dashed bubbles. The Chief’s row reads “Bringing in agents from Grok”. Above the composer one bar with a live accent dot: “Importing from Grok · Finance staged for review”, a muted line that what you type here stays between you and Chief of Staff, and a secondary Stop.',
     command: 'agents.open',
     requires: '[data-testid="agent-import-talk"][data-state="interviewing"]',
     commands: {
       agents_overview: overview([
-        { ...TEAM[0], status: status('working', 'Talking to Grok (import)') },
+        { ...TEAM[0], status: status('working', 'Talking to Grok') },
         TEAM.find((a) => a.id === 'finance') ?? TEAM[1],
       ]),
       agents_messages: (args: Record<string, unknown>) =>
@@ -2890,7 +2897,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-always-allow',
     title: 'Agents — Always allow on an approval, and a call it allowed itself',
     looksRightWhen:
-      'Acme Site’s chat: a quiet centred “Allowed automatically: npm run lint · Always allowed” line, then a “Run a command” card for npm test -- --run pricing. Deny and Allow sit on the right; on the left, apart and muted, “Always allow npm test” with npm test in mono. Its tooltip says any command starting with npm test runs without asking and that chained commands still ask.',
+      'Acme Site’s chat: a quiet centred “npm run lint · always allowed” line, then a “Run a command” card for npm test -- --run pricing. Deny and Allow sit on the right; on the left, apart and muted, “Always allow npm test” with npm test in mono. Its tooltip says any command starting with npm test runs without asking and that chained commands still ask.',
     requires: '.agent-approval__always',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="acme"]' }],
@@ -3213,7 +3220,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-secrets-editor',
     title: 'Agents — the Secrets list in Edit agent',
     looksRightWhen:
-      'Editing Finance, below Permissions: a Secrets group listing stripe_key ($STRIPE_KEY) and bank ($BANK_USERNAME, $BANK_PASSWORD), each with its purpose, when it was added and when a turn last had it (or “not used yet”), hairline-separated, each with a quiet Revoke on the right.',
+      'Editing Finance, below Permissions: a Logins group listing each by what it’s for (no $VARIABLES or stored names on the row; those are in the row’s hover title), then “Added <when> · used <when>” (or “not used yet”), hairline-separated, each with a quiet Revoke on the right.',
     openSelector: AGENTS_TAB,
     requires: '.agent-secrets__row',
     clipSelector: '.agent-editor [role="group"][aria-label="Secrets"]',

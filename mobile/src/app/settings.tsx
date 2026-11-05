@@ -124,13 +124,8 @@ export default function Settings() {
       <Section title="Paired Mac">
         <Row
           label={credentials?.name ?? 'None'}
-          value={
-            route === 'tailscale'
-              ? 'Over Tailscale'
-              : route === 'lan'
-                ? 'On this network'
-                : undefined
-          }
+          // The state, not the route: which network it goes over is on Connection details.
+          value={route ? 'Connected' : undefined}
         />
         {credentials && <Row label="Paired" value={formatDate(credentials.pairedAt)} />}
         <Row label="Connection details" onPress={() => router.push('/connection')} />
@@ -155,7 +150,7 @@ export default function Settings() {
       <NewAgentDefaults />
 
       <Section
-        title="Alerts"
+        title="Notifications"
         footer={
           pushInfo && alerts === Notifications.PermissionStatus.GRANTED
             ? pushInfo.footer

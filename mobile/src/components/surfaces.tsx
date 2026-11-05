@@ -32,7 +32,6 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { makeStyles, useColors } from '../lib/appearance';
-import { useAccent } from '../lib/accent';
 import { BAR_ORDER, MAX_BARS, type BarId, type BarTone } from '../lib/bars';
 import {
   CARD_TITLE_SCALE,
@@ -43,9 +42,10 @@ import {
   radius,
   space,
   type,
+  type Palette,
 } from '../lib/theme';
 import type { SFName } from '../lib/icons';
-import { Dot, Icon, T, tap, useRipple } from './ui';
+import { DISABLED_OPACITY, Dot, Icon, T, tap, useRipple } from './ui';
 
 /** What the card's icon is tinted with: muted by default, warning only for real risk. */
 export type CardTone = 'warning' | 'error';
@@ -331,10 +331,14 @@ export function TextAction({
       hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
       android_ripple={{ ...ripple, borderless: true }}
       onPress={onPress}
-      style={({ pressed }) => [pressed && { opacity: 0.6 }, disabled && { opacity: 0.4 }]}
+      style={({ pressed }) => [
+        pressed && { opacity: 0.6 },
+        disabled && { opacity: DISABLED_OPACITY },
+      ]}
     >
+      {/* Small, not caption: beside 16pt values and answers a 12pt link read as a footnote. */}
       <T
-        variant="caption"
+        variant="small"
         color={muted ? colors.textSecondary : colors.textStrong}
         style={{ fontFamily: fonts.medium }}
         maxFontSizeMultiplier={chromeScale}
@@ -359,17 +363,19 @@ export interface BarSpec {
   action?: { label: string; onPress: () => void; icon?: SFName };
 }
 
+/** A bar's state colour: status roles and neutral only, never the agent's accent. */
+export const barTint = (colors: Palette): Record<BarTone, string> => ({
+  waiting: colors.accentWarning,
+  active: colors.statusRunning,
+  info: colors.textMuted,
+  problem: colors.accentErrorLight,
+});
+
 /** One bar: a dot (or icon) in the state's colour, the title and its detail, an action. */
 export function Bar({ bar }: { bar: BarSpec }) {
   const colors = useColors();
   const styles = useBarStyles();
-  const accent = useAccent();
-  const tint: Record<BarTone, string> = {
-    waiting: colors.accentWarning,
-    active: accent.accent,
-    info: colors.textMuted,
-    problem: colors.accentErrorLight,
-  };
+  const tint = barTint(colors);
   const body = (
     <>
       {bar.icon ? (
@@ -546,7 +552,8 @@ const useBarStyles = makeStyles((colors) => ({
     gap: space.sm,
     minHeight: 44,
     paddingHorizontal: space.md,
-    borderRadius: radius.inner,
+    // The card corner (theme.ts: summary bars are `card`): under a 16pt card an inner corner read as another family.
+    borderRadius: radius.card,
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,

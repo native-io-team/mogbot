@@ -74,7 +74,7 @@ export function quitPrompt(
   const title =
     working > 0
       ? `${working} ${plural(working, 'agent is', 'agents are')} still working. Quit anyway?`
-      : `${nameList(scheduled)} ${plural(scheduled.length, 'has a check-in', 'have check-ins')} coming up. Quit anyway?`;
+      : `${nameList(scheduled)} ${plural(scheduled.length, 'has a routine', 'have routines')} coming up. Quit anyway?`;
 
   const lines: string[] = [];
   if (working > 0) {
@@ -85,8 +85,8 @@ export function quitPrompt(
   if (scheduled.length > 0) {
     lines.push(
       working > 0
-        ? `${nameList(scheduled)}’s check-ins won’t run while the app is closed; they run when you reopen it.`
-        : 'Check-ins don’t run while the app is closed; they run when you reopen it.'
+        ? `${nameList(scheduled)}’s routines won’t run while the app is closed; they run when you reopen it.`
+        : 'Routines don’t run while the app is closed; they run when you reopen it.'
     );
   }
   if (waiting > 0) {

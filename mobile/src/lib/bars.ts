@@ -23,7 +23,10 @@ export type BarId = (typeof BAR_ORDER)[number];
 /** How many bars show before the rest fold into "N more". */
 export const MAX_BARS = 2;
 
-/** amber = waiting on you, accent = going on, muted = information, red = a problem. */
+/**
+ * amber = waiting on you, running blue = going on, muted = information, red =
+ * a problem. Status roles only: the agent's accent is never a status.
+ */
 export type BarTone = 'waiting' | 'active' | 'info' | 'problem';
 
 export interface BarText {
@@ -66,18 +69,15 @@ export function importBar(agent: Agent, messages: AgentMessage[] | undefined): B
           title: `Import from ${connector.source} · Needs your OK`,
           detail: 'Nothing has been shared yet.',
         }
-      : {
-          tone: 'waiting',
-          title: `Import from ${connector.source} · ready to review`,
-          detail: 'Review it on your Mac. Nothing is created until you import there.',
-        };
+      : // The review card above already says what happens on the Mac; the bar only says the state.
+        { tone: 'waiting', title: `Import from ${connector.source} · waiting on your Mac` };
   }
   const going = agent.status.state !== 'idle' && IMPORTING.exec(agent.status.activity ?? '');
   if (!going) return null;
   return {
     tone: 'active',
     title: `Importing from ${going[1]}`,
-    detail: `${going[1]} talks to a separate, sealed conversation: what you type here stays between you and ${agent.name}.`,
+    detail: `${going[1]} talks to a separate conversation that can’t see your chats: what you type here stays between you and ${agent.name}.`,
   };
 }
 

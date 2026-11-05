@@ -79,7 +79,7 @@ import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AgentAvatar } from './agent';
 import { StagedTile, type Staged } from './attachments';
 import { choose } from './menu';
-import { Icon, useRipple, T } from './ui';
+import { DISABLED_OPACITY, Icon, useRipple, T } from './ui';
 
 const NONE: Agent[] = [];
 
@@ -348,7 +348,7 @@ export function Composer({
           entering={FadeIn.duration(150)}
           exiting={FadeOut.duration(100)}
           layout={LinearTransition.duration(150)}
-          style={styles.hintRow}
+          style={[styles.hintRow, !canAttach && { marginLeft: composer.padLeft }]}
         >
           <T variant="caption" color={colors.textSecondary} style={styles.hint}>
             {hint}
@@ -634,7 +634,8 @@ export function RoundButton({
                       ? colors.surfaceSelected
                       : 'transparent',
               },
-              disabled && tone !== 'off' && field.off,
+              // Disabled reads one way everywhere: as the + beside it does.
+              disabled && field.off,
               pressed && { transform: [{ scale: 0.92 }] },
             ]}
           >
@@ -709,7 +710,7 @@ const useFieldStyles = makeStyles((colors) => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.composerBorder,
   },
-  off: { opacity: 0.4 },
+  off: { opacity: DISABLED_OPACITY },
 }));
 
 const useStyles = makeStyles((colors) => ({
@@ -723,7 +724,8 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    marginLeft: space.md,
+    // Under the field's text, as the quote is: past the + and the gap, then the field's inset.
+    marginLeft: composer.attach + space.sm + composer.padLeft,
     marginRight: space.xs,
   },
   hint: { flex: 1 },

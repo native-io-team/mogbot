@@ -35,7 +35,8 @@ top of the agent list, shown only while an agent waits on you (a request, or a
 turn that didn't finish; the same set ⌘J visits), and from ⌘K. A usage limit
 is not waiting on you — it resets by itself — so it isn't counted: What's in
 flight lists it under **Paused**, and in a chat it is a quiet centred line
-with "Retry at 4:45 AM", not a tinted box. There is no
+with "Retry at 4:45 AM" (and a quiet "Try anyway", since the limit may have
+lifted early), not a tinted box. There is no
 icon for it: an unlabeled one was three names for one place. Its foot has the Phone row (the companion
 app: pair, or which phone is connected); remote access, for driving the app
 from another assistant, appears there only while it is on and is otherwise
@@ -562,7 +563,9 @@ at once still reads as one product:
   this conversation until it ends, in the reading column directly above the
   composer, in a fixed order: take-over, import, what the engine can't do, a
   key in the draft, dictation blocked. At most two show; the rest fold into
-  "N more". A bar says the state, never repeats the card's question, and
+  "N more". A key in the draft never folds: it guards something the user is
+  about to do and can't take back, so it always shows and the others fold
+  around it. A bar says the state, never repeats the card's question, and
   never points at "the card". Nothing spans the pane under the header.
 
 The **header is identity only** (badge, name, role, project chip). What an
@@ -1928,7 +1931,7 @@ prompt (`prompts::FILES`) tells it to for deliverables, never for chat.
   unrelated result. Retry on a failed ask keeps its `revises`. A revision keeps the id, becomes version
   n+1, and must say what changed (`changes`), shown as "Changes since v1: …".
   The log stays append-only: the older version is still there, folded to
-  "<title> · v1 · a newer version is below" (`newestResults`), and opens on
+  "<title> · v1 · earlier version" (`newestResults`), and opens on
   click, for reading only, with its change receipt (See changes, the diff)
   when it rode on a change card.
 - **Checks are the agent's.** The list is headed "It says it checked"

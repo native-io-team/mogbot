@@ -203,7 +203,7 @@ pub enum MessageKind {
     /// A scheduled check-in or routine fired; `text` is the note it left.
     CheckIn,
     /// A quiet line about something Ship Studio did on the agent's behalf
-    /// ("Allowed automatically: npm test · Always allowed", "Interrupted").
+    /// ("npm test · always allowed", "Interrupted").
     /// With `peer`, the line names that agent ("Created Finance").
     Note,
     /// Files a project-bound agent's turn changed in its project (`changes`).

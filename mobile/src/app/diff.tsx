@@ -62,7 +62,8 @@ export default function Diff() {
             {changes.fileCount} file{changes.fileCount === 1 ? '' : 's'} changed
           </SheetTitle>
           <T variant="small" color={colors.textSecondary}>
-            {[folderName(changes.project), changes.branch].filter(Boolean).join(' · ')}
+            {/* The project, never the branch: no branch names in what a person reads. */}
+            {folderName(changes.project)}
             {' · '}
             <T variant="small" color={colors.diffAdd} style={styles.count}>
               +{changes.added}

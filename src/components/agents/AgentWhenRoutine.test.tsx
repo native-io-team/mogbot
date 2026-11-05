@@ -62,7 +62,7 @@ describe('WhenComposer', () => {
     const { calls, onDone } = mount();
     expect(radio('Someone mentions me on GitHub')).toHaveAttribute('aria-checked', 'true');
     expect(radio('Someone mentions me on GitHub')).toHaveTextContent(
-      'Free · checked with the GitHub CLI'
+      'Free · checked from this Mac'
     );
     expect(screen.queryByRole('radio', { name: /Linear/ })).toBeNull();
     expect(screen.getByText(/Checks are free\./)).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe('WhenComposer', () => {
       target: { value: 'Triage it' },
     });
     expect(
-      screen.getByText('When someone mentions you on GitHub, Finance gets a turn.')
+      screen.getByText('When someone mentions you on GitHub, Finance starts on it.')
     ).toBeInTheDocument();
     await act(() => {
       fireEvent.click(add);
@@ -95,7 +95,7 @@ describe('WhenComposer', () => {
     fireEvent.click(radio('A Linear issue is assigned to me'));
     expect(
       screen.getByText(
-        /a short read-only Claude Code call on Haiku, up to 24 a day, counted in Finance’s usage/
+        /uses a little of Finance’s Claude usage and can only read that app, up to 24 a day/
       )
     ).toBeInTheDocument();
     // A model check is at least 15 minutes apart, and starts at 30.
@@ -119,7 +119,9 @@ describe('WhenComposer', () => {
     await waitFor(() => expect(calls.some((c) => c.cmd === 'agents_apps_list')).toBe(true));
     expect(screen.queryByRole('radio', { name: /Linear/ })).toBeNull();
     fireEvent.click(radio('Something else'));
-    expect(screen.getByText(/claude\.ai connectors can’t be used here/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Apps connected on claude\.ai\s+can’t be used here/)
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /claude\.ai/ })).toBeNull();
   });
 
@@ -170,7 +172,7 @@ describe('WhenComposer', () => {
         },
       ],
     });
-    expect(await screen.findByRole('button', { name: 'gmail' })).toHaveAttribute(
+    expect(await screen.findByRole('button', { name: 'Gmail' })).toHaveAttribute(
       'aria-pressed',
       'true'
     );
@@ -206,7 +208,7 @@ describe('WhenComposer', () => {
     });
     expect(await screen.findByText('Which app should it check?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'gmail' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Gmail' }));
     expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
   });
 });

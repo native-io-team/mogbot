@@ -129,6 +129,22 @@ describe('ErrorLine', () => {
     });
     expect(screen.getByRole('button', { name: /retry at/i })).toBeEnabled();
   });
+
+  it('keeps “Try anyway” beside the retry at the reset', () => {
+    const onRetry = vi.fn();
+    const message: AgentMessage = {
+      id: 'e2',
+      agentId: 'acme',
+      ts: Date.now(),
+      kind: 'error',
+      text: 'Usage limit reached',
+      failure: { kind: 'usage_limit', resetsAt: Date.now() + 3_600_000 },
+    };
+    render(<ErrorLine message={message} onRetry={onRetry} onRetryAt={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /retry at/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try anyway' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('Start fresh', () => {

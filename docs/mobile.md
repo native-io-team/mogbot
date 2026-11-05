@@ -798,7 +798,10 @@ pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681   # the defaults
 ```
 
 The ports also read `QA_WEB_PORT`, `QA_MOCK_PORT` and `QA_CDP_PORT`; `--verbose`
-streams the mock's and Expo's output. The native-only modules (notifications,
+streams the mock's and Expo's output. With a `TMPDIR` longer than 60 characters
+(a sandbox's), it works under `/tmp/qa-web-*` and gives its children a `TMPDIR`
+there, since tsx's IPC pipe and Chrome's singleton socket would pass macOS's
+104-byte socket-path limit; Metro bundles cold in that case. The native-only modules (notifications,
 secure store, SF Symbols, the date picker, keyboard controller, file system) are
 swapped for stand-ins in `mobile/dev/web/` by `metro.config.js`, **only on the
 web platform**, so native builds, Expo Go and jest never see them.

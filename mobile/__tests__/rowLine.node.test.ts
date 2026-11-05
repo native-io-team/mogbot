@@ -16,10 +16,10 @@ describe('rowLine', () => {
     expect(runner).toContain('"Waiting for a free slot ({busy} agents already working)"');
     expect(runner).toContain('"Waiting for free memory ({working} {} already working)"');
     expect(rowLine('Waiting for a free slot (4 agents already working)')).toBe(
-      'Waiting for a free slot · 4 busy'
+      'Waiting for a free slot · 4 others working'
     );
     expect(rowLine('Waiting for free memory (1 agent already working)')).toBe(
-      'Waiting for free memory · 1 busy'
+      'Waiting for free memory · 1 other working'
     );
   });
 
