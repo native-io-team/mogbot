@@ -2285,11 +2285,8 @@ mod tests {
         assert_eq!(parse_gh_auth_status(old, ""), Some("octocat".to_string()));
 
         // New gh phrasing (~v2.40+: "... account <user>"), with the ✓ glyph.
-        let new = "github.com\n  ✓ Logged in to github.com account julianmemberstack (keyring)\n  - Active account: true\n";
-        assert_eq!(
-            parse_gh_auth_status(new, ""),
-            Some("julianmemberstack".to_string())
-        );
+        let new = "github.com\n  ✓ Logged in to github.com account sam-work (keyring)\n  - Active account: true\n";
+        assert_eq!(parse_gh_auth_status(new, ""), Some("sam-work".to_string()));
     }
 
     #[test]

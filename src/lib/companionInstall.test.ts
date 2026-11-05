@@ -37,9 +37,9 @@ const thisMac: IosInstallStatus = {
   node: 'v24.17.0',
   devices: [],
   signing: {
-    teamId: 'H8NN6DM6G6',
+    teamId: 'TEAM000001',
     identity: 'Apple Development: me',
-    bundleId: 'io.native.dashbot.companion.a4c8c6',
+    bundleId: 'io.native.dashbot.companion.87be70',
   },
   source,
 };
@@ -148,11 +148,11 @@ describe('the build', () => {
   it('builds Release with xcodebuild for the phone’s hardware UDID, then installs', () => {
     const cmd = iosBuildCommand(thisMac, iphone)!;
     expect(cmd).toContain("cd '/Users/me/ShipStudio/.companion-build/mobile'");
-    expect(cmd).toContain('COMPANION_BUNDLE_ID=io.native.dashbot.companion.a4c8c6');
-    expect(cmd).toContain('APPLE_TEAM_ID=H8NN6DM6G6');
+    expect(cmd).toContain('COMPANION_BUNDLE_ID=io.native.dashbot.companion.87be70');
+    expect(cmd).toContain('APPLE_TEAM_ID=TEAM000001');
     const name = iosProjectName();
     expect(cmd).toContain(
-      `npx expo prebuild -p ios --clean && cd ios && COMPANION_BUNDLE_ID=io.native.dashbot.companion.a4c8c6 APPLE_TEAM_ID=H8NN6DM6G6 xcodebuild -workspace ${name}.xcworkspace -scheme ${name} -configuration Release -destination id=00008140-001 -allowProvisioningUpdates -derivedDataPath build DEVELOPMENT_TEAM=H8NN6DM6G6 CODE_SIGN_STYLE=Automatic build`
+      `npx expo prebuild -p ios --clean && cd ios && COMPANION_BUNDLE_ID=io.native.dashbot.companion.87be70 APPLE_TEAM_ID=TEAM000001 xcodebuild -workspace ${name}.xcworkspace -scheme ${name} -configuration Release -destination id=00008140-001 -allowProvisioningUpdates -derivedDataPath build DEVELOPMENT_TEAM=TEAM000001 CODE_SIGN_STYLE=Automatic build`
     );
     expect(cmd).toMatch(
       new RegExp(

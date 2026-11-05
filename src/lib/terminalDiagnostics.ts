@@ -170,8 +170,8 @@ export function isNetworkError(tail: string): boolean {
 /**
  * Identity-capturing shapes of "the CLI believes it's signed in":
  * - "Logged in as julian@example.com" (claude / codex)
- * - "✓ Logged in to github.com account juliangalluzzo (keyring)" and
- *   "Logged in to github.com as juliangalluzzo" (gh, old and new phrasing)
+ * - "✓ Logged in to github.com account samlee (keyring)" and
+ *   "Logged in to github.com as samlee" (gh, old and new phrasing)
  */
 const LOGGED_IN_AS_PATTERNS = [
   /\blogged in as\s+['"]?([^\s'"]+)/i,
