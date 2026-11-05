@@ -15,7 +15,7 @@
  *
  *   pnpm qa:web                          # everything, into qa-shots/
  *   pnpm qa:web --only chat-             # shots whose name starts with chat-
- *   pnpm qa:web --phases heavy           # only these phases (fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work)
+ *   pnpm qa:web --phases heavy           # only these phases (fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,torture)
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --out /tmp/shots
  *   pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681
@@ -49,7 +49,7 @@ const VERBOSE = args.includes('--verbose');
 const PHASES = opt(
   '--phases',
   'QA_PHASES',
-  'fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work'
+  'fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,torture'
 ).split(',');
 const phase = (name) => PHASES.includes(name);
 // Ports other tools in this repo own: the desktop app, its harness, the phone's Metro.
@@ -1202,6 +1202,126 @@ const HEAVY_OFFLINE = [
 ];
 
 /** `--team-setup`: sixteen agents just imported, and the checklist in the Chief's chat. */
+/**
+ * `--torture`: the chat torture set (dev/mock-torture.ts). Besides the
+ * pictures, the event shots drive `/dev/torture` and check the chat's text:
+ * a line shown twice, out of order or a dead draft is recorded as a failure.
+ */
+const torture = (what) => fetch(`${MOCK}/dev/torture?${what}`).then((r) => r.text());
+/** How many times each text shows in the chat, as the reader sees it. */
+const countIn = (page, texts) =>
+  page.eval(`(() => {
+    const body = document.body.innerText;
+    return ${JSON.stringify(texts)}.map((t) => body.split(t).length - 1);
+  })()`);
+const expectCounts = async (page, texts, want) => {
+  const got = await countIn(page, texts);
+  texts.forEach((t, i) => {
+    if (got[i] !== want[i])
+      page.errors.push(`failed: “${t}” shown ${got[i]}×, expected ${want[i]}×`);
+  });
+};
+// The chat is an inverted list: its scroll starts at the newest line, and older ones are further on.
+const scrollChatToEnd = async (page) => {
+  await page.eval(FIND_SCROLLER);
+  await page.eval('window.__qaScroller && (window.__qaScroller.scrollTop = 0)');
+  await sleep(500);
+};
+/** Where on screen a text is drawn (the inverted list's DOM order is newest first). */
+const topOf = (page, text) =>
+  page.eval(`(() => {
+    const el = [...document.querySelectorAll('body *')].filter((e) => e.children.length === 0 && e.textContent.includes(${JSON.stringify(text)})).pop();
+    return el ? el.getBoundingClientRect().top : null;
+  })()`);
+const TORTURE = [
+  {
+    name: 'torture-chat',
+    route: '/chat/torture',
+    ready: 'Torture',
+    pages: 12,
+    check:
+      'Every kind of line: day dividers, the code block and wide table scroll inside their own frames (never the page), URLs and tokens wrap inside the screen, emoji / CJK / Hebrew / Arabic render, images are link chips, expired card a receipt, result v2 says what changed, nothing touches the screen edges',
+  },
+  {
+    name: 'torture-events',
+    route: '/chat/torture',
+    ready: 'Torture',
+    settle: 2500,
+    act: async (page) => {
+      await scrollChatToEnd(page);
+      await torture('do=duplicate');
+      await torture('do=outOfOrder');
+      await torture('do=burst&n=12');
+      await torture('do=stream&n=8');
+      await torture('do=lateDraft');
+      await torture('do=answer');
+      await torture('do=replace');
+      await sleep(2000);
+      await scrollChatToEnd(page);
+      await expectCounts(
+        page,
+        [
+          'Burst line 1 of 12',
+          'Burst line 12 of 12',
+          'Written first (arrives second).',
+          'Half of it',
+          '(edited: one line added)',
+        ],
+        [1, 1, 1, 0, 1]
+      );
+      const first = await topOf(page, 'Written first');
+      const second = await topOf(page, 'Written second');
+      if (first == null || second == null || first > second)
+        page.errors.push('failed: an overtaken line is shown below the line written after it');
+    },
+    check:
+      'After a duplicated event, two lines out of order, a burst of 12, a streamed reply, a late draft, a card answered and a reply edited: each line once, in time order, no leftover draft, the newest line in view',
+  },
+  {
+    name: 'torture-reconnect',
+    route: '/chat/torture',
+    ready: 'Got both.',
+    settle: 2000,
+    act: async (page) => {
+      // The Mac restarts (a new epoch): the phone gets a snapshot and re-reads the chat.
+      await startMock('--torture');
+      await sleep(6000);
+      await scrollChatToEnd(page);
+      await expectCounts(page, ['Got both.', 'Plan for the week?'], [1, 1]);
+    },
+    check:
+      'After the Mac restarts mid-chat: reconnected, every line once, nothing stale or doubled',
+  },
+  {
+    name: 'torture-long',
+    route: '/chat/longchat',
+    ready: 'Answer 4999',
+    settle: 2500,
+    act: async (page) => {
+      await page.eval(FIND_SCROLLER);
+      for (let i = 0; i < 25; i++) {
+        await page.eval('window.__qaScroller && (window.__qaScroller.scrollTop = 1e9)');
+        await sleep(400);
+      }
+      // Deep in the history now: the oldest pages loaded, each line once.
+      const deep = await page.eval(
+        `(() => { const m = [...document.body.innerText.matchAll(/Question (\\d+):/g)].map((x) => +x[1]); return { n: m.length, min: Math.min(...m), dups: m.length - new Set(m).size }; })()`
+      );
+      if (deep.dups) page.errors.push(`failed: ${deep.dups} questions shown twice`);
+      if (!(deep.min < 4800))
+        page.errors.push(`failed: scrolling up never got past Question ${deep.min}`);
+    },
+    check:
+      'A 5,000-line chat scrolled up through several pages: older lines load above, nothing doubled at a page seam',
+  },
+  {
+    name: 'torture-empty',
+    route: '/chat/quiet',
+    ready: 'Quiet',
+    check: 'An agent with no lines: its empty state, the composer usable, no stray divider or time',
+  },
+];
+
 const TEAM_SETUP = [
   {
     name: 'setup-in-timeline',
@@ -1438,6 +1558,13 @@ async function main() {
     await page.goto(`${WEB}/agents`);
     await sleep(4000);
     await each(TEAM_SETUP);
+  }
+
+  if (phase('torture')) {
+    await startMock('--torture');
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await each(TORTURE);
   }
 
   page.close();
