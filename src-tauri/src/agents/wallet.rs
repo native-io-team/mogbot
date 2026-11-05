@@ -712,6 +712,54 @@ pub fn carry_session(account: &Account, session: &str) -> bool {
     })
 }
 
+/// Whether `session`'s transcript is on disk in any of the engine's account
+/// folders: Claude Code's `projects/<folder>/<session>.jsonl`, Codex's
+/// `sessions/…/rollout-…-<thread>.jsonl`. A turn is only ever picked up on
+/// a conversation that is really there; without one it would start blank
+/// and could do again what was already done.
+pub fn session_on_disk(engine: Engine, session: &str) -> bool {
+    session_in(&folders(engine), engine, session)
+}
+
+pub fn session_in(roots: &[PathBuf], engine: Engine, session: &str) -> bool {
+    if !valid_session(session) {
+        return false;
+    }
+    match engine {
+        Engine::Claude => {
+            let name = format!("{session}.jsonl");
+            roots.iter().any(|root| {
+                std::fs::read_dir(root.join("projects"))
+                    .is_ok_and(|dirs| dirs.flatten().any(|d| d.path().join(&name).is_file()))
+            })
+        }
+        Engine::Codex => {
+            let suffix = format!("-{session}.jsonl");
+            roots.iter().any(|root| {
+                let mut dirs = vec![(root.join("sessions"), 0)];
+                while let Some((dir, depth)) = dirs.pop() {
+                    let Ok(entries) = std::fs::read_dir(&dir) else {
+                        continue;
+                    };
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() && depth < 4 {
+                            dirs.push((path, depth + 1));
+                        } else if path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .is_some_and(|n| n.starts_with("rollout-") && n.ends_with(&suffix))
+                        {
+                            return true;
+                        }
+                    }
+                }
+                false
+            })
+        }
+    }
+}
+
 /// Session and thread ids are uuids: nothing else is looked for on disk.
 fn valid_session(id: &str) -> bool {
     !id.is_empty() && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')

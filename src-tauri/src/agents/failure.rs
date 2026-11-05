@@ -21,6 +21,9 @@ use super::schedule;
 pub enum FailureKind {
     UsageLimit,
     SignedOut,
+    /// Cut off part-way (the app restarted, or its engine died) and not
+    /// picked up on its own: Continue carries on in the same conversation.
+    Interrupted,
     Other,
 }
 
@@ -37,6 +40,10 @@ pub struct Failure {
 impl Failure {
     pub const OTHER: Failure = Failure {
         kind: FailureKind::Other,
+        resets_at: None,
+    };
+    pub const INTERRUPTED: Failure = Failure {
+        kind: FailureKind::Interrupted,
         resets_at: None,
     };
 }
@@ -220,7 +227,8 @@ fn is_rate_limited(lower: &str) -> bool {
 pub fn is_temporary(detail: &str, failure: &Failure) -> bool {
     match failure.kind {
         FailureKind::UsageLimit => true,
-        FailureKind::SignedOut => false,
+        // Not run again by itself: it may have done half its work.
+        FailureKind::SignedOut | FailureKind::Interrupted => false,
         FailureKind::Other => {
             let lower = detail.to_lowercase();
             let server_error = [

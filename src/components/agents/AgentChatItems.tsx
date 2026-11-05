@@ -552,7 +552,7 @@ export const ErrorLine = memo(function ErrorLine({
             <div className="agent-card__actions">
               {onRetry && (
                 <Button tabIndex={0} variant={signIn ? 'ghost' : 'secondary'} onClick={onRetry}>
-                  Retry
+                  {message.failure?.kind === 'interrupted' ? 'Continue' : 'Retry'}
                 </Button>
               )}
               {signIn && (

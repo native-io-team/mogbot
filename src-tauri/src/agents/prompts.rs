@@ -438,6 +438,15 @@ fn interrupted_parts(previous: &str, activity: Option<&str>) -> (String, String)
     (was, step)
 }
 
+/// What a turn picked up after it was cut off is told, in the conversation
+/// it was cut off in. `why`: "The app restarted", "Claude Code stopped
+/// unexpectedly".
+pub fn carry_on(why: &str) -> String {
+    format!(
+        "[{why} while you were working on this, so you stopped part-way. This is the same conversation: everything you did is above. Carry on from where you were. What you already did stands (files you wrote are written, commands you ran have run, messages you sent were sent): don't redo finished steps, and if you can't tell whether one finished, check before doing it again. Then finish what was asked. Don't apologise for the interruption or mention it unless asked.]"
+    )
+}
+
 /// What the first turn after a take-over is told: the user drove this very
 /// conversation in a terminal for `took` ("6 min"), so it is all above.
 pub fn handed_back(took: &str) -> String {

@@ -132,6 +132,15 @@ struct Inbound {
     /// own memory without a card (`from_outside`).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     outside: bool,
+    /// Put back to carry on a turn the app (or its engine) cut off: which
+    /// pick-up this is (one at most, `MAX_RESUMES`). The turn it starts runs
+    /// in the same session, told to carry on, never from scratch.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    resume: u8,
+}
+
+fn is_zero(n: &u8) -> bool {
+    *n == 0
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -451,7 +460,8 @@ pub fn busy_count() -> usize {
 }
 
 /// A turn in flight, on disk (`<home>/turn.json`) from spawn until the turn
-/// ends. Still there at launch means Ship Studio quit or crashed mid-turn.
+/// ends. Still there at launch means the app quit or crashed mid-turn, and
+/// it holds what the next launch needs to pick the turn up where it was.
 #[derive(Serialize, serde::Deserialize, Default)]
 struct TurnMark {
     /// Claude Code's process, once spawned.
@@ -469,17 +479,89 @@ struct TurnMark {
     /// took them (the app went in between): they are resent, not retried.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     batch: Vec<String>,
+    /// Those messages themselves (redacted, like the inbox): who asked, and
+    /// where, so a turn picked up after a restart answers the same people.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    took: Vec<Inbound>,
+    /// The engine's conversation the turn runs in: Claude Code's session id
+    /// (known before it starts) or Codex's thread (once it says). What a
+    /// pick-up resumes; without it nothing is picked up.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    session_id: Option<String>,
+    /// How many times this turn was already picked up (`MAX_RESUMES`).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    resumes: u8,
+    /// The user pressed Stop: a turn they ended is never picked up again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    stopped: bool,
+    /// What the turn had done so far, saved as it goes ([`save_progress`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    progress: Option<Progress>,
 }
+
+/// A running turn's progress, saved at most once a second while it changes:
+/// the reply streaming now (completed replies are already in the log) and
+/// the "what it did" timeline so far.
+#[derive(Serialize, serde::Deserialize, Default, Clone, Debug, PartialEq)]
+struct Progress {
+    /// The reply being written: its message id and the text so far.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    draft: Option<(String, String)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    work: Option<super::work::TurnWork>,
+}
+
+/// Auto pick-ups a turn gets, whatever cut it off (a restart, its engine
+/// dying). Past that, the chat says it was interrupted and offers Continue.
+const MAX_RESUMES: u8 = 1;
 
 fn read_mark(agent_id: &str) -> Option<TurnMark> {
     let raw = std::fs::read_to_string(mark_path(agent_id)?).ok()?;
     serde_json::from_str(&raw).ok()
 }
 
+/// One writer at a time: the turn saves its progress while a Stop, from
+/// another thread, marks it stopped; neither may lose the other's change.
+static MARK_LOCK: Mutex<()> = Mutex::new(());
+
+/// Written whole and redacted (what it took, the reply so far), 0600, by
+/// rename: a crash mid-write leaves the last good mark, never half of one.
 fn write_mark(agent_id: &str, mark: TurnMark) {
-    if let (Some(path), Ok(json)) = (mark_path(agent_id), serde_json::to_vec(&mark)) {
-        let _ = super::store::write_private(&path, &json);
+    let _one = MARK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    put_mark(agent_id, &mark);
+}
+
+fn put_mark(agent_id: &str, mark: &TurnMark) {
+    let Some(path) = mark_path(agent_id) else {
+        return;
+    };
+    if let Ok(json) = serde_json::to_value(mark).and_then(|mut v| {
+        super::secrets::redact_value(&mut v);
+        serde_json::to_vec(&v)
+    }) {
+        let tmp = path.with_extension("json.tmp");
+        if super::store::write_private(&tmp, &json).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
     }
+}
+
+/// Change the mark in place, if the turn has one.
+fn update_mark(agent_id: &str, f: impl FnOnce(&mut TurnMark)) {
+    let _one = MARK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(mut mark) = read_mark(agent_id) {
+        f(&mut mark);
+        put_mark(agent_id, &mark);
+    }
+}
+
+/// Save what the running turn has done so far into its mark.
+fn save_progress(agent_id: &str, draft: Option<(&str, &str)>) {
+    let work = super::work::snapshot(agent_id);
+    let draft = draft
+        .filter(|(_, text)| !text.trim().is_empty())
+        .map(|(id, text)| (id.to_string(), text.to_string()));
+    update_mark(agent_id, |m| m.progress = Some(Progress { draft, work }));
 }
 
 fn mark_path(agent_id: &str) -> Option<std::path::PathBuf> {
@@ -489,10 +571,63 @@ fn mark_path(agent_id: &str) -> Option<std::path::PathBuf> {
 }
 
 fn clear_mark(agent_id: &str) {
+    let _one = MARK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(path) = mark_path(agent_id) {
         let _ = std::fs::remove_file(path);
     }
 }
+
+/// The next pick-up a cut-off turn gets, if it has one left.
+fn next_pickup(resumes: u8) -> Option<u8> {
+    (resumes < MAX_RESUMES).then(|| resumes + 1)
+}
+
+/// Its engine's process ended mid-turn by itself, in a conversation the
+/// engine had confirmed (so it is on disk to carry on in), and not for a
+/// reason that needs the user (signed out, out of usage): worth picking up.
+fn died_mid_turn(session_confirmed: bool, kind: super::failure::FailureKind) -> bool {
+    session_confirmed && kind == super::failure::FailureKind::Other
+}
+
+/// Agents whose turn ends cut off and not picked up: its line offers
+/// Continue (`FailureKind::Interrupted`), never Retry, which would send the
+/// request again and could do the same work twice.
+static CUT_OFF: LazyLock<Mutex<std::collections::HashSet<String>>> =
+    LazyLock::new(Default::default);
+
+fn set_cut_off(agent_id: &str) {
+    CUT_OFF
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(agent_id.to_string());
+}
+
+fn take_cut_off(agent_id: &str) -> bool {
+    CUT_OFF
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(agent_id)
+}
+
+/// Its engine died a second time in the same turn: not picked up again.
+fn died_again_line(engine: Engine, detail: &str) -> String {
+    let first = detail.lines().map(str::trim).find(|l| !l.is_empty());
+    let why = first
+        .map(|l| format!(" ({})", l.chars().take(160).collect::<String>()))
+        .unwrap_or_default();
+    format!(
+        "Interrupted: {} stopped unexpectedly again{why}, so this turn stopped part-way. Continue picks it up where it was.",
+        engine.label()
+    )
+}
+
+/// The line a turn the app cut off ends on when it isn't picked up by itself.
+const RESTART_LINE: &str =
+    "Interrupted: the app closed while this agent was working, so the turn stopped part-way. Continue picks it up where it was.";
+/// A pick-up whose conversation can't be found: nothing is started blank.
+const SESSION_GONE_LINE: &str = "Interrupted: the app couldn't find this agent's conversation to carry on in, so it didn't start the turn again from scratch (that could do the same work twice). Check what was done, then Continue or send what's left.";
+/// The quiet line a turn picked up after a restart starts with.
+const PICKED_UP_LINE: &str = "Picked up after the app restarted";
 
 /// What is queued behind the turn in progress, on disk (`<home>/inbox.json`)
 /// so a quit, crash or update doesn't lose it. Written whenever the queue
@@ -732,47 +867,220 @@ fn kick(app: &AppHandle, agent_id: &str) {
 
 /// One agent the last run left mid-turn, or with messages waiting.
 async fn recover_one(app: &AppHandle, agent_id: &str, found: &[Inbound]) {
+    // Was the user driving it by hand? Read before the take-over's own
+    // recovery below closes it: a turn is never picked up under them.
+    let driven = super::takeover::left_over(agent_id);
     // A take-over's terminal the last run left behind, first: it is in the
     // session the queue below resumes.
     if let Ok(agent) = store::get(agent_id) {
         super::takeover::recover_after_restart(app, &agent).await;
     }
-    let mut retry_line = false;
-    if let Some(path) = mark_path(agent_id).filter(|p| p.exists()) {
-        let mark = read_mark(agent_id).unwrap_or_default();
-        retry_line = !never_taken(&mark, found);
-        if let Some(pid) = mark.pid {
-            if !mark.session.is_empty() {
-                stop_orphan(pid, &mark.session).await;
-            }
-        }
-        let _ = std::fs::remove_file(&path);
-        // Same order as a turn that ends: its changes, then its error line,
-        // which tags the agent as needing you (Retry re-sends).
-        if let (Some(project), Some(tree)) = (mark.project, mark.tree) {
-            record_changes(app, agent_id, project.into(), tree, None).await;
+    // The cut-off turn's process, if it outlived the app: stopped before
+    // anything carries on in its conversation.
+    if let Some(mark) = mark_path(agent_id)
+        .filter(|p| p.exists())
+        .and_then(|_| read_mark(agent_id))
+    {
+        if let (Some(pid), false) = (mark.pid, mark.session.is_empty()) {
+            stop_orphan(pid, &mark.session).await;
         }
     }
-    // A turn that had taken its messages didn't finish: Retry re-sends. One
-    // that never took them (the app went between its mark and the dequeue)
-    // has nothing to retry: its messages are the ones sent again below.
-    if retry_line {
-        let text = "The app closed while this agent was working, so that turn didn't finish. Retry to send it again.";
-        let mut line = new_message(agent_id, MessageKind::Error, text);
-        line.failure = Some(super::failure::Failure::OTHER);
-        let _ = record(app, line);
+    let plan = plan_recovery(agent_id, found, driven, super::wallet::session_on_disk);
+    // Same order as a turn that ends: what it had said, its changes, then
+    // the line that says what became of it (under which its timeline hangs).
+    if let Some(reply) = plan.partial {
+        let _ = record(app, reply);
+    }
+    if let Some((project, tree)) = plan.changes {
+        record_changes(app, agent_id, project.into(), tree, None).await;
+    }
+    let line = match plan.pickup {
+        // Carries on by itself: a quiet line, and the turn is queued first.
+        Some(Pickup::Resume) => Some(new_message(agent_id, MessageKind::Note, PICKED_UP_LINE)),
+        // The user stopped it as the app went: it ended, as they asked.
+        Some(Pickup::Stopped) => Some(new_message(agent_id, MessageKind::Note, "Stopped")),
+        // Not picked up by itself: Continue (never Retry: it may have done
+        // half its work, and sending the request again could redo it).
+        Some(Pickup::Continue(text)) => {
+            let mut line = new_message(agent_id, MessageKind::Error, text);
+            line.failure = Some(super::failure::Failure::INTERRUPTED);
+            Some(line)
+        }
+        None => None,
+    };
+    if let Some(Ok(line)) = line.map(|l| record(app, l)) {
+        if let Some(work) = plan.work {
+            super::work::keep_under(app, &line, work, store::now_ms());
+        }
     }
     // What was queued behind it was never started: it runs now, once (it is
     // already back on the queue), and the chat says which messages were sent
     // again: only those still queued, not any a Stop has dropped meanwhile.
-    // The interrupted turn itself is not re-run: it may have done half its work.
-    let resent = still_queued(agent_id, found);
+    let resent: Vec<Inbound> = still_queued(agent_id, found)
+        .into_iter()
+        .filter(|m| m.resume == 0)
+        .collect();
     if !resent.is_empty() {
         let _ = record(
             app,
             new_message(agent_id, MessageKind::Note, resent_note(&resent)),
         );
     }
+}
+
+/// What became of a turn the last run cut off after it had taken its messages.
+#[derive(Debug, Clone, PartialEq)]
+enum Pickup {
+    /// Picked up by itself, in the same conversation: queued first.
+    Resume,
+    /// The user had pressed Stop.
+    Stopped,
+    /// Left for the user: the line says why, and offers Continue.
+    Continue(&'static str),
+}
+
+/// What recovery does for one agent, worked out without the app: the mark
+/// is read and removed, and a pick-up is queued, here; recording the lines
+/// is [`recover_one`]'s.
+#[derive(Default)]
+struct Recovery {
+    /// A bound agent's project and its snapshot from before the turn.
+    changes: Option<(String, String)>,
+    /// The reply that was streaming, kept as it stood (cut off).
+    partial: Option<AgentMessage>,
+    /// `None`: no turn was cut off (or it never took its messages).
+    pickup: Option<Pickup>,
+    /// Its timeline so far, for the recovery line.
+    work: Option<super::work::TurnWork>,
+}
+
+/// Whether a cut-off turn is picked up by itself. Never when the user
+/// stopped it or was driving it by hand, never in a room (its asks are
+/// quoted fresh each turn), never twice, and never without its conversation
+/// on disk: a blank session would see only the chat and could redo the work.
+fn pickup_for(mark: &TurnMark, driven: bool, session_found: bool) -> Pickup {
+    if mark.stopped {
+        Pickup::Stopped
+    } else if driven || mark.took.iter().any(|m| m.room.is_some()) {
+        Pickup::Continue(RESTART_LINE)
+    } else if next_pickup(mark.resumes).is_none() {
+        Pickup::Continue(RESTART_LINE)
+    } else if !session_found {
+        Pickup::Continue(SESSION_GONE_LINE)
+    } else {
+        Pickup::Resume
+    }
+}
+
+fn plan_recovery(
+    agent_id: &str,
+    found: &[Inbound],
+    driven: bool,
+    session_on_disk: impl Fn(Engine, &str) -> bool,
+) -> Recovery {
+    let Some(path) = mark_path(agent_id).filter(|p| p.exists()) else {
+        return Recovery::default();
+    };
+    let mark = read_mark(agent_id).unwrap_or_default();
+    let _ = std::fs::remove_file(&path);
+    let mut plan = Recovery {
+        changes: mark.project.clone().zip(mark.tree.clone()),
+        ..Recovery::default()
+    };
+    // One that never took them (the app went between its mark and the
+    // dequeue) has nothing to pick up: its messages are sent again.
+    if never_taken(&mark, found) {
+        return plan;
+    }
+    let progress = mark.progress.clone().unwrap_or_default();
+    plan.partial = partial_reply(agent_id, progress.draft.as_ref());
+    plan.work = progress.work;
+    let agent = store::get(agent_id).ok();
+    let engine = agent.as_ref().map(|a| a.engine).unwrap_or_default();
+    // The conversation it was in, still the agent's (not started fresh
+    // since), and really on disk.
+    let session = mark.session_id.as_deref().filter(|sid| {
+        agent
+            .as_ref()
+            .is_some_and(|a| a.session_id.as_deref().is_none_or(|own| own == *sid))
+            && session_on_disk(engine, sid)
+    });
+    let pickup = pickup_for(&mark, driven, session.is_some());
+    if let (Pickup::Resume, Some(sid)) = (&pickup, session) {
+        // Claude Code's first turn may have gone before it said its session.
+        let sid = sid.to_string();
+        let _ = store::update(agent_id, |a| {
+            if a.session_id.is_none() {
+                a.session_id = Some(sid);
+                a.new_engine = false;
+            }
+        });
+        let resume = next_pickup(mark.resumes).unwrap_or(MAX_RESUMES);
+        requeue_first(
+            agent_id,
+            resume_inbounds(&mark.took, resume, prompts::carry_on("The app restarted")),
+        );
+    }
+    plan.pickup = Some(pickup);
+    plan
+}
+
+/// The reply that was streaming when the turn was cut off, as a message
+/// under the draft's own id (so it takes the place of what was on screen),
+/// marked cut off. Nothing when it was already recorded whole.
+fn partial_reply(agent_id: &str, draft: Option<&(String, String)>) -> Option<AgentMessage> {
+    let (id, text) = draft.filter(|(_, t)| !t.trim().is_empty())?;
+    let recent = store::messages(agent_id, 50).unwrap_or_default();
+    if recent.iter().any(|m| &m.id == id) {
+        return None;
+    }
+    let mut message = new_message(agent_id, MessageKind::Agent, text.clone());
+    message.id = id.clone();
+    message.stopped = true;
+    Some(message)
+}
+
+/// The messages that carry a cut-off turn on: the same askers, in the same
+/// order (so delegators are still answered and a "When…" turn stays sealed),
+/// with the pick-up note said once in place of what they asked, which is
+/// already in the conversation. Scheduled runs aren't carried: the restart
+/// closed them (`runs::after_restart`).
+fn resume_inbounds(took: &[Inbound], resume: u8, note: String) -> Vec<Inbound> {
+    let mut out: Vec<Inbound> = took
+        .iter()
+        .map(|m| Inbound {
+            id: store::new_id(),
+            text: String::new(),
+            ticket: None,
+            resume,
+            ..m.clone()
+        })
+        .collect();
+    if out.is_empty() {
+        out.push(Inbound {
+            id: store::new_id(),
+            text: String::new(),
+            from: From::User,
+            reply: false,
+            routine: false,
+            ticket: None,
+            room: None,
+            outside: false,
+            resume,
+        });
+    }
+    out[0].text = note;
+    out
+}
+
+/// Put messages at the front of the agent's queue (and on disk).
+fn requeue_first(agent_id: &str, messages: Vec<Inbound>) {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let runtime = runtimes.entry(agent_id.to_string()).or_default();
+    for (i, message) in messages.into_iter().enumerate() {
+        runtime.queue.insert(i, message);
+    }
+    save_inbox(agent_id, &runtime.queue);
 }
 
 /// The cut-off turn never took its messages: every one it marked as its
@@ -1161,6 +1469,7 @@ pub fn enqueue(app: &AppHandle, agent_id: &str, text: String, from: From) {
             ticket: None,
             room: None,
             outside: false,
+            resume: 0,
         },
     );
 }
@@ -1187,6 +1496,7 @@ pub fn enqueue_scheduled(
             ticket: Some(ticket),
             room: None,
             outside: false,
+            resume: 0,
         },
     );
 }
@@ -1206,6 +1516,7 @@ pub fn enqueue_from_outside(app: &AppHandle, agent_id: &str, text: String, ticke
             ticket: Some(ticket),
             room: None,
             outside: true,
+            resume: 0,
         },
     );
 }
@@ -1236,6 +1547,7 @@ fn room_inbound(text: String, room: super::rooms::RoomRef, outside: bool) -> Inb
         ticket: None,
         room: Some(room),
         outside,
+        resume: 0,
     }
 }
 
@@ -1387,6 +1699,7 @@ fn agent_inbound(text: String, sender: AgentRef, hop: u8, reply: bool, outside: 
         ticket: None,
         room: None,
         outside,
+        resume: 0,
     }
 }
 
@@ -1556,6 +1869,7 @@ pub fn stop_in_room(agent_id: &str, room_id: &str) -> bool {
     let running_here = runtime.room.as_ref().is_some_and(|r| r.room_id == room_id);
     if running_here {
         if let Some(cancel) = &runtime.cancel {
+            update_mark(agent_id, |m| m.stopped = true);
             runtime.interrupt = false;
             cancel.notify_one();
             return true;
@@ -1599,6 +1913,8 @@ fn stop_queue(agent_id: &str, deleting: bool) -> (bool, Vec<Inbound>) {
     runtime.interrupt = false;
     let stopped = match &runtime.cancel {
         Some(cancel) => {
+            // Should the app go before the turn ends: never picked up.
+            update_mark(agent_id, |m| m.stopped = true);
             cancel.notify_one();
             true
         }
@@ -2056,6 +2372,8 @@ async fn wait_for_memory(app: &AppHandle, agent_id: &str) -> bool {
 struct Batch {
     prompt: String,
     routine: bool,
+    /// A turn picked back up after it was cut off: which pick-up (0: not one).
+    resume: u8,
     /// The first message's text: what a bound agent's copy is named after.
     request: String,
     /// Asked in a room: the prompt is the room's, written as the turn starts.
@@ -2079,15 +2397,13 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     // and never folded into a turn answering the agent's own chat (or
     // another room). The rest waits for the next turn, in order.
     let take = same_place_prefix(&runtime.queue);
+    let took: Vec<Inbound> = runtime.queue.iter().take(take).cloned().collect();
     write_mark(
         agent_id,
         TurnMark {
-            batch: runtime
-                .queue
-                .iter()
-                .take(take)
-                .map(|m| m.id.clone())
-                .collect(),
+            batch: took.iter().map(|m| m.id.clone()).collect(),
+            resumes: took.iter().map(|m| m.resume).max().unwrap_or(0),
+            took,
             ..TurnMark::default()
         },
     );
@@ -2103,6 +2419,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
         room
     });
     let routine = batch.iter().all(|m| m.routine);
+    let resume = batch.iter().map(|m| m.resume).max().unwrap_or(0);
     // Its cost is a routine's only if nothing else was in it, nor in the
     // interrupted turn it replaces (whose cost carries over in `turn_usage`).
     runtime.turn_mixed |= !routine;
@@ -2178,6 +2495,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     Some(Batch {
         prompt,
         routine,
+        resume,
         request,
         room: room.map(|room| RoomBatch {
             room,
@@ -2485,6 +2803,7 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         let Batch {
             prompt,
             routine,
+            resume,
             request,
             room,
         } = batch;
@@ -2516,16 +2835,10 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             Err(_) => None,
         };
         if let Some((project, tree)) = &start {
-            write_mark(
-                &agent_id,
-                TurnMark {
-                    pid: None,
-                    session: String::new(),
-                    project: Some(project.to_string_lossy().into_owned()),
-                    tree: Some(tree.clone()),
-                    batch: Vec::new(),
-                },
-            );
+            update_mark(&agent_id, |m| {
+                m.project = Some(project.to_string_lossy().into_owned());
+                m.tree = Some(tree.clone());
+            });
         }
         let since = store::now_ms();
         super::work::begin(&agent_id, since);
@@ -2538,9 +2851,15 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             super::work::on_step(&agent_id, super::work::StepKind::Project, &label, since);
         }
         let result = match prepared {
-            Ok(_) => run_on_accounts(&app, &agent_id, &prompt, routine).await,
+            Ok(_) => run_on_accounts(&app, &agent_id, &prompt, routine, resume).await,
             Err(e) => Err(e),
         };
+        // An engine that died is picked up inside (`run_on_accounts`); one
+        // that died again is a failure like any other, said as interrupted.
+        let result = result.and_then(|ended| match ended {
+            Ended::Died(text) => Err(CommandError::expected(text)),
+            ended => Ok(ended),
+        });
         if QUITTING.load(Ordering::SeqCst) {
             // The app is going: the mark stays, for the next launch to report.
             return;
@@ -2576,6 +2895,8 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         let mut settle_as: Option<&str> = None;
         let finished = matches!(result, Ok(Ended::Finished));
         match result {
+            // Made an error above.
+            Ok(Ended::Died(_)) => {}
             Ok(Ended::Interrupted) => {
                 // Its debts and scheduled runs carry over to the next turn.
                 if let Some(room) = &room_ref {
@@ -2593,8 +2914,12 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             Ok(Ended::Finished) => return_results(&app, &agent_id, since, None),
             Err(err) => {
                 let engine = store::get(&agent_id).map(|a| a.engine).unwrap_or_default();
-                // Every account of its engine out: the wallet's own line.
+                // Cut off and not picked up: Continue, not Retry. Every
+                // account of its engine out: the wallet's own line.
                 let (text, failure) = match super::wallet::take_all_out(&agent_id) {
+                    _ if take_cut_off(&agent_id) => {
+                        (err.to_string(), super::failure::Failure::INTERRUPTED)
+                    }
                     Some((line, resets_at)) => (
                         line,
                         super::failure::Failure {
@@ -2816,7 +3141,11 @@ async fn record_changes(
 fn compose(batch: &[Inbound]) -> String {
     batch
         .iter()
+        // A pick-up's note is said once, in the app's words, to whoever
+        // asked: the request itself is already in the conversation.
+        .filter(|m| m.resume == 0 || !m.text.is_empty())
         .map(|m| match &m.from {
+            _ if m.resume > 0 => m.text.clone(),
             From::User => m.text.clone(),
             From::Agent { sender, .. } => prompts::from_agent(&sender.name, &m.text, m.reply),
         })
@@ -3155,6 +3484,9 @@ enum Ended {
     /// Stopped by the user (`None`), or by us: the time limit, or a turn
     /// whose permissions can't be trusted (the line the chat was given).
     Stopped(Option<&'static str>),
+    /// Its engine's process ended mid-turn on its own (crashed, killed):
+    /// what the chat would say. Picked up once by [`run_on_accounts`].
+    Died(String),
 }
 
 /// Run one turn on the engine's accounts (`agents::wallet`): on the first
@@ -3165,11 +3497,15 @@ async fn run_on_accounts(
     agent_id: &str,
     prompt: &str,
     routine: bool,
+    mut resumes: u8,
 ) -> Result<Ended, CommandError> {
     use super::wallet::{self, Choice};
     let engine = store::get(agent_id)?.engine;
     let mut tried: Vec<String> = Vec::new();
     let mut prompt = prompt.to_string();
+    // A pick-up carries on in the conversation it was cut off in, or not at
+    // all: a fresh session would see only the chat, and do it all again.
+    let mut picking_up = resumes > 0;
     // Any try of this turn, on any account, that ran a tool.
     clear_acted(agent_id);
     loop {
@@ -3201,11 +3537,33 @@ async fn run_on_accounts(
             agent_id,
             &prompt,
             routine,
-            !switched_after_acting,
+            !switched_after_acting && !picking_up,
             &account,
         )
         .await;
+        if let Ok(Ended::Died(detail)) = &result {
+            // The app is going: the mark stays as it is, for the next launch.
+            if QUITTING.load(Ordering::SeqCst) {
+                return result;
+            }
+            let Some(next) = next_pickup(resumes) else {
+                set_cut_off(agent_id);
+                return Err(CommandError::expected(died_again_line(engine, detail)));
+            };
+            resumes = next;
+            picking_up = true;
+            update_mark(agent_id, |m| m.resumes = next);
+            tracing::warn!("[Agents] {agent_id}'s engine stopped mid-turn; picking it up");
+            let line = format!("Picked up after {} stopped unexpectedly", engine.label());
+            let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
+            prompt = prompts::carry_on(&format!("{} stopped unexpectedly", engine.label()));
+            continue;
+        }
         let Err(err) = &result else { return result };
+        if picking_up && is_missing_session(&err.to_string()) {
+            set_cut_off(agent_id);
+            return Err(CommandError::expected(SESSION_GONE_LINE));
+        }
         if switched_after_acting && is_missing_session(&err.to_string()) {
             return Err(CommandError::expected(not_carried_line(&account.name)));
         }
@@ -3475,6 +3833,11 @@ async fn run_turn(
     let mut mark = read_mark(agent_id).unwrap_or_default();
     mark.pid = pid;
     mark.session = driver.process_mark(&session_id, &home);
+    // The conversation to pick up, should the turn be cut off: Claude Code's
+    // is known now; a new Codex thread's once it says (`Step::Session`).
+    if !session_id.is_empty() {
+        mark.session_id = Some(session_id.clone());
+    }
     write_mark(agent_id, mark);
 
     // An app-server conversation: stdin stays open for the turn, written by
@@ -3607,6 +3970,9 @@ async fn run_turn(
     pulse_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut peek_tick = tokio::time::interval(PEEK_EVERY);
     peek_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // What it has done changed since it was last saved into the mark: saved
+    // on the next peek tick, so a cut-off turn keeps its reply and timeline.
+    let mut progress_dirty = false;
 
     loop {
         tokio::select! {
@@ -3677,6 +4043,7 @@ async fn run_turn(
                         None => super::codex::steps(&value),
                     },
                 };
+                progress_dirty |= !steps.is_empty();
                 for step in steps {
                     match step {
                         Step::Session(sid) if !session_confirmed => {
@@ -3684,10 +4051,14 @@ async fn run_turn(
                             session_confirmed = true;
                             this_session = Some(sid.clone());
                             let id = agent_id.to_string();
-                            let _ = tokio::task::spawn_blocking(move || store::update(&id, |a| {
-                                a.session_id = Some(sid);
-                                a.new_engine = false;
-                            })).await;
+                            let _ = tokio::task::spawn_blocking(move || {
+                                // The conversation a pick-up resumes.
+                                update_mark(&id, |m| m.session_id = Some(sid.clone()));
+                                store::update(&id, |a| {
+                                    a.session_id = Some(sid);
+                                    a.new_engine = false;
+                                })
+                            }).await;
                         }
                         Step::Session(_) => {}
                         Step::Capabilities(caps) => {
@@ -3798,6 +4169,7 @@ async fn run_turn(
                 }
             }
             _ = draft_tick.tick(), if drafts.dirty() => {
+                progress_dirty = true;
                 if let Some((id, text)) = drafts.flush() {
                     timing.mark_first_word();
                     emit_draft(app, agent_id, id, text);
@@ -3811,6 +4183,9 @@ async fn run_turn(
             _ = cancel.notified() => { stopped = Some(None); break; }
             _ = &mut deadline => { stopped = Some(Some(TIMEOUT_NOTE)); break; }
             _ = peek_tick.tick() => {
+                if std::mem::take(&mut progress_dirty) {
+                    save_progress(agent_id, drafts.current());
+                }
                 if super::work::take_dirty(agent_id) {
                     let now = status_of(agent_id);
                     if now.state == "working" {
@@ -3969,12 +4344,15 @@ async fn run_turn(
         };
         let detail = unfinished_turn(engine, status.success(), stderr_text);
         // Agents' own words for what it can name (never PR generation's).
-        if let Some(text) = super::failure::cli_failure(engine.label(), &detail) {
-            return Err(CommandError::expected(text));
+        let text = super::failure::cli_failure(engine.label(), &detail)
+            .unwrap_or_else(|| crate::external_command::truncate_output(detail.trim()));
+        // Its process went mid-turn, in a conversation that is on disk: the
+        // turn is picked up there, rather than ended with nothing.
+        let kind = super::failure::describe_now(engine, &text).1.kind;
+        if died_mid_turn(session_confirmed, kind) {
+            return Ok(Ended::Died(text));
         }
-        return Err(CommandError::expected(
-            crate::external_command::truncate_output(detail.trim()),
-        ));
+        return Err(CommandError::expected(text));
     }
     if !said_anything {
         tracing::debug!("[Agents] {agent_id} finished a turn without a reply");
@@ -4068,6 +4446,7 @@ mod tests {
             ticket: None,
             room: None,
             outside: false,
+            resume: 0,
         }
     }
 
@@ -4115,6 +4494,7 @@ mod tests {
                 ticket: None,
                 room: None,
                 outside: false,
+                resume: 0,
             }),
             Ok(false)
         ));
@@ -4215,6 +4595,7 @@ mod tests {
                 ticket: None,
                 room: None,
                 outside: false,
+                resume: 0,
             },
             Inbound {
                 id: String::new(),
@@ -4231,6 +4612,7 @@ mod tests {
                 ticket: None,
                 room: None,
                 outside: false,
+                resume: 0,
             },
         ];
         let prompt = compose(&batch);
@@ -4449,6 +4831,7 @@ mod tests {
                 ticket: None,
                 room: None,
                 outside: false,
+                resume: 0,
             },
             Inbound {
                 id: String::new(),
@@ -4465,6 +4848,7 @@ mod tests {
                 ticket: None,
                 room: None,
                 outside: false,
+                resume: 0,
             },
         ]
         .into();
@@ -4616,6 +5000,7 @@ mod tests {
                     ticket: None,
                     room: None,
                     outside: false,
+                    resume: 0,
                 });
             }
             assert!(begin_fresh(&a.id).is_err());
@@ -4850,3 +5235,7 @@ mod review_runner_tests;
 #[cfg(test)]
 #[path = "rooms_runner_tests.rs"]
 mod rooms_runner_tests;
+
+#[cfg(test)]
+#[path = "resume_runner_tests.rs"]
+mod resume_runner_tests;

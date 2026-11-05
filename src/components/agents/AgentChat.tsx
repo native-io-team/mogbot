@@ -103,6 +103,8 @@ import {
   isQueued,
   retryExtras,
   retrySourceFor,
+  continuesFrom,
+  CONTINUE_TEXT,
   resendable,
   retryNote,
   whenAt,
@@ -807,7 +809,9 @@ export const AgentChat = memo(function AgentChat({
   // Retry belongs to the newest failure only, and only if nothing was said
   // since. It sends that message again whole: its words and its files.
   const retrySource = useMemo(() => retrySourceFor(shown), [shown]);
-  const retryId = retrySource ? shown[shown.length - 1].id : null;
+  // Cut off and not picked up by itself: Continue instead.
+  const continuing = useMemo(() => continuesFrom(shown), [shown]);
+  const retryId = retrySource || continuing ? shown[shown.length - 1].id : null;
   // Mid-turn, what you send waits for the next turn. The newest waiting
   // message says so and offers to interrupt instead.
   const busy = agent.status.state !== 'idle';
@@ -1156,6 +1160,10 @@ export const AgentChat = memo(function AgentChat({
   );
 
   const retryFailed = () => {
+    if (continuing) {
+      sendText(CONTINUE_TEXT);
+      return;
+    }
     if (!retrySource) return;
     sendText(retrySource.text, false, retryExtras(agent, retrySource));
   };
