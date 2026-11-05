@@ -144,7 +144,13 @@ pub fn verdict(a: &Approval, age_ms: i64, waited_on: bool, moment: Moment) -> Op
     if a.connector.is_some() {
         return None;
     }
-    if a.secret.is_some() {
+    if let Some(s) = &a.secret {
+        // An import's old-style secure input (before sign-in cards, which
+        // replaced it): nothing raises these any more and nothing waits on
+        // them, so they close at once instead of counting as "needs your OK".
+        if s.quiet {
+            return Some(Expiry::MaybeLater);
+        }
         // Nobody waits on a secure input: saving it later still works, until it's overdue.
         return overdue.then_some(Expiry::MaybeLater);
     }
@@ -205,6 +211,10 @@ pub fn sweep_agent(app: &AppHandle, agent_id: &str, moment: Moment) {
     let changed = sweep_store(agent_id, moment, store::now_ms(), &|id| {
         super::mcp::is_waited_on(id)
     });
+    if moment == Moment::Launch {
+        // A count left by an older build is recounted from the log.
+        store::refresh_pending(agent_id);
+    }
     if changed.is_empty() {
         return;
     }
@@ -229,6 +239,10 @@ pub fn sweep_all(app: &AppHandle, moment: Moment) {
     let Ok(agents) = store::list() else { return };
     for agent in agents {
         sweep_agent(app, &agent.id, moment);
+    }
+    if moment == Moment::Launch {
+        let _ = app.emit(super::runner::EVENT_REGISTRY, ());
+        super::notify::refresh_badge(app);
     }
 }
 

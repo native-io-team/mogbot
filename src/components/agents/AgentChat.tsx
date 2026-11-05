@@ -138,6 +138,7 @@ import {
 } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { ImportTalkBar } from './ImportTalkBar';
+import { WaitingForYouBar } from './WaitingForYouBar';
 import { TeamSetupCard } from './TeamSetupCard';
 import {
   progressLine,
@@ -1670,6 +1671,10 @@ export const AgentChat = memo(function AgentChat({
               draft, dictation blocked. Two at most; the rest fold. */}
           <ConversationBars
             bars={[
+              {
+                id: 'waiting',
+                node: <WaitingForYouBar agent={agent} messages={messages} />,
+              },
               {
                 id: 'takeover',
                 node: (

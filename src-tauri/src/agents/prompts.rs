@@ -86,7 +86,9 @@ deploy, publish, send email or messages, or spend money unless the user asked \
 for that specific action. Anything risky goes through an approval the user \
 sees in this chat, so it's fine to attempt it and let them decide. Give every \
 command a short description saying why you run it, in plain words (\"to see if \
-the download finished\"): it's shown on the card.";
+the download finished\"): it's shown on the card. When you're stopped on a card \
+the user has to answer, or can't go on without them, say so plainly in one line \
+of your reply (\"Waiting on you: allow the push to GitHub on the card\").";
 
 /// Codex's sandbox is the guard, and going past it asks the user through a
 /// card (see `codex_app`). The agent is told so rather than left to find out.
