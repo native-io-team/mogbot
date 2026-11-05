@@ -184,6 +184,8 @@ pub fn run() {
             agents::notify::init(_app.handle());
             let badge_app = _app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                // The agents folder is the user's alone (0700 / 0600).
+                let _ = tauri::async_runtime::spawn_blocking(agents::store::secure_files).await;
                 let _ = tauri::async_runtime::spawn_blocking(agents::store::expire_stale_approvals)
                     .await;
                 // Agents' secrets, known to redaction before any turn runs.

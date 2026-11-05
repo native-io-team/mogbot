@@ -488,13 +488,94 @@ fn recover_registry(path: &Path, why: &str) -> Result<Registry, CommandError> {
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), CommandError> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| super::err_io(e.to_string()))?;
+        private_dir(dir).map_err(|e| super::err_io(e.to_string()))?;
     }
     let mut tmp = path.as_os_str().to_owned();
     tmp.push(".tmp");
     let tmp = PathBuf::from(tmp);
-    std::fs::write(&tmp, bytes).map_err(|e| super::err_io(e.to_string()))?;
+    write_private(&tmp, bytes).map_err(|e| super::err_io(e.to_string()))?;
     std::fs::rename(&tmp, path).map_err(|e| super::err_io(e.to_string()))
+}
+
+/* ------------------------------------------------------- who can read it */
+
+// The registry, each agent's CLAUDE.md (instructions and memory) and its
+// conversation are the user's alone: the agents folder is 0700 and every
+// file in it 0600, whatever the umask. Other accounts on the Mac could read
+// them otherwise (home folders are often group-readable).
+
+#[cfg(unix)]
+fn set_mode(path: &Path, mode: u32) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+}
+
+/// `dir` (and the agents folder above it) exist, readable by the user only.
+pub(crate) fn private_dir(dir: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    #[cfg(unix)]
+    {
+        if let Ok(root) = agents_root() {
+            if dir.starts_with(&root) {
+                let mut at = dir.to_path_buf();
+                loop {
+                    set_mode(&at, 0o700)?;
+                    if at == root || !at.pop() {
+                        break;
+                    }
+                }
+                return Ok(());
+            }
+        }
+        set_mode(dir, 0o700)?;
+    }
+    Ok(())
+}
+
+/// Write `bytes` to `path`, created 0600 (and made 0600 if it existed).
+pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    #[cfg(unix)]
+    set_mode(path, 0o600)?;
+    file.write_all(bytes)
+}
+
+/// Bring everything under the agents folder to 0700 / 0600: what an older
+/// build wrote, and what an agent's own tools wrote with the default umask.
+/// Symlinks are left alone (their mode isn't theirs). Best effort, at launch.
+pub fn secure_files() {
+    #[cfg(unix)]
+    {
+        let Ok(root) = agents_root() else { return };
+        if !root.is_dir() {
+            return;
+        }
+        fn walk(dir: &Path, fixed: &mut usize) {
+            if set_mode(dir, 0o700).is_ok() {
+                *fixed += 1;
+            }
+            let Ok(entries) = std::fs::read_dir(dir) else { return };
+            for entry in entries.flatten() {
+                let Ok(kind) = entry.file_type() else { continue };
+                let path = entry.path();
+                if kind.is_dir() {
+                    walk(&path, fixed);
+                } else if kind.is_file() && set_mode(&path, 0o600).is_ok() {
+                    *fixed += 1;
+                }
+            }
+        }
+        let mut fixed = 0;
+        walk(&root, &mut fixed);
+        tracing::debug!(fixed, "[Agents] agents folder is private");
+    }
 }
 
 /// Written twice: the copy is what [`recover_registry`] falls back on if the
@@ -695,7 +776,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         extra: Default::default(),
     };
     let home = agents_root()?.join(&agent.id);
-    std::fs::create_dir_all(&home).map_err(|e| super::err_io(e.to_string()))?;
+    private_dir(&home).map_err(|e| super::err_io(e.to_string()))?;
     write_instructions(&home, &agent, &new.instructions)?;
     registry.agents.push(agent.clone());
     write_registry(&registry)?;
@@ -872,17 +953,21 @@ impl Answer {
 /// Append one JSON line, never fused onto a torn last line.
 fn append_line<T: Serialize>(path: &Path, value: &T) -> Result<(), CommandError> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| super::err_io(e.to_string()))?;
+        private_dir(dir).map_err(|e| super::err_io(e.to_string()))?;
     }
     // Every line goes through redaction: a secret's value never lands on disk.
     let mut value = serde_json::to_value(value).map_err(|e| super::err_other(e.to_string()))?;
     super::secrets::redact_value(&mut value);
     let mut line = serde_json::to_string(&value).map_err(|e| super::err_other(e.to_string()))?;
     line.push('\n');
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .read(true)
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).append(true).read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
         .open(path)
         .map_err(|e| super::err_io(e.to_string()))?;
     // A crash mid-append leaves a last line with no newline. Appending straight
@@ -1390,6 +1475,42 @@ mod tests {
             color: None,
             is_main: false,
         }
+    }
+
+    #[cfg(unix)]
+    fn mode(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_agents_folder_and_its_files_are_the_users_alone() {
+        with_root(|| {
+            let root = agents_root().unwrap();
+            let a = create(new("Finance")).unwrap();
+            let line = super::super::runner::new_message(&a.id, MessageKind::Note, "hi");
+            append_message(&line).unwrap();
+            let home = agent_home(&a.id).unwrap();
+            assert_eq!(mode(&root), 0o700);
+            assert_eq!(mode(&home), 0o700);
+            assert_eq!(mode(&root.join("agents.json")), 0o600);
+            assert_eq!(mode(&home.join("CLAUDE.md")), 0o600);
+            assert_eq!(mode(&home.join("messages.jsonl")), 0o600);
+
+            // What an older build (or an agent's own Edit, at the default
+            // umask) left readable is fixed at launch.
+            set_mode(&root, 0o755).unwrap();
+            set_mode(&home, 0o755).unwrap();
+            set_mode(&home.join("CLAUDE.md"), 0o644).unwrap();
+            std::fs::write(home.join("notes.txt"), "x").unwrap();
+            set_mode(&home.join("notes.txt"), 0o644).unwrap();
+            secure_files();
+            assert_eq!(mode(&root), 0o700);
+            assert_eq!(mode(&home), 0o700);
+            assert_eq!(mode(&home.join("CLAUDE.md")), 0o600);
+            assert_eq!(mode(&home.join("notes.txt")), 0o600);
+        });
     }
 
     #[test]
