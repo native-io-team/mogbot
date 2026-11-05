@@ -158,6 +158,33 @@ pub fn claude_deny_rules(add_dirs: &[String]) -> Vec<String> {
             rules.push(format!("Edit(/{dir}/**/{d}/**)"));
         }
     }
+    rules.extend(claude_bash_deny_rules());
+    rules
+}
+
+/// Git settings that make a later `git` run (the app's own included) execute
+/// a program: hooks from anywhere, a file-system monitor, an SSH command.
+const DANGEROUS_GIT_KEYS: [&str; 3] = ["core.hooksPath", "core.fsmonitor", "core.sshCommand"];
+const GIT_CONFIG_SCOPES: [&str; 5] = ["", "--local ", "--worktree ", "--global ", "--system "];
+
+/// Shell commands denied outright, on top of the file-tool rules: setting
+/// one of [`DANGEROUS_GIT_KEYS`] persistently. Claude Code matches a `Bash`
+/// rule as a command prefix (and checks each part of a compound command), and
+/// a deny wins over any allow in the user's own settings.
+///
+/// Residuals, by design of prefix rules: a shell can still write into `.git`
+/// another way (`echo … > .git/hooks/pre-commit`, `cp`, an interpreter), and
+/// `git config` spelled differently (`git -C x config …`, `git config
+/// --file .git/config …`) isn't matched. Those aren't silent: in
+/// `acceptEdits` every shell command asks through `approve`, unless the
+/// user's settings allow it. This is defence in depth, not a sandbox.
+pub fn claude_bash_deny_rules() -> Vec<String> {
+    let mut rules = Vec::new();
+    for key in DANGEROUS_GIT_KEYS {
+        for scope in GIT_CONFIG_SCOPES {
+            rules.push(format!("Bash(git config {scope}{key}:*)"));
+        }
+    }
     rules
 }
 
@@ -169,8 +196,16 @@ const SCAN_LIMIT: usize = 400;
 /// Existing [`PROTECTED_DIRS`] folders inside `roots`, for Codex's sandbox
 /// to keep read-only. Codex accepts a glob only to deny reading, so they are
 /// listed by exact path: the roots themselves, projects in them, and copies
-/// under `.worktrees/<project>/` (depth 3). One created during the turn
-/// (`git init` in a new folder) isn't on the list.
+/// under `.worktrees/<project>/` (depth 3).
+///
+/// Re-checked on Codex 0.166 (`codex sandbox -P`): a `"<root>/**/.git" =
+/// "read"` entry is refused outright ("filesystem glob path … only supports
+/// `deny` access"), and a `deny` would stop git *reading* its own store. The
+/// list is fixed when a turn's process starts (a process per turn), so a
+/// `.git` created during the turn (`git init`, `git clone`) isn't on it until
+/// the next turn, which scans again. Nor is one deeper than [`SCAN_DEPTH`] or
+/// beyond [`SCAN_LIMIT`]. Codex older than 0.166 has no profiles and keeps
+/// only each root's own top-level `.git` read-only.
 pub fn protected_paths(roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut out = Vec::new();
     for root in roots {
@@ -263,8 +298,9 @@ mod tests {
     #[test]
     fn claude_is_denied_writes_under_its_cwd_and_every_added_folder() {
         let rules = claude_deny_rules(&["/u/Ship Studio".into(), "/ext/site/".into()]);
+        let edit_rules: Vec<_> = rules.iter().filter(|r| r.starts_with("Edit(")).collect();
         assert_eq!(
-            rules,
+            edit_rules,
             vec![
                 "Edit(**/.git/**)",
                 "Edit(**/.shipstudio/**)",
@@ -274,6 +310,20 @@ mod tests {
                 "Edit(//ext/site/**/.shipstudio/**)",
             ]
         );
+    }
+
+    #[test]
+    fn claude_is_denied_persisting_git_settings_that_run_programs() {
+        let rules = claude_deny_rules(&[]);
+        for rule in [
+            "Bash(git config core.hooksPath:*)",
+            "Bash(git config --local core.hooksPath:*)",
+            "Bash(git config --global core.fsmonitor:*)",
+            "Bash(git config core.sshCommand:*)",
+        ] {
+            assert!(rules.iter().any(|r| r == rule), "{rule}");
+        }
+        assert_eq!(claude_bash_deny_rules().len(), 15);
     }
 
     #[test]

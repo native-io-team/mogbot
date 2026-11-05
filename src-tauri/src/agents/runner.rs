@@ -3384,6 +3384,13 @@ mod tests {
         ]
         .map(String::from)
         .to_vec();
+        // The shell deny rules follow the file-tool ones, in the same list.
+        let mut expected = expected;
+        let at = expected
+            .iter()
+            .position(|a| a == "--disallowedTools=mcp__shipstudio-preview")
+            .unwrap();
+        expected.splice(at..at, super::super::reach::claude_bash_deny_rules());
         assert_eq!(args, expected);
     }
 

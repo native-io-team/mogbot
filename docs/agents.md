@@ -74,6 +74,7 @@ claude --print --output-format stream-json --verbose --include-partial-messages
        --add-dir <projects root> --add-dir <each external project>
        --disallowedTools 'Edit(**/.git/**)' 'Edit(**/.shipstudio/**)'
                          'Edit(/<each added dir>/**/.git/**)' …
+                         'Bash(git config core.hooksPath:*)' …
 cwd = the agent's home, prompt on stdin, MCP_TOOL_TIMEOUT raised (see below)
 ```
 
@@ -85,9 +86,15 @@ deny rules: relative ones for its cwd and absolute `//` ones per added folder,
 because a relative rule doesn't reach an `--add-dir` (verified on 2.1.318: a
 Write into each is refused "denied by your permission settings", including in
 an added folder whose path has a space and a comma). The rules cover the file
-tools; a shell command touching those folders isn't read-only, so it asks
-through `approve` like any other. Codex gets the same as a permissions
-profile (below). The copy-per-task commit is made by the app at the end of the
+tools. For the shell there are also `Bash` deny rules for persisting the git
+settings that make a later `git` run execute a program (`core.hooksPath`,
+`core.fsmonitor`, `core.sshCommand`, in every `git config` scope); a deny wins
+over any allow in the user's own settings. Those are prefix rules, so other
+ways of writing into `.git` from a shell (`echo … > .git/hooks/x`, `cp`, an
+interpreter, `git -C dir config …`) aren't matched; they aren't silent either,
+since in `acceptEdits` every shell command asks through `approve` unless the
+user's settings allow it. Treat all of this as defence in depth, not a
+sandbox. Codex gets the same as a permissions profile (below). The copy-per-task commit is made by the app at the end of the
 turn, never by the agent (`task`).
 
 There is no long-lived process per agent, so twenty idle agents cost nothing.
@@ -1287,10 +1294,16 @@ codex app-server
 The permissions profile (Codex 0.166+, read off `codex --version`) is what
 keeps `.git` and `.shipstudio` read-only: Codex accepts a glob only to deny
 *reading*, so the folders are listed by path (`reach::protected_paths`: the
-roots, the projects in them and copies under `.worktrees/<project>/`; one
-created during the turn isn't listed). Verified on 0.166 with `codex sandbox
--P`: a nested project's `.git` and `.shipstudio` refuse a write while the
-project stays writable, and `thread/start` answers with the profile active.
+roots, the projects in them and copies under `.worktrees/<project>/`, three
+levels deep, at most 400). Verified on 0.166 with `codex sandbox -P`: a nested
+project's `.git` and `.shipstudio` refuse a write while the project stays
+writable, and `thread/start` answers with the profile active. Re-checked on
+0.166: a `"<root>/**/.git"="read"` entry is refused ("filesystem glob path …
+only supports `deny` access"), and `deny` would stop git reading its own
+store, so there is no pattern to fall back on. The list is fixed when the
+turn's process starts, so a `.git` created during a turn (`git init`, `git
+clone`), one deeper than three levels, or past the cap isn't protected until
+the next turn scans again (the first two) or at all (the cap).
 A thread names no `sandbox` of its own then, since it would replace the
 profile. An older Codex keeps the legacy
 `sandbox_workspace_write.writable_roots` + `network_access=false` (and the
