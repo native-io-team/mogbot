@@ -10,12 +10,13 @@
 //!   service, deduped team-wide. Nothing is asked in any chat.
 //! - **The check** ([`run`]), straight after the import and on demand (⌘K,
 //!   the checklist's "Check again"), tries for each service, read-only, in
-//!   order: a connection already made here; an app in Claude Code (a
-//!   claude.ai connector or the user's own MCP server, as `claude mcp list`
-//!   reports it); this Mac's own sign-in (`gh`, `vercel`); and, once the
-//!   team's browser is set up, the user's signed-in Chrome: one page per
-//!   asked service, opened in a new tab, looked at, and closed
-//!   (`browser::probe`). No click, no typing, no form, nothing sent.
+//!   order: one of our own connections already made here; this Mac's own
+//!   sign-in (`gh`, `vercel`); once the team's browser is set up, the
+//!   user's signed-in Chrome: one page per asked service, opened in a new
+//!   tab, looked at, and closed (`browser::probe`); and last, as an extra,
+//!   an app in Claude Code (a claude.ai connector or the user's own MCP
+//!   server, as `claude mcp list` reports it). No click, no typing, no
+//!   form, nothing sent.
 //! - **Resolved silently.** A service found is ticked with a one-line
 //!   receipt ("Figma: your browser, signed in on www.figma.com"); for the
 //!   browser, the agents that asked are given that site. Nothing is granted
@@ -201,9 +202,10 @@ impl LaterBook {
 fn action_for(service: &str, title: &str) -> (Option<String>, bool) {
     match logins::service(service) {
         Some(s) => match s.connector {
-            Connector::Oauth(_) | Connector::ClaudeAi(_) | Connector::Gh => {
-                (Some(format!("Connect {}", s.title)), false)
-            }
+            Connector::Oauth(_) | Connector::Gh => (Some(format!("Connect {}", s.title)), false),
+            // The browser first; claude.ai's connector is an extra on the card.
+            Connector::ClaudeAi(_) if s.site.is_some() => (Some("Use my browser".into()), false),
+            Connector::ClaudeAi(_) => (Some(format!("Connect {}", s.title)), false),
             Connector::None if s.site.is_some() => (Some("Use my browser".into()), false),
             Connector::None if s.key.is_some() => (Some("Get your key".into()), true),
             Connector::None => (None, false),
@@ -433,13 +435,12 @@ async fn run_inner(app: &AppHandle) -> Result<usize, CommandError> {
         if g.service != "other" {
             if let Some(c) = super::connections::for_service(&g.service)
                 .into_iter()
-                .find(|c| !c.needs_sign_in)
+                .find(|c| {
+                    !c.needs_sign_in && !matches!(c.kind, super::connections::Kind::ClaudeAi { .. })
+                })
             {
                 via = Some(format!("connected already ({})", c.account));
             }
-        }
-        if via.is_none() {
-            via = app_for(&g.service, &apps).map(|a| format!("Claude Code's {a} app"));
         }
         if via.is_none() && g.service == "github" {
             via = gh
@@ -463,6 +464,11 @@ async fn run_inner(app: &AppHandle) -> Result<usize, CommandError> {
                     via = Some(format!("your browser, signed in on {site}"));
                 }
             }
+        }
+        // Last, an extra: an app in Claude Code (a claude.ai connector or
+        // the user's own server), after the browser.
+        if via.is_none() {
+            via = app_for(&g.service, &apps).map(|a| format!("Claude Code's {a} app"));
         }
         let reached = via.is_some();
         if let Some(via) = via {

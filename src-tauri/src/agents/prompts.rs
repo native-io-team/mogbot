@@ -581,10 +581,12 @@ mod tests {
         .unwrap();
         let prompt = system_prompt(&agent, None);
         assert!(prompt.contains("Never ask for a password"));
-        // The chain, in order: a connected app, the browser, then one ask.
+        // The chain, in order: our own connection, the browser, then one ask;
+        // claude.ai's connectors are an extra, never waited on.
+        assert!(prompt.contains("an extra: use it if it works, never wait on it"));
         let chain = [
-            "A connected app",
-            "The user's own browser",
+            "One of the app's own connections",
+            "the user's own browser",
             "Only if neither works: `request_login`, once",
         ];
         let at: Vec<usize> = chain

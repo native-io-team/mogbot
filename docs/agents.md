@@ -853,12 +853,12 @@ to do (read; and, when `scopes` asks for more, send/post/change, which
 
 | Tier | Way in | Where the sign-in is kept | Engines |
 | --- | --- | --- | --- |
-| 1 | **Use \<account>**: an account already connected for another agent | as below | as below |
+| 1 | **Use \<account>**: an account already connected (ours) for another agent | as below | as below |
 | 1 | **Connect** (ours, `oauth.rs`): the app's own OAuth in the Mac's browser | this Mac's Keychain, `<slug>-connection-<id>` | both |
-| 1 | **Connect** (claude.ai connector): opens claude.ai's connector settings in the Mac's browser if it isn't added yet; the card watches `claude mcp list` until it's connected | claude.ai | Claude Code |
 | 1 | **Use GitHub on this Mac**: the `gh` sign-in | `gh`'s own Keychain item | both |
-| 2 | **Use my browser**: Claude in Chrome, in the user's own Chrome where they're signed in; every click/post/send/pay asks | nowhere new | Claude Code |
-| 3 | **Enter an API key**: the masked field (`secrets.rs`), only where a key made for programs is a real way in (X API, Stripe restricted key, an app we don't know) | this Mac's Keychain | both |
+| 2 | **Use my browser**: Claude in Chrome, in the user's own Chrome where they're signed in; every click/post/send/pay asks. The default for every service without our own OAuth (Gmail, Calendar, Drive, Slack, LinkedIn, X…) | nowhere new | Claude Code |
+| 3 | **Use claude.ai's connector** (optional, after the browser): opens claude.ai's connector settings in the Mac's browser if it isn't added yet; the card watches `claude mcp list` until it's connected. If it doesn't, the card says to use the browser instead: never a dead end. A claude.ai connection made for another agent sits here too | claude.ai | Claude Code |
+| 4 | **Enter an API key**: the masked field (`secrets.rs`), only where a key made for programs is a real way in (X API, Stripe restricted key, an app we don't know) | this Mac's Keychain | both |
 
 A service with no connector says so in one line on the card ("LinkedIn has
 no connector agents can sign in to."), instead of a password field. A Codex
@@ -878,7 +878,9 @@ signed-in browser and say which account it's in, and ask only if both fail.
    away): never asked again; the agent carries on without it. A service the
    catalogue doesn't know matches however it's spelled ("Acme CRM",
    "acme-crm").
-2. **Granted already** (a connection): use it.
+2. **Granted already**: one of our own working connections (OAuth, `gh`).
+   A claude.ai connector doesn't count (it isn't always recognised in a
+   turn): it's an optional extra after the browser, never the default.
 3. **This Mac is signed in**: GitHub through `gh` (granted silently: the
    agent could run `gh` anyway, and every change asks through the broker).
 4. **The user's browser**, when this turn has it (below) and the service has
@@ -933,7 +935,12 @@ URL) to a site in the agent's `browser_sites`, unless the URL carries another
 URL (`//` anywhere after the host, plain or percent-encoded): an own site's
 redirect endpoint would otherwise carry data off-site. Any other site, and
 every click, keystroke, form fill, upload, script, shortcut, batch or GIF
-export, asks on an Allow card. `browser_sites` only ever holds a catalogue
+export, asks on an Allow card (`browser::card_for`) saying exactly what it
+does (the text typed, the value filled, the file, the script) and where and
+as whom: the site the agent last opened and the account it was found signed
+in as there (`browser_profiles`), or "whoever is signed in there". A click's
+card can't see what the button sends, so the agent is told to say in chat,
+before it, exactly what will go and from which account. `browser_sites` only ever holds a catalogue
 service's built-in host (`logins::SERVICES`): the access chain, a login card's
 "Use my browser" and the reach check add one; nothing an agent or an import
 types becomes a site.
@@ -983,11 +990,11 @@ it had used elsewhere. Now nothing is asked up front: an imported agent's
 logins become **Maybe later** rows on "Setting up your team", one per service
 team-wide, and the app checks them itself straight after the import (and from
 ⌘K "Check what your team can already reach" or the step's Check again), in
-order and read-only: a connection already made; an app in Claude Code
-(`claude mcp list`: a claude.ai connector or the user's own server); this
-Mac's sign-ins (`gh`, `vercel whoami`); and, once the team's browser is on,
-the service's account page opened in a new tab, looked at (did it land on a
-sign-in page?) and closed. Only services someone mentioned are opened; no
+order and read-only: one of our own connections already made; this Mac's
+sign-ins (`gh`, `vercel whoami`); once the team's browser is on, the
+service's account page opened in a new tab, looked at (did it land on a
+sign-in page?) and closed; and last, as an extra, an app in Claude Code
+(`claude mcp list`: a claude.ai connector or the user's own server). Only services someone mentioned are opened; no
 click, no typing; nothing kept beyond the service, how it was reached and an
 account name a connection or CLI reported.
 
