@@ -357,8 +357,74 @@ pub fn remove(engine: Engine, id: &str) -> Result<(), CommandError> {
         file.quota_from.retain(|_, v| *v != k);
         Ok(())
     })?;
+    // Conversations that last ran there go on: their newest copies are kept
+    // in this Mac's own folder before the account's folder goes.
+    let gone = Account {
+        id: id.to_string(),
+        engine,
+        name: String::new(),
+        added_at: 0,
+        limit: None,
+    };
+    let kept = keep_sessions(engine, &folder(&gone), &folder(&this_mac(engine)));
+    tracing::info!("[Agents] kept {kept} conversation(s) from a removed account");
     accounts::forget_isolated_account(id);
     Ok(())
+}
+
+/// Every session in `from` carried into `into` where it is newer there.
+pub fn keep_sessions(engine: Engine, from: &Path, into: &Path) -> usize {
+    let roots = [from.to_path_buf(), into.to_path_buf()];
+    let mut ids: Vec<String> = Vec::new();
+    match engine {
+        Engine::Claude => {
+            for dir in std::fs::read_dir(from.join("projects"))
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
+                for file in std::fs::read_dir(dir.path())
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                {
+                    let name = file.file_name().to_string_lossy().into_owned();
+                    if let Some(id) = name.strip_suffix(".jsonl") {
+                        ids.push(id.to_string());
+                    }
+                }
+            }
+        }
+        Engine::Codex => {
+            let mut dirs = vec![(from.join("sessions"), 0)];
+            while let Some((dir, depth)) = dirs.pop() {
+                for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                    let path = entry.path();
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    if path.is_dir() && depth < 4 {
+                        dirs.push((path, depth + 1));
+                    } else if let Some(stem) = name.strip_suffix(".jsonl") {
+                        // rollout-<time>-<uuid>: the uuid is its last 36 characters.
+                        if stem.starts_with("rollout-") && stem.len() > 36 {
+                            ids.push(stem[stem.len() - 36..].to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ids.sort();
+    ids.dedup();
+    ids.iter()
+        .filter(|id| valid_session(id))
+        .filter(|id| {
+            match engine {
+                Engine::Claude => carry_claude(&roots, into, id),
+                Engine::Codex => carry_codex(&roots, into, id),
+            }
+            .unwrap_or(false)
+        })
+        .count()
 }
 
 fn not_found() -> CommandError {
@@ -545,6 +611,16 @@ pub fn folder(account: &Account) -> PathBuf {
     }
 }
 
+/// Claude Code's own settings file for an account (where its folder trust
+/// is recorded): this Mac's as Claude Code finds it, else the one in the
+/// account's folder.
+pub fn claude_config_for(account: &Account) -> Option<PathBuf> {
+    if account.is_this_mac() {
+        return super::decisions::claude_config();
+    }
+    Some(folder(account).join(".claude.json"))
+}
+
 /// The account an agent's turns last ran on (for a take-over's terminal),
 /// else the engine's first.
 pub fn last_account(engine: Engine, agent_id: &str) -> Account {
@@ -718,6 +794,13 @@ fn copy_replacing(from: &Path, to: &Path) -> std::io::Result<()> {
     tmp.push(".carry");
     let tmp = PathBuf::from(tmp);
     std::fs::copy(from, &tmp)?;
+    // A conversation is the user's own: readable by them only, whatever
+    // the source's mode was.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+    }
     if let Some(at) = modified(from) {
         if let Ok(f) = std::fs::File::options().write(true).open(&tmp) {
             let _ = f.set_modified(at);
@@ -1213,6 +1296,16 @@ mod tests {
             .join(folder)
             .join(format!("{sid}.jsonl"));
         assert_eq!(std::fs::read_to_string(&carried).unwrap(), "old\nnew\n");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&carried).unwrap().permissions().mode();
+            assert_eq!(
+                mode & 0o777,
+                0o600,
+                "a carried conversation is the user's only"
+            );
+        }
         assert!(work
             .join("projects")
             .join(folder)
@@ -1235,6 +1328,31 @@ mod tests {
         );
         // A session nobody has: nothing, and no error.
         assert!(!carry_claude(&roots, &work, "0000").unwrap());
+    }
+
+    #[test]
+    fn removing_an_account_keeps_the_conversations_that_last_ran_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mac, work) = (dir.path().join("mac"), dir.path().join("work"));
+        let sid = "85100e7a-050c-4811-a26e-55203a85d28b";
+        let folder = "-Users-me-Library-Application-Support-app-agents-ag1";
+        let at = |root: &Path| {
+            root.join("projects")
+                .join(folder)
+                .join(format!("{sid}.jsonl"))
+        };
+        touch(&at(&mac), "old\n", 100);
+        touch(&at(&work), "old\nnewer\n", 0);
+        assert_eq!(keep_sessions(Engine::Claude, &work, &mac), 1);
+        assert_eq!(std::fs::read_to_string(at(&mac)).unwrap(), "old\nnewer\n");
+        // Already kept: nothing to do again.
+        assert_eq!(keep_sessions(Engine::Claude, &work, &mac), 0);
+
+        let thread = "019a1b2c-3d4e-7f60-8a9b-0c1d2e3f4a5b";
+        let rel = format!("2026/11/05/rollout-2026-11-05T10-00-00-{thread}.jsonl");
+        touch(&work.join("sessions").join(&rel), "t\n", 0);
+        assert_eq!(keep_sessions(Engine::Codex, &work, &mac), 1);
+        assert!(mac.join("sessions").join(&rel).is_file());
     }
 
     #[test]

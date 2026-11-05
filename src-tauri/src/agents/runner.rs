@@ -3039,6 +3039,8 @@ async fn run_on_accounts(
     let engine = store::get(agent_id)?.engine;
     let mut tried: Vec<String> = Vec::new();
     let mut prompt = prompt.to_string();
+    // Any try of this turn, on any account, that ran a tool.
+    clear_acted(agent_id);
     loop {
         let now = store::now_ms();
         let candidates = wallet::candidates(engine).await;
@@ -3059,8 +3061,23 @@ async fn run_on_accounts(
             let line = wallet::switch_line(&account, from, &chrono::Local, now);
             let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
         }
-        let result = run_turn(app, agent_id, &prompt, routine, true, &account).await;
+        // A switched try whose last attempt already acted resumes that
+        // attempt's conversation or doesn't run: a fresh start there would
+        // see only the chat, not what its tools did, and do it all again.
+        let switched_after_acting = !tried.is_empty() && took_action(agent_id);
+        let result = run_turn(
+            app,
+            agent_id,
+            &prompt,
+            routine,
+            !switched_after_acting,
+            &account,
+        )
+        .await;
         let Err(err) = &result else { return result };
+        if switched_after_acting && is_missing_session(&err.to_string()) {
+            return Err(CommandError::expected(not_carried_line(&account.name)));
+        }
         let (_, failure) = super::failure::describe_now(engine, &err.to_string());
         if failure.kind != super::failure::FailureKind::UsageLimit {
             return result;
@@ -3084,6 +3101,37 @@ async fn run_on_accounts(
         tracing::info!("[Agents] {agent_id}'s account is out of usage; trying the next");
         prompt = wallet::continue_prompt(&prompt);
     }
+}
+
+/// Agents whose turn ran a tool in any of its tries (`run_on_accounts`).
+static ACTED: LazyLock<Mutex<std::collections::HashSet<String>>> = LazyLock::new(Default::default);
+
+fn note_acted(agent_id: &str) {
+    ACTED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(agent_id.to_string());
+}
+
+fn took_action(agent_id: &str) -> bool {
+    ACTED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(agent_id)
+}
+
+fn clear_acted(agent_id: &str) {
+    ACTED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(agent_id);
+}
+
+/// A switch whose conversation couldn't be brought to the next account,
+/// after the last one had already done part of the work. Not said with the
+/// usage-limit words: it isn't one, and mustn't mark this account out.
+fn not_carried_line(to: &str) -> String {
+    format!("Stopped instead of switching to {to}: this conversation couldn't be brought over to it, and part of the work had already run, so starting again could do it twice. Check what was done, then send what's left.")
 }
 
 /// Run one turn on `account`. `retry_fresh` lets a vanished session be replaced once.
@@ -3473,6 +3521,7 @@ async fn run_turn(
                             }
                         }
                         Step::Action(action) => {
+                            note_acted(agent_id);
                             let doing = super::work::on_action(agent_id, action, store::now_ms());
                             if status_of(agent_id).state != "waiting" {
                                 set_status(app, agent_id, Status { state: "working", activity: Some(doing), since: Some(started), work: None, room: None });

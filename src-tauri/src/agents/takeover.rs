@@ -437,7 +437,7 @@ async fn open(
     // Read-only: Claude Code's own answer to its trust question. Never
     // written here; the person at the keyboard answers it.
     let trust_prompt = agent.engine == Engine::Claude
-        && !super::decisions::claude_config()
+        && !super::wallet::claude_config_for(&account)
             .is_some_and(|config| super::decisions::trusted(&config, &layout.cwd));
     let transcript = transcript_len(agent.engine, session);
     let pty = format!("{PTY_PREFIX}{}", uuid::Uuid::new_v4());

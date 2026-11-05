@@ -1337,7 +1337,11 @@ its sqlite state first and by a filename scan when that misses (source,
 the engine's account folders into this one at the same relative path (mtime
 kept, so A → B → A carries B's newer copy back). If the engine still can't
 find it ("No conversation found", "no rollout found"), the existing fallback
-starts a new session with the recent visible conversation (`with_recap`).
+starts a new session with the recent visible conversation (`with_recap`),
+**except** on a switch after a try that already ran a tool: a new session
+would see only the chat, not what its tools did, and could do it all again
+(send a message twice, redo writes). That turn stops on a plain line instead
+(`runner::not_carried_line`). Carried copies are written 0600.
 Claude Code itself handles thinking written under another organization: it
 says so and regenerates it (string in its binary), rather than failing.
 
@@ -1382,7 +1386,9 @@ another account reports one, the old reading is cleared first
 accounts' windows. The wallet itself is `<agents root>/wallet.json`: the
 ordered accounts with their last limit, which account each agent last ran on,
 and which account each engine's reading came from. Removing an account
-deletes its Keychain items and its folder (`accounts::forget_isolated_account`,
+first carries every conversation in its folder that is newer there into this
+Mac's own (`wallet::keep_sessions`), so an agent that last ran on it resumes
+where it was, then deletes its Keychain items and its folder (`accounts::forget_isolated_account`,
 which refuses any id a workspace uses). The phone reads the list read-only
 (`agents.accounts`) in its Settings, once an engine has more than one.
 
