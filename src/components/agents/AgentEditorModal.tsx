@@ -68,7 +68,7 @@ function UsageLines({ usage, agent }: { usage: UsageSummary | null; agent: Agent
   const context = agent && formatContext(agent);
   if (!allTime && !context) return null;
   const priced = (t: UsageTotals | undefined) =>
-    !onPlan && t && t.pricedTurns > 0 ? COST_BASIS_NOTE : undefined;
+    !onPlan && t && t.pricedTurns + (t.pricedChecks ?? 0) > 0 ? COST_BASIS_NOTE : undefined;
   return (
     <dl className="agent-editor__usage">
       {allTime && (

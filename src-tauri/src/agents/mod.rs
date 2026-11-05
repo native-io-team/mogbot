@@ -79,6 +79,8 @@ pub mod takeover;
 pub mod task;
 pub mod tray;
 pub mod usage;
+pub mod watch;
+pub mod watch_seal;
 pub mod work;
 
 use crate::errors::CommandError;

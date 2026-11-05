@@ -317,6 +317,7 @@ fn usage(value: &Value) -> Option<UsageTotals> {
         cost_usd: 0.0,
         priced_turns: 0,
         duration_ms: 0,
+        ..Default::default()
     })
 }
 

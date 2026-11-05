@@ -1,0 +1,124 @@
+/* "When…" routines in the schedule popover (AgentWhenRoutine.tsx, and the
+   rows of AgentSchedulePopover.tsx). Semantic tokens only: both themes. */
+
+/* The When… composer is taller than a line: give the popover the room. */
+.ss-dropdown__menu.agent-schedule:has(.agent-when) {
+  max-height: min(760px, calc(100vh - var(--spacing-2xl) * 3));
+}
+
+.agent-schedule__mode {
+  display: flex;
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-sm) 0;
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+/* The mode switch sits where the composer's top rule was. */
+.agent-schedule__mode + .agent-schedule__composer {
+  margin-top: 0;
+  border-top: none;
+}
+
+.agent-when {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-tight);
+}
+
+.agent-when__sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+/* A choice with a second line saying how it's checked and what it costs. */
+.agent-when__source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: var(--border-width-default) solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--transition-interaction),
+    border-color var(--transition-interaction);
+}
+
+.agent-when__source:hover {
+  background: var(--tint-subtle);
+}
+
+.agent-when__source:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.agent-when__source[aria-checked='true'] {
+  border-color: var(--border-strong);
+  background: var(--tint-subtle);
+  color: var(--text-primary);
+}
+
+.agent-when__source-label {
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+}
+
+.agent-when__source-how {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-when__every {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.agent-when__every-label {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-when__cost {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+}
+
+.agent-when__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-xs);
+}
+
+/* A row: what it waits for (the note's place), then what it does. */
+.agent-when__then {
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-when__spent,
+.agent-when__checked {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-when__checked {
+  color: var(--text-secondary);
+}
+
+/* The read-back can be long (a folder path, a check in your words): it wraps here. */
+.agent-when .agent-schedule__readback {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

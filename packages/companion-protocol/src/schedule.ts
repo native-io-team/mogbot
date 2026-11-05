@@ -5,7 +5,7 @@
  * (which re-exports them) so both clients word a schedule the same way.
  */
 
-import type { CheckIn, CheckInRun, Repeat } from './model';
+import type { CheckIn, CheckInRun, Repeat, Watch, WatchSource } from './model';
 
 /** What a scheduled run came to, in a few words. */
 export function describeRun(run: CheckInRun, now = Date.now()): string {
@@ -364,4 +364,100 @@ export function routineEcho(w: RoutineWhen, note: string, now = Date.now(), time
 /** A once that's already past can't run: the picker says so before the Mac has to. */
 export function routineInPast(w: RoutineWhen, now = Date.now(), timeZone?: string): boolean {
   return w.kind === 'once' && localTs(w.date, w.hour, w.minute, timeZone) <= now;
+}
+
+/* ------------------------------------------------- "When…" routines */
+
+/** What it waits for, after "When": mirrors `watch::describe`. */
+export function describeWatchSource(source: WatchSource): string {
+  switch (source.kind) {
+    case 'github_mentions':
+      return 'someone mentions you on GitHub';
+    case 'github_assigned':
+      return 'an issue or pull request is assigned to you on GitHub';
+    case 'linear_assigned':
+      return 'a Linear issue is assigned to you';
+    case 'new_file':
+      return `a new file appears in ${source.folder}`;
+    case 'custom':
+      return source.check.trim().replace(/\.$/, '');
+    default:
+      return 'something this version of the app doesn’t know';
+  }
+}
+
+/** "When someone mentions you on GitHub". */
+export function describeWatchTitle(source: WatchSource): string {
+  return `When ${describeWatchSource(source)}`;
+}
+
+/** Whether each check is a Claude Code call (a connector), not a free CLI call. */
+export function watchUsesModel(source: WatchSource): boolean {
+  return source.kind === 'linear_assigned' || source.kind === 'custom';
+}
+
+/** "every 10 min", "every hour". */
+export function describeEvery(minutes: number): string {
+  if (minutes === 1) return 'every minute';
+  if (minutes < 60 || minutes % 60 !== 0) return `every ${minutes} min`;
+  return minutes === 60 ? 'every hour' : `every ${minutes / 60} hours`;
+}
+
+/** Model checks a routine makes in a day, at most, unless it says otherwise (`watch::DEFAULT_MAX_CHECKS_PER_DAY`). */
+export const DEFAULT_MAX_CHECKS_PER_DAY = 24;
+
+/** A local day, as `watch::DayChecks::day` writes it. */
+function dayKey(ts: number): string {
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** It has made today's model checks: none more until tomorrow. */
+export function watchCappedToday(w: Watch, now = Date.now()): boolean {
+  const cap = w.maxChecksPerDay ?? DEFAULT_MAX_CHECKS_PER_DAY;
+  return !!w.dayChecks && w.dayChecks.day === dayKey(now) && w.dayChecks.checks >= cap;
+}
+
+/** "3 min ago", "just now": how long since a check, for a row. */
+function ago(ts: number, now: number): string {
+  const min = Math.round((now - ts) / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  return formatWhen(ts, now);
+}
+
+/**
+ * A "When…" row's secondary line: how often, then what the last check
+ * found, or why it's paused or failing. Only what the Mac recorded.
+ */
+export function describeWatchStatus(c: CheckIn, now = Date.now()): string {
+  const w = c.watch;
+  if (!w) return describeCheckInTime(c, now);
+  const every = `Checks ${describeEvery(w.everyMinutes)}`;
+  if (c.paused) return w.pausedNote ?? `Paused · ${every.toLowerCase()}`;
+  if (c.retry) {
+    return `Didn’t finish · retrying ${formatWhen(c.retry.at, now).replace(/^(Today|Tomorrow)/, (x) => x.toLowerCase())}`;
+  }
+  if (w.failures > 0 && w.lastError) return `Last check failed: ${w.lastError}`;
+  if (watchCappedToday(w, now)) {
+    const cap = w.maxChecksPerDay ?? DEFAULT_MAX_CHECKS_PER_DAY;
+    return `Made today’s ${cap} checks · checks again tomorrow`;
+  }
+  if (w.baselineAt === undefined && w.emptyAnswers)
+    return `${every} · found nothing yet; the next check confirms that before anything starts work`;
+  if (w.baselineAt === undefined)
+    return `${every} · first check soon, to note what’s already there`;
+  const parts = [every];
+  if (w.lastCheckedAt !== undefined) parts.push(`checked ${ago(w.lastCheckedAt, now)}`);
+  if (w.lastFoundAt !== undefined && w.lastFound > 0) {
+    parts.push(
+      `last found ${w.lastFound} ${formatWhen(w.lastFoundAt, now).replace(/^(Today|Tomorrow)/, (x) => x.toLowerCase())}`
+    );
+  } else {
+    parts.push('nothing new yet');
+  }
+  return parts.join(' · ');
 }

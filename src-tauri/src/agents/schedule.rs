@@ -97,6 +97,11 @@ pub struct CheckIn {
     /// A failed run waiting to be tried again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub retry: Option<runs::Retry>,
+    /// A "When…" routine (`agents::watch`): it fires when something
+    /// happens, not at a time. `next_at` is then its next check and
+    /// `repeat` is `None`; the time tick leaves it alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watch: Option<super::watch::Watch>,
     /// What its runs cost, as the engine reported it: only turns that ran
     /// nothing but this routine (`runs::turn_ended`).
     #[serde(default, skip_serializing_if = "super::usage::AgentUsage::is_empty")]
@@ -118,6 +123,10 @@ pub struct CheckInMark {
     /// The user pressed Run now; its schedule didn't move.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub manual: bool,
+    /// A "When…" routine fired: what it found, in a few words ("2 new
+    /// GitHub mentions"). The chat line says this instead of a time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub found: Option<String>,
 }
 
 /* -------------------------------------------------------------- grammar */
@@ -522,7 +531,8 @@ pub enum Due {
 
 /// Whether a check-in is due at `now`, and what happens if so.
 pub fn due<Tz: TimeZone>(tz: &Tz, check_in: &CheckIn, now: i64) -> Option<Due> {
-    if check_in.paused {
+    // A "When…" routine is checked by `agents::watch`, never fired by time.
+    if check_in.paused || check_in.watch.is_some() {
         return None;
     }
     if let Some(retry) = &check_in.retry {
@@ -616,7 +626,9 @@ pub fn plan<Tz: TimeZone>(tz: &Tz, agents: &[store::Agent], now: i64) -> Plan {
                             agent
                                 .check_ins
                                 .iter()
-                                .filter(|c| c.id != check_in.id && c.repeat.is_none())
+                                .filter(|c| {
+                                    c.id != check_in.id && c.repeat.is_none() && c.watch.is_none()
+                                })
                                 .filter(|c| !c.paused && c.retry.is_none())
                                 .filter(|c| now - c.next_at > LATE_AFTER_MS)
                                 .cloned()
@@ -812,6 +824,7 @@ where
         paused_on_import: false,
         runs: Vec::new(),
         retry: None,
+        watch: None,
         usage: Default::default(),
         extra: Default::default(),
     };
@@ -848,7 +861,11 @@ where
 }
 
 /// Two entries that would do the same thing at the same times.
-fn same_schedule(a: &CheckIn, b: &CheckIn) -> bool {
+pub(crate) fn same_schedule(a: &CheckIn, b: &CheckIn) -> bool {
+    let source = |c: &CheckIn| c.watch.as_ref().map(|w| w.source.clone());
+    if a.watch.is_some() || b.watch.is_some() {
+        return a.note == b.note && source(a) == source(b);
+    }
     a.note == b.note && a.repeat == b.repeat && (a.repeat.is_some() || a.next_at == b.next_at)
 }
 
@@ -884,6 +901,12 @@ fn edit_in<Tz: TimeZone>(
             return;
         };
         let current = agent.check_ins[i].clone();
+        if current.watch.is_some() && schedule.is_some() {
+            outcome = Err(CommandError::expected(
+                "That routine starts when something happens, not at a time. Change what it waits for in its When… settings.",
+            ));
+            return;
+        }
         let edited = match &schedule {
             Some((repeat, next_at)) => CheckIn {
                 note: note.to_string(),
@@ -918,7 +941,21 @@ fn edit_in<Tz: TimeZone>(
 /// Fire one now, as a normal wake, without touching its next time. A
 /// one-time check-in stays scheduled too: this is a rehearsal, not a skip.
 pub fn run_now(app: &AppHandle, agent_id: &str, id: &str) -> Result<(), CommandError> {
-    let firing = manual_firing(&store::get(agent_id)?, id)?;
+    let agent = store::get(agent_id)?;
+    if agent
+        .check_ins
+        .iter()
+        .any(|c| c.id == id && c.watch.is_some())
+    {
+        // "Run now" on a "When…" routine is "Check now": it runs only if
+        // something new is there.
+        let (app, agent_id, id) = (app.clone(), agent_id.to_string(), id.to_string());
+        tauri::async_runtime::spawn(async move {
+            let _ = super::watch::check_now(&app, &agent_id, &id).await;
+        });
+        return Ok(());
+    }
+    let firing = manual_firing(&agent, id)?;
     let now = store::now_ms();
     store::update(agent_id, |a| {
         if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == id) {
@@ -969,9 +1006,10 @@ pub fn list_text(agent: &store::Agent) -> String {
         .check_ins
         .iter()
         .map(|c| {
-            let when = match &c.repeat {
-                Some(r) => format!("{}, next {}", describe(r), format_time(&tz, c.next_at)),
-                None => format_time(&tz, c.next_at),
+            let when = match (&c.watch, &c.repeat) {
+                (Some(w), _) => super::watch::list_line(w),
+                (None, Some(r)) => format!("{}, next {}", describe(r), format_time(&tz, c.next_at)),
+                (None, None) => format_time(&tz, c.next_at),
             };
             let paused = match (c.paused, c.paused_on_import) {
                 (true, true) => " [paused by the import, until the user turns it on]",
@@ -1009,7 +1047,14 @@ pub fn set_paused(agent_id: &str, id: &str, paused: bool) -> Result<(), CommandE
     store::update(agent_id, |agent| {
         if let Some(c) = agent.check_ins.iter_mut().find(|c| c.id == id) {
             found = true;
-            if c.paused && !paused && c.next_at <= now {
+            if c.watch.is_some() {
+                if c.paused && !paused {
+                    if let Some(w) = c.watch.as_mut() {
+                        super::watch::resumed(w);
+                    }
+                    c.next_at = now;
+                }
+            } else if c.paused && !paused && c.next_at <= now {
                 if let Some(r) = &c.repeat {
                     if let Some(next) = advance(&tz, r, c.next_at, now) {
                         c.next_at = next;
@@ -1182,6 +1227,7 @@ where
         late: firing.late,
         repeats: firing.check_in.repeat.is_some(),
         manual: firing.manual,
+        found: None,
     });
     // Wake first, then record the line: recorded during the turn, it goes
     // through `runner::record` like a reply (a `wants_user` kind), so the
@@ -1500,6 +1546,7 @@ mod tests {
             paused_on_import: false,
             runs: Vec::new(),
             retry: None,
+            watch: None,
             usage: Default::default(),
             extra: Default::default(),
         }
@@ -1798,6 +1845,7 @@ mod tests {
             late: false,
             repeats: true,
             manual: false,
+            found: None,
         };
         assert!(!serde_json::to_string(&mark).unwrap().contains("manual"));
     }

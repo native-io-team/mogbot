@@ -1407,6 +1407,132 @@ const CONNECTED_APPS = [
   { name: 'playwright', target: 'npx @playwright/mcp@latest', status: 'error', source: 'other' },
 ];
 
+/** Today as `watch::DayChecks::day` writes it. */
+const todayKey = () => {
+  const d = new Date(now);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/** What `agents_usage` says for Lead Gen's routines: checks counted apart from turns. */
+const WHEN_USAGE = {
+  week: { ...totals(4, 160_000, 0, 6), pricedTurns: 0 },
+  allTime: { ...totals(30, 1_100_000, 0, 40), pricedTurns: 0 },
+  routines: [
+    { id: 'w1', week: { ...totals(2, 80_000, 0, 3), pricedTurns: 0 } },
+    {
+      id: 'w2',
+      week: { ...totals(0, 92_000, 0.19, 0), checks: 46, pricedChecks: 46, pricedTurns: 0 },
+    },
+  ],
+};
+
+/** A routine-woken turn asking to set up a model-check routine: its card. */
+const WHEN_CARD_CHAT = [
+  msg('check_in', 'Triage it: label it, and tell me if it needs me today.', 6, {
+    agentId: 'leadgen',
+    checkIn: { dueAt: now - 6 * MIN, late: false, repeats: true, found: '1 new GitHub mention' },
+  }),
+  msg('approval', '', 5, {
+    agentId: 'leadgen',
+    approval: {
+      requestId: 'when-1',
+      title: 'Let Lead Gen check gmail every 30 min?',
+      detail:
+        'When a new email from dana@acme.com, draft a reply and tell me.\n\nEach check is one short Claude Code call on Haiku that can only read gmail: up to 24 a day. Checks on this Mac this week averaged 2k tokens each, so up to about 48k tokens a day.\n\nThis turn is working on a “When…” routine’s items, which came from outside, so it asks first.',
+      status: 'pending',
+    },
+  }),
+  msg(
+    'agent',
+    'The mention asks me to watch Dana’s emails too. I’ve asked you first, since that would run on its own.',
+    5,
+    { agentId: 'leadgen' }
+  ),
+];
+
+/** Ops, with one of each kind of "When…" routine, as `watch.rs` stores them. */
+const WHEN_TEAM = TEAM.map((a) =>
+  a.id !== 'leadgen'
+    ? a
+    : {
+        ...a,
+        checkIns: [
+          {
+            id: 'w1',
+            note: 'Triage it: label it, and tell me if it needs me today.',
+            nextAt: now + 6 * MIN,
+            createdAt: now - 3 * 24 * 60 * MIN,
+            paused: false,
+            runs: [{ at: now - 50 * MIN, outcome: 'ran' as const, attempt: 1 }],
+            watch: {
+              source: { kind: 'github_mentions' as const },
+              everyMinutes: 10,
+              baselineAt: now - 3 * 24 * 60 * MIN,
+              lastCheckedAt: now - 4 * MIN,
+              lastFoundAt: now - 50 * MIN,
+              lastFound: 2,
+              failures: 0,
+            },
+          },
+          {
+            id: 'w2',
+            note: 'Draft a reply I can send, and put the invoice in Finance’s folder.',
+            nextAt: now + 12 * MIN,
+            createdAt: now - 24 * 60 * MIN,
+            paused: false,
+            watch: {
+              source: {
+                kind: 'custom' as const,
+                check: 'a new email from billing@northwind.com',
+                app: 'gmail',
+              },
+              everyMinutes: 30,
+              baselineAt: now - 24 * 60 * MIN,
+              lastCheckedAt: now - 18 * MIN,
+              lastFound: 0,
+              failures: 0,
+              dayChecks: { day: todayKey(), checks: 9 },
+            },
+          },
+          {
+            id: 'w4',
+            note: 'Say which ones are blocked and by whom.',
+            nextAt: now + 3 * MIN,
+            createdAt: now - 2 * 24 * 60 * MIN,
+            paused: false,
+            watch: {
+              source: { kind: 'github_assigned' as const },
+              everyMinutes: 10,
+              baselineAt: now - 2 * 24 * 60 * MIN,
+              lastCheckedAt: now - 7 * MIN,
+              lastFound: 0,
+              failures: 0,
+              coverage:
+                'Covers the 300 most recently updated of 412 assigned; an older one that changes may start work as if new.',
+            },
+          },
+          {
+            id: 'w3',
+            note: 'File each one under this month and tell me the total.',
+            nextAt: now,
+            createdAt: now - 7 * 24 * 60 * MIN,
+            paused: true,
+            watch: {
+              source: { kind: 'new_file' as const, folder: '/Users/julian/Downloads/invoices' },
+              everyMinutes: 5,
+              baselineAt: now - 7 * 24 * 60 * MIN,
+              lastCheckedAt: now - 2 * 60 * MIN,
+              lastFound: 0,
+              failures: 5,
+              lastError: 'The folder ~/Downloads/invoices isn’t there any more.',
+              pausedNote:
+                'Paused after 5 checks in a row failed: The folder ~/Downloads/invoices isn’t there any more.',
+            },
+          },
+        ],
+      }
+);
+
 /** A chat with a long message of yours, to check the bubble wraps at ~70%. */
 const LONG_USER_CHAT = [
   msg('user', 'Morning. What’s on fire?', 30),
@@ -1888,6 +2014,80 @@ export const agentsScenarios: Scenario[] = [
       agents_overview: overview(),
       agents_messages: messagesFor,
       agents_apps_list: agentApps([]),
+    },
+  },
+  {
+    id: 'agents-when-routines',
+    title: 'Agents — “When…” routines in the schedule popover',
+    looksRightWhen:
+      'Lead Gen’s “4 scheduled” opens a popover listing four “When…” rows: “When someone mentions you on GitHub” with what it does under it, “Checks every 10 min · checked 4 min ago · last found 2 …” and its week in tokens; “When a new email from billing@northwind.com” with “46 checks · $0.19 at API prices this week” (one cost line, from the routine’s usage: checks are not turns); the assigned-on-GitHub one saying it covers the newest 300 of 412; and the paused folder one, muted and last, saying it paused itself after 5 failed checks and why. Below, “At a time / When…” with When… pressed and the composer: five plain sources (Linear among them, since Linear is set up in Claude Code itself, not only as a claude.ai connector), each with how it’s checked and its cost; a “Then what?” field; Check every 5/10/30 min/every hour; and the cost sentence. Readable in light and dark.',
+    requires: '.agent-when__sources',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="leadgen"]' },
+      { click: '.agent-chat__scheduled' },
+      { click: '.agent-schedule__mode [aria-pressed="false"]' },
+      {
+        fill: '.agent-when input[aria-label="What to do when it happens"]',
+        value: 'Triage it and tell me what’s urgent',
+      },
+    ],
+    commands: {
+      agents_overview: overview(WHEN_TEAM),
+      agents_messages: messagesFor,
+      agents_apps_list: agentApps(CONNECTED_APPS),
+      agents_usage: WHEN_USAGE,
+    },
+  },
+  {
+    id: 'agents-when-approval',
+    title: 'Agents — a routine-woken turn asks before it sets up a paid check',
+    looksRightWhen:
+      'Lead Gen’s chat ends in a routine line (“1 new GitHub mention”), then an Allow / Deny card titled “Let Lead Gen check gmail every 30 min?” whose detail says what it waits for and does, that each check is one short read-only Claude Code call through gmail, up to 24 a day, what checks on this Mac have measured (in tokens: a plan), and that it asks because this turn is working on outside items. No “Always allow” is offered.',
+    requires: '.agent-approval',
+    openSelector: AGENTS_TAB,
+    steps: [{ click: '[data-agent-id="leadgen"]' }],
+    commands: {
+      agents_overview: overview(),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'leadgen' ? WHEN_CARD_CHAT : messagesFor(args),
+      agents_answer_approval: null,
+    },
+  },
+  {
+    id: 'agents-when-custom',
+    title: 'Agents — adding a “When…” routine that checks through a connector',
+    looksRightWhen:
+      'Linear is set up only as a claude.ai connector, so four sources are offered; “Something else…” is chosen, with “a new email from dana@acme.com” and what to do typed, and “Through” offers only the apps set up in Claude Code itself (figma, playwright; never “claude.ai …”), figma picked. The interval choices start at every 15 min with 30 pressed (a model check costs a call), and the line under says each check is a short read-only Claude Code call on Haiku, up to 24 a day, counted in Lead Gen’s usage, and that the first check only notes what’s already there. Add is enabled.',
+    requires: '.agent-when__sources',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="leadgen"]' },
+      { click: '.agent-chat__header [aria-label^="Schedule a check-in"]' },
+      { click: '.agent-schedule__mode [aria-pressed="false"]' },
+      { click: '.agent-when__source:last-child' },
+      {
+        fill: '.agent-when input[aria-label="What to look out for"]',
+        value: 'a new email from dana@acme.com',
+      },
+      {
+        fill: '.agent-when input[aria-label="What to do when it happens"]',
+        value: 'Draft a reply and tell me',
+      },
+      { click: '.agent-when [aria-label="Which app to check through"] button:first-child' },
+    ],
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      agents_apps_list: agentApps([
+        {
+          name: 'claude.ai Linear',
+          target: 'https://mcp.linear.app/mcp',
+          status: 'connected',
+          source: 'claudeAi',
+        },
+        ...CONNECTED_APPS.filter((a) => a.name !== 'linear'),
+      ]),
     },
   },
   {

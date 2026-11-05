@@ -220,13 +220,10 @@ export const MessageRow = memo(function MessageRow({
       // "Started fresh · memory kept", a take-over that closed: something that happened.
       return <Line text={message.text} />;
     case 'check_in':
-      if (!message.work)
-        return (
-          <Line text={`${message.checkIn?.manual ? 'Ran now' : 'Routine'} · ${message.text}`} />
-        );
+      if (!message.work) return <Line text={checkInText(message)} />;
       return (
         <View style={styles.agentRow}>
-          <Line text={`${message.checkIn?.manual ? 'Ran now' : 'Routine'} · ${message.text}`} />
+          <Line text={checkInText(message)} />
           <WorkLine message={message} work={message.work} onError={onError} />
         </View>
       );
@@ -374,6 +371,13 @@ function SessionCard({
       )}
     </Card>
   );
+}
+
+/** A routine's line: what found it (a "When…" routine), or that it ran by hand. */
+function checkInText(message: AgentMessage): string {
+  const c = message.checkIn;
+  const what = c?.manual ? 'Ran now' : c?.found ? `Routine · ${c.found}` : 'Routine';
+  return `${what} · ${message.text}`;
 }
 
 /** Notes, check-ins, delegation and session lines: one muted line each. A change opens its diff. */

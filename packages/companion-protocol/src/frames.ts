@@ -158,6 +158,8 @@ export interface WelcomeFrame {
 export const MAC_FEATURES = {
   /** `agents.send` takes `revises`: a result card's "Ask for changes". */
   reviseResults: 'results.revise',
+  /** Agents carry their "When…" routines as `watches`, shown read-only. */
+  whenRoutines: 'routines.when',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

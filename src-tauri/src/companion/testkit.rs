@@ -36,6 +36,33 @@ where
     typed
 }
 
+/// One of each kind of check-in and routine, "When…" ones included.
+fn check_ins() -> Value {
+    json!([
+        { "id": "c1", "note": "Check the invoices", "repeat": { "kind": "days", "days": [1, 3], "hour": 9, "minute": 30 }, "nextAt": 1_762_300_000_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": false,
+          "runs": [
+              { "at": 1_762_100_000_000_i64, "outcome": "ran", "attempt": 1, "manual": true },
+              { "at": 1_762_150_000_000_i64, "outcome": "failed", "attempt": 3, "detail": "Claude Code is signed out.", "signIn": ["Gmail"] },
+              { "at": 1_762_200_000_000_i64, "outcome": "retrying", "attempt": 1, "detail": "Usage limit", "retryAt": 1_762_201_800_000_i64 },
+              { "at": 1_762_250_000_000_i64, "outcome": "running", "attempt": 2 },
+              { "at": 1_762_260_000_000_i64, "outcome": "unknown", "attempt": 1 }
+          ],
+          "retry": { "at": 1_762_201_800_000_i64, "attempts": 1, "firstFailedAt": 1_762_200_000_000_i64, "dueAt": 1_762_200_000_000_i64 } },
+        { "id": "c2", "note": "Look at the queue", "repeat": { "kind": "every", "minutes": 60 }, "nextAt": 1_762_300_000_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": true },
+        { "id": "c3", "note": "Remind me about the VAT return", "nextAt": 1_762_400_000_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": false },
+        { "id": "c4", "note": "File it under this month", "nextAt": 1_762_300_600_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": true,
+          "runs": [{ "at": 1_762_250_000_000_i64, "outcome": "ran", "attempt": 1 }],
+          "watch": { "source": { "kind": "custom", "check": "a new invoice email from Northwind", "app": "gmail" }, "everyMinutes": 15,
+                     "seen": ["msg-1", "msg-2"], "baselineAt": 1_762_200_000_000_i64, "lastCheckedAt": 1_762_290_000_000_i64,
+                     "lastFoundAt": 1_762_250_000_000_i64, "lastFound": 1, "failures": 5, "lastError": "Gmail needs signing in again.",
+                     "pending": [{ "id": "msg-2", "title": "Invoice #1182", "detail": "From billing@northwind.example", "url": "https://mail.google.com/mail/u/0/#inbox/msg-2" }],
+                     "pausedNote": "Paused after 5 checks in a row failed: Gmail needs signing in again.",
+                     "dayChecks": { "day": "2025-11-04", "checks": 3 } } },
+        { "id": "c5", "note": "Triage it", "nextAt": 1_762_300_600_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": false,
+          "watch": { "source": { "kind": "new_file", "folder": "/Users/julian/Downloads/invoices" }, "everyMinutes": 1, "lastFound": 0, "failures": 0 } }
+    ])
+}
+
 /// Every optional field of an agent set, as stored (no live status).
 pub fn stored_agent() -> Agent {
     round_trip(
@@ -58,19 +85,7 @@ pub fn stored_agent() -> Agent {
             "model": "opus",
             "context": { "used": 30_099, "window": 200_000, "at": 1_762_290_000_000_i64 },
             "muted": false,
-            "checkIns": [
-                { "id": "c1", "note": "Check the invoices", "repeat": { "kind": "days", "days": [1, 3], "hour": 9, "minute": 30 }, "nextAt": 1_762_300_000_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": false,
-                  "runs": [
-                      { "at": 1_762_100_000_000_i64, "outcome": "ran", "attempt": 1, "manual": true },
-                      { "at": 1_762_150_000_000_i64, "outcome": "failed", "attempt": 3, "detail": "Claude Code is signed out.", "signIn": ["Gmail"] },
-                      { "at": 1_762_200_000_000_i64, "outcome": "retrying", "attempt": 1, "detail": "Usage limit", "retryAt": 1_762_201_800_000_i64 },
-                      { "at": 1_762_250_000_000_i64, "outcome": "running", "attempt": 2 },
-                      { "at": 1_762_260_000_000_i64, "outcome": "unknown", "attempt": 1 }
-                  ],
-                  "retry": { "at": 1_762_201_800_000_i64, "attempts": 1, "firstFailedAt": 1_762_200_000_000_i64, "dueAt": 1_762_200_000_000_i64 } },
-                { "id": "c2", "note": "Look at the queue", "repeat": { "kind": "every", "minutes": 60 }, "nextAt": 1_762_300_000_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": true },
-                { "id": "c3", "note": "Remind me about the VAT return", "nextAt": 1_762_400_000_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": false }
-            ],
+            "checkIns": check_ins(),
             "permissions": [
                 { "id": "r1", "kind": "command_prefix", "value": "npm test", "label": "npm test", "createdAt": 1_762_200_000_000_i64 },
                 { "id": "r2", "kind": "command", "value": "git status", "label": "git status", "createdAt": 1_762_200_000_000_i64 },
@@ -121,7 +136,7 @@ pub fn messages() -> Vec<AgentMessage> {
         json!({ "id": "m09", "agentId": AGENT, "ts": at(9), "kind": "error", "text": "Claude Code is signed out.", "failure": { "kind": "signed_out" } }),
         json!({ "id": "m10", "agentId": AGENT, "ts": at(10), "kind": "error", "text": "Something broke.", "failure": { "kind": "other" } }),
         json!({ "id": "m11", "agentId": AGENT, "ts": at(11), "kind": "check_in", "text": "Check the invoices",
-                "checkIn": { "dueAt": at(0), "late": true, "repeats": true, "manual": true } }),
+                "checkIn": { "dueAt": at(0), "late": true, "repeats": true, "manual": true, "found": "2 new GitHub mentions" } }),
         json!({ "id": "m12", "agentId": AGENT, "ts": at(12), "kind": "note", "text": "Allowed automatically: git status · Always allowed",
                 "approval": { "requestId": "q5", "title": "Run a command", "detail": "git status", "status": "allowed",
                               "always": { "kind": "command", "value": "git status", "label": "git status" }, "alwaysAllowed": true } }),
@@ -954,6 +969,7 @@ impl Backend for Stub {
                     paused_on_import: false,
                     runs: Vec::new(),
                     retry: None,
+                    watch: None,
                     usage: Default::default(),
                     extra: Default::default(),
                 })

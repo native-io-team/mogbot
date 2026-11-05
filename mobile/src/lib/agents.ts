@@ -214,13 +214,23 @@ export function describeScope(scope: PermissionScope, agentName: string, revocab
  * isn't the bill, so its tokens instead.
  */
 export function usageLine(t: UsageTotals, onPlan = false): string {
-  if (!t.turns) return 'Nothing yet';
+  const checks = t.checks ?? 0;
+  if (!t.turns && !checks) return 'Nothing yet';
+  const units = t.turns + checks;
+  const priced = t.pricedTurns + (t.pricedChecks ?? 0);
   const cost = onPlan
     ? tokenCount(t)
-    : t.pricedTurns > 0
-      ? `${apiPrice(t.costUsd)}${t.pricedTurns < t.turns ? ` for ${t.pricedTurns} of them` : ''}`
+    : priced > 0
+      ? `${apiPrice(t.costUsd)}${priced < units ? ` for ${priced} of them` : ''}`
       : null;
-  return [`${t.turns} message${t.turns === 1 ? '' : 's'}`, cost].filter(Boolean).join(' · ');
+  return [
+    t.turns ? `${t.turns} message${t.turns === 1 ? '' : 's'}` : null,
+    // "When…" routines' checks: not messages, said apart.
+    checks ? `${checks} check${checks === 1 ? '' : 's'}` : null,
+    cost,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 export function formatClock(ts: number): string {

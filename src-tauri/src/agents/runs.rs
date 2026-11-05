@@ -251,6 +251,12 @@ pub fn settle(
         .first()
         .map(|c| short(&c.note, 48))
         .unwrap_or_default();
+    // What it was, in the alert's first words.
+    let what = if ticket.check_ins.first().is_some_and(|c| c.watch.is_some()) {
+        "“When…” routine"
+    } else {
+        "Scheduled"
+    };
     let mut reason = short(detail, 160);
     if !reason.ends_with(['.', '!', '?', '…']) {
         reason.push('.');
@@ -270,7 +276,7 @@ pub fn settle(
                 }),
                 alert: Some((ticket.attempt == 1).then(|| {
                     format!(
-                        "Scheduled “{name}” didn't run: {reason} Trying again {}.{sign}",
+                        "{what} “{name}” didn't run: {reason} Trying again {}.{sign}",
                         when(at)
                     )
                 })),
@@ -280,10 +286,10 @@ pub fn settle(
             run,
             retry: None,
             alert: Some(Some(if ticket.attempt == 1 {
-                format!("Scheduled “{name}” didn't run: {reason}{sign}")
+                format!("{what} “{name}” didn't run: {reason}{sign}")
             } else {
                 format!(
-                    "Scheduled “{name}” still didn't run after {} tries: {reason}{sign}",
+                    "{what} “{name}” still didn't run after {} tries: {reason}{sign}",
                     ticket.attempt
                 )
             })),
@@ -388,6 +394,12 @@ pub fn turn_ended(
                     Some(c) => {
                         record(&mut c.runs, settled.run.clone());
                         c.retry = settled.retry.clone();
+                        // A "When…" firing settled for good: its items are done with.
+                        if settled.retry.is_none() {
+                            if let Some(w) = c.watch.as_mut() {
+                                w.pending.clear();
+                            }
+                        }
                     }
                     // A one-time check-in left when it fired; it comes back to be retried.
                     None if settled.retry.is_some() && snapshot.repeat.is_none() => {
@@ -408,6 +420,17 @@ pub fn turn_ended(
     let _ = tauri::Emitter::emit(app, super::runner::EVENT_REGISTRY, ());
 }
 
+/// A run cut off by the app quitting.
+pub const APP_CLOSED: &str = "The app closed before it finished.";
+/// A retry that came due while the app was closed.
+pub const APP_NOT_RUNNING: &str = "The app wasn't running when it was due to try again.";
+
+/// A run's failure was the app quitting, not the run failing: it doesn't
+/// count toward a routine pausing itself.
+pub fn is_interruption(detail: &str) -> bool {
+    detail == APP_CLOSED || detail == APP_NOT_RUNNING
+}
+
 /// At launch: a run still marked running was cut off by quitting, and a
 /// routine's retry that came due while closed is dropped, not run late.
 pub fn after_restart(check_ins: &mut [CheckIn], now: i64) -> bool {
@@ -415,10 +438,10 @@ pub fn after_restart(check_ins: &mut [CheckIn], now: i64) -> bool {
     for c in check_ins.iter_mut() {
         for run in c.runs.iter_mut().filter(|r| r.outcome == Outcome::Running) {
             run.outcome = Outcome::Failed;
-            run.detail = Some("The app closed before it finished.".to_string());
+            run.detail = Some(APP_CLOSED.to_string());
             changed = true;
         }
-        let stale = c.repeat.is_some()
+        let stale = (c.repeat.is_some() || c.watch.is_some())
             && c.retry
                 .as_ref()
                 .is_some_and(|r| now - r.at > ROUTINE_GRACE_MS);
@@ -432,8 +455,7 @@ pub fn after_restart(check_ins: &mut [CheckIn], now: i64) -> bool {
             {
                 run.outcome = Outcome::Failed;
                 run.retry_at = None;
-                run.detail =
-                    Some("The app wasn't running when it was due to try again.".to_string());
+                run.detail = Some(APP_NOT_RUNNING.to_string());
             }
             changed = true;
         }

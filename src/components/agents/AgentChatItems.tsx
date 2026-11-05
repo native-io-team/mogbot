@@ -646,6 +646,7 @@ export const CheckInLine = memo(function CheckInLine({
       <span className="agent-peer__line">
         <HistoryIcon size={12} />
         {label}
+        {mark?.found && <span className="agent-checkin__late">· {mark.found}</span>}
         {mark?.manual && <span className="agent-checkin__late">· run now</span>}
         {mark?.late && (
           <span className="agent-checkin__late">· late, was due {formatWhen(mark.dueAt)}</span>
