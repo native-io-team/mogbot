@@ -642,6 +642,70 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Checking on the team",
             "check on the team",
         ),
+        // Real chats showed a run of "Used a tool" after "Checked on the
+        // team": the Chief reading each agent's chat in turn.
+        "read_agent" => {
+            let n = named("agent", "an agent");
+            act(
+                StepKind::Read,
+                format!("Caught up on {n}'s chat"),
+                format!("Catching up on {n}'s chat"),
+                format!("catch up on {n}'s chat"),
+            )
+        }
+        "team_requests" => act(
+            StepKind::Message,
+            "Looked at what the team is asking for",
+            "Looking at what the team is asking for",
+            "look at what the team is asking for",
+        ),
+        "answer_request" => {
+            let n = named("agent", "an agent");
+            act(
+                StepKind::Message,
+                format!("Answered a request from {n}"),
+                format!("Answering a request from {n}"),
+                format!("answer a request from {n}"),
+            )
+        }
+        "bring_to_user" => act(
+            StepKind::Message,
+            "Brought a request to you",
+            "Bringing a request to you",
+            "bring a request to you",
+        ),
+        "pause_agent" | "resume_agent" => {
+            let n = named("agent", "an agent");
+            let (done, doing, to) = if tool == "pause_agent" {
+                ("Paused", "Pausing", "pause")
+            } else {
+                ("Resumed", "Resuming", "resume")
+            };
+            act(
+                StepKind::Delegate,
+                format!("{done} {n}"),
+                format!("{doing} {n}"),
+                format!("{to} {n}"),
+            )
+        }
+        "request_login" => act(
+            StepKind::Message,
+            "Asked you to sign in",
+            "Asking you to sign in",
+            "ask you to sign in",
+        ),
+        "remember_browser_account" => act(
+            StepKind::Web,
+            "Noted which account the browser uses",
+            "Noting which account the browser uses",
+            "note which account the browser uses",
+        ),
+        "ask_bring_browser_to_front" => act(
+            StepKind::Web,
+            "Asked to bring the browser to the front",
+            "Asking to bring the browser to the front",
+            "bring the browser to the front",
+        ),
         "share_file" => act(
             StepKind::Message,
             "Shared a file",
@@ -844,6 +908,12 @@ const WRAPPERS: [&str; 8] = [
 const SETUP: [&str; 9] = [
     "cd", "export", "set", "source", ".", "pushd", "popd", "true", "unset",
 ];
+/// Shell words that lead into the command that runs: `do gh pr view`.
+const SHELL_LEADS: [&str; 4] = ["do", "then", "else", "!"];
+/// Shell words that start or end a block rather than run anything.
+const SHELL_CONTROL: [&str; 11] = [
+    "for", "while", "until", "if", "elif", "case", "select", "done", "fi", "esac", "[",
+];
 /// Programs whose first argument says what they do ("git push", "npm test").
 const WITH_SUBCOMMANDS: [&str; 34] = [
     "git",
@@ -888,24 +958,32 @@ const WITH_SUBCOMMANDS: [&str; 34] = [
 /// the timeline doesn't need them. `None` when no program is plain enough
 /// to show.
 pub fn command_words(command: &str) -> Option<String> {
-    let line = command
+    // Every line: a loop's body is often on the lines after its header.
+    let segments = command
         .lines()
         .map(str::trim)
-        .find(|l| !l.is_empty() && !l.starts_with('#'))?;
-    for segment in line
-        .split(['&', '|', ';'])
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .flat_map(|l| l.split(['&', '|', ';']))
         .map(str::trim)
-        .filter(|s| !s.is_empty())
-    {
+        .filter(|s| !s.is_empty());
+    for segment in segments {
         let mut words = segment
             .split_whitespace()
             .map(|w| w.trim_matches(|c: char| "'\"()`{}".contains(c)))
             .filter(|w| !w.is_empty());
-        let program = words
-            .by_ref()
-            .find(|w| !WRAPPERS.contains(w) && !w.starts_with('-') && !is_assignment(w))?;
+        let Some(program) = words.by_ref().find(|w| {
+            !WRAPPERS.contains(w)
+                && !SHELL_LEADS.contains(w)
+                && !w.starts_with('-')
+                && !is_assignment(w)
+                && !redirect_leftover(w)
+        }) else {
+            continue;
+        };
         let program = file_name(program);
-        if SETUP.contains(&program) {
+        // A loop or test header ("for f in …", "if [ … ]") or its closing
+        // word is not what ran: real timelines read "Ran for".
+        if SETUP.contains(&program) || SHELL_CONTROL.contains(&program) {
             continue;
         }
         let plain = program.chars().count() <= 32
@@ -938,6 +1016,11 @@ pub fn command_words(command: &str) -> Option<String> {
         return Some(out);
     }
     None
+}
+
+/// What splitting on `&` leaves of a redirect: the `2>` and `1` of `2>&1`.
+fn redirect_leftover(word: &str) -> bool {
+    word.chars().all(|c| c.is_ascii_digit() || "<>".contains(c))
 }
 
 fn is_assignment(word: &str) -> bool {
@@ -1230,6 +1313,10 @@ struct Live {
     /// The newest step's call, while it's still running.
     running: Option<String>,
     doing: Option<String>,
+    /// Cards this turn the user answered Deny on, not yet matched to the
+    /// refused call they explain. A call refused with none (the card went
+    /// unanswered, or a rule said no) never says "you declined".
+    declined_by_you: u32,
     /// That call in full, for the working line ([`LiveCall`]).
     current: Option<Running>,
     /// The engine streams command output as it runs (Codex's app server).
@@ -1390,9 +1477,18 @@ impl Live {
                 return;
             }
             Outcome::Failed => (StepOutcome::Failed, format!("Tried to {ask}")),
+            Outcome::Declined if self.declined_by_you > 0 => {
+                self.declined_by_you -= 1;
+                (
+                    StepOutcome::Declined,
+                    format!("Asked to {ask} — you declined"),
+                )
+            }
+            // Real timelines said "you declined" beside a card nobody had
+            // answered ("Asked for your OK", then set aside or timed out).
             Outcome::Declined => (
                 StepOutcome::Declined,
-                format!("Asked to {ask} — you declined"),
+                format!("Asked to {ask} — it wasn't allowed"),
             ),
         };
         let label = clean(&label);
@@ -1409,10 +1505,13 @@ impl Live {
         };
         let (label, outcome) = match status {
             ApprovalStatus::Allowed => (format!("You allowed: {title}"), None),
-            ApprovalStatus::Denied => (
-                format!("You declined: {title}"),
-                Some(StepOutcome::Declined),
-            ),
+            ApprovalStatus::Denied => {
+                self.declined_by_you = self.declined_by_you.saturating_add(1);
+                (
+                    format!("You declined: {title}"),
+                    Some(StepOutcome::Declined),
+                )
+            }
             ApprovalStatus::Pending | ApprovalStatus::Expired => return,
         };
         let label = clean(&label);
