@@ -342,6 +342,13 @@ pub struct AgentMessage {
     /// failure: quiet, no Retry. (Older builds wrote it as an `error`.)
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub takeover: bool,
+    /// Said in a room (`agents::rooms`), not in this agent's own chat: the
+    /// room's id. On an agent's line it is also copied into the room's log;
+    /// the agent's own chat folds it into one "In <room>" line. On a line
+    /// that only the room has (the user's message, a room note) `agent_id`
+    /// is empty. Older builds show it in the agent's chat as ordinary lines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub room: Option<String>,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -658,6 +665,13 @@ pub struct NewAgent {
     pub is_main: bool,
 }
 
+/// A character that starts a new line where a model reads text, though it
+/// isn't a control character: Unicode's line and paragraph separators
+/// (Zl, Zp).
+pub fn breaks_line(c: char) -> bool {
+    matches!(c, '\u{2028}' | '\u{2029}')
+}
+
 pub fn validate_name(name: &str) -> Result<String, CommandError> {
     let name = name.trim();
     if name.is_empty() {
@@ -667,6 +681,16 @@ pub fn validate_name(name: &str) -> Result<String, CommandError> {
         return Err(super::err_invalid(
             "name",
             "Keep the name under 40 characters.",
+        ));
+    }
+    if name.chars().any(|c| c.is_control() || breaks_line(c)) {
+        return Err(super::err_invalid("name", "Keep the name on one line."));
+    }
+    // "@everyone" in a room means every member (`agents::rooms`).
+    if name.eq_ignore_ascii_case("everyone") {
+        return Err(super::err_invalid(
+            "name",
+            "\"Everyone\" means every member of a room. Pick another name.",
         ));
     }
     Ok(name.to_string())
@@ -872,9 +896,9 @@ pub fn instructions_of(raw: &str) -> String {
 /// avatar and settings as they were there. Refused if the id or the name is
 /// already taken, or it would be a second Chief of Staff. Its home must
 /// already be in place.
-pub fn insert_imported(agent: Agent) -> Result<Agent, CommandError> {
+pub fn insert_imported(mut agent: Agent) -> Result<Agent, CommandError> {
     validate_id(&agent.id)?;
-    validate_name(&agent.name)?;
+    agent.name = validate_name(&agent.name)?;
     let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut registry = read_registry()?;
     if registry.agents.iter().any(|a| a.id == agent.id) {
@@ -918,6 +942,8 @@ pub fn delete(id: &str) -> Result<Agent, CommandError> {
     }
     let removed = registry.agents.remove(index);
     write_registry(&registry)?;
+    // It leaves its rooms; the rooms stay, with what it said in them.
+    super::rooms::forget_agent(&removed.id);
     super::secrets::forget_all(&removed);
     super::work::forget_agent(&removed.id);
     if let Ok(log) = log_path(&removed.id) {
@@ -990,7 +1016,7 @@ impl Answer {
 }
 
 /// Append one JSON line, never fused onto a torn last line.
-fn append_line<T: Serialize>(path: &Path, value: &T) -> Result<(), CommandError> {
+pub(crate) fn append_line<T: Serialize>(path: &Path, value: &T) -> Result<(), CommandError> {
     if let Some(dir) = path.parent() {
         ensure_private_dir(dir).map_err(|e| super::err_io(e.to_string()))?;
     }
@@ -1241,7 +1267,7 @@ fn read_text(path: &Path) -> Result<String, CommandError> {
 /// `enough` is satisfied by what has been read or the log runs out. Opening a
 /// long chat, or paging back through it, costs what it shows, not the whole
 /// history. A torn line is skipped. Answers are not applied here.
-fn read_back(
+pub(crate) fn read_back(
     path: &Path,
     mut enough: impl FnMut(&[AgentMessage]) -> bool,
 ) -> Result<Vec<AgentMessage>, CommandError> {
@@ -1316,7 +1342,7 @@ fn parse_log<'a>(
 }
 
 /// Apply `approvals.jsonl` over the cards among `log`.
-fn apply_answers(agent_id: &str, log: &mut [AgentMessage]) -> Result<(), CommandError> {
+pub(crate) fn apply_answers(agent_id: &str, log: &mut [AgentMessage]) -> Result<(), CommandError> {
     if log.iter().any(|m| m.approval.is_some()) {
         let answers = read_answers(agent_id)?;
         for approval in log.iter_mut().filter_map(|m| m.approval.as_mut()) {
@@ -1730,6 +1756,7 @@ mod tests {
                     result: None,
                     revises: None,
                     takeover: false,
+                    room: None,
                 })
                 .unwrap();
             }
@@ -2005,6 +2032,7 @@ mod tests {
                 result: None,
                 revises: None,
                 takeover: false,
+                room: None,
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -2050,6 +2078,7 @@ mod tests {
             result: None,
             revises: None,
             takeover: false,
+            room: None,
         }
     }
 
@@ -2274,6 +2303,7 @@ mod tests {
                 .chain((1..=4).map(|n| format!("s{n:02}")))
                 .chain((1..=4).map(|n| format!("p{n:02}")))
                 .chain((1..=3).map(|n| format!("r{n:02}")))
+                .chain(["o01".into()])
                 .chain(["m22".into()])
                 .collect();
             assert_eq!(ids, expected, "a line was dropped");
@@ -2356,6 +2386,11 @@ mod tests {
                     ..
                 }
             ));
+            // A line said in a room keeps the room it was said in.
+            assert_eq!(
+                by_id("o01").room.as_deref(),
+                Some("f00dface000040008000000000000001")
+            );
             assert_eq!(messages(CHIEF, 3).unwrap().len(), 3);
 
             // Answering a card and appending leave every existing line as it was.

@@ -151,6 +151,8 @@ inside it.
 - `agents.create` (`name`, `role`, `color` only; idempotent by an optional
   `clientId`; see "Starting things")
 - `projects.list`, `sessions.read|send|key|start`, `preview.screenshot`
+- `rooms.list|messages|send|focus` (a Mac whose `welcome.features` has
+  `rooms`; see "Rooms")
 
 Declared in the package but not served: `agents.delete`, the import
 methods. Pure reads (`READ_ONLY_METHODS`, mirrored in Rust) are not audited.
@@ -471,6 +473,49 @@ sheet, files, a session, the diff and the photo viewer push over them. At
 - **Settings.** The paired Mac, alerts (with their limits), haptics, updates,
   about.
 
+### Rooms
+
+Group conversations of 2–6 agents ([agents.md](agents.md), "Rooms"), on a
+Mac whose `welcome.features` has `rooms` (`roomsOffered`, `lib/rooms.ts`).
+An older Mac, or one without rooms, shows none, and nothing kept from
+before is drawn.
+
+- **Gating, both ways.** The phone says `hello.features: ["rooms"]`. Only
+  then does the Mac send `rooms.changed` (every room, after any change;
+  journaled, latest only) and the lines only a room has: the user's message
+  there and room notes, which carry `room` and an empty `agentId`
+  (`wire::for_app`). A member's own line said in a room carries its
+  `agentId` and `room`, so an older app still gets it, in that agent's chat
+  (as older builds show it).
+- **Store.** A room's thread is a chat under `room:<id>` beside the agents'
+  chats, so paging (`rooms.messages`, same `asOf` merge), upserts and the
+  outbox are the chats' own. A member's line goes in both its room and its
+  own chat (`chatKeysOf`), where runs of it fold into one quiet line, "In
+  Month end · 2 messages · 4:12 PM", that opens the room; a card still
+  waiting on you stays whole there too. A reply being written in a room
+  streams in the room, not in the agent's chat.
+- **List.** A **Rooms** section under the agents (most recent first; the
+  agents get their own label once it's there): stacked member badges, the
+  name, "Needs your OK" while a member's card waits, "Ops is replying",
+  else the Mac's preview ("Ops: Filed."), unread as a dot.
+- **Room.** Neutral accent (`AccentProvider color={null}`): no single
+  agent's. The header is the room and its members ("Finance, Ops", or who is
+  replying). Each member's name and badge sit over its first line in a run,
+  in its own colour; the rows are the chat's own `MessageRow`, so approval,
+  secret and session cards answer for the agent that asked (by the line's
+  `agentId`). Your lines are bubbles with "to Finance · Ops" (or "to
+  everyone") under them, from the `mentions` the Mac recorded. Members
+  whose `status.room` is this room show their draft or working line.
+- **Composer.** `@` offers the room's members and `@everyone`, nobody else.
+  Sending settles who answers the way the Mac does (`answerers`: named,
+  everyone, else the lead); with nobody, it asks **Who should answer?** with
+  each member and Everyone, and sends nothing until one is picked. The hint
+  says the lead ("Finance answers unless you @mention someone") or what to
+  do, and while members reply, the turn cap ("3 of 8 replies for this
+  message"). Text only: no attachments or quotes in a room yet. Offline, a
+  room send waits in the outbox like any other (`PendingSend.roomId`).
+- **Search.** A hit with `roomId` groups under its room and opens it.
+
 ### Starting things
 
 The phone can start work as well as answer it. Each piece is gated by
@@ -714,6 +759,13 @@ on a fork's binary. For self-builders, Reinstall is the update.
   clock, and share payloads; `share.test.tsx` the share sheet (a crafted
   `files=` link uploads nothing); `dictation.test.tsx` the mic against a
   fake recognizer, including Android 12 and typing while it listens.
+- **Rooms:** `rooms.test.ts` (routing, gating, store keys, folding, the
+  room's list), `roomView.test.tsx` (the thread, the @ menu, "Who should
+  answer?"), `roomsList.test.tsx` (the section only from a Mac with rooms);
+  server: `companion::server::tests::rooms_reach_only_phones_that_show_them`
+  and `wire::tests::an_app_without_rooms_gets_no_room_events_or_room_only_lines`.
+  The mock Mac has two rooms (Launch, led by the Chief; Month end, no lead)
+  whose members reply in turn.
 - **Server:** `cargo test --lib companion::` (including the fixture drift
   check); **relay:** `pnpm test` in `services/push-relay`.
 
@@ -776,3 +828,7 @@ the share extension, the camera, real keyboard behaviour).
   tried on a device, and dictation's recognizer has only been exercised
   against a fake in tests, not on a phone.
 - Verification on Android hardware.
+- Rooms on the phone: creating, renaming, muting or deleting one, changing
+  its members or lead, Stop for a room, attachments in a room, and opening a
+  room's search hit at the line. All are done on the Mac. Room screens have
+  not been looked at on a simulator or device yet (only rendered in tests).

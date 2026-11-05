@@ -59,6 +59,7 @@ import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './ch
 import { Composer } from './Composer';
 import { LinkProblem } from './ConnectionPill';
 import { Line } from './surfaces';
+import { RoomFoldRow } from './RoomRow';
 import { PathContext } from './Markdown';
 import { PaneContext, type Pane } from './ApprovalCard';
 import { showActions } from './menu';
@@ -640,6 +641,8 @@ function ItemView({
       <PendingRow pending={item.pending} />
     ) : item.kind === 'draft' ? (
       <DraftRow id={item.key} text={item.text} onHeight={onDraftHeight} />
+    ) : item.kind === 'room' ? (
+      <RoomFoldRow fold={item.fold} />
     ) : (
       <WorkingRow label={item.label} agent={agent} onError={onError} />
     );

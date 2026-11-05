@@ -846,6 +846,7 @@ async fn a_running_turns_steps_go_only_to_phones_that_show_them() {
         activity: Some("Running npm test".into()),
         since: Some(1),
         work: Some(crate::companion::testkit::live_work()),
+        room: None,
     })
     .unwrap();
     c.hub.publish(crate::companion::wire::Event::Status {
@@ -864,6 +865,117 @@ async fn a_running_turns_steps_go_only_to_phones_that_show_them() {
     // The overview never carries them: they'd go out on every registry change.
     let overview = crate::companion::testkit::overview();
     assert!(overview["agents"][0]["status"].get("work").is_none());
+}
+
+/// Rooms go only to phones that said they show them; the methods work for
+/// any phone, route as the desk does, and retry by clientId.
+#[tokio::test]
+async fn rooms_reach_only_phones_that_show_them() {
+    use crate::companion::testkit::ROOM;
+    use crate::companion::wire::Event;
+    let (c, stub) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
+    let (mut old, welcome, ..) = open(port, &token, None).await;
+    assert!(
+        welcome["features"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("rooms")),
+        "{welcome}"
+    );
+    assert!(welcome["methods"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("rooms.send")));
+    let mut ws = connect(port).await;
+    let mut h = hello(&token, None);
+    h["features"] = json!(["work.live", "rooms"]);
+    send(&mut ws, h).await;
+    loop {
+        let f = next(&mut ws).await;
+        if f["event"]["type"] == "sync.caughtUp" {
+            break;
+        }
+    }
+
+    // The list, and a page of the thread with its user line (no agent).
+    let (_, list) = call(&mut ws, 1, "rooms.list", json!({})).await;
+    assert_eq!(list["result"][0]["id"], ROOM, "{list}");
+    assert_eq!(list["result"][0]["turnCap"], 8);
+    let (_, page) = call(
+        &mut ws,
+        2,
+        "rooms.messages",
+        json!({ "roomId": ROOM, "limit": 2 }),
+    )
+    .await;
+    assert_eq!(page["result"]["more"], true, "{page}");
+    assert_eq!(page["result"]["messages"][1]["id"], "rm5");
+    assert_eq!(page["result"]["messages"][1]["agentId"], "");
+
+    // Nobody named and no lead: refused, nothing said.
+    let (_, who) = call(
+        &mut ws,
+        3,
+        "rooms.send",
+        json!({ "roomId": ROOM, "text": "Status?", "clientId": "rc0" }),
+    )
+    .await;
+    assert_eq!(who["ok"], false, "{who}");
+    assert!(
+        who["error"].to_string().contains("Who should answer"),
+        "{who}"
+    );
+
+    // @everyone: both asked; the room's own line is an event for this phone only.
+    let params = json!({ "roomId": ROOM, "text": "Status?", "clientId": "rc1", "everyone": true });
+    let (events, sent) = call(&mut ws, 4, "rooms.send", params.clone()).await;
+    assert_eq!(
+        sent["result"]["asked"].as_array().unwrap().len(),
+        2,
+        "{sent}"
+    );
+    assert!(
+        events.iter().any(|e| e["event"]["message"]["room"] == ROOM),
+        "{events:?}"
+    );
+    let (_, again) = call(&mut ws, 5, "rooms.send", params).await;
+    assert_eq!(
+        again["result"]["message"]["id"],
+        sent["result"]["message"]["id"]
+    );
+    assert_eq!(
+        stub.sends.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "retried once"
+    );
+
+    // A rooms event and a member's room line: the old phone gets only the line.
+    c.hub.publish(Event::Rooms { rooms: json!([]) });
+    c.hub.publish(Event::Message {
+        message: json!({ "id": "rm9", "agentId": AGENT, "room": ROOM, "ts": 1, "kind": "agent", "text": "Done" }),
+    });
+    let first = next(&mut old).await;
+    assert_eq!(
+        first["event"]["message"]["id"], "rm9",
+        "the user's room line and rooms.changed skipped: {first}"
+    );
+    let r = next(&mut ws).await;
+    assert_eq!(r["event"]["type"], "rooms.changed", "{r}");
+
+    // Focus is the socket's, as "room:<id>".
+    let (_, focused) = call(&mut ws, 6, "rooms.focus", json!({ "roomId": ROOM })).await;
+    assert_eq!(focused["ok"], true);
+    assert!(stub
+        .focus
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(_, id)| id.as_deref() == Some("room:r1")));
 }
 
 // ============================================================================

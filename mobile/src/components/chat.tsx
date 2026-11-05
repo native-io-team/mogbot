@@ -19,7 +19,7 @@ import { useRouter } from 'expo-router';
 import { engineName, failureLine, folderName, formatClock, sessionLabel } from '../lib/agents';
 import { drivenWait } from '../lib/bars';
 import { haptic } from '../lib/haptics';
-import { discardPending, editPending, send } from '../lib/session';
+import { discardPending, editPending, resend } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
 import { avatarSize, composer, fonts, iconSize, space, type } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -637,14 +637,7 @@ export function PendingRow({ pending }: { pending: PendingSend }) {
                 label="Send"
                 onPress={() => {
                   haptic.light();
-                  void send(
-                    pending.agentId,
-                    pending.text,
-                    false,
-                    pending.clientId,
-                    pending.attachments,
-                    pending.mentions
-                  ).catch(() => {});
+                  void resend(pending).catch(() => {});
                 }}
               />
             )

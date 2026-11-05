@@ -328,8 +328,35 @@ pub const MAC_FEATURE_REVISE_RESULTS: &str = "results.revise";
 /// (`agents/watch.rs`), which the phone shows read-only.
 pub const MAC_FEATURE_WHEN_ROUTINES: &str = "routines.when";
 
+/// `hello.features`: the app shows rooms, so it gets `rooms.changed` and the
+/// lines only a room has (an empty `agentId`).
+pub const FEATURE_ROOMS: &str = "rooms";
+
+/// `welcome.features`: the `rooms.*` methods and `rooms.changed`.
+pub const MAC_FEATURE_ROOMS: &str = "rooms";
+
 /// Everything `welcome.features` lists.
-pub const MAC_FEATURES: &[&str] = &[MAC_FEATURE_REVISE_RESULTS, MAC_FEATURE_WHEN_ROUTINES];
+pub const MAC_FEATURES: &[&str] = &[
+    MAC_FEATURE_REVISE_RESULTS,
+    MAC_FEATURE_WHEN_ROUTINES,
+    MAC_FEATURE_ROOMS,
+];
+
+/// What one connected app said it shows (`hello.features`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Shows {
+    pub live_work: bool,
+    pub rooms: bool,
+}
+
+impl Shows {
+    pub fn from_hello(features: &[String]) -> Self {
+        Shows {
+            live_work: features.iter().any(|f| f == FEATURE_LIVE_WORK),
+            rooms: features.iter().any(|f| f == FEATURE_ROOMS),
+        }
+    }
+}
 
 /// Phone → Mac. Unknown frame types are ignored, as the protocol promises.
 #[derive(Debug, Clone, Deserialize)]
@@ -521,6 +548,9 @@ pub enum Event {
     Status { agent_id: String, status: Value },
     #[serde(rename = "agents.registry")]
     Registry { overview: Value },
+    /// Every room, after any change (`agents://rooms`).
+    #[serde(rename = "rooms.changed")]
+    Rooms { rooms: Value },
     #[serde(rename = "system.status")]
     System { status: MacStatus },
     #[serde(rename = "projects.changed")]
@@ -611,6 +641,64 @@ pub fn without_live_work(mut event: Event) -> Event {
     event
 }
 
+/// A line only a room has: the user's message there, or a room note. It
+/// names no agent, so an app without rooms would have nowhere to put it.
+pub fn is_room_only(message: &Value) -> bool {
+    message.get("room").is_some_and(|r| !r.is_null())
+        && message
+            .get("agentId")
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
+}
+
+/// `agents.search`'s hits for one app. One that doesn't show rooms gets no
+/// room-only hit (the user's own line there has no agent to open), and a
+/// member's line said in a room as a hit in that agent's chat, where an
+/// older app shows it.
+pub fn search_for_app(hits: serde_json::Value, shows: Shows) -> serde_json::Value {
+    if shows.rooms {
+        return hits;
+    }
+    let serde_json::Value::Array(hits) = hits else {
+        return hits;
+    };
+    hits.into_iter()
+        .filter_map(|mut hit| {
+            let Some(o) = hit.as_object_mut() else {
+                return Some(hit);
+            };
+            if o.remove("roomId").is_some() {
+                o.remove("roomName");
+                let speaker = o.get("agentId").and_then(|v| v.as_str()).unwrap_or("");
+                if speaker.is_empty() {
+                    return None;
+                }
+            }
+            Some(hit)
+        })
+        .collect::<Vec<_>>()
+        .into()
+}
+
+/// An event as this app gets it, or `None` when it wouldn't show it: rooms
+/// (and their room-only lines) only to an app that said it shows rooms; a
+/// running turn's steps only to one that shows those. A member's own line
+/// said in a room still reaches an older app, in that agent's chat.
+pub fn for_app(event: Event, shows: Shows) -> Option<Event> {
+    if !shows.rooms {
+        match &event {
+            Event::Rooms { .. } => return None,
+            Event::Message { message } if is_room_only(message) => return None,
+            _ => {}
+        }
+    }
+    Some(if shows.live_work {
+        event
+    } else {
+        without_live_work(event)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -627,6 +715,59 @@ mod tests {
             shown["agents"][0]["takeover"],
             serde_json::json!({ "since": 5, "cli": "claude-code", "project": "/p" })
         );
+    }
+
+    #[test]
+    fn an_app_without_rooms_gets_no_room_events_or_room_only_lines() {
+        let old = Shows {
+            live_work: true,
+            rooms: false,
+        };
+        let new = Shows {
+            live_work: true,
+            rooms: true,
+        };
+        let rooms = Event::Rooms {
+            rooms: serde_json::json!([]),
+        };
+        assert_eq!(for_app(rooms.clone(), old), None);
+        assert_eq!(for_app(rooms.clone(), new), Some(rooms));
+        let users_line = Event::Message {
+            message: serde_json::json!({"id": "m1", "agentId": "", "room": "r1", "kind": "user"}),
+        };
+        assert_eq!(for_app(users_line.clone(), old), None);
+        assert!(for_app(users_line, new).is_some());
+        // A member's reply in a room still shows in its own chat on an older app.
+        let reply = Event::Message {
+            message: serde_json::json!({"id": "m2", "agentId": "a1", "room": "r1", "kind": "agent"}),
+        };
+        assert!(for_app(reply, old).is_some());
+        assert_eq!(
+            Shows::from_hello(&["rooms".into(), "work.live".into()]),
+            new
+        );
+    }
+
+    #[test]
+    fn an_app_without_rooms_gets_no_room_only_search_hits() {
+        let hits = serde_json::json!([
+            { "agentId": "a1", "messageId": "m1", "snippet": "own" },
+            { "agentId": "", "messageId": "m2", "roomId": "r1", "roomName": "Launch" },
+            { "agentId": "a2", "messageId": "m3", "roomId": "r1", "roomName": "Launch" }
+        ]);
+        let old = search_for_app(hits.clone(), Shows::default());
+        assert_eq!(
+            old,
+            serde_json::json!([
+                { "agentId": "a1", "messageId": "m1", "snippet": "own" },
+                { "agentId": "a2", "messageId": "m3" }
+            ])
+        );
+        let new = Shows {
+            live_work: false,
+            rooms: true,
+        };
+        assert_eq!(search_for_app(hits.clone(), new), hits);
     }
 
     #[test]

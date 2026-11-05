@@ -69,6 +69,7 @@ fn status_value(state: &'static str) -> Value {
         since: (state != "idle").then_some(1_762_290_000_000),
         // The turn's steps so far, for a phone that says it shows them.
         work: (state != "idle").then(testkit::live_work),
+        room: None,
     })
     .unwrap()
 }
@@ -151,6 +152,7 @@ fn frames() -> Vec<ServerFrame> {
                     activity: Some("Waiting for a free slot (4 agents already working)".into()),
                     since: None,
                     work: None,
+                    room: None,
                 })
                 .unwrap(),
             },
@@ -159,6 +161,12 @@ fn frames() -> Vec<ServerFrame> {
             Some(4),
             Event::Registry {
                 overview: testkit::overview(),
+            },
+        ),
+        (
+            Some(4),
+            Event::Rooms {
+                rooms: serde_json::to_value(vec![testkit::room()]).unwrap(),
             },
         ),
         (
@@ -354,6 +362,10 @@ async fn generate() -> String {
         device_name: "Julian’s iPhone".into(),
         label: "companion:dev_0123456789abcdef:1".into(),
         route: super::wire::RouteKind::Tailscale,
+        shows: super::wire::Shows {
+            live_work: true,
+            rooms: true,
+        },
     };
     let call = |method: &'static str, params: Value| {
         let (c, caller) = (c.clone(), caller.clone());
@@ -425,6 +437,30 @@ async fn generate() -> String {
         "agentsSend",
         "Result<'agents.send'>",
         &testkit::messages()[0],
+    );
+    out += &entry(
+        "roomsList",
+        "Result<'rooms.list'>",
+        call("rooms.list", json!({})).await,
+    );
+    out += &entry(
+        "roomsMessages",
+        "Result<'rooms.messages'>",
+        call("rooms.messages", json!({ "roomId": testkit::ROOM })).await,
+    );
+    out += &entry(
+        "roomsSend",
+        "Result<'rooms.send'>",
+        call(
+            "rooms.send",
+            json!({ "roomId": testkit::ROOM, "text": "Status?", "clientId": "rc_fixture", "everyone": true }),
+        )
+        .await,
+    );
+    out += &entry(
+        "roomsFocus",
+        "Result<'rooms.focus'>",
+        call("rooms.focus", json!({ "roomId": testkit::ROOM })).await,
     );
     out += &entry(
         "agentsStop",

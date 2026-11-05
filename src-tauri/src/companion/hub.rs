@@ -35,6 +35,7 @@ fn replay_key(event: &Event) -> Option<String> {
         Event::Message { .. } => None,
         Event::Status { agent_id, .. } => Some(format!("status:{agent_id}")),
         Event::Registry { .. } => Some("registry".into()),
+        Event::Rooms { .. } => Some("rooms".into()),
         Event::System { .. } => Some("system".into()),
         // A removal supersedes the project's last change, and the other way round.
         Event::ProjectChanged { project } => Some(format!(

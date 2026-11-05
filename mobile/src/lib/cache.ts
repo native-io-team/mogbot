@@ -28,6 +28,8 @@ export interface Cached {
   overview: SyncState['overview'];
   mac: SyncState['mac'];
   projects: SyncState['projects'];
+  /** Absent in copies from before rooms. */
+  rooms?: SyncState['rooms'];
   cursor: Cursor | null;
   syncedAt: number | null;
   chats: Record<string, { messages: AgentMessage[]; more: boolean }>;
@@ -51,6 +53,7 @@ export function toCache(s: SyncState & { served?: Served | null }, now = Date.no
     overview: s.overview,
     mac: s.mac,
     projects: s.projects,
+    rooms: s.rooms,
     cursor: s.cursor,
     syncedAt: s.syncedAt,
     chats: Object.fromEntries(
@@ -82,6 +85,7 @@ export function fromCache(c: Cached): (Partial<SyncState> & { served?: Served | 
     overview: c.overview,
     mac: c.mac,
     projects: c.projects,
+    rooms: c.rooms ?? null,
     cursor: c.cursor,
     syncedAt: c.syncedAt,
     chats: Object.fromEntries(
@@ -127,6 +131,7 @@ export function watchCache(): () => void {
       s.overview !== prev.overview ||
       s.chats !== prev.chats ||
       s.projects !== prev.projects ||
+      s.rooms !== prev.rooms ||
       s.mac !== prev.mac ||
       s.served !== prev.served ||
       s.cursor !== prev.cursor

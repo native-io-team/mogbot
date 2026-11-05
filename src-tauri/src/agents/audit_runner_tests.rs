@@ -32,6 +32,7 @@ fn user(text: &str) -> Inbound {
         reply: false,
         routine: false,
         ticket: None,
+        room: None,
         outside: false,
     }
 }
@@ -50,6 +51,7 @@ fn from_chief(text: &str, reply: bool) -> Inbound {
         reply,
         routine: false,
         ticket: None,
+        room: None,
         outside: false,
     }
 }
@@ -281,6 +283,7 @@ fn waiting_lasts_until_every_open_card_is_answered() {
             activity: None,
             since: None,
             work: None,
+            room: None,
         });
     };
     let turn = open_wait(id);

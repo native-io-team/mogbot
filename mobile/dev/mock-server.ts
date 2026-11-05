@@ -30,6 +30,7 @@ import {
   type CheckIn,
   type ProjectSummary,
   type Repeat,
+  type RoomView,
   type SearchHit,
   type SessionScreen,
   type SharedFile,
@@ -666,6 +667,154 @@ export function createMockServer(opts: MockOptions = {}) {
     });
   }
 
+  // ---- Rooms --------------------------------------------------------------------------
+
+  /** Two rooms: one led by the Chief, one with no lead (so the phone asks who answers). */
+  const rooms: RoomView[] = [
+    {
+      id: 'launch',
+      name: 'Launch',
+      members: ['chief', 'site', 'design'],
+      lead: 'chief',
+      muted: false,
+      createdAt: now - 3 * 86_400_000,
+      lastActivityAt: now - 20 * 60_000,
+      preview: 'Designer: Hero is ready for review.',
+      unread: 1,
+      turnsUsed: 0,
+      turnCap: 8,
+      waiting: [],
+    },
+    {
+      id: 'monthend',
+      name: 'Month end',
+      members: ['fin', 'ops'],
+      muted: false,
+      createdAt: now - 7 * 86_400_000,
+      lastActivityAt: now - 3 * 3_600_000,
+      preview: 'Ops: Filed.',
+      unread: 0,
+      turnsUsed: 0,
+      turnCap: 8,
+      waiting: [],
+    },
+  ];
+  const roomLines = new Map<string, AgentMessage[]>([
+    [
+      'launch',
+      [
+        {
+          id: 'rl1',
+          agentId: '',
+          room: 'launch',
+          ts: now - 30 * 60_000,
+          kind: 'user',
+          text: '@everyone where are we on the launch page?',
+          mentions: [
+            { id: 'chief', name: 'Chief of Staff' },
+            { id: 'site', name: 'Acme Site' },
+            { id: 'design', name: 'Designer' },
+          ],
+        },
+        {
+          id: 'rl2',
+          agentId: 'chief',
+          room: 'launch',
+          ts: now - 29 * 60_000,
+          kind: 'agent',
+          text: 'Copy is final. I asked @Designer for the hero and @Acme Site to wire the pricing table.',
+        },
+        {
+          id: 'rl3',
+          agentId: 'site',
+          room: 'launch',
+          ts: now - 25 * 60_000,
+          kind: 'agent',
+          text: 'Pricing table is in on a copy of the site. **3 files** changed; preview looks right at all widths.',
+        },
+        {
+          id: 'rl4',
+          agentId: 'design',
+          room: 'launch',
+          ts: now - 21 * 60_000,
+          kind: 'approval',
+          text: '',
+          approval: {
+            requestId: 'rq_launch',
+            title: 'Run a command',
+            detail: 'npm run export-assets',
+            status: 'pending',
+          },
+        },
+        {
+          id: 'rl5',
+          agentId: 'design',
+          room: 'launch',
+          ts: now - 20 * 60_000,
+          kind: 'agent',
+          text: 'Hero is ready for review. Two variants, light and dark.',
+        },
+      ],
+    ],
+    [
+      'monthend',
+      structuredClone(real.roomsMessages.messages as AgentMessage[]).map((m) => ({
+        ...m,
+        room: 'monthend',
+        agentId: m.agentId === 'a1' ? 'fin' : m.agentId === 'a2' ? 'ops' : m.agentId,
+      })),
+    ],
+  ]);
+  const roomsChanged = () => emit({ type: 'rooms.changed', rooms: structuredClone(rooms) });
+  /** A line said in a room: in its thread, and (a member's) in the member's own chat. */
+  function putRoomLine(m: AgentMessage) {
+    const list = roomLines.get(m.room!) ?? [];
+    const at = list.findIndex((x) => x.id === m.id);
+    if (at === -1) list.push(m);
+    else list[at] = m;
+    roomLines.set(m.room!, list);
+    if (m.agentId) {
+      const own = messages.get(m.agentId) ?? [];
+      if (!own.some((x) => x.id === m.id)) own.push(m);
+      messages.set(m.agentId, own);
+    }
+    emit({ type: 'agents.message', message: m });
+    const r = rooms.find((x) => x.id === m.room)!;
+    r.lastActivityAt = m.ts;
+    const who = m.agentId ? agent(m.agentId)?.name : 'You';
+    if (m.text) r.preview = `${who}: ${m.text.split('\n')[0].slice(0, 100)}`;
+    roomsChanged();
+  }
+  /** Each asked member "replies" in turn: working in the room, then its line. */
+  function replyInRoom(roomId: string, asked: string[], text: string) {
+    const r = rooms.find((x) => x.id === roomId)!;
+    r.turnsUsed = asked.length;
+    asked.forEach((id, i) => {
+      const a = agent(id)!;
+      setTimeout(
+        () => {
+          a.status = { state: 'working', activity: 'Thinking', since: Date.now(), room: roomId };
+          emit({ type: 'agents.status', agentId: id, status: a.status });
+        },
+        300 + i * 900
+      );
+      setTimeout(
+        () => {
+          putRoomLine({
+            id: `rr_${randomUUID().slice(0, 8)}`,
+            agentId: id,
+            room: roomId,
+            ts: Date.now(),
+            kind: 'agent',
+            text: replyFor(text),
+          });
+          setStatus(id, 'idle', null);
+        },
+        1500 + i * 900
+      );
+    });
+  }
+
   // ---- Methods ------------------------------------------------------------------------
 
   function checkIn(p: Record<string, unknown>): CheckIn {
@@ -736,6 +885,57 @@ export function createMockServer(opts: MockOptions = {}) {
     // A Mac whose build has no push service, which is what a dev build is.
     'devices.setPush': () => ({ status: 'unavailable' }),
     'agents.overview': () => overview(),
+    'rooms.list': () => structuredClone(rooms),
+    'rooms.messages': (p) => {
+      const list = roomLines.get(String(p.roomId));
+      if (!list) return fail({ type: 'Other', message: 'That room no longer exists.' });
+      const limit = Number(p.limit ?? 50);
+      const end = p.before ? list.findIndex((m) => m.id === p.before) : list.length;
+      const stop = end === -1 ? 0 : end;
+      const start = Math.max(0, stop - limit);
+      return { messages: list.slice(start, stop), asOf: cursor(), more: start > 0 };
+    },
+    'rooms.send': (p) => {
+      const r = rooms.find((x) => x.id === p.roomId);
+      if (!r) return fail({ type: 'Other', message: 'That room no longer exists.' });
+      const clientId = String(p.clientId);
+      const known = clientIds.get(clientId);
+      if (known) return { message: known, asked: known.mentions ?? [] };
+      const named = r.members.filter((m) =>
+        ((p.mentions as string[] | undefined) ?? []).includes(m)
+      );
+      const asked = p.everyone ? r.members : named.length ? named : r.lead ? [r.lead] : [];
+      if (!asked.length) {
+        return fail({
+          type: 'Validation',
+          field: 'mentions',
+          reason: 'Who should answer? Mention someone, or @everyone.',
+        });
+      }
+      const refs = asked.map((id) => ({ id, name: agent(id)!.name }));
+      const m: AgentMessage = {
+        id: `ru_${randomUUID().slice(0, 8)}`,
+        agentId: '',
+        room: r.id,
+        ts: Date.now(),
+        kind: 'user',
+        text: String(p.text),
+        clientId,
+        mentions: refs,
+      };
+      clientIds.set(clientId, m);
+      putRoomLine(m);
+      replyInRoom(r.id, asked, String(p.text));
+      return { message: m, asked: refs };
+    },
+    'rooms.focus': (p) => {
+      const r = rooms.find((x) => x.id === p.roomId);
+      if (r?.unread) {
+        r.unread = 0;
+        roomsChanged();
+      }
+      return null;
+    },
     'agents.messages': (p) => {
       const list = messages.get(String(p.agentId)) ?? [];
       const limit = Number(p.limit ?? 50);

@@ -36,6 +36,8 @@ export interface AgentStatus {
   since: number | null;
   /** The turn's timeline so far, while it isn't idle; older Macs omit it. */
   work?: TurnWork;
+  /** The room the turn in progress answers in (`lib/agentRooms`); absent for its own chat. */
+  room?: string;
 }
 
 /**
@@ -464,6 +466,12 @@ export interface AgentMessage {
   revises?: ResultRef;
   /** On a `note` (an `error` in older logs): a take-over's terminal closed by itself, its last lines after a blank line; not a turn's failure, so no Retry. */
   takeover?: boolean;
+  /**
+   * Said in a room: that room's id. A member's line is also in the room's
+   * thread; in the agent's own chat it folds into one "In <room>" line. A
+   * line only the room has (yours, a room note) has an empty `agentId`.
+   */
+  room?: string;
 }
 
 /** Mirrors `project::ChangedFile`: line counts are absent for a binary file. */
@@ -807,6 +815,9 @@ export interface SearchHit {
   peerName?: string;
   /** Text around the first match, on one line, with … where cut. */
   snippet: string;
+  /** Said in a room: opens the room. `agentId` is then who said it (empty: you). */
+  roomId?: string;
+  roomName?: string;
 }
 
 export interface UsageTotals {
@@ -1843,7 +1854,9 @@ export const folderName = (path: string) => path.replace(/\/+$/, '').split('/').
 export type ChatItem =
   | { type: 'message'; message: AgentMessage }
   | { type: 'peer-group'; peer: AgentRef; messages: AgentMessage[] }
-  | { type: 'day'; ts: number };
+  | { type: 'day'; ts: number }
+  /** What this agent said in a room, folded into one line that opens the room. */
+  | { type: 'room'; roomId: string; messages: AgentMessage[] };
 
 const isPeerLine = (m: AgentMessage) => m.kind === 'sent_to_agent' || m.kind === 'from_agent';
 
@@ -1855,7 +1868,15 @@ const DIVIDER_GAP_MS = 3 * 60 * 60 * 1000;
 
 const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString();
 
-export function buildChatItems(messages: AgentMessage[]): ChatItem[] {
+/** How an agent's own chat folds what its members said in rooms. */
+export interface ChatFolding {
+  /** A line kept in full even though it was said in a room (its open copy's card). */
+  unfolded?: string | null;
+  /** Whether lines from this room fold; a room that is gone doesn't. */
+  folds?: (roomId: string) => boolean;
+}
+
+export function buildChatItems(messages: AgentMessage[], folding: ChatFolding = {}): ChatItem[] {
   const items: ChatItem[] = [];
   let lastTs = 0;
   for (const message of messages) {
@@ -1868,6 +1889,21 @@ export function buildChatItems(messages: AgentMessage[]): ChatItem[] {
     }
     lastTs = message.ts;
     const previous = items[items.length - 1];
+    // Said in a room: the room's thread shows it; here it's one line. A card
+    // still waiting on you stays a card, so nothing waits out of sight.
+    if (
+      message.room &&
+      message.approval?.status !== 'pending' &&
+      message.id !== folding.unfolded &&
+      (folding.folds?.(message.room) ?? true)
+    ) {
+      if (previous?.type === 'room' && previous.roomId === message.room) {
+        previous.messages.push(message);
+        continue;
+      }
+      items.push({ type: 'room', roomId: message.room, messages: [message] });
+      continue;
+    }
     // The other assistant's side of an import is the conversation itself:
     // shown in full, never folded away like agents' hand-offs.
     if (isPeerLine(message) && message.peer && !isConnectorLine(message)) {

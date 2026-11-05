@@ -23,6 +23,8 @@ import type {
   PasteImportPreview,
   ProjectSummary,
   PushEnvironment,
+  RoomView,
+  AgentRef,
   PushStatus,
   SchedulePreview,
   SearchHit,
@@ -223,6 +225,32 @@ export interface Methods {
   'agents.import.pastePreview': { params: { text: string }; result: PasteImportPreview };
   'agents.import.paste': { params: { text: string }; result: ImportSummary };
 
+  // ---- Rooms (a Mac whose welcome.features has `rooms`) --------------------
+  'rooms.list': { params: Record<string, never>; result: RoomView[] };
+  /** A page of the room's thread, oldest first; `before` for scrollback. */
+  'rooms.messages': {
+    params: { roomId: string; limit?: number; before?: string };
+    result: { messages: AgentMessage[]; asOf: Cursor; more: boolean };
+  };
+  /**
+   * Say something in a room: to the members in `mentions` (agent ids), to
+   * everyone, or else to the room's lead. With no mention and no lead it is
+   * refused (`validation`, nothing recorded): ask who should answer first.
+   * Same text rules and `clientId` retry as `agents.send`.
+   */
+  'rooms.send': {
+    params: {
+      roomId: string;
+      text: string;
+      clientId: string;
+      mentions?: string[];
+      everyone?: boolean;
+    };
+    result: { message: AgentMessage; asked: AgentRef[] };
+  };
+  /** The room on screen (or `null`), like `agents.focus`: its lines aren't unread meanwhile. */
+  'rooms.focus': { params: { roomId: string | null }; result: null };
+
   // ---- Projects and their sessions (Remote Access's handlers) -------------
   'projects.list': { params: Record<string, never>; result: ProjectSummary[] };
   'sessions.read': { params: { sessionId: string }; result: SessionScreen };
@@ -267,6 +295,8 @@ export const READ_ONLY_METHODS = [
   'agents.changeDiff',
   'agents.search',
   'agents.schedule.preview',
+  'rooms.list',
+  'rooms.messages',
   'agents.import.pastePrompt',
   'agents.import.pastePreview',
   'projects.list',

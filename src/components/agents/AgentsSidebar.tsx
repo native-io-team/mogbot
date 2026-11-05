@@ -24,7 +24,14 @@ import {
   type PointerEvent,
   type RefObject,
 } from 'react';
-import { AddIcon, BellOffIcon, ChevronRightIcon, DownloadIcon, PinIcon } from '@/components/icons';
+import {
+  AddIcon,
+  BellOffIcon,
+  ChevronRightIcon,
+  CollaboratorsIcon,
+  DownloadIcon,
+  PinIcon,
+} from '@/components/icons';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../primitives/ContextMenu';
 import { Button } from '../primitives/Button';
 import { AgentAvatar } from './AgentAvatar';
@@ -35,6 +42,8 @@ import { ImportNudge, useImportNudge } from './ImportNudge';
 import { useImportGate } from './ImportConnectorPanel';
 import { talkIsLive } from '../../lib/agents';
 import { AgentMark } from './AgentSwitcher';
+import { RoomRow, type RoomActions } from './AgentRoomParts';
+import { sortRooms, type Room } from '../../lib/agentRooms';
 import { useFlipReorder } from './useAgentMotion';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import {
@@ -71,6 +80,10 @@ interface AgentsSidebarProps {
   /** What's in flight is the view on screen. */
   inFlightOpen: boolean;
   onOpenInFlight: () => void;
+  /** Group conversations, each with its members as they are now. */
+  rooms: { room: Room; members: Agent[] }[];
+  roomActions: RoomActions;
+  onNewRoom: () => void;
 }
 
 function subtitle(agent: Agent): string {
@@ -157,6 +170,9 @@ export function AgentsSidebar({
   needsYouCount,
   inFlightOpen,
   onOpenInFlight,
+  rooms,
+  roomActions,
+  onNewRoom,
 }: AgentsSidebarProps) {
   const searching = query.trim().length > 0;
   // Bringing agents over is for someone whose agents can run: never while
@@ -248,6 +264,21 @@ export function AgentsSidebar({
             </button>
           )}
           {showHidden && hidden.map(row)}
+          {rooms.length > 0 && (
+            <div className="agents-list__section" role="group" aria-label="Rooms">
+              <div className="agents-list__section-title">Rooms</div>
+              {sortRooms(rooms.map((r) => r.room)).map((room) => (
+                <RoomRow
+                  key={room.id}
+                  room={room}
+                  members={rooms.find((r) => r.room.id === room.id)?.members ?? []}
+                  current={selectedId === `room:${room.id}`}
+                  onSelect={onSelect}
+                  actions={roomActions}
+                />
+              ))}
+            </div>
+          )}
           {showNudge && <ImportNudge onImport={onImport} onDismiss={nudge.dismiss} />}
           <div className="workspace-sidebar-active-actions">
             <Button
@@ -260,6 +291,18 @@ export function AgentsSidebar({
               <AddIcon size={16} />
               <span>New agent</span>
             </Button>
+            {/* A room needs two agents to talk to. */}
+            {agents.length >= 2 && (
+              <Button
+                variant="ghost"
+                width="fill"
+                className="workspace-sidebar-add-project agents-list__new-room"
+                onClick={onNewRoom}
+              >
+                <CollaboratorsIcon size={16} />
+                <span>New room</span>
+              </Button>
+            )}
             {/* Here for good once the note above is gone: people decide to
                 bring their agents over after they've tried it. While the note
                 shows, it is the way in, and a second button would only echo it. */}

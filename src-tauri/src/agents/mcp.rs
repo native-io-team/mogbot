@@ -797,10 +797,9 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
     if target.id == caller.id {
         return error("That's you.");
     }
-    let hop = runner::current_hop(&caller.id).saturating_add(1);
-    if hop > runner::MAX_HOPS {
+    let Some(hop) = runner::next_hop(&caller.id) else {
         return error("Not sent: this chain of agent-to-agent messages is too long. Tell the user where things stand instead.");
-    }
+    };
     // Answering a request the target sent: settles it (see runner::settle).
     let answer = runner::settle(&caller.id, &target.id);
     let mut sent = runner::new_message(&caller.id, MessageKind::SentToAgent, body);
@@ -1058,7 +1057,15 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
                 let _ = runner::record(app, note);
             }
             let mut started = String::new();
-            if let Some(task) = arg(args, "first_task") {
+            let first_task = arg(args, "first_task");
+            // The first task is a request like `message_agent`'s: it travels one
+            // hop past the caller's turn, so creating an agent can't start a
+            // fresh chain (nor one past the cap).
+            let hop = runner::next_hop(&caller.id);
+            if first_task.is_some() && hop.is_none() {
+                started = ", but didn't start it on its first task: this chain of agent-to-agent messages is too long. Tell the user where things stand instead".to_string();
+            }
+            if let (Some(task), Some(hop)) = (first_task, hop) {
                 let mut sent = runner::new_message(&caller.id, MessageKind::SentToAgent, task);
                 sent.peer = Some(peer(&agent));
                 let _ = runner::record(app, sent);
@@ -1071,7 +1078,7 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
                     task.to_string(),
                     From::Agent {
                         sender: peer(caller),
-                        hop: 1,
+                        hop,
                     },
                 );
                 started =
@@ -1637,7 +1644,7 @@ pub(super) async fn decide(
             "Allowed automatically: {} · Always allowed",
             one_line(tool, input)
         );
-        let _ = runner::record(
+        let _ = runner::record_in_turn(
             app,
             runner::new_message(&caller.id, MessageKind::Note, line),
         );
