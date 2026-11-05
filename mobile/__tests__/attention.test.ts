@@ -77,7 +77,7 @@ describe('attention', () => {
   it('says what a waiting agent is asking, only when the saved chat knows', () => {
     const a = named('a', { pendingApprovals: 1 });
     expect(needsLine(a, [approval('m1', 'pending')])).toBe(
-      'Needs your OK · pnpm run deploy --prod'
+      'Needs your OK · Wants to run its “deploy” script'
     );
     expect(needsLine(a, [approval('m1', 'allowed')])).toBe('Needs your OK');
     expect(needsLine(a, undefined)).toBe('Needs your OK');
@@ -93,7 +93,9 @@ describe('attention', () => {
     expect(
       askingLine({ title: 'Edit a file', detail: '--- a/x.ts\n+++ b/x.ts\n@@ -1 +1 @@' })
     ).toBe('Edit a file');
-    expect(askingLine({ title: 'Run a command', detail: 'npm test\n' })).toBe('npm test');
+    expect(askingLine({ title: 'Run a command', detail: 'npm test\n' })).toBe(
+      'Wants to run the tests'
+    );
     expect(askingLine({ title: 'Fetch a page', detail: '' })).toBe('Fetch a page');
   });
 

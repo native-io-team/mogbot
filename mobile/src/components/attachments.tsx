@@ -23,7 +23,8 @@ import { attachmentSource, describeError, download } from '../lib/session';
 import type { PendingAttachment } from '../lib/sync';
 import { alpha, colors, radius, space } from '../lib/theme';
 import { Spinner } from './agent';
-import { choose, Icon, T } from './ui';
+import { choose } from './menu';
+import { Icon, T } from './ui';
 
 /** Either a file on the Mac, or (before the Mac has it) the phone's own copy. */
 export type Shown = Attachment & { localUri?: string };

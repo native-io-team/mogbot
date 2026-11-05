@@ -11,7 +11,7 @@ import { setPref } from '../lib/prefs';
 import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
 import { enableAlerts, unpair } from '../lib/session';
 import { useApp } from '../lib/store';
-import { useAccent } from '../lib/accent';
+import { switchColors, useAccent } from '../lib/accent';
 import { brand } from '../lib/brand';
 import { colors, space } from '../lib/theme';
 
@@ -152,7 +152,7 @@ export default function Settings() {
             <Switch
               value={haptics}
               onValueChange={(on) => setPref('haptics', on)}
-              trackColor={{ true: accent.accent, false: colors.surfaceSelected }}
+              {...switchColors(accent, haptics)}
               accessibilityLabel="Haptics"
             />
           }
@@ -191,14 +191,16 @@ export default function Settings() {
         </T>
       )}
 
-      <Section title="About">
-        <Row
-          label="Source code"
-          value="GitHub"
-          onPress={() => void Linking.openURL(brand.repository)}
-          last
-        />
-      </Section>
+      {!!brand.repository && (
+        <Section title="About">
+          <Row
+            label="Source code"
+            value="GitHub"
+            onPress={() => void Linking.openURL(brand.repository)}
+            last
+          />
+        </Section>
+      )}
     </ScrollView>
   );
 }

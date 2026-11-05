@@ -1,7 +1,7 @@
 /**
- * An approval in the chat: the exact command, then Deny / Allow (and Always
- * allow, when the desktop offers a scope), inert for a beat after it lands.
- * Once answered, the outcome in a line.
+ * An approval in the chat: the exact command, then Deny | Allow, with Always
+ * allow (when the desktop offers a scope) one tap away behind ⋯, inert for a
+ * beat after it lands. Once answered, the outcome in a line.
  */
 
 import type { Agent, AgentMessage, Approval } from '@shipstudio/companion-protocol';
@@ -21,7 +21,8 @@ import { haptic } from '../lib/haptics';
 import { answerApproval, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
 import { alpha, chromeScale, colors, fonts, radius, space, type } from '../lib/theme';
-import { Button, choose, Icon, T } from './ui';
+import { choose } from './menu';
+import { Button, Icon, T } from './ui';
 
 /**
  * How long a new card's answers stay inert: the desktop's anti-misclick
@@ -30,60 +31,103 @@ import { Button, choose, Icon, T } from './ui';
  */
 export const ARM_MS = 400;
 
-/** Whether a pending card's answers are live yet: false for `ARM_MS` after it lands. */
-export function useArmed(pending: boolean) {
-  const [armed, setArmed] = useState(false);
+const UNARMED = Symbol('unarmed');
+
+/**
+ * Whether a pending card's answers are live yet: false for `ARM_MS` after it
+ * lands, and again for `ARM_MS` whenever its `layout` changes (a rotation, a
+ * banner, the pin coming or going): a reflow can put a different answer
+ * under a thumb that was already moving.
+ */
+export function useArmed(pending: boolean, layout: string | number | boolean = '') {
+  const [armedFor, setArmedFor] = useState<unknown>(UNARMED);
   useEffect(() => {
     if (!pending) return;
-    const timer = setTimeout(() => setArmed(true), ARM_MS);
+    const timer = setTimeout(() => setArmedFor(layout), ARM_MS);
     return () => clearTimeout(timer);
-  }, [pending]);
-  return armed;
+  }, [pending, layout]);
+  // Derived in the render that changes the layout: there's no frame where the
+  // new layout is live before its beat has passed.
+  return pending && armedFor === layout;
 }
 
 /**
- * The height of the chat pane a card sits in (0 when unknown). A pending card
- * caps its detail by it, so the question, what it's about and the answers
- * are on screen together: in a short pane (a phone in landscape, the split
- * view) a 12-line diff would otherwise push the question off the top and
- * leave three buttons with no context.
+ * The chat pane a card sits in. A pending card caps its detail by its height,
+ * so the question, what it's about and the answers are on screen together: in
+ * a short pane (a phone in landscape, the split view) a 12-line diff would
+ * otherwise push the question off the top and leave buttons with no context.
  */
-export const PaneHeightContext = createContext(0);
+export interface Pane {
+  /** The list's height (0 when unknown). */
+  height: number;
+  /** The list's and the pinned question's together: the same whether the pin shows or not. */
+  room: number;
+  /** The card the chat would pin: the newest pending one. */
+  candidate: string | null;
+  /** The card whose question the pin is showing now. */
+  pinnedId: string | null;
+  /** That card says whether it needs the pin (it can't fit whole with its own question). */
+  report: (id: string, needsPin: boolean) => void;
+}
+
+export const PaneContext = createContext<Pane>({
+  height: 0,
+  room: 0,
+  candidate: null,
+  pinnedId: null,
+  report: () => {},
+});
 
 /**
- * Below this a pending card can't fit whole (a phone in landscape, the split
- * view): the chat pins the question above the list, and cards go compact,
- * Deny | Allow with the broader answers one tap away.
+ * Below this a pane is short (a phone in landscape, the split view): cards go
+ * compact, Deny | Allow | ⋯ and nothing under them.
  */
 export const SHORT_PANE = 480;
 
 export function useShortPane() {
-  const pane = useContext(PaneHeightContext);
-  return pane > 0 && pane < SHORT_PANE;
+  const { height } = useContext(PaneContext);
+  return height > 0 && height < SHORT_PANE;
 }
 
 /** Room kept clear around a fitted card: the list's and the row's padding. */
 const FIT_MARGIN = 40;
-/** Never squeeze the detail below a few lines; past that the pane scrolls as usual. */
-const MIN_DETAIL = 88;
+/** Never squeeze the detail below a couple of lines; past that the pane scrolls as usual. */
+const MIN_DETAIL = 48;
 
 /**
- * Measure the card and its detail; while pending, the detail's max height is
- * whatever the pane has left once the rest of the card (title, answers) fits.
- * The rest's height is the card's less the detail's, which a cap doesn't
- * change, so the fit settles in one pass.
+ * Measure the card, its head (eyebrow and title) and its detail; while
+ * pending, the detail's max height is whatever the pane has left once the
+ * rest of the card fits. When even that leaves less than `MIN_DETAIL`, the
+ * chat pins the question above the list and the card drops its own head
+ * (`pinned`): the pin owns the question, so it's never on screen twice.
+ *
+ * The decision is made against the card *with* its head and the room the
+ * pin and the list share, neither of which the pin changes, so it settles
+ * instead of flipping the pin on and off.
  */
-export function useFitDetail(pending: boolean) {
-  const pane = useContext(PaneHeightContext);
+export function useFitDetail(pending: boolean, id: string) {
+  const pane = useContext(PaneContext);
   const [card, setCard] = useState(0);
   const [detail, setDetail] = useState(0);
+  const [head, setHead] = useState(0);
+  const candidate = pending && pane.candidate === id;
+  const pinned = pending && pane.pinnedId === id;
+  const measured = pending && pane.height > 0 && card > 0;
+  // The rest of the card with its head, whether or not the head is drawn now.
+  const restFull = card - detail + (pinned ? head + space.md : 0);
+  const needsPin = candidate && measured && pane.room - restFull - FIT_MARGIN < MIN_DETAIL;
+  const { report } = pane;
+  useEffect(() => report(id, needsPin), [needsPin, id, report]);
+  useEffect(() => () => report(id, false), [id, report]);
   const rest = card - detail;
-  const maxHeight =
-    pending && pane > 0 && card > 0 ? Math.max(MIN_DETAIL, pane - rest - FIT_MARGIN) : undefined;
+  const maxHeight = measured ? Math.max(MIN_DETAIL, pane.height - rest - FIT_MARGIN) : undefined;
   return {
     onCardLayout: (e: LayoutChangeEvent) => setCard(e.nativeEvent.layout.height),
     onDetailLayout: (e: LayoutChangeEvent) => setDetail(e.nativeEvent.layout.height),
+    onHeadLayout: (e: LayoutChangeEvent) => setHead(e.nativeEvent.layout.height),
     maxHeight,
+    /** The chat is showing this card's question in the pin: the card leaves its head out. */
+    pinned,
   };
 }
 
@@ -126,13 +170,14 @@ export function ApprovalCard({
   const [busy, setBusy] = useState<null | 'allow' | 'deny' | 'always'>(null);
   const [noting, setNoting] = useState(false);
   const [note, setNote] = useState('');
-  const armed = useArmed(approval.status === 'pending');
-  const [explained, setExplained] = useState(false);
   const { fontScale } = useWindowDimensions();
   const large = fontScale >= LARGE_TEXT;
   const connected = useApp((s) => s.link.kind === 'connected');
   const pending = approval.status === 'pending';
   const paused = pending && agent.status.state === 'idle';
+  const fit = useFitDetail(pending, message.id);
+  const compact = useShortPane();
+  const armed = useArmed(pending, `${compact}:${fit.pinned}`);
 
   // The haptic says what the Mac did, so it waits for the Mac.
   const answer = async (allow: boolean, always = false, why?: string) => {
@@ -154,8 +199,13 @@ export function ApprovalCard({
   const outcome = cardOutcome(approval);
   const scope = approval.always ? describeScope(approval.always, agent.name) : null;
   const off = !!busy || !connected;
-  const fit = useFitDetail(pending);
-  const compact = useShortPane();
+  // Behind ⋯: the broader answer always; in a short pane, the note too.
+  const more = [
+    ...(approval.always
+      ? [{ label: `Always allow ${approval.always.label}`, run: () => void answer(true, true) }]
+      : []),
+    ...(compact ? [{ label: 'Deny with note…', run: () => setNoting(true) }] : []),
+  ];
 
   return (
     <Animated.View
@@ -163,16 +213,21 @@ export function ApprovalCard({
       onLayout={fit.onCardLayout}
       style={[cardStyles.card, pending && cardStyles.cardPending]}
     >
-      {pending && <Eyebrow />}
-      <T variant="subhead" color={colors.textWhite} maxFontSizeMultiplier={2}>
-        {approval.title}
-      </T>
+      {!fit.pinned && (
+        // The pin above the chat shows the question while this can't fit whole.
+        <View onLayout={fit.onHeadLayout} style={{ gap: space.md }}>
+          {pending && <Eyebrow />}
+          <T variant="subhead" color={colors.textWhite} maxFontSizeMultiplier={2}>
+            {approval.title}
+          </T>
+        </View>
+      )}
       {!!approval.detail && (
         <FittedDetail fit={fit}>
           <Command text={approval.detail} lines={large ? 6 : 12} />
         </FittedDetail>
       )}
-      {paused && (
+      {paused && !fit.pinned && (
         <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>
           It paused here for you. Allow it and it picks up where it left off.
         </T>
@@ -234,7 +289,7 @@ export function ApprovalCard({
             />
             <Button
               title="Allow"
-              variant="primary"
+              variant="answer"
               busy={busy === 'allow'}
               disabled={off}
               focusable={armed}
@@ -242,61 +297,15 @@ export function ApprovalCard({
               accessibilityHint={approval.detail || undefined}
               style={{ flex: 1 }}
             />
-            {compact && (
-              // A short pane: Deny | Allow are the card's last line, under the
-              // thumb; the broader answers wait one tap away, with what they cover.
+            {more.length > 0 && (
+              // Never a second Allow under the thumb: anything broader is a
+              // deliberate second step, with what it covers spelled out.
               <MoreAnswers
                 disabled={off || !armed}
-                onPress={() =>
-                  choose(
-                    approval.title,
-                    [
-                      ...(approval.always
-                        ? [
-                            {
-                              label: `Always allow ${approval.always.label}`,
-                              run: () => void answer(true, true),
-                            },
-                          ]
-                        : []),
-                      { label: 'Deny with note…', run: () => setNoting(true) },
-                    ],
-                    scope ?? undefined
-                  )
-                }
+                onPress={() => choose(approval.title, more, scope ?? undefined)}
               />
             )}
           </View>
-          {!compact && approval.always && (
-            <View style={{ gap: space.xs }}>
-              <Button
-                title={`Always allow ${approval.always.label}`}
-                busy={busy === 'always'}
-                disabled={off}
-                focusable={armed}
-                onPress={() => void answer(true, true)}
-                accessibilityHint={scope ?? undefined}
-              />
-              {large && !explained ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="What does always allow cover?"
-                  hitSlop={{ top: 10, bottom: 10 }}
-                  onPress={() => setExplained(true)}
-                  style={cardStyles.disclosure}
-                >
-                  <Icon name="info.circle" size={12} color={colors.textSecondary} />
-                  <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={2}>
-                    What does this cover?
-                  </T>
-                </Pressable>
-              ) : (
-                <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={2}>
-                  {scope}
-                </T>
-              )}
-            </View>
-          )}
           {!compact && (
             <Button
               title="Deny with note…"
@@ -403,12 +412,6 @@ export const cardStyles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardDetailInner: { padding: space.md },
-  disclosure: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    alignSelf: 'flex-start',
-  },
   actions: { flexDirection: 'row', gap: space.sm },
   more: {
     width: 44,

@@ -29,15 +29,9 @@ import {
 } from './ApprovalCard';
 import { DiffLines } from './diff';
 import { tabName } from './session';
-import { Button, choose as actionSheet, T } from './ui';
-
-/**
- * An option that covers more than this one request ("Yes, allow all edits
- * during this session", "…and don't ask again"). The phone can't know its
- * exact reach (that's the session's), so it says only that it is wider.
- */
-const BROADER = /\b(all|always|during this session|don.t ask again|for this session)\b/i;
-const BROADER_SCOPE = 'Covers more than this one request.';
+import { choose as actionSheet } from './menu';
+import { Button, T } from './ui';
+import { moreMessage, promptAnswers } from '../lib/answers';
 
 export function PromptCard({
   message,
@@ -54,7 +48,9 @@ export function PromptCard({
 }) {
   const [busy, setBusy] = useState<number | null>(null);
   const pending = approval.status === 'pending';
-  const armed = useArmed(pending);
+  const fit = useFitDetail(pending, message.id);
+  const compact = useShortPane();
+  const armed = useArmed(pending, `${compact}:${fit.pinned}`);
   const connected = useApp((s) => s.link.kind === 'connected');
   const off = busy !== null || !connected;
 
@@ -81,10 +77,7 @@ export function PromptCard({
     }
   };
 
-  const indexed = prompt.options.map((option, index) => ({ option, index }));
-  const allow = indexed.find(({ option }) => option.role === 'allow');
-  const deny = indexed.find(({ option }) => option.role === 'deny');
-  const others = indexed.filter(({ option }) => option.role === 'other');
+  const { deny, allow, more, listed } = promptAnswers(prompt);
   const owner = prompt.owner.name === agent.name ? 'Its' : `${prompt.owner.name}’s`;
   // The tab as its own engine names it ("Codex 2"), when the Mac's project
   // list says which engine; the prompt itself doesn't carry it.
@@ -100,8 +93,6 @@ export function PromptCard({
     const kind = diffLineKind(l);
     return kind === 'add' || kind === 'del';
   });
-  const fit = useFitDetail(pending);
-  const compact = useShortPane();
 
   return (
     <Animated.View
@@ -109,10 +100,15 @@ export function PromptCard({
       onLayout={fit.onCardLayout}
       style={[cardStyles.card, pending && cardStyles.cardPending]}
     >
-      {pending && <Eyebrow />}
-      <T variant="subhead" color={colors.textWhite} maxFontSizeMultiplier={2}>
-        {approval.title}
-      </T>
+      {!fit.pinned && (
+        // The pin above the chat shows the question while this can't fit whole.
+        <View onLayout={fit.onHeadLayout} style={{ gap: space.md }}>
+          {pending && <Eyebrow />}
+          <T variant="subhead" color={colors.textWhite} maxFontSizeMultiplier={2}>
+            {approval.title}
+          </T>
+        </View>
+      )}
       <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={2}>
         {owner} work in {project} · {tab}
       </T>
@@ -144,7 +140,7 @@ export function PromptCard({
           importantForAccessibility={armed ? 'auto' : 'no-hide-descendants'}
           style={{ gap: space.sm }}
         >
-          {/* The safe pair first, as on every approval; anything broader comes after it. */}
+          {/* The safe pair, and only it, under the thumb; everything else behind ⋯. */}
           {(deny || allow) && (
             <View style={cardStyles.actions}>
               {deny && (
@@ -161,7 +157,7 @@ export function PromptCard({
               {allow && (
                 <Button
                   title="Allow"
-                  variant="primary"
+                  variant="answer"
                   busy={busy === allow.index}
                   disabled={off}
                   focusable={armed}
@@ -170,48 +166,35 @@ export function PromptCard({
                   style={{ flex: 1 }}
                 />
               )}
-              {compact && others.length > 0 && (
-                // A short pane: Deny | Allow stay the last line; the rest are one tap away.
+              {more.length > 0 && (
                 <MoreAnswers
                   disabled={off || !armed}
                   onPress={() =>
                     actionSheet(
                       approval.title,
-                      others.map(({ option, index }) => ({
+                      more.map(({ option, index }) => ({
                         label: option.label,
                         run: () => void choose(index),
                       })),
-                      others.some(({ option }) => BROADER.test(option.label))
-                        ? BROADER_SCOPE
-                        : undefined
+                      moreMessage(more)
                     )
                   }
                 />
               )}
             </View>
           )}
-          {!(compact && (deny || allow)) &&
-            others.map(({ option, index }) => {
-              const broader = !!(deny || allow) && BROADER.test(option.label);
-              return (
-                <View key={index} style={{ gap: space.xs }}>
-                  <Button
-                    title={option.label}
-                    lines={3}
-                    busy={busy === index}
-                    disabled={off}
-                    focusable={armed}
-                    accessibilityHint={broader ? BROADER_SCOPE : undefined}
-                    onPress={() => void choose(index)}
-                  />
-                  {broader && (
-                    <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={2}>
-                      {BROADER_SCOPE}
-                    </T>
-                  )}
-                </View>
-              );
-            })}
+          {/* A plain menu (no Deny | Allow): every option, as the session lists them. */}
+          {listed.map(({ option, index }) => (
+            <Button
+              key={index}
+              title={option.label}
+              lines={3}
+              busy={busy === index}
+              disabled={off}
+              focusable={armed}
+              onPress={() => void choose(index)}
+            />
+          ))}
         </Animated.View>
       ) : (
         <Animated.View entering={FadeIn.duration(200).delay(100)}>

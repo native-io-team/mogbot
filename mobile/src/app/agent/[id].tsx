@@ -21,7 +21,8 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-na
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { AgentAvatar } from '../../components/agent';
 import { useNow } from '../../components/ConnectionPill';
-import { Button, choose, Icon, Row, T } from '../../components/ui';
+import { choose } from '../../components/menu';
+import { Button, Icon, Row, T } from '../../components/ui';
 import {
   describeScope,
   engineLine,
@@ -40,7 +41,7 @@ import {
   setAgentToggles,
 } from '../../lib/session';
 import { useApp } from '../../lib/store';
-import { useAccent } from '../../lib/accent';
+import { switchColors, useAccent } from '../../lib/accent';
 import { withAgentAccent } from '../../lib/accentScreen';
 import { colors, radius, space } from '../../lib/theme';
 
@@ -340,7 +341,7 @@ function Toggle({
       trailing={
         <Switch
           value={agent[field]}
-          trackColor={{ true: accent.accent, false: colors.surfaceSelected }}
+          {...switchColors(accent, agent[field])}
           disabled={!enabled}
           accessibilityLabel={label}
           onValueChange={(on) => {

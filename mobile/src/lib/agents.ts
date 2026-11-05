@@ -236,12 +236,103 @@ export function needsLine(agent: Agent, messages: AgentMessage[] | undefined): s
   return asking ? `Needs your OK · ${askingLine(asking)}` : subtitle(agent);
 }
 
+const PACKAGE_MANAGERS = new Set(['npm', 'pnpm', 'yarn', 'bun']);
+
+/** What a package manager's subcommand does, or null for one this doesn't know. */
+function packageVerb(args: string[]): string | null {
+  const [sub, script] = args;
+  if (!sub || ['install', 'i', 'add', 'ci'].includes(sub)) return 'install packages';
+  if (['remove', 'uninstall', 'rm', 'un'].includes(sub)) return 'remove packages';
+  if (sub === 'test' || sub === 't') return 'run the tests';
+  if (sub === 'run' && script) return `run its “${script}” script`;
+  if (['exec', 'dlx', 'x'].includes(sub)) return script ? `run ${script}` : null;
+  return `run its “${sub}” script`;
+}
+
+const GIT: Record<string, string> = {
+  push: 'push commits',
+  commit: 'commit changes',
+  pull: 'pull the latest changes',
+  fetch: 'fetch the latest changes',
+  clone: 'download a repository',
+  checkout: 'switch branches',
+  switch: 'switch branches',
+  merge: 'merge branches',
+  rebase: 'rebase a branch',
+  reset: 'reset changes',
+  stash: 'set changes aside',
+  add: 'stage changes',
+};
+
+const PROGRAMS: Record<string, string> = {
+  cp: 'copy files',
+  mv: 'move files',
+  rm: 'delete files',
+  rmdir: 'delete a folder',
+  mkdir: 'create a folder',
+  touch: 'create a file',
+  cat: 'read a file',
+  head: 'read a file',
+  tail: 'read a file',
+  ls: 'look through files',
+  find: 'look through files',
+  grep: 'search files',
+  rg: 'search files',
+  curl: 'fetch something from the web',
+  wget: 'download something from the web',
+  chmod: 'change file permissions',
+  chown: 'change file ownership',
+  kill: 'stop a process',
+  pkill: 'stop a process',
+  open: 'open something on your Mac',
+  node: 'run a script',
+  python: 'run a script',
+  python3: 'run a script',
+  tsx: 'run a script',
+  deno: 'run a script',
+};
+
 /**
- * What an approval asks, in a line a person reads: the command itself when
- * it's one line of words, but never a diff's `@@ -18,3 +18,3 @@` or a file
- * header. An edit says which file ("Wants to edit Header.tsx").
+ * A shell command as a person would say it: "Wants to copy files", "Wants to
+ * run the tests". Only a preview: the card shows the command itself, and a
+ * chain says there's more to it rather than naming only its harmless start.
+ */
+export function commandLine(command: string): string {
+  const steps = command
+    .split(/&&|\|\||;|\||\n/)
+    .map((step) => step.trim().split(/\s+/).filter(Boolean))
+    .filter((words) => words.length > 0)
+    // Moving into a folder first isn't what it's asking to do.
+    .filter((words, i, all) => !(words[0] === 'cd' && i < all.length - 1));
+  const first = steps[0];
+  if (!first) return 'Wants to run a command';
+  let words = first;
+  while (words.length > 1 && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0]) || words[0] === 'sudo'))
+    words = words.slice(1);
+  const program = words[0].split('/').pop() ?? words[0];
+  const args = words.slice(1).filter((w) => !w.startsWith('-'));
+  const verb =
+    program === 'git'
+      ? (GIT[args[0]] ?? 'use git')
+      : PACKAGE_MANAGERS.has(program)
+        ? packageVerb(args)
+        : program === 'npx' || program === 'bunx'
+          ? args[0]
+            ? `run ${args[0]}`
+            : null
+          : (PROGRAMS[program] ?? null);
+  const line = `Wants to ${verb ?? `run “${program}”`}`;
+  return steps.length > 1 ? `${line}, and more` : line;
+}
+
+/**
+ * What an approval asks, in a line a person reads: a command in plain words
+ * (`commandLine`), never a diff's `@@ -18,3 +18,3 @@` or a file header. An
+ * edit says which file ("Wants to edit Header.tsx").
  */
 export function askingLine(approval: Pick<Approval, 'title' | 'detail'>): string {
+  if (approval.title === 'Run a command' && approval.detail?.trim())
+    return commandLine(approval.detail);
   const lines = (approval.detail ?? '')
     .split('\n')
     .map((l) => l.trim())

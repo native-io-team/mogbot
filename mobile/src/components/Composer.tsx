@@ -60,7 +60,8 @@ import { useApp } from '../lib/store';
 import { chromeScale, colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
 import { AgentAvatar } from './agent';
 import { StagedTile, type Staged } from './attachments';
-import { choose, Icon, ripple, T } from './ui';
+import { choose } from './menu';
+import { Icon, ripple, T } from './ui';
 
 const NONE: Agent[] = [];
 
@@ -72,6 +73,7 @@ export function Composer({
   onError,
   onSent,
   onHeight,
+  side = { left: 0, right: 0 },
 }: {
   agent: Agent;
   autoFocus?: boolean;
@@ -80,6 +82,8 @@ export function Composer({
   onError: (text: string) => void;
   onSent: () => void;
   onHeight?: (h: number) => void;
+  /** Kept clear at each side: a phone in landscape has its notch there. */
+  side?: { left: number; right: number };
 }) {
   const accent = useAccent();
   const insets = useSafeAreaInsets();
@@ -221,7 +225,14 @@ export function Composer({
 
   return (
     <View
-      style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, space.sm) }]}
+      style={[
+        styles.wrap,
+        {
+          paddingBottom: Math.max(insets.bottom, space.sm),
+          paddingLeft: space.md + side.left,
+          paddingRight: space.md + side.right,
+        },
+      ]}
       onLayout={(e: LayoutChangeEvent) => onHeight?.(e.nativeEvent.layout.height)}
     >
       {suggestions.length > 0 && (

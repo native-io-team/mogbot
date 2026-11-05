@@ -1,5 +1,9 @@
 import type { ExpoConfig } from 'expo/config';
 
+// The product's name and links (MISSION: set in one place), handed to the app
+// as `extra.brand` (src/lib/brand.ts), so Metro never has to see outside mobile/.
+const brand = require('../brand.json');
+
 /**
  * Official builds set all three in EAS; forks and self-builds set their own
  * (docs/mobile.md, "Installing the app"). With no EAS_PROJECT_ID, OTA
@@ -78,6 +82,7 @@ export default (): ExpoConfig => ({
   ],
   experiments: { typedRoutes: true },
   extra: {
+    brand,
     official: Boolean(projectId),
     ...(projectId ? { eas: { projectId } } : {}),
   },

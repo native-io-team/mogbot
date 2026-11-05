@@ -5,15 +5,22 @@
  * the router.
  */
 
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import type { ComponentType } from 'react';
-import { AgentAccent } from './accent';
+import { AgentAccent, useAccent } from './accent';
+
+/** The screen's header controls (Back, Done) in the accent in scope. */
+function HeaderTint() {
+  const { accent } = useAccent();
+  return <Stack.Screen options={{ headerTintColor: accent }} />;
+}
 
 export function withAgentAccent<P extends object>(Screen: ComponentType<P>, param = 'id') {
   function Scoped(props: P) {
     const params = useLocalSearchParams<Record<string, string>>();
     return (
       <AgentAccent agentId={params[param]}>
+        <HeaderTint />
         <Screen {...props} />
       </AgentAccent>
     );
