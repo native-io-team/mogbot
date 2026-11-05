@@ -608,19 +608,27 @@ Mac: see [Pairing is stuck](#pairing-is-stuck-or-cant-reach-the-mac).
 
 ### Step 17. Let agents use Chrome (optional, Claude Code only)
 
-With this, an agent can work in the human's own Chrome where they're already
-signed in (LinkedIn, X, a dashboard), and every click, post, send or payment
-still asks on a card first. Codex agents can't use it.
+With this, an agent uses the sites the human is already signed in to in their
+own Chrome (Figma, LinkedIn, a dashboard) instead of asking them to log in.
+Reading goes through; every click, typing, post, send or payment, and any site
+the agent wasn't given, asks on a card first. It needs Claude Code signed in
+with a Claude account (not an API key). Codex agents can't use it; they ask
+instead.
 
-**HUMAN:** *"If you want your agents to be able to use websites in your own
-Chrome: in **each Chrome profile** you want them to use, install the
-**Claude** extension by Anthropic from the Chrome Web Store, and sign in to it
-with the **same Claude account** you signed in to Claude Code with. Keep
-Chrome open while agents work. The first time an agent opens a site, the
-extension asks whether it may use that site: approve it. Tell me when it's
-installed."*
+**HUMAN:** *"If you want your agents to use websites in your own Chrome: in
+**each Chrome profile** you want them to use, install the **Claude in Chrome**
+extension (https://claude.ai/chrome) and sign in to it with the **same Claude
+account** you signed in to Claude Code with. Then in the app press ⌘K, choose
+**Let agents use your browser…**, and follow the card until it offers **Turn
+on**; press it. Keep Chrome open while agents work. The first time an agent
+opens a site, the extension asks whether it may use that site: approve it.
+Tell me what the card says."*
 
-**Check**
+**Check:** the card says *"On. Agents use the sites you're signed in to in
+Chrome, as you…"*. *"On, but Chrome isn't answering right now"* means Chrome
+is closed or the extension isn't connected: see
+[Extension not connected](#chrome-extension-not-connected). From the terminal,
+Claude Code's link to the extension:
 
 ```bash
 ls "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_code_browser_extension.json" && echo HELPER_OK
@@ -844,16 +852,20 @@ attachments, old downloads); that's the human's call.
 
 ### Chrome extension not connected
 
-1. The **Claude** extension by Anthropic is installed in the Chrome profile
-   the agent should use (each profile needs its own install) and signed in
-   with the **same Claude account** as Claude Code (`claude auth status`
-   shows which).
-2. Chrome is open. Agents can't use a closed Chrome.
-3. Step 17's check passes (`HELPER_OK`). If not, run `claude --chrome` once
-   and type `/chrome` to see the status.
-4. The extension asked whether it may use the site: approve it in Chrome.
-5. Only Claude Code agents can use Chrome. A Codex agent says so; ask the Chief to
-   switch that agent to Claude Code if it needs the browser.
+1. The **Claude in Chrome** extension (https://claude.ai/chrome) is installed
+   in the Chrome profile the agent should use (each profile needs its own
+   install) and signed in with the **same Claude account** as Claude Code
+   (`claude auth status` shows which). Claude Code signed in with an API key
+   can't use it.
+2. Chrome is open. Agents can't use a closed Chrome. If the agent asks you to
+   bring a Chrome window to the front, do that and press Check again.
+3. ⌘K → **Let agents use your browser…** says "On". If it offers Check again,
+   press it after opening Chrome.
+4. Step 17's terminal check passes (`HELPER_OK`). If not, run
+   `claude --chrome` once and type `/chrome` to see the status.
+5. The extension asked whether it may use the site: approve it in Chrome.
+6. Only Claude Code agents can use Chrome. A Codex agent says so; ask the
+   Chief to switch that agent to Claude Code if it needs the browser.
 
 ### Port already in use
 

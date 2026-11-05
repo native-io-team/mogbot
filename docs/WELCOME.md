@@ -52,7 +52,7 @@ you. Roughly:
    first time, the real experience). Your agent asks which. Then scan the code
    on the Mac to pair.
 5. **Say hello to your Chief of Staff.** Optionally: let agents use your
-   Chrome (the Claude extension, same Claude account), and bring your agents
+   Chrome (the Claude in Chrome extension, same Claude account), and bring your agents
    over from Grok Bot or another assistant.
 
 How independent your agents are, and everything about your team, can be
