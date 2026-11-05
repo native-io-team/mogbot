@@ -34,6 +34,7 @@ import { ImportAgentsModal, type ImportPath } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
 import { ChiefIdeasModal } from './ChiefIdeasModal';
 import { TeamLoginsModal } from './TeamLogins';
+import { BrowserSetupModal } from './TeamSetupReach';
 import { ProjectActionConfirmModal } from '../dashboard/ProjectActionConfirmModal';
 import { AccentScope } from '../../contexts/AccentScopeContext';
 import { Spinner } from '../primitives/Spinner';
@@ -287,6 +288,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const openModal = useOpenModal();
   const openIdeas = useCallback(() => openModal('chiefIdeas'), [openModal]);
   const openLogins = useCallback(() => openModal('teamLogins'), [openModal]);
+  const openBrowser = useCallback(() => openModal('agentBrowser'), [openModal]);
   /** A picked idea: the Chief's chat, with its brief typed out. */
   const pickIdea = useCallback(
     (idea: ChiefIdea) => {
@@ -389,6 +391,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     onSearch: focusSearch,
     onIdeas: openIdeas,
     onLogins: openLogins,
+    onBrowser: openBrowser,
   });
 
   // The order you see in the sidebar, for previous / next.
@@ -969,6 +972,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
       />
       <AgentAppsModal isOpen={appsOpen} onClose={() => setAppsOpen(false)} />
       <TeamLoginsModal />
+      <BrowserSetupModal />
       {roomEditor.open && (
         <RoomEditorModal
           isOpen

@@ -17,6 +17,7 @@ import { ErrorIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
 import { Tooltip } from '../primitives/Tooltip';
 import { useAsyncState } from '../../hooks/useAsyncState';
+import { useOpenModal } from '../../contexts/ModalContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { formatAgo } from '../../lib/workflows';
 import {
@@ -31,6 +32,7 @@ import type { Agent } from '../../lib/agents';
 export function AgentReach({ agent }: { agent: Agent }) {
   const load = useCallback(() => agentReach(agent.id), [agent.id]);
   const { data, setData, error: loadError, execute } = useAsyncState<Reach>(load);
+  const openModal = useOpenModal();
   useEffect(() => {
     void execute();
   }, [execute]);
@@ -50,7 +52,7 @@ export function AgentReach({ agent }: { agent: Agent }) {
     reach.connections.length === 0 &&
     reach.secrets.length === 0 &&
     reach.blockedApps.length === 0 &&
-    (!reach.browser || (reach.browser.on && reach.browser.sites.length === 0));
+    !reach.browser;
 
   return (
     <div className="agent-editor__label" role="group" aria-label="What it can reach">
@@ -100,21 +102,29 @@ export function AgentReach({ agent }: { agent: Agent }) {
           </ul>
         </section>
       )}
-      {reach?.browser && (!reach.browser.on || reach.browser.sites.length > 0) && (
+      {reach?.browser && (
         <section className="agent-reach__section" aria-label="Browser">
           <span className="agent-reach__heading">Your browser</span>
           <ul className="agent-permissions">
             <li className="agent-permissions__rule agent-secrets__row">
               <span className="agent-secrets__text">
                 <span className="agent-secrets__name">
-                  {reach.browser.on ? 'Chrome, through Claude in Chrome' : 'Off'}
+                  {reach.browser.on
+                    ? 'Chrome, through Claude in Chrome'
+                    : reach.browser.teamOn
+                      ? 'Off'
+                      : 'Not set up'}
                 </span>
                 <span className="agent-secrets__meta">
                   {reach.browser.on
                     ? `Where you’re signed in${
-                        reach.browser.sites.length ? ` · for ${reach.browser.sites.join(', ')}` : ''
-                      } · every click, post or send asks you first`
-                    : `${agent.name} can’t use your browser.`}
+                        reach.browser.sites.length
+                          ? ` · reads ${reach.browser.sites.join(', ')}`
+                          : ''
+                      } · other sites, and every click, post or send, ask you first · never for routines answering outside text`
+                    : reach.browser.teamOn
+                      ? `${agent.name} can’t use your browser.`
+                      : 'Your team’s browser isn’t on yet, so it asks you instead.'}
                 </span>
                 {reach.browser.on && !reach.browser.helperInstalled && (
                   <span className="agent-secrets__meta agent-reach__warn">
@@ -129,6 +139,24 @@ export function AgentReach({ agent }: { agent: Agent }) {
                   onClick={() => void remove({ kind: 'browser' })}
                 >
                   Remove
+                </TextButton>
+              )}
+              {!reach.browser.teamOn && (
+                <TextButton
+                  tabIndex={0}
+                  className="agent-permissions__revoke"
+                  onClick={() => openModal('agentBrowser')}
+                >
+                  Set up
+                </TextButton>
+              )}
+              {reach.browser.teamOn && reach.browser.ownOff && (
+                <TextButton
+                  tabIndex={0}
+                  className="agent-permissions__revoke"
+                  onClick={() => void remove({ kind: 'browser_on' })}
+                >
+                  Give it back
                 </TextButton>
               )}
             </li>

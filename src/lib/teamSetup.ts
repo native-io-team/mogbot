@@ -50,10 +50,42 @@ export interface SetupHello {
   state: HelloState;
 }
 
+/** A row of the Logins step: one service the imported agents mentioned (`agents/access_check.rs`). */
+export type SetupLaterState =
+  | { state: 'open' }
+  | { state: 'reachable'; via: string }
+  | { state: 'not_needed' }
+  | { state: 'asked'; agentId: string; requestId: string };
+
+export type SetupLater = {
+  key: string;
+  /** The catalogue's id, or `other`. */
+  service: string;
+  title: string;
+  agents: string[];
+  agentIds: string[];
+  /** The one button: "Connect Figma", "Use my browser", "Get your key". */
+  action?: string;
+  /** A key is the only way in. */
+  keyOnly: boolean;
+} & SetupLaterState;
+
+/** "Checking what your team can already reach", live. */
+export interface SetupCheck {
+  running: boolean;
+  total: number;
+  checked: { title: string; reached: boolean }[];
+  /** The browser was part of it. */
+  browser: boolean;
+  finishedAt?: number;
+}
+
 export interface SetupStep {
   id: SetupStepId;
   state: SetupStepState;
   logins?: SetupLogin[];
+  later?: SetupLater[];
+  check?: SetupCheck;
   routines?: SetupRoutine[];
   gaps?: SetupGapGroup[];
   agents?: SetupHello[];
@@ -86,6 +118,11 @@ export const sayHiFromSetup = (agentId: string) =>
 export const askChiefAboutMissing = () => invoke<AgentMessage>('agents_team_setup_missing');
 export const dismissTeamSetup = () => invoke<void>('agents_team_setup_dismiss');
 export const reopenTeamSetup = () => invoke<void>('agents_team_setup_reopen');
+/** A row nothing reached: one sign-in card, started on this Mac, or put away. */
+export const setupLater = (key: string, action: 'connect' | 'not_needed') =>
+  invoke<{ agentId: string; requestId: string } | null>('agents_team_setup_later', { key, action });
+/** Check again what the team can already reach (progress arrives on the checklist). */
+export const checkTeamReach = () => invoke<number>('agents_access_check');
 
 /* ------------------------------------------------------------- the store */
 
@@ -218,9 +255,10 @@ export function stepWords(
   switch (id) {
     case 'logins':
       return {
-        title: 'Add logins',
-        detail: 'Each one goes into this Mac’s Keychain, never the chat.',
-        done: 'Logins added',
+        title: 'Logins',
+        detail:
+          'Checked against this Mac first: connected apps, its own sign-ins and your browser. Only what’s left is asked.',
+        done: 'Logins sorted',
       };
     case 'routines':
       return {
@@ -249,6 +287,33 @@ export function stepStatus(step: SetupStep, chief: string): string {
   if (step.state === 'skipped') return 'Skipped';
   if (step.state === 'done') return stepWords(step.id, chief).done;
   return '';
+}
+
+/** The progress line while the check runs: "Checking 14 services… Figma ✓ GitHub ✓". */
+export function checkLine(check: SetupCheck): string {
+  const n = check.total;
+  const head = check.running
+    ? `Checking ${n} service${n === 1 ? '' : 's'}…`
+    : `Checked ${n} service${n === 1 ? '' : 's'}.`;
+  const marks = check.checked.map((c) => `${c.title} ${c.reached ? '✓' : '–'}`);
+  return marks.length ? `${head} ${marks.join(' ')}` : head;
+}
+
+/** Rows nothing reached and nobody decided: the residue. */
+export function openLater(later: SetupLater[]): SetupLater[] {
+  return later.filter((l) => l.state === 'open');
+}
+
+/** The Logins step's head once the check is done. */
+export function residueLine(later: SetupLater[]): string {
+  const n = openLater(later).length;
+  if (n === 0) return 'Your team is ready. Everything it mentioned is reachable on this Mac.';
+  return `Your team is ready. ${n} thing${n === 1 ? '' : 's'} I couldn’t reach on this Mac:`;
+}
+
+/** "Figma: your browser, signed in on www.figma.com". */
+export function receiptLine(l: SetupLater): string | null {
+  return l.state === 'reachable' ? `${l.title}: ${l.via}` : null;
 }
 
 /** Logins by service, whoever needs them: one row for a login several agents use. */

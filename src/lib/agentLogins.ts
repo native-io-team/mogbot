@@ -154,6 +154,7 @@ export interface AgentReachSettings {
 export type Removal =
   | { kind: 'connection'; connectionId: string }
   | { kind: 'browser' }
+  | { kind: 'browser_on' }
   | { kind: 'browser_site'; site: string }
   | { kind: 'secret'; secretId: string }
   | { kind: 'block_app'; name: string }

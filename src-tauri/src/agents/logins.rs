@@ -2057,6 +2057,8 @@ pub enum Removal {
         connection_id: String,
     },
     Browser,
+    /// Give it back (the team's browser stays as it is).
+    BrowserOn,
     #[serde(rename_all = "camelCase")]
     BrowserSite {
         site: String,
@@ -2084,6 +2086,9 @@ pub fn remove(agent_id: &str, removal: &Removal) -> Result<Reach, CommandError> 
                 a.reach.browser_off = true;
                 a.reach.browser_sites.clear();
             })?;
+        }
+        Removal::BrowserOn => {
+            store::update(agent_id, |a| a.reach.browser_off = false)?;
         }
         Removal::BrowserSite { site } => {
             store::update(agent_id, |a| a.reach.browser_sites.retain(|s| s != site))?;

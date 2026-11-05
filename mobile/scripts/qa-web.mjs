@@ -1037,7 +1037,7 @@ const TEAM_SETUP = [
     ready: 'Setting up your team',
     settle: 2500,
     check:
-      'One card at the foot of the Chief’s chat: “Setting up your team”, quiet “0 of 4 done”, the source line “A few things to finish… from Grok Bot”, a quiet set-aside note (no count). Add logins open with five rows and Add; the other steps folded rows with chevrons. Skip is quiet; no accent fill anywhere',
+      'One card at the foot of the Chief’s chat: “Setting up your team”, quiet “0 of 4 done”, the source line “A few things to finish… from Grok Bot”, a quiet set-aside note (no count). Add logins open on “Your team is ready. 3 things I couldn’t reach on this Mac:” with LinkedIn (Use my browser), Notion (Connect Notion) and Kiln log (Add a key for Kiln log), each with a quiet Not needed; “3 reached” folded and “Check again” quiet; no per-agent secret rows; the other steps folded rows with chevrons. Skip is quiet; no accent fill anywhere',
   },
   {
     name: 'setup-routines',

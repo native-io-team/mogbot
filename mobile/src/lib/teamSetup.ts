@@ -7,7 +7,9 @@
  */
 
 import type {
+  TeamSetupCheck,
   TeamSetupHello,
+  TeamSetupLater,
   TeamSetupStep,
   TeamSetupStepId,
   TeamSetupView,
@@ -28,7 +30,9 @@ export const stepTitle = (id: TeamSetupStepId) => TITLES[id];
 export function stepHint(step: TeamSetupStep, chief: string): string {
   switch (step.id) {
     case 'logins':
-      return 'Each one goes into the Keychain on your Mac, never the chat.';
+      return step.later?.length
+        ? 'Your Mac checked what your team can already reach. Only the rest is here.'
+        : 'Each one goes into the Keychain on your Mac, never the chat.';
     case 'routines':
       return 'They arrived paused. Switch on the ones you want; they run while your Mac is awake.';
     case 'missing':
@@ -73,6 +77,50 @@ export function stateWord(step: TeamSetupStep): string | null {
   if (step.state === 'skipped') return 'Skipped';
   return null;
 }
+
+/* ------------------------------------------- what the team can already reach */
+
+/** "Checking 14 services… Figma ✓ Bankline –", as the Mac's `progress_line` says it. */
+export function checkLine(c: TeamSetupCheck): string {
+  const n = c.total;
+  const s = n === 1 ? '' : 's';
+  const head = c.running ? `Checking ${n} service${s}…` : `Checked ${n} service${s}.`;
+  const marks = c.checked.map((x) => `${x.title} ${x.reached ? '✓' : '–'}`);
+  return marks.length ? `${head} ${marks.join(' ')}` : head;
+}
+
+/** Rows nothing on the Mac reached and nobody has decided. */
+export const openRows = (rows: TeamSetupLater[] | undefined) =>
+  (rows ?? []).filter((r) => r.state === 'open');
+
+/** Rows the check reached, as receipts. */
+export const reachedRows = (rows: TeamSetupLater[] | undefined) =>
+  (rows ?? []).filter(
+    (r): r is TeamSetupLater & { state: 'reachable'; via: string } => r.state === 'reachable'
+  );
+
+/** "Figma: your browser, signed in on www.figma.com". */
+export const receipt = (r: { title: string; via: string }) => `${r.title}: ${r.via}`;
+
+/** The residue's head line. */
+export function residueLine(open: number): string {
+  if (open === 0) return 'Your team is ready.';
+  return `Your team is ready. ${open} thing${open === 1 ? '' : 's'} I couldn’t reach on this Mac:`;
+}
+
+/** "3 reached", the receipts' toggle. */
+export const reachedToggle = (n: number) => `${n} reached`;
+
+/** A row's agents line: "Finance, Ops". */
+export const rowAgents = (r: Pick<TeamSetupLater, 'agents'>) => r.agents.join(', ');
+
+export const ASKED_LINE = 'Waiting on the sign-in card';
+export const NOT_NEEDED = 'Not needed';
+export const CHECK_AGAIN = 'Check again';
+
+/** A login card's line for the agents that joined it. */
+export const alsoForLine = (names: string[] | undefined) =>
+  names && names.length ? `Also for ${names.join(', ')}` : null;
 
 /** Whether the card draws anything (a Mac that has none says `null`). */
 export const shows = (v: TeamSetupView | null | undefined): v is TeamSetupView =>

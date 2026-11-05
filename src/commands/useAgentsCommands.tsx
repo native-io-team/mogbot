@@ -11,6 +11,7 @@ import {
   AgentsIcon,
   CollaboratorsIcon,
   DownloadIcon,
+  GlobeIcon,
   PlugIcon,
   PlusIcon,
   SearchIcon,
@@ -23,7 +24,12 @@ import { useAgentsSelector, type AgentsState } from '../lib/agentsStore';
 import type { AppView } from '../lib/types';
 import { AGENT_EVENTS, OTHER_APP_NAME, otherAppExists, TEAM_ID } from '../lib/agents';
 import { ROLE_TEMPLATES } from '../lib/agentTemplates';
-import { resumeTeamSetup, SETUP_TITLE, useResumableTeamSetup } from '../lib/teamSetup';
+import {
+  checkTeamReach,
+  resumeTeamSetup,
+  SETUP_TITLE,
+  useResumableTeamSetup,
+} from '../lib/teamSetup';
 
 type AgentsIntent =
   | { kind: 'new'; template?: string }
@@ -32,6 +38,7 @@ type AgentsIntent =
   | { kind: 'search' }
   | { kind: 'ideas' }
   | { kind: 'logins' }
+  | { kind: 'browser' }
   | { kind: 'open'; agentId: string };
 let pendingIntent: AgentsIntent | null = null;
 const intentListeners = new Set<(intent: AgentsIntent) => void>();
@@ -58,8 +65,19 @@ export function useAgentsIntents(handlers: {
   onIdeas: () => void;
   /** "What your team needs": every login waiting, one row per app. */
   onLogins?: () => void;
+  /** "Let agents use your browser": the guided card. */
+  onBrowser?: () => void;
 }) {
-  const { onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch, onIdeas, onLogins } = handlers;
+  const {
+    onNewAgent,
+    onImportAgents,
+    onApps,
+    onOpenAgent,
+    onSearch,
+    onIdeas,
+    onLogins,
+    onBrowser,
+  } = handlers;
   useEffect(() => {
     const listener = (intent: AgentsIntent) => {
       if (intent.kind === 'new') onNewAgent(intent.template);
@@ -68,6 +86,7 @@ export function useAgentsIntents(handlers: {
       else if (intent.kind === 'search') onSearch();
       else if (intent.kind === 'ideas') onIdeas();
       else if (intent.kind === 'logins') onLogins?.();
+      else if (intent.kind === 'browser') onBrowser?.();
       else onOpenAgent(intent.agentId);
     };
     intentListeners.add(listener);
@@ -79,7 +98,7 @@ export function useAgentsIntents(handlers: {
     return () => {
       intentListeners.delete(listener);
     };
-  }, [onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch, onIdeas, onLogins]);
+  }, [onNewAgent, onImportAgents, onApps, onOpenAgent, onSearch, onIdeas, onLogins, onBrowser]);
 }
 
 /** What the "Open <agent>" commands name: a status or a new message doesn't change them. */
@@ -284,6 +303,38 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         keywords: ['agents', 'migrate', 'bring over', 'team', 'move', 'copy'],
         run: () => {
           requestAgentsIntent({ kind: 'import', from: 'otherApp' });
+          setView('agents');
+        },
+      },
+      {
+        id: 'agents.browser',
+        title: 'Let agents use your browser…',
+        icon: <GlobeIcon size={14} />,
+        category: 'navigation',
+        keywords: [
+          'agents',
+          'browser',
+          'chrome',
+          'claude in chrome',
+          'signed in',
+          'extension',
+          'logins',
+        ],
+        run: () => {
+          requestAgentsIntent({ kind: 'browser' });
+          setView('agents');
+        },
+      },
+      {
+        id: 'agents.checkReach',
+        title: 'Check what your team can already reach',
+        icon: <PlugIcon size={14} />,
+        category: 'navigation',
+        when: () => !!setup,
+        keywords: ['agents', 'import', 'logins', 'reach', 'access', 'connected', 'check'],
+        run: () => {
+          checkTeamReach().catch((e: unknown) => showToast(String(e), 'error'));
+          if (chiefId) requestAgentsIntent({ kind: 'open', agentId: chiefId });
           setView('agents');
         },
       },

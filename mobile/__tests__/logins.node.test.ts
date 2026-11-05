@@ -146,7 +146,7 @@ describe('a login card, in words', () => {
         { connectionId: 'c1', service: 'gmail', title: 'Gmail', account: 'work@acme.com', access: 'read', kept: 'Held on claude.ai', needsSignIn: false },
         { connectionId: 'c2', service: 'linear', title: 'Linear', account: 'Linear', access: 'full', kept: 'In your Mac’s Keychain', needsSignIn: true },
       ],
-      browser: { on: true, sites: ['www.linkedin.com'], helperInstalled: false },
+      browser: { on: true, teamOn: true, ownOff: false, sites: ['www.linkedin.com'], helperInstalled: false },
       secrets: [{ secretId: 's1', name: 'x_key', purpose: 'Post', variables: ['$X_KEY'] }],
       blockedApps: ['figma'],
     });

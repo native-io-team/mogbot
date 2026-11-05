@@ -29,6 +29,10 @@ jest.mock('../src/lib/session', () => ({
     hello: (...a: unknown[]) => (calls.push(['hello', ...a]), Promise.resolve({})),
     missing: () => (calls.push(['missing']), Promise.resolve({})),
     dismiss: () => (calls.push(['dismiss']), Promise.resolve(null)),
+    later: (...a: unknown[]) =>
+      (calls.push(['later', ...a]),
+      Promise.resolve(a[1] === 'connect' ? { agentId: 'finance', requestId: 'q9' } : null)),
+    check: () => (calls.push(['check']), Promise.resolve(2)),
   },
 }));
 jest.mock('../src/lib/haptics', () => ({
@@ -127,6 +131,40 @@ describe('Setting up your team', () => {
     expect(screen.getByRole('button', { name: 'Skip' }).props.accessibilityState).toMatchObject({
       disabled: true,
     });
+  });
+});
+
+describe('what the team can already reach', () => {
+  it('leaves only what the Mac could not reach, each with one button and Not needed', async () => {
+    await show(view());
+    expect(screen.getByText('Your team is ready. 2 things I couldn’t reach on this Mac:')).toBeTruthy();
+    expect(screen.getByTestId('reach-open-linkedin')).toBeTruthy();
+    expect(screen.getByTestId('reach-open-other:bankline')).toBeTruthy();
+    expect(screen.queryByTestId('reach-open-figma')).toBeNull();
+    // Decided rows read as such; a raised card waits.
+    expect(screen.getByText('Notion · Not needed')).toBeTruthy();
+    expect(screen.getByText('Waiting on the sign-in card')).toBeTruthy();
+    // What it reached folds into receipts.
+    expect(screen.queryByText('Figma: your browser, signed in on www.figma.com')).toBeNull();
+    await fireEvent.press(screen.getByText('1 reached'));
+    expect(screen.getByText('Figma: your browser, signed in on www.figma.com')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Use my browser' }));
+    await waitFor(() => expect(calls).toEqual([['later', 'linkedin', 'connect', true]]));
+    calls.length = 0;
+    await fireEvent.press(screen.getByLabelText('Bankline: Not needed'));
+    await waitFor(() => expect(calls).toEqual([['later', 'other:bankline', 'not_needed']]));
+    calls.length = 0;
+    await fireEvent.press(screen.getByTestId('reach-check-again'));
+    await waitFor(() => expect(calls).toEqual([['check']]));
+  });
+
+  it('is one calm line while the Mac checks', async () => {
+    const v = view();
+    const logins = v.steps.find((s) => s.id === 'logins')!;
+    logins.check = { ...logins.check!, running: true };
+    await show(v);
+    expect(screen.getByText('Checking 5 services… Figma ✓ LinkedIn –')).toBeTruthy();
+    expect(screen.queryByTestId('team-setup-reach')).toBeNull();
   });
 });
 
