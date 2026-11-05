@@ -10,6 +10,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { Spinner } from '../../components/agent';
+import { LinkProblem } from '../../components/ConnectionPill';
 import { openFile } from '../../components/attachments';
 import { choose } from '../../components/menu';
 import { Segmented, T } from '../../components/ui';
@@ -36,21 +37,27 @@ function Files() {
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const live = useApp((s) => s.link.kind === 'connected');
+  const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
 
-  const load = useCallback(
-    () =>
-      listFiles(id).then(
+  const load = useCallback(() => {
+    setLoading(true);
+    return listFiles(id)
+      .then(
         (f) => {
           setFiles(f);
           setError(null);
         },
         (e: unknown) => setError(describeError(e))
-      ),
-    [id]
-  );
+      )
+      .finally(() => setLoading(false));
+  }, [id]);
+  // Asked once the link is up, and again each time it comes back: a cold or
+  // deep-linked open lands here before the socket is.
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (live) void load();
+  }, [load, live]);
 
   const shown = useMemo(
     () => (files ?? []).filter((f) => filter === 'all' || f.from === filter),
@@ -113,7 +120,7 @@ function Files() {
               { value: 'agent', label: agentName },
             ]}
           />
-          {error && (
+          {error && live && (
             <T variant="small" color={colors.accentErrorLight}>
               {error}
             </T>
@@ -123,7 +130,11 @@ function Files() {
       ListEmptyComponent={
         <View style={styles.empty}>
           {files == null ? (
-            <Spinner />
+            !live ? (
+              <LinkProblem what="Files from this conversation" macName={macName} />
+            ) : loading ? (
+              <Spinner />
+            ) : null
           ) : (
             <T color={colors.textSecondary}>
               {filter === 'user'

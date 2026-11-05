@@ -178,9 +178,9 @@ describe('the result card', () => {
     const { rerender } = render(
       <ResultCardView message={message(V1)} card={V1} agent={agent} newest={false} />
     );
-    expect(screen.getByText('October summary · v1 · a newer version is below')).toBeTruthy();
+    expect(screen.getByText('October summary · v1 · earlier version')).toBeTruthy();
     expect(screen.queryByRole('article')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /a newer version/ }));
+    fireEvent.click(screen.getByRole('button', { name: /earlier version/ }));
     expect(screen.getByRole('article')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Ask for changes/ })).toBeNull();
     rerender(
@@ -264,7 +264,7 @@ describe('an older version on a change card', () => {
     // Folded: one line, nothing else.
     expect(screen.queryByRole('article')).toBeNull();
     expect(screen.queryByText(/Changed 1 file/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /a newer version/ }));
+    fireEvent.click(screen.getByRole('button', { name: /earlier version/ }));
     const card = screen.getByRole('article');
     expect(within(card).getByText(/Changed 1 file/)).toBeTruthy();
     // Still no Ask for changes on an old version.
