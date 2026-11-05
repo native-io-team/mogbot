@@ -20,6 +20,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { Spinner } from '../components/agent';
 import { choose } from '../components/menu';
 import { Button, Icon, T, SheetPage } from '../components/ui';
+import { SheetTitle } from '../components/SheetTitle';
 import { haptic } from '../lib/haptics';
 import { changeMemory, describeError, readMemory } from '../lib/session';
 import { useApp } from '../lib/store';
@@ -135,9 +136,7 @@ function Memory() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <T variant="title" color={colors.textStrong}>
-          Memory
-        </T>
+        <SheetTitle>Memory</SheetTitle>
         <T variant="small" color={colors.textSecondary}>
           What {name} remembers between conversations. It reads this at the start of every one, and
           keeps it up to date itself.

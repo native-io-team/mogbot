@@ -374,7 +374,7 @@ export function ChatView({
             headerTitle: () => (
               <Pressable
                 accessibilityRole="button"
-                accessibilityHint="Files, check-ins and routines"
+                accessibilityHint="Instructions, memory, files and routines"
                 onPress={openSheet}
               >
                 {header}

@@ -344,7 +344,7 @@ function SystemLine({ message }: { message: AgentMessage }) {
       : message.kind === 'from_agent' && message.peer
         ? `From ${message.peer.name}: ${message.text}`
         : message.kind === 'check_in'
-          ? `${message.checkIn?.manual ? 'Ran now' : 'Check-in'} · ${message.text}`
+          ? `${message.checkIn?.manual ? 'Ran now' : 'Routine'} · ${message.text}`
           : message.text;
   const opens = !!changes && canDiff;
   // No clock of its own: the chat's time lines say when (and the long-press menu, exactly).

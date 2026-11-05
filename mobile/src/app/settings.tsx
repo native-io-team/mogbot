@@ -36,6 +36,9 @@ export default function Settings() {
   const router = useRouter();
   const credentials = useApp((s) => s.credentials);
   const connected = useApp((s) => s.link.kind === 'connected');
+  // The route in use now, never assumed: nothing while it isn't connected.
+  const route = useApp((s) => (s.link.kind === 'connected' ? s.link.route : null));
+  const protocol = useApp((s) => s.welcome?.protocol ?? null);
   const haptics = useApp((s) => s.prefs.haptics);
   const appearance = useApp((s) => s.prefs.appearance);
   const hapticsSwitch = useSwitchColors(haptics);
@@ -115,7 +118,13 @@ export default function Settings() {
       <Section title="Paired Mac">
         <Row
           label={credentials?.name ?? 'None'}
-          value={credentials ? 'Over Tailscale' : undefined}
+          value={
+            route === 'tailscale'
+              ? 'Over Tailscale'
+              : route === 'lan'
+                ? 'On this network'
+                : undefined
+          }
         />
         {credentials && (
           <Row label="Paired" value={new Date(credentials.pairedAt).toLocaleDateString()} />
@@ -205,14 +214,25 @@ export default function Settings() {
             : 'Over-the-air updates are off in this build (a development or self-built app). Reinstall it from your Mac to update.'
         }
       >
-        <Row label="App version" value={`${version} (${build})`} />
-        {!!Updates.channel && <Row label="Channel" value={Updates.channel} />}
+        {/* One row: the build's details are for a bug report, a tap away. */}
         <Row
-          label="Runtime"
-          value={Updates.runtimeVersion ?? 'Development'}
-          last={!Updates.updateId && !Updates.isEnabled}
+          label="Version"
+          value={`${version} (${build})`}
+          onPress={() =>
+            Alert.alert(
+              `Version ${version} (${build})`,
+              [
+                `Runtime ${Updates.runtimeVersion ?? 'development'}`,
+                Updates.channel ? `Channel ${Updates.channel}` : null,
+                Updates.updateId ? `Update ${Updates.updateId.slice(0, 8)}` : null,
+                protocol != null ? `Connection protocol ${protocol}` : null,
+              ]
+                .filter(Boolean)
+                .join('\n')
+            )
+          }
+          last={!Updates.isEnabled}
         />
-        {Updates.updateId && <Row label="Update" value={Updates.updateId.slice(0, 8)} />}
         {Updates.isEnabled && (
           <Row
             label={update.kind === 'ready' ? 'Restart to update' : 'Check for update'}

@@ -17,6 +17,7 @@ import {
   type PressableProps,
   type StyleProp,
   type TextProps,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import {
@@ -348,6 +349,26 @@ export function Dot({
   );
 }
 
+/**
+ * A group's label, as iOS sets it: small capitals over the group, a header
+ * to VoiceOver, and grown with Dynamic Type only as far as chrome does.
+ */
+export function SectionTitle({ title, style }: { title: string; style?: StyleProp<TextStyle> }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <T
+      variant="caption"
+      color={colors.textMuted}
+      style={[styles.sectionTitle, style]}
+      maxFontSizeMultiplier={chromeScale}
+      accessibilityRole="header"
+    >
+      {title.toUpperCase()}
+    </T>
+  );
+}
+
 /** A grouped section on a settings-style screen. */
 export function Section({
   title,
@@ -358,21 +379,11 @@ export function Section({
   children: ReactNode;
   footer?: string;
 }) {
-  const colors = useColors();
   const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.section}>
-      {title && (
-        <T
-          variant="caption"
-          color={colors.textMuted}
-          style={styles.sectionTitle}
-          maxFontSizeMultiplier={chromeScale}
-          accessibilityRole="header"
-        >
-          {title.toUpperCase()}
-        </T>
-      )}
+      {title && <SectionTitle title={title} />}
       <View style={styles.sectionBody}>{children}</View>
       {footer && (
         <T variant="small" color={colors.textMuted} style={styles.sectionFooter}>
@@ -528,7 +539,12 @@ export function Segmented<V extends string>({
             hitSlop={4}
             style={[styles.segment, on && styles.segmentOn]}
           >
-            <T variant="small" color={on ? colors.textStrong : colors.textSecondary}>
+            <T
+              variant="small"
+              color={on ? colors.onSelectedFill : colors.textSecondary}
+              style={on ? { fontFamily: fonts.medium } : undefined}
+              maxFontSizeMultiplier={chromeScale}
+            >
               {o.label}
             </T>
           </Pressable>
@@ -553,7 +569,7 @@ const useStyles = makeStyles((colors) => ({
     justifyContent: 'center',
     borderRadius: radius.inner,
   },
-  segmentOn: { backgroundColor: colors.surfaceSelected },
+  segmentOn: { backgroundColor: colors.selectedFill },
   button: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -2,11 +2,12 @@
  * The message field. What it will do is always on the button, never hidden
  * behind a gesture:
  *
- * - idle: **Send**;
- * - working, nothing typed: **Stop**;
- * - working, with text: **Queue** (it reads it when this turn ends), with
- *   **Send now** (interrupt, then send) and Stop beside it;
- * - waiting on your OK: **Queue**, and no Stop: the card above is the control;
+ * - idle: the mic and **Send**;
+ * - working, nothing typed: **Stop**, in place of the mic;
+ * - working, with text: Stop and **Send**, which queues (the hint says it
+ *   reads it when this turn ends), with **Send now** (interrupt, then send)
+ *   in the hint row. Two controls in the field at most, never three;
+ * - waiting on your OK: Send queues, and no Stop: the card above is the control;
  * - offline: **Send** waits for the Mac (outbox.ts), and says so.
  *
  * What's typed, quoted, @mentioned and attached is the chat's draft
@@ -172,6 +173,7 @@ export function Composer({
   }, [agent.id]);
   const blocked = uploading || staged.some((f) => f.error);
   const mode = sendMode(agent, hasContent);
+  const busy = agent.status.state !== 'idle';
   const waitingOnYou = needsYou(agent);
   // What it waits on is answered on the Mac (an import to review), not above.
   const onMac = useApp((s) => waitingOnMac(agent, s.chats[agent.id]?.messages));
@@ -469,30 +471,23 @@ export function Composer({
           label={`Message ${agent.name}`}
           inputRef={input}
         >
-          <RoundButton
-            key="mic"
-            label={listening ? 'Stop dictating' : 'Dictate'}
-            onPress={mic}
-            tone={listening ? 'accent' : 'off'}
-          >
-            <Icon
-              name={listening ? 'mic.fill' : 'mic'}
-              size={iconSize.body}
-              color={listening ? accent.onAccent : colors.textSecondary}
-              fallback={<T color={colors.textSecondary}>●</T>}
-            />
-          </RoundButton>
-          {mode === 'queue' && !waitingOnYou && (
+          {/* While a turn runs the mic steps aside: Stop takes its place, never a third control. */}
+          {(!busy || listening) && (
             <RoundButton
-              label={`Stop ${agent.name}`}
-              disabled={!connected}
-              onPress={stopTurn}
-              tone="quiet"
+              key="mic"
+              label={listening ? 'Stop dictating' : 'Dictate'}
+              onPress={mic}
+              tone={listening ? 'accent' : 'off'}
             >
-              <View style={styles.stopSquare} />
+              <Icon
+                name={listening ? 'mic.fill' : 'mic'}
+                size={iconSize.body}
+                color={listening ? accent.onAccent : colors.textSecondary}
+                fallback={<T color={colors.textSecondary}>●</T>}
+              />
             </RoundButton>
           )}
-          {mode === 'stop' ? (
+          {(mode === 'stop' || (mode === 'queue' && !waitingOnYou)) && (
             <RoundButton
               key="stop"
               label={`Stop ${agent.name}`}
@@ -502,42 +497,18 @@ export function Composer({
             >
               <View style={styles.stopSquare} />
             </RoundButton>
-          ) : mode === 'queue' ? (
-            <Animated.View key="queue" entering={ZoomIn.duration(160)} style={field.roundSlot}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Queue: ${agent.name} reads it when this turn ends`}
-                disabled={!canSend}
-                onPress={() => submit(false)}
-                hitSlop={8}
-              >
-                {({ pressed }) => (
-                  <View
-                    style={[
-                      field.queue,
-                      { height: size.send, borderRadius: size.send / 2 },
-                      { backgroundColor: accent.accent },
-                      !canSend && field.off,
-                      pressed && { transform: [{ scale: 0.95 }] },
-                    ]}
-                  >
-                    <T
-                      variant="small"
-                      color={accent.onAccent}
-                      style={{ fontFamily: fonts.medium }}
-                      maxFontSizeMultiplier={chromeScale}
-                    >
-                      Queue
-                    </T>
-                    <Icon name="arrow.up" size={iconSize.inline} color={accent.onAccent} />
-                  </View>
-                )}
-              </Pressable>
-            </Animated.View>
-          ) : (
+          )}
+          {mode !== 'stop' && (
             <RoundButton
               key="send"
-              label={connected ? 'Send' : `Send when ${macName} answers`}
+              // Sending while it works queues: the hint above says so, so the button stays an arrow.
+              label={
+                mode === 'queue'
+                  ? `Queue: ${agent.name} reads it when this turn ends`
+                  : connected
+                    ? 'Send'
+                    : `Send when ${macName} answers`
+              }
               disabled={!canSend}
               onPress={() => submit(false)}
               tone={canSend ? 'accent' : 'off'}
@@ -715,14 +686,6 @@ const useFieldStyles = makeStyles((colors) => ({
     borderRadius: composer.send / 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  queue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    height: composer.send,
-    paddingHorizontal: space.md,
-    borderRadius: composer.send / 2,
   },
   attach: {
     width: composer.attach,

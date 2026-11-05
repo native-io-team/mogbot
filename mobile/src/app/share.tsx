@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { AgentAvatar } from '../components/agent';
 import { Button, SheetPage, T, useRipple } from '../components/ui';
+import { SheetTitle } from '../components/SheetTitle';
 import { makeStyles, useColors } from '../lib/appearance';
 import { sortAgents } from '../lib/agents';
 import { addFile, addQuote } from '../lib/drafts';
@@ -111,9 +112,7 @@ export default function Share() {
     return (
       <SheetPage>
         <View style={styles.root}>
-          <T variant="title" color={colors.textStrong}>
-            Nothing to send
-          </T>
+          <SheetTitle>Nothing to send</SheetTitle>
           <T color={colors.textSecondary}>
             What was shared didn’t reach the app. Share it again, or paste it into a chat.
           </T>
@@ -131,9 +130,7 @@ export default function Share() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <View style={styles.header}>
-            <T variant="title" color={colors.textStrong} accessibilityRole="header">
-              Send to agent…
-            </T>
+            <SheetTitle>Send to agent…</SheetTitle>
             <Preview payload={payload} />
             {filesBlocked && (
               <T variant="caption" color={colors.textSecondary}>

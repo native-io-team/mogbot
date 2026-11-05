@@ -4,11 +4,12 @@
  */
 
 import type { Device } from '@shipstudio/companion-protocol';
-import { PROTOCOL_VERSION } from '@shipstudio/companion-protocol';
+
 import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useLinkState, useNow } from '../components/ConnectionPill';
 import { Button, Dot, Section, T, useToneColor, SheetPage, InsetDivider } from '../components/ui';
+import { SheetTitle } from '../components/SheetTitle';
 import { engineName, formatAgo } from '../lib/agents';
 import { layers, pill } from '../lib/connection';
 import { appInfo, openTailscale } from '../lib/pairing';
@@ -41,9 +42,7 @@ export default function Connection() {
     <SheetPage>
       <ScrollView contentContainerStyle={styles.page}>
         <View style={styles.head}>
-          <T variant="title" color={colors.textStrong}>
-            {state.credentials?.name ?? 'Your Mac'}
-          </T>
+          <SheetTitle>{state.credentials?.name ?? 'Your Mac'}</SheetTitle>
           <View style={styles.headLine}>
             <Dot color={toneColor[p.tone]} />
             <T variant="small" color={colors.textSecondary}>
@@ -110,8 +109,7 @@ export default function Connection() {
               state.credentials ? new Date(state.credentials.pairedAt).toLocaleDateString() : '—'
             }
           />
-          <Info label="App" value={`${appInfo().version} (${appInfo().build})`} />
-          <Info label="Protocol" value={`v${t?.welcome?.protocol ?? PROTOCOL_VERSION}`} last />
+          <Info label="App" value={`${appInfo().version} (${appInfo().build})`} last />
         </Section>
 
         {!connected && (

@@ -12,6 +12,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { Spinner } from '../components/agent';
 import { DiffLines } from '../components/diff';
 import { Icon, T, SheetPage, InsetDivider } from '../components/ui';
+import { SheetTitle } from '../components/SheetTitle';
 import { folderName } from '../lib/agents';
 import { changeDiff, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
@@ -57,9 +58,9 @@ export default function Diff() {
     <SheetPage>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={{ gap: space['2xs'] }}>
-          <T variant="title" color={colors.textStrong}>
+          <SheetTitle>
             {changes.fileCount} file{changes.fileCount === 1 ? '' : 's'} changed
-          </T>
+          </SheetTitle>
           <T variant="small" color={colors.textSecondary}>
             {[folderName(changes.project), changes.branch].filter(Boolean).join(' · ')}
             {' · '}

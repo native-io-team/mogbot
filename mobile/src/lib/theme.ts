@@ -38,6 +38,14 @@ export interface Palette {
   inkDark: string;
   /** Ink on a dark fill (a dark accent). */
   inkLight: string;
+  /**
+   * A selected chip or segment: the neutral ink as a fill (near-black in
+   * light, near-white in dark), so which one is on reads at a glance in both.
+   * A grey step on grey (1.15:1 in light) didn't.
+   */
+  selectedFill: string;
+  /** Words on `selectedFill`. */
+  onSelectedFill: string;
   /** The one divider: between rows in a group, around a well in prose, under a pinned bar. */
   borderDefault: string;
   /** Fainter than the divider, for a line that should barely register. */
@@ -118,6 +126,8 @@ const dark: Palette = {
   textFaint: '#4e4e4e', // --text-faint (gray-700)
   inkDark: '#141414', // --text-on-accent
   inkLight: '#ffffff',
+  selectedFill: '#ededed',
+  onSelectedFill: '#141414',
   // Named by how much they show: the desktop's --border-subtle (#303030) is
   // the firmer of its two, so the phone's names are the other way round.
   borderDefault: '#303030',
@@ -172,6 +182,8 @@ const light: Palette = {
   textFaint: '#c2c2c2',
   inkDark: '#0f0f0f',
   inkLight: '#ffffff',
+  selectedFill: '#171717',
+  onSelectedFill: '#ffffff',
   borderDefault: '#e0e0e0',
   borderSubtle: '#ebebeb',
   borderStrong: '#cfcfcf',
@@ -247,6 +259,21 @@ export const agentColorKeys = {
   pickedOnly: ['white', 'gray'],
   fallback: 'purple',
 } as const;
+
+/** Each colour key in words, for VoiceOver: what the swatch looks like, not its key. */
+export const agentColorNames: Record<string, string> = {
+  white: 'Neutral',
+  brown: 'Brown',
+  red: 'Red',
+  orange: 'Orange',
+  amber: 'Amber',
+  green: 'Green',
+  teal: 'Teal',
+  blue: 'Blue',
+  purple: 'Purple',
+  pink: 'Pink',
+  gray: 'Gray',
+};
 
 /** `--spacing-*`. */
 export const space = {

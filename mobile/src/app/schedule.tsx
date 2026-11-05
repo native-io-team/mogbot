@@ -36,6 +36,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useNow } from '../components/ConnectionPill';
 import { Chip, ChipRow } from '../components/pickers';
 import { Button, T, SheetPage } from '../components/ui';
+import { SheetTitle } from '../components/SheetTitle';
 import { describeError, schedule } from '../lib/session';
 import { useApp } from '../lib/store';
 import { WireFailure } from '../lib/transport';
@@ -165,13 +166,8 @@ function Schedule() {
 
   const ready = reading.kind === 'ok' && note.trim().length > 0 && !saving;
   const timed = picker.cadence !== 'hours';
-  const title = editing
-    ? editing.repeat
-      ? 'Edit routine'
-      : 'Edit check-in'
-    : agent
-      ? `New routine for ${agent.name}`
-      : 'New routine';
+  // A routine, whether it runs once or repeats: one word for one thing.
+  const title = editing ? 'Edit routine' : agent ? `New routine for ${agent.name}` : 'New routine';
 
   return (
     <SheetPage>
@@ -180,9 +176,7 @@ function Schedule() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
       >
-        <T variant="title" color={colors.textStrong} accessibilityRole="header">
-          {title}
-        </T>
+        <SheetTitle>{title}</SheetTitle>
 
         <View style={styles.group}>
           <T variant="caption" color={colors.textMuted} style={styles.label}>
@@ -200,7 +194,7 @@ function Schedule() {
           </ChipRow>
           {picker.cadence === 'weekly' && (
             <Animated.View entering={FadeIn.duration(150)}>
-              <ChipRow label="On these days">
+              <ChipRow label="On these days" multiple>
                 {WEEK.map((d) => (
                   <Chip
                     key={d.day}
@@ -216,7 +210,7 @@ function Schedule() {
           )}
           {picker.cadence === 'hours' && (
             <Animated.View entering={FadeIn.duration(150)}>
-              <ChipRow label="How often">
+              <ChipRow label="Every">
                 {intervals.map((m) => (
                   <Chip
                     key={m}

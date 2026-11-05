@@ -1,7 +1,7 @@
 /**
  * What a turn did, as on the desktop (`AgentWork.tsx`): under the message it
  * ended on, one quiet line that opens into the steps; while the agent works,
- * a folded "Working · 8 steps" under the working row that opens into the
+ * a folded "8 steps so far" under the working row that opens into the
  * steps so far. Only what the Mac recorded; a message without `work` (or
  * from an older Mac) shows nothing.
  */
@@ -18,6 +18,7 @@ import {
   liveSteps,
   liveSummary,
   stepOffset,
+  stepOffsetSpoken,
   stepSymbol,
   workSummary,
 } from '../lib/work';
@@ -34,9 +35,11 @@ function Toggle({ open, label, onPress }: { open: boolean; label: string; onPres
         haptic.select();
         onPress();
       }}
-      hitSlop={8}
+      // A caption line is 16pt tall: the slop makes it a 44pt target.
+      hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={open ? 'Hides the steps' : 'Shows each step'}
       accessibilityState={{ expanded: open }}
       style={styles.head}
     >
@@ -69,7 +72,12 @@ function StepRow({
   const quiet = step.outcome != null;
   return (
     <View style={styles.stepBlock} testID={`work-step-${step.kind}`}>
-      <View style={styles.step}>
+      {/* One stop for VoiceOver: what it did and when, not a glyph, a label and four digits. */}
+      <View
+        style={styles.step}
+        accessible
+        accessibilityLabel={`${step.label}, ${stepOffsetSpoken(step, startedAt)}`}
+      >
         <View style={styles.icon}>
           <Icon name={stepSymbol(step.kind)} size={iconSize.inline} color={colors.textMuted} />
         </View>
@@ -162,7 +170,7 @@ export function WorkLine({
 }
 
 /**
- * Under the working row while it works: "Working · 8 steps", folded, opening
+ * Under the working row while it works: "8 steps so far", folded, opening
  * into the steps so far. The newest is left out while the working row is
  * saying it (`liveSteps`), so nothing shows twice.
  */

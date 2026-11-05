@@ -86,8 +86,8 @@ export function PromptCard({
 
   const { deny, allow, more, listed } = promptAnswers(prompt);
   // Whose session it is, said plainly: "In acme-site · Claude Code 1", or
-  // "Designer’s session in acme-site · …" when it isn’t this chat’s agent’s.
-  const owner = prompt.owner.name === agent.name ? '' : `${prompt.owner.name}’s session `;
+  // "Designer’s task in acme-site · …" when it isn’t this chat’s agent’s.
+  const owner = prompt.owner.name === agent.name ? '' : `${prompt.owner.name}’s task `;
   // The tab as its own engine names it ("Codex 2"), when the Mac's project
   // list says which engine; the prompt itself doesn't carry it.
   const session = useApp((s) =>

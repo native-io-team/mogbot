@@ -7,6 +7,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { MATERIAL } from '../src/lib/icons';
+import { STEP_SYMBOL } from '../src/lib/work';
 
 const SRC = join(__dirname, '..', 'src');
 
@@ -65,5 +66,9 @@ describe('icons', () => {
     }
     expect(seen).toBeGreaterThan(40);
     expect(missing).toEqual([]);
+  });
+
+  it('maps every step glyph of the “what it did” timeline', () => {
+    expect(Object.values(STEP_SYMBOL).filter((name) => !(name in MATERIAL))).toEqual([]);
   });
 });
