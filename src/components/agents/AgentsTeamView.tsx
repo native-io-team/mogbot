@@ -50,6 +50,7 @@ import { refreshAgents, upsertMessage, useAgentsSelector } from '../../lib/agent
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { AgentsStayOnNote } from './AgentsStayOn';
+import { AgentsQuota } from './AgentsQuota';
 import { kbd } from '../../lib/shortcuts';
 
 /** Lines read per chat: enough for its latest reply. A chat with a card open reads a page. */
@@ -413,6 +414,40 @@ export function AgentsTeamView({
             })}
           </Section>
 
+          {/* A usage limit resets by itself: listed here, quietly, not under Needs you. */}
+          {team.paused.length > 0 && (
+            <Section title="Paused" empty="">
+              {team.paused.map(({ agent, failure }) => {
+                const kind = failedTurn(agent);
+                return (
+                  <div key={agent.id} className="agents-team__group">
+                    <Row
+                      agent={agent}
+                      line={kind ? failureLine(kind, agent.preview) : 'Paused'}
+                      state="limited"
+                      onOpen={() => onOpenAgent(agent.id)}
+                    />
+                    {failure && kind && (
+                      <ErrorLine
+                        message={failure}
+                        engine={agent.engine}
+                        onSignIn={() => onSignIn(agent.engine)}
+                        onRetry={() => void retry(agent, failure)}
+                        onRetryAt={(at) => void retryAt(agent, failure, at)}
+                        retryScheduled={(agent.checkIns ?? []).some(
+                          (c) =>
+                            !c.repeat &&
+                            kind.resetsAt !== undefined &&
+                            Math.abs(c.nextAt - kind.resetsAt) < 120_000
+                        )}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </Section>
+          )}
+
           <Section title="Working now" empty="No one is working right now.">
             {team.working.map((agent) => (
               <Row
@@ -452,6 +487,9 @@ export function AgentsTeamView({
 
           {/* What keeps them going, said once there is something to keep going. */}
           {(team.working.length > 0 || team.scheduled.length > 0) && <AgentsStayOnNote />}
+
+          {/* The plan's usage, when an engine reported it: before the wall, not at it. */}
+          <AgentsQuota place="team" />
         </div>
       </div>
     </section>

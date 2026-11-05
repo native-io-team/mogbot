@@ -1,7 +1,7 @@
 import type { Agent } from '@shipstudio/companion-protocol';
 import { withQuotes } from '@shipstudio/companion-protocol';
 import { agentActions, messageActions, plainText, toggleFor } from '../src/lib/actions';
-import { CACHED_MESSAGES, fromCache, toCache } from '../src/lib/cache';
+import { CACHED_MESSAGES, fromCache, toCache, toOutbox } from '../src/lib/cache';
 import { EMPTY_DRAFT, liveMentions, putDraft } from '../src/lib/drafts';
 import { OUTBOX_WAIT_MS, outboxPlan, restorePending, unreached } from '../src/lib/outbox';
 import { emptySync, type PendingSend } from '../src/lib/sync';
@@ -103,11 +103,13 @@ describe('offline cache', () => {
     expect(cached.chats.a.messages[0].id).toBe('m5');
     expect(cached.chats.a.more).toBe(true);
     expect(cached.chats.empty).toBeUndefined();
-    expect(Object.keys(cached.pending)).toEqual(['a']);
+    // The outbox is a file of its own (kept where the OS never clears it).
+    expect(cached.pending).toBeUndefined();
+    expect(Object.keys(toOutbox(s).pending)).toEqual(['a']);
     const back = fromCache(JSON.parse(JSON.stringify(cached)) as typeof cached)!;
     expect(back.cursor).toEqual({ epoch: 'e', seq: 9 });
     expect(back.chats!.a.loaded).toBe(false);
-    expect(back.pending!.a[0].waiting).toBe(true);
+    expect(restorePending(toOutbox(s).pending).a[0].waiting).toBe(true);
     expect(fromCache({ ...cached, v: 99 })).toBeNull();
   });
 });

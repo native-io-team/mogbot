@@ -12,6 +12,10 @@
  * "At a time / When…" switches the composer: a "When…" routine starts when
  * something happens (`AgentWhenRoutine`). Its row says what it waits for,
  * what it does, and what its last check found; Run now is Check now.
+ * A routine that ran on its own this week says what it cost, as its engine
+ * reported it: dollars "at API prices" when every run was priced and Claude
+ * reported no plan, else tokens (on a Pro or Max plan the price isn't the
+ * bill), else nothing.
  *
  * @module components/agents/AgentSchedulePopover
  */
@@ -36,17 +40,20 @@ import { WhenComposer } from './AgentWhenRoutine';
 import {
   cancelCheckIn,
   checkWatchNow,
+  COST_BASIS_NOTE,
   createCheckIn,
   describeCheckInTime,
   describeRepeat,
   describeRun,
   describeRunDetail,
-  describeWatchCost,
   describeWatchStatus,
   describeWatchTitle,
   formatWhen,
+  getAgentUsage,
+  onClaudePlan,
   pauseCheckIn,
   previewSchedule,
+  routineWeekLine,
   runCheckInNow,
   scheduleWhenPhrase,
   sortCheckIns,
@@ -57,8 +64,10 @@ import {
   type CheckInRun,
   type SchedulePreview,
   type WatchCheckOutcome,
+  type UsageSummary,
 } from '../../lib/agents';
 import { KeepAwakeLink } from './AgentsStayOn';
+import { useQuotaLines } from './AgentsQuota';
 import { refreshAgents } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAsyncState } from '../../hooks/useAsyncState';
@@ -168,6 +177,10 @@ function ScheduleBody({
     };
   }, [when]);
 
+  // Each routine's week, read once per opening (it moves only when a run ends).
+  const usage = useAsyncState<UsageSummary>(() => getAgentUsage(agent.id), { immediate: true });
+  const weekOf = (id: string) => usage.data?.routines?.find((r) => r.id === id)?.week;
+  const onPlan = onClaudePlan(useQuotaLines());
   const { execute: run, isLoading: busy } = useAsyncState(async (change: () => Promise<void>) => {
     setError(null);
     try {
@@ -238,6 +251,8 @@ function ScheduleBody({
             <ScheduleRow
               key={c.id}
               item={c}
+              spent={routineWeekLine(weekOf(c.id), onPlan)}
+              priced={!onPlan && (weekOf(c.id)?.pricedTurns ?? 0) > 0}
               busy={busy}
               editing={editing?.id === c.id || editingWhen?.id === c.id}
               onRunNow={() =>
@@ -335,6 +350,8 @@ function ScheduleBody({
 
 function ScheduleRow({
   item,
+  spent,
+  priced,
   busy,
   editing,
   onRunNow,
@@ -344,6 +361,10 @@ function ScheduleRow({
   onCancel,
 }: {
   item: CheckIn;
+  /** "$0.84 at API prices this week" or "96k tokens this week", when it ran on its own this week. */
+  spent: string | null;
+  /** `spent` is a price (Claude Code's), not a token count. */
+  priced: boolean;
   busy: boolean;
   editing: boolean;
   onRunNow: () => void;
@@ -365,7 +386,6 @@ function ScheduleRow({
       setChecked(reasonOf(err));
     }
   });
-  const cost = watch ? describeWatchCost(watch) : null;
   return (
     <li
       className="agent-schedule__item"
@@ -384,7 +404,6 @@ function ScheduleRow({
             >
               {describeWatchStatus(item)}
             </span>
-            {cost && <span className="agent-when__spent">{cost}</span>}
             {checked && (
               <span className="agent-when__checked" aria-live="polite">
                 {checked}
@@ -398,6 +417,11 @@ function ScheduleRow({
               {describeCheckInTime(item)}
             </span>
           </>
+        )}
+        {spent && (
+          <span className="agent-schedule__spent" title={priced ? COST_BASIS_NOTE : undefined}>
+            {spent}
+          </span>
         )}
         {runs.length > 0 && (
           <TextButton

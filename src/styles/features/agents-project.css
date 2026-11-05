@@ -59,39 +59,6 @@
 
 /* ------------------------------------------------------------ change card */
 
-/* The bubble's surface and radius, like an approval card, but quieter: it's
-   a record, not a question. */
-.agent-changes {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-  align-self: flex-start;
-  width: min(var(--agents-bubble-max), 100%);
-  padding: var(--spacing-sm) var(--spacing-md);
-  font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-compact);
-  color: var(--text-secondary);
-  background: var(--surface-control);
-  border-radius: var(--radius-lg);
-}
-
-.agent-changes__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-  min-width: 0;
-}
-
-.agent-changes__summary {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--spacing-sm);
-  min-width: 0;
-  font-weight: var(--font-weight-label);
-  color: var(--text-primary);
-}
-
 .agent-changes__counts {
   display: inline-flex;
   gap: var(--spacing-xs);
@@ -184,27 +151,26 @@
   gap: var(--spacing-sm);
 }
 
-.agent-changes__actions {
-  display: flex;
+/* --------------------------------------------- a change card for a copy */
+
+/* The card's rarest action, alone on the left (as "Always allow" is). */
+.agent-copy__more {
+  margin-right: auto;
+}
+
+.agent-changes__record-actions {
+  display: inline-flex;
+  align-items: center;
   gap: var(--spacing-md);
 }
 
-/* --------------------------------------------- a change card for a copy */
-
-/* "On a copy of acme-site · acme-site itself is unchanged" */
-.agent-copy__line {
-  margin: 0;
-  color: var(--text-muted);
-}
-
-.agent-copy__actions {
-  flex-wrap: wrap;
-  align-items: center;
-  margin-top: var(--spacing-2xs);
-}
-
-.agent-copy__more {
-  margin-left: auto;
+/* A change card is a record more than a question: its list reads small. */
+.agent-changes .agent-changes__files,
+.agent-changes .agent-copy,
+.agent-changes .agent-copy__left-out,
+.agent-changes .agent-copy__warning {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
 }
 
 .agent-copy {

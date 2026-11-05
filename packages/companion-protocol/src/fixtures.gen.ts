@@ -2,7 +2,14 @@
 // actually serializes. Do not edit: rewrite it with UPDATE_FIXTURES=1.
 // `tsc -p packages/companion-protocol` checks every value against the protocol.
 
-import type { Device, PairingLink, PairResponse, Result, ServerFrame } from './index';
+import type {
+  Device,
+  IdentityResponse,
+  PairingLink,
+  PairResponse,
+  Result,
+  ServerFrame,
+} from './index';
 
 export const systemStatus = {
   "appVersion": "1.7.0",
@@ -330,6 +337,75 @@ export const agentsOverview = {
     }
   ]
 } satisfies Result<'agents.overview'>;
+export const agentsUsage = {
+  "allTime": {
+    "cacheReadTokens": 369000,
+    "cacheWriteTokens": 32800,
+    "costUsd": 6.18,
+    "durationMs": 1640000,
+    "inputTokens": 49200,
+    "outputTokens": 12300,
+    "pricedTurns": 41,
+    "turns": 41
+  },
+  "routines": [
+    {
+      "id": "ck1",
+      "week": {
+        "cacheReadTokens": 18000,
+        "cacheWriteTokens": 1600,
+        "costUsd": 0.3,
+        "durationMs": 80000,
+        "inputTokens": 2400,
+        "outputTokens": 600,
+        "pricedTurns": 2,
+        "turns": 2
+      }
+    }
+  ],
+  "week": {
+    "cacheReadTokens": 27000,
+    "cacheWriteTokens": 2400,
+    "costUsd": 0.42,
+    "durationMs": 120000,
+    "inputTokens": 3600,
+    "outputTokens": 900,
+    "pricedTurns": 3,
+    "turns": 3
+  }
+} satisfies Result<'agents.usage'>;
+export const agentsQuota = [
+  {
+    "engine": "claude",
+    "windows": [
+      {
+        "kind": "seven_day",
+        "limited": false,
+        "observedAt": 1762290000000,
+        "resetsAt": 1762400000000,
+        "usedPercent": 85.0
+      }
+    ]
+  },
+  {
+    "engine": "codex",
+    "windows": [
+      {
+        "kind": "primary",
+        "limited": true,
+        "observedAt": 1762290000000,
+        "resetsAt": 1762300000000,
+        "usedPercent": 100.0,
+        "windowMinutes": 300
+      },
+      {
+        "kind": "secondary",
+        "limited": false,
+        "observedAt": 1762290000000
+      }
+    ]
+  }
+] satisfies Result<'agents.quota'>;
 export const agentsMessages = {
   "asOf": {
     "epoch": "epoch-test",
@@ -1846,8 +1922,20 @@ export const sessionsSend = {
 } satisfies Result<'sessions.send'>;
 export const frames = [
   {
+    "t": "identity",
+    "protocol": 2,
+    "serverId": "srv_0123456789abcdef",
+    "hosts": [
+      "julians-macbook-pro.tail1234.ts.net"
+    ],
+    "identity": {
+      "publicKey": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "signature": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
+    }
+  },
+  {
     "t": "welcome",
-    "protocol": 1,
+    "protocol": 2,
     "server": {
       "id": "srv_0123456789abcdef",
       "name": "Julian’s MacBook Pro",
@@ -1878,6 +1966,7 @@ export const frames = [
       "agents.memoryChange",
       "agents.memorySuggest",
       "agents.usage",
+      "agents.quota",
       "agents.changeDiff",
       "agents.keepCopy",
       "agents.discardCopy",
@@ -1927,6 +2016,11 @@ export const frames = [
     "t": "refused",
     "reason": "too_many_connections",
     "message": "Too many connections from this phone."
+  },
+  {
+    "t": "refused",
+    "reason": "unavailable",
+    "message": "Your Mac can't read its identity key from the Keychain right now."
   },
   {
     "t": "res",
@@ -2911,7 +3005,14 @@ export const pairResponses = [
     "deviceId": "dev_0123456789abcdef",
     "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "serverId": "srv_0123456789abcdef",
-    "serverPublicKey": ""
+    "serverPublicKey": "",
+    "hosts": [
+      "julians-macbook-pro.tail1234.ts.net"
+    ],
+    "identity": {
+      "publicKey": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "signature": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
+    }
   },
   {
     "ok": false,
@@ -2953,11 +3054,36 @@ export const pairingLink = {
     {
       "kind": "tailscale",
       "url": "https://julians-macbook-pro.tail1234.ts.net:47443"
-    },
-    {
-      "kind": "lan",
-      "url": "https://192.168.1.20:47444",
-      "pin": "q2v0bQyR3m8b0f4Jc1lT8wq9s1nC3kq8H1cX0p9yQ2A"
     }
-  ]
+  ],
+  "fingerprint": "Zmh6rfhivXdsj8GLjp-OIA"
 } satisfies PairingLink;
+export const identityResponses = [
+  {
+    "ok": true,
+    "protocol": 2,
+    "serverId": "srv_0123456789abcdef",
+    "hosts": [
+      "julians-macbook-pro.tail1234.ts.net"
+    ],
+    "identity": {
+      "publicKey": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "signature": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
+    }
+  },
+  {
+    "ok": false,
+    "reason": "update_app",
+    "message": "What happened, for the user."
+  },
+  {
+    "ok": false,
+    "reason": "update_mac",
+    "message": "What happened, for the user."
+  },
+  {
+    "ok": false,
+    "reason": "unavailable",
+    "message": "What happened, for the user."
+  }
+] satisfies IdentityResponse[];

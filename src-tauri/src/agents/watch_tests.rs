@@ -38,6 +38,7 @@ fn watch_check_in(source: Source) -> CheckIn {
         runs: Vec::new(),
         retry: None,
         watch: Some(Watch::new(source, 10)),
+        usage: Default::default(),
         extra: Default::default(),
     }
 }

@@ -10,8 +10,14 @@
  * a bump, so an app that hasn't taken its OTA update yet keeps working.
  */
 
-export const PROTOCOL_VERSION = 1;
-export const MIN_PROTOCOL_VERSION = 1;
+/**
+ * 2: the Mac proves who it is first (`challenge` → `identity`, before
+ * `hello`), and pairing signs the hosts. Nothing has shipped on 1, so the Mac
+ * no longer answers it: an app on 1 is told to update, and an app on 2 that
+ * reaches a Mac on 1 says to update the Mac.
+ */
+export const PROTOCOL_VERSION = 2;
+export const MIN_PROTOCOL_VERSION = 2;
 
 export interface ProtocolRange {
   min: number;

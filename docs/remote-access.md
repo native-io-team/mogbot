@@ -149,7 +149,11 @@ card; see "Importing agents as a conversation" below.
 - Messages up to 20k characters.
 
 Every action, connection, refusal and screenshot goes to
-`remote_audit.jsonl` (1 MB, trimmed to its newer half). The audit records
+`remote_audit.jsonl`. Past 1 MB it is rotated to `remote_audit.jsonl.1`
+(replacing the older one) and a new file started, so the last two files
+are always kept and nothing in the newer one is ever cut. The phone
+companion writes its own `companion_audit.jsonl` with the same rotation,
+so neither log can roll the other's record out. The audit records
 previews of what was typed, never a PIN. Pure reads are left out so they
 don't bury the actions.
 

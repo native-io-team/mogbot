@@ -185,18 +185,53 @@ export const phoneScenarios: Scenario[] = [
     'phone-confirm',
     'Phone — a phone used the code and waits for Allow',
     'Centred in an amber-edged card: a phone tile, "Allow Julian’s iPhone to use your agents?" ' +
-      'with the name in bold, "iPhone 16 Pro · app 1.0.0", an amber warning to only allow a phone ' +
-      'you’re holding, and Deny / Allow with Allow primary.',
+      'with the name in bold, "iPhone 16 Pro · app 1.0.0", "Asked at <time> · code ending 5D2Q · ' +
+      'julian@example.com", an amber warning to only allow a phone you’re holding showing the same ' +
+      'code ending, and Deny / Allow with Allow primary.',
     {
       ...ON,
       pairing: {
         active: false,
         request: {
-          name: 'Julian’s iPhone',
-          platform: 'ios',
-          model: 'iPhone 16 Pro',
-          appVersion: '1.0.0',
-          build: 'official',
+          id: 'pr_1',
+          device: {
+            name: 'Julian’s iPhone',
+            platform: 'ios',
+            model: 'iPhone 16 Pro',
+            appVersion: '1.0.0',
+            build: 'official',
+          },
+          requestedAt: Date.now() - 20_000,
+          codeHint: '5D2Q',
+          login: 'julian@example.com',
+          replaces: [],
+        },
+      },
+    }
+  ),
+  phone(
+    'phone-confirm-replace',
+    'Phone — a phone that looks like one already paired asks',
+    'As phone-confirm, plus a second amber line: "A phone called Julian’s iPhone is already paired ' +
+      '(since <date>). If this is that phone again, replace it…". Three answers: Deny, "Allow, keep ' +
+      'both" and a primary "Allow and replace". Nothing is replaced without that click.',
+    {
+      ...ON,
+      devices,
+      pairing: {
+        active: false,
+        request: {
+          id: 'pr_2',
+          device: {
+            name: 'Julian’s iPhone',
+            platform: 'ios',
+            model: 'iPhone 16 Pro',
+            appVersion: '1.0.1',
+            build: 'official',
+          },
+          requestedAt: Date.now() - 5_000,
+          codeHint: 'K7Q2',
+          replaces: [devices[0]],
         },
       },
     }

@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { createMockServer } from '../dev/mock-server';
-import { until } from './helpers';
+import { until, provenBy } from './helpers';
 import { applyEvent, emptySync } from '../src/lib/sync';
 import { DirectTransport, WireFailure, type HttpAdapter } from '../src/lib/transport';
 
@@ -52,6 +52,7 @@ describe('files, search, schedules and projects against the mock Mac', () => {
       getResume: () => state.cursor ?? undefined,
       foreground: true,
       WebSocketImpl: WebSocket as unknown as typeof globalThis.WebSocket,
+      ...provenBy(mock),
       http: nodeHttp,
     });
     t.onEvent((e: CompanionEvent, c?: Cursor) => {

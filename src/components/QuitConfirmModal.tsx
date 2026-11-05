@@ -63,7 +63,7 @@ export function QuitConfirmModal({
               Keep running in background
             </Button>
           )}
-          <Button variant="danger" width="fill" onClick={onQuit}>
+          <Button width="fill" onClick={onQuit}>
             Quit
           </Button>
           <Button

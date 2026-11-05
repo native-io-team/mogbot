@@ -94,7 +94,7 @@ export const agentsTakeoverScenarios: Scenario[] = [
     id: 'agents-takeover-terminal',
     title: 'Agents — you’re driving Finance in a terminal',
     looksRightWhen:
-      'Under Finance’s header, one quiet line: a small terminal icon in Finance’s colour, “You’re driving Finance in a terminal” (hovering it says edits are accepted automatically, Shift-Tab changes it), then “Show chat” and a secondary “Hand back” button at the trailing edge. Under that line, wrapping, the trust hint: “Claude Code will ask whether to trust this folder — choose “Yes, proceed”. Choosing No ends the take-over.” Below it the conversation’s place is taken by a terminal in the app’s own background (the fixture’s resumed Claude Code screen: the earlier question, a Write step, a reply, an empty prompt), with a focus ring around it because the keys go there. No composer. In the sidebar Finance’s row reads “You’re driving Finance”; the header status says the same.',
+      'Finance’s conversation is replaced by a terminal in the app’s own background (the fixture’s resumed Claude Code screen), with a focus ring because the keys go there. No composer. Under the terminal, in the reading column, the take-over bar: a small terminal icon in Finance’s colour, “You’re driving Finance in a terminal” (hovering says edits are accepted automatically, Shift-Tab changes it), “Show chat” and a secondary “Hand back” on the right, and under it, wrapping, “Claude Code will ask whether to trust this folder — choose “Yes, proceed”. Choosing No hands it back.” Nothing full-width under the header; the header is Finance’s name and role only. The sidebar row reads “You’re driving Finance”.',
     openSelector: AGENTS_TAB,
     steps: [openFinance],
     requires: '.agent-chat[data-takeover-terminal] .agent-takeover-terminal .xterm',
@@ -108,11 +108,13 @@ export const agentsTakeoverScenarios: Scenario[] = [
     id: 'agents-takeover-chat',
     title: 'Agents — driving Finance, the chat showing, a message waiting',
     looksRightWhen:
-      'The same line under the header, now offering “Show terminal” and “Hand back”. The chat is back with its composer. Your newest message (“Also: did Globex reply?”) is dimmed with “Waiting, sends when you hand Finance back” under it, and no Interrupt link.',
+      'Finance’s conversation (Show chat pressed), the take-over bar above the composer with “Show terminal” and Hand back. The header is name and role only.',
     openSelector: AGENTS_TAB,
-    steps: [openFinance, { click: '.agent-takeover__actions .text-button' }],
-    requires:
-      '.agent-takeover + .agent-chat__scroll, .agent-chat:not([data-takeover-terminal]) .agent-takeover',
+    steps: [
+      openFinance,
+      { click: '[data-testid="agent-takeover"] .agent-bar__actions .text-button' },
+    ],
+    requires: '.agent-chat:not([data-takeover-terminal]) [data-testid="agent-takeover"]',
     commands: {
       agents_overview: drivenTeam('finance'),
       agents_messages: FINANCE_WAITING,
@@ -123,10 +125,10 @@ export const agentsTakeoverScenarios: Scenario[] = [
     id: 'agents-takeover-project',
     title: 'Agents — driving Acme Site in its project',
     looksRightWhen:
-      'Acme Site works in acme-marketing, so its session is a tab in that project’s workspace, not here. The chat stays as it was, with one line under the header: “You’re driving Acme Site in acme-marketing”, “Open in acme-marketing”, and “Hand back”. No trust hint (the fixture’s folder is trusted).',
+      'Acme Site’s conversation with its composer; above the composer, in the reading column, one bar: terminal icon, “You’re driving Acme Site in acme-marketing”, then “Open in acme-marketing” and Hand back on the right. The header is identity only (name, role, project chip). Sidebar row: “You’re driving Acme Site”.',
     openSelector: AGENTS_TAB,
     steps: [openAcme],
-    requires: '.agent-takeover',
+    requires: '[data-testid="agent-takeover"]',
     commands: {
       agents_overview: drivenTeam('acme'),
       agents_messages: messagesFor,
@@ -139,7 +141,10 @@ export const agentsTakeoverScenarios: Scenario[] = [
     looksRightWhen:
       'A dialog over Finance’s terminal: “Hand Finance back?”, “Finance is in the middle of something in the terminal. Handing back now stops it there.”, the hint “Anything typed in the terminal but not sent is dropped.”, then “Keep driving” and a red “Hand back anyway”.',
     openSelector: AGENTS_TAB,
-    steps: [openFinance, { click: '.agent-takeover__actions > button:last-child' }],
+    steps: [
+      openFinance,
+      { click: '[data-testid="agent-takeover"] .agent-bar__actions > button:last-child' },
+    ],
     requires: '[aria-modal="true"]',
     commands: {
       agents_overview: drivenTeam('finance'),
@@ -152,7 +157,7 @@ export const agentsTakeoverScenarios: Scenario[] = [
     id: 'agents-takeover-ended',
     title: 'Agents — a take-over that ended by itself, explained',
     looksRightWhen:
-      'Finance’s chat, nobody driving. The newest line is a quiet centred note (muted, not a red error bubble): “Claude Code closed after 2 seconds (exit code 1), so the take-over ended and Finance has its session back. The last thing it showed:” and below it, in a mono block keeping its line breaks, the trust question with “2. No, exit” chosen. No Retry button, and the sidebar row doesn’t read as failed. Above it, an earlier hand-back note: “You handed Finance back after 6 min”.',
+      'Finance’s chat, nobody driving. The newest line is a quiet centred note (muted, not a red error bubble): “Claude Code closed after 2 seconds, so you’re back in the chat and Finance carries on from here.” then a quiet “Show its last screen” (no exit code, no terminal dump in view). No Retry button, and the sidebar row doesn’t read as failed. Above it, an earlier hand-back note: “You handed Finance back after 6 min”.',
     openSelector: AGENTS_TAB,
     steps: [openFinance],
     requires: '.agent-chat__messages',
@@ -165,7 +170,7 @@ export const agentsTakeoverScenarios: Scenario[] = [
               msg('note', 'You handed Finance back after 6 min', 30, { agentId: 'finance' }),
               msg(
                 'note',
-                'Claude Code closed after 2 seconds (exit code 1), so the take-over ended and Finance has its session back. The last thing it showed:\n\nDo you trust the files in this folder?\n\n  1. Yes, proceed\n❯ 2. No, exit',
+                'Claude Code closed after 2 seconds, so you’re back in the chat and Finance carries on from here. The last thing it showed:\n\nDo you trust the files in this folder?\n\n  1. Yes, proceed\n❯ 2. No, exit',
                 1,
                 { agentId: 'finance', takeover: true }
               ),
@@ -179,7 +184,11 @@ export const agentsTakeoverScenarios: Scenario[] = [
     looksRightWhen:
       'A dialog over Acme Site’s chat: “Acme Site is working”, “Its session is in use, so you can’t step into it while it works. Stop it and take over now, or wait until it’s done.”, the hint “Stopping keeps what it already did, and drops what’s queued for it.”, then “Wait” and a red “Stop and take over”.',
     openSelector: AGENTS_TAB,
-    steps: [openAcme, { click: '.agent-working__takeover' }],
+    steps: [
+      openAcme,
+      { click: '.agent-working__more button' },
+      { click: '[role="menuitem"]', text: 'Take over' },
+    ],
     requires: '[aria-modal="true"]',
     commands: workCommands(true),
   },

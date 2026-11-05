@@ -834,6 +834,38 @@ export interface UsageTotals {
 export interface UsageSummary {
   week: UsageTotals;
   allTime: UsageTotals;
+  /** Each routine that ran on its own this week. Newer Macs only. */
+  routines?: RoutineUsage[];
+}
+
+/** One routine's week, from turns that ran nothing but it. */
+export interface RoutineUsage {
+  /** The check-in's id. */
+  id: string;
+  week: UsageTotals;
+}
+
+/**
+ * One window of an engine's plan (Claude Code's `five_hour` / `seven_day`,
+ * Codex's `primary` / `secondary`), exactly as the engine last reported it.
+ */
+export interface QuotaWindow {
+  kind: string;
+  /** 0–100; absent when the engine said only that it's used up. */
+  usedPercent?: number;
+  /** When it resets, epoch ms. */
+  resetsAt?: number;
+  windowMinutes?: number;
+  /** The engine said it's used up. */
+  limited: boolean;
+  /** When the engine reported it, epoch ms. */
+  observedAt: number;
+}
+
+/** An engine's plan, only ever as the engine reported it. Never estimated. */
+export interface Quota {
+  engine: AgentEngine;
+  windows: QuotaWindow[];
 }
 
 export const AGENT_EVENTS = {
@@ -842,6 +874,8 @@ export const AGENT_EVENTS = {
   registry: 'agents://registry',
   /** A reply being written: `{ agentId, id, text }`, the text so far. */
   draft: 'agents://draft',
+  /** An engine reported its plan's limits; read `agents_quota` again. */
+  quota: 'agents://quota',
   /** A notification was clicked; payload is the agent id to open. */
   open: 'agents://open',
   /** The import over the connector changed: an `ImportGate`. */
@@ -1019,7 +1053,7 @@ export const handBackAgent = (agentId: string, force = false) =>
 
 /** "Claude Code will ask…": the one thing to know before the terminal opens. */
 export const TRUST_HINT =
-  'Claude Code will ask whether to trust this folder — choose “Yes, proceed”. Choosing No ends the take-over.';
+  'Claude Code will ask whether to trust this folder — choose “Yes, proceed”. Choosing No hands it back.';
 
 /** What driving it means for edits, said once, on the banner. */
 export function takeoverPolicy(takeover: AgentTakeover, name: string): string {
@@ -1455,6 +1489,28 @@ export const checkWatchNow = (agentId: string, id: string) =>
 
 export const searchAgents = (query: string) => invoke<SearchHit[]>('agents_search', { query });
 export const getAgentUsage = (agentId: string) => invoke<UsageSummary>('agents_usage', { agentId });
+/** Each engine's plan as it last reported it; empty when none has (`agents::quota`). */
+export const getQuotas = () => invoke<Quota[]>('agents_quota');
+
+// The plan's limits and a routine's week, worded once for the desk and the phone.
+export {
+  apiPrice,
+  COST_BASIS_NOTE,
+  onClaudePlan,
+  QUOTA_WARN_PERCENT,
+  quotaLines,
+  resetDay,
+  resetPhrase,
+  retryPhrase,
+  routineWeekLine,
+  sumTotals,
+  type QuotaLine,
+  type QuotaTone,
+} from '../../packages/companion-protocol/src/quota';
+import {
+  apiPrice as apiPriceWords,
+  resetPhrase as resetWords,
+} from '../../packages/companion-protocol/src/quota';
 
 /**
  * A hit's snippet cut to start a few words before its first match, so the
@@ -1498,11 +1554,12 @@ function duration(ms: number): string {
 }
 
 /**
- * "$0.42 · 38k tokens · 6 turns · 4 min", from what Claude Code reported.
- * The cost is left out unless every turn reported one: a partial sum would
- * read as the whole. Null when there were no turns.
+ * "$0.42 at API prices · 38k tokens · 6 turns · 4 min", from what Claude Code
+ * reported. The cost is left out unless every turn reported one (a partial
+ * sum would read as the whole), and on a Claude plan (`onPlan`), where it is
+ * a list price and not the bill. Null when there were no turns.
  */
-export function formatUsage(totals: UsageTotals): string | null {
+export function formatUsage(totals: UsageTotals, onPlan = false): string | null {
   if (totals.turns === 0) return null;
   const tokens =
     totals.inputTokens + totals.outputTokens + totals.cacheReadTokens + totals.cacheWriteTokens;
@@ -1511,8 +1568,8 @@ export function formatUsage(totals: UsageTotals): string | null {
     `${totals.turns} ${totals.turns === 1 ? 'turn' : 'turns'}`,
   ];
   if (totals.durationMs > 0) parts.push(duration(totals.durationMs));
-  if (totals.pricedTurns === totals.turns) {
-    parts.unshift(totals.costUsd < 0.01 ? '<$0.01' : `$${totals.costUsd.toFixed(2)}`);
+  if (totals.pricedTurns === totals.turns && !onPlan) {
+    parts.unshift(apiPriceWords(totals.costUsd));
   }
   return parts.join(' · ');
 }
@@ -1600,13 +1657,26 @@ export function failedTurn(agent: Agent): Failure | null {
 }
 
 /** Needs you, or its last turn didn't finish: what the "next needing you" key visits. */
-export const needsAttention = (agent: Agent) => needsYou(agent) || failedTurn(agent) !== null;
+/**
+ * Waiting on you: a request, or a turn that failed and needs you to act. A
+ * usage limit isn't one: it resets by itself and is quiet (docs/agents.md,
+ * "amber means needs you, only"), so it isn't counted in "Needs you · N".
+ */
+export const needsAttention = (agent: Agent) => {
+  if (needsYou(agent)) return true;
+  const failure = failedTurn(agent);
+  return failure !== null && failure.kind !== 'usage_limit';
+};
+
+/** Stopped by a usage limit: paused until it resets, not waiting on you. */
+export const usageLimited = (agent: Agent) =>
+  !needsYou(agent) && failedTurn(agent)?.kind === 'usage_limit';
 
 /** The text of a failure's first clause: "Didn't finish: Couldn't start Claude Code". */
 export function failureLine(failure: Failure, preview: string | null): string {
   if (failure.kind === 'usage_limit') {
     return failure.resetsAt
-      ? `Usage limit · resets ${formatClock(failure.resetsAt)}`
+      ? `Usage limit · resets ${resetWords(failure.resetsAt)}`
       : 'Usage limit reached';
   }
   if (failure.kind === 'signed_out') return 'Claude Code is signed out';
@@ -2065,6 +2135,8 @@ export interface TeamSummary {
   working: Agent[];
   /** Cards to answer, or the failed turn's line (newest in its chat) to act on. */
   needsYou: { agent: Agent; approvals: AgentMessage[]; failure: AgentMessage | null }[];
+  /** Stopped by a usage limit, with the line that says when it resets. */
+  paused: { agent: Agent; failure: AgentMessage | null }[];
   scheduled: { agent: Agent; checkIn: CheckIn }[];
   replies: { agent: Agent; message: AgentMessage }[];
 }
@@ -2106,6 +2178,11 @@ export function summarizeTeam(
         approvals: lines.filter((m) => m.approval?.status === 'pending'),
         failure: failedTurn(agent) && last?.kind === 'error' ? last : null,
       };
+    }),
+    paused: shown.filter(usageLimited).map((agent) => {
+      const lines = messages[agent.id] ?? [];
+      const last = lines[lines.length - 1];
+      return { agent, failure: last?.kind === 'error' ? last : null };
     }),
     scheduled,
     replies,

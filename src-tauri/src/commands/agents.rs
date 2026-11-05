@@ -992,11 +992,21 @@ pub async fn agents_search(query: String) -> Result<Vec<search::SearchHit>, Comm
         .map_err(agents::err_other)?
 }
 
-/// Tokens and cost for one agent: this week and all time.
+/// Tokens and cost for one agent: this week and all time, and each routine's week.
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_usage(agent_id: String) -> Result<usage::UsageSummary, CommandError> {
-    Ok(store::get(&agent_id)?.usage.summary(usage::today()))
+    Ok(usage::summarize(&store::get(&agent_id)?, usage::today()))
+}
+
+/// How much of each engine's plan is used, as the engine last reported it.
+/// Empty when no engine has said (an API-key login, or no turn yet).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_quota() -> Result<Vec<agents::quota::Quota>, CommandError> {
+    tokio::task::spawn_blocking(|| agents::quota::shown(&agents::quota::load(), store::now_ms()))
+        .await
+        .map_err(agents::err_other)
 }
 
 /// What the user sends their other assistant to start an import: one line

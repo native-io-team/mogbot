@@ -30,16 +30,14 @@
 }
 
 /* Quieter than a TextButton's default; hover brings it up. */
-.text-button.button.agent-work__toggle,
-.text-button.button.agent-work__open {
+.text-button.button.agent-work__toggle {
   gap: var(--spacing-xs);
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.text-button.button.agent-work__toggle:hover:not(:disabled),
-.text-button.button.agent-work__open:hover:not(:disabled) {
+.text-button.button.agent-work__toggle:hover:not(:disabled) {
   color: var(--text-secondary);
 }
 
@@ -167,18 +165,6 @@
 
 .agent-work--live .agent-work__steps {
   padding: 0 0 var(--spacing-sm);
-}
-
-/* The ways into a working agent: its project, its session. */
-.agent-work__ways-in {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  margin: 0 0 var(--spacing-sm) calc(var(--agents-work-icon) + var(--spacing-sm));
-}
-
-.agent-work__ways-in:empty {
-  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

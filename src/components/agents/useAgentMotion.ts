@@ -131,6 +131,10 @@ export function useFollowBottom(
       if (atBottomRef.current) follow(false);
     });
     observer.observe(content);
+    // The scroller itself shrinks when a bar appears over the composer (an
+    // import's, a take-over's): the newest card would slide under it, its
+    // buttons out of sight, at exactly the moment it matters.
+    observer.observe(el);
     el.addEventListener('scroll', landed, { passive: true });
     el.addEventListener('wheel', stop, { passive: true });
     el.addEventListener('touchstart', stop, { passive: true });

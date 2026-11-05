@@ -274,7 +274,18 @@ pub fn resolve(home: &Path, rel: &str) -> Result<PathBuf, CommandError> {
     if !safe {
         return Err(invalid());
     }
-    let full = home.join(rel);
+    // Nothing under `attachments/` may be a symlink: the files there are
+    // ones the app wrote, and a link an agent planted would otherwise serve
+    // any file on the Mac as an "attachment".
+    let mut full = home.to_path_buf();
+    for part in rel.components() {
+        full.push(part);
+        match std::fs::symlink_metadata(&full) {
+            Ok(m) if m.file_type().is_symlink() => return Err(invalid()),
+            Ok(_) => {}
+            Err(_) => return Err(CommandError::expected("That file isn't there any more.")),
+        }
+    }
     if !full.is_file() {
         return Err(CommandError::expected("That file isn't there any more."));
     }
@@ -337,6 +348,23 @@ pub fn sweep_unreferenced(home: &Path, log: &str, older_than: std::time::SystemT
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn an_attachment_is_never_reached_through_a_symlink() {
+        let home = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let secret = outside.path().join(".env");
+        std::fs::write(&secret, "KEY=1").unwrap();
+        let dir = home.path().join("attachments/m1");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("real.txt"), "ok").unwrap();
+        std::os::unix::fs::symlink(&secret, dir.join("link.txt")).unwrap();
+        std::os::unix::fs::symlink(outside.path(), home.path().join("attachments/out")).unwrap();
+        assert!(resolve(home.path(), "attachments/m1/real.txt").is_ok());
+        assert!(resolve(home.path(), "attachments/m1/link.txt").is_err());
+        assert!(resolve(home.path(), "attachments/out/.env").is_err());
+    }
 
     #[test]
     fn the_sweep_removes_only_folders_the_log_never_mentions() {

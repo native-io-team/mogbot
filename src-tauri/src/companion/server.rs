@@ -7,9 +7,12 @@
 //! `tailscale serve`, which terminates TLS with the tailnet's own
 //! certificate and proxies here; nothing listens on a public interface.
 //!
-//! The device token arrives in the socket's first frame (`hello.token`),
-//! never in a URL, and is re-checked on every frame after it, so revoking a
-//! phone on the Mac closes its sockets at once.
+//! On a socket the Mac proves itself first: the phone's first frame is a
+//! challenge with no secret in it, the Mac answers with its signed identity
+//! and the hosts it serves on (`identity.rs`), and only then does the phone
+//! send its device token (`hello.token`), never in a URL. The token is
+//! re-checked on every frame after it, so revoking a phone on the Mac closes
+//! its sockets at once.
 
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
@@ -24,53 +27,79 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::task::JoinSet;
 use tokio_tungstenite::tungstenite::protocol::{Role, WebSocketConfig};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
 use super::hub::{Drafts, HubItem, Resume};
-use super::pairing::{self, Claim};
+use super::limits;
+use super::pairing::{self, Claim, Decision};
 use super::router::{self, Caller};
 use super::wire::{
-    self, ClientFrame, Event, Negotiation, PairRefusal, PairRequest, PairResponse, RefusedReason,
-    ResumeMode, RouteKind, ServerFrame, ServerInfo,
+    self, ClientFrame, Event, IdentityRequest, IdentityResponse, Negotiation, PairRefusal,
+    PairRequest, PairResponse, RefusedReason, ResumeMode, RouteKind, ServerFrame, ServerInfo,
 };
-use super::{actor_for, now_ms, Auth, Companion};
+use super::{actor_for, now_ms, Auth, Companion, DeviceRecord};
 
 pub(crate) type Body = BoxBody<Bytes, hyper::Error>;
 
 /// The largest frame either way, and the largest pair request.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
 const MAX_PAIR_BODY: usize = 16 * 1024;
+/// The whole pair request body must arrive this quickly.
+pub const PAIR_BODY_TIMEOUT: Duration = Duration::from_secs(10);
 /// The phone must say hello this quickly after the upgrade.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
+/// Headers must arrive this quickly, on every request of a connection.
+const HEADER_TIMEOUT: Duration = Duration::from_secs(10);
 /// The Mac's heartbeat (`HEARTBEAT_MS` in frames.ts).
 pub const HEARTBEAT: Duration = Duration::from_secs(15);
 const DRAFT_TICK: Duration = Duration::from_millis(50);
 
-/// Serve until `shutdown` fires. Every connection gets a 10 s header timeout.
+/// Serve until `shutdown` fires. Connections pass the [`limits::Gate`]:
+/// at most [`limits::MAX_CONNECTIONS`] open, of which only
+/// [`limits::MAX_UNAUTHENTICATED`] may be strangers (the oldest is evicted to
+/// make room, a socket that authenticated never is). Each gets a 10 s header
+/// timeout, and the failed-connection counts are written once a minute.
 pub async fn serve(c: Arc<Companion>, listener: TcpListener, mut shutdown: oneshot::Receiver<()>) {
+    let gate = Arc::new(limits::Gate::default());
+    let mut flush = tokio::time::interval(Duration::from_secs(60));
+    flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
             accepted = listener.accept() => {
-                let Ok((stream, _)) = accepted else { continue };
+                let Ok((stream, peer)) = accepted else { continue };
+                let Some(ticket) = gate.admit() else {
+                    tracing::debug!("[Companion] at the connection cap; closing one from {}", peer);
+                    drop(stream);
+                    continue;
+                };
                 let c = c.clone();
+                // Shared with an upgraded socket, which outlives the HTTP
+                // connection future: the place is free only when both are done.
+                let ticket = Arc::new(ticket);
                 tokio::spawn(async move {
+                    let held = ticket.clone();
                     let service = service_fn(move |req| {
-                        let c = c.clone();
-                        async move { Ok::<_, hyper::Error>(handle(c, req).await) }
+                        let (c, held) = (c.clone(), held.clone());
+                        async move { Ok::<_, hyper::Error>(handle(c, req, Some(peer), Some(held)).await) }
                     });
-                    if let Err(e) = http1::Builder::new()
+                    let conn = http1::Builder::new()
                         .timer(hyper_util::rt::TokioTimer::new())
-                        .header_read_timeout(Duration::from_secs(10))
+                        .header_read_timeout(HEADER_TIMEOUT)
                         .serve_connection(TokioIo::new(stream), service)
-                        .with_upgrades()
-                        .await
-                    {
-                        tracing::debug!("[Companion] connection error: {}", e);
+                        .with_upgrades();
+                    tokio::select! {
+                        done = conn => if let Err(e) = done {
+                            tracing::debug!("[Companion] connection error: {}", e);
+                        },
+                        _ = ticket.evicted() => tracing::debug!("[Companion] evicted a connection that never authenticated"),
                     }
+                    drop(ticket);
                 });
             }
+            _ = flush.tick() => c.flush_refusals(),
             _ = &mut shutdown => break,
         }
     }
@@ -102,11 +131,75 @@ pub(crate) fn json_response(value: &impl serde::Serialize) -> Response<Body> {
     res
 }
 
-async fn handle(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
+/// Where a request came from, as far as the server can tell.
+#[derive(Default)]
+pub struct Peer {
+    /// `limits::source_of`: the per-source key.
+    pub source: String,
+    /// `Tailscale-User-Login`, when `tailscale serve` set it.
+    pub login: Option<String>,
+    /// The connection's place at the [`limits::Gate`], held by an upgraded
+    /// socket for as long as it is open.
+    pub conn: Option<Arc<limits::Ticket>>,
+    /// A socket's place under [`limits::MAX_PREHELLO_PER_SOURCE`], given back
+    /// once its `hello` checks out.
+    pub prehello: Option<limits::Slot>,
+}
+
+impl Peer {
+    /// It proved who it is: its gate place is safe from eviction.
+    fn authenticated(&self) {
+        if let Some(t) = &self.conn {
+            t.authenticated();
+        }
+    }
+
+    /// Resolves if the gate evicts this connection (never, without one).
+    async fn evicted(&self) {
+        match &self.conn {
+            Some(t) => t.evicted().await,
+            None => std::future::pending().await,
+        }
+    }
+}
+
+async fn handle(
+    c: Arc<Companion>,
+    req: Request<Incoming>,
+    addr: Option<std::net::SocketAddr>,
+    conn: Option<Arc<limits::Ticket>>,
+) -> Response<Body> {
+    // A web page can reach a loopback port too: refuse anything a browser
+    // sent (an Origin that isn't this server) and any Host that isn't the
+    // tailnet name or loopback (DNS rebinding), before anything else.
+    if !limits::host_allowed(req.headers()) || !limits::origin_allowed(req.headers()) {
+        return status_only(StatusCode::FORBIDDEN);
+    }
+    let mut peer = Peer {
+        source: limits::source_of(addr, req.headers()),
+        login: limits::tailnet_login(req.headers()),
+        conn,
+        prehello: None,
+    };
+    let Some(slot) = c.sources.try_take(&peer.source, limits::MAX_PER_SOURCE) else {
+        return status_only(StatusCode::TOO_MANY_REQUESTS);
+    };
     let path = req.uri().path().to_string();
     match (req.method(), path.as_str()) {
-        (&Method::POST, "/v1/pair") => pair(c, req).await,
-        (&Method::GET, "/v1/ws") => upgrade(c, req),
+        (&Method::POST, "/v1/identity") => identity(c, req).await,
+        (&Method::POST, "/v1/pair") => pair(c, req, &peer).await,
+        (&Method::GET, "/v1/ws") => {
+            // Strangers' sockets are cheap to open and held for the hello
+            // timeout: a few per source, so one can't hold them all.
+            let Some(prehello) = c
+                .prehello
+                .try_take(&peer.source, limits::MAX_PREHELLO_PER_SOURCE)
+            else {
+                return status_only(StatusCode::TOO_MANY_REQUESTS);
+            };
+            peer.prehello = Some(prehello);
+            upgrade(c, req, peer, slot)
+        }
         (&Method::PUT, "/v1/blobs") => super::files::upload(c, req).await,
         (&Method::GET | &Method::HEAD, p)
             if p.starts_with("/v1/blobs/") || p.starts_with("/v1/agents/") =>
@@ -122,12 +215,92 @@ async fn handle(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
 // Pairing
 // ============================================================================
 
-async fn pair(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
-    let Ok(collected) = Limited::new(req.into_body(), MAX_PAIR_BODY).collect().await else {
-        return status_only(StatusCode::PAYLOAD_TOO_LARGE);
+/// A small JSON body, or the response that says why not. JSON only: a
+/// browser can POST `text/plain` anywhere without asking, but not
+/// `application/json`.
+async fn json_body<T: serde::de::DeserializeOwned>(
+    req: Request<Incoming>,
+) -> Result<T, Response<Body>> {
+    let json = req
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(';').next())
+        .is_some_and(|v| v.trim().eq_ignore_ascii_case("application/json"));
+    if !json {
+        return Err(status_only(StatusCode::UNSUPPORTED_MEDIA_TYPE));
+    }
+    let read = Limited::new(req.into_body(), MAX_PAIR_BODY).collect();
+    let collected = match tokio::time::timeout(PAIR_BODY_TIMEOUT, read).await {
+        Err(_) => return Err(status_only(StatusCode::REQUEST_TIMEOUT)),
+        Ok(Err(_)) => return Err(status_only(StatusCode::PAYLOAD_TOO_LARGE)),
+        Ok(Ok(collected)) => collected,
     };
-    let Ok(request) = serde_json::from_slice::<PairRequest>(&collected.to_bytes()) else {
+    serde_json::from_slice::<T>(&collected.to_bytes())
+        .map_err(|_| status_only(StatusCode::BAD_REQUEST))
+}
+
+/// The hosts this Mac serves itself on, as it signs them.
+fn serve_hosts(c: &Companion) -> Vec<String> {
+    c.backend.serve_hosts()
+}
+
+const KEY_UNAVAILABLE: &str = "Your Mac can't read its identity key from the Keychain right now. Unlock your Mac, then try again.";
+
+/// `POST /v1/identity`: who this Mac is, signed over the phone's challenge,
+/// before the phone sends a pairing code.
+async fn identity(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
+    let request = match json_body::<IdentityRequest>(req).await {
+        Ok(r) => r,
+        Err(res) => return res,
+    };
+    let refused = |reason, message: String| {
+        json_response(&IdentityResponse::Refused {
+            ok: false,
+            reason,
+            message,
+        })
+    };
+    let protocol = match wire::negotiate(request.protocol, wire::SUPPORTED) {
+        Negotiation::Ok(v) => v,
+        Negotiation::UpdateApp => {
+            return refused(
+                RefusedReason::UpdateApp,
+                "Update this app to pair with this Mac.".into(),
+            )
+        }
+        Negotiation::UpdateMac => {
+            return refused(
+                RefusedReason::UpdateMac,
+                format!(
+                    "Update {} on {} to pair.",
+                    crate::brand::NAME,
+                    c.backend.server_name()
+                ),
+            )
+        }
+    };
+    let Some(key) = c.registry.identity() else {
+        return refused(RefusedReason::Unavailable, KEY_UNAVAILABLE.into());
+    };
+    let server_id = c.registry.server_id();
+    let hosts = serve_hosts(&c);
+    let Some(proof) = key.prove_mac(&request.challenge, &server_id, &hosts) else {
         return status_only(StatusCode::BAD_REQUEST);
+    };
+    json_response(&IdentityResponse::Proven {
+        ok: true,
+        protocol,
+        server_id,
+        hosts,
+        identity: proof,
+    })
+}
+
+async fn pair(c: Arc<Companion>, req: Request<Incoming>, peer: &Peer) -> Response<Body> {
+    let request = match json_body::<PairRequest>(req).await {
+        Ok(r) => r,
+        Err(res) => return res,
     };
     // Versions first: an out-of-date app learns that, and the code survives
     // to be used once it has updated.
@@ -150,12 +323,29 @@ async fn pair(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
             ))
         }
     }
-    let device = request.device.clone();
+    // Nothing to sign, or a key that won't survive a restart: refuse before
+    // the code is used, so it still works once that's sorted.
+    if !request
+        .challenge
+        .as_deref()
+        .is_some_and(super::identity::is_usable_challenge)
+    {
+        return status_only(StatusCode::BAD_REQUEST);
+    }
+    if !c.registry.identity_is_durable() {
+        return json_response(&PairResponse::refused(
+            PairRefusal::Denied,
+            "This Mac can't keep its identity key in the Keychain, so it can't pair a phone safely. Check Keychain Access on the Mac.",
+        ));
+    }
+    let device = super::clean_pair_device(&request.device);
     let actor = actor_for(&device.name);
     let rx = match c.pairing.claim(
         &request.code,
         device.clone(),
         request.public_key.clone(),
+        &peer.source,
+        peer.login.clone(),
         now_ms(),
     ) {
         Claim::NoMatch => {
@@ -176,25 +366,52 @@ async fn pair(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
         }
         Claim::Waiting(rx) => rx,
     };
+    // It knew a live code: no flood of strangers evicts it while the desk decides.
+    peer.authenticated();
     c.backend
         .audit(&actor, "pair_request", device_line(&device), true);
     c.backend.changed();
 
     let decision = tokio::time::timeout(pairing::DECISION_TIMEOUT, rx).await;
     let response = match decision {
-        Ok(Ok(true)) => match c.registry.add(&device, request.public_key, now_ms() as i64) {
+        Ok(Ok(Decision::Allow { replace })) => match c.registry.add(
+            &device,
+            request.public_key,
+            now_ms() as i64,
+            &replace,
+            peer.login.clone(),
+        ) {
             Ok((record, token, replaced)) => {
                 for id in replaced {
+                    // Revoked as the desk asked: its files and push go too.
+                    c.blobs.forget_device(&id);
                     c.hub.signal(HubItem::Revoked { device_id: id });
                 }
-                c.backend
-                    .audit(&actor, "paired", device_line(&device), true);
-                PairResponse::Allowed {
-                    ok: true,
-                    device_id: record.id,
-                    token,
-                    server_id: c.registry.server_id(),
-                    server_public_key: String::new(),
+                let server_id = c.registry.server_id();
+                let hosts = serve_hosts(&c);
+                let proof = c.registry.identity().and_then(|k| {
+                    k.prove_pair(request.challenge.as_deref(), &server_id, &hosts, &record.id)
+                });
+                match proof {
+                    Some(identity) => {
+                        c.backend
+                            .audit(&actor, "paired", device_line(&device), true);
+                        PairResponse::Allowed {
+                            ok: true,
+                            device_id: record.id,
+                            token,
+                            server_id,
+                            server_public_key: String::new(),
+                            hosts,
+                            identity,
+                        }
+                    }
+                    // The key went away in between: an answer the phone
+                    // can't check is no pairing, so the device goes too.
+                    None => {
+                        let _ = c.registry.revoke(&record.id);
+                        PairResponse::refused(PairRefusal::Denied, KEY_UNAVAILABLE)
+                    }
                 }
             }
             Err(e) => {
@@ -234,7 +451,12 @@ fn device_line(d: &wire::PairDevice) -> String {
 // The WebSocket
 // ============================================================================
 
-fn upgrade(c: Arc<Companion>, mut req: Request<Incoming>) -> Response<Body> {
+fn upgrade(
+    c: Arc<Companion>,
+    mut req: Request<Incoming>,
+    peer: Peer,
+    slot: limits::Slot,
+) -> Response<Body> {
     let headers = req.headers();
     let is_ws = headers
         .get(header::UPGRADE)
@@ -262,7 +484,9 @@ fn upgrade(c: Arc<Companion>, mut req: Request<Incoming>) -> Response<Body> {
                     Some(config),
                 )
                 .await;
-                run_socket(c, ws).await;
+                serve_socket_as(c, ws, peer).await;
+                // The socket counted against its source while it was open.
+                drop(slot);
             }
             Err(e) => tracing::debug!("[Companion] upgrade failed: {}", e),
         }
@@ -282,8 +506,6 @@ fn upgrade(c: Arc<Companion>, mut req: Request<Incoming>) -> Response<Body> {
     }
     res
 }
-
-type Socket = WebSocketStream<TokioIo<hyper::upgrade::Upgraded>>;
 
 async fn send<S>(ws: &mut S, frame: &ServerFrame) -> bool
 where
@@ -310,96 +532,36 @@ where
     let _ = ws.send(Message::Close(None)).await;
 }
 
-/// Read the hello, or `None` if the phone didn't send one in time.
-async fn read_hello<S>(ws: &mut S) -> Option<wire::HelloFrame>
-where
-    S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin,
-{
-    let first = tokio::time::timeout(HELLO_TIMEOUT, async {
-        loop {
-            match ws.next().await? {
-                Ok(Message::Text(text)) => return Some(text),
-                Ok(Message::Ping(_) | Message::Pong(_)) => continue,
-                _ => return None,
-            }
-        }
-    })
-    .await
-    .ok()??;
-    match serde_json::from_str::<ClientFrame>(&first).ok()? {
-        ClientFrame::Hello(hello) => Some(hello),
-        _ => None,
-    }
-}
-
-async fn run_socket(c: Arc<Companion>, ws: Socket) {
-    serve_socket(c, ws).await
-}
-
 /// One phone connection, from hello to close. Generic over the stream so the
 /// tests can drive it without TLS or a proxy in between.
-pub async fn serve_socket<S>(c: Arc<Companion>, mut ws: S)
+pub async fn serve_socket<S>(c: Arc<Companion>, ws: S)
 where
     S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
         + SinkExt<Message>
         + Unpin,
 {
-    let Some(hello) = read_hello(&mut ws).await else {
+    serve_socket_as(c, ws, Peer::default()).await
+}
+
+/// [`serve_socket`], knowing who connected.
+pub async fn serve_socket_as<S>(c: Arc<Companion>, mut ws: S, mut peer: Peer)
+where
+    S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+        + SinkExt<Message>
+        + Unpin,
+{
+    // Everything before the token checks out can be evicted by the gate.
+    let shaken = tokio::select! {
+        done = handshake(&c, &mut ws, &peer) => done,
+        _ = peer.evicted() => None,
+    };
+    let Some((record, protocol, hello)) = shaken else {
         let _ = ws.send(Message::Close(None)).await;
         return;
     };
-    let record = match c.registry.authenticate(&hello.token) {
-        Auth::Device(d) => d,
-        Auth::Revoked => {
-            c.backend.audit(
-                "Phone",
-                "refused",
-                "a removed phone tried to connect".into(),
-                false,
-            );
-            return refuse(
-                &mut ws,
-                RefusedReason::Revoked,
-                "This Mac removed this phone.",
-            )
-            .await;
-        }
-        Auth::Unknown => {
-            c.backend.audit(
-                "Phone",
-                "refused",
-                "an unknown device tried to connect".into(),
-                false,
-            );
-            return refuse(
-                &mut ws,
-                RefusedReason::Unauthorized,
-                "This phone isn't paired with this Mac.",
-            )
-            .await;
-        }
-    };
+    peer.authenticated();
+    drop(peer.prehello.take());
     let actor = actor_for(&record.name);
-    let protocol = match wire::negotiate(hello.protocol, wire::SUPPORTED) {
-        Negotiation::Ok(v) => v,
-        Negotiation::UpdateApp => {
-            return refuse(
-                &mut ws,
-                RefusedReason::UpdateApp,
-                "Update this app to connect to this Mac.",
-            )
-            .await
-        }
-        Negotiation::UpdateMac => {
-            let name = c.backend.server_name();
-            return refuse(
-                &mut ws,
-                RefusedReason::UpdateMac,
-                format!("Update {} on {name}.", crate::brand::NAME),
-            )
-            .await;
-        }
-    };
     let Some(conn) = c.open_conn(&record.id, hello.foreground) else {
         return refuse(
             &mut ws,
@@ -428,15 +590,7 @@ where
     c.backend.changed();
 
     let live_work = hello.features.iter().any(|f| f == wire::FEATURE_LIVE_WORK);
-    let ended = connected(
-        &c,
-        &mut ws,
-        &caller,
-        protocol,
-        hello.resume.as_ref(),
-        live_work,
-    )
-    .await;
+    let ended = connected(&c, &mut ws, &caller, protocol, &hello, live_work).await;
     tracing::debug!(device = %record.id, ?ended, "[Companion] socket closed");
 
     c.close_conn(conn);
@@ -444,6 +598,141 @@ where
     c.registry
         .touch(&record.id, now_ms() as i64, RouteKind::Tailscale, true);
     c.backend.changed();
+}
+
+/// The next text frame as a client frame, or `None` if none came in time
+/// (or it wasn't one).
+async fn read_frame<S>(ws: &mut S) -> Option<ClientFrame>
+where
+    S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin,
+{
+    let text = tokio::time::timeout(HELLO_TIMEOUT, async {
+        loop {
+            match ws.next().await? {
+                Ok(Message::Text(text)) => return Some(text),
+                Ok(Message::Ping(_) | Message::Pong(_)) => continue,
+                _ => return None,
+            }
+        }
+    })
+    .await
+    .ok()??;
+    serde_json::from_str::<ClientFrame>(&text).ok()
+}
+
+/// Up to an authenticated hello: the phone's challenge, this Mac's signed
+/// identity, then the token. `None` once the socket was refused or dropped.
+async fn handshake<S>(
+    c: &Arc<Companion>,
+    ws: &mut S,
+    peer: &Peer,
+) -> Option<(DeviceRecord, u32, wire::HelloFrame)>
+where
+    S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+        + SinkExt<Message>
+        + Unpin,
+{
+    let (range, challenge) = match read_frame(ws).await? {
+        ClientFrame::Challenge {
+            protocol,
+            challenge,
+        } => (protocol, challenge),
+        // An app from before the Mac proved itself first sends its token
+        // straight away. It's not read: the app is told to update.
+        ClientFrame::Hello(h) => {
+            if wire::negotiate(h.protocol, wire::SUPPORTED) == Negotiation::UpdateApp {
+                refuse(
+                    ws,
+                    RefusedReason::UpdateApp,
+                    "Update this app to connect to this Mac.",
+                )
+                .await;
+            }
+            return None;
+        }
+        _ => return None,
+    };
+    let protocol = match wire::negotiate(range, wire::SUPPORTED) {
+        Negotiation::Ok(v) => v,
+        Negotiation::UpdateApp => {
+            refuse(
+                ws,
+                RefusedReason::UpdateApp,
+                "Update this app to connect to this Mac.",
+            )
+            .await;
+            return None;
+        }
+        Negotiation::UpdateMac => {
+            let name = c.backend.server_name();
+            refuse(
+                ws,
+                RefusedReason::UpdateMac,
+                format!("Update {} on {name}.", crate::brand::NAME),
+            )
+            .await;
+            return None;
+        }
+    };
+    let Some(key) = c.registry.identity() else {
+        refuse(ws, RefusedReason::Unavailable, KEY_UNAVAILABLE).await;
+        return None;
+    };
+    let server_id = c.registry.server_id();
+    let hosts = serve_hosts(c);
+    let proof = key.prove_mac(&challenge, &server_id, &hosts)?;
+    let identity = ServerFrame::Identity {
+        protocol,
+        server_id,
+        hosts,
+        identity: proof,
+    };
+    if !send(ws, &identity).await {
+        return None;
+    }
+    let ClientFrame::Hello(hello) = read_frame(ws).await? else {
+        return None;
+    };
+    let source = if peer.source.is_empty() {
+        "unknown"
+    } else {
+        peer.source.as_str()
+    };
+    let record = match c.registry.authenticate(&hello.token) {
+        Auth::Device(d) if d.login_matches(peer.login.as_deref()) => d,
+        Auth::Device(d) => {
+            c.note_refused(
+                source,
+                &format!(
+                    "{}'s token came without the tailnet user who paired it",
+                    d.name
+                ),
+            );
+            refuse(
+                ws,
+                RefusedReason::Unauthorized,
+                "This phone isn't paired with this Mac.",
+            )
+            .await;
+            return None;
+        }
+        Auth::Revoked => {
+            c.note_refused(source, "a removed phone tried to connect");
+            refuse(ws, RefusedReason::Revoked, "This Mac removed this phone.").await;
+            return None;
+        }
+        Auth::Unknown => {
+            c.note_refused(source, "an unknown device tried to connect");
+            refuse(
+                ws,
+                RefusedReason::Unauthorized,
+                "This phone isn't paired with this Mac.",
+            )
+            .await;
+            return None;
+        }
+    };
+    Some((record, protocol, hello))
 }
 
 #[derive(Debug)]
@@ -476,7 +765,7 @@ async fn connected<S>(
     ws: &mut S,
     caller: &Caller,
     protocol: u32,
-    resume: Option<&wire::Cursor>,
+    hello: &wire::HelloFrame,
     live_work: bool,
 ) -> Ended
 where
@@ -484,11 +773,12 @@ where
         + SinkExt<Message>
         + Unpin,
 {
-    let (mut rx, plan) = c.hub.resume(resume);
+    let (mut rx, plan) = c.hub.resume(hello.resume.as_ref());
+    let server_id = c.registry.server_id();
     let welcome = ServerFrame::Welcome {
         protocol,
         server: ServerInfo {
-            id: c.registry.server_id(),
+            id: server_id,
             name: c.backend.server_name(),
             app_version: c.backend.app_version(),
         },
@@ -565,6 +855,46 @@ where
 
     let mut drafts = Drafts::default();
     let (done_tx, mut done_rx) = mpsc::unbounded_channel::<(u64, Result<Value, wire::WireError>)>();
+    // This socket's requests still running. A revoke (or unpair) aborts them
+    // with the socket; any other close lets them finish, since a send the
+    // phone will retry by clientId is better done once than cut in half.
+    let mut work = JoinSet::new();
+    let ended = serve_frames(
+        c,
+        ws,
+        caller,
+        live_work,
+        &mut rx,
+        &mut drafts,
+        &done_tx,
+        &mut done_rx,
+        &mut work,
+    )
+    .await;
+    match ended {
+        Ended::Revoked | Ended::Unpaired => work.abort_all(),
+        _ => work.detach_all(),
+    }
+    ended
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn serve_frames<S>(
+    c: &Arc<Companion>,
+    ws: &mut S,
+    caller: &Caller,
+    live_work: bool,
+    rx: &mut broadcast::Receiver<HubItem>,
+    drafts: &mut Drafts,
+    done_tx: &mpsc::UnboundedSender<(u64, Result<Value, wire::WireError>)>,
+    done_rx: &mut mpsc::UnboundedReceiver<(u64, Result<Value, wire::WireError>)>,
+    work: &mut JoinSet<()>,
+) -> Ended
+where
+    S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+        + SinkExt<Message>
+        + Unpin,
+{
     let mut heartbeat =
         tokio::time::interval_at(tokio::time::Instant::now() + HEARTBEAT, HEARTBEAT);
     let mut draft_tick = tokio::time::interval(DRAFT_TICK);
@@ -609,7 +939,7 @@ where
                     }
                     ClientFrame::Req { id, method, params } => {
                         let (c, caller, done) = (c.clone(), caller.clone(), done_tx.clone());
-                        tokio::spawn(async move {
+                        work.spawn(async move {
                             let result = router::dispatch(&c, &caller, &method, params).await;
                             let _ = done.send((id, result));
                         });
@@ -622,13 +952,13 @@ where
                             return Ended::SendFailed;
                         }
                     }
-                    ClientFrame::Hello(_) => {}
+                    ClientFrame::Hello(_) | ClientFrame::Challenge { .. } => {}
                 }
             }
             item = rx.recv() => {
                 match item {
                     Ok(item) => {
-                        if let Some(ended) = forward(ws, &mut drafts, caller, item, live_work).await {
+                        if let Some(ended) = forward(ws, drafts, caller, item, live_work).await {
                             return ended;
                         }
                     }
@@ -638,10 +968,12 @@ where
                     Err(broadcast::error::RecvError::Closed) => return Ended::Shutdown,
                 }
             }
+            // Reap finished tasks so the set doesn't grow over a long session.
+            Some(_) = work.join_next(), if !work.is_empty() => {}
             Some((id, result)) = done_rx.recv() => {
                 // Events the request caused go out before its response.
                 while let Ok(item) = rx.try_recv() {
-                    if let Some(ended) = forward(ws, &mut drafts, caller, item, live_work).await {
+                    if let Some(ended) = forward(ws, drafts, caller, item, live_work).await {
                         return ended;
                     }
                 }

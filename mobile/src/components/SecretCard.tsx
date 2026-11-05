@@ -58,7 +58,7 @@ export function SecretCard({
   const values = useRef<string[]>(request.fields.map(() => ''));
   const inputs = useRef<(ComponentRef<typeof TextInput> | null)[]>([]);
   const route = link.kind === 'connected' ? (currentTransport()?.route ?? null) : null;
-  const problem = secretRouteProblem(route);
+  const problem = secretRouteProblem(route, currentTransport()?.identityVerified ?? false);
 
   const wipe = () => {
     values.current = request.fields.map(() => '');

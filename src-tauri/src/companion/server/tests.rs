@@ -26,10 +26,32 @@ async fn start(c: Arc<Companion>) -> u16 {
     port
 }
 
-async fn connect(port: u16) -> Ws {
+/// A socket with nothing said on it yet.
+async fn connect_raw(port: u16) -> Ws {
     let (ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/v1/ws"))
         .await
         .unwrap();
+    ws
+}
+
+const CHALLENGE: &str = "c2lnbiBtZSBwbGVhc2UsIGEgcGhvbmUgY2hvc2UgbWU";
+
+fn challenge() -> Value {
+    json!({ "t": "challenge", "protocol": { "min": 2, "max": 2 }, "challenge": CHALLENGE })
+}
+
+/// The phone's first move: a challenge, and the Mac's signed identity back.
+async fn prove(ws: &mut Ws) -> Value {
+    send(ws, challenge()).await;
+    let identity = next(ws).await;
+    assert_eq!(identity["t"], "identity", "{identity}");
+    identity
+}
+
+/// A socket the Mac has proved itself on, ready for a hello.
+async fn connect(port: u16) -> Ws {
+    let mut ws = connect_raw(port).await;
+    prove(&mut ws).await;
     ws
 }
 
@@ -54,7 +76,7 @@ async fn next(ws: &mut Ws) -> Value {
 fn hello(token: &str, resume: Option<Value>) -> Value {
     let mut h = json!({
         "t": "hello",
-        "protocol": { "min": 1, "max": 1 },
+        "protocol": { "min": 2, "max": 2 },
         "token": token,
         "app": { "version": "1.0.0", "runtimeVersion": "1" },
         "foreground": true
@@ -123,8 +145,9 @@ fn pair_body(code: &str) -> Value {
     json!({
         "code": code,
         "device": { "name": "Test Phone", "platform": "ios", "model": "iPhone 16", "appVersion": "1.0.0", "build": "official" },
-        "protocol": { "min": 1, "max": 1 },
-        "publicKey": "pk"
+        "protocol": { "min": 2, "max": 2 },
+        "publicKey": "pk",
+        "challenge": CHALLENGE
     })
 }
 
@@ -133,8 +156,13 @@ fn desk(c: &Arc<Companion>, allow: bool) {
     let c = c.clone();
     tokio::spawn(async move {
         for _ in 0..200 {
-            if c.pairing.view(now_ms()).request.is_some() {
-                c.pairing.decide(allow);
+            if let Some(r) = c.pairing.view(now_ms()).request {
+                let decision = if allow {
+                    crate::companion::pairing::Decision::Allow { replace: vec![] }
+                } else {
+                    crate::companion::pairing::Decision::Deny
+                };
+                c.pairing.decide(&r.id, decision);
                 return;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
@@ -182,7 +210,7 @@ async fn pair_chat_resume_and_audit_end_to_end() {
     let (mut ws, welcome, catch_up, cursor0) = open(port, &token, None).await;
     assert_eq!(welcome["resume"], "snapshot");
     assert_eq!(welcome["deviceId"], device_id.as_str());
-    assert_eq!(welcome["protocol"], 1);
+    assert_eq!(welcome["protocol"], 2);
     assert!(welcome["methods"]
         .as_array()
         .unwrap()
@@ -383,7 +411,10 @@ async fn pair_chat_resume_and_audit_end_to_end() {
 async fn a_revoked_phone_is_closed_at_once_and_told_so() {
     let (c, stub) = Stub::companion();
     let port = start(c.clone()).await;
-    let (record, token, _) = c.registry.add(&phone(), String::new(), 1).unwrap();
+    let (record, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
     let (mut ws, ..) = open(port, &token, None).await;
     c.revoke(&record.id).unwrap();
     let f = next(&mut ws).await;
@@ -403,16 +434,20 @@ async fn a_revoked_phone_is_closed_at_once_and_told_so() {
 async fn unknown_tokens_and_old_versions_are_refused() {
     let (c, _) = Stub::companion();
     let port = start(c.clone()).await;
-    let (_, token, _) = c.registry.add(&phone(), String::new(), 1).unwrap();
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
 
     let mut ws = connect(port).await;
     send(&mut ws, hello(&"0".repeat(64), None)).await;
     assert_eq!(next(&mut ws).await["reason"], "unauthorized");
 
-    let mut ws = connect(port).await;
-    let mut h = hello(&token, None);
-    h["protocol"] = json!({ "min": 2, "max": 3 });
-    send(&mut ws, h).await;
+    // Versions are settled by the challenge, before anything else.
+    let mut ws = connect_raw(port).await;
+    let mut ch = challenge();
+    ch["protocol"] = json!({ "min": 3, "max": 4 });
+    send(&mut ws, ch).await;
     let f = next(&mut ws).await;
     assert_eq!(f["reason"], "update_mac");
     assert_eq!(
@@ -420,13 +455,25 @@ async fn unknown_tokens_and_old_versions_are_refused() {
         format!("Update {} on Julian’s MacBook Pro.", crate::brand::NAME)
     );
 
-    let mut ws = connect(port).await;
+    let mut ws = connect_raw(port).await;
+    let mut ch = challenge();
+    ch["protocol"] = json!({ "min": 0, "max": 0 });
+    send(&mut ws, ch).await;
+    assert_eq!(next(&mut ws).await["reason"], "update_app");
+
+    // An app from protocol 1 sends its token first: told to update, and the
+    // token isn't so much as looked at.
+    let mut ws = connect_raw(port).await;
     let mut h = hello(&token, None);
-    h["protocol"] = json!({ "min": 0, "max": 0 });
+    h["protocol"] = json!({ "min": 1, "max": 1 });
     send(&mut ws, h).await;
     assert_eq!(next(&mut ws).await["reason"], "update_app");
 
-    // Not a hello first: closed without a word.
+    // Not a challenge first: closed without a word.
+    let mut ws = connect_raw(port).await;
+    send(&mut ws, json!({ "t": "ping" })).await;
+    assert_eq!(next(&mut ws).await["t"], "closed");
+    // Nor a hello after the proof.
     let mut ws = connect(port).await;
     send(&mut ws, json!({ "t": "ping" })).await;
     assert_eq!(next(&mut ws).await["t"], "closed");
@@ -467,7 +514,10 @@ async fn an_old_app_is_told_to_update_before_its_code_is_spent() {
 async fn unpairing_from_the_phone_answers_then_closes() {
     let (c, _) = Stub::companion();
     let port = start(c.clone()).await;
-    let (record, token, _) = c.registry.add(&phone(), String::new(), 1).unwrap();
+    let (record, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
     let (mut ws, ..) = open(port, &token, None).await;
     send(
         &mut ws,
@@ -486,7 +536,10 @@ async fn unpairing_from_the_phone_answers_then_closes() {
 async fn sockets_per_device_are_capped() {
     let (c, _) = Stub::companion();
     let port = start(c.clone()).await;
-    let (_, token, _) = c.registry.add(&phone(), String::new(), 1).unwrap();
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
     let mut held = Vec::new();
     for _ in 0..crate::companion::MAX_SOCKETS_PER_DEVICE {
         held.push(open(port, &token, None).await.0);
@@ -544,7 +597,10 @@ fn other_phone() -> PairDevice {
 async fn upload_send_and_download_a_photo_end_to_end() {
     let (c, _stub) = Stub::companion();
     let port = start(c.clone()).await;
-    let (_, token, _) = c.registry.add(&phone(), String::new(), 1).unwrap();
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
 
     // Upload: a BlobRef with the cleaned name and the declared type.
     let res = put_blob(
@@ -640,8 +696,14 @@ async fn upload_send_and_download_a_photo_end_to_end() {
 async fn file_routes_need_a_live_token_and_keep_devices_apart() {
     let (c, _stub) = Stub::companion();
     let port = start(c.clone()).await;
-    let (record, token, _) = c.registry.add(&phone(), String::new(), 1).unwrap();
-    let (_, other, _) = c.registry.add(&other_phone(), String::new(), 1).unwrap();
+    let (record, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
+    let (_, other, _) = c
+        .registry
+        .add(&other_phone(), String::new(), 1, &[], None)
+        .unwrap();
 
     assert_eq!(
         put_blob(port, None, "a.txt", "text/plain", b"x".to_vec())
@@ -701,7 +763,10 @@ async fn uploads_over_the_desks_limit_are_refused() {
     use crate::agents::attachments::MAX_FILE_BYTES;
     let (c, _stub) = Stub::companion();
     let port = start(c.clone()).await;
-    let (_, token, _) = c.registry.add(&phone(), String::new(), 1).unwrap();
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
     let res = put_blob(
         port,
         Some(&token),
@@ -729,10 +794,13 @@ async fn an_oversized_chunked_upload_is_read_out_and_answered_413() {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let (c, _stub) = Stub::companion();
     let port = start(c.clone()).await;
-    let (_, token, _) = c.registry.add(&phone(), String::new(), 1).unwrap();
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
     let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
     let head = format!(
-        "PUT /v1/blobs HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer {token}\r\nX-Name: big.bin\r\nTransfer-Encoding: chunked\r\n\r\n"
+        "PUT /v1/blobs HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {token}\r\nX-Name: big.bin\r\nTransfer-Encoding: chunked\r\n\r\n"
     );
     s.write_all(head.as_bytes()).await.unwrap();
     let chunk = vec![0u8; 1024 * 1024];
@@ -758,7 +826,10 @@ async fn an_oversized_chunked_upload_is_read_out_and_answered_413() {
 async fn a_running_turns_steps_go_only_to_phones_that_show_them() {
     let (c, _) = Stub::companion();
     let port = start(c.clone()).await;
-    let (_, token, _) = c.registry.add(&phone(), String::new(), 1).unwrap();
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
     let (mut old, ..) = open(port, &token, None).await;
     let mut ws = connect(port).await;
     let mut h = hello(&token, None);
@@ -793,4 +864,638 @@ async fn a_running_turns_steps_go_only_to_phones_that_show_them() {
     // The overview never carries them: they'd go out on every registry change.
     let overview = crate::companion::testkit::overview();
     assert!(overview["agents"][0]["status"].get("work").is_none());
+}
+
+// ============================================================================
+// Hardening (security audit of the companion, Nov 2026)
+// ============================================================================
+
+use base64::Engine as _;
+use ring::signature::{UnparsedPublicKey, ED25519};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+fn b64(s: &str) -> Vec<u8> {
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(s)
+        .unwrap()
+}
+
+/// The proof verifies, by the key the pairing link fingerprints.
+fn verifies(c: &Companion, proof: &Value, message: &str) -> bool {
+    let key = b64(proof["publicKey"].as_str().unwrap());
+    let sig = b64(proof["signature"].as_str().unwrap());
+    crate::companion::identity::fingerprint_of(&key) == c.registry.identity().unwrap().fingerprint()
+        && UnparsedPublicKey::new(&ED25519, key)
+            .verify(message.as_bytes(), &sig)
+            .is_ok()
+}
+
+fn hosts(v: &Value) -> Vec<String> {
+    serde_json::from_value(v["hosts"].clone()).unwrap()
+}
+
+#[tokio::test]
+async fn the_mac_proves_itself_before_any_secret_is_sent() {
+    use crate::companion::identity::{mac_message, pair_message};
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let server_id = c.registry.server_id();
+
+    // Before pairing: who it is, and where it serves, signed over the challenge.
+    let res: Value = reqwest::Client::new()
+        .post(format!("http://127.0.0.1:{port}/v1/identity"))
+        .json(&json!({ "protocol": { "min": 2, "max": 2 }, "challenge": CHALLENGE }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(res["ok"], true, "{res}");
+    assert_eq!(
+        hosts(&res),
+        vec![crate::companion::testkit::HOST.to_string()]
+    );
+    assert!(verifies(
+        &c,
+        &res["identity"],
+        &mac_message(CHALLENGE, &server_id, &hosts(&res))
+    ));
+
+    // The pairing answer signs the hosts and the device it made.
+    let (code, _) = c.pairing.start(now_ms());
+    desk(&c, true);
+    let paired: Value = post_pair(port, &pair_body(&code))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(paired["ok"], true, "{paired}");
+    let device_id = paired["deviceId"].as_str().unwrap();
+    assert!(verifies(
+        &c,
+        &paired["identity"],
+        &pair_message(CHALLENGE, &server_id, &hosts(&paired), device_id)
+    ));
+    assert!(!verifies(
+        &c,
+        &paired["identity"],
+        &pair_message(CHALLENGE, &server_id, &hosts(&paired), "dev_other")
+    ));
+
+    // On a socket: the proof comes before the token, and isn't a pairing proof.
+    let mut ws = connect_raw(port).await;
+    let identity = prove(&mut ws).await;
+    assert_eq!(identity["serverId"], server_id.as_str());
+    assert_eq!(identity["protocol"], 2);
+    assert!(verifies(
+        &c,
+        &identity["identity"],
+        &mac_message(CHALLENGE, &server_id, &hosts(&identity))
+    ));
+    assert!(!verifies(
+        &c,
+        &identity["identity"],
+        &pair_message(CHALLENGE, &server_id, &hosts(&identity), device_id)
+    ));
+    send(&mut ws, hello(paired["token"].as_str().unwrap(), None)).await;
+    let welcome = next(&mut ws).await;
+    assert_eq!(welcome["t"], "welcome");
+    assert!(welcome.get("identity").is_none(), "proved once, first");
+
+    // A challenge that isn't one gets no signature, and no socket.
+    let mut ws = connect_raw(port).await;
+    let mut ch = challenge();
+    ch["challenge"] = json!("short");
+    send(&mut ws, ch).await;
+    assert_eq!(next(&mut ws).await["t"], "closed");
+}
+
+/// The relay attack: someone with their own `*.ts.net` name passes the
+/// phone's frames to the real Mac and back. Every signature is real, but it
+/// names the Mac's own host, never the relay's, so a phone that checks the
+/// host it reached sends the relay nothing.
+#[tokio::test]
+async fn a_relay_on_another_host_cant_pass_the_macs_proof_off_as_its_own() {
+    use crate::companion::identity::mac_message;
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let server_id = c.registry.server_id();
+    let mut ws = connect_raw(port).await;
+    let relayed = prove(&mut ws).await;
+    let relay_host = "attacker.tail9.ts.net".to_string();
+    // What the phone checks: the pinned key signed this, for the host it reached.
+    let phone_accepts = |reached: &str| {
+        hosts(&relayed).iter().any(|h| h == reached)
+            && verifies(
+                &c,
+                &relayed["identity"],
+                &mac_message(CHALLENGE, &server_id, &hosts(&relayed)),
+            )
+    };
+    assert!(phone_accepts(crate::companion::testkit::HOST));
+    assert!(!phone_accepts(&relay_host));
+    // And the relay can't swap its own host in without breaking the signature.
+    assert!(!verifies(
+        &c,
+        &relayed["identity"],
+        &mac_message(CHALLENGE, &server_id, &[relay_host])
+    ));
+}
+
+#[tokio::test]
+async fn a_mac_that_cant_read_its_key_says_so_and_offers_no_pairing() {
+    let keys = Arc::new(crate::companion::keystore::Memory::default());
+    keys.fail_load
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let dir = tempfile::tempdir().unwrap();
+    let registry =
+        crate::companion::Registry::load_with(dir.path().join("companion.json"), Box::new(keys));
+    let (c, _) = Stub::companion_with(registry, "epoch-test");
+    let port = start(c.clone()).await;
+    let mut ws = connect_raw(port).await;
+    send(&mut ws, challenge()).await;
+    let f = next(&mut ws).await;
+    assert_eq!(f["reason"], "unavailable", "{f}");
+    let (code, _) = c.pairing.start(now_ms());
+    let res: Value = post_pair(port, &pair_body(&code))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(res["ok"], false, "{res}");
+    assert!(c.pairing.view(now_ms()).active, "the code survives");
+}
+
+#[tokio::test]
+async fn strangers_cant_hold_every_socket_from_one_source() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    // Sockets that never say a word, all from one tailnet user.
+    let mut held = Vec::new();
+    let open_as = |login: &'static str| async move {
+        let mut req =
+            tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
+                format!("ws://127.0.0.1:{port}/v1/ws"),
+            )
+            .unwrap();
+        req.headers_mut()
+            .insert("Tailscale-User-Login", login.parse().unwrap());
+        tokio_tungstenite::connect_async(req).await
+    };
+    for _ in 0..crate::companion::limits::MAX_PREHELLO_PER_SOURCE {
+        held.push(open_as("mallory@example.com").await.unwrap().0);
+    }
+    assert!(
+        open_as("mallory@example.com").await.is_err(),
+        "one more from the same source is turned away"
+    );
+    // The paired phone, from its own user, still gets in.
+    let (_, token, _) = c
+        .registry
+        .add(
+            &phone(),
+            String::new(),
+            1,
+            &[],
+            Some("julian@example.com".into()),
+        )
+        .unwrap();
+    let (mut ws, _) = open_as("julian@example.com").await.unwrap();
+    prove(&mut ws).await;
+    send(&mut ws, hello(&token, None)).await;
+    assert_eq!(next(&mut ws).await["t"], "welcome");
+    // A socket that authenticated gives its stranger's place back.
+    assert_eq!(c.prehello.in_flight("user:julian@example.com"), 0);
+}
+
+#[tokio::test]
+async fn a_token_from_a_users_phone_needs_that_user_every_time() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (_, token, _) = c
+        .registry
+        .add(
+            &phone(),
+            String::new(),
+            1,
+            &[],
+            Some("julian@example.com".into()),
+        )
+        .unwrap();
+    // No login header at all (a tagged node holding a stolen token).
+    let mut ws = connect(port).await;
+    send(&mut ws, hello(&token, None)).await;
+    assert_eq!(next(&mut ws).await["reason"], "unauthorized");
+    let res = reqwest::Client::new()
+        .get(format!("http://127.0.0.1:{port}/v1/blobs/x"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 401);
+}
+
+#[tokio::test]
+async fn pairing_takes_json_only_and_browsers_are_refused() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (code, _) = c.pairing.start(now_ms());
+    let client = reqwest::Client::new();
+    let url = format!("http://127.0.0.1:{port}/v1/pair");
+    // A web page's no-cors POST.
+    let res = client
+        .post(&url)
+        .header("Content-Type", "text/plain")
+        .body(pair_body(&code).to_string())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 415);
+    // A page from another origin, even with the right type.
+    let res = client
+        .post(&url)
+        .header("Origin", "https://evil.example")
+        .json(&pair_body(&code))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 403);
+    // DNS rebinding: the page's own name pointed at 127.0.0.1.
+    let res = client
+        .post(&url)
+        .header("Host", format!("attacker.example:{port}"))
+        .json(&pair_body(&code))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 403);
+    assert!(
+        c.pairing.view(now_ms()).active,
+        "none of that touched the code"
+    );
+
+    // A browser's WebSocket carries its page's Origin: refused at the upgrade.
+    let mut req = tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
+        format!("ws://127.0.0.1:{port}/v1/ws"),
+    )
+    .unwrap();
+    req.headers_mut()
+        .insert("Origin", "https://evil.example".parse().unwrap());
+    assert!(tokio_tungstenite::connect_async(req).await.is_err());
+    // The app's own (React Native sends the server's own origin) is fine.
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
+    let mut req = tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
+        format!("ws://127.0.0.1:{port}/v1/ws"),
+    )
+    .unwrap();
+    req.headers_mut().insert(
+        "Origin",
+        format!("http://127.0.0.1:{port}").parse().unwrap(),
+    );
+    let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
+    prove(&mut ws).await;
+    send(&mut ws, hello(&token, None)).await;
+    assert_eq!(next(&mut ws).await["t"], "welcome");
+}
+
+#[tokio::test]
+async fn bad_hellos_cost_one_audit_line_a_minute_not_one_each() {
+    let (c, stub) = Stub::companion();
+    let port = start(c.clone()).await;
+    for _ in 0..200 {
+        let mut ws = connect(port).await;
+        send(&mut ws, hello(&"0".repeat(64), None)).await;
+        assert_eq!(next(&mut ws).await["reason"], "unauthorized");
+    }
+    let refused = stub.audited().iter().filter(|a| a.1 == "refused").count();
+    assert_eq!(refused, 1, "the rest are counted, then written as one line");
+    c.refusals.flush(now_ms() + 61_000).iter().for_each(|l| {
+        assert!(l.starts_with("199 more failed connections"), "{l}");
+    });
+}
+
+#[tokio::test]
+async fn a_stalled_pair_body_is_dropped_after_its_timeout() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let mut s = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .unwrap();
+    s.write_all(
+        format!(
+            "POST /v1/pair HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: 16000\r\n\r\n{{"
+        )
+        .as_bytes(),
+    )
+    .await
+    .unwrap();
+    let started = std::time::Instant::now();
+    let mut buf = vec![0u8; 512];
+    let n = tokio::time::timeout(
+        super::PAIR_BODY_TIMEOUT + Duration::from_secs(5),
+        s.read(&mut buf),
+    )
+    .await
+    .expect("answered, not held open")
+    .unwrap();
+    assert!(started.elapsed() >= super::PAIR_BODY_TIMEOUT - Duration::from_millis(500));
+    assert!(String::from_utf8_lossy(&buf[..n]).starts_with("HTTP/1.1 408"));
+}
+
+#[tokio::test]
+async fn connections_are_capped_overall_and_per_source() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    // One source holding requests open (a body that never finishes).
+    let mut held = Vec::new();
+    for _ in 0..crate::companion::limits::MAX_PER_SOURCE {
+        let mut s = tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .unwrap();
+        s.write_all(format!("POST /v1/pair HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Forwarded-For: 100.64.0.9\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{{").as_bytes()).await.unwrap();
+        held.push(s);
+    }
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let busy = reqwest::Client::new()
+        .post(format!("http://127.0.0.1:{port}/v1/pair"))
+        .header("X-Forwarded-For", "100.64.0.9")
+        .json(&pair_body("X"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(busy.status(), 429, "that source is at its cap");
+    let other = reqwest::Client::new()
+        .post(format!("http://127.0.0.1:{port}/v1/pair"))
+        .header("X-Forwarded-For", "100.64.0.10")
+        .json(&pair_body("X"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(other.status(), 404, "another source still gets in");
+    drop(held);
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Strangers past their share: the oldest is closed to make room, and
+    // the newcomer (maybe the paired phone) is served.
+    let mut idle = Vec::new();
+    for _ in 0..crate::companion::limits::MAX_UNAUTHENTICATED {
+        idle.push(
+            tokio::net::TcpStream::connect(("127.0.0.1", port))
+                .await
+                .unwrap(),
+        );
+        // In order, so "oldest" means the first.
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let ok = reqwest::Client::new()
+        .post(format!("http://127.0.0.1:{port}/v1/pair"))
+        .json(&pair_body("X"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(ok.status(), 404, "the newcomer is answered");
+    let mut buf = [0u8; 16];
+    let n = tokio::time::timeout(Duration::from_secs(2), idle[0].read(&mut buf))
+        .await
+        .expect("the oldest stranger is closed")
+        .unwrap_or(0);
+    assert_eq!(n, 0);
+}
+
+#[tokio::test]
+async fn somebody_elses_wrong_codes_never_burn_the_real_one() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (code, _) = c.pairing.start(now_ms());
+    let client = reqwest::Client::new();
+    let wrong = (0..8).map(|_| {
+        client
+            .post(format!("http://127.0.0.1:{port}/v1/pair"))
+            .header("X-Forwarded-For", "100.64.0.66")
+            .json(&pair_body("AAAAAAAAAAAAAAAAAAAAAAAAAA"))
+            .send()
+    });
+    for res in futures_util::future::join_all(wrong).await {
+        assert_eq!(res.unwrap().status(), 404);
+    }
+    desk(&c, true);
+    let paired: Value = client
+        .post(format!("http://127.0.0.1:{port}/v1/pair"))
+        .header("X-Forwarded-For", "100.64.0.2")
+        .json(&pair_body(&code))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(paired["ok"], true, "{paired}");
+}
+
+#[tokio::test]
+async fn uploads_hold_their_room_first_and_http_counts_against_the_limit() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
+    let big = vec![7u8; 4 * 1024 * 1024];
+    let all = (0..40).map(|_| {
+        put_blob(
+            port,
+            Some(&token),
+            "a.bin",
+            "application/octet-stream",
+            big.clone(),
+        )
+    });
+    let results = futures_util::future::join_all(all).await;
+    let staged = results.iter().filter(|r| r.status() == 200).count();
+    assert!(staged <= crate::companion::blobs::MAX_BLOBS_PER_DEVICE);
+    assert!(results
+        .iter()
+        .all(|r| r.status() == 200 || r.status() == 429));
+    assert!(staged >= 1);
+
+    // Every route shares the per-minute budget the socket has.
+    let mut limited = 0;
+    for _ in 0..(crate::companion::MAX_REQUESTS_PER_MINUTE + 20) {
+        if get(port, Some(&token), "/v1/blobs/blob_nope")
+            .await
+            .status()
+            == 429
+        {
+            limited += 1;
+        }
+    }
+    assert!(limited >= 20, "{limited}");
+}
+
+#[tokio::test]
+async fn revoking_mid_upload_stops_it_and_leaves_nothing() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (record, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
+    let mut s = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .unwrap();
+    s.write_all(format!("PUT /v1/blobs HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {token}\r\nContent-Type: text/plain\r\nX-Name: a.txt\r\nContent-Length: 2000\r\n\r\n").as_bytes()).await.unwrap();
+    s.write_all(&[b'x'; 1000]).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    c.revoke(&record.id).unwrap();
+    s.write_all(&[b'x'; 1000]).await.unwrap();
+    let mut buf = vec![0u8; 512];
+    let n = tokio::time::timeout(Duration::from_secs(5), s.read(&mut buf))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&buf[..n]).starts_with("HTTP/1.1 401"));
+    assert!(c.blobs.get(&record.id, "anything", now_ms()).is_none());
+    let left = std::fs::read_dir(c.blobs.dir())
+        .map(|d| d.count())
+        .unwrap_or(0);
+    assert_eq!(left, 0, "no partial file left behind");
+}
+
+#[tokio::test]
+async fn a_revoke_cancels_the_requests_its_socket_had_running() {
+    let (c, stub) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (record, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
+    let (mut ws, ..) = open(port, &token, None).await;
+    send(
+        &mut ws,
+        json!({ "t": "req", "id": 1, "method": "agents.memorySuggest", "params": { "text": "slow" } }),
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    c.revoke(&record.id).unwrap();
+    assert_eq!(next(&mut ws).await["reason"], "revoked");
+    tokio::time::sleep(Duration::from_millis(2500)).await;
+    assert_eq!(
+        stub.slow_done.load(std::sync::atomic::Ordering::SeqCst),
+        0,
+        "aborted, not finished after the phone was removed"
+    );
+
+    // An ordinary close lets running work finish (a retried send by
+    // clientId is better done once than cut in half).
+    let (_, token, _) = c
+        .registry
+        .add(&other_phone(), String::new(), 1, &[], None)
+        .unwrap();
+    let (mut ws, ..) = open(port, &token, None).await;
+    send(
+        &mut ws,
+        json!({ "t": "req", "id": 1, "method": "agents.memorySuggest", "params": { "text": "slow" } }),
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    drop(ws);
+    tokio::time::sleep(Duration::from_millis(2500)).await;
+    assert_eq!(stub.slow_done.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn thumbnails_refuse_a_decompression_bomb_and_cache_the_rest() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
+    // 8000 x 6000 = 48 MP: a small file that says it is huge.
+    let bomb = {
+        let img = image::GrayImage::new(8000, 6000);
+        let mut out = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut out, image::ImageFormat::Png).unwrap();
+        out.into_inner()
+    };
+    assert!(bomb.len() < 2 * 1024 * 1024);
+    let blob: Value = put_blob(port, Some(&token), "bomb.png", "image/png", bomb)
+        .await
+        .json()
+        .await
+        .unwrap();
+    let started = std::time::Instant::now();
+    let res = get(
+        port,
+        Some(&token),
+        &format!("/v1/blobs/{}?w=16", blob["blobId"].as_str().unwrap()),
+    )
+    .await;
+    assert_eq!(res.status(), 422);
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "refused from its header, not decoded"
+    );
+
+    let ok: Value = put_blob(port, Some(&token), "ok.png", "image/png", png(800, 400))
+        .await
+        .json()
+        .await
+        .unwrap();
+    let path = format!("/v1/blobs/{}?w=100", ok["blobId"].as_str().unwrap());
+    let first = get(port, Some(&token), &path).await.bytes().await.unwrap();
+    let again = get(port, Some(&token), &path).await.bytes().await.unwrap();
+    assert_eq!(first, again);
+    assert!(image::load_from_memory(&first).unwrap().width() <= 100);
+}
+
+#[tokio::test]
+async fn a_token_used_by_another_tailnet_user_is_refused() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (_, token, _) = c
+        .registry
+        .add(
+            &phone(),
+            String::new(),
+            1,
+            &[],
+            Some("julian@example.com".into()),
+        )
+        .unwrap();
+    let res = reqwest::Client::new()
+        .get(format!("http://127.0.0.1:{port}/v1/blobs/x"))
+        .bearer_auth(&token)
+        .header("Tailscale-User-Login", "mallory@example.com")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 401);
+    let mut req = tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
+        format!("ws://127.0.0.1:{port}/v1/ws"),
+    )
+    .unwrap();
+    req.headers_mut().insert(
+        "Tailscale-User-Login",
+        "mallory@example.com".parse().unwrap(),
+    );
+    let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
+    prove(&mut ws).await;
+    send(&mut ws, hello(&token, None)).await;
+    assert_eq!(next(&mut ws).await["reason"], "unauthorized");
+    // The same user is let in.
+    let res = reqwest::Client::new()
+        .get(format!("http://127.0.0.1:{port}/v1/blobs/x"))
+        .bearer_auth(&token)
+        .header("Tailscale-User-Login", "julian@example.com")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 404);
 }

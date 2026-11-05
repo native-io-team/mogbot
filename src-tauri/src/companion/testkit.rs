@@ -467,7 +467,14 @@ pub struct Stub {
     pub copies: Mutex<Vec<String>>,
     /// Secure input cards saved (the values are not kept).
     pub secrets_saved: AtomicUsize,
+    /// `memorySuggest("slow")` calls that ran to the end.
+    pub slow_done: AtomicUsize,
+    /// What `serve_hosts` answers: the Tailscale route's host by default.
+    pub hosts: Mutex<Vec<String>>,
 }
+
+/// The host the stub Mac serves on (its Tailscale route's).
+pub const HOST: &str = "julians-macbook-pro.tail1234.ts.net";
 
 impl Stub {
     pub fn companion() -> (Arc<Companion>, Arc<Stub>) {
@@ -490,6 +497,8 @@ impl Stub {
             revoked: Mutex::new(Vec::new()),
             copies: Mutex::new(Vec::new()),
             secrets_saved: AtomicUsize::new(0),
+            slow_done: AtomicUsize::new(0),
+            hosts: Mutex::new(vec![HOST.into()]),
         });
         let c = Arc::new(Companion::with_epoch(registry, stub.clone(), epoch.into()));
         let _ = stub.companion.set(Arc::downgrade(&c));
@@ -520,6 +529,10 @@ fn status(state: &'static str) -> Value {
 
 #[async_trait]
 impl Backend for Stub {
+    fn serve_hosts(&self) -> Vec<String> {
+        self.hosts.lock().unwrap().clone()
+    }
+
     async fn overview(&self) -> Result<Value, CommandError> {
         Ok(overview())
     }
@@ -669,6 +682,12 @@ impl Backend for Stub {
     }
 
     async fn memory_suggest(&self, text: String) -> Result<String, CommandError> {
+        // "slow": a long-running request, for what a revoke does to work in flight.
+        if text == "slow" {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            self.slow_done
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
         Ok(text
             .lines()
             .next()
@@ -792,7 +811,52 @@ impl Backend for Stub {
                 "costUsd": cost, "pricedTurns": turns, "durationMs": turns * 40_000
             })
         };
-        Ok(json!({ "week": totals(3, 0.42), "allTime": totals(41, 6.18) }))
+        Ok(json!({
+            "week": totals(3, 0.42),
+            "allTime": totals(41, 6.18),
+            "routines": [{ "id": "ck1", "week": totals(2, 0.3) }]
+        }))
+    }
+
+    async fn quota(&self) -> Result<Value, CommandError> {
+        use crate::agents::engine::Engine;
+        use crate::agents::quota::{Quota, QuotaWindow};
+        let window =
+            |kind: &str, used: Option<f64>, resets: Option<i64>, minutes, limited| QuotaWindow {
+                kind: kind.into(),
+                used_percent: used,
+                resets_at: resets,
+                window_minutes: minutes,
+                limited,
+                observed_at: 1_762_290_000_000,
+            };
+        // Every field set (Codex's window length), and a used-up window with no figure.
+        let quotas = vec![
+            Quota {
+                engine: Engine::Claude,
+                windows: vec![window(
+                    "seven_day",
+                    Some(85.0),
+                    Some(1_762_400_000_000),
+                    None,
+                    false,
+                )],
+            },
+            Quota {
+                engine: Engine::Codex,
+                windows: vec![
+                    window(
+                        "primary",
+                        Some(100.0),
+                        Some(1_762_300_000_000),
+                        Some(300),
+                        true,
+                    ),
+                    window("secondary", None, None, None, false),
+                ],
+            },
+        ];
+        serde_json::to_value(quotas).map_err(|e| CommandError::expected(e.to_string()))
     }
 
     async fn revoke_permission(&self, _agent_id: &str, rule_id: &str) -> Result<(), CommandError> {
@@ -906,6 +970,7 @@ impl Backend for Stub {
                     runs: Vec::new(),
                     retry: None,
                     watch: None,
+                    usage: Default::default(),
                     extra: Default::default(),
                 })
                 .unwrap()

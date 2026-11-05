@@ -37,6 +37,8 @@ pub const EVENT_REGISTRY: &str = "agents://registry";
 /// A reply being written: `{agentId, id, text}`, the text so far. The message
 /// that completes it arrives on [`EVENT_MESSAGE`] with the same id.
 pub const EVENT_DRAFT: &str = "agents://draft";
+/// An engine reported how much of the plan is left (`super::quota`).
+pub const EVENT_QUOTA: &str = "agents://quota";
 
 /// How often a growing draft is sent to the UI: smooth to the eye, and a
 /// burst of tiny deltas costs one event rather than dozens.
@@ -184,6 +186,14 @@ struct Runtime {
     /// The agent is being deleted (`stop_for_delete`): nothing more is
     /// queued for it, so no turn starts on an agent about to go.
     deleting: bool,
+    /// What the turn in progress has cost so far, as its engine reported it
+    /// (a session retry is a second report; an interrupted turn's cost carries
+    /// over to the one that replaces it, like its scheduled runs): what a
+    /// routine it ran is charged.
+    turn_usage: super::usage::UsageTotals,
+    /// Something other than a routine firing was in the turn in progress
+    /// (or in a turn it replaced): its cost is nobody's routine's.
+    turn_mixed: bool,
 }
 
 /// Why a take-over can't start now.
@@ -1217,7 +1227,7 @@ fn tell_dropped(app: &AppHandle, agent_id: &str, dropped: Vec<Inbound>, why: Dro
     if !tickets.is_empty() {
         // A failure settles as the turn's error line says (retried or reported).
         let settle_as = (why != Dropped::Failed).then_some("Stopped");
-        super::runs::turn_ended(app, agent_id, &tickets, settle_as);
+        super::runs::turn_ended(app, agent_id, &tickets, settle_as, None);
     }
     if askers.is_empty() {
         return;
@@ -1600,6 +1610,9 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     let batch: Vec<Inbound> = runtime.queue.drain(..).collect();
     save_inbox(agent_id, &runtime.queue);
     let routine = batch.iter().all(|m| m.routine);
+    // Its cost is a routine's only if nothing else was in it, nor in the
+    // interrupted turn it replaces (whose cost carries over in `turn_usage`).
+    runtime.turn_mixed |= !routine;
     let request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
     // The turn inherits the deepest hop it is answering; a user message
     // in the batch resets the chain.
@@ -1669,6 +1682,8 @@ fn finish_if_idle(agent_id: &str) -> Option<Idle> {
     runtime.origin = None;
     runtime.prompt = None;
     runtime.interrupted = None;
+    runtime.turn_usage = super::usage::UsageTotals::default();
+    runtime.turn_mixed = false;
     Some(Idle {
         owed: std::mem::take(&mut runtime.owed),
         tickets: std::mem::take(&mut runtime.tickets),
@@ -1784,6 +1799,8 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     runtime.origin = None;
     runtime.prompt = None;
     runtime.waits = 0;
+    runtime.turn_usage = super::usage::UsageTotals::default();
+    runtime.turn_mixed = false;
     runtime.status = Some(Status::idle());
     // Messages that arrived during the dead turn are newer than what killed
     // it: a new worker sends them (or the hand-back does, while someone
@@ -1833,7 +1850,7 @@ fn after_panic(app: &AppHandle, agent_id: &str, reset: PanicReset) {
         );
     }
     if !reset.tickets.is_empty() {
-        super::runs::turn_ended(app, agent_id, &reset.tickets, None);
+        super::runs::turn_ended(app, agent_id, &reset.tickets, None, None);
     }
     tell_dropped(app, agent_id, reset.dropped, Dropped::Failed);
     if reset.restart {
@@ -1896,7 +1913,7 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
                 );
             }
             if !idle.tickets.is_empty() {
-                super::runs::turn_ended(&app, &agent_id, &idle.tickets, Some("Stopped"));
+                super::runs::turn_ended(&app, &agent_id, &idle.tickets, Some("Stopped"), None);
             }
             return;
         }
@@ -1983,6 +2000,7 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         // How the scheduled runs it answered settle: `None` reads the turn's
         // own last line (an error, or not).
         let mut settle_as: Option<&str> = None;
+        let finished = matches!(result, Ok(Ended::Finished));
         match result {
             Ok(Ended::Interrupted) => {
                 // Its debts and scheduled runs carry over to the next turn.
@@ -1998,6 +2016,12 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             Err(err) => {
                 let engine = store::get(&agent_id).map(|a| a.engine).unwrap_or_default();
                 let (text, failure) = super::failure::describe_now(engine, &err.to_string());
+                // Signed out: the plan reading kept belonged to a login that isn't here.
+                if failure.kind == super::failure::FailureKind::SignedOut
+                    && super::quota::clear(engine, store::now_ms())
+                {
+                    let _ = app.emit(EVENT_QUOTA, ());
+                }
                 let mut line = new_message(&agent_id, MessageKind::Error, text.clone());
                 line.failure = Some(failure);
                 let _ = record(&app, line);
@@ -2005,12 +2029,37 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
                 return_results(&app, &agent_id, since, Some(text));
             }
         }
-        // A scheduled run that failed is retried, or reported (`agents::runs`).
+        // A scheduled run that failed is retried, or reported (`agents::runs`);
+        // a turn that finished having only run routines is charged to them.
+        let (spent, mixed) = take_turn_usage(&agent_id);
+        let spent = (finished && !mixed).then_some(spent);
         let tickets = take_tickets(&agent_id);
         if !tickets.is_empty() {
-            super::runs::turn_ended(&app, &agent_id, &tickets, settle_as);
+            super::runs::turn_ended(&app, &agent_id, &tickets, settle_as, spent.as_ref());
         }
         notify::turn_ended(&app, &agent_id);
+    }
+}
+
+/// What the turn (and any it replaced) cost, and whether anything but a
+/// routine was in it; reset for the next.
+fn take_turn_usage(agent_id: &str) -> (super::usage::UsageTotals, bool) {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    runtimes
+        .get_mut(agent_id)
+        .map(|r| {
+            (
+                std::mem::take(&mut r.turn_usage),
+                std::mem::take(&mut r.turn_mixed),
+            )
+        })
+        .unwrap_or_default()
+}
+
+fn add_turn_usage(agent_id: &str, turn: &super::usage::UsageTotals) {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(r) = runtimes.get_mut(agent_id) {
+        r.turn_usage.add(turn);
     }
 }
 
@@ -2791,8 +2840,17 @@ async fn run_turn(
                                 turn.duration_ms = u64::try_from(store::now_ms() - started).unwrap_or(0);
                             }
                             let today = super::usage::today();
+                            add_turn_usage(agent_id, &turn);
                             let id = agent_id.to_string();
                             let _ = tokio::task::spawn_blocking(move || store::update(&id, |a| a.usage.record(&turn, today))).await;
+                        }
+                        Step::Quota(reading) => {
+                            let changed = tokio::task::spawn_blocking(move || super::quota::record(reading, store::now_ms()))
+                                .await
+                                .unwrap_or(false);
+                            if changed {
+                                let _ = app.emit(EVENT_QUOTA, ());
+                            }
                         }
                         Step::Context(fill) if reading.armed => {
                             let (id, on) = (agent_id.to_string(), this_session.clone());

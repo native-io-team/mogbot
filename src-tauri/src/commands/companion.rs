@@ -5,7 +5,8 @@
 use serde::Serialize;
 use tauri::AppHandle;
 
-use crate::companion::{actor_for, desktop, now_ms, pairing::PairingView, wire};
+use crate::companion::pairing::{Decision, PairingView};
+use crate::companion::{actor_for, desktop, now_ms, wire};
 use crate::errors::CommandError;
 use crate::remote_access::tailscale;
 
@@ -81,13 +82,23 @@ async fn read_status(app: &AppHandle) -> PhoneStatus {
             .await
             .unwrap_or_default()
     };
+    let mut pairing = c.pairing.view(now_ms());
+    if let Some(request) = pairing.request.as_mut() {
+        // Phones it looks like: offered for replacing, never replaced unasked.
+        request.replaces = c
+            .registry
+            .same_phones(&request.device)
+            .iter()
+            .map(|d| d.view(c.is_connected(&d.id)))
+            .collect();
+    }
     PhoneStatus {
         enabled: c.registry.read(|s| s.enabled),
         running: desktop::running_port().is_some(),
         serve: desktop::serve_state(),
         tailscale: tailscale::status().await,
         devices,
-        pairing: c.pairing.view(now_ms()),
+        pairing,
         activity,
         methods: crate::companion::router::METHODS.to_vec(),
         push: c.push.view(&c),
@@ -176,6 +187,19 @@ pub async fn companion_pair_start(app: AppHandle) -> Result<PairingCode, Command
             "Your phone can't reach this Mac yet. Turn on phone access and wait for Tailscale.",
         ));
     }
+    // The phone pins this key for good: only offer it once it's kept where
+    // the next launch will find it (and after any reset that changes the id).
+    let identity = c
+        .registry
+        .identity()
+        .filter(|_| c.registry.identity_is_durable());
+    let Some(identity) = identity else {
+        return Err(CommandError::expected(
+            "This Mac can't keep its identity key in the Keychain, so it can't pair a phone safely. Unlock the Keychain (or check Keychain Access) and try again.",
+        ));
+    };
+    // Exactly one route: the host the phone shows is the only one it tries.
+    let routes = routes.into_iter().take(1).collect();
     let (code, expires_at) = c.pairing.start(now_ms());
     let link = wire::PairingLink {
         v: 1,
@@ -183,6 +207,7 @@ pub async fn companion_pair_start(app: AppHandle) -> Result<PairingCode, Command
         server_id: c.registry.server_id(),
         name: c.backend.server_name(),
         routes,
+        fingerprint: identity.fingerprint(),
     }
     .format();
     let qr = qr_matrix(&link)?;
@@ -203,16 +228,55 @@ pub async fn companion_pair_cancel(app: AppHandle) -> Result<(), CommandError> {
     Ok(())
 }
 
-/// Allow or Deny the phone waiting at the desk.
+/// Allow or Deny the phone waiting at the desk: the request the panel was
+/// showing (`request_id`), so a click can't land on another that arrived
+/// meanwhile. `replace` lists paired phones to remove on Allow, and only
+/// ones the panel offered (`PairingView.request.replaces`) are taken.
 #[tauri::command]
 #[tracing::instrument(skip(app))]
-pub async fn companion_pair_decide(app: AppHandle, allow: bool) -> Result<(), CommandError> {
+pub async fn companion_pair_decide(
+    app: AppHandle,
+    request_id: String,
+    allow: bool,
+    replace: Option<Vec<String>>,
+) -> Result<(), CommandError> {
     let c = desktop::ensure(&app);
-    let answered = c.pairing.decide(allow);
+    let decision = decision_for(&c, &request_id, allow, replace.unwrap_or_default());
+    let answered = c.pairing.decide(&request_id, decision);
     c.backend.changed();
-    answered
-        .map(|_| ())
-        .ok_or_else(|| CommandError::expected("That phone stopped waiting. Pair it again."))
+    answered.map(|_| ()).ok_or_else(|| {
+        CommandError::expected("That phone stopped waiting, or another one asked. Look again.")
+    })
+}
+
+/// Allow (replacing only phones the desk was offered) or Deny.
+fn decision_for(
+    c: &crate::companion::Companion,
+    request_id: &str,
+    allow: bool,
+    replace: Vec<String>,
+) -> Decision {
+    if !allow {
+        return Decision::Deny;
+    }
+    let view = c.pairing.view(now_ms());
+    let offered: Vec<String> = view
+        .request
+        .filter(|r| r.id == request_id)
+        .map(|r| {
+            c.registry
+                .same_phones(&r.device)
+                .into_iter()
+                .map(|d| d.id)
+                .collect()
+        })
+        .unwrap_or_default();
+    Decision::Allow {
+        replace: replace
+            .into_iter()
+            .filter(|id| offered.contains(id))
+            .collect(),
+    }
 }
 
 /// Remove a paired phone: its token stops working and its sockets close now.
@@ -242,6 +306,7 @@ mod tests {
                 url: "https://julians-macbook-pro.tailc1f170.ts.net:47443".into(),
                 pin: None,
             }],
+            fingerprint: "Zmh6rfhivXdsj8GLjp-OIA".into(),
         }
         .format();
         let qr = qr_matrix(&link).unwrap();
@@ -249,5 +314,54 @@ mod tests {
         assert!(qr.modules.chars().all(|c| c == '0' || c == '1'));
         // Small enough to scan comfortably off a laptop screen.
         assert!(qr.size <= 81, "version {} is too dense", (qr.size - 17) / 4);
+    }
+
+    #[tokio::test]
+    async fn allow_replaces_only_a_phone_the_desk_was_offered() {
+        use crate::companion::pairing::Claim;
+        use crate::companion::testkit::Stub;
+        let (c, _) = Stub::companion();
+        let phone = wire::PairDevice {
+            name: "Julian’s iPhone".into(),
+            platform: wire::DevicePlatform::Ios,
+            model: Some("iPhone 16".into()),
+            app_version: "1.0.0".into(),
+            build: wire::BuildKind::Official,
+        };
+        let (old, _, _) = c.registry.add(&phone, String::new(), 1, &[], None).unwrap();
+        let (other, _, _) = c
+            .registry
+            .add(
+                &wire::PairDevice {
+                    name: "iPad".into(),
+                    ..phone.clone()
+                },
+                String::new(),
+                1,
+                &[],
+                None,
+            )
+            .unwrap();
+        let (code, _) = c.pairing.start(now_ms());
+        let Claim::Waiting(_rx) =
+            c.pairing
+                .claim(&code, phone.clone(), String::new(), "s", None, now_ms())
+        else {
+            panic!()
+        };
+        let id = c.pairing.view(now_ms()).request.unwrap().id;
+        // The iPad wasn't offered, so asking to replace it does nothing.
+        let d = decision_for(&c, &id, true, vec![old.id.clone(), other.id.clone()]);
+        assert_eq!(
+            d,
+            Decision::Allow {
+                replace: vec![old.id.clone()]
+            }
+        );
+        assert_eq!(
+            decision_for(&c, "pr_other", true, vec![old.id.clone()]),
+            Decision::Allow { replace: vec![] }
+        );
+        assert_eq!(decision_for(&c, &id, false, vec![old.id]), Decision::Deny);
     }
 }

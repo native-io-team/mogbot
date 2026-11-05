@@ -41,16 +41,43 @@ impl Failure {
     };
 }
 
-/// The chat line and its tag for a failed turn, on this Mac's clock.
+/// The chat line and its tag for a failed turn, on this Mac's clock. A
+/// usage limit whose message gave no reset time takes the one the engine
+/// last reported for its used-up window (`super::quota`), if any.
 pub fn describe_now(engine: Engine, detail: &str) -> (String, Failure) {
     let zone = iana_time_zone::get_timezone().ok();
-    describe(
-        engine,
-        detail,
-        &chrono::Local,
-        zone.as_deref(),
-        super::store::now_ms(),
-    )
+    let now = super::store::now_ms();
+    let described = describe(engine, detail, &chrono::Local, zone.as_deref(), now);
+    let reported = super::quota::limited_until(&super::quota::load(), engine, now);
+    with_reported_reset(engine, described, reported, &chrono::Local, now)
+}
+
+/// `describe`'s answer, given the reset time the engine's quota reading
+/// says (only used when the message itself named none).
+pub fn with_reported_reset<Tz: TimeZone>(
+    engine: Engine,
+    (text, failure): (String, Failure),
+    reported: Option<i64>,
+    tz: &Tz,
+    now: i64,
+) -> (String, Failure)
+where
+    Tz::Offset: std::fmt::Display,
+{
+    match (failure.kind, failure.resets_at, reported) {
+        (FailureKind::UsageLimit, None, Some(at)) if at > now => (
+            format!(
+                "{}'s usage limit is reached. It resets {}.",
+                engine.label(),
+                clock_phrase(tz, at, now)
+            ),
+            Failure {
+                kind: FailureKind::UsageLimit,
+                resets_at: Some(at),
+            },
+        ),
+        _ => (text, failure),
+    }
 }
 
 pub fn describe<Tz: TimeZone>(
@@ -357,7 +384,11 @@ fn next_clock_time<Tz: TimeZone>(tz: &Tz, words: &str, now: i64) -> Option<i64> 
     schedule::resolve(tz, today + Duration::days(1), hour, minute)
 }
 
-/// "at 3:00 PM", "tomorrow at 3:00 PM", "on Nov 7 at 3:00 PM".
+/// "at 3:00 PM", "tomorrow at 3:00 PM", "Sat at 3:00 PM" within the week,
+/// else "on Nov 14". The same rule for naming a day as everywhere else a
+/// reset is said (`resetPhrase` in the companion protocol's quota.ts: the
+/// Retry button, the sidebar), so the chat's sentence and the button beside
+/// it never disagree about the day.
 pub fn clock_phrase<Tz: TimeZone>(tz: &Tz, at: i64, now: i64) -> String
 where
     Tz::Offset: std::fmt::Display,
@@ -371,9 +402,10 @@ where
     let time = then.format("%-I:%M %p").to_string();
     let days = (then.date_naive() - today.date_naive()).num_days();
     match days {
-        0 => format!("at {time}"),
+        ..=0 => format!("at {time}"),
         1 => format!("tomorrow at {time}"),
-        _ => format!("on {} {} at {time}", then.format("%b"), then.day()),
+        2..=6 => format!("{} at {time}", then.format("%a")),
+        _ => format!("on {} {}", then.format("%b"), then.day()),
     }
 }
 
@@ -445,6 +477,48 @@ mod tests {
     }
 
     #[test]
+    fn a_limit_without_a_time_takes_the_engines_reported_reset() {
+        let bare = describe(
+            Engine::Claude,
+            "Claude AI usage limit reached",
+            &Utc,
+            None,
+            NOW,
+        );
+        assert_eq!(bare.1.resets_at, None);
+        let at = NOW + 3 * 3_600_000;
+        let (text, failure) =
+            with_reported_reset(Engine::Claude, bare.clone(), Some(at), &Utc, NOW);
+        assert_eq!(failure.resets_at, Some(at));
+        assert!(
+            text.starts_with("Claude Code's usage limit is reached. It resets "),
+            "{text}"
+        );
+        // A time the message gave wins; a reported reset already past is no help.
+        let timed = describe(
+            Engine::Claude,
+            "Claude AI usage limit reached|1793620800",
+            &Utc,
+            None,
+            NOW,
+        );
+        assert_eq!(
+            with_reported_reset(Engine::Claude, timed.clone(), Some(at), &Utc, NOW),
+            timed
+        );
+        assert_eq!(
+            with_reported_reset(Engine::Claude, bare.clone(), Some(NOW - 1), &Utc, NOW),
+            bare
+        );
+        // Not a usage limit: untouched.
+        let other = describe(Engine::Claude, "boom", &Utc, None, NOW);
+        assert_eq!(
+            with_reported_reset(Engine::Claude, other.clone(), Some(at), &Utc, NOW),
+            other
+        );
+    }
+
+    #[test]
     fn only_failures_that_heal_on_their_own_are_temporary() {
         let temp = |d: &str| is_temporary(d, &describe(Engine::Claude, d, &Utc, None, NOW).1);
         let codex = |d: &str| is_temporary(d, &describe(Engine::Codex, d, &Utc, None, NOW).1);
@@ -480,6 +554,27 @@ mod tests {
 
     /// Mon 2 Nov 2026, 10:00 UTC.
     const NOW: i64 = 1_793_613_600_000;
+
+    #[test]
+    fn a_reset_names_its_day_as_the_button_does() {
+        // 2026-11-05 14:00 UTC, a Thursday.
+        let now = Utc
+            .with_ymd_and_hms(2026, 11, 5, 14, 0, 0)
+            .unwrap()
+            .timestamp_millis();
+        let at = |d: u32, h: u32| {
+            Utc.with_ymd_and_hms(2026, 11, d, h, 0, 0)
+                .unwrap()
+                .timestamp_millis()
+        };
+        assert_eq!(clock_phrase(&Utc, at(5, 17), now), "at 5:00 PM");
+        assert_eq!(clock_phrase(&Utc, at(6, 9), now), "tomorrow at 9:00 AM");
+        // Within the week: its weekday, never a date (the Retry button says "Sat").
+        assert_eq!(clock_phrase(&Utc, at(7, 14), now), "Sat at 2:00 PM");
+        assert_eq!(clock_phrase(&Utc, at(11, 9), now), "Wed at 9:00 AM");
+        // A week or more away: the date.
+        assert_eq!(clock_phrase(&Utc, at(12, 9), now), "on Nov 12");
+    }
 
     #[test]
     fn a_local_clock_time_becomes_a_reset_time() {

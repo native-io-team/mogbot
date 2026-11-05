@@ -141,12 +141,16 @@ describe('usage', () => {
     expect(usageLine(totals({}))).toBe('Nothing yet');
     // In a person's words: messages, never turns or tokens.
     expect(usageLine(totals({ turns: 3, inputTokens: 1500, costUsd: 0.4, pricedTurns: 3 }))).toBe(
-      '3 messages · $0.40'
+      '3 messages · $0.40 at API prices'
     );
     expect(
       usageLine(totals({ turns: 4, inputTokens: 2_500_000, costUsd: 1, pricedTurns: 2 }))
-    ).toBe('4 messages · $1.00 for 2 of them');
+    ).toBe('4 messages · $1.00 at API prices for 2 of them');
     expect(usageLine(totals({ turns: 1, outputTokens: 10 }))).toBe('1 message');
+    // On a Claude plan the list price isn't the bill: its tokens instead.
+    expect(
+      usageLine(totals({ turns: 3, inputTokens: 1500, costUsd: 0.4, pricedTurns: 3 }), true)
+    ).toBe('3 messages · 2k tokens');
   });
 });
 

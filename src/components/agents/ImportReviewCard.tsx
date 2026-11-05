@@ -20,7 +20,7 @@
  */
 
 import { memo, useEffect, useMemo, useState } from 'react';
-import { CheckIcon, ChevronRightIcon, DownloadIcon } from '@/components/icons';
+import { CheckIcon, DownloadIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { Checkbox } from '../primitives/Checkbox';
 import { TextButton } from '../primitives/TextButton';
@@ -38,7 +38,8 @@ import {
   type ImportPicks,
   type ImportProposal,
 } from '../../lib/agents';
-import { plural } from './ImportParts';
+import { ImportAgentRow, ImportSection, plural } from './ImportParts';
+import { AgentCard } from './AgentCard';
 
 /** Past this, a line diff isn't drawn: both texts are shown whole instead. */
 const MAX_DIFF_CHARS = 40_000;
@@ -94,13 +95,14 @@ function Instructions({ name, text }: { name: string; text: string }) {
   const long = lines.length > PREVIEW_LINES;
   return (
     <div className="agent-import-review__instructions">
-      <pre
+      {/* Prose, as written: instructions are read, not copied as code. */}
+      <p
         className="agent-import-review__text agent-import-review__text--preview"
         data-all={all || undefined}
         aria-label={`${name}’s instructions`}
       >
         {all || !long ? text : `${lines.slice(0, PREVIEW_LINES).join('\n')}…`}
-      </pre>
+      </p>
       {long && (
         <TextButton onClick={() => setAll((v) => !v)} aria-expanded={all}>
           {all ? 'Show less' : `Show all ${lines.length} lines`}
@@ -186,9 +188,9 @@ function ReplaceConsequences({
             The instructions differ. Both are too long to compare line by line, so here are both.
           </p>
           <h4>Your {yours}’s now</h4>
-          <pre className="agent-import-review__text">{clash.instructions}</pre>
+          <p className="agent-import-review__text">{clash.instructions}</p>
           <h4>What they become</h4>
-          <pre className="agent-import-review__text">{p.instructions}</pre>
+          <p className="agent-import-review__text">{p.instructions}</p>
         </>
       )}
     </>
@@ -220,7 +222,6 @@ function ProposalRow({
   onChoice,
   onKeepLogins,
 }: RowProps) {
-  const [open, setOpen] = useState(false);
   const memory = p.memory.split('\n').filter((l) => l.trim());
   const arrivesAs = p.clash && choice === 'copy' ? copyName(p.name, source) : p.name;
   const yours = p.clash?.name || p.name;
@@ -234,48 +235,23 @@ function ProposalRow({
     .filter(Boolean)
     .join(' · ');
   return (
-    <li
-      className="agent-import-review__agent"
-      data-open={open || undefined}
-      data-kept={kept || undefined}
-    >
-      <div className="agent-import-review__row">
-        <Checkbox checked={kept} disabled={disabled} onChange={onKeep} label={`Import ${p.name}`} />
-        <button
-          type="button"
-          className="agent-import-review__summary"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <span className="agent-import-review__name">
-            {arrivesAs}
-            {p.clash && (
-              <span
-                className="agent-import-review__chip"
-                data-tone={choice === 'replace' ? 'warn' : undefined}
-              >
-                {choice === 'replace'
-                  ? `Replaces your ${yours}`
-                  : lookalike
-                    ? `Looks like your ${yours}`
-                    : 'Name taken here'}
-              </span>
-            )}
-          </span>
-          {p.role && <span className="agent-import-review__role">{p.role}</span>}
-          {(counts || !p.instructions) && (
-            <span className="agent-import-review__counts">{counts || 'Name and role only'}</span>
-          )}
-          <ChevronRightIcon size={12} className="agent-import-review__chevron" />
-        </button>
-      </div>
-      {p.instructions && (
-        <div className="agent-import-review__inline">
-          <Instructions name={p.name} text={p.instructions} />
-        </div>
-      )}
-      {open && (
-        <div className="agent-import-review__detail">
+    <ImportAgentRow
+      name={arrivesAs}
+      avatarName={p.name}
+      color="gray"
+      chip={
+        p.clash
+          ? choice === 'replace'
+            ? { kind: 'replace', label: `Replaces your ${yours}` }
+            : { kind: 'taken', label: lookalike ? `Looks like your ${yours}` : 'Name taken here' }
+          : { kind: 'new', label: 'New' }
+      }
+      role={p.role || undefined}
+      counts={counts || (!p.instructions ? 'Name and role only' : undefined)}
+      select={{ checked: kept, disabled, onChange: onKeep, label: `Import ${p.name}` }}
+      inline={p.instructions ? <Instructions name={p.name} text={p.instructions} /> : undefined}
+      detail={() => (
+        <>
           {p.clash && kept && (
             <div className="agent-import-review__clash">
               <SegmentedControl<Choice>
@@ -299,19 +275,17 @@ function ProposalRow({
             </div>
           )}
           {memory.length > 0 && (
-            <>
-              <h4>What it remembers</h4>
-              <ul className="agent-import-review__list">
+            <ImportSection title="Memory">
+              <ul className="agents-import-agent__memory">
                 {memory.map((line, i) => (
                   <li key={i}>{line.replace(/^\s*[-•]\s*/, '')}</li>
                 ))}
               </ul>
-            </>
+            </ImportSection>
           )}
           {p.routines.length > 0 && (
-            <>
-              <h4>Routines · arrive paused</h4>
-              <ul className="agent-import-review__list">
+            <ImportSection title="Routines · arrive paused">
+              <ul className="agents-import-agent__memory">
                 {p.routines.map((r, i) => (
                   <li key={i}>
                     <strong>{r.schedule ?? r.when}</strong> · {r.what}
@@ -324,12 +298,11 @@ function ProposalRow({
                   </li>
                 ))}
               </ul>
-            </>
+            </ImportSection>
           )}
           {p.logins.length > 0 && (
-            <>
-              <h4>Logins it asks for · on secure cards, never here</h4>
-              <ul className="agent-import-review__list">
+            <ImportSection title="Logins it asks for · on secure cards, never here">
+              <ul className="agents-import-agent__memory">
                 {p.logins.map((l) => (
                   <li key={l.name}>
                     <code>{l.name}</code>
@@ -337,14 +310,14 @@ function ProposalRow({
                   </li>
                 ))}
               </ul>
-            </>
+            </ImportSection>
           )}
           {!p.clash && memory.length === 0 && !p.routines.length && !p.logins.length && (
-            <p className="agent-import-review__muted">Nothing else came with it.</p>
+            <p className="agents-import-agent__none">Nothing else came with it.</p>
           )}
-        </div>
+        </>
       )}
-    </li>
+    />
   );
 }
 
@@ -416,28 +389,69 @@ export const ImportReviewCard = memo(function ImportReviewCard({
       data-arrived={arrived || undefined}
       data-message-ids={message.id}
     >
-      <section
+      <AgentCard
+        as="section"
         className="agent-import-review"
-        data-status={approval.status}
+        data={{ status: approval.status }}
         aria-label={approval.title}
         data-testid="agent-import-review"
+        icon={<DownloadIcon size={14} />}
+        title={approval.title}
+        actions={
+          pending ? (
+            <>
+              <Button variant="secondary" disabled={busy} onClick={() => void submit(null)}>
+                Don’t import
+              </Button>
+              {/* The affirmative answer: neutral, like Allow. */}
+              <Button
+                variant="strong"
+                disabled={busy || (count === 0 && !notes)}
+                onClick={() =>
+                  void submit({
+                    agents: proposals
+                      .filter((p) => kept[p.key])
+                      .map((p) => {
+                        const replace = !!p.clash && choice[p.key] === 'replace';
+                        return replace
+                          ? {
+                              key: p.key,
+                              replace,
+                              keepLogins: !!keepLogins[p.key],
+                              seen: p.clash,
+                            }
+                          : { key: p.key, replace };
+                      }),
+                    chiefNotes: notes,
+                  })
+                }
+              >
+                {count === 0 ? 'Import notes only' : `Import ${plural(count, 'agent')}`}
+              </Button>
+            </>
+          ) : undefined
+        }
+        outcome={
+          pending ? undefined : (
+            <span className="agent-import-review__outcome" data-status={approval.status}>
+              {approval.status === 'allowed' && <CheckIcon size={12} />}
+              {outcome}
+            </span>
+          )
+        }
+        outcomeTone={approval.status === 'allowed' ? 'done' : undefined}
       >
-        <header className="agent-import-review__head">
-          <DownloadIcon size={14} className="agent-import-review__icon" />
-          <span className="agent-import-review__title">{approval.title}</span>
-        </header>
         {pending && (
           <p className="agent-import-review__lede">
-            Read each agent’s instructions before you import: they come from {card.source}. Only
-            what’s ticked is created. Routines arrive paused, logins are asked for on secure cards,
-            and no permissions come across.
+            Read each agent’s instructions before you import. Only what’s ticked is created.
+            Routines arrive paused, logins are asked for securely, and no permissions come across.
           </p>
         )}
         {review?.summary && pending && (
           <p className="agent-import-review__summary-text">“{review.summary}”</p>
         )}
         {pending && (
-          <ul className="agent-import-review__agents">
+          <ul className="agents-import-preview__list">
             {proposals.map((p) => (
               <ProposalRow
                 key={p.key}
@@ -469,49 +483,13 @@ export const ImportReviewCard = memo(function ImportReviewCard({
                   · what {card.source}’s managing agent knew. Off unless you tick it.
                 </span>
               </span>
-              <pre className="agent-import-review__text agent-import-review__text--short">
+              <p className="agent-import-review__text agent-import-review__text--short">
                 {review.chiefNotes}
-              </pre>
+              </p>
             </div>
           </div>
         )}
-        {pending ? (
-          <footer className="agent-import-review__actions">
-            <Button variant="secondary" disabled={busy} onClick={() => void submit(null)}>
-              Don’t import
-            </Button>
-            <Button
-              variant="primary"
-              disabled={busy || (count === 0 && !notes)}
-              onClick={() =>
-                void submit({
-                  agents: proposals
-                    .filter((p) => kept[p.key])
-                    .map((p) => {
-                      const replace = !!p.clash && choice[p.key] === 'replace';
-                      return replace
-                        ? {
-                            key: p.key,
-                            replace,
-                            keepLogins: !!keepLogins[p.key],
-                            seen: p.clash,
-                          }
-                        : { key: p.key, replace };
-                    }),
-                  chiefNotes: notes,
-                })
-              }
-            >
-              {count === 0 ? 'Import notes only' : `Import ${plural(count, 'agent')}`}
-            </Button>
-          </footer>
-        ) : (
-          <p className="agent-import-review__outcome" data-status={approval.status}>
-            {approval.status === 'allowed' && <CheckIcon size={12} />}
-            {outcome}
-          </p>
-        )}
-      </section>
+      </AgentCard>
     </div>
   );
 });
