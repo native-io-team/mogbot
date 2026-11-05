@@ -1098,14 +1098,17 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
 
         if (!mounted) return;
 
+        // The loading line has no newline of its own (the agent's first frame
+        // replaces it), so the first failure starts below it, not glued on.
+        if (retryCount === 0) term.write('\r\n');
         if (retryCount < maxRetries) {
           term.write(
-            `\x1b[33mFailed to start ${agent.displayName}, retrying (${retryCount + 1}/${maxRetries})...\x1b[0m\r\n`
+            `  \x1b[33mFailed to start ${agent.displayName}, retrying (${retryCount + 1}/${maxRetries})…\x1b[0m\r\n`
           );
           setTimeout(() => void setupPty(retryCount + 1), 1000);
         } else {
-          term.write(`\x1b[31m${agent.notFoundMessage}: ${spawnError}\x1b[0m\r\n`);
-          term.write(`\x1b[33m${agent.installHint}\x1b[0m\r\n`);
+          term.write(`  \x1b[31m${agent.notFoundMessage}: ${spawnError}\x1b[0m\r\n`);
+          term.write(`  \x1b[33m${agent.installHint}\x1b[0m\r\n`);
         }
       }
     };
