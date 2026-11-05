@@ -13,6 +13,7 @@ import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { AppState, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { haptic } from '../lib/haptics';
+import { useInFlight } from '../lib/once';
 import {
   answerApproval,
   currentTransport,
@@ -23,7 +24,7 @@ import {
 import { useApp } from '../lib/store';
 import { CARD_TITLE_SCALE, fonts, iconSize, space } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
-import { ARM_MS, Receipt, useCardStyles, useArmed } from './ApprovalCard';
+import { ARM_MS, Eyebrow, Receipt, useCardStyles, useArmed } from './ApprovalCard';
 import { Button, Icon, T } from './ui';
 
 /** `$STRIPE_KEY`, or `$BANK_USERNAME, $BANK_PASSWORD`: what the agent gets. */
@@ -74,34 +75,38 @@ export function SecretCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- wipe only reads refs
   }, []);
 
-  const save = async () => {
-    if (!armed || problem || !filled.every(Boolean)) return;
-    setBusy('save');
-    setError(null);
-    try {
-      await saveSecret(message.agentId, approval.requestId, [...values.current]);
-      wipe();
-      haptic.success();
-    } catch (e) {
-      haptic.error();
-      setError(describeError(e));
-    } finally {
-      setBusy(null);
-    }
-  };
-  const deny = async () => {
-    setBusy('deny');
-    try {
-      await answerApproval(message.agentId, approval.requestId, false);
-      wipe();
-      haptic.warning();
-    } catch (e) {
-      haptic.error();
-      onError(describeError(e));
-    } finally {
-      setBusy(null);
-    }
-  };
+  // Save and Deny share one guard: whichever is tapped first is the answer.
+  const once = useInFlight();
+  const save = () =>
+    once(async () => {
+      if (!armed || problem || !filled.every(Boolean)) return;
+      setBusy('save');
+      setError(null);
+      try {
+        await saveSecret(message.agentId, approval.requestId, [...values.current]);
+        wipe();
+        haptic.success();
+      } catch (e) {
+        haptic.error();
+        setError(describeError(e));
+      } finally {
+        setBusy(null);
+      }
+    });
+  const deny = () =>
+    once(async () => {
+      setBusy('deny');
+      try {
+        await answerApproval(message.agentId, approval.requestId, false);
+        wipe();
+        haptic.warning();
+      } catch (e) {
+        haptic.error();
+        onError(describeError(e));
+      } finally {
+        setBusy(null);
+      }
+    });
 
   const outcome =
     approval.status === 'allowed'
@@ -115,14 +120,13 @@ export function SecretCard({
   if (!pending) {
     return (
       <Receipt
-        icon="lock.fill"
+        status={approval.status}
         title={`${agent.name} asked for “${request.name}”`}
         outcome={
           approval.status === 'allowed'
             ? outcome.replace('Saved to your Mac’s Keychain', 'Saved')
             : outcome
         }
-        ok={approval.status === 'allowed'}
       >
         <T variant="small" color={colors.textSecondary}>
           {request.purpose}
@@ -138,7 +142,8 @@ export function SecretCard({
 
   return (
     <Animated.View layout={LinearTransition.duration(220)} style={cardStyles.card}>
-      <View style={styles.head}>
+      <View style={cardStyles.head}>
+        <Eyebrow />
         <View style={styles.title}>
           <Icon name="lock.fill" size={iconSize.inline} color={colors.textMuted} />
           <T
@@ -230,7 +235,8 @@ export function SecretCard({
             />
             <Button
               title="Save"
-              variant="primary"
+              // The filled answer is the neutral one on every card, like Allow.
+              variant="answer"
               busy={busy === 'save'}
               disabled={!!busy || !filled.every(Boolean)}
               focusable={armed}
@@ -245,7 +251,6 @@ export function SecretCard({
 }
 
 const useStyles = makeStyles(() => ({
-  head: { gap: space['2xs'] },
   title: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   secret: { fontFamily: fonts.mono },
 }));

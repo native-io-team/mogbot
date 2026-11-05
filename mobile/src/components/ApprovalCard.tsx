@@ -4,8 +4,9 @@
  * beat after it lands. Once answered, the outcome in a line.
  */
 
-import type { Agent, AgentMessage, Approval } from '@shipstudio/companion-protocol';
+import type { Agent, AgentMessage, Approval, ImportProposal } from '@shipstudio/companion-protocol';
 import {
+  Children,
   createContext,
   useContext,
   useEffect,
@@ -25,6 +26,7 @@ import {
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { cardOutcome, describeScope } from '../lib/agents';
 import { haptic } from '../lib/haptics';
+import { useInFlight } from '../lib/once';
 import { answerApproval, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
 import { CARD_TITLE_SCALE, chromeScale, fonts, iconSize, radius, space, type } from '../lib/theme';
@@ -194,23 +196,26 @@ export function ApprovalCard({
   const fit = useFitDetail(pending, message.id, paused);
   const compact = useShortPane();
   const armed = useArmed(pending, `${compact}:${fit.pinned}`);
+  const once = useInFlight();
 
-  // The haptic says what the Mac did, so it waits for the Mac.
-  const answer = async (allow: boolean, always = false, why?: string) => {
-    if (!armed) return;
-    setBusy(always ? 'always' : allow ? 'allow' : 'deny');
-    try {
-      await answerApproval(message.agentId, approval.requestId, allow, always, why);
-      if (allow) haptic.success();
-      else haptic.warning();
-      setNoting(false);
-    } catch (error) {
-      haptic.error();
-      onError(describeError(error));
-    } finally {
-      setBusy(null);
-    }
-  };
+  // The haptic says what the Mac did, so it waits for the Mac. One answer at
+  // a time: a second tap in the same frame would be refused by the Mac.
+  const answer = (allow: boolean, always = false, why?: string) =>
+    once(async () => {
+      if (!armed) return;
+      setBusy(always ? 'always' : allow ? 'allow' : 'deny');
+      try {
+        await answerApproval(message.agentId, approval.requestId, allow, always, why);
+        if (allow) haptic.success();
+        else haptic.warning();
+        setNoting(false);
+      } catch (error) {
+        haptic.error();
+        onError(describeError(error));
+      } finally {
+        setBusy(null);
+      }
+    });
 
   const outcome = cardOutcome(approval);
   const scope = approval.always ? describeScope(approval.always, agent.name) : null;
@@ -226,12 +231,7 @@ export function ApprovalCard({
 
   if (!pending) {
     return (
-      <Receipt
-        icon={approval.status === 'allowed' ? 'checkmark' : 'xmark'}
-        title={approval.title}
-        outcome={outcome}
-        ok={approval.status === 'allowed'}
-      >
+      <Receipt status={approval.status} title={approval.title} outcome={outcome}>
         {!!approval.detail && <Command text={approval.detail} lines={12} />}
       </Receipt>
     );
@@ -356,59 +356,80 @@ export function ApprovalCard({
 export function ReviewOnMacCard({ approval }: { approval: Approval }) {
   const cardStyles = useCardStyles();
   const colors = useColors();
+  const proposals = approval.connector?.review?.proposals ?? [];
+  const agents = reviewLines(proposals);
   if (approval.status !== 'pending') {
     return (
-      <Receipt
-        icon={approval.status === 'allowed' ? 'checkmark' : 'xmark'}
-        title={approval.title}
-        outcome={cardOutcome(approval)}
-        ok={approval.status === 'allowed'}
-      />
+      <Receipt status={approval.status} title={approval.title} outcome={cardOutcome(approval)}>
+        {agents.map((line, i) => (
+          <T key={i} variant="small" color={colors.textSecondary}>
+            {line}
+          </T>
+        ))}
+      </Receipt>
     );
   }
-  const lines = (approval.detail ?? '').split('\n').filter((l) => l.trim());
-  // The desktop's last line is the "Review on your Mac" sentence; the rest name the agents.
-  const agents = lines.filter((l) => !l.startsWith('Review on your Mac'));
   return (
     <Animated.View layout={LinearTransition.duration(220)} style={cardStyles.card}>
       <View style={cardStyles.head}>
-        <Eyebrow text="REVIEW ON YOUR MAC" />
+        {/* Not the amber "act here" mark: there's nothing to do on this phone. */}
+        <Eyebrow text="ON YOUR MAC" icon="info.circle" tone="neutral" />
         <T variant="headline" color={colors.textStrong} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
           {approval.title}
         </T>
       </View>
-      {agents.map((line, i) => (
-        <T key={i} variant="small" color={colors.textSecondary}>
-          {line}
-        </T>
-      ))}
+      {agents.length > 0 && (
+        <View style={{ gap: space['2xs'] }}>
+          {agents.map((line, i) => (
+            <T key={i} variant="small" color={colors.textSecondary}>
+              {line}
+            </T>
+          ))}
+        </View>
+      )}
       <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-        Review on your Mac: each agent’s instructions are shown there, and nothing is created until
-        you import them.
+        Each agent’s instructions are shown there before anything is created.
       </T>
     </Animated.View>
   );
 }
 
+/**
+ * The agents an import proposes, from the card's own data: "Scout · Research",
+ * and "replaces your Scout" where one would take an existing agent's place.
+ */
+export function reviewLines(proposals: ImportProposal[]): string[] {
+  return proposals.map((p) => {
+    const who = p.role ? `${p.name} · ${p.role}` : p.name;
+    return p.clash ? `${who} · replaces your ${p.clash.name ?? p.name}` : who;
+  });
+}
+
 type IconName = ComponentProps<typeof Icon>['name'];
+
+/** A receipt's glyph is always its outcome, on every kind of card. */
+export const OUTCOME_GLYPH: Record<Exclude<Approval['status'], 'pending'>, IconName> = {
+  allowed: 'checkmark',
+  denied: 'xmark',
+  expired: 'clock',
+};
 
 /**
  * A card once it's answered: one quiet line, "✓ Allowed · what it asked", so
  * a finished request doesn't keep the footprint of a live one (three
- * answered secret cards used to take a screen). Tap for what it was about.
+ * answered secret cards used to take a screen). Tap for what it was about;
+ * with nothing more to show, it's a plain line with no chevron and no press.
  */
 export function Receipt({
-  icon,
+  status,
   title,
   outcome,
-  ok,
   children,
 }: {
-  icon: IconName;
+  status: Approval['status'];
   title: string;
   /** `cardOutcome`: its first part leads the line, the whole of it shows when open. */
   outcome: string;
-  ok: boolean;
   children?: ReactNode;
 }) {
   const colors = useColors();
@@ -417,7 +438,30 @@ export function Receipt({
   const cut = outcome.indexOf(' · ');
   const word = cut < 0 ? outcome : outcome.slice(0, cut);
   const rest = cut < 0 ? '' : outcome.slice(cut + 3);
+  const ok = status === 'allowed';
   const tint = ok ? colors.accentSuccess : colors.textSecondary;
+  const glyph = OUTCOME_GLYPH[status === 'pending' ? 'expired' : status];
+  const hasDetail = Children.toArray(children).length > 0 || !!rest;
+  if (!hasDetail) {
+    return (
+      <Animated.View
+        entering={FadeIn.duration(200)}
+        layout={LinearTransition.duration(200)}
+        accessible
+        accessibilityLabel={`${outcome}. ${title}`}
+        style={cardStyles.receipt}
+      >
+        <Icon name={glyph} size={iconSize.inline} color={tint} />
+        <T variant="small" color={colors.textSecondary} numberOfLines={2} style={{ flexShrink: 1 }}>
+          <T variant="small" color={tint} style={{ fontFamily: fonts.medium }}>
+            {word}
+          </T>
+          {' · '}
+          {title}
+        </T>
+      </Animated.View>
+    );
+  }
   return (
     <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.duration(200)}>
       <Pressable
@@ -432,7 +476,7 @@ export function Receipt({
         }}
         style={({ pressed }) => [cardStyles.receipt, pressed && { opacity: 0.6 }]}
       >
-        <Icon name={icon} size={iconSize.inline} color={tint} />
+        <Icon name={glyph} size={iconSize.inline} color={tint} />
         <T
           variant="small"
           color={colors.textSecondary}
@@ -487,20 +531,28 @@ export function MoreAnswers({ disabled, onPress }: { disabled: boolean; onPress:
   );
 }
 
-/** The pending card's label. */
-export function Eyebrow({ text = 'NEEDS YOUR OK' }: { text?: string }) {
+/**
+ * The pending card's label: amber "NEEDS YOUR OK" for an answer wanted here,
+ * or neutral for one that only says where it's answered.
+ */
+export function Eyebrow({
+  text = 'NEEDS YOUR OK',
+  icon = 'exclamationmark.triangle.fill',
+  tone = 'warning',
+}: {
+  text?: string;
+  icon?: IconName;
+  tone?: 'warning' | 'neutral';
+}) {
   const cardStyles = useCardStyles();
   const colors = useColors();
+  const tint = tone === 'warning' ? colors.accentWarning : colors.textSecondary;
   return (
     <View style={cardStyles.eyebrow}>
-      <Icon
-        name="exclamationmark.triangle.fill"
-        size={iconSize.inline}
-        color={colors.accentWarning}
-      />
+      <Icon name={icon} size={iconSize.inline} color={tint} />
       <T
         variant="caption"
-        color={colors.accentWarning}
+        color={tint}
         style={cardStyles.eyebrowText}
         maxFontSizeMultiplier={chromeScale}
       >

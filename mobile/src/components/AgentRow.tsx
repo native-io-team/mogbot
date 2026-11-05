@@ -16,8 +16,8 @@ import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, { interpolate, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
-import { agentActions, type AgentAction, type AgentCaps } from '../lib/actions';
-import { formatAgo, lineState, needsLine, needsYou, subtitle } from '../lib/agents';
+import { agentActions, type Action, type AgentAction, type AgentCaps } from '../lib/actions';
+import { formatAgo, lineState, needsLine, needsYou, subtitle, waitingOnMac } from '../lib/agents';
 import { useApp } from '../lib/store';
 import { haptic } from '../lib/haptics';
 import {
@@ -80,6 +80,9 @@ export const AgentRow = memo(function AgentRow({
       live={live}
       selected={selected}
       onPress={onPress}
+      // The swipes and the hold menu, for VoiceOver and TalkBack: the actions rotor.
+      actions={live ? actions : []}
+      onAction={(id) => onAction(agent, id)}
       onLongPress={
         NATIVE_MENU && !onPress
           ? undefined
@@ -153,7 +156,8 @@ export const AgentRow = memo(function AgentRow({
               side="right"
               icon={agent.hidden ? 'eye' : 'eye.slash'}
               label={agent.hidden ? 'Unhide' : 'Hide'}
-              color={colors.accentError}
+              // Neutral, like Mute: hiding is undone in a tap, and the agent keeps working.
+              color={colors.surfaceSelected}
               onPress={() => act(agent.hidden ? 'unhide' : 'hide')}
             />
           )}
@@ -222,6 +226,8 @@ function RowBody({
   selected,
   onPress,
   onLongPress,
+  actions,
+  onAction,
   ...trigger
 }: {
   agent: Agent;
@@ -229,6 +235,8 @@ function RowBody({
   selected?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
+  actions: Action<AgentAction>[];
+  onAction: (id: AgentAction) => void;
 }) {
   const colors = useColors();
   const styles = useStyles();
@@ -236,7 +244,9 @@ function RowBody({
   const { fontScale } = useWindowDimensions();
   // At the largest sizes the time moves under the subtitle so the name keeps its room.
   const stacked = fontScale >= 1.6;
-  const state = lineState(agent);
+  // Waiting only on the Mac (an import to review): said plainly, not in amber.
+  const onMac = useApp((s) => waitingOnMac(agent, s.chats[agent.id]?.messages));
+  const state = onMac ? undefined : lineState(agent);
   // Waiting on you: say what for, when the saved chat knows.
   const line = useApp((s) =>
     needsYou(agent) ? needsLine(agent, s.chats[agent.id]?.messages) : subtitle(agent)
@@ -274,7 +284,11 @@ function RowBody({
       accessibilityLabel={`${agent.name}. ${line}${agent.unread ? '. Unread' : ''}${
         live ? '' : '. Last known'
       }`}
-      accessibilityHint="Hold for Pin, Mute and Hide"
+      accessibilityActions={actions.map((a) => ({ name: a.id, label: a.title }))}
+      onAccessibilityAction={(e) => {
+        const id = actions.find((a) => a.id === e.nativeEvent.actionName)?.id;
+        if (id) onAction(id);
+      }}
     >
       <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.list} />
       <View style={styles.text}>
@@ -323,7 +337,7 @@ function RowBody({
             )}
           </T>
           <View style={styles.mark}>
-            <StatusMark agent={agent} live={live} />
+            <StatusMark agent={agent} live={live} onMac={onMac} />
           </View>
         </View>
         {stacked && time}

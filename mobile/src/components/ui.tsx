@@ -5,7 +5,7 @@
  * status dot. Every control is at least 44pt to touch, whatever it draws.
  */
 
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { SymbolView } from 'expo-symbols';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -17,6 +17,7 @@ import {
   type PressableProps,
   type StyleProp,
   type TextProps,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import {
@@ -34,6 +35,7 @@ import { makeStyles, useColors } from '../lib/appearance';
 import type { Tone } from '../lib/connection';
 import { useAccent, useAnswerAccent } from '../lib/accent';
 import { haptic } from '../lib/haptics';
+import { MATERIAL, type SFName } from '../lib/icons';
 import { useApp } from '../lib/store';
 
 /** Ripple for Android presses; iOS uses its pressed tints. */
@@ -231,71 +233,8 @@ export function Button({
   );
 }
 
-type SFName = Extract<SymbolViewProps['name'], string>;
-
 /** Only the sizes in `iconSize`: a 13 or a 15 is a typo in the system, so the type refuses it. */
 type IconSize = (typeof iconSize)[keyof typeof iconSize];
-
-/**
- * Each SF Symbol the app draws, as the Material Symbol Android draws in its
- * place. One map, so no icon quietly vanishes on Android.
- */
-const MATERIAL: Partial<Record<SFName, string>> = {
-  'arrow.up': 'arrow_upward',
-  'bubble.left': 'chat_bubble',
-  'checkmark.shield': 'verified_user',
-  globe: 'public',
-  'list.bullet': 'list',
-  pencil: 'edit',
-  'person.2': 'group',
-  puzzlepiece: 'extension',
-  'arrow.down': 'arrow_downward',
-  'arrow.clockwise': 'refresh',
-  'arrow.trianglehead.2.clockwise': 'sync',
-  'arrow.uturn.left': 'undo',
-  bell: 'notifications',
-  brain: 'psychology',
-  checkmark: 'check',
-  'bell.slash': 'notifications_off',
-  'bell.slash.fill': 'notifications_off',
-  'chevron.right': 'chevron_right',
-  'chevron.down': 'expand_more',
-  clock: 'schedule',
-  'doc.on.doc': 'content_copy',
-  'doc.on.clipboard': 'content_paste',
-  'doc.text': 'description',
-  ellipsis: 'more_horiz',
-  'exclamationmark.circle': 'error',
-  'exclamationmark.triangle.fill': 'warning',
-  eye: 'visibility',
-  'eye.slash': 'visibility_off',
-  'folder.fill': 'folder',
-  gearshape: 'settings',
-  'info.circle': 'info',
-  'lock.fill': 'lock',
-  magnifyingglass: 'search',
-  mic: 'mic',
-  'mic.fill': 'mic',
-  'square.and.pencil': 'edit_square',
-  'square.and.arrow.down': 'download',
-  iphone: 'smartphone',
-  'message.badge': 'mark_chat_unread',
-  pin: 'keep',
-  'pin.fill': 'keep',
-  'pin.slash': 'keep_off',
-  plus: 'add',
-  'qrcode.viewfinder': 'qr_code_scanner',
-  'selection.pin.in.out': 'select_all',
-  'stop.fill': 'stop',
-  terminal: 'terminal',
-  'text.alignleft': 'notes',
-  camera: 'photo_camera',
-  play: 'play_arrow',
-  'text.badge.checkmark': 'markdown',
-  'text.quote': 'format_quote',
-  'tray.and.arrow.up': 'outbox',
-  xmark: 'close',
-};
 
 /** An SF Symbol on iOS, its Material Symbol on Android; `fallback` if neither exists. */
 export function Icon({
@@ -417,6 +356,26 @@ export function Dot({
   );
 }
 
+/**
+ * A group's label, as iOS sets it: small capitals over the group, a header
+ * to VoiceOver, and grown with Dynamic Type only as far as chrome does.
+ */
+export function SectionTitle({ title, style }: { title: string; style?: StyleProp<TextStyle> }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <T
+      variant="caption"
+      color={colors.textMuted}
+      style={[styles.sectionTitle, style]}
+      maxFontSizeMultiplier={chromeScale}
+      accessibilityRole="header"
+    >
+      {title.toUpperCase()}
+    </T>
+  );
+}
+
 /** A grouped section on a settings-style screen. */
 export function Section({
   title,
@@ -427,21 +386,11 @@ export function Section({
   children: ReactNode;
   footer?: string;
 }) {
-  const colors = useColors();
   const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.section}>
-      {title && (
-        <T
-          variant="caption"
-          color={colors.textMuted}
-          style={styles.sectionTitle}
-          maxFontSizeMultiplier={chromeScale}
-          accessibilityRole="header"
-        >
-          {title.toUpperCase()}
-        </T>
-      )}
+      {title && <SectionTitle title={title} />}
       <View style={styles.sectionBody}>{children}</View>
       {footer && (
         <T variant="small" color={colors.textMuted} style={styles.sectionFooter}>
@@ -597,7 +546,12 @@ export function Segmented<V extends string>({
             hitSlop={4}
             style={[styles.segment, on && styles.segmentOn]}
           >
-            <T variant="small" color={on ? colors.textStrong : colors.textSecondary}>
+            <T
+              variant="small"
+              color={on ? colors.onSelectedFill : colors.textSecondary}
+              style={on ? { fontFamily: fonts.medium } : undefined}
+              maxFontSizeMultiplier={chromeScale}
+            >
               {o.label}
             </T>
           </Pressable>
@@ -622,7 +576,7 @@ const useStyles = makeStyles((colors) => ({
     justifyContent: 'center',
     borderRadius: radius.inner,
   },
-  segmentOn: { backgroundColor: colors.surfaceSelected },
+  segmentOn: { backgroundColor: colors.selectedFill },
   button: {
     flexDirection: 'row',
     alignItems: 'center',

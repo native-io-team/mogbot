@@ -35,13 +35,17 @@ export const failedTurn = (agent: Agent): Failure | null =>
 
 export const needsAttention = (agent: Agent) => needsYou(agent) || failedTurn(agent) !== null;
 
-export function failureLine(failure: Failure, preview: string | null): string {
+/**
+ * A failed turn in a line. `engine`: what the agent runs on ("Codex"), so a
+ * Codex agent is never said to be signed out of Claude Code.
+ */
+export function failureLine(failure: Failure, preview: string | null, engine?: string): string {
   if (failure.kind === 'usage_limit') {
     return failure.resetsAt
       ? `Usage limit · resets ${formatClock(failure.resetsAt)}`
       : 'Usage limit reached';
   }
-  if (failure.kind === 'signed_out') return 'Claude Code is signed out';
+  if (failure.kind === 'signed_out') return `${engine ?? 'Its engine'} is signed out`;
   const clause = (preview ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
   return clause ? `Didn’t finish: ${clause}` : 'Didn’t finish';
 }
@@ -66,7 +70,8 @@ export function workingLine(agent: Agent, brief = false): string {
 }
 
 /** "Claude Code" / "Codex": what the agent's turns run on. */
-export const engineName = (agent: Agent) => (agent.engine === 'codex' ? 'Codex' : 'Claude Code');
+export const engineName = (agent: Pick<Agent, 'engine'>) =>
+  agent.engine === 'codex' ? 'Codex' : 'Claude Code';
 
 /** Its model as its engine names it ("Opus"), or Default. */
 export function modelName(agent: Agent, engines: EngineInfo[] | undefined): string {
@@ -102,7 +107,7 @@ export function subtitle(agent: Agent): string {
   if (needsYou(agent)) return 'Needs your OK';
   if (agent.status.state === 'working') return workingLine(agent);
   const failure = failedTurn(agent);
-  if (failure) return failureLine(failure, agent.preview);
+  if (failure) return failureLine(failure, agent.preview, engineName(agent));
   return agent.preview ?? agent.role ?? '';
 }
 
@@ -197,21 +202,17 @@ export function describeScope(scope: PermissionScope, agentName: string, revocab
   return `${what} runs for ${agentName} without asking.${chained}${revoke}`;
 }
 
-const tokenCount = (t: UsageTotals) => {
-  const n = t.inputTokens + t.outputTokens + t.cacheReadTokens + t.cacheWriteTokens;
-  return n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : `${n}`;
-};
-
-/** Turns, tokens and cost, as the Mac counts them. Cost only for the turns it could price. */
+/**
+ * Messages it worked on and their cost, as the Mac counts them: in a
+ * person's words, not turns and tokens. Cost only for the ones it could price.
+ */
 export function usageLine(t: UsageTotals): string {
   if (!t.turns) return 'Nothing yet';
   const cost =
     t.pricedTurns > 0
       ? `$${t.costUsd.toFixed(2)}${t.pricedTurns < t.turns ? ` for ${t.pricedTurns} of them` : ''}`
       : null;
-  return [`${t.turns} turn${t.turns === 1 ? '' : 's'}`, `${tokenCount(t)} tokens`, cost]
-    .filter(Boolean)
-    .join(' · ');
+  return [`${t.turns} message${t.turns === 1 ? '' : 's'}`, cost].filter(Boolean).join(' · ');
 }
 
 export function formatClock(ts: number): string {
@@ -224,9 +225,13 @@ const CLI_NAMES: Record<string, string> = {
   opencode: 'Opencode',
 };
 
-/** "Claude Code 1": the tab as the project's tab bar names it. */
-export function sessionLabel(mark: SessionMark): string {
-  const cli = (mark.cli && CLI_NAMES[mark.cli]) ?? mark.cli ?? 'Session';
+/**
+ * "Claude Code 1": the tab as the project's tab bar names it, or "Task 1"
+ * when the Mac didn't say which engine. In the app's words a project's
+ * agent tab is a task; "session" stays an internal name.
+ */
+export function sessionLabel(mark: Pick<SessionMark, 'cli' | 'tab'>): string {
+  const cli = (mark.cli && CLI_NAMES[mark.cli]) ?? mark.cli ?? 'Task';
   return mark.tab ? `${cli} ${mark.tab}` : cli;
 }
 
@@ -244,22 +249,65 @@ export function formatAgo(ts: number, now = Date.now()): string {
   return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-/** An agent's approval still waiting, as far as this phone's copy of its chat shows. */
+/**
+ * Whether the phone can answer this card. An import's review card can't be:
+ * each agent's instructions are read on the Mac before anything is created,
+ * and the Mac refuses an Allow sent from anywhere else.
+ */
+export const answerableHere = (approval: Pick<Approval, 'connector'>) =>
+  approval.connector?.kind !== 'review';
+
+const pendingCard = (m: AgentMessage): Approval | null =>
+  m.kind === 'approval' && m.approval?.status === 'pending' ? m.approval : null;
+
+/**
+ * An agent's approval still waiting that the phone can answer, as far as
+ * this phone's copy of its chat shows. A review card isn't one.
+ */
 export function pendingApproval(messages: AgentMessage[] | undefined): AgentMessage | undefined {
   if (!messages) return undefined;
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].kind === 'approval' && messages[i].approval?.status === 'pending') {
-      return messages[i];
-    }
+    const card = pendingCard(messages[i]);
+    if (card && answerableHere(card)) return messages[i];
   }
   return undefined;
 }
 
 /**
+ * Everything it's waiting on can only be answered on the Mac (an import to
+ * review), as far as the saved chat shows. The Mac's `pendingApprovals`
+ * counts review cards too; when it counts more than the chat holds, or the
+ * agent is stopped mid-turn on a card, one of them may be answerable here,
+ * so this says no rather than hide it.
+ */
+export function waitingOnMac(agent: Agent, messages: AgentMessage[] | undefined): boolean {
+  if (!messages || !needsYou(agent)) return false;
+  let reviews = 0;
+  for (const m of messages) {
+    const card = pendingCard(m);
+    if (!card) continue;
+    if (answerableHere(card)) return false;
+    reviews++;
+  }
+  return (
+    reviews > 0 && agent.status.state !== 'waiting' && (agent.pendingApprovals ?? 0) <= reviews
+  );
+}
+
+/** Waiting on an answer this phone can give: `needsYou`, less what only the Mac can answer. */
+export const needsYouHere = (agent: Agent, messages: AgentMessage[] | undefined) =>
+  needsYou(agent) && !waitingOnMac(agent, messages);
+
+/** Said wherever "Needs your OK" would be, for a card only the Mac can answer. */
+export const ON_MAC_LINE = 'Waiting for you on your Mac';
+
+/**
  * The row's second line for an agent waiting on you: what it's asking, when
- * the saved chat says; only "Needs your OK" when it doesn't.
+ * the saved chat says; only "Needs your OK" when it doesn't; and, when only
+ * the Mac can answer, that it's waiting there.
  */
 export function needsLine(agent: Agent, messages: AgentMessage[] | undefined): string {
+  if (waitingOnMac(agent, messages)) return `${ON_MAC_LINE} · an import to review`;
   const asking = pendingApproval(messages)?.approval;
   return asking ? `Needs your OK · ${askingLine(asking)}` : subtitle(agent);
 }
@@ -374,11 +422,17 @@ export function askingLine(approval: Pick<Approval, 'title' | 'detail' | 'tool'>
   return approval.title;
 }
 
-/** "2 need you · 3 working", over the agents shown on Home. */
-export function attentionCounts(agents: Agent[]) {
+type Chats = Record<string, { messages: AgentMessage[] } | undefined>;
+
+/**
+ * "2 need you · 3 working", over the agents shown on Home. Needs-you counts
+ * only what can be answered here, as far as the saved chats (`chats`) show;
+ * the Agents tab's badge is this same number.
+ */
+export function attentionCounts(agents: Agent[], chats: Chats = {}) {
   const shown = agents.filter((a) => !a.hidden);
   return {
-    needYou: shown.filter(needsYou).length,
+    needYou: shown.filter((a) => needsYouHere(a, chats[a.id]?.messages)).length,
     // As the desk's tray counts: one waiting for a slot is listed, not working.
     working: shown.filter((a) => !needsYou(a) && a.status.state === 'working' && !waitingForSlot(a))
       .length,
@@ -391,9 +445,11 @@ export function attentionCounts(agents: Agent[]) {
  */
 export function nextNeedsYou(
   agents: Agent[],
-  chats: Record<string, { messages: AgentMessage[] } | undefined>
+  chats: Chats
 ): { agentId: string; messageId?: string } | null {
-  const next = sortAgents(agents.filter((a) => !a.hidden)).find(needsYou);
+  const next = sortAgents(agents.filter((a) => !a.hidden)).find((a) =>
+    needsYouHere(a, chats[a.id]?.messages)
+  );
   if (!next) return null;
   const card = pendingApproval(chats[next.id]?.messages);
   return { agentId: next.id, ...(card ? { messageId: card.id } : {}) };

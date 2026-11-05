@@ -6,8 +6,10 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Button, T, SheetPage } from '../components/ui';
+import { SheetTitle } from '../components/SheetTitle';
 import { haptic } from '../lib/haptics';
 import { describeError, startSession } from '../lib/session';
 import { useApp } from '../lib/store';
@@ -51,10 +53,14 @@ export default function Start() {
 
   return (
     <SheetPage>
-      <View style={styles.content}>
-        <T variant="title" color={colors.textStrong}>
-          New task in {name}
-        </T>
+      {/* Scrolls, and keeps the field and Start above the keyboard on a small phone. */}
+      <KeyboardAwareScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        bottomOffset={space.lg}
+      >
+        <SheetTitle>New task in {name}</SheetTitle>
         <T variant="small" color={colors.textSecondary}>
           {macName} starts an agent in this project on what you write here. It can take up to a
           minute to begin.
@@ -88,7 +94,7 @@ export default function Start() {
             Starting a task needs {macName}.
           </T>
         )}
-      </View>
+      </KeyboardAwareScrollView>
     </SheetPage>
   );
 }

@@ -6,7 +6,9 @@
  */
 
 import type { CompanionEvent, Cursor } from '@shipstudio/companion-protocol';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { createMockServer } from '../dev/mock-server';
@@ -39,7 +41,63 @@ import { DirectTransport } from '../src/lib/transport';
 jest.setTimeout(20_000);
 
 const VALUE = 'sk_live_51NeverWriteMeDown';
-const certs = join(__dirname, '../dev/.certs');
+
+/**
+ * The mock's certificate: `dev/.certs` (made by `pnpm mock`, and gitignored),
+ * or on a clean checkout a throwaway one made here and removed afterwards.
+ * Null when there's neither: no openssl to make one.
+ */
+function testCerts(): { key: Buffer; cert: Buffer; cleanup: () => void } | null {
+  const saved = join(__dirname, '../dev/.certs');
+  if (existsSync(join(saved, 'key.pem')) && existsSync(join(saved, 'cert.pem'))) {
+    return {
+      key: readFileSync(join(saved, 'key.pem')),
+      cert: readFileSync(join(saved, 'cert.pem')),
+      cleanup: () => {},
+    };
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'companion-test-certs-'));
+  const cleanup = () => rmSync(dir, { recursive: true, force: true });
+  try {
+    execFileSync(
+      'openssl',
+      [
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-keyout',
+        join(dir, 'key.pem'),
+        '-out',
+        join(dir, 'cert.pem'),
+        '-days',
+        '1',
+        '-subj',
+        '/CN=localhost',
+        '-addext',
+        'subjectAltName=DNS:localhost,IP:127.0.0.1',
+      ],
+      { stdio: 'ignore' }
+    );
+    return {
+      key: readFileSync(join(dir, 'key.pem')),
+      cert: readFileSync(join(dir, 'cert.pem')),
+      cleanup,
+    };
+  } catch {
+    cleanup();
+    return null;
+  }
+}
+
+const tls = testCerts();
+if (!tls) {
+  console.warn(
+    'secrets.node.test: skipped. No dev/.certs and no openssl to make a temporary certificate. Run `pnpm mock` once to create dev/.certs.'
+  );
+}
+afterAll(() => tls?.cleanup());
 
 /** The mock's certificate is self-signed; the app trusts the real `*.ts.net` one. */
 class SelfSignedOk extends WebSocket {
@@ -48,11 +106,11 @@ class SelfSignedOk extends WebSocket {
   }
 }
 
-describe('secrets', () => {
+(tls ? describe : describe.skip)('secrets', () => {
   const mock = createMockServer({
     quiet: true,
     allowAfterMs: 0,
-    tls: { key: readFileSync(join(certs, 'key.pem')), cert: readFileSync(join(certs, 'cert.pem')) },
+    tls: tls ? { key: tls.key, cert: tls.cert } : undefined,
   });
   let t: DirectTransport;
   let state = emptySync();

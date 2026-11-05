@@ -10,7 +10,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { agentTint } from '../lib/accent';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AGENT_COLORS } from '../lib/newAgent';
-import { chromeScale, iconSize, radius, space } from '../lib/theme';
+import { agentColorNames, chromeScale, fonts, iconSize, radius, space } from '../lib/theme';
 import { Icon, T, tap, useRipple } from './ui';
 
 /** Chips fit 36pt; their slop makes the target 44. */
@@ -52,7 +52,8 @@ export function Chip({
     >
       <T
         variant="small"
-        color={selected ? colors.textStrong : colors.textSecondary}
+        color={selected ? colors.onSelectedFill : colors.textSecondary}
+        style={selected ? { fontFamily: fonts.medium } : undefined}
         maxFontSizeMultiplier={chromeScale}
         numberOfLines={1}
       >
@@ -62,15 +63,36 @@ export function Chip({
   );
 }
 
-/** A wrapping row of chips, spaced so their 44pt targets don't overlap. */
-export function ChipRow({ children, label }: { children: ReactNode; label?: string }) {
+/**
+ * A wrapping row of chips, spaced so their 44pt targets don't overlap. A
+ * radio group, unless its chips are checkboxes (several may be on): then
+ * just a labelled group.
+ */
+export function ChipRow({
+  children,
+  label,
+  multiple = false,
+}: {
+  children: ReactNode;
+  label?: string;
+  multiple?: boolean;
+}) {
   const styles = useStyles();
   return (
-    <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel={label}>
+    <View
+      style={styles.row}
+      accessible={multiple ? false : undefined}
+      accessibilityRole={multiple ? undefined : 'radiogroup'}
+      accessibilityLabel={label}
+    >
       {children}
     </View>
   );
 }
+
+/** What VoiceOver calls a swatch (`agentColorNames`): what it looks like, never its key. */
+export const colorName = (key: string) =>
+  agentColorNames[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
 
 /** Every agent colour as the app draws it in this appearance; white is the neutral accent. */
 export function ColorSwatches({
@@ -84,7 +106,7 @@ export function ColorSwatches({
   const styles = useStyles();
   const appearance = useAppearance();
   return (
-    <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Colour">
+    <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Color">
       {AGENT_COLORS.map((color) => {
         const on = color === value;
         const tint = agentTint(color, appearance);
@@ -92,7 +114,7 @@ export function ColorSwatches({
           <Pressable
             key={color}
             accessibilityRole="radio"
-            accessibilityLabel={color}
+            accessibilityLabel={colorName(color)}
             accessibilityState={{ selected: on }}
             onPress={() => {
               if (!on) tap();
@@ -135,7 +157,7 @@ const useStyles = makeStyles((colors) => ({
     borderColor: 'transparent',
     overflow: 'hidden',
   },
-  chipOn: { backgroundColor: colors.surfaceSelected, borderColor: colors.borderStrong },
+  chipOn: { backgroundColor: colors.selectedFill, borderColor: colors.selectedFill },
   chipPressed: { backgroundColor: colors.surfaceControlHover },
   swatches: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -space['2xs'] },
   swatchTarget: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },

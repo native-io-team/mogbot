@@ -15,6 +15,7 @@ import type { Agent, CopyRef, KeptCopy, LeftOut } from '@shipstudio/companion-pr
 import { useState } from 'react';
 import { Alert, View } from 'react-native';
 import { haptic } from '../lib/haptics';
+import { useInFlight } from '../lib/once';
 import { describeError, discardCopy, keepCopy } from '../lib/session';
 import { useApp } from '../lib/store';
 import { CARD_TITLE_SCALE } from '../lib/theme';
@@ -111,6 +112,8 @@ export function CopyActions({
     (s) => s.projects?.find((p) => p.path === projectPath)?.name ?? folderName(projectPath)
   );
   const [busy, setBusy] = useState<'keep' | 'discard' | null>(null);
+  // One at a time: two taps in one frame both see the render before \`busy\`.
+  const once = useInFlight();
   if (!served) return null;
   const working = agent.status.state !== 'idle';
   // What stopped the last Keep lives on the Mac (the agent's copy), so it
@@ -120,19 +123,20 @@ export function CopyActions({
   const off = !connected || working || busy !== null;
 
   // The haptic says what the Mac did, so it waits for the Mac.
-  const keep = (into?: string) => {
-    setBusy('keep');
-    keepCopy(agent.id, copy.id, into)
-      .then((kept) => {
+  const keep = (into?: string) =>
+    once(async () => {
+      setBusy('keep');
+      try {
+        const kept = await keepCopy(agent.id, copy.id, into);
         if (kept.outcome === 'kept' || kept.outcome === 'nothing') haptic.success();
         else haptic.warning();
-      })
-      .catch((e: unknown) => {
+      } catch (e) {
         haptic.error();
         onError(describeError(e));
-      })
-      .finally(() => setBusy(null));
-  };
+      } finally {
+        setBusy(null);
+      }
+    });
 
   const discard = () =>
     Alert.alert(
@@ -143,16 +147,19 @@ export function CopyActions({
         {
           text: 'Discard',
           style: 'destructive',
-          onPress: () => {
-            setBusy('discard');
-            discardCopy(agent.id, copy.id)
-              .then(() => haptic.success())
-              .catch((e: unknown) => {
+          onPress: () =>
+            void once(async () => {
+              setBusy('discard');
+              try {
+                await discardCopy(agent.id, copy.id);
+                haptic.success();
+              } catch (e) {
                 haptic.error();
                 onError(describeError(e));
-              })
-              .finally(() => setBusy(null));
-          },
+              } finally {
+                setBusy(null);
+              }
+            }),
         },
       ]
     );
@@ -219,7 +226,7 @@ export function CopyActions({
           variant="answer"
           busy={busy === 'keep'}
           disabled={off}
-          onPress={() => keep(into)}
+          onPress={() => void keep(into)}
           style={{ flex: 1 }}
         />
       </View>

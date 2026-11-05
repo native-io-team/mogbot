@@ -9,9 +9,16 @@ import { memo } from 'react';
 import { type LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { DRIVEN_LINE, failureLine, folderName, formatClock, sessionLabel } from '../lib/agents';
+import {
+  DRIVEN_LINE,
+  engineName,
+  failureLine,
+  folderName,
+  formatClock,
+  sessionLabel,
+} from '../lib/agents';
 import { haptic } from '../lib/haptics';
-import { discardPending, send } from '../lib/session';
+import { discardPending, editPending, send } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
 import { alpha, chromeScale, composer, fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -147,7 +154,9 @@ export const MessageRow = memo(function MessageRow({
             color={colors.accentErrorLight}
           />
           <T variant="small" color={colors.accentErrorLight} style={{ flex: 1 }}>
-            {message.failure ? failureLine(message.failure, message.text) : message.text}
+            {message.failure
+              ? failureLine(message.failure, message.text, engineName(agent))
+              : message.text}
           </T>
         </View>
       );
@@ -292,7 +301,7 @@ function SessionCard({
         <Icon name="terminal" size={iconSize.inline} color={colors.textMuted} />
         <T variant="small" color={colors.textSecondary} numberOfLines={1} style={{ flexShrink: 1 }}>
           {mark.event === 'started'
-            ? `Started a session in ${project}`
+            ? `Started a task in ${project}`
             : `Sent to ${project} · ${tab}`}
         </T>
         {open && <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />}
@@ -304,7 +313,7 @@ function SessionCard({
     <View style={styles.sessionCard}>
       <View style={styles.sessionHead}>
         <Icon
-          name={mark.event === 'reply' ? 'terminal' : 'iphone'}
+          name={mark.event === 'reply' ? 'terminal' : 'photo'}
           size={iconSize.inline}
           color={colors.textMuted}
         />
@@ -339,7 +348,7 @@ function SessionCard({
           accessibilityRole="button"
         >
           <T variant="small" color={colors.textStrong} style={{ fontFamily: fonts.medium }}>
-            Open session
+            Open task
           </T>
           <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
         </Pressable>
@@ -364,7 +373,7 @@ function SystemLine({ message }: { message: AgentMessage }) {
       : message.kind === 'from_agent' && message.peer
         ? `From ${message.peer.name}: ${message.text}`
         : message.kind === 'check_in'
-          ? `${message.checkIn?.manual ? 'Ran now' : 'Check-in'} · ${message.text}`
+          ? `${message.checkIn?.manual ? 'Ran now' : 'Routine'} · ${message.text}`
           : message.text;
   const opens = !!changes && canDiff;
   // No clock of its own: the chat's time lines say when (and the long-press menu, exactly).
@@ -428,6 +437,12 @@ export function PendingRow({ pending }: { pending: PendingSend }) {
           <Bubble text={pending.text} />
         </View>
       )}
+      {pending.refused && !!pending.reason && (
+        // Why the Mac said no, where it happened, not only in a passing toast.
+        <T variant="caption" color={colors.textSecondary} style={styles.refusedReason}>
+          {pending.reason}
+        </T>
+      )}
       {pending.failed || pending.waiting ? (
         <View style={styles.failedLine}>
           <T
@@ -437,21 +452,32 @@ export function PendingRow({ pending }: { pending: PendingSend }) {
           >
             {pending.failed ? 'Not sent' : `Waiting for ${macName}`}
           </T>
-          {pending.failed && (
+          {pending.refused ? (
+            // A refusal is final: sending it again is refused again. Edit puts it back.
             <LineButton
-              label="Send"
+              label="Edit"
               onPress={() => {
                 haptic.light();
-                void send(
-                  pending.agentId,
-                  pending.text,
-                  false,
-                  pending.clientId,
-                  pending.attachments,
-                  pending.mentions
-                ).catch(() => {});
+                editPending(pending);
               }}
             />
+          ) : (
+            pending.failed && (
+              <LineButton
+                label="Send"
+                onPress={() => {
+                  haptic.light();
+                  void send(
+                    pending.agentId,
+                    pending.text,
+                    false,
+                    pending.clientId,
+                    pending.attachments,
+                    pending.mentions
+                  ).catch(() => {});
+                }}
+              />
+            )
           )}
           <LineButton
             label="Discard"
@@ -582,6 +608,7 @@ const useStyles = makeStyles((colors) => ({
     paddingLeft: space.sm,
   },
   meta: { marginRight: space.xs },
+  refusedReason: { maxWidth: '78%', marginRight: space.xs, textAlign: 'right' },
   failedLine: {
     flexDirection: 'row',
     alignItems: 'center',
