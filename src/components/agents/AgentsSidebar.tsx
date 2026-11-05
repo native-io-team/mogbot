@@ -45,6 +45,7 @@ import { AgentMark } from './AgentSwitcher';
 import { RoomRow, type RoomActions } from './AgentRoomParts';
 import { sortRooms, type Room } from '../../lib/agentRooms';
 import { useFlipReorder } from './useAgentMotion';
+import { useAttentionOrder } from './useAttentionOrder';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import {
   engineIsReady,
@@ -52,7 +53,6 @@ import {
   failureLine,
   needsYou,
   plainActivity,
-  sortAgents,
   type Agent,
   type SearchHit,
 } from '../../lib/agents';
@@ -73,6 +73,8 @@ interface AgentsSidebarProps {
   query: string;
   searchRef: RefObject<HTMLInputElement | null>;
   onOpenHit: (hit: SearchHit) => void;
+  /** An agent picked by name from the results: opens it and puts search away. */
+  onOpenAgent: (agentId: string) => void;
   /** The hit last opened, marked as the row is. */
   currentHit?: string | null;
   /** Agents waiting on you (a card, or a turn that didn't finish). */
@@ -88,7 +90,12 @@ interface AgentsSidebarProps {
 
 function subtitle(agent: Agent): string {
   // A request outranks driving: the row's words and its amber dot agree.
-  if (needsYou(agent)) return 'Needs your OK';
+  // With a dozen agents waiting the label alone repeats down the list; how
+  // many it holds is what tells one waiting row from the next.
+  if (needsYou(agent)) {
+    const n = agent.pendingApprovals ?? 0;
+    return n > 1 ? `Needs your OK · ${n}` : 'Needs your OK';
+  }
   if (agent.takeover) return `You’re driving ${agent.name}`;
   if (agent.status.state === 'working') return plainActivity(agent.status.activity) ?? 'Working…';
   const failure = failedTurn(agent);
@@ -165,6 +172,7 @@ export function AgentsSidebar({
   query,
   searchRef,
   onOpenHit,
+  onOpenAgent,
   currentHit,
   actions,
   needsYouCount,
@@ -190,15 +198,18 @@ export function AgentsSidebar({
   const importing = talkIsLive(useImportGate().talk);
   // An import already going needs no pitch for one.
   const showNudge = nudge.visible && engineWorks && !importing;
-  const { visible, hidden } = useMemo(() => {
-    const sorted = sortAgents(agents);
-    return {
+  // By attention (waiting on you, working, recent), held still while the
+  // list is in use so a row never moves under the pointer.
+  const listRef = useRef<HTMLDivElement>(null);
+  const sorted = useAttentionOrder(agents, listRef);
+  const { visible, hidden } = useMemo(
+    () => ({
       visible: sorted.filter((a) => !a.hidden || a.id === selectedId),
       hidden: sorted.filter((a) => a.hidden && a.id !== selectedId),
-    };
-  }, [agents, selectedId]);
-  // An agent that just did something slides to the top instead of jumping.
-  const listRef = useRef<HTMLDivElement>(null);
+    }),
+    [sorted, selectedId]
+  );
+  // An agent that just did something slides into place instead of jumping.
   const shown = showHidden ? [...visible, ...hidden] : visible;
   useFlipReorder(listRef, '[data-agent-id]', shown.map((a) => a.id).join(' '));
 
@@ -230,6 +241,7 @@ export function AgentsSidebar({
           field={searchRef}
           onOpen={onOpenHit}
           currentId={currentHit}
+          onOpenAgent={onOpenAgent}
         />
       ) : (
         <>

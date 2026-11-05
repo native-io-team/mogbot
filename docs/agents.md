@@ -2195,6 +2195,13 @@ cards.
   card's Allow (or the next row). Long field values clamp to two lines with
   "Show all"; cards span the row's text column. The Chief of Staff is created
   pinned (an ordinary pin: unpin it and it sorts by recency).
+- **Sidebar order** (`lib/agentsOrder.ts`, `useAttentionOrder`): pinned on
+  top, then within each, waiting on you → working → most recent activity.
+  It holds still while the list is in use (pointer over it, or scrolled,
+  clicked or keyed through in the last 2s): only new agents are added at the
+  end and deleted ones dropped. It re-sorts once left alone for 2s, when the
+  window comes back to the front, and at once on a pin or unpin. Other lists
+  (switcher, Quick Entry) still use `sortAgents` (pinned, then recency).
 - **Sections** (user-made groups in the list) are not built: they need a
   persisted field, a naming flow, collapse state, and a story for how they
   sit with the recency sort. Worth doing as its own slice once the list is

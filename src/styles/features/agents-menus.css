@@ -124,6 +124,22 @@
   background: var(--surface-control);
 }
 
+/* An agent whose name matched: the group header's look (badge on the avatar
+   column, name on the text column), but a row you can open. */
+.agents-search__hit.agents-search__name-hit {
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agents-search__name-hit mark {
+  color: inherit;
+  background: rgba(var(--accent-warning-rgb), 0.22);
+  border-radius: var(--radius-sm);
+}
+
 /* The hit last opened, marked like the open row, so ↓ and Enter walk on. */
 .agents-search__hit.is-current {
   background: var(--surface-selected);

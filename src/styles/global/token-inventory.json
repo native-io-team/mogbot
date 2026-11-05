@@ -860,6 +860,15 @@
       "consumerCount": 10
     },
     {
+      "name": "--size-sidebar-footer-fade",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "WorkspaceSidebar",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 2
+    },
+    {
       "name": "--size-sidebar-section-row",
       "definitionFile": "src/styles/global/tokens-components.css",
       "layer": "components",
@@ -5348,7 +5357,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 566
+      "consumerCount": 567
     },
     {
       "name": "--text-secondary",
@@ -5816,7 +5825,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 346
+      "consumerCount": 347
     },
     {
       "name": "--font-size-body-sm",
@@ -5924,7 +5933,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 107
+      "consumerCount": 108
     },
     {
       "name": "--font-weight-heading",
@@ -6086,7 +6095,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 37
+      "consumerCount": 38
     },
     {
       "name": "--accent-error-rgb",
@@ -6140,7 +6149,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 623
+      "consumerCount": 625
     },
     {
       "name": "--spacing-sm",
@@ -6149,7 +6158,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 784
+      "consumerCount": 785
     },
     {
       "name": "--spacing-md",
@@ -6221,7 +6230,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 214
+      "consumerCount": 215
     },
     {
       "name": "--radius-lg",
@@ -6707,7 +6716,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 566
+      "consumerCount": 567
     },
     {
       "name": "--text-secondary",
@@ -6932,7 +6941,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 37
+      "consumerCount": 38
     },
     {
       "name": "--accent-error-rgb",

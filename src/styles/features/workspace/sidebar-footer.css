@@ -2,7 +2,7 @@
 
 /* Footer is the button itself — no inner outline, no padding gap. */
 .workspace-sidebar-footer {
-  --workspace-sidebar-footer-fade-height: calc(var(--space-32) + var(--space-16));
+  --workspace-sidebar-footer-fade-height: var(--size-sidebar-footer-fade);
   position: relative;
   z-index: var(--z-dropdown);
   flex-shrink: 0;
@@ -11,6 +11,14 @@
     var(--space-08);
   border-top: 0;
   overflow: visible;
+  /* The fade is only a look: clicks in it reach the row underneath. Without
+   * this, the last row of a long list (Import agents, a project) sat under
+   * the footer's transparent top and could not be clicked. */
+  pointer-events: none;
+}
+
+.workspace-sidebar-footer > * {
+  pointer-events: auto;
 }
 
 .workspace-sidebar-footer-actions {

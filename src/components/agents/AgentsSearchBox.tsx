@@ -111,10 +111,17 @@ interface AgentsSearchPopoverProps {
   open: boolean;
   field: RefObject<HTMLInputElement | null>;
   onOpenHit: (hit: SearchHit) => void;
+  onOpenAgent: (agentId: string) => void;
 }
 
 /** No sidebar to hold it, so ⌘F opens the same search over the chat. */
-export function AgentsSearchPopover({ search, open, field, onOpenHit }: AgentsSearchPopoverProps) {
+export function AgentsSearchPopover({
+  search,
+  open,
+  field,
+  onOpenHit,
+  onOpenAgent,
+}: AgentsSearchPopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, search.close, open);
   if (!open) return null;
@@ -135,6 +142,7 @@ export function AgentsSearchPopover({ search, open, field, onOpenHit }: AgentsSe
               onOpenHit(hit);
               search.close();
             }}
+            onOpenAgent={onOpenAgent}
           />
         </div>
       )}
