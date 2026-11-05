@@ -283,6 +283,13 @@ pub struct Arrival<'a> {
     pub tools: &'a [ToolNote],
 }
 
+/// The logins bullet of the section: just try, and ask only when blocked.
+pub const LOGINS_LINE: &str = "- Logins: just try first. For a task in an app, use what you have (your own tools for it, `gh` for GitHub), then the user's own signed-in browser (the mcp__claude-in-chrome__* tools) if you have it, and tell them which account you're in. Only when you're blocked on what the user asked, call request_login, once, for that one app, never up front and never for everything you used before: the logins you came with are on the user's setup checklist already, checked against this Mac. One ask at a time; never repeat one that's waiting or answered. Never ask for a password, or for a login, token or code in chat. request_secret is only for an API key made for programs.";
+
+/// The bullet builds before this one wrote, upgraded in place
+/// ([`upgrade`]): an exact match, so nothing the user wrote is touched.
+pub const PAST_LOGINS_LINES: &[&str] = &["- Logins: when you need an account (email, Slack, LinkedIn, X, GitHub…), ask for it with request_login: one card where the user connects it, from their desk or phone, and it stays in this Mac's Keychain. request_secret is only for an API key made for programs. Never ask for a password, or for a login or code in the chat."];
+
 /// The section itself, heading included. Written for the agent.
 pub fn preamble(a: &Arrival) -> String {
     let source = a.source;
@@ -314,7 +321,7 @@ pub fn preamble(a: &Arrival) -> String {
         None => format!("- No files or past conversations came over from {source}."),
     });
     lines.push("- The user's projects: find one with project_list and work in it through its session (session_message). Don't go looking for them on disk.".into());
-    lines.push("- Logins: when you need an account (email, Slack, LinkedIn, X, GitHub…), ask for it with request_login: one card where the user connects it, from their desk or phone, and it stays in this Mac's Keychain. request_secret is only for an API key made for programs. Never ask for a password, or for a login or code in the chat.".into());
+    lines.push(LOGINS_LINE.into());
     if !a.tools.is_empty() {
         let list: Vec<String> = a
             .tools
@@ -468,8 +475,20 @@ pub(crate) fn upgrade(agent: &store::Agent) -> Result<bool, CommandError> {
     let Ok(raw) = std::fs::read_to_string(&path) else {
         return Ok(false);
     };
-    if section(&raw).is_some() {
-        return Ok(false);
+    if let Some((start, end)) = section(&raw) {
+        // Ours already: only its logins bullet moves on, by exact match.
+        let ours = &raw[start..end];
+        let Some(old) = PAST_LOGINS_LINES.iter().find(|l| ours.contains(**l)) else {
+            return Ok(false);
+        };
+        let next = format!(
+            "{}{}{}",
+            &raw[..start],
+            ours.replacen(old, LOGINS_LINE, 1),
+            &raw[end..]
+        );
+        write(&agent.id, &next)?;
+        return Ok(true);
     }
     let Some(source) = imported_from(&raw) else {
         return Ok(false);

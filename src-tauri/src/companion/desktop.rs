@@ -670,6 +670,21 @@ impl Backend for DesktopBackend {
                 cmd::agents_team_setup_dismiss(app).await?;
                 Ok(Value::Null)
             }
+            A::Later {
+                key,
+                connect,
+                on_phone,
+            } => json(
+                cmd::agents_team_setup_later(
+                    app,
+                    key,
+                    if connect { "connect" } else { "not_needed" }.into(),
+                    Some(true),
+                    Some(on_phone),
+                )
+                .await?,
+            ),
+            A::Check => json(cmd::agents_access_check(app).await?),
         }
     }
 
