@@ -1655,7 +1655,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-scheduled',
     title: 'Agents — the schedule popover',
     looksRightWhen:
-      'Clicking “3 scheduled” in the Finance header opens a popover under it: the one-time check-in, the weekday routine with its next time, and the paused Monday routine muted and last, each note on its own line with the time quieter beneath. Below, one composer line with “every weekday 9am: brief me on Acme” typed and the time read back under it, then a one-sentence footnote (Ship Studio open and this Mac awake) ending in an inline “Keep this Mac awake” link.',
+      'Clicking “3 scheduled” in the Finance header opens a popover under it: the one-time check-in, the weekday routine with its next time, and the paused Monday routine muted and last, each note on its own line with the time quieter beneath. Below, one composer line with “every weekday 9am: brief me on Acme” typed and the time read back under it, then a one-sentence footnote (the app open and this Mac awake) ending in an inline “Keep this Mac awake” link.',
     requires: '.agent-schedule__foot .text-button',
     openSelector: AGENTS_TAB,
     steps: [
@@ -2478,7 +2478,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-dictation-blocked',
     title: 'Agents — dictation without microphone access',
     looksRightWhen:
-      'One quiet line above the composer says Ship Studio needs microphone access, with a link to open System Settings. The composer still works for typing.',
+      'One quiet line above the composer says the app (by its brand name) needs microphone access, with a link to open System Settings. The composer still works for typing.',
     // Steps run before a palette command, so walk in through the sidebar.
     openSelector: AGENTS_TAB,
     requires: '.agent-composer__notice',

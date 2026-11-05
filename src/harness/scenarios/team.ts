@@ -36,7 +36,7 @@ const teamCommands = {
 export const teamScenarios: Scenario[] = [
   {
     id: 'team-coverage',
-    title: 'Team — the half of the team who are not in Ship Studio',
+    title: 'Team — the half of the team who do not use this app',
     looksRightWhen:
       'The coverage note names who pushes straight to GitHub, says exactly what is missing from their rows (the why, not the fact), and offers one action. It is a footnote after the feed, not a banner in front of it.',
     project: WORKSPACE_PROJECT,

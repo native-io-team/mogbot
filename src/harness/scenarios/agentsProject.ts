@@ -234,7 +234,7 @@ const CAPABILITIES = {
   seenAt: now - 5 * MIN,
   lines: [
     {
-      what: 'Ship Studio projects',
+      what: 'Projects',
       detail:
         'Create projects, start and continue sessions in them, screenshot their previews, check git, push with your OK, and check deploys.',
     },
@@ -554,7 +554,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-capabilities',
     title: 'Agents — what an agent can do, in its editor',
     looksRightWhen:
-      'Editing the Chief of Staff: a quiet “What Chief of Staff can do” group, label column on the left (Ship Studio projects, The team, Chrome, On this Mac, Connectors, Needs sign-in) and plain sentences on the right, above Permissions. No computer use is claimed.',
+      'Editing the Chief of Staff: a quiet “What Chief of Staff can do” group, label column on the left (Projects, The team, Chrome, On this Mac, Connectors, Needs sign-in) and plain sentences on the right, above Permissions. No computer use is claimed.',
     openSelector: AGENTS_TAB,
     requires: '.agent-editor__can-do',
     steps: [

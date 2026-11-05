@@ -10,10 +10,6 @@ vi.mock('../../lib/project', () => ({
   listProjects: vi.fn(),
 }));
 
-vi.mock('../../hooks/useDashboardVisibility', () => ({
-  useDashboardVisibility: () => ({ dashboardHeaderHidden: true, hideDashboardHeader: vi.fn() }),
-}));
-
 vi.mock('../dashboard/DashboardSearch', () => ({
   DashboardSearch: () => <div data-testid="search" />,
 }));

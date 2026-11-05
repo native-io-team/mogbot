@@ -303,7 +303,8 @@
   font-size: var(--font-size-body-sm);
 }
 
-.agents-desktop-settings {
+/* The agent rows lead General; the rest of the tab follows them. */
+.agents-desktop-settings + .settings-section {
   margin-top: var(--spacing-lg);
 }
 

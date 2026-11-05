@@ -17,7 +17,7 @@ interface ChangelogModalProps {
 export function ChangelogModal({ isOpen, onClose }: ChangelogModalProps) {
   if (!isOpen) return null;
   return (
-    <ModalFrame isOpen={isOpen} onClose={onClose} title="What's New" className="changelog-modal">
+    <ModalFrame isOpen={isOpen} onClose={onClose} title="What's new" className="changelog-modal">
       <div className="changelog-modal-body">
         <Changelog className="changelog-in-modal" />
       </div>

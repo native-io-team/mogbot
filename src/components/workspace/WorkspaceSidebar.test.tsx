@@ -670,7 +670,7 @@ describe('WorkspaceSidebar project activity indicator', () => {
     expect(projectRow).not.toBeNull();
     fireEvent.contextMenu(projectRow!);
 
-    expect(screen.getByRole('menuitem', { name: 'Project Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Project settings' })).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole('menuitem', { name: 'Unpin from sidebar' }));
 
     expect(onUnpinProject).toHaveBeenCalledWith(PROJECT_PATH);
@@ -683,7 +683,7 @@ describe('WorkspaceSidebar project activity indicator', () => {
 
     fireEvent.contextMenu(container.querySelector<HTMLElement>('.sidebar-project-row')!);
 
-    expect(screen.getByRole('menuitem', { name: 'Project Settings' })).toBeEnabled();
+    expect(screen.getByRole('menuitem', { name: 'Project settings' })).toBeEnabled();
     expect(screen.getByRole('menuitem', { name: 'Rename project' })).toBeDisabled();
     expect(screen.getByRole('menuitem', { name: 'Stop dev server' })).toBeDisabled();
     expect(screen.getByRole('menuitem', { name: 'Unpin from sidebar' })).toBeDisabled();
@@ -794,9 +794,9 @@ describe('WorkspaceSidebar project activity indicator', () => {
     const projectRow = container.querySelector<HTMLElement>('.sidebar-project-row');
     expect(projectRow).not.toBeNull();
     fireEvent.contextMenu(projectRow!);
-    await userEvent.setup().click(screen.getByRole('menuitem', { name: 'Project Settings' }));
+    await userEvent.setup().click(screen.getByRole('menuitem', { name: 'Project settings' }));
 
-    expect(await screen.findByRole('dialog', { name: 'Project Settings' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Project settings' })).toBeInTheDocument();
     expect(screen.getByRole('spinbutton')).toHaveValue(4321);
   });
 

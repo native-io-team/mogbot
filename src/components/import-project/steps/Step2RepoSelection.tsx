@@ -41,7 +41,7 @@ export function Step2RepoSelection({
     <div className="create-modal-content import-repo-step">
       <div className="create-modal-header">
         <div>
-          <h2>Import Project</h2>
+          <h2>Import project</h2>
           <p className="template-context">
             {selectedOwner === '__collaborator__' ? (
               <>Repos shared with you</>
@@ -123,7 +123,7 @@ export function Step2RepoSelection({
           Back
         </Button>
         <Button variant="primary" type="button" disabled={!selectedRepo} onClick={onImport}>
-          Import Project
+          Import project
         </Button>
       </div>
     </div>

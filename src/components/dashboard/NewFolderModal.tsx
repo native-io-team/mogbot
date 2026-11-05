@@ -33,7 +33,7 @@ export function NewFolderModal({
   onClose,
   onCreate,
   initialName = '',
-  title = 'New Folder',
+  title = 'New folder',
   buttonLabel = 'Create',
 }: NewFolderModalProps) {
   const [name, setName] = useState(initialName);

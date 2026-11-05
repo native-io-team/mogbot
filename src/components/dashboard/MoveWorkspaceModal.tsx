@@ -74,7 +74,7 @@ export function MoveWorkspaceModal({
     <ModalFrame
       isOpen={isOpen}
       onClose={onClose}
-      title="Move to Workspace"
+      title="Move to workspace"
       className="move-folder-modal"
       dismissable={!selecting}
     >

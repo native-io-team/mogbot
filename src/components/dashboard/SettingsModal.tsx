@@ -2,11 +2,14 @@
  * SettingsModal - app-level settings accessible from the dashboard.
  *
  * Contains:
- * - Projects folder (where projects are listed/created), with an optional move
- * - General settings and Appearance settings, including workspace layout and icon selection
+ * - General: what anyone running agents cares about first (the menu bar,
+ *   quick message, the phone) and the analytics opt-out
+ * - Projects: the developer rows (projects folder, shared libraries,
+ *   thumbnails, commit messages, terminal rendering), kept together so General
+ *   stays calm for people who never open a project
+ * - Appearance: accent and workspace layout
  * - Experimental: opt-in toys and half-finished ideas, kept out of Appearance so
  *   that tab stays about how the app looks
- * - Analytics opt-out toggle
  *
  * @module components/SettingsModal
  */
@@ -58,6 +61,8 @@ import { MoveToFolderIcon } from '@/components/icons';
 import { useActiveAccount } from '../../hooks/useActiveAccount';
 import { useOpenModal } from '../../contexts/ModalContext';
 import { useKeepDevServersRunning } from '../../hooks/useKeepDevServersRunning';
+import { BRAND } from '../../lib/brand';
+import { SLACK_INVITE_URL } from '../../lib/links';
 
 const errMsg = (err: unknown) => formatCommandError(asCommandError(err));
 
@@ -77,7 +82,7 @@ interface MovePrompt {
   info: MovableProjects;
 }
 
-type SettingsTab = 'general' | 'appearance' | 'experimental';
+type SettingsTab = 'general' | 'projects' | 'appearance' | 'experimental';
 
 export function SettingsModal({
   isOpen,
@@ -431,6 +436,9 @@ export function SettingsModal({
             <TabsTab value="general" width="fill" className="command-palette-tab">
               General
             </TabsTab>
+            <TabsTab value="projects" width="fill" className="command-palette-tab">
+              Projects
+            </TabsTab>
             <TabsTab value="appearance" width="fill" className="command-palette-tab">
               Appearance
             </TabsTab>
@@ -439,7 +447,57 @@ export function SettingsModal({
             </TabsTab>
           </TabsList>
 
+          {/* General leads with the agents, which is what anyone using the app
+              cares about; the developer rows live on Projects. */}
           <TabsPanel value="general" className="settings-tab-panel">
+            <div className="settings-modal-body">
+              <AgentsDesktopSettings />
+              <div className="settings-section">
+                <div className="settings-row">
+                  <div className="settings-row-info">
+                    <span className="settings-row-label">Phone</span>
+                    <span className="settings-row-description">
+                      Use your agents from your phone over Tailscale. Pair a phone, see which are
+                      connected, and remove them.
+                    </span>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    data-settings-open="phone"
+                    onClick={() => {
+                      onClose();
+                      openModal('phone');
+                    }}
+                  >
+                    Open
+                  </Button>
+                </div>
+                <div className="settings-row">
+                  <div className="settings-row-info">
+                    <span className="settings-row-label">Usage analytics &amp; error reports</span>
+                    <span className="settings-row-description">
+                      Help improve the app by sharing anonymous usage data and automatic error
+                      reports (error messages and stack traces only — never your code or file
+                      contents, and paths are anonymized). Turning this off stops all data sharing.
+                    </span>
+                  </div>
+                  <button
+                    className={`settings-toggle ${analyticsEnabled ? 'on' : 'off'}`}
+                    onClick={handleToggle}
+                    disabled={loading}
+                    role="switch"
+                    aria-checked={analyticsEnabled}
+                  >
+                    <span className="settings-toggle-track">
+                      <span className="settings-toggle-thumb" />
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </TabsPanel>
+
+          <TabsPanel value="projects" className="settings-tab-panel">
             <div className="settings-modal-body">
               <div className="settings-section">
                 <div className="settings-row settings-row--stacked">
@@ -459,7 +517,7 @@ export function SettingsModal({
                     <span className="settings-row-description">
                       {multipleWorkspaces && activeAccount
                         ? `Where the ${activeAccount.name} workspace lists and creates projects. Each workspace can use its own folder.`
-                        : 'Where Ship Studio lists and creates your projects. Point this at an existing dev directory to keep everything in one place.'}
+                        : 'Where your projects are listed and created. Point this at an existing folder to keep everything in one place.'}
                     </span>
                     <button
                       type="button"
@@ -507,52 +565,12 @@ export function SettingsModal({
                 </div>
                 <div className="settings-row">
                   <div className="settings-row-info">
-                    <span className="settings-row-label">Phone</span>
-                    <span className="settings-row-description">
-                      Use your agents from your phone over Tailscale. Pair a phone, see which are
-                      connected, and remove them.
-                    </span>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    data-settings-open="phone"
-                    onClick={() => {
-                      onClose();
-                      openModal('phone');
-                    }}
-                  >
-                    Open
-                  </Button>
-                </div>
-                <div className="settings-row">
-                  <div className="settings-row-info">
-                    <span className="settings-row-label">Terminal GPU acceleration</span>
-                    <span className="settings-row-description">
-                      Use GPU rendering for faster, smoother terminals. Turn off if agent output
-                      looks garbled or fragmented (a known issue on some macOS beta builds). Applies
-                      to newly opened terminals.
-                    </span>
-                  </div>
-                  <button
-                    className={`settings-toggle ${terminalGpuEnabled ? 'on' : 'off'}`}
-                    onClick={handleTerminalGpuToggle}
-                    disabled={loading}
-                    role="switch"
-                    aria-checked={terminalGpuEnabled}
-                  >
-                    <span className="settings-toggle-track">
-                      <span className="settings-toggle-thumb" />
-                    </span>
-                  </button>
-                </div>
-                <div className="settings-row">
-                  <div className="settings-row-info">
                     <span className="settings-row-label">Project thumbnails</span>
                     <span className="settings-row-description">
                       Automatically screenshot the preview to show project thumbnails on the
-                      dashboard. On macOS this may require Screen Recording permission — allow Ship
-                      Studio under System Settings → Privacy &amp; Security → Screen Recording, then
-                      turn this back on.
+                      dashboard. On macOS this may require Screen Recording permission — allow{' '}
+                      {BRAND.name} under System Settings → Privacy &amp; Security → Screen
+                      Recording, then turn this back on.
                     </span>
                   </div>
                   <button
@@ -595,7 +613,7 @@ export function SettingsModal({
                     </span>
                   </button>
                 </div>
-                {/* What Ship Studio writes into your history, next to what it
+                {/* What the app writes into your history, next to what it
                     sends off your machine. Both are "what the app does on your
                     behalf", which is a different question from how it looks —
                     this was briefly on the Appearance tab, where it read as a
@@ -627,19 +645,19 @@ export function SettingsModal({
                 </div>
                 <div className="settings-row">
                   <div className="settings-row-info">
-                    <span className="settings-row-label">Usage analytics &amp; error reports</span>
+                    <span className="settings-row-label">Terminal GPU acceleration</span>
                     <span className="settings-row-description">
-                      Help improve Ship Studio by sharing anonymous usage data and automatic error
-                      reports (error messages and stack traces only — never your code or file
-                      contents, and paths are anonymized). Turning this off stops all data sharing.
+                      Use GPU rendering for faster, smoother terminals. Turn off if agent output
+                      looks garbled or fragmented (a known issue on some macOS beta builds). Applies
+                      to newly opened terminals.
                     </span>
                   </div>
                   <button
-                    className={`settings-toggle ${analyticsEnabled ? 'on' : 'off'}`}
-                    onClick={handleToggle}
+                    className={`settings-toggle ${terminalGpuEnabled ? 'on' : 'off'}`}
+                    onClick={handleTerminalGpuToggle}
                     disabled={loading}
                     role="switch"
-                    aria-checked={analyticsEnabled}
+                    aria-checked={terminalGpuEnabled}
                   >
                     <span className="settings-toggle-track">
                       <span className="settings-toggle-thumb" />
@@ -647,7 +665,6 @@ export function SettingsModal({
                   </button>
                 </div>
               </div>
-              <AgentsDesktopSettings />
             </div>
           </TabsPanel>
 
@@ -657,26 +674,28 @@ export function SettingsModal({
                 <div className="settings-group">
                   <ThemeSetting />
                   <AccentColorSetting />
-                  <div className="settings-row">
-                    <div className="settings-row-info">
-                      <span className="settings-row-label">Show community banner</span>
-                      <span className="settings-row-description">
-                        Show the Slack community invite on the dashboard.
-                      </span>
+                  {SLACK_INVITE_URL && (
+                    <div className="settings-row">
+                      <div className="settings-row-info">
+                        <span className="settings-row-label">Show community banner</span>
+                        <span className="settings-row-description">
+                          Show the Slack community invite on the dashboard.
+                        </span>
+                      </div>
+                      <button
+                        className={`settings-toggle ${slackCtaVisible ? 'on' : 'off'}`}
+                        onClick={handleSlackCtaToggle}
+                        disabled={loading}
+                        role="switch"
+                        aria-label="Show community banner"
+                        aria-checked={slackCtaVisible}
+                      >
+                        <span className="settings-toggle-track">
+                          <span className="settings-toggle-thumb" />
+                        </span>
+                      </button>
                     </div>
-                    <button
-                      className={`settings-toggle ${slackCtaVisible ? 'on' : 'off'}`}
-                      onClick={handleSlackCtaToggle}
-                      disabled={loading}
-                      role="switch"
-                      aria-label="Show community banner"
-                      aria-checked={slackCtaVisible}
-                    >
-                      <span className="settings-toggle-track">
-                        <span className="settings-toggle-thumb" />
-                      </span>
-                    </button>
-                  </div>
+                  )}
                 </div>
                 <div className="settings-row">
                   <div className="settings-row-info">
@@ -736,7 +755,7 @@ export function SettingsModal({
                       <span className="settings-row-label">Keep dev servers running</span>
                       <span className="settings-row-description">
                         Keep previews ready while you switch views or projects. Servers stop when
-                        you stop them, close their project window, or quit Ship Studio.
+                        you stop them, close their project window, or quit the app.
                       </span>
                     </div>
                     <button

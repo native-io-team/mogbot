@@ -94,8 +94,8 @@ export class ErrorBoundary extends Component<Props, State> {
           </p>
           {!this.isPluginError() && (
             <p className="error-boundary__report-status">
-              Check Settings &amp; Help → Report Bug for confirmed automatic reports, or report this
-              problem yourself.
+              Check Settings &amp; Help → Report a bug for confirmed automatic reports, or report
+              this problem yourself.
             </p>
           )}
           <div className="error-boundary__actions">

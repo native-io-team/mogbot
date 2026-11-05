@@ -255,7 +255,9 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
               </section>
             )}
 
-            {s.devices.length > 0 && (
+            {/* A build with no push service has nothing to offer here, so the
+                section isn't shown at all rather than as a dead checkbox. */}
+            {s.devices.length > 0 && s.push.available && (
               <PhonePush
                 push={s.push}
                 busy={busy}
@@ -331,7 +333,7 @@ function AccessHeader({ step, busy, onEnable, onRetry }: HeaderProps) {
       <div className="phone-onbar">
         <span className="phone-dot" aria-hidden />
         <span className="phone-onbar__text">
-          <span className="phone-onbar__title">On for phones on your tailnet</span>
+          <span className="phone-onbar__title">On for your phones</span>
           <span className="phone-onbar__url">{shortUrl(step.url)}</span>
         </span>
         {turnOff}
@@ -421,16 +423,14 @@ function PhonePush({
       <label className="phone-toggle">
         <Checkbox
           checked={push.enabled}
-          disabled={!push.available || busy !== null}
+          disabled={busy !== null}
           label={PUSH_COPY.label}
           onChange={onChange}
         />
         <span className="phone-toggle__text">
           {PUSH_COPY.label}
-          <span className="phone-toggle__hint">
-            {push.available ? PUSH_COPY.detail : PUSH_COPY.unavailable}
-          </span>
-          {push.available && <span className="phone-toggle__hint">{PUSH_COPY.officialOnly}</span>}
+          <span className="phone-toggle__hint">{PUSH_COPY.detail}</span>
+          <span className="phone-toggle__hint">{PUSH_COPY.officialOnly}</span>
         </span>
       </label>
     </section>

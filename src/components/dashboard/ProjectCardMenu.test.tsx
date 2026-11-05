@@ -21,7 +21,7 @@ describe('ProjectCardMenu', () => {
     renderMenu(onOpenSettings);
 
     await user.click(screen.getByRole('button', { name: 'Project options' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Project Settings' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Project settings' }));
 
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });

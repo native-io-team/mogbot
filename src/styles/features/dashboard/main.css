@@ -118,40 +118,6 @@
   flex-shrink: 0;
 }
 
-/* Figma-specific hero geometry: 24px vertical padding around the headline
-   creates the intended compact display block. */
-.dashboard-hero {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-lg);
-  padding: var(--spacing-xl) 0;
-  margin-bottom: var(--dashboard-section-gap);
-  text-align: center;
-}
-
-.dashboard-hero-hide {
-  position: absolute;
-  top: var(--spacing-sm);
-  right: var(--spacing-sm);
-  color: var(--text-muted);
-  opacity: 0;
-}
-
-.dashboard-hero:hover .dashboard-hero-hide,
-.dashboard-hero-hide:focus-visible {
-  opacity: 1;
-}
-
-.dashboard-hero-hide:hover {
-  color: var(--text-primary);
-}
-
-.dashboard-hero-title {
-  color: var(--text-primary);
-}
-
 /* Slack Community CTA */
 .slack-cta {
   display: flex;

@@ -98,7 +98,7 @@ export function buildBugReportBody(draft: BugReportDraft, includeEvidence = true
     draft.reproductionSteps.trim(),
     '',
     '## Environment',
-    `- **Ship Studio version:** ${version}`,
+    `- **App version:** ${version}`,
     `- **OS:** ${os}`,
     `- **Architecture:** ${draft.architecture.trim() || 'Not provided'}`,
     `- **Install method:** ${installMethod}`,

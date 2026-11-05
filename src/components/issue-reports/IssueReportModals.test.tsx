@@ -817,7 +817,7 @@ describe('IssueReportModals', () => {
     resolveContext(reportContext);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Ship Studio version')).toHaveValue('0.9.0');
+      expect(screen.getByLabelText('App version')).toHaveValue('0.9.0');
       expect(screen.getByLabelText('Architecture')).toHaveValue('x86_64');
       expect(screen.getByLabelText('Agent (if relevant)')).toHaveValue('Claude Code');
     });
@@ -848,7 +848,7 @@ describe('IssueReportModals', () => {
     fireEvent.click(document.querySelector('[data-issue-action="discard-saved-draft"]')!);
     expect(await screen.findByLabelText(/Title/)).toHaveValue('[Bug] ');
     await waitFor(() => {
-      expect(screen.getByLabelText('Ship Studio version')).toHaveValue('1.4.0');
+      expect(screen.getByLabelText('App version')).toHaveValue('1.4.0');
       expect(screen.getByLabelText('Architecture')).toHaveValue('arm64');
       expect(screen.getByLabelText('Agent (if relevant)')).toHaveValue('Codex');
     });

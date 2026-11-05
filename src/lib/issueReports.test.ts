@@ -75,7 +75,7 @@ describe('issue report drafts', () => {
     ]) {
       expect(body).toContain(heading);
     }
-    expect(body).toContain('**Ship Studio version:** 1.4.0');
+    expect(body).toContain('**App version:** 1.4.0');
     expect(body).toContain('**OS:** macOS');
     expect(body).toContain('**Architecture:** arm64');
     expect(body).toContain('**Install method:** Not provided');

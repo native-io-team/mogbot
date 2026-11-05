@@ -6,6 +6,7 @@
  */
 
 import type { Scenario, ScenarioStep } from '../types';
+import { BRAND } from '../../lib/brand';
 import { PHONE_PAIRING_LINK, PHONE_QR } from '../fixtures/phoneQr';
 import { phoneStatus } from './phone';
 
@@ -65,7 +66,7 @@ const AGENT_SCREEN = [
   '',
   ' \x1b[38;5;173m✻\x1b[0m \x1b[1mClaude Code\x1b[0m',
   '',
-  ' \x1b[2m> You are installing the Ship Studio companion app on the user’s iPhone…\x1b[0m',
+  ` \x1b[2m> You are installing the ${BRAND.name} companion app on the user’s iPhone…\x1b[0m`,
   '',
   ' \x1b[38;5;173m⏺\x1b[0m I’ll check what this Mac already has.',
   '',
@@ -73,7 +74,7 @@ const AGENT_SCREEN = [
   '   ⎿  Xcode 26.4 · CocoaPods 1.16.2 · Node v24.17.0',
   '',
   ' \x1b[38;5;173m⏺\x1b[0m Everything is in place, and Julian’s iPhone is plugged in with',
-  '   Developer Mode on. Now I’ll fetch the app’s source for Ship Studio 1.7.0.',
+  `   Developer Mode on. Now I’ll fetch the app’s source for ${BRAND.name} 1.7.0.`,
   '',
   ' \x1b[38;5;114m⏺\x1b[0m \x1b[1mBash\x1b[0m(git clone --depth 1 --sparse --branch v1.7.0 … && pnpm install)',
   '   ⎿  Done in 41.2s',
@@ -83,8 +84,8 @@ const AGENT_SCREEN = [
   '',
   ' \x1b[38;5;114m⏺\x1b[0m \x1b[1mBash\x1b[0m(npx expo run:ios --device 00008140-001A… --configuration Release)',
   '   ⎿  › Planning build',
-  '      › Executing ShipStudio » [CP] Check Pods Manifest.lock',
-  '      › Compiling ShipStudio » AppDelegate.swift',
+  `      › Executing ${BRAND.appDirName} » [CP] Check Pods Manifest.lock`,
+  `      › Compiling ${BRAND.appDirName} » AppDelegate.swift`,
   '      › Compiling expo-camera Pods/ExpoCamera » CameraView.swift',
   '',
   ' \x1b[38;5;173m✶\x1b[0m \x1b[2mBuilding… (3m 12s · esc to interrupt)\x1b[0m',
@@ -195,7 +196,7 @@ export const phoneInstallScenarios: Scenario[] = [
   install(
     'phone-install-done',
     'Install — on the phone, with its expiry',
-    'Every row green. Right: a green tick, "Ship Studio is on Julian’s iPhone", "Works until ' +
+    'Every row green. Right: a green tick, "The app is on Julian’s iPhone", "Works until ' +
       '<a week from now>" and that Reinstall needs no agent, the Untrusted Developer fix in ' +
       'small grey text, and "Open on phone" / "Pair it now".',
     {

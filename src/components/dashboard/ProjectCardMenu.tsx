@@ -88,7 +88,7 @@ export function ProjectCardMenu({
       >
         {onOpenSettings && (
           <DropdownItem icon={<SettingsIcon size={14} />} onSelect={onOpenSettings}>
-            <span>Project Settings</span>
+            <span>Project settings</span>
           </DropdownItem>
         )}
         <DropdownItem

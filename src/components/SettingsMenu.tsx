@@ -38,21 +38,21 @@ export function SettingsMenu({
       onOpenChange={onOpenChange}
     >
       <DropdownItem icon={<SettingsIcon size={14} />} onSelect={onOpenSettings}>
-        <span data-settings-item="app-settings">App Settings</span>
+        <span data-settings-item="app-settings">App settings</span>
       </DropdownItem>
       {ISSUE_REPORTS_ENABLED && (
         <DropdownItem icon={<BugReportIcon size={14} />} onSelect={onOpenBugReports}>
-          <span data-settings-item="bug-reports">Report Bug</span>
+          <span data-settings-item="bug-reports">Report a bug</span>
         </DropdownItem>
       )}
       {ISSUE_REPORTS_ENABLED && (
         <DropdownItem icon={<PlusIcon size={14} />} onSelect={onOpenFeatureRequest}>
-          <span data-settings-item="feature-request">Feature Request</span>
+          <span data-settings-item="feature-request">Request a feature</span>
         </DropdownItem>
       )}
       {HAS_CHANGELOG && (
         <DropdownItem icon={<HistoryIcon size={14} />} onSelect={onOpenChangelog}>
-          <span data-settings-item="whats-new">What's New</span>
+          <span data-settings-item="whats-new">What's new</span>
         </DropdownItem>
       )}
     </Dropdown>

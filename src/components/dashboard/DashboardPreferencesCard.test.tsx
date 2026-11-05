@@ -14,7 +14,7 @@ describe('DashboardPreferencesCard settings menu', () => {
     localStorage.clear();
   });
 
-  it('uses the shared Settings & Help label and routes Report Bug from Preferences', async () => {
+  it('uses the shared Settings & Help label and routes Report a bug from Preferences', async () => {
     const onOpenBugReports = vi.fn();
     const user = userEvent.setup();
 
@@ -34,8 +34,8 @@ describe('DashboardPreferencesCard settings menu', () => {
     await user.click(trigger);
 
     const menu = await screen.findByRole('menu');
-    expect(within(menu).getByRole('menuitem', { name: 'App Settings' })).toBeInTheDocument();
-    await user.click(within(menu).getByRole('menuitem', { name: 'Report Bug' }));
+    expect(within(menu).getByRole('menuitem', { name: 'App settings' })).toBeInTheDocument();
+    await user.click(within(menu).getByRole('menuitem', { name: 'Report a bug' }));
 
     await waitFor(() => expect(onOpenBugReports).toHaveBeenCalledOnce());
   });

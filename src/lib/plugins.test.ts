@@ -139,7 +139,7 @@ describe('isExpectedPluginFailure', () => {
       "Plugin manifest must have 'id' and 'name' fields",
       'Plugin ID contains invalid characters',
       "This plugin can't be installed: its repository has no built bundle (dist/index.js). …",
-      "Plugin 'Figma' requires Ship Studio v9.0.0 or later (current: v0.18.6). Please update Ship Studio.",
+      "Plugin 'Figma' requires app version 9.0.0 or later (current: v0.18.6). Please update the app.",
       "Plugin 'x' requests commands that are not available to plugins: rm_rf",
       "A non-dev plugin 'vercel' is already installed. Uninstall it first.",
     ]) {
@@ -174,7 +174,7 @@ describe('isExpectedPluginFailure', () => {
   it('recognizes a registry still syncing from a cloud drive (issue #947)', async () => {
     const { isExpectedPluginFailure } = await loadPlugins();
     for (const message of [
-      "Ship Studio timed out trying to read this project's plugin registry (<project>/.shipstudio/plugins/registry.json). The folder looks like it's on a cloud drive (Google Drive, OneDrive, Dropbox, iCloud) that's still syncing — wait for sync to finish and try again, or keep the project on your local disk.",
+      "The app timed out trying to read this project's plugin registry (<project>/.shipstudio/plugins/registry.json). The folder looks like it's on a cloud drive (Google Drive, OneDrive, Dropbox, iCloud) that's still syncing — wait for sync to finish and try again, or keep the project on your local disk.",
       "Ship Studio couldn't read this project's plugin registry (<project>/.shipstudio/plugins/registry.json) — macOS canceled the read. The folder looks like it's on a cloud drive (iCloud, Google Drive, OneDrive, Dropbox) that hasn't finished downloading the file — wait for sync to finish and try again, or keep the project on your local disk.",
     ]) {
       expect(isExpectedPluginFailure({ type: 'Other', message })).toBe(true);

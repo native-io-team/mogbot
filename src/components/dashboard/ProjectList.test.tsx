@@ -55,7 +55,6 @@ vi.mock('../../lib/accounts', async (importOriginal) => ({
 // neither fail the render nor be mistaken for the list's loading state.
 vi.mock('./AgentsPanel', () => ({ AgentsPanel: () => null }));
 vi.mock('./MachineToolsPanel', () => ({ MachineToolsPanel: () => null }));
-vi.mock('./GitHubCalendar', () => ({ GitHubCalendar: () => null }));
 vi.mock('../../contexts/ModalContext', () => ({
   useModal: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
   useOpenModal: () => vi.fn(),
@@ -68,14 +67,8 @@ vi.mock('../../hooks/useActiveAccount', () => ({
 }));
 vi.mock('../../hooks/useDashboardVisibility', () => ({
   useDashboardVisibility: () => ({
-    dashboardHeaderHidden: true,
-    calendarHidden: true,
     slackCtaHidden: true,
-    hideDashboardHeader: vi.fn(),
-    hideCalendar: vi.fn(),
     hideSlackCta: vi.fn(),
-    setDashboardHeaderHidden: vi.fn(),
-    setCalendarHidden: vi.fn(),
     setSlackCtaHidden: vi.fn(),
   }),
 }));
