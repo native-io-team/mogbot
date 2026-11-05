@@ -86,7 +86,7 @@ export function AgentActionItems({
     },
     ...(onFiles ? [{ label: 'Files', icon: <PaperclipIcon size={12} />, run: onFiles }] : []),
     ...(onSchedule
-      ? [{ label: 'Schedule a check-in…', icon: <HistoryIcon size={12} />, run: onSchedule }]
+      ? [{ label: 'Schedule a routine…', icon: <HistoryIcon size={12} />, run: onSchedule }]
       : []),
     { label: 'Edit agent…', icon: <EditIcon size={12} />, run: () => onEdit(agent) },
     ...takeoverItems(agent, onTakeOver, onHandBack),

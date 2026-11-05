@@ -345,7 +345,7 @@ export function AgentChat({
     () => [
       {
         id: 'agents.scheduleCheckIn',
-        title: `Schedule a check-in for ${agent.name}…`,
+        title: `Schedule a routine for ${agent.name}…`,
         icon: <HistoryIcon size={14} />,
         category: 'action',
         keywords: ['routine', 'remind', 'every', 'recurring', 'later', 'scheduled'],

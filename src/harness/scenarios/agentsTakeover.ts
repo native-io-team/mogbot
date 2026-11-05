@@ -196,7 +196,7 @@ export const agentsTakeoverScenarios: Scenario[] = [
     id: 'agents-takeover-menu',
     title: 'Agents — Take over in the agent menu',
     looksRightWhen:
-      'Finance’s … menu, open: Pin, Mark as unread, Mute notifications, Files, Schedule a check-in…, Edit agent…, then “Take over” with a terminal icon, then Start fresh… and the rest.',
+      'Finance’s … menu, open: Pin, Mark as unread, Mute notifications, Files, Schedule a routine…, Edit agent…, then “Take over” with a terminal icon, then Start fresh… and the rest.',
     openSelector: AGENTS_TAB,
     steps: [openFinance, { click: '.agent-chat__menu button' }],
     requires: '[role="menu"]',
