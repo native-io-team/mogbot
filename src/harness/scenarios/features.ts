@@ -163,7 +163,7 @@ export const featureScenarios: Scenario[] = [
     requires: '.plugin-trust-prompt',
     title: 'Workspace — a cloned project asks to load a plugin',
     looksRightWhen:
-      'A small card under the Plugins control reads "This project wants to load plugin Deploy Helper", says plugins run code in the app, shows the bundle path and the repo it came from, "1 of 2", and Don’t load / Allow buttons. Nothing is modal; the rest of the workspace is usable.',
+      'A small card under the Plugins control reads "This project wants to load a plugin that calls itself “Deploy Helper”", says plugins run code in the app, shows the bundle path and, labelled "Says it’s from", the repo the project claims, "1 of 2", and Don’t load / Allow buttons. Nothing is modal; the rest of the workspace is usable.',
     project: WORKSPACE_PROJECT,
     commands: {
       ...workspaceCommands,

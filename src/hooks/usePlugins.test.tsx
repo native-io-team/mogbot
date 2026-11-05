@@ -88,8 +88,28 @@ describe('usePlugins missing-bundle self-heal', () => {
     const { result } = renderHook(() => usePlugins('/projects/heal-success'));
 
     await waitFor(() => expect(result.current.plugins).toHaveLength(1));
-    expect(mockUpdatePlugin).toHaveBeenCalledWith('/projects/heal-success', 'dependency-checker');
+    expect(mockUpdatePlugin).toHaveBeenCalledWith('/projects/heal-success', 'dependency-checker', {
+      userInitiated: false,
+    });
     expect(result.current.failures).toHaveLength(0);
+  });
+
+  it('asks before loading what a re-install fetched unless it is what was approved', async () => {
+    // The re-install cloned whatever the repo's registry names; the backend
+    // didn't carry the approval over, so the plugin now needs an answer.
+    const healed = makeInfo({ trust: { state: 'changed', sha256: 'abc', bundlePath: '/b' } });
+    mockListPlugins.mockResolvedValueOnce([makeInfo()]).mockResolvedValueOnce([healed]);
+    mockLoadPluginModule.mockRejectedValueOnce(missingBundleError);
+    mockUpdatePlugin.mockResolvedValue(makeInfo());
+
+    const { result } = renderHook(() => usePlugins('/projects/heal-untrusted'));
+
+    await waitFor(() => expect(result.current.pendingTrust).toHaveLength(1));
+    expect(result.current.pendingTrust[0].trust?.state).toBe('changed');
+    expect(result.current.plugins).toHaveLength(0);
+    expect(result.current.failures).toHaveLength(0);
+    // Never loaded after the heal.
+    expect(mockLoadPluginModule).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces an actionable failure when the re-install also fails', async () => {

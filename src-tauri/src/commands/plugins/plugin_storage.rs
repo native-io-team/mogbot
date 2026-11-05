@@ -372,6 +372,13 @@ pub async fn link_dev_plugin(
     app: AppHandle,
     project_path: String,
 ) -> Result<Option<PluginInfo>, CommandError> {
+    // Developer mode is the user's explicit switch, never turned on as a
+    // side effect of linking (`plugin_trust`).
+    if !super::developer_mode() {
+        return Err(CommandError::expected(
+            "Linking a dev plugin needs plugin developer mode. Turn it on in the Plugin Manager first.",
+        ));
+    }
     let folder = app
         .dialog()
         .file()
@@ -458,8 +465,7 @@ pub async fn link_dev_plugin(
     registry.plugins.push(entry);
     write_registry(&project_path, &registry)?;
     // The developer picked this folder themselves: it's approved as it is
-    // now, and they are doing plugin development (`plugin_trust`).
-    super::enable_developer_mode()?;
+    // now (`plugin_trust`).
     super::record_installed(&project_path, &manifest.id)?;
 
     Ok(Some(PluginInfo {

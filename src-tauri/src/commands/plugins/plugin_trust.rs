@@ -9,16 +9,24 @@
 //!
 //! What decides is this app's own trust store (`plugin-trust.json` in app
 //! support, 0600): for each project, the plugin id, the bundle's canonical
-//! path and the SHA-256 of the bundle's bytes, recorded only when the user
-//! acted — installed it, updated a plugin they had approved, linked a dev
-//! folder, or answered "Allow" to "This project wants to load plugin X". A
-//! bundle whose path or bytes differ from what was approved is not loaded;
+//! path, the SHA-256 of the bundle's bytes and the source URL it was
+//! approved from, recorded only when the user acted — installed it, updated
+//! a plugin they had approved (from the same source), linked a dev folder,
+//! or answered "Allow" to "This project wants to load plugin X". A bundle
+//! whose path, bytes or source differ from what was approved is not loaded;
 //! the app asks, quietly. "Don't load" is remembered for that exact bundle,
 //! so it doesn't ask again until the bundle changes.
 //!
+//! The automatic re-install of a plugin whose bundle went missing never
+//! carries trust over: the source URL it clones comes from the repo's own
+//! registry, so a pushed change could otherwise swap it for someone else's
+//! code and have it approved silently. If what it fetched isn't byte-for-byte
+//! what was approved, the user is asked.
+//!
 //! Dev plugins (a registry entry naming a local folder) load only in plugin
-//! developer mode: a debug build, or once the user has linked a dev plugin
-//! themselves. In a normal session a dev entry from a repo is not even
+//! developer mode, which is an explicit switch in the Plugin Manager (on by
+//! default in debug builds, and shown as on). Linking a dev plugin doesn't
+//! turn it on. In a normal session a dev entry from a repo is not even
 //! offered.
 //!
 //! The bundle is hashed from the same bytes that are handed to the webview
@@ -68,15 +76,20 @@ struct Approval {
     plugin_id: String,
     bundle_path: String,
     sha256: String,
+    /// The registry's `source_url` when approved. A registry that now names
+    /// another source is asked about again, whatever the bytes.
+    #[serde(default)]
+    source_url: String,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct TrustFile {
     #[serde(default)]
     version: u32,
-    /// Plugin developer mode: dev plugins may load.
+    /// Plugin developer mode: dev plugins may load. `None` until the user
+    /// sets it: then the build's default (on in debug builds).
     #[serde(default)]
-    developer_mode: bool,
+    developer_mode: Option<bool>,
     /// `<plugins dir>\n<plugin id>` → what was approved.
     #[serde(default)]
     approved: HashMap<String, Approval>,
@@ -127,9 +140,12 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
 }
 
-/// Plugin developer mode, as stored (debug builds are always in it).
+/// Plugin developer mode: as the user set it, else the build's default (on
+/// in debug builds; the Plugin Manager shows it either way).
 fn developer_mode_at(store: &Path) -> bool {
-    cfg!(debug_assertions) || read_store(store).developer_mode
+    read_store(store)
+        .developer_mode
+        .unwrap_or(cfg!(debug_assertions))
 }
 
 /// The bundle a registry entry (or none) points at.
@@ -160,6 +176,7 @@ fn judge(
     plugins_dir: &Path,
     plugin_id: &str,
     is_dev: bool,
+    source_url: &str,
     bundle: &Path,
     bytes: Option<&[u8]>,
 ) -> PluginTrust {
@@ -177,7 +194,13 @@ fn judge(
         TrustState::DevModeOff
     } else {
         match file.approved.get(&k) {
-            Some(a) if a.bundle_path == bundle_path && a.sha256 == sha256 => TrustState::Trusted,
+            Some(a)
+                if a.bundle_path == bundle_path
+                    && a.sha256 == sha256
+                    && a.source_url == source_url =>
+            {
+                TrustState::Trusted
+            }
             _ if file.declined.get(&k) == Some(&sha256) => TrustState::Declined,
             Some(_) => TrustState::Changed,
             None => TrustState::New,
@@ -204,6 +227,7 @@ fn trust_for_entry_at(store: &Path, plugins_dir: &Path, entry: &RegistryEntry) -
         plugins_dir,
         &entry.plugin_id,
         entry.is_dev,
+        &entry.source_url,
         &bundle,
         bytes.as_deref(),
     )
@@ -249,6 +273,7 @@ fn verified_bundle_at(
         plugins_dir,
         plugin_id,
         is_dev,
+        entry.map_or("", |e| e.source_url.as_str()),
         &bundle,
         Some(&bytes),
     );
@@ -299,6 +324,7 @@ fn approve_at(
         plugin_id: plugin_id.to_string(),
         bundle_path: canonical(&bundle),
         sha256,
+        source_url: entry.map(|e| e.source_url.clone()).unwrap_or_default(),
     };
     update_store(store, |file| {
         file.declined.remove(&k);
@@ -314,20 +340,46 @@ pub(crate) fn record_installed(project_path: &str, plugin_id: &str) -> Result<()
     approve_at(&store_path(), &plugins_dir, plugin_id, entry, None)
 }
 
-/// After an update: still trusted only if the user had approved this
-/// plugin here before (an update of an unapproved one asks like any other).
-pub(crate) fn record_updated(project_path: &str, plugin_id: &str) -> Result<(), CommandError> {
+/// After an update. Trust carries over only when the user asked for the
+/// update (never the automatic re-install of a missing bundle), had approved
+/// this plugin here before, and the registry still names the source it was
+/// approved from. Anything else asks like any other new bundle.
+pub(crate) fn record_updated(
+    project_path: &str,
+    plugin_id: &str,
+    user_initiated: bool,
+) -> Result<(), CommandError> {
     let plugins_dir = get_plugins_dir(project_path)?;
-    let store = store_path();
-    let was_approved = read_store(&store)
-        .approved
-        .contains_key(&key(&plugins_dir, plugin_id));
-    if !was_approved {
-        return Ok(());
-    }
     let registry = read_registry(project_path)?;
     let entry = registry.plugins.iter().find(|e| e.plugin_id == plugin_id);
-    approve_at(&store, &plugins_dir, plugin_id, entry, None)
+    record_updated_at(
+        &store_path(),
+        &plugins_dir,
+        plugin_id,
+        entry,
+        user_initiated,
+    )
+}
+
+fn record_updated_at(
+    store: &Path,
+    plugins_dir: &Path,
+    plugin_id: &str,
+    entry: Option<&RegistryEntry>,
+    user_initiated: bool,
+) -> Result<(), CommandError> {
+    if !user_initiated {
+        return Ok(());
+    }
+    let source_url = entry.map_or("", |e| e.source_url.as_str());
+    let same_source = read_store(store)
+        .approved
+        .get(&key(plugins_dir, plugin_id))
+        .is_some_and(|a| a.source_url == source_url);
+    if !same_source {
+        return Ok(());
+    }
+    approve_at(store, plugins_dir, plugin_id, entry, None)
 }
 
 /// Uninstalled or unlinked: nothing to remember.
@@ -342,9 +394,9 @@ pub(crate) fn forget(project_path: &str, plugin_id: &str) {
     });
 }
 
-/// Linking a dev plugin is the user doing plugin development.
-pub(crate) fn enable_developer_mode() -> Result<(), CommandError> {
-    update_store(&store_path(), |file| file.developer_mode = true)
+/// Whether dev plugins may be linked and loaded right now.
+pub(crate) fn developer_mode() -> bool {
+    developer_mode_at(&store_path())
 }
 
 /// Owner-only, whatever an older build left.
@@ -414,7 +466,7 @@ pub fn get_plugin_developer_mode() -> Result<bool, CommandError> {
 #[tauri::command]
 #[tracing::instrument]
 pub fn set_plugin_developer_mode(enabled: bool) -> Result<(), CommandError> {
-    update_store(&store_path(), |file| file.developer_mode = enabled)
+    update_store(&store_path(), |file| file.developer_mode = Some(enabled))
 }
 
 #[cfg(test)]
@@ -555,11 +607,21 @@ mod tests {
             &f.plugins,
             "devp",
             true,
+            "",
             &bundle,
             Some(b"dev"),
         );
         assert_eq!(off.state, TrustState::DevModeOff);
-        let on = judge(&file, true, &f.plugins, "devp", true, &bundle, Some(b"dev"));
+        let on = judge(
+            &file,
+            true,
+            &f.plugins,
+            "devp",
+            true,
+            "",
+            &bundle,
+            Some(b"dev"),
+        );
         assert_eq!(on.state, TrustState::New);
     }
 
@@ -580,10 +642,89 @@ mod tests {
             &f.plugins,
             "hello",
             true,
+            &e.source_url,
             &bundle,
             Some(b"same bytes"),
         );
         assert_eq!(t.state, TrustState::Changed);
+    }
+
+    #[test]
+    fn a_registry_that_names_another_source_is_asked_about_again() {
+        let f = fixture();
+        let e = installed(&f.plugins, "hello", "same bytes");
+        approve_at(&f.store, &f.plugins, "hello", Some(&e), None).unwrap();
+        assert_eq!(
+            trust_for_entry_at(&f.store, &f.plugins, &e).state,
+            TrustState::Trusted
+        );
+        let swapped = RegistryEntry {
+            source_url: "https://github.com/attacker/y".into(),
+            ..e.clone()
+        };
+        assert_eq!(
+            trust_for_entry_at(&f.store, &f.plugins, &swapped).state,
+            TrustState::Changed
+        );
+        assert!(verified_bundle_at(&f.store, &f.plugins, "hello", Some(&swapped)).is_err());
+    }
+
+    #[test]
+    fn the_automatic_reinstall_never_carries_trust() {
+        let f = fixture();
+        let e = installed(&f.plugins, "hello", "v1");
+        approve_at(&f.store, &f.plugins, "hello", Some(&e), None).unwrap();
+        // The self-heal fetched new bytes: not approved, whatever the source.
+        installed(&f.plugins, "hello", "v2 from the repo's registry");
+        record_updated_at(&f.store, &f.plugins, "hello", Some(&e), false).unwrap();
+        assert_eq!(
+            trust_for_entry_at(&f.store, &f.plugins, &e).state,
+            TrustState::Changed
+        );
+        // Re-fetching the exact approved bytes from the approved source still loads.
+        installed(&f.plugins, "hello", "v1");
+        record_updated_at(&f.store, &f.plugins, "hello", Some(&e), false).unwrap();
+        assert_eq!(
+            trust_for_entry_at(&f.store, &f.plugins, &e).state,
+            TrustState::Trusted
+        );
+    }
+
+    #[test]
+    fn a_user_update_keeps_trust_only_from_the_approved_source() {
+        let f = fixture();
+        let e = installed(&f.plugins, "hello", "v1");
+        approve_at(&f.store, &f.plugins, "hello", Some(&e), None).unwrap();
+        installed(&f.plugins, "hello", "v2");
+        record_updated_at(&f.store, &f.plugins, "hello", Some(&e), true).unwrap();
+        assert_eq!(
+            trust_for_entry_at(&f.store, &f.plugins, &e).state,
+            TrustState::Trusted
+        );
+
+        let swapped = RegistryEntry {
+            source_url: "https://github.com/attacker/y".into(),
+            ..e.clone()
+        };
+        installed(&f.plugins, "hello", "v3");
+        record_updated_at(&f.store, &f.plugins, "hello", Some(&swapped), true).unwrap();
+        assert_eq!(
+            trust_for_entry_at(&f.store, &f.plugins, &swapped).state,
+            TrustState::Changed
+        );
+    }
+
+    #[test]
+    fn developer_mode_is_the_users_switch_with_the_builds_default() {
+        let f = fixture();
+        assert_eq!(developer_mode_at(&f.store), cfg!(debug_assertions));
+        update_store(&f.store, |file| file.developer_mode = Some(false)).unwrap();
+        assert!(!developer_mode_at(&f.store), "off even in a debug build");
+        update_store(&f.store, |file| file.developer_mode = Some(true)).unwrap();
+        assert!(developer_mode_at(&f.store));
+        // A store written by the build before this one (a plain bool) reads.
+        std::fs::write(&f.store, r#"{"version":1,"developer_mode":true}"#).unwrap();
+        assert!(developer_mode_at(&f.store));
     }
 
     #[test]

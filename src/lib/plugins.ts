@@ -390,9 +390,19 @@ export async function uninstallPlugin(projectPath: string, pluginId: string): Pr
 
 /**
  * Update a plugin to the latest version from its source.
+ *
+ * `userInitiated`: the user asked for this update. Only then may the plugin
+ * keep its approval (and only if the registry still names the source it was
+ * approved from). The automatic re-install of a missing bundle passes false,
+ * so whatever it fetched is asked about unless it is byte-for-byte what was
+ * approved (`plugin_trust.rs`).
  */
-export async function updatePlugin(projectPath: string, pluginId: string): Promise<PluginInfo> {
-  return invoke<PluginInfo>('update_plugin', { projectPath, pluginId });
+export async function updatePlugin(
+  projectPath: string,
+  pluginId: string,
+  { userInitiated }: { userInitiated: boolean }
+): Promise<PluginInfo> {
+  return invoke<PluginInfo>('update_plugin', { projectPath, pluginId, userInitiated });
 }
 
 /**

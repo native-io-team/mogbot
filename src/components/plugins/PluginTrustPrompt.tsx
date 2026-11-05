@@ -50,10 +50,13 @@ export function PluginTrustPrompt({ projectPath, pending, onDecided }: Props) {
 
   return (
     <div className="plugin-trust-prompt" role="region" aria-labelledby="plugin-trust-title">
+      {/* The name and repo come from the project's own files, which anyone
+          with push access controls: they are what the plugin says about
+          itself, never shown as fact. */}
       <p id="plugin-trust-title" className="plugin-trust-title">
         {changed
-          ? `Plugin ${plugin.manifest.name} changed since you allowed it`
-          : `This project wants to load plugin ${plugin.manifest.name}`}
+          ? `A plugin you allowed here (“${plugin.manifest.name}”) changed since`
+          : `This project wants to load a plugin that calls itself “${plugin.manifest.name}”`}
       </p>
       <p className="plugin-trust-hint">
         A plugin runs code inside the app, with access to this project. Only allow ones you trust.
@@ -64,7 +67,7 @@ export function PluginTrustPrompt({ projectPath, pending, onDecided }: Props) {
       </p>
       {plugin.source_url && (
         <p className="plugin-trust-source">
-          <span className="plugin-trust-label">Repo</span>
+          <span className="plugin-trust-label">Says it’s from</span>
           <code>{plugin.source_url}</code>
         </p>
       )}

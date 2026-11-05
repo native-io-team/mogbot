@@ -299,7 +299,7 @@ export function PluginManager({
     if (!projectPath) return;
     setUpdateStates((prev) => ({ ...prev, [pluginId]: 'updating' }));
     try {
-      await updatePlugin(projectPath, pluginId);
+      await updatePlugin(projectPath, pluginId, { userInitiated: true });
       void trackEvent('plugin_updated', { plugin_id: pluginId, $screen_name: 'Plugin Manager' });
       await fetchPlugins();
       onPluginsChanged();
@@ -617,7 +617,12 @@ export function PluginManager({
                   onClick={() => {
                     void handleLinkDevPlugin();
                   }}
-                  disabled={isLinkingDev}
+                  disabled={isLinkingDev || developerMode === false}
+                  title={
+                    developerMode === false
+                      ? 'Turn on plugin developer mode below to link a dev plugin.'
+                      : undefined
+                  }
                 >
                   {isLinkingDev ? 'Linking…' : 'Link dev plugin'}
                 </Button>
@@ -628,7 +633,7 @@ export function PluginManager({
                     width="fill"
                     pressed={developerMode}
                     onClick={() => void toggleDeveloperMode()}
-                    title="Dev-linked plugins load only while this is on. Linking one turns it on."
+                    title="Dev-linked plugins can be linked and load only while this is on. It starts on in development builds."
                   >
                     {developerMode ? 'Plugin developer mode: on' : 'Plugin developer mode: off'}
                   </ToggleButton>

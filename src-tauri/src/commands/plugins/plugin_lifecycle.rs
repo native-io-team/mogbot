@@ -623,8 +623,12 @@ pub async fn update_plugin(
     app: AppHandle,
     project_path: String,
     plugin_id: String,
+    user_initiated: Option<bool>,
 ) -> Result<PluginInfo, CommandError> {
     validate_plugin_id(&plugin_id)?;
+    // Only an update the user asked for may keep the plugin's approval; the
+    // automatic re-install of a missing bundle never does (`plugin_trust`).
+    let user_initiated = user_initiated.unwrap_or(false);
     let registry = read_registry(&project_path)?;
     let entry = registry
         .plugins
@@ -699,8 +703,9 @@ pub async fn update_plugin(
         entry.installed_commit = commit_hash;
     }
     write_registry(&project_path, &registry)?;
-    // Still approved if it was before; otherwise it asks like any other.
-    super::record_updated(&project_path, &plugin_id)?;
+    // Still approved if the user asked for this update, had approved it
+    // before, and it came from the same source; otherwise it asks.
+    super::record_updated(&project_path, &plugin_id, user_initiated)?;
 
     Ok(PluginInfo {
         manifest,

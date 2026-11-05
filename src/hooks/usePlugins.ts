@@ -36,6 +36,13 @@ const SUPPORTED_API_VERSIONS = [0, 1];
  */
 const attemptedSelfHeals = new Set<string>();
 
+/** A self-heal fetched a bundle the user hasn't approved: ask, don't load. */
+class HealNeedsTrust extends Error {
+  constructor(readonly info: PluginInfo) {
+    super(`Plugin ${info.manifest.id} needs approval after being re-installed`);
+  }
+}
+
 /** The load failure produced by a registry entry whose built bundle is gone. */
 function isMissingBundleError(message: string): boolean {
   return message.includes('Plugin bundle not found');
@@ -50,6 +57,11 @@ function isMissingBundleError(message: string): boolean {
  * ever repaired those entries, so they failed identically on every session
  * forever. One re-install from source (which now validates the bundle) fixes
  * them for good. Tried at most once per plugin per session.
+ *
+ * The re-install clones the source URL in the project's own registry, which
+ * the repo controls, so it never carries the plugin's approval over: unless
+ * what it fetched is byte-for-byte what was approved, from the same source,
+ * the plugin goes back to the user's Allow / Don't load ({@link HealNeedsTrust}).
  */
 async function loadModuleWithSelfHeal(
   path: string,
@@ -74,7 +86,7 @@ async function loadModuleWithSelfHeal(
       plugin: info.manifest.id,
     });
     try {
-      await updatePlugin(path, info.manifest.id);
+      await updatePlugin(path, info.manifest.id, { userInitiated: false });
     } catch (healError) {
       logger.warn('Plugin self-heal re-install failed', {
         plugin: info.manifest.id,
@@ -83,6 +95,8 @@ async function loadModuleWithSelfHeal(
       // Surface the original missing-bundle state, not the update error.
       throw e;
     }
+    const healed = (await listPlugins(path)).find((p) => p.manifest.id === info.manifest.id);
+    if (healed && needsTrustDecision(healed)) throw new HealNeedsTrust(healed);
     return await loadPluginModule(path, info.manifest.id, onLifecycleError);
   }
 }
@@ -203,6 +217,10 @@ export function usePlugins(
             loaded.push(result.value);
           } else {
             const info = compatible[i];
+            if (result.reason instanceof HealNeedsTrust) {
+              asking.push(result.reason.info);
+              return;
+            }
             const message = formatCommandError(asCommandError(result.reason));
             if (isMissingBundleError(message)) {
               // A missing bundle that survived the self-heal is a broken

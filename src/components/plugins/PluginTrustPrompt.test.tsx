@@ -46,7 +46,11 @@ describe('PluginTrustPrompt', () => {
 
   it('names the plugin and where it comes from', () => {
     render(<PluginTrustPrompt projectPath={PROJECT} pending={[info('new')]} onDecided={vi.fn()} />);
-    expect(screen.getByText('This project wants to load plugin Vercel')).toBeTruthy();
+    // Name and repo are the project's own claims, labelled as such.
+    expect(
+      screen.getByText('This project wants to load a plugin that calls itself “Vercel”')
+    ).toBeTruthy();
+    expect(screen.getByText('Says it’s from')).toBeTruthy();
     expect(screen.getByText(`${PROJECT}/.shipstudio/plugins/vercel/dist/index.js`)).toBeTruthy();
     expect(screen.getByText('https://github.com/acme/plugin')).toBeTruthy();
   });
@@ -55,7 +59,7 @@ describe('PluginTrustPrompt', () => {
     render(
       <PluginTrustPrompt projectPath={PROJECT} pending={[info('changed')]} onDecided={vi.fn()} />
     );
-    expect(screen.getByText('Plugin Vercel changed since you allowed it')).toBeTruthy();
+    expect(screen.getByText('A plugin you allowed here (“Vercel”) changed since')).toBeTruthy();
   });
 
   it('Allow approves exactly the bundle it showed, then reloads', async () => {
