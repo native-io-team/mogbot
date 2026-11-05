@@ -28,16 +28,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import {
-  CloseIcon,
-  EditFieldIcon,
-  HistoryIcon,
-  PauseIcon,
-  PlayIcon,
-  PlusIcon,
-  SearchIcon,
-  SkipNextIcon,
-} from '@/components/icons';
+import { HistoryIcon, PlusIcon } from '@/components/icons';
 import { Dropdown } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
 import { Button } from '../primitives/Button';
@@ -614,7 +605,14 @@ function ScheduleRow({
             >
               {describeWatchStatus(item)}
             </span>
-            {watch.coverage && <span className="agent-schedule__spent">{watch.coverage}</span>}
+            {/* The window's arithmetic is for whoever asks: a quiet line, the detail on hover. */}
+            {watch.coverage && (
+              <Tooltip content={watch.coverage}>
+                <span className="agent-schedule__spent" tabIndex={0}>
+                  Watches the most recent ones
+                </span>
+              </Tooltip>
+            )}
             {checked && (
               <span className="agent-when__checked" aria-live="polite">
                 {checked}
@@ -647,71 +645,58 @@ function ScheduleRow({
             aria-expanded={showRuns}
             onClick={() => setShowRuns((v) => !v)}
           >
-            {showRuns ? 'Hide past runs' : `Past runs (${runs.length})`}
+            {showRuns ? 'Hide past runs' : `Past runs · ${runs.length}`}
           </TextButton>
         )}
       </div>
+      {/* Labelled, not four bare glyphs: each says what it does. */}
       <div className="agent-schedule__actions">
         {watch ? (
-          <Tooltip content="Check now">
-            <IconButton
-              tabIndex={0}
-              variant="ghost"
-              size="compact"
-              icon={<SearchIcon size={12} />}
-              onClick={() => void checkNow()}
-              disabled={busy || checking}
-              aria-label={`Check now for “${item.note}”`}
-            />
-          </Tooltip>
+          <TextButton
+            tabIndex={0}
+            onClick={() => void checkNow()}
+            disabled={busy || checking}
+            aria-label={`Check now for “${item.note}”`}
+          >
+            Check now
+          </TextButton>
         ) : (
-          <Tooltip content="Run now">
-            <IconButton
-              tabIndex={0}
-              variant="ghost"
-              size="compact"
-              icon={<SkipNextIcon size={12} />}
-              onClick={onRunNow}
-              disabled={busy}
-              aria-label={`Run “${item.note}” now`}
-            />
-          </Tooltip>
-        )}
-        <Tooltip content="Edit">
-          <IconButton
+          <TextButton
             tabIndex={0}
-            variant="ghost"
-            size="compact"
-            icon={<EditFieldIcon size={12} />}
-            onClick={onEdit}
+            onClick={onRunNow}
             disabled={busy}
-            aria-label={`Edit “${item.note}”`}
-          />
-        </Tooltip>
+            aria-label={`Run “${item.note}” now`}
+          >
+            Run now
+          </TextButton>
+        )}
+        <TextButton
+          tabIndex={0}
+          onClick={onEdit}
+          disabled={busy}
+          aria-label={`Edit “${item.note}”`}
+        >
+          Edit
+        </TextButton>
         {(item.repeat || watch) && (
-          <Tooltip content={item.paused ? 'Resume' : 'Pause'}>
-            <IconButton
-              tabIndex={0}
-              variant="ghost"
-              size="compact"
-              icon={item.paused ? <PlayIcon size={12} /> : <PauseIcon size={12} />}
-              onClick={onTogglePause}
-              disabled={busy}
-              aria-label={item.paused ? `Resume “${item.note}”` : `Pause “${item.note}”`}
-            />
-          </Tooltip>
-        )}
-        <Tooltip content="Cancel this routine">
-          <IconButton
+          <TextButton
             tabIndex={0}
-            variant="ghost"
-            size="compact"
-            icon={<CloseIcon size={12} />}
-            onClick={onCancel}
+            onClick={onTogglePause}
             disabled={busy}
-            aria-label={`Cancel “${item.note}”`}
-          />
-        </Tooltip>
+            aria-label={item.paused ? `Resume “${item.note}”` : `Pause “${item.note}”`}
+          >
+            {item.paused ? 'Resume' : 'Pause'}
+          </TextButton>
+        )}
+        <TextButton
+          tabIndex={0}
+          variant="danger"
+          onClick={onCancel}
+          disabled={busy}
+          aria-label={`Delete “${item.note}”`}
+        >
+          Delete
+        </TextButton>
       </div>
       {showRuns && <RunHistory runs={runs} />}
     </li>

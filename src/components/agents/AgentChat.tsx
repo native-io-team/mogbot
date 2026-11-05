@@ -27,10 +27,10 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   HistoryIcon,
+  InfoIcon,
   MicrophoneIcon,
   MoreHorizontalIcon,
   PaperclipIcon,
-  WarningIcon,
 } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { Dropdown } from '../primitives/Dropdown';
@@ -109,6 +109,7 @@ import {
   ENGINE_LABEL,
   engineCantAsk,
   engineIsReady,
+  roleWithoutPath,
 } from '../../lib/agents';
 import {
   loadOlderMessages,
@@ -877,13 +878,14 @@ export function AgentChat({
   // Identity only: who this is and what it's for. What it's doing is said
   // once in the sidebar row and once in the conversation (a bar, the working
   // line), never a third time up here.
+  const role = agent.role ? roleWithoutPath(agent.role) : '';
   const title = (
     <>
       <AgentAvatar name={agent.name} color={agent.color} selected />
       <h2 className="agent-chat__name">{agent.name}</h2>
-      {agent.role && (
-        <span className="agent-chat__status" title={agent.role}>
-          {agent.role}
+      {role && (
+        <span className="agent-chat__status" title={role}>
+          {role}
         </span>
       )}
     </>
@@ -1468,7 +1470,7 @@ export function AgentChat({
             </form>
           ) : (
             <div className="agent-composer agent-composer--blocked" role="status">
-              <WarningIcon size={14} className="agent-composer__blocked-icon" />
+              <InfoIcon size={14} className="agent-composer__blocked-icon" />
               <span className="agent-composer__blocked-text">
                 {engineInstalled
                   ? `${agent.name} runs on ${ENGINE_LABEL[agent.engine]}, which is signed out on this Mac.`

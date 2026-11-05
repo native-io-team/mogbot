@@ -564,9 +564,10 @@ export const ErrorLine = memo(function ErrorLine({
                 {scheduling ? 'Scheduling…' : `Retry ${retryPhrase(retryAt)}`}
               </TextButton>
             ))}
-          {onRetry && (
-            <TextButton tabIndex={0} onClick={onRetry}>
-              {retryAt ? 'Try anyway' : 'Retry'}
+          {/* One text action: retry at the reset, or now once it's passed. */}
+          {onRetry && !retryAt && (
+            <TextButton tabIndex={0} variant="accent" onClick={onRetry}>
+              Retry
             </TextButton>
           )}
         </div>
@@ -627,7 +628,7 @@ function ErrorText({ message }: { message: AgentMessage }) {
 }
 
 /**
- * "Scheduled check-in", centred like the agent-to-agent lines, with the note
+ * "Scheduled" (one-time) or "Routine" (repeating), centred like the agent-to-agent lines, with the note
  * the agent left itself. A late one says so: the app was closed when it was due.
  * One you ran from the schedule popover says that instead.
  */
@@ -636,7 +637,7 @@ export const CheckInLine = memo(function CheckInLine({
   arrived,
 }: { message: AgentMessage } & Arrival) {
   const mark = message.checkIn;
-  const label = mark?.repeats ? 'Routine' : 'Scheduled check-in';
+  const label = mark?.repeats ? 'Routine' : 'Scheduled';
   return (
     <div
       className="agent-checkin"
@@ -661,7 +662,7 @@ export const CheckInLine = memo(function CheckInLine({
 
 /**
  * Something Ship Studio did for the agent, said quietly so it never happens
- * invisibly: "Allowed automatically: npm test · Always allowed".
+ * invisibly: "npm test · always allowed".
  */
 /**
  * A take-over's terminal that closed by itself: the sentence as a Line, and
@@ -791,7 +792,7 @@ export const ConnectorBubble = memo(function ConnectorBubble({
         {outgoing ? (
           <>
             To {source}
-            <span className="agent-connector__via"> · from the sealed conversation</span>
+            <span className="agent-connector__via"> · from the import conversation</span>
           </>
         ) : (
           <>From {source}</>
@@ -1373,9 +1374,10 @@ function SessionPromptCard({
         outcomeTone={approval.status === 'allowed' ? 'done' : undefined}
         resolved={openedPending && !pending}
       >
-        {/* Folder trust is our explanation, not the session's text: prose. */}
+        {/* Folder trust is our explanation and an edit is one sentence ("Edit
+            index.html", decisions.rs): prose. A command keeps its own lines. */}
         {approval.detail &&
-          (prompt.kind === 'trust' ? (
+          (prompt.kind === 'trust' || !approval.detail.includes('\n') ? (
             <p className="agent-card__note">{approval.detail}</p>
           ) : (
             <pre className="agent-approval__detail">{approval.detail}</pre>

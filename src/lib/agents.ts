@@ -1839,6 +1839,21 @@ export function newestPeerGroups(items: ChatItem[]): Set<string> {
 /** "acme" from "/Users/me/ShipStudio/acme/". */
 export const folderName = (path: string) => path.replace(/\/+$/, '').split('/').pop() ?? path;
 
+/**
+ * An agent's role for the header, without a folder path in it ("Owns the
+ * Acme rebuild in ~/ShipStudio/acme" → "Owns the Acme rebuild"): the
+ * project chip beside it already says where it works.
+ */
+export function roleWithoutPath(role: string): string {
+  const path = String.raw`(?:~|\/(?:Users|home|Volumes|private)\b)[^\s,;]*?(?=\.?(?:\s|$|[,;]))`;
+  return role
+    .replace(new RegExp(String.raw`\s+(?:in|at|from|under|inside)\s+` + path, 'g'), '')
+    .replace(new RegExp(path, 'g'), '')
+    .replace(/\s+([.,;])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 /** A run of consecutive agent-to-agent lines with the same peer collapses into one row. */
 export type ChatItem =
   | { type: 'message'; message: AgentMessage }

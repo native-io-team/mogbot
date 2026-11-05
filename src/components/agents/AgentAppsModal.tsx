@@ -27,6 +27,7 @@ import {
   appTarget,
   appTitle,
   listAgentApps,
+  openClaudeConnectors,
   removeAgentApp,
   type AgentApp,
   type AgentAppSuggestion,
@@ -128,6 +129,29 @@ export function AgentAppsModal({ isOpen, onClose }: AgentAppsModalProps) {
               <h3 id="agent-apps-add" className="agent-apps__heading">
                 Add an app
               </h3>
+              {/* Mail, calendar and chat are what most people want first, and
+                  they come from claude.ai: a row of their own, first. */}
+              <ul className="agent-apps__list">
+                <li className="agent-apps__row">
+                  <div className="agent-apps__text">
+                    <span className="agent-apps__name">Gmail, Google Calendar, Slack and more</span>
+                    <span className="agent-apps__meta">
+                      Connected on claude.ai, under Settings → Connectors
+                    </span>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="compact"
+                    onClick={() =>
+                      void openClaudeConnectors().catch((err: unknown) =>
+                        setActionError(formatCommandError(asCommandError(err)))
+                      )
+                    }
+                  >
+                    Open claude.ai
+                  </Button>
+                </li>
+              </ul>
               <ul className="agent-apps__list agent-apps__list--grid">
                 {apps.suggestions.map((s) => (
                   <SuggestionRow
@@ -153,10 +177,6 @@ export function AgentAppsModal({ isOpen, onClose }: AgentAppsModalProps) {
             <p>
               A new app signs in once, in your browser, through Claude Code: use Sign in… when it
               says Needs sign-in.
-            </p>
-            <p>
-              Gmail, Google Calendar and Slack come from claude.ai: connect them there under
-              Settings → Connectors.
             </p>
           </div>
 

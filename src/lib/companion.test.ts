@@ -118,7 +118,7 @@ describe('activityLine', () => {
       activityLine({ tool, detail, ok: true, atMs: now }, now);
     expect(a('agents.answerApproval', 'always allow')).toBe('Allowed a request · just now');
     expect(a('agents.answerApproval', 'deny with note: no')).toBe('Denied a request · just now');
-    expect(a('agents.schedule.pause', 'resume c1')).toBe('Resumed a check-in · just now');
+    expect(a('agents.schedule.pause', 'resume c1')).toBe('Resumed a routine · just now');
   });
   it('says when it was refused, and falls back to the method name', () => {
     expect(activityLine({ tool: 'agents.send', detail: '', ok: false, atMs: now }, now)).toBe(

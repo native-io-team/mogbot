@@ -57,6 +57,11 @@
   overflow-y: auto;
 }
 
+/* Portalled out of the agent editor: above the dialog it opens from. */
+.ss-dropdown__menu.agent-project-menu {
+  z-index: var(--z-tooltip);
+}
+
 /* ------------------------------------------------------------ change card */
 
 .agent-changes__counts {
@@ -128,14 +133,12 @@
   text-decoration: line-through;
 }
 
+/* A file by its name, in prose: the path is on hover, the diff a click away. */
 .agent-changes__path {
   min-width: 0;
   overflow: hidden;
-  font-family: var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
-  unicode-bidi: plaintext;
 }
 
 .agent-changes__more {

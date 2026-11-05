@@ -895,7 +895,7 @@ fn edit_in<Tz: TimeZone>(
     };
     let note = note.trim();
     let mut outcome: Result<CheckIn, CommandError> =
-        Err(CommandError::expected("That check-in no longer exists."));
+        Err(CommandError::expected("That routine no longer exists."));
     store::update(agent_id, |agent| {
         let Some(i) = agent.check_ins.iter().position(|c| c.id == id) else {
             return;
@@ -984,7 +984,7 @@ fn manual_firing(agent: &store::Agent, id: &str) -> Result<Firing, CommandError>
         .iter()
         .find(|c| c.id == id)
         .cloned()
-        .ok_or_else(|| CommandError::expected("That check-in no longer exists."))?;
+        .ok_or_else(|| CommandError::expected("That routine no longer exists."))?;
     Ok(Firing {
         agent_id: agent.id.clone(),
         check_in,
@@ -1068,7 +1068,7 @@ pub fn set_paused(agent_id: &str, id: &str, paused: bool) -> Result<(), CommandE
     if found {
         Ok(())
     } else {
-        Err(CommandError::expected("That check-in no longer exists."))
+        Err(CommandError::expected("That routine no longer exists."))
     }
 }
 

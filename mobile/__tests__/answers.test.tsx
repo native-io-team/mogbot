@@ -174,6 +174,10 @@ describe('prompt answers', () => {
     expect(broaderCaption('Yes, allow all edits during this session')).toBe(
       'Lets it make edits without asking for the rest of this task.'
     );
+    // The desk's own words for it (decisions.rs).
+    expect(broaderCaption('Allow all edits in demo-site for this conversation')).toBe(
+      'Lets it make edits without asking for the rest of this task.'
+    );
     expect(broaderCaption("Yes, and don't ask again for npm test")).toBe(
       'Lets it do this without asking again, not just this once.'
     );

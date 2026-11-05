@@ -146,6 +146,76 @@ pub fn options_for(question: &str, raw: &[String]) -> Vec<PromptOption> {
     options
 }
 
+/// A trailing key hint, as Claude Code prints it for its own terminal
+/// ("(shift+tab)", "(esc)"): the user answers on a card, not with keys.
+fn strip_key_hint(label: &str) -> &str {
+    const KEYS: &[&str] = &[
+        "shift", "tab", "esc", "escape", "enter", "return", "ctrl", "control", "alt", "option",
+        "cmd", "meta", "space",
+    ];
+    let trimmed = label.trim_end();
+    let Some(inner) = trimmed
+        .strip_suffix(')')
+        .and_then(|rest| rest.rfind('(').map(|at| (at, &rest[at + 1..])))
+    else {
+        return trimmed;
+    };
+    let (at, hint) = inner;
+    let is_key = |k: &str| {
+        let k = k.trim().to_lowercase();
+        KEYS.contains(&k.as_str())
+            || (k.chars().count() == 1 && k.chars().all(|c| c.is_ascii_alphanumeric()))
+    };
+    if !hint.is_empty() && hint.split('+').all(is_key) {
+        trimmed[..at].trim_end()
+    } else {
+        trimmed
+    }
+}
+
+/// An option in the app's words: no key hints, "conversation" for Claude
+/// Code's "session", the project by name rather than its path, and the
+/// known options said plainly (docs/agents.md, vocabulary).
+pub fn plain_label(label: &str, project: &str) -> String {
+    let name = shared::project_name(project);
+    let label = strip_key_hint(label);
+    let lower = label.to_lowercase();
+    if lower == "yes, allow all edits during this session" {
+        return format!("Allow all edits in {name} for this conversation");
+    }
+    if lower.starts_with("no, and tell claude what to do differently") {
+        return "No, and say what to do instead".into();
+    }
+    let mut plain = label.to_string();
+    let path = project.trim_end_matches('/');
+    if !path.is_empty() {
+        plain = plain.replace(path, name);
+    }
+    plain
+        .replace("during this session", "for this conversation")
+        .replace("this session", "this conversation")
+}
+
+/// The body of a permission card. An edit is said as a sentence ("Edit
+/// index.html"); anything else (a command) keeps the session's own lines,
+/// which the card shows as written.
+fn plain_detail(body: &[String]) -> String {
+    let lines: Vec<&str> = body
+        .iter()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect();
+    let verb = match lines.first().map(|l| l.to_lowercase()) {
+        Some(l) if l == "edit file" => Some("Edit"),
+        Some(l) if l == "create file" || l == "write file" => Some("Create"),
+        _ => None,
+    };
+    match (verb, lines.get(1)) {
+        (Some(verb), Some(file)) if lines.len() == 2 => format!("{verb} {file}"),
+        _ => body.join("\n"),
+    }
+}
+
 pub fn kind_of(question: &str, options: &[PromptOption]) -> PromptKind {
     let lower = question.to_lowercase();
     if options
@@ -180,8 +250,16 @@ pub(crate) fn card(
             format!("Let Claude Code work in {name}?"),
             format!("Claude Code asks once per folder before it reads, edits and runs files in it. Allow, and {name} stays trusted, the way Claude Code records it when you accept its own dialog."),
         ),
-        _ => (decision.question.clone(), decision.body.join("\n")),
+        _ => (decision.question.clone(), plain_detail(&decision.body)),
     };
+    // Its kind is read from the session's own words; the card shows ours.
+    let options = options
+        .into_iter()
+        .map(|o| PromptOption {
+            label: plain_label(&o.label, project),
+            ..o
+        })
+        .collect();
     Approval {
         request_id,
         title,
@@ -874,6 +952,80 @@ mod tests {
             );
         }
         store::set_root_for_tests(None);
+    }
+
+    #[test]
+    fn a_card_speaks_the_apps_words_not_the_terminals() {
+        // Claude Code 2.1's edit prompt, as recorded.
+        let decision = Decision {
+            question: "Do you want to make this edit to index.html?".into(),
+            options: raw(&[
+                "1. Yes",
+                "2. Yes, allow all edits during this session (shift+tab)",
+                "3. No, and tell Claude what to do differently (esc)",
+            ]),
+            body: raw(&["Edit file", "index.html"]),
+        };
+        let card = card(
+            "r3".into(),
+            "/Users/a/ShipStudio/demo-site",
+            &outcome(decision.clone()),
+            &decision,
+            owner(),
+            vec!["site".into()],
+        );
+        assert_eq!(card.detail, "Edit index.html");
+        let prompt = card.prompt.unwrap();
+        assert_eq!(prompt.kind, PromptKind::Permission);
+        let labels: Vec<_> = prompt.options.iter().map(|o| o.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            vec![
+                "Yes",
+                "Allow all edits in demo-site for this conversation",
+                "No, and say what to do instead",
+            ]
+        );
+        // The keys and roles are the session's, untouched.
+        assert_eq!(
+            prompt.options.iter().map(|o| o.role).collect::<Vec<_>>(),
+            vec![Role::Allow, Role::Other, Role::Deny]
+        );
+        assert_eq!(prompt.options[2].keys, vec!["3"]);
+        for o in &prompt.options {
+            assert!(
+                !o.label.contains("session") && !o.label.contains('('),
+                "{}",
+                o.label
+            );
+        }
+    }
+
+    #[test]
+    fn only_key_hints_are_stripped_and_paths_become_the_project_name() {
+        let p = "/Users/a/ShipStudio/bakery";
+        assert_eq!(plain_label("Yes (ctrl+y)", p), "Yes");
+        assert_eq!(plain_label("Yes (tab)", p), "Yes");
+        // A parenthesis that says something stays.
+        assert_eq!(plain_label("Use Sonnet (faster)", p), "Use Sonnet (faster)");
+        assert_eq!(
+            plain_label(
+                "Yes, and don't ask again for npm commands in /Users/a/ShipStudio/bakery/",
+                p
+            ),
+            "Yes, and don't ask again for npm commands in bakery/"
+        );
+        assert_eq!(
+            plain_label("Yes, for this session only", p),
+            "Yes, for this conversation only"
+        );
+        // A project path of "/" never rewrites every character.
+        assert_eq!(plain_label("Yes", "/"), "Yes");
+        // A command keeps its own lines.
+        assert_eq!(
+            plain_detail(&raw(&["Bash command", "touch a.txt"])),
+            "Bash command\ntouch a.txt"
+        );
     }
 
     #[test]

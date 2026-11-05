@@ -33,6 +33,7 @@ import { TakeoverProvider, useTakeover } from './AgentTakeover';
 import { ImportAgentsModal, type ImportPath } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
 import { ProjectActionConfirmModal } from '../dashboard/ProjectActionConfirmModal';
+import { AccentScope } from '../../contexts/AccentScopeContext';
 import { Spinner } from '../primitives/Spinner';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
@@ -788,48 +789,57 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
       <AgentAppsModal isOpen={appsOpen} onClose={() => setAppsOpen(false)} />
       {engineSetup && <EngineSignInModal {...engineSetup} onClose={() => setEngineSetup(null)} />}
       {stopping && (
-        <ProjectActionConfirmModal
-          title={`Stop ${stopping.name}?`}
-          body={<p>What it’s doing now ends here, and anything queued for it is dropped.</p>}
-          hint="Its conversation is kept."
-          loading={false}
-          confirmLabel="Stop"
-          loadingLabel="Stopping…"
-          confirmVariant="danger"
-          onCancel={() => setStopping(null)}
-          onConfirm={() => void confirmStop()}
-        />
+        // In the agent's own colour: a confirm about Acme is Acme's.
+        <AccentScope color={stopping.color}>
+          <ProjectActionConfirmModal
+            title={`Stop ${stopping.name}?`}
+            body={<p>What it’s doing now ends here, and anything queued for it is dropped.</p>}
+            hint="Its conversation is kept."
+            loading={false}
+            confirmLabel="Stop"
+            loadingLabel="Stopping…"
+            confirmVariant="danger"
+            onCancel={() => setStopping(null)}
+            onConfirm={() => void confirmStop()}
+          />
+        </AccentScope>
       )}
       {freshening && (
-        <ProjectActionConfirmModal
-          title={`Start ${freshening.name} fresh?`}
-          body={
-            <p>
-              Its next message starts a new conversation. Its instructions and memory carry over;
-              anything it only knew from this conversation doesn’t.
-            </p>
-          }
-          hint="This chat stays here to scroll back through."
-          loading={false}
-          confirmLabel="Start fresh"
-          loadingLabel="Starting fresh…"
-          confirmVariant="primary"
-          onCancel={() => setFreshening(null)}
-          onConfirm={() => void confirmFresh()}
-        />
+        // In the agent's own colour: a confirm about Acme is Acme's.
+        <AccentScope color={freshening.color}>
+          <ProjectActionConfirmModal
+            title={`Start ${freshening.name} fresh?`}
+            body={
+              <p>
+                Its next message starts a new conversation. Its instructions and memory carry over;
+                anything it only knew from this conversation doesn’t.
+              </p>
+            }
+            hint="This chat stays here to scroll back through."
+            loading={false}
+            confirmLabel="Start fresh"
+            loadingLabel="Starting fresh…"
+            confirmVariant="primary"
+            onCancel={() => setFreshening(null)}
+            onConfirm={() => void confirmFresh()}
+          />
+        </AccentScope>
       )}
       {deleting && (
-        <ProjectActionConfirmModal
-          title={`Delete ${deleting.name}?`}
-          body={<p>Its memory and its whole conversation are deleted with it.</p>}
-          hint="This can't be undone."
-          loading={deleteBusy}
-          confirmLabel="Delete"
-          loadingLabel="Deleting…"
-          confirmVariant="danger"
-          onCancel={() => setDeleting(null)}
-          onConfirm={() => void confirmDelete()}
-        />
+        // In the agent's own colour: a confirm about Acme is Acme's.
+        <AccentScope color={deleting.color}>
+          <ProjectActionConfirmModal
+            title={`Delete ${deleting.name}?`}
+            body={<p>Its memory and its whole conversation are deleted with it.</p>}
+            hint="This can't be undone."
+            loading={deleteBusy}
+            confirmLabel="Delete"
+            loadingLabel="Deleting…"
+            confirmVariant="danger"
+            onCancel={() => setDeleting(null)}
+            onConfirm={() => void confirmDelete()}
+          />
+        </AccentScope>
       )}
     </div>
   );

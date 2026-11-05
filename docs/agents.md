@@ -493,7 +493,9 @@ at once still reads as one product:
   this conversation until it ends, in the reading column directly above the
   composer, in a fixed order: take-over, import, what the engine can't do, a
   key in the draft, dictation blocked. At most two show; the rest fold into
-  "N more". A bar says the state, never repeats the card's question, and
+  "N more". A key in the draft never folds: it guards something the user is
+  about to do and can't take back, so it always shows and the others fold
+  around it. A bar says the state, never repeats the card's question, and
   never points at "the card". Nothing spans the pane under the header.
 
 The **header is identity only** (badge, name, role, project chip). What an
