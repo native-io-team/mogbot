@@ -2,7 +2,7 @@
  * "Setting up your team" after an import, as the phone words it: one card in
  * the Chief's chat (desktop `agents/team_setup.rs`, docs/agents.md). The Mac
  * decides what each step holds and whether it's done; this only says it.
- * Plain and short, and never a count that alarms: "A few things to finish",
+ * Plain and short, and never a count that alarms: "2 steps left",
  * not "41 requests".
  */
 
@@ -38,13 +38,18 @@ export function stepHint(step: TeamSetupStep, chief: string): string {
   }
 }
 
-/** "2 of 4 done", the card's quiet meta. */
-export const progress = (v: Pick<TeamSetupView, 'done' | 'total'>) =>
-  `${v.done} of ${v.total} done`;
+/** "2 steps left", the card's quiet meta: what's left, never requests. */
+export const progress = (v: Pick<TeamSetupView, 'done' | 'total'>) => {
+  const left = Math.max(0, v.total - v.done);
+  if (left === 0) return 'All done';
+  return `${left} ${left === 1 ? 'step' : 'steps'} left`;
+};
 
 /** The card's source line. */
-export const sourceLine = (v: Pick<TeamSetupView, 'source'>) =>
-  `A few things to finish setting up your team from ${v.source}`;
+export const sourceLine = (v: Pick<TeamSetupView, 'source' | 'agents'>) =>
+  `${v.agents > 1 ? `Your ${v.agents} agents` : 'Your agent'} from ${v.source} ${
+    v.agents > 1 ? 'are' : 'is'
+  } here, quiet until you say hi. These get them going.`;
 
 /** Set aside on the update: said once, quietly, never as a number. */
 export const SET_ASIDE_NOTE =

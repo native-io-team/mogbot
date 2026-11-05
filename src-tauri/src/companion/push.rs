@@ -673,7 +673,7 @@ pub fn raise(agent_id: &str, kind: PushKind) {
         return;
     }
     let badge = crate::agents::store::list()
-        .map(|agents| crate::agents::notify::badge_count(&agents))
+        .map(|agents| crate::agents::notify::badge_now(&agents))
         .unwrap_or(0);
     let alert = PushAlert {
         agent_id: agent_id.to_string(),
