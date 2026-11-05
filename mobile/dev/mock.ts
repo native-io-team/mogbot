@@ -8,6 +8,7 @@
  *   pnpm mock --takeover           # Designer driven in a terminal on the Mac
  *   pnpm mock --bars               # three bars in the Chief's chat: reaches "1 more"
  *   pnpm mock --importing          # the Chief mid-import, the Designer working: live bar + typing dots
+ *   pnpm mock --heavy              # 17 agents, ~40 cards waiting, long chats
  *   pnpm mock --impostor           # signs with a stranger's key: "This isn't your Mac"
  *   pnpm mock --http --cors        # for the web build (`pnpm qa:web` passes both)
  *
@@ -76,6 +77,7 @@ function selfSigned(dir: string) {
     importing: args.includes('--importing'),
     cors: args.includes('--cors'),
     solo: args.includes('--solo'),
+    heavy: args.includes('--heavy'),
     identityFile: path.join(state, 'identity.pem'),
     // The same server id and paired phones, a different key: what a phone
     // sees when something else answers at its Mac's address.

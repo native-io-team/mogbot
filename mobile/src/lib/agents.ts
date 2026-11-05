@@ -484,11 +484,41 @@ export function commandLine(command: string): string {
  * (`commandLine`), never a diff's `@@ -18,3 +18,3 @@` or a file header. An
  * edit says which file ("Wants to edit Header.tsx").
  */
+/** A key as a label: `thread_id` → "Thread id", `sendAt` → "Send at". */
+const fieldLabel = (key: string) => {
+  const words = key.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+};
+
+/**
+ * A connector tool's input (an email to send, a record to write) as labelled
+ * fields, as the desk shows it, rather than its JSON. Null for anything else:
+ * Claude Code's own tools come with a one-line detail. Every value in full:
+ * it is what you're agreeing to.
+ */
+export function approvalFields(
+  tool: string | undefined,
+  input: unknown
+): [string, string][] | null {
+  if (!tool?.startsWith('mcp__') || !input || typeof input !== 'object' || Array.isArray(input)) {
+    return null;
+  }
+  const fields = Object.entries(input as Record<string, unknown>).map(
+    ([key, value]): [string, string] => [
+      fieldLabel(key),
+      typeof value === 'string' ? value : JSON.stringify(value, null, 2),
+    ]
+  );
+  return fields.length ? fields : null;
+}
+
 export function askingLine(
   approval: Pick<Approval, 'title' | 'detail' | 'tool' | 'secret' | 'connector'>
 ): string {
   // These cards' titles are the request; their detail is the reassurance or
   // the purpose under it, which cut short only says half.
+  // An import's review: the row says what to do, short; the card keeps its title.
+  if (approval.connector?.kind === 'review') return 'Review the agents to import';
   if (approval.connector) return approval.title;
   if (approval.secret) return `Asks for “${approval.secret.name}”`;
   if (approval.title === 'Run a command' && approval.detail?.trim())
@@ -500,7 +530,10 @@ export function askingLine(
     .map((l) => l.trim())
     .filter(Boolean);
   const diff = lines.some((l) => diffLineKind(l) !== 'context' || /^(\+\+\+|---)\s/.test(l));
-  if (!diff && lines[0]) return lines[0];
+  // A connector tool's detail is its input as JSON (`describe_request`): its
+  // first line is "{", and the title already says it ("Send an email · Gmail").
+  const json = /^[{[]/.test(lines[0] ?? '');
+  if (!diff && lines[0] && !json) return lines[0];
   const edit = /^do you want to make this edit to (.+?)\?*$/i.exec(approval.title.trim());
   if (edit) return `Wants to edit ${edit[1]}`;
   return approval.title;
@@ -573,4 +606,20 @@ export function contextPercent(agent: Pick<Agent, 'context'>): number | null {
 export function contextLine(agent: Pick<Agent, 'context'>): string | null {
   const percent = contextPercent(agent);
   return percent === null ? null : `${percent < 1 ? '<1' : percent}% full`;
+}
+
+/**
+ * A search hit's snippet is raw message text: drop the markdown a reader
+ * never sees. Emphasis and heading marks go; a table's separator row goes,
+ * and its cells read "Renewal pricing · Dana at Northwind" rather than
+ * "| --- | --- | Renewal pricing | Dana…".
+ */
+export function plainSnippet(snippet: string): string {
+  return snippet
+    .replace(/\*\*|__|`+|^#+\s*/gm, '')
+    .replace(/\|?(\s*:?-{3,}:?\s*\|)+(\s*:?-{3,}:?\s*)?/g, ' ')
+    .replace(/(\s*\|\s*)+/g, ' · ')
+    .replace(/^\s*·\s*|\s*·\s*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
