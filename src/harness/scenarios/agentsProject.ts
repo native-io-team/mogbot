@@ -111,7 +111,7 @@ const CHIEF_AUDIT_CHAT = [
   msg('note', 'Deleted Social Posts', 29),
   msg(
     'sent_to_agent',
-    'Northwind ($4,200) and Globex ($1,150) are overdue. Draft a firmer reminder for each and send them once the user approves.',
+    'Northwind ($4,200) and Globex ($1,150) are overdue. Draft a firmer reminder for each and send them once you have the OK.',
     28,
     peer('finance', 'Finance')
   ),
@@ -147,7 +147,7 @@ const FINANCE_DRIVEN_CHAT = [
   }),
   msg(
     'from_agent',
-    'Northwind ($4,200) and Globex ($1,150) are overdue. Draft a firmer reminder for each and send them once the user approves.',
+    'Northwind ($4,200) and Globex ($1,150) are overdue. Draft a firmer reminder for each and send them once you have the OK.',
     1,
     { agentId: 'finance', ...peer('chief', 'Chief of Staff') }
   ),

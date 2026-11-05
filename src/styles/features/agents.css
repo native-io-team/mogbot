@@ -2173,6 +2173,13 @@
 
 /* ---------------------------------------------------------- model, usage */
 
+/* The conversation's … menu carries its actions and then its model: taller
+   than the shared 360px cap, so the model choices aren't hidden below a
+   scroll. Still never taller than the window. */
+.ss-dropdown__menu.agent-model-menu {
+  max-height: calc(100vh - var(--spacing-2xl) * 3);
+}
+
 /* The engine's own name for a model, small beside its plain one. */
 .agent-model-menu .agent-model-menu__detail {
   margin-left: var(--spacing-sm);

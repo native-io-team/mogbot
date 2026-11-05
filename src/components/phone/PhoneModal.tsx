@@ -193,6 +193,15 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
     );
   }
 
+  // Nothing to connect yet: off, no phone paired, no build from this Mac,
+  // and not told they already have the app. The panel is the way to get it.
+  const getAppFirst =
+    !!s &&
+    phoneStep(s).kind === 'off' &&
+    s.devices.length === 0 &&
+    !readInstallRecord() &&
+    !haveApp;
+
   return (
     <ModalFrame isOpen={isOpen} onClose={onClose} title="Your phone" className="phone-modal">
       <div className="settings-modal-body phone-access">
@@ -209,10 +218,7 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
             {/* The app comes first: there's nothing to connect until it's on a
                 phone. Off, with no phone paired and no build from this Mac, the
                 panel is the way to get it; turning access on comes after. */}
-            {phoneStep(s).kind === 'off' &&
-            s.devices.length === 0 &&
-            !readInstallRecord() &&
-            !haveApp ? (
+            {getAppFirst ? (
               <PhoneGetApp
                 onInstall={COMPANION_INSTALL_ENABLED ? () => setInstall({}) : undefined}
                 onHaveApp={() => setHaveApp(true)}
@@ -244,14 +250,13 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
               </section>
             )}
 
-            {COMPANION_INSTALL_ENABLED &&
-              !(phoneStep(s).kind === 'off' && s.devices.length === 0 && !haveApp) && (
-                <PhoneInstallEntry
-                  now={now}
-                  onInstall={() => setInstall({})}
-                  onReinstall={(platform) => setInstall({ reinstall: platform })}
-                />
-              )}
+            {COMPANION_INSTALL_ENABLED && !getAppFirst && (
+              <PhoneInstallEntry
+                now={now}
+                onInstall={() => setInstall({})}
+                onReinstall={(platform) => setInstall({ reinstall: platform })}
+              />
+            )}
 
             {(s.enabled || s.devices.length > 0) && (
               <section className="phone-section">
@@ -323,7 +328,12 @@ function PhoneGetApp({ onInstall, onHaveApp }: { onInstall?: () => void; onHaveA
           phone needs USB debugging turned on.
         </p>
         {onInstall ? (
-          <Button variant="primary" onClick={onInstall} className="phone-step__action">
+          <Button
+            variant="primary"
+            onClick={onInstall}
+            className="phone-step__action"
+            data-install-open
+          >
             Install on my phone…
           </Button>
         ) : (

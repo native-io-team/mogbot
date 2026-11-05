@@ -126,6 +126,12 @@ export function AgentSetupDetail({
           <>
             <SetupItem
               item={readiness}
+              // Not the tool's name ("package manager"): which step of how many.
+              progressText={
+                nextPrerequisite
+                  ? `Step ${prerequisites.indexOf(nextPrerequisite) + 1} of ${prerequisites.length} · a few minutes`
+                  : undefined
+              }
               onAction={() => onItemAction(readiness.id)}
               isActionInProgress={activeItemId !== null && prerequisiteIds.has(activeItemId)}
               isAnyActionInProgress={busy}
