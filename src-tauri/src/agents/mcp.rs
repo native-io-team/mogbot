@@ -1783,6 +1783,60 @@ fn one_line(tool: &str, input: &Value) -> String {
     }
 }
 
+/// Open browser cards this build no longer asks about (looking around, a
+/// click that doesn't send): answered Allow, with one quiet receipt line per
+/// agent, and the agent woken once to carry on. Run at launch.
+pub fn allow_open_browser_cards(app: &AppHandle) {
+    let Ok(agents) = store::list() else { return };
+    for agent in agents {
+        let Ok(open) = store::pending_approvals(&agent.id) else {
+            continue;
+        };
+        let mut answered: Vec<String> = Vec::new();
+        let mut late = false;
+        for card in open {
+            let (Some(tool), Some(input)) = (&card.tool, &card.input) else {
+                continue;
+            };
+            if !tool.starts_with(super::browser_gate::SERVER)
+                || super::browser::gate(&agent, tool, input, false) != super::browser::Gate::Allow
+            {
+                continue;
+            }
+            match store::set_approval_status(&agent.id, &card.request_id, ApprovalStatus::Allowed) {
+                Ok(Some(updated)) => {
+                    let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &updated);
+                }
+                _ => continue,
+            }
+            if !answer_approval(&card.request_id, true) {
+                grant_once(&agent.id, tool, input);
+                late = true;
+            }
+            answered.push(card.title.clone());
+        }
+        if answered.is_empty() {
+            continue;
+        }
+        store::refresh_pending(&agent.id);
+        let line = format!(
+            "Allowed on its own now (looking around and ordinary clicks in your browser don't ask any more): {}",
+            answered.join(" · ")
+        );
+        let _ = runner::record(app, runner::new_message(&agent.id, MessageKind::Note, line));
+        if late {
+            runner::enqueue(
+                app,
+                &agent.id,
+                "[The browser steps you were waiting on are allowed now; they go through without asking if you run them exactly as before. Carry on with what you were doing.]".to_string(),
+                runner::From::User,
+            );
+        }
+    }
+    let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
+    super::notify::refresh_badge(app);
+}
+
 /// The user answered a card nobody is waiting on any more. Allow grants that
 /// exact call once and wakes the agent to finish; Deny just records it.
 pub fn answer_late(
@@ -1845,7 +1899,11 @@ fn mcp_title(tool: &str) -> String {
     let Some((server, name)) = tool.strip_prefix("mcp__").and_then(|t| t.split_once("__")) else {
         return format!("Use {tool}");
     };
-    let words = split_words(name);
+    // "tabs_context_mcp": the server's own suffix isn't a word anyone says.
+    let words: Vec<String> = split_words(name)
+        .into_iter()
+        .filter(|w| w != "mcp")
+        .collect();
     let Some((verb, object)) = words.split_first() else {
         return format!("Use {tool}");
     };
@@ -2021,13 +2079,28 @@ async fn decide_inner(
         );
         return Decision::Allow;
     }
-    // A browser action says exactly what it does, where, and as whom.
-    let (title, mut detail) = super::browser::card(&caller.id, tool, input)
-        .unwrap_or_else(|| describe_request(tool, input));
+    let (title, mut detail) = describe_request(tool, input);
     if let Some(why) = why.map(str::trim).filter(|w| !w.is_empty()) {
         detail = format!("{detail}\n\n{why}");
     }
-    match ask_user(app, caller, title, detail, Some((tool, input))).await {
+    // A browser card says what it would do in plain words ("Click “Send” on
+    // mail.google.com"), where and as whom; the raw call stays behind Details.
+    let (title, summary) = if tool.starts_with(super::browser_gate::SERVER) {
+        let page = super::browser_gate::page_of(&caller.id);
+        let (title, said) = super::browser_gate::describe(tool, input, &page);
+        let mut summary = said;
+        if let Some((_, where_)) = super::browser::card(&caller.id, tool, input) {
+            summary = [summary, where_]
+                .into_iter()
+                .filter(|s| !s.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+        }
+        (title, Some(summary).filter(|s| !s.is_empty()))
+    } else {
+        (title, None)
+    };
+    match ask(app, caller, title, summary, detail, Some((tool, input))).await {
         Answer::Allowed => Decision::Allow,
         Answer::Denied(note) => Decision::Deny(denied(note)),
         Answer::NotYet => Decision::Deny(NOT_YET.to_string()),

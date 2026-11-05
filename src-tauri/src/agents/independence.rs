@@ -19,6 +19,8 @@
 //! home. Every card that asks before spending, sending, publishing, pushing,
 //! sharing, deleting the user's files or touching credentials appears at
 //! every level.
+//! The browser (`browser_gate`): above "Check with me often", looking around
+//! and clicks that don't send go through without a card; sending asks.
 //!
 //! **Outside text never goes hard.** A turn answering outside text (a
 //! "When…" routine's items, or anything that carried their taint through

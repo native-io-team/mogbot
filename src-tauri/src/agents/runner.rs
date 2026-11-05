@@ -3546,6 +3546,10 @@ async fn run_turn(
                         continue;
                     }
                     Driver::ClaudePrint => {
+                        // What the browser showed: which control each ref is.
+                        if matches!(kind, Some("assistant" | "user")) {
+                            super::browser_gate::observe(agent_id, &value);
+                        }
                         let mut steps = stream::claude_steps(&value, store::now_ms());
                         steps.extend(claude_context.observe(&value, store::now_ms()).map(Step::Context));
                         steps

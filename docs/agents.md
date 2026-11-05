@@ -1001,22 +1001,41 @@ outside text (a "When…" routine's items, or a message carrying that taint
 through `message_agent` or a room): those run `--no-chrome`, and the broker
 refuses any browser call they make anyway.
 
-**What asks** (`browser::gate`, before Always-allow rules): reads go through
-without a card (`get_page_text`, `read_page`, `find`, tabs, screenshots,
-scrolling, recording a GIF) and so does `navigate` (or a new tab opened on a
-URL) to a site in the agent's `browser_sites`, unless the URL carries another
-URL (`//` anywhere after the host, plain or percent-encoded): an own site's
-redirect endpoint would otherwise carry data off-site. Any other site, and
-every click, keystroke, form fill, upload, script, shortcut, batch or GIF
-export, asks on an Allow card (`browser::card_for`) saying exactly what it
-does (the text typed, the value filled, the file, the script) and where and
-as whom: the site the agent last opened and the account it was found signed
-in as there (`browser_profiles`), or "whoever is signed in there". A click's
-card can't see what the button sends, so the agent is told to say in chat,
-before it, exactly what will go and from which account. `browser_sites` only ever holds a catalogue
-service's built-in host (`logins::SERVICES`): the access chain, a login card's
-"Use my browser" and the reach check add one; nothing an agent or an import
-types becomes a site.
+**What asks** (`agents/browser_gate.rs`, before Always-allow rules). The one
+place the independence level changes an approval, and only for the browser:
+
+- **Looking never asks** at "Use good judgement" and "Go hard": tabs, browsers
+  and profiles, `navigate` / a new tab to *any* `http(s)` page, `read_page`,
+  `get_page_text`, `find`, screenshots, zoom, scroll, hover, wait, the console
+  and network, resizing, recording a GIF. Other schemes (`javascript:`,
+  `file:`, `chrome:`) ask. At "Check with me often" only the agent's own
+  `browser_sites` are free to open, and a URL carrying another URL (`//` after
+  the host, plain or percent-encoded) asks.
+- **Acting goes through unless it sends**, at "Use good judgement" and "Go
+  hard": a click, keystroke, form fill or batch asks only when the control's
+  accessible name (what `read_page` / `find` answered for that `ref`, kept per
+  agent from the stream: `browser_gate::observe`) is a send / post / publish /
+  pay / buy / order / delete / remove / share / invite / submit / confirm /
+  merge / deploy word (whole words: "Posts" and "Sign in" don't count), when
+  Enter is pressed anywhere but a search box (or nobody knows where the cursor
+  is), or when the page is a payment host or a checkout / cart / billing /
+  compose / transfer page. A click by coordinate can't be named, so it goes
+  through except on those pages: **an accepted gap**, as is a navigation
+  carrying data in its own URL to a site the agent chose. At "Check with me
+  often" every interaction asks.
+- **Always a card**, at every level: `javascript_tool`, `file_upload`,
+  `upload_image`, `shortcuts_execute`, a GIF export and any tool this build
+  doesn't know.
+
+A browser card says what it would do in plain words ("Click “Send” on
+mail.google.com", "This would send it as you"), then what it types or fills and where and as whom (`browser::card_for`: the site last opened and the account found there, `browser_profiles`), with the raw call behind
+Details. Allowed steps leave only their line in "What it did". At launch,
+pending browser cards the current rules wouldn't ask about are answered Allow
+(`mcp::allow_open_browser_cards`), with one receipt line per agent, and the
+agent woken once. Turns answering outside text still never get the browser.
+`browser_sites` only ever holds a catalogue service's built-in host
+(`logins::SERVICES`): the access chain, a login card's "Use my browser" and
+the reach check add one; nothing an agent or an import types becomes a site.
 
 **Which Chrome profile** (`agents/browser_profiles.rs`). The extension can sit
 in more than one Chrome profile, each signed in as someone else. When the

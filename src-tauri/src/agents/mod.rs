@@ -56,6 +56,7 @@ pub mod attachments;
 pub mod autoallow;
 pub mod broker;
 pub mod browser;
+pub mod browser_gate;
 pub mod browser_profiles;
 pub mod capabilities;
 pub mod capacity;

@@ -1,4 +1,6 @@
 use super::*;
+use crate::agents::browser_gate::SERVER;
+use crate::agents::independence::Level;
 use serde_json::json;
 
 fn with_root<F: FnOnce()>(f: F) {
@@ -40,7 +42,17 @@ fn only_a_switched_on_team_and_its_own_turns_get_the_browser() {
 #[test]
 fn reading_is_free_on_its_sites_and_everything_else_asks() {
     let a = agent(Engine::Claude, &["www.figma.com"], false);
-    let g = |tool: &str, input: serde_json::Value| gate_with(true, &a, tool, &input, false);
+    let g = |tool: &str, input: serde_json::Value| {
+        gate_with(
+            true,
+            Level::Often,
+            &a,
+            tool,
+            &input,
+            false,
+            &Page::default(),
+        )
+    };
     assert_eq!(
         g(NAV, json!({"url": "https://www.figma.com/files"})),
         Gate::Allow
@@ -117,7 +129,17 @@ fn reading_is_free_on_its_sites_and_everything_else_asks() {
 #[test]
 fn a_url_inside_a_url_or_a_new_tab_elsewhere_or_a_gif_export_asks() {
     let a = agent(Engine::Claude, &["www.linkedin.com"], false);
-    let g = |tool: &str, input: serde_json::Value| gate_with(true, &a, tool, &input, false);
+    let g = |tool: &str, input: serde_json::Value| {
+        gate_with(
+            true,
+            Level::Often,
+            &a,
+            tool,
+            &input,
+            false,
+            &Page::default(),
+        )
+    };
     // Its own site's redirect endpoint would carry page data off-site.
     for url in [
         "https://www.linkedin.com/redir/redirect?url=https://evil.example/?d=x",
@@ -159,10 +181,10 @@ fn an_outside_turn_or_a_switched_off_team_is_refused_even_reads() {
     let a = agent(Engine::Claude, &["www.figma.com"], false);
     let read = json!({"url": "https://www.figma.com/"});
     assert!(
-        matches!(gate_with(true, &a, NAV, &read, true), Gate::Refuse(w) if w.contains("from outside"))
+        matches!(gate_with(true, Level::Often, &a, NAV, &read, true, &Page::default()), Gate::Refuse(w) if w.contains("from outside"))
     );
     assert!(
-        matches!(gate_with(false, &a, NAV, &read, false), Gate::Refuse(w) if w.contains("request_login"))
+        matches!(gate_with(false, Level::Often, &a, NAV, &read, false, &Page::default()), Gate::Refuse(w) if w.contains("request_login"))
     );
 }
 
