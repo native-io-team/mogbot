@@ -911,8 +911,10 @@ call, so turning it off holds from the next call):
   are kept until it's purged (`purge_expired`, when that list is read). It
   leaves its rooms. The user's own Delete is unchanged.
 
-**What it may never do** (`classify`, `judge`, both pure and tested):
-local work is reading (`ls`, `cat`, `grep`, read-only `git`…), `mkdir` /
+**What it may never do** (`classify_in`, `judge_in`, both pure and tested):
+local work is exactly what Go hard answers on its own (`autoallow::classify`:
+Read and Change). Without the asking agent's context, the narrower fallback:
+reading (`ls`, `cat`, `grep`, read-only `git`…), `mkdir` /
 `touch`, Read, and Write of a *new* file under the home folder. Anything with
 a hidden path (`.env`, `~/.ssh`), a chain, `rm`, `git push`, `gh`,
 `curl`/`ssh`, `sudo`, `security`, publish/deploy, Edit of an existing file,
@@ -939,9 +941,10 @@ read (`admin::apply`).
 **Not verified.** No live engine turn has called these tools; the rules are
 held by unit tests (`admin_tests.rs`) and the UI by the harness
 (`agents-admin-batch`, `settings-agents-admins`) and the phone's `qa:web`
-(`chat-chief`). The Go-hard classifier (another branch) may replace
-`local_call` once merged; "Maybe later" here closes the card rather than
-using the access chain's checklist.
+(`chat-chief`). Local work is Go hard's own classifier
+(`autoallow::classify`, Read and Change) with the asking agent's context;
+`local_call` is only the fallback without one. "Maybe later" here closes the
+card rather than using the access chain's checklist.
 
 ## Secrets (`src-tauri/src/agents/secrets.rs`)
 
