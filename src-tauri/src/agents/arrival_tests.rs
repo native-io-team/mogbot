@@ -371,3 +371,24 @@ fn importing_from_the_review_card_writes_what_the_card_showed() {
     assert!(md[s..e].contains("confirm_push → push"));
     assert!(md[s..e].contains("No files or past conversations came over from Grok Bot."));
 }
+
+#[test]
+fn an_older_logins_bullet_becomes_just_try_first_and_nothing_else_moves() {
+    let (_serial, _dir) = root();
+    let (agent, _) = already_imported("Garden Redesign", GARDEN, "- Never contact realtors");
+    assert!(upgrade(&agent).unwrap());
+    let path = store::agent_home(&agent.id).unwrap().join("CLAUDE.md");
+    // As an older build wrote it.
+    let now = claude_md(&agent.id);
+    let old = now.replacen(LOGINS_LINE, PAST_LOGINS_LINES[0], 1);
+    assert_ne!(old, now);
+    std::fs::write(&path, &old).unwrap();
+    assert!(upgrade(&agent).unwrap());
+    let after = claude_md(&agent.id);
+    assert!(!upgrade(&agent).unwrap(), "once");
+    store::set_root_for_tests(None);
+    assert_eq!(after, now, "only the bullet changed");
+    assert!(after.contains("just try first"));
+    assert!(after.contains("never up front"));
+    assert!(after.contains("which account you're in"));
+}

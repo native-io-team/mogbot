@@ -50,7 +50,8 @@ export type ModalId =
   | 'phone'
   | 'projectTools'
   | 'chiefIdeas'
-  | 'teamLogins';
+  | 'teamLogins'
+  | 'agentBrowser';
 
 interface ModalContextValue {
   isOpen: (id: ModalId) => boolean;

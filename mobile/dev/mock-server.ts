@@ -520,13 +520,35 @@ export function createMockServer(opts: MockOptions = {}) {
         {
           id: 'logins',
           state: 'open',
-          logins: made.slice(0, 5).map((a) => ({
-            agentId: a.id,
-            agentName: a.name,
-            requestId: `${a.id}_login`,
-            name: a.name.toLowerCase().replace(/\W+/g, '_'),
-            purpose: `A login ${a.name} used with Grok Bot`,
+          // An import asks for nothing up front: what its agents used is
+          // checked against the Mac, and only the residue is left (fictional).
+          later: [
+            ['figma', 'Figma', 'reachable', 'your browser, signed in on www.figma.com'],
+            ['github', 'GitHub', 'reachable', 'GitHub CLI on this Mac, signed in as ivy-studio'],
+            ['gmail', 'Gmail', 'reachable', 'Claude Code’s claude.ai gmail app'],
+            ['linkedin', 'LinkedIn', 'open', 'Use my browser'],
+            ['notion', 'Notion', 'open', 'Connect Notion'],
+            ['other:kiln log', 'Kiln log', 'open', 'Add a key for Kiln log'],
+          ].map(([key, title, state, more], i) => ({
+            key,
+            service: key.startsWith('other:') ? 'other' : key,
+            title,
+            agents: [made[i % made.length].name, made[(i + 3) % made.length].name],
+            agentIds: [made[i % made.length].id, made[(i + 3) % made.length].id],
+            keyOnly: key.startsWith('other:'),
+            ...(state === 'reachable'
+              ? { state: 'reachable' as const, via: more, action: `Connect ${title}` }
+              : { state: 'open' as const, action: more }),
           })),
+          check: {
+            running: false,
+            total: 6,
+            checked: ['Figma', 'GitHub', 'Gmail', 'LinkedIn', 'Notion', 'Kiln log'].map(
+              (title, i) => ({ title, reached: i < 3 })
+            ),
+            browser: true,
+            finishedAt: now - 8 * 60_000,
+          },
         },
         {
           id: 'routines',
@@ -594,7 +616,9 @@ export function createMockServer(opts: MockOptions = {}) {
     if (!teamSetup) return;
     const s = teamSetup;
     const logins = s.steps.find((x) => x.id === 'logins');
-    if (logins && !logins.logins?.length && logins.state === 'open') logins.state = 'done';
+    const residue = logins?.later?.some((r) => r.state === 'open' || r.state === 'asked');
+    if (logins && !logins.logins?.length && !residue && logins.state === 'open')
+      logins.state = 'done';
     const hello = s.steps.find((x) => x.id === 'hello');
     if (hello?.agents?.every((a) => a.state === 'said_hi')) hello.state = 'done';
     s.done = s.steps.filter((x) => x.state !== 'open').length;
@@ -1373,7 +1397,7 @@ export function createMockServer(opts: MockOptions = {}) {
       .map((c) => c.slice('Using your browser · '.length));
     return {
       connections,
-      ...(a?.engine === 'codex' ? {} : { browser: { on: true, sites, helperInstalled: true } }),
+      ...(a?.engine === 'codex' ? {} : { browser: { on: true, teamOn: true, ownOff: false, sites, helperInstalled: true } }),
       secrets: (a?.secrets ?? []).map((x) => ({
         secretId: x.id,
         name: x.name,
@@ -2089,6 +2113,27 @@ export function createMockServer(opts: MockOptions = {}) {
       if (teamSetup) teamSetup.dismissed = true;
       setupChanged();
       return null;
+    },
+    'agents.teamSetup.later': (p) => {
+      const step = teamSetup?.steps.find((s) => s.id === 'logins');
+      const i = step?.later?.findIndex((r) => r.key === p.key) ?? -1;
+      if (!step?.later || i < 0)
+        return fail({ type: 'Other', message: 'That isn’t on the checklist any more.' });
+      const row = step.later[i];
+      if (p.action === 'not_needed') {
+        step.later[i] = { ...row, state: 'not_needed' } as typeof row;
+        setupChanged();
+        return null;
+      }
+      const raised = { agentId: row.agentIds[0], requestId: `${row.key}_signin` };
+      step.later[i] = { ...row, state: 'asked', ...raised } as typeof row;
+      setupChanged();
+      return raised;
+    },
+    'agents.teamSetup.check': () => {
+      const step = teamSetup?.steps.find((s) => s.id === 'logins');
+      setupChanged();
+      return step?.later?.filter((r) => r.state === 'reachable').length ?? 0;
     },
     // An import going on, as the phone's Import screen follows it.
     'agents.import.status': () => importStatus(),

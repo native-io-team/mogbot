@@ -22,10 +22,20 @@ import { haptic } from '../lib/haptics';
 import { describeError, teamSetup } from '../lib/session';
 import { useApp } from '../lib/store';
 import {
+  ASKED_LINE,
+  CHECK_AGAIN,
   COMPLETE_LINE,
+  NOT_NEEDED,
   SET_ASIDE_NOTE,
   SETUP_TITLE,
   anyReplying,
+  checkLine,
+  openRows,
+  reachedRows,
+  reachedToggle,
+  receipt,
+  residueLine,
+  rowAgents,
   groupLogins,
   helloWord,
   openStep,
@@ -256,7 +266,14 @@ function StepItems({
     router.push({ pathname: '/chat/[id]', params: { id: agentId } });
   switch (step.id) {
     case 'logins':
-      return <SetupLogins logins={step.logins ?? []} onOpenChat={openChat} />;
+      return (
+        <View style={styles.items}>
+          {!!step.later?.length && (
+            <Reach step={step} connected={connected} busy={busy} run={run} openChat={openChat} />
+          )}
+          <SetupLogins logins={step.logins ?? []} onOpenChat={openChat} />
+        </View>
+      );
     case 'routines':
       return (
         <View style={styles.items}>
@@ -333,6 +350,147 @@ function StepItems({
       );
     }
   }
+}
+
+/**
+ * What the team can already reach (desktop `agents/access_check.rs`): one
+ * calm line while the Mac checks, then only the residue, each with one
+ * sign-in button and "Not needed"; what it reached folds into receipts.
+ */
+function Reach({
+  step,
+  connected,
+  busy,
+  run,
+  openChat,
+}: {
+  step: TeamSetupStep;
+  connected: boolean;
+  busy: string | null;
+  run: (key: string, work: () => Promise<unknown>) => void;
+  openChat: (agentId: string) => void;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const [showReached, setShowReached] = useState(false);
+  const rows = step.later ?? [];
+  const check = step.check;
+  const off = !connected || busy !== null;
+  if (check?.running) {
+    return (
+      <View style={styles.item} testID="team-setup-checking">
+        <Spinner />
+        <T variant="small" color={colors.textSecondary} style={{ flex: 1 }}>
+          {checkLine(check)}
+        </T>
+      </View>
+    );
+  }
+  const open = openRows(rows);
+  const reached = reachedRows(rows);
+  const waiting = rows.filter((r) => r.state === 'asked');
+  const notNeeded = rows.filter((r) => r.state === 'not_needed');
+  return (
+    <View style={styles.items} testID="team-setup-reach">
+      <T variant="small" color={colors.textStrong}>
+        {residueLine(open.length)}
+      </T>
+      {open.map((r) => (
+        <View key={r.key} style={styles.item} testID={`reach-open-${r.key}`}>
+          <View style={{ flex: 1 }}>
+            <T variant="small" color={colors.textStrong}>
+              {r.title}
+            </T>
+            <T variant="caption" color={colors.textMuted}>
+              {rowAgents(r)}
+            </T>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${r.title}: ${NOT_NEEDED}`}
+              disabled={off}
+              onPress={() => run(`later:${r.key}:no`, () => teamSetup.later(r.key, 'not_needed'))}
+              hitSlop={10}
+            >
+              <T variant="caption" color={colors.textSecondary}>
+                {NOT_NEEDED}
+              </T>
+            </Pressable>
+          </View>
+          {!!r.action && (
+            <Button
+              title={r.action}
+              variant="secondary"
+              size="compact"
+              disabled={off}
+              busy={busy === `later:${r.key}`}
+              onPress={() =>
+                run(`later:${r.key}`, async () => {
+                  const raised = await teamSetup.later(r.key, 'connect', true);
+                  if (raised) openChat(raised.agentId);
+                })
+              }
+            />
+          )}
+        </View>
+      ))}
+      {waiting.map((r) => (
+        <View key={r.key} style={styles.item} testID={`reach-asked-${r.key}`}>
+          <View style={{ flex: 1 }}>
+            <T variant="small" color={colors.textStrong}>
+              {r.title}
+            </T>
+            <T variant="caption" color={colors.textMuted}>
+              {ASKED_LINE}
+            </T>
+          </View>
+          {r.state === 'asked' && (
+            <Button
+              title="Open"
+              variant="ghost"
+              size="compact"
+              onPress={() => openChat(r.agentId)}
+              accessibilityHint="Opens the chat with its sign-in card"
+            />
+          )}
+        </View>
+      ))}
+      {notNeeded.map((r) => (
+        <T key={r.key} variant="caption" color={colors.textMuted}>
+          {r.title} · {NOT_NEEDED}
+        </T>
+      ))}
+      {reached.length > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showReached }}
+          onPress={() => setShowReached((v) => !v)}
+          hitSlop={10}
+          testID="reach-reached-toggle"
+        >
+          <T variant="caption" color={colors.textSecondary}>
+            {reachedToggle(reached.length)}
+          </T>
+        </Pressable>
+      )}
+      {showReached &&
+        reached.map((r) => (
+          <T key={r.key} variant="caption" color={colors.textMuted}>
+            {receipt(r)}
+          </T>
+        ))}
+      <Pressable
+        accessibilityRole="button"
+        disabled={off}
+        onPress={() => run('check', teamSetup.check)}
+        hitSlop={10}
+        testID="reach-check-again"
+      >
+        <T variant="caption" color={colors.textSecondary}>
+          {CHECK_AGAIN}
+        </T>
+      </Pressable>
+    </View>
+  );
 }
 
 function RoutineRow({

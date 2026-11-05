@@ -25,6 +25,7 @@ import {
   CommentIcon,
   CopyIcon,
   DownloadIcon,
+  GlobeIcon,
   ErrorIcon,
   FolderIcon,
   HistoryIcon,
@@ -968,6 +969,9 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
       </>
     );
   }
+  if (approval.front && (approval.status === 'allowed' || approval.status === 'denied')) {
+    return approval.status === 'allowed' ? 'Checked again' : 'Not now';
+  }
   if (approval.status === 'denied' && approval.note) {
     return <>Declined · “{approval.note}”</>;
   }
@@ -1053,7 +1057,9 @@ export const ApprovalCard = memo(function ApprovalCard({
   }
   // Another assistant asking to start an import: a plain yes or no, so Deny
   // doesn't open the "what instead" line.
-  const plainDeny = approval.connector?.kind === 'consent';
+  // "Bring your Chrome window to the front": Check again / Not now, nothing else.
+  const front = !!approval.front;
+  const plainDeny = approval.connector?.kind === 'consent' || front;
   const pending = approval.status === 'pending';
   const fields = approvalFields(approval.tool, approval.input);
   const answer = async (allow: boolean, always = false, why?: string) => {
@@ -1074,7 +1080,15 @@ export const ApprovalCard = memo(function ApprovalCard({
       <AgentCard
         className="agent-approval"
         data={{ status: approval.status, clamped: (long && !showAll) || undefined }}
-        icon={plainDeny ? <DownloadIcon size={14} /> : <ShieldCheckIcon size={14} />}
+        icon={
+          front ? (
+            <GlobeIcon size={14} />
+          ) : plainDeny ? (
+            <DownloadIcon size={14} />
+          ) : (
+            <ShieldCheckIcon size={14} />
+          )
+        }
         title={approval.title}
         meta={
           series && series.total > 1
@@ -1141,7 +1155,7 @@ export const ApprovalCard = memo(function ApprovalCard({
                 disabled={busy}
                 onClick={() => void answer(false)}
               >
-                Deny
+                {front ? 'Not now' : 'Deny'}
               </Button>
               <Button
                 tabIndex={0}
@@ -1151,7 +1165,7 @@ export const ApprovalCard = memo(function ApprovalCard({
                 {...keyProps}
                 onClick={guard(() => void answer(true))}
               >
-                Allow
+                {front ? 'Check again' : 'Allow'}
               </Button>
             </>
           ) : undefined
