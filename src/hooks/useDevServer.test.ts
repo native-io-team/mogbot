@@ -29,6 +29,12 @@ vi.mock('../lib/static-server', () => ({
   isMobileProjectType: (type: string) => type === 'reactnative' || type === 'flutter',
 }));
 
+vi.mock('../lib/devServerConsent', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/devServerConsent')>()),
+  getDevServerConsent: vi.fn(),
+  approveDevServer: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
 }));
@@ -57,7 +63,100 @@ vi.mock('../lib/logger', () => ({
   },
 }));
 
+const APPROVED = {
+  state: 'approved' as const,
+  fingerprint: 'f1',
+  surface: {
+    scripts: { dev: 'next dev' },
+    workspaceScripts: null,
+    workspaceSubpath: null,
+    customCommand: null,
+  },
+};
+
 describe('useDevServer', () => {
+  describe('dev-server consent', () => {
+    it('asks instead of starting when the project was never approved, and starts once approved', async () => {
+      const { detectProjectType } = await import('../lib/static-server');
+      const { startDevServer } = await import('../lib/project');
+      const consent = await import('../lib/devServerConsent');
+      vi.mocked(detectProjectType).mockResolvedValue('nextjs');
+      vi.mocked(consent.getDevServerConsent).mockResolvedValue({ ...APPROVED, state: 'new' });
+
+      const { result } = renderHook(() => useDevServer('/path/to/project'));
+      await act(async () => {
+        await result.current.startServerForProject('/path/to/project', 'my-project', 3000, 'main');
+      });
+
+      expect(startDevServer).not.toHaveBeenCalled();
+      expect(result.current.isServerStarting('/path/to/project')).toBe(false);
+      const pending = consent.devServerConsentStore.get('/path/to/project');
+      expect(pending?.consent.state).toBe('new');
+
+      vi.mocked(consent.getDevServerConsent).mockResolvedValue(APPROVED);
+      await act(async () => {
+        await pending!.resume();
+      });
+      expect(startDevServer).toHaveBeenCalledWith(
+        '/path/to/project',
+        3000,
+        'main',
+        expect.any(Function),
+        undefined,
+        { root: '/path/to/project' }
+      );
+      expect(consent.devServerConsentStore.get('/path/to/project')).toBeNull();
+    });
+
+    it('a restart after the scripts changed asks again and leaves the server alone', async () => {
+      const { detectProjectType } = await import('../lib/static-server');
+      const { startDevServer } = await import('../lib/project');
+      const consent = await import('../lib/devServerConsent');
+      vi.mocked(detectProjectType).mockResolvedValue('nextjs');
+
+      const { result } = renderHook(() => useDevServer('/path/to/project'));
+      await act(async () => {
+        await result.current.startServerForProject('/path/to/project', 'my-project', 3000, 'main');
+      });
+      expect(startDevServer).toHaveBeenCalledTimes(1);
+
+      vi.mocked(consent.getDevServerConsent).mockResolvedValue({ ...APPROVED, state: 'changed' });
+      await act(async () => {
+        await result.current.handleRestartDevServer('/path/to/project');
+      });
+      expect(startDevServer).toHaveBeenCalledTimes(1);
+      expect(result.current.isServerRunning('/path/to/project')).toBe(true);
+      expect(consent.devServerConsentStore.get('/path/to/project')?.consent.state).toBe('changed');
+    });
+
+    it('a failed consent check starts nothing', async () => {
+      const { detectProjectType } = await import('../lib/static-server');
+      const { startDevServer } = await import('../lib/project');
+      const consent = await import('../lib/devServerConsent');
+      vi.mocked(detectProjectType).mockResolvedValue('nextjs');
+      vi.mocked(consent.getDevServerConsent).mockRejectedValue(new Error('boom'));
+
+      const { result } = renderHook(() => useDevServer('/path/to/project'));
+      await act(async () => {
+        await result.current.startServerForProject('/path/to/project', 'my-project', 3000, 'main');
+      });
+      expect(startDevServer).not.toHaveBeenCalled();
+    });
+
+    it('a static site starts without asking', async () => {
+      const { detectProjectType } = await import('../lib/static-server');
+      const consent = await import('../lib/devServerConsent');
+      vi.mocked(detectProjectType).mockResolvedValue('statichtml');
+      vi.mocked(consent.getDevServerConsent).mockResolvedValue({ ...APPROVED, state: 'new' });
+
+      const { result } = renderHook(() => useDevServer('/path/to/project'));
+      await act(async () => {
+        await result.current.startServerForProject('/path/to/project', 'site', 3000, 'main');
+      });
+      expect(consent.getDevServerConsent).not.toHaveBeenCalled();
+    });
+  });
+
   beforeEach(async () => {
     vi.clearAllMocks();
     // Clear call history, then re-apply defaults for mocks used by most tests.
@@ -78,6 +177,9 @@ describe('useDevServer', () => {
       hasPackageJson: true,
       workspaceHasPackageJson: true,
     });
+    const consent = await import('../lib/devServerConsent');
+    vi.mocked(consent.getDevServerConsent).mockResolvedValue(APPROVED);
+    consent.devServerConsentStore.clear('/path/to/project');
   });
 
   it('initializes with default state', () => {
@@ -356,7 +458,8 @@ describe('useDevServer', () => {
         3000,
         'main',
         expect.any(Function),
-        'pnpm run dev'
+        'pnpm run dev',
+        { root: '/path/to/project' }
       );
       expect(result.current.customDevCommand).toBeNull();
       expect(result.current.genericDevCommand).toBe('pnpm run dev');
@@ -381,7 +484,8 @@ describe('useDevServer', () => {
         3000,
         'main',
         expect.any(Function),
-        'nx serve web'
+        'nx serve web',
+        { root: '/path/to/project' }
       );
       expect(result.current.customDevCommand).toBe('nx serve web');
       expect(result.current.genericDevCommand).toBe('nx serve web');
@@ -492,7 +596,9 @@ describe('useDevServer', () => {
         '/path/to/project',
         3000,
         'main',
-        expect.any(Function)
+        expect.any(Function),
+        undefined,
+        { root: '/path/to/project' }
       );
     });
 
@@ -589,7 +695,9 @@ describe('useDevServer', () => {
         '/path/to/project/apps/web',
         3000,
         'main',
-        expect.any(Function)
+        expect.any(Function),
+        undefined,
+        { root: '/path/to/project' }
       );
     });
 

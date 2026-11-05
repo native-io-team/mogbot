@@ -69,6 +69,8 @@ function installIpc() {
         return null;
       case 'get_shell_path':
         return '/usr/bin:/bin';
+      case 'get_dev_server_consent':
+        return { state: 'approved', fingerprint: 'f', surface: {} };
       default:
         return null;
     }

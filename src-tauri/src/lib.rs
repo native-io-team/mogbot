@@ -213,6 +213,9 @@ pub fn run() {
                 }
             }
 
+            // Dev-server approvals: owner-only, whatever an older build left.
+            commands::projects::harden_dev_consent_store();
+
             // Remote access: if the user left it on, bring it back — a Mac that
             // restarted overnight should be reachable again once it's logged in.
             {
@@ -736,6 +739,8 @@ pub fn run() {
             commands::projects::get_hide_main_branch_warning,
             commands::projects::set_hide_main_branch_warning,
             commands::projects::get_custom_dev_command,
+            commands::projects::get_dev_server_consent,
+            commands::projects::approve_dev_server,
             commands::projects::set_custom_dev_command,
             commands::projects::get_dev_server_port,
             commands::projects::set_dev_server_port,

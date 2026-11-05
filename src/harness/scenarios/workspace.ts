@@ -16,6 +16,20 @@ import { buildTeamFixture } from '../fixtures/team';
 
 export const WORKSPACE_PROJECT = `${HARNESS_ROOT}/acme-marketing`;
 
+/** What acme-marketing's package.json would run, for the consent prompt. */
+export const DEV_CONSENT_SURFACE = {
+  scripts: {
+    dev: 'next dev',
+    build: 'next build',
+    start: 'next start',
+    lint: 'next lint',
+    postinstall: 'node scripts/fetch-fonts.mjs',
+  },
+  workspaceScripts: null,
+  workspaceSubpath: null,
+  customCommand: null,
+};
+
 /**
  * `get_team_snapshot`, which reads a real repository — git history, `gh pr
  * list`, and any records under `.shipstudio-team/`. A capture machine has none
@@ -71,6 +85,17 @@ export const workspaceCommands: CommandMap = {
   // `detectPackageManager` in `src/lib/github.ts` ("pnpm" | "yarn" | "bun" |
   // "npm"); 'pnpm' matches what this repo uses.
   detect_package_manager: 'pnpm',
+
+  // Asked before the dev server starts (and again right before it spawns).
+  // Approved by default so every other workspace capture shows the preview
+  // it always did; the `dev-server-consent-*` scenarios show the prompt.
+  // Shape: `DevServerConsent` in src/lib/devServerConsent.ts (camelCase).
+  get_dev_server_consent: {
+    state: 'approved',
+    fingerprint: 'harness',
+    surface: DEV_CONSENT_SURFACE,
+  },
+  approve_dev_server: null,
 
   // Asked for on every workspace open. Unmocked it badged every workspace
   // capture incomplete, which by this harness's own rule means none of their
