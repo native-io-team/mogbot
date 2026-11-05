@@ -343,7 +343,7 @@ export function WorkspaceHeader({
   pluginTheme,
 }: WorkspaceHeaderProps) {
   const [openSourceMenu, setOpenSourceMenu] = useState<'branches' | 'push' | null>(null);
-  const currentBranchIsLive =
+  const currentBranchIsDefault =
     currentBranch !== null &&
     (branches.find((branch) => branch.name === currentBranch)?.isDefault ?? false);
   // PublishBranchDropdown renders a bare disabled trigger (no menu at all)
@@ -449,7 +449,7 @@ export function WorkspaceHeader({
             isOpen={openSourceMenu === 'push'}
             onOpenChange={(open) => setOpenSourceMenu(open ? 'push' : null)}
             opensPushMenu={pushMenuAvailable}
-            isLive={currentBranchIsLive}
+            isDefault={currentBranchIsDefault}
           />
         )}
         <PublishBranchDropdown

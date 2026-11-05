@@ -5,10 +5,9 @@
  *   (`AgentsDesktopSettings`), and what keeps agents going (keep awake, keep
  *   running when closed, open at login — `useStayOn`, read back from the
  *   thing itself).
- * - **Engines and models**: which engine a new agent starts on, as
- *   `defaultEngine` decides it from the engines' real state, and what
- *   routines run on. Both are per agent; this says the rule and where to
- *   change it, and shows nothing it hasn't read.
+ * - **Engines and models**: the engine and model new agents start on, a
+ *   real setting (`AgentDefaultsSettings`), and what routines run on.
+ *   Existing agents keep theirs; nothing shown that wasn't read.
  * - **Notifications**: what notifies, and where to mute one agent.
  * - **Phone and other assistants**: the way into each.
  *
@@ -20,9 +19,10 @@
 import type { ReactNode } from 'react';
 import { Button } from '../primitives/Button';
 import { AgentsDesktopSettings } from './AgentsDesktopSettings';
+import { AgentDefaultsSettings } from './AgentDefaultsSettings';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
-import { defaultEngine, ENGINE_LABEL, engineUnavailable, type EngineInfo } from '../../lib/agents';
+import type { EngineInfo } from '../../lib/agents';
 
 function Toggle({
   on,
@@ -69,15 +69,6 @@ function Row({
   );
 }
 
-const engineState = (e: EngineInfo) => {
-  const missing = engineUnavailable(e);
-  return missing === 'install'
-    ? 'not installed'
-    : missing === 'sign-in'
-      ? 'not signed in'
-      : 'ready';
-};
-
 const selectEngines = (s: { engines: EngineInfo[] }) => s.engines;
 
 export function AgentsSettings({
@@ -89,7 +80,7 @@ export function AgentsSettings({
 }) {
   const { state: stayOn, change } = useStayOn();
   const engines = useAgentsSelector(selectEngines);
-  const starts = engines.length > 0 ? defaultEngine(engines) : null;
+  const hasDefaults = useAgentsSelector((s) => s.defaults !== null);
 
   return (
     <div className="settings-modal-body agents-settings">
@@ -130,22 +121,13 @@ export function AgentsSettings({
         )}
       </section>
 
-      {starts && (
+      {engines.length > 0 && hasDefaults && (
         <section className="settings-group" aria-labelledby="agents-settings-engines">
           <h3 className="settings-group__title" id="agents-settings-engines">
             Engines and models
           </h3>
+          <AgentDefaultsSettings />
           <div className="settings-section">
-            <Row
-              label={`New agents start on ${ENGINE_LABEL[starts]}`}
-              description={engines
-                .map((e) => `${ENGINE_LABEL[e.id] ?? e.label} ${engineState(e)}`)
-                .join(' · ')}
-            />
-            <Row
-              label="Models"
-              description="Each agent uses its engine’s default model; pick another in Edit agent."
-            />
             <Row
               label="Routines"
               description="On Claude Code, routines run on the fastest model unless the agent has its own."

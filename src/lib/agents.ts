@@ -283,11 +283,35 @@ export interface EngineInfo {
   models: EngineModel[];
 }
 
+/**
+ * Mirrors `defaults::View`: what a new agent starts on when nobody picked
+ * (Settings → Agents). Existing agents keep their own engine and model.
+ */
+export interface NewAgentDefaults {
+  /** The engine the user chose; null when they never have (the rule decides). */
+  engine: AgentEngine | null;
+  /** Each engine's chosen model while it still offers it; null is the engine's own default. */
+  models: { claude: string | null; codex: string | null };
+  /** Where a new agent starts now: the chosen engine when it's ready, else the first that is. */
+  startsOn: AgentEngine;
+  /** The model it starts on there; null is that engine's default. */
+  model: string | null;
+}
+
+/** A change to `NewAgentDefaults`: a field left out stays; an empty model is the engine's own. */
+export interface NewAgentDefaultsChange {
+  engine?: AgentEngine;
+  claudeModel?: string;
+  codexModel?: string;
+}
+
 export interface AgentsOverview {
   agents: Agent[];
   /** Claude Code is installed. Per-agent readiness is `engineIsReady` over `engines`. */
   engineReady: boolean;
   engines: EngineInfo[];
+  /** What new agents start on. Optional for the phone's older Macs (see the protocol). */
+  defaults?: NewAgentDefaults;
 }
 
 export type MessageKind =
@@ -671,12 +695,15 @@ export interface UpdateAgentInput {
   workDirectly?: boolean;
 }
 
+/** The model choice that passes no model: whatever the engine itself defaults to. */
+export const ENGINE_DEFAULT_LABEL = 'Engine’s default';
+
 /**
  * The models an agent can run on: Claude Code's own `--model` aliases, which
  * always mean the current model of that family. Must match `MODELS` in store.rs.
  */
 export const AGENT_MODELS: readonly ModelChoice[] = [
-  { value: '', label: 'Default' },
+  { value: '', label: ENGINE_DEFAULT_LABEL },
   { value: 'opus', label: 'Most capable', detail: 'Opus' },
   { value: 'sonnet', label: 'Balanced', detail: 'Sonnet' },
   { value: 'haiku', label: 'Fastest', detail: 'Haiku' },
@@ -684,7 +711,7 @@ export const AGENT_MODELS: readonly ModelChoice[] = [
 
 export const ENGINE_LABEL: Record<AgentEngine, string> = { claude: 'Claude Code', codex: 'Codex' };
 
-/** Default first, then the engine's own models (Claude Code's aliases until the overview says). */
+/** Engine's default first, then the engine's own models (Claude Code's aliases until the overview says). */
 export function modelChoices(engine: AgentEngine, engines: EngineInfo[]): readonly ModelChoice[] {
   const listed = engines.find((e) => e.id === engine)?.models;
   if (engine === 'claude' && !listed?.length) return AGENT_MODELS;
@@ -701,7 +728,7 @@ export function modelLabel(
   model: string | null,
   choices: readonly ModelChoice[] = AGENT_MODELS
 ): string {
-  return choices.find((m) => m.value === (model ?? ''))?.label ?? model ?? 'Default';
+  return choices.find((m) => m.value === (model ?? ''))?.label ?? model ?? ENGINE_DEFAULT_LABEL;
 }
 
 /**
@@ -733,6 +760,44 @@ export function defaultEngine(engines: EngineInfo[]): AgentEngine {
   const ready = engines.filter((e) => engineUnavailable(e) === null);
   if (ready.some((e) => e.id === 'claude')) return 'claude';
   return ready[0]?.id ?? 'claude';
+}
+
+/**
+ * Where a new agent starts when nobody picked: the user's default
+ * (`defaults.startsOn`, already checked against the engines on the Mac), or
+ * before the overview says, the rule (`defaultEngine`).
+ */
+export function newAgentEngine(
+  defaults: NewAgentDefaults | null,
+  engines: EngineInfo[]
+): AgentEngine {
+  return defaults?.startsOn ?? defaultEngine(engines);
+}
+
+/**
+ * The model a new agent on `engine` starts on: the default chosen for that
+ * engine while it's still one of `choices`, else the engine's own ('').
+ */
+export function newAgentModel(
+  defaults: NewAgentDefaults | null,
+  engine: AgentEngine,
+  choices: readonly ModelChoice[]
+): string {
+  const chosen = defaults?.models[engine] ?? '';
+  return choices.some((m) => m.value === chosen) ? chosen : '';
+}
+
+/**
+ * The line under "New agents start on" when the chosen engine can't take new
+ * agents and they start on another for now (`startsOn`), or null when they
+ * start where chosen. `verb` is how the control is used: "Pick" on the desk,
+ * "Tap" on the phone (mobile/src/lib/newAgentDefaults.ts says the same).
+ */
+export function startsOnFallback(defaults: NewAgentDefaults, verb: 'Pick' | 'Tap'): string | null {
+  const { engine, startsOn } = defaults;
+  if (!engine || engine === startsOn) return null;
+  const on = ENGINE_LABEL[startsOn];
+  return `${ENGINE_LABEL[engine]} isn’t ready, so new agents start on ${on} for now. ${verb} ${on} to keep them there.`;
 }
 
 /** What an engine needs before it can take an agent, or null when it can. */
@@ -986,6 +1051,13 @@ export type FilesFilter = 'all' | 'user' | 'agent';
 export const filterFiles = (files: SharedFile[], filter: FilesFilter) =>
   filter === 'all' ? files : files.filter((f) => f.from === filter);
 
+/**
+ * Change what new agents start on. Refused, with nothing saved, for an engine
+ * that isn't installed and signed in or a model its engine doesn't offer. The
+ * overview carries the result, so the store picks it up on its own.
+ */
+export const setNewAgentDefaults = (change: NewAgentDefaultsChange) =>
+  invoke<NewAgentDefaults>('agents_set_defaults', { change });
 export const createAgent = (input: NewAgentInput) =>
   invoke<Omit<Agent, 'status' | 'home'>>('agents_create', { input });
 export const updateAgent = (agentId: string, input: UpdateAgentInput) =>

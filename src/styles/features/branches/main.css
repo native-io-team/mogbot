@@ -137,11 +137,13 @@
   font-weight: var(--font-weight-medium);
 }
 
-.branch-live-badge {
+/* The default branch's role. Neutral: it is not a deploy state — the app
+   never checked that the branch is live (Hosting answers that per commit). */
+.branch-default-badge {
   padding: var(--space-04);
   border-radius: var(--radius-2);
-  background: color-mix(in srgb, var(--accent-success) 15%, transparent);
-  color: var(--accent-success);
+  background: var(--surface-control);
+  color: var(--text-secondary);
   font-size: var(--font-size-10);
   font-weight: var(--font-weight-medium);
   white-space: nowrap;
@@ -190,7 +192,7 @@
    narrows: the live marker first, then the branch name. The Push affordance
    and its unsaved state remain visible throughout. */
 @media (max-width: 1100px) {
-  .workspace-titlebar .source-control-push .branch-live-badge {
+  .workspace-titlebar .source-control-push .branch-default-badge {
     display: none;
   }
 }

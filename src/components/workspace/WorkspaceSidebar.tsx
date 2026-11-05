@@ -494,7 +494,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   // For the ~80% single-workspace users the footer switcher stays hidden; the
   // picker is still reachable any time via the ⌘K command below.
   const hasMultipleWorkspaces = accounts.length > 1;
-  const pageHasSearch = activeNav === 'home' || activeNav === 'workflows' || activeNav === 'inbox';
   const showWorkspaceSwitcher = Boolean(onSwitchAccount && activeAccount && hasMultipleWorkspaces);
   // With no workspace switcher between them, Slack and Settings share the row
   // as two labelled halves instead of two icons with a gap in the middle.
@@ -1783,22 +1782,22 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
               layout={isSidebarHidden ? 'stacked' : 'labels'}
             />
           )}
-          {/* Home, Workflows and Inbox carry the palette's search across their top
-              bar; a second field with the same shortcut beside it is just noise. */}
-          {searchContent ??
-            (pageHasSearch ? null : (
-              <button
-                type="button"
-                className="workspace-sidebar-filter"
-                onClick={() => openPalette()}
-                title="Open command palette"
-                aria-label="Open command palette"
-              >
-                <SearchIcon size={12} />
-                <span className="workspace-sidebar-filter-placeholder">Search</span>
-                <span className="workspace-sidebar-filter-shortcut">{kbd('mod', 'K')}</span>
-              </button>
-            ))}
+          {/* The Projects side's twin of Agents' "Search conversations": same
+              row, same place. It searches projects — the palette's Projects tab
+              (⌘O) — so it never duplicates a page's own ⌘K search bar. */}
+          {searchContent ?? (
+            <button
+              type="button"
+              className="workspace-sidebar-filter"
+              onClick={() => openPalette({ tab: 'project' })}
+              title={`Search projects (${kbd('mod', 'O')})`}
+              aria-label="Search projects"
+            >
+              <SearchIcon size={12} />
+              <span className="workspace-sidebar-filter-placeholder">Search projects</span>
+              <span className="workspace-sidebar-filter-shortcut">{kbd('mod', 'O')}</span>
+            </button>
+          )}
         </div>
 
         <SpotifyWidget isSidebarHidden={isSidebarHidden} />

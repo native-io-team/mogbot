@@ -31,7 +31,7 @@ const BUTTON_VARIANTS: readonly ButtonVariant[] = [
   'primary',
   'secondary',
   'danger',
-  'success',
+  'strong',
   'ghost',
   'warning',
   'variable',

@@ -393,9 +393,13 @@ server), and every link must carry a fingerprint.
 sheet, files, a session, the diff and the photo viewer push over them. At
 700 pt and wider (iPad, landscape) the Agents list and a chat sit side by side.
 
-- **Agents (home).** A "1 needs you · 2 working" summary with Next; Needs you
-  (approvals, signed out, usage limit), then the Chief and pinned agents, then
-  the rest by activity. Swipe to mute, hide (with Undo) or pin; hold for the
+- **Agents (home).** Needs you (approvals, signed out, usage limit) first,
+  then the Chief and pinned agents, then the rest by activity. Attention is
+  said once: the Needs you header, with **Open next** (straight to the first
+  card waiting) at its right, and each row's own words ("Needs your OK ·
+  …", the state word in amber). No summary card over the list and no dot
+  beside a row that already says it (rooms too); the tab badge counts it
+  from the other tabs. Every other state keeps its mark. Swipe to mute, hide (with Undo) or pin; hold for the
   context menu. Quick actions on the icon: "Needs you" and "New message to
   Chief of Staff".
 - **Chat.** An inverted list: newest on the composer, older pages loaded on
@@ -466,12 +470,29 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   (40 pages at most) to the hit and lights it.
 - **Projects and sessions.** Live from `projects.changed` events (the Mac
   watches tabs every 2 s and git every 10 s, only while a phone is connected).
-  A session shows its state, its screen (`sessions.read`, every 2.5 s while
-  open), its question with an option per key, and lets you type, start a new
-  session or take a preview screenshot (a private blob, never a public link).
+  A task (`app/session/[id].tsx`, every 2.5 s while open) reads as a
+  conversation, not a terminal: its state in plain words ("Working ·
+  Checking the hero at 390px", the Mac's `agent_state` reading without the
+  timer), its question with each option's words as neutral answers (no key
+  numbers), what it was asked as your bubble, its steps in plain words
+  ("Read Hero.tsx", "Took a screenshot") and what it said. `lib/taskScreen.ts`
+  reads that off `sessions.read`'s screen (the Mac's `reply` when the screen
+  has no words of the agent's), leaving out the input box, the spinner and
+  "esc to interrupt", shortcut hints, tool output and boxes. **Show
+  terminal** opens the raw screen in a sideways-scrolling well with a fading
+  right edge. You can type to it, start a new task or take a preview
+  screenshot (a private blob, never a public link).
 - **Connection screen.** Every layer of the link (below).
-- **Settings.** The paired Mac, alerts (with their limits), haptics, updates,
-  about.
+- **Settings.** The paired Mac, plan usage, what new agents start on, alerts
+  (with their limits), haptics, updates, about. **New agents start on** lists
+  the Mac's engines (one not installed or signed in is dimmed, saying which),
+  and a **Model on …** section per installed engine offers "Engine's default"
+  and only the models that engine listed (`lib/newAgentDefaults.ts`). Read
+  from the overview's `defaults`; a tap sends `agents.setDefaults`, which the
+  Mac checks as the desk does (a ready engine, a model it lists), audits
+  ("new agents: engine codex"), and answers with an `agents.registry` event.
+  On a Mac without the method the choice shows but isn't tappable. Existing
+  agents keep theirs ([agents.md](agents.md), "Defaults for new agents").
 
 ### Rooms
 
@@ -495,23 +516,37 @@ before is drawn.
   waiting on you stays whole there too. A reply being written in a room
   streams in the room, not in the agent's chat.
 - **List.** A **Rooms** section under the agents (most recent first; the
-  agents get their own label once it's there): stacked member badges, the
-  name, "Needs your OK" while a member's card waits, "Ops is replying",
+  agents get their own label once it's there): two whole member badges
+  corner to corner and "+N" for the rest (never a third tile cutting
+  initials), the name, "Needs your OK" while a member's card waits (no dot
+  beside it), "Ops is replying",
   else the Mac's preview ("Ops: Filed."), unread as a dot.
 - **Room.** Neutral accent (`AccentProvider color={null}`): no single
-  agent's. The header is the room and its members ("Finance, Ops", or who is
-  replying). Each member's name and badge sit over its first line in a run,
+  agent's. The header is the room, two badges side by side (+N), and its
+  members ("Finance and Ops", joined as the desk's `listNames`), or who is
+  replying. Each member's name and badge sit over its first line in a run,
   in its own colour; the rows are the chat's own `MessageRow`, so approval,
   secret and session cards answer for the agent that asked (by the line's
-  `agentId`). Your lines are bubbles with "to Finance · Ops" (or "to
-  everyone") under them, from the `mentions` the Mac recorded. Members
-  whose `status.room` is this room show their draft or working line.
+  `agentId`). As in the member's own chat (the desk's `RoomChat`), the
+  newest change card for a member's open copy offers Discard / Keep changes
+  (`liveCopyCards`), and that card also stays whole in the member's own
+  chat; a result card's **Ask for changes** opens the member's own chat with
+  the request staged ("Changes to …"), since a room message can't revise a
+  result. A member's @mention of another in its reply is drawn in that
+  member's colour (whole names, as `rooms::mentioned_in`). Your lines are
+  bubbles with "To Finance and Ops" (or "To everyone" when every member was
+  asked) under them, from the `mentions` the Mac recorded. Members whose
+  `status.room` is this room show their draft or working line. The room
+  opens on what it is: everything said there is posted for everyone in it,
+  and each agent keeps its own memory and remembers its own chat when it
+  answers there (a room turn resumes its own session).
 - **Composer.** `@` offers the room's members and `@everyone`, nobody else.
   Sending settles who answers the way the Mac does (`answerers`: named,
   everyone, else the lead); with nobody, it asks **Who should answer?** with
-  each member and Everyone, and sends nothing until one is picked. The hint
-  says the lead ("Finance answers unless you @mention someone") or what to
-  do, and while members reply, the turn cap ("3 of 8 replies for this
+  each member and Everyone, and sends nothing until one is picked. The foot
+  line is the desk's `addressLine`, word for word: "To Finance · @ someone
+  else, or @everyone", "To Finance and Ops", "To everyone · 3 replies", or
+  "Who should answer? @ someone"; while members reply, the turn cap ("3 of 8 replies for this
   message"). Text only: no attachments or quotes in a room yet. Offline, a
   room send waits in the outbox like any other (`PendingSend.roomId`).
 - **Search.** A hit with `roomId` groups under its room and opens it.
@@ -528,9 +563,9 @@ The phone can start work as well as answer it. Each piece is gated by
   `lib/newAgent.ts`): it's the field's placeholder and the Create button's
   words, so nothing is named unseen. The colour starts on the first one
   nobody wears, as the desk's editor does. `agents.create` calls the desk's
-  own `agents_create` with the engine the desk would pick
-  (`engine::default_for`: Claude Code when ready, else the first engine that
-  is) and that engine's own model; the phone can't set the engine, model,
+  own `agents_create` with no engine or model, so it starts on the defaults
+  for new agents (Settings → Agents, falling back to the first ready engine
+  when the chosen one isn't); the phone can't set the engine, model,
   project or instructions at creation (refused with `bad_params`): the
   instructions are edited afterwards from the agent sheet, on either side,
   and the engine, model and project at the desk. The name and role are one
@@ -760,8 +795,9 @@ on a fork's binary. For self-builders, Reinstall is the update.
   `files=` link uploads nothing); `dictation.test.tsx` the mic against a
   fake recognizer, including Android 12 and typing while it listens.
 - **Rooms:** `rooms.test.ts` (routing, gating, store keys, folding, the
-  room's list), `roomView.test.tsx` (the thread, the @ menu, "Who should
-  answer?"), `roomsList.test.tsx` (the section only from a Mac with rooms);
+  room's list), `roomParity.test.ts` (open copies, the foot line, @mentions,
+  the intro's claim), `roomView.test.tsx` (the thread, Keep / Discard and Ask
+  for changes in a room, the @ menu, "Who should answer?"), `roomsList.test.tsx` (the section only from a Mac with rooms);
   server: `companion::server::tests::rooms_reach_only_phones_that_show_them`
   and `wire::tests::an_app_without_rooms_gets_no_room_events_or_room_only_lines`.
   The mock Mac has two rooms (Launch, led by the Chief; Month end, no lead)
@@ -778,7 +814,8 @@ approach as the desktop's `scripts/harness-capture.mjs`). It starts the mock
 (`--http --cors`) and `expo start --web`, pairs through the real `/pair?d=`
 confirm screen, then walks the states only a Mac can cause by restarting or
 stopping the mock: a deep-linked chat offline with nothing saved, every screen
-live, the same chats offline from the saved copy, "This isn't your Mac"
+live (rooms and a task with its terminal shown included), the same chats
+offline from the saved copy, "This isn't your Mac"
 (`--impostor`), and the bar fold (`--bars`). Out: `mobile/qa-shots/` (PNGs and
 `report.md`, which lists each shot's route, what to check, console errors and
 any text cut off with an ellipsis). It exits non-zero when a screen failed or threw.
@@ -834,4 +871,5 @@ the share extension, the camera, real keyboard behaviour).
 - Rooms on the phone: creating, renaming, muting or deleting one, changing
   its members or lead, Stop for a room, attachments in a room, and opening a
   room's search hit at the line. All are done on the Mac. Room screens have
-  not been looked at on a simulator or device yet (only rendered in tests).
+  not been looked at on a simulator or device yet (in tests and `qa:web`'s
+  `room-*` shots only).

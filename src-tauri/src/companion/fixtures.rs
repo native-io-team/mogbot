@@ -429,6 +429,15 @@ async fn generate() -> String {
         call("agents.quota", json!({})).await,
     );
     out += &entry(
+        "agentsSetDefaults",
+        "Result<'agents.setDefaults'>",
+        call(
+            "agents.setDefaults",
+            json!({ "engine": "claude", "claudeModel": "opus", "codexModel": "" }),
+        )
+        .await,
+    );
+    out += &entry(
         "agentsMessages",
         "Result<'agents.messages'>",
         call("agents.messages", json!({ "agentId": AGENT, "limit": 100 })).await,

@@ -36,6 +36,7 @@ pub const METHODS: &[&str] = &[
     "agents.create",
     "agents.templates",
     "agents.update",
+    "agents.setDefaults",
     "agents.revokePermission",
     "agents.instructions",
     "agents.memory",
@@ -372,6 +373,12 @@ pub trait Backend: Send + Sync + 'static {
     async fn instructions(&self, agent_id: &str) -> Result<String, CommandError>;
     /// `agents_usage`: this week and all time.
     async fn usage(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_set_defaults`: what new agents start on (Settings → Agents).
+    /// Checked as the desk checks it: a ready engine, a model it offers.
+    async fn set_defaults(
+        &self,
+        change: crate::agents::defaults::Change,
+    ) -> Result<Value, CommandError>;
     /// `agents_quota`: each engine's plan, as it last reported it.
     async fn quota(&self) -> Result<Value, CommandError>;
     /// `agents_revoke_permission`: an "Always allow" rule taken back.
@@ -878,6 +885,21 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             )
         }
         "agents.schedule.cancel" | "agents.schedule.runNow" => field("id").to_string(),
+        "agents.setDefaults" => {
+            let said: Vec<String> = [
+                ("engine", "engine"),
+                ("claudeModel", "Claude Code model"),
+                ("codexModel", "Codex model"),
+            ]
+            .into_iter()
+            .filter(|(key, _)| params.get(*key).is_some())
+            .map(|(key, name)| match field(key) {
+                "" => format!("{name} default"),
+                value => format!("{name} {}", preview(value)),
+            })
+            .collect();
+            format!("new agents: {}", said.join(", "))
+        }
         _ => field("agentId").to_string(),
     }
 }
@@ -1208,6 +1230,17 @@ async fn run(
             Ok(b.usage(&p.agent_id).await?)
         }
         "agents.quota" => Ok(b.quota().await?),
+        "agents.setDefaults" => {
+            let change: crate::agents::defaults::Change = parse(params).map_err(|_| {
+                bad_params(
+                    "New agents' defaults take an engine (claude or codex), claudeModel and codexModel.",
+                )
+            })?;
+            if change.is_empty() {
+                return Err(bad_params("Nothing to change."));
+            }
+            Ok(b.set_defaults(change).await?)
+        }
         // The ready-made agents, without their briefings: the phone shows
         // the choice, the Mac fills the instructions in on create.
         "agents.templates" => Ok(templates_for_phone()),
@@ -1647,6 +1680,51 @@ mod tests {
             .audited()
             .iter()
             .any(|(_, m, _, ok)| m == "agents.create" && !ok));
+    }
+
+    #[tokio::test]
+    async fn a_phone_sets_new_agents_defaults_as_the_desk_checks_them() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let set = |params: Value| dispatch(&c, &me, "agents.setDefaults", params);
+        // Read with the overview: what's chosen, and where new agents start.
+        let overview = dispatch(&c, &me, "agents.overview", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(overview["defaults"]["engine"], "codex");
+        assert_eq!(overview["defaults"]["startsOn"], "claude");
+        assert_eq!(overview["defaults"]["model"], "opus");
+        // Nothing, or anything else, is refused before the Mac sees it.
+        assert!(set(json!({})).await.is_err());
+        assert!(set(json!({ "model": "opus" })).await.is_err());
+        assert!(set(json!({ "engine": 3 })).await.is_err());
+        assert!(stub.defaults.lock().unwrap().is_empty());
+        // The Mac's own refusal (a signed-out engine) comes back as it is.
+        assert!(set(json!({ "engine": "codex" }))
+            .await
+            .unwrap_err()
+            .summary()
+            .contains("isn't signed in"));
+        let view = set(json!({ "engine": "claude", "claudeModel": "" }))
+            .await
+            .unwrap();
+        assert_eq!(view["startsOn"], "claude");
+        let sent = stub.defaults.lock().unwrap().clone();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].engine.as_deref(), Some("claude"));
+        assert_eq!(sent[0].claude_model.as_deref(), Some(""));
+        // A settings write: audited, refusals included, in plain words.
+        assert!(!READ_ONLY_METHODS.contains(&"agents.setDefaults"));
+        let audited = stub.audited();
+        assert!(audited
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.setDefaults"
+                && *ok
+                && detail == "new agents: engine claude, Claude Code model default"));
+        assert!(audited
+            .iter()
+            .any(|(_, m, _, ok)| m == "agents.setDefaults" && !ok));
     }
 
     #[tokio::test]

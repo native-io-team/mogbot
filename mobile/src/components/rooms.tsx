@@ -8,8 +8,14 @@
  * (`MessageRow`), cards and all, answered on behalf of the agent that asked.
  */
 
-import type { Agent, AgentMessage, AgentRef, RoomView } from '@shipstudio/companion-protocol';
-import { Stack, useFocusEffect } from 'expo-router';
+import {
+  type Agent,
+  type AgentMessage,
+  type AgentRef,
+  type ResultRef,
+  type RoomView,
+} from '@shipstudio/companion-protocol';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type FlatList, Pressable, ScrollView, View, type ScrollViewProps } from 'react-native';
 import { KeyboardChatScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
@@ -22,12 +28,18 @@ import { mentionQuery } from '../lib/composer';
 import { clearComposer, liveMentions, setComposer, useComposerDraft } from '../lib/drafts';
 import { haptic } from '../lib/haptics';
 import {
+  addressLine,
   answerers,
   EVERYONE,
+  liveCopyCards,
+  memberNames,
+  membersWithCards,
+  newestRoomResults,
   membersOf,
   mentionsEveryone,
   roomItems,
   roomKey,
+  ROOM_INTRO,
   roomSuggestions,
   toLine,
   turnsLine,
@@ -40,6 +52,7 @@ import { avatarSize, chromeScale, fonts, iconSize, mix, radius, space } from '..
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
+import { MentionContext } from './Markdown';
 import { ComposerField, RoundButton } from './Composer';
 import { RoomBars } from './ConversationBars';
 import { Icon, T, useRipple } from './ui';
@@ -132,6 +145,57 @@ function RoomChat({ id }: { id: string }) {
     [room, members, messages, pending, present]
   );
   const byId = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
+  // A member's @mention of another in its reply is drawn in that member's colour.
+  const appearance = useAppearance();
+  const mentionColors = useMemo(
+    () =>
+      members.map((m) => ({
+        name: m.name,
+        color: mix(agentTint(m.color, appearance), colors.textPrimary, 0.7),
+      })),
+    [members, appearance, colors.textPrimary]
+  );
+  // As in each member's own chat: the newest card for its open copy offers
+  // Keep / Discard, and each result's newest version is drawn in full.
+  // A newer card in the member's own chat retires the one here, so that
+  // chat's newest page is read for every member with a card in the room.
+  const carded = useMemo(() => membersWithCards(members, messages), [members, messages]);
+  const own = useApp(
+    useShallow((s) => Object.fromEntries(carded.map((m) => [m.id, s.chats[m.id]?.messages])))
+  );
+  const ownLoaded = useApp(
+    useShallow((s) => carded.map((m) => !!s.chats[m.id]?.loaded))
+  );
+  // Once per member per connection: a read that fails leaves that member's
+  // cards as the room has them, and isn't retried on every status update
+  // (`carded` is rebuilt whenever a member's status or a message changes).
+  const asked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!connected) {
+      asked.current.clear();
+      return;
+    }
+    carded.forEach((m, i) => {
+      if (ownLoaded[i] || asked.current.has(m.id)) return;
+      asked.current.add(m.id);
+      loadLatest(m.id).catch(() => {});
+    });
+  }, [connected, carded, ownLoaded]);
+  const liveCopies = useMemo(
+    () => liveCopyCards(members, messages, own),
+    [members, messages, own]
+  );
+  const newest = useMemo(() => newestRoomResults(messages, own), [messages, own]);
+  // A room message can't revise a result: the member's own chat opens with
+  // the request staged in its composer, as on the desk.
+  const router = useRouter();
+  const askForChanges = useCallback(
+    (agentId: string, ref: ResultRef) => {
+      setComposer(agentId, { revising: ref });
+      router.push({ pathname: '/chat/[id]', params: { id: agentId } });
+    },
+    [router]
+  );
 
   const older = useCallback(() => {
     if (!chat?.loaded || !chat.more || loadingOlder || !connected) return;
@@ -176,46 +240,53 @@ function RoomChat({ id }: { id: string }) {
       <Stack.Screen
         options={{
           headerTintColor: colors.textPrimary,
-          headerTitle: () => <RoomHeader room={room} members={members} working={working.length} />,
+          headerTitle: () => <RoomHeader room={room} members={members} working={working} />,
         }}
       />
-      <Animated.FlatList
-        ref={list}
-        inverted
-        data={items}
-        keyExtractor={(i) => i.key}
-        itemLayoutAnimation={glide}
-        renderScrollComponent={renderScroll}
-        contentContainerStyle={[
-          styles.content,
-          { paddingLeft: space.lg + insets.left, paddingRight: space.lg + insets.right },
-        ]}
-        keyboardDismissMode="interactive"
-        keyboardShouldPersistTaps="handled"
-        onEndReached={older}
-        onEndReachedThreshold={0.6}
-        renderItem={({ item }) => (
-          <RoomItemView
-            item={item}
-            agent={item.kind === 'message' ? byId.get(item.message.agentId) : undefined}
-            fallback={fallback}
-            memberCount={members.length}
-            onError={showError}
-          />
-        )}
-        ListFooterComponent={
-          chat?.loaded && !chat.more ? (
-            <View style={styles.start}>
-              <StackedAvatars members={members} />
-              <T variant="caption" color={colors.textSecondary} style={{ textAlign: 'center' }}>
-                {room.name} · each agent keeps its own memory and sees only what’s said here
-              </T>
-            </View>
-          ) : chat?.loaded ? (
-            <View style={styles.start}>{loadingOlder && <Spinner />}</View>
-          ) : undefined
-        }
-      />
+      <MentionContext.Provider value={mentionColors}>
+        <Animated.FlatList
+          ref={list}
+          inverted
+          data={items}
+          keyExtractor={(i) => i.key}
+          itemLayoutAnimation={glide}
+          renderScrollComponent={renderScroll}
+          contentContainerStyle={[
+            styles.content,
+            { paddingLeft: space.lg + insets.left, paddingRight: space.lg + insets.right },
+          ]}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          onEndReached={older}
+          onEndReachedThreshold={0.6}
+          renderItem={({ item }) => (
+            <RoomItemView
+              item={item}
+              agent={item.kind === 'message' ? byId.get(item.message.agentId) : undefined}
+              fallback={fallback}
+              memberCount={members.length}
+              liveCopy={item.kind === 'message' && liveCopies.has(item.message.id)}
+              newestResult={
+                item.kind !== 'message' || !item.message.result || newest.has(item.message.id)
+              }
+              onAskForChanges={askForChanges}
+              onError={showError}
+            />
+          )}
+          ListFooterComponent={
+            chat?.loaded && !chat.more ? (
+              <View style={styles.start}>
+                <StackedAvatars members={members} />
+                <T variant="caption" color={colors.textSecondary} style={{ textAlign: 'center' }}>
+                  {room.name} · {ROOM_INTRO}
+                </T>
+              </View>
+            ) : chat?.loaded ? (
+              <View style={styles.start}>{loadingOlder && <Spinner />}</View>
+            ) : undefined
+          }
+        />
+      </MentionContext.Provider>
       {toast && (
         <Animated.View
           entering={FadeInDown.duration(180)}
@@ -256,17 +327,18 @@ function RoomHeader({
 }: {
   room: RoomView;
   members: Agent[];
-  working: number;
+  /** Members replying here now (`workingHere`): never one waiting on your OK. */
+  working: Agent[];
 }) {
   const colors = useColors();
   const styles = useStyles();
   const connected = useApp((s) => s.link.kind === 'connected');
   const line =
-    working > 0 && connected
-      ? working === 1
-        ? `${members.find((m) => m.status.room === room.id)?.name ?? 'One'} is replying`
-        : `${working} are replying`
-      : members.map((m) => m.name).join(', ');
+    working.length > 0 && connected
+      ? working.length === 1
+        ? `${working[0].name} is replying`
+        : `${working.length} are replying`
+      : memberNames(members);
   return (
     <View style={styles.header}>
       <StackedAvatars members={members} size="header" />
@@ -299,6 +371,9 @@ function RoomItemView({
   agent,
   fallback,
   memberCount,
+  liveCopy,
+  newestResult,
+  onAskForChanges,
   onError,
 }: {
   item: RoomItem;
@@ -307,6 +382,11 @@ function RoomItemView({
   /** Any member, for the rows that only need one to draw (yours, notes). */
   fallback?: Agent;
   memberCount: number;
+  /** The newest card for the member's open copy: it offers Keep / Discard. */
+  liveCopy: boolean;
+  /** The newest version of its result: drawn in full, with Ask for changes. */
+  newestResult: boolean;
+  onAskForChanges: (agentId: string, ref: ResultRef) => void;
   onError: (text: string) => void;
 }) {
   const styles = useStyles();
@@ -321,7 +401,15 @@ function RoomItemView({
     body = who ? (
       <View style={{ gap: space.xs }}>
         {item.speaker && agent && <Speaker agent={agent} />}
-        <MessageRow message={m} agent={who} queued={false} onError={onError} />
+        <MessageRow
+          message={m}
+          agent={who}
+          queued={false}
+          liveCopy={liveCopy}
+          newestResult={newestResult}
+          onAskForChanges={onAskForChanges}
+          onError={onError}
+        />
         {to && (
           <T variant="caption" color={colors.textMuted} style={styles.to}>
             {to}
@@ -391,7 +479,6 @@ export function RoomComposer({
     () => roomSuggestions(members, mentionQuery(draft.text)),
     [members, draft.text]
   );
-  const lead = members.find((m) => m.id === room.lead);
 
   const setText = (text: string) => {
     setAsking(false);
@@ -439,11 +526,15 @@ export function RoomComposer({
       : 'Not connected · what you type stays here'
     : working
       ? turnsLine(room)
-      : !hasContent
-        ? lead
-          ? `${lead.name} answers unless you @mention someone`
-          : '@mention who should answer, or @everyone'
-        : null;
+      : // Who will answer what's typed, in the desk's words.
+        addressLine(
+          room,
+          members,
+          liveMentions(draft.text, draft.mentions)
+            .map((m) => m.id)
+            .filter((m) => m !== EVERYONE.id),
+          mentionsEveryone(draft.text)
+        );
 
   return (
     <View

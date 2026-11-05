@@ -359,7 +359,7 @@ export function WorkspaceModals({
         <ModalFrame
           isOpen
           onClose={onCloseAutoAcceptWarning}
-          title="Auto Accept Mode"
+          title="Auto-accept mode"
           className="auto-accept-warning-modal"
         >
           <div className="auto-accept-warning-body">

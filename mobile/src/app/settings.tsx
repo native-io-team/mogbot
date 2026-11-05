@@ -6,6 +6,7 @@ import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Icon, Row, Section, T, tap } from '../components/ui';
+import { NewAgentDefaults } from '../components/NewAgentDefaults';
 import { formatDate } from '../lib/agents';
 import { useQuotaLines } from '../lib/quota';
 import { appInfo } from '../lib/pairing';
@@ -145,6 +146,8 @@ export default function Settings() {
           ))}
         </Section>
       )}
+
+      <NewAgentDefaults />
 
       <Section
         title="Notifications"

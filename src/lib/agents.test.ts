@@ -49,6 +49,8 @@ import {
   modelChoices,
   engineIsReady,
   defaultEngine,
+  newAgentEngine,
+  newAgentModel,
   noEngineInstalled,
   engineCantAsk,
   engineProtections,
@@ -347,7 +349,7 @@ describe('formatUsage', () => {
   });
 
   it('labels models by alias and passes unknown ids through', () => {
-    expect(modelLabel(null)).toBe('Default');
+    expect(modelLabel(null)).toBe('Engine’s default');
     expect(modelLabel('opus')).toBe('Most capable');
     expect(modelLabel('claude-x')).toBe('claude-x');
   });
@@ -372,7 +374,7 @@ describe('formatUsage', () => {
       },
     ];
     expect(modelChoices('claude', engines).map((m) => m.label)).toEqual([
-      'Default',
+      'Engine’s default',
       'Most capable',
       'Balanced',
       'Fastest',
@@ -396,6 +398,20 @@ describe('formatUsage', () => {
     expect(noEngineInstalled(codexOnly)).toBe(false);
     expect(noEngineInstalled(engines.map((e) => ({ ...e, installed: false })))).toBe(true);
     expect(noEngineInstalled([])).toBe(false);
+    // The user's defaults for new agents, as the overview says them.
+    const chosen = {
+      engine: 'codex' as const,
+      models: { claude: 'haiku', codex: 'gpt-5.5' },
+      startsOn: 'codex' as const,
+      model: 'gpt-5.5',
+    };
+    expect(newAgentEngine(chosen, engines)).toBe('codex');
+    expect(newAgentEngine(null, codexOnly)).toBe('codex'); // before the overview: the rule
+    expect(newAgentModel(chosen, 'codex', modelChoices('codex', engines))).toBe('gpt-5.5');
+    expect(newAgentModel(chosen, 'claude', modelChoices('claude', engines))).toBe('haiku');
+    // A model the engine doesn't offer (any more) is its default, never invented.
+    expect(newAgentModel(chosen, 'codex', modelChoices('codex', []))).toBe('');
+    expect(newAgentModel(null, 'claude', modelChoices('claude', engines))).toBe('');
   });
 
   it('says what an engine needs, and only claims protection the engine enforces', () => {

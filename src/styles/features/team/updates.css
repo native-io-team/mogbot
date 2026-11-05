@@ -215,6 +215,12 @@
   white-space: nowrap;
 }
 
+/* A label that is not a status — an unseen count, "you", a comment's pin.
+   Neutral, a step brighter than the resting pill so it still reads as a tag. */
+.team-status--label {
+  color: var(--text-secondary);
+}
+
 .team-status[data-status='needs-review'],
 .team-status[data-status='in-review'] {
   background: var(--team-review-surface);
@@ -222,8 +228,7 @@
 }
 
 .team-status[data-status='deployed'],
-.team-status[data-status='merged'],
-.team-status--merged {
+.team-status[data-status='merged'] {
   background: rgba(var(--accent-success-rgb), 0.12);
   color: var(--accent-success);
 }

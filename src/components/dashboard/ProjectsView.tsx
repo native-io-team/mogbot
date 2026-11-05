@@ -9,7 +9,7 @@
 
 import { memo } from 'react';
 import { ProjectList } from './ProjectList';
-import { CreateProject } from './CreateProject';
+import { CreateProject, type CreateProjectTab } from './CreateProject';
 import { ImportProject } from './ImportProject';
 import { ImportTypePicker } from './ImportTypePicker';
 import { PluginSlot } from '../plugins/PluginSlot';
@@ -36,6 +36,8 @@ interface ProjectsViewProps {
   onGitHubConnect: () => void;
 
   showCreateModal: boolean;
+  /** The tab New Project opens on. */
+  createInitialTab?: CreateProjectTab;
   onCloseCreateModal: () => void;
   onProjectCreated: (projectPath: string) => void;
   importView: 'none' | 'picker' | 'github';
@@ -73,6 +75,7 @@ export const ProjectsView = memo(function ProjectsView({
   isAuthCheckDone,
   onGitHubConnect,
   showCreateModal,
+  createInitialTab,
   onCloseCreateModal,
   onProjectCreated,
   importView,
@@ -121,7 +124,11 @@ export const ProjectsView = memo(function ProjectsView({
           )}
         </div>
         {showCreateModal && (
-          <CreateProject onComplete={onProjectCreated} onCancel={onCloseCreateModal} />
+          <CreateProject
+            onComplete={onProjectCreated}
+            onCancel={onCloseCreateModal}
+            initialTab={createInitialTab}
+          />
         )}
         {importView === 'picker' && (
           <ImportTypePicker

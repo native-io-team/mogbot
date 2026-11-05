@@ -37,6 +37,8 @@ export type Conformance = [
   Assert<Same<Wire.CheckIn, Desktop.CheckIn>>,
   Assert<Same<Wire.CheckInRun, Desktop.CheckInRun>>,
   Assert<Same<Wire.EngineInfo, Desktop.EngineInfo>>,
+  Assert<Same<Wire.NewAgentDefaults, Desktop.NewAgentDefaults>>,
+  Assert<Same<Wire.NewAgentDefaultsChange, Desktop.NewAgentDefaultsChange>>,
   Assert<Same<Wire.SessionPrompt, Desktop.SessionPrompt>>,
   Assert<Same<Wire.SecretRequest, DesktopSecrets.SecretRequest>>,
   Assert<Same<Wire.AgentSecret, DesktopSecrets.AgentSecret>>,

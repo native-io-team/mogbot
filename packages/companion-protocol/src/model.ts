@@ -296,11 +296,35 @@ export interface EngineInfo {
   models: ModelChoice[];
 }
 
+/**
+ * Mirrors `defaults::View`: what a new agent starts on when nobody picked
+ * (Settings → Agents). Existing agents keep their own engine and model.
+ */
+export interface NewAgentDefaults {
+  /** The engine the user chose; null when they never have (the rule decides). */
+  engine: AgentEngine | null;
+  /** Each engine's chosen model while it still offers it; null is the engine's own default. */
+  models: { claude: string | null; codex: string | null };
+  /** Where a new agent starts now: the chosen engine when it's ready, else the first that is. */
+  startsOn: AgentEngine;
+  /** The model it starts on there; null is that engine's default. */
+  model: string | null;
+}
+
+/** A change to `NewAgentDefaults`: a field left out stays; an empty model is the engine's own. */
+export interface NewAgentDefaultsChange {
+  engine?: AgentEngine;
+  claudeModel?: string;
+  codexModel?: string;
+}
+
 export interface AgentsOverview {
   agents: Agent[];
   /** Claude Code is installed (the default engine). */
   engineReady: boolean;
   engines: EngineInfo[];
+  /** What new agents start on. Optional: a Mac from before it sends none. */
+  defaults?: NewAgentDefaults;
 }
 
 export type MessageKind =
@@ -851,6 +875,20 @@ export interface SessionScreen {
   screen: string;
   /** The agent's latest reply, without the input box and spinner lines. */
   reply?: string;
+  /**
+   * The newest message the Mac typed into this tab (from this phone, an
+   * outside assistant or an agent), and when. Absent when it typed none
+   * since the app started, or on an older Mac. Never read off the screen:
+   * a message typed at the desk isn't here.
+   */
+  sent?: SessionSent;
+}
+
+export interface SessionSent {
+  text: string;
+  at: number;
+  /** One of the user's agents sent it, not the user. */
+  byAgent: boolean;
 }
 
 // ============================================================================

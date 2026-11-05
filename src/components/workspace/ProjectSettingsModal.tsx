@@ -152,7 +152,7 @@ export function ProjectSettingsModal({
                   className="project-settings-label settings-form-label"
                   htmlFor="project-settings-command"
                 >
-                  Dev Server Command
+                  Dev server command
                 </label>
                 <TextField
                   id="project-settings-command"

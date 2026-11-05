@@ -2,7 +2,7 @@
  * Dismissible warning banner shown when editing the main branch.
  *
  * Displayed below the workspace header to warn users they're editing
- * the production branch directly. Can be dismissed for the session,
+ * the default branch directly. Can be dismissed for the session,
  * or permanently hidden for the project via checkbox.
  *
  * @module components/MainBranchBanner
@@ -18,6 +18,8 @@ import '../../styles/features/main-branch-banner.css';
 interface MainBranchBannerProps {
   /** Absolute path to the project directory */
   projectPath: string;
+  /** The branch being edited (`main` or `master`), named as it is. */
+  branchName: string;
   /** Callback to create a new branch */
   onCreateBranch?: () => void;
   /**
@@ -32,6 +34,7 @@ interface MainBranchBannerProps {
 
 export function MainBranchBanner({
   projectPath,
+  branchName,
   onCreateBranch,
   isGitHubConnected = true,
 }: MainBranchBannerProps) {
@@ -77,10 +80,12 @@ export function MainBranchBanner({
       <div className="main-branch-banner-content">
         <WarningIcon size={16} />
         <span className="main-branch-banner-text">
-          You're editing <strong>main</strong> directly.
+          You're editing <strong>{branchName}</strong> directly.
+          {/* Whether pushing deploys anything is the host's business (Hosting
+              answers it per commit); the banner only says where work lands. */}
           <span className="main-branch-banner-text-extra">
             {' '}
-            Changes will go live immediately when published.
+            Pushing sends changes straight to it.
           </span>
         </span>
         {onCreateBranch && (

@@ -18,7 +18,7 @@ import { requestPairOnOpen } from '../lib/companion';
 import { COMPANION_INSTALL_ENABLED, requestInstallOnOpen } from '../lib/companionInstall';
 import { fileManagerName } from '../lib/setup';
 import { BRAND } from '../lib/brand';
-import { requestSettingsTabOnOpen } from '../lib/settings';
+import { requestSettingsSectionOnOpen, requestSettingsTabOnOpen } from '../lib/settings';
 import {
   CodeIcon,
   CloseIcon,
@@ -51,6 +51,8 @@ export interface UseAppCommandsParams {
   handleSelectProject: (project: Project) => void | Promise<void>;
   handleBackToProjects: () => void;
   handleCreateProject: () => void;
+  /** New Project, opened on its From a URL tab. */
+  handleCreateProjectFromUrl: () => void;
   handleImportProject: () => void;
   handleImportLocalFolder: () => void | Promise<void>;
   handleGitHubConnect: () => void | Promise<void>;
@@ -75,6 +77,7 @@ export function useAppCommands({
   handleSelectProject,
   handleBackToProjects,
   handleCreateProject,
+  handleCreateProjectFromUrl,
   handleImportProject,
   handleImportLocalFolder,
   handleGitHubConnect,
@@ -90,7 +93,7 @@ export function useAppCommands({
 }: UseAppCommandsParams) {
   const openModal = useOpenModal();
 
-  useMigrationCommands();
+  useMigrationCommands({ openCreateFromUrl: handleCreateProjectFromUrl });
   useIssueReportCommands();
   useThemeCommands();
 
@@ -341,6 +344,29 @@ export function useAppCommands({
         ],
         run: () => {
           requestSettingsTabOnOpen('agents');
+          openModal('settings');
+        },
+      },
+      {
+        id: 'agents.newAgentDefaults',
+        title: 'Engine and model for new agents…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: [
+          'agents',
+          'default',
+          'engine',
+          'model',
+          'claude code',
+          'codex',
+          'new agent',
+          'opus',
+          'sonnet',
+          'haiku',
+        ],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-defaults');
           openModal('settings');
         },
       },

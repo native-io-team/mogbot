@@ -34,7 +34,6 @@ export type ModalId =
   | 'submitReview'
   | 'newFolder'
   | 'moveFolder'
-  | 'newProject'
   | 'importProject'
   | 'branchSelector'
   | 'unsavedChanges'

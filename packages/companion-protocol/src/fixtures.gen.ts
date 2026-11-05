@@ -302,6 +302,15 @@ export const agentsOverview = {
       "workDirectly": true
     }
   ],
+  "defaults": {
+    "engine": "codex",
+    "model": "opus",
+    "models": {
+      "claude": "opus",
+      "codex": "gpt-5-codex"
+    },
+    "startsOn": "claude"
+  },
   "engineReady": true,
   "engines": [
     {
@@ -405,6 +414,15 @@ export const agentsQuota = [
     ]
   }
 ] satisfies Result<'agents.quota'>;
+export const agentsSetDefaults = {
+  "engine": "codex",
+  "model": "opus",
+  "models": {
+    "claude": "opus",
+    "codex": "gpt-5-codex"
+  },
+  "startsOn": "claude"
+} satisfies Result<'agents.setDefaults'>;
 export const agentsMessages = {
   "asOf": {
     "epoch": "epoch-test",
@@ -1529,6 +1547,11 @@ export const projectsList = [
 export const sessionsRead = {
   "reply": "Fixed the header's spacing.",
   "screen": "> Fix the header\n\n⏺ Editing Header.tsx",
+  "sent": {
+    "at": 1700000000000,
+    "byAgent": false,
+    "text": "Fix the header"
+  },
   "session": {
     "activity": "Editing Header.tsx",
     "cli": "codex",
@@ -2101,6 +2124,7 @@ export const frames = [
       "agents.create",
       "agents.templates",
       "agents.update",
+      "agents.setDefaults",
       "agents.revokePermission",
       "agents.instructions",
       "agents.memory",
@@ -2642,6 +2666,15 @@ export const frames = [
             "workDirectly": true
           }
         ],
+        "defaults": {
+          "engine": "codex",
+          "model": "opus",
+          "models": {
+            "claude": "opus",
+            "codex": "gpt-5-codex"
+          },
+          "startsOn": "claude"
+        },
         "engineReady": true,
         "engines": [
           {
@@ -3048,6 +3081,15 @@ export const frames = [
             "workDirectly": true
           }
         ],
+        "defaults": {
+          "engine": "codex",
+          "model": "opus",
+          "models": {
+            "claude": "opus",
+            "codex": "gpt-5-codex"
+          },
+          "startsOn": "claude"
+        },
         "engineReady": true,
         "engines": [
           {
