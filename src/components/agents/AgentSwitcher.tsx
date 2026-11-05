@@ -35,12 +35,10 @@ export function AgentMark({ agent }: { agent: Agent }) {
   if (agent.status.state === 'working') {
     return <PixelLoaderRings size="sm" label={`${agent.name} is working`} />;
   }
-  if (failure) {
-    return failure.kind === 'usage_limit' ? (
-      <span className="sidebar-row-dot dot-waiting" aria-label="At its usage limit" />
-    ) : (
-      <span className="sidebar-row-dot dot-error" aria-label="Didn’t finish" />
-    );
+  // Amber means one thing: it needs you. A usage limit heals on its own, so
+  // its row says when in words and carries no dot.
+  if (failure && failure.kind !== 'usage_limit') {
+    return <span className="sidebar-row-dot dot-error" aria-label="Didn’t finish" />;
   }
   if (agent.unread > 0) return <span className="sidebar-row-dot dot-unread" aria-label="Unread" />;
   return null;

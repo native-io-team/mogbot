@@ -168,7 +168,8 @@
 }
 
 .setup-item-spinner {
-  color: var(--status-running);
+  /* Monochrome: progress isn't a colour of its own. */
+  color: currentColor;
 }
 
 .setup-item-name {
@@ -193,7 +194,6 @@
 .setup-item-blocked-text {
   font-size: var(--font-size-body-md);
   color: var(--text-muted);
-  font-style: italic;
 }
 
 .setup-item-progress-container {

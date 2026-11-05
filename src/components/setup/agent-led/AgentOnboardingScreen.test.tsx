@@ -98,10 +98,10 @@ describe('AgentOnboardingScreen', () => {
   it('a failed check offers a retry instead of guessing', async () => {
     getFullSetupStatus.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(machine());
     render(<AgentOnboardingScreen onComplete={vi.fn()} />);
-    expect(await screen.findByText('Couldn’t check this computer. Try again.')).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t check this Mac. Try again.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await waitFor(() =>
-      expect(screen.queryByText('Couldn’t check this computer. Try again.')).not.toBeInTheDocument()
+      expect(screen.queryByText('Couldn’t check this Mac. Try again.')).not.toBeInTheDocument()
     );
   });
 });

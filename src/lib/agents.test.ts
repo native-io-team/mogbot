@@ -13,6 +13,8 @@ import {
   isQueued,
   lastUserMessage,
   failureLine,
+  approvalSeries,
+  plainActivity,
   retryNote,
   whenAt,
   snippetAround,
@@ -307,7 +309,7 @@ describe('formatUsage', () => {
 
   it('labels models by alias and passes unknown ids through', () => {
     expect(modelLabel(null)).toBe('Default');
-    expect(modelLabel('opus')).toBe('Opus');
+    expect(modelLabel('opus')).toBe('Most capable');
     expect(modelLabel('claude-x')).toBe('claude-x');
   });
 
@@ -332,9 +334,9 @@ describe('formatUsage', () => {
     ];
     expect(modelChoices('claude', engines).map((m) => m.label)).toEqual([
       'Default',
-      'Opus',
-      'Sonnet',
-      'Haiku',
+      'Most capable',
+      'Balanced',
+      'Fastest',
     ]);
     expect(modelChoices('codex', engines).map((m) => m.value)).toEqual(['', 'gpt-5.5']);
     expect(modelLabel('gpt-5.5', modelChoices('codex', engines))).toBe('GPT-5.5');
@@ -482,12 +484,59 @@ describe('lastUserMessage', () => {
   });
 });
 
+describe('approvalSeries', () => {
+  const card = (id: string, title: string): AgentMessage => ({
+    id,
+    agentId: 'lg',
+    ts: Number(id.slice(1)),
+    kind: 'approval',
+    text: '',
+    approval: { requestId: id, title, detail: '', status: 'pending' },
+  });
+  const said = (id: string, kind: AgentMessage['kind']): AgentMessage => ({
+    id,
+    agentId: 'lg',
+    ts: Number(id.slice(1)),
+    kind,
+    text: 'x',
+  });
+  it('counts a run of the same request, across what the agent says between', () => {
+    const items = buildChatItems([
+      card('a1', 'Send an email'),
+      said('a2', 'agent'),
+      card('a3', 'Send an email'),
+      card('a4', 'Send an email'),
+      said('a5', 'user'),
+      card('a6', 'Send an email'),
+      card('a7', 'Run a command'),
+    ]);
+    const series = approvalSeries(items);
+    expect(series.get('a1')).toEqual({ index: 1, total: 3 });
+    expect(series.get('a4')).toEqual({ index: 3, total: 3 });
+    expect(series.has('a6')).toBe(false);
+    expect(series.has('a7')).toBe(false);
+  });
+});
+
+describe('plainActivity', () => {
+  it('says files and commands in words, and leaves plain lines alone', () => {
+    expect(plainActivity('Editing PricingTable.tsx')).toBe('Working on the pricing table');
+    expect(plainActivity('Reading …/src/App.tsx')).toBe('Reading the app');
+    expect(plainActivity('$ npm test')).toBe('Running a command');
+    expect(plainActivity('Fetching https://www.acme.com/pricing')).toBe('Reading acme.com');
+    expect(plainActivity('Searching for footer')).toBe('Looking through the files');
+    expect(plainActivity('Editing files')).toBe('Editing files');
+    expect(plainActivity('Drafting the reminders')).toBe('Drafting the reminders');
+    expect(plainActivity(null)).toBeNull();
+  });
+});
+
 describe('failure lines', () => {
   it('says what kind of failure, in the row’s few words', () => {
     expect(failureLine({ kind: 'signed_out' }, 'x')).toBe('Claude Code is signed out');
     expect(failureLine({ kind: 'usage_limit' }, 'x')).toBe('Usage limit reached');
     expect(failureLine({ kind: 'other' }, "Couldn't start Claude Code: no such file. More")).toBe(
-      "Didn’t finish: Couldn't start Claude Code"
+      "Couldn't start Claude Code · didn’t finish"
     );
   });
   it('a retry note keeps the ask and fits a check-in', () => {

@@ -159,6 +159,14 @@
   color: var(--text-muted);
 }
 
+/* The branch and line counts, at the top of the list once it's open. */
+.agent-changes__receipt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
 .agent-changes__actions {
   display: flex;
   gap: var(--spacing-md);

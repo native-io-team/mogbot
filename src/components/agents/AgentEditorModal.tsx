@@ -169,6 +169,8 @@ interface AgentEditorModalProps {
   initialTab?: EditorTab;
   /** Install or sign in to an engine that isn't ready, over the editor. */
   onSetUpEngine?: (engine: AgentEngine, step: 'install' | 'sign-in') => void;
+  /** Creating: close and draft the request in the Chief of Staff's chat instead. */
+  onAskChief?: () => void;
 }
 
 export type EditorTab = 'agent' | 'memory';
@@ -188,6 +190,7 @@ export function AgentEditorModal({
   onOpenApps,
   initialTab = 'agent',
   onSetUpEngine,
+  onAskChief,
 }: AgentEditorModalProps) {
   const editing = Boolean(agent);
   const [tab, setTab] = useState<EditorTab>(initialTab);
@@ -301,7 +304,14 @@ export function AgentEditorModal({
           What it remembers is kept separately, under Memory, and isn't changed here.
         </p>
       ) : (
-        <p className="agent-editor__hint">Or just ask your Chief of Staff to set one up for you.</p>
+        onAskChief && (
+          <p className="agent-editor__hint agent-editor__ask-chief">
+            Not sure what to write?{' '}
+            <TextButton tabIndex={0} variant="primary" onClick={onAskChief}>
+              Ask your Chief of Staff to set it up
+            </TextButton>
+          </p>
+        )
       )}
 
       {/* Out of Advanced: it shows only a choice (two engines installed) or why
@@ -387,18 +397,28 @@ export function AgentEditorModal({
                 onValueChange={setModel}
                 aria-label="Model"
               />
+              {/* The engine's own name for it, small: what you'd tell someone who asks. */}
+              {modelChoices(engine, engines).find((m) => m.value === model)?.detail && (
+                <span className="agent-editor__model-detail">
+                  Uses {modelChoices(engine, engines).find((m) => m.value === model)?.detail}
+                </span>
+              )}
             </div>
 
             <AgentProjectField value={project} onChange={setProject} />
 
             {onOpenApps && (
-              <div className="agent-editor__label" role="group" aria-label="Apps">
-                Apps
+              <div
+                className="agent-editor__label"
+                role="group"
+                aria-label="Apps this agent can use"
+              >
+                Apps this agent can use
                 <div className="agent-editor__apps">
                   <p className="agent-editor__hint">
                     {engine === 'codex'
-                      ? 'A Codex agent can use the MCP servers set up in Codex.'
-                      : 'Every agent can use the apps your Claude Code is connected to.'}
+                      ? 'This agent can use the apps you’ve connected in Codex.'
+                      : 'This agent can use the apps you’ve connected.'}
                   </p>
                   {engine === 'claude' && (
                     <Button variant="secondary" size="compact" onClick={onOpenApps}>

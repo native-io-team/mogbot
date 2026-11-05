@@ -1,6 +1,7 @@
 /**
- * What's in flight across every agent, in one calm column. Reached only from
- * ⌘K ("What's in flight"); the sidebar lists agents, not overviews. Who is
+ * What's in flight across every agent, in one calm column. Reached from ⌘K
+ * ("What's in flight") and, while anything waits on you, the "Needs you · N"
+ * row at the top of the agent list. Who is
  * working (with what they're doing), who needs you (approval cards you can
  * answer here, and turns that didn't finish, with their one next step), what's scheduled next, and the latest replies. Every row
  * opens that conversation; a reply opens it at that line.
@@ -33,6 +34,7 @@ import {
   getAgentMessages,
   lastUserMessage,
   needsYou,
+  plainActivity,
   replyPreview,
   resendable,
   retryNote,
@@ -48,6 +50,7 @@ import { refreshAgents, upsertMessage, useAgentsSelector } from '../../lib/agent
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { AgentsStayOnNote } from './AgentsStayOn';
+import { kbd } from '../../lib/shortcuts';
 
 /** Lines read per chat: enough for its latest reply. A chat with a card open reads a page. */
 const RECENT_LINES = 20;
@@ -97,16 +100,22 @@ function useRecentLines(agents: Agent[], loaded: Record<string, AgentMessage[]>)
 
 function Section({
   title,
+  hint,
   empty,
   children,
 }: {
   title: string;
+  /** Quiet, after the title: a key that gets you there faster. */
+  hint?: ReactNode;
   empty: string;
   children: ReactNode[];
 }) {
   return (
     <section className="agents-team__section" aria-label={title}>
-      <h3 className="agents-team__heading">{title}</h3>
+      <h3 className="agents-team__heading">
+        {title}
+        {hint && <span className="agents-team__hint">{hint}</span>}
+      </h3>
       {children.length > 0 ? children : <p className="agents-team__empty">{empty}</p>}
     </section>
   );
@@ -330,7 +339,11 @@ export function AgentsTeamView({
 
       <div className="agent-chat__scroll">
         <div className="agents-team__column" ref={columnRef}>
-          <Section title="Needs you" empty="Nothing is waiting on you.">
+          <Section
+            title="Needs you"
+            hint={groups.length > 0 ? `${kbd('mod', 'J')} next agent that needs you` : undefined}
+            empty="Nothing is waiting on you."
+          >
             {groups.map(({ agent, approvals, failure }) => {
               const kind = failedTurn(agent);
               const pending = approvals.some((m) => m.approval?.status === 'pending');
@@ -405,7 +418,7 @@ export function AgentsTeamView({
               <Row
                 key={agent.id}
                 agent={agent}
-                line={agent.status.activity ?? 'Working…'}
+                line={plainActivity(agent.status.activity) ?? 'Working…'}
                 state="working"
                 meta={<PixelLoaderRings size="sm" label={`${agent.name} is working`} />}
                 onOpen={() => onOpenAgent(agent.id)}

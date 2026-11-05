@@ -19,8 +19,8 @@ interface QuitConfirmModalProps {
  * branch in App.tsx, so it lives at the component root alongside the other
  * app-global chrome.
  *
- * With agents working or waiting on an approval it becomes the quit guard:
- * it names who would be stopped, and the safe choice is the default. Laid
+ * With agents working, or a check-in due soon, it becomes the quit guard
+ * (an open approval alone doesn't: it waits for you): it names who would be stopped, and the safe choice is the default. Laid
  * out as a macOS alert with three choices is: stacked, default first, Cancel
  * last.
  */

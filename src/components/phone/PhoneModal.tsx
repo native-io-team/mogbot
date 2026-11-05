@@ -52,6 +52,7 @@ import { PhoneInstall } from './PhoneInstall';
 import { PhoneInstallEntry } from './PhoneInstallEntry';
 import {
   COMPANION_INSTALL_ENABLED,
+  readInstallRecord,
   takeInstallOnOpen,
   type InstallPlatform,
 } from '../../lib/companionInstall';
@@ -73,6 +74,8 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
   const [now, setNow] = useState(() => Date.now());
   // "Install on my phone": the route choice, or a reinstall for one platform.
   const [install, setInstall] = useState<{ reinstall?: InstallPlatform } | null>(null);
+  // Said they already have the app (from somewhere other than this Mac).
+  const [haveApp, setHaveApp] = useState(false);
   const { copy } = useCopyToClipboard({
     onCopy: () => showToast('Pairing link copied. It works once, for five minutes.', 'success'),
   });
@@ -191,7 +194,7 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
   }
 
   return (
-    <ModalFrame isOpen={isOpen} onClose={onClose} title="Phone" className="phone-modal">
+    <ModalFrame isOpen={isOpen} onClose={onClose} title="Your phone" className="phone-modal">
       <div className="settings-modal-body phone-access">
         {!s ? (
           <div className="phone-loading">
@@ -203,12 +206,25 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
           </div>
         ) : (
           <>
-            <AccessHeader
-              step={phoneStep(s)}
-              busy={busy}
-              onEnable={(on) => void run(on ? 'enable' : 'disable', () => setPhoneAccess(on))}
-              onRetry={() => void run('retry', retryPhoneTailscale)}
-            />
+            {/* The app comes first: there's nothing to connect until it's on a
+                phone. Off, with no phone paired and no build from this Mac, the
+                panel is the way to get it; turning access on comes after. */}
+            {phoneStep(s).kind === 'off' &&
+            s.devices.length === 0 &&
+            !readInstallRecord() &&
+            !haveApp ? (
+              <PhoneGetApp
+                onInstall={COMPANION_INSTALL_ENABLED ? () => setInstall({}) : undefined}
+                onHaveApp={() => setHaveApp(true)}
+              />
+            ) : (
+              <AccessHeader
+                step={phoneStep(s)}
+                busy={busy}
+                onEnable={(on) => void run(on ? 'enable' : 'disable', () => setPhoneAccess(on))}
+                onRetry={() => void run('retry', retryPhoneTailscale)}
+              />
+            )}
 
             {phoneStep(s).kind === 'ready' && (
               <section className="phone-section">
@@ -228,13 +244,14 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
               </section>
             )}
 
-            {COMPANION_INSTALL_ENABLED && (
-              <PhoneInstallEntry
-                now={now}
-                onInstall={() => setInstall({})}
-                onReinstall={(platform) => setInstall({ reinstall: platform })}
-              />
-            )}
+            {COMPANION_INSTALL_ENABLED &&
+              !(phoneStep(s).kind === 'off' && s.devices.length === 0 && !haveApp) && (
+                <PhoneInstallEntry
+                  now={now}
+                  onInstall={() => setInstall({})}
+                  onReinstall={(platform) => setInstall({ reinstall: platform })}
+                />
+              )}
 
             {(s.enabled || s.devices.length > 0) && (
               <section className="phone-section">
@@ -281,6 +298,47 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
         )}
       </div>
     </ModalFrame>
+  );
+}
+
+/**
+ * First visit, nothing installed: get the app, said plainly. It's in beta;
+ * there's no store download yet, so today it's built on this Mac and put on
+ * the phone over a cable. Connecting (Tailscale) is the second step, named
+ * so nobody is surprised by it, and offered straight away to someone who
+ * already has the app.
+ */
+function PhoneGetApp({ onInstall, onHaveApp }: { onInstall?: () => void; onHaveApp: () => void }) {
+  return (
+    <div className="phone-intro phone-get-app">
+      <p className="phone-lede">
+        Talk to your agents from your phone, answer their questions and approve what they ask for.
+      </p>
+      <section className="phone-step">
+        <h3 className="phone-step__title">1. Get the app on your phone</h3>
+        <p className="phone-step__text">
+          The phone app is in beta, and not in the App Store or Play Store yet. Today it’s built on
+          this Mac and installed over a cable: an iPhone needs Xcode and an Apple ID (with a free
+          Apple ID it stops opening after 7 days, and reinstalling is one click here); an Android
+          phone needs USB debugging turned on.
+        </p>
+        {onInstall ? (
+          <Button variant="primary" onClick={onInstall} className="phone-step__action">
+            Install on my phone…
+          </Button>
+        ) : (
+          <p className="phone-step__text">Installing isn’t available in this version yet.</p>
+        )}
+      </section>
+      <section className="phone-step" data-later>
+        <h3 className="phone-step__title">2. Connect it to this Mac</h3>
+        <p className="phone-step__text">
+          Then turn on phone access. Your phone talks straight to this Mac over Tailscale, a private
+          network between your own devices; nothing goes through anyone else, and this Mac has to
+          stay on. <TextButton onClick={onHaveApp}>I already have the app</TextButton>
+        </p>
+      </section>
+    </div>
   );
 }
 

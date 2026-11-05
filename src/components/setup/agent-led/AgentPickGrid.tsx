@@ -22,6 +22,10 @@ interface CardDef {
   key: AgentCardKey;
   name: string;
   description: string;
+  /** The paid plan it signs in with, so nobody picks blind. No prices: they change. */
+  account: string;
+  /** The one to pick if you don't know which. */
+  recommended?: boolean;
   icon: ReactNode;
 }
 
@@ -30,12 +34,15 @@ const CARDS: CardDef[] = [
     key: 'claude',
     name: 'Claude Code',
     description: 'Claude, by Anthropic',
+    account: 'Uses a Claude Pro or Max plan',
+    recommended: true,
     icon: <ClaudeIcon size={28} />,
   },
   {
     key: 'codex',
     name: 'Codex',
     description: 'GPT, by OpenAI',
+    account: 'Uses a ChatGPT Plus or Pro plan',
     icon: <CodexIcon size={28} />,
   },
 ];
@@ -73,9 +80,11 @@ export function AgentPickGrid({ items, onSelect, disabled }: AgentPickGridProps)
             onClick={() => onSelect(card.key)}
             disabled={disabled}
           >
+            {card.recommended && <span className="agent-pick-card-badge">Recommended</span>}
             <span className="agent-pick-card-icon">{card.icon}</span>
             <span className="agent-pick-card-name">{card.name}</span>
             <span className="agent-pick-card-desc">{card.description}</span>
+            <span className="agent-pick-card-account">{card.account}</span>
             <span className={`agent-pick-card-status ${state}`}>{STATUS_LABELS[state]}</span>
           </button>
         );

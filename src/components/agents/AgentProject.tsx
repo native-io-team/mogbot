@@ -210,24 +210,26 @@ export const ChangeCard = memo(function ChangeCard({
       data-arrived={arrived || undefined}
       data-message-ids={message.id}
     >
+      {/* What changed, in a line; the receipt (branch, line counts, files) is
+          one click down, for whoever wants it. */}
       <div className="agent-changes__head">
         <span className="agent-changes__summary">
           Changed {count} in {project}
-          <span className="agent-changes__counts">
-            <LineCounts added={changes.added} removed={changes.removed} />
-          </span>
         </span>
-        {changes.branch && (
-          <Tooltip content="Branch when the turn ended">
-            <span className="agent-changes__branch">
-              <BranchIcon size={12} />
-              {changes.branch}
-            </span>
-          </Tooltip>
-        )}
       </div>
       {expanded && (
         <ul className="agent-changes__files">
+          {changes.branch && (
+            <li className="agent-changes__more agent-changes__receipt">
+              <span className="agent-changes__branch">
+                <BranchIcon size={12} />
+                {changes.branch}
+              </span>
+              <span className="agent-changes__counts">
+                <LineCounts added={changes.added} removed={changes.removed} />
+              </span>
+            </li>
+          )}
           {changes.files.map((file) => (
             <li key={file.path}>
               <Tooltip content={`View the diff of ${file.path}`}>
@@ -254,21 +256,7 @@ export const ChangeCard = memo(function ChangeCard({
         </ul>
       )}
       <div className="agent-changes__actions">
-        {changes.files.length > 0 && (
-          <TextButton tabIndex={0} onClick={() => setViewing(changes.files[0])}>
-            View diff
-          </TextButton>
-        )}
-        {several && (
-          <TextButton
-            tabIndex={0}
-            className="agent-changes__toggle-files"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? 'Hide files' : 'Show files'}
-          </TextButton>
-        )}
+        {/* The result first: what it looks like now. */}
         {ctx && (
           <TextButton
             tabIndex={0}
@@ -276,6 +264,16 @@ export const ChangeCard = memo(function ChangeCard({
             onClick={() => ctx.openProject(changes.project)}
           >
             Open preview
+          </TextButton>
+        )}
+        {changes.files.length > 0 && (
+          <TextButton
+            tabIndex={0}
+            className="agent-changes__toggle-files"
+            aria-expanded={several ? expanded : undefined}
+            onClick={() => (several ? setExpanded((v) => !v) : setViewing(changes.files[0]))}
+          >
+            {several ? (expanded ? 'Hide changes' : 'See changes') : 'See changes'}
           </TextButton>
         )}
       </div>
