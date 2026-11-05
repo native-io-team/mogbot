@@ -14,7 +14,7 @@ const brief = (over: Partial<RemoteAccessBrief> = {}): RemoteAccessBrief => ({
 });
 
 describe('indicatorState', () => {
-  it('stays visible while off, so people can find the feature', () => {
+  it('reads as off while off (the row then hides: the phone story is the companion app)', () => {
     expect(indicatorState(brief({ enabled: false }), now)).toMatchObject({
       tone: 'off',
       line: 'Remote access off',

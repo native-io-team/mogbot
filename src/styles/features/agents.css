@@ -534,6 +534,28 @@
   color: var(--text-muted);
 }
 
+/* How a new teammate works, in one quiet line under its role. */
+.agent-chat__empty-hint {
+  max-width: 360px;
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+}
+
+/* Under the Chief's greeting the ways in sit with the conversation, at the
+   message column's leading edge, not centred like an empty state. */
+.agent-chat__messages > .agent-chat__starters {
+  justify-content: flex-start;
+  max-width: none;
+  margin-top: var(--spacing-sm);
+}
+
+/* What keeps them going, at the foot of What's in flight. */
+.agents-team__column > .agents-stay-on {
+  margin-top: var(--spacing-xl);
+}
+
 /* Where agents run: a quiet note set apart under the starters. */
 .agents-stay-on {
   display: flex;
@@ -1408,6 +1430,27 @@
   align-self: flex-start;
 }
 
+.agent-editor__advanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.agent-editor__more-chevron {
+  transition: transform var(--transition-interaction-fast);
+}
+
+.agent-editor__more-chevron[data-open] {
+  transform: rotate(90deg);
+}
+
+/* Colour, engine, model, project, apps: there when wanted, out of the way. */
+.agent-editor__advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
 .agent-editor__briefing {
   display: flex;
   flex-direction: column;
@@ -2135,4 +2178,11 @@
 /* "What <agent> can do": reads as prose, not figures. */
 .agent-editor__can-do {
   font-variant-numeric: normal;
+}
+
+/* What's in flight's bell: its count is agents waiting on you, which is
+   attention (amber), not an error. */
+.agents-inflight-badge {
+  background: var(--accent-warning);
+  color: var(--text-on-accent);
 }

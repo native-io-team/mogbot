@@ -6,7 +6,7 @@
  */
 
 import { SetupItem, SETUP_FRIENDLY_NAMES } from '../../../lib/setup';
-import { AGENT_LED_REQUIRED_ITEM_IDS, HostChoice } from '../../../lib/agentOnboarding';
+import { PROJECT_TOOL_ITEM_IDS, HostChoice } from '../../../lib/agentOnboarding';
 import { SuccessIcon } from '@/components/icons';
 
 interface ChecklistRow {
@@ -32,7 +32,7 @@ export function SetupChecklist({
   hostChoice,
 }: SetupChecklistProps) {
   const rows: ChecklistRow[] = [
-    // "Other" agents aren't managed by Ship Studio, so there's no row to
+    // "Other" agents aren’t managed by the app, so there's no row to
     // verify for them — only the required tools below.
     ...(agentBinaryId !== null
       ? [
@@ -47,7 +47,7 @@ export function SetupChecklist({
       : []),
     // Required items, in install order. Absent items (e.g. npm_fix once
     // permissions are fine) simply don't get a row.
-    ...AGENT_LED_REQUIRED_ITEM_IDS.map((id) => items.find((i) => i.id === id))
+    ...PROJECT_TOOL_ITEM_IDS.map((id) => items.find((i) => i.id === id))
       .filter((item): item is SetupItem => item !== undefined)
       .map((item) => ({
         id: item.id,
@@ -73,7 +73,7 @@ export function SetupChecklist({
     <div className="agent-setup-checklist" aria-label="Setup progress">
       <h3 className="agent-setup-checklist-title">Setup checklist</h3>
       <p className="agent-setup-checklist-hint">
-        Ship Studio verifies each item itself — they turn green as real checks pass.
+        The app checks each one itself; they turn green as real checks pass.
       </p>
       <ul className="agent-setup-checklist-items">
         {rows.map((row) => (
@@ -97,8 +97,8 @@ export function SetupChecklist({
       </ul>
       {hostChoice === 'cloudflare' && (
         <p className="agent-setup-checklist-footnote">
-          Cloudflare is set up by your agent in the terminal — Ship Studio can't verify it yet, so
-          check the terminal output.
+          Cloudflare is set up by your agent in the terminal — the app can’t verify it yet, so check
+          the terminal output.
         </p>
       )}
     </div>

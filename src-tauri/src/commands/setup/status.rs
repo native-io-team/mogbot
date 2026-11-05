@@ -97,6 +97,16 @@ async fn run_gh_with_timeout(args: &[&str], timeout_secs: u64) -> Option<std::pr
 }
 
 /// Get full setup status for all items
+/// The setup agent ids whose CLIs Agents can run on (`agents::engine`).
+const AGENTS_ENGINE_IDS: &[&str] = &["claude-code", "codex"];
+
+/// Setup is complete once one engine that can run Agents is ready.
+fn has_agents_engine(detected_agents: &[String]) -> bool {
+    detected_agents
+        .iter()
+        .any(|id| AGENTS_ENGINE_IDS.contains(&id.as_str()))
+}
+
 #[tauri::command]
 #[tracing::instrument]
 pub async fn get_full_setup_status() -> FullSetupStatus {
@@ -161,14 +171,6 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
             .map(|i| matches!(i.status, SetupItemStatus::Ready))
             .unwrap_or(false);
 
-        // Required base items for setup completion
-        const REQUIRED_ITEMS_MOCK: &[&str] = &["homebrew", "node", "git", "gh"];
-
-        let base_ready = mock_items
-            .iter()
-            .filter(|i| REQUIRED_ITEMS_MOCK.contains(&i.id.as_str()))
-            .all(|i| matches!(i.status, SetupItemStatus::Ready));
-
         // Check which agent pairs are fully ready
         let mut detected_agents = Vec::new();
         for agent in ALL_AGENTS {
@@ -187,14 +189,8 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
             }
         }
 
-        let at_least_one_agent = !detected_agents.is_empty();
-        // In mock mode, also require all items ready so the wizard shows
-        // for any incomplete step (including optional ones like hosting).
-        // The wizard handles skippable steps internally.
-        let all_items_ready = mock_items
-            .iter()
-            .all(|i| matches!(i.status, SetupItemStatus::Ready));
-        let all_ready = base_ready && at_least_one_agent && all_items_ready;
+        // Same rule as the real check: one engine that can run Agents.
+        let all_ready = has_agents_engine(&detected_agents);
 
         return FullSetupStatus {
             all_ready,
@@ -624,19 +620,11 @@ pub async fn get_full_setup_status() -> FullSetupStatus {
         error_message: None,
     });
 
-    // Required base items for setup completion (GitHub auth and individual agent items are optional)
-    const REQUIRED_ITEMS: &[&str] = &["homebrew", "node", "git", "gh"];
-
-    let base_ready = items
-        .iter()
-        .filter(|i| REQUIRED_ITEMS.contains(&i.id.as_str()) || i.id == "npm_fix")
-        .all(|i| matches!(i.status, SetupItemStatus::Ready));
-
-    // At least one agent pair must be fully ready — or the user declared they
-    // bring their own agent ("Other" in agent-led onboarding).
-    let external_agent = read_app_state().external_agent.unwrap_or(false);
-    let at_least_one_agent = !detected_agents.is_empty() || external_agent;
-    let all_ready = base_ready && at_least_one_agent;
+    // Setup is complete when one engine that can run Agents (Claude Code or
+    // Codex) is installed and signed in. The package manager, Node, version
+    // control and hosting are project tools: they are asked for when work
+    // first becomes a project, never as a gate in front of the app.
+    let all_ready = has_agents_engine(&detected_agents);
 
     // Track optional auth status separately
     let github_authenticated = items
@@ -694,24 +682,16 @@ pub async fn quick_setup_check() -> crate::types::QuickSetupCheck {
         };
     }
 
-    // Fast Tier-1 checks: binary existence only (no --version calls)
-    #[cfg(windows)]
-    let pkg_mgr_present = get_winget_command().is_some();
-    #[cfg(not(windows))]
-    let pkg_mgr_present = get_brew_command().is_some();
-
-    let node_present = find_executable("node").is_some();
-    let git_present = find_executable("git").is_some();
-    let gh_present = find_executable("gh").is_some();
-
-    // Check ALL agents — at least one pair must be present (or the user
-    // opted to bring their own agent via "Other" in agent-led onboarding)
+    // Fast Tier-1 checks: file existence only (no --version calls). Only an
+    // engine that can run Agents counts; project tools are not part of setup.
     let quick_account_id = app_state
         .active_account_id
         .clone()
         .unwrap_or_else(|| crate::commands::accounts::DEFAULT_ACCOUNT_ID.to_string());
-    let at_least_one_agent = app_state.external_agent.unwrap_or(false)
-        || ALL_AGENTS.iter().any(|agent| {
+    let at_least_one_agent = ALL_AGENTS
+        .iter()
+        .filter(|agent| AGENTS_ENGINE_IDS.contains(&agent.id))
+        .any(|agent| {
             let binary_present = find_binary_by_name(agent.binary_name).is_some();
             if !binary_present {
                 return false;
@@ -729,8 +709,7 @@ pub async fn quick_setup_check() -> crate::types::QuickSetupCheck {
     // For gh_auth, we trust the cached state since checking requires subprocess
     // It will be verified in the background after showing projects
 
-    let all_present =
-        pkg_mgr_present && node_present && git_present && gh_present && at_least_one_agent;
+    let all_present = at_least_one_agent;
 
     crate::types::QuickSetupCheck {
         all_present,

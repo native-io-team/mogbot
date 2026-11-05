@@ -47,6 +47,12 @@ export interface Scenario {
    */
   looksRightWhen: string;
   /**
+   * The app opens on Agents. A scenario about the Projects side (the
+   * dashboard and what hangs off it) says so, and the harness clicks the
+   * sidebar's Projects toggle first, as a person would.
+   */
+  startOn?: 'projects';
+  /**
    * Open straight into this project's workspace instead of the dashboard.
    * Saved a whole class of brittle "click the third card" capture steps.
    */

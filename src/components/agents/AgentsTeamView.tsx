@@ -46,6 +46,7 @@ import {
 import { refreshAgents, upsertMessage, useAgentsSelector } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { AgentsStayOnNote } from './AgentsStayOn';
 
 /** Lines read per chat: enough for its latest reply. A chat with a card open reads a page. */
 const RECENT_LINES = 20;
@@ -431,6 +432,9 @@ export function AgentsTeamView({
               />
             ))}
           </Section>
+
+          {/* What keeps them going, said once there is something to keep going. */}
+          {(team.working.length > 0 || team.scheduled.length > 0) && <AgentsStayOnNote />}
         </div>
       </div>
     </section>

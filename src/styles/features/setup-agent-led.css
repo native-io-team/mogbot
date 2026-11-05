@@ -25,28 +25,43 @@
   min-height: 0;
 }
 
-/* Escape hatch, pinned in view at all times. */
-.onboarding-mode-toggle {
-  position: fixed;
-  top: var(--spacing-lg);
-  right: var(--spacing-lg);
-  z-index: var(--z-modal-overlay);
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--surface-panel);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-card);
-  font-size: var(--font-size-badge);
-  cursor: pointer;
-  transition: all var(--transition-interaction);
+/* ============ How it works ============ */
+
+/* Three numbered lines under the heading: what a person actually does. */
+.onboarding-how {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-lg) auto var(--spacing-lg);
+  padding: 0;
+  list-style: none;
+  text-align: left;
+  width: fit-content;
 }
 
-.onboarding-mode-toggle:hover {
-  background: var(--surface-control);
+.onboarding-how li {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
   color: var(--text-primary);
+  font-size: var(--font-size-subhead);
 }
 
-/* ============ Agent pick grid (Phase 0) ============ */
+.onboarding-how-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--spacing-xl);
+  height: var(--spacing-xl);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: var(--font-size-badge);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============ Engine pick grid ============ */
 
 /* Wide enough for three cards per row; flex centering gives the 3 + 2 split. */
 .onboarding-content.agent-onboarding-content {
@@ -384,6 +399,61 @@
   50% {
     opacity: 0;
   }
+}
+
+/* ============ Project tools (asked for at the first project) ============ */
+
+.project-tools-modal {
+  width: 480px; /* css-ok: dialog width */
+  max-width: calc(100vw - var(--spacing-xl) * 2);
+}
+
+/* Running: the terminal and the checklist side by side need the room. */
+.project-tools-modal.is-running {
+  width: 960px; /* css-ok: guided layout max (terminal + sidebar) */
+}
+
+.project-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.project-tools__loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-xl) 0;
+  color: var(--text-secondary);
+}
+
+.project-tools__lede,
+.project-tools__note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-lg);
+  line-height: var(--line-height-help);
+}
+
+.project-tools__note {
+  color: var(--text-muted);
+  font-size: var(--font-size-body-md);
+}
+
+.project-tools__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin: 0;
+  padding-left: var(--spacing-lg);
+  color: var(--text-primary);
+  font-size: var(--font-size-body-lg);
+}
+
+.project-tools__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
 }
 
 /* ============ Narrow windows ============ */

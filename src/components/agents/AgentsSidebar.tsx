@@ -142,7 +142,10 @@ export function AgentsSidebar({
   actions,
 }: AgentsSidebarProps) {
   const searching = query.trim().length > 0;
-  const nudge = useImportNudge(agents.length);
+  const nudge = useImportNudge(
+    agents.length,
+    agents.some((a) => a.isMain && a.sessionId !== null)
+  );
   const { visible, hidden } = useMemo(() => {
     const sorted = sortAgents(agents);
     return {
@@ -205,7 +208,7 @@ export function AgentsSidebar({
             <Button
               variant="ghost"
               width="fill"
-              className="workspace-sidebar-add-project"
+              className="workspace-sidebar-add-project agents-list__new"
               onClick={onNew}
               title={`New agent (${kbd('mod', 'N')})`}
             >
@@ -219,7 +222,7 @@ export function AgentsSidebar({
               <Button
                 variant="ghost"
                 width="fill"
-                className="workspace-sidebar-add-project"
+                className="workspace-sidebar-add-project agents-list__import"
                 onClick={onImport}
               >
                 <DownloadIcon size={16} />

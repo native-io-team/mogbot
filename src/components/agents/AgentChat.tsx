@@ -42,7 +42,6 @@ import { AgentModelMenu } from './AgentModelMenu';
 import { TextArea } from '../primitives/TextField';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
-import { AgentsStayOnNote } from './AgentsStayOn';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
@@ -110,10 +109,35 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 
 /**
- * First open: one-click ways in. Importing isn't the Chief's job (the other
- * assistant does it), so that one opens the import steps instead.
+ * The Chief's first open: one-click answers to its greeting. Importing isn't
+ * the Chief's job (the other assistant does it), so that one opens the import
+ * steps instead.
  */
-const STARTERS = ['Set up my team', 'What can you do?'];
+const STARTERS = ['Help me plan my week', 'Set up a daily brief', 'What can you do?'];
+
+function ChiefStarters({
+  onStart,
+  onImport,
+}: {
+  onStart: (text: string) => void;
+  /** With no sidebar to hold the import note, the starters offer it. */
+  onImport?: () => void;
+}) {
+  return (
+    <div className="agent-chat__starters">
+      {STARTERS.map((text) => (
+        <Button key={text} tabIndex={0} variant="secondary" onClick={() => onStart(text)}>
+          {text}
+        </Button>
+      ))}
+      {onImport && (
+        <Button tabIndex={0} variant="secondary" onClick={onImport}>
+          Import agents…
+        </Button>
+      )}
+    </div>
+  );
+}
 /** Any other agent's first open: what to ask a new teammate. */
 const AGENT_STARTERS = ['What’s on your plate?', 'Check in with me tomorrow at 9'];
 
@@ -387,6 +411,12 @@ export function AgentChat({
   }, [colorKey]);
 
   const items = useMemo(() => buildChatItems(shown), [shown]);
+  /** Nothing yet but what the Chief said first: the user hasn't spoken. */
+  const greetingOnly =
+    agent.isMain &&
+    shown.length > 0 &&
+    shown.every((m) => m.kind === 'agent') &&
+    agent.status.state === 'idle';
   const livePeerLines = useMemo(() => newestPeerGroups(items), [items]);
   const drivingId = useMemo(() => drivingBriefId(items, agent), [items, agent]);
   // Retry belongs to the newest failure only, and only if nothing was said
@@ -949,34 +979,23 @@ export function AgentChat({
               {agent.isMain ? (
                 <>
                   <p className="agent-chat__empty-role">
-                    Your Chief of Staff builds and runs your team: it sets up agents for your
-                    projects, briefs them, and tracks their work.
+                    Tell me what you’re working on and I’ll put a team together. I create agents,
+                    hand them the work, and bring you what comes back.
                   </p>
                   {engineReady && (
-                    <div className="agent-chat__starters">
-                      {STARTERS.map((text) => (
-                        <Button
-                          key={text}
-                          tabIndex={0}
-                          variant="secondary"
-                          onClick={() => sendStarter(text)}
-                        >
-                          {text}
-                        </Button>
-                      ))}
-                      {/* The sidebar's import note is the way in; with no sidebar, this is. */}
-                      {compact && (
-                        <Button tabIndex={0} variant="secondary" onClick={onImport}>
-                          Import agents…
-                        </Button>
-                      )}
-                    </div>
+                    <ChiefStarters
+                      onStart={sendStarter}
+                      onImport={compact ? onImport : undefined}
+                    />
                   )}
-                  <AgentsStayOnNote />
                 </>
               ) : (
                 <>
                   {agent.role && <p className="agent-chat__empty-role">{agent.role}</p>}
+                  <p className="agent-chat__empty-hint">
+                    It remembers what you tell it. Anything risky comes to you first, as an Allow or
+                    Deny card.
+                  </p>
                   <TextButton tabIndex={0} onClick={() => actions.onEdit(agent)}>
                     View instructions
                   </TextButton>
@@ -999,6 +1018,11 @@ export function AgentChat({
             </div>
           ) : (
             rows
+          )}
+          {/* The Chief spoke first (its stored greeting); the ways in sit
+              under it until the user says something. */}
+          {greetingOnly && engineReady && (
+            <ChiefStarters onStart={sendStarter} onImport={compact ? onImport : undefined} />
           )}
           {items.length === 0 && indicator.mounted && (
             <WorkingIndicator

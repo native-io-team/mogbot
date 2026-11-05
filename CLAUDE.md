@@ -234,123 +234,49 @@ cd src-tauri && cargo test
 
 Unit tests are colocated in source files using `#[cfg(test)]` modules.
 
-### Onboarding / Setup Wizard Testing
+### Onboarding / Setup Testing
 
-Onboarding is critical — it's the first thing every new user sees.
+Onboarding is critical — it's the first thing every new user sees, and it ends in a conversation with the Chief of Staff.
 
-**There are two onboarding experiences**, chosen by `OnboardingRouter` (`src/components/setup/OnboardingRouter.tsx`):
+**What it asks for: one engine Agents can run on** (Claude Code or Codex), installed and signed in. Nothing else. `OnboardingRouter` → `AgentOnboardingScreen` (`src/components/setup/agent-led/`):
 
-- **Agent-led (default)** — Phase 0 is a five-card agent picker (Claude Code / Codex / Cursor / Opencode / Other) with install→sign-in click-through per card; "Other" opens a plain terminal for any agent CLI and persists an `external_agent` opt-in so setup checks stop requiring a managed agent. A hosting step follows (Vercel / Cloudflare / skip — persisted as the workspace `default_host`). Then Phase 1 spawns the chosen agent in a terminal with a prescriptive setup prompt (`buildGuidedSetupPrompt` in `src/lib/agentOnboarding.ts`) and it installs everything else (Homebrew/winget, Node, Git, GitHub CLI, GitHub sign-in, plus the chosen host's CLI) while a checklist verifies with the app's own `get_full_setup_status` checks. The agent drives; the app verifies — completion is decided by our checks, never by the agent's claim. (Cloudflare has no backend detection yet, so its setup is verified only in the terminal; publishing flows are still Vercel-only.)
-- **Classic wizard** — the 4-step deterministic flow described below. Always one click away via the pinned "Try classic onboarding" corner button; the choice persists in `localStorage` (`shipstudio.onboardingMode`).
+1. A short "how it works" (talk to your Chief of Staff; it builds a team; risky things wait for your Allow) and two engine cards. Only engines `agents::engine` can run are offered.
+2. The chosen card's install → sign-in rows (Codex first gets Node.js and the package manager, since it installs through npm). The next step starts on its own.
+3. The hand-off screen ("You're all set — Claude Code is connected. Your Chief of Staff is waiting"), then Agents with the Chief open on its stored greeting (`CHIEF_GREETING`, written by `agents::ensure_main`; no model turn runs until the user replies) and three starters.
 
-#### Visual testing for the agent-led flow (works on any machine)
+The app verifies; nothing self-certifies: an engine counts when `get_full_setup_status` says it is installed and signed in. Backend `allReady` means exactly that (`has_agents_engine` in `commands/setup/status.rs`), and the background check after launch only logs — it never sends a user back to onboarding.
 
-```bash
-SHIPSTUDIO_FORCE_SETUP=fresh pnpm tauri dev
-```
+**Project tools are asked for in context.** Homebrew/winget, Node, Git, GitHub CLI and a GitHub sign-in are needed only when work becomes a project. Creating or importing one goes through `useGatedProjectStarts` (`src/lib/projectTools.ts`); if anything is missing, the Project tools dialog (`ProjectToolsModal`) lists it in plain words and runs the guided phase: the user's own agent installs the tools in a terminal (`buildGuidedSetupPrompt`) while the checklist ticks green from the app's own checks, then the project flow carries on. Hosting stays in a project's Push popover.
 
-Under mock mode the agent-led flow is fully scripted and deterministic: Phase 0 install/connect buttons flip the backend mock state after a visible beat (no real terminals), and Phase 1 plays a scripted demo agent session (`DemoAgentTerminal`) that "installs" each tool on a ~30s timeline, flipping mock items ready via `mock_mark_setup_item_ready` so the real checklist polling ticks green end-to-end. Nothing touches the host machine — this is the reliable way for any contributor to eyeball the whole flow.
+The classic step-by-step wizard and its "Try classic onboarding" toggle were removed: it gated the app on developer tools onboarding no longer asks for.
 
-Other useful scenarios: `SHIPSTUDIO_FORCE_SETUP=auth-only` (agents installed, nothing signed in — exercises Phase 0 connect), `almost-done` (only GitHub sign-in missing — short guided phase).
+#### Looking at it
 
-`SHIPSTUDIO_FORCE_ONBOARDING=1` shows the agent-led flow with **real** checks and a **real agent**. On a fully set-up dev machine the pick phase shows real agent statuses, and the guided phase always runs (the fast-forwards to celebration are deliberately disabled under this env var): the agent is spawned with a verify-only prompt, checks each installed tool, and reports back — a genuine end-to-end test of the agent interaction without a fresh machine. Real *install* runs still need a machine/VM where things are actually missing.
+- `pnpm harness` scenarios: `onboarding-fresh`, `onboarding-codex-prereqs`, `onboarding-handoff` (celebration → Agents with the Chief), `launch-returning` (launch lands on Agents), `project-tools` and `project-tools-running`.
+- `SHIPSTUDIO_FORCE_SETUP=fresh pnpm tauri dev` — mock backend; install/connect buttons flip mock state after a visible beat, and the Project tools dialog plays the scripted `DemoAgentTerminal`. Nothing touches the host machine. Also `auth-only`, `codex-only`, `both-agents` (fast path to the hand-off).
+- `SHIPSTUDIO_FORCE_ONBOARDING=1 pnpm tauri dev` — real checks, onboarding forced open, the pick phase always shown even on a set-up machine; `mark_setup_complete` is in-memory only.
 
-The classic wizard's two modes below work unchanged — click "Try classic onboarding" to reach them.
+#### Testing on a Fresh Machine (Real End-to-End)
 
-#### 1. Classic, Real Mode: `SHIPSTUDIO_FORCE_ONBOARDING=1`
-
-```bash
-SHIPSTUDIO_FORCE_ONBOARDING=1 pnpm tauri dev
-```
-
-This forces the onboarding wizard to appear but runs **real system checks**. Items show their actual status on your machine (homebrew, node, git, etc. will show as "ready" with real versions). Terminal-based installs and auth flows work normally.
-
-How it works:
-- `quick_setup_check` returns `setup_complete_cached: false` → app shows onboarding
-- `get_full_setup_status` returns `all_ready: false` → onboarding stays open
-- All individual item checks are real (versions, auth status, etc.)
-- `mark_setup_complete` sets an in-memory flag instead of writing to disk
-- After completing onboarding, background verification sees real `all_ready: true` → no redirect loop
-- Next launch with the env var: onboarding shows again (nothing persisted)
-
-Since your dev machine likely has everything installed, the wizard will auto-advance to the celebration screen. This is correct behavior — it validates the auto-advance logic works.
-
-#### 2. Mock Mode: `SHIPSTUDIO_FORCE_SETUP=<scenario>` (for testing specific states)
-
-```bash
-SHIPSTUDIO_FORCE_SETUP=fresh pnpm tauri dev        # Nothing installed (step 1)
-SHIPSTUDIO_FORCE_SETUP=auth-only pnpm tauri dev     # Tools installed, no auth (step 2/3)
-SHIPSTUDIO_FORCE_SETUP=almost-done pnpm tauri dev   # Only gh_auth missing (step 2)
-SHIPSTUDIO_FORCE_SETUP=both-agents pnpm tauri dev   # Everything ready → celebration
-SHIPSTUDIO_FORCE_SETUP=codex-only pnpm tauri dev    # Only Codex, no Claude
-SHIPSTUDIO_FORCE_SETUP=homebrew,node,git,gh,gh_auth pnpm tauri dev  # Custom: step 3
-```
-
-This uses a **mock backend** — item statuses are faked. Clicking "Install" simulates a 2-second install. However, **terminal-based items (homebrew, gh_auth, claude, codex) spawn real processes** that will fail or do unexpected things since they run against your actual system, not the mock.
-
-**When to use which:**
-| Scenario | Use |
-|----------|-----|
-| Testing wizard UI flow and navigation | `SHIPSTUDIO_FORCE_ONBOARDING=1` |
-| Testing specific incomplete states | `SHIPSTUDIO_FORCE_SETUP=<scenario>` |
-| Testing on a fresh machine (real installs) | No env var needed — onboarding shows automatically |
-
-#### 3. Testing on a Fresh Machine (Real End-to-End)
-
-This is the gold standard test — the true production path, no env vars, on a machine with nothing installed.
-
-**Disposable macOS VM (recommended):** `scripts/onboarding-vm.sh` wraps the whole flow with [Tart](https://github.com/cirruslabs/tart). One-time setup instructions are in the script header (standalone Tart binary + the `macos-sequoia-vanilla` image — *vanilla*, not *base*, which ships with Homebrew preinstalled and ruins the test). Then:
+The gold standard: no env vars, a machine with nothing installed. `scripts/onboarding-vm.sh` wraps it with [Tart](https://github.com/cirruslabs/tart) (setup in the script header; use the `macos-sequoia-vanilla` image — *base* ships with Homebrew and ruins the test):
 
 ```bash
 ./scripts/onboarding-vm.sh fresh   # build DMG if needed, boot a pristine VM with it mounted
 ./scripts/onboarding-vm.sh reset   # throw the used VM away; next fresh starts clean
 ```
 
-VM login is admin/admin; the DMG appears under "My Shared Files → dmg" in Finder. Locally-built DMGs aren't notarized — right-click → Open. Budget ~35GB disk for the image. Clones are copy-on-write, so retest cycles are fast and always pristine.
+VM login is admin/admin; the DMG appears under "My Shared Files → dmg". Locally-built DMGs aren't notarized — right-click → Open.
 
-Alternatively, on a real clean macOS install:
+**Checklist:**
 
-1. Install Xcode CLI tools: `xcode-select --install`
-2. Install Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-3. Install the app (DMG or `pnpm tauri dev`)
-4. Walk through every wizard step — verify each install/connect actually works
-5. Verify the wizard auto-advances past pre-existing tools
-6. Verify celebration screen appears and app loads correctly
+- [ ] Claude Code card: installs via terminal, sign-in completes, hand-off screen names it
+- [ ] Codex card on a bare machine: package manager and Node.js install first, then Codex, then sign-in
+- [ ] Hand-off lands on Agents with the Chief's greeting and starters; the Chief runs on the engine chosen
+- [ ] Re-launch lands on Agents, not onboarding (setup_complete persisted)
+- [ ] New project: the Project tools dialog lists what's missing, the agent installs it, the checklist turns green, the new-project flow opens
+- [ ] A project window (opened from a project) still goes straight to the workspace
 
-**Checklist for fresh machine testing:**
-
-- [ ] Step 1: Homebrew installs successfully via terminal
-- [ ] Step 1: Node.js installs after homebrew completes
-- [ ] Step 1: npm_fix appears only if ~/.npm has permission issues
-- [ ] Step 1: "Next" enables only when all step 1 items are ready
-- [ ] Step 2: Git and GitHub CLI install (batch install works)
-- [ ] Step 2: GitHub auth opens browser and completes
-- [ ] Step 3: Claude Code installs via terminal
-- [ ] Step 3: Claude auth flow completes
-- [ ] Step 3: "Next" enables when at least one agent pair is ready
-- [ ] Step 3: If both agents ready, default agent selection appears inline
-- [ ] Step 4: "Skip for Now" advances to celebration
-- [ ] Celebration: "You're all set!" shows, auto-continues after 2.5s
-- [ ] App: Projects view loads correctly after onboarding
-- [ ] Re-launch: Onboarding does NOT show again (setup_complete persisted)
-
-#### Wizard Architecture Quick Reference
-
-The wizard has 4 steps defined in `src/lib/setup.ts` (`WIZARD_STEPS`):
-
-| Step | ID | Items | Complete When |
-|------|----|-------|---------------|
-| 1 | `package-manager` | homebrew, node, npm_fix | All present items ready |
-| 2 | `git-github` | git, gh, gh_auth | All 3 ready |
-| 3 | `agent` | claude, claude_auth, codex, codex_auth, opencode, opencode_auth | At least 1 agent pair ready |
-| 4 | `hosting` | vercel, vercel_auth | Both ready (skippable) |
-
-Key files:
-- `src/components/setup/OnboardingScreen.tsx` — wizard orchestrator
-- `src/components/setup/WizardStepIndicator.tsx` — step dots
-- `src/components/setup/steps/` — per-step components
-- `src/lib/setup.ts` — step definitions, helpers, backend API
-- `src-tauri/src/commands/setup.rs` — backend setup checks, mock/force modes
+Key files: `src/components/setup/agent-led/AgentOnboardingScreen.tsx`, `src/components/setup/ProjectToolsModal.tsx`, `src/lib/agentOnboarding.ts`, `src/lib/projectTools.ts`, `src-tauri/src/commands/setup/` (checks, mock/force modes).
 
 ## Shared CSS Classes (Plugin-Stable)
 
@@ -471,7 +397,7 @@ Full design, the threat model, and what is and isn't verified: [docs/remote-acce
 
 Answers: **can I run my work through a team of agents, the way I do in Grok Bot, but on the best model on my own machine?**
 
-1. Agents is a mode (`AppView` `'agents'`): the sidebar's Agents row or ⌘K → Agents. The Chief of Staff exists from first open (`ensure_main`)
+1. Agents is the primary view (`AppView` `'agents'`): launch and the end of onboarding land there (`postSetupViewFor` in `useAppSetup.ts`; a project window still opens its workspace), and Projects is the sidebar toggle or ⌘K. The Chief of Staff exists from first open (`ensure_main`) and its chat opens on a stored greeting (`CHIEF_GREETING`). The bell beside the sidebar toggle opens What's in flight, with how many agents need you; the Phone row at the foot of the sidebar is the companion app (remote access shows there only while on)
 2. An agent is a registry entry plus a home folder: `CLAUDE.md` (instructions + a `## Memory` section it maintains) and `messages.jsonl` (what the user was shown). The chat log is ours, never reconstructed from Claude's transcript
 3. Each turn is one `claude --print --resume` process in the agent's home, with the agent tools on the agent bridge at `/mcp/<token>/agents/<id>`. Text blocks become bubbles; tool calls only update the "working" line. No process per idle agent
 4. `message_agent` is asynchronous and capped at 6 agent-to-agent hops per user message. Management tools are Chief-only; `delete_agent` asks the user first

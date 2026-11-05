@@ -6,6 +6,7 @@
 import type { Scenario } from '../types';
 import { HARNESS_ROOT } from './base';
 import { AGENTS_TAB, MIN, TEAM, msg, messagesFor, now, overview, status } from './agents';
+import { workspaceCommands } from './workspace';
 
 const ACME_PATH = `${HARNESS_ROOT}/acme-marketing`;
 
@@ -472,6 +473,7 @@ export const agentsProjectScenarios: Scenario[] = [
       { click: '[data-agent-id="acme"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]:nth-child(6)' },
+      { click: '.agent-editor__more' },
       { click: '.agent-editor__project' },
     ],
     commands: {
@@ -590,6 +592,20 @@ export const agentsProjectScenarios: Scenario[] = [
       ),
       agents_messages: (args: Record<string, unknown>) =>
         args.agentId === 'finance' ? FINANCE_DRIVEN_CHAT : messagesFor(args),
+    },
+  },
+  {
+    id: 'workspace-project-agents',
+    title: 'Workspace — the agents that work in this project, above its sessions',
+    looksRightWhen:
+      'In the acme-marketing project’s sidebar body: an “Agents” section listing Acme Site (the agent bound to this folder, with “message” muted at the right), then “Sessions” (the terminal tabs, formerly headed Agents) with “New session ⌘T” at its foot. Clicking Acme Site opens its chat in Agents.',
+    project: ACME_PATH,
+    requires: '#sidebar-section-team',
+    clipSelector: '.workspace-sidebar',
+    commands: {
+      ...workspaceCommands,
+      agents_overview: overview(boundTeam()),
+      agents_messages: messagesFor,
     },
   },
 ];

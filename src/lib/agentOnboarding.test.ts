@@ -18,11 +18,13 @@ vi.mock('./setup', async (importOriginal) => {
 });
 
 import {
-  AGENT_LED_REQUIRED_ITEM_IDS,
+  PROJECT_TOOL_ITEM_IDS,
   buildGuidedSetupPrompt,
-  getMissingRequiredItems,
+  getMissingProjectTools,
   guidedAgentSpawn,
-  isAgentLedSetupComplete,
+  areProjectToolsReady,
+  isEnginePairReady,
+  readyAgentsEngine,
 } from './agentOnboarding';
 
 function item(id: string, status: SetupItem['status']): SetupItem {
@@ -95,7 +97,7 @@ describe('buildGuidedSetupPrompt', () => {
   it('tells the agent verification is the app’s job, not its own claim', () => {
     const prompt = buildGuidedSetupPrompt(FRESH_MISSING);
     expect(prompt).toContain('a clean exit is a claim, not proof');
-    expect(prompt).toContain('Ship Studio runs its own checks');
+    expect(prompt).toContain('the app runs its own checks');
   });
 
   it('appends the chosen host CLI as the final step, with its check command', () => {
@@ -151,7 +153,7 @@ describe('guidedAgentSpawn', () => {
   });
 });
 
-describe('getMissingRequiredItems', () => {
+describe('getMissingProjectTools', () => {
   it('returns required items that are present and not ready, in install order', () => {
     const items = [
       item('gh_auth', 'not_authenticated'),
@@ -159,26 +161,26 @@ describe('getMissingRequiredItems', () => {
       item('node', 'ready'),
       item('claude', 'not_installed'), // agent items are not "required" here
     ];
-    expect(getMissingRequiredItems(items).map((i) => i.id)).toEqual(['homebrew', 'gh_auth']);
+    expect(getMissingProjectTools(items).map((i) => i.id)).toEqual(['homebrew', 'gh_auth']);
   });
 
   it('treats absent items as ready (npm_fix disappears once fixed)', () => {
-    const items = AGENT_LED_REQUIRED_ITEM_IDS.filter((id) => id !== 'npm_fix').map((id) =>
+    const items = PROJECT_TOOL_ITEM_IDS.filter((id) => id !== 'npm_fix').map((id) =>
       item(id, 'ready')
     );
-    expect(getMissingRequiredItems(items)).toEqual([]);
+    expect(getMissingProjectTools(items)).toEqual([]);
   });
 });
 
-describe('isAgentLedSetupComplete', () => {
-  const allRequiredReady = AGENT_LED_REQUIRED_ITEM_IDS.filter((id) => id !== 'npm_fix').map((id) =>
+describe('areProjectToolsReady', () => {
+  const allRequiredReady = PROJECT_TOOL_ITEM_IDS.filter((id) => id !== 'npm_fix').map((id) =>
     item(id, 'ready')
   );
 
   it('requires the chosen agent pair on top of the required items', () => {
-    expect(isAgentLedSetupComplete(allRequiredReady, 'claude')).toBe(false);
+    expect(areProjectToolsReady(allRequiredReady, 'claude')).toBe(false);
     const withPair = [...allRequiredReady, item('claude', 'ready'), item('claude_auth', 'ready')];
-    expect(isAgentLedSetupComplete(withPair, 'claude')).toBe(true);
+    expect(areProjectToolsReady(withPair, 'claude')).toBe(true);
   });
 
   it('fails when a required item is not ready, even with the agent ready', () => {
@@ -188,7 +190,7 @@ describe('isAgentLedSetupComplete', () => {
       item('claude', 'ready'),
       item('claude_auth', 'ready'),
     ];
-    expect(isAgentLedSetupComplete(items, 'claude')).toBe(false);
+    expect(areProjectToolsReady(items, 'claude')).toBe(false);
   });
 
   it('only checks the chosen agent, not every agent', () => {
@@ -198,16 +200,38 @@ describe('isAgentLedSetupComplete', () => {
       item('claude_auth', 'ready'),
       item('codex', 'not_installed'),
     ];
-    expect(isAgentLedSetupComplete(items, 'claude')).toBe(true);
-    expect(isAgentLedSetupComplete(items, 'codex')).toBe(false);
+    expect(areProjectToolsReady(items, 'claude')).toBe(true);
+    expect(areProjectToolsReady(items, 'codex')).toBe(false);
   });
 
   it('null agent ("Other") gates on required items only', () => {
-    expect(isAgentLedSetupComplete(allRequiredReady, null)).toBe(true);
+    expect(areProjectToolsReady(allRequiredReady, null)).toBe(true);
     const items = [
       ...allRequiredReady.filter((i) => i.id !== 'gh_auth'),
       item('gh_auth', 'not_authenticated'),
     ];
-    expect(isAgentLedSetupComplete(items, null)).toBe(false);
+    expect(areProjectToolsReady(items, null)).toBe(false);
+  });
+});
+
+describe('engines onboarding offers', () => {
+  it('counts an engine only when installed and signed in, by the app’s checks', () => {
+    expect(isEnginePairReady([item('codex', 'ready')], 'codex')).toBe(false);
+    expect(isEnginePairReady([item('codex', 'ready'), item('codex_auth', 'ready')], 'codex')).toBe(
+      true
+    );
+  });
+
+  it('finds a ready engine Agents can run on, and ignores the others', () => {
+    const cursorOnly = [item('cursor', 'ready'), item('cursor_auth', 'ready')];
+    expect(readyAgentsEngine(cursorOnly)).toBeNull();
+    const codex = [...cursorOnly, item('codex', 'ready'), item('codex_auth', 'ready')];
+    expect(readyAgentsEngine(codex)).toBe('codex');
+  });
+
+  it('needs no project tools: an engine alone is a finished setup', () => {
+    const items = [...FRESH_MISSING, item('claude', 'ready'), item('claude_auth', 'ready')];
+    expect(readyAgentsEngine(items)).toBe('claude');
+    expect(areProjectToolsReady(items, 'claude')).toBe(false);
   });
 });

@@ -1,12 +1,17 @@
 /**
- * Agent-led onboarding: the agent does the setup work, the app verifies it.
+ * Agent-led setup: the agent does the setup work, the app verifies it.
  *
- * The flow inverts the classic wizard. Phase 0 gets exactly one AI agent
- * installed + signed in (the only part that can't be agent-led). Phase 1
- * spawns that agent in a terminal with a prescriptive setup prompt and lets
- * it install everything else (Homebrew/winget, Node, Git, GitHub CLI, GitHub
- * sign-in) while a checklist polls `get_full_setup_status` — the backend's
- * real checks, never the agent's own claims, decide when setup is complete.
+ * Onboarding needs exactly one thing: an engine that can run Agents (Claude
+ * Code or Codex) installed and signed in. That is the only part that can't
+ * be agent-led, and it is all a person needs to start talking to their Chief
+ * of Staff.
+ *
+ * Project tools (Homebrew/winget, Node, Git, GitHub CLI, GitHub sign-in) are
+ * asked for later, the first time work becomes a project
+ * (`ProjectToolsModal`): the agent is spawned in a terminal with a
+ * prescriptive prompt and installs them while a checklist polls
+ * `get_full_setup_status` — the backend's real checks, never the agent's own
+ * claims, decide when it is done.
  *
  * @module lib/agentOnboarding
  */
@@ -14,6 +19,50 @@
 import { agentPromptArgs } from './agent';
 import { invoke } from '@tauri-apps/api/core';
 import { SetupItem, isSetupItemReady, isWindows, TerminalCommand } from './setup';
+import { getAgentsOverview, updateAgent } from './agents';
+import { logger } from './logger';
+
+// ============ Engines ============
+
+/**
+ * The setup ids of the engines Agents runs on (`agents::engine`). Onboarding
+ * offers only these: an agent CLI that can't run Agents would finish setup
+ * into a product that can't start.
+ */
+export const AGENTS_ENGINE_BINARY_IDS = ['claude', 'codex'] as const;
+export type AgentsEngineBinaryId = (typeof AGENTS_ENGINE_BINARY_IDS)[number];
+
+/** Installed and signed in, by the app's own checks. */
+export function isEnginePairReady(items: SetupItem[], binaryId: string): boolean {
+  return (
+    items.find((i) => i.id === binaryId)?.status === 'ready' &&
+    items.find((i) => i.id === `${binaryId}_auth`)?.status === 'ready'
+  );
+}
+
+/** The first engine that can run Agents and is ready, if any. */
+export function readyAgentsEngine(items: SetupItem[]): AgentsEngineBinaryId | null {
+  return AGENTS_ENGINE_BINARY_IDS.find((id) => isEnginePairReady(items, id)) ?? null;
+}
+
+/**
+ * Put a Chief of Staff that has never run onto the engine onboarding just
+ * set up. The Chief defaults to Claude Code; someone who set up only Codex
+ * would otherwise land on a Chief that can't answer. A Chief that has run
+ * keeps its engine. Failure is logged: the chat offers the engine switch too.
+ */
+export async function putChiefOnEngine(defaultAgentId: string | null): Promise<void> {
+  if (defaultAgentId !== 'codex') return;
+  try {
+    const { agents } = await getAgentsOverview();
+    const chief = agents.find((a) => a.isMain);
+    if (chief && chief.engine !== 'codex' && !chief.sessionId) {
+      await updateAgent(chief.id, { engine: 'codex' });
+    }
+  } catch (err) {
+    logger.warn('Could not move the Chief of Staff onto Codex', { error: String(err) });
+  }
+}
 
 // ============ Test-mode API ============
 
@@ -71,15 +120,15 @@ export async function setDefaultHost(host: HostChoice): Promise<void> {
   return invoke('set_default_host', { host });
 }
 
-// ============ Required items & completion ============
+// ============ Project tools & completion ============
 
 /**
- * Everything the guided phase is responsible for, in install order. The agent
- * pair itself is handled in Phase 0 and checked separately; Vercel stays
- * optional (connectable later from the dashboard), matching the classic
- * wizard's skippable hosting step.
+ * What a project needs on the machine, in install order — everything the
+ * guided phase is responsible for. None of it gates onboarding; it is asked
+ * for when work first becomes a project. Hosting stays optional (connectable
+ * later from a project's Push popover).
  */
-export const AGENT_LED_REQUIRED_ITEM_IDS = [
+export const PROJECT_TOOL_ITEM_IDS = [
   'homebrew',
   'node',
   'npm_fix',
@@ -89,36 +138,37 @@ export const AGENT_LED_REQUIRED_ITEM_IDS = [
 ] as const;
 
 /**
- * Required items that are present in the status and not yet ready.
+ * Project tools that are present in the status and not yet ready.
  * Absent items count as ready (`npm_fix` only exists while ~/.npm is broken).
  */
-export function getMissingRequiredItems(items: SetupItem[]): SetupItem[] {
-  return AGENT_LED_REQUIRED_ITEM_IDS.map((id) => items.find((i) => i.id === id)).filter(
+export function getMissingProjectTools(items: SetupItem[]): SetupItem[] {
+  return PROJECT_TOOL_ITEM_IDS.map((id) => items.find((i) => i.id === id)).filter(
     (item): item is SetupItem => item !== undefined && item.status !== 'ready'
   );
 }
 
-/** Required items already detected as ready — the prompt names these so the
+/** Project tools already detected as ready — the prompt names these so the
  *  agent confirms them to the user instead of silently skipping them. */
-export function getReadyRequiredItems(items: SetupItem[]): SetupItem[] {
-  return AGENT_LED_REQUIRED_ITEM_IDS.map((id) => items.find((i) => i.id === id)).filter(
+export function getReadyProjectTools(items: SetupItem[]): SetupItem[] {
+  return PROJECT_TOOL_ITEM_IDS.map((id) => items.find((i) => i.id === id)).filter(
     (item): item is SetupItem => item !== undefined && item.status === 'ready'
   );
 }
 
 /**
- * The agent-led flow is complete when every required item is ready AND the
- * chosen agent pair is ready. Computed from items (not `allReady`) so it
- * stays truthful under SHIPSTUDIO_FORCE_ONBOARDING, which pins `allReady`
- * to false while onboarding is open.
+ * The guided phase is done when every project tool is ready AND the agent
+ * running it is still installed and signed in. Computed from items (not
+ * `allReady`, which only means "an engine is ready" now) so the checklist
+ * and the Continue button agree.
  *
- * `agentBinaryId: null` means the "Other" path — an agent we don't manage —
- * so only the required items gate completion. The backend's own `allReady`
- * still requires a known agent pair, so a user going this route will be
- * offered agent setup again from the dashboard; that's honest, not a bug.
+ * `agentBinaryId: null` means an agent we don't manage, so only the tools
+ * gate completion.
  */
-export function isAgentLedSetupComplete(items: SetupItem[], agentBinaryId: string | null): boolean {
-  const requiredReady = AGENT_LED_REQUIRED_ITEM_IDS.every((id) => isSetupItemReady(items, id));
+export function areProjectToolsReady(
+  items: SetupItem[],
+  agentBinaryId: string | null = null
+): boolean {
+  const requiredReady = PROJECT_TOOL_ITEM_IDS.every((id) => isSetupItemReady(items, id));
   if (agentBinaryId === null) return requiredReady;
   const pairReady =
     items.find((i) => i.id === agentBinaryId)?.status === 'ready' &&
@@ -232,16 +282,16 @@ export function buildGuidedSetupPrompt(
   const readyNames = alreadyReady.map((i) => PROMPT_ITEM_NAMES[i.id] ?? i.id).join(', ');
   const detectionHint =
     missingNames && readyNames
-      ? `For reference, Ship Studio's own detection currently reports installed: ${readyNames}; missing: ${missingNames} — but trust what your checks find over this list. `
+      ? `For reference, the app's own detection currently reports installed: ${readyNames}; missing: ${missingNames} — but trust what your checks find over this list. `
       : missingNames
-        ? `For reference, Ship Studio's own detection currently reports everything missing: ${missingNames} — but trust what your checks find over this list. `
-        : "For reference, Ship Studio's own detection reports everything already installed — but trust what your checks find over this list. ";
+        ? `For reference, the app's own detection currently reports everything missing: ${missingNames} — but trust what your checks find over this list. `
+        : "For reference, the app's own detection reports everything already installed — but trust what your checks find over this list. ";
 
   const steps = instructions.map((s, idx) => `${String(idx + 1)}) ${s}`).join('; ');
 
   return (
-    'You are helping a brand-new Ship Studio user get their computer ready. ' +
-    'Ship Studio is a desktop app for building websites with AI agents, and you are that agent — this is their first impression of you, so be warm, brief, and clear. ' +
+    'You are helping someone get their computer ready for their first project (a site or an app their agents will build). ' +
+    'They use a desktop app where a team of AI agents works for them, and you are one of those agents — be warm, brief, and clear. ' +
     'Assume the user is not technical: before each step, say what you are about to do in one short sentence. ' +
     `Start by checking what is already installed yourself: run ${checkCommands.join(', ')}, then give the user one short summary of what's already good and what's missing. ` +
     detectionHint +
@@ -252,7 +302,7 @@ export function buildGuidedSetupPrompt(
     'Your job is to get every listed tool working no matter what this machine throws at you: if a standard command fails, read the error, explain it in plain words, and fix the underlying problem — installing prerequisites (like Xcode Command Line Tools), repairing PATH or npm permissions, or retrying another official install method are all fair game. ' +
     'If the user has to do something themselves (type a password, click through a browser), tell them exactly what to expect. ' +
     'Do not set up anything unrelated to the tools listed above. ' +
-    'When everything is verified, tell the user they are all set and to look at the checklist beside this window — Ship Studio runs its own checks and will turn every item green, then show a Continue button.'
+    'When everything is verified, tell the user they are all set and to look at the checklist beside this window — the app runs its own checks and will turn every item green, then show a Continue button.'
   );
 }
 

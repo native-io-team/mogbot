@@ -28,6 +28,8 @@ interface HomeSidebarProps {
   /** The Projects | Agents toggle: back to wherever you were on each side. */
   onGoProjects: () => void;
   onGoAgents: () => void;
+  /** Agents mode's own nav (What's in flight) in place of Home / Workflows / Inbox. */
+  navContent?: ReactNode;
   /** Agents mode's conversation search, in the palette trigger's place. */
   searchContent?: ReactNode;
   isSidebarHidden: boolean;
@@ -55,6 +57,7 @@ export function HomeSidebar({
   onGoProjects,
   onGoAgents,
   searchContent,
+  navContent,
   listContent,
   isSidebarHidden,
   onToggleSidebar,
@@ -83,6 +86,7 @@ export function HomeSidebar({
       onGoProjects={onGoProjects}
       onGoAgents={onGoAgents}
       searchContent={searchContent}
+      navContent={navContent}
       listContent={listContent}
       onOpenProjectPicker={onOpenProjectPicker}
       isSidebarHidden={isSidebarHidden}

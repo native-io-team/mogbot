@@ -5,6 +5,7 @@ import { SettingsModal } from './dashboard/SettingsModal';
 import { MigrationModals } from './migration/MigrationModals';
 import { RemoteAccessModal } from './remote/RemoteAccessModal';
 import { PhoneModal } from './phone/PhoneModal';
+import { ProjectToolsModal } from './setup/ProjectToolsModal';
 import { useCompanionInstallReminder } from './phone/PhoneInstallEntry';
 import { ToastList } from './primitives/ToastList';
 import { useModal } from '../contexts/ModalContext';
@@ -42,6 +43,7 @@ function GlobalModalsBody() {
   const settings = useModal('settings');
   const remoteAccess = useModal('remoteAccess');
   const phone = useModal('phone');
+  const projectTools = useModal('projectTools');
   const { toasts, dismissToast } = useToast();
   useCompanionInstallReminder();
 
@@ -53,6 +55,7 @@ function GlobalModalsBody() {
       <SettingsModal isOpen={settings.isOpen} onClose={settings.close} />
       <RemoteAccessModal isOpen={remoteAccess.isOpen} onClose={remoteAccess.close} />
       <PhoneModal isOpen={phone.isOpen} onClose={phone.close} />
+      <ProjectToolsModal isOpen={projectTools.isOpen} onClose={projectTools.close} />
       <IssueReportModals />
       <MigrationModals />
       <ToastList toasts={toasts} onDismiss={dismissToast} />

@@ -16,6 +16,25 @@ import type { CommandMap } from '../types';
 
 export const HARNESS_ROOT = '/Users/harness/ShipStudio';
 
+/** `prompts::CHIEF_GREETING`, verbatim: what a new Chief's chat opens on. */
+export const CHIEF_GREETING_TEXT =
+  "Hi, I'm your Chief of Staff.\n\n" +
+  "Tell me what you're working on and what eats your time, and I'll put a team together for it.\n\n" +
+  '- **Agents for the work.** I create agents for the things you hand off, brief them, and check what comes back. Each one remembers you.\n' +
+  '- **You stay in charge.** Before anyone sends, spends, deletes or runs something on this computer, you get an Allow or Deny card.\n' +
+  '- **Projects when it gets real.** When the work becomes a site or an app, it gets its own project you can open and go deep in.\n' +
+  '- **On your phone too.** Pair the companion app and pick this conversation up from anywhere.\n\n' +
+  "So: what's on your plate this week?";
+
+/** The greeting as `agents_messages` returns it. */
+export const chiefGreeting = (agentId: string, ts = 1_790_000_000_000) => ({
+  id: 'greeting',
+  agentId,
+  ts,
+  kind: 'agent' as const,
+  text: CHIEF_GREETING_TEXT,
+});
+
 /**
  * `DashboardProject` (see `src/lib/project.ts`) — every field the real command
  * returns, so the dashboard renders its full card rather than a card with
@@ -173,11 +192,27 @@ export const baseCommands: CommandMap = {
         pendingApprovals: 0,
         model: null,
         muted: false,
+        engine: 'claude',
         status: { state: 'idle', activity: null, since: null },
       },
     ],
+    engines: [
+      {
+        id: 'claude',
+        label: 'Claude Code',
+        installed: true,
+        signedIn: true,
+        models: [
+          { value: 'opus', label: 'Opus' },
+          { value: 'sonnet', label: 'Sonnet' },
+          { value: 'haiku', label: 'Haiku' },
+        ],
+      },
+    ],
   },
-  agents_messages: [],
+  // A new Chief opens on its stored greeting (`agents::ensure_main`).
+  agents_messages: (args: Record<string, unknown>) =>
+    args.agentId === 'chief' ? [chiefGreeting('chief')] : [],
   agents_search: [],
   agents_usage: {
     week: {

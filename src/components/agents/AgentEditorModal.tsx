@@ -19,6 +19,7 @@ import { AgentProjectField } from './AgentProject';
 import { AgentMemory } from './AgentMemory';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentSecrets } from './AgentSecrets';
+import { ChevronRightIcon } from '@/components/icons';
 import {
   AGENT_COLORS,
   type AgentColor,
@@ -180,7 +181,7 @@ export function AgentEditorModal({
   const switching = Boolean(agent && agent.engine !== engine);
   const [project, setProject] = useState(agent?.project ?? '');
   const [usage, setUsage] = useState<UsageSummary | null>(null);
-  const [showBriefing, setShowBriefing] = useState(Boolean(agent));
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -253,130 +254,152 @@ export function AgentEditorModal({
         />
       </div>
 
-      {/* One Tab stop; the arrows move focus and the choice together, as radios do. */}
-      <div
-        className="agent-editor__colors"
-        role="radiogroup"
-        aria-label="Colour"
-        onKeyDown={(e) => {
-          const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-          if (!step) return;
-          e.preventDefault();
-          const at = AGENT_COLORS.indexOf(color as AgentColor);
-          const next = AGENT_COLORS[(at + step + AGENT_COLORS.length) % AGENT_COLORS.length];
-          setColor(next);
-          e.currentTarget.querySelector<HTMLElement>(`[data-color="${next}"]`)?.focus();
-        }}
-      >
-        {AGENT_COLORS.map((key) => (
-          <button
-            key={key}
-            type="button"
-            role="radio"
-            tabIndex={
-              color === key ||
-              (key === AGENT_COLORS[0] && !AGENT_COLORS.includes(color as AgentColor))
-                ? 0
-                : -1
-            }
-            aria-checked={color === key}
-            aria-label={key}
-            className="agent-editor__swatch"
-            data-color={key}
-            data-selected={color === key || undefined}
-            onClick={() => setColor(key)}
-          />
-        ))}
-      </div>
-
-      {runsOn.length > 1 && (
-        <div className="agent-editor__label" role="group" aria-label="Runs on">
-          Runs on
-          <SegmentedControl
-            value={engine}
-            options={runsOn.map((e) => ({ value: e.id, label: e.label }))}
-            onValueChange={(next) => {
-              setEngine(next);
-              // Models don't cross engines.
-              setModel(next === agent?.engine ? (agent.model ?? '') : '');
-            }}
-            aria-label="Runs on"
-          />
-          {switching && (
-            <p className="agent-editor__hint">
-              Its next message starts a new {ENGINE_LABEL[engine]} session, handed the recent
-              conversation. Instructions and memory carry over.
-            </p>
-          )}
-        </div>
+      <label className="agent-editor__label">
+        What should it do?
+        <TextField
+          placeholder="Keeps my inbox down to what matters"
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          disabled={agent?.isMain}
+        />
+      </label>
+      <label className="agent-editor__label">
+        What should it know?
+        <TextArea
+          rows={editing ? 6 : 4}
+          placeholder="Brief it like a new hire: context, standing rules, who's who, where things live."
+          value={instructions}
+          onChange={(e) => setInstructions(e.target.value)}
+        />
+      </label>
+      {editing ? (
+        <p className="agent-editor__hint">
+          What it remembers is kept separately, under Memory, and isn't changed here.
+        </p>
+      ) : (
+        <p className="agent-editor__hint">Or just ask your Chief of Staff to set one up for you.</p>
       )}
 
-      <div className="agent-editor__label" role="group" aria-label="Model">
-        Model
-        <SegmentedControl
-          value={model}
-          options={modelChoices(engine, engines)}
-          onValueChange={setModel}
-          aria-label="Model"
-        />
-      </div>
+      <div className="agent-editor__advanced">
+        <TextButton
+          className="agent-editor__more"
+          aria-expanded={showAdvanced}
+          leftIcon={
+            <ChevronRightIcon
+              size={10}
+              className="agent-editor__more-chevron"
+              data-open={showAdvanced || undefined}
+            />
+          }
+          onClick={() => setShowAdvanced((open) => !open)}
+        >
+          Advanced
+        </TextButton>
+        {showAdvanced && (
+          <div className="agent-editor__advanced-body">
+            {/* One Tab stop; the arrows move focus and the choice together, as radios do. */}
+            <div className="agent-editor__label" role="group" aria-label="Colour">
+              Colour
+              <div
+                className="agent-editor__colors"
+                role="radiogroup"
+                aria-label="Colour"
+                onKeyDown={(e) => {
+                  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+                  if (!step) return;
+                  e.preventDefault();
+                  const at = AGENT_COLORS.indexOf(color as AgentColor);
+                  const next =
+                    AGENT_COLORS[(at + step + AGENT_COLORS.length) % AGENT_COLORS.length];
+                  setColor(next);
+                  e.currentTarget.querySelector<HTMLElement>(`[data-color="${next}"]`)?.focus();
+                }}
+              >
+                {AGENT_COLORS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    tabIndex={
+                      color === key ||
+                      (key === AGENT_COLORS[0] && !AGENT_COLORS.includes(color as AgentColor))
+                        ? 0
+                        : -1
+                    }
+                    aria-checked={color === key}
+                    aria-label={key}
+                    className="agent-editor__swatch"
+                    data-color={key}
+                    data-selected={color === key || undefined}
+                    onClick={() => setColor(key)}
+                  />
+                ))}
+              </div>
+            </div>
 
-      <AgentProjectField value={project} onChange={setProject} />
+            {runsOn.length > 1 && (
+              <div className="agent-editor__label" role="group" aria-label="Runs on">
+                Runs on
+                <SegmentedControl
+                  value={engine}
+                  options={runsOn.map((e) => ({ value: e.id, label: e.label }))}
+                  onValueChange={(next) => {
+                    setEngine(next);
+                    // Models don't cross engines.
+                    setModel(next === agent?.engine ? (agent.model ?? '') : '');
+                  }}
+                  aria-label="Runs on"
+                />
+                {switching && (
+                  <p className="agent-editor__hint">
+                    Its next message starts a new {ENGINE_LABEL[engine]} session, handed the recent
+                    conversation. Instructions and memory carry over.
+                  </p>
+                )}
+              </div>
+            )}
 
-      {onOpenApps && (
-        <div className="agent-editor__label" role="group" aria-label="Apps">
-          Apps
-          <div className="agent-editor__apps">
-            <p className="agent-editor__hint">
-              {engine === 'codex'
-                ? 'A Codex agent can use the MCP servers set up in Codex.'
-                : 'Every agent can use the apps your Claude Code is connected to.'}
-            </p>
-            {engine === 'claude' && (
-              <Button variant="secondary" size="compact" onClick={onOpenApps}>
-                Manage apps…
-              </Button>
+            <div className="agent-editor__label" role="group" aria-label="Model">
+              Model
+              <SegmentedControl
+                value={model}
+                options={modelChoices(engine, engines)}
+                onValueChange={setModel}
+                aria-label="Model"
+              />
+            </div>
+
+            <AgentProjectField value={project} onChange={setProject} />
+
+            {onOpenApps && (
+              <div className="agent-editor__label" role="group" aria-label="Apps">
+                Apps
+                <div className="agent-editor__apps">
+                  <p className="agent-editor__hint">
+                    {engine === 'codex'
+                      ? 'A Codex agent can use the MCP servers set up in Codex.'
+                      : 'Every agent can use the apps your Claude Code is connected to.'}
+                  </p>
+                  {engine === 'claude' && (
+                    <Button variant="secondary" size="compact" onClick={onOpenApps}>
+                      Manage apps…
+                    </Button>
+                  )}
+                </div>
+              </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {showBriefing ? (
+      {agent && (
         <div className="agent-editor__briefing">
-          <label className="agent-editor__label">
-            Role
-            <TextField
-              placeholder="What is this agent responsible for?"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              disabled={agent?.isMain}
-            />
-          </label>
-          <label className="agent-editor__label">
-            Instructions
-            <TextArea
-              rows={6}
-              placeholder="Brief it like a new hire: context, standing rules, who's who, where things live."
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-            />
-          </label>
-          {editing && (
-            <p className="agent-editor__hint">
-              What it remembers is kept separately, under Memory, and isn't changed here.
-            </p>
-          )}
           <UsageLines usage={usage} />
-          {agent && <CanDo agent={agent} />}
-          {agent && <Permissions agent={agent} />}
-          {agent && <AgentSecrets agent={agent} />}
+          <CanDo agent={agent} />
+          <Permissions agent={agent} />
+          <AgentSecrets agent={agent} />
         </div>
-      ) : (
-        <TextButton className="agent-editor__more" onClick={() => setShowBriefing(true)}>
-          Add a role and instructions
-        </TextButton>
       )}
-
       {error && (
         <p className="agent-editor__error" role="alert">
           {error}

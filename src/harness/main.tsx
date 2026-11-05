@@ -162,6 +162,8 @@ function selectOption(el: HTMLElement, value: string): void {
  */
 async function runSteps(): Promise<void> {
   const steps = [
+    // The sidebar's Projects segment (labels, stacked or compact icons).
+    ...(scenario.startOn === 'projects' ? [{ click: '.mode-toggle [aria-label="Projects"]' }] : []),
     ...(scenario.openSelector ? [{ click: scenario.openSelector }] : []),
     ...(scenario.steps ?? []),
   ];

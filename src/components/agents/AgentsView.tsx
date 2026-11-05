@@ -11,7 +11,7 @@
  * next agent that needs you (a card, or a turn that didn't finish); ⌘F
  * search, Esc to put it away; Esc twice in an empty composer stops a working
  * agent (AgentChat); ⌘K "Open <agent>", "Stop <agent>", "What's in flight"
- * (the cross-agent overview, reachable only from there), and Allow / Deny for
+ * (the cross-agent overview, also the bell beside the sidebar toggle), and Allow / Deny for
  * the oldest card waiting on you.
  *
  * @module components/agents/AgentsView
@@ -57,14 +57,15 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { useAgentsIntents } from '../../commands/useAgentsCommands';
 import { useCommands } from '../../commands/useCommands';
-import { AgentsModeIcon, CheckIcon, CloseIcon, EditFieldIcon } from '@/components/icons';
+import { AgentsModeIcon, BellIcon, CheckIcon, CloseIcon, EditFieldIcon } from '@/components/icons';
+import { IconButton } from '../primitives/IconButton';
 import { kbd } from '../../lib/shortcuts';
 
 const SELECTED_KEY = 'shipstudio.agents.selected';
 
 function readSelected(): string | null {
   try {
-    // "What's in flight" is a ⌘K detour, never where Agents reopens.
+    // "What's in flight" (the bell, or ⌘K) is a detour, never where Agents reopens.
     const id = localStorage.getItem(SELECTED_KEY);
     return id === TEAM_ID ? null : id;
   } catch {
@@ -121,7 +122,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const [jump, setJump] = useState<{ agentId: string; messageId: string } | null>(null);
 
   const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
-  // "What's in flight" (⌘K only), else the last agent you had open, else the Chief of Staff.
+  // "What's in flight" (the bell or ⌘K), else the last agent you had open, else the Chief of Staff.
   const teamOpen = selectedId === TEAM_ID;
   const selected = teamOpen
     ? null
@@ -314,6 +315,8 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [openAgent]);
 
+  const needsYouCount = agents.filter((a) => !a.hidden && needsYou(a)).length;
+
   // The oldest card waiting on you, on the first agent (sidebar order) with one.
   const waitingOn = sortAgents(agents).find((a) => !a.hidden && needsYou(a)) ?? null;
   const topCard = useAgentsSelector((s) =>
@@ -450,6 +453,13 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
           <HomeSidebar
             {...sidebarProps}
             activeNav="agents"
+            navContent={
+              <InFlightButton
+                active={teamOpen}
+                needsYouCount={needsYouCount}
+                onOpen={() => setSelectedId(TEAM_ID)}
+              />
+            }
             searchContent={
               <AgentsTopSearch
                 search={search}
@@ -597,5 +607,42 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * The bell beside the sidebar toggle: What's in flight, the overview of every
+ * agent, with how many are waiting on you. On the Projects side the bell is
+ * the Workflows inbox; here it is about agents.
+ */
+function InFlightButton({
+  active,
+  needsYouCount,
+  onOpen,
+}: {
+  active: boolean;
+  needsYouCount: number;
+  onOpen: () => void;
+}) {
+  const label =
+    needsYouCount > 0 ? `What’s in flight — ${needsYouCount} need you` : 'What’s in flight';
+  return (
+    <span className="workspace-sidebar-inbox">
+      <IconButton
+        variant="ghost"
+        className={`workspace-sidebar-home ${active ? 'is-active' : ''}`}
+        icon={<BellIcon size={12} />}
+        onClick={onOpen}
+        disabled={active}
+        aria-current={active ? 'page' : undefined}
+        title={label}
+        aria-label={label}
+      />
+      {needsYouCount > 0 && (
+        <span className="workspace-sidebar-inbox-badge agents-inflight-badge" aria-hidden>
+          {needsYouCount > 9 ? '9+' : needsYouCount}
+        </span>
+      )}
+    </span>
   );
 }

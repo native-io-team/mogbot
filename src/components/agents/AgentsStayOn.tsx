@@ -1,6 +1,7 @@
 /**
  * What keeps agents running: this Mac, awake, with Ship Studio running. Said
- * once, quietly — under the Chief of Staff's first-run starters, and as a
+ * once, quietly — at the foot of What's in flight once something is running
+ * or scheduled (when it matters, not on a new user's first screen), and as a
  * link in the schedule popover's footnote — with what the app can do about
  * it: hold the Mac awake (the same assertion remote access uses), keep
  * running when windows close, and open at login (remote access's login item).
@@ -28,7 +29,7 @@ export function AgentsStayOnNote() {
       <p className="agents-stay-on__line">
         {state.keepRunning
           ? 'Agents run on this Mac. Closing the window keeps them going; quitting stops them, and sleep pauses them.'
-          : 'Agents run on this Mac. Closing Ship Studio stops them, and sleep pauses them.'}
+          : 'Agents run on this Mac. Quitting the app stops them, and sleep pauses them.'}
       </p>
       <div className="agents-stay-on__actions">
         <ToggleButton
@@ -45,7 +46,7 @@ export function AgentsStayOnNote() {
           size="compact"
           pressed={state.keepRunning}
           leftIcon={tick(state.keepRunning)}
-          title="Closing a window hides it and Ship Studio keeps running. Click its Dock icon to bring it back; ⌘Q quits."
+          title="Closing a window hides it and the app keeps running. Click its Dock icon to bring it back; ⌘Q quits."
           onClick={() => void change({ keepRunning: !state.keepRunning })}
         >
           Keep running when closed
@@ -56,7 +57,7 @@ export function AgentsStayOnNote() {
             size="compact"
             pressed={state.openAtLogin}
             leftIcon={tick(state.openAtLogin)}
-            title="Reopens Ship Studio after a restart, once you've logged in."
+            title="Reopens the app after a restart, once you've logged in."
             onClick={() => void change({ openAtLogin: !state.openAtLogin })}
           >
             Open at login
@@ -64,8 +65,7 @@ export function AgentsStayOnNote() {
         )}
       </div>
       <p className="agents-stay-on__line agents-stay-on__line--quiet">
-        Around the clock? Run Ship Studio on a Mac that never sleeps, like a Mac mini or a cloud
-        Mac.
+        Around the clock? Run it on a Mac that never sleeps, like a Mac mini or a cloud Mac.
       </p>
     </div>
   );

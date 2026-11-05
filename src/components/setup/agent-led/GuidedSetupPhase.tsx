@@ -4,7 +4,7 @@
  * missing, while the checklist beside it verifies with the app's own checks.
  *
  * The agent drives; the app verifies. Completion is decided exclusively by
- * `isAgentLedSetupComplete` over freshly polled items — never by the agent
+ * `areProjectToolsReady` over freshly polled items — never by the agent
  * declaring success.
  *
  * `agentBinaryId: null` is the "Other" path: a plain shell opens instead of
@@ -21,10 +21,10 @@ import { SetupItem } from '../../../lib/setup';
 import {
   buildGuidedSetupPrompt,
   ensureAgentWorkdir,
-  getMissingRequiredItems,
-  getReadyRequiredItems,
+  getMissingProjectTools,
+  getReadyProjectTools,
   guidedAgentSpawn,
-  isAgentLedSetupComplete,
+  areProjectToolsReady,
   otherAgentShellSpawn,
   HostChoice,
 } from '../../../lib/agentOnboarding';
@@ -59,9 +59,9 @@ export function GuidedSetupPhase({
   // as it stood when the session started. A restart recomputes it, so an
   // agent relaunched after partial progress only gets the remaining items.
   const missingRef = useRef<SetupItem[] | null>(null);
-  missingRef.current ??= getMissingRequiredItems(items);
+  missingRef.current ??= getMissingProjectTools(items);
   const readyRef = useRef<SetupItem[] | null>(null);
-  readyRef.current ??= getReadyRequiredItems(items);
+  readyRef.current ??= getReadyProjectTools(items);
   const [session, setSession] = useState(0);
   const [agentExit, setAgentExit] = useState<number | null>(null);
   const { copy, isCopied } = useCopyToClipboard();
@@ -85,7 +85,7 @@ export function GuidedSetupPhase({
   }, []);
 
   const isOther = agentBinaryId === null;
-  const complete = isAgentLedSetupComplete(items, agentBinaryId);
+  const complete = areProjectToolsReady(items, agentBinaryId);
 
   const prompt = useMemo(
     () => buildGuidedSetupPrompt(missingRef.current ?? [], hostChoice, readyRef.current ?? []),
@@ -121,7 +121,7 @@ export function GuidedSetupPhase({
         </h2>
         <p className="wizard-step-subtitle">
           {complete
-            ? 'All checks passed — you’re ready to start building.'
+            ? 'All checks passed. Your project is next.'
             : isOther
               ? 'Start your agent in this terminal, then paste the setup instructions below into it.'
               : 'Follow along in the terminal — your agent explains each step and will tell you if it needs anything (like a password or a browser sign-in).'}
@@ -173,7 +173,7 @@ export function GuidedSetupPhase({
           />
           {complete && (
             <div className="agent-guided-complete">
-              <p>Every check passed — verified by Ship Studio itself, not just the agent.</p>
+              <p>Every check passed, verified by the app itself, not just the agent.</p>
               <Button variant="primary" block onClick={onVerified}>
                 Continue
               </Button>
