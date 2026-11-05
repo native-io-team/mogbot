@@ -14,7 +14,13 @@ import type {
   PermissionScope,
   UsageTotals,
 } from '@shipstudio/companion-protocol';
-import { apiPrice, resetPhrase, secretTitle, tokenCount } from '@shipstudio/companion-protocol';
+import {
+  apiPrice,
+  resetPhrase,
+  secretTitle,
+  tokenCount,
+  workingRowLine,
+} from '@shipstudio/companion-protocol';
 import { drivenLine } from './bars';
 import { diffLineKind } from './diff';
 import { ENGINE_DEFAULT } from './newAgentDefaults';
@@ -71,7 +77,8 @@ export function workingLine(agent: Agent, brief = false): string {
       ? 'Waiting for a free slot'
       : rowLine(agent.status.activity);
   }
-  return agent.status.activity ?? 'Working…';
+  // Between calls the engine is deciding what's next: say that, not "Working…".
+  return agent.status.activity ?? 'Thinking';
 }
 
 /** "Claude Code" / "Codex": what the agent's turns run on. */
@@ -120,11 +127,16 @@ export function engineCantAskBar(
 }
 
 /** The row's second line, as the sidebar writes it. */
-export function subtitle(agent: Agent): string {
+export function subtitle(agent: Agent, now = Date.now()): string {
   // A request outranks driving, as on the desk: the row's words and its amber dot agree.
   if (needsYou(agent)) return 'Needs your OK';
   if (agent.takeover) return drivenLine(agent.name);
-  if (agent.status.state === 'working') return rowLine(workingLine(agent));
+  if (agent.status.state === 'working') {
+    if (waitingForSlot(agent)) return rowLine(workingLine(agent));
+    // The live step and how long it's been at it: "Running the Cypress tests · 5m".
+    const row = workingRowLine(agent.status.activity, agent.status.work, agent.status.since, now);
+    return row.elapsed ? `${row.text} · ${row.elapsed}` : row.text;
+  }
   const failure = failedTurn(agent);
   if (failure) return failureLine(failure, agent.preview, engineName(agent));
   return agent.preview ?? agent.role ?? '';

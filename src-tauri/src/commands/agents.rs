@@ -746,6 +746,23 @@ pub async fn agents_start_fresh(
     Ok(agent)
 }
 
+/// "Stop this step": end the command the agent is running and let its turn
+/// carry on (the engine sees the command end). Says what it did.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_stop_step(agent_id: String) -> Result<String, CommandError> {
+    blocking(move || agents::work::stop_step(&agent_id).map_err(CommandError::expected)).await
+}
+
+/// "Check on it": what the app can see of the turn right now, in one line
+/// (the engine's process, its command's, the CPU, the last progress).
+/// Never interrupts the turn.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_check_on(agent_id: String) -> Result<String, CommandError> {
+    blocking(move || Ok(agents::work::check_on(&agent_id))).await
+}
+
 /// Stop the turn in progress so the messages queued behind it run now. The
 /// next turn is told what it was doing when it was cut off.
 #[tauri::command]

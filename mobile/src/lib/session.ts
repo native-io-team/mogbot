@@ -676,6 +676,9 @@ export const keepCopy = (agentId: string, copyId: string, into?: string) =>
   call('agents.keepCopy', into ? { agentId, copyId, into } : { agentId, copyId });
 export const discardCopy = (agentId: string, copyId: string) =>
   call('agents.discardCopy', { agentId, copyId });
+/** "Watch live": a one-time link to the card's running site, on this Mac's tailnet only. */
+export const watchLive = (agentId: string, messageId: string) =>
+  call('agents.watchLive', { agentId, messageId });
 
 /** A path written in an agent's reply, fetched from the Mac and saved here. */
 export async function fetchPath(agentId: string, path: string) {

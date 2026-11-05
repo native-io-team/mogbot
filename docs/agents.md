@@ -402,8 +402,18 @@ steps has no line.
   allowed: Run a command" / "You declined: …". "Edited n files" counts only
   edits that came back successful.
 - **Words, safe by construction**: `work::describe_tool` is the one table.
-  A command is only its program and subcommand ("Ran npm test", "Ran git
-  push", "Ran curl": never arguments, URLs or environment), a web page only
+  A command goes through `agents::describe`, which reads the shell (quotes,
+  redirections, here-documents, `&&`, pipes, loops, `bash -c`, wrappers)
+  and names what the line is for in plain words: "Running the Cypress
+  tests", "Looking up PR #248 on GitHub", "Getting the latest changes",
+  "Installing packages", "Reading 3 files", "Fetching localhost:3268",
+  "Looking up a PR on GitHub, 3 times". The only argument values it ever
+  shows are safe and telling: a PR or issue number, a web host (a local
+  one with its port), a script or file's own name, a count. Anything
+  unknown falls back to the program's name ("Running ffmpeg"), never raw
+  shell; `describe_tests.rs` holds the table. A line's headline is its
+  weightiest command (tests, then deploys and builds, installs, what goes
+  out to others, then the rest). A web page only
   its host ("Browsed acme.com"), a file only its name, someone else's MCP
   tool a verb and the service ("Searched Google Drive", "Sent from Gmail",
   "Worked in Chrome"), our own tools past-tense words ("Shared a file").
@@ -427,6 +437,42 @@ steps has no line.
   workspace), and every agent's offers **Take over** (below), as does the
   working line itself. Taking over a browser tab the agent drives is not
   built.
+- **The step it's on right now** (`work::LiveCall`, `AgentLiveStep`): from
+  the moment a call starts, the status's `work.current` carries its words,
+  when it started (the working line's live timer, "· 5:32"), whether it's a
+  known slow tool (`describe::Slow`: after a minute, a quiet "Test runs
+  usually take a few minutes"), and what it has printed so far, only
+  where the engine streams it (Codex's app server sends
+  `item/commandExecution/outputDelta`; Claude Code's stream-json carries
+  only `tool_progress` heartbeats, so its "Show output" says "Output
+  appears when it finishes"). Output lines are stripped of escapes, then
+  redacted and scrubbed like a label: the newest 20, sent at most once a
+  second. After ten minutes, **Stop this step** (`agents_stop_step`) ends
+  that command's process tree, found under the engine's pid by the start
+  of its command line (`liveness::needle`); the engine sees it end and the
+  turn carries on. Between calls the line says "Thinking".
+- **Finished steps keep their words** and add what was observed: how long
+  it took (`endedAt`, shown from 10s) and, for a test run, the counts the
+  runner printed ("Ran the Cypress tests · 6m 12s · 42 passed, 3 failed";
+  Jest, Vitest, Playwright, pytest, Mocha, Cypress's table, cargo). A
+  command that ran 20s or more, or failed, keeps its last 20 lines
+  (`output`, on the stored timeline only, never on the live status).
+- **Alive or stuck** (`work/liveness.rs`): every engine line is a sign of
+  life, and a sign of *progress* unless it's a heartbeat (Claude Code's
+  `tool_progress`). Every 15s the running command's processes are looked
+  up (`ps`, under the engine's pid); one using the CPU counts as progress
+  too. Shown only on demand: clicking the step reads "Last activity 4s ago
+  · using the CPU". With no progress for 3 min (6 for a slow tool),
+  `work.quietSince` is set and the working line reads "No progress for 5
+  min" with **Check on it** (`agents_check_on`: what the app can see now,
+  in one line; the engine can't be asked mid-call without interrupting
+  it, so it isn't) and **Stop**. A command whose process was seen and then
+  gone (or a zombie) for 2 min while the engine never reported it back
+  ends the turn with a line saying so (`HUNG_NOTE`).
+- **In the lists**: a working agent's row (sidebar, What's in flight)
+  says the step and how long ("Running the Cypress tests · 5m") or "No
+  progress for 5 min", never "Working…", and its badge's ring breathes
+  slowly in its colour (still under Reduce Motion).
 - **Stored** beside the log, never in it: `turns/<message-id>.json`, sent
   again on `agents://message` when the turn ends, and applied only to the
   paged chat reads (desktop and phone), after the log's lock is released,
@@ -3308,8 +3354,9 @@ chat.
 
 - **Preview, when it names a project.** `project` is a project's name from
   `project_list`, resolved against the real list (an unknown one shares
-  nothing) and stored as its path. The desk's card then offers Preview, which
-  opens the project only when pressed; a revision keeps it. A card riding on
+  nothing) and stored as its path. The desk's card then offers Preview and
+  Test it, which open it in a pane beside the chat only when pressed (see
+  "Preview beside the chat"); a revision keeps it. A card riding on
   a change card shows that card's Preview instead. The phone ignores it.
 
 - **Only what exists.** `items` are files (`path`) or links (`url`). A file
@@ -3477,7 +3524,8 @@ can't trample each other. The UI says "a copy of acme-site", "Keep changes",
   agent before it prepares its copy, so a Keep can't remove the folder a turn
   is about to start in. Both name the copy, so a stale card can't act on a
   newer one.
-- **Preview** opens the copy as a workspace project; **Open a pull request**
+- **Preview** opens the copy in the pane beside the chat (Open in workspace
+  from there opens it as a workspace project); **Open a pull request**
   opens it and queues the workspace's own Submit for review modal
   (`lib/reviewHandoff.ts`), which only creates the PR when the user submits.
 - **Cleanup** (agent deleted, launch sweep): what's pending is committed to the
@@ -3503,6 +3551,68 @@ can't trample each other. The UI says "a copy of acme-site", "Keep changes",
 - Not built: a `start_task` tool to begin a fresh copy mid-conversation; the
   sidebar and dashboard still count agent copies as ordinary worktrees; the
   agent's project `session_*` tools still drive the user's own folder.
+
+## Preview beside the chat, and Test it (`src-tauri/src/agents/preview_test.rs`)
+
+**Preview** on a result card with a project, or on a copy card, opens a pane
+beside the chat (`components/agents/AgentPreviewPane.tsx`) instead of moving
+the window to the workspace. **Open in workspace** is the secondary action.
+Older cards get it too: only `result.project` or `changes` is needed.
+
+- **Which folder**: decided from the card as the log has it
+  (`agents_preview_target` → `preview_test::resolve`), never from a path the
+  client names. A live copy's card shows the copy (its own dev port, seeded at
+  creation); a kept or discarded copy's card, a plain change card or a result
+  shows the project, which must still be one of the user's projects.
+- **Port**: a server already up in this app wins, else the folder's saved
+  port, else the usual per-folder one (`pick_port`, `preferredPortForProject`).
+- **Starting**: through the window's own dev-server owner (App's
+  `useDevServer`, passed down as `AgentPreviewServer`), so the install gate and
+  the "run this project's commands?" consent are the same ones; the pane shows
+  the consent prompt in place, "needs its dependencies installed first" with
+  Open in workspace, "has no web preview", or a calm "Starting <name>…".
+- **The frame**: the workspace preview's own plumbing (`usePreviewConnection`:
+  proxy, injected inspector, health checks) with a smaller toolbar: Back (pages
+  this pane visited), the address (paths on this site only;
+  `parsePreviewAddress` refuses other hosts), Reload, and a width. What the page
+  itself loads is the page's business, as in the workspace preview (the one
+  place the webview loads a project's content).
+- **Routing**: the pane registers itself (`agents_preview_attach`, one per
+  window); `agent_bridge::dispatch_tool` sends that folder's preview tools to
+  it (`target: "pane"`; the workspace listener ignores those, the pane answers
+  nothing else). The pane registers with no agent CLI.
+
+**Test it** (pane header, or on the result card, which opens the pane and
+starts once the site is up) records "Test it in the preview" as your message
+and asks the agent (`test_prompt`) to click through the site while you watch.
+
+- **Tools**: `test_open`, `test_click`, `test_type`, `test_scroll`,
+  `test_viewport`, `test_page`, `test_console`, `test_network`,
+  `test_screenshot`, `test_note`, `test_report` — listed only while the user's
+  run is open, only for that folder, refused once the pane is closed or the
+  run stopped. They run the existing preview bridge tools against the pane.
+  Clicking around your own localhost is local work: like Go hard's local work,
+  no card, at any level (they're app tools, reachable only after you pressed
+  Test it). Everything else in that turn is under the usual rules.
+- **Steps are observed**: each action becomes a step in the app's words
+  ("Opened /pricing", "Clicked “Sign up”", "Couldn't click …" when it matched
+  nothing); typed values never show; `test_note` is the agent's own line
+  ("Form showed an error"). Steps stream to the pane (`agents://preview-test`).
+  Screenshots are copied into `attachments/<run id>/` (8 at most).
+- **The report** (`test_report`: outcome, summary, what's broken) becomes a new
+  version of the card, staged for the turn's end like `share_result`. Console
+  errors on it are read from the preview's own capture since the run began
+  (`preview_console` with `since`). A live copy's card stays a change card, so
+  Keep / Discard carry over to the newest version. A copy card without a result
+  gets a first one ("Tested <project>"). Too much is refused, never trimmed.
+- **Nothing goes silent**: a test turn that ends without a report leaves "The
+  test stopped before it reported back."; closing the pane stops the run.
+- **Phone**: the card shows the outcome, what's broken and the screenshots as a
+  swipeable strip, and **Watch live** (docs/mobile.md).
+- Not verified: a full Test it turn against a real engine and dev server in
+  the running app (the parts are unit-tested and the pane is seen in the UI
+  harness against a fictional site); a report staged in the same turn as a
+  `share_result` replaces it.
 
 ## The Chief's audit trail and live hand-offs
 

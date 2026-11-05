@@ -22,6 +22,7 @@ import { WorkspaceView } from './workspace/WorkspaceView';
 import { Spinner } from './primitives/Spinner';
 import type { Project, WorkspaceInfo } from '../lib/project';
 import type { AppView } from '../lib/types';
+import type { AgentPreviewServer } from '../lib/agentPreview';
 import type { WorkspacePick } from './dashboard/MonorepoPickerModal';
 
 type AccountSelectProps = ComponentProps<typeof AccountSelectScreen>;
@@ -58,6 +59,8 @@ export interface AppViewRouterProps {
   toasts: ToastListProps['toasts'];
   onDismissToast: ToastListProps['onDismiss'];
   quitConfirmModal: ReactNode;
+  /** The window's dev servers, for the Agents preview pane. */
+  agentPreviewServer?: AgentPreviewServer;
 }
 
 const EMPTY_TAB_TITLES = new Map<number, string>();
@@ -83,6 +86,7 @@ export function AppViewRouter({
   toasts,
   onDismissToast,
   quitConfirmModal,
+  agentPreviewServer,
 }: AppViewRouterProps) {
   if (view === 'loading') {
     return (
@@ -152,7 +156,11 @@ export function AppViewRouter({
   if (view === 'agents') {
     return (
       <>
-        <AgentsView isCompact={isCompact} sidebarProps={homeSidebarProps} />
+        <AgentsView
+          isCompact={isCompact}
+          sidebarProps={homeSidebarProps}
+          previewServer={agentPreviewServer}
+        />
         <ToastList toasts={toasts} onDismiss={onDismissToast} />
         {quitConfirmModal}
       </>

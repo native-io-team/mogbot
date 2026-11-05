@@ -558,6 +558,26 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   ("new agents: engine codex"), and answers with an `agents.registry` event.
   On a Mac without the method the choice shows but isn't tappable. Existing
   agents keep theirs ([agents.md](agents.md), "Defaults for new agents").
+- **What it's doing right now** (`LiveStep` in `components/work.tsx`): while
+  a call runs, the working row says it in plain words with a live timer
+  ("Running the Cypress tests 5:32", the call's `status.work.current`); after
+  a minute on a known slow tool a quiet "Test runs usually take a few
+  minutes"; "Show output" opens the last lines the command printed (Codex
+  streams them; under Claude Code it says "Output appears when it
+  finishes"); after ten minutes "Stop this step" (`agents.stopStep`, the
+  turn carries on). Tapping the line says when it last showed life ("Last
+  activity 4s ago · using the CPU"). Once the Mac reports no progress
+  (`quietSince`) the line reads "No progress for 5 min" with a still clock,
+  "Check on it" (`agents.checkOn`: what the Mac can see, one line, never
+  interrupting) and Stop. Finished steps read "Ran the Cypress tests · 6m 12s
+  · 42 passed, 3 failed", and a long or failed command keeps "Show output".
+  On the list a working agent's avatar gets a ring in its colour that
+  breathes slowly (still under Reduce Motion) in place of the spinner, and
+  its line says the step and how long ("Running the Cypress tests · 5m");
+  the overview carries no steps, so until a live status arrives it is the
+  status's words and the turn's time. The words come from
+  `@shipstudio/companion-protocol`'s `work.ts`, shared with the desk; the
+  methods show only on a Mac that lists them.
 
 ### Rooms
 
@@ -862,6 +882,48 @@ Haptics only for send, stop, approvals (after the Mac confirms), failures and
 toggles, and can be turned off. Android gets Material symbols, ripples and
 predictive back.
 
+### A tested card, and Watch live
+
+When the desk's **Test it** has run (docs/agents.md), the result card's new
+version carries `test`. The phone shows it in the card: the outcome in one
+line (a warning icon only when something is broken), the agent's summary and
+its list of what's broken, "N console errors" (the preview's own capture), and
+the screenshots as a sideways-paging strip, each captioned "2 of 3 · <step>"
+with the app's own step label. Tapping a picture opens the usual viewer. The
+"Changes since v1" line is left off a tested card: the test section says it.
+
+**Watch live** (a text action, like Ask for changes; shown when the Mac serves
+`agents.watchLive` and the card names a project or is a copy's card) opens the
+card's running site in the in-app browser, read-only:
+
+- The phone asks over its paired socket; the Mac resolves the folder from the
+  card exactly as the desk's Preview does (`preview_test::resolve`) and needs a
+  dev server already up for it (`proxy::dev_server_port_for`). None: "Open
+  Preview on the Mac first — the site isn't running there." The phone can't
+  start one.
+- The answer is a one-time link: `https://<mac>.ts.net:<companion port + 1>/__<slug>-watch/<ticket>`.
+  The ticket is 256 bits, kept only as a hash, bound to that phone and that
+  port, and good for a minute. Opening it trades it for an HttpOnly, Secure,
+  SameSite=Strict cookie good for 30 minutes (`companion/watch.rs`).
+- **Tailnet only**: the proxy binds loopback and is published with `tailscale
+  serve` on its own port, never Funnel (the port is never 443/8443/10000, and
+  a request Tailscale marks `Tailscale-Funnel-Request` is refused). Started on
+  the first Watch live, stopped with the phone server.
+- **Read-only**: GET and HEAD only; forms that post and WebSockets are
+  refused, so there's no live reload (reload the page). Every request re-checks
+  the phone is still paired: removing it on the Mac ends its sessions.
+- Passed through untouched: no script injection; our cookie and Tailscale's
+  identity headers are stripped, Host is the dev server's own.
+
+Verified: `cargo test --lib companion` (the decision function: one-use and
+expired tickets, revoked phones, cookie per port, Funnel and non-loopback
+refused, every write method refused, upgrades refused, cookie stripping;
+`agents.watchLive` served and audited), `mobile/__tests__/resultTest.test.tsx`,
+and the `result-tested` qa:web shot in both themes. **Not verified**:
+`tailscale serve` on the second port against a real tailnet, and a real dev
+server (Next, Vite) rendering through the proxy on a phone; with HMR refused,
+some dev clients may log reconnect attempts.
+
 ## Notifications
 
 `lib/notify.ts` keeps them honest: one per alert, grouped per agent
@@ -993,7 +1055,10 @@ Chief mid-import with its live bar, the Designer working, the Import screen's
 counts, and an 8-frame close-up of the typing dots 150 ms apart with each dot's
 opacity per frame in the report), and an account in daily use
 (`--heavy`: 17 agents, ~40 cards waiting with logins and keys among them,
-paused routines, long chats, an import an hour in), live and offline. Out: `mobile/qa-shots/` (PNGs and
+paused routines, long chats, an import an hour in), live and offline, and
+what agents are doing (`--live-work`: QA 2 five minutes into a Cypress run
+with its output open, Finance gone quiet with "Check on it" answered, a
+finished Cypress step with its time, counts and output). Out: `mobile/qa-shots/` (PNGs and
 `report.md`, which lists each shot's route, what to check, console errors and
 any text cut off with an ellipsis). It exits non-zero when a screen failed or threw.
 

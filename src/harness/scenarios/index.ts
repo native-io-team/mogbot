@@ -5,12 +5,15 @@ import { agentsScenarios } from './agents';
 import { agentsDesktopScenarios } from './agentsDesktop';
 import { agentsProjectScenarios } from './agentsProject';
 import { agentsWorkScenarios } from './agentsWork';
+import { agentsLiveScenarios } from './agentsLive';
 import { agentsResultsScenarios } from './agentsResults';
+import { agentsPreviewScenarios } from './agentsPreview';
 import { agentsRoomsScenarios } from './agentsRooms';
 import { agentsTakeoverScenarios } from './agentsTakeover';
 import { agentsStackScenarios } from './agentsStack';
 import { agentsFirstWinScenarios } from './agentsFirstWin';
 import { agentsStressScenarios } from './agentsStress';
+import { agentsTortureScenarios } from './agentsTorture';
 import { agentsRequestsScenarios } from './agentsRequests';
 import { agentsUsageScenarios } from './agentsUsage';
 import { agentsLoginsScenarios } from './agentsLogins';
@@ -36,12 +39,15 @@ export const scenarios: Scenario[] = [
   ...agentsDesktopScenarios,
   ...agentsProjectScenarios,
   ...agentsWorkScenarios,
+  ...agentsLiveScenarios,
   ...agentsResultsScenarios,
+  ...agentsPreviewScenarios,
   ...agentsRoomsScenarios,
   ...agentsTakeoverScenarios,
   ...agentsStackScenarios,
   ...agentsFirstWinScenarios,
   ...agentsStressScenarios,
+  ...agentsTortureScenarios,
   ...agentsRequestsScenarios,
   ...agentsUsageScenarios,
   ...agentsLoginsScenarios,

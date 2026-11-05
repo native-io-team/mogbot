@@ -5,7 +5,7 @@
  * with nothing behind it is left out, never shown as zero. Pure, so tested.
  */
 
-import type { TurnWork, WorkStep } from '@shipstudio/companion-protocol';
+import type { LiveCall, TurnWork, WorkStep } from '@shipstudio/companion-protocol';
 
 /** "40s", "6 min", "1 h 20 min". */
 export function formatWorked(ms: number): string {
@@ -103,4 +103,20 @@ export const STEP_SYMBOL = {
 
 export function stepSymbol(kind: string): (typeof STEP_SYMBOL)[keyof typeof STEP_SYMBOL] {
   return STEP_SYMBOL[kind as keyof typeof STEP_SYMBOL] ?? STEP_SYMBOL.tool;
+}
+
+/**
+ * The call the working row is saying, when it is saying one: the Mac's line
+ * is that call's words (`doing`), or says nothing else. Another line
+ * ("Reconnecting to Codex", "Waiting for your OK") is shown as it is, with
+ * no timer: it isn't the call.
+ */
+export function liveCallShown(
+  work: TurnWork | undefined,
+  activity: string | null | undefined
+): LiveCall | undefined {
+  const call = work?.current;
+  if (!call) return undefined;
+  if (activity == null || activity === work?.doing || activity === call.label) return call;
+  return undefined;
 }

@@ -6,6 +6,13 @@
 Your own team of AI agents, on your own computer, on the accounts you already
 pay for.
 
+**The goal: extremely complex tasks, made extremely easy.** You say what you
+want; your agents do whatever it takes. They find access wherever it exists (a
+connected app or Claude connector, the tools and files on your Mac, a built-in
+browser, your own Chrome) and only ask you when there's truly no other way —
+or before spending money, sending as you, publishing, or deleting your things.
+See [docs/MISSION.md](docs/MISSION.md#north-star-extremely-complex-tasks-made-extremely-easy).
+
 ## Try it
 
 **Invited to test it? Start with [docs/WELCOME.md](docs/WELCOME.md).**

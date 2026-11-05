@@ -96,6 +96,12 @@ pub struct ResultCard {
     /// which opens it when the user chooses. Never guessed from the files.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
+    /// "Test it": what the agent found clicking through the site in the
+    /// preview beside the chat (`preview_test`). The steps and the console
+    /// errors are the app's own observations; the outcome, summary and what's
+    /// broken are the agent's words. A later revision starts without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test: Option<super::preview_test::TestReport>,
 }
 
 /// On a user message: the result it asks to change, as it stood when asked.
@@ -383,6 +389,7 @@ pub fn build(
         not_verified: draft.not_verified,
         changes,
         project,
+        test: None,
     }
 }
 

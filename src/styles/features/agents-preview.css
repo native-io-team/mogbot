@@ -1,0 +1,443 @@
+/* The preview beside the chat (components/agents/AgentPreviewPane.tsx) and
+   what "Test it" leaves on the card (AgentTestReport.tsx). One surface: the
+   pane is a panel like the sidebar, the frame sits in it the way the
+   workspace preview sits in its rail. */
+
+:root {
+  --agents-preview-width: 52%; /* css-ok: share of the window beside the chat */
+  --agents-preview-min-width: 420px; /* css-ok: a phone-width site plus its toolbar */
+  --agents-preview-max-width: 980px; /* css-ok: past this the chat gets too narrow */
+  --agents-preview-steps-width: 248px; /* css-ok: one step label per line */
+  --agents-preview-shot-height: 64px; /* css-ok: a step's thumbnail */
+  --agents-test-shot-width: 168px; /* css-ok: a report thumbnail */
+  --agents-test-shot-height: 112px; /* css-ok: a report thumbnail */
+}
+
+.agent-preview {
+  display: flex;
+  flex: 0 0 var(--agents-preview-width);
+  flex-direction: column;
+  min-width: var(--agents-preview-min-width);
+  max-width: var(--agents-preview-max-width);
+  min-height: 0;
+  background: var(--surface-panel);
+  border-left: var(--border-width-default) solid var(--border-subtle);
+  container-type: inline-size;
+}
+
+/* Compact windows: the pane covers the chat; closing it brings the chat back. */
+.agents-main > .agent-preview {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-dropdown);
+  min-width: 0;
+  max-width: none;
+  border-left: none;
+}
+
+.agent-preview__header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: 44px; /* css-ok: matches the chat header */
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-md);
+  color: var(--text-muted);
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-preview__heading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.agent-preview__title {
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-preview__where {
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-preview__header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.agent-preview__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.agent-preview__stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A calm state in place of the frame: one line and at most one action. */
+.agent-preview__status {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xl);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.agent-preview__status--consent {
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: auto;
+  text-align: left;
+}
+
+.agent-preview__status-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.agent-preview__status-line {
+  max-width: 360px; /* css-ok: reading width */
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agent-preview__frame-wrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.agent-preview__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-preview__address {
+  flex: 1;
+  min-width: 0;
+  height: 26px; /* css-ok: a compact control's height */
+  padding: 0 var(--spacing-sm);
+  font-family: var(--font-code);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+  background: var(--surface-control);
+  border: var(--border-width-default) solid var(--border-control);
+  border-radius: var(--radius-control);
+}
+
+.agent-preview__address:focus-visible {
+  outline: none;
+  color: var(--text-primary);
+  box-shadow: var(--focus-ring);
+}
+
+.agent-preview__viewport {
+  position: relative;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-recessed);
+}
+
+.agent-preview__viewport > .agent-preview__status {
+  position: absolute;
+  inset: 0;
+}
+
+.agent-preview__device {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-origin: top center;
+}
+
+.agent-preview__device[data-width='fixed'] {
+  flex: 0 0 auto;
+  border-right: var(--border-width-default) solid var(--border-subtle);
+  border-left: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-preview__iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--surface-canvas);
+  border: none;
+}
+
+/* The steps, live, beside the frame (under it when the pane is narrow). */
+.agent-preview__steps {
+  display: flex;
+  flex: 0 0 var(--agents-preview-steps-width);
+  flex-direction: column;
+  min-height: 0;
+  border-left: var(--border-width-default) solid var(--border-subtle);
+}
+
+@container (max-width: 640px) {
+  .agent-preview__body {
+    flex-direction: column;
+  }
+
+  .agent-preview__steps {
+    flex: 0 0 auto;
+    max-height: 38%;
+    border-top: var(--border-width-default) solid var(--border-subtle);
+    border-left: none;
+  }
+}
+
+.agent-preview__steps-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agent-preview__step-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin: 0;
+  padding: 0 var(--spacing-md) var(--spacing-md);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.agent-preview__step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--spacing-2xs) var(--spacing-xs);
+  align-items: start;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agent-preview__step-icon {
+  display: inline-flex;
+  padding-top: var(--spacing-3xs);
+  color: var(--accent-error);
+}
+
+.agent-preview__step[data-ok] .agent-preview__step-icon {
+  color: var(--text-muted);
+}
+
+.agent-preview__step-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-preview__step-shot {
+  grid-column: 2;
+  height: var(--agents-preview-shot-height);
+  padding: 0;
+  overflow: hidden;
+  cursor: zoom-in;
+  background: var(--surface-recessed);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.agent-preview__step-shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.agent-preview__step-shot:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ---------------------------------------------------------------- the report */
+
+.agent-test-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.agent-test-report__title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agent-test-report[data-outcome='passed'] .agent-test-report__title svg {
+  color: var(--accent-success);
+}
+
+.agent-test-report[data-outcome='broken'] .agent-test-report__title svg {
+  color: var(--accent-warning);
+}
+
+.agent-test-report__summary {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.agent-test-report__broken {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  margin: 0;
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm) var(--spacing-xl);
+  color: var(--text-primary);
+  list-style: disc;
+  background: var(--surface-warning);
+  border-radius: var(--radius-sm);
+  user-select: text;
+}
+
+.agent-test-report__console {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+}
+
+.agent-test-report__console-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
+.agent-test-report__console ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-test-report__console code {
+  font-family: var(--font-code);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.agent-test-report__shots {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding-bottom: var(--spacing-2xs);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+}
+
+.agent-test-report__shot {
+  display: flex;
+  flex: 0 0 var(--agents-test-shot-width);
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  padding: 0;
+  text-align: left;
+  cursor: zoom-in;
+  background: none;
+  border: none;
+  scroll-snap-align: start;
+}
+
+.agent-test-report__shot img {
+  display: block;
+  width: 100%;
+  height: var(--agents-test-shot-height);
+  object-fit: cover;
+  object-position: top;
+  background: var(--surface-recessed);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.agent-test-report__shot:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.agent-test-report__shot-label {
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-test-report__steps-toggle {
+  align-self: flex-start;
+}
+
+.agent-test-report__steps-toggle[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+.agent-test-report__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  margin: 0;
+  padding: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+  list-style: none;
+}
+
+.agent-test-report__steps li {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.agent-test-report__steps li svg {
+  flex: 0 0 auto;
+  color: var(--accent-error);
+}
+
+.agent-test-report__steps li[data-ok] svg {
+  color: var(--text-muted);
+}

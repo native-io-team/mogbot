@@ -279,6 +279,14 @@ impl Backend for DesktopBackend {
         cmd::agents_interrupt(agent_id.to_string()).await
     }
 
+    async fn stop_step(&self, agent_id: &str) -> Result<String, CommandError> {
+        cmd::agents_stop_step(agent_id.to_string()).await
+    }
+
+    async fn check_on(&self, agent_id: &str) -> Result<String, CommandError> {
+        cmd::agents_check_on(agent_id.to_string()).await
+    }
+
     async fn answer_approval(&self, a: ApprovalAnswer) -> Result<(), CommandError> {
         cmd::agents_answer_approval(
             self.app.clone(),
@@ -865,6 +873,22 @@ impl Backend for DesktopBackend {
             .map_err(CommandError::expected)
     }
 
+    async fn watch_port(
+        &self,
+        agent_id: &str,
+        message_id: &str,
+    ) -> Result<(String, u16), CommandError> {
+        let target = crate::commands::agents_preview::target_for(agent_id, message_id).await?;
+        let port = crate::proxy::dev_server_port_for(&target.path).ok_or_else(|| {
+            CommandError::expected("Open Preview on the Mac first — the site isn't running there.")
+        })?;
+        Ok((target.path, port))
+    }
+
+    async fn watch_publish(&self) -> Result<String, CommandError> {
+        publish_watch(ensure(&self.app)).await
+    }
+
     async fn preview_screenshot(
         &self,
         project: &str,
@@ -1179,9 +1203,80 @@ pub async fn bring_up(app: &AppHandle) -> Result<(), CommandError> {
     Ok(())
 }
 
+/// The watch proxy, once a phone has asked for it: the tailnet URL it's
+/// served on, and how to stop it.
+struct WatchRunning {
+    url: String,
+    shutdown: Option<oneshot::Sender<()>>,
+}
+
+static WATCH: LazyLock<tokio::sync::Mutex<Option<WatchRunning>>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(None));
+
+/// Start the watch proxy on loopback and serve it on the tailnet (`tailscale
+/// serve`, never Funnel), once; later calls reuse it.
+async fn publish_watch(c: Arc<Companion>) -> Result<String, CommandError> {
+    use super::watch::WATCH_TAILNET_PORT;
+    let mut slot = WATCH.lock().await;
+    if let Some(running) = slot.as_ref() {
+        return Ok(running.url.clone());
+    }
+    let tailscale::TailscaleState::Connected { dns_name, .. } = tailscale::status().await else {
+        return Err(CommandError::expected(
+            "Tailscale isn't connected on the Mac, so the site can't be shown on the phone.",
+        ));
+    };
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| CommandError::from(format!("Could not open a port to watch from: {e}")))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| CommandError::from(format!("watch address: {e}")))?
+        .port();
+    let (tx, rx) = oneshot::channel();
+    tauri::async_runtime::spawn(super::watch::serve(c, listener, rx));
+    let refused = match tailscale::enable_serve(WATCH_TAILNET_PORT, port, &dns_name).await {
+        tailscale::FunnelOutcome::On => None,
+        tailscale::FunnelOutcome::NeedsApproval { .. } => Some(
+            "Turn on HTTPS certificates for your tailnet first, as for the phone itself."
+                .to_string(),
+        ),
+        tailscale::FunnelOutcome::Failed { detail } => {
+            Some(format!("Tailscale couldn't serve it: {detail}"))
+        }
+    };
+    if let Some(why) = refused {
+        let _ = tx.send(());
+        return Err(CommandError::expected(why));
+    }
+    let url = format!("https://{dns_name}:{WATCH_TAILNET_PORT}");
+    tracing::info!("[Companion] watch proxy on 127.0.0.1:{} at {}", port, url);
+    *slot = Some(WatchRunning {
+        url: url.clone(),
+        shutdown: Some(tx),
+    });
+    Ok(url)
+}
+
+/// Stop the watch proxy and take it off the tailnet.
+async fn stop_watch() {
+    let running = WATCH.lock().await.take();
+    if let Some(mut running) = running {
+        if let Some(tx) = running.shutdown.take() {
+            let _ = tx.send(());
+        }
+        if tailscale::find_binary().is_some() {
+            if let Err(e) = tailscale::disable_serve(super::watch::WATCH_TAILNET_PORT).await {
+                tracing::warn!("[Companion] {}", e);
+            }
+        }
+    }
+}
+
 pub async fn tear_down(app: &AppHandle) {
     let c = ensure(app);
     c.pairing.cancel();
+    stop_watch().await;
     if tailscale::find_binary().is_some() {
         if let Err(e) = tailscale::disable_serve(TAILNET_HTTPS_PORT).await {
             tracing::warn!("[Companion] {}", e);

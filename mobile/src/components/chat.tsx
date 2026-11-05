@@ -52,7 +52,9 @@ import { SecretCard } from './SecretCard';
 import { LoginCard } from './LoginCard';
 import { servesLogins } from '../lib/logins';
 import { useTaskName } from './session';
-import { LiveWork, WorkLine } from './work';
+import { LiveStep, LiveWork, WorkLine } from './work';
+import { liveCallShown } from '../lib/work';
+import { useClock } from '../lib/useClock';
 import { CopyCard } from './copy';
 import { ResultCardView, useCanRevise } from './result';
 import { setComposer } from '../lib/drafts';
@@ -754,17 +756,26 @@ export function WorkingRow({
 }) {
   const colors = useColors();
   const styles = useStyles();
+  const work = agent?.status.work;
+  // Mid-import (no words) the bar says it: no step, no timer, just the dots.
+  const live = label ? liveCallShown(work, agent?.status.activity) : undefined;
+  const ticking = !!label && (live != null || work?.quietSince != null);
+  const now = useClock(ticking);
   return (
     <Animated.View entering={FadeIn.duration(250)} style={styles.working}>
-      <View style={styles.workingRow}>
-        {/* No words (mid-import, when the bar says it): the dots speak. */}
-        <TypingDots label={label ? undefined : 'Working'} />
-        {!!label && (
-          <T variant="small" color={colors.textSecondary} numberOfLines={1}>
-            {label}
-          </T>
-        )}
-      </View>
+      {agent && ticking ? (
+        <LiveStep agentId={agent.id} work={work} call={live} label={label} now={now} />
+      ) : (
+        <View style={styles.workingRow}>
+          {/* No words (mid-import, when the bar says it): the dots speak. */}
+          <TypingDots label={label ? undefined : 'Working'} />
+          {!!label && (
+            <T variant="small" color={colors.textSecondary} numberOfLines={1}>
+              {label}
+            </T>
+          )}
+        </View>
+      )}
       {agent && (
         <LiveWork
           agentId={agent.id}

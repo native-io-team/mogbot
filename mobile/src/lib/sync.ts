@@ -133,6 +133,19 @@ function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState
   switch (event.type) {
     case 'agents.message': {
       const m = event.message;
+      // A replayed or overtaken event for a row already written at a later
+      // seq in this epoch (a newer event, or a page read after it): applying
+      // it would put the older copy back (an answered card turning pending).
+      const written = s.seqs[m.id];
+      if (
+        cursor &&
+        s.cursor?.epoch === cursor.epoch &&
+        written != null &&
+        written !== Number.MAX_SAFE_INTEGER &&
+        written > cursor.seq
+      ) {
+        return s;
+      }
       // A line said in a room goes in the room's thread and its agent's own chat.
       const chats = { ...s.chats };
       for (const key of chatKeysOf(m)) {
@@ -163,6 +176,10 @@ function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState
     case 'system.status':
       return { ...s, mac: event.status };
     case 'agents.draft':
+      // The reply it streams is already here (the draft event was overtaken
+      // by its finished message, or replayed): a second, growing copy would
+      // sit under it until the turn ends.
+      if (s.chats[event.agentId]?.messages.some((m) => m.id === event.id)) return s;
       return { ...s, drafts: applyDraft(s.drafts, event) };
     case 'sync.snapshot':
       // Seqs from another epoch can't be compared with anything new: forget
