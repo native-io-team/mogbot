@@ -31,6 +31,10 @@ export interface Room {
   lastActivityAt: number;
   preview?: string;
   unread: number;
+  /** What the room is for, in a line; absent in rooms made without one. */
+  purpose?: string;
+  /** The agent that made it (the Chief's `create_room`); absent: you did. */
+  createdBy?: string;
   /** Agent turns the newest message set off so far, and the most it can. */
   turnsUsed: number;
   turnCap: number;
@@ -49,6 +53,8 @@ export interface RoomChange {
   /** `null` clears the lead. */
   lead?: string | null;
   muted?: boolean;
+  /** An empty string clears it. */
+  purpose?: string;
 }
 
 /** The registry changed: read `agents_rooms` again. */

@@ -79,8 +79,8 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
   {
     id: 'launch',
     label: 'Run my launch as a team…',
-    what: 'A strategist, a writer and a builder, a standup from them every weekday at 9am, and your Chief keeping the plan. Put them in a room to talk to all three at once.',
-    text: 'Run my launch as a team: create a strategist, a writer and a builder, keep the plan yourself in a file, and every weekday at 9am collect a standup from each of them and send me one summary with what’s blocked and what needs me. The launch: ',
+    what: 'A strategist, a writer and a builder in a room with your Chief, so you talk to the whole team at once, a standup from them every weekday at 9am, and your Chief keeping the plan.',
+    text: 'Run my launch as a team: create a strategist, a writer and a builder, put them and yourself in a room so I can talk to everyone at once, keep the plan yourself in a file, and every weekday at 9am collect a standup from each of them and send me one summary with what’s blocked and what needs me. The launch: ',
     group: 'together',
   },
   {

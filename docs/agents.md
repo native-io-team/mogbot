@@ -60,8 +60,8 @@ with one blank at its end; none sends by itself.
   card with Keep / Review / Discard. Pushing waits for the user.
 - **Run my launch as a team…**: a strategist, a writer and a builder, the
   Chief keeping the plan in a file, and a 9am weekday standup it collects
-  and summarises. There is no tool for an agent to make a room, so the
-  gallery line says the user can put them in one.
+  and summarises. The Chief puts the three and itself in a room
+  (`create_room`, see "Rooms"), so the user talks to the whole team at once.
 - **Turn client briefs into sites…**: `watch_for` `new_file` on a folder;
   each brief becomes a project (`blank` needs nothing installed) whose
   session drafts the site, handed back with `share_result` naming the
@@ -464,6 +464,8 @@ those turns exposed is replaced once at the next launch.)
 | `create_agent` | Chief | name, role, instructions, optional `template`, `project` and `first_task` |
 | `update_agent` | Chief | name / role / instructions / project (memory kept) |
 | `delete_agent` | Chief | puts an Allow / Deny card in the Chief's chat first |
+| `create_room` | Chief | name, 2–6 members, optional lead, a one-line purpose (`agents/room_tools.rs`, below, "Rooms") |
+| `add_to_room`, `remove_from_room` | Chief | change who's in a room (it keeps 2–6); a joiner gets the room's files |
 | `approve` | CLI only | the permission prompt tool (below) |
 
 **Answers come back on their own.** A `message_agent` request is a debt: the
@@ -2290,6 +2292,27 @@ of their own is open.
   preview and the unread count; the agent's row still shows a failure.
 - **Accent.** A room is neutral (the monochrome accent); each member's run of
   lines opens with its badge and name in its own colour.
+- **The Chief makes rooms** (`agents/room_tools.rs`). `create_room {name,
+  members, lead?, purpose}`, `add_to_room {room, agent}` and
+  `remove_from_room {room, agent}` are served only to the Chief of Staff and
+  refused to anyone else who calls them by name. Each call is checked in full
+  first (real agents, two to six, a lead who is in the room, a purpose under
+  300 characters folded to one line, no second room with the same name), and
+  only then, in a turn answering text from outside (`runner::from_outside`:
+  a "When…" routine's items, or a `message_agent` request or room hand-off
+  carrying that taint), the user gets a card ("Make a room: Launch", who's in
+  it, who answers, what it's for). After Allow the call is checked again, and
+  refused if the team or room changed meanwhile. The tools send nothing into
+  the room, so the 8-turn and 6-hop caps apply unchanged once people talk
+  there. The Chief's chat gets an audit line ("Made a room, Launch, with …");
+  adding or removing also leaves a line in the room. The room records
+  `purpose` and `createdBy` (both optional and additive: older builds keep
+  them untouched, as unknown fields); the desk's empty room shows the purpose
+  and "Chief of Staff made this room", and every member's room prompt quotes
+  the purpose under an app-written header. The phone gets both fields but
+  doesn't show them yet. The Chief is told about the tools in its app-owned
+  section (`prompts::CHIEF`, built every turn), so Chiefs made by older
+  builds have it without touching their CLAUDE.md.
 - **Managing.** "New room" at the foot of the agent list (once there are two
   agents), ⌘K → New room…, Open <room>, <room>: members and name…,
   Mute/Unmute, Delete…. Rooms sit in a "Rooms" section right after the
@@ -2318,8 +2341,18 @@ of their own is open.
   while members are replying and nothing is typed. Files are saved into the
   first member's home and copied to every other member's under the same
   `attachments/<message id>/` path, so the room (desk and phone) shows them
-  through any member who was there when they were sent; each asked member is
-  told where they are in its own home. A member added later gets no copy. The startup sweep keeps those copies
+  through any member; each asked member is told where they are in its own
+  home. A member added later (the room's settings or `add_to_room`) is given
+  a copy of every file already in the thread (the user's attachments and
+  members' shared files) when it joins (`rooms::copy_files_to`): the same
+  `attachments/<message id>/` path in its own home, copied from any home that
+  still has it, never through a symlink, and all or nothing: if a copy fails,
+  what it copied is removed and the member change is refused, so the room is
+  as it was. A file sent while that copy runs is picked up by a second pass.
+  Copying was chosen over a read path to a shared folder: each agent keeps
+  reading only its own home, and the room keeps showing files through any
+  member. Every member's turn in a room lists the files with each line it is
+  shown, where they are in its own home. The startup sweep keeps those copies
   (`rooms::any_log_mentions`), since a member's own log never mentions them.
   A member's @mention of another member is tinted in that member's colour
   (whole names, as `rooms::mentioned_in` matches them). Under your message,
