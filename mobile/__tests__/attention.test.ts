@@ -2,6 +2,8 @@ import type { Agent, AgentMessage, UsageTotals } from '@shipstudio/companion-pro
 import type { NotificationRequest } from 'expo-notifications';
 import {
   attentionCounts,
+  canStartFresh,
+  contextLine,
   cardOutcome,
   describeScope,
   engineCantAsk,
@@ -258,5 +260,25 @@ describe('engines, slots and decision cards', () => {
     expect(cardOutcome({ ...base, status: 'denied', note: 'use pnpm' })).toBe(
       'Declined · “use pnpm”'
     );
+  });
+});
+
+describe('the conversation reading', () => {
+  it('shows only what the engine reported, and offers a fresh start only when there is one to leave', () => {
+    expect(contextLine(agent({ context: undefined }))).toBeNull();
+    expect(contextLine(agent({ context: { used: 174_000, window: 200_000, at: 1 } }))).toBe(
+      '87% full'
+    );
+    expect(contextLine(agent({ context: { used: 3_000, window: 1_000_000, at: 1 } }))).toBe(
+      '<1% full'
+    );
+    expect(contextLine(agent({ context: { used: 10, window: 0, at: 1 } }))).toBeNull();
+    expect(canStartFresh(agent({ sessionId: null }))).toBe(false);
+    expect(canStartFresh(agent({ sessionId: 's1' }))).toBe(true);
+    expect(canStartFresh(agent({ sessionId: null, newEngine: true }))).toBe(true);
+    // The Mac's own serialization: a reading on the agent, none after a fresh start.
+    expect(contextLine(real.agentsOverview.agents[0])).toBe('15% full');
+    expect('context' in real.agentsStartFresh).toBe(false);
+    expect(canStartFresh(real.agentsStartFresh)).toBe(false);
   });
 });

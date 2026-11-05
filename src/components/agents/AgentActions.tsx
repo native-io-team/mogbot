@@ -1,5 +1,5 @@
 /**
- * What you can do to an agent: Pin, Mark as unread, Mute, Edit, Hide, Delete. One
+ * What you can do to an agent: Pin, Mark as unread, Mute, Edit, Start fresh, Hide, Delete. One
  * list, rendered as a row's right-click menu or as the conversation header's
  * … menu, so the two never drift apart.
  *
@@ -17,11 +17,12 @@ import {
   HistoryIcon,
   PaperclipIcon,
   PinIcon,
+  ResetIcon,
   TrashIcon,
 } from '@/components/icons';
 import { ContextMenuItem, ContextMenuSeparator } from '../primitives/ContextMenu';
 import { DropdownDivider, DropdownItem } from '../primitives/Dropdown';
-import type { Agent } from '../../lib/agents';
+import { canStartFresh, contextPercent, type Agent } from '../../lib/agents';
 
 export interface AgentActions {
   onTogglePin: (agent: Agent) => void;
@@ -30,6 +31,8 @@ export interface AgentActions {
   onMarkUnread: (agent: Agent) => void;
   onEdit: (agent: Agent) => void;
   onDelete: (agent: Agent) => void;
+  /** A new conversation, memory kept (asks first). */
+  onStartFresh: (agent: Agent) => void;
 }
 
 interface Item {
@@ -38,6 +41,7 @@ interface Item {
   run: () => void;
   danger?: boolean;
   divider?: boolean;
+  disabled?: boolean;
 }
 
 export function AgentActionItems({
@@ -49,6 +53,7 @@ export function AgentActionItems({
   onMarkUnread,
   onEdit,
   onDelete,
+  onStartFresh,
   onSchedule,
   onFiles,
 }: {
@@ -76,6 +81,18 @@ export function AgentActionItems({
       ? [{ label: 'Schedule a check-in…', icon: <HistoryIcon size={12} />, run: onSchedule }]
       : []),
     { label: 'Edit agent…', icon: <EditIcon size={12} />, run: () => onEdit(agent) },
+    ...(canStartFresh(agent)
+      ? [
+          {
+            // How full it is, only when its engine said.
+            label: freshLabel(agent),
+            icon: <ResetIcon size={12} />,
+            run: () => onStartFresh(agent),
+            // Its turn is in the conversation it would leave.
+            disabled: agent.status.state !== 'idle',
+          },
+        ]
+      : []),
     {
       label: agent.hidden ? 'Show in sidebar' : 'Hide from sidebar',
       icon: agent.hidden ? <EyeIcon size={12} /> : <EyeOffIcon size={12} />,
@@ -105,6 +122,7 @@ export function AgentActionItems({
           <ContextMenuItem
             key={item.label}
             variant={item.danger ? 'destructive' : 'default'}
+            disabled={item.disabled}
             onSelect={item.run}
           >
             {item.icon} {item.label}
@@ -114,6 +132,7 @@ export function AgentActionItems({
             key={item.label}
             icon={item.icon}
             variant={item.danger ? 'danger' : 'default'}
+            disabled={item.disabled}
             onSelect={item.run}
           >
             {item.label}
@@ -122,4 +141,9 @@ export function AgentActionItems({
       ])}
     </>
   );
+}
+
+function freshLabel(agent: Agent): string {
+  const percent = contextPercent(agent);
+  return percent === null ? 'Start fresh…' : `Start fresh… (${percent < 1 ? '<1' : percent}% full)`;
 }

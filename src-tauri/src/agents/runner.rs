@@ -553,6 +553,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         changes: None,
         session: None,
         client_id: None,
+        fresh: false,
     }
 }
 
@@ -648,6 +649,35 @@ pub fn stop(agent_id: &str) -> bool {
         }
         None => false,
     }
+}
+
+/// The divider a fresh start leaves in the chat.
+pub const FRESH_LINE: &str = "Started fresh · memory kept";
+
+/// Start the agent's next turn in a new conversation on the same engine,
+/// with its instructions and memory and no recap (`Agent::start_fresh`). The
+/// chat stays, with a divider where the new conversation begins. Refused
+/// while a turn runs or waits: that turn is in the old conversation, and
+/// would record it again.
+pub fn start_fresh(app: &AppHandle, agent_id: &str) -> Result<store::Agent, CommandError> {
+    let agent = store::get(agent_id)?;
+    if in_turn(agent_id) || queued(agent_id) {
+        return Err(CommandError::expected(format!(
+            "{} is working. Start fresh once it's done, or stop it first.",
+            agent.name
+        )));
+    }
+    if !agent.has_conversation() {
+        return Err(CommandError::expected(format!(
+            "{}'s next message already starts a new conversation.",
+            agent.name
+        )));
+    }
+    let agent = store::update(agent_id, store::Agent::start_fresh)?;
+    let mut line = new_message(agent_id, MessageKind::Note, FRESH_LINE);
+    line.fresh = true;
+    record(app, line)?;
+    Ok(agent)
 }
 
 /// Stop the turn in progress so what's queued runs now, as the next turn.
@@ -1484,6 +1514,10 @@ async fn run_turn(
     // What the engine said along the way, for a turn that ends without a result.
     let mut last_detail: Option<String> = None;
     let mut session_confirmed = false;
+    // The session this turn is in, once known: a context reading is kept only
+    // while the agent is still on it (not after a fresh start).
+    let mut this_session = resuming.then(|| session_id.clone());
+    let mut claude_context = super::context::ClaudeContext::default();
     let deadline = tokio::time::sleep(std::time::Duration::from_secs(TURN_TIMEOUT_SECS));
     tokio::pin!(deadline);
     // None: ran to the end. Some(None): the user pressed Stop. Some(Some(note)): we stopped it.
@@ -1533,7 +1567,11 @@ async fn run_turn(
                         drafts.on_stream_event(&value, store::new_id);
                         continue;
                     }
-                    Driver::ClaudePrint => stream::claude_steps(&value, &line, store::now_ms()),
+                    Driver::ClaudePrint => {
+                        let mut steps = stream::claude_steps(&value, &line, store::now_ms());
+                        steps.extend(claude_context.observe(&value, store::now_ms()).map(Step::Context));
+                        steps
+                    }
                     Driver::CodexExec => super::codex::steps(&value),
                     Driver::CodexApp => match conversation.as_mut() {
                         Some(conversation) => {
@@ -1565,6 +1603,7 @@ async fn run_turn(
                         Step::Session(sid) if !session_confirmed => {
                             timing.mark_boot();
                             session_confirmed = true;
+                            this_session = Some(sid.clone());
                             let id = agent_id.to_string();
                             let _ = tokio::task::spawn_blocking(move || store::update(&id, |a| {
                                 a.session_id = Some(sid);
@@ -1601,6 +1640,15 @@ async fn run_turn(
                             let today = super::usage::today();
                             let id = agent_id.to_string();
                             let _ = tokio::task::spawn_blocking(move || store::update(&id, |a| a.usage.record(&turn, today))).await;
+                        }
+                        Step::Context(fill) => {
+                            let (id, on) = (agent_id.to_string(), this_session.clone());
+                            let _ = tokio::task::spawn_blocking(move || store::update(&id, |a| {
+                                if on.is_some() && a.session_id == on {
+                                    a.context = Some(fill);
+                                }
+                            })).await;
+                            let _ = app.emit(EVENT_REGISTRY, ());
                         }
                         Step::Failed(text) => result_error = Some(text),
                         Step::Detail(text) => last_detail = Some(text),

@@ -151,6 +151,11 @@ export const agentsOverview = {
         }
       ],
       "color": "green",
+      "context": {
+        "at": 1762290000000,
+        "used": 30099,
+        "window": 200000
+      },
       "createdAt": 1762200000000,
       "engine": "claude",
       "failure": {
@@ -1109,6 +1114,11 @@ export const agentsUpdate = {
     }
   ],
   "color": "green",
+  "context": {
+    "at": 1762290000000,
+    "used": 30099,
+    "window": 200000
+  },
   "createdAt": 1762200000000,
   "engine": "claude",
   "failure": {
@@ -1179,6 +1189,163 @@ export const agentsUpdate = {
   "shape": 2,
   "unread": 2
 } satisfies Result<'agents.update'>;
+export const agentsStartFresh = {
+  "capabilities": {
+    "lines": [
+      {
+        "detail": "Bash, Read, Edit",
+        "what": "Tools"
+      }
+    ],
+    "seenAt": 1762290000000
+  },
+  "checkIns": [
+    {
+      "createdAt": 1762200000000,
+      "id": "c1",
+      "nextAt": 1762300000000,
+      "note": "Check the invoices",
+      "paused": false,
+      "repeat": {
+        "days": [
+          1,
+          3
+        ],
+        "hour": 9,
+        "kind": "days",
+        "minute": 30
+      },
+      "retry": {
+        "at": 1762201800000,
+        "attempts": 1,
+        "dueAt": 1762200000000,
+        "firstFailedAt": 1762200000000
+      },
+      "runs": [
+        {
+          "at": 1762100000000,
+          "attempt": 1,
+          "manual": true,
+          "outcome": "ran"
+        },
+        {
+          "at": 1762150000000,
+          "attempt": 3,
+          "detail": "Claude Code is signed out.",
+          "outcome": "failed",
+          "signIn": [
+            "Gmail"
+          ]
+        },
+        {
+          "at": 1762200000000,
+          "attempt": 1,
+          "detail": "Usage limit",
+          "outcome": "retrying",
+          "retryAt": 1762201800000
+        },
+        {
+          "at": 1762250000000,
+          "attempt": 2,
+          "outcome": "running"
+        },
+        {
+          "at": 1762260000000,
+          "attempt": 1,
+          "outcome": "unknown"
+        }
+      ]
+    },
+    {
+      "createdAt": 1762200000000,
+      "id": "c2",
+      "nextAt": 1762300000000,
+      "note": "Look at the queue",
+      "paused": true,
+      "repeat": {
+        "kind": "every",
+        "minutes": 60
+      }
+    },
+    {
+      "createdAt": 1762200000000,
+      "id": "c3",
+      "nextAt": 1762400000000,
+      "note": "Remind me about the VAT return",
+      "paused": false
+    }
+  ],
+  "color": "green",
+  "createdAt": 1762200000000,
+  "engine": "claude",
+  "failure": {
+    "kind": "usage_limit",
+    "resetsAt": 1762310000000
+  },
+  "hidden": false,
+  "id": "a1",
+  "isMain": false,
+  "lastActivityAt": 1762290000000,
+  "model": "opus",
+  "muted": false,
+  "name": "Finance",
+  "pendingApprovals": 1,
+  "permissions": [
+    {
+      "createdAt": 1762200000000,
+      "id": "r1",
+      "kind": "command_prefix",
+      "label": "npm test",
+      "value": "npm test"
+    },
+    {
+      "createdAt": 1762200000000,
+      "id": "r2",
+      "kind": "command",
+      "label": "git status",
+      "value": "git status"
+    },
+    {
+      "createdAt": 1762200000000,
+      "id": "r3",
+      "kind": "domain",
+      "label": "example.com",
+      "value": "example.com"
+    },
+    {
+      "createdAt": 1762200000000,
+      "id": "r4",
+      "kind": "tool",
+      "label": "Send an email · Gmail",
+      "value": "mcp__gmail__send"
+    }
+  ],
+  "pinned": true,
+  "preview": "Invoices are filed.",
+  "project": "/Users/julian/ShipStudio/site",
+  "role": "Keeps the books",
+  "routineModel": "same",
+  "secrets": [
+    {
+      "createdAt": 1762200000000,
+      "fields": [
+        {
+          "env": "STRIPE_KEY",
+          "label": "API key"
+        }
+      ],
+      "id": "s1",
+      "kind": "api_key",
+      "lastUsedAt": 1762290000000,
+      "name": "Stripe key",
+      "purpose": "Reconcile payouts",
+      "reference": "secret:finance/stripe_key"
+    }
+  ],
+  "sessionId": null,
+  "shape": 2,
+  "unread": 2
+} satisfies Result<'agents.startFresh'>;
 export const sessionsSend = {
   "sessionId": "pty-1"
 } satisfies Result<'sessions.send'>;
@@ -1207,6 +1374,7 @@ export const frames = [
       "agents.saveSecret",
       "agents.focus",
       "agents.markUnread",
+      "agents.startFresh",
       "agents.update",
       "agents.revokePermission",
       "agents.instructions",
@@ -1563,6 +1731,11 @@ export const frames = [
               }
             ],
             "color": "green",
+            "context": {
+              "at": 1762290000000,
+              "used": 30099,
+              "window": 200000
+            },
             "createdAt": 1762200000000,
             "engine": "claude",
             "failure": {
@@ -1875,6 +2048,11 @@ export const frames = [
               }
             ],
             "color": "green",
+            "context": {
+              "at": 1762290000000,
+              "used": 30099,
+              "window": 200000
+            },
             "createdAt": 1762200000000,
             "engine": "claude",
             "failure": {

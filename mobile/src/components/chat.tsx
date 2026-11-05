@@ -142,6 +142,13 @@ export const MessageRow = memo(function MessageRow({
       );
     case 'session':
       return message.session ? <SessionCard message={message} onError={onError} /> : null;
+    case 'note':
+      // "Started fresh · memory kept": where a new conversation began.
+      return message.fresh ? (
+        <DaySeparator label={message.text} />
+      ) : (
+        <SystemLine message={message} />
+      );
     default:
       return <SystemLine message={message} />;
   }

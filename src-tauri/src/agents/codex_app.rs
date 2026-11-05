@@ -420,7 +420,10 @@ impl Conversation {
                 self.usage.output_tokens += n("outputTokens");
                 self.usage.cache_read_tokens += cached;
                 self.usage.cache_write_tokens += n("cacheWriteInputTokens");
-                Vec::new()
+                super::context::from_codex_app(params, super::store::now_ms())
+                    .map(|fill| Out::Step(Step::Context(fill)))
+                    .into_iter()
+                    .collect()
             }
             "error" => {
                 let message = str_at(params, "/error/message").unwrap_or("").to_string();

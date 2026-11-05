@@ -641,6 +641,7 @@ pub fn run() {
             commands::agents::agents_revoke_secret,
             commands::agents::agents_focus,
             commands::agents::agents_mark_unread,
+            commands::agents::agents_start_fresh,
             commands::agents::agents_import_prompt,
             commands::agents::agents_import_paste_prompt,
             commands::agents::agents_import_paste_preview,

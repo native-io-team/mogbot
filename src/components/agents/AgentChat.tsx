@@ -67,6 +67,7 @@ import {
   DayDivider,
   CheckInLine,
   ErrorLine,
+  FreshHint,
   NoteLine,
   PeerGroup,
   UserBubble,
@@ -1002,6 +1003,9 @@ export function AgentChat({
             </div>
           ) : (
             rows
+          )}
+          {items.length > 0 && (
+            <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
           )}
           {items.length === 0 && indicator.mounted && (
             <WorkingIndicator

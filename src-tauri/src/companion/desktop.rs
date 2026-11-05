@@ -296,6 +296,10 @@ impl Backend for DesktopBackend {
         cmd::agents_mark_unread(self.app.clone(), agent_id.to_string()).await
     }
 
+    async fn start_fresh(&self, agent_id: &str) -> Result<Value, CommandError> {
+        json(cmd::agents_start_fresh(self.app.clone(), agent_id.to_string()).await?)
+    }
+
     async fn update_agent(
         &self,
         agent_id: &str,

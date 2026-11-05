@@ -27,6 +27,7 @@ import {
   createAgent,
   defaultEngine,
   ENGINE_LABEL,
+  formatContext,
   formatUsage,
   getAgentInstructions,
   getAgentUsage,
@@ -42,17 +43,31 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { useAsyncState } from '../../hooks/useAsyncState';
 
-/** This week and all time, as Claude Code reported them; nothing before any turn. */
-function UsageLines({ usage }: { usage: UsageSummary | null }) {
+/**
+ * This week and all time, as its engine reported them; nothing before any
+ * turn. Then how full its conversation is, only when the engine said.
+ */
+function UsageLines({ usage, agent }: { usage: UsageSummary | null; agent: Agent | null }) {
   const week = usage && formatUsage(usage.week);
   const allTime = usage && formatUsage(usage.allTime);
-  if (!allTime) return null;
+  const context = agent && formatContext(agent);
+  if (!allTime && !context) return null;
   return (
     <dl className="agent-editor__usage">
-      <dt>This week</dt>
-      <dd>{week ?? 'No turns'}</dd>
-      <dt>All time</dt>
-      <dd>{allTime}</dd>
+      {allTime && (
+        <>
+          <dt>This week</dt>
+          <dd>{week ?? 'No turns'}</dd>
+          <dt>All time</dt>
+          <dd>{allTime}</dd>
+        </>
+      )}
+      {context && (
+        <>
+          <dt>Conversation</dt>
+          <dd>{context}</dd>
+        </>
+      )}
     </dl>
   );
 }
@@ -366,7 +381,7 @@ export function AgentEditorModal({
               What it remembers is kept separately, under Memory, and isn't changed here.
             </p>
           )}
-          <UsageLines usage={usage} />
+          <UsageLines usage={usage} agent={agent ?? null} />
           {agent && <CanDo agent={agent} />}
           {agent && <Permissions agent={agent} />}
           {agent && <AgentSecrets agent={agent} />}

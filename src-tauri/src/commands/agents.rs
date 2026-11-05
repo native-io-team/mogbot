@@ -474,6 +474,21 @@ pub async fn agents_stop(agent_id: String) -> Result<bool, CommandError> {
     Ok(runner::stop(&agent_id))
 }
 
+/// Start the agent's next message in a new conversation: its instructions
+/// and memory carry over, the session doesn't, and the chat stays with a
+/// divider. Refused while it's working.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_start_fresh(
+    app: AppHandle,
+    agent_id: String,
+) -> Result<store::Agent, CommandError> {
+    let app2 = app.clone();
+    let agent = blocking(move || runner::start_fresh(&app2, &agent_id)).await?;
+    emit_registry(&app);
+    Ok(agent)
+}
+
 /// Stop the turn in progress so the messages queued behind it run now. The
 /// next turn is told what it was doing when it was cut off.
 #[tauri::command]
