@@ -16,6 +16,7 @@ import {
   IFRAME_BLANK_TIMEOUT_MS,
 } from './previewIframeWatchdog';
 import { logger } from '../lib/logger';
+import { cleanPreviewError } from '../lib/previewErrorToAgent';
 import { splitLocation } from '../lib/previewUrl';
 import {
   asCommandError,
@@ -82,7 +83,6 @@ interface UsePreviewConnectionParams {
   serverInstanceId?: number | null;
   onServerReady?: () => void;
   onPageChange?: (page: string) => void;
-  onSendToClaude?: (prompt: string) => void;
   onToast?: (message: string, type?: 'success' | 'error') => void;
 }
 
@@ -123,9 +123,12 @@ export function usePreviewConnection({
   serverInstanceId = null,
   onServerReady,
   onPageChange,
-  onSendToClaude,
   onToast,
 }: UsePreviewConnectionParams) {
+  // An error the preview asked to send to the agent. Only ever shown to the
+  // user as a chip outside the iframe — see lib/previewErrorToAgent.
+  const [pendingAgentError, setPendingAgentError] = useState<string | null>(null);
+  const dismissAgentError = useCallback(() => setPendingAgentError(null), []);
   const [isLoading, setIsLoading] = useState(
     () => !(enabled && serverAlreadyRunning && hasWarmReadyPreview(projectPath, serverInstanceId))
   );
@@ -496,6 +499,9 @@ export function usePreviewConnection({
   // `shipstudio:send-error-to-claude` message and inject arbitrary text into
   // the AI agent terminal, or silently write to the clipboard. Only accept
   // messages whose origin is the preview's own dev-server / proxy port.
+  // The origin check is not enough on its own: the project's own scripts and
+  // dependencies run on that same origin. So nothing here writes to a terminal
+  // — send-error only raises a chip the user must click.
   useEffect(() => {
     const allowedOrigins = new Set<string>([
       `http://localhost:${port}`,
@@ -557,9 +563,11 @@ export function usePreviewConnection({
           }
         });
       }
-      if (data && data.type === 'shipstudio:send-error-to-claude' && data.message) {
-        const prompt = `My dev server is returning an error:\n\n${data.message}\n\nPlease help me fix this.`;
-        onSendToClaude?.(prompt);
+      if (data && data.type === 'shipstudio:send-error-to-claude') {
+        // Never pasted from here: any script in the page can post this. It
+        // only raises the in-app chip; the user's click sends it.
+        const error = cleanPreviewError(data.message);
+        if (error) setPendingAgentError(error);
       }
       if (data && data.type === 'shipstudio:hmr-down') {
         // The page's HMR socket died and never came back (watchdog in the
@@ -589,7 +597,6 @@ export function usePreviewConnection({
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [
-    onSendToClaude,
     onToast,
     port,
     proxyPort,
@@ -906,5 +913,9 @@ export function usePreviewConnection({
     handleRetry,
     stopConnecting,
     handleIframeLoad,
+
+    // Error-to-agent chip
+    pendingAgentError,
+    dismissAgentError,
   };
 }

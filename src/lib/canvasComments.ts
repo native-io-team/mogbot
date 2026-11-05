@@ -36,6 +36,10 @@ export interface CommentAgent {
   id: number;
   label: string;
   send: (prompt: string) => Promise<void>;
+  /** An AI agent tab, not a plain shell. */
+  isAgent?: boolean;
+  /** The project's active terminal tab. */
+  isActive?: boolean;
 }
 export const COMMENT_DEVICES: CommentDevice[] = ['Desktop', 'Tablet', 'Mobile'];
 export function commentScopeDevices(scope: CommentScope): CommentDevice[] {
