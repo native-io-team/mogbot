@@ -141,6 +141,12 @@ export function watchCache(): () => void {
   });
 }
 
+/**
+ * The outbox on disk now: a send writes it before the emptied draft is
+ * saved, so the words are always in one of the two files.
+ */
+export const saveOutbox = () => outboxSaver.flush();
+
 export const flushCache = () => Promise.all([saver.flush(), outboxSaver.flush()]).then(() => {});
 
 export async function forgetCache(serverId: string) {

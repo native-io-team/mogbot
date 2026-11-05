@@ -414,6 +414,20 @@ fn reset_and_set_write_through_and_keep_the_mirrors_in_step() {
         load().agents[&a.id].projects.as_ref().unwrap().how,
         How::Direct
     );
+    // Admin is the Admin role's own switch on the agent: handed over, not kept here.
+    set(
+        &Target::Agent {
+            agent_id: a.id.clone(),
+        },
+        &Change {
+            admin: Some(true),
+            ..Default::default()
+        },
+        &store::list().unwrap(),
+    )
+    .unwrap();
+    assert!(super::super::admin::is_admin(&store::get(&a.id).unwrap()));
+    assert!(load().agents.get(&a.id).is_none_or(|o| o.admin.is_none()));
     store::set_root_for_tests(None);
 }
 

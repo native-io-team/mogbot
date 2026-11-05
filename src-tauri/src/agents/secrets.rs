@@ -660,6 +660,7 @@ mod tests {
             revises: None,
             takeover: false,
             room: None,
+            decide: Vec::new(),
         };
         let request_id = store::new_id();
         card.approval = Some(Approval {
@@ -679,6 +680,9 @@ mod tests {
             connector: None,
             login: None,
             set_aside: None,
+            expiry: None,
+            from_outside: None,
+            front: None,
             settings: None,
         });
         store::append_message(&card).unwrap();

@@ -140,8 +140,67 @@ export function groupLine(group: RequestGroup): string {
   }
   if (open === 1 && pendingCards.length === 1) {
     const a = pendingCards[0].approval!;
-    return a.prompt?.question ?? a.title;
+    // What it does and why, in words, when the card says (`admin::summary_for`).
+    return a.prompt?.question ?? a.summary ?? a.title;
   }
   if (group.logins === 0) return count(open, 'request');
   return `${count(open, 'request')}, ${group.logins} of them ${group.logins === 1 ? 'a login' : 'logins'}`;
+}
+
+/**
+ * The cards "Allow all" answers: pending Allow cards. Never a login or a
+ * secure input (they need you to sign in or type), a session's question
+ * (its answer is a choice), or an import's own cards.
+ */
+export function allowAllCards(cards: AgentMessage[]): AgentMessage[] {
+  return cards.filter((m) => {
+    const a = m.approval;
+    return isPending(m) && a !== undefined && !a.login && !a.secret && !a.prompt && !a.connector;
+  });
+}
+
+/** What a card is, for the "Allow all" line: [one, many]. */
+function kindOf(m: AgentMessage): [string, string] {
+  const a = m.approval!;
+  switch (a.tool) {
+    case 'Bash':
+      return ['command', 'commands'];
+    case 'Write':
+    case 'Edit':
+    case 'MultiEdit':
+    case 'NotebookEdit':
+      return ['file change', 'file changes'];
+    case 'Read':
+    case 'Glob':
+    case 'Grep':
+    case 'LS':
+      return ['file read', 'file reads'];
+    case 'WebFetch':
+      return ['web page', 'web pages'];
+    case 'WebSearch':
+      return ['web search', 'web searches'];
+    default:
+      // A connector's tool or the app's own confirmation: its own words.
+      return [a.title, a.title];
+  }
+}
+
+/**
+ * The confirm line before "Allow all": how many, by kind, most first.
+ * "Allow 5 requests? 3 commands, 1 file change, Send an email · Gmail".
+ */
+export function allowAllLine(cards: AgentMessage[]): string {
+  const counts = new Map<string, { n: number; one: string; many: string }>();
+  for (const m of cards) {
+    const [one, many] = kindOf(m);
+    const entry = counts.get(one) ?? { n: 0, one, many };
+    entry.n += 1;
+    counts.set(one, entry);
+  }
+  const parts = [...counts.values()]
+    .sort((a, b) => b.n - a.n)
+    .map(({ n, one, many }) =>
+      one === many ? (n === 1 ? one : `${one} ×${n}`) : `${n} ${n === 1 ? one : many}`
+    );
+  return `Allow ${count(cards.length, 'request')}? ${parts.join(', ')}`;
 }

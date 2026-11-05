@@ -389,7 +389,7 @@ async fn open(
     // Its connection servers too (Claude Code), so taking over doesn't
     // lose the apps it was granted. Blocks and `--no-chrome` aren't applied
     // here: the person at the keyboard answers every prompt themselves.
-    let reach = super::connections::for_turn(agent, port).await;
+    let reach = super::connections::for_turn(agent, port, false).await;
     let mcp_config = match agent.engine {
         Engine::Claude => Some(super::reach::write_config(
             &super::reach::claude_config_with(

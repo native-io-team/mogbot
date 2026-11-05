@@ -39,7 +39,7 @@ export const systemStatus = {
 } satisfies Result<'system.status'>;
 export const devicesSelf = {
   "id": "dev_0123456789abcdef",
-  "name": "Julian’s iPhone",
+  "name": "Sam’s iPhone",
   "platform": "ios",
   "model": "iPhone 16 Pro",
   "appVersion": "1.0.0",
@@ -52,7 +52,7 @@ export const devicesSelf = {
 } satisfies Result<'devices.self'>;
 export const deviceMinimal = {
   "id": "dev_0123456789abcdef",
-  "name": "Julian’s iPhone",
+  "name": "Sam’s iPhone",
   "platform": "android",
   "appVersion": "1.0.0",
   "build": "official",
@@ -427,6 +427,10 @@ export const agentsSetDefaults = {
 export const agentsSetIndependence = {
   "level": "go_hard"
 } satisfies Result<'agents.setIndependence'>;
+export const agentsSetAdmin = {
+  "admin": true,
+  "agentId": "a1"
+} satisfies Result<'agents.setAdmin'>;
 export const agentsImportStatus = {
   "armed": false,
   "chiefId": "chief",
@@ -470,7 +474,108 @@ export const agentsTeamSetup = {
   "source": "Grok",
   "steps": [
     {
+      "check": {
+        "browser": true,
+        "checked": [
+          {
+            "reached": true,
+            "title": "Figma"
+          },
+          {
+            "reached": false,
+            "title": "LinkedIn"
+          }
+        ],
+        "finishedAt": 1762290000000,
+        "running": false,
+        "total": 5
+      },
       "id": "logins",
+      "later": [
+        {
+          "action": "Connect Figma",
+          "agentIds": [
+            "a1",
+            "a2"
+          ],
+          "agents": [
+            "Finance",
+            "Ops"
+          ],
+          "key": "figma",
+          "keyOnly": false,
+          "service": "figma",
+          "state": "reachable",
+          "title": "Figma",
+          "via": "your browser, signed in on www.figma.com"
+        },
+        {
+          "action": "Use my browser",
+          "agentIds": [
+            "a1",
+            "a2"
+          ],
+          "agents": [
+            "Finance",
+            "Ops"
+          ],
+          "key": "linkedin",
+          "keyOnly": false,
+          "service": "linkedin",
+          "state": "open",
+          "title": "LinkedIn"
+        },
+        {
+          "action": "Add a key for Bankline",
+          "agentIds": [
+            "a1",
+            "a2"
+          ],
+          "agents": [
+            "Finance",
+            "Ops"
+          ],
+          "key": "other:bankline",
+          "keyOnly": true,
+          "service": "other",
+          "state": "open",
+          "title": "Bankline"
+        },
+        {
+          "action": "Connect Notion",
+          "agentIds": [
+            "a1",
+            "a2"
+          ],
+          "agents": [
+            "Finance",
+            "Ops"
+          ],
+          "key": "notion",
+          "keyOnly": false,
+          "service": "notion",
+          "state": "not_needed",
+          "title": "Notion"
+        },
+        {
+          "action": "Connect Gmail",
+          "agentId": "a1",
+          "agentIds": [
+            "a1",
+            "a2"
+          ],
+          "agents": [
+            "Finance",
+            "Ops"
+          ],
+          "key": "gmail",
+          "keyOnly": false,
+          "requestId": "q9",
+          "service": "gmail",
+          "state": "asked",
+          "title": "Gmail"
+        }
+      ],
       "logins": [
         {
           "agentId": "a1",
@@ -1594,9 +1699,11 @@ export const agentsReach = {
   "browser": {
     "helperInstalled": true,
     "on": true,
+    "ownOff": false,
     "sites": [
       "www.linkedin.com"
-    ]
+    ],
+    "teamOn": true
   },
   "connections": [
     {
@@ -2674,6 +2781,7 @@ export const frames = [
       "agents.update",
       "agents.setDefaults",
       "agents.setIndependence",
+      "agents.setAdmin",
       "agents.revokePermission",
       "agents.instructions",
       "agents.memory",
@@ -2714,7 +2822,9 @@ export const frames = [
       "agents.teamSetup.routine",
       "agents.teamSetup.hello",
       "agents.teamSetup.missing",
-      "agents.teamSetup.dismiss"
+      "agents.teamSetup.dismiss",
+      "agents.teamSetup.later",
+      "agents.teamSetup.check"
     ],
     "timeZone": "America/New_York",
     "features": [
@@ -2949,6 +3059,9 @@ export const frames = [
               }
             ],
             "accountHint": "work",
+            "alsoFor": [
+              "Ops"
+            ],
             "askedAs": "gmail work",
             "flow": {
               "fromPhone": true,

@@ -353,7 +353,7 @@ mod tests {
 
     fn phone() -> PairDevice {
         PairDevice {
-            name: "Julian’s iPhone".into(),
+            name: "Sam’s iPhone".into(),
             platform: DevicePlatform::Ios,
             model: Some("iPhone 16".into()),
             app_version: "1.0.0".into(),
@@ -411,13 +411,13 @@ mod tests {
         let view = p.view(2_002);
         assert!(!view.active, "a used code isn't offered again");
         let req = view.request.unwrap();
-        assert_eq!(req.device.name, "Julian’s iPhone");
+        assert_eq!(req.device.name, "Sam’s iPhone");
         assert_eq!(req.code_hint, code_hint(&code));
         assert_eq!(req.requested_at, 2_000);
         let (device, key) = p
             .decide(&req.id, Decision::Allow { replace: vec![] })
             .unwrap();
-        assert_eq!(device.name, "Julian’s iPhone");
+        assert_eq!(device.name, "Sam’s iPhone");
         assert_eq!(key, "pk");
         assert_eq!(rx.await.unwrap(), Decision::Allow { replace: vec![] });
         assert!(matches!(claim(&p, &code, 2_003), Claim::Used));
@@ -568,10 +568,10 @@ mod tests {
         let p = Pairing::default();
         let (code, _) = p.start(0);
         let mut d = phone();
-        d.name = "Julian’s iPhone\u{202E}\u{200B}".into();
+        d.name = "Sam’s iPhone\u{202E}\u{200B}".into();
         let _rx = p.claim(&code, d, String::new(), SRC, Some("j@x.com".into()), 1);
         let req = p.view(1).request.unwrap();
-        assert_eq!(req.device.name, "Julian’s iPhone");
+        assert_eq!(req.device.name, "Sam’s iPhone");
         assert_eq!(req.login.as_deref(), Some("j@x.com"));
     }
 }

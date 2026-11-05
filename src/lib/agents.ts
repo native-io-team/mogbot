@@ -111,6 +111,8 @@ export interface Agent {
   /** One of AGENT_COLORS; typed loosely because the registry is a file. */
   color: string;
   isMain: boolean;
+  /** "Admin — can manage and approve for other agents". Absent: on for the Chief only (`isAdmin`). */
+  admin?: boolean;
   pinned: boolean;
   hidden: boolean;
   sessionId: string | null;
@@ -432,6 +434,33 @@ export interface Approval {
   setAside?: string;
   /** "Change this agent's settings?" (`propose_settings_change`): who, and what changes in plain words. Allow applies it. */
   settings?: SettingsProposal;
+  /**
+   * "Bring your work Chrome window to the front so I can use it": answered
+   * with Check again (allow) or Not now, never a login.
+   */
+  front?: { site: string; account?: string };
+  /**
+   * Closed by the app because nobody answered (status `expired`): the agent
+   * moved on, the wait ran out, or a sign-in became "Maybe later". Drawn as
+   * a one-line receipt; never counted as waiting.
+   */
+  expiry?: CardExpiry;
+}
+
+export type CardExpiry = 'moved_on' | 'no_answer' | 'maybe_later';
+
+/** The one-line receipt an expired card collapses to (desk and phone say the same). */
+export function expiryLine(approval: Pick<Approval, 'title' | 'expiry'>): string | null {
+  switch (approval.expiry) {
+    case 'moved_on':
+      return `Expired — the agent moved on · ${approval.title}`;
+    case 'no_answer':
+      return `No answer — ask again later if it still matters · ${approval.title}`;
+    case 'maybe_later':
+      return `Maybe later · ${approval.title}`;
+    default:
+      return null;
+  }
 }
 
 /**
@@ -517,6 +546,15 @@ export interface AgentMessage {
    * line only the room has (yours, a room note) has an empty `agentId`.
    */
   room?: string;
+  /** On an admin's message: other agents' requests only you can decide, answered in place. */
+  decide?: DecideItem[];
+}
+
+/** Mirrors `admin::DecideItem`: another agent's card, brought to you by an admin. */
+export interface DecideItem {
+  agentId: string;
+  agentName: string;
+  approval: Approval;
 }
 
 /** Mirrors `project::ChangedFile`: line counts are absent for a binary file. */

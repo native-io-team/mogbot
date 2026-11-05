@@ -95,6 +95,12 @@ export interface Agent {
   shape: number;
   color: string;
   isMain: boolean;
+  /**
+   * The user's "Admin — can manage and approve for other agents" switch
+   * (`agents::admin`). Absent: the default, which is on for the Chief of
+   * Staff only (`isAdmin`). Older Macs never send it.
+   */
+  admin?: boolean;
   pinned: boolean;
   hidden: boolean;
   sessionId: string | null;
@@ -408,11 +414,22 @@ export interface Approval {
   /** "Change this agent's settings?" (`propose_settings_change`): who, and what changes in plain words. Allow applies it. A Mac without it never sends it. */
   settings?: SettingsProposal;
   /**
+   * "Bring your work Chrome window to the front so I can use it": Allow means
+   * Check again, Deny means Not now. Never a login.
+   */
+  front?: { site: string; account?: string };
+  /**
    * A login card (`request_login`): which app, what the agent may do, and the
    * ways in, best first. Every way in runs on the Mac (`agents.loginStart`);
    * `flow` is its live state. A Mac without the `logins` feature never sends it.
    */
   login?: LoginRequest;
+  /**
+   * Closed by the Mac because nobody answered (status `expired`): the agent
+   * moved on, the wait ran out, or a sign-in became "Maybe later". A
+   * one-line receipt; never counted as waiting. Older Macs never send it.
+   */
+  expiry?: 'moved_on' | 'no_answer' | 'maybe_later';
 }
 
 // Logins: identical to src/lib/agentLogins.ts (desktop `agents/logins.rs`).
@@ -471,6 +488,8 @@ export interface LoginRequest {
   /** The secret card an older Mac build raised, which this replaced. */
   replaces?: string;
   flow?: LoginFlow;
+  /** Other agents that asked for the same and joined this card: answering it answers them. */
+  alsoFor?: string[];
 }
 
 /** `agents.loginPhoneBegin`: what the phone opens. No secret: the PKCE verifier stays on the Mac. */
@@ -534,7 +553,20 @@ export interface AgentReach {
     lastUsedAt?: number;
   }[];
   /** Absent for an agent on Codex, which has no browser. */
-  browser?: { on: boolean; sites: string[]; helperInstalled: boolean };
+  /**
+   * `on`: its turns get the user's Chrome (the team's browser is set up and on,
+   * and this agent's wasn't taken away; never for outside text). `teamOn`: the
+   * team's switch. `ownOff`: taken away from this agent.
+   */
+  browser?: {
+    on: boolean;
+    teamOn: boolean;
+    ownOff: boolean;
+    sites: string[];
+    /** The Chrome profile (and account) each site was last found signed in to. */
+    accounts?: { site: string; browser: string; account?: string }[];
+    helperInstalled: boolean;
+  };
   secrets: {
     secretId: string;
     name: string;
@@ -674,10 +706,47 @@ export interface TeamSetupHello {
   state: TeamSetupHelloState;
 }
 
+/**
+ * A login the imported agents mentioned, one row per service (desktop
+ * `agents/access_check.rs`): reached on this Mac, or the residue.
+ */
+export type TeamSetupLaterState =
+  | { state: 'open' }
+  | { state: 'reachable'; via: string }
+  | { state: 'not_needed' }
+  | { state: 'asked'; agentId: string; requestId: string };
+
+export type TeamSetupLater = {
+  key: string;
+  /** The catalogue's id, or `other`. */
+  service: string;
+  title: string;
+  agents: string[];
+  agentIds: string[];
+  /** The one button: "Connect Figma", "Use my browser", "Get your key". */
+  action?: string;
+  /** A key is the only way in. */
+  keyOnly: boolean;
+} & TeamSetupLaterState;
+
+/** "Checking what your team can already reach", live. */
+export interface TeamSetupCheck {
+  running: boolean;
+  total: number;
+  checked: { title: string; reached: boolean }[];
+  /** The browser was part of it. */
+  browser: boolean;
+  finishedAt?: number;
+}
+
 export interface TeamSetupStep {
   id: TeamSetupStepId;
   state: TeamSetupStepState;
   logins?: TeamSetupLogin[];
+  /** Logins step: one row per service the imported agents mentioned. */
+  later?: TeamSetupLater[];
+  /** Logins step: the check, while it runs and once it's done. */
+  check?: TeamSetupCheck;
   routines?: TeamSetupRoutine[];
   gaps?: TeamSetupGap[];
   agents?: TeamSetupHello[];
@@ -843,6 +912,23 @@ export interface AgentMessage {
    * room has (the user's message, a room note) has an empty `agentId`.
    */
   room?: string;
+  /**
+   * On an admin's `agent` message: other agents' requests only the user can
+   * decide, each answered in place (the answer goes to that agent's card).
+   */
+  decide?: DecideItem[];
+}
+
+/** One of another agent's cards, brought to the user by an admin. */
+export interface DecideItem {
+  agentId: string;
+  agentName: string;
+  approval: Approval;
+}
+
+/** Whether an agent is an admin: its switch, else on for the Chief only. */
+export function isAdmin(agent: Pick<Agent, 'admin' | 'isMain'>): boolean {
+  return agent.admin ?? agent.isMain;
 }
 
 /**

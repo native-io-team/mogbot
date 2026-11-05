@@ -860,6 +860,10 @@ fn tag_room(message: &mut AgentMessage, tag: Tag) {
 
 /// Persist a message, update the agent's sidebar row, and tell the UI.
 pub fn record(app: &AppHandle, message: AgentMessage) -> Result<AgentMessage, CommandError> {
+    // The user wrote: a new task, in which an ask that expired may be raised again.
+    if message.kind == MessageKind::User && !message.agent_id.is_empty() {
+        super::expiry::new_task(&message.agent_id);
+    }
     record_as(app, message, true, Tag::ByKind)
 }
 
@@ -1130,6 +1134,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         revises: None,
         takeover: false,
         room: None,
+        decide: Vec::new(),
     }
 }
 
@@ -2533,6 +2538,8 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             return;
         }
         clear_mark(&agent_id);
+        // Nothing waits on its cards now: they close, rather than ask on.
+        super::expiry::sweep_agent(&app, &agent_id, super::expiry::Moment::TurnEnded);
         // What the turn changed goes before its failure, so a failed turn still
         // ends on its error line (Retry and the sidebar's failure read the newest line).
         // Then its result card, if it shared one: on the change card when
@@ -2978,6 +2985,12 @@ pub(super) fn system_prompt_for(
         &super::policy::effective(agent),
         agent,
     ));
+    // An admin's powers, said only in a turn that has them: fixed text, so
+    // the prompt changes only when the user flips the switch.
+    if super::admin::admin_now(agent) {
+        prompt.push_str("\n\n");
+        prompt.push_str(super::admin::PROMPT_SECTION);
+    }
     if agent.is_main {
         if let Some(team) = store::list()
             .ok()
@@ -3274,7 +3287,10 @@ async fn run_turn(
     let url = super::reach::agent_url(port);
     // The apps it was granted on login cards (tokens refreshed), the
     // claude.ai connectors it's kept from, and its browser (`connections`).
-    let mut access = super::connections::for_turn(&agent, port).await;
+    // A "When…" routine's items came from outside: such a turn gets no
+    // browser, and can't write its own instructions or memory (below).
+    let outside = from_outside(agent_id);
+    let mut access = super::connections::for_turn(&agent, port, outside).await;
     let mcp_config = match engine {
         Engine::Claude => Some(super::reach::write_config(
             &super::reach::claude_config_with(
@@ -3400,7 +3416,6 @@ async fn run_turn(
     // A "When…" routine's items came from outside: this turn can't write its
     // own instructions or memory (Claude Code refuses the edit; for Codex,
     // and for anything that gets past that, it's put back when the turn ends).
-    let outside = from_outside(agent_id);
     if outside && engine == super::engine::Engine::Claude {
         cmd.args(outside_turn_args(&home));
     }
@@ -3607,6 +3622,10 @@ async fn run_turn(
                         continue;
                     }
                     Driver::ClaudePrint => {
+                        // What the browser showed: which control each ref is.
+                        if matches!(kind, Some("assistant" | "user")) {
+                            super::browser_gate::observe(agent_id, &value);
+                        }
                         let mut steps = stream::claude_steps(&value, store::now_ms());
                         steps.extend(claude_context.observe(&value, store::now_ms()).map(Step::Context));
                         steps
@@ -4566,6 +4585,9 @@ mod tests {
                 connector: None,
                 login: None,
                 set_aside: None,
+                expiry: None,
+                from_outside: None,
+                front: None,
                 settings: None,
             });
             store::append_message(&card).unwrap();

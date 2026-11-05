@@ -628,7 +628,7 @@ const LIVE = [
       await sleep(2300);
     },
     check:
-      'Listening: × in the +’s place, words streaming (the last lighter), the waveform and 0:0x beside ✓; no mic, no Send',
+      'Listening: × in the +’s place, words streaming (the last lighter), the waveform and 0:0x, then Stop and Send (accent); no mic',
     after: async (page) => {
       await page.clickLabel('Cancel dictation').catch(() => {});
       await sleep(600);

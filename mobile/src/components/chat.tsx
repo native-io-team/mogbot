@@ -40,7 +40,13 @@ import { Card, Line, TextAction } from './surfaces';
 import { Button, Icon, T } from './ui';
 import { AgentAvatar } from './agent';
 import { TypingDots } from './TypingDots';
-import { ApprovalCard, PhoneReviewCard, PlaybackCard, ReviewOnMacCard } from './ApprovalCard';
+import {
+  ApprovalCard,
+  DecideCards,
+  PhoneReviewCard,
+  PlaybackCard,
+  ReviewOnMacCard,
+} from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
 import { LoginCard } from './LoginCard';
@@ -174,6 +180,7 @@ export const MessageRow = memo(function MessageRow({
           style={({ pressed }) => [styles.agentRow, pressed && styles.heldProse]}
         >
           <Prose id={message.id} text={message.text} />
+          {!!message.decide?.length && <DecideCards message={message} onError={onError} />}
           {!!message.attachments?.length && (
             <Attachments
               agentId={message.agentId}

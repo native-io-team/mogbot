@@ -25,6 +25,7 @@ import {
   CommentIcon,
   CopyIcon,
   DownloadIcon,
+  GlobeIcon,
   ErrorIcon,
   FolderIcon,
   HistoryIcon,
@@ -66,6 +67,7 @@ import {
   describeScope,
   ENGINE_LABEL,
   errorRemedy,
+  expiryLine,
   folderName,
   formatClock,
   retryPhrase,
@@ -970,6 +972,9 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
       </>
     );
   }
+  if (approval.front && (approval.status === 'allowed' || approval.status === 'denied')) {
+    return approval.status === 'allowed' ? 'Checked again' : 'Not now';
+  }
   if (approval.status === 'denied' && approval.note) {
     return <>Declined · “{approval.note}”</>;
   }
@@ -1021,6 +1026,19 @@ export const ApprovalCard = memo(function ApprovalCard({
   const [openedPending] = useState(approval?.status === 'pending');
   const { guard, keyProps } = useCardGuard(approval?.status === 'pending');
   if (!approval) return null;
+  // Nobody answered: a quiet one-line receipt, not a card still asking.
+  const expired = approval.status === 'expired' ? expiryLine(approval) : null;
+  if (expired) {
+    return (
+      <div
+        className="agent-note agent-note--expired"
+        data-arrived={arrived || undefined}
+        data-message-ids={message.id}
+      >
+        {expired}
+      </div>
+    );
+  }
   if (approval.prompt) {
     return (
       <SessionPromptCard
@@ -1058,7 +1076,9 @@ export const ApprovalCard = memo(function ApprovalCard({
   }
   // Another assistant asking to start an import: a plain yes or no, so Deny
   // doesn't open the "what instead" line.
-  const plainDeny = approval.connector?.kind === 'consent';
+  // "Bring your Chrome window to the front": Check again / Not now, nothing else.
+  const front = !!approval.front;
+  const plainDeny = approval.connector?.kind === 'consent' || front;
   const pending = approval.status === 'pending';
   const fields = approvalFields(approval.tool, approval.input);
   const answer = async (allow: boolean, always = false, why?: string) => {
@@ -1080,7 +1100,9 @@ export const ApprovalCard = memo(function ApprovalCard({
         className="agent-approval"
         data={{ status: approval.status, clamped: (long && !showAll) || undefined }}
         icon={
-          plainDeny ? (
+          front ? (
+            <GlobeIcon size={14} />
+          ) : plainDeny ? (
             <DownloadIcon size={14} />
           ) : approval.settings ? (
             <SettingsSlidersIcon size={14} />
@@ -1154,7 +1176,7 @@ export const ApprovalCard = memo(function ApprovalCard({
                 disabled={busy}
                 onClick={() => void answer(false)}
               >
-                Deny
+                {front ? 'Not now' : 'Deny'}
               </Button>
               <Button
                 tabIndex={0}
@@ -1164,7 +1186,7 @@ export const ApprovalCard = memo(function ApprovalCard({
                 {...keyProps}
                 onClick={guard(() => void answer(true))}
               >
-                Allow
+                {front ? 'Check again' : 'Allow'}
               </Button>
             </>
           ) : undefined

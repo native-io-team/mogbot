@@ -30,9 +30,9 @@ const TEAM = BASE_TEAM.map((a) => (RENAMED[a.id] ? { ...a, name: RENAMED[a.id] }
 const CLAUDE_AI = {
   id: 'claude_ai',
   method: 'claude_ai',
-  label: 'Connect Gmail',
+  label: 'Use claude.ai’s Gmail connector',
   detail:
-    'Uses claude.ai’s Gmail connector, which keeps the sign-in with your Claude account. If it isn’t added yet, claude.ai opens in this Mac’s browser to add it. Recruiter never sees a password.',
+    'Optional. Uses claude.ai’s Gmail connector, which keeps the sign-in with your Claude account. If it isn’t added yet, claude.ai opens in this Mac’s browser to add it. Recruiter never sees a password.',
 };
 const BROWSER = (site: string, name = 'Recruiter') => ({
   id: 'browser',
@@ -58,7 +58,7 @@ const GMAIL_LOGIN = {
     { id: 'read', label: 'Read and search your email' },
     { id: 'write', label: 'Draft and send email — it asks you on a card each time' },
   ],
-  options: [CLAUDE_AI, BROWSER('mail.google.com')],
+  options: [BROWSER('mail.google.com'), CLAUDE_AI],
   quiet: true,
 };
 
@@ -340,7 +340,7 @@ export const agentsLoginsScenarios: Scenario[] = [
         state: 'failed',
         option: 'claude_ai',
         message:
-          'Gmail didn’t show up as connected within ten minutes. Try again once it’s added on claude.ai.',
+          'Gmail didn’t show up as connected within ten minutes. Try again once it’s added on claude.ai. Choose Use my browser instead: it works where you’re already signed in.',
         startedAt: now - MIN,
       },
     })

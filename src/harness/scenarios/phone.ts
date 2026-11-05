@@ -46,7 +46,7 @@ const ON = {
 const devices = [
   {
     id: 'dev_1',
-    name: 'Julian’s iPhone',
+    name: 'Sam’s iPhone',
     platform: 'ios',
     model: 'iPhone 16 Pro',
     appVersion: '1.0.0',
@@ -220,7 +220,7 @@ export const phoneScenarios: Scenario[] = [
   phone(
     'phone-confirm',
     'Phone — a phone used the code and waits for Allow',
-    'Centred in an amber-edged card: a phone tile, "Allow Julian’s iPhone to use your agents?" ' +
+    'Centred in an amber-edged card: a phone tile, "Allow Sam’s iPhone to use your agents?" ' +
       'with the name in bold, "iPhone 16 Pro · app 1.0.0", "Asked at <time> · code ending 5D2Q · ' +
       'julian@example.com", an amber warning to only allow a phone you’re holding showing the same ' +
       'code ending, and Deny / Allow with Allow primary.',
@@ -231,7 +231,7 @@ export const phoneScenarios: Scenario[] = [
         request: {
           id: 'pr_1',
           device: {
-            name: 'Julian’s iPhone',
+            name: 'Sam’s iPhone',
             platform: 'ios',
             model: 'iPhone 16 Pro',
             appVersion: '1.0.0',
@@ -248,7 +248,7 @@ export const phoneScenarios: Scenario[] = [
   phone(
     'phone-confirm-replace',
     'Phone — a phone that looks like one already paired asks',
-    'As phone-confirm, plus a second amber line: "A phone called Julian’s iPhone is already paired ' +
+    'As phone-confirm, plus a second amber line: "A phone called Sam’s iPhone is already paired ' +
       '(since <date>). If this is that phone again, replace it…". Three answers: Deny, "Allow, keep ' +
       'both" and a primary "Allow and replace". Nothing is replaced without that click.',
     {
@@ -259,7 +259,7 @@ export const phoneScenarios: Scenario[] = [
         request: {
           id: 'pr_2',
           device: {
-            name: 'Julian’s iPhone',
+            name: 'Sam’s iPhone',
             platform: 'ios',
             model: 'iPhone 16 Pro',
             appVersion: '1.0.1',
@@ -275,7 +275,7 @@ export const phoneScenarios: Scenario[] = [
   phone(
     'phone-remove-confirm',
     'Phone — confirming Remove on a paired phone',
-    'The iPhone’s row reads "Remove Julian’s iPhone?" with what that means, and Keep / a red ' +
+    'The iPhone’s row reads "Remove Sam’s iPhone?" with what that means, and Keep / a red ' +
       'Remove. The other row is unchanged.',
     { ...ON, devices },
     {

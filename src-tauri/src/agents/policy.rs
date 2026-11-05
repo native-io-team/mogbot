@@ -35,10 +35,10 @@
 //! (task copies, `--no-chrome`, the access chain's browser) needs no second
 //! source.
 //!
-//! **Seams.** Admin: [`is_admin`] is the Chief unless an agent's policy says
-//! otherwise; the Admin role work reads and sets it here. Go-hard local
-//! auto-allow: it should read [`independence_for`] (an agent's own level)
-//! rather than the team's.
+//! **Seams.** Admin is the Admin role's own switch (`admin::is_admin`, kept
+//! on the agent); a card or the desk changing it hands it to `admin::set_admin`
+//! ([`modify`]). Go hard's local auto-allow and the browser gate read each
+//! agent's own level ([`chosen_level`]).
 //!
 //! Full design: docs/agents.md, "What each agent can do".
 
@@ -333,10 +333,17 @@ impl Effective {
 pub fn resolve(saved: &Saved, agent: &Agent, team_level: Level) -> Effective {
     let empty = Overrides::default();
     let o = saved.agents.get(&agent.id).unwrap_or(&empty);
-    resolve_with(&saved.team, o, agent.is_main, team_level)
+    resolve_with(&saved.team, o, super::admin::is_admin(agent), team_level)
 }
 
-pub fn resolve_with(team: &Team, o: &Overrides, is_main: bool, team_level: Level) -> Effective {
+/// `default_admin`: whether it's an admin now (`admin::is_admin`); an
+/// override only carries a change a card or the desk is about to make.
+pub fn resolve_with(
+    team: &Team,
+    o: &Overrides,
+    default_admin: bool,
+    team_level: Level,
+) -> Effective {
     let mut own = Vec::new();
     if o.projects.is_some() {
         own.push("projects");
@@ -365,7 +372,7 @@ pub fn resolve_with(team: &Team, o: &Overrides, is_main: bool, team_level: Level
         apps: o.apps.clone().unwrap_or_else(|| team.apps.clone()),
         browser: o.browser.unwrap_or(team.browser),
         independence: o.independence.unwrap_or(team_level),
-        admin: o.admin.unwrap_or(is_main),
+        admin: o.admin.unwrap_or(default_admin),
         team_rules: team.rules.clone(),
         own_rules: o.rules.clone(),
         own,
@@ -444,16 +451,26 @@ pub fn migrate(agents: &[Agent]) -> Saved {
 /// Change the saved policy under the lock. `change` returns `Err` to write
 /// nothing. The mirrors are brought in step afterwards.
 pub fn modify<T>(change: impl FnOnce(&mut Saved) -> Result<T, String>) -> Result<T, CommandError> {
-    let out = {
+    let (out, admins) = {
         let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let mut saved = load_locked();
         let out = change(&mut saved).map_err(CommandError::expected)?;
+        // Who's an admin lives on the agent (`admin::ADMIN_KEY`, the Admin
+        // role's own switch); a change to it is handed over, not kept here.
+        let admins: Vec<(String, bool)> = saved
+            .agents
+            .iter_mut()
+            .filter_map(|(id, o)| o.admin.take().map(|a| (id.clone(), a)))
+            .collect();
         saved.version += 1;
         saved.agents.retain(|_, o| !o.is_empty());
         let json = serde_json::to_vec_pretty(&saved).map_err(super::err_other)?;
         store::write_atomic(&path()?, &json)?;
-        out
+        (out, admins)
     };
+    for (id, on) in admins {
+        super::admin::set_admin(&id, on)?;
+    }
     sync();
     Ok(out)
 }
@@ -575,11 +592,17 @@ pub fn forget(agent_id: &str) {
 
 /// Whether it may propose settings for other agents and the team.
 pub fn is_admin(agent: &Agent) -> bool {
+    super::admin::is_admin(agent)
+}
+
+/// The level the user chose for it: its own, or the team's (before any
+/// outside-text cap). What Go hard's local auto-allow reads.
+pub fn chosen_level(agent: &Agent) -> Level {
     load()
         .agents
         .get(&agent.id)
-        .and_then(|o| o.admin)
-        .unwrap_or(agent.is_main)
+        .and_then(|o| o.independence)
+        .unwrap_or_else(super::independence::level)
 }
 
 /// The level its turns run at: its own, or the team's; never Go hard when

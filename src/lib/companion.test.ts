@@ -57,7 +57,7 @@ describe('phoneStep', () => {
 
 const device = (over: Partial<Device> = {}): Device => ({
   id: 'd1',
-  name: 'Julian’s iPhone',
+  name: 'Sam’s iPhone',
   platform: 'ios',
   model: 'iPhone 16 Pro',
   appVersion: '1.0.0',
