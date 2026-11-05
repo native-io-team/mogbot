@@ -1059,3 +1059,57 @@
 .agent-import-review__outcome[data-status='allowed'] {
   color: var(--text-primary);
 }
+
+/* ----------------------------------- the playback card (Chief's chat)
+   "Here's what I'll do for you": each agent's plan in plain words, then
+   what it doesn't know yet, then the question. Gaps read as something to
+   add, so they're quieter, not alarming. */
+
+.agent-import-playback__plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.agent-import-playback__agent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+}
+
+.agent-import-playback__name {
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agent-import-playback__lines {
+  margin: 0;
+  padding-left: var(--spacing-md);
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.agent-import-playback__lines li + li {
+  margin-top: var(--spacing-3xs);
+}
+
+.agent-import-playback__lines--gaps {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.agent-import-playback__ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+}
+
+.agent-import-playback__question {
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}

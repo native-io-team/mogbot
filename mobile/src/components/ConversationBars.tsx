@@ -56,6 +56,7 @@ export function ConversationBars({
   onStopRevising: () => void;
 }) {
   const messages = useApp((s) => s.chats[agent.id]?.messages);
+  const reviewHere = useApp((s) => !!s.welcome?.methods.includes('agents.import.review'));
   const engines = useApp((s) => s.overview?.engines);
   const cantAsk = engineCantAskBar(agent, engines);
   const connection = useConnectionBar();
@@ -71,7 +72,7 @@ export function ConversationBars({
       icon: 'terminal',
     });
   }
-  const importing = importBar(agent, messages);
+  const importing = importBar(agent, messages, reviewHere);
   if (importing) bars.push({ id: 'import', ...importing, icon: 'square.and.arrow.down' });
   const changes = revisingBar(revising);
   if (changes) {

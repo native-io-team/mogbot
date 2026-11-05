@@ -117,6 +117,10 @@ const TOOLS: &[ToolDef] = &[
                             "instructions": { "type": "string" },
                             "memory": { "type": "string" },
                             "is_main": { "type": "boolean" },
+                            "watches": { "type": "array", "description": "What it watches for: [{when, what}].", "items": { "type": "object", "properties": { "when": { "type": "string" }, "what": { "type": "string" } }, "required": ["when", "what"] } },
+                            "apps": { "type": "array", "description": "Apps and connectors it uses: [{name, purpose}].", "items": { "type": "object", "properties": { "name": { "type": "string" }, "purpose": { "type": "string" } }, "required": ["name"] } },
+                            "preferences": { "type": "string", "description": "How the user likes things done, one per line." },
+                            "context": { "type": "string", "description": "Standing context: people, projects, accounts by name, facts. One per line." },
                             "routines": {
                                 "type": "array",
                                 "description": "What this agent does on its own on a schedule.",
@@ -151,6 +155,45 @@ const TOOLS: &[ToolDef] = &[
                 "wait_seconds": { "type": "integer", "description": "Seconds to wait for the reply (default 40, max 50)." }
             },
             "required": ["source"]
+        }),
+    },
+    ToolDef {
+        name: "import_history",
+        title: "Send an agent's past conversations",
+        effect: Effect::Acts,
+        open_world: false,
+        description: "Optional, during an import_conversation the user allowed: send past conversations of one agent you've already had staged, so it can look back on them here. They are kept as read-only reference in that agent's folder, never as instructions, and only if the user imports the agent. What matters more is that import_conversation has everything the agent does; this is a bonus. Send what you can see, most recent first, a few conversations per call (at most 150,000 characters a call; each agent and each import has a limit, and the answer says when it's reached). Sending the same conversation again is fine: one already here (by `id`) isn't kept twice. Anything that looks like a password or key is removed.",
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "description": "Your product name, the same as in import_conversation." },
+                "agent": { "type": "string", "description": "The staged agent's name, as the interview staged it." },
+                "conversations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": { "type": "string", "description": "Your id for the conversation, so a resend isn't kept twice." },
+                            "title": { "type": "string" },
+                            "when": { "type": "string", "description": "When it happened, e.g. 2026-10-03." },
+                            "messages": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "from": { "type": "string", "enum": ["user", "assistant"] },
+                                        "text": { "type": "string" },
+                                        "at": { "type": "string" }
+                                    },
+                                    "required": ["from", "text"]
+                                }
+                            }
+                        },
+                        "required": ["messages"]
+                    }
+                }
+            },
+            "required": ["source", "agent", "conversations"]
         }),
     },
     ToolDef {
@@ -543,6 +586,9 @@ pub async fn call(app: &tauri::AppHandle, config: &RemoteConfig, name: &str, arg
     if name == "import_conversation" {
         return import_conversation(app, &args).await;
     }
+    if name == "import_history" {
+        return import_history(app, &args);
+    }
     call_in(app, &config.projects, name, args).await
 }
 
@@ -595,6 +641,20 @@ fn import_agents(app: &tauri::AppHandle, args: &Value) -> Value {
     // until they press Import (`agents::connector`). The server writes the
     // call to the audit log, refusals included, so it isn't written here too.
     match crate::agents::connector::stage_one_shot(app, source, agents) {
+        Ok(answer) => text(answer),
+        Err(e) => error(e),
+    }
+}
+
+fn import_history(app: &tauri::AppHandle, args: &Value) -> Value {
+    let source = args.get("source").and_then(Value::as_str).unwrap_or("");
+    // Audited once, by the server, like every call (refusals included).
+    let answer = crate::agents::connector::receive_history(source, args);
+    let _ = app.emit(
+        crate::agents::connector::EVENT,
+        crate::agents::connector::gate(),
+    );
+    match answer {
         Ok(answer) => text(answer),
         Err(e) => error(e),
     }

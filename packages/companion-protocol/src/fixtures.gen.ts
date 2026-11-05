@@ -405,6 +405,37 @@ export const agentsQuota = [
     ]
   }
 ] satisfies Result<'agents.quota'>;
+export const agentsImportStatus = {
+  "armed": false,
+  "chiefId": "chief",
+  "prompt": "Move my agents to the app I just connected you to, so each one picks up exactly where it left off. Use its import_conversation tool to talk to my Chief of Staff there and tell it everything about each agent you run for me: its role and full instructions, every routine and schedule, everything it watches for, the apps it uses, my preferences and anything it knows that it still needs. Leave nothing out. If you can, also send each agent's past conversations with import_history once it's staged. Don't send passwords, API keys or card numbers: the app asks me for those itself.",
+  "remoteAccess": {
+    "enabled": true,
+    "everConnected": true,
+    "funnelOn": true
+  },
+  "talk": null
+} satisfies Result<'agents.import.status'>;
+export const agentsImportStarted = {
+  "armed": true,
+  "chiefId": "chief",
+  "prompt": "Move my agents to the app I just connected you to, so each one picks up exactly where it left off. Use its import_conversation tool to talk to my Chief of Staff there and tell it everything about each agent you run for me: its role and full instructions, every routine and schedule, everything it watches for, the apps it uses, my preferences and anything it knows that it still needs. Leave nothing out. If you can, also send each agent's past conversations with import_history once it's staged. Don't send passwords, API keys or card numbers: the app asks me for those itself.",
+  "remoteAccess": {
+    "enabled": true,
+    "everConnected": true,
+    "funnelOn": true
+  },
+  "talk": null
+} satisfies Result<'agents.import.start'>;
+export const agentsImportReview = {
+  "agents": [
+    "Agent p1"
+  ],
+  "chiefNotes": false,
+  "replaced": [],
+  "routinesRefused": [],
+  "skipped": []
+} satisfies Result<'agents.import.review'>;
 export const agentsMessages = {
   "asOf": {
     "epoch": "epoch-test",
@@ -2129,7 +2160,11 @@ export const frames = [
       "sessions.send",
       "sessions.key",
       "sessions.start",
-      "preview.screenshot"
+      "preview.screenshot",
+      "agents.import.status",
+      "agents.import.start",
+      "agents.import.stop",
+      "agents.import.review"
     ],
     "timeZone": "America/New_York",
     "features": [

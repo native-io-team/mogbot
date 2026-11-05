@@ -208,7 +208,8 @@ describe('WhenComposer', () => {
     });
     expect(await screen.findByText('Which app should it check?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Gmail' }));
+    // The apps list loads on its own: wait for its button, not just the question.
+    fireEvent.click(await screen.findByRole('button', { name: 'Gmail' }));
     expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
   });
 });

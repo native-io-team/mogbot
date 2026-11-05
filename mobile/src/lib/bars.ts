@@ -58,19 +58,31 @@ const IMPORTING = /^Bringing in agents from (.+)$/;
  * the Chief's own status while the interview runs. Says the state, never the
  * request's question, and never points at "the card".
  */
-export function importBar(agent: Agent, messages: AgentMessage[] | undefined): BarText | null {
+export function importBar(
+  agent: Agent,
+  messages: AgentMessage[] | undefined,
+  reviewHere = false
+): BarText | null {
   for (let i = (messages?.length ?? 0) - 1; i >= 0; i--) {
     const approval = messages![i].approval;
     const connector = approval?.connector;
     if (!connector || approval.status !== 'pending') continue;
-    return connector.kind === 'consent'
-      ? {
-          tone: 'waiting',
-          title: `Import from ${connector.source} · Needs your OK`,
-          detail: 'Nothing has been shared yet.',
-        }
-      : // The review card above already says what happens on the Mac; the bar only says the state.
-        { tone: 'waiting', title: `Import from ${connector.source} · waiting on your Mac` };
+    if (connector.kind === 'consent')
+      return {
+        tone: 'waiting',
+        title: `Import from ${connector.source} · Needs your OK`,
+        detail: 'Nothing has been shared yet.',
+      };
+    if (connector.kind === 'playback')
+      return {
+        tone: 'waiting',
+        title: `Import from ${connector.source} · check the plan`,
+        detail: 'Is anything missing? Nothing is created until you import.',
+      };
+    // The review card above says what happens; the bar only says the state.
+    return reviewHere
+      ? { tone: 'waiting', title: `Import from ${connector.source} · ready to import` }
+      : { tone: 'waiting', title: `Import from ${connector.source} · waiting on your Mac` };
   }
   const going = agent.status.state !== 'idle' && IMPORTING.exec(agent.status.activity ?? '');
   if (!going) return null;

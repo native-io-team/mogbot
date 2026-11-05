@@ -600,6 +600,24 @@ mod tests {
         });
         assert!(!funnel_routes_to(&someone_elses_root, host, 4321));
         assert!(!funnel_routes_to(&json!({}), host, 4321));
+
+        // Ship Studio's own mount on the same Funnel isn't ours: with only it,
+        // ours is off (so setup turns ours on); with both, ours is on.
+        if MOUNT_PATH != "/shipstudio" {
+            let only_theirs = json!({
+                "Web": { "m.t.ts.net:443": { "Handlers": { "/shipstudio": { "Proxy": "http://127.0.0.1:4321" } } } },
+                "AllowFunnel": { "m.t.ts.net:443": true }
+            });
+            assert!(!funnel_routes_to(&only_theirs, host, 4321));
+            let both = json!({
+                "Web": { "m.t.ts.net:443": { "Handlers": {
+                    "/shipstudio": { "Proxy": "http://127.0.0.1:5555" },
+                    MOUNT_PATH: { "Proxy": "http://127.0.0.1:4321" }
+                } } },
+                "AllowFunnel": { "m.t.ts.net:443": true }
+            });
+            assert!(funnel_routes_to(&both, host, 4321));
+        }
     }
 
     #[test]

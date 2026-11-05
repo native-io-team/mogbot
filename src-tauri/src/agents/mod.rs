@@ -54,6 +54,7 @@ pub mod driver;
 pub mod engine;
 pub mod failure;
 pub mod files;
+pub mod harvest;
 pub mod import;
 pub mod interview;
 pub mod mcp;

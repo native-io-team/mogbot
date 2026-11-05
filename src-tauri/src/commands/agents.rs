@@ -757,7 +757,7 @@ fn answer_card(
     }
     // The import connector's own cards: consent, and the staged agents.
     if approval.connector.is_some() {
-        return agents::connector::answer_card(app, agent_id, &approval, allow);
+        return agents::connector::answer_card(app, agent_id, &approval, allow, note);
     }
     // A session's question: keys to the session, and every chat holding the
     // card is answered with it.
@@ -1078,6 +1078,21 @@ pub async fn agents_import_review_apply(
     picks: agents::review::Picks,
 ) -> Result<agents::review::Applied, CommandError> {
     blocking(move || agents::connector::apply_review(&app, &agent_id, &request_id, &picks)).await
+}
+
+/// The user answered the plan's playback: nothing to add (`addition` empty:
+/// the review comes up), or what's missing, which goes back to the sealed
+/// interview to fold in before the plan is played back again.
+#[tauri::command]
+#[tracing::instrument(skip(app, addition))]
+pub async fn agents_import_playback_answer(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+    addition: Option<String>,
+) -> Result<(), CommandError> {
+    blocking(move || agents::connector::answer_playback(&app, &agent_id, &request_id, addition))
+        .await
 }
 
 /// A review card as it should show now: each clash read again against the

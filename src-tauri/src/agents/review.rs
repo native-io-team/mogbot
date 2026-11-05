@@ -28,7 +28,8 @@
 //! The card carries everything it shows, so it survives a restart. Its
 //! clashes are read again when it's shown ([`current`]) and when Import is
 //! pressed ([`apply`]), and Replace refuses if the agent changed in between.
-//! Only the Mac's card imports: the phone shows "Review on your Mac".
+//! The phone imports only as new agents (`companion` `agents.import.review`:
+//! no Replace, no Chief's notes); a plain Allow from anywhere is refused.
 
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
@@ -44,12 +45,17 @@ pub const MAX_PROPOSALS: usize = 30;
 pub const MAX_FIELD_CHARS: usize = 20_000;
 const MAX_ROUTINES: usize = 20;
 const MAX_LOGINS: usize = 10;
+const MAX_APPS: usize = 20;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum CardKind {
     /// "<source> wants to bring its agents over": Allow starts the interview.
     Consent,
+    /// "Here's what I'll do for you": the plan played back in plain words,
+    /// with "Is there anything I'm missing?". What the user adds goes back
+    /// to the interview; "That's everything" brings up the review.
+    Playback,
     /// The staged agents: Import creates what's ticked.
     Review,
 }
@@ -64,6 +70,9 @@ pub struct ConnectorCard {
     pub source: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review: Option<Review>,
+    /// Playback only: the plan, agent by agent, in plain words.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub playback: Option<Vec<super::harvest::PlaybackAgent>>,
 }
 
 /// Whether this card is an import review (kept across restarts).
@@ -103,6 +112,24 @@ pub struct Proposal {
     pub routines: Vec<ProposedRoutine>,
     #[serde(default)]
     pub logins: Vec<ProposedLogin>,
+    /// What it watches for and does when it happens ("when an invoice email
+    /// arrives: file it"). Not set up here by itself: it lands in memory and
+    /// the agent offers to set each one up as a "When…" routine.
+    #[serde(default)]
+    pub watches: Vec<ProposedWatch>,
+    /// The apps and connectors it used there, by name, and what for.
+    #[serde(default)]
+    pub apps: Vec<ProposedApp>,
+    /// How the user likes things done, one per line.
+    #[serde(default)]
+    pub preferences: String,
+    /// Standing context: people, projects, accounts by name, facts.
+    #[serde(default)]
+    pub context: String,
+    /// Past conversations the other assistant sent for it (`harvest`), as
+    /// counted; the text waits in the import's staging folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history: Option<super::harvest::HistoryCount>,
     /// An agent here already has this name: what it is now, for the diff.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clash: Option<Clash>,
@@ -119,6 +146,21 @@ pub struct ProposedRoutine {
     pub schedule: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refused: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposedWatch {
+    pub when: String,
+    pub what: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposedApp {
+    pub name: String,
+    #[serde(default)]
+    pub purpose: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -393,15 +435,27 @@ pub fn secret_in(p: &Proposal) -> Option<&'static str> {
         .logins
         .iter()
         .flat_map(|l| [l.name.as_str(), l.purpose.as_str()]);
+    let watch_text = p
+        .watches
+        .iter()
+        .flat_map(|w| [w.when.as_str(), w.what.as_str()]);
+    let app_text = p
+        .apps
+        .iter()
+        .flat_map(|a| [a.name.as_str(), a.purpose.as_str()]);
     [
         p.name.as_str(),
         p.role.as_str(),
         p.instructions.as_str(),
         p.memory.as_str(),
+        p.preferences.as_str(),
+        p.context.as_str(),
     ]
     .into_iter()
     .chain(routine_text)
     .chain(login_text)
+    .chain(watch_text)
+    .chain(app_text)
     .find_map(super::connector::looks_like_secret)
 }
 
@@ -475,6 +529,40 @@ pub fn proposal(key: String, args: &serde_json::Value, chief: &str) -> Result<Pr
             })
         })
         .collect();
+    let watches: Vec<ProposedWatch> = args
+        .get("watches")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+        .take(MAX_ROUTINES)
+        .filter_map(|w| {
+            let when = clean_line(w.get("when")?.as_str()?, 200);
+            let what = clean_text(w.get("what")?.as_str()?, 2_000);
+            (!when.is_empty() && !what.is_empty()).then_some(ProposedWatch { when, what })
+        })
+        .collect();
+    let apps: Vec<ProposedApp> = args
+        .get("apps")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+        .take(MAX_APPS)
+        .filter_map(|a| {
+            // A bare name is fine too.
+            let (name, purpose) = match a {
+                serde_json::Value::String(n) => (n.as_str(), ""),
+                _ => (
+                    a.get("name")?.as_str()?,
+                    a.get("purpose").and_then(|v| v.as_str()).unwrap_or(""),
+                ),
+            };
+            let name = clean_line(name, 60);
+            (!name.is_empty()).then(|| ProposedApp {
+                name,
+                purpose: clean_line(purpose, 200),
+            })
+        })
+        .collect();
     let p = Proposal {
         key,
         name,
@@ -483,6 +571,11 @@ pub fn proposal(key: String, args: &serde_json::Value, chief: &str) -> Result<Pr
         memory: clean_text(s("memory"), MAX_FIELD_CHARS),
         routines,
         logins,
+        watches,
+        apps,
+        preferences: clean_text(s("preferences"), MAX_FIELD_CHARS),
+        context: clean_text(s("context"), MAX_FIELD_CHARS),
+        history: None,
         clash: None,
     };
     if let Some(what) = secret_in(&p) {
@@ -608,7 +701,7 @@ pub fn apply(
         chosen.push((p, Some(pick)));
     }
     for (p, replace) in chosen {
-        match apply_one(app, p, replace, source) {
+        match apply_one(app, p, replace, source, &card.talk_id) {
             Ok((name, replaced, refused)) => {
                 if replaced {
                     out.replaced.push(name.clone());
@@ -679,6 +772,7 @@ fn apply_one(
     p: &Proposal,
     replace: Option<&Pick>,
     source: &str,
+    talk_id: &str,
 ) -> Result<(String, bool, Vec<import::RoutineOutcome>), CommandError> {
     let routines: Vec<ImportedRoutine> = p
         .routines
@@ -698,7 +792,12 @@ fn apply_one(
         (Some(_), _) => (create(&unique_name(&p.name, source), p)?, false),
         (None, _) => (create(&p.name, p)?, false),
     };
-    import::add_memory(&agent.id, &p.memory, source)?;
+    let conversations = super::harvest::write_home(talk_id, &p.key, &agent.id, source)?;
+    import::add_memory(
+        &agent.id,
+        &super::harvest::memory_block(p, source, conversations),
+        source,
+    )?;
     import::add_routines(&agent, &routines, true, &mut summary);
     if let Some(app) = app {
         for login in &p.logins {
@@ -958,6 +1057,7 @@ mod tests {
                 chief_notes: None,
                 summary: None,
             }),
+            playback: None,
         }
     }
 

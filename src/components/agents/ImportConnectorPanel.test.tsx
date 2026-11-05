@@ -49,19 +49,31 @@ function renderPanel(over: Partial<Parameters<typeof ImportConnectorPanel>[0]> =
 }
 
 describe('ImportConnectorPanel', () => {
-  it('says what the other assistant can and can’t do, and needs Start before the message', async () => {
+  it('promises everything each agent does, played back first, and needs Start before the message', async () => {
     gate = { armed: false, talk: null };
     const props = renderPanel();
-    expect(screen.getByText('See your chats, files, memory or other agents')).toBeInTheDocument();
+    // What it now does: everything each agent does, history as a bonus.
     expect(
-      screen.getByText('Create or change anything: you import what you keep')
+      screen.getByText('Each agent’s instructions, routines and what it watches for')
     ).toBeInTheDocument();
+    expect(
+      screen.getByText('Past conversations, if your assistant can send them')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Ada plays it back to you before anything is created/)
+    ).toBeInTheDocument();
+    // Honest: the other assistant decides what it can send.
+    expect(
+      screen.getByText('Your assistant chooses what it can send; you see what arrived')
+    ).toBeInTheDocument();
+    // The old promise is gone.
+    expect(screen.queryByText(/can’t see your chats/i)).not.toBeInTheDocument();
     // No message to copy until Start.
     expect(screen.queryByText(/import_conversation/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Start' }));
     expect(armImportTalk).toHaveBeenCalled();
     expect(await screen.findByText(/import_conversation/)).toBeInTheDocument();
-    expect(screen.getByText('Allow it, then review in Ada’s chat')).toBeInTheDocument();
+    expect(screen.getByText('Allow it, then check the plan in Ada’s chat')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open Ada' }));
     expect(props.onOpenAgent).toHaveBeenCalledWith('chief');
     fireEvent.click(screen.getByRole('button', { name: 'Can’t connect? Paste a reply instead' }));

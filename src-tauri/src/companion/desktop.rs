@@ -453,6 +453,46 @@ impl Backend for DesktopBackend {
         json(cmd::agents_quota().await?)
     }
 
+    async fn import_status(&self) -> Result<Value, CommandError> {
+        import_status_now().await
+    }
+
+    async fn import_start(&self) -> Result<Value, CommandError> {
+        crate::agents::connector::arm(&self.app)?;
+        import_status_now().await
+    }
+
+    async fn import_stop(&self) -> Result<Value, CommandError> {
+        crate::agents::connector::stop(&self.app);
+        import_status_now().await
+    }
+
+    async fn import_review(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+        keys: Vec<String>,
+    ) -> Result<Value, CommandError> {
+        let app = self.app.clone();
+        let (agent_id, request_id) = (agent_id.to_string(), request_id.to_string());
+        let picks = crate::agents::review::Picks {
+            agents: keys
+                .into_iter()
+                .map(|key| crate::agents::review::Pick {
+                    key,
+                    ..Default::default()
+                })
+                .collect(),
+            chief_notes: false,
+        };
+        let applied = tauri::async_runtime::spawn_blocking(move || {
+            crate::agents::connector::apply_review(&app, &agent_id, &request_id, &picks)
+        })
+        .await
+        .map_err(crate::agents::err_other)??;
+        json(applied)
+    }
+
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError> {
         cmd::agents_revoke_permission(self.app.clone(), agent_id.to_string(), rule_id.to_string())
             .await
@@ -693,6 +733,29 @@ impl Backend for DesktopBackend {
 
 /// Every Ship Studio project: what agents reach (the P1 decision), and so
 /// what the phone sees.
+/// What the phone's Import screen shows (`agents.import.status`).
+async fn import_status_now() -> Result<Value, CommandError> {
+    let remote = crate::commands::remote_access::get_remote_access_status().await?;
+    let gate = crate::agents::connector::gate();
+    let chief = crate::agents::store::list()?
+        .into_iter()
+        .find(|a| a.is_main);
+    let prompt = crate::agents::import::import_prompt(
+        chief.as_ref().map_or("Chief of Staff", |c| c.name.as_str()),
+    );
+    Ok(serde_json::json!({
+        "remoteAccess": {
+            "enabled": remote.enabled,
+            "funnelOn": remote.funnel_on,
+            "everConnected": remote.ever_connected,
+        },
+        "armed": gate.armed,
+        "talk": gate.talk,
+        "prompt": prompt,
+        "chiefId": chief.map(|c| c.id),
+    }))
+}
+
 async fn all_projects() -> Vec<String> {
     crate::commands::projects::list_projects()
         .await

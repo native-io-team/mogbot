@@ -373,10 +373,87 @@ export interface Approval {
  * before Import (the desktop refuses an Allow sent for one).
  */
 export interface ConnectorCard {
-  kind: 'consent' | 'review';
+  kind: 'consent' | 'playback' | 'review';
   talkId: string;
   source: string;
   review?: ImportReview;
+  /**
+   * Playback only: what each agent will do, in plain words. Answerable on the
+   * phone: Allow is "That's everything", Deny with a note adds what's missing.
+   */
+  playback?: PlaybackAgent[];
+}
+
+export interface PlaybackAgent {
+  key: string;
+  name: string;
+  lines: { kind: PlaybackKind; text: string }[];
+}
+
+export type PlaybackKind =
+  | 'job'
+  | 'routine'
+  | 'watch'
+  | 'app'
+  | 'keep'
+  | 'login'
+  | 'history'
+  | 'gap';
+
+/** Past conversations that arrived for one agent, as counted. */
+export interface ImportHistoryCount {
+  conversations: number;
+  messages: number;
+  masked?: number;
+  chars?: number;
+  capped?: boolean;
+}
+
+/** An import with another assistant over the connector (desktop `agents/connector.rs`). */
+export interface ImportTalk {
+  id: string;
+  source: string;
+  chiefId: string;
+  state:
+    | 'awaiting_consent'
+    | 'interviewing'
+    | 'playback'
+    | 'review'
+    | 'imported'
+    | 'declined'
+    | 'denied'
+    | 'stopped';
+  startedAt: number;
+  lastAt: number;
+  exchanges: number;
+  staged: string[];
+  imported: string[];
+  busy: boolean;
+  conversations?: number;
+  playbacks?: number;
+}
+
+/** What importing from a review card made. */
+export interface ImportApplied {
+  agents: string[];
+  replaced: string[];
+  skipped: [string, string][];
+  chiefNotes: boolean;
+  routinesRefused: string[];
+}
+
+/**
+ * An import as the phone follows it (`agents.import.status`). Never the
+ * Remote access link: it's a key, and only the Mac copies it.
+ */
+export interface PhoneImportStatus {
+  remoteAccess: { enabled: boolean; funnelOn: boolean; everConnected: boolean };
+  /** Start was pressed: one import may begin. */
+  armed: boolean;
+  talk: ImportTalk | null;
+  /** The message to send the other assistant (no secrets in it). */
+  prompt: string;
+  chiefId: string | null;
 }
 
 export interface ImportReview {
@@ -393,6 +470,11 @@ export interface ImportProposal {
   memory: string;
   routines: { when: string; what: string; schedule?: string; refused?: string }[];
   logins: { name: string; purpose: string; kind: string }[];
+  watches?: { when: string; what: string }[];
+  apps?: { name: string; purpose: string }[];
+  preferences?: string;
+  context?: string;
+  history?: ImportHistoryCount;
   clash?: ImportClash;
 }
 

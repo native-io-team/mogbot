@@ -576,6 +576,12 @@ const LIVE = [
   },
   { name: 'new-agent', route: '/new-agent', check: 'New agent' },
   {
+    name: 'import',
+    route: '/import',
+    ready: 'Import agents',
+    check: 'Import: the three steps, Remote access ticked, the import going on with past conversations counted',
+  },
+  {
     name: 'session',
     route: '/session/pty-site-1',
     settle: 3500,

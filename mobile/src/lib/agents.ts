@@ -322,12 +322,13 @@ export function formatDate(ts: number, now = Date.now()): string {
 }
 
 /**
- * Whether the phone can answer this card. An import's review card can't be:
- * each agent's instructions are read on the Mac before anything is created,
- * and the Mac refuses an Allow sent from anywhere else.
+ * Whether the phone can answer this card. An import's review card only on a
+ * Mac that serves `agents.import.review` (`reviewHere`): there the phone's
+ * card shows each agent's instructions and imports them as new agents; an
+ * older Mac refuses an Allow sent from anywhere but its own card.
  */
-export const answerableHere = (approval: Pick<Approval, 'connector'>) =>
-  approval.connector?.kind !== 'review';
+export const answerableHere = (approval: Pick<Approval, 'connector'>, reviewHere = false) =>
+  reviewHere || approval.connector?.kind !== 'review';
 
 const pendingCard = (m: AgentMessage): Approval | null =>
   m.kind === 'approval' && m.approval?.status === 'pending' ? m.approval : null;
@@ -352,13 +353,17 @@ export function pendingApproval(messages: AgentMessage[] | undefined): AgentMess
  * agent is stopped mid-turn on a card, one of them may be answerable here,
  * so this says no rather than hide it.
  */
-export function waitingOnMac(agent: Agent, messages: AgentMessage[] | undefined): boolean {
+export function waitingOnMac(
+  agent: Agent,
+  messages: AgentMessage[] | undefined,
+  reviewHere = false
+): boolean {
   if (!messages || !needsYou(agent)) return false;
   let reviews = 0;
   for (const m of messages) {
     const card = pendingCard(m);
     if (!card) continue;
-    if (answerableHere(card)) return false;
+    if (answerableHere(card, reviewHere)) return false;
     reviews++;
   }
   return (

@@ -227,10 +227,19 @@ function ProposalRow({
   const yours = p.clash?.name || p.name;
   // "Ѕite" (Cyrillic Ѕ) is matched to your Site, and the card says so.
   const lookalike = !!p.clash?.name && p.clash.name.toLowerCase() !== p.name.toLowerCase();
+  const watches = p.watches ?? [];
+  const apps = p.apps ?? [];
+  const keep = [p.preferences ?? '', p.context ?? '']
+    .flatMap((t) => t.split('\n'))
+    .map((l) => l.replace(/^\s*[-•*]\s*/, '').trim())
+    .filter(Boolean);
+  const history = p.history?.conversations ?? 0;
   const counts = [
     memory.length && `${memory.length} ${memory.length === 1 ? 'memory' : 'memories'}`,
     p.routines.length && `${plural(p.routines.length, 'routine')} (paused)`,
+    watches.length && `watches for ${plural(watches.length, 'thing')}`,
     p.logins.length && plural(p.logins.length, 'login'),
+    history && plural(history, 'past conversation'),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -300,6 +309,51 @@ function ProposalRow({
               </ul>
             </ImportSection>
           )}
+          {watches.length > 0 && (
+            <ImportSection title="What it watches for · kept in its memory, set up here when you ask">
+              <ul className="agents-import-agent__memory">
+                {watches.map((w, i) => (
+                  <li key={i}>
+                    <strong>When {w.when.replace(/^when\s+/i, '')}</strong> · {w.what}
+                  </li>
+                ))}
+              </ul>
+            </ImportSection>
+          )}
+          {keep.length > 0 && (
+            <ImportSection title="Preferences and context · added to its memory">
+              <ul className="agents-import-agent__memory">
+                {keep.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            </ImportSection>
+          )}
+          {apps.length > 0 && (
+            <ImportSection title={`Apps it used with ${source} · here it asks before connecting`}>
+              <ul className="agents-import-agent__memory">
+                {apps.map((a) => (
+                  <li key={a.name}>
+                    {a.name}
+                    {a.purpose && ` · ${a.purpose}`}
+                  </li>
+                ))}
+              </ul>
+            </ImportSection>
+          )}
+          {history > 0 && p.history && (
+            <ImportSection title="Past conversations · read-only, for it to look back on">
+              <p className="agents-import-agent__none">
+                {plural(history, 'conversation')}, {plural(p.history.messages, 'message')} arrived
+                {p.history.capped ? ' (not all: a limit was reached)' : ''}.
+                {p.history.masked
+                  ? ` ${plural(p.history.masked, 'thing')} that looked like a password or key ${
+                      p.history.masked === 1 ? 'was' : 'were'
+                    } removed.`
+                  : ''}
+              </p>
+            </ImportSection>
+          )}
           {p.logins.length > 0 && (
             <ImportSection title="Logins it asks for · on secure cards, never here">
               <ul className="agents-import-agent__memory">
@@ -312,9 +366,14 @@ function ProposalRow({
               </ul>
             </ImportSection>
           )}
-          {!p.clash && memory.length === 0 && !p.routines.length && !p.logins.length && (
-            <p className="agents-import-agent__none">Nothing else came with it.</p>
-          )}
+          {!p.clash &&
+            memory.length === 0 &&
+            !p.routines.length &&
+            !p.logins.length &&
+            !watches.length &&
+            !keep.length &&
+            !apps.length &&
+            !history && <p className="agents-import-agent__none">Nothing else came with it.</p>}
         </>
       )}
     />

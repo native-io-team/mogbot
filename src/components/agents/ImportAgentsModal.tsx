@@ -8,10 +8,12 @@
  * fallback for one that can't connect (`ImportPastePanel`). Both end in the
  * same merge (`agents/import.rs`).
  *
- * When the app this one grew out of has agents on this Mac, a first segment
+ * When the app this one grew out of has agents on this Mac, a second segment
  * reads them straight from its folder and copies them in whole
- * (`agents/other_app.rs`). It leads whenever it has someone left to bring
- * over. Its name comes from the preview (`appName`).
+ * (`agents/other_app.rs`). Another assistant always comes first and is where
+ * the modal opens (few people have agents in the other app); the other app's
+ * segment opens only when asked for (the palette's command). Its name comes
+ * from the preview (`appName`).
  *
  * @module components/agents/ImportAgentsModal
  */
@@ -27,7 +29,7 @@ import { getRemoteAccessStatus } from '../../lib/remoteAccess';
 import { ImportPastePanel, type ImportResult } from './ImportPastePanel';
 import { ImportConnectorPanel } from './ImportConnectorPanel';
 import { ImportDone } from './ImportParts';
-import { arriving, OtherAppImportPanel } from './OtherAppImportPanel';
+import { OtherAppImportPanel } from './OtherAppImportPanel';
 
 /** `paste` is the assistant path's fallback, reached from the connector panel. */
 export type ImportPath = 'otherApp' | 'assistant' | 'paste';
@@ -96,9 +98,8 @@ export function ImportAgentsModal({
     onOpenAgent(id);
   };
 
-  // Each time it opens: the other app's team leads when there's someone left
-  // to bring over (or the palette asked for it); otherwise the conversation
-  // over the connector, with pasting a reply one link away.
+  // Each time it opens: another assistant first, unless the palette asked for
+  // the other app's team; pasting a reply is one link away.
   useEffect(() => {
     if (!isOpen) return;
     let live = true;
@@ -109,8 +110,7 @@ export function ImportAgentsModal({
       if (!live) return;
       setConnected(!!remote?.enabled);
       setOtherApp(other);
-      const leads = !!other && (arriving(other).length > 0 || initialPath === 'otherApp');
-      setPath(leads ? 'otherApp' : 'assistant');
+      setPath(other && initialPath === 'otherApp' ? 'otherApp' : 'assistant');
     });
     return () => {
       live = false;
@@ -145,11 +145,11 @@ export function ImportAgentsModal({
         <Tabs value={path} onValueChange={(v) => setPath(v as 'otherApp' | 'assistant')}>
           {otherApp && (
             <TabsList className="agents-import__tabs" aria-label="Where from">
-              <TabsTab value="otherApp" width="fill">
-                From {otherApp.appName}
-              </TabsTab>
               <TabsTab value="assistant" width="fill">
                 From another assistant
+              </TabsTab>
+              <TabsTab value="otherApp" width="fill">
+                From {otherApp.appName}
               </TabsTab>
             </TabsList>
           )}

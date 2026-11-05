@@ -65,6 +65,10 @@ pub const METHODS: &[&str] = &[
     "sessions.key",
     "sessions.start",
     "preview.screenshot",
+    "agents.import.status",
+    "agents.import.start",
+    "agents.import.stop",
+    "agents.import.review",
 ];
 
 /// `READ_ONLY_METHODS` in methods.ts (the served subset): not audited.
@@ -77,6 +81,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.memory",
     "agents.usage",
     "agents.quota",
+    "agents.import.status",
     "agents.templates",
     "agents.changeDiff",
     "agents.files",
@@ -374,6 +379,26 @@ pub trait Backend: Send + Sync + 'static {
     async fn usage(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_quota`: each engine's plan, as it last reported it.
     async fn quota(&self) -> Result<Value, CommandError>;
+    /// An import from another assistant, as the phone follows it: whether
+    /// this Mac's Remote access is on and has been reached, whether an import
+    /// may begin, the one going on, and the message to send. Never the link:
+    /// it's a key, and only the Mac copies it (`remote_access` "Security").
+    async fn import_status(&self) -> Result<Value, CommandError>;
+    /// Start: one import may begin (`connector::arm`). It still asks on a
+    /// card in the Chief's chat first.
+    async fn import_start(&self) -> Result<Value, CommandError>;
+    /// Stop the import (`connector::stop`).
+    async fn import_stop(&self) -> Result<Value, CommandError>;
+    /// Import from a review card, from the phone: the kept agents come in as
+    /// new agents (a taken name as a copy), never replacing one here, with no
+    /// notes added to the Chief. Replace stays on the Mac, where its diff and
+    /// consequences are on screen.
+    async fn import_review(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+        keys: Vec<String>,
+    ) -> Result<Value, CommandError>;
     /// `agents_revoke_permission`: an "Always allow" rule taken back.
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError>;
     /// `agents_change_diff`: one file of a change card.
@@ -560,6 +585,14 @@ struct SetPushParams {
 #[serde(rename_all = "camelCase")]
 struct AgentParam {
     agent_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportReviewParams {
+    agent_id: String,
+    request_id: String,
+    keys: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -1208,6 +1241,16 @@ async fn run(
             Ok(b.usage(&p.agent_id).await?)
         }
         "agents.quota" => Ok(b.quota().await?),
+        "agents.import.status" => Ok(b.import_status().await?),
+        "agents.import.start" => Ok(b.import_start().await?),
+        "agents.import.stop" => Ok(b.import_stop().await?),
+        "agents.import.review" => {
+            let p: ImportReviewParams = parse(params)?;
+            if p.keys.len() > crate::agents::review::MAX_PROPOSALS {
+                return Err(bad_params("That's more agents than one import holds."));
+            }
+            Ok(b.import_review(&p.agent_id, &p.request_id, p.keys).await?)
+        }
         // The ready-made agents, without their briefings: the phone shows
         // the choice, the Mac fills the instructions in on create.
         "agents.templates" => Ok(templates_for_phone()),

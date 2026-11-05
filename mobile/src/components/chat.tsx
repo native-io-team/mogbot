@@ -19,7 +19,7 @@ import { useRouter } from 'expo-router';
 import { engineName, failureLine, folderName, formatClock } from '../lib/agents';
 import { drivenWait } from '../lib/bars';
 import { haptic } from '../lib/haptics';
-import { discardPending, editPending, resend } from '../lib/session';
+import { canCall, discardPending, editPending, resend } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
 import { avatarSize, composer, fonts, iconSize, space, type } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -29,7 +29,7 @@ import { Markdown } from './Markdown';
 import { Card, Line, TextAction } from './surfaces';
 import { Button, Icon, T } from './ui';
 import { AgentAvatar, Spinner } from './agent';
-import { ApprovalCard, ReviewOnMacCard } from './ApprovalCard';
+import { ApprovalCard, PhoneReviewCard, PlaybackCard, ReviewOnMacCard } from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
 import { useTaskName } from './session';
@@ -174,8 +174,15 @@ export const MessageRow = memo(function MessageRow({
           />
         );
       }
+      if (message.approval?.connector?.kind === 'playback') {
+        return <PlaybackCard message={message} approval={message.approval} onError={onError} />;
+      }
       if (message.approval?.connector?.kind === 'review') {
-        return <ReviewOnMacCard approval={message.approval} />;
+        return canCall('agents.import.review') ? (
+          <PhoneReviewCard message={message} approval={message.approval} onError={onError} />
+        ) : (
+          <ReviewOnMacCard approval={message.approval} />
+        );
       }
       if (message.approval?.prompt) {
         return (
