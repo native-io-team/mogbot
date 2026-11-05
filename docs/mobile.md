@@ -483,8 +483,16 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   right edge. You can type to it, start a new task or take a preview
   screenshot (a private blob, never a public link).
 - **Connection screen.** Every layer of the link (below).
-- **Settings.** The paired Mac, alerts (with their limits), haptics, updates,
-  about.
+- **Settings.** The paired Mac, plan usage, what new agents start on, alerts
+  (with their limits), haptics, updates, about. **New agents start on** lists
+  the Mac's engines (one not installed or signed in is dimmed, saying which),
+  and a **Model on …** section per installed engine offers "Engine's default"
+  and only the models that engine listed (`lib/newAgentDefaults.ts`). Read
+  from the overview's `defaults`; a tap sends `agents.setDefaults`, which the
+  Mac checks as the desk does (a ready engine, a model it lists), audits
+  ("new agents: engine codex"), and answers with an `agents.registry` event.
+  On a Mac without the method the choice shows but isn't tappable. Existing
+  agents keep theirs ([agents.md](agents.md), "Defaults for new agents").
 
 ### Rooms
 
@@ -555,9 +563,9 @@ The phone can start work as well as answer it. Each piece is gated by
   `lib/newAgent.ts`): it's the field's placeholder and the Create button's
   words, so nothing is named unseen. The colour starts on the first one
   nobody wears, as the desk's editor does. `agents.create` calls the desk's
-  own `agents_create` with the engine the desk would pick
-  (`engine::default_for`: Claude Code when ready, else the first engine that
-  is) and that engine's own model; the phone can't set the engine, model,
+  own `agents_create` with no engine or model, so it starts on the defaults
+  for new agents (Settings → Agents, falling back to the first ready engine
+  when the chosen one isn't); the phone can't set the engine, model,
   project or instructions at creation (refused with `bad_params`): the
   instructions are edited afterwards from the agent sheet, on either side,
   and the engine, model and project at the desk. The name and role are one

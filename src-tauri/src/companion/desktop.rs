@@ -381,14 +381,9 @@ impl Backend for DesktopBackend {
     }
 
     async fn create_agent(&self, input: PhoneNewAgent) -> Result<Value, CommandError> {
-        use crate::agents::engine::{self, Engine};
-        // The desk's editor sends the engine it shows (`defaultEngine`), so a
-        // phone-made agent goes where a desk-made one would: Claude Code when
-        // it's ready, else the first engine that is.
-        let engine = match engine::default_for(&engine::overview().await) {
-            Engine::Claude => "claude",
-            Engine::Codex => "codex",
-        };
+        // No engine and no model: `agents_create` puts it where a desk-made
+        // one would start, the user's defaults for new agents (Settings →
+        // Agents) when that engine can run, else the first engine that can.
         let color = match input.color {
             Some(c) => c,
             None => {
@@ -407,12 +402,23 @@ impl Backend for DesktopBackend {
             color: Some(color),
             role: input.role,
             instructions: template.map(|t| t.instructions()).unwrap_or_default(),
-            engine: Some(engine.to_string()),
+            engine: None,
             model: None,
             project: None,
             template: template.map(|t| t.id.clone()),
         };
-        json(cmd::agents_create(self.app.clone(), input).await?)
+        // Read before, as `agents_create` reads it, so its first line can say
+        // where it went and, on a fallback, why: the header's badge leaves
+        // Claude Code unsaid.
+        let defaults = crate::agents::defaults::view().await;
+        let agent = cmd::agents_create(self.app.clone(), input).await?;
+        let note = runner::new_message(
+            &agent.id,
+            store::MessageKind::Note,
+            phone_created_line(&defaults.started_on(agent.engine, false)),
+        );
+        let _ = runner::record(&self.app, note);
+        json(agent)
     }
 
     async fn update_agent(
@@ -452,6 +458,13 @@ impl Backend for DesktopBackend {
 
     async fn quota(&self) -> Result<Value, CommandError> {
         json(cmd::agents_quota().await?)
+    }
+
+    async fn set_defaults(
+        &self,
+        change: crate::agents::defaults::Change,
+    ) -> Result<Value, CommandError> {
+        json(cmd::agents_set_defaults(self.app.clone(), change).await?)
     }
 
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError> {
@@ -970,4 +983,48 @@ pub(crate) fn refuse_watch_from_phone(agent_id: &str, id: &str) -> Result<(), Co
         ));
     }
     Ok(())
+}
+
+/// A phone-made agent's first line: "Created on your phone on Claude Code —
+/// Codex isn't signed in" (`on` from `View::started_on`).
+fn phone_created_line(on: &str) -> String {
+    format!("Created on your phone {on}")
+}
+
+#[cfg(test)]
+mod created_line_tests {
+    use super::*;
+    use crate::agents::defaults::{view_of, Saved};
+    use crate::agents::engine::{Engine, EngineInfo};
+
+    fn info(id: Engine, ready: bool) -> EngineInfo {
+        EngineInfo {
+            id,
+            label: id.label(),
+            installed: true,
+            signed_in: ready,
+            asks: true,
+            models: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_phone_made_agent_says_its_engine_and_why_on_a_fallback() {
+        let saved = Saved {
+            engine: Some(Engine::Codex),
+            ..Saved::default()
+        };
+        let engines = [info(Engine::Claude, true), info(Engine::Codex, false)];
+        let view = view_of(&saved, &engines);
+        assert_eq!(
+            phone_created_line(&view.started_on(Engine::Claude, false)),
+            "Created on your phone on Claude Code — Codex isn't signed in"
+        );
+        let engines = [info(Engine::Claude, true), info(Engine::Codex, true)];
+        let view = view_of(&saved, &engines);
+        assert_eq!(
+            phone_created_line(&view.started_on(Engine::Codex, false)),
+            "Created on your phone on Codex"
+        );
+    }
 }

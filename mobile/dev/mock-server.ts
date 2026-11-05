@@ -24,6 +24,7 @@ import {
   type AgentMessage,
   type AgentSecret,
   type AgentsOverview,
+  type NewAgentDefaults,
   type Alert,
   type Attachment,
   type BlobRef,
@@ -491,10 +492,36 @@ export function createMockServer(opts: MockOptions = {}) {
     ];
   }
 
+  // What new agents start on, as the Mac saves it (`agents::defaults::Saved`).
+  const saved: {
+    engine: NewAgentDefaults['engine'];
+    claudeModel: string | null;
+    codexModel: string | null;
+  } = { engine: null, claudeModel: null, codexModel: null };
+  /** `defaults::view_of`: the choice against the engines as they are now. */
+  const defaults = (): NewAgentDefaults => {
+    const list = engines();
+    const ready = (id: string) => list.some((e) => e.id === id && e.installed && e.signedIn);
+    const offered = (id: 'claude' | 'codex') => {
+      const model = id === 'claude' ? saved.claudeModel : saved.codexModel;
+      const info = list.find((e) => e.id === id);
+      return model && info?.models.some((m) => m.value === model) ? model : null;
+    };
+    const startsOn =
+      saved.engine && ready(saved.engine)
+        ? saved.engine
+        : ready('claude')
+          ? 'claude'
+          : (list.find((e) => ready(e.id))?.id ?? 'claude');
+    const models = { claude: offered('claude'), codex: offered('codex') };
+    return { engine: saved.engine, models, startsOn, model: models[startsOn] };
+  };
+
   const overview = (): AgentsOverview => ({
     agents: structuredClone(agents),
     engineReady: !opts.codexOnly,
     engines: engines(),
+    defaults: defaults(),
   });
   // What each agent remembers (its CLAUDE.md `## Memory`), and secrets saved.
   const memories = new Map<string, MemoryEntry[]>([
@@ -1252,6 +1279,43 @@ export function createMockServer(opts: MockOptions = {}) {
     },
     // The ready-made agents, as the Mac serializes them.
     'agents.templates': () => real.agentsTemplates,
+    // As `agents::defaults::check` does: a ready engine, a model it offers.
+    'agents.setDefaults': (p) => {
+      const keys = Object.keys(p);
+      if (!keys.length || keys.some((k) => !['engine', 'claudeModel', 'codexModel'].includes(k))) {
+        return fail({
+          type: 'Protocol',
+          code: 'bad_params',
+          message:
+            'New agents’ defaults take an engine (claude or codex), claudeModel and codexModel.',
+        });
+      }
+      const list = engines();
+      if (p.engine !== undefined) {
+        const info = list.find((e) => e.id === p.engine);
+        if (!info?.installed || !info.signedIn) {
+          return fail({
+            type: 'Other',
+            message: `${info?.label ?? 'That engine'} isn’t signed in. Sign in to it first.`,
+          });
+        }
+      }
+      for (const [key, id] of [
+        ['claudeModel', 'claude'],
+        ['codexModel', 'codex'],
+      ] as const) {
+        const model = p[key];
+        if (typeof model !== 'string' || model === '') continue;
+        if (!list.find((e) => e.id === id)?.models.some((m) => m.value === model)) {
+          return fail({ type: 'Validation', field: 'model', reason: 'Pick one it offers or Default.' });
+        }
+      }
+      if (p.engine !== undefined) saved.engine = p.engine as 'claude' | 'codex';
+      if (typeof p.claudeModel === 'string') saved.claudeModel = p.claudeModel || null;
+      if (typeof p.codexModel === 'string') saved.codexModel = p.codexModel || null;
+      emit({ type: 'agents.registry', overview: overview() });
+      return defaults();
+    },
     // The router's rules (router.rs `check_new_agent`): a name, a role, a colour and a template only.
     'agents.create': (p, c) => {
       const input = (p.input ?? {}) as Record<string, unknown>;

@@ -395,8 +395,24 @@ pub fn overview() -> Value {
             agents: vec![view],
             engine_ready: true,
             engines: engines(),
+            defaults: defaults(),
         })
         .unwrap(),
+    )
+}
+
+/// New agents' defaults: Codex chosen, but signed out (see [`engines`]), so
+/// they start on Claude Code, on the model chosen for it.
+pub fn defaults() -> crate::agents::defaults::View {
+    use crate::agents::defaults::{view_of, Saved};
+    use crate::agents::engine::Engine;
+    view_of(
+        &Saved {
+            engine: Some(Engine::Codex),
+            claude_model: Some("opus".into()),
+            codex_model: Some("gpt-5-codex".into()),
+        },
+        &engines(),
     )
 }
 
@@ -511,6 +527,8 @@ pub struct Stub {
     pub toggles: Mutex<Vec<(String, AgentToggles)>>,
     /// Agents created from the phone, as the router handed them over.
     pub created: Mutex<Vec<PhoneNewAgent>>,
+    /// Changes to new agents' defaults, as the router handed them over.
+    pub defaults: Mutex<Vec<crate::agents::defaults::Change>>,
     /// Agents started fresh, by id.
     pub fresh: Mutex<Vec<String>>,
     /// What reached a session: `(session id, text or "key:<key>")`.
@@ -546,6 +564,7 @@ impl Stub {
             answers: Mutex::new(Vec::new()),
             toggles: Mutex::new(Vec::new()),
             created: Mutex::new(Vec::new()),
+            defaults: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
@@ -949,6 +968,20 @@ impl Backend for Stub {
             "allTime": totals(41, 6.18),
             "routines": [{ "id": "ck1", "week": totals(2, 0.3) }]
         }))
+    }
+
+    async fn set_defaults(
+        &self,
+        change: crate::agents::defaults::Change,
+    ) -> Result<Value, CommandError> {
+        // As `agents::defaults::check` refuses it: Codex is signed out here.
+        if change.engine.as_deref() == Some("codex") {
+            return Err(CommandError::expected(
+                "Codex isn't signed in. Sign in to it first.",
+            ));
+        }
+        self.defaults.lock().unwrap().push(change);
+        Ok(serde_json::to_value(defaults()).unwrap())
     }
 
     async fn quota(&self) -> Result<Value, CommandError> {

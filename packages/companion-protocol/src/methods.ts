@@ -32,6 +32,8 @@ import type {
   SharedFile,
   StoredAgent,
   NewAgentInput,
+  NewAgentDefaults,
+  NewAgentDefaultsChange,
   RoleTemplateSummary,
   UpdateAgentInput,
   UsageSummary,
@@ -151,9 +153,9 @@ export interface Methods {
   /**
    * `agents_create`, from the phone: a name (at most 40 characters), what it
    * should do (one line, at most 500) and a colour; any other field is
-   * refused with `bad_params`. It goes on the engine the desk would pick
-   * (Claude Code when ready, else the first engine that is) with that
-   * engine's own model, and on the first free colour when none is given.
+   * refused with `bad_params`. It goes on the defaults for new agents
+   * (`defaults` in the overview: the chosen engine when ready, else the first
+   * engine that is) with the model chosen for that engine, and on the first free colour when none is given.
    * `clientId` makes a retry return the agent the first try made. Newer
    * Macs only: check `welcome.methods`.
    */
@@ -180,6 +182,13 @@ export interface Methods {
    * their reset left out. Empty when no engine has said. Newer Macs only.
    */
   'agents.quota': { params: Record<string, never>; result: Quota[] };
+  /**
+   * `agents_set_defaults`: what new agents start on (Settings → Agents),
+   * read back from `agents.overview`'s `defaults`. Checked as the desk checks
+   * it (an engine installed and signed in, a model its engine offers) and
+   * audited. Existing agents don't change. Newer Macs only.
+   */
+  'agents.setDefaults': { params: NewAgentDefaultsChange; result: NewAgentDefaults };
   /**
    * The ready-made agents the phone's New agent sheet offers. `template` on
    * `agents.create` takes one's id, and the Mac fills in its briefing. A Mac

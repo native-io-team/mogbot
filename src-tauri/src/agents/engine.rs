@@ -258,11 +258,11 @@ pub fn normalize_model(engine: Engine, model: &str) -> Result<Option<String>, Co
         "model",
         if names.is_empty() {
             format!(
-                "{} has no models to pick from yet; use Default.",
+                "{} has no models to pick from yet; use Engine's default (no model).",
                 engine.label()
             )
         } else {
-            format!("Pick {} or Default.", names.join(", "))
+            format!("Pick {} or Engine's default (no model).", names.join(", "))
         },
     ))
 }

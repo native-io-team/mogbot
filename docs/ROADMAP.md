@@ -19,19 +19,16 @@ infrastructure where a good one exists.
 3. **"Take over" a browser tab.** Driving the agent's own session in a
    terminal is done; stepping into the Chrome tab it drives is not. Codex
    take-over is unverified on a real thread.
-4. **Global defaults for engine and model.** Settings → Agents states the
-   rule and where to change it per agent; a real default needs a backend
-   setting.
-5. **Watch claude.ai connectors.** Linear or Gmail set up as claude.ai
+4. **Watch claude.ai connectors.** Linear or Gmail set up as claude.ai
    connectors can't be watched by a "When…" check (the sealed call loads
    only apps configured in Claude Code itself), and connector checks are
    not yet verified on a live Linear or Gmail account
    ([agents.md](agents.md), "When… routines").
-6. **Usage wallets.** Several Claude Code and Codex accounts in Settings →
+5. **Usage wallets.** Several Claude Code and Codex accounts in Settings →
    Agents, in priority order; when one hits its usage limit the turn
    switches to the next and carries on, with a line saying so, and ends
    honestly when every account is out. In progress.
-7. **Results, the rest.** A PR straight from a non-copy result, and
+6. **Results, the rest.** A PR straight from a non-copy result, and
    recordings.
 
 Small wins: save-as-skill, sections in the agent list, duplicate agent,
@@ -39,6 +36,13 @@ reply to a single message.
 
 ## Done
 
+- **Defaults for new agents** — Settings → Agents sets the engine (Claude
+  Code or Codex, only when ready) and a model per engine, from only the
+  models each engine lists; the New agent dialog, the Chief's
+  `create_agent` and the phone's New agent start there, existing agents
+  don't change; the phone reads and sets it (`agents.setDefaults`, audited);
+  ⌘K "Engine and model for new agents…" ([agents.md](agents.md), "Defaults
+  for new agents"). Not yet tried on a live Codex account's model list.
 - **Rooms** — group conversations with 2–6 agents: @one, @everyone, or the
   room's lead; agents bring each other in with @Name, at most 8 agent turns
   per message; cards, timelines and results inline under the agent; on the

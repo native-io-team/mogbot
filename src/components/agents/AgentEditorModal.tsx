@@ -35,7 +35,8 @@ import {
   ENGINE_LABEL,
   folderName,
   keepCopy,
-  defaultEngine,
+  newAgentEngine,
+  newAgentModel,
   formatContext,
   formatUsage,
   getAgentInstructions,
@@ -258,11 +259,15 @@ export function AgentEditorModal({
     setTemplate(next);
   };
   const engines = useAgentsSelector((s) => s.engines);
-  // Until someone picks, a new agent goes on the first engine that can take
-  // it, worked out from the overview as it arrives rather than once.
+  const defaults = useAgentsSelector((s) => s.defaults);
+  // Until someone picks, a new agent goes where Settings → Agents says new
+  // agents start (or, before the overview says, the first engine that can
+  // take it), on the model chosen there for that engine. Worked out as the
+  // overview arrives rather than once.
   const [picked, setEngine] = useState<AgentEngine | null>(agent?.engine ?? null);
-  const engine = picked ?? defaultEngine(engines);
-  const [model, setModel] = useState(agent?.model ?? '');
+  const engine = picked ?? newAgentEngine(defaults, engines);
+  const [pickedModel, setModel] = useState<string | null>(agent ? (agent.model ?? '') : null);
+  const model = pickedModel ?? newAgentModel(defaults, engine, modelChoices(engine, engines));
   const switching = Boolean(agent && agent.engine !== engine);
   const [project, setProject] = useState(agent?.project ?? '');
   const [workDirectly, setWorkDirectly] = useState(agent?.workDirectly ?? false);
@@ -456,8 +461,9 @@ export function AgentEditorModal({
         current={agent?.engine}
         onChange={(next) => {
           setEngine(next);
-          // Models don't cross engines.
-          setModel(next === agent?.engine ? (agent.model ?? '') : '');
+          // Models don't cross engines: an agent being made takes the new
+          // engine's default model, one that exists goes to its engine's own.
+          setModel(agent ? (next === agent.engine ? (agent.model ?? '') : '') : null);
         }}
         onSetUp={onSetUpEngine}
         note={

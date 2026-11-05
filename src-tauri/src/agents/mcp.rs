@@ -159,7 +159,7 @@ const TOOLS: &[Tool] = &[
                 "instructions": { "type": "string", "description": "A briefing, as if for a new hire: context, standing rules, who's who, where things live. Required unless you use a template; with one, what you know about the user, added to its briefing." },
                 "color": { "type": "string", "enum": store::COLORS },
                 "project": { "type": "string", "description": "Optional: bind it to one of the user's projects (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
-                "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on Claude Code, or on Codex when Claude Code isn't set up. Only when the user asks for it; it must be installed and signed in." },
+                "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on the user's default engine and model for new agents (Settings → Agents), or on whichever engine is set up when that one isn't. Only when the user asks for it; it must be installed and signed in." },
                 "first_task": { "type": "string", "description": "Optional message to start it on right away." }
             },
             "required": ["name"]
@@ -964,8 +964,10 @@ fn audit_note(agent_id: &str, text: String, peer: Option<AgentRef>) -> store::Ag
     note
 }
 
-/// The lines a create leaves: in the Chief's chat, and the new agent's first.
-fn create_notes(caller: &store::Agent, agent: &store::Agent) -> Vec<store::AgentMessage> {
+/// The lines a create leaves: in the Chief's chat, and the new agent's first,
+/// which says the engine it started on (`on`, see `View::started_on`): the
+/// header's badge leaves Claude Code unsaid, and a fallback needs its reason.
+fn create_notes(caller: &store::Agent, agent: &store::Agent, on: &str) -> Vec<store::AgentMessage> {
     vec![
         audit_note(
             &caller.id,
@@ -974,7 +976,7 @@ fn create_notes(caller: &store::Agent, agent: &store::Agent) -> Vec<store::Agent
         ),
         audit_note(
             &agent.id,
-            format!("Created by {}", caller.name),
+            format!("Created by {} {on}", caller.name),
             Some(peer(caller)),
         ),
     ]
@@ -1112,18 +1114,20 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         },
         None => None,
     };
+    // Unpicked: the user's default (Settings → Agents) when it can run here,
+    // else one that can (Codex, when that's all there is), on the model the
+    // user chose for that engine.
+    let defaults = super::defaults::view().await;
+    let picked = arg(args, "engine").is_some();
     let engine = match arg(args, "engine").map(Engine::parse) {
         Some(Ok(engine)) => match super::engine::require_ready(engine).await {
-            Ok(()) => Some(engine),
+            Ok(()) => engine,
             Err(e) => return error(e.to_string()),
         },
         Some(Err(e)) => return error(e.to_string()),
-        // Unpicked: one that can run here (Codex, when that's all there is).
-        None => match super::engine::default_for(&super::engine::overview().await) {
-            Engine::Claude => None,
-            other => Some(other),
-        },
+        None => defaults.starts_on,
     };
+    let model = defaults.model_for(engine);
     let created = store::create(store::NewAgent {
         name: name.to_string(),
         role,
@@ -1132,18 +1136,21 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         color,
         is_main: false,
     });
-    let created = created.and_then(|agent| match (&project, engine, template) {
-        (None, None, None) => Ok(agent),
+    let plain = project.is_none() && engine == Engine::default() && model.is_none();
+    let created = created.and_then(|agent| match (plain, template) {
+        (true, None) => Ok(agent),
         _ => store::update(&agent.id, |a| {
             a.project = project.as_ref().map(|p| p.path.clone());
-            a.engine = engine.unwrap_or_default();
+            a.engine = engine;
+            a.model = model;
             a.template = template.map(|t| t.id.clone());
         }),
     });
     match created {
         Ok(agent) => {
             let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
-            for note in create_notes(caller, &agent) {
+            let on = defaults.started_on(agent.engine, picked);
+            for note in create_notes(caller, &agent, &on) {
                 let _ = runner::record(app, note);
             }
             let mut started = String::new();
@@ -1175,7 +1182,7 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
                     " and started it on its first task; its answer comes back to you".to_string();
             }
             text(format!(
-                "Created {}{started}. It's in the user's sidebar now.",
+                "Created {} {on}{started}. It's in the user's sidebar now.",
                 agent.name
             ))
         }
@@ -1806,14 +1813,17 @@ mod tests {
     fn chief_actions_leave_linked_notes_in_both_chats() {
         let chief = named("chief", "Chief of Staff");
         let finance = named("fin", "Finance");
-        let notes = create_notes(&chief, &finance);
+        let notes = create_notes(&chief, &finance, "on Claude Code — Codex isn't signed in");
         assert_eq!(notes.len(), 2);
         assert!(notes.iter().all(|n| n.kind == MessageKind::Note));
         assert_eq!(notes[0].agent_id, "chief");
         assert_eq!(notes[0].text, "Created Finance · Invoices and the books");
         assert_eq!(notes[0].peer.as_ref().unwrap().id, "fin");
         assert_eq!(notes[1].agent_id, "fin");
-        assert_eq!(notes[1].text, "Created by Chief of Staff");
+        assert_eq!(
+            notes[1].text,
+            "Created by Chief of Staff on Claude Code — Codex isn't signed in"
+        );
         assert_eq!(notes[1].peer.as_ref().unwrap().id, "chief");
 
         let notes = update_notes(&chief, &finance, &finance, &["instructions"]);

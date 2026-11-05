@@ -34,6 +34,8 @@ pub struct AgentsOverview {
     /// Every engine an agent can run on: whether it's here and signed in,
     /// and the models it offers.
     pub engines: Vec<engine::EngineInfo>,
+    /// What a new agent starts on when nobody picked (Settings → Agents).
+    pub defaults: agents::defaults::View,
 }
 
 /// Store work (file reads and writes) on a blocking thread, off the async
@@ -73,10 +75,12 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
             })
         })
         .collect::<Result<_, CommandError>>()?;
+    let defaults = agents::defaults::view_of(&agents::defaults::saved(), &engines);
     Ok(AgentsOverview {
         agents,
         engine_ready,
         engines,
+        defaults,
     })
 }
 
@@ -335,17 +339,24 @@ pub async fn agents_create(
 ) -> Result<store::Agent, CommandError> {
     // Checked whichever way it was chosen: an agent is never put on an
     // engine that can't run its first message.
-    let engine = match input.engine.as_deref() {
-        Some(e) => Engine::parse(e)?,
-        None => Engine::default(),
+    // Whatever wasn't given comes from the user's defaults for new agents
+    // (Settings → Agents): an empty model is a choice (the engine's own),
+    // a missing one isn't.
+    let defaults = match (&input.engine, &input.model) {
+        (Some(_), Some(_)) => None,
+        _ => Some(agents::defaults::view().await),
+    };
+    let engine = match (input.engine.as_deref(), &defaults) {
+        (Some(e), _) => Engine::parse(e)?,
+        (None, Some(d)) => d.starts_on,
+        (None, None) => Engine::default(),
     };
     engine::require_ready(engine).await?;
-    let model = input
-        .model
-        .as_deref()
-        .map(|m| engine::normalize_model(engine, m))
-        .transpose()?
-        .flatten();
+    let model = match (input.model.as_deref(), &defaults) {
+        (Some(m), _) => engine::normalize_model(engine, m)?,
+        (None, Some(d)) => d.model_for(engine),
+        (None, None) => None,
+    };
     let project = match input.project.as_deref() {
         Some(p) => project::resolve(p).await?.map(|p| p.path),
         None => None,
@@ -1348,6 +1359,21 @@ pub async fn agents_quit_check() -> Result<agents::tray::QuitCheck, CommandError
 #[tracing::instrument(skip(app))]
 pub async fn agents_keep_running_in_background(app: AppHandle) -> Result<(), CommandError> {
     crate::commands::window::hide_all_to_background(&app).await
+}
+
+/// Change the defaults for new agents; a field left out stays as it is, an
+/// empty model is the engine's own. Refused, and nothing saved, for an engine
+/// that isn't installed and signed in or a model its engine doesn't offer.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_set_defaults(
+    app: AppHandle,
+    change: agents::defaults::Change,
+) -> Result<agents::defaults::View, CommandError> {
+    let view = agents::defaults::set(change).await?;
+    // The overview carries it: the desk's editor and the phone pick it up.
+    emit_registry(&app);
+    Ok(view)
 }
 
 #[tauri::command]
