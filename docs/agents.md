@@ -667,22 +667,83 @@ independent your agents are…", and the phone's Settings
 (`agents.setIndependence`, audited; read from the overview's `independence`).
 Saved in `agents/independence.json`.
 
-It changes words, never the wall. The level is one short app-owned section of
-every agent's system prompt, built from code each turn (so existing and
-imported agents get it on their next turn, nothing in their CLAUDE.md is
-touched) and fixed per level (the prompt cache only breaks when the user
-changes it). Go hard tells an agent to finish what it was asked and, before
-asking the user to do anything, check whether they already asked for it and
-whether it has tried every way it has; it stops only for money, identity,
-sending or publishing as them, or deleting their data. No approval reads the
-level: every card appears at every level, and the only ways past one are
-still a one-time grant from a late Allow or an Always-allow rule the user
-chose (`mcp::decide`; a test holds it). Read-only commands already don't ask
-under `acceptEdits`, so no relaxation was added. A turn answering outside
-text (a "When…" routine's items, or anything carrying their taint through
-`message_agent` or a room) never runs at Go hard: it is capped at Use good
-judgement, so unattended routines still finish; the approval wall and the
-taint gate anything consequential.
+The level is one short app-owned section of every agent's system prompt,
+built from code each turn (so existing and imported agents get it on their
+next turn, nothing in their CLAUDE.md is touched) and fixed per level (the
+prompt cache only breaks when the user changes it). Go hard tells an agent to
+finish what it was asked and, before asking the user to do anything, check
+whether they already asked for it and whether it has tried every way it has;
+it stops only for money, identity, sending or publishing as them, or deleting
+their data.
+
+**Which cards it answers** (`agents/autoallow.rs`). `acceptEdits` still asks
+for a plain `ls -la ~/SomeFolder` outside the agent's folders, so a card per
+look was the norm even when the user had said "go hard". The level now also
+decides local cards, in `mcp::decide`, after a one-time grant and an Always
+allow rule and before a card, for Claude Code's permission prompt and Codex's
+approval requests alike (both arrive as the same `Bash` / `Edit` / `Read`
+calls):
+
+| Level | Answered without a card |
+|---|---|
+| Check with me often | nothing (as before) |
+| Use good judgement | reads |
+| Go hard | reads and local work |
+
+- **Reads**: read-only commands and file reads anywhere the user's account
+  can read (`ls`, `cat`, `grep -r`, `rg`, `find` without `-delete`/`-exec`,
+  `git status/log/diff/show…`, `gh pr/issue/repo … view/list/status`, `gh api`
+  GETs, `jq`, `defaults read`…), except credentials and private stores:
+  `~/Library/Keychains`, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`,
+  `~/.codex`, `~/.claude`, shell profiles, browser profiles, Mail, Messages,
+  the app's own data (every agent's home but this one's) and `~/.<slug>`, and
+  any `.env`, key, `*credential*`, `*secret*`, `*token*` or `*password*` file.
+  A recursive read of a folder that holds one of those (`grep -r x ~`) asks.
+- **Local work** (Go hard only): creating, editing, moving, copying, linking,
+  `chmod` (no setuid) and unpacking inside the home, never into a shell
+  profile, `~/Library/LaunchAgents`, `~/Library/Preferences`, a PATH folder,
+  a protected place above, the agent's own log files, or any `.git` /
+  `.shipstudio` folder; deleting only folders the tools rebuild
+  (`node_modules`, `dist`, `build`, `.next`, `target`, `.cache`, and what is
+  inside them) in the agent's own home or its copy of a project — every other
+  delete asks, even there; the project's build, check and test
+  tools (`npm test`, `pnpm run build`, `cargo test`, `npx tsc`, `make test`…);
+  and scripts in the home whose text is read first: a shell script line by
+  line through the same classifier, other languages refused on sight of
+  anything that spawns, reaches the network, deletes or names a protected
+  place. That last check reads only the script, not what it imports (not
+  verified beyond that).
+- **Always a card, at every level** (`autoallow::ALWAYS_ASK` plus everything
+  unrecognised): `git push` and every other git write, `gh` writes, `curl`,
+  `wget` and any network transfer, mail/Slack/hosting/cloud CLIs, `npm
+  publish` and every install (`brew`, `npm install`, `pip install`…), `rm` /
+  `trash` of the user's files, `sudo`, `chown`, `chmod` on system paths,
+  launch agents and shell profiles, `security`, `osascript`, `open`, `kill`,
+  connector tools, web pages and searches, payments, and Codex's "Allow more
+  access" cards.
+- **Compound commands** are split into every command they run (`&&`, `||`,
+  `;`, `|`, `&`, line breaks, `$(…)`, backticks, `bash -c '…'`) and take the
+  class of the most dangerous part. Variables other than `$HOME`,
+  here-documents, subshells, `eval`, unknown programs and anything that
+  doesn't parse ask. Paths are judged as written and where they really are
+  (a symlink out of the home asks). When in doubt, a card.
+
+Each one answered this way leaves a step in the turn's "What it did"
+("Allowed automatically — Go hard · ls -la ~/SomeFolder"). A turn answering
+outside text (a "When…" routine's items, or anything carrying their taint
+through `message_agent` or a room) never runs at Go hard: it is capped at Use
+good judgement, so its reads go through and nothing it would write does
+without a card; unattended routines still finish, and the approval wall and
+the taint gate anything consequential.
+
+**Cards already open.** On launch and whenever the level changes,
+`mcp::sweep_auto_allowed` answers open permission cards the level now covers,
+with a receipt line in the chat ("Allowed automatically — Go hard · …"),
+through the same path as a late Allow (a waiter is woken; otherwise the exact
+call is granted once). Each new card records whether its turn answered
+outside text (`Approval.fromOutside`); a card without that record, or from
+such a turn, is judged at Use good judgement and doesn't wake its agent.
+Logins, secure input, session questions and import cards are never answered.
 
 ## Approvals
 
@@ -691,7 +752,8 @@ without asking. Anything else Claude Code would prompt for (a shell command
 that isn't read-only, a web fetch, an MCP tool like sending email, a file
 outside those folders) goes to `approve`, which puts a card in that agent's
 chat showing the exact command, file, URL or tool input, and waits for
-**Allow** or **Deny**. While it waits, the agent's row says "Needs your OK".
+**Allow** or **Deny**, unless the independence level answers it (local reads
+and, at Go hard, local work; see "How much agents do on their own"). While it waits, the agent's row says "Needs your OK".
 
 **What the broker trusts** (`agents/broker.rs`). Each turn gets an id, named
 by its secret, open until `run_turn` returns. An `approve` call with no
@@ -776,6 +838,17 @@ agent with nothing of yours between says "2 of 3 similar requests" on each
 card, counted from the cards that have arrived, never from how many might
 follow (`approvalSeries`).
 
+**Allow all.** With more than one Allow card shown, the panel's head offers
+**Allow all**, and an agent's row with more than one offers its own. Either
+asks first on one confirm line with the counts by kind ("Allow 7 requests? 4
+commands, 2 file changes, Send an email · Gmail", or "Lead Gen: Allow 3
+requests? …"), then answers each card shown with Allow, one after another,
+through the same command as a single Allow (`allowAllCards` /
+`allowAllLine` in `lib/agentRequests.ts`). Login and secure input cards,
+session questions and import cards are never included, and cards further
+back in a chat (not shown) aren't answered. A card that fails stays waiting
+and the count is toasted. Desk only; the phone answers one card at a time.
+
 **Always allow** (`agents/permissions.rs`). A permission card can offer a
 quiet "Always allow …" beside Deny / Allow, scoped when the card is made and
 stored on it, so the UI can only accept that scope, never widen it: a Bash
@@ -853,12 +926,12 @@ to do (read; and, when `scopes` asks for more, send/post/change, which
 
 | Tier | Way in | Where the sign-in is kept | Engines |
 | --- | --- | --- | --- |
-| 1 | **Use \<account>**: an account already connected for another agent | as below | as below |
+| 1 | **Use \<account>**: an account already connected (ours) for another agent | as below | as below |
 | 1 | **Connect** (ours, `oauth.rs`): the app's own OAuth in the Mac's browser | this Mac's Keychain, `<slug>-connection-<id>` | both |
-| 1 | **Connect** (claude.ai connector): opens claude.ai's connector settings in the Mac's browser if it isn't added yet; the card watches `claude mcp list` until it's connected | claude.ai | Claude Code |
 | 1 | **Use GitHub on this Mac**: the `gh` sign-in | `gh`'s own Keychain item | both |
-| 2 | **Use my browser**: Claude in Chrome, in the user's own Chrome where they're signed in; every click/post/send/pay asks | nowhere new | Claude Code |
-| 3 | **Enter an API key**: the masked field (`secrets.rs`), only where a key made for programs is a real way in (X API, Stripe restricted key, an app we don't know) | this Mac's Keychain | both |
+| 2 | **Use my browser**: Claude in Chrome, in the user's own Chrome where they're signed in; every click/post/send/pay asks. The default for every service without our own OAuth (Gmail, Calendar, Drive, Slack, LinkedIn, X…) | nowhere new | Claude Code |
+| 3 | **Use claude.ai's connector** (optional, after the browser): opens claude.ai's connector settings in the Mac's browser if it isn't added yet; the card watches `claude mcp list` until it's connected. If it doesn't, the card says to use the browser instead: never a dead end. A claude.ai connection made for another agent sits here too | claude.ai | Claude Code |
+| 4 | **Enter an API key**: the masked field (`secrets.rs`), only where a key made for programs is a real way in (X API, Stripe restricted key, an app we don't know) | this Mac's Keychain | both |
 
 A service with no connector says so in one line on the card ("LinkedIn has
 no connector agents can sign in to."), instead of a password field. A Codex
@@ -878,7 +951,9 @@ signed-in browser and say which account it's in, and ask only if both fail.
    away): never asked again; the agent carries on without it. A service the
    catalogue doesn't know matches however it's spelled ("Acme CRM",
    "acme-crm").
-2. **Granted already** (a connection): use it.
+2. **Granted already**: one of our own working connections (OAuth, `gh`).
+   A claude.ai connector doesn't count (it isn't always recognised in a
+   turn): it's an optional extra after the browser, never the default.
 3. **This Mac is signed in**: GitHub through `gh` (granted silently: the
    agent could run `gh` anyway, and every change asks through the broker).
 4. **The user's browser**, when this turn has it (below) and the service has
@@ -953,7 +1028,7 @@ place the independence level changes an approval, and only for the browser:
   doesn't know.
 
 A browser card says what it would do in plain words ("Click “Send” on
-mail.google.com", "This would send it as you"), with the raw call behind
+mail.google.com", "This would send it as you"), then what it types or fills and where and as whom (`browser::card_for`: the site last opened and the account found there, `browser_profiles`), with the raw call behind
 Details. Allowed steps leave only their line in "What it did". At launch,
 pending browser cards the current rules wouldn't ask about are answered Allow
 (`mcp::allow_open_browser_cards`), with one receipt line per agent, and the
@@ -1007,11 +1082,11 @@ it had used elsewhere. Now nothing is asked up front: an imported agent's
 logins become **Maybe later** rows on "Setting up your team", one per service
 team-wide, and the app checks them itself straight after the import (and from
 ⌘K "Check what your team can already reach" or the step's Check again), in
-order and read-only: a connection already made; an app in Claude Code
-(`claude mcp list`: a claude.ai connector or the user's own server); this
-Mac's sign-ins (`gh`, `vercel whoami`); and, once the team's browser is on,
-the service's account page opened in a new tab, looked at (did it land on a
-sign-in page?) and closed. Only services someone mentioned are opened; no
+order and read-only: one of our own connections already made; this Mac's
+sign-ins (`gh`, `vercel whoami`); once the team's browser is on, the
+service's account page opened in a new tab, looked at (did it land on a
+sign-in page?) and closed; and last, as an extra, an app in Claude Code
+(`claude mcp list`: a claude.ai connector or the user's own server). Only services someone mentioned are opened; no
 click, no typing; nothing kept beyond the service, how it was reached and an
 account name a connection or CLI reported.
 

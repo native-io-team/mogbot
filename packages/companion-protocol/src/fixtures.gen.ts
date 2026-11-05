@@ -39,7 +39,7 @@ export const systemStatus = {
 } satisfies Result<'system.status'>;
 export const devicesSelf = {
   "id": "dev_0123456789abcdef",
-  "name": "Julian’s iPhone",
+  "name": "Sam’s iPhone",
   "platform": "ios",
   "model": "iPhone 16 Pro",
   "appVersion": "1.0.0",
@@ -52,7 +52,7 @@ export const devicesSelf = {
 } satisfies Result<'devices.self'>;
 export const deviceMinimal = {
   "id": "dev_0123456789abcdef",
-  "name": "Julian’s iPhone",
+  "name": "Sam’s iPhone",
   "platform": "android",
   "appVersion": "1.0.0",
   "build": "official",

@@ -679,6 +679,7 @@ mod tests {
             connector: None,
             login: None,
             set_aside: None,
+            from_outside: None,
             front: None,
         });
         store::append_message(&card).unwrap();

@@ -47,7 +47,7 @@ const thisMac: IosInstallStatus = {
 const iphone = {
   udid: '00008140-001',
   hardwareUdid: '00008140-001' as string | null,
-  name: 'Julian’s iPhone',
+  name: 'Sam’s iPhone',
   model: 'iPhone 16 Pro',
   osVersion: '26.1',
   connected: true,
@@ -167,14 +167,14 @@ describe('the build', () => {
   it('never builds for devicectl’s CoreDevice identifier', () => {
     const coreDeviceOnly = {
       ...iphone,
-      udid: 'D9365757-35EA-5C91-8B97-D01B61F65328',
+      udid: 'A1B2C3D4-0000-4000-8000-00000000AB12',
       hardwareUdid: null,
     };
     expect(iosBuildCommand(thisMac, coreDeviceOnly)).toBeNull();
     const prompt = buildIosInstallPrompt({ ...thisMac, devices: [coreDeviceOnly] });
     expect(prompt).toContain('xcrun xctrace list devices');
     expect(prompt).toContain('-destination id=<UDID>');
-    expect(prompt).not.toContain('D9365757');
+    expect(prompt).not.toContain('A1B2C3D4');
   });
 
   it('names the workspace the way expo prebuild does', () => {
@@ -212,7 +212,7 @@ describe('expiry', () => {
   const installedAt = Date.UTC(2026, 10, 4, 12); // noon, so any timezone reads the same day
   const record = {
     platform: 'ios' as const,
-    deviceName: 'Julian’s iPhone',
+    deviceName: 'Sam’s iPhone',
     deviceId: 'u',
     installedAt,
     expiresAt: installedAt + 7 * DAY,

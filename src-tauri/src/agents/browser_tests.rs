@@ -309,3 +309,35 @@ fn the_switch_starts_off_and_an_old_browser_choice_keeps_it_on() {
         assert!(!team_enabled(), "a kept choice wins over the upgrade");
     });
 }
+
+#[test]
+fn an_action_card_says_exactly_what_where_and_as_whom() {
+    let (t, d) = card_for(
+        "mcp__claude-in-chrome__computer",
+        &json!({"action": "type", "text": "See you at 3"}),
+        Some("mail.google.com"),
+        Some("sam@example.com"),
+    )
+    .unwrap();
+    assert_eq!(t, "Type in your browser");
+    assert!(d.contains("“See you at 3”"));
+    assert!(d.contains("On mail.google.com, as sam@example.com."));
+    let (_, d) = card_for(
+        "mcp__claude-in-chrome__form_input",
+        &json!({"ref": "ref_4", "value": "Q3 numbers"}),
+        Some("app.slack.com"),
+        None,
+    )
+    .unwrap();
+    assert!(d.contains("“Q3 numbers”"));
+    assert!(d.contains("as whoever is signed in there"));
+    let (t, _) = card_for(
+        "mcp__claude-in-chrome__computer",
+        &json!({"action": "left_click", "coordinate": [10, 20]}),
+        None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(t, "Click in your browser");
+    assert!(card_for("Bash", &json!({}), None, None).is_none());
+}

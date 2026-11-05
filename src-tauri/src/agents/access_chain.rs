@@ -5,7 +5,9 @@
 //! 1. **The user already said no** to that service, for anyone on the team
 //!    (declined, or "Not needed"): no second ask. The agent is told to carry
 //!    on without it.
-//! 2. **It already has it**: a connection granted to it (`connections`).
+//! 2. **It already has it**: one of our own working connections granted to
+//!    it (OAuth, `gh`). A claude.ai connector is an optional extra, never
+//!    counted here: the browser comes first.
 //! 3. **This Mac is signed in already**: GitHub through `gh`. The agent works
 //!    through `gh`, whose commands still ask through the approval broker.
 //! 4. **The user's browser**: for a site, when this turn has Claude in Chrome
@@ -167,10 +169,14 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
             said: no.said.clone().unwrap_or_else(|| "No".into()),
         };
     }
-    // 2. Granted already.
+    // 2. Granted already: our own working connection (OAuth, `gh`). A
+    // claude.ai connector isn't counted: it isn't always recognised in a
+    // turn, so the browser comes first and the connector stays an extra.
     if let Some((c, access)) = connections::granted_to(&agent.id)
         .into_iter()
-        .find(|(c, _)| c.service == r.service && !c.needs_sign_in)
+        .find(|(c, _)| {
+            c.service == r.service && !c.needs_sign_in && !matches!(c.kind, Kind::ClaudeAi { .. })
+        })
     {
         if access == Access::Full || r.access() == Access::Read {
             return Step::Have(format!("{} ({})", c.title, c.account));
@@ -230,7 +236,7 @@ pub fn reply(step: &Step) -> String {
             "GitHub is signed in on this Mac as {login}: use the `gh` command. Anything that changes GitHub asks the user on a card first. Nothing to ask."
         ),
         Step::Browser { site, title } => format!(
-            "Use {title} in the user's own Chrome, where they're already signed in: the Claude in Chrome tools (mcp__claude-in-chrome__*), on {site}. First open it in a new tab and tell the user in one line which account you're in, from what the page shows (\"I'm in {title} as …\"); never guess one. Reading there needs no card; every click, post, send, share, payment or delete asks the user on a card. Never type a password. If the page asks you to sign in, call request_login again for it with signed_out: true."
+            "Use {title} in the user's own Chrome, where they're already signed in: the Claude in Chrome tools (mcp__claude-in-chrome__*), on {site}. First open it in a new tab and tell the user in one line which account you're in, from what the page shows (\"I'm in {title} as …\"); never guess one. Reading there needs no card. Before any send, post, publish, payment, delete or share, say in chat exactly what will go and from which account; the click or keystroke that does it asks the user on a card, which shows it too. Never type a password. If the page asks you to sign in, call request_login again for it with signed_out: true."
         ),
         Step::Join { agent_name, title, .. } => format!(
             "The user is already being asked about {title} (for {agent_name}). You're on that same card: you'll be woken when they answer. Don't ask again; stop here or carry on with what doesn't need it."

@@ -252,3 +252,58 @@ fn not_needed_on_the_checklist_and_other_spellings_count_as_no() {
         ));
     });
 }
+
+#[test]
+fn the_browser_comes_before_a_claude_ai_connector_and_after_our_own() {
+    with_root(|| {
+        let mailroom = agent("Mailroom");
+        let none = Tried::default();
+        // A claude.ai Gmail connector granted already isn't "you have it":
+        // the browser is tried first.
+        connections::add_and_grant(
+            "gmail",
+            "Gmail",
+            "sam@example.com",
+            Kind::ClaudeAi {
+                server_name: "claude.ai Gmail".into(),
+            },
+            &mailroom.id,
+            Access::Read,
+        )
+        .unwrap();
+        let gmail = logins::build(&mailroom, &ask("gmail")).unwrap();
+        assert!(matches!(
+            decide(&mailroom, &gmail, &none, &browser(), &[]),
+            Step::Browser { ref site, .. } if site == "mail.google.com"
+        ));
+        // Without the browser it still ends on one card, never a dead end.
+        assert_eq!(
+            decide(&mailroom, &gmail, &none, &Here::default(), &[]),
+            Step::Ask
+        );
+        // Our own OAuth connection does count, before the browser.
+        connections::add_and_grant(
+            "linear",
+            "Linear",
+            "sam@example.com",
+            Kind::Oauth {
+                server_url: "https://mcp.linear.app/mcp".into(),
+            },
+            &mailroom.id,
+            Access::Read,
+        )
+        .unwrap();
+        let linear = logins::build(&mailroom, &ask("linear")).unwrap();
+        assert!(matches!(
+            decide(&mailroom, &linear, &none, &browser(), &[]),
+            Step::Have(_)
+        ));
+        // The browser's reply holds the account rule and the card rule.
+        let told = reply(&Step::Browser {
+            site: "mail.google.com".into(),
+            title: "Gmail".into(),
+        });
+        assert!(told.contains("I'm in Gmail as"));
+        assert!(told.contains("exactly what will go and from which account"));
+    });
+}

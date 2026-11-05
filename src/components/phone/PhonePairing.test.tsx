@@ -4,7 +4,7 @@ import { PairCode, PairConfirm } from './PhonePairing';
 import type { Device, PairRequestView } from '../../lib/companion';
 
 const device = {
-  name: 'Julian’s iPhone',
+  name: 'Sam’s iPhone',
   platform: 'ios',
   model: 'iPhone 16 Pro',
   appVersion: '1.0.0',
