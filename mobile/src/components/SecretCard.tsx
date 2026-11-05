@@ -8,7 +8,13 @@
  * with the variable's name, never the value.
  */
 
-import type { Agent, AgentMessage, Approval, SecretRequest } from '@shipstudio/companion-protocol';
+import {
+  secretTitle,
+  type Agent,
+  type AgentMessage,
+  type Approval,
+  type SecretRequest,
+} from '@shipstudio/companion-protocol';
 import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { AppState, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -123,7 +129,7 @@ export function SecretCard({
     return (
       <Receipt
         status={approval.status}
-        title={`${agent.name} asked for “${request.name}”`}
+        title={`${agent.name} asked for “${secretTitle(request.name)}”`}
         outcome={
           approval.status === 'allowed'
             ? outcome.replace('Saved to your Mac’s Keychain', 'Saved')
@@ -156,7 +162,7 @@ export function SecretCard({
     return (
       <Card
         icon="lock.fill"
-        title={`${agent.name} asks for “${request.name}”`}
+        title={`${agent.name} asks for “${secretTitle(request.name)}”`}
         source={project ? `In ${project}` : undefined}
         note={connected ? problem : OFFLINE_NOTE}
         actions={
@@ -177,7 +183,7 @@ export function SecretCard({
   return (
     <Card
       icon="lock.fill"
-      title={`${agent.name} asks for “${request.name}”`}
+      title={`${agent.name} asks for “${secretTitle(request.name)}”`}
       source={project ? `In ${project}` : undefined}
     >
       {purpose}

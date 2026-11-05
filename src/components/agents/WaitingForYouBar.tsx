@@ -9,6 +9,7 @@
  */
 
 import type { Agent, AgentMessage, Approval } from '../../lib/agents';
+import { Button } from '../primitives/Button';
 import { ConversationBar } from './AgentCard';
 
 /**
@@ -21,12 +22,20 @@ export function waitingOn(
   agent: Pick<Agent, 'status'>,
   messages: readonly AgentMessage[] | undefined
 ): Approval | null {
+  return waitingMessage(agent, messages)?.approval ?? null;
+}
+
+/** The message carrying that card, so the bar can bring it into view. */
+function waitingMessage(
+  agent: Pick<Agent, 'status'>,
+  messages: readonly AgentMessage[] | undefined
+): AgentMessage | null {
   if (agent.status.state !== 'waiting' || !messages) return null;
   for (let i = messages.length - 1; i >= 0; i--) {
     const a = messages[i].approval;
     if (!a || a.status !== 'pending') continue;
     if (a.login || a.secret || a.prompt || a.connector) continue;
-    return a;
+    return messages[i];
   }
   return null;
 }
@@ -38,15 +47,29 @@ export function WaitingForYouBar({
   agent: Pick<Agent, 'status' | 'name'>;
   messages: readonly AgentMessage[] | undefined;
 }) {
-  const card = waitingOn(agent, messages);
-  if (!card) return null;
+  const message = waitingMessage(agent, messages);
+  const card = message?.approval;
+  if (!message || !card) return null;
+  // The card is in this chat, but often scrolled away: the bar never says
+  // "below" (it sits under the card) and brings it to the middle instead.
+  const show = () => {
+    const target = document.querySelector<HTMLElement>(
+      `[data-message-ids~="${CSS.escape(message.id)}"]`
+    );
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  };
   return (
     <ConversationBar
       state="waiting"
       role="alert"
       data-testid="agent-waiting-bar"
       title="Waiting for you"
-      detail={`${agent.name} is stopped until you answer: ${card.title}. Allow or deny it on the card below.`}
+      detail={`${agent.name} is stopped until you answer: ${card.title}.`}
+      actions={
+        <Button variant="secondary" size="compact" onClick={show}>
+          Show
+        </Button>
+      }
     />
   );
 }

@@ -31,6 +31,7 @@ import {
   type LoginOption,
 } from '../../lib/agentLogins';
 import type { AgentMessage } from '../../lib/agents';
+import { secretTitle } from '../../lib/agentSecrets';
 
 interface LoginCardProps {
   message: AgentMessage;
@@ -145,7 +146,7 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
         title={approval.title || `${agentName} needs your ${login.title}`}
         source={
           [
-            login.askedAs ? `Asked for as “${login.askedAs}”` : null,
+            login.askedAs ? `Asked for “${secretTitle(login.askedAs)}”` : null,
             pending && login.alsoFor?.length ? `Also for ${login.alsoFor.join(', ')}` : null,
           ]
             .filter(Boolean)

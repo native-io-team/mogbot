@@ -14,7 +14,7 @@ import type {
   PermissionScope,
   UsageTotals,
 } from '@shipstudio/companion-protocol';
-import { apiPrice, resetPhrase, tokenCount } from '@shipstudio/companion-protocol';
+import { apiPrice, resetPhrase, secretTitle, tokenCount } from '@shipstudio/companion-protocol';
 import { drivenLine } from './bars';
 import { diffLineKind } from './diff';
 import { ENGINE_DEFAULT } from './newAgentDefaults';
@@ -522,7 +522,7 @@ export function askingLine(
   // An import's review: the row says what to do, short; the card keeps its title.
   if (approval.connector?.kind === 'review') return 'Review the agents to import';
   if (approval.connector) return approval.title;
-  if (approval.secret) return `Asks for “${approval.secret.name}”`;
+  if (approval.secret) return `Asks for “${secretTitle(approval.secret.name)}”`;
   if (approval.title === 'Run a command' && approval.detail?.trim())
     return commandLine(approval.detail);
   // A command whose title already says it in words: the title, never the command.
