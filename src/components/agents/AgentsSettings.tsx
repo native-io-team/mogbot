@@ -8,6 +8,10 @@
  * - **Engines and models**: the engine and model new agents start on, a
  *   real setting (`AgentDefaultsSettings`), and what routines run on.
  *   Existing agents keep theirs; nothing shown that wasn't read.
+ * - **Usage**: how agents use the plans' limits (Normal, Save my limits,
+ *   Use it all before reset), what each account last reported, estimates
+ *   from past runs, other compute here, and the spare-capacity list
+ *   (`AgentsUsage`, `agents/inventory.rs`).
  * - **Accounts**: each engine's accounts, in the order turns try them when
  *   one runs out of usage (`AgentAccounts`, `agents/wallet.rs`).
  * - **Notifications**: what notifies, and where to mute one agent.
@@ -23,6 +27,7 @@ import { Button } from '../primitives/Button';
 import { AgentsDesktopSettings } from './AgentsDesktopSettings';
 import { AgentDefaultsSettings } from './AgentDefaultsSettings';
 import { AgentAccounts } from './AgentAccounts';
+import { AgentUsageSettings } from './AgentsUsage';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
@@ -138,6 +143,8 @@ export function AgentsSettings({
           </div>
         </section>
       )}
+
+      {engines.some((e) => e.installed) && <AgentUsageSettings />}
 
       {engines.some((e) => e.installed) && <AgentAccounts engines={engines} />}
 

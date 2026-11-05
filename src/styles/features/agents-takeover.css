@@ -42,10 +42,21 @@
   min-height: 0;
 }
 
-/* The ⋯ beside the working line: its project, its session. Quiet until hovered. */
+/* The ⋯ beside the working line: its project, its session. A hover action,
+   like a message's: hidden until the row is hovered or focused (or its menu
+   is open), and set well apart from the pill, so it never reads as a second
+   set of typing dots beside the moving ones. */
 .agent-working__more {
-  margin-left: var(--spacing-2xs);
+  margin-left: var(--spacing-sm);
   color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--transition-interaction-fast);
+}
+
+.agent-chat__row--working:hover .agent-working__more,
+.agent-chat__row--working:focus-within .agent-working__more,
+.agent-working__more.is-open {
+  opacity: 1;
 }
 
 /* A take-over's terminal that closed by itself: a quiet note that wraps,

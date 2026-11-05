@@ -500,6 +500,8 @@ export interface ImportProposal {
   context?: string;
   history?: ImportHistoryCount;
   clash?: ImportClash;
+  foreignPaths?: string[];
+  foreignTools?: { name: string; here?: string }[];
 }
 
 export interface ImportClash {
@@ -826,6 +828,8 @@ export interface QuotaWindow {
 export interface Quota {
   engine: AgentEngine;
   windows: QuotaWindow[];
+  /** The plan's name, only when the engine said it (Codex's `planType`). */
+  plan?: string;
 }
 
 /** The last usage limit a turn on an account hit (`agents::wallet::LimitHit`). */
@@ -851,6 +855,114 @@ export interface UsageAccount {
   limit?: UsageLimitHit;
   /** Out of usage right now. */
   out: boolean;
+}
+
+/** How the user wants their limits used (`agents::usage_plan::Mode`). */
+export type UsageMode = 'normal' | 'save' | 'use_it_all';
+
+/**
+ * What one run has used, from this user's own past runs: an ESTIMATE
+ * (`agents::forecast::PerRun`), never a reading. Absent with too little
+ * history.
+ */
+export interface UsageEstimate {
+  estimate: true;
+  tokens: number;
+  low: number;
+  high: number;
+  runs: number;
+  days: number;
+}
+
+export interface UsageEngineLine {
+  id: AgentEngine;
+  label: string;
+  installed: boolean;
+  signedIn: boolean;
+  agents: number;
+  nextAccount?: string;
+  allOut: boolean;
+  perTurn?: UsageEstimate;
+}
+
+/** An account with what its engine last reported (`agents::inventory`). */
+export interface UsageAccountLine {
+  engine: AgentEngine;
+  id: string;
+  name: string;
+  thisMac: boolean;
+  signedIn: boolean;
+  out: boolean;
+  outUntil?: number;
+  /** Its engine's next turn runs on it. */
+  next: boolean;
+  plan?: string;
+  /** As last reported and still current; empty: no reading. */
+  windows: QuotaWindow[];
+  /** Window kinds whose share per token this Mac has learned. */
+  learned: string[];
+}
+
+/** Other compute detected on this Mac; agents here don't run on it. */
+export interface LocalCompute {
+  name: string;
+  running?: boolean;
+  models: string[];
+}
+
+/** A window near its reset with capacity left, as reported. */
+export interface SpareWindow {
+  engine: AgentEngine;
+  accountId: string;
+  accountName: string;
+  next: boolean;
+  kind: string;
+  windowMinutes?: number;
+  usedPercent: number;
+  resetsAt: number;
+  observedAt: number;
+}
+
+/** Work to do when there's spare capacity. */
+export interface SpareItem {
+  id: string;
+  text: string;
+  agentId?: string;
+  addedBy: string;
+  addedAt: number;
+  state: 'waiting' | 'started';
+  startedAt?: number;
+}
+
+export interface UsageAgentLine {
+  id: string;
+  name: string;
+  engine: AgentEngine;
+  model?: string;
+  isMain: boolean;
+  perTurn?: UsageEstimate;
+}
+
+export interface UsageRoutineLine {
+  agentId: string;
+  id: string;
+  what: string;
+  when: boolean;
+  perRun?: UsageEstimate;
+}
+
+/** The capacity inventory (`agents_usage_overview`, `agents.usagePlan`). */
+export interface UsageInventory {
+  mode: UsageMode;
+  modeSetAt?: number;
+  engines: UsageEngineLine[];
+  accounts: UsageAccountLine[];
+  local: LocalCompute[];
+  spare: SpareWindow[];
+  backlog: SpareItem[];
+  agents: UsageAgentLine[];
+  routines: UsageRoutineLine[];
+  now: number;
 }
 
 export interface PasteImportAgent {

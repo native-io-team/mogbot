@@ -474,10 +474,10 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-session-prompt-chief',
     title: 'Agents — a delegated session’s question, answerable in the Chief’s chat',
     looksRightWhen:
-      'The Chief’s chat: the user’s ask, “Handed to Acme Site.”, the hand-off line. Acme Site’s question is not a second full card in the conversation: at the foot, the one chip every other agent’s request uses, “Review Acme Site’s request”, opened here, showing the same card in place — a folder icon, “Let Claude Code work in demo-site?”, the muted source “Acme Site · in demo-site” (no tab number, no engine name), the explanation, then Deny / a neutral Allow on the right. Both Chief and Acme Site rows say they need your OK.',
+      'The Chief’s chat: the user’s ask, “Handed to Acme Site.”, the hand-off line. Acme Site’s question is not a second full card in the conversation: above the composer, the one bar every other agent’s request uses (“Acme Site needs your OK”), its Review panel open, showing the same card in place — a folder icon, “Let Claude Code work in demo-site?”, the muted source “Acme Site · in demo-site” (no tab number, no engine name), the explanation, then Deny / a neutral Allow on the right. Both Chief and Acme Site rows say they need your OK.',
     command: 'agents.open',
-    requires: '.agent-requests .agent-approval[data-prompt="trust"]',
-    steps: [{ click: '.agent-requests__chip' }],
+    requires: '.agent-requests-panel .agent-approval[data-prompt="trust"]',
+    steps: [{ click: '.agent-requests__review' }],
     commands: {
       agents_overview: promptTeam(),
       agents_messages: (args: Record<string, unknown>) =>

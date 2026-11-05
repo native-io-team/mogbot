@@ -939,6 +939,8 @@ export interface QuotaWindow {
 export interface Quota {
   engine: AgentEngine;
   windows: QuotaWindow[];
+  /** The plan's name, only when the engine said it (Codex's `planType`). */
+  plan?: string;
 }
 
 export const AGENT_EVENTS = {
@@ -1298,6 +1300,10 @@ export interface ImportProposal {
   history?: ImportHistoryCount;
   /** An agent here already has this name (or one that looks like it): what it is now. */
   clash?: ImportClash;
+  /** Paths from the other assistant's sandbox that aren't on this Mac, each marked in the text. */
+  foreignPaths?: string[];
+  /** The other assistant's tools its text names, and the nearest here (none: not available). */
+  foreignTools?: { name: string; here?: string }[];
 }
 
 /** The agent here a proposal's name is taken by, with everything Replace would change. */
@@ -1878,6 +1884,15 @@ export function plainFileName(path: string): string {
   if (!words || words === 'index') return 'a file';
   return `the ${words}`;
 }
+
+/**
+ * The Chief's status while an import interview runs, exactly as
+ * `connector::interview_status` writes it. The import bar above the composer
+ * says it then, so the working line under the chat keeps only its dots
+ * rather than saying it a second time.
+ */
+export const isImportInterviewActivity = (activity: string | null | undefined): boolean =>
+  /^Bringing in agents from /.test(activity ?? '');
 
 /**
  * What an agent is doing, said the way a person would: the engine's activity

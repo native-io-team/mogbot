@@ -224,7 +224,14 @@ export interface BarSpec {
 }
 
 /** The fixed order bars stack in, top to bottom. */
-export const BAR_ORDER = ['takeover', 'import', 'engine', 'secret', 'dictation'] as const;
+export const BAR_ORDER = [
+  'takeover',
+  'import',
+  'requests',
+  'engine',
+  'secret',
+  'dictation',
+] as const;
 export type BarId = (typeof BAR_ORDER)[number];
 
 /** How many bars show before the rest fold into "N more". */

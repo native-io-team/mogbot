@@ -85,19 +85,6 @@
   }
 }
 
-@keyframes agents-motion-dot {
-  0%,
-  70%,
-  100% {
-    opacity: 0.3;
-    transform: scale(0.75);
-  }
-  35% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 @keyframes agents-motion-resolve {
   from {
     min-height: var(--control-height-standard);
@@ -218,22 +205,6 @@
 .agent-chat__row--working[data-leaving] {
   overflow: hidden;
   animation: agents-motion-working-close var(--transition-interaction) forwards;
-}
-
-/* Refined dots: a soft swell rather than a bounce, staggered at the
-   interaction step, on the loader period the pixel loaders use. */
-.agent-working__dots span {
-  animation: agents-motion-dot var(--agents-motion-typing-period) var(--agents-motion-typing-easing)
-    infinite;
-  animation-delay: 0s;
-}
-
-.agent-working__dots span:nth-child(2) {
-  animation-delay: var(--agents-motion-typing-stagger);
-}
-
-.agent-working__dots span:nth-child(3) {
-  animation-delay: calc(var(--agents-motion-typing-stagger) * 2);
 }
 
 /* "Editing PricingTable.tsx" → "Running tests": the new text eases in. */
@@ -449,11 +420,6 @@
   .agent-bubble[data-streaming] .agent-markdown__prose:last-child > :last-child::after,
   .agent-bubble[data-streaming] .agent-markdown__prose li:last-child::after {
     animation: none;
-  }
-
-  .agent-working__dots span {
-    animation: none;
-    opacity: 0.6;
   }
 
   .agent-peer__thread,

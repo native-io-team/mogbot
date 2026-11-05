@@ -41,6 +41,7 @@ import type {
   UsageSummary,
   Quota,
   UsageAccount,
+  UsageInventory,
 } from './model';
 
 /** A file uploaded with `PUT /v1/blobs`, referenced by id. Replaces a desktop path. */
@@ -199,6 +200,13 @@ export interface Methods {
    */
   'agents.accounts': { params: Record<string, never>; result: UsageAccount[] };
   /**
+   * The capacity inventory: the usage mode, every account with what its
+   * engine last reported, other compute, spare windows, estimates from past
+   * runs and the spare-capacity list (`agents::inventory`). Read-only on the
+   * phone. Newer Macs only.
+   */
+  'agents.usagePlan': { params: Record<string, never>; result: UsageInventory };
+  /**
    * The ready-made agents the phone's New agent sheet offers. `template` on
    * `agents.create` takes one's id, and the Mac fills in its briefing. A Mac
    * that lists this method accepts `template`. Newer Macs only.
@@ -333,6 +341,7 @@ export const READ_ONLY_METHODS = [
   'agents.usage',
   'agents.quota',
   'agents.accounts',
+  'agents.usagePlan',
   'agents.import.status',
   'agents.templates',
   'agents.files',

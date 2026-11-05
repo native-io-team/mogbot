@@ -202,6 +202,9 @@ pub fn run() {
                     tauri::async_runtime::spawn_blocking(agents::store::harden_permissions).await;
                 let _ = tauri::async_runtime::spawn_blocking(agents::store::expire_stale_approvals)
                     .await;
+                // Agents imported before they were told where they are now
+                // (no Grok sandbox here): add the app's section, once.
+                let _ = tauri::async_runtime::spawn_blocking(agents::arrival::upgrade_all).await;
                 // Agents' secrets, known to redaction before any turn runs.
                 let _ = tauri::async_runtime::spawn_blocking(agents::secrets::load_known).await;
                 // A turn the last run quit in the middle of: stop its process, say so.
@@ -729,6 +732,10 @@ pub fn run() {
             commands::agents::agents_usage,
             commands::agents::agents_quota,
             commands::agents::agents_accounts,
+            commands::agents_usage::agents_usage_overview,
+            commands::agents_usage::agents_set_usage_mode,
+            commands::agents_usage::agents_spare_add,
+            commands::agents_usage::agents_spare_remove,
             commands::agents::agents_account_add,
             commands::agents::agents_account_rename,
             commands::agents::agents_account_reorder,

@@ -85,6 +85,11 @@ pub struct QuotaWindow {
 pub struct Quota {
     pub engine: Engine,
     pub windows: Vec<QuotaWindow>,
+    /// The plan's name, when the engine said it (Codex's `planType`:
+    /// `plus`, `pro`, …). Claude Code's stream doesn't say, so it's never
+    /// filled in for Claude.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<String>,
 }
 
 fn secs_to_ms(value: Option<&Value>) -> Option<i64> {
@@ -122,6 +127,7 @@ pub fn from_claude(value: &Value, now: i64) -> Option<Quota> {
             return Some(Quota {
                 engine: Engine::Claude,
                 windows: Vec::new(),
+                plan: None,
             })
         }
         (None, Some(kind)) => {
@@ -135,6 +141,7 @@ pub fn from_claude(value: &Value, now: i64) -> Option<Quota> {
     (!windows.is_empty()).then_some(Quota {
         engine: Engine::Claude,
         windows,
+        plan: None,
     })
 }
 
@@ -165,9 +172,16 @@ pub fn from_codex(snapshot: &Value, now: i64) -> Option<Quota> {
             })
         })
         .collect();
+    let plan = snapshot
+        .get("planType")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(str::to_string);
     (!windows.is_empty()).then_some(Quota {
         engine: Engine::Codex,
         windows,
+        plan,
     })
 }
 
@@ -185,6 +199,7 @@ pub fn none(engine: Engine) -> Quota {
     Quota {
         engine,
         windows: Vec::new(),
+        plan: None,
     }
 }
 
@@ -205,6 +220,9 @@ pub fn merge(known: &mut Vec<Quota>, reading: Quota, now: i64) {
                 .retain(|w| current(w, now) && !reading.windows.iter().any(|n| n.kind == w.kind));
             quota.windows.extend(reading.windows);
             quota.windows.sort_by(|a, b| a.kind.cmp(&b.kind));
+            if reading.plan.is_some() {
+                quota.plan = reading.plan;
+            }
         }
         None => known.push(reading),
     }
@@ -224,6 +242,7 @@ pub fn shown(known: &[Quota], now: i64) -> Vec<Quota> {
             (!windows.is_empty()).then_some(Quota {
                 engine: q.engine,
                 windows,
+                plan: q.plan.clone(),
             })
         })
         .collect()
@@ -463,6 +482,7 @@ mod tests {
                     w("primary", 50.0, NOW + HOUR_MS, NOW),
                     w("secondary", 10.0, NOW + 100 * HOUR_MS, NOW),
                 ],
+                plan: None,
             },
             NOW,
         );
@@ -472,6 +492,7 @@ mod tests {
             Quota {
                 engine: Engine::Codex,
                 windows: vec![w("primary", 60.0, NOW + HOUR_MS, NOW + 1)],
+                plan: None,
             },
             NOW + 1,
         );

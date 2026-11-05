@@ -88,7 +88,7 @@ export const agentsStackScenarios: Scenario[] = [
     id: 'agents-stack-chief',
     title: 'Agents — everything at once in the Chief’s chat, while you drive it',
     looksRightWhen:
-      'The header is identity only: the Chief’s badge, name and role, no status. The conversation ends on the import review card (download icon, title, “From Grok”, rows with avatars and neutral chips, Don’t import and a neutral Import 2 agents on the right), then the one chip “Review Lead Gen’s request”. No “getting long” nudge: Start fresh can’t run while you drive. Above the composer, one stack in the reading column: first the take-over bar (terminal icon in the accent, “You’re driving Chief of Staff in acme-marketing”, Open in acme-marketing, Hand back), then the import bar (amber dot, “Import from Grok · ready to review”, Stop). Nothing full-width under the header. The sidebar row says “Needs your OK” with an amber dot (the request outranks driving).',
+      'The header is identity only: the Chief’s badge, name and role, no status. The conversation ends on the import review card (download icon, title, “From Grok”, rows with avatars and neutral chips, Don’t import and a neutral Import 2 agents on the right), and nothing under it. No “getting long” nudge: Start fresh can’t run while you drive. Above the composer, one stack in the reading column: first the take-over bar (terminal icon in the accent, “You’re driving Chief of Staff in acme-marketing”, Open in acme-marketing, Hand back), then the import bar (amber dot, “Import from Grok · ready to review”, Stop), and a quiet “1 more” (Lead Gen’s requests bar). Nothing full-width under the header. The sidebar row says “Needs your OK” with an amber dot (the request outranks driving).',
     command: 'agents.open',
     requires: '[data-bar="takeover"] .agent-bar',
     commands: chiefCommands(true),
@@ -97,7 +97,7 @@ export const agentsStackScenarios: Scenario[] = [
     id: 'agents-stack-chief-free',
     title: 'Agents — everything at once in the Chief’s chat, not driven',
     looksRightWhen:
-      'As agents-stack-chief without the take-over: the header identity only, the review card, the Lead Gen chip, then the quiet centred nudge “This conversation is getting long…” with its Start fresh link, wrapping rather than cut. One bar above the composer: the import’s.',
+      'As agents-stack-chief without the take-over: the header identity only, the review card, then the quiet centred nudge “This conversation is getting long…” with its Start fresh link, wrapping rather than cut. Two bars above the composer: the import’s, then “Lead Gen needs your OK” with Review.',
     command: 'agents.open',
     requires: '.agent-fresh-hint',
     commands: chiefCommands(false),

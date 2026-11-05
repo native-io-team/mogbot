@@ -1498,7 +1498,7 @@ fn post_review(app: &AppHandle, talk_id: &str) {
     let Some(t) = lock().talk.clone().filter(|t| t.id == talk_id) else {
         return;
     };
-    let review = review::with_clashes(t.draft.clone());
+    let review = review::with_arrival(review::with_clashes(t.draft.clone()), &t.source);
     let count = review.proposals.len();
     let mut approval = super::mcp::new_card(
         store::new_id(),

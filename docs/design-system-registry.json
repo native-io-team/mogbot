@@ -480,6 +480,21 @@
       "lifecycle": "canonical"
     },
     {
+      "name": "TypingDots",
+      "file": "src/components/primitives/TypingDots.tsx",
+      "exports": ["TypingDots"],
+      "purpose": "An agent at work: three dots in one even wave on one clock (the working pill, a live bar). The phone draws the same wave.",
+      "owner": "primitives/status",
+      "props": ["label", "native span attributes"],
+      "variants": [],
+      "states": ["animating", "reduced motion (still)"],
+      "accessibility": "Decorative (aria-hidden) unless given a label, then role=status with that label.",
+      "style": "src/styles/components/typing-dots.css",
+      "example": "docs/design-system.md#typingdots--typingdotstsx",
+      "tests": [],
+      "lifecycle": "canonical"
+    },
+    {
       "name": "Tabs family",
       "file": "src/components/primitives/Tabs.tsx",
       "exports": [

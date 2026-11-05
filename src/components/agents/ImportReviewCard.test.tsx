@@ -171,6 +171,36 @@ describe('ImportReviewCard', () => {
     expect(shown.textContent).toContain('Rule 20.');
   });
 
+  it('lists the sandbox paths it marked and the tools it translated', () => {
+    const card: ConnectorCard = {
+      ...CARD,
+      review: {
+        proposals: [
+          {
+            ...CARD.review!.proposals[1],
+            instructions:
+              'Keep notes in /workspace/trips/ (from Grok — not on this Mac). Use x_search.',
+            foreignPaths: ['/workspace/trips/'],
+            foreignTools: [{ name: 'x_search' }, { name: 'confirm_push', here: 'push' }],
+          },
+        ],
+      },
+    };
+    render(<ImportReviewCard message={message()} card={card} chiefName="Ada" onAnswer={vi.fn()} />);
+    // The marked text is what's in view: what Import writes.
+    expect(screen.getByLabelText('Travel’s instructions').textContent).toContain(
+      '/workspace/trips/ (from Grok — not on this Mac)'
+    );
+    fireEvent.click(screen.getByText('Travel'));
+    expect(
+      screen.getByText('Paths from Grok that aren’t on this Mac · marked in its text')
+    ).toBeInTheDocument();
+    expect(screen.getByText('/workspace/trips/')).toBeInTheDocument();
+    const tools = screen.getByText('Tools from Grok · what it uses here instead').parentElement!;
+    expect(tools.textContent).toContain('x_search · not available here');
+    expect(tools.textContent).toContain('confirm_push · push');
+  });
+
   it('shows the agent as it is now, and a lookalike name as one', async () => {
     current = () =>
       Promise.resolve({

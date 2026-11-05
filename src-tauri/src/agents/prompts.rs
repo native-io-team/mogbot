@@ -159,6 +159,47 @@ codebase: its own turns then run inside it.
 - `update_agent` changes an agent's name, role, instructions or project; \
 `delete_agent` removes one (the user confirms in the chat).";
 
+// On every turn of every agent, so kept short: the tools' own descriptions
+// say what they answer.
+const USAGE: &str = "\
+## Usage limits
+
+Turns run on the user's own subscriptions, whose limits reset on a schedule (`usage_overview`, \
+`forecast_usage`).
+- Don't do less because of limits unless the usage mode below says so.
+- Before something big (a fan-out, a long routine), say in one line what `forecast_usage` puts it \
+at and which account it runs on, then go ahead.
+- Say whether a figure is a reading (an engine reported it, with when) or an estimate (from past \
+runs). Never present one as the other, and never invent either.
+- Given a choice of engine for the same work, prefer the one whose limit resets soonest with room left.
+- Work wanted \"sometime\" or \"when there's spare capacity\" goes on the list with `add_spare_work`.";
+
+const USAGE_CHIEF: &str = "\
+- `set_usage_mode` changes the mode when the user asks (they confirm on a card).";
+
+/// The usage section, with the user's mode. App-owned, built every turn
+/// from code, so every agent (whenever it was created or imported) has it,
+/// and nothing in its own CLAUDE.md is touched. It changes only with the
+/// mode, never per turn: anything time-dependent here would change the
+/// system prompt every turn and cost the engine's prompt cache.
+pub fn usage_section(mode: super::usage_plan::Mode, is_main: bool) -> String {
+    use super::usage_plan::Mode;
+    let mode_line = match mode {
+        Mode::Normal => "Usage mode: Normal. Use what the work needs.",
+        Mode::Save => "Usage mode: \"Save my limits\". Ask before heavy work (a tenth of a limit or \
+more by `forecast_usage`, or a fan-out), and hand light work to agents on lighter models or engines.",
+        Mode::UseItAll => "Usage mode: \"Use it all before reset\", the user's standing OK to spend \
+capacity that would otherwise expire on the spare-capacity list and their routines (the Chief of \
+Staff is woken for it). No approval changes.",
+    };
+    let mut s = format!("{USAGE}\n\n{mode_line}");
+    if is_main {
+        s.push('\n');
+        s.push_str(USAGE_CHIEF);
+    }
+    s
+}
+
 /// Where a project-bound agent's identity lives, and what it says right now.
 pub struct Bound<'a> {
     pub home: &'a str,

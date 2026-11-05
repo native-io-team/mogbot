@@ -41,7 +41,7 @@ import { CompactModeToggle } from '../workspace/ModeToggle';
 import { TextButton } from '../primitives/TextButton';
 import { AgentSecretHint } from './AgentSecretHint';
 import { AgentModelItems } from './AgentModelMenu';
-import { AgentInlineRequests } from './AgentInlineRequests';
+import { AgentRequestsBar } from './AgentRequests';
 import { TextArea } from '../primitives/TextField';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
@@ -105,6 +105,7 @@ import {
   retryNote,
   whenAt,
   mentionedAgents,
+  isImportInterviewActivity,
   plainActivity,
   approvalSeries,
   withQuotes,
@@ -1187,7 +1188,12 @@ export const AgentChat = memo(function AgentChat({
   // of it, and a growing reply re-renders only its own bubble.
   const rowsPaused = agent.status.state === 'idle';
   const checkIns = agent.checkIns;
-  const activity = plainActivity(agent.status.activity);
+  // Mid-import the bar above the composer says what's happening: the
+  // working line keeps its dots and doesn't repeat it.
+  const activity =
+    agent.isMain && isImportInterviewActivity(agent.status.activity)
+      ? null
+      : plainActivity(agent.status.activity);
   const work = agent.status.work;
   const history = useMemo(
     () =>
@@ -1530,14 +1536,6 @@ export const AgentChat = memo(function AgentChat({
             {/* A ready-made agent the Chief just made: only "Created by" so
               far, so its own starters sit under it until the user speaks. */}
             {templateFirstOpen && engineReady && templateStarters}
-            {engineReady && (
-              <AgentInlineRequests
-                agent={agent}
-                peerIds={peerIds}
-                askers={foreignOwners}
-                shownRequestIds={shownRequestIds}
-              />
-            )}
             {items.length > 0 && (
               <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
             )}
@@ -1584,7 +1582,19 @@ export const AgentChat = memo(function AgentChat({
                   />
                 ),
               },
-              { id: 'import', node: agent.isMain && <ImportTalkBar chief={agent.name} /> },
+              { id: 'import', node: agent.isMain && <ImportTalkBar /> },
+              {
+                id: 'requests',
+                node: engineReady && (
+                  <AgentRequestsBar
+                    agent={agent}
+                    peerIds={peerIds}
+                    askers={foreignOwners}
+                    shownRequestIds={shownRequestIds}
+                    onOpenAgent={onOpenAgent}
+                  />
+                ),
+              },
               {
                 id: 'engine',
                 node: engineReady && cantAsk && (

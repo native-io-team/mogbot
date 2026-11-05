@@ -33,6 +33,7 @@ import {
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { makeStyles, useColors } from '../lib/appearance';
 import { BAR_ORDER, MAX_BARS, type BarId, type BarTone } from '../lib/bars';
+import { TypingDots } from './TypingDots';
 import {
   CARD_TITLE_SCALE,
   chromeScale,
@@ -356,6 +357,8 @@ export interface BarSpec {
   detail?: string;
   /** A glyph in place of the dot (a speech bubble for "Changes to X"). */
   icon?: SFName;
+  /** Something is going on now: the typing dots lead, in the state's colour. */
+  live?: boolean;
   /** The whole bar opens something (the Connection screen). */
   onPress?: () => void;
   pressHint?: string;
@@ -378,7 +381,9 @@ export function Bar({ bar }: { bar: BarSpec }) {
   const tint = barTint(colors);
   const body = (
     <>
-      {bar.icon ? (
+      {bar.live ? (
+        <TypingDots color={tint[bar.tone]} />
+      ) : bar.icon ? (
         <Icon name={bar.icon} size={iconSize.inline} color={tint[bar.tone]} />
       ) : (
         <View style={styles.dot}>

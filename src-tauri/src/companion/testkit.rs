@@ -1043,6 +1043,7 @@ impl Backend for Stub {
                     None,
                     false,
                 )],
+                plan: None,
             },
             Quota {
                 engine: Engine::Codex,
@@ -1056,6 +1057,7 @@ impl Backend for Stub {
                     ),
                     window("secondary", None, None, None, false),
                 ],
+                plan: None,
             },
         ];
         serde_json::to_value(quotas).map_err(|e| CommandError::expected(e.to_string()))
@@ -1073,6 +1075,123 @@ impl Backend for Stub {
             { "id": "default", "engine": "codex", "name": "This Mac", "thisMac": true,
               "signedIn": false, "out": false }
         ]))
+    }
+
+    async fn usage_plan(&self) -> Result<Value, CommandError> {
+        use crate::agents::engine::Engine;
+        use crate::agents::forecast::PerRun;
+        use crate::agents::inventory::*;
+        use crate::agents::quota::QuotaWindow;
+        use crate::agents::usage_plan::{ItemState, Mode, Spare, SpareItem};
+        // Every optional field set: a reading with a plan, an account out,
+        // other compute running and not, a spare window, an estimate.
+        let per = PerRun {
+            estimate: true,
+            tokens: 41_000,
+            low: 12_000,
+            high: 90_000,
+            runs: 37,
+            days: 5,
+        };
+        let window = QuotaWindow {
+            kind: "five_hour".into(),
+            used_percent: Some(38.0),
+            resets_at: Some(1_762_300_000_000),
+            window_minutes: Some(300),
+            limited: false,
+            observed_at: 1_762_290_000_000,
+        };
+        let inv = Inventory {
+            mode: Mode::UseItAll,
+            mode_set_at: Some(1_762_200_000_000),
+            engines: vec![EngineLine {
+                id: Engine::Claude,
+                label: "Claude Code",
+                installed: true,
+                signed_in: true,
+                agents: 3,
+                next_account: Some("This Mac".into()),
+                all_out: false,
+                per_turn: Some(per.clone()),
+            }],
+            accounts: vec![
+                AccountLine {
+                    engine: Engine::Claude,
+                    id: "default".into(),
+                    name: "This Mac".into(),
+                    this_mac: true,
+                    signed_in: true,
+                    out: false,
+                    out_until: None,
+                    next: true,
+                    plan: None,
+                    windows: vec![window.clone()],
+                    learned: vec!["five_hour".into()],
+                },
+                AccountLine {
+                    engine: Engine::Codex,
+                    id: "c1".into(),
+                    name: "Plus".into(),
+                    this_mac: false,
+                    signed_in: true,
+                    out: true,
+                    out_until: Some(1_762_400_000_000),
+                    next: false,
+                    plan: Some("plus".into()),
+                    windows: vec![],
+                    learned: vec![],
+                },
+            ],
+            local: vec![
+                LocalCompute {
+                    name: "Ollama",
+                    running: Some(true),
+                    models: vec!["llama3.2:3b".into()],
+                },
+                LocalCompute {
+                    name: "Opencode",
+                    running: None,
+                    models: vec![],
+                },
+            ],
+            spare: vec![Spare {
+                engine: Engine::Claude,
+                account_id: "default".into(),
+                account_name: "This Mac".into(),
+                next: true,
+                kind: "five_hour".into(),
+                window_minutes: Some(300),
+                used_percent: 38.0,
+                resets_at: 1_762_300_000_000,
+                observed_at: 1_762_290_000_000,
+            }],
+            backlog: vec![SpareItem {
+                id: "s1".into(),
+                text: "Read the three papers in Downloads and summarise them".into(),
+                agent_id: Some(AGENT.into()),
+                added_by: "you".into(),
+                added_at: 1_762_100_000_000,
+                state: ItemState::Started,
+                started_at: Some(1_762_295_000_000),
+            }],
+            agents: vec![AgentLine {
+                id: AGENT.into(),
+                name: "Finance".into(),
+                engine: Engine::Claude,
+                model: Some("sonnet".into()),
+                is_main: false,
+                per_turn: Some(per.clone()),
+            }],
+            routines: vec![RoutineLine {
+                agent_id: AGENT.into(),
+                id: "r1".into(),
+                what: "Morning brief".into(),
+                when: false,
+                per_run: Some(per),
+            }],
+            now: 1_762_295_000_000,
+        };
+        serde_json::to_value(inv).map_err(|e| CommandError::expected(e.to_string()))
     }
 
     async fn revoke_permission(&self, _agent_id: &str, rule_id: &str) -> Result<(), CommandError> {

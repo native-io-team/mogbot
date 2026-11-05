@@ -235,6 +235,8 @@ function ProposalRow({
     .map((l) => l.replace(/^\s*[-•*]\s*/, '').trim())
     .filter(Boolean);
   const history = p.history?.conversations ?? 0;
+  const foreignPaths = p.foreignPaths ?? [];
+  const foreignTools = p.foreignTools ?? [];
   const counts = [
     memory.length && `${memory.length} ${memory.length === 1 ? 'memory' : 'memories'}`,
     p.routines.length && `${plural(p.routines.length, 'routine')} (paused)`,
@@ -353,6 +355,28 @@ function ProposalRow({
                     } removed.`
                   : ''}
               </p>
+            </ImportSection>
+          )}
+          {foreignPaths.length > 0 && (
+            <ImportSection title={`Paths from ${source} that aren’t on this Mac · marked in its text`}>
+              <ul className="agents-import-agent__memory">
+                {foreignPaths.map((path) => (
+                  <li key={path}>
+                    <code>{path}</code>
+                  </li>
+                ))}
+              </ul>
+            </ImportSection>
+          )}
+          {foreignTools.length > 0 && (
+            <ImportSection title={`Tools from ${source} · what it uses here instead`}>
+              <ul className="agents-import-agent__memory">
+                {foreignTools.map((t) => (
+                  <li key={t.name}>
+                    <code>{t.name}</code> · {t.here ?? 'not available here'}
+                  </li>
+                ))}
+              </ul>
             </ImportSection>
           )}
           {p.logins.length > 0 && (
