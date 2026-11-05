@@ -53,7 +53,7 @@ import {
   unpair,
 } from '../../../lib/session';
 import { setApp, useApp } from '../../../lib/store';
-import { chromeScale, fonts, iconSize, radius, space } from '../../../lib/theme';
+import { chromeScale, fonts, iconSize, PRESSED, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
 
 type Row =
@@ -299,7 +299,7 @@ export default function Agents() {
             android_ripple={ripple}
             accessibilityRole="button"
             accessibilityState={{ expanded: showHidden }}
-            style={({ pressed }) => [styles.hiddenToggle, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [styles.hiddenToggle, pressed && PRESSED]}
           >
             <Icon
               name={showHidden ? 'chevron.down' : 'chevron.right'}
