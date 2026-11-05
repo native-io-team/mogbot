@@ -55,6 +55,14 @@ export function drivenBar(agent: Agent): BarText | null {
 const IMPORTING = /^Bringing in agents from (.+)$/;
 
 /**
+ * The Chief's status while an import interview runs (`connector::
+ * interview_status`). The import bar says it then, so the working row keeps
+ * only its dots (`lib/timeline.ts`), as on the desk.
+ */
+export const isImportInterview = (activity: string | null | undefined) =>
+  IMPORTING.test(activity ?? '');
+
+/**
  * An import another assistant started (desktop `agents/connector.rs`), from
  * what this phone knows: a pending consent or review request in the chat, or
  * the Chief's own status while the interview runs. Says the state, never the

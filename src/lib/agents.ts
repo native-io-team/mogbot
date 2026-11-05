@@ -1880,6 +1880,15 @@ export function plainFileName(path: string): string {
 }
 
 /**
+ * The Chief's status while an import interview runs, exactly as
+ * `connector::interview_status` writes it. The import bar above the composer
+ * says it then, so the working line under the chat keeps only its dots
+ * rather than saying it a second time.
+ */
+export const isImportInterviewActivity = (activity: string | null | undefined): boolean =>
+  /^Bringing in agents from /.test(activity ?? '');
+
+/**
  * What an agent is doing, said the way a person would: the engine's activity
  * line ("Editing PricingTable.tsx", "$ npm test", "Reading …/src/App.tsx")
  * with file names, paths and commands put into words. A line that's already

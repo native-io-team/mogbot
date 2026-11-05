@@ -22,7 +22,16 @@ import { drivenWait } from '../lib/bars';
 import { haptic } from '../lib/haptics';
 import { canCall, discardPending, editPending, resend } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
-import { avatarSize, composer, fonts, iconSize, space, type, PRESSED } from '../lib/theme';
+import {
+  avatarSize,
+  composer,
+  fonts,
+  iconSize,
+  lineHeight,
+  space,
+  type,
+  PRESSED,
+} from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Attachments } from './attachments';
 import { useReveal } from '../lib/reveal';
@@ -725,10 +734,13 @@ export function WorkingRow({
   return (
     <Animated.View entering={FadeIn.duration(250)} style={styles.working}>
       <View style={styles.workingRow}>
-        <TypingDots />
-        <T variant="small" color={colors.textSecondary} numberOfLines={1}>
-          {label}
-        </T>
+        {/* No words (mid-import, when the bar says it): the dots speak. */}
+        <TypingDots label={label ? undefined : 'Working'} />
+        {!!label && (
+          <T variant="small" color={colors.textSecondary} numberOfLines={1}>
+            {label}
+          </T>
+        )}
       </View>
       {agent && (
         <LiveWork
@@ -786,5 +798,7 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
+    // One line tall with or without words, so the row never jumps.
+    minHeight: lineHeight(type.small),
   },
 }));
