@@ -405,6 +405,11 @@ export interface Approval {
    */
   setAside?: string;
   /**
+   * "Bring your work Chrome window to the front so I can use it": Allow means
+   * Check again, Deny means Not now. Never a login.
+   */
+  front?: { site: string; account?: string };
+  /**
    * A login card (`request_login`): which app, what the agent may do, and the
    * ways in, best first. Every way in runs on the Mac (`agents.loginStart`);
    * `flow` is its live state. A Mac without the `logins` feature never sends it.
@@ -543,6 +548,8 @@ export interface AgentReach {
     teamOn: boolean;
     ownOff: boolean;
     sites: string[];
+    /** The Chrome profile (and account) each site was last found signed in to. */
+    accounts?: { site: string; browser: string; account?: string }[];
     helperInstalled: boolean;
   };
   secrets: {

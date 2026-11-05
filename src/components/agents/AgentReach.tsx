@@ -126,6 +126,19 @@ export function AgentReach({ agent }: { agent: Agent }) {
                       ? `${agent.name} can’t use your browser.`
                       : 'Your team’s browser isn’t on yet, so it asks you instead.'}
                 </span>
+                {reach.browser.on &&
+                  reach.browser.accounts?.map((a) => (
+                    <span key={a.site} className="agent-secrets__meta">
+                      {a.site}: {a.account ? `${a.account} in ` : ''}“{a.browser}”{' '}
+                      <TextButton
+                        tabIndex={0}
+                        className="agent-permissions__revoke"
+                        onClick={() => void remove({ kind: 'browser_account', site: a.site })}
+                      >
+                        Forget
+                      </TextButton>
+                    </span>
+                  ))}
                 {reach.browser.on && !reach.browser.helperInstalled && (
                   <span className="agent-secrets__meta agent-reach__warn">
                     The Claude in Chrome extension isn’t set up on this Mac yet.

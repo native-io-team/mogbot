@@ -655,7 +655,11 @@ in a new tab, and tell the user in one line which account you're in, from \
 what the page shows (\"I'm in Figma as …\"); never guess one. Reading \
 there is free; every click, post, send, share, payment or delete asks the \
 user on a card. Never type a password; if a page asks you to sign in, stop \
-using it.
+using it. The user may have Chrome in more than one profile, each signed in \
+as someone else: if the page shows the wrong account, `select_browser` / \
+`switch_browser` to another connected one (`list_connected_browsers`); if \
+none is, `ask_bring_browser_to_front` once, never `request_login`. Once \
+it's right, `remember_browser_account`.
 3. Only if neither works: `request_login`, once, for that one app (with \
 `signed_out: true` if the browser showed a sign-in page). It may answer \
 that you can reach it already, or that someone already asked: do what it \
@@ -1424,6 +1428,7 @@ fn record_card(app: &AppHandle, agent: &Agent, r: LoginRequest) -> Result<String
         connector: None,
         login: Some(r),
         set_aside: None,
+        front: None,
     });
     runner::record_own(app, card)?;
     store::refresh_pending(&agent.id);
@@ -1537,6 +1542,7 @@ pub fn migrate_pending(app: Option<&AppHandle>) -> usize {
                 connector: None,
                 login: Some(login),
                 set_aside: None,
+                front: None,
             });
             let new = match app {
                 Some(app) => runner::record_own(app, card).map(|_| ()),
@@ -1984,6 +1990,8 @@ pub struct ReachBrowser {
     /// The user took it away from this agent.
     pub own_off: bool,
     pub sites: Vec<String>,
+    /// The Chrome profile and account each of its sites was found in.
+    pub accounts: Vec<super::browser_profiles::ReachAccount>,
     pub helper_installed: bool,
 }
 
@@ -2031,6 +2039,7 @@ pub fn reach(agent: &Agent) -> Reach {
             team_on: super::browser::team_enabled(),
             own_off: agent.reach.browser_off,
             sites: agent.reach.browser_sites.clone(),
+            accounts: super::browser_profiles::for_reach(agent),
             helper_installed: browser_helper_installed(),
         }),
         secrets: agent
@@ -2063,6 +2072,11 @@ pub enum Removal {
     BrowserSite {
         site: String,
     },
+    /// Forget which Chrome profile a site was found in (for everyone).
+    #[serde(rename_all = "camelCase")]
+    BrowserAccount {
+        site: String,
+    },
     #[serde(rename_all = "camelCase")]
     Secret {
         secret_id: String,
@@ -2093,6 +2107,7 @@ pub fn remove(agent_id: &str, removal: &Removal) -> Result<Reach, CommandError> 
         Removal::BrowserSite { site } => {
             store::update(agent_id, |a| a.reach.browser_sites.retain(|s| s != site))?;
         }
+        Removal::BrowserAccount { site } => super::browser_profiles::forget(site)?,
         Removal::Secret { secret_id } => secrets::revoke(agent_id, secret_id)?,
         Removal::BlockApp { name } => {
             let name = name.trim().chars().take(120).collect::<String>();
@@ -2282,6 +2297,7 @@ mod tests {
             connector: None,
             login: None,
             set_aside: None,
+            front: None,
         });
         // Written the way an older build wrote it: no `login` key at all.
         let line = serde_json::to_string(&card).unwrap();
@@ -2522,6 +2538,7 @@ mod tests {
             connector: None,
             login: Some(r),
             set_aside: None,
+            front: None,
         });
         store::append_message(&card).unwrap();
         store::refresh_pending(&a.id);

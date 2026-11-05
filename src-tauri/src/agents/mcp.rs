@@ -336,6 +336,34 @@ const TOOLS: &[Tool] = &[
         }),
     },
     Tool {
+        name: "remember_browser_account",
+        description: "After you checked, on the page itself, which account one of your sites is signed in as in the user's Chrome: remember which Chrome profile (browser) that was, so next time starts there. Only for your own sites; never a guess.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "site": { "type": "string", "description": "The site, as you were given it (e.g. www.figma.com)." },
+                "browser": { "type": "string", "description": "The browser's name from list_connected_browsers (e.g. \"Browser 1\")." },
+                "account": { "type": "string", "description": "The account the page showed (an email or a username)." }
+            },
+            "required": ["site", "browser"]
+        }),
+    },
+    Tool {
+        name: "ask_bring_browser_to_front",
+        description: "The account a task needs isn't in any connected Chrome profile you've looked in, and no other profile is connected: ask the user, once, to bring the right Chrome window to the front. One plain card (Check again / Not now), never a login. If another profile is connected that you haven't looked in, it says so instead. When a card was raised, stop; you're woken when they answer.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "site": { "type": "string", "description": "The site, as you were given it." },
+                "account": { "type": "string", "description": "The account you need (\"sam@work.example\"), when you know it." },
+                "looked_in": { "type": "array", "items": { "type": "string" }, "description": "The browsers you already opened it in and found the wrong account." }
+            },
+            "required": ["site"]
+        }),
+    },
+    Tool {
         name: "approve",
         description: "Internal: Claude Code asks this before a tool call that needs the user's permission.",
         main_only: false,
@@ -549,6 +577,20 @@ async fn call(
         }
         "request_secret" => request_secret(app, caller, args),
         "request_login" => request_login(app, caller, args).await,
+        "remember_browser_account" => {
+            match super::browser_profiles::remember(caller, args, runner::from_outside(&caller.id))
+            {
+                Ok(t) => text(t),
+                Err(e) => error(e),
+            }
+        }
+        "ask_bring_browser_to_front" => {
+            let outside = runner::from_outside(&caller.id);
+            match super::browser_profiles::bring_to_front(app, caller, args, outside).await {
+                Ok(t) => text(t),
+                Err(e) => error(e),
+            }
+        }
         _ => error("Unknown tool"),
     }
 }
@@ -1680,6 +1722,7 @@ pub(super) fn new_card(
         connector: None,
         login: None,
         set_aside: None,
+        front: None,
     }
 }
 

@@ -115,6 +115,46 @@ fn reading_is_free_on_its_sites_and_everything_else_asks() {
 }
 
 #[test]
+fn a_url_inside_a_url_or_a_new_tab_elsewhere_or_a_gif_export_asks() {
+    let a = agent(Engine::Claude, &["www.linkedin.com"], false);
+    let g = |tool: &str, input: serde_json::Value| gate_with(true, &a, tool, &input, false);
+    // Its own site's redirect endpoint would carry page data off-site.
+    for url in [
+        "https://www.linkedin.com/redir/redirect?url=https://evil.example/?d=x",
+        "https://www.linkedin.com/redir/redirect?url=https%3A%2F%2Fevil.example",
+        "https://www.linkedin.com/redir/redirect?url=https%253A%252F%252Fevil.example",
+        "https://www.linkedin.com/redir/redirect?url=//evil.example",
+        "https://www.linkedin.com/go/https://evil.example/",
+        "https://www.linkedin.com/feed/#u=https://evil.example",
+    ] {
+        assert_eq!(g(NAV, json!({ "url": url })), Gate::Ask, "{url}");
+    }
+    assert_eq!(
+        g(
+            NAV,
+            json!({"url": "https://www.linkedin.com/search/results/all/?keywords=design"})
+        ),
+        Gate::Allow
+    );
+    // A new tab is a look, unless it opens a URL elsewhere.
+    let tab = format!("{SERVER}tabs_create_mcp");
+    assert_eq!(g(&tab, json!({})), Gate::Allow);
+    assert_eq!(g(&tab, json!({"url": "https://evil.example/"})), Gate::Ask);
+    assert_eq!(
+        g(&tab, json!({"url": "https://www.linkedin.com/feed/"})),
+        Gate::Allow
+    );
+    // Recording looks; exporting can upload it to a page.
+    let gif = format!("{SERVER}gif_creator");
+    assert_eq!(g(&gif, json!({"action": "start_recording"})), Gate::Allow);
+    assert_eq!(
+        g(&gif, json!({"action": "export", "download": true})),
+        Gate::Ask
+    );
+    assert_eq!(g(&gif, json!({})), Gate::Ask);
+}
+
+#[test]
 fn an_outside_turn_or_a_switched_off_team_is_refused_even_reads() {
     let a = agent(Engine::Claude, &["www.figma.com"], false);
     let read = json!({"url": "https://www.figma.com/"});

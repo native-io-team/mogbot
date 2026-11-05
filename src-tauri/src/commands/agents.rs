@@ -765,6 +765,14 @@ pub async fn agents_answer_approval(
         let (a, r) = (agent_id.clone(), request_id.clone());
         blocking(move || Ok(store::find_approval(&a, &r)?.filter(|c| c.login.is_some()))).await?
     };
+    // "Bring your Chrome window to the front": Check again or Not now.
+    let front = {
+        let (a, r) = (agent_id.clone(), request_id.clone());
+        blocking(move || Ok(store::find_approval(&a, &r)?.filter(|c| c.front.is_some()))).await?
+    };
+    if front.is_some() {
+        return agents::browser_profiles::answer(&app, &agent_id, &request_id, allow).await;
+    }
     if login.is_some() {
         return if allow {
             agents::logins::allow_from_old_client(&app, &agent_id, &request_id).await

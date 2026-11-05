@@ -117,14 +117,45 @@ pub struct Here {
     pub gh: Option<String>,
     /// This turn has the user's browser.
     pub browser: bool,
+    /// Services the user marked "Not needed" on the setup checklist
+    /// (`access_check::key_of` keys).
+    pub not_needed: Vec<String>,
+    /// The turn answers text from outside: nothing is granted or joined
+    /// without the user seeing a card.
+    pub outside: bool,
+}
+
+/// One spelling for an unknown service's name: "Acme CRM", "acme-crm" and
+/// "ACME_crm." are the same thing.
+fn same_title(a: &str, b: &str) -> bool {
+    let norm = |s: &str| {
+        s.chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_lowercase())
+            .collect::<String>()
+    };
+    norm(a) == norm(b)
 }
 
 /// Which step of the chain answers `r` from `agent`. Pure, for tests.
 pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team: &[Seen]) -> Step {
     let same = |s: &Seen| {
         s.login.service == r.service
-            && (r.service != "other" || s.login.title.eq_ignore_ascii_case(&r.title))
+            && (r.service != "other" || same_title(&s.login.title, &r.title))
     };
+    // 1a. "Not needed" on the setup checklist counts as a no.
+    let key = super::access_check::key_of(&r.service, &r.title);
+    if here.not_needed.iter().any(|k| {
+        k == &key
+            || (r.service == "other"
+                && k.strip_prefix("other:")
+                    .is_some_and(|t| same_title(t, &r.title)))
+    }) {
+        return Step::AlreadyDeclined {
+            title: r.title.clone(),
+            said: "Not needed".into(),
+        };
+    }
     // 1. Said no, for anyone: not asked again.
     if let Some(no) = team
         .iter()
@@ -146,13 +177,15 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
         }
     }
     // 3. This Mac's own sign-in.
-    if r.service == "github" {
+    // Not for outside text: it would grant `gh` to this agent unseen.
+    if r.service == "github" && !here.outside {
         if let Some(login) = &here.gh {
             return Step::Gh(login.clone());
         }
     }
-    // 4. The user's browser, unless it showed a sign-in page.
-    if here.browser && !tried.signed_out {
+    // 4. The user's browser, unless it showed a sign-in page (never for
+    // outside text: such a turn has no browser).
+    if here.browser && !here.outside && !tried.signed_out {
         if let Some(site) = logins::service(&r.service).and_then(|s| s.site) {
             return Step::Browser {
                 site: site.to_string(),
@@ -160,10 +193,12 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
             };
         }
     }
-    // 5. Someone's card for it is waiting: join it.
+    // 5. Someone's card for it is waiting: join it. Outside text doesn't
+    // join (the answer would grant it unseen); it raises its own card.
     if let Some(open) = team
         .iter()
         .find(|s| same(s) && s.status == ApprovalStatus::Pending)
+        .filter(|_| !here.outside)
     {
         return Step::Join {
             agent_id: open.agent_id.clone(),
@@ -223,6 +258,8 @@ pub async fn request(
             None
         },
         browser: super::browser::for_turn(agent, outside),
+        not_needed: not_needed_keys(),
+        outside,
     };
     let step = decide(agent, &r, tried, &here, &seen());
     match &step {
@@ -241,7 +278,33 @@ pub async fn request(
         _ => {}
     }
     tracing::info!(agent = %agent.id, service = %r.service, step = ?std::mem::discriminant(&step), "[Agents] access chain");
+    // Which Chrome profile: listed by the app (nothing opened), started from
+    // where this site was last found (`browser_profiles`).
+    if let Step::Browser { site, .. } = &step {
+        let list = super::browser_profiles::connected().await;
+        let known = super::browser_profiles::remembered(site);
+        return Ok(format!(
+            "{} {}",
+            reply(&step),
+            super::browser_profiles::guidance(site, list.as_deref(), known.as_ref())
+        ));
+    }
     Ok(reply(&step))
+}
+
+/// Rows the user marked "Not needed" on the setup checklist, kept even
+/// after the checklist is put away.
+fn not_needed_keys() -> Vec<String> {
+    super::team_setup::load()
+        .map(|s| {
+            s.later
+                .states
+                .into_iter()
+                .filter(|(_, st)| *st == super::access_check::LaterState::NotNeeded)
+                .map(|(k, _)| k)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 async fn gh_login() -> Option<String> {

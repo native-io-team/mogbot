@@ -45,8 +45,8 @@ fn seen(a: &Agent, service: &str, status: ApprovalStatus, said: Option<&str>) ->
 
 fn browser() -> Here {
     Here {
-        gh: None,
         browser: true,
+        ..Default::default()
     }
 }
 
@@ -95,6 +95,7 @@ fn github_uses_this_macs_sign_in_before_anything_else() {
         let here = Here {
             gh: Some("sam-example".into()),
             browser: true,
+            ..Default::default()
         };
         assert_eq!(
             decide(&dev, &r, &Tried::default(), &here, &[]),
@@ -193,4 +194,61 @@ fn every_reply_tells_the_agent_what_to_do_next() {
         title: "Figma".into()
     })
     .contains("One at a time"));
+}
+
+#[test]
+fn outside_text_is_granted_and_joins_nothing_unseen() {
+    with_root(|| {
+        let dev = agent("Builder");
+        let writer = agent("Writer");
+        let none = Tried::default();
+        let gh = logins::build(&dev, &ask("github")).unwrap();
+        let outside = Here {
+            gh: Some("sam-example".into()),
+            browser: true,
+            outside: true,
+            ..Default::default()
+        };
+        // No silent `gh` grant and no browser: it ends on a card.
+        assert_eq!(decide(&dev, &gh, &none, &outside, &[]), Step::Ask);
+        // Doesn't join another agent's waiting card (its answer would grant).
+        let r = logins::build(&writer, &ask("figma")).unwrap();
+        let team = [seen(&dev, "figma", ApprovalStatus::Pending, None)];
+        assert_eq!(decide(&writer, &r, &none, &outside, &team), Step::Ask);
+    });
+}
+
+#[test]
+fn not_needed_on_the_checklist_and_other_spellings_count_as_no() {
+    with_root(|| {
+        let designer = agent("Designer");
+        let writer = agent("Writer");
+        let none = Tried::default();
+        let r = logins::build(&writer, &ask("figma")).unwrap();
+        let here = Here {
+            browser: true,
+            not_needed: vec!["figma".into()],
+            ..Default::default()
+        };
+        assert!(matches!(
+            decide(&writer, &r, &none, &here, &[]),
+            Step::AlreadyDeclined { ref said, .. } if said == "Not needed"
+        ));
+        // An unknown service, spelled differently, is still the same one.
+        let acme = logins::build(&writer, &ask("acme-crm")).unwrap();
+        assert_eq!(acme.service, "other");
+        let here = Here {
+            not_needed: vec!["other:acme crm".into()],
+            ..Default::default()
+        };
+        assert!(matches!(
+            decide(&writer, &acme, &none, &here, &[]),
+            Step::AlreadyDeclined { .. }
+        ));
+        let declined = seen(&designer, "ACME_crm.", ApprovalStatus::Denied, None);
+        assert!(matches!(
+            decide(&writer, &acme, &none, &Here::default(), &[declined]),
+            Step::AlreadyDeclined { .. }
+        ));
+    });
 }

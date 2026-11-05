@@ -129,6 +129,8 @@ export interface Reach {
     teamOn: boolean;
     ownOff: boolean;
     sites: string[];
+    /** The Chrome profile (and account) each site was last found signed in to. */
+    accounts?: { site: string; browser: string; account?: string }[];
     helperInstalled: boolean;
   };
   secrets: {
@@ -156,6 +158,7 @@ export type Removal =
   | { kind: 'browser' }
   | { kind: 'browser_on' }
   | { kind: 'browser_site'; site: string }
+  | { kind: 'browser_account'; site: string }
   | { kind: 'secret'; secretId: string }
   | { kind: 'block_app'; name: string }
   | { kind: 'unblock_app'; name: string };

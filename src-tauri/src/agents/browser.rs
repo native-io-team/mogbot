@@ -148,7 +148,6 @@ const SERVER: &str = "mcp__claude-in-chrome__";
 /// Tools that only look: they change nothing on a page or a site.
 const LOOKS: &[&str] = &[
     "tabs_context_mcp",
-    "tabs_create_mcp",
     "tabs_close_mcp",
     "get_page_text",
     "read_page",
@@ -160,7 +159,6 @@ const LOOKS: &[&str] = &[
     "switch_browser",
     "resize_window",
     "shortcuts_list",
-    "gif_creator",
 ];
 
 /// `computer` actions that only look.
@@ -172,6 +170,39 @@ fn host_matches(host: &str, site: &str) -> bool {
     let h = host.trim_start_matches("www.").to_ascii_lowercase();
     let s = site.trim_start_matches("www.").to_ascii_lowercase();
     !s.is_empty() && (h == s || h.ends_with(&format!(".{s}")))
+}
+
+/// A free navigation: a web URL on one of `sites`, carrying no other URL in
+/// its query or fragment. An own site's redirect endpoint
+/// (`/redir/redirect?url=https://…`) would otherwise carry page data to a
+/// host nobody named, so a URL inside a URL asks.
+fn free_to_open(url: &str, sites: &[String]) -> bool {
+    let Ok(u) = url::Url::parse(url.trim()) else {
+        return false;
+    };
+    let Some(host) = matches!(u.scheme(), "https" | "http")
+        .then(|| u.host_str())
+        .flatten()
+    else {
+        return false;
+    };
+    if !sites.iter().any(|s| host_matches(host, s)) {
+        return false;
+    }
+    // `//` however it's spelled (plain, encoded, or encoded twice), in the
+    // path after its first character, the query or the fragment.
+    let rest = format!(
+        "{}?{}#{}",
+        u.path().get(1..).unwrap_or(""),
+        u.query().unwrap_or(""),
+        u.fragment().unwrap_or("")
+    )
+    .to_ascii_lowercase()
+    .replace("%25", "%")
+    .replace("%2f", "/")
+    .replace("%5c", "/")
+    .replace('\\', "/");
+    !rest.contains("//")
 }
 
 /// The host of a URL the agent asked to open, if it's a web URL.
@@ -202,17 +233,31 @@ pub fn gate_with(enabled: bool, agent: &Agent, tool: &str, input: &Value, outsid
             if matches!(url.trim(), "back" | "forward") {
                 return Gate::Allow;
             }
-            match host_of(url) {
-                Some(host)
-                    if agent
-                        .reach
-                        .browser_sites
-                        .iter()
-                        .any(|s| host_matches(&host, s)) =>
-                {
+            if free_to_open(url, &agent.reach.browser_sites) {
+                Gate::Allow
+            } else {
+                Gate::Ask
+            }
+        }
+        // A new tab is a look, unless it opens a URL: then it's a navigation.
+        "tabs_create_mcp" => match input.get("url").and_then(Value::as_str) {
+            Some(url) if !url.trim().is_empty() => {
+                if free_to_open(url, &agent.reach.browser_sites) {
                     Gate::Allow
+                } else {
+                    Gate::Ask
                 }
-                _ => Gate::Ask,
+            }
+            _ => Gate::Allow,
+        },
+        // Recording is a look; exporting can drop the file onto a page (an
+        // upload) or save it to disk, so it asks.
+        "gif_creator" => {
+            let action = input.get("action").and_then(Value::as_str).unwrap_or("");
+            if matches!(action, "start_recording" | "stop_recording" | "clear") {
+                Gate::Allow
+            } else {
+                Gate::Ask
             }
         }
         "computer" => {
@@ -225,7 +270,8 @@ pub fn gate_with(enabled: bool, agent: &Agent, tool: &str, input: &Value, outsid
         }
         n if LOOKS.contains(&n) => Gate::Allow,
         // form_input, javascript_tool, file_upload, upload_image,
-        // shortcuts_execute, browser_batch, and anything new: ask.
+        // shortcuts_execute, browser_batch, a GIF's export, and anything
+        // new: ask.
         _ => Gate::Ask,
     }
 }
