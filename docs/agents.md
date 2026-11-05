@@ -1078,7 +1078,7 @@ the full threat model in docs/remote-access.md):
 
 **Where you are now** (`agents/arrival.rs`). An imported agent's
 instructions were written for the other assistant's sandbox ("research lives
-at /workspace/canada-west-move/", "use confirm_push"). Taken at their word
+at /workspace/garden-redesign/", "use confirm_push"). Taken at their word
 here, a turn runs `ls /workspace/…`, which doesn't exist on a Mac, and every
 try raises an Allow card. So:
 

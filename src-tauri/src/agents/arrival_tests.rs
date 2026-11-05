@@ -7,21 +7,21 @@ fn nowhere(_: &str) -> bool {
     false
 }
 
-/// The real West Canada Move agent's instructions, as Grok Bot sent them.
-const CANADA: &str = "Project lead for the West Canada move. Owns the research at /workspace/canada-west-move/ (listings, mortgage, budget). Report only to Chief of Staff.";
+/// An imported agent's instructions, in the shape Grok Bot sends them.
+const GARDEN: &str = "Project lead for the garden redesign. Owns the research at /workspace/garden-redesign/ (plants, suppliers, budget). Report only to Chief of Staff.";
 
 #[test]
 fn foreign_paths_are_found_as_written_and_nothing_else() {
     let text = "Reports: /workspace/site-qa/<site>/report.md; checklist: `/workspace/site-qa/checklist.md`.\n\
-        Also /workspace/move-deb: and (/workspace/us-move/, /mnt/data/a.csv).\n\
+        Also /workspace/notes-deb: and (/workspace/kitchen-plan/, /mnt/data/a.csv).\n\
         Not these: ~/workspace/x, src/workspace/y, /workspaces/z, https://x.com/workspace/q, /Users/me/workspace.";
     assert_eq!(
         paths_with(text, &nowhere),
         [
             "/workspace/site-qa/<site>/report.md",
             "/workspace/site-qa/checklist.md",
-            "/workspace/move-deb",
-            "/workspace/us-move/",
+            "/workspace/notes-deb",
+            "/workspace/kitchen-plan/",
             "/mnt/data/a.csv",
         ]
     );
@@ -31,13 +31,13 @@ fn foreign_paths_are_found_as_written_and_nothing_else() {
 
 #[test]
 fn the_first_mention_of_each_path_is_marked_and_no_word_is_lost() {
-    let text = "Owns /workspace/canada-west-move/ (listings). Keep /workspace/canada-west-move/ tidy; see `/workspace/x.md`.";
+    let text = "Owns /workspace/garden-redesign/ (listings). Keep /workspace/garden-redesign/ tidy; see `/workspace/x.md`.";
     let (out, paths) = annotate_with(text, GROK, &nowhere);
     assert_eq!(
         out,
-        "Owns /workspace/canada-west-move/ (from Grok Bot — not on this Mac) (listings). Keep /workspace/canada-west-move/ tidy; see `/workspace/x.md` (from Grok Bot — not on this Mac)."
+        "Owns /workspace/garden-redesign/ (from Grok Bot — not on this Mac) (listings). Keep /workspace/garden-redesign/ tidy; see `/workspace/x.md` (from Grok Bot — not on this Mac)."
     );
-    assert_eq!(paths, ["/workspace/canada-west-move/", "/workspace/x.md"]);
+    assert_eq!(paths, ["/workspace/garden-redesign/", "/workspace/x.md"]);
     // Every word the user wrote is still there, in order.
     assert_eq!(out.replace(" (from Grok Bot — not on this Mac)", ""), text);
     // Twice is the same as once.
@@ -96,7 +96,7 @@ fn a_proposal_is_marked_everywhere_and_says_so_for_the_card() {
 
 #[test]
 fn the_preamble_names_home_paths_imports_projects_logins_and_tools() {
-    let paths = vec!["/workspace/canada-west-move/".to_string()];
+    let paths = vec!["/workspace/garden-redesign/".to_string()];
     let tools = tools("confirm_push and x_search");
     let text = preamble(&Arrival {
         source: GROK,
@@ -110,8 +110,8 @@ fn the_preamble_names_home_paths_imports_projects_logins_and_tools() {
         "on Claude Code or Codex",
         "not in Grok Bot's sandbox",
         "`/Users/j/Library/Application Support/Dashbot/agents/abc`",
-        "/workspace/canada-west-move/ is `canada-west-move/` there",
-        "none of them on this Mac: `/workspace/canada-west-move/`",
+        "/workspace/garden-redesign/ is `garden-redesign/` there",
+        "none of them on this Mac: `/workspace/garden-redesign/`",
         "`imported/grok-bot/`",
         "project_list",
         "request_secret",
@@ -151,10 +151,10 @@ fn an_import_marks_paths_and_writes_the_preamble_outside_the_instructions() {
     let (_serial, _dir) = root();
     let summary = import::import(
         vec![import::ImportedAgent {
-            name: "West Canada Move".into(),
+            name: "Garden Redesign".into(),
             role: "Canada research".into(),
-            instructions: CANADA.into(),
-            memory: "- Research lives at /workspace/canada-west-move/".into(),
+            instructions: GARDEN.into(),
+            memory: "- Research lives at /workspace/garden-redesign/".into(),
             is_main: false,
             color: None,
             routines: vec![],
@@ -162,17 +162,17 @@ fn an_import_marks_paths_and_writes_the_preamble_outside_the_instructions() {
         GROK,
     )
     .unwrap();
-    assert_eq!(summary.created, ["West Canada Move"]);
-    let agent = store::find("West Canada Move").unwrap().unwrap();
+    assert_eq!(summary.created, ["Garden Redesign"]);
+    let agent = store::find("Garden Redesign").unwrap().unwrap();
     let md = claude_md(&agent.id);
     let instructions = store::read_instructions(&agent.id).unwrap();
     store::set_root_for_tests(None);
     // The user's instructions: their words, the path marked, no preamble.
     assert_eq!(
         instructions,
-        CANADA.replace(
-            "/workspace/canada-west-move/",
-            "/workspace/canada-west-move/ (from Grok Bot — not on this Mac)"
+        GARDEN.replace(
+            "/workspace/garden-redesign/",
+            "/workspace/garden-redesign/ (from Grok Bot — not on this Mac)"
         )
     );
     assert!(!instructions.contains(HEADING));
@@ -180,7 +180,7 @@ fn an_import_marks_paths_and_writes_the_preamble_outside_the_instructions() {
     let at = md.find(HEADING).unwrap();
     assert!(at < md.find("## Instructions").unwrap());
     assert!(md.contains("### Imported from Grok Bot"));
-    assert!(md.contains("none of them on this Mac: `/workspace/canada-west-move/`"));
+    assert!(md.contains("none of them on this Mac: `/workspace/garden-redesign/`"));
 }
 
 #[test]
@@ -227,8 +227,8 @@ fn already_imported(name: &str, instructions: &str, memory: &str) -> (store::Age
 #[test]
 fn an_agent_imported_before_gets_the_preamble_once_and_nothing_else_changes() {
     let (_serial, _dir) = root();
-    let memory = "- Research lives at /workspace/canada-west-move/\n- Never contact realtors";
-    let (agent, before) = already_imported("West Canada Move", CANADA, memory);
+    let memory = "- Research lives at /workspace/garden-redesign/\n- Never contact realtors";
+    let (agent, before) = already_imported("Garden Redesign", GARDEN, memory);
     assert!(upgrade(&agent).unwrap());
     let after = claude_md(&agent.id);
     let instructions = store::read_instructions(&agent.id).unwrap();
@@ -239,10 +239,10 @@ fn an_agent_imported_before_gets_the_preamble_once_and_nothing_else_changes() {
     store::set_root_for_tests(None);
     // The user's instructions are byte for byte as they were (no marks added
     // to them: they're the user's), and so is the memory.
-    assert_eq!(instructions, CANADA);
+    assert_eq!(instructions, GARDEN);
     let (s, e) = section(&after).unwrap();
     assert_eq!(format!("{}{}", &after[..s], &after[e..]), before);
-    assert!(after[s..e].contains("`/workspace/canada-west-move/`"));
+    assert!(after[s..e].contains("`/workspace/garden-redesign/`"));
     assert_eq!(again, after);
 }
 

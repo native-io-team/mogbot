@@ -2,7 +2,7 @@
 //!
 //! An agent brought over from another assistant (Grok Bot, over the
 //! connector) arrives with instructions written for that assistant's
-//! sandbox: "keep your research at /workspace/canada-west-move/", "use
+//! sandbox: "keep your research at /workspace/garden-redesign/", "use
 //! confirm_push". Here those paths don't exist and the tools have other
 //! names, so a turn that takes them at their word runs `ls /workspace/…` and
 //! raises an Allow card for every try.
