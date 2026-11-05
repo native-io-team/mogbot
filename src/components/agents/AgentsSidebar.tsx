@@ -32,6 +32,8 @@ import { AgentEngineBadge } from './AgentEngine';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { AgentsSearchResults } from './AgentsSearchResults';
 import { ImportNudge, useImportNudge } from './ImportNudge';
+import { useImportGate } from './ImportConnectorPanel';
+import { talkIsLive } from '../../lib/agents';
 import { AgentMark } from './AgentSwitcher';
 import { useFlipReorder } from './useAgentMotion';
 import { useAgentsSelector } from '../../lib/agentsStore';
@@ -166,7 +168,9 @@ export function AgentsSidebar({
     agents.length,
     agents.some((a) => a.isMain && a.sessionId !== null)
   );
-  const showNudge = nudge.visible && engineWorks;
+  const importing = talkIsLive(useImportGate().talk);
+  // An import already going needs no pitch for one.
+  const showNudge = nudge.visible && engineWorks && !importing;
   const { visible, hidden } = useMemo(() => {
     const sorted = sortAgents(agents);
     return {

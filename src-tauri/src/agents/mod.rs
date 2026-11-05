@@ -23,6 +23,7 @@
 //! - [`failure`]: a failed turn in Agents' own words (usage limit, signed out)
 //! - [`files`]: files an agent shares back, the Files list, paths in prose
 //! - [`import`]: bring an existing setup over from another assistant
+//! - [`other_app`]: a one-time, read-only copy of the team from the app this grew out of
 //! - [`schedule`]: check-ins and routines that wake an agent on time
 //! - [`project`]: binding an agent to a project, and what its turns changed there
 //! - [`procs`]: a turn's whole process tree, so Stop and quit leave nothing running
@@ -31,6 +32,7 @@
 //! - [`secrets`]: credentials an agent asked for, kept in the Keychain, never shown to it
 //! - [`stream`]: a reply while it is being written (drafts)
 //! - [`usage`]: tokens and cost per agent, from each turn's `result` event
+//! - [`work`]: what a turn did, step by step, for the timeline under its reply
 //!
 //! Full design: docs/agents.md.
 
@@ -42,6 +44,7 @@ pub mod capacity;
 pub mod claude;
 pub mod codex;
 pub mod codex_app;
+pub mod connector;
 pub mod context;
 pub mod decisions;
 pub mod driver;
@@ -49,15 +52,18 @@ pub mod engine;
 pub mod failure;
 pub mod files;
 pub mod import;
+pub mod interview;
 pub mod mcp;
 pub mod memory;
 pub mod notify;
+pub mod other_app;
 pub mod paste;
 pub mod permissions;
 pub mod procs;
 pub mod project;
 pub mod prompts;
 pub mod quick_entry;
+pub mod review;
 pub mod runner;
 pub mod runs;
 pub mod schedule;
@@ -68,6 +74,7 @@ pub mod store;
 pub mod stream;
 pub mod tray;
 pub mod usage;
+pub mod work;
 
 use crate::errors::CommandError;
 
@@ -109,6 +116,7 @@ fn greet(agent_id: &str) {
         changes: None,
         session: None,
         client_id: None,
+        work: None,
         fresh: false,
     };
     if let Err(e) = store::append_message(&message) {

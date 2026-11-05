@@ -5,16 +5,17 @@
  *
  * Two layers, as MISSION asks ("black and white, plus one accent"):
  *
- * - The **palette** here is fixed: greys, and the semantic colours whose
- *   meaning never changes (success, warning, error, focus). It has no accent.
+ * - The **palette** here is fixed per appearance: greys, and the semantic
+ *   colours whose meaning never changes (success, warning, error, focus). It
+ *   has no accent.
  * - The **accent** is derived at runtime from an agent's colour
  *   (lib/accent.tsx): the Chief of Staff's across the app, each agent's
  *   inside its own chat, as Grok Bot does.
  *
  * Every colour a screen draws comes from one of the two; there are no colour
- * literals outside this file. The palette is keyed by appearance, so a light
- * one drops in as a second entry of `palettes` (the `Palette` type makes a
- * missing role an error). Dark only for now.
+ * literals outside this file (a test holds that). Screens never import a
+ * palette: they read the one in use from `useColors()` / `makeStyles()`
+ * (lib/appearance.tsx), which follows the system, or the phone's own setting.
  */
 
 export interface Palette {
@@ -23,31 +24,77 @@ export interface Palette {
   surfaceControl: string;
   surfaceControlHover: string;
   surfaceSelected: string;
-  textWhite: string;
-  /** What people read: message bodies, a step brighter than the chrome. */
+  /** Your own messages. Dark lifts them to the selected grey; light keeps them a quiet step off white, as iMessage's grey is. */
+  surfaceBubble: string;
+  /** The strongest text: titles, names, what must be read first. White in dark, near-black in light. */
+  textStrong: string;
+  /** What people read: message bodies, a step stronger than the chrome. */
   textBody: string;
   textPrimary: string;
   textSecondary: string;
   textMuted: string;
   textFaint: string;
-  /** Ink on a light fill (a light accent, the warning pill). */
+  /** Ink on a light fill (a light accent). */
   inkDark: string;
   /** Ink on a dark fill (a dark accent). */
   inkLight: string;
+  /** The one divider: between rows in a group, around a well in prose, under a pinned bar. */
   borderDefault: string;
+  /** Fainter than the divider, for a line that should barely register. */
   borderSubtle: string;
+  /** Interactive outlines only (a focused field). Never a card. */
   borderStrong: string;
+  /**
+   * A grouped list on a sheet (Settings, the agent sheet, the diff's files): one
+   * step toward the viewer from the sheet behind it, the iOS grouped idiom.
+   */
+  surfaceGroup: string;
+  /**
+   * The one border a card may have. None in light, where the fill step carries
+   * it; one hairline in dark, where the fill step alone (1.07:1) doesn't.
+   */
+  cardBorder: string;
+  /** A pressed row inside a group. */
+  surfaceGroupPressed: string;
+  /** The message field and the + beside it: a fill in dark, a fill and a hairline in light. */
+  composerFill: string;
+  composerBorder: string;
+  /** A text field in a card or on a sheet: clearly a field on a panel, in either appearance. */
+  inputFill: string;
+  inputBorder: string;
   /** Outcomes only ("Allowed", a diff's additions, "Finished"). Never an action. */
   accentSuccess: string;
   accentWarning: string;
+  /** Words on a warning fill (the "Needs your OK" pill): dark on dark's bright amber, white on light's deep one. */
+  onWarning: string;
   accentError: string;
+  /** Error as words and glyphs (a destructive row, a failed line). */
   accentErrorLight: string;
   accentFocus: string;
-  /** The scanner's viewfinder, over the camera. */
-  overlayFrame: string;
+  /** The neutral accent: what an agent coloured "white" (and the Chief, by default) takes. */
+  accentNeutral: string;
+  /** A diff's added and removed lines: ink, and the band behind the line. */
+  diffAdd: string;
+  diffAddBg: string;
+  diffDel: string;
+  diffDelBg: string;
+  /** Behind a menu or a dialog, over the app. */
   scrim: string;
+  /** On a photo or the camera, in either appearance: white words, a dark scrim, the viewfinder. */
+  onMedia: string;
+  mediaScrim: string;
+  overlayFrame: string;
+  /** Behind a photo, as the system viewer has it, in either appearance. */
   black: string;
 }
+
+/** Shared by both: what sits on a photo or the camera doesn't change with the app around it. */
+const media = {
+  onMedia: '#ffffff',
+  mediaScrim: 'rgba(0, 0, 0, 0.75)', // --color-black-o75
+  overlayFrame: 'rgba(255, 255, 255, 0.85)', // --color-white-o85
+  black: '#000000', // --color-black
+} as const;
 
 const dark: Palette = {
   surfaceApp: '#141414', // --surface-app (gray-950)
@@ -55,56 +102,151 @@ const dark: Palette = {
   surfaceControl: '#282828', // --surface-control (gray-850)
   surfaceControlHover: '#303030', // --surface-control-hover (gray-800)
   surfaceSelected: '#393939', // --surface-selected (gray-750)
-  textWhite: '#ffffff',
+  surfaceBubble: '#393939',
+  textStrong: '#ffffff',
   // Between --color-gray-100 and -200: a whole reply in #bcbcbc read dim next
   // to Grok's and iMessage's near-white bodies. Chrome keeps textPrimary.
   textBody: '#e6e6e6',
   textPrimary: '#bcbcbc', // --text-primary (gray-200)
   textSecondary: '#979797', // --text-secondary (gray-400)
   // --text-muted is gray-600 on the desk, 4.06:1 on these surfaces: too faint
-  // for words read outdoors at 12-14pt. The phone takes the next step up the
-  // desktop's own scale, which passes 4.5:1 on app and panel.
-  textMuted: '#868686', // --color-gray-500
+  // for words read outdoors at 12-14pt. The phone's sits just under
+  // textSecondary, so it still passes 4.5:1 where placeholders and metadata
+  // sit on a fill: a control (4.5), a group (4.6), the message field (4.8).
+  textMuted: '#8e8e8e',
   // Decoration only (rules, chevrons, a disabled glyph), never words: 2.2:1.
   textFaint: '#4e4e4e', // --text-faint (gray-700)
   inkDark: '#141414', // --text-on-accent
   inkLight: '#ffffff',
-  borderDefault: '#282828', // --border-default
-  borderSubtle: '#303030', // --border-subtle
+  // Named by how much they show: the desktop's --border-subtle (#303030) is
+  // the firmer of its two, so the phone's names are the other way round.
+  borderDefault: '#303030',
+  borderSubtle: '#232323',
   borderStrong: '#393939', // --border-strong
+  surfaceGroup: '#262626',
+  cardBorder: '#262626',
+  surfaceGroupPressed: '#303030',
+  composerFill: '#232323',
+  composerBorder: 'transparent',
+  inputFill: '#141414',
+  inputBorder: '#393939',
   accentSuccess: '#35d35d', // --accent-success (green-600)
   accentWarning: '#e89a1c', // --accent-warning (orange-600)
+  onWarning: '#141414',
   accentError: '#f44747', // --accent-error
   accentErrorLight: '#ef4444', // --accent-error-light
   accentFocus: '#2792ff', // --accent-focus (blue-500)
-  overlayFrame: 'rgba(255, 255, 255, 0.85)', // --color-white-o85
+  accentNeutral: '#e6e6e6', // --agents-tint-white
+  diffAdd: '#35d35d',
+  diffAddBg: 'rgba(53, 211, 93, 0.1)',
+  diffDel: '#ef4444',
+  diffDelBg: 'rgba(244, 71, 71, 0.1)',
   scrim: 'rgba(0, 0, 0, 0.75)', // --color-black-o75
-  black: '#000000', // --color-black: behind a photo, as the system viewer has it
+  ...media,
 };
-
-export const palettes = { dark } as const;
-export type Appearance = keyof typeof palettes;
-
-/** The palette in use. A light mode makes this follow the appearance. */
-export const colors: Palette = palettes.dark;
 
 /**
- * `--agents-tint-*` in src/styles/features/agents.css, keyed like `Agent.color`.
- * Each is also an accent (lib/accent.tsx).
+ * Light is drawn for light, not inverted from dark. Paper-white for the app
+ * and its chats (what's read most sits on the brightest surface), and each
+ * step of layering a few percent darker: panels and cards recess rather than
+ * glow. Words are near-black, never pure black, and every grey that carries
+ * words passes 4.5:1 on app, panel and control. Hairlines are a touch firmer
+ * than dark's, because on white a 1px line is all that separates two greys.
+ * The semantic colours are their deeper shades (green-700, amber-700, red-700
+ * and so on): the bright ones the dark palette uses wash out on white.
  */
-export const agentTints: Record<string, string> = {
-  white: '#e6e6e6',
-  brown: '#b08560',
-  red: '#ef5b50',
-  orange: '#f07c3c',
-  amber: '#e9a83a',
-  green: '#3fbf6a',
-  teal: '#2fb3a1',
-  blue: '#4d8ff5',
-  purple: '#9471f5',
-  pink: '#e45a9f',
-  gray: '#8a8a8a',
+const light: Palette = {
+  surfaceApp: '#ffffff',
+  surfacePanel: '#f5f5f5',
+  surfaceControl: '#ebebeb',
+  surfaceControlHover: '#e3e3e3',
+  surfaceSelected: '#dcdcdc',
+  surfaceBubble: '#ededed',
+  textStrong: '#0f0f0f',
+  textBody: '#1c1c1c',
+  textPrimary: '#383838',
+  textSecondary: '#5c5c5c',
+  // 4.9:1 on a control (placeholders sit there), 5.2 on a panel, 5.7 on the app.
+  textMuted: '#666666',
+  // Decoration only, as in dark.
+  textFaint: '#c2c2c2',
+  inkDark: '#0f0f0f',
+  inkLight: '#ffffff',
+  borderDefault: '#e0e0e0',
+  borderSubtle: '#ebebeb',
+  borderStrong: '#cfcfcf',
+  surfaceGroup: '#ffffff',
+  cardBorder: 'transparent',
+  surfaceGroupPressed: '#ebebeb',
+  composerFill: '#f5f5f5',
+  composerBorder: '#e0e0e0',
+  inputFill: '#ffffff',
+  inputBorder: '#cfcfcf',
+  accentSuccess: '#15803d', // green-700
+  accentWarning: '#b45309', // amber-700
+  onWarning: '#ffffff',
+  accentError: '#d42a20',
+  accentErrorLight: '#c4261c',
+  accentFocus: '#0b6bdc',
+  // The neutral accent in light is ink: a white Chief on a white app would be invisible.
+  accentNeutral: '#171717',
+  diffAdd: '#11672f',
+  diffAddBg: 'rgba(21, 128, 61, 0.1)',
+  diffDel: '#b0221a',
+  diffDelBg: 'rgba(212, 42, 32, 0.08)',
+  scrim: 'rgba(0, 0, 0, 0.22)',
+  ...media,
 };
+
+export const palettes = { dark, light } as const;
+export type Appearance = keyof typeof palettes;
+export const APPEARANCES = Object.keys(palettes) as Appearance[];
+
+/**
+ * `--agents-tint-*` in src/styles/features/agents.css, keyed like
+ * `Agent.color`, per appearance. Each is also an accent (lib/accent.tsx).
+ * "white" isn't here: it is the palette's `accentNeutral`, one rule in
+ * accent.tsx. Light takes each hue's deeper shade, so it reads as words
+ * (4.5:1 on the app and a panel) and carries white ink as a fill.
+ */
+export const agentTints: Record<Appearance, Record<string, string>> = {
+  dark: {
+    brown: '#b08560',
+    red: '#ef5b50',
+    orange: '#f07c3c',
+    amber: '#e9a83a',
+    green: '#3fbf6a',
+    teal: '#2fb3a1',
+    blue: '#4d8ff5',
+    purple: '#9471f5',
+    pink: '#e45a9f',
+    gray: '#8a8a8a',
+  },
+  light: {
+    brown: '#8a5a33',
+    red: '#c4342a',
+    orange: '#b64a0c',
+    amber: '#9c6200',
+    green: '#187d41',
+    teal: '#0e7a6d',
+    blue: '#2563d6',
+    purple: '#6d45dc',
+    pink: '#bf3580',
+    gray: '#6b6b6b',
+  },
+};
+
+/**
+ * Every `Agent.color` key, in the desk's order (`store::COLORS`): the neutral
+ * one, then the tints above. A new agent starts on the first that nobody
+ * wears, never on the two left for you to pick, and on the fallback when
+ * all are taken (the desk's `freeColor`).
+ */
+export const agentColorKeys = {
+  all: ['white', ...Object.keys(agentTints.dark)],
+  pickedOnly: ['white', 'gray'],
+  fallback: 'purple',
+} as const;
 
 /** `--spacing-*`. */
 export const space = {
@@ -119,8 +261,59 @@ export const space = {
   '2xl': 32,
 } as const;
 
-/** `--radius-*`. */
-export const radius = { sm: 4, control: 6, card: 8, lg: 12, pill: 999 } as const;
+/**
+ * Corners. One card radius, and an inner radius concentric with it: a well
+ * inside a 16-padded card is `card − padding / 2`, so the two curves share a
+ * centre. Nothing draws a corner that isn't one of these, a circle (`size / 2`)
+ * or a squircle (`squircle(size)`); a test holds that.
+ *
+ * - `inner`: wells inside a card (a command, a diff, code, a table), text
+ *   inputs, small badges.
+ * - `control`: buttons, icon wells, composer tiles.
+ * - `card`: every card, group, chip, thumbnail, toast and summary bar.
+ * - `sheet`: sheets, native and our own menu.
+ */
+export const radius = { sm: 4, inner: 10, control: 12, card: 16, sheet: 24, pill: 999 } as const;
+
+/** An avatar's or logo's corner: one squircle proportion at every size. */
+export const squircle = (size: number) => Math.round(size * 0.28);
+
+/**
+ * Icon sizes. Four, and one exception:
+ * - `inline` 12: beside a caption or small line (every chevron, pin, lock, eyebrow glyph).
+ * - `body` 16: beside body text (row icons, button icons, the composer's glyphs).
+ * - `button` 20: an IconButton's glyph in its 44pt target.
+ * - `hero` 28: an empty state.
+ * - `micro` 10: only the × on a tile too small for 12.
+ */
+export const iconSize = { micro: 10, inline: 12, body: 16, button: 20, hero: 28 } as const;
+
+/**
+ * The message field, iMessage's geometry: one line is a 36pt pill, and the
+ * corner stays 18 as it grows, so several lines read as a rounded rectangle
+ * rather than a blob. The + is a 36pt circle (as tall as one line); send is
+ * a 28pt circle inside the field, 4pt in from its edge. Both sit on the last
+ * line as the field grows. User bubbles share the corner and the line.
+ */
+export const composer = {
+  /** 16pt text on a 20pt line. */
+  line: 20,
+  /** Above and below the text, so one line is 36. */
+  padV: 8,
+  padLeft: 12,
+  padRight: 8,
+  height: 36,
+  corner: 18,
+  /** Lines before it scrolls inside. */
+  maxLines: 6,
+  attach: 36,
+  send: 28,
+  /** Send's inset from the field's edge. */
+  inset: 4,
+} as const;
+
+/** Agent avatars: in a search group, a chat header, a list row, the agent sheet. */
+export const avatarSize = { group: 24, header: 28, list: 48, sheet: 56 } as const;
 
 /**
  * The desktop's type scale (`--font-size-*`), one step up where the desk
@@ -134,6 +327,8 @@ export const type = {
   subhead: 16,
   title: 18,
   display: 28,
+  /** Tile labels only (a file's extension on a 40pt badge): never a sentence. */
+  micro: 10,
 } as const;
 
 /**
@@ -142,6 +337,12 @@ export const type = {
  * no cap; they reflow.
  */
 export const chromeScale = 1.3;
+
+/**
+ * A card's title and its asides: they may grow further than chrome, but not
+ * so far that the answers under them leave the screen.
+ */
+export const CARD_TITLE_SCALE = 1.5;
 
 export const lineHeight = (size: number, ratio = 1.4) => Math.round(size * ratio);
 

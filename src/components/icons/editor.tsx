@@ -4,6 +4,7 @@ import ElementCodeBlockSvg from '../../assets/icons/element-code-block.svg?react
 import TerminalSvg from '../../assets/icons/terminal.svg?react';
 import EditModeSvg from '../../assets/icons/edit-mode.svg?react';
 import EditFieldSvg from '../../assets/icons/edit-field.svg?react';
+import PencilSvg from '../../assets/icons/pencil.svg?react';
 import FileSvg from '../../assets/icons/file.svg?react';
 import FileTextSvg from '../../assets/icons/file-text.svg?react';
 import PaperclipSvg from '../../assets/icons/paperclip.svg?react';
@@ -91,6 +92,14 @@ export const EditIcon = createIcon(EditModeSvg, {
 export const EditFieldIcon = createIcon(EditFieldSvg, {
   name: 'EditFieldIcon',
   source: 'icons/edit-field.svg',
+  kind: 'ui',
+  defaultSize: 16,
+  strokeWidth: '1px',
+});
+/** Changing a file's contents: a pencil, where `EditIcon` is the visual editor's mode. */
+export const PencilIcon = createIcon(PencilSvg, {
+  name: 'PencilIcon',
+  source: 'icons/pencil.svg',
   kind: 'ui',
   defaultSize: 16,
   strokeWidth: '1px',

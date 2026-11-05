@@ -52,12 +52,6 @@
   gap: var(--spacing-xl);
 }
 
-.onboarding-logo {
-  height: 40px;
-  width: auto;
-  margin-bottom: var(--spacing-2xl);
-}
-
 .onboarding-header h1 {
   font-size: var(--font-size-h2);
   font-weight: 600;

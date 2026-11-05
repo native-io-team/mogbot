@@ -1,14 +1,17 @@
 /**
- * Import an agent setup from another assistant.
+ * Import an agent setup from somewhere else.
  *
- * Only the other assistant knows its own agents, instructions and memory, so
- * it does the harvesting, one of two ways:
- * - Paste: it writes its agents out as JSON and the user pastes the reply
- *   here. Needs nothing set up, so it's the default while remote access is off.
- * - Connected assistant: it calls our `import_agents` tool over the
- *   remote access connector. The default once remote access is on.
+ * From another assistant (Grok, ChatGPT, Claude…), the main path is a
+ * conversation: the user sends it one message, and it talks to the Chief of
+ * Staff over the connector until every agent is over
+ * (`ImportConnectorPanel`, `agents/connector.rs`). Pasting its reply is the
+ * fallback for one that can't connect (`ImportPastePanel`). Both end in the
+ * same merge (`agents/import.rs`).
  *
- * Both end in the same merge (`agents/import.rs`).
+ * When the app this one grew out of has agents on this Mac, a first segment
+ * reads them straight from its folder and copies them in whole
+ * (`agents/other_app.rs`). It leads whenever it has someone left to bring
+ * over. Its name comes from the preview (`appName`).
  *
  * @module components/agents/ImportAgentsModal
  */
@@ -16,15 +19,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
+import { TextButton } from '../primitives/TextButton';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
-import { useOpenModal } from '../../contexts/ModalContext';
-import { getImportPrompt } from '../../lib/agents';
+import { previewOtherAppImport, type OtherAppPreview } from '../../lib/agents';
 import { useAgentsList } from '../../lib/agentsStore';
 import { getRemoteAccessStatus } from '../../lib/remoteAccess';
 import { ImportPastePanel, type ImportResult } from './ImportPastePanel';
-import { ImportDone, ImportStep, MessageCard } from './ImportParts';
+import { ImportConnectorPanel } from './ImportConnectorPanel';
+import { ImportDone } from './ImportParts';
+import { arriving, OtherAppImportPanel } from './OtherAppImportPanel';
 
-type ImportPath = 'paste' | 'connected';
+/** `paste` is the assistant path's fallback, reached from the connector panel. */
+export type ImportPath = 'otherApp' | 'assistant' | 'paste';
 
 interface ImportAgentsModalProps {
   isOpen: boolean;
@@ -32,60 +38,27 @@ interface ImportAgentsModalProps {
   onClose: (imported: boolean) => void;
   /** Closes the modal and opens this agent's conversation. */
   onOpenAgent: (agentId: string) => void;
+  /** Open on this path when it's available (the palette's "from the other app"). */
+  initialPath?: ImportPath | null;
 }
 
-function ConnectedPanel({ connected, onClose }: { connected: boolean; onClose: () => void }) {
-  const [prompt, setPrompt] = useState('');
-  const openModal = useOpenModal();
-
-  useEffect(() => {
-    void getImportPrompt()
-      .then(setPrompt)
-      .catch(() => setPrompt(''));
-  }, []);
-
-  return (
-    <>
-      <div className="agents-import__body">
-        <p className="agents-import__lede">
-          A connected assistant can send its agents over itself, with their instructions and what
-          they remember.
-        </p>
-        <ol className="agents-import-steps">
-          <ImportStep
-            n={1}
-            state={connected ? 'done' : 'current'}
-            title="Connect your assistant"
-            folded={connected}
-            aside={connected && 'Remote access is on'}
-          >
-            <div className="agents-import__inline">
-              <span>It reaches this Mac through Remote access.</span>
-              <Button variant="secondary" size="compact" onClick={() => openModal('remoteAccess')}>
-                Set up Remote access…
-              </Button>
-            </div>
-          </ImportStep>
-          <ImportStep n={2} state={connected ? 'current' : 'todo'} title="Send it this message">
-            <MessageCard message={prompt} />
-          </ImportStep>
-        </ol>
-      </div>
-      <footer className="agents-import__footer">
-        <p className="agents-import__note">
-          Your agents appear in the list as soon as it&apos;s done. Running it again updates them
-          rather than making copies.
-        </p>
-        <Button variant="secondary" onClick={onClose}>
-          Done
-        </Button>
-      </footer>
-    </>
-  );
-}
-
-export function ImportAgentsModal({ isOpen, onClose, onOpenAgent }: ImportAgentsModalProps) {
-  const [path, setPath] = useState<ImportPath>('paste');
+export function ImportAgentsModal({
+  isOpen,
+  onClose,
+  onOpenAgent,
+  initialPath,
+}: ImportAgentsModalProps) {
+  const [path, setPath] = useState<'otherApp' | 'assistant'>('assistant');
+  const [pasting, setPasting] = useState(initialPath === 'paste');
+  // Each opening starts on the path it was asked for (state adjusted while
+  // rendering, not in an effect, so it never paints the wrong one first).
+  const opening = isOpen ? `open:${initialPath ?? ''}` : 'closed';
+  const [opened, setOpened] = useState(opening);
+  if (opened !== opening) {
+    setOpened(opening);
+    setPasting(initialPath === 'paste');
+  }
+  const [otherApp, setOtherApp] = useState<OtherAppPreview | null>(null);
   const [connected, setConnected] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const main = useAgentsList().find((a) => a.isMain);
@@ -118,22 +91,31 @@ export function ImportAgentsModal({ isOpen, onClose, onOpenAgent }: ImportAgents
     setResult(null);
     onClose(done);
   };
+  const openAgent = (id: string) => {
+    setResult(null);
+    onOpenAgent(id);
+  };
 
-  // Each time it opens: paste works anywhere, so it leads unless remote access is on.
+  // Each time it opens: the other app's team leads when there's someone left
+  // to bring over (or the palette asked for it); otherwise the conversation
+  // over the connector, with pasting a reply one link away.
   useEffect(() => {
     if (!isOpen) return;
     let live = true;
-    void getRemoteAccessStatus()
-      .then((s) => {
-        if (!live) return;
-        setConnected(s.enabled);
-        setPath(s.enabled ? 'connected' : 'paste');
-      })
-      .catch(() => undefined);
+    void Promise.all([
+      getRemoteAccessStatus().catch(() => null),
+      previewOtherAppImport().catch(() => null),
+    ]).then(([remote, other]) => {
+      if (!live) return;
+      setConnected(!!remote?.enabled);
+      setOtherApp(other);
+      const leads = !!other && (arriving(other).length > 0 || initialPath === 'otherApp');
+      setPath(leads ? 'otherApp' : 'assistant');
+    });
     return () => {
       live = false;
     };
-  }, [isOpen]);
+  }, [isOpen, initialPath]);
 
   return (
     <ModalFrame
@@ -146,41 +128,57 @@ export function ImportAgentsModal({ isOpen, onClose, onOpenAgent }: ImportAgents
       {result ? (
         <>
           <div className="agents-import__body" ref={doneRef} tabIndex={-1}>
-            <ImportDone summary={result.summary} agents={result.agents} />
+            <ImportDone summary={result.summary} agents={result.agents} extra={result.extra} />
           </div>
           <footer className="agents-import__footer agents-import__footer--done">
             <Button variant="secondary" onClick={close}>
               Close
             </Button>
             {main && (
-              <Button
-                variant="primary"
-                ref={openRef}
-                onClick={() => {
-                  setResult(null);
-                  onOpenAgent(main.id);
-                }}
-              >
+              <Button variant="primary" ref={openRef} onClick={() => openAgent(main.id)}>
                 Open {main.name}
               </Button>
             )}
           </footer>
         </>
       ) : (
-        <Tabs value={path} onValueChange={(v) => setPath(v as ImportPath)}>
-          <TabsList
-            className="agents-import__tabs"
-            appearance="underline"
-            aria-label="How to import"
-          >
-            <TabsTab value="paste">Paste a reply</TabsTab>
-            <TabsTab value="connected">Connected assistant</TabsTab>
-          </TabsList>
-          <TabsPanel value="paste">
-            <ImportPastePanel onCancel={close} onDone={setResult} />
-          </TabsPanel>
-          <TabsPanel value="connected">
-            <ConnectedPanel connected={connected} onClose={close} />
+        <Tabs value={path} onValueChange={(v) => setPath(v as 'otherApp' | 'assistant')}>
+          {otherApp && (
+            <TabsList className="agents-import__tabs" aria-label="Where from">
+              <TabsTab value="otherApp" width="fill">
+                From {otherApp.appName}
+              </TabsTab>
+              <TabsTab value="assistant" width="fill">
+                From another assistant
+              </TabsTab>
+            </TabsList>
+          )}
+          {otherApp && (
+            <TabsPanel value="otherApp">
+              <OtherAppImportPanel preview={otherApp} onCancel={close} onDone={setResult} />
+            </TabsPanel>
+          )}
+          <TabsPanel value="assistant">
+            {pasting ? (
+              <ImportPastePanel
+                onCancel={close}
+                onDone={setResult}
+                aside={
+                  <p className="agents-import__switch">
+                    <TextButton onClick={() => setPasting(false)}>
+                      Talk over the connector instead
+                    </TextButton>
+                  </p>
+                }
+              />
+            ) : (
+              <ImportConnectorPanel
+                connected={connected}
+                onClose={close}
+                onOpenAgent={openAgent}
+                onPaste={() => setPasting(true)}
+              />
+            )}
           </TabsPanel>
         </Tabs>
       )}

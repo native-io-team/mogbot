@@ -229,7 +229,7 @@
   width: 15px;
   height: 15px;
   margin: 2px 0 0;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   background: var(--surface-control);
   cursor: pointer;

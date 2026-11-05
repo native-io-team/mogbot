@@ -23,3 +23,17 @@
   background: var(--button-surface-pressed);
   box-shadow: var(--shadow-input-inset);
 }
+
+/* Beside a field or button in a toolbar row, the control takes the row's
+   height instead of its own: a compact group next to a standard search field
+   was 4px short and sat visibly off the field's baseline. */
+.segmented-control--stretch {
+  box-sizing: border-box;
+  align-self: stretch;
+  align-items: stretch;
+}
+
+.segmented-control--stretch > .button {
+  height: auto;
+  min-height: 0;
+}

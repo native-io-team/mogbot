@@ -22,45 +22,12 @@
   flex-shrink: 0;
 }
 
-.help-tab {
-  position: relative;
-  display: flex;
-  flex: 1 1 0;
-  align-items: center;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  appearance: none;
-  -webkit-appearance: none;
-  padding: var(--spacing-lg) 0;
-  font-size: var(--font-size-body-lg);
-  color: var(--text-muted);
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
-  transition: color var(--transition);
-  outline: none;
-}
-
 /* The shared tab primitive defaults to a compact fixed height. Let these
-   help tabs grow with their larger vertical padding, matching the command
-   palette tabs. */
+   help tabs fill the band, matching the command palette tabs. Colour, hover,
+   focus and the bar come from the underline appearance. */
 .help-tabs .tabs__tab.button.help-tab {
   height: auto;
   min-height: 0;
-}
-
-.help-tab:hover,
-.help-tab:focus,
-.help-tab:focus-visible {
-  color: var(--text-secondary);
-  background: transparent;
-  outline: none;
-  box-shadow: none;
-}
-
-.help-tab.is-active {
-  color: var(--text-primary);
 }
 
 .help-modal-body {
@@ -68,7 +35,7 @@
   padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
   overflow-y: auto;
   flex: 1;
-  border-top: var(--stroke-1) solid var(--border-default);
+  border-top: var(--stroke-1) solid var(--border-subtle);
   scrollbar-width: thin;
   scrollbar-color: var(--border-default) transparent;
 }

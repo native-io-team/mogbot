@@ -34,12 +34,6 @@
     },
     {
       "path": "src/styles/components/command-palette.css",
-      "token": "--transition",
-      "count": 1,
-      "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
-    },
-    {
-      "path": "src/styles/components/command-palette.css",
       "token": "--transition-fast",
       "count": 1,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
@@ -148,12 +142,6 @@
     },
     {
       "path": "src/styles/components/tabs.css",
-      "token": "--radius-2",
-      "count": 2,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/components/tabs.css",
       "token": "--space-12",
       "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
@@ -161,7 +149,7 @@
     {
       "path": "src/styles/components/tabs.css",
       "token": "--stroke-1",
-      "count": 2,
+      "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
@@ -964,12 +952,6 @@
     },
     {
       "path": "src/styles/features/element-tree.css",
-      "token": "--color-orange-400",
-      "count": 2,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/features/element-tree.css",
       "token": "--font-size-11",
       "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
@@ -1055,7 +1037,7 @@
     {
       "path": "src/styles/features/help-modal.css",
       "token": "--transition",
-      "count": 5,
+      "count": 4,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
     },
     {
@@ -1950,12 +1932,6 @@
       "path": "src/styles/global/base.css",
       "token": "--stroke-1",
       "count": 3,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/global/base.css",
-      "token": "--stroke-2",
-      "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {

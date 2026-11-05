@@ -35,6 +35,12 @@
   --agents-prose-measure: 38em; /* ≈70 characters of body text */
 }
 
+/* White is the strongest neutral of the theme: near-black on light, as the
+   accent itself is (LIGHT_THEME_WHITE in accent.ts). */
+:root[data-theme='light'] {
+  --agents-tint-white: #1c1c1c;
+}
+
 [data-color='white'] {
   --agents-tint: var(--agents-tint-white);
 }
@@ -292,13 +298,13 @@
   color: var(--text-secondary);
 }
 
-.workspace-sidebar:not(.is-hidden) .agents-list__new {
-  margin-top: var(--spacing-xs);
+.workspace-sidebar:not(.is-hidden) .agents-list__new:hover:not(:disabled),
+.workspace-sidebar:not(.is-hidden) .agents-list__import:hover:not(:disabled) {
+  color: var(--text-primary);
 }
 
-.workspace-sidebar:not(.is-hidden) .agents-list__new:hover,
-.workspace-sidebar:not(.is-hidden) .agents-list__import:hover {
-  color: var(--text-primary);
+.workspace-sidebar:not(.is-hidden) .agents-list__new {
+  margin-top: var(--spacing-xs);
 }
 
 /* "● Needs you · 2 ›": the way into What's in flight, at the top of the list
@@ -1698,10 +1704,20 @@
   color: var(--text-muted);
 }
 
+/* Save stays in reach however long the form gets (permissions, secrets and
+   usage push it well below the fold): a footer pinned to the dialog's
+   bottom edge, bled to its sides like Import agents' footer. */
 .agent-editor__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-sm);
+  margin: 0 calc(var(--spacing-xl) * -1) calc(var(--spacing-xl) * -1);
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: var(--surface-panel);
+  border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
 .agent-editor__delete {
@@ -2476,4 +2492,131 @@
   text-transform: none;
   letter-spacing: normal;
   color: var(--text-faint);
+}
+
+/* ------------------------------------------------ import over the connector */
+
+/* The other assistant's side of an import (agents/connector.rs): on the left
+   like the agent's words, outlined and labelled so it reads as neither the
+   agent nor you. */
+.agent-chat__row--connector {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-2xs);
+}
+
+.agent-chat__messages > .agent-chat__row--connector,
+.agent-chat__row--connector + .agent-chat__row--agent,
+.agent-chat__row--agent + .agent-chat__row--connector {
+  margin-top: var(--spacing-lg);
+}
+
+.agent-connector__who {
+  padding-left: var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+}
+
+.agent-connector__via {
+  font-weight: var(--font-weight-body);
+  color: var(--text-muted);
+}
+
+.agent-bubble--connector {
+  max-width: min(var(--agents-prose-measure), 100%);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface-recessed);
+  border: var(--border-width-default) solid var(--border-subtle);
+}
+
+/* As a link in the agents' prose looks. */
+.agent-connector__link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+  text-underline-offset: 2px;
+}
+
+/* What the sealed interview wrote back: indented under the other
+   assistant's line, dashed rather than solid, so a reply to Grok never
+   passes for the Chief talking to you. */
+.agent-chat__row--to-connector {
+  padding-left: var(--spacing-xl);
+}
+
+.agent-bubble--to-connector {
+  max-width: min(calc(var(--agents-prose-measure) - var(--spacing-xl)), 100%);
+  background: transparent;
+  border-style: dashed;
+}
+
+/* Above the Chief's composer while an import conversation is going. */
+.agent-import-talk {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: calc(100% - (var(--spacing-xl) * 2));
+  max-width: var(--agents-chat-width);
+  margin: 0 auto var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-md);
+  font-size: var(--font-size-body-md);
+  color: var(--text-secondary);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-card);
+}
+
+.agent-import-talk__dot {
+  flex: none;
+  width: var(--spacing-xs);
+  height: var(--spacing-xs);
+  border-radius: var(--radius-pill);
+  background: var(--status-running);
+  animation: agent-import-talk-live var(--agents-motion-typing-period) ease-in-out infinite;
+}
+
+.agent-import-talk__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-import-talk__text strong {
+  display: block;
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agent-import-talk__detail {
+  display: block;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-import-talk[data-state='awaiting_consent'] .agent-import-talk__dot,
+.agent-import-talk[data-state='review'] .agent-import-talk__dot {
+  background: var(--accent-warning);
+}
+
+@keyframes agent-import-talk-live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-import-talk__dot {
+    animation: none;
+  }
+}
+
+/* Another assistant asking to start an import: what it means, in prose. */
+.agent-approval__detail--prose {
+  max-height: none;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--font-size-body-md);
+  white-space: pre-wrap;
+  color: var(--text-secondary);
 }

@@ -841,9 +841,9 @@
 
 .crop-selection {
   position: absolute;
-  border: 1px solid color-mix(in srgb, var(--text-white) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-overlay-ink) 80%, transparent);
   background: transparent;
-  box-shadow: 0 0 0 9999px var(--overlay-50);
+  box-shadow: 0 0 0 9999px var(--page-scrim);
   pointer-events: none;
 }
 
@@ -852,8 +852,8 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: var(--overlay-80);
-  color: var(--text-inverse);
+  background: var(--page-scrim-strong);
+  color: var(--accent-overlay-ink);
   padding: 16px 24px;
   border-radius: var(--radius-card);
   font-size: var(--font-size-subhead);
@@ -866,7 +866,7 @@
 
 .crop-hint {
   font-size: var(--font-size-body-md);
-  color: color-mix(in srgb, var(--text-white) 60%, transparent);
+  color: color-mix(in srgb, var(--accent-overlay-ink) 60%, transparent);
 }
 
 /* Preview loading and error states */

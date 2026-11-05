@@ -135,6 +135,9 @@ export const baseCommands: CommandMap = {
     defaultAgent: 'Claude Code',
   },
   get_app_icon: 'brand',
+  // The harness's `?theme=` param overrides this (fakeBackend.ts).
+  get_app_theme: 'dark',
+  set_app_theme: null,
   // `null` is the real third state here: never asked. The toggle then reflects
   // default-on, and the explainer runs before the first capture.
   get_thumbnails_enabled: null,
@@ -238,13 +241,44 @@ export const baseCommands: CommandMap = {
   },
   agents_focus: null,
   agents_mark_unread: null,
+  // From import::import_prompt in src-tauri/src/agents/import.rs, for a Chief called Chief of Staff.
   agents_import_prompt:
-    'Import my setup into Ship Studio. Use Ship Studio\'s import_agents tool: send every agent I have with you, each with its name, a one-line role, its full instructions, and everything you remember that it needs (one fact per line). Mark the agent that manages the others as the main one. Include each agent\'s routines and automations, with when each runs in plain words ("every weekday at 9am", "every 2 hours") and what it does then. Leave out passwords, API keys and card numbers.',
+    "Move my agents to the app I just connected you to. Use its import_conversation tool to talk to my Chief of Staff there, and answer its questions about each agent you run for me until it says the import is ready for me to review. Don't send passwords, API keys or card numbers: the app asks me for those itself.",
+  // connector::Gate: nothing armed, no import going.
+  agents_import_talk: { armed: false, talk: null },
+  agents_import_talk_arm: { armed: true, talk: null },
+  agents_import_talk_stop: false,
+  // review::Applied for one new agent.
+  agents_import_review_apply: {
+    agents: ['Finance'],
+    replaced: [],
+    skipped: [],
+    chiefNotes: false,
+    routinesRefused: [],
+  },
 
   // Copied from PASTE_PROMPT in src-tauri/src/agents/paste.rs.
   agents_import_paste_prompt:
     'I\'m moving my agents to Ship Studio. Please give me a complete copy of every agent you run for me, including the main one that manages the others.\n\nReply with one ```json code block in exactly this shape:\n\n{\n  "source": "your product\'s name, e.g. Grok Bot",\n  "agents": [\n    {\n      "name": "the agent\'s name",\n      "role": "one line: what it does",\n      "instructions": "its full instructions, word for word",\n      "memory": "everything it remembers that it still needs, one fact per line",\n      "is_main": false,\n      "color": "red",\n      "routines": [\n        { "when": "every weekday at 9am", "what": "what it does then, in a sentence or two" }\n      ]\n    }\n  ]\n}\n\nRules:\n- Include every agent. Set "is_main": true on the one that manages the others (at most one), false on the rest.\n- Copy instructions and memory in full, word for word. Don\'t summarize, shorten or paraphrase them. Long is fine.\n- "routines": everything the agent does on its own on a schedule (routines, automations, reminders, recurring check-ins), one entry each. Write "when" in plain words, like "every weekday at 9am", "every monday at 8:30am", "every day at 7pm", "every 2 hours" or, for a one-off, "friday at 2pm". Start repeating ones with "every". Write "what" so the agent knows exactly what to do when it fires. Use [] if it has none.\n- "color" is optional: if the agent has one, use the closest of white, brown, red, orange, amber, green, teal, blue, purple, pink, gray. Otherwise leave it out.\n- Never include passwords, API keys, tokens, card numbers or any other credentials. If an instruction or memory contains one, write [removed] in its place.\n- Valid JSON only: straight double quotes, line breaks written as \\n inside strings, no comments, no trailing commas.\n- If it\'s too long for one message, split it into numbered ```json blocks (Part 1 of 3, Part 2 of 3, ...), each in the same shape and each holding whole agents. Never split one agent across blocks. Send the next part when I say "continue".\n- Put nothing but the JSON inside each code block.',
   agents_import_paste_preview: { source: '', blocks: 0, agents: [], problems: [] },
+  // The other app isn't on this machine: its tab and palette command stay hidden.
+  agents_other_app_preview: null,
+  agents_other_app_exists: false,
+  agents_other_app_import: {
+    created: [],
+    updated: [],
+    skipped: [],
+    routinesSet: [],
+    routinesRefused: [],
+    appName: 'Ship Studio',
+    already: [],
+    routinesPaused: 0,
+    messages: 0,
+    secretsLeft: [],
+    rulesKept: [],
+    rulesLeft: [],
+    filesSkipped: [],
+  },
   agents_import_paste: {
     created: [],
     updated: [],

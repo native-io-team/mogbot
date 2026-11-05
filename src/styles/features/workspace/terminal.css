@@ -314,6 +314,22 @@
   background: var(--surface-app);
 }
 
+/* The xterm host and its placeholders sit on the same surface as the xterm
+   palette's background (terminalTheme.ts), in either theme. */
+.terminal-instance-container,
+.terminal-loading {
+  background: var(--surface-app);
+}
+
+.terminal-loading {
+  color: var(--text-muted);
+}
+
+/* Washes an unfocused terminal toward the surface it sits on. */
+.terminal-dim-overlay {
+  background: color-mix(in srgb, var(--surface-app) 40%, transparent);
+}
+
 .terminal-tab-content:not([data-agent-id='opencode']) .terminal-instance {
   left: -12px;
   width: calc(100% + 12px) !important;

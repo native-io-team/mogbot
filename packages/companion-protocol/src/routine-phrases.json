@@ -1,0 +1,57 @@
+{
+  "about": "Every kind of schedule the phone's routine picker makes, and the words it sends for it. mobile/__tests__/start.node.test.ts checks routineWhenPhrase writes each phrase; the Rust test agents::schedule::tests::reads_every_phrase_the_phone_picker_writes checks the Mac's grammar reads each one back as the same schedule. One-off dates are after Tue 3 Nov 2026, the Rust test's now.",
+  "cases": [
+    {
+      "when": { "kind": "days", "days": [1, 2, 3, 4, 5], "hour": 9, "minute": 0 },
+      "phrase": "every weekday at 09:00"
+    },
+    {
+      "when": { "kind": "days", "days": [0, 1, 2, 3, 4, 5, 6], "hour": 7, "minute": 30 },
+      "phrase": "every day at 07:30"
+    },
+    {
+      "when": { "kind": "days", "days": [0, 1, 2, 3, 4, 5, 6], "hour": 0, "minute": 0 },
+      "phrase": "every day at 00:00"
+    },
+    {
+      "when": { "kind": "days", "days": [0, 6], "hour": 10, "minute": 15 },
+      "phrase": "every weekend day at 10:15"
+    },
+    {
+      "when": { "kind": "days", "days": [1, 4], "hour": 8, "minute": 30 },
+      "phrase": "every monday and thursday at 08:30"
+    },
+    {
+      "when": { "kind": "days", "days": [0], "hour": 18, "minute": 0 },
+      "phrase": "every sunday at 18:00"
+    },
+    {
+      "when": { "kind": "days", "days": [1, 3, 5], "hour": 23, "minute": 55 },
+      "phrase": "every monday, wednesday and friday at 23:55"
+    },
+    {
+      "when": { "kind": "days", "days": [2, 3, 4, 5, 6], "hour": 12, "minute": 5 },
+      "phrase": "every tuesday, wednesday, thursday, friday and saturday at 12:05"
+    },
+    { "when": { "kind": "every", "minutes": 60 }, "phrase": "every hour" },
+    { "when": { "kind": "every", "minutes": 120 }, "phrase": "every 2 hours" },
+    { "when": { "kind": "every", "minutes": 240 }, "phrase": "every 4 hours" },
+    { "when": { "kind": "every", "minutes": 90 }, "phrase": "every 90 minutes" },
+    {
+      "when": { "kind": "once", "date": "2026-11-20", "hour": 9, "minute": 0 },
+      "phrase": "2026-11-20 09:00"
+    },
+    {
+      "when": { "kind": "once", "date": "2026-11-04", "hour": 0, "minute": 5 },
+      "phrase": "2026-11-04 00:05"
+    },
+    {
+      "when": { "kind": "once", "date": "2026-12-31", "hour": 23, "minute": 55 },
+      "phrase": "2026-12-31 23:55"
+    },
+    {
+      "when": { "kind": "once", "date": "2027-03-14", "hour": 12, "minute": 0 },
+      "phrase": "2027-03-14 12:00"
+    }
+  ]
+}

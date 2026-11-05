@@ -10,6 +10,12 @@
   --alo-demo-ok: #23d18b;
 }
 
+/* The demo terminal follows the light xterm palette (terminalTheme.ts). */
+:root[data-theme='light'] {
+  --alo-demo-cmd: #0a63c9;
+  --alo-demo-ok: #1a7f37;
+}
+
 /* ============ Mode router ============ */
 
 .onboarding-router {

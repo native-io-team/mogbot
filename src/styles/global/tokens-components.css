@@ -127,16 +127,16 @@
   --property-surface: var(--color-blue-700);
   --property-surface-hover: var(--color-blue-600);
   --property-border: var(--color-blue-700);
-  --property-text: var(--color-blue-400);
+  --property-text: var(--syntax-property);
   --property-field-hover: var(--color-blue-500-o15);
   --property-field-selected: var(--color-blue-500-o40);
   --property-label-modified-surface: var(--color-blue-500-o15);
-  --property-label-modified-text: var(--color-blue-400);
+  --property-label-modified-text: var(--syntax-property);
   --property-label-inherited-surface: color-mix(in srgb, var(--color-orange-500) 15%, transparent);
-  --property-label-inherited-text: var(--color-orange-400);
+  --property-label-inherited-text: var(--syntax-class);
 
   --tag-surface: color-mix(in oklch, var(--color-green-700) 15%);
-  --tag-text: var(--color-green-400);
+  --tag-text: var(--syntax-tag);
   --tag-chip-surface: var(--color-green-800);
   --tag-chip-surface-hover: var(--color-green-700);
   --tag-chip-text: var(--text-inverse);
@@ -144,13 +144,13 @@
   --variable-surface: var(--color-purple-700);
   --variable-surface-hover: var(--color-purple-600);
   --variable-border: var(--color-purple-700);
-  --variable-text: var(--color-purple-400);
-  --variable-text-hover: var(--color-purple-300);
+  --variable-text: var(--syntax-variable);
+  --variable-text-hover: var(--syntax-variable-hover);
   --variable-field-hover: var(--color-purple-500-o15);
   --variable-field-selected: var(--color-purple-500-o40);
-  --class-text: var(--color-orange-400);
-  --property-text-hover: var(--color-white);
-  --function-text: var(--color-red-400);
+  --class-text: var(--syntax-class);
+  --property-text-hover: var(--text-white);
+  --function-text: var(--syntax-function);
   --media-surface: var(--color-pink-600);
   --media-surface-hover: var(--color-pink-500);
   --media-text: color-mix(in srgb, var(--color-pink-400) 40%, var(--text-inverse));
@@ -182,7 +182,7 @@
   --button-success-border: color-mix(in srgb, var(--accent-success) 30%, transparent);
   --button-success-surface-hover: color-mix(in srgb, var(--accent-success) 10%, transparent);
   --button-success-text: var(--accent-success);
-  --button-surface-busy: var(--color-gray-900);
+  --button-surface-busy: var(--surface-busy);
   --button-strong-surface: var(--surface-inverse);
   --button-strong-surface-hover: var(--surface-inverse-hover);
   --button-strong-text: var(--text-on-inverse);
@@ -361,10 +361,10 @@
   --editor-panel-spacing-core-x: 36px;
   --editor-panel-spacing-core-y: 22px;
   --editor-panel-spacing-core-h: 20px;
-  --editor-panel-spacing-label: var(--color-gray-500);
-  --editor-panel-spacing-value: var(--color-gray-400);
+  --editor-panel-spacing-label: var(--text-quiet);
+  --editor-panel-spacing-value: var(--text-secondary);
   --editor-panel-spacing-margin-top: var(--surface-selected);
-  --editor-panel-spacing-margin-top-hover: var(--color-gray-700);
+  --editor-panel-spacing-margin-top-hover: var(--surface-selected-strong);
   --editor-panel-spacing-margin-side: var(--surface-control-hover);
   --editor-panel-spacing-margin-side-hover: var(--surface-selected);
   --editor-panel-spacing-margin-bottom: var(--surface-control);
@@ -374,7 +374,7 @@
   --editor-panel-spacing-padding-side: var(--surface-control-hover);
   --editor-panel-spacing-padding-side-hover: var(--surface-selected);
   --editor-panel-spacing-padding-bottom: var(--surface-selected);
-  --editor-panel-spacing-padding-bottom-hover: var(--color-gray-700);
+  --editor-panel-spacing-padding-bottom-hover: var(--surface-selected-strong);
   /* A band that stays put while its own container scrolls under it. */
   --z-sticky-band: 1;
   --z-editor-spacing-band: 1;

@@ -71,7 +71,7 @@ import {
   shouldArmStartupWatchdog,
   STARTUP_TIMEOUT_MS,
 } from './startupWatchdog';
-import { createTerminalOptions } from './terminalTheme';
+import { createTerminalOptions, followAppTheme } from './terminalTheme';
 import type { AgentConfig } from '../../lib/agent';
 import '@xterm/xterm/css/xterm.css';
 
@@ -419,6 +419,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       ...createTerminalOptions('normal'),
       allowProposedApi: true,
     });
+    followAppTheme(term, 'normal');
 
     const fitAddon = new FitAddon();
     const unicode11Addon = new Unicode11Addon();
@@ -1239,7 +1240,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         style={{
           width: '100%',
           height: '100%',
-          backgroundColor: '#141414',
           filter: isFocused ? 'none' : 'grayscale(100%)',
           transition: 'filter 150ms ease-in-out',
         }}
@@ -1247,14 +1247,13 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       {/* Loading indicator while terminal is initializing */}
       {!isReady && (
         <div
+          className="terminal-loading"
           style={{
             position: 'absolute',
             inset: 0,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: '#141414',
-            color: '#666666',
             fontFamily: 'var(--font-code)',
             fontSize: 13,
           }}
@@ -1265,10 +1264,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       {/* Dimming overlay when terminal is not focused */}
       <div
         onClick={handleClick}
+        className="terminal-dim-overlay"
         style={{
           position: 'absolute',
           inset: 0,
-          backgroundColor: 'rgba(30, 30, 30, 0.4)',
           pointerEvents: isFocused ? 'none' : 'auto',
           opacity: isFocused ? 0 : 1,
           transition: 'opacity 150ms ease-in-out',

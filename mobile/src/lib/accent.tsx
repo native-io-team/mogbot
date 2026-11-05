@@ -7,13 +7,26 @@
  *
  * Only actions and attention take it: the primary button, Send, the cursor,
  * a switch that's on. Outcomes keep their semantic colours (theme.ts), and an
- * approval's answers never take it (`ANSWER`): a red agent's Allow must not
- * read as the dangerous choice.
+ * approval's answers never take it (`answerAccent`): a red agent's Allow must
+ * not read as the dangerous choice.
+ *
+ * Each agent colour is drawn per appearance (theme.ts `agentTints`): the same
+ * hue, deeper in light so it reads on white.
  */
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { useTheme } from './appearance';
 import { useApp } from './store';
-import { agentTints, alpha, colors, contrast, luminance, mix } from './theme';
+import {
+  agentTints,
+  alpha,
+  contrast,
+  luminance,
+  mix,
+  palettes,
+  type Appearance,
+  type Palette,
+} from './theme';
 
 export interface Accent {
   /** The fill: a primary button, Send, a switch that's on. */
@@ -26,12 +39,25 @@ export interface Accent {
   onAccent: string;
 }
 
-/** An accent from any hex colour: its pressed state, a soft tint, and the ink that reads on it. */
-export function deriveAccent(hex: string): Accent {
+/**
+ * The hex an agent colour key draws in this appearance. The one rule for
+ * "white" (and for a key this phone doesn't know): it is the neutral accent,
+ * the palette's `accentNeutral` — near-white in dark, near-black in light,
+ * because a white accent on a white app is no accent at all. Every caller
+ * that turns `Agent.color` into a colour goes through here.
+ */
+export function agentTint(color: string | null | undefined, appearance: Appearance): string {
+  return (color && agentTints[appearance][color]) || palettes[appearance].accentNeutral;
+}
+
+/** An accent from any hex colour on a palette: its pressed state, a soft tint, and the ink that reads on it. */
+export function deriveAccent(hex: string, colors: Palette = palettes.dark): Accent {
   const onAccent =
     contrast(hex, colors.inkDark) >= contrast(hex, colors.inkLight)
       ? colors.inkDark
       : colors.inkLight;
+  // Held down, a fill moves toward the surface it sits on: darker in dark,
+  // lighter in light. A near-black fill on white would otherwise have nowhere to go.
   return {
     accent: hex,
     pressed: mix(hex, colors.surfaceApp, 0.82),
@@ -40,17 +66,21 @@ export function deriveAccent(hex: string): Accent {
   };
 }
 
-/** The accent for an agent's colour key (`Agent.color`); white for one this phone doesn't know. */
-export function agentAccent(color: string | null | undefined): Accent {
-  return deriveAccent((color && agentTints[color]) || colors.textWhite);
+/** The accent for an agent's colour key (`Agent.color`) in an appearance. */
+export function agentAccent(
+  color: string | null | undefined,
+  appearance: Appearance = 'dark'
+): Accent {
+  return deriveAccent(agentTint(color, appearance), palettes[appearance]);
 }
 
 /**
- * Allow on every approval, whatever the agent's colour: near-white with dark
- * ink. Deny beside it is the outline. The one control that must stay
- * unambiguous is the same in every chat.
+ * Allow on every approval, whatever the agent's colour: the neutral accent
+ * (near-white with dark ink in dark, near-black with white ink in light).
+ * Deny beside it is the outline. The one control that must stay unambiguous
+ * is the same in every chat.
  */
-export const ANSWER: Accent = agentAccent('white');
+export const answerAccent = (appearance: Appearance): Accent => agentAccent('white', appearance);
 
 /** Above this, the system's white thumb all but disappears on an accent track. */
 export const LIGHT_ACCENT = 0.6;
@@ -60,14 +90,16 @@ const LIGHT_TRACK = 0.55;
 
 /**
  * A switch's colours for an accent. On a light accent (white, the Chief's
- * default) a white thumb on a near-white track reads the same as off, so the
- * on-track is a darker shade of it, and the thumb is dark where the platform
- * honours a thumb colour (iOS 26's switch ignores it; Android paints it in
- * both states, so it follows the value).
+ * default in dark) a white thumb on a near-white track reads the same as off,
+ * so the on-track is a darker shade of it, and the thumb is dark where the
+ * platform honours a thumb colour (iOS 26's switch ignores it; Android paints
+ * it in both states, so it follows the value). Light mode's accents are all
+ * deep, so there the track is the accent itself.
  */
 export function switchColors(
   a: Accent,
-  on: boolean
+  on: boolean,
+  colors: Palette = palettes.dark
 ): {
   trackColor: { true: string; false: string };
   thumbColor: string;
@@ -79,15 +111,27 @@ export function switchColors(
       true: light ? mix(a.accent, colors.surfaceApp, LIGHT_TRACK) : a.accent,
       false: colors.surfaceSelected,
     },
-    thumbColor: on && light ? colors.inkDark : colors.textWhite,
+    thumbColor: on && light ? colors.inkDark : colors.inkLight,
     ios_backgroundColor: colors.surfaceSelected,
   };
 }
 
-const DEFAULT = agentAccent('white');
-const AccentContext = createContext<Accent>(DEFAULT);
+const AccentContext = createContext<Accent>(agentAccent('white'));
 
 export const useAccent = () => useContext(AccentContext);
+
+/** Allow's colours in the appearance in force. */
+export function useAnswerAccent(): Accent {
+  const { appearance } = useTheme();
+  return useMemo(() => answerAccent(appearance), [appearance]);
+}
+
+/** A switch's colours for the accent in scope, in the appearance in force. */
+export function useSwitchColors(on: boolean) {
+  const accent = useAccent();
+  const { colors } = useTheme();
+  return switchColors(accent, on, colors);
+}
 
 export function AccentProvider({
   color,
@@ -96,11 +140,12 @@ export function AccentProvider({
   color: string | null | undefined;
   children: ReactNode;
 }) {
-  const value = useMemo(() => agentAccent(color), [color]);
+  const { appearance } = useTheme();
+  const value = useMemo(() => agentAccent(color, appearance), [color, appearance]);
   return <AccentContext.Provider value={value}>{children}</AccentContext.Provider>;
 }
 
-/** The app's accent: the Chief of Staff's colour, white until the Mac has said. */
+/** The app's accent: the Chief of Staff's colour, the neutral one until the Mac has said. */
 export function RootAccent({ children }: { children: ReactNode }) {
   const color = useApp((s) => s.overview?.agents.find((a) => a.isMain)?.color);
   return <AccentProvider color={color}>{children}</AccentProvider>;

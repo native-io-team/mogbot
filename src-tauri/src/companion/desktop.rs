@@ -13,7 +13,7 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
 use super::hub::HubItem;
-use super::router::{AgentToggles, ApprovalAnswer, Backend, ScheduleOp, SendExtras};
+use super::router::{AgentToggles, ApprovalAnswer, Backend, PhoneNewAgent, ScheduleOp, SendExtras};
 use super::wire::{ClaudeInfo, Event, Known, MacStatus, PowerInfo, Route, RouteKind};
 use super::{Companion, Registry, TAILNET_HTTPS_PORT};
 use crate::agents::{runner, store};
@@ -193,15 +193,19 @@ impl Backend for DesktopBackend {
     ) -> Result<(Vec<Value>, bool), CommandError> {
         let (agent_id, before) = (agent_id.to_string(), before.map(str::to_string));
         // One past the page says whether older messages exist.
-        let mut page = tokio::task::spawn_blocking(move || {
-            store::messages_page(&agent_id, limit.saturating_add(1), before.as_deref(), None)
+        let (page, more) = tokio::task::spawn_blocking(move || {
+            let mut page =
+                store::messages_page(&agent_id, limit.saturating_add(1), before.as_deref(), None)?;
+            let more = page.len() > limit;
+            if more {
+                page.drain(..page.len() - limit);
+            }
+            // What each turn did, read after the log's lock is let go.
+            crate::agents::work::apply(&agent_id, &mut page);
+            Ok::<_, CommandError>((page, more))
         })
         .await
         .map_err(crate::agents::err_other)??;
-        let more = page.len() > limit;
-        if more {
-            page.drain(..page.len() - limit);
-        }
         Ok((page.into_iter().map(json).collect::<Result<_, _>>()?, more))
     }
 
@@ -237,7 +241,7 @@ impl Backend for DesktopBackend {
     }
 
     async fn stop(&self, agent_id: &str) -> Result<bool, CommandError> {
-        cmd::agents_stop(agent_id.to_string()).await
+        cmd::agents_stop(self.app.clone(), agent_id.to_string()).await
     }
 
     async fn interrupt(&self, agent_id: &str) -> Result<bool, CommandError> {
@@ -298,6 +302,35 @@ impl Backend for DesktopBackend {
 
     async fn start_fresh(&self, agent_id: &str) -> Result<Value, CommandError> {
         json(cmd::agents_start_fresh(self.app.clone(), agent_id.to_string()).await?)
+    }
+
+    async fn create_agent(&self, input: PhoneNewAgent) -> Result<Value, CommandError> {
+        use crate::agents::engine::{self, Engine};
+        // The desk's editor sends the engine it shows (`defaultEngine`), so a
+        // phone-made agent goes where a desk-made one would: Claude Code when
+        // it's ready, else the first engine that is.
+        let engine = match engine::default_for(&engine::overview().await) {
+            Engine::Claude => "claude",
+            Engine::Codex => "codex",
+        };
+        let color = match input.color {
+            Some(c) => c,
+            None => {
+                let taken: Vec<String> = store::list()?.into_iter().map(|a| a.color).collect();
+                super::router::free_color(&taken).to_string()
+            }
+        };
+        let input = cmd::CreateAgentInput {
+            name: input.name,
+            shape: None,
+            color: Some(color),
+            role: input.role,
+            instructions: String::new(),
+            engine: Some(engine.to_string()),
+            model: None,
+            project: None,
+        };
+        json(cmd::agents_create(self.app.clone(), input).await?)
     }
 
     async fn update_agent(

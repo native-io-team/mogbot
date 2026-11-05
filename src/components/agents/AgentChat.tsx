@@ -66,6 +66,7 @@ import {
   ApprovalCard,
   DayDivider,
   CheckInLine,
+  ConnectorBubble,
   ErrorLine,
   FreshHint,
   NoteLine,
@@ -111,6 +112,7 @@ import {
   useAgentsSelector,
 } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
+import { ImportTalkBar } from './ImportTalkBar';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
@@ -808,6 +810,7 @@ export function AgentChat({
   const rowsPaused = agent.status.state === 'idle';
   const checkIns = agent.checkIns;
   const activity = plainActivity(agent.status.activity);
+  const work = agent.status.work;
   const rows = useMemo(
     () =>
       withIndicatorAt(
@@ -878,6 +881,7 @@ export function AgentChat({
                   key={m.id}
                   message={m}
                   arrived={arrived}
+                  agent={rowAgent}
                   engine={agent.engine}
                   onSignIn={onSignIn}
                   onRetry={m.id === retryId ? retryLast : undefined}
@@ -889,12 +893,17 @@ export function AgentChat({
               );
             case 'check_in':
               return <CheckInLine key={m.id} message={m} arrived={arrived} />;
+            case 'from_agent':
+            case 'sent_to_agent':
+              // Only an import conversation's lines stand alone (`buildChatItems`).
+              return <ConnectorBubble key={m.id} message={m} arrived={arrived} />;
             case 'note':
               return (
                 <NoteLine
                   key={m.id}
                   message={m}
                   arrived={arrived}
+                  agent={rowAgent}
                   onOpenPeer={m.peer && agentsById.has(m.peer.id) ? onOpenAgent : undefined}
                 />
               );
@@ -910,6 +919,8 @@ export function AgentChat({
           <WorkingIndicator
             key="working"
             activity={activity}
+            work={work}
+            agent={rowAgent}
             entering={indicator.entering}
             leaving={indicator.leaving}
             onExited={indicator.onExited}
@@ -948,6 +959,7 @@ export function AgentChat({
       indicator.leaving,
       indicator.onExited,
       activity,
+      work,
     ]
   );
 
@@ -1105,6 +1117,8 @@ export function AgentChat({
             {items.length === 0 && indicator.mounted && (
               <WorkingIndicator
                 activity={activity}
+                work={agent.status.work}
+                agent={rowAgent}
                 entering={indicator.entering}
                 leaving={indicator.leaving}
                 onExited={indicator.onExited}
@@ -1145,6 +1159,8 @@ export function AgentChat({
               <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
             </p>
           )}
+
+          {agent.isMain && <ImportTalkBar chief={agent.name} />}
 
           {engineReady && cantAsk && (
             <p className="agent-composer__notice" data-testid="agent-cant-ask">

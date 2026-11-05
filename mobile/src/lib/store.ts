@@ -34,11 +34,15 @@ export interface AppState extends SyncState {
   push: PushStatus | null;
 }
 
+/** Light or dark: the system's (the default), or one this phone keeps whatever the system does. */
+export type AppearancePref = 'system' | 'light' | 'dark';
+
 export interface Prefs {
   haptics: boolean;
+  appearance: AppearancePref;
 }
 
-export const defaultPrefs: Prefs = { haptics: true };
+export const defaultPrefs: Prefs = { haptics: true, appearance: 'system' };
 
 export const useApp = create<AppState>(() => ({
   ...emptySync(),

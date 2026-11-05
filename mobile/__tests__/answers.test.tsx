@@ -1,12 +1,18 @@
 import type { AgentMessage, Approval, SessionPrompt } from '@shipstudio/companion-protocol';
 import { act, render, screen } from '@testing-library/react-native';
-import { agentAccent, ANSWER, deriveAccent, LIGHT_ACCENT, switchColors } from '../src/lib/accent';
+import {
+  agentAccent,
+  answerAccent,
+  deriveAccent,
+  LIGHT_ACCENT,
+  switchColors,
+} from '../src/lib/accent';
 import { askingLine, commandLine } from '../src/lib/agents';
 import { BROADER, broaderCaption, moreMessage, promptAnswers } from '../src/lib/answers';
 import { readBrand } from '../src/lib/brand';
-import { agentTints, colors, contrast, luminance } from '../src/lib/theme';
+import { agentTints, APPEARANCES, contrast, luminance, palettes } from '../src/lib/theme';
 import { PromptCard } from '../src/components/PromptCard';
-import { ARM_MS, useArmed } from '../src/components/ApprovalCard';
+import { ARM_MS, ReviewOnMacCard, useArmed } from '../src/components/ApprovalCard';
 import { Text } from 'react-native';
 import { agent } from './helpers';
 
@@ -27,10 +33,13 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('expo-haptics', () => ({}));
 jest.mock('../src/lib/session', () => ({ answerApproval: jest.fn(), describeError: String }));
 
-describe('accent maths', () => {
+describe.each(APPEARANCES)('accent maths, %s', (appearance) => {
+  const colors = palettes[appearance];
+  const tints = agentTints[appearance];
+
   it('gives every agent colour an ink that reads on it', () => {
-    for (const [key, hex] of Object.entries(agentTints)) {
-      const a = agentAccent(key);
+    for (const [key, hex] of Object.entries(tints)) {
+      const a = agentAccent(key, appearance);
       expect(a.accent).toBe(hex);
       expect([colors.inkDark, colors.inkLight]).toContain(a.onAccent);
       // WCAG AA for the label on a primary button.
@@ -38,47 +47,71 @@ describe('accent maths', () => {
     }
   });
 
-  it('picks the higher-contrast ink, and falls back to white for an unknown key', () => {
-    expect(deriveAccent('#ffffff').onAccent).toBe(colors.inkDark);
-    expect(deriveAccent('#000000').onAccent).toBe(colors.inkLight);
-    expect(agentAccent('chartreuse').accent).toBe(colors.textWhite);
-    expect(agentAccent(null).accent).toBe(colors.textWhite);
+  it('picks the higher-contrast ink, and falls back to the neutral accent for white or an unknown key', () => {
+    expect(deriveAccent('#ffffff', colors).onAccent).toBe(colors.inkDark);
+    expect(deriveAccent('#000000', colors).onAccent).toBe(colors.inkLight);
+    expect(agentAccent('white', appearance).accent).toBe(colors.accentNeutral);
+    expect(agentAccent('chartreuse', appearance).accent).toBe(colors.accentNeutral);
+    expect(agentAccent(null, appearance).accent).toBe(colors.accentNeutral);
   });
 
-  it('draws an approval’s Allow the same neutral near-white for every agent', () => {
-    expect(ANSWER.accent).toBe(agentTints.white);
-    expect(ANSWER.onAccent).toBe(colors.inkDark);
+  it('draws an approval’s Allow the same neutral accent for every agent', () => {
+    const allow = answerAccent(appearance);
+    expect(allow.accent).toBe(colors.accentNeutral);
+    expect(contrast(allow.accent, allow.onAccent)).toBeGreaterThanOrEqual(4.5);
     // Not the error red, not the warning amber: an answer never borrows an outcome's colour.
-    expect(ANSWER.accent).not.toBe(agentTints.red);
-    expect(ANSWER.accent).not.toBe(agentTints.amber);
+    for (const outcome of [tints.red, tints.amber, colors.accentError, colors.accentWarning]) {
+      expect(allow.accent).not.toBe(outcome);
+    }
   });
 });
 
 describe('switch contrast', () => {
   it('darkens the thumb on a light accent, so on never looks like off', () => {
-    const white = switchColors(agentAccent('white'), true);
-    expect(luminance(agentTints.white)).toBeGreaterThan(LIGHT_ACCENT);
+    const colors = palettes.dark;
+    const white = switchColors(agentAccent('white', 'dark'), true, colors);
+    expect(luminance(colors.accentNeutral)).toBeGreaterThan(LIGHT_ACCENT);
     expect(white.thumbColor).toBe(colors.inkDark);
     expect(contrast(white.thumbColor, white.trackColor.true)).toBeGreaterThanOrEqual(3);
     // iOS 26 ignores the thumb colour: the white thumb must still stand out on the track…
-    expect(contrast(colors.textWhite, white.trackColor.true)).toBeGreaterThanOrEqual(3);
+    expect(contrast(colors.inkLight, white.trackColor.true)).toBeGreaterThanOrEqual(3);
     // …and on must still look different from off.
     expect(contrast(white.trackColor.true, white.trackColor.false)).toBeGreaterThanOrEqual(1.5);
   });
 
-  it('keeps the white thumb on a dark accent, and when off', () => {
-    for (const key of Object.keys(agentTints)) {
-      const off = switchColors(agentAccent(key), false);
-      expect(off.thumbColor).toBe(colors.textWhite);
-      expect(off.trackColor.false).toBe(colors.surfaceSelected);
+  it.each(APPEARANCES)(
+    'keeps the white thumb on a dark accent, and when off (%s)',
+    (appearance) => {
+      const colors = palettes[appearance];
+      for (const key of [...Object.keys(agentTints[appearance]), 'white']) {
+        const off = switchColors(agentAccent(key, appearance), false, colors);
+        expect(off.thumbColor).toBe(colors.inkLight);
+        expect(off.trackColor.false).toBe(colors.surfaceSelected);
+      }
+      expect(switchColors(agentAccent('blue', appearance), true, colors).thumbColor).toBe(
+        colors.inkLight
+      );
     }
-    expect(switchColors(agentAccent('blue'), true).thumbColor).toBe(colors.textWhite);
-  });
+  );
 
-  it('keeps the on thumb distinct from the track for every agent colour', () => {
-    for (const key of Object.keys(agentTints)) {
-      const on = switchColors(agentAccent(key), true);
-      expect(contrast(on.thumbColor, on.trackColor.true)).toBeGreaterThan(1.5);
+  it.each(APPEARANCES)(
+    'keeps on distinct from the thumb and from off, for every colour (%s)',
+    (appearance) => {
+      const colors = palettes[appearance];
+      for (const key of [...Object.keys(agentTints[appearance]), 'white']) {
+        const on = switchColors(agentAccent(key, appearance), true, colors);
+        expect(contrast(on.thumbColor, on.trackColor.true)).toBeGreaterThan(1.5);
+        // iOS 26 paints its own white thumb whatever we ask: it must still show on the track.
+        expect(contrast(colors.inkLight, on.trackColor.true)).toBeGreaterThan(1.5);
+        expect(contrast(on.trackColor.true, on.trackColor.false)).toBeGreaterThan(1.5);
+      }
+    }
+  );
+
+  it('uses the accent itself as the on-track in light, where every accent is deep', () => {
+    for (const key of [...Object.keys(agentTints.light), 'white']) {
+      const a = agentAccent(key, 'light');
+      expect(switchColors(a, true, palettes.light).trackColor.true).toBe(a.accent);
     }
   });
 });
@@ -215,6 +248,25 @@ describe('PromptCard', () => {
     const answers = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel as string);
     expect(answers).toEqual(['Deny', 'Allow', 'More answers']);
     expect(screen.queryByText('Yes, allow all edits during this session')).toBeNull();
+  });
+});
+
+describe('an import review card', () => {
+  const approval = {
+    requestId: 'r1',
+    title: 'Bring in 2 agents from Grok',
+    detail:
+      "Finance · Money\nTravel · Trips\nReview on your Mac: each agent's instructions are shown there, and nothing is created until you import them.",
+    status: 'pending',
+    connector: { kind: 'review', talkId: 't', source: 'Grok' },
+  } as Approval;
+
+  it('names the agents and sends you to the Mac, with nothing to press', async () => {
+    await render(<ReviewOnMacCard approval={approval} />);
+    expect(screen.getByText('Finance · Money')).toBeTruthy();
+    expect(screen.getByText(/Review on your Mac: each agent’s instructions/)).toBeTruthy();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.queryByText('Allow')).toBeNull();
   });
 });
 

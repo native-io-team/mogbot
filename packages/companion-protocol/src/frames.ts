@@ -67,7 +67,19 @@ export interface HelloFrame {
   resume?: Cursor;
   /** The phone is in the foreground (only then does it count as "showing" an agent). */
   foreground: boolean;
+  /**
+   * What this app can show beyond the protocol version, so the Mac sends it
+   * only what it will use. An older app sends none. See `FEATURES`.
+   */
+  features?: Feature[];
 }
+
+/** Optional things an app can say it shows (`hello.features`). */
+export const FEATURES = {
+  /** The steps of a turn still running, on `agents.status` (`status.work`). */
+  liveWork: 'work.live',
+} as const;
+export type Feature = (typeof FEATURES)[keyof typeof FEATURES];
 
 export interface RequestFrame<M extends MethodName = MethodName> {
   t: 'req';
@@ -105,6 +117,13 @@ export interface WelcomeFrame {
   resume: 'replay' | 'snapshot';
   /** Methods this Mac supports, so a newer app can hide what an older Mac lacks. */
   methods: MethodName[];
+  /**
+   * The Mac's IANA zone ("America/New_York"): routine times are its wall
+   * clock, so the phone shows them in it. Absent from older Macs and when
+   * the Mac can't say. A Mac that sends it keeps a check-in's schedule when
+   * `agents.schedule.update` has an empty `when` (a note-only edit).
+   */
+  timeZone?: string;
 }
 
 export interface RefusedFrame {

@@ -57,6 +57,7 @@ import {
   mentionRuns,
   replyPreview,
   summarizeTeam,
+  isConnectorLine,
 } from './agents';
 
 const msg = (id: string, kind: AgentMessage['kind'], ts: number, peer?: string): AgentMessage => ({
@@ -81,6 +82,18 @@ describe('buildChatItems', () => {
       i.type === 'peer-group' ? `group:${i.messages.length}` : i.type
     );
     expect(kinds).toEqual(['day', 'message', 'group:2', 'group:1', 'message']);
+  });
+
+  it('shows the import connector’s side in full, never folded into a hand-off group', () => {
+    const items = buildChatItems([
+      msg('a', 'from_agent', 1000, 'connector:Grok'),
+      msg('b', 'agent', 1001),
+      msg('c', 'from_agent', 1002, 'connector:Grok'),
+      msg('d', 'from_agent', 1003, 'connector:Grok'),
+    ]);
+    expect(items.map((i) => i.type)).toEqual(['day', 'message', 'message', 'message', 'message']);
+    expect(isConnectorLine(msg('x', 'from_agent', 1, 'connector:Grok'))).toBe(true);
+    expect(isConnectorLine(msg('x', 'from_agent', 1, 'finance'))).toBe(false);
   });
 
   it('does not merge groups across a regular message', () => {

@@ -1,6 +1,6 @@
-# Contributing to Ship Studio
+# Contributing
 
-Thanks for your interest in contributing to Ship Studio! This guide will help you get started.
+Thanks for your interest in contributing. This app (working name Dashbot, set in `brand.json`) is the evolution of Ship Studio; read [docs/MISSION.md](docs/MISSION.md) first, then [docs/ROADMAP.md](docs/ROADMAP.md). This guide will help you get started.
 
 > **Before you start**
 >
@@ -24,8 +24,8 @@ Thanks for your interest in contributing to Ship Studio! This guide will help yo
 
 ```bash
 # Clone the repo
-git clone https://github.com/ship-studio/ship-studio.git
-cd ship-studio
+git clone https://github.com/native-io-team/dashbot.git   # `repository` in brand.json
+cd dashbot
 
 # Install dependencies
 pnpm install
@@ -34,7 +34,9 @@ pnpm install
 pnpm tauri dev
 ```
 
-This starts both the Vite dev server (frontend) and Tauri app (backend).
+This starts both the Vite dev server (frontend) and Tauri app (backend). The phone app is a separate pnpm project in `mobile/` — see [mobile/README.md](mobile/README.md).
+
+**Working in a git worktree?** Set `CARGO_TARGET_DIR` to the main checkout's `.claude/cargo-shared` (absolute path) so worktrees share one Rust build instead of compiling from scratch each. Running several UI harnesses at once? Give each its own `SHIPSTUDIO_HARNESS_PORT` and `TMPDIR` (see [docs/ui-harness.md](docs/ui-harness.md)).
 
 ## Before You Push — the CI Gates
 
@@ -42,7 +44,7 @@ Every PR runs these checks in CI. Run them locally first and your PR will
 pass on the first try:
 
 ```bash
-pnpm check:all     # typecheck + lint + prettier + rustfmt + clippy + pattern & LOC checks
+pnpm check:all     # brand + typecheck + lint + prettier + rustfmt + clippy + docs + pattern & LOC checks
 pnpm test:run      # frontend tests (Vitest)
 pnpm rust:test     # backend tests (cargo test)
 ```
@@ -57,6 +59,9 @@ Notes:
   `setInterval`, `Result<T, String>`, raw hex colors, …) — see
   [docs/CONTRIBUTING_PATTERNS.md](docs/CONTRIBUTING_PATTERNS.md) for what to
   use instead.
+- `check:brand` keeps the identity copies in sync with `brand.json`, and
+  `check:patterns` also runs `scripts/check-brand-copy.mjs`: the product name
+  is never hardcoded in UI copy (use `BRAND.name`, or say "the app").
 - `check:loc` enforces per-file line ceilings; if you hit one, split the file
   rather than raising the limit.
 - Frontend coverage thresholds are enforced in CI — add tests for non-trivial
@@ -259,7 +264,9 @@ Unit tests are colocated in source files using `#[cfg(test)]` modules.
 Before submitting a PR, verify:
 
 - [ ] CI gates pass (`pnpm check:all && pnpm test:run && pnpm rust:test`)
-- [ ] App launches without errors
+- [ ] App launches without errors and lands on Agents
+- [ ] A message to the Chief of Staff gets a reply; an approval card can be answered
+- [ ] Looks right in both light and dark (Settings → Appearance)
 - [ ] Can create a new project
 - [ ] Terminal works and responds to input
 - [ ] Preview loads and shows the dev server
@@ -268,16 +275,15 @@ Before submitting a PR, verify:
 
 ### Testing Onboarding
 
-Onboarding is the first thing every new user sees. See the detailed testing guide in `CLAUDE.md` under "Onboarding / Setup Wizard Testing". Quick reference:
+Onboarding is the first thing every new user sees: it asks for one engine (Claude Code or Codex) and ends in a conversation with the Chief of Staff. See `CLAUDE.md` → "Onboarding / Setup Testing". Quick reference:
 
 ```bash
-# Force onboarding with REAL system checks (recommended for UI testing)
+# Force onboarding open with REAL checks
 SHIPSTUDIO_FORCE_ONBOARDING=1 pnpm tauri dev
 
-# Force onboarding with MOCK states (for testing specific incomplete scenarios)
+# MOCK backend, nothing touches the machine
 SHIPSTUDIO_FORCE_SETUP=fresh pnpm tauri dev        # Nothing installed
-SHIPSTUDIO_FORCE_SETUP=auth-only pnpm tauri dev     # Tools installed, no auth
-SHIPSTUDIO_FORCE_SETUP=almost-done pnpm tauri dev   # Only gh_auth missing
+SHIPSTUDIO_FORCE_SETUP=auth-only pnpm tauri dev     # Engines installed, none signed in
 ```
 
 For the real end-to-end test, use a clean macOS install or VM. See `CLAUDE.md` for the full fresh-machine checklist.
@@ -360,21 +366,21 @@ For anything that affects user-visible state or data integrity, propagate the er
 
 ### Log files
 
-Ship Studio writes structured logs (via the `tracing` crate) to:
+The app writes structured logs (via the `tracing` crate) to a folder named by `appDirName` in `brand.json` (`Dashbot` today):
 
 ```
-macOS:    ~/Library/Logs/ShipStudio/
-Windows:  %LOCALAPPDATA%\ShipStudio\logs\
+macOS:    ~/Library/Logs/Dashbot/
+Windows:  %LOCALAPPDATA%\Dashbot\logs\
 ```
 
 Rotated daily. Tail the latest with:
 
 ```bash
 # macOS / Linux
-tail -f ~/Library/Logs/ShipStudio/ship-studio.log
+tail -f ~/Library/Logs/Dashbot/dashbot.log.*
 
 # Windows (PowerShell)
-Get-Content -Wait $env:LOCALAPPDATA\ShipStudio\logs\ship-studio.log
+Get-Content -Wait (Get-ChildItem $env:LOCALAPPDATA\Dashbot\logs\dashbot.log.* | Select -Last 1)
 ```
 
 ### Rust backtraces
@@ -386,7 +392,7 @@ RUST_BACKTRACE=1 pnpm tauri dev
 # or RUST_BACKTRACE=full for more detail
 ```
 
-Pair with `RUST_LOG=debug` (or `RUST_LOG=ship_studio=debug`) to raise log verbosity without recompiling.
+Pair with `RUST_LOG=debug` (or `RUST_LOG=app_lib=debug`) to raise log verbosity without recompiling.
 
 ### Frontend DevTools
 
@@ -394,23 +400,20 @@ In the running app, open Chromium DevTools with **Cmd+Option+I**. The Console sh
 
 ### Onboarding / setup wizard
 
-See `CLAUDE.md` → **Onboarding / Setup Wizard Testing** for `SHIPSTUDIO_FORCE_ONBOARDING` and `SHIPSTUDIO_FORCE_SETUP` env vars. Copy [`.env.example`](.env.example) to `.env` for a local reference.
+See `CLAUDE.md` → **Onboarding / Setup Testing** for `SHIPSTUDIO_FORCE_ONBOARDING` and `SHIPSTUDIO_FORCE_SETUP` env vars. Copy [`.env.example`](.env.example) to `.env` for a local reference.
 
 ## Getting Help
 
-- Check existing [issues](https://github.com/ship-studio/ship-studio/issues) for similar problems.
-- Open a [discussion](https://github.com/ship-studio/ship-studio/discussions) for "how do I…" questions.
-- Drop into the [community Slack](https://ship.studio/slack).
-- Read the code comments and the docs in [docs/](docs/).
+- Read the code comments and the docs in [docs/](docs/) — start with [CLAUDE.md](CLAUDE.md).
+- Issues, discussions and a community channel aren't set up yet (their links in `brand.json` are null).
 
 ## FAQ
 
 ### Why does `package.json` say `"private": true`?
 
 That field blocks accidental `npm publish` — it's unrelated to the
-repository's visibility. Ship Studio is distributed as `.dmg` and `.exe`
-installers, not as an npm package. The repo itself is open source under
-MIT (see [LICENSE](LICENSE)).
+repository's visibility. The app is distributed as installers, not as an
+npm package. The code is MIT-licensed (see [LICENSE](LICENSE)).
 
 ### Why are `CLAUDE.md` and `AGENTS.md` checked in?
 

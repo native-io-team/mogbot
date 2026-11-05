@@ -18,6 +18,69 @@ export interface AgentStatus {
   state: 'idle' | 'working' | 'waiting';
   activity: string | null;
   since: number | null;
+  /** The turn's timeline so far, while it isn't idle; older Macs omit it. */
+  work?: TurnWork;
+}
+
+/**
+ * What kind of thing a timeline step was, for its icon (`agents::work::StepKind`).
+ * A newer Mac may send a kind this build doesn't know: draw it as `tool`.
+ */
+export type WorkStepKind =
+  | 'read'
+  | 'edit'
+  | 'search'
+  | 'web'
+  | 'command'
+  | 'message'
+  | 'approval'
+  | 'screenshot'
+  | 'plan'
+  | 'delegate'
+  | 'project'
+  | 'tool';
+
+/** One thing a turn did, in plain words ("Read Hero.tsx", "Ran npm test"). */
+export interface WorkStep {
+  /** When it was seen, ms since the epoch. */
+  at: number;
+  kind: WorkStepKind;
+  label: string;
+  /**
+   * What became of it, when it didn't simply go through: `declined` (the
+   * user said no) or `failed` (it came back with an error). Absent while it
+   * runs and once it succeeded. Its label already says so in words.
+   */
+  outcome?: WorkStepOutcome;
+  /** A screenshot this step produced. */
+  image?: Attachment;
+}
+
+/** `agents::work::StepOutcome`. */
+export type WorkStepOutcome = 'declined' | 'failed';
+
+/**
+ * What a turn did (`agents::work`): on the status while it runs (its newest
+ * steps), and on the message it ended on once it's over. Only what the
+ * engine's output said it did; a turn with no steps has none.
+ */
+export interface TurnWork {
+  startedAt: number;
+  /** Absent while the turn is still running. */
+  endedAt?: number;
+  /** Every step seen, including any no longer kept in `steps`. */
+  stepCount: number;
+  /** The newest steps, oldest first. */
+  steps: WorkStep[];
+  /** Files it edited successfully, distinct. Not carried while it runs. */
+  files?: string[];
+  fileCount: number;
+  /**
+   * While it runs: the working-line words of the newest step, while that
+   * call hasn't come back. When it equals the status's `activity`, the
+   * working line *is* that step.
+   */
+  doing?: string;
 }
 
 export interface Agent {
@@ -212,6 +275,50 @@ export interface Approval {
   prompt?: SessionPrompt;
   /** The option picked on a `prompt` card. */
   choice?: string;
+  /** An import connector card: another assistant asking to start, or its staged agents. */
+  connector?: ConnectorCard;
+}
+
+/**
+ * An import over the connector (desktop `agents/review.rs`). On the phone a
+ * consent card is Allow / Deny. A review card can't be answered there: it
+ * says "Review on your Mac", where each agent's instructions are on screen
+ * before Import (the desktop refuses an Allow sent for one).
+ */
+export interface ConnectorCard {
+  kind: 'consent' | 'review';
+  talkId: string;
+  source: string;
+  review?: ImportReview;
+}
+
+export interface ImportReview {
+  proposals: ImportProposal[];
+  chiefNotes?: string;
+  summary?: string;
+}
+
+export interface ImportProposal {
+  key: string;
+  name: string;
+  role: string;
+  instructions: string;
+  memory: string;
+  routines: { when: string; what: string; schedule?: string; refused?: string }[];
+  logins: { name: string; purpose: string; kind: string }[];
+  clash?: ImportClash;
+}
+
+export interface ImportClash {
+  agentId: string;
+  name?: string;
+  role: string;
+  instructions: string;
+  logins?: string[];
+  project?: string;
+  activeRoutines?: number;
+  rules?: number;
+  conversation?: boolean;
 }
 
 /** One answer a session's question offers, as the session shows it. */
@@ -282,6 +389,8 @@ export interface AgentMessage {
    * Absent on everything else; older clients ignore it.
    */
   clientId?: string;
+  /** What the turn that ended on this message did; older Macs omit it. */
+  work?: TurnWork;
   /** On a `note`: the conversation started fresh here (memory kept); a divider. */
   fresh?: boolean;
 }

@@ -227,6 +227,32 @@ API** (selectors in `src/styles/global/base.css`, variables in the token files o
   `--border`, `--accent`, `--action`, `--success`, `--warning`, `--error`,
   `--font-mono`, `--radius`, …
 
+### Light and dark
+
+The app has a light and a dark theme (Settings → Appearance: System, Light or
+Dark). The resolved theme is always on the root element as
+`data-theme="light"` or `data-theme="dark"` — never `system` — and changes
+live, without a reload, when the user switches or macOS flips appearance.
+
+- **The plugin-stable variables change value per theme.** `--bg-primary` is
+  near-black on dark and near-white on light; `--text-primary` the reverse.
+  Anything coloured through them (or through the SDK's `theme` values) follows
+  automatically.
+- **Hardcoded colours do not.** A plugin that paints `#1a1a1a` backgrounds or
+  `white` text was invisible as a problem while the app was dark-only; on light
+  it renders as a dark island or white-on-white. Use the variables, or, for a
+  colour with no variable, branch on the attribute:
+
+  ```css
+  .my-plugin-chart { --my-plugin-grid: #333; }
+  :root[data-theme='light'] .my-plugin-chart { --my-plugin-grid: #ddd; }
+  ```
+
+- Read the theme from script with
+  `document.documentElement.dataset.theme`, and watch it with a
+  `MutationObserver` on that attribute. Don't use `prefers-color-scheme`: the
+  user can pick a theme that differs from the OS.
+
 ## Developing a plugin locally
 
 1. Create a folder with `plugin.json` and a built `dist/index.js`.

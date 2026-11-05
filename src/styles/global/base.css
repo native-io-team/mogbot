@@ -188,13 +188,8 @@ body.compact-mode-active html {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  /* Generous space between the logo and the boot loader. */
+  /* Generous space between the boot content and the loader. */
   gap: var(--space-32);
-}
-
-.app-logo {
-  height: 48px;
-  width: auto;
 }
 
 .app.loading .boot-progress {
@@ -473,8 +468,8 @@ body.compact-mode-active html {
 
 .button:focus-visible,
 .toolbar-icon-btn:focus-visible {
-  outline: var(--stroke-2) solid var(--accent-focus);
-  outline-offset: -1px;
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .button--default {

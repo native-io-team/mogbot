@@ -87,6 +87,10 @@ pub struct CheckIn {
     pub created_at: i64,
     #[serde(default)]
     pub paused: bool,
+    /// Paused by an import (so a routine doesn't run in two apps at once),
+    /// not by the user. Cleared when it's resumed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paused_on_import: bool,
     /// Its last runs, oldest first (`agents::runs`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub runs: Vec<runs::Run>,
@@ -744,21 +748,26 @@ pub fn check<Tz: TimeZone>(
     note: &str,
     now: i64,
 ) -> Result<(Option<Repeat>, i64), Refused> {
+    check_note(note)?;
+    parse(when, tz, now).map_err(|why| Refused::Invalid { field: "when", why })
+}
+
+/// A check-in's note: something to do, and not an essay.
+fn check_note(note: &str) -> Result<(), Refused> {
     let note = note.trim();
-    let invalid = |field, why: &str| Refused::Invalid {
-        field,
+    let invalid = |why: &str| Refused::Invalid {
+        field: "note",
         why: why.to_string(),
     };
     if note.is_empty() {
         return Err(invalid(
-            "note",
             "Write a note to yourself saying what to do when it fires.",
         ));
     }
     if note.chars().count() > MAX_NOTE_CHARS {
-        return Err(invalid("note", "Keep the note under 600 characters."));
+        return Err(invalid("Keep the note under 600 characters."));
     }
-    parse(when, tz, now).map_err(|why| Refused::Invalid { field: "when", why })
+    Ok(())
 }
 
 /// What a check-in is, for the user: "every weekday at 09:00", or "once, Fri 6 Nov 2026, 09:00 (UTC-05:00)".
@@ -796,6 +805,7 @@ where
         next_at,
         created_at: now,
         paused: false,
+        paused_on_import: false,
         runs: Vec::new(),
         retry: None,
         extra: Default::default(),
@@ -843,6 +853,10 @@ pub fn edit(agent_id: &str, id: &str, when: &str, note: &str) -> Result<CheckIn,
     edit_in(&chrono::Local, agent_id, id, when, note, store::now_ms())
 }
 
+/// An empty `when` keeps the schedule as it is and changes only the note:
+/// the phone sends `when` only when its picker changed it, so editing a
+/// note neither re-anchors "every 2 hours" nor moves a one-off by the
+/// difference between the phone's clock and this Mac's.
 fn edit_in<Tz: TimeZone>(
     tz: &Tz,
     agent_id: &str,
@@ -851,7 +865,12 @@ fn edit_in<Tz: TimeZone>(
     note: &str,
     now: i64,
 ) -> Result<CheckIn, CommandError> {
-    let (repeat, next_at) = check(tz, when, note, now).map_err(Refused::into_error)?;
+    let schedule = if when.trim().is_empty() {
+        check_note(note).map_err(Refused::into_error)?;
+        None
+    } else {
+        Some(check(tz, when, note, now).map_err(Refused::into_error)?)
+    };
     let note = note.trim();
     let mut outcome: Result<CheckIn, CommandError> =
         Err(CommandError::expected("That check-in no longer exists."));
@@ -859,13 +878,21 @@ fn edit_in<Tz: TimeZone>(
         let Some(i) = agent.check_ins.iter().position(|c| c.id == id) else {
             return;
         };
-        let edited = CheckIn {
-            note: note.to_string(),
-            repeat: repeat.clone(),
-            next_at,
-            // A pending retry was for what it used to say.
-            retry: None,
-            ..agent.check_ins[i].clone()
+        let current = agent.check_ins[i].clone();
+        let edited = match &schedule {
+            Some((repeat, next_at)) => CheckIn {
+                note: note.to_string(),
+                repeat: repeat.clone(),
+                next_at: *next_at,
+                // A pending retry was for when it used to run.
+                retry: None,
+                ..current
+            },
+            // Same schedule, so a pending retry of it still stands.
+            None => CheckIn {
+                note: note.to_string(),
+                ..current
+            },
         };
         let clash = agent
             .check_ins
@@ -941,10 +968,10 @@ pub fn list_text(agent: &store::Agent) -> String {
                 Some(r) => format!("{}, next {}", describe(r), format_time(&tz, c.next_at)),
                 None => format_time(&tz, c.next_at),
             };
-            let paused = if c.paused {
-                " [paused by the user]"
-            } else {
-                ""
+            let paused = match (c.paused, c.paused_on_import) {
+                (true, true) => " [paused by the import, until the user turns it on]",
+                (true, false) => " [paused by the user]",
+                _ => "",
             };
             format!("- {} · {when}{paused}: {}", c.id, c.note)
         })
@@ -985,6 +1012,7 @@ pub fn set_paused(agent_id: &str, id: &str, paused: bool) -> Result<(), CommandE
                 }
             }
             c.paused = paused;
+            c.paused_on_import = false;
         }
     })?;
     if found {
@@ -1388,6 +1416,7 @@ mod tests {
             next_at,
             created_at: 0,
             paused: false,
+            paused_on_import: false,
             runs: Vec::new(),
             retry: None,
             extra: Default::default(),
@@ -1687,6 +1716,104 @@ mod tests {
             manual: false,
         };
         assert!(!serde_json::to_string(&mark).unwrap().contains("manual"));
+    }
+
+    /// The phone's routine picker writes these words (packages/companion-protocol,
+    /// `routineWhenPhrase`; mobile's start.node.test.ts checks it does). Each must
+    /// read back here as the schedule the picker meant.
+    #[test]
+    fn reads_every_phrase_the_phone_picker_writes() {
+        #[derive(serde::Deserialize)]
+        #[serde(tag = "kind", rename_all = "lowercase")]
+        enum When {
+            Days {
+                days: Vec<u8>,
+                hour: u32,
+                minute: u32,
+            },
+            Every {
+                minutes: u32,
+            },
+            Once {
+                date: String,
+                hour: u32,
+                minute: u32,
+            },
+        }
+        #[derive(serde::Deserialize)]
+        struct Case {
+            when: When,
+            phrase: String,
+        }
+        #[derive(serde::Deserialize)]
+        struct Phrases {
+            cases: Vec<Case>,
+        }
+        let file: Phrases = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../packages/companion-protocol/src/routine-phrases.json"
+        )))
+        .unwrap();
+        assert!(file.cases.len() >= 10);
+        for case in file.cases {
+            let (repeat, next_at) = parse(&case.phrase, &Eastern, now())
+                .unwrap_or_else(|e| panic!("{:?} didn't parse: {e}", case.phrase));
+            match case.when {
+                When::Days { days, hour, minute } => {
+                    let mut days = days;
+                    days.sort_unstable();
+                    assert_eq!(
+                        repeat,
+                        Some(Repeat::Days { days, hour, minute }),
+                        "{}",
+                        case.phrase
+                    );
+                }
+                When::Every { minutes } => {
+                    assert_eq!(repeat, Some(Repeat::Every { minutes }), "{}", case.phrase);
+                }
+                When::Once { date, hour, minute } => {
+                    assert_eq!(repeat, None, "{}", case.phrase);
+                    let d = NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap();
+                    let want = resolve(&Eastern, d, hour, minute).unwrap();
+                    assert_eq!(show(next_at), show(want), "{}", case.phrase);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_edit_without_a_when_changes_only_the_note() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let agent = store::create(store::NewAgent {
+            name: "Finance".into(),
+            role: String::new(),
+            instructions: String::new(),
+            shape: None,
+            color: None,
+            is_main: false,
+        })
+        .unwrap();
+        let made = create_in(&Eastern, &agent.id, "every 2 hours", "Check", now()).unwrap();
+        // An hour later, only the note changes: it isn't re-anchored to then.
+        let later = now() + 60 * 60 * 1000;
+        let edited = edit_in(
+            &Eastern,
+            &agent.id,
+            &made.check_in.id,
+            "  ",
+            "Check mail",
+            later,
+        )
+        .unwrap();
+        assert_eq!(edited.note, "Check mail");
+        assert_eq!(edited.repeat, made.check_in.repeat);
+        assert_eq!(edited.next_at, made.check_in.next_at);
+        // The note's own rules still hold.
+        assert!(edit_in(&Eastern, &agent.id, &made.check_in.id, "", " ", later).is_err());
+        store::set_root_for_tests(None);
     }
 
     #[test]

@@ -63,7 +63,7 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
         .into_iter()
         .map(|agent| {
             Ok(AgentView {
-                status: runner::status_of(&agent.id),
+                status: runner::status_with_work(&agent.id),
                 home: store::agent_home(&agent.id)?.display().to_string(),
                 agent,
             })
@@ -110,7 +110,7 @@ pub async fn agents_with_projects() -> Result<Vec<AgentView>, CommandError> {
             .filter(|a| a.project.is_some())
             .map(|agent| {
                 Ok(AgentView {
-                    status: runner::status_of(&agent.id),
+                    status: runner::status_with_work(&agent.id),
                     home: store::agent_home(&agent.id)?.display().to_string(),
                     agent,
                 })
@@ -130,12 +130,15 @@ pub async fn agents_messages(
 ) -> Result<Vec<store::AgentMessage>, CommandError> {
     const MAX: usize = 5000;
     blocking(move || {
-        store::messages_page(
+        let mut page = store::messages_page(
             &agent_id,
             limit.unwrap_or(400).min(MAX),
             before.as_deref(),
             through.as_deref().map(|id| (id, MAX)),
-        )
+        )?;
+        // What each turn did, read after the log's lock is let go.
+        crate::agents::work::apply(&agent_id, &mut page);
+        Ok(page)
     })
     .await
 }
@@ -518,8 +521,12 @@ pub async fn agents_busy() -> Result<usize, CommandError> {
 
 #[tauri::command]
 #[tracing::instrument]
-pub async fn agents_stop(agent_id: String) -> Result<bool, CommandError> {
-    Ok(runner::stop(&agent_id))
+pub async fn agents_stop(app: AppHandle, agent_id: String) -> Result<bool, CommandError> {
+    let stopped = runner::stop(&agent_id);
+    // The Chief's Stop (here and on the phone) also stops an import it's
+    // running; only the import's own messages go, never the user's.
+    let import = store::get(&agent_id).is_ok_and(|a| a.is_main) && agents::connector::stop(&app);
+    Ok(stopped || import)
 }
 
 /// Start the agent's next message in a new conversation: its instructions
@@ -582,6 +589,10 @@ fn answer_card(
         .ok_or_else(|| CommandError::expected("That request no longer exists."))?;
     if approval.status != store::ApprovalStatus::Pending {
         return Err(CommandError::expected("That request was already answered."));
+    }
+    // The import connector's own cards: consent, and the staged agents.
+    if approval.connector.is_some() {
+        return agents::connector::answer_card(app, agent_id, &approval, allow);
     }
     // A session's question: keys to the session, and every chat holding the
     // card is answered with it.
@@ -683,12 +694,15 @@ fn decline_secret(
     store::refresh_pending(agent_id);
     emit_registry(app);
     notify::refresh_badge(app);
-    runner::enqueue(
-        app,
-        agent_id,
-        secrets::denied_prompt(request, note),
-        runner::From::User,
-    );
+    // An imported agent's login card: declining doesn't wake it either.
+    if !request.quiet {
+        runner::enqueue(
+            app,
+            agent_id,
+            secrets::denied_prompt(request, note),
+            runner::From::User,
+        );
+    }
     Ok(())
 }
 
@@ -706,17 +720,36 @@ pub async fn agents_save_secret(
         let (agent_id, request_id) = (agent_id.clone(), request_id.clone());
         blocking(move || secrets::save(&agent_id, &request_id, &values)).await?
     };
+    // A login asked for on an imported agent's behalf doesn't wake it: its
+    // instructions came from another assistant, so it starts when the user
+    // first messages it, not unattended with the new secret in hand.
+    let quiet = card
+        .as_ref()
+        .and_then(|m| m.approval.as_ref())
+        .and_then(|a| a.secret.as_ref())
+        .is_some_and(|r| r.quiet);
     if let Some(message) = card {
         let _ = app.emit(runner::EVENT_MESSAGE, &message);
     }
     emit_registry(&app);
     notify::refresh_badge(&app);
-    runner::enqueue(
-        &app,
-        &agent_id,
-        secrets::saved_prompt(&secret),
-        runner::From::User,
-    );
+    if quiet {
+        let _ = runner::record(
+            &app,
+            runner::new_message(
+                &agent_id,
+                store::MessageKind::Note,
+                format!("Saved {}. It's used from your first message.", secret.name),
+            ),
+        );
+    } else {
+        runner::enqueue(
+            &app,
+            &agent_id,
+            secrets::saved_prompt(&secret),
+            runner::From::User,
+        );
+    }
     Ok(secret)
 }
 
@@ -821,11 +854,66 @@ pub async fn agents_usage(agent_id: String) -> Result<usage::UsageSummary, Comma
     Ok(store::get(&agent_id)?.usage.summary(usage::today()))
 }
 
-/// What the user pastes into their other assistant to start an import.
+/// What the user sends their other assistant to start an import: one line
+/// asking it to talk to the Chief of Staff over the connector.
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_import_prompt() -> Result<String, CommandError> {
-    Ok(import::IMPORT_PROMPT.to_string())
+    let chief = store::list()?
+        .into_iter()
+        .find(|a| a.is_main)
+        .map(|a| a.name)
+        .unwrap_or_else(|| "Chief of Staff".into());
+    Ok(import::import_prompt(&chief))
+}
+
+/// Whether an import over the connector may begin, and the one in progress
+/// (or just ended), for the modal and the bar above the Chief's composer.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_import_talk() -> Result<agents::connector::Gate, CommandError> {
+    Ok(agents::connector::gate())
+}
+
+/// The user pressed Start: one import over the connector may begin (it
+/// still asks on a card in the Chief's chat first).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_import_talk_arm(
+    app: AppHandle,
+) -> Result<agents::connector::Gate, CommandError> {
+    agents::connector::arm(&app)
+}
+
+/// Stop the import: the interview ends, the other assistant's queued
+/// message is dropped, and nothing more is accepted until Start again.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_import_talk_stop(app: AppHandle) -> Result<bool, CommandError> {
+    Ok(agents::connector::stop(&app))
+}
+
+/// Import what the user kept on a review card (`agents::review`).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_import_review_apply(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+    picks: agents::review::Picks,
+) -> Result<agents::review::Applied, CommandError> {
+    blocking(move || agents::connector::apply_review(&app, &agent_id, &request_id, &picks)).await
+}
+
+/// A review card as it should show now: each clash read again against the
+/// agents here (a card restored after a restart, or one an agent changed under).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_import_review_current(
+    agent_id: String,
+    request_id: String,
+) -> Result<agents::review::Review, CommandError> {
+    blocking(move || agents::review::current(&agent_id, &request_id)).await
 }
 
 /// What the user sends their other assistant to get its agents back as JSON
@@ -859,6 +947,66 @@ pub async fn agents_import_paste(
     })
     .await
     .map_err(agents::err_other)?
+}
+
+/// The other app's agents on this Mac, and what importing them would do;
+/// `None` when it isn't here or has none. Reads only.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_other_app_preview() -> Result<Option<agents::other_app::Preview>, CommandError>
+{
+    tokio::task::spawn_blocking(agents::other_app::preview)
+        .await
+        .map_err(agents::err_other)?
+}
+
+/// Whether the other app has agents on this Mac, from its registry alone:
+/// what the palette asks at launch (the preview reads every agent's folder).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_other_app_exists() -> Result<bool, CommandError> {
+    tokio::task::spawn_blocking(agents::other_app::available)
+        .await
+        .map_err(agents::err_other)
+}
+
+/// How far an import's copy has got: `{agent, doneBytes, totalBytes}`.
+pub const EVENT_IMPORT_PROGRESS: &str = "agents://import-progress";
+
+/// Copy the other app's team in (`agents::other_app`). Never writes to its
+/// folder. Whatever came across is announced however the import ended, so
+/// the sidebar and an open chat never miss agents made before a failure.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_other_app_import(
+    app: AppHandle,
+    options: Option<agents::other_app::Options>,
+) -> Result<agents::other_app::Summary, CommandError> {
+    let progress_app = app.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let root = agents::other_app::find_source().ok_or_else(|| {
+            CommandError::expected(format!(
+                "There are no {} agents on this Mac to import.",
+                agents::other_app::OTHER_APP_NAME
+            ))
+        })?;
+        // A bar is only worth drawing every so often, not per file.
+        let mut last = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        let mut report = |p: &agents::other_app::Progress| {
+            if last.elapsed() >= std::time::Duration::from_millis(100)
+                || p.done_bytes >= p.total_bytes
+            {
+                last = std::time::Instant::now();
+                let _ = progress_app.emit(EVENT_IMPORT_PROGRESS, p);
+            }
+        };
+        agents::other_app::import_from(&root, options.unwrap_or_default(), &mut report)
+    })
+    .await
+    .map_err(agents::err_other);
+    let _ = app.emit(agents::runner::EVENT_REGISTRY, ());
+    agents::tray::mark_used(&app);
+    result?
 }
 
 /// What a `when` phrase means, as the user types it in the schedule popover:

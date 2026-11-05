@@ -260,7 +260,8 @@ pub fn run() {
                 .resizable(true)
                 .fullscreen(false)
                 .transparent(true)
-                .background_color(tauri::utils::config::Color(45, 45, 45, 255))
+                .background_color(commands::settings::saved_window_background())
+                .theme(commands::settings::saved_native_theme())
                 .initialization_script_for_all_frames(webview_scripts::INSPECTOR_SHIM);
 
                 #[cfg(target_os = "macos")]
@@ -670,9 +671,17 @@ pub fn run() {
             commands::agents::agents_mark_unread,
             commands::agents::agents_start_fresh,
             commands::agents::agents_import_prompt,
+            commands::agents::agents_import_talk,
+            commands::agents::agents_import_talk_stop,
+            commands::agents::agents_import_talk_arm,
+            commands::agents::agents_import_review_apply,
+            commands::agents::agents_import_review_current,
             commands::agents::agents_import_paste_prompt,
             commands::agents::agents_import_paste_preview,
             commands::agents::agents_import_paste,
+            commands::agents::agents_other_app_preview,
+            commands::agents::agents_other_app_import,
+            commands::agents::agents_other_app_exists,
             commands::agents::agents_schedule_preview,
             commands::agents::agents_schedule_create,
             commands::agents::agents_schedule_cancel,
@@ -858,6 +867,8 @@ pub fn run() {
             commands::settings::set_thumbnails_enabled,
             commands::settings::get_app_icon,
             commands::settings::set_app_icon,
+            commands::settings::get_app_theme,
+            commands::settings::set_app_theme,
             // Accounts (Workspaces)
             commands::accounts::list_accounts,
             commands::accounts::create_account,

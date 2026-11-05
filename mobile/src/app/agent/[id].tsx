@@ -23,7 +23,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { AgentAvatar } from '../../components/agent';
 import { useNow } from '../../components/ConnectionPill';
 import { choose } from '../../components/menu';
-import { Button, Icon, Row, T } from '../../components/ui';
+import { Button, Icon, Row, T, SheetPage } from '../../components/ui';
 import {
   describeScope,
   engineCantAsk,
@@ -48,15 +48,18 @@ import {
   startFresh,
 } from '../../lib/session';
 import { useApp } from '../../lib/store';
-import { switchColors, useAccent } from '../../lib/accent';
+import { useSwitchColors } from '../../lib/accent';
 import { withAgentAccent } from '../../lib/accentScreen';
-import { colors, radius, space } from '../../lib/theme';
+import { avatarSize, iconSize, radius, space } from '../../lib/theme';
+import { makeStyles, useColors } from '../../lib/appearance';
 
 // Its colour, which is also its chat's accent, is set at the desk: the Mac
 // doesn't take a colour change from a phone (`AgentToggles` in companion/router.rs).
 export default withAgentAccent(AgentSheet);
 
 function AgentSheet() {
+  const colors = useColors();
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const agent = useApp((s) => s.overview?.agents.find((a) => a.id === id));
@@ -86,169 +89,173 @@ function AgentSheet() {
     .join(' · ');
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.who}>
-        <AgentAvatar name={agent.name} color={agent.color} size={52} />
-        <View style={{ flex: 1, gap: space['2xs'] }}>
-          <T variant="title" color={colors.textWhite} numberOfLines={1}>
-            {agent.name}
-          </T>
-          {!!agent.role && (
-            <T variant="small" color={colors.textSecondary} numberOfLines={2}>
-              {agent.role}
+    <SheetPage>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.who}>
+          <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.sheet} />
+          <View style={{ flex: 1, gap: space['2xs'] }}>
+            <T variant="title" color={colors.textStrong} numberOfLines={1}>
+              {agent.name}
             </T>
-          )}
-          {!!where && (
-            <T variant="caption" color={colors.textMuted}>
-              {where}
-            </T>
-          )}
+            {!!agent.role && (
+              <T variant="small" color={colors.textSecondary} numberOfLines={2}>
+                {agent.role}
+              </T>
+            )}
+            {!!where && (
+              <T variant="caption" color={colors.textMuted}>
+                {where}
+              </T>
+            )}
+          </View>
         </View>
-      </View>
 
-      <View style={styles.list}>
-        {canCall('agents.instructions', welcome) && (
-          <Row
-            label="Instructions"
-            leading={<Icon name="text.alignleft" size={15} color={colors.textSecondary} />}
-            onPress={() => router.push({ pathname: '/instructions', params: { id } })}
-          />
-        )}
-        {canCall('agents.memory', welcome) && (
-          <Row
-            label="Memory"
-            leading={<Icon name="brain" size={15} color={colors.textSecondary} />}
-            onPress={() => router.push({ pathname: '/memory', params: { id } })}
-          />
-        )}
-        {canCall('agents.files', welcome) && (
-          <Row
-            label="Files"
-            leading={<Icon name="doc.on.doc" size={15} color={colors.textSecondary} />}
-            onPress={() => router.push({ pathname: '/files/[id]', params: { id } })}
-          />
-        )}
-        <Toggle
-          agent={agent}
-          field="pinned"
-          label="Pinned"
-          detail="Stays at the top of your agents."
-          enabled={live}
-          onError={setError}
-        />
-        <Toggle
-          agent={agent}
-          field="muted"
-          label="Muted"
-          detail="No alerts from it. Unread still counts."
-          enabled={live}
-          onError={setError}
-          last={agent.isMain}
-        />
-        {!agent.isMain && (
+        <View style={styles.list}>
+          {canCall('agents.instructions', welcome) && (
+            <Row
+              label="Instructions"
+              leading={
+                <Icon name="text.alignleft" size={iconSize.body} color={colors.textSecondary} />
+              }
+              onPress={() => router.push({ pathname: '/instructions', params: { id } })}
+            />
+          )}
+          {canCall('agents.memory', welcome) && (
+            <Row
+              label="Memory"
+              leading={<Icon name="brain" size={iconSize.body} color={colors.textSecondary} />}
+              onPress={() => router.push({ pathname: '/memory', params: { id } })}
+            />
+          )}
+          {canCall('agents.files', welcome) && (
+            <Row
+              label="Files"
+              leading={<Icon name="doc.on.doc" size={iconSize.body} color={colors.textSecondary} />}
+              onPress={() => router.push({ pathname: '/files/[id]', params: { id } })}
+            />
+          )}
           <Toggle
             agent={agent}
-            field="hidden"
-            label="Hidden"
-            detail="Tucked under Hidden in your list. It keeps working."
+            field="pinned"
+            label="Pinned"
+            detail="Stays at the top of your agents."
             enabled={live}
             onError={setError}
-            last
           />
-        )}
-      </View>
-
-      {!!agent.engine && (
-        // Read-only here: switching engines starts a new session, a choice for the desk.
-        <View style={styles.list}>
-          <Row label="Runs on" value={engineName(agent)} />
-          <Row label="Model" value={modelName(agent, engines)} last />
+          <Toggle
+            agent={agent}
+            field="muted"
+            label="Muted"
+            detail="No alerts from it. Unread still counts."
+            enabled={live}
+            onError={setError}
+            last={agent.isMain}
+          />
+          {!agent.isMain && (
+            <Toggle
+              agent={agent}
+              field="hidden"
+              label="Hidden"
+              detail="Tucked under Hidden in your list. It keeps working."
+              enabled={live}
+              onError={setError}
+              last
+            />
+          )}
         </View>
-      )}
-      {!!cantAsk && (
-        <T variant="small" color={colors.textMuted} style={styles.note}>
-          {cantAsk}
-        </T>
-      )}
 
-      <Conversation
-        agent={agent}
-        canFresh={canCall('agents.startFresh', welcome)}
-        live={live}
-        onError={setError}
-      />
+        <Conversation
+          agent={agent}
+          canFresh={canCall('agents.startFresh', welcome)}
+          live={live}
+          onError={setError}
+        />
 
-      {usage && <Usage usage={usage} />}
-
-      {!!agent.permissions?.length && (
-        <>
-          <T variant="caption" color={colors.textMuted} style={styles.sectionTitle}>
-            ALLOWED WITHOUT ASKING
-          </T>
+        {!!agent.engine && (
+          // Read-only here: switching engines starts a new session, a choice for the desk.
           <View style={styles.list}>
-            {agent.permissions.map((rule, i) => (
+            <Row label="Runs on" value={engineName(agent)} />
+            <Row label="Model" value={modelName(agent, engines)} last />
+          </View>
+        )}
+        {!!cantAsk && (
+          <T variant="small" color={colors.textMuted} style={styles.note}>
+            {cantAsk}
+          </T>
+        )}
+
+        {usage && <Usage usage={usage} />}
+
+        {!!agent.permissions?.length && (
+          <>
+            <T variant="caption" color={colors.textMuted} style={styles.sectionTitle}>
+              ALLOWED WITHOUT ASKING
+            </T>
+            <View style={styles.list}>
+              {agent.permissions.map((rule, i) => (
+                <Animated.View
+                  key={rule.id}
+                  exiting={FadeOut.duration(150)}
+                  layout={LinearTransition.springify().damping(20)}
+                >
+                  <PermissionRow
+                    agent={agent}
+                    rule={rule}
+                    first={i === 0}
+                    enabled={live && canCall('agents.revokePermission', welcome)}
+                    onError={setError}
+                  />
+                </Animated.View>
+              ))}
+            </View>
+          </>
+        )}
+
+        <View style={styles.sectionHead}>
+          <T variant="caption" color={colors.textMuted} style={styles.sectionTitle}>
+            CHECK-INS AND ROUTINES
+          </T>
+          {canSchedule && (
+            <Button
+              title="Add"
+              size="compact"
+              variant="ghost"
+              icon="plus"
+              onPress={() => router.push({ pathname: '/schedule', params: { agentId: id } })}
+            />
+          )}
+        </View>
+        <View style={styles.list}>
+          {checkIns.length === 0 ? (
+            <T variant="small" color={colors.textMuted} style={styles.none}>
+              Nothing scheduled. Add a routine, like every weekday at 9:00, “Draft my day”.
+            </T>
+          ) : (
+            checkIns.map((c, i) => (
               <Animated.View
-                key={rule.id}
+                key={c.id}
+                entering={FadeIn.duration(180)}
                 exiting={FadeOut.duration(150)}
                 layout={LinearTransition.springify().damping(20)}
               >
-                <PermissionRow
+                <CheckInRow
                   agent={agent}
-                  rule={rule}
+                  checkIn={c}
                   first={i === 0}
-                  enabled={live && canCall('agents.revokePermission', welcome)}
+                  enabled={canSchedule}
                   onError={setError}
                 />
               </Animated.View>
-            ))}
-          </View>
-        </>
-      )}
-
-      <View style={styles.sectionHead}>
-        <T variant="caption" color={colors.textMuted} style={styles.sectionTitle}>
-          CHECK-INS AND ROUTINES
-        </T>
-        {canSchedule && (
-          <Button
-            title="Add"
-            size="compact"
-            variant="ghost"
-            icon="plus"
-            onPress={() => router.push({ pathname: '/schedule', params: { agentId: id } })}
-          />
-        )}
-      </View>
-      <View style={styles.list}>
-        {checkIns.length === 0 ? (
-          <T variant="small" color={colors.textMuted} style={styles.none}>
-            Nothing scheduled. Add one in a line, like “every weekday 9am: brief me on the launch”.
+            ))
+          )}
+        </View>
+        {error && (
+          <T variant="small" color={colors.accentErrorLight} style={styles.none}>
+            {error}
           </T>
-        ) : (
-          checkIns.map((c, i) => (
-            <Animated.View
-              key={c.id}
-              entering={FadeIn.duration(180)}
-              exiting={FadeOut.duration(150)}
-              layout={LinearTransition.springify().damping(20)}
-            >
-              <CheckInRow
-                agent={agent}
-                checkIn={c}
-                first={i === 0}
-                enabled={canSchedule}
-                onError={setError}
-              />
-            </Animated.View>
-          ))
         )}
-      </View>
-      {error && (
-        <T variant="small" color={colors.accentErrorLight} style={styles.none}>
-          {error}
-        </T>
-      )}
-    </ScrollView>
+      </ScrollView>
+    </SheetPage>
   );
 }
 
@@ -265,6 +272,8 @@ function CheckInRow({
   enabled: boolean;
   onError: (text: string | null) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const now = useNow(30_000);
   const [busy, setBusy] = useState(false);
@@ -318,18 +327,18 @@ function CheckInRow({
     >
       <Icon
         name={c.repeat ? 'arrow.trianglehead.2.clockwise' : 'clock'}
-        size={14}
+        size={iconSize.body}
         color={c.paused ? colors.textMuted : colors.textSecondary}
       />
       <View style={{ flex: 1, gap: space['2xs'] }}>
-        <T color={c.paused ? colors.textMuted : colors.textWhite} numberOfLines={2}>
+        <T color={c.paused ? colors.textMuted : colors.textStrong} numberOfLines={2}>
           {c.note}
         </T>
         <T variant="caption" color={colors.textSecondary}>
           {describeCheckInTime(c, now)}
         </T>
       </View>
-      {busy ? null : <Icon name="ellipsis" size={14} color={colors.textMuted} />}
+      {busy ? null : <Icon name="ellipsis" size={iconSize.body} color={colors.textMuted} />}
     </Pressable>
   );
 }
@@ -352,7 +361,7 @@ function Toggle({
   onError: (text: string | null) => void;
   last?: boolean;
 }) {
-  const accent = useAccent();
+  const switchProps = useSwitchColors(agent[field]);
   return (
     <Row
       label={label}
@@ -361,7 +370,7 @@ function Toggle({
       trailing={
         <Switch
           value={agent[field]}
-          {...switchColors(accent, agent[field])}
+          {...switchProps}
           disabled={!enabled}
           accessibilityLabel={label}
           onValueChange={(on) => {
@@ -391,6 +400,8 @@ function PermissionRow({
   enabled: boolean;
   onError: (text: string | null) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const [busy, setBusy] = useState(false);
   const revoke = () =>
     Alert.alert(`Revoke “${rule.label}”?`, `${agent.name} asks again before it does this.`, [
@@ -414,7 +425,7 @@ function PermissionRow({
   return (
     <View style={[styles.row, !first && styles.divider]}>
       <View style={{ flex: 1, gap: space['2xs'] }}>
-        <T variant="mono" color={colors.textWhite} numberOfLines={2}>
+        <T variant="mono" color={colors.textStrong} numberOfLines={2}>
           {rule.label}
         </T>
         <T variant="caption" color={colors.textSecondary}>
@@ -449,6 +460,8 @@ function Conversation({
   live: boolean;
   onError: (text: string | null) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const [busy, setBusy] = useState(false);
   const context = contextLine(agent);
   const percent = contextPercent(agent);
@@ -490,7 +503,7 @@ function Conversation({
         {freshable && (
           <Row
             label={busy ? 'Starting fresh…' : 'Start fresh'}
-            leading={<Icon name="arrow.counterclockwise" size={15} color={colors.textSecondary} />}
+            leading={<Icon name="arrow.counterclockwise" size={iconSize.body} color={colors.textSecondary} />}
             // Its turn is in the conversation it would leave.
             onPress={busy ? undefined : confirm}
             disabled={!!unavailable}
@@ -510,6 +523,8 @@ function Conversation({
 }
 
 function Usage({ usage }: { usage: UsageSummary }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <>
       <T variant="caption" color={colors.textMuted} style={styles.sectionTitle}>
@@ -536,7 +551,7 @@ function Usage({ usage }: { usage: UsageSummary }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   who: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.sm },
   sectionHead: {
@@ -546,13 +561,7 @@ const styles = StyleSheet.create({
     marginTop: space.sm,
   },
   sectionTitle: { marginLeft: space.lg, letterSpacing: 0.4 },
-  list: {
-    backgroundColor: colors.surfaceApp,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    overflow: 'hidden',
-  },
+  list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
   none: { padding: space.lg },
   note: { marginHorizontal: space.lg },
   row: {
@@ -562,5 +571,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
   },
-  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
-});
+  divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
+}));

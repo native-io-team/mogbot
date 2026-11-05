@@ -10,7 +10,7 @@
  * @module components/agents/ImportPastePanel
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ErrorIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
@@ -32,15 +32,19 @@ const PREVIEW_DELAY_MS = 200;
 
 export interface ImportResult {
   summary: ImportSummary;
-  agents: PasteImportAgent[];
+  agents: Pick<PasteImportAgent, 'name' | 'isMain' | 'color'>[];
+  /** Shown in the done state under the shared summary. */
+  extra?: ReactNode;
 }
 
 interface ImportPastePanelProps {
   onCancel: () => void;
   onDone: (result: ImportResult) => void;
+  /** Under the lede: the way back to the main path, when this is the fallback. */
+  aside?: ReactNode;
 }
 
-export function ImportPastePanel({ onCancel, onDone }: ImportPastePanelProps) {
+export function ImportPastePanel({ onCancel, onDone, aside }: ImportPastePanelProps) {
   const [prompt, setPrompt] = useState('');
   const [copied, setCopied] = useState(false);
   const [showMessage, setShowMessage] = useState(false);
@@ -121,6 +125,7 @@ export function ImportPastePanel({ onCancel, onDone }: ImportPastePanelProps) {
           Bring your agents over with their instructions, memory and routines. It takes about two
           minutes, and they run on Claude Code on this Mac.
         </p>
+        {aside}
         <ol className="agents-import-steps">
           <ImportStep
             n={1}

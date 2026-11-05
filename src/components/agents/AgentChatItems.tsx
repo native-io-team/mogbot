@@ -39,12 +39,15 @@ import type { DraftAttachment } from './useComposerAttachments';
 import { MentionText } from './AgentMentions';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
+import { ImportReviewCard } from './ImportReviewCard';
+import { useLiveWork, WorkTimeline } from './AgentWork';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
 import { useCardGuard } from './useCardGuard';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import {
+  connectorTextParts,
   CONTEXT_SUGGEST_AT,
   contextPercent,
   describeScope,
@@ -65,6 +68,7 @@ import {
   type AgentEngine,
   type AgentMessage,
   type AgentRef,
+  type TurnWork,
   type Approval,
   type SessionPrompt,
 } from '../../lib/agents';
@@ -319,6 +323,7 @@ export const AgentBubble = memo(function AgentBubble({
       data-arrived={arrived || undefined}
       data-stopped={message.stopped || undefined}
       data-attachments={attachments.length > 0 || undefined}
+      data-work={message.work ? true : undefined}
       data-message-ids={message.id}
     >
       {message.text && (
@@ -340,6 +345,7 @@ export const AgentBubble = memo(function AgentBubble({
       ) : (
         actions
       )}
+      {message.work && <WorkTimeline work={message.work} agent={agent} />}
     </div>
   );
 });
@@ -471,6 +477,8 @@ interface ErrorLineProps extends Arrival {
   onSignIn?: () => void;
   /** What the agent runs on, which "Sign in to …" names. */
   engine?: AgentEngine;
+  /** Whose home a timeline's screenshots live in; without it, no timeline. */
+  agent?: Agent;
 }
 
 /**
@@ -486,6 +494,7 @@ export const ErrorLine = memo(function ErrorLine({
   retryScheduled,
   onSignIn,
   engine = 'claude',
+  agent,
 }: ErrorLineProps) {
   const signIn = errorRemedy(message) === 'sign-in' && onSignIn;
   const resetsAt = message.failure?.kind === 'usage_limit' ? message.failure.resetsAt : undefined;
@@ -511,6 +520,7 @@ export const ErrorLine = memo(function ErrorLine({
       onKeyDown={onKeyDown}
       className="agent-chat__row agent-chat__row--agent agent-chat__row--card"
       data-arrived={arrived || undefined}
+      data-work={message.work && agent ? true : undefined}
       data-message-ids={message.id}
     >
       <div
@@ -558,6 +568,7 @@ export const ErrorLine = memo(function ErrorLine({
         )}
       </div>
       <MessageActions text={message.text} ts={message.ts} />
+      {message.work && agent && <WorkTimeline work={message.work} agent={agent} />}
     </div>
   );
 });
@@ -600,7 +611,13 @@ export const NoteLine = memo(function NoteLine({
   message,
   arrived,
   onOpenPeer,
-}: { message: AgentMessage; onOpenPeer?: (agentId: string) => void } & Arrival) {
+  agent,
+}: {
+  message: AgentMessage;
+  onOpenPeer?: (agentId: string) => void;
+  /** Whose home a timeline's screenshots live in; without it, no timeline. */
+  agent?: Agent;
+} & Arrival) {
   // Where a new conversation began: a divider, since what's above it is history to the agent.
   if (message.fresh) {
     return (
@@ -618,7 +635,7 @@ export const NoteLine = memo(function NoteLine({
   // "Created Finance": the agent it names is a link, while that agent exists.
   const name = message.peer?.name;
   const at = name && onOpenPeer ? message.text.indexOf(name) : -1;
-  return (
+  const note = (
     <div className="agent-note" data-arrived={arrived || undefined} data-message-ids={message.id}>
       {at < 0 || !message.peer ? (
         message.text
@@ -637,6 +654,83 @@ export const NoteLine = memo(function NoteLine({
           {message.text.slice(at + name!.length)}
         </>
       )}
+    </div>
+  );
+  if (!message.work || !agent) return note;
+  return (
+    <>
+      {note}
+      <div className="agent-chat__row agent-chat__row--agent" data-work>
+        <WorkTimeline work={message.work} agent={agent} />
+      </div>
+    </>
+  );
+});
+
+/**
+ * Links in the other assistant's words: web links open in the system
+ * browser, never in the app's own webview; anything else (a local path, a
+ * custom scheme) is inert. Unlike the agents' own prose, nothing here is
+ * trusted to open a file on this Mac.
+ */
+function onConnectorLinkClick(event: MouseEvent<HTMLElement>) {
+  const anchor = (event.target as HTMLElement).closest('a');
+  const href = anchor?.getAttribute('href');
+  if (!href) return;
+  event.preventDefault();
+  if (/^https?:/i.test(href)) void openUrl(href);
+}
+
+/**
+ * One line of an import conversation (`agents/connector.rs`). The other
+ * assistant's words sit on the left, outlined and labelled "From Grok · via
+ * connector"; what the sealed interview wrote back to it is indented under
+ * them as "To Grok", so neither reads as the Chief talking to you, or as you.
+ */
+export const ConnectorBubble = memo(function ConnectorBubble({
+  message,
+  arrived,
+}: { message: AgentMessage } & Arrival) {
+  const onKeyDown = useCopyOnKey(message.text);
+  const source = message.peer?.name ?? 'another assistant';
+  const outgoing = message.kind === 'sent_to_agent';
+  return (
+    <div
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className={`agent-chat__row agent-chat__row--connector${outgoing ? ' agent-chat__row--to-connector' : ''}`}
+      data-arrived={arrived || undefined}
+      data-message-ids={message.id}
+    >
+      <span className="agent-connector__who">
+        {outgoing ? (
+          <>
+            To {source}
+            <span className="agent-connector__via"> · from the import interview</span>
+          </>
+        ) : (
+          <>
+            From {source}
+            <span className="agent-connector__via"> · via connector</span>
+          </>
+        )}
+      </span>
+      {/* Plain text: never HTML or markdown, whatever the other assistant sent. */}
+      <div
+        className={`agent-bubble agent-bubble--connector${outgoing ? ' agent-bubble--to-connector' : ''}`}
+        onClick={onConnectorLinkClick}
+        data-plain
+      >
+        {connectorTextParts(message.text).map((part, i) =>
+          'url' in part ? (
+            <a key={i} href={part.url} className="agent-connector__link">
+              {part.url}
+            </a>
+          ) : (
+            part.text
+          )
+        )}
+      </div>
     </div>
   );
 });
@@ -886,6 +980,20 @@ export const ApprovalCard = memo(function ApprovalCard({
       <SecretCard message={message} agentName={agentName} onAnswer={onAnswer} arrived={arrived} />
     );
   }
+  if (approval.connector?.kind === 'review') {
+    return (
+      <ImportReviewCard
+        message={message}
+        card={approval.connector}
+        chiefName={agentName}
+        arrived={arrived}
+        onAnswer={(id, allow) => onAnswer(id, allow)}
+      />
+    );
+  }
+  // Another assistant asking to start an import: a plain yes or no, so Deny
+  // doesn't open the "what instead" line.
+  const plainDeny = approval.connector?.kind === 'consent';
   const pending = approval.status === 'pending';
   const fields = approvalFields(approval.tool, approval.input);
   const answer = async (allow: boolean, always = false, why?: string) => {
@@ -927,7 +1035,14 @@ export const ApprovalCard = memo(function ApprovalCard({
             ))}
           </dl>
         ) : (
-          approval.detail && <pre className="agent-approval__detail">{approval.detail}</pre>
+          approval.detail &&
+          (plainDeny ? (
+            <p className="agent-approval__detail agent-approval__detail--prose">
+              {approval.detail}
+            </p>
+          ) : (
+            <pre className="agent-approval__detail">{approval.detail}</pre>
+          ))
         )}
         {long && (
           <TextButton
@@ -938,7 +1053,7 @@ export const ApprovalCard = memo(function ApprovalCard({
             {showAll ? 'Show less' : 'Show all'}
           </TextButton>
         )}
-        {pending && paused && (
+        {pending && paused && !plainDeny && (
           <p className="agent-approval__note">
             It paused here for you. Allow it and it picks up where it left off.
           </p>
@@ -993,7 +1108,9 @@ export const ApprovalCard = memo(function ApprovalCard({
                 </TextButton>
               </Tooltip>
             )}
-            {/* A note for what to do instead is the rarer answer: one menu away, as on the phone. */}
+            {/* A note for what to do instead is the rarer answer: one menu away, as on
+                the phone. A consent card has nothing to say instead: just Deny. */}
+            {!plainDeny && (
             <Dropdown
               align="right"
               portal
@@ -1013,6 +1130,7 @@ export const ApprovalCard = memo(function ApprovalCard({
             >
               <DropdownItem onSelect={() => setNoting(true)}>Deny with a note…</DropdownItem>
             </Dropdown>
+            )}
             {/* tabIndex: WebKit leaves buttons out of the Tab order unless asked. */}
             <Button
               ref={denyRef}
@@ -1168,6 +1286,9 @@ function SessionPromptCard({
 
 interface WorkingIndicatorProps {
   activity: string | null;
+  /** The turn's steps so far (`status.work`), and whose they are. */
+  work?: TurnWork;
+  agent?: Agent;
   /** It appeared after the chat opened: open its height rather than pop in. */
   entering?: boolean;
   /** The turn ended: collapse, then `onExited` unmounts it. */
@@ -1176,15 +1297,25 @@ interface WorkingIndicatorProps {
 }
 
 /** Three dots and what it's doing, under the last message while it works. */
-export function WorkingIndicator({ activity, entering, leaving, onExited }: WorkingIndicatorProps) {
+export function WorkingIndicator({
+  activity,
+  work,
+  agent,
+  entering,
+  leaving,
+  onExited,
+}: WorkingIndicatorProps) {
   // Keep the last thing it said while it collapses, rather than blanking it.
   const [shown, setShown] = useState(activity);
   if (!leaving && activity !== shown) setShown(activity);
   // Only a change of activity crossfades; the first one is just there.
   const [first] = useState(activity);
+  const live = useLiveWork({ work, agent, activity, leaving });
   return (
     <div
       className="agent-chat__row agent-chat__row--agent agent-chat__row--working"
+      data-work={live.toggle ? true : undefined}
+      data-open={live.open || undefined}
       data-entering={entering || undefined}
       data-leaving={leaving || undefined}
       onAnimationEnd={(e) => {
@@ -1192,21 +1323,25 @@ export function WorkingIndicator({ activity, entering, leaving, onExited }: Work
       }}
       aria-live="polite"
     >
-      <div className="agent-working">
-        <span className="agent-working__dots" aria-hidden>
-          <span />
-          <span />
-          <span />
-        </span>
-        {shown && (
-          <span
-            key={shown}
-            className="agent-working__activity"
-            data-changed={shown !== first || undefined}
-          >
-            {shown}
+      {live.list}
+      <div className="agent-working__line">
+        <div className="agent-working">
+          <span className="agent-working__dots" aria-hidden>
+            <span />
+            <span />
+            <span />
           </span>
-        )}
+          {shown && (
+            <span
+              key={shown}
+              className="agent-working__activity"
+              data-changed={shown !== first || undefined}
+            >
+              {shown}
+            </span>
+          )}
+        </div>
+        {live.toggle}
       </div>
     </div>
   );

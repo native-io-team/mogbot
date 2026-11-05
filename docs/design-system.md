@@ -1,4 +1,4 @@
-# Ship Studio Design System
+# Design System
 
 The reference for tokens and UI primitives. Audience: you're about to build a feature and need
 the right token or component in under a minute. Canonical sources (always trust these over docs):
@@ -45,7 +45,7 @@ with a leading search icon and a labelled clear action; use its compact density 
 SVG ownership is split by reuse and meaning:
 
 - `src/assets/icons/` contains reusable product icons and brand marks.
-- `src/assets/icons/old-icons/` contains app-specific artwork that is reusable inside Ship Studio
+- `src/assets/icons/old-icons/` contains app-specific artwork that is reusable inside the app
   but is not part of the primary shared icon set.
 - `src/assets/graphics/` contains feature artwork with its own visual or layout contract.
 
@@ -161,7 +161,7 @@ value, consume a semantic role or an owner-appropriate component token.
 | Surfaces | `--surface-app` / `--surface-panel` / `--surface-control` / `--surface-selected` / `--surface-recessed` | App background → panels → controls → selected rows; recessed wells are used for terminals, log output, and code editors. |
 | Text | `--text-primary` / `--text-secondary` / `--text-muted` / `--text-faint` / `--text-terminal-strong` | Default → supporting labels → muted hints → faint chrome; terminal output has its own readable roles. |
 | Accent | `--accent-active` / `--accent-active-hover` / `--accent-active-strong` / `--accent-active-soft` / `--accent-text` / `--text-on-accent` | The app is monochrome plus ONE accent: the Chief of Staff's colour, set at runtime. Use it for primary actions, selection and "this is on" — never for status. See "The accent" below. |
-| Focus | `--focus-ring` (= `--accent-focus`) | Every focus indication. A fixed blue, deliberately not the accent, so it is visible whatever colour the user picked. |
+| Focus | `--focus-ring` (= `--accent-focus`), `--focus-ring-width`, `--focus-ring-offset` | Every focus indication: a neutral 1.5px ring of `--text-primary` at `--focus-ring-strength` (58% dark, 50% light) with a 2px offset (white-ish on dark, near-black on light), shown only on `:focus-visible`. Never a hue, never the accent. |
 | Fixed status | `--status-info`, `--status-running` | Info severity and in-progress dots. Fixed hues so a red/orange accent never reads as an error. |
 | Overlay | `--accent-overlay` / `--accent-overlay-ink` | Anything drawn on the user's own page (preview overlays, comment pins). Fixed, never the accent. |
 | Status | `--accent-success`, `--accent-warning`, `--accent-error`, `--accent-error-light`, `--accent-error-deep`, `--modified-yellow` | Semantic states. `--accent-success` means healthy/done/connected only — it is not the brand colour, and never stands in for the accent. Error values are retained as reviewed legacy inputs until their Figma mapping is confirmed. |
@@ -197,7 +197,7 @@ agent's colour instead.
   red, amber or green accent must never be readable as error, warning or
   success, and the Chief's colour may be any of them.
 - **Answers are neutral.** Allow on an approval or prompt card is
-  `variant="strong"` (near-white fill, dark ink), never `primary` — a red
+  `variant="strong"` (the strongest neutral: near-white with dark ink on dark, near-black with white ink on light), never `primary` — a red
   accent would make Allow look like the destructive choice.
   `approvalNeutral.test.tsx` holds this.
 - **Danger is not told apart by hue.** `<Button variant="danger">` gets a
@@ -223,8 +223,20 @@ agent's colour instead.
   `<AccentScope color>`, from `src/contexts/AccentScopeContext.tsx`):
   `ModalFrame`, `Dropdown` (portalled) and `ContextMenu` put the scope on
   their own root. Tooltips do not carry it — they have no accent surface.
-- **Focus is not the accent.** `--focus-ring` is a fixed blue so it shows
-  whatever colour the user picked, white included.
+- **Focus is neutral.** `--focus-ring` is `--text-primary` at
+  `--focus-ring-strength` (plain `--text-primary` without `color-mix()`),
+  1.5px wide with a 2px offset. The strength is the lightest that still
+  clears 3:1 on each theme's hardest surface — 58% on dark (selected rows),
+  50% on light (the app background) — so the ring reads as focus rather than
+  a border or a selection box, and keeps the app monochrome whatever accent
+  the user picked. Rings draw only on `:focus-visible` (text inputs show a
+  focus border while typing). `ModalFrame` focuses the first control in its
+  body — never the header's close button — or the dialog itself; a dialog
+  whose body opens on tabs (Settings) focuses itself, so a ⌘K open paints no
+  ring on the selected tab. `theme.test.ts` holds the ring at
+  ≥ 3:1 against app, panel, control, hover and selected surfaces in both
+  themes. Things drawn on the user's own page keep the fixed overlay blue
+  (`--accent-overlay`).
 - **No flash.** The last app accent is cached in `localStorage` and applied by
   an inline script in `index.html` before the bundle runs; both the script and
   `readCachedAccent` validate every cached value.
@@ -233,10 +245,57 @@ agent's colour instead.
 - **The picker previews, then saves.** Arrow keys in the accent picker move
   the selection and repaint at once; the registry write happens on Space or
   Enter, on click, or after the arrows stop.
-- **Theme-ready.** Nothing in the accent block assumes dark: shades are
-  computed from the colour itself, soft fills mix with surface tokens and
-  accent text with `--text-primary`. A light theme redefines surfaces and text
-  only.
+- **Per theme.** Shades are computed from the colour itself, soft fills mix
+  with surface tokens and accent text with `--text-primary` (at
+  `--accent-text-share`, 65% dark / 55% light). One rule differs by theme:
+  **white is near-black on light** (`LIGHT_THEME_WHITE` in `accent.ts`, mirrored
+  by `--color-accent-light-default` and the light `--agents-tint-white`). A
+  near-black accent's hover and pressed shades lift instead of darkening.
+  `accentVars(key, theme)` defaults to the theme currently painted; the boot
+  cache keeps one entry per theme (`app.accent`, `app.accent.light`).
+- **Allow on light** is the same `strong` variant: `--surface-inverse` is
+  near-black there with white ink (`--text-on-inverse`).
+
+### Themes (light and dark)
+
+Settings → Appearance → *Theme* (and ⌘K → "Theme…", "Use light theme", "Use
+dark theme", "Match system appearance") picks **System** (default), **Light** or
+**Dark**. The preference is saved by `set_app_theme` (settings.rs, which also
+sets each window's native appearance), cached in `localStorage` (`app.theme`)
+and applied by an inline script in `index.html` before the first paint, as
+`data-theme="light" | "dark"` on `<html>`. System follows
+`prefers-color-scheme`, live. `src/lib/theme.ts` owns all of it; every window
+follows a change through the cache's `storage` event.
+
+- **Semantic roles only.** `:root[data-theme='light']` in
+  `tokens-semantic.css` overrides surfaces, text, borders, status hues,
+  syntax roles, overlays and shadows. Components never branch on the theme.
+  If something looks wrong in one theme, it is reading a primitive it should
+  not — point it at a role (that is how `--syntax-*`, `--text-quiet`,
+  `--surface-busy` and `--surface-selected-strong` came to exist).
+- **Not an inversion.** Light keeps the dark theme's structure: a quiet
+  `--surface-app` (#f5f5f5), panels one step forward (white), controls one
+  step into the panel, hairline borders. Elevation reads as whiter, and the
+  tactile depth that dark gets from highlights comes from hairline-ringed
+  shadows. Scrims dim (≤ 18% black) rather than black out.
+- **`--text-white` is the emphasis role**, near-black on light; the name
+  predates themes. `--text-inverse` is ink on a coloured fill and stays white.
+- **Fixed in both themes:** anything drawn on the user's page
+  (`--accent-overlay*`, `--page-scrim*`) and the traffic lights. The focus
+  ring follows the theme because it is a neutral, not a hue.
+  The live preview iframe is the user's site and is never themed.
+- **Outside CSS:** the xterm palettes (`terminalTheme.ts`, `followAppTheme`
+  re-themes live terminals) and the contribution calendar's ramp follow the
+  theme explicitly.
+- **Tests.** `theme.test.ts` holds the light block complete (every
+  colour-bearing role has a light value), checks text/surface, status, syntax
+  and accent-text contrast against WCAG AA in both themes, the light accent
+  mapping, the terminal palette, and runs the boot script. Feature-local
+  colour tokens get a light value in a `:root[data-theme='light']` block in
+  the same file (the token checker accepts a same-file theme block as the
+  role's other half, not a duplicate).
+- **Harness:** `node scripts/harness-capture.mjs --theme light` (or
+  `?theme=light` on a harness URL). Unforced captures are dark.
 
 Need a value that doesn't exist? Add it to the smallest appropriate layer, update the inventory, and
 run `pnpm check:token-layers`. Do not add a new alias to the compatibility file unless it is a
@@ -357,7 +416,7 @@ attributes, `invalid`, and an optional `suffix`. The primitive owns the followin
 | Code | Add `ss-text-field--code` for commands, paths, and other code-like values. |
 | Invalid | `invalid` adds the stable invalid class and `aria-invalid="true"`; feature validation owns the message text. |
 | Disabled | Native `disabled` behavior remains intact and receives the disabled surface, text, and cursor treatment. |
-| Placeholder / focus | Placeholder uses the secondary text role; focus uses the fixed blue `--focus-ring` (never the accent) and primary text. |
+| Placeholder / focus | Placeholder uses the secondary text role; focus uses the neutral `--focus-ring` (never the accent) and primary text. |
 | Labels / help / messages | Render these in the owning form recipe so TextField does not become a form god component. |
 | Suffix | `suffix` enables the optional shell; suffix content is decorative/supporting UI, not the input label. |
 
@@ -412,6 +471,20 @@ Gotchas:
 - Open/close state: `useModalState()` for local toggles, `useModal('id')` from `ModalContext`
   for app-registered modals.
 
+Layout rules every dialog follows:
+
+- **Header.** Use the frame's header (`title`) unchanged — `--spacing-lg` / `--spacing-xl`
+  padding, `--font-size-h4` title, one rule under it. Don't restyle it per feature; an off-scale
+  title or hand-picked padding is what made sibling dialogs look like different apps.
+- **Anything under the header** (tabs, a search field) starts `--spacing-lg` below the rule and
+  sits on the content's `--spacing-xl` inset. Never butt a control against the header's rule.
+- **Actions.** Right-aligned, dismissal first, commitment last: `Cancel` then the primary. A
+  destructive commitment uses `variant="danger"` in the primary's place. Inline confirm rows
+  (Save/Cancel beside a field) follow the same order.
+- **Copy.** Sentence case on buttons ("Restart now", not "Restart Now"); a true ellipsis (`…`)
+  only when the action opens another step; progress labels say what is happening
+  ("Installing…"), never "Please wait".
+
 ### Button family — [Button.tsx](../src/components/primitives/Button.tsx)
 
 Every button control uses one visual recipe and token set while retaining the semantics of its
@@ -448,6 +521,29 @@ panels remain inert. Use `mode="navigation"` only when the control changes a rou
 whose content is rendered elsewhere (for example, the workspace Preview/Focus/Code switch); this
 mode deliberately omits `aria-controls`. Do not use `Tabs` for an in-place display/filter choice —
 use `SegmentedControl`, whose options expose `aria-pressed` state.
+
+#### Underline tabs, segmented tabs, or a segmented control
+
+Three looks, one decision each. Pick by what the control *is*, then by how big the surface is:
+
+| The control… | Use | Looks like |
+| --- | --- | --- |
+| Filters or sets a value; nothing else on screen is swapped out (All / User / Project, an install scope, a sort) | `SegmentedControl` | Pill group, pressed option sunken |
+| Swaps between 2–3 views of one **small** surface — a dialog under ~600px, a card, a popover (Paste a reply / Connected assistant, Agent / Memory) | `Tabs` with the default `appearance="segmented"`, tabs `width="fill"`, set into the body with the content's inset | Pill group with a sliding selected surface |
+| Navigates the sections of a **large** surface, where the strip is effectively that surface's header (Settings, Help, Cmd+K, a docked panel, the workspace modes) | `Tabs` with `appearance="underline"` | Text labels, muted until active, a 2px bar under the active *label* |
+
+Rules for underline tabs, all owned by the primitive — a feature stylesheet sets layout (fill,
+stretch, inset) and nothing else:
+
+- No list surface and no rule of its own. If the surface needs an edge under the strip, the owner
+  draws **one** hairline in `--border-subtle`; never stack it on a header that already has one.
+- The bar spans the active label (icon included), not the hit area, so fill-width tabs don't get a
+  column-wide bar. It is `--border-width-emphasis` (2px) in `--text-primary`; there is no thicker variant.
+- Hit area: `--spacing-sm` each side, `--spacing-xs` between tabs. Inactive labels are `--text-muted`,
+  hover `--text-secondary`, active `--text-primary`, weight 500 throughout so selection never
+  shifts the layout.
+- Keep the Button focus ring. Never `outline: none` a tab — two feature stylesheets did, which
+  made the Help and Cmd+K tabs invisible to keyboard focus.
 
 Editor values use [PropertyField.tsx](../src/components/primitives/PropertyField.tsx), not
 `Button`: `value` and `select` are neutral, while `variable` uses the purple variable tokens.
@@ -536,7 +632,7 @@ variants. Callers may add lifecycle/input overrides without duplicating visual o
 
 ### Development primitive lab
 
-The development-only primitive lab is a diagnostic surface for Ship Studio's own design-system
+The development-only primitive lab is a diagnostic surface for the app's own design-system
 contracts. While running the Vite development server, append `?designSystemLab=1` to the app URL.
 The lab is query-gated and lazy-loaded only when `import.meta.env.DEV` is true, so it is not a
 production route, product feature, or component-catalog experience. It renders real primitives
@@ -544,7 +640,7 @@ and their states so contributors can inspect Button variants and sizes, fields, 
 overlays, status surfaces, semantic token themes, compact density, keyboard focus, and long or
 localized content in one place. Close it from the lab header or remove the query parameter.
 
-Keep the lab separate from any project-facing component catalog: the lab verifies Ship Studio's
+Keep the lab separate from any project-facing component catalog: the lab verifies the app's
 own implementation contracts, while a product catalog would document or expose user projects.
 
 ### Dropdown — [Dropdown.tsx](../src/components/primitives/Dropdown.tsx)

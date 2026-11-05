@@ -80,6 +80,16 @@ pub(crate) fn audit_detail(tool: &str, args: &Value) -> String {
     let field = |k: &str| args.get(k).and_then(Value::as_str).unwrap_or("");
     match tool {
         "message_agent" => super::preview(field("message")),
+        "import_conversation" => {
+            format!("{}: {}", field("source"), super::preview(field("message")))
+        }
+        "import_agents" => format!(
+            "{} agent(s) from {}",
+            args.get("agents")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len),
+            super::preview(field("source"))
+        ),
         "close_agent" => format!("tab {}", field("tab")),
         "start_agent" => super::preview(field("prompt")),
         "press_key" => format!("key {}", field("key")),
@@ -509,6 +519,34 @@ mod tests {
             allow_in_window(&mut w, 61_001, 3),
             "the oldest has aged out"
         );
+    }
+
+    #[test]
+    fn import_calls_are_described_once_by_the_server() {
+        assert_eq!(
+            audit_detail(
+                "import_agents",
+                &json!({ "source": "Grok", "agents": [{"name": "A"}, {"name": "B"}] })
+            ),
+            "2 agent(s) from Grok"
+        );
+        assert_eq!(
+            audit_detail(
+                "import_conversation",
+                &json!({ "source": "Grok", "message": "hi\nthere" })
+            ),
+            "Grok: hi there"
+        );
+        // The tools themselves leave the log to the server (one line a call).
+        let tools = include_str!("tools.rs");
+        let body = |name: &str| {
+            let start = tools.find(&format!("fn {name}(")).unwrap();
+            let end = tools[start..].find("\n}\n").unwrap();
+            &tools[start..start + end]
+        };
+        for name in ["import_agents", "import_conversation"] {
+            assert!(!body(name).contains("audit("), "{name} audits itself");
+        }
     }
 
     #[test]

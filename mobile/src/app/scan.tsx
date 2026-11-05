@@ -8,9 +8,13 @@ import { Linking, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, IconButton, T } from '../components/ui';
 import { haptic } from '../lib/haptics';
-import { colors, radius, space } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { StatusBar } from 'expo-status-bar';
+import { makeStyles, useColors } from '../lib/appearance';
 
 export default function Scan() {
+  const colors = useColors();
+  const styles = useStyles();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [permission, request] = useCameraPermissions();
@@ -29,17 +33,24 @@ export default function Scan() {
   };
 
   return (
-    <View style={styles.page}>
+    // Black once the camera is up, as the viewer is: the frame, caption and ×
+    // are drawn in media white, and a white page under a camera that hasn't
+    // produced a frame yet would hide every one of them.
+    <View style={[styles.page, permission?.granted && { backgroundColor: colors.black }]}>
       {permission?.granted ? (
-        <CameraView
-          style={StyleSheet.absoluteFill}
-          facing="back"
-          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-          onBarcodeScanned={onScan}
-        />
+        <>
+          <CameraView
+            style={StyleSheet.absoluteFill}
+            facing="back"
+            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+            onBarcodeScanned={onScan}
+          />
+          {/* Over the camera, in either appearance: white words, a white clock. */}
+          <StatusBar style="light" />
+        </>
       ) : (
         <View style={styles.ask}>
-          <T variant="title" color={colors.textWhite}>
+          <T variant="title" color={colors.textStrong}>
             Scan the code on your Mac
           </T>
           <T color={colors.textSecondary}>
@@ -59,7 +70,7 @@ export default function Scan() {
       {permission?.granted && (
         <View pointerEvents="none" style={styles.frameWrap}>
           <View style={styles.frame} />
-          <T color={colors.textWhite} style={styles.caption}>
+          <T color={colors.onMedia} style={styles.caption}>
             {wrong
               ? 'That isn’t a pairing code'
               : 'Point at the code in Settings → Phone on your Mac'}
@@ -70,7 +81,7 @@ export default function Scan() {
         <IconButton
           name="xmark"
           label="Close"
-          color={colors.textWhite}
+          color={permission?.granted ? colors.onMedia : colors.textStrong}
           fallback="✕"
           onPress={() => router.back()}
         />
@@ -79,7 +90,7 @@ export default function Scan() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   page: { flex: 1, backgroundColor: colors.surfaceApp },
   ask: { flex: 1, justifyContent: 'center', padding: space.xl, gap: space.md },
   frameWrap: {
@@ -91,10 +102,10 @@ const styles = StyleSheet.create({
   frame: {
     width: 240,
     height: 240,
-    borderRadius: radius.lg + 12,
+    borderRadius: radius.sheet,
     borderWidth: 2,
     borderColor: colors.overlayFrame,
   },
   caption: { textAlign: 'center', paddingHorizontal: space.xl },
   close: { position: 'absolute', right: space.lg },
-});
+}));

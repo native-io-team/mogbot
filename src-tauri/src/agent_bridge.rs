@@ -424,6 +424,12 @@ async fn handle_http(
     let Some(segment) = req.uri().path().strip_prefix(&expected_prefix) else {
         return Ok(plain_response(StatusCode::NOT_FOUND, "Not found"));
     };
+    // An import's sealed interview gets only its own three tools, at
+    // /mcp/<token>/agents/import/<that import's secret> (`agents::connector`).
+    if let Some(secret) = segment.strip_prefix("agents/import/") {
+        let secret = secret.trim_end_matches('/').to_string();
+        return handle_import_http(app, secret, req).await;
+    }
     // Agents get their own tool set at /mcp/<token>/agents/<agent-id>.
     if let Some(agent_id) = segment.strip_prefix("agents/") {
         let agent_id = agent_id.trim_end_matches('/').to_string();
@@ -490,6 +496,48 @@ async fn handle_http(
 }
 
 /// Same transport rules as the preview tools, answered by `crate::agents::mcp`.
+async fn handle_import_http(
+    app: tauri::AppHandle,
+    secret: String,
+    req: Request<Incoming>,
+) -> Result<Response<ServerBody>, hyper::Error> {
+    match *req.method() {
+        Method::POST => {
+            let body = req.into_body().collect().await?.to_bytes();
+            if body.len() > MAX_BODY_BYTES {
+                return Ok(plain_response(
+                    StatusCode::PAYLOAD_TOO_LARGE,
+                    "Payload too large",
+                ));
+            }
+            let message: Value = match serde_json::from_slice::<Value>(&body) {
+                Ok(v) if v.is_object() => v,
+                _ => {
+                    return Ok(json_response(error_response(
+                        Value::Null,
+                        -32700,
+                        "Parse error",
+                    )))
+                }
+            };
+            if message.get("id").is_none_or(Value::is_null) {
+                return Ok(Response::builder()
+                    .status(StatusCode::ACCEPTED)
+                    .body(full_body(Bytes::new()))
+                    .unwrap());
+            }
+            Ok(json_response(
+                crate::agents::connector::handle_rpc(&app, &secret, &message).await,
+            ))
+        }
+        Method::DELETE => Ok(plain_response(StatusCode::OK, "")),
+        _ => Ok(plain_response(
+            StatusCode::METHOD_NOT_ALLOWED,
+            "Method not allowed",
+        )),
+    }
+}
+
 async fn handle_agents_http(
     app: tauri::AppHandle,
     agent_id: String,

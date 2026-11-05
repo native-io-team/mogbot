@@ -189,11 +189,75 @@ far back as the page needs, and apply `approvals.jsonl` to the page read. A log 
 fails with the reason; a reply mid-turn is still shown, with one error line
 (at most a minute) saying it won't survive a restart.
 
+### What it did (`src-tauri/src/agents/work.rs`)
+
+Under the last thing a turn says (its reply, its error, or "Stopped"; never
+a note someone else wrote into the chat, and never a "started fresh"
+divider), one quiet line: "Worked 6 min · 23 steps · edited 2 files". It
+opens into the steps in order, each with its time into the turn and any
+screenshot it produced. Every step is something observed: a tool call in the
+engine's own output (Claude Code's `tool_use`, a Codex item; a call reported
+twice is one step), an approval card, a preview screenshot. A turn with no
+steps has no line.
+
+- **Outcomes are observed**: a call is a request, so each step is matched to
+  what came back by id (Claude Code's `tool_result` by `tool_use_id`, with
+  `is_error` and the permission decision beside it; a Codex item's
+  completion and its `status`). Declined reads "Asked to run rm — you
+  declined", failed reads "Tried to edit App.tsx", and both are drawn
+  quieter (`outcome` on the step). An approval step says the answer: "You
+  allowed: Run a command" / "You declined: …". "Edited n files" counts only
+  edits that came back successful.
+- **Words, safe by construction**: `work::describe_tool` is the one table.
+  A command is only its program and subcommand ("Ran npm test", "Ran git
+  push", "Ran curl": never arguments, URLs or environment), a web page only
+  its host ("Browsed acme.com"), a file only its name, someone else's MCP
+  tool a verb and the service ("Searched Google Drive", "Sent from Gmail",
+  "Worked in Chrome"), our own tools past-tense words ("Shared a file").
+  The engine's bookkeeping (ToolSearch, Skill, BashOutput, plan-mode
+  switches) is no step at all; an unknown built-in is "Used a tool". The
+  working line uses the present tense ("Running npm test").
+- **Then scrubbed, then clipped**: Keychain redaction, then `work::scrub`
+  (blanks secret-named variables, flags and headers, `-p…`/`-a`, query and
+  JSON fields such as `sig=` and `"password":`, bearer values, URL user
+  info, key- and base64-shaped strings), and only then the 100-character
+  limit, so a cut never leaves part of a token.
+- **Screenshots** attach to the screenshot call that took them: the oldest
+  one still running for that project. A screenshot no call explains (it
+  came with a session's reply) is a step of its own.
+- **Live**: while the turn runs, the status carries `work` (the newest 12
+  steps and the counts; no file names) plus `doing`, the running call's
+  working-line words. The desktop's working line gets a "5 steps" toggle
+  that opens the steps so far above it; the newest is left out only while
+  the working line is saying it (`doing` equals the activity), never when
+  the line is blank. A bound agent's list offers **Open project** (its
+  workspace), the only real way in today; "Take over" (opening the live
+  session or browser tab) is not built.
+- **Stored** beside the log, never in it: `turns/<message-id>.json`, sent
+  again on `agents://message` when the turn ends, and applied only to the
+  paged chat reads (desktop and phone), after the log's lock is released,
+  with one listing of `turns/` per page. Search, summaries and the shared
+  files list never read them. `messages.jsonl` stays append-only; older
+  builds show no timeline.
+- **Pruned**: an agent keeps the newest 500 timelines, and past its newest
+  100 none older than 90 days; the replies stay, only what they did is
+  forgotten. Deleting an agent removes its home and so its timelines;
+  starting fresh keeps them, since the history above the divider is still
+  shown.
+- **Bounded**: at most 60 steps per turn (the newest; `stepCount` says how
+  many there were), 30 file names.
+- **Phone**: the message's `work` shows as the folded line and list under it
+  (`mobile/src/components/work.tsx`). While it works, "Working · 8 steps"
+  sits folded under the working row and opens into the steps so far. Live
+  steps go only to an app that says it shows them (`hello.features:
+  ["work.live"]`); others get the status without `work`, and the overview
+  never carries it (it goes out on every registry change).
+
 ## Tools agents get (`src-tauri/src/agents/mcp.rs`)
 
 Served by the existing loopback agent bridge at
 `/mcp/<bridge token>/agents/<agent id>`. The id in the path is the caller, and
-the URL is passed only inline to the process Ship Studio spawned for that agent.
+the URL is passed only inline to the process the app spawned for that agent.
 
 | Tool | Who | What |
 | --- | --- | --- |
@@ -225,7 +289,7 @@ acknowledgements to each other.
 
 ## Working on projects (`src-tauri/src/agents/sessions.rs`)
 
-Agents work on Ship Studio projects the way Remote Access does: in the
+Agents work on projects the way Remote Access does: in the
 project's real agent tabs (backend PTY sessions), so the user can open the
 project and carry on the same conversation. It is Remote Access's toolset,
 run by the same handlers in `remote_access/tools.rs`, under names that can't
@@ -239,7 +303,7 @@ be confused with agent-to-agent `message_agent`:
 | `preview_screenshot`, `git_status`, `deploy_status` | same |
 | `push` | own: a card instead of the PIN |
 
-- **Scope:** every Ship Studio project (agents already run as the user with
+- **Scope:** every project in the app (agents already run as the user with
   every project as an `--add-dir`), not the remote's opt-in list.
   `project_create` doesn't share the project for remote access and doesn't
   switch the window.
@@ -286,7 +350,7 @@ be confused with agent-to-agent `message_agent`:
 - **Questions a session asks** (`agents/decisions.rs`): when a session stops
   on something it can't answer itself (Claude Code's folder-trust dialog, a
   permission prompt in the tab, any menu or y/n `agent_state.rs` recognises),
-  Ship Studio raises a card with the prompt's own text and options, and the
+  the app raises a card with the prompt's own text and options, and the
   agent's tool call waits on it like `approve` (240s; then the card stays live
   and an answer wakes the agent with "call session_wait"). The card goes in
   the owner's chat **and** where the work came from: up the delegation chain
@@ -392,7 +456,7 @@ one click and just records the answer. **Deny with a note…**, in the card's
 agent what you typed: as the deny message while it waits on the card, or as a
 queued turn when it doesn't; the card keeps it ("Declined · “…”").
 Live cards survive restarts, because the
-tool and input are stored on the card. Ship Studio's own confirmations (delete
+tool and input are stored on the card. The app's own confirmations (delete
 an agent) do expire, since they only mean something while asked. The sidebar
 shows "Needs your OK" while any card is open (`pendingApprovals`).
 
@@ -413,7 +477,7 @@ command's leading words (`npm test`, `git push`, `npm run build`), or the exact
 command for wrappers and risky programs (`sudo`, `rm`, `bash`, `curl`…) and for
 anything whose second word is a flag; one exact host for WebFetch; one
 connector tool; web search. Never Bash, Write or Edit as a whole, and never on
-Ship Studio's own confirmations (delete an agent has no tool call, so no
+The app's own confirmations (delete an agent has no tool call, so no
 scope). A command only matches if it is one plain command: `;`, `&`, `|`,
 redirects, `$`, backticks, parentheses, backslashes and line breaks all ask
 again, so `npm test && rm -rf ~` never matches `npm test`. Rules are stored per
@@ -533,43 +597,120 @@ the tab.
 ## Import from Grok Bot (or any connected assistant)
 
 Only the other assistant knows its own agents, instructions and memory, so the
-import runs from its side. Remote access gains an `import_agents` tool:
-`{source, agents: [{name, role, instructions, memory, is_main, routines}]}`. Ship Studio
-creates each agent, writes its instructions, and appends its memory under
-`### Imported from <source>`. The `is_main` agent merges into the Chief of
-Staff. Re-importing updates same-named agents instead of duplicating them.
-Imported agents don't run until you message them, apart from their routines.
-Every import is audited like any other remote-access action.
+import runs from its side, over Remote Access. Nothing it sends becomes an
+agent by itself: every connector import ends on one review card in the
+Chief's chat, and the user imports what they keep (`agents/review.rs`).
 
-Each agent can also bring `routines: [{when, what}]`, with `when` in plain
-words ("every weekday at 9am", "every 2 hours", "friday at 2pm"). Each goes
-through the same parser and limits as `schedule_check_in` (`schedule::check`)
-and becomes a routine, or a one-time check-in, with `what` as its note. A
-phrase that can't be read, or is too frequent, or a full agent, isn't
-guessed at: the paste preview shows it under its agent with the reason, and the
-result (`routinesRefused`, and the tool's reply, which tells the assistant to
-list each one to the user) names it by agent. A refused routine doesn't block
-the rest of the import. Re-importing doesn't duplicate routines: the same note
-on the same schedule, or the same one-off note, counts as already set.
+The **Import agents** button leads with a conversation (`agents/connector.rs`,
+the full threat model in docs/remote-access.md):
 
-The **Import agents** button in Agents mode offers two paths, as tabs:
+1. The user presses **Start** (one import, until it ends or the app quits),
+   then sends their other assistant one message (`import::import_prompt`).
+2. Its first `import_conversation` call puts an Allow / Deny card in the
+   Chief's chat ("Grok wants to bring its agents over"). Nothing is shared or
+   delivered until Allow.
+3. It then talks to a **sealed interview** (`agents/interview.rs`): a
+   throwaway Claude Code session that speaks as the Chief but has no built-in
+   tools, no settings or CLAUDE.md, no folders, not the Chief's session or
+   rules, and only `propose_agent` / `update_proposal` / `finish`, which
+   stage a draft. The user watches it in the Chief's chat: the other
+   assistant's lines are `from_agent` lines with a `connector:<source>` peer
+   ("From Grok · via connector"), the interview's replies `sent_to_agent`
+   lines to the same peer, indented as "To Grok". Neither ever reaches the
+   Chief's own session (`runner::recap_lines` skips them), and the other
+   assistant only hears what the interview wrote. A bar above the composer
+   says where it is, that what you type stays between you and the Chief, and
+   has a red **Stop import**; the Chief's own Stop (desktop or phone, where
+   its row reads "Talking to Grok (import)") stops it too.
+4. `finish` posts the review card: each agent ticked, with its role and the
+   first lines of its instructions in view (**Show all** for the rest), its
+   memory, routines (paused) and the logins it asks for a click away; a
+   name already taken (or a lookalike of one) comes in as "<Name> (from
+   Grok)" unless the user picks **Replace**, which lists what it does to
+   that agent: new instructions (the diff), a fresh conversation (memory
+   kept), its running routines paused, its project unbound, its
+   Always-allow rules removed, and its saved logins removed unless "Keep its
+   saved logins" is ticked (off by default). The managing agent's notes are
+   an optional "Add to <Chief>'s notes", off by default. **Import** creates
+   what's ticked; **Don't import** creates nothing. Only the Mac's card
+   imports: the phone's says "Review on your Mac". Logins arrive as secure
+   cards in each agent's chat that don't wake it
+   (`secrets::Request::quiet`): an imported agent first runs when the user
+   messages it.
 
-- **Paste** (the default while remote access is off; needs nothing set up).
-  Copy a message into the other assistant (`PASTE_PROMPT` in
-  `src-tauri/src/agents/paste.rs`) asking for every agent as a ```json block
-  in the same `{source, agents}` shape, in full and with no credentials, split
-  into numbered whole-agent blocks if it's long. Paste the whole reply back:
-  every ```json block (or bare JSON) is found and merged, and the preview lists
-  each agent and whether it is new, updates an existing one, or merges into the
-  Chief. Anything wrong (a trailing comma and its line, a cut-off block, a
-  missing name, a non-text field, a duplicate, two mains) is listed by block,
-  agent and field and blocks the import; nothing is repaired except curly
-  quotes used as JSON quotes. Import runs the same `import::import()`.
-- **Connected assistant** (the default once remote access is on): the one
-  message that makes it call `import_agents`, and a link to Remote access setup.
+The one-shot `import_agents` tool (`{source, agents: [{name, role,
+instructions, memory, is_main, routines}]}`) goes through the same Start and
+the same review card. Routines are read by the same parser and limits as
+`schedule_check_in` (`schedule::check`); one that can't be read is shown on
+the card with why, and is never guessed at.
+
+**Paste** is the fallback ("Can't connect? Paste a reply instead"; needs
+nothing set up). Copy a message into the other assistant (`PASTE_PROMPT` in
+`src-tauri/src/agents/paste.rs`) asking for every agent as a ```json block in
+the `{source, agents}` shape, in full and with no credentials, split into
+numbered whole-agent blocks if it's long. Paste the whole reply back: every
+```json block (or bare JSON) is found and merged, and the preview lists each
+agent and whether it is new, updates an existing one, or merges into the
+Chief. Anything wrong (a trailing comma and its line, a cut-off block, a
+missing name, a non-text field, a duplicate, two mains) is listed by block,
+agent and field and blocks the import; nothing is repaired except curly
+quotes used as JSON quotes. Import runs the same `import::import()`.
 
 What doesn't come across: the other platform's own connectors (its Gmail,
 Calendar…). Here, agents use what this Mac and Claude Code are connected to.
+
+### From Ship Studio on this Mac (`src-tauri/src/agents/other_app.rs`)
+
+When the app this one grew out of has agents on this Mac, **Import agents**
+gains a segmented choice, "From Ship Studio" | "From another assistant" (and
+⌘K gains "Import agents from Ship Studio…", gated by the cheap
+`agents_other_app_exists`, which reads only its registry). The name is
+`OTHER_APP_NAME` in `other_app.rs`; the modal reads it from the preview's
+`appName`, and the TS copy is used only for the palette title. Its agents are found
+under its projects folder (`<its projects root>/.shipstudio/agents`, the root
+read from its own `app_state.json`), else `~/ShipStudio/.shipstudio/agents`.
+
+Both apps use the same layout, so it's a copy, not a translation. The tab
+previews every agent (new, merges into the Chief, already here, or stays
+behind and why), with its instructions, memory, message and file counts,
+routines and project, then **Import** copies:
+
+| Comes across | How |
+| --- | --- |
+| Registry entry | same id (so agent-to-agent lines still point at the right agent), name, role, avatar, engine, model, routine model, pinned/hidden/muted, usage, unknown fields. "Always allow" rules only if the user ticks "Keep their rules" (listed per agent in the preview; off by default, since they pre-approve tool calls) |
+| Home | whole folder: CLAUDE.md (instructions + memory), `messages.jsonl`, `approvals.jsonl`, `attachments/`, anything else it kept there. Symlinks are never followed or copied |
+| Project binding | kept when the folder still exists; otherwise dropped and said in its chat |
+| Routines | kept, **paused**, so nothing runs in both apps while both are open |
+| Chief of Staff | merged by `import.rs`'s rules: ours keeps its name, role, avatar, engine and session; theirs adds its instructions under `### From Ship Studio` (unless they're the stock Chief's), its memory section under `### Imported from Ship Studio`, its conversation as **one block before ours** under a "From Ship Studio" divider note (`store::prepend_log_block`, never interleaved), its files (an existing name here wins, reported), its routines (paused) and, if kept, its rules, without doubling any. Since our Chief keeps its own session, a recap of the other Chief's last 24 messages is written to `history-from-ship-studio.md` in its home and named in its memory; the chat note says "Merged in", not "Brought over" |
+
+Not copied, on purpose: **saved secrets** (values in its Keychain items,
+`ship-studio-agent-<id>`; reading them would raise Keychain prompts owned by
+the other app and copy credentials without the user choosing to: the tab and
+the agent's chat name which secrets stayed behind, and the agent asks again
+with `request_secret`); **sessions** (tied to the folder they ran in; the
+agent starts fresh and is handed the recent conversation, `new_engine`);
+**a turn in flight** (`turn.json`, `inbox.json`). Waiting approval cards are
+expired, except secure input cards, which still work here.
+
+It's read-only: nothing under the other app's folder is written, moved or
+deleted (the Rust test hashes the whole source tree before and after; an
+agent home that is itself a symlink is skipped, not followed). It's
+idempotent and safe to retry: `agents/imports.json` records each source id it
+brought over, so importing again skips them ("Already here"; a bare id
+collision says so instead); the Chief's merge skips lines by id, memory by
+block, files by name and routines/rules by value, so a merge that failed part
+way is simply run again; a folder left between moving a home in and
+registering it, or an `.import-*` staging folder, is ours and is cleared. One
+import runs at a time (a static mutex). One agent failing is reported by name
+and the rest carry on; the registry event fires however it ended, and the
+modal reloads the Chief's chat. The preview counts conversation only (not
+cards or notes), sizes each agent, and says when a bound agent shares its
+project folder with its Ship Studio twin and that paused routines' twins keep
+running there. Across volumes (APFS clones within one) the copy checks free
+space first, refuses with both sizes if it won't fit, and reports progress
+(`agents://import-progress`). An agent whose name is taken here
+stays behind until one is renamed; a newer build's entry this one can't read
+is listed, not guessed at.
 
 ## Check-ins and routines (`src-tauri/src/agents/schedule.rs`)
 
@@ -655,13 +796,13 @@ with `runner::strip_session_env`, from the agents folder, so what's listed is
 what a turn sees. The project MCP modal edits the same Claude Code settings for
 the active agent CLI, plus project scope; it's left as it is.
 
-## When the Mac sleeps, a window closes, or Ship Studio quits
+## When the Mac sleeps, a window closes, or the app quits
 
 Agents are not a service. Each turn is one `claude --print --resume <session>`
-process that Ship Studio starts on this Mac and reads to the end, and the
+process that the app starts on this Mac and reads to the end, and the
 check-in tick is a loop inside the app. So:
 
-- **A window closes.** By default closing a window quits Ship Studio (the
+- **A window closes.** By default closing a window quits the app (the
   frontend's close handler calls `exit`), so it is the same as quitting. With
   **Keep running when closed** on (opt-in, macOS), the window is hidden
   instead (`close_to_background`) and nothing stops: agents, check-ins,
@@ -669,7 +810,7 @@ check-in tick is a loop inside the app. So:
   destroying matters, because a destroyed main window runs the global cleanup
   that kills agent processes. Clicking the Dock icon brings hidden windows
   back (`RunEvent::Reopen`); so do a notification and opening that project.
-- **Ship Studio quits** (⌘Q, or a close with the option off). The turn in progress ends with it: its Claude Code
+- **The app quits** (⌘Q, or a close with the option off). The turn in progress ends with it: its Claude Code
   process is stopped on the way out (`cleanup_agent_processes`), and any that
   outlived a crash are cleaned up at the next launch. What the agent already
   did (files written, commands run) stands. Messages queued behind that turn
@@ -678,7 +819,7 @@ check-in tick is a loop inside the app. So:
 - **It reopens.** Every conversation is on disk and the next message resumes
   the same Claude Code session, so the agent still has its context. There is
   no automatic restart of an interrupted turn on this branch: you pick it up
-  by sending the next message. Ship Studio's own confirmation cards left
+  by sending the next message. The app's own confirmation cards left
   pending are marked expired (`store::expire_stale_approvals`); permission
   cards stay answerable, and a late Allow wakes the agent again. Missed
   check-ins follow the rules above: a one-time one fires once, late; a routine
@@ -719,11 +860,11 @@ schedule popover's footnote. Elsewhere than macOS none of it shows.
 
 ## Menu bar, quit guard and quick entry (`agents/tray.rs`, `agents/quick_entry.rs`)
 
-Agents run inside Ship Studio, so staying alive, and being reachable while
+Agents run inside the app, so staying alive, and being reachable while
 the window is closed, is part of the product.
 
 **Menu-bar icon.** A monochrome template image (`src-tauri/icons/tray/*.svg`,
-rasterised by `pnpm icons:tray`): Ship Studio's three discs, with a dot while
+rasterised by `pnpm icons:tray`): a placeholder ring (until real branding), with a dot while
 anything needs you. The menu is a pure function of the agents and their live
 status (`tray::menu_model`), rebuilt at most every 300ms on `agents://status`
 and `agents://registry`:
@@ -731,7 +872,7 @@ and `agents://registry`:
 - **Needs you** (up to 5): `Name · Needs your OK` (`· 3 need your OK`).
 - **Working** (up to 5): `Name · <activity line>`, cut to one short line. An agent waiting for a free slot is listed after the running ones and isn't counted as working: the tooltip says `2 working, 1 waiting for a slot` (`runner::queued`).
 - Overflow is counted (`2 more`), not listed. Hidden agents aren't listed; idle ones aren't either.
-- Then Open Ship Studio, New message to Chief… (quick entry), Keep this Mac awake / Keep running when closed (checkmarks, the same `set_stay_on`), Quit Ship Studio.
+- Then Open <name>, New message to Chief… (quick entry), Keep this Mac awake / Keep running when closed (checkmarks, the same `set_stay_on`), Quit <name> (`brand::NAME`).
 - Clicking an agent opens its chat (`notify::open_agent`, the notification click's path), showing a window that a close hid.
 
 Shown by default **once the user has actually used Agents, or while Keep
@@ -746,7 +887,7 @@ same runner status and approval cards. Quick entry stays opt-in (it follows
 Keep running only). Turning Keep running off *from the icon*
 pins the icon on, so it doesn't vanish under the pointer.
 
-**Quit guard.** ⌘Q, the icon's Quit, ⌘K "Quit Ship Studio…", and closing a
+**Quit guard.** ⌘Q, the icon's Quit, ⌘K "Quit…", and closing a
 window while it would quit all go through `useQuitGuard`, which asks
 `agents_quit_check` (`tray::quit_check`: agents mid-turn or queued for a slot,
 agents with a check-in due in the next 24 hours, and agents with an open card,
@@ -769,8 +910,8 @@ only shows it, on the display under the pointer, a third of the way down.
 
 - To the Chief of Staff; a leading `@Name` sends it to that agent instead (`quickEntryRecipient`, longest name wins). Other @mentions work as in a chat.
 - Dictation is the chat composer's (`useDictation`). The camera runs `screencapture -i -o -x` (drag a region, or Space and click a window) with the composer hidden; the PNG goes to `<agents>/.quick-entry/` (cleared after a day) and is attached like a file. **macOS asks for Screen Recording permission the first time**; the composer says so until a screenshot has worked.
-- Return sends (queued like any message), focus goes back to the app you were in (`[NSApp deactivate]`), and "Sent to Chief of Staff · Open chat" stays up 2.4s, unfocused, then hides. Esc or clicking elsewhere closes; closing hands focus back (`NSApp hide`) if Ship Studio wasn't in front.
-- The shortcut is released while one of Ship Studio's own windows has focus, and taken again when they lose it: in-app, ⌥Space stays the composer's hold-to-dictate key.
+- Return sends (queued like any message), focus goes back to the app you were in (`[NSApp deactivate]`), and "Sent to Chief of Staff · Open chat" stays up 2.4s, unfocused, then hides. Esc or clicking elsewhere closes; closing hands focus back (`NSApp hide`) if the app wasn't in front.
+- The shortcut is released while one of the app's own windows has focus, and taken again when they lose it: in-app, ⌥Space stays the composer's hold-to-dictate key.
 - Conflicts we can know are refused with a reason (`Accelerator::conflict`): no ⌃/⌥/⌘, macOS's own (⌘Space, ⌃Space, ⌃⌥Space, ⌃⌘Space, ⌘⇧3/4/5, ⌘Tab…), and a bare ⌘-letter every app uses. Another app's global shortcut can only be found by trying; when macOS refuses, the old shortcut is put back and the reason shown.
 - Off by default unless Keep running when closed is on (`AppState.quick_entry`): a global ⌥Space takes a non-breaking space from every other app.
 
@@ -1057,7 +1198,7 @@ cards.
 
 ## Agents that work in a project (`src-tauri/src/agents/project.rs`)
 
-An agent can be bound to one Ship Studio project (`Agent.project`, a path from
+An agent can be bound to one project (`Agent.project`, a path from
 `list_projects`), from the editor's **Works in** or by the Chief
 (`create_agent` / `update_agent` take `project`, a name or path; `"none"`
 unbinds). Unbound agents run exactly as before; nothing is migrated.
@@ -1120,7 +1261,7 @@ prunes them the diff says it can't be shown.
   left running would keep the agent "working" for hours; instead, a few
   seconds after the turn's result the tree is stopped. An agent can't leave a
   server running for you to look at.
-- Check-ins and routines only fire while Ship Studio is open.
+- Check-ins and routines only fire while the app is open.
 - Notification click-through is unverified in a signed build.
 - After a restart, the interrupted turn is not re-run (it may have done half
   its work); messages queued behind it are, once. Retry then belongs to

@@ -63,8 +63,10 @@ fn cursor(seq: u64) -> Cursor {
 fn status_value(state: &'static str) -> Value {
     serde_json::to_value(crate::agents::runner::Status {
         state,
-        activity: (state != "idle").then(|| "Reading src/App.tsx".to_string()),
+        activity: (state != "idle").then(|| "Running npm test".to_string()),
         since: (state != "idle").then_some(1_762_290_000_000),
+        // The turn's steps so far, for a phone that says it shows them.
+        work: (state != "idle").then(testkit::live_work),
     })
     .unwrap()
 }
@@ -146,6 +148,7 @@ fn frames() -> Vec<ServerFrame> {
                     state: "working",
                     activity: Some("Waiting for a free slot (4 agents already working)".into()),
                     since: None,
+                    work: None,
                 })
                 .unwrap(),
             },
@@ -208,6 +211,7 @@ fn frames() -> Vec<ServerFrame> {
         device_id: "dev_0123456789abcdef".into(),
         resume: ResumeMode::Replay,
         methods: router::METHODS.to_vec(),
+        time_zone: Some("America/New_York".into()),
     }];
     for (reason, message) in [
         (
@@ -504,6 +508,15 @@ async fn generate() -> String {
         "agentsStartFresh",
         "Result<'agents.startFresh'>",
         call("agents.startFresh", json!({ "agentId": AGENT })).await,
+    );
+    out += &entry(
+        "agentsCreate",
+        "Result<'agents.create'>",
+        call(
+            "agents.create",
+            json!({ "input": { "name": "Inbox", "role": "Keeps my inbox down to what matters", "color": "teal" }, "clientId": "n_1" }),
+        )
+        .await,
     );
     out += &entry(
         "sessionsSend",
