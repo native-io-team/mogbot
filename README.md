@@ -18,23 +18,42 @@ Why it exists, and what it is not: [docs/MISSION.md](docs/MISSION.md).
 ## What it does today
 
 - **A team, not a chatbot.** A Chief of Staff plus the agents it (or you)
-  creates, each with a colour, memory you can read and edit, check-ins and
-  routines, apps it may use, and a choice of engine per agent.
+  creates, each with a colour, memory you can read and edit, routines, apps
+  it may use, and a choice of engine per agent.
 - **Approvals as a tap.** Allow / Deny cards in the chat. Secrets go into a
   masked card and the macOS Keychain, never into the conversation.
+- **Results you can review.** Finished work comes back as one card: the
+  files and links, what the agent says it checked and what it didn't
+  verify. Ask for changes and you get a new version.
+- **A copy of the project per task.** An agent working on a project works
+  in its own copy, so it never tramples you or another agent. Keep changes,
+  Review changes, Preview or Discard.
+- **Take over.** Step into an agent's own session in a terminal, drive it by
+  hand, then hand it back.
 - **Shows its work.** Under each reply, a folded "what it did" timeline of
-  the steps the agent actually took, with screenshots, live while it works.
+  the steps the agent actually took and how they turned out, with
+  screenshots, live while it works.
+- **Routines that start themselves.** On a schedule, or "When…" something
+  happens: a GitHub mention or assignment, a new file in a folder, or a
+  check through one of your apps. Checks run sealed and read-only, from
+  your Mac; there are no webhooks.
+- **Usage before the wall.** What each agent and routine used this week, and
+  your plan's usage when Claude Code or Codex reports it. Nothing estimated.
 - **Start fresh, keep memory.** A clean conversation whenever you want one,
   and a context meter that only shows what the engine reported.
+- **Nothing goes silent.** A turn that fails, is stopped or is cut off says
+  so in the chat.
 - **Your phone.** A companion app (`mobile/`), paired by QR code, that talks to
-  your own Mac over your own Tailscale: chat, approve, start new agents and
-  routines, dictate, share things to an agent. Nothing passes through our
+  your own Mac over your own Tailscale: chat, approve, review results, start
+  new agents and routines, dictate, share things to an agent. The phone only
+  talks to a Mac that has proved it's yours. Nothing passes through our
   servers.
 - **Projects underneath.** When work becomes a site or an app, it lives in a
   full workspace: agent terminals, live preview, visual editing, branches,
   PRs, hosting status, snapshots. Agents create and work in projects too.
-- **Bring your agents.** Import from Grok Bot or any other assistant, with
-  their memory and routines.
+- **Bring your agents.** From Ship Studio on this Mac, or from Grok Bot or any
+  other assistant through a short conversation that ends on a card where you
+  pick what to import.
 - Light and dark, on desktop and phone.
 
 Your Mac does the work, so it has to be on for agents to keep going. Being
