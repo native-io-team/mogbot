@@ -432,6 +432,37 @@ pub fn browser_helper_installed() -> bool {
 }
 
 /// The card for `ask` from `agent`, with the ways in this agent can use.
+/// A claude.ai connector that didn't work, with the way that still does.
+fn or_browser(r: &LoginRequest, why: String) -> String {
+    if r.options.iter().any(|o| o.method == Method::Browser) {
+        format!("{why} Choose Use my browser instead: it works where you're already signed in.")
+    } else {
+        why
+    }
+}
+
+/// Where a way in sits on the card: the browser before claude.ai.
+fn option_rank(o: &LoginOption, all: &[connections::Connection]) -> u8 {
+    match o.method {
+        Method::Existing => {
+            let claude_ai = o
+                .connection_id
+                .as_deref()
+                .and_then(|id| all.iter().find(|c| c.id == id))
+                .is_some_and(|c| matches!(c.kind, Kind::ClaudeAi { .. }));
+            if claude_ai {
+                2
+            } else {
+                0
+            }
+        }
+        Method::Oauth | Method::Gh => 0,
+        Method::Browser => 1,
+        Method::ClaudeAi => 2,
+        Method::Key => 3,
+    }
+}
+
 pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
     if ask.service.trim().is_empty() {
         return Err(super::err_invalid(
@@ -502,11 +533,12 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
             detail: format!("Opens {title}'s own sign-in in this Mac's browser. The token stays in this Mac's Keychain; {name} never sees a password, and you can disconnect it any time."),
             connection_id: None,
         }),
+        // An extra, after the browser: never the default, never the only way.
         Connector::ClaudeAi(on) if claude => options.push(LoginOption {
             id: "claude_ai".into(),
             method: Method::ClaudeAi,
-            label: format!("Connect {title}"),
-            detail: format!("Uses claude.ai's {on} connector, which keeps the sign-in with your Claude account. If it isn't added yet, claude.ai opens in this Mac's browser to add it. {name} never sees a password."),
+            label: format!("Use claude.ai's {on} connector"),
+            detail: format!("Optional. Uses claude.ai's {on} connector, which keeps the sign-in with your Claude account. If it isn't added yet, claude.ai opens in this Mac's browser to add it. {name} never sees a password."),
             connection_id: None,
         }),
         Connector::ClaudeAi(_) => {
@@ -579,6 +611,10 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
         }
         None => None,
     };
+    // Our own working connections first (OAuth, `gh`, one already made with
+    // them), then the user's browser, then claude.ai's connectors, then a key.
+    let all = connections::list().unwrap_or_default();
+    options.sort_by_key(|o| option_rank(o, &all));
     let asked_as = (!ask.service.eq_ignore_ascii_case(&title)
         && !known.is_some_and(|s| ask.service.eq_ignore_ascii_case(s.id)))
     .then(|| ask.service.clone());
@@ -647,14 +683,18 @@ for, at that moment. Never ask up front, never for a list of things, and \
 never for what nobody asked you to do yet. For a task in an app or site, in \
 this order:
 
-1. A connected app: your own tools (`mcp__<app>__*`, a claude.ai connector), \
-or the app's command on this Mac (`gh` for GitHub). Use it.
-2. The user's own browser, where they're already signed in: the Claude in \
-Chrome tools (`mcp__claude-in-chrome__*`), when you have them. Open the site \
-in a new tab, and tell the user in one line which account you're in, from \
-what the page shows (\"I'm in Figma as …\"); never guess one. Reading \
-there is free; every click, post, send, share, payment or delete asks the \
-user on a card. Never type a password; if a page asks you to sign in, stop \
+1. One of the app's own connections you were given (`mcp__<app>__*` for \
+Linear, Notion, Figma, Stripe, Vercel), or its command on this Mac (`gh` for \
+GitHub). Use it.
+2. Otherwise, for most things (Gmail, Calendar, Drive, Slack, LinkedIn, X, \
+a bank, an internal tool), the user's own browser, where they're already \
+signed in: the Claude in Chrome tools (`mcp__claude-in-chrome__*`), when you \
+have them. Open the site in a new tab, and tell the user in one line which \
+account you're in, from what the page shows (\"I'm in Gmail as …\"); never \
+guess one. Reading there is free. Before any send, post, publish, payment, \
+delete or share, say exactly what will go and from which account; the action \
+itself asks the user on a card. A claude.ai connector (`mcp__claude_ai_*`) is \
+an extra: use it if it works, never wait on it. Never type a password; if a page asks you to sign in, stop \
 using it. The user may have Chrome in more than one profile, each signed in \
 as someone else: if the page shows the wrong account, `select_browser` / \
 `switch_browser` to another connected one (`list_connected_browsers`); if \
@@ -1096,9 +1136,10 @@ pub async fn start(
                         access,
                     ) {
                         Ok(c) => run2.complete(&r2, &c, access),
-                        Err(e) => run2.fail(e.to_string()),
+                        Err(e) => run2.fail(or_browser(&r2, e.to_string())),
                     },
-                    Err(e) => run2.fail(e.to_string()),
+                    // Never a dead end: the browser is still on the card.
+                    Err(e) => run2.fail(or_browser(&r2, e.to_string())),
                 }
             });
             run.set_flow(
@@ -1748,11 +1789,13 @@ pub fn team(since: Option<i64>) -> TeamLogins {
             }
         }
     }
+    // Our own connections, then the browser, then claude.ai (an extra).
     let rank = |m: Method| match m {
-        Method::Oauth | Method::ClaudeAi | Method::Gh => 0,
+        Method::Oauth | Method::Gh => 0,
         Method::Browser => 1,
-        Method::Key => 2,
-        Method::Existing => 3,
+        Method::ClaudeAi => 2,
+        Method::Key => 3,
+        Method::Existing => 4,
     };
     for n in &mut needs {
         n.options.sort_by_key(|o| rank(o.method));
@@ -2183,8 +2226,11 @@ mod tests {
         with_root(|| {
             let recruiter = agent("Recruiter", Engine::Claude);
             let gmail = build(&recruiter, &ask("gmail", &["read", "send"])).unwrap();
-            assert_eq!(gmail.options[0].method, Method::ClaudeAi);
-            assert_eq!(gmail.options[1].method, Method::Browser);
+            // The browser first; claude.ai's connector is an optional extra.
+            assert_eq!(gmail.options[0].method, Method::Browser);
+            assert_eq!(gmail.options[0].label, "Use my browser");
+            assert_eq!(gmail.options[1].method, Method::ClaudeAi);
+            assert!(gmail.options[1].detail.starts_with("Optional."));
             assert!(gmail.key.is_none(), "no password field for Gmail");
             assert_eq!(gmail.access(), Access::Full);
             assert!(gmail.abilities[1].label.contains("asks you"));
@@ -2261,8 +2307,10 @@ mod tests {
             )
             .unwrap();
             let card = build(&social, &ask("gmail", &[])).unwrap();
-            assert_eq!(card.options[0].method, Method::Existing);
-            assert_eq!(card.options[0].label, "Use work@acme.com");
+            // A claude.ai connection made already is offered, after the browser.
+            assert_eq!(card.options[0].method, Method::Browser);
+            assert_eq!(card.options[1].method, Method::Existing);
+            assert_eq!(card.options[1].label, "Use work@acme.com");
             // The agent it's already granted to isn't offered it again.
             let again = build(&recruiter, &ask("gmail", &[])).unwrap();
             assert!(again.options.iter().all(|o| o.method != Method::Existing));
@@ -2573,7 +2621,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                 vec!["Recruiter", "Mailroom", "Calendar"]
             );
-            assert_eq!(google.options[0].method, Method::ClaudeAi);
+            assert_eq!(google.options[0].method, Method::Browser);
             let gh = t.needs.iter().find(|n| n.key == "github").unwrap();
             assert_eq!(
                 gh.cards.len(),

@@ -164,9 +164,9 @@ const LOGIN_OPTIONS: Record<string, LoginOption> = {
   gmail: {
     id: 'claude_ai',
     method: 'claude_ai',
-    label: 'Connect Gmail',
+    label: 'Use claude.ai’s Gmail connector',
     detail:
-      'Uses claude.ai’s Gmail connector, which keeps the sign-in with your Claude account. If it isn’t added yet, claude.ai opens in your Mac’s browser to add it. Never a password.',
+      'Optional. Uses claude.ai’s Gmail connector, which keeps the sign-in with your Claude account. If it isn’t added yet, claude.ai opens in your Mac’s browser to add it. Never a password.',
   },
   browser: {
     id: 'browser',
@@ -191,8 +191,8 @@ const LOGIN_OPTIONS: Record<string, LoginOption> = {
   calendar: {
     id: 'claude_ai',
     method: 'claude_ai',
-    label: 'Connect Google Calendar',
-    detail: 'Uses claude.ai’s Google Calendar connector. Never a password.',
+    label: 'Use claude.ai’s Google Calendar connector',
+    detail: 'Optional. Uses claude.ai’s Google Calendar connector. Never a password.',
   },
 };
 
@@ -208,7 +208,7 @@ export function loginCard(
       title: 'Gmail',
       why: 'Read the invoices that arrive by email',
       abilities: [{ id: 'read', label: 'Read and search your email' }],
-      options: [LOGIN_OPTIONS.gmail, LOGIN_OPTIONS.browser],
+      options: [LOGIN_OPTIONS.browser, LOGIN_OPTIONS.gmail],
       noConnector:
         'Google only lets apps it has approved use Gmail’s own connector, so Gmail comes through claude.ai’s connector or your browser.',
     },
@@ -246,7 +246,7 @@ export function loginCard(
       title: 'Google Calendar',
       why: 'Find a free hour for the regression review',
       abilities: [{ id: 'read', label: 'See your calendar' }],
-      options: [LOGIN_OPTIONS.calendar, LOGIN_OPTIONS.browser],
+      options: [LOGIN_OPTIONS.browser, LOGIN_OPTIONS.calendar],
     },
   };
   void agentName;

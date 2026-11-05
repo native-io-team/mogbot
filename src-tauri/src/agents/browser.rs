@@ -283,6 +283,125 @@ pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
     gate_with(team_enabled(), agent, tool, input, outside)
 }
 
+/// The site each agent last opened in the browser, so a card can say where
+/// (and as whom) an action happens. In memory: it's only for the card.
+static OPENED: Mutex<Option<std::collections::HashMap<String, String>>> = Mutex::new(None);
+
+/// Remember where a navigation went, once it's going ahead.
+pub fn note_opened(agent_id: &str, tool: &str, input: &Value) {
+    let Some(name) = tool.strip_prefix(SERVER) else {
+        return;
+    };
+    if !matches!(name, "navigate" | "tabs_create_mcp") {
+        return;
+    }
+    if let Some(host) = input.get("url").and_then(Value::as_str).and_then(host_of) {
+        OPENED
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_or_insert_with(Default::default)
+            .insert(agent_id.to_string(), host);
+    }
+}
+
+fn opened(agent_id: &str) -> Option<String> {
+    OPENED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .and_then(|m| m.get(agent_id).cloned())
+}
+
+fn quoted(v: Option<&Value>) -> Option<String> {
+    let t = match v? {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    };
+    let t: String = t.chars().take(600).collect();
+    (!t.trim().is_empty()).then(|| format!("“{t}”"))
+}
+
+/// The Allow card for a browser action: what will happen, exactly, where,
+/// and from which account. `site`/`account`: where the agent last opened a
+/// page and who it was found signed in as there (`browser_profiles`). Pure.
+pub fn card_for(
+    tool: &str,
+    input: &Value,
+    site: Option<&str>,
+    account: Option<&str>,
+) -> Option<(String, String)> {
+    let name = tool.strip_prefix(SERVER)?;
+    let field = |k: &str| input.get(k);
+    let (title, what) = match name {
+        "navigate" | "tabs_create_mcp" => (
+            "Open a page in your browser".to_string(),
+            field("url")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+        ),
+        "computer" => {
+            let action = field("action").and_then(Value::as_str).unwrap_or("");
+            match action {
+                "type" => ("Type in your browser".into(), format!("Types {}", quoted(field("text")).unwrap_or_default())),
+                "key" => ("Press keys in your browser".into(), format!("Presses {}", quoted(field("text")).unwrap_or_default())),
+                a if a.contains("click") => (
+                    "Click in your browser".into(),
+                    format!(
+                        "{} at {} on the page. What it sends, if anything, is what the agent said in chat just before.",
+                        a.replace('_', " "),
+                        field("coordinate").or_else(|| field("ref")).map(Value::to_string).unwrap_or_else(|| "a spot".into())
+                    ),
+                ),
+                a => ("Act in your browser".into(), a.replace('_', " ")),
+            }
+        }
+        "form_input" => (
+            "Fill in a form in your browser".into(),
+            format!(
+                "Sets a field to {}",
+                quoted(field("value")).unwrap_or_else(|| "(empty)".into())
+            ),
+        ),
+        "javascript_tool" => (
+            "Run a script on a page in your browser".into(),
+            quoted(field("text").or_else(|| field("code"))).unwrap_or_default(),
+        ),
+        "file_upload" | "upload_image" => (
+            "Upload a file in your browser".into(),
+            quoted(
+                field("paths")
+                    .or_else(|| field("path"))
+                    .or_else(|| field("imageId")),
+            )
+            .unwrap_or_default(),
+        ),
+        "gif_creator" => (
+            "Export a recording from your browser".into(),
+            "A GIF of what it recorded".into(),
+        ),
+        _ => return None,
+    };
+    let from = match (site, account) {
+        (Some(s), Some(a)) => format!("On {s}, as {a}."),
+        (Some(s), None) => {
+            format!("On {s}, as whoever is signed in there (it should have said who in chat).")
+        }
+        _ => "On the page open in your browser.".to_string(),
+    };
+    Some((title, format!("{what}\n\n{from}")))
+}
+
+/// [`card_for`] for `agent_id`, with what's known of where it is.
+pub fn card(agent_id: &str, tool: &str, input: &Value) -> Option<(String, String)> {
+    let site = opened(agent_id);
+    let account = site
+        .as_deref()
+        .and_then(super::browser_profiles::remembered)
+        .and_then(|r| r.account);
+    card_for(tool, input, site.as_deref(), account.as_deref())
+}
+
 /// Give `agent` the browser for `site` (shown in "What it can reach").
 pub fn give_site(agent_id: &str, site: &str) -> Result<(), CommandError> {
     store::update(agent_id, |a| {

@@ -48,9 +48,9 @@ describe('a login card, in words', () => {
   const gmail = loginCard('Finance', 'gmail');
   const linkedin = loginCard('Social', 'linkedin');
 
-  it('leads with the connector, and offers the browser second', () => {
-    expect(primaryOption(gmail)?.method).toBe('claude_ai');
-    expect(otherOptions(gmail).map((o) => o.method)).toEqual(['browser']);
+  it('leads with the browser, and offers claude.ai’s connector as an extra', () => {
+    expect(primaryOption(gmail)?.method).toBe('browser');
+    expect(otherOptions(gmail).map((o) => o.method)).toEqual(['claude_ai']);
     // No connector: the browser leads, and the card says why there's no connector.
     expect(primaryOption(linkedin)?.method).toBe('browser');
     expect(linkedin.noConnector).toMatch(/no connector/);
@@ -197,7 +197,7 @@ describe('login cards against the mock Mac', () => {
     const team = await t.request('agents.loginsTeam', {});
     const google = team.needs.find((n) => n.key === 'google')!;
     expect(google.cards.map((c) => c.agentName).sort()).toEqual(['Finance', 'QA 2']);
-    expect(google.options[0].method).toBe('claude_ai');
+    expect(google.options[0].method).toBe('browser');
     expect(team.needs.find((n) => n.key === 'linkedin')!.options.map((o) => o.method)).toEqual(['browser']);
   });
 

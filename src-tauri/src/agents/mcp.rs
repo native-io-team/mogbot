@@ -1944,6 +1944,10 @@ pub(super) async fn decide(
     why: Option<&str>,
 ) -> Decision {
     let decision = decide_inner(app, caller, tool, input, why).await;
+    // Where its browser is now, for the next card's "on <site>, as …".
+    if decision == Decision::Allow {
+        super::browser::note_opened(&caller.id, tool, input);
+    }
     // The connection relay lets an allowed call through once, so it doesn't
     // ask again (`conn_relay`).
     if decision == Decision::Allow && super::connections::is_connection_tool(tool) {
@@ -2002,7 +2006,9 @@ async fn decide_inner(
         );
         return Decision::Allow;
     }
-    let (title, mut detail) = describe_request(tool, input);
+    // A browser action says exactly what it does, where, and as whom.
+    let (title, mut detail) = super::browser::card(&caller.id, tool, input)
+        .unwrap_or_else(|| describe_request(tool, input));
     if let Some(why) = why.map(str::trim).filter(|w| !w.is_empty()) {
         detail = format!("{detail}\n\n{why}");
     }
