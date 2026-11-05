@@ -33,22 +33,21 @@
  * unmocked — so it gates CI as well as feeding a review.
  */
 
-import { spawn } from 'node:child_process';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { CHROME, launchChrome } from './headless-chrome.mjs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 const HARNESS_PORT = Number(process.env.SHIPSTUDIO_HARNESS_PORT ?? 1425);
 const HARNESS_ORIGIN = `http://127.0.0.1:${HARNESS_PORT}`;
-// Overridable so harnesses in two worktrees can capture at the same time.
-const CDP_PORT = Number(process.env.HARNESS_CDP_PORT ?? 9333);
+// Preferred, overridable; a taken port is skipped, never adopted (see
+// headless-chrome.mjs), so harnesses in two worktrees can capture at once.
+const BASE_CDP_PORT = Number(process.env.HARNESS_CDP_PORT ?? 9333);
+/** The port the browser this run started actually got. */
+let CDP_PORT = BASE_CDP_PORT;
+// A run that outlives this is hung: Chrome is closed and the run fails.
+const MAX_MS = Number(process.env.HARNESS_MAX_MS ?? 45 * 60 * 1000);
 const VIEWPORT = { width: 1440, height: 900 };
-const CHROME = [
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  '/usr/bin/google-chrome',
-].find((p) => existsSync(p));
 
 /**
  * Commands that are noise in a visual sweep: they navigate away from the thing
@@ -70,8 +69,7 @@ const outValueIdx = outIdx === -1 ? -1 : outIdx + 1;
 const outDir = path.resolve(outIdx === -1 ? 'harness/shots' : args[outValueIdx]);
 const themeValueIdx = args.includes('--theme') ? args.indexOf('--theme') + 1 : -1;
 const filter =
-  args.filter((a, i) => !a.startsWith('--') && i !== outValueIdx && i !== themeValueIdx)[0] ??
-  '';
+  args.filter((a, i) => !a.startsWith('--') && i !== outValueIdx && i !== themeValueIdx)[0] ?? '';
 const wantCommands = flag('--commands') || flag('--all');
 // `--theme light|dark|system` forces the colour theme for every capture
 // (src/harness/resetStorage.ts reads it). Unforced captures are dark.
@@ -600,28 +598,30 @@ async function main() {
   // Before anything is captured: prove the server belongs to this checkout.
   const identity = await assertHarnessIsThisCheckout();
 
-  const chrome = spawn(
-    CHROME,
-    [
-      '--headless=new',
-      `--remote-debugging-port=${CDP_PORT}`,
+  // Its own profile under TMPDIR, its own process group, killed on exit, on
+  // error, on SIGINT/SIGTERM/SIGHUP and after MAX_MS; leftovers from an
+  // earlier interrupted run are swept first (headless-chrome.mjs).
+  const chrome = await launchChrome({
+    tool: 'harness',
+    basePort: BASE_CDP_PORT,
+    scale: 2,
+    disableGpu: false,
+    maxMs: MAX_MS,
+    // The fixed profile an older version of this script used.
+    legacy: [/shipstudio-harness-chrome/],
+    args: [
       `--window-size=${VIEWPORT.width},${VIEWPORT.height}`,
-      '--hide-scrollbars',
       // Hermetic by construction. Components like the GitHub contributions
       // calendar fetch from the real internet; letting those resolve makes a
       // capture depend on the network's mood, and two runs disagree for
       // reasons that have nothing to do with the app. Everything but the
       // harness origin fails to resolve, fast and identically every time.
       '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1',
-      '--force-device-scale-factor=2',
-      '--no-first-run',
-      '--no-default-browser-check',
-      `--user-data-dir=${path.join(process.env.TMPDIR ?? '/tmp', 'shipstudio-harness-chrome')}`,
       'about:blank',
     ],
-    { stdio: 'ignore' }
-  );
-  await waitForServer(`http://127.0.0.1:${CDP_PORT}/json/version`);
+  });
+  CDP_PORT = chrome.port;
+  if (chrome.swept) console.log(`Closed ${chrome.swept} headless Chrome left by an earlier run.`);
 
   // A full run owns the directory and clears it, so nothing stale survives to
   // be mistaken for current. A *filtered* run must not: it would delete images
@@ -721,7 +721,7 @@ async function main() {
     }
   }
 
-  chrome.kill();
+  chrome.close();
 
   const report = {
     capturedAt: new Date().toISOString(),

@@ -32,6 +32,7 @@ import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sweepOrphans } from '../../scripts/headless-chrome.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -46,6 +47,8 @@ const OUT = path.resolve(opt('--out', 'QA_OUT', path.join(ROOT, 'qa-shots')));
 const ONLY = opt('--only', 'QA_ONLY', '');
 const THEMES = opt('--themes', 'QA_THEMES', 'light,dark').split(',').filter(Boolean);
 const VERBOSE = args.includes('--verbose');
+// A run that outlives this is hung: everything it started is killed and it fails.
+const MAX_MS = Number(opt('--max-ms', 'QA_MAX_MS', 30 * 60 * 1000));
 const PHASES = opt('--phases', 'QA_PHASES', 'fresh,live,cached,impostor,bars,heavy,importing,team-setup').split(',');
 const phase = (name) => PHASES.includes(name);
 // Ports other tools in this repo own: the desktop app, its harness, the phone's Metro.
@@ -147,6 +150,18 @@ for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
     process.exit(130);
   });
 }
+for (const ev of ['uncaughtException', 'unhandledRejection']) {
+  process.on(ev, (err) => {
+    console.error('[qa:web]', err);
+    stopAllNow();
+    process.exit(1);
+  });
+}
+setTimeout(() => {
+  console.error(`[qa:web] still running after ${Math.round(MAX_MS / 1000)}s; stopping everything it started.`);
+  stopAllNow();
+  process.exit(124);
+}, MAX_MS).unref();
 
 async function waitForUrl(url, timeoutMs, what = url) {
   const deadline = Date.now() + timeoutMs;
@@ -338,10 +353,16 @@ class Page {
 let chrome = null;
 async function startChrome() {
   if (!CHROME) throw new Error('No Chrome or Chromium found');
+  // A headless Chrome an earlier, interrupted run left behind (matched by
+  // the profile name below, or the one older versions used) is closed first:
+  // a stray one is where macOS can send the user's own links.
+  const swept = sweepOrphans('qa-web', [/qa-web-[^/\s]+\/chrome(\s|$)/]);
+  if (swept) log(`closed ${swept} headless Chrome left by an earlier run`);
   chrome = run('chrome', CHROME, [
     '--headless=new',
     `--remote-debugging-port=${CDP_PORT}`,
-    `--user-data-dir=${path.join(work, 'chrome')}`,
+    // Ours alone, under TMPDIR, and named so the sweep above can find it.
+    `--user-data-dir=${path.join(work, 'shipstudio-cdp-qa-web-chrome')}`,
     '--no-first-run',
     '--no-default-browser-check',
     '--hide-scrollbars',
