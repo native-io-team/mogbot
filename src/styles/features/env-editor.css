@@ -89,7 +89,7 @@
 
 .env-new-file-input input:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .env-new-file-input .button {
@@ -145,7 +145,7 @@
 
 .env-var-key:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .env-var-equals {
@@ -166,7 +166,7 @@
 
 .env-var-value:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .env-var-visibility {
@@ -384,7 +384,7 @@
 
 .env-paste-textarea:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .env-paste-textarea::placeholder {

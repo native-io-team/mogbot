@@ -108,6 +108,7 @@ import {
 } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { useAccentScope } from '../../lib/accent';
 
 /**
  * First open: one-click ways in. Importing isn't the Chief's job (the other
@@ -205,6 +206,8 @@ export function AgentChat({
   onJumped,
   ...actions
 }: AgentChatProps) {
+  // Everything in this conversation takes on the agent's colour.
+  const accentScope = useAccentScope(agent.color);
   // This chat's slices only: another agent's reply streaming doesn't touch it.
   const messages = useAgentsSelector((s) => s.messages[agent.id]);
   const rawDraft = useAgentsSelector((s) => s.drafts[agent.id]);
@@ -869,6 +872,7 @@ export function AgentChat({
       data-color={agent.color}
       data-dropping={dropping || undefined}
       aria-label={`Conversation with ${agent.name}`}
+      {...accentScope}
       {...dropHandlers}
     >
       <header className="agent-chat__header">

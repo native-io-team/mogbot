@@ -121,7 +121,7 @@
 }
 
 .inbox-item-severity[data-severity='info'] {
-  background: var(--accent-active);
+  background: var(--status-info);
 }
 
 /* A read item keeps its severity meaning but drops the visual shout. */
@@ -276,7 +276,7 @@
 }
 
 .inbox-detail-severity[data-severity='info'] {
-  background: rgba(var(--accent-active-rgb), 0.1);
+  background: color-mix(in srgb, var(--accent-active) 10%, transparent);
   color: var(--accent-active);
 }
 

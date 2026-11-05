@@ -204,7 +204,7 @@
 .worktree-field input[type='text']:focus,
 .worktree-field select:focus {
   outline: none;
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .worktree-field-hint {

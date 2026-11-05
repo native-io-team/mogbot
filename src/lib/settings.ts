@@ -414,3 +414,18 @@ export async function listMovableProjects(from: string, to: string): Promise<Mov
 export async function moveProjectsToRoot(from: string, to: string): Promise<MoveReport> {
   return invoke<MoveReport>('move_projects_to_root', { from, to });
 }
+
+/** A Settings tab a command asked to land on, consumed when the modal opens. */
+export type SettingsTabRequest = 'general' | 'appearance' | 'experimental';
+let settingsTabOnOpen: SettingsTabRequest | null = null;
+
+/** Ask the next Settings open to show `tab` (e.g. ⌘K → "Accent color…"). */
+export function requestSettingsTabOnOpen(tab: SettingsTabRequest) {
+  settingsTabOnOpen = tab;
+}
+
+export function takeSettingsTabOnOpen(): SettingsTabRequest | null {
+  const tab = settingsTabOnOpen;
+  settingsTabOnOpen = null;
+  return tab;
+}

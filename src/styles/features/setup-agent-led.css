@@ -94,7 +94,7 @@
 }
 
 .agent-pick-card.detected-ready {
-  border-color: rgba(var(--accent-active-rgb), 0.5);
+  border-color: color-mix(in srgb, var(--accent-active) 50%, transparent);
 }
 
 .agent-pick-card-icon {
@@ -248,9 +248,9 @@
 
 .agent-guided-complete {
   padding: var(--spacing-md);
-  border: 1px solid rgba(var(--accent-active-rgb), 0.4);
+  border: 1px solid color-mix(in srgb, var(--accent-active) 40%, transparent);
   border-radius: var(--radius-card);
-  background: rgba(var(--accent-active-rgb), 0.08);
+  background: color-mix(in srgb, var(--accent-active) 8%, transparent);
 }
 
 .agent-guided-complete p {

@@ -32,10 +32,12 @@
   --border-width-default: var(--stroke-1);
   --border-width-emphasis: var(--stroke-2);
 
-  --accent-active: var(--color-green-500);
-  --accent-active-hover: var(--color-green-600);
   --accent-selected: var(--text-primary);
+  /* Focus is deliberately NOT the accent: the accent is whatever colour the
+     user picked (possibly white, possibly navy), and a focus ring has to be
+     visible on every surface regardless. */
   --accent-focus: var(--color-blue-500);
+  --focus-ring: var(--accent-focus);
 
   --focus-ring-width: var(--stroke-2);
   --focus-ring-offset: calc(-1 * var(--stroke-1));
@@ -49,7 +51,17 @@
   --accent-warning-light-rgb: 232, 154, 28;
   --accent-scope-project: var(--color-purple-400);
 
-  --text-on-accent: var(--color-gray-950);
+  /* Status colours that are not success/warning/error: an informational
+     severity and "in progress". Fixed hues, never the accent — a red or orange
+     user accent would otherwise make "running" read as an error. */
+  --status-info: var(--color-blue-400);
+  --status-running: var(--color-blue-400);
+
+  /* Drawing ON the user's own page (preview overlays, comment pins, drop
+     lines). Fixed, because it must stay visible on backgrounds we don't know —
+     a white accent on a white page would vanish. */
+  --accent-overlay: var(--color-blue-500);
+  --accent-overlay-ink: var(--color-white);
 
   --color-red-traffic: var(--color-red-500);
   --color-amber-traffic: var(--color-orange-500);
@@ -112,7 +124,6 @@
     inset 0 4px 4px var(--color-black-o15), inset 0 8px 8px var(--color-black-o15),
     inset 0 12px 12px var(--color-black-o15), inset 0 16px 16px var(--color-black-o15);
 
-  --accent-active-rgb: 70, 231, 111;
   --accent-success-rgb: 53, 211, 93;
   --accent-warning-rgb: 232, 154, 28;
   --accent-error-rgb: 244, 71, 71;
@@ -167,4 +178,48 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * ============================================================================
+ * THE ACCENT
+ * ============================================================================
+ * The app is monochrome plus one accent: the Chief of Staff's colour. Exactly
+ * one value is set at runtime — `--accent-user` — by src/lib/accent.ts, along
+ * with two companions it computes in JS: `--accent-on-user` (ink that reads on
+ * the accent, chosen by WCAG contrast) and `--accent-user-rgb` (an r, g, b
+ * triplet, kept only so the plugin-stable `--action-rgb` still works).
+ *
+ * Everything else is DERIVED here, and the block is declared on
+ * `[data-accent-scope]` as well as `:root`. That matters: a custom property
+ * derived with color-mix() at :root is computed at :root and inherited as a
+ * finished colour, so overriding `--accent-user` on a child would not change
+ * it. Any element that sets its own accent (an agent's conversation takes on
+ * that agent's colour) carries `data-accent-scope`, which re-runs these
+ * derivations against its own `--accent-user`.
+ *
+ * Nothing here assumes a dark theme: hover/pressed mix toward black, soft
+ * fills mix with the surface tokens, and accent text mixes with the text
+ * tokens — so a light theme only has to redefine surfaces and text.
+ * ============================================================================
+ */
+:root {
+  /* Inputs. Defaults only: accent.ts writes all three on <html> (and on any
+     [data-accent-scope] element) via inline style. */
+  --accent-user: var(--color-accent-default);
+  --accent-on-user: var(--color-gray-950);
+  --accent-user-rgb: 230, 230, 230;
+}
+
+:root,
+[data-accent-scope] {
+  --accent-active: var(--accent-user);
+  --accent-active-hover: color-mix(in oklch, var(--accent-user) 88%, var(--color-black));
+  --accent-active-strong: color-mix(in oklch, var(--accent-user) 72%, var(--color-black));
+  /* A selected/current row: a quiet accent-tinted fill on the control surface. */
+  --accent-active-soft: color-mix(in srgb, var(--accent-user) 14%, var(--surface-control));
+  /* Accent-coloured text on a dark (or light) tinted surface: the accent,
+     pulled toward the primary text colour so it always reads. */
+  --accent-text: color-mix(in oklch, var(--accent-user) 65%, var(--text-primary));
+  --text-on-accent: var(--accent-on-user);
 }

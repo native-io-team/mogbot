@@ -58,7 +58,7 @@
 }
 
 .team-person.is-self {
-  border-color: rgba(var(--accent-active-rgb), 0.45);
+  border-color: color-mix(in srgb, var(--accent-active) 45%, transparent);
   background: var(--surface-recessed);
 }
 
@@ -160,7 +160,7 @@
   align-items: center;
   padding: var(--spacing-2xs) var(--spacing-xs);
   border-radius: var(--radius-sm);
-  background: rgba(var(--accent-active-rgb), 0.12);
+  background: color-mix(in srgb, var(--accent-active) 12%, transparent);
   color: var(--accent-active);
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-compact);

@@ -84,6 +84,7 @@ import { installAppLifecycleTracking } from './lib/appLifecycle';
 import { useQuitGuard } from './hooks/useQuitGuard';
 import { useStayOn } from './hooks/useStayOn';
 import type { AppView } from './lib/types';
+import { useAppAccent } from './lib/accent';
 import './styles/index.css';
 
 // Boot-path guard: a throw at module scope would leave a black window (#173),
@@ -108,6 +109,8 @@ interface AppProps {
  * without crashing. The actual app body lives in `AppContents`.
  */
 function App({ initialProjectPath }: AppProps) {
+  // The accent is the Chief of Staff's colour; keep <html> in step with it.
+  useAppAccent();
   useEffect(() => {
     const suppressNativeContextMenu = (event: MouseEvent) => event.preventDefault();
     document.addEventListener('contextmenu', suppressNativeContextMenu, true);

@@ -2,8 +2,8 @@
 
 /* Keep the wizard stages and ready indicators aligned with primary actions. */
 :root {
-  --setup-wizard-green: var(--button-primary-mid);
-  --setup-wizard-green-hover: var(--button-primary-end);
+  --setup-wizard-accent: var(--button-primary-mid);
+  --setup-wizard-accent-hover: var(--button-primary-end);
 }
 
 /* ============ Onboarding Screen ============ */
@@ -147,7 +147,7 @@
 }
 
 .setup-item-icon-check {
-  color: var(--setup-wizard-green);
+  color: var(--setup-wizard-accent);
 }
 
 .setup-item-icon-check path,
@@ -278,14 +278,14 @@
 }
 
 .wizard-indicator-dot.current {
-  background: var(--setup-wizard-green);
-  border-color: var(--setup-wizard-green);
+  background: var(--setup-wizard-accent);
+  border-color: var(--setup-wizard-accent);
   color: var(--text-on-accent);
 }
 
 .wizard-indicator-dot.completed {
-  background: var(--setup-wizard-green);
-  border-color: var(--setup-wizard-green);
+  background: var(--setup-wizard-accent);
+  border-color: var(--setup-wizard-accent);
   /* Dark glyph on the green dot — matches the current step's number,
      instead of a white check that reads as a different style. */
   color: var(--text-on-accent);
@@ -307,7 +307,7 @@
 }
 
 .wizard-indicator-line.active {
-  background: var(--setup-wizard-green);
+  background: var(--setup-wizard-accent);
 }
 
 .wizard-indicator-label {
@@ -435,9 +435,12 @@
   border-color: rgba(var(--accent-success-rgb), 0.3);
 }
 
+/* Selected is a choice, not a success: the accent, plus a doubled border so
+   the state still reads when the accent is white. */
 .wizard-agent-card.selected {
-  border-color: var(--accent-success);
-  background: rgba(var(--accent-success-rgb), 0.05);
+  border-color: var(--accent-active);
+  box-shadow: inset 0 0 0 var(--border-width-default) var(--accent-active);
+  background: var(--accent-active-soft);
   cursor: pointer;
 }
 

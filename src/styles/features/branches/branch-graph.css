@@ -97,7 +97,7 @@
 }
 
 .branch-graph-default-base-select:focus {
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .branch-graph-select-caret {

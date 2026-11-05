@@ -528,8 +528,8 @@
 }
 
 .issue-report__draft-choice-card:focus-visible {
-  border-color: var(--accent-active);
-  outline: var(--focus-ring-width) solid var(--accent-active);
+  border-color: var(--focus-ring);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
   background: color-mix(in srgb, var(--accent-active) 8%, var(--surface-panel));
 }

@@ -62,7 +62,7 @@
 .update-indicator-update-action:hover:not(:disabled),
 .update-indicator-update-action:focus-visible {
   background: color-mix(in srgb, var(--accent-active) 18%, transparent);
-  color: var(--color-green-300);
+  color: var(--accent-text);
 }
 
 .update-indicator-update-action:active:not(:disabled) {
@@ -70,7 +70,7 @@
 }
 
 .update-indicator-update-action:focus-visible {
-  outline: var(--stroke-2) solid var(--accent-active);
+  outline: var(--stroke-2) solid var(--focus-ring);
   outline-offset: calc(-1 * var(--stroke-2));
 }
 
@@ -208,7 +208,7 @@
 }
 
 .update-indicator-details:focus-visible {
-  outline: var(--stroke-2) solid var(--accent-active);
+  outline: var(--stroke-2) solid var(--focus-ring);
   outline-offset: calc(-1 * var(--stroke-2));
 }
 
@@ -218,7 +218,7 @@
 }
 
 .update-indicator-version {
-  color: var(--color-green-300);
+  color: var(--accent-text);
   font-size: var(--font-size-badge);
   font-variant-numeric: tabular-nums;
 }
@@ -254,7 +254,7 @@
 .workspace-sidebar .update-indicator-dismiss:hover:not(:disabled),
 .workspace-sidebar .update-indicator-dismiss:focus-visible {
   background: color-mix(in srgb, var(--accent-active) 20%, transparent);
-  color: var(--color-green-300);
+  color: var(--accent-text);
 }
 
 .update-indicator-progress-fill {
@@ -273,7 +273,7 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 var(--control-height-standard);
-  color: var(--color-green-300);
+  color: var(--accent-text);
   font-size: var(--font-size-badge);
   font-variant-numeric: tabular-nums;
 }

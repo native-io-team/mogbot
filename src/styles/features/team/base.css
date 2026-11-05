@@ -196,7 +196,7 @@
 }
 
 .team-external-link:focus-visible {
-  outline: var(--border-width-default) solid var(--accent-active);
+  outline: var(--border-width-default) solid var(--focus-ring);
   outline-offset: var(--spacing-2xs);
 }
 

@@ -1304,8 +1304,9 @@
 }
 
 .agent-composer:not([data-dictation='idle']) {
-  border-color: rgba(var(--accent-active-rgb), 0.45);
-  box-shadow: 0 0 0 var(--border-width-default) rgba(var(--accent-active-rgb), 0.12);
+  border-color: color-mix(in srgb, var(--accent-active) 45%, transparent);
+  box-shadow: 0 0 0 var(--border-width-default)
+    color-mix(in srgb, var(--accent-active) 12%, transparent);
 }
 
 /* "● Listening · Esc to cancel", in the paperclip's place. */

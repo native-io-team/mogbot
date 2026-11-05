@@ -149,13 +149,13 @@
 }
 
 .ss-edit-panel__slider:focus-visible::-webkit-slider-thumb {
-  border-color: var(--accent-active);
-  box-shadow: 0 0 0 var(--focus-ring-width) rgba(var(--accent-active-rgb), 0.4);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 var(--focus-ring-width) color-mix(in srgb, var(--focus-ring) 40%, transparent);
 }
 
 .ss-edit-panel__slider:focus-visible::-moz-range-thumb {
-  border-color: var(--accent-active);
-  box-shadow: 0 0 0 var(--focus-ring-width) rgba(var(--accent-active-rgb), 0.4);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 var(--focus-ring-width) color-mix(in srgb, var(--focus-ring) 40%, transparent);
 }
 
 /* Color swatch trigger + popover picker */
@@ -575,7 +575,7 @@
   box-shadow: none;
 }
 .ss-color-picker__variable-search:focus-within {
-  outline: var(--text-field-border-width) solid var(--accent-active);
+  outline: var(--text-field-border-width) solid var(--focus-ring);
   outline-offset: calc(-1 * var(--text-field-border-width));
 }
 .ss-color-picker__variable-search .ss-text-field:focus {

@@ -14,6 +14,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { AgentsDesktopSettings } from '../agents/AgentsDesktopSettings';
+import { AccentColorSetting } from './AccentColorSetting';
 import { Button } from '../primitives/Button';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
 import { getAnalyticsEnabled, setAnalyticsEnabled, trackEvent } from '../../lib/analytics';
@@ -55,6 +56,7 @@ import {
   listMovableProjects,
   moveProjectsToRoot,
   type MovableProjects,
+  takeSettingsTabOnOpen,
 } from '../../lib/settings';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { isMac } from '../../lib/setup';
@@ -124,6 +126,8 @@ export function SettingsModal({
 
   useEffect(() => {
     if (!isOpen) return;
+    const requestedTab = takeSettingsTabOnOpen();
+    if (requestedTab) setActiveSettingsTab(requestedTab);
     let cancelled = false;
     void (async () => {
       const [
@@ -706,6 +710,7 @@ export function SettingsModal({
             <div className="settings-modal-body">
               <div className="settings-section">
                 <div className="settings-group">
+                  <AccentColorSetting />
                   <div className="settings-row">
                     <div className="settings-row-info">
                       <span className="settings-row-label">Show home screen header</span>

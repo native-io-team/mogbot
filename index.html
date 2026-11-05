@@ -12,6 +12,24 @@
         background: #1e1e1e;
       }
     </style>
+    <!-- The accent (the Chief of Staff's colour) is read from the agent
+         registry once the app is running; src/lib/accent.ts caches the last
+         one here so every window paints in it from the first frame instead of
+         flashing the default and flipping. -->
+    <script>
+      try {
+        var cachedAccent = JSON.parse(localStorage.getItem('app.accent') || 'null');
+        if (cachedAccent && /^#[0-9a-f]{6}$/i.test(cachedAccent['--accent-user'])) {
+          for (var accentVar in cachedAccent) {
+            if (/^--accent-(user|on-user|user-rgb)$/.test(accentVar)) {
+              document.documentElement.style.setProperty(accentVar, String(cachedAccent[accentVar]));
+            }
+          }
+        }
+      } catch (e) {
+        /* storage unavailable: the default accent shows until the registry loads */
+      }
+    </script>
   </head>
 
   <body>

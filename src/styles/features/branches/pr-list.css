@@ -37,7 +37,7 @@
 }
 
 .branches-new-branch-input-wrapper:focus-within {
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .branches-new-branch-prefix {
@@ -95,7 +95,7 @@
 }
 
 .branches-new-branch-base-select:focus {
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 /* Shown when the typed name gets sanitized (e.g. "adjust h2" → "adjust-h2") */
@@ -236,7 +236,7 @@
 }
 
 .branch-card-badge.ahead {
-  background: rgba(var(--accent-active-rgb), 0.1);
+  background: color-mix(in srgb, var(--accent-active) 10%, transparent);
   color: var(--accent-active);
 }
 

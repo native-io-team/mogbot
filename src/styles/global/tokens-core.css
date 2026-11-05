@@ -61,6 +61,11 @@
 
   --color-green-tag: #3fce90;
 
+  /* The default accent: the Chief of Staff's default colour ("white" in the
+     agent palette, src/styles/features/agents.css). src/lib/accent.ts mirrors
+     it, and a unit test holds the three in sync. */
+  --color-accent-default: #e6e6e6;
+
   --color-swatch-blue: #007aff;
   --color-swatch-green: #34c759;
   --color-swatch-yellow: #ffcc00;
