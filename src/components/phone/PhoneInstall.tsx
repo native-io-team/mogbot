@@ -1,6 +1,6 @@
 /**
  * "Install on my phone", inside the Phone panel: choose a route, then — for
- * "Build it on this Mac" — a checklist decided by Ship Studio's own checks
+ * "Build it on this Mac" — a checklist decided by the app's own checks
  * beside a terminal where Claude Code does the work. Once the app is on the
  * phone, the panel goes straight to pairing.
  *
@@ -135,8 +135,8 @@ function RouteChoice({ platform, onPlatform, onBuild, onBack }: ChoiceProps) {
           <span className="phone-route__title">Build it on this Mac</span>
           <span className="phone-route__detail">
             {platform === 'ios'
-              ? 'Claude Code builds the app from source and installs it over a cable, with a checklist that Ship Studio verifies itself. You need Xcode and an Apple ID. With a free Apple ID the app stops opening after 7 days, and Reinstall here fixes that in one click.'
-              : 'Claude Code builds the app from source and installs it over a cable, with a checklist that Ship Studio verifies itself. You turn on USB debugging on the phone. It doesn’t expire.'}
+              ? 'Your agent builds the app and installs it over a cable; the app checks each step itself. You need Xcode and an Apple ID. With a free Apple ID the app stops opening after 7 days, and Reinstall here fixes that in one click.'
+              : 'Your agent builds the app and installs it over a cable; the app checks each step itself. You turn on USB debugging on the phone. It doesn’t expire.'}
           </span>
         </div>
         <Button variant="primary" data-install-route="build" onClick={onBuild}>
@@ -311,11 +311,11 @@ function BuildOnMac({ platform, reinstall, onBack, onPair }: BuildProps) {
                 <p className="phone-install-start__text">
                   It checks what’s missing, installs it, and builds the app, stopping to tell you
                   when something needs your hands: a tap on the phone, or your Mac password. The
-                  checklist turns green only when Ship Studio’s own checks pass.
+                  checklist turns green only when this app’s own checks pass.
                 </p>
                 <p className="phone-install-start__note">
                   {platform === 'ios'
-                    ? 'With a free Apple ID, the app stops opening after 7 days. Reinstalling takes one click here and no agent, and Ship Studio reminds you the day before. A paid developer account lasts a year.'
+                    ? 'With a free Apple ID, the app stops opening after 7 days. Reinstalling takes one click here and no agent, and you’re reminded the day before. A paid developer account lasts a year.'
                     : 'Android builds don’t expire. Reinstall only when you want a newer version.'}
                 </p>
                 <div className="phone-install-start__actions">

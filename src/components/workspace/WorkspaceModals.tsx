@@ -41,6 +41,7 @@ import type { LoadedPlugin } from '../../hooks/usePlugins';
 import { Spinner } from '../primitives/Spinner';
 import { Button } from '../primitives/Button';
 import { ModalFrame } from '../primitives/ModalFrame';
+import { BRAND } from '../../lib/brand';
 
 export interface WorkspaceModalsProps {
   // Project context
@@ -376,7 +377,7 @@ export function WorkspaceModals({
               <li>Make changes without confirmation</li>
             </ul>
             <p className="auto-accept-warning-disclaimer">
-              By enabling this mode, you acknowledge that Ship Studio and Anthropic are{' '}
+              By enabling this mode, you acknowledge that {BRAND.name} and Anthropic are{' '}
               <strong>not liable</strong> for any unintended changes or actions taken by the AI.
             </p>
             <div className="modal-actions">

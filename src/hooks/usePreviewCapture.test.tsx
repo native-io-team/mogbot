@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { usePreviewCapture } from './usePreviewCapture';
 import { ToastContext } from '../contexts/ToastContext';
 import { trackEvent } from '../lib/analytics';
+import { BRAND } from '../lib/brand';
 
 // Stub Tauri IPC, analytics, and the logger so the test exercises only the
 // capture flow. `capture_fullpage_playwright` behavior is set per-test.
@@ -32,7 +33,7 @@ let screenshotGate: Promise<void> = Promise.resolve();
 vi.mock('tauri-plugin-screenshots-api', () => ({
   getScreenshotableWindows: async () => {
     await screenshotGate;
-    return [{ id: 1, title: 'Ship Studio' }];
+    return [{ id: 1, title: BRAND.name }];
   },
   getWindowScreenshot: () => Promise.resolve('/tmp/shot.png'),
 }));

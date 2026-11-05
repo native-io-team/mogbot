@@ -19,6 +19,7 @@ import { useState, type ReactNode } from 'react';
 import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
 import { CheckIcon } from '@/components/icons';
+import { BRAND } from '../../lib/brand';
 import type { DashboardProject } from '../../lib/project';
 import {
   setupSteps,
@@ -58,7 +59,7 @@ export function RemoteSetup({ ctl, choices, setChoice, projects, onProjectChange
       <>
         <p className="remote-lede">
           Your assistant doesn’t run your agents — this computer does. If it sleeps, shuts down,
-          loses Wi-Fi, or Ship Studio quits, your assistant can’t reach it, and{' '}
+          loses Wi-Fi, or the app quits, your assistant can’t reach it, and{' '}
           <strong>nothing can wake it up from your phone</strong>.
         </p>
         <ReadinessList ctl={ctl} />
@@ -123,12 +124,12 @@ export function RemoteSetup({ ctl, choices, setChoice, projects, onProjectChange
         <ol className="remote-steps-mini">
           <li>Copy the link.</li>
           <li>
-            In your AI assistant, add a custom MCP connector, name it <strong>Ship Studio</strong>,
+            In your AI assistant, add a custom MCP connector, name it <strong>{BRAND.name}</strong>,
             and paste the link. Grok, Claude, ChatGPT and Cursor all have one — anything that speaks
             MCP works.
           </li>
           <li>
-            Ask it: <em>“What are my Ship Studio agents doing?”</em>
+            Ask it: <em>“What are my agents doing?”</em>
           </li>
         </ol>
         {status.reachability?.state === 'reachable' && (

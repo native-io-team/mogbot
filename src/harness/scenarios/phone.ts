@@ -140,7 +140,7 @@ export const phoneScenarios: Scenario[] = [
       '"built on this Mac". Each row has a quiet Remove and its last action ("Sent a message · 3 min ' +
       'ago"). Below, "What a paired phone can do": green-ticked abilities on the left, the ' +
       "things it can't do (push, edit code, type into sessions or terminals) muted on the right. " +
-      'A "Notifications" section has its checkbox disabled and says this build has no push service.',
+      'A "Notifications" section has its checkbox disabled and says it is not available in this build.',
     {
       ...ON,
       devices,
@@ -223,7 +223,7 @@ export const phoneScenarios: Scenario[] = [
     'phone-push',
     'Phone — notifications through the push service',
     'Below the paired phones, a "Notifications" section with a ticked checkbox "Phone ' +
-      'notifications via Ship Studio’s push service", a muted line saying only a generic alert ' +
+      'notifications", a muted line saying only a generic alert ' +
       'is sent with no message, agent name or project, and one saying it needs the official app.',
     { ...ON, devices, push: { available: true, enabled: true } },
     { commands: { companion_set_push: phoneStatus({ ...ON, devices }) } }

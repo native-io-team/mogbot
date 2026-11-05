@@ -747,7 +747,7 @@ function notFoundReason(selector: string | null, cssModulesHint: boolean): strin
   if (cssModulesHint && selector && looksLikeCssModuleSelector(selector)) {
     const file = cssModuleFileHint(selector);
     const source = file ? `${file}` : 'the .module.css file';
-    return `styled by a CSS Module — class names are hashed at build time, so Ship Studio can't map this rule back to its source yet. Edit ${source} directly or ask the agent.`;
+    return `styled by a CSS Module — class names are hashed at build time, so the editor can't map this rule back to its source yet. Edit ${source} directly or ask the agent.`;
   }
   return 'stylesheet source could not be mapped';
 }

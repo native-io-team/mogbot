@@ -65,6 +65,9 @@ export const ProjectCard = memo(function ProjectCard({
   onTogglePin,
 }: ProjectCardProps) {
   const hasChanges = project.uncommitted_count !== null && project.uncommitted_count > 0;
+  const hasWorktrees = project.worktree_count != null && project.worktree_count > 0;
+  // An empty meta row still takes its line height and pushes the menu below the name.
+  const hasMeta = Boolean(project.git_branch) || hasChanges || hasWorktrees;
   const hideMainBranchWarning = project.hide_main_branch_warning === true;
 
   return (
@@ -103,22 +106,28 @@ export const ProjectCard = memo(function ProjectCard({
               </span>
             )}
           </div>
-          <div className="project-card-meta text-style-body-medium">
-            {project.git_branch && (
-              <span className="project-card-branch">
-                <BranchIcon />
-                <span className="project-card-branch-name">{project.git_branch}</span>
-              </span>
-            )}
-            {hasChanges && (
-              <span className="project-card-changes">{project.uncommitted_count} uncommitted</span>
-            )}
-            {project.worktree_count != null && project.worktree_count > 0 && (
-              <span className="project-card-worktrees">
-                · {project.worktree_count} {project.worktree_count === 1 ? 'worktree' : 'worktrees'}
-              </span>
-            )}
-          </div>
+          {hasMeta && (
+            <div className="project-card-meta text-style-body-medium">
+              {project.git_branch && (
+                <span className="project-card-branch">
+                  <BranchIcon />
+                  <span className="project-card-branch-name">{project.git_branch}</span>
+                </span>
+              )}
+              {hasChanges && (
+                <span className="project-card-changes">
+                  {project.uncommitted_count}{' '}
+                  {project.uncommitted_count === 1 ? 'change' : 'changes'}
+                </span>
+              )}
+              {hasWorktrees && (
+                <span className="project-card-worktrees">
+                  · {project.worktree_count}{' '}
+                  {project.worktree_count === 1 ? 'worktree' : 'worktrees'}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <ProjectCardMenu
           onOpenSettings={onOpenSettings}

@@ -5,7 +5,7 @@
  * it does the harvesting, one of two ways:
  * - Paste: it writes its agents out as JSON and the user pastes the reply
  *   here. Needs nothing set up, so it's the default while remote access is off.
- * - Connected assistant: it calls Ship Studio's `import_agents` tool over the
+ * - Connected assistant: it calls our `import_agents` tool over the
  *   remote access connector. The default once remote access is on.
  *
  * Both end in the same merge (`agents/import.rs`).
@@ -48,14 +48,14 @@ function ConnectedPanel({ connected, onClose }: { connected: boolean; onClose: (
     <>
       <div className="agents-import__body">
         <p className="agents-import__lede">
-          An assistant connected to Ship Studio can send its agents over itself, with their
-          instructions and what they remember.
+          A connected assistant can send its agents over itself, with their instructions and what
+          they remember.
         </p>
         <ol className="agents-import-steps">
           <ImportStep
             n={1}
             state={connected ? 'done' : 'current'}
-            title="Connect it to Ship Studio"
+            title="Connect your assistant"
             folded={connected}
             aside={connected && 'Remote access is on'}
           >

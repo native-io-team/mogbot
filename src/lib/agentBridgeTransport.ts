@@ -196,7 +196,7 @@ export async function deliverBridgeResponse(
         content: [
           {
             type: 'text',
-            text: `Ship Studio ran ${tool} but could not hand its result back (${detail}). This is a Ship Studio bug, not a problem with the page. Retrying may help; if it keeps failing, narrow the request (e.g. a smaller limit or a more specific selector).`,
+            text: `The app ran ${tool} but could not hand its result back (${detail}). This is a bug in the app, not a problem with the page. Retrying may help; if it keeps failing, narrow the request (e.g. a smaller limit or a more specific selector).`,
           },
         ],
         isError: true,

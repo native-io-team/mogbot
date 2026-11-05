@@ -247,11 +247,11 @@ export function phoneCapabilities(methods: string[]): { can: string[]; cannot: s
  * `services/push-relay` (docs/push-relay.md): no message, name or project.
  */
 export const PUSH_COPY = {
-  label: 'Phone notifications via Ship Studio’s push service',
+  label: 'Phone notifications',
   detail:
-    'When your phone isn’t open to Ship Studio, it still hears that an agent needs you or finished. ' +
+    'When the app isn’t open on your phone, it still hears that an agent needs you or finished. ' +
     'Only a generic alert is sent, with no message, agent name or project. Apple or Google delivers it.',
   officialOnly:
     'Needs the official app from TestFlight or the App Store. A self-built app can’t receive push.',
-  unavailable: 'This build of Ship Studio has no push service.',
+  unavailable: 'Not available in this build.',
 } as const;

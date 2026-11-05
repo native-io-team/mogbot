@@ -9,7 +9,7 @@ interface QuitConfirmModalProps {
   onQuit: () => void;
   /** What a quit would interrupt; null while unknown (the plain question shows). */
   check?: QuitCheck | null;
-  /** macOS: windows can hide while Ship Studio keeps running. */
+  /** macOS: windows can hide while the app keeps running. */
   backgroundAvailable?: boolean;
   onKeepRunning?: () => void;
 }
@@ -40,7 +40,7 @@ export function QuitConfirmModal({
   });
   const remoteLine = remoteOn && (
     <p className="quit-confirm-remote">
-      Remote access is on. Quitting stops your assistant reaching this computer until Ship Studio is
+      Remote access is on. Quitting stops your assistant reaching this computer until the app is
       open again.
     </p>
   );
@@ -83,7 +83,7 @@ export function QuitConfirmModal({
     <ModalFrame
       isOpen
       onClose={onCancel}
-      ariaLabel="Quit Ship Studio"
+      ariaLabel="Quit"
       showCloseButton={false}
       className="quit-confirm-modal"
     >
@@ -92,13 +92,15 @@ export function QuitConfirmModal({
           if (e.key === 'Enter') onQuit();
         }}
       >
-        <p>Are you sure you want to quit Ship Studio?</p>
+        <p>Quit?</p>
         {remoteLine}
         <div className="quit-confirm-actions">
           <Button variant="secondary" onClick={onCancel}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={onQuit} autoFocus>
+          {/* Nothing is running, so Return still quits (the ⌘Q-then-Return habit),
+              but a neutral button: quitting isn't the thing this app wants you to do. */}
+          <Button onClick={onQuit} autoFocus>
             Quit
           </Button>
         </div>

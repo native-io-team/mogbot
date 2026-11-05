@@ -790,7 +790,7 @@ describe('structuralEditMessage', () => {
   // Issue #789: raw internal wording reached the toast verbatim.
   it('rephrases the span-mapping failure but keeps it reportable', () => {
     const raw = "couldn't map this element to its source markup";
-    expect(structuralEditMessage(raw)).toContain("couldn't read this element's full markup");
+    expect(structuralEditMessage(raw)).toContain("Couldn't read this element's full markup");
     expect(isExpectedStructuralRefusal(raw)).toBe(false);
   });
 });
