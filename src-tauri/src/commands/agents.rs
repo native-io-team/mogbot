@@ -1192,6 +1192,7 @@ pub async fn agents_schedule_create(
     note: String,
 ) -> Result<schedule::CheckIn, CommandError> {
     let created = schedule::create(&agent_id, &when, &note)?;
+    agents::mcp::created_routine_line(&app, &agent_id, &created.check_in);
     emit_registry(&app);
     Ok(created.check_in)
 }
@@ -1247,7 +1248,7 @@ pub async fn agents_schedule_run_now(
     schedule::run_now(&app, &agent_id, &id)
 }
 
-/// Add a "When…" routine: `source` is `watch::Source` (`{ kind, folder?, check? }`).
+/// Add a "When…" routine: `source` is `watch::Source` (`{ kind, folder?, check?, app? }`).
 #[tauri::command]
 #[tracing::instrument(skip(app, note))]
 pub async fn agents_watch_create(
@@ -1258,6 +1259,7 @@ pub async fn agents_watch_create(
     note: String,
 ) -> Result<schedule::CheckIn, CommandError> {
     let created = agents::watch::create(&agent_id, source, every_minutes, &note)?;
+    agents::mcp::created_routine_line(&app, &agent_id, &created.check_in);
     emit_registry(&app);
     Ok(created.check_in)
 }

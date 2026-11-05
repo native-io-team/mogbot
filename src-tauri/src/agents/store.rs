@@ -710,6 +710,33 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
     Ok(agent)
 }
 
+/// Writes the app itself has made to each CLAUDE.md (instructions, memory),
+/// so a turn's `runner::MemorySeal` can tell the user's edits from the turn's.
+static CLAUDE_MD_WRITES: LazyLock<Mutex<HashMap<PathBuf, u64>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+pub fn note_claude_md_write(path: &Path) {
+    *CLAUDE_MD_WRITES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(path.to_path_buf())
+        .or_default() += 1;
+}
+
+pub fn claude_md_writes(path: &Path) -> u64 {
+    CLAUDE_MD_WRITES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(path)
+        .copied()
+        .unwrap_or(0)
+}
+
+/// Put a CLAUDE.md back as it was.
+pub fn restore_claude_md(path: &Path, bytes: &[u8]) -> Result<(), CommandError> {
+    write_atomic(path, bytes)
+}
+
 /// CLAUDE.md is the agent's own file: instructions on top, a memory section it
 /// maintains below. Rewriting instructions keeps whatever it has remembered.
 pub fn write_instructions(
@@ -736,6 +763,7 @@ pub fn write_instructions(
         format!("## Instructions\n\n{body}\n\n")
     };
     let content = format!("# {}\n\n{role}{instructions}{memory}", agent.name);
+    note_claude_md_write(&path);
     write_atomic(&path, content.as_bytes())
 }
 

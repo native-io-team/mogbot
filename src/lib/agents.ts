@@ -829,6 +829,9 @@ export interface UsageTotals {
   /** Turns that reported a cost; costUsd is complete only when this equals turns. */
   pricedTurns: number;
   durationMs: number;
+  /** "When…" routines' model checks, counted apart from turns (cost included above). */
+  checks?: number;
+  pricedChecks?: number;
 }
 
 export interface UsageSummary {
@@ -1449,11 +1452,12 @@ const EXACT = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle:
 export {
   describeCheckInTime,
   describeEvery,
-  describeWatchCost,
   describeWatchSource,
   describeWatchStatus,
   describeWatchTitle,
   watchUsesModel,
+  watchCappedToday,
+  DEFAULT_MAX_CHECKS_PER_DAY,
   describeRepeat,
   describeRun,
   describeRunDetail,
@@ -1467,6 +1471,8 @@ export {
 export interface WatchCheckOutcome {
   found: number;
   baseline: boolean;
+  /** A model check found nothing before its baseline; the next check confirms it. */
+  unconfirmed?: boolean;
   error?: string;
   paused?: string;
 }
@@ -1503,12 +1509,14 @@ export {
   resetPhrase,
   retryPhrase,
   routineWeekLine,
+  fullyPriced,
   sumTotals,
   type QuotaLine,
   type QuotaTone,
 } from '../../packages/companion-protocol/src/quota';
 import {
   apiPrice as apiPriceWords,
+  fullyPriced as fullyPricedTotals,
   resetPhrase as resetWords,
 } from '../../packages/companion-protocol/src/quota';
 
@@ -1560,15 +1568,16 @@ function duration(ms: number): string {
  * a list price and not the bill. Null when there were no turns.
  */
 export function formatUsage(totals: UsageTotals, onPlan = false): string | null {
-  if (totals.turns === 0) return null;
+  const checks = totals.checks ?? 0;
+  if (totals.turns === 0 && checks === 0) return null;
   const tokens =
     totals.inputTokens + totals.outputTokens + totals.cacheReadTokens + totals.cacheWriteTokens;
-  const parts = [
-    `${compact(tokens)} tokens`,
-    `${totals.turns} ${totals.turns === 1 ? 'turn' : 'turns'}`,
-  ];
+  const parts = [`${compact(tokens)} tokens`];
+  if (totals.turns > 0) parts.push(`${totals.turns} ${totals.turns === 1 ? 'turn' : 'turns'}`);
+  // "When…" model checks are said apart: they aren't turns.
+  if (checks > 0) parts.push(`${checks} ${checks === 1 ? 'check' : 'checks'}`);
   if (totals.durationMs > 0) parts.push(duration(totals.durationMs));
-  if (totals.pricedTurns === totals.turns && !onPlan) {
+  if (fullyPricedTotals(totals) && !onPlan) {
     parts.unshift(apiPriceWords(totals.costUsd));
   }
   return parts.join(' · ');

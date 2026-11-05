@@ -5,7 +5,6 @@ import type {
   MacStatus,
 } from '@shipstudio/companion-protocol';
 import {
-  describeWatchCost,
   describeWatchStatus,
   describeWatchTitle,
   MAC_FEATURES,
@@ -200,12 +199,14 @@ describe('“When…” routines from the Mac (fixtures.gen.ts)', () => {
     const agent: Agent = real.agentsOverview.agents[0];
     const [paused, folder] = agent.watches ?? [];
     expect(describeWatchTitle(paused.watch!.source)).toBe(
-      'When a new invoice email from Northwind in Gmail'
+      'When a new invoice email from Northwind'
     );
+    expect(paused.watch!.source).toMatchObject({ kind: 'custom', app: 'gmail' });
     expect(describeWatchStatus(paused)).toBe(
       'Paused after 5 checks in a row failed: Gmail needs signing in again.'
     );
-    expect(describeWatchCost(paused.watch!)).toBe('40 checks so far cost $0.17');
+    // No cost of its own: checks are in the routine's usage, like its runs.
+    expect(paused.watch).not.toHaveProperty('cost');
     expect(describeWatchTitle(folder.watch!.source)).toBe(
       'When a new file appears in /Users/julian/Downloads/invoices'
     );

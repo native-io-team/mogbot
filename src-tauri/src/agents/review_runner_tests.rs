@@ -155,6 +155,7 @@ fn chief_asks(text: &str) -> Inbound {
         reply: false,
         routine: false,
         ticket: None,
+        outside: false,
     }
 }
 
@@ -166,6 +167,7 @@ fn user_says(text: &str) -> Inbound {
         reply: false,
         routine: false,
         ticket: None,
+        outside: false,
     }
 }
 

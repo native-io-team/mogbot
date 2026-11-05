@@ -974,53 +974,106 @@ and its answer post one notification per turn.
 A routine can start when something happens instead of at a time: "When
 someone mentions me on GitHub, triage it." There are no webhooks (nothing of
 ours is reachable from the internet); each one is a cheap check from this Mac
-every few minutes (default 10):
+every few minutes:
 
 | Source | How it's checked | Cost |
 |---|---|---|
-| Someone mentions me on GitHub | `gh api notifications` (all, participating), reason `mention`/`team_mention`; once per thread | free |
-| An issue or PR is assigned to me | `gh api search/issues -f q="assignee:@me is:open"` | free |
-| A new file appears in a folder | the folder's listing (not hidden, not `.crdownload`/`.part`/…, not modified in the last 5 s) | free |
-| A Linear issue is assigned to me | one headless `claude --print --model haiku --permission-mode plan` call through the user's connectors, answering JSON | a model call |
-| Something else… (in the user's words, e.g. "a new email from dana@acme.com in Gmail") | the same headless call | a model call |
+| Someone mentions me on GitHub | `gh api notifications` (all, participating), reason `mention`/`team_mention`; one firing per new mention (thread id + latest comment, or `updated_at`) | free |
+| An issue or PR is assigned to me | `gh api search/issues -f q="assignee:@me is:open"`, 100 a page, up to 300 | free |
+| A new file appears in a folder | the folder's listing (not hidden, not `.crdownload`/`.part`/…, not modified in the last 5 s; symlinks skipped); folders of at most 2,000 entries | free |
+| A Linear issue is assigned to me | one sealed headless Claude Code call on Haiku through the Linear app set up in Claude Code | a model call |
+| Something else… (in the user's words, through one named app) | the same sealed call, through that app | a model call |
 
-Linear is offered only when `claude mcp list` has a Linear server. A model
-check's `total_cost_usd` is added to the agent's usage (it counts as a turn
-there) and to the routine's own `cost`, shown on its row only when every
-check reported one. Nothing is estimated. Model checks always run on Claude
-Code, even for a Codex agent. At most one model check runs per tick.
+**The rules.** The first check is a baseline (it notes what's there and
+fires nothing). Nothing fires twice: ids seen are kept per routine; a
+complete listing (a folder, or every assigned issue when all of them were
+read) replaces them and is never capped, so a folder of 400 files never
+re-fires; a window (the newest 50 notifications) is added to them, capped at
+300. A file still settling keeps its place in what's seen, so a seen file
+that's touched again isn't new. When more than 300 issues are assigned, the
+row says so ("Covers the 300 most recently updated of 412 …"). The merge
+happens inside the registry update, so two checks racing can't both fire.
 
-The rules: **the first check is a baseline** (it notes what's there and fires
-nothing); **nothing fires twice** (ids seen are kept per routine, at most
-300; a folder's listing replaces them, so a file deleted and dropped in
-again is new); the merge happens inside the registry update, so two checks
-racing can't both fire. A check that finds something new wakes the agent
-once with all of it (the first 20 listed), marked as information, never
-instructions; the chat line says "Routine · 2 new GitHub mentions". The run
-is ticketed and settled by `runs.rs` like a scheduled run, so it appears in
-Past runs and a temporary failure is retried with the same items
-(`Watch::pending`); checks wait while a retry is pending. A failed check
-backs off (interval doubled per failure, capped at an hour) and says why on
-the row; after 5 failed checks in a row, or 3 runs in a row that failed for
-good, the routine pauses itself with a note in the chat and on the row.
-Resume clears it and checks at the next tick. While the agent is driven in a
-terminal its checks wait. Nothing is checked while the app is closed; what
-arrived meanwhile is found by the next check.
+**One firing at a time.** A check that finds something new wakes the agent
+once with all of it (the first 20 listed) and marks a run running. Until that
+run settles (or its retry does), the routine isn't checked, and Check now
+says why instead of running, so a retry always works on exactly its own items
+(`Watch::pending`). A retry with nothing left marks nothing running; a
+firing whose turn couldn't be queued fails at once; a run nobody reported
+back on for 5 hours is settled as lost. The ticket is settled by `runs.rs`
+like a scheduled run, and its alerts say “When…” routine, not Scheduled.
+
+**Failures.** A failed check backs off (interval doubled per failure, capped
+at an hour) and says why on the row; after 5 failed checks in a row, or 3
+runs in a row that failed for good, it pauses itself with a note. Runs cut
+off by the app quitting (or lost) don't count toward that. A folder listing
+is given 20 s (a dead network mount is a failed check, not a stalled tick),
+and the tick starts checks in their own tasks, at most 4 at once.
+
+**Outside text.** The items go to the agent in an `<external_items>`
+envelope, one JSON object per line, control characters dropped and the tag
+neutralised inside, so a title can't close it and pass for us (as the import
+interview's `<from_assistant>`). The turn that answers them (or replaces one
+that did: `runner::from_outside`) needs an Allow card for `create_agent`,
+`update_agent`, `delete_agent`, `watch_for` and `schedule_check_in`
+(`mcp::needs_card_in_routine_turn`), and can't write its own CLAUDE.md: on
+Claude Code its edit tools are denied for that file (`--disallowedTools
+Edit(//<home>/CLAUDE.md),…`), and for any engine a change to it is put back
+when the turn ends, with a note in the chat, unless the app itself wrote it
+meanwhile (`runner::MemorySeal`). Bash still asks through `approve` as always.
+*Not verified:* that Claude Code 2.1.318 honours the `Edit(//path)` deny rule
+in a real turn; the put-back covers it either way.
+
+**The sealed model check** (`watch_seal.rs`). `--print --model haiku
+--output-format json --no-session-persistence --no-chrome
+--disable-slash-commands --strict-mcp-config --setting-sources "" --tools ""
+--disallowedTools <every built-in> --permission-mode dontAsk
+--permission-prompts none --mcp-config <that one app> --allowedTools
+mcp__<app>__list*,get*,search*,read*,find*,query* --system-prompt <ours>`,
+in an empty folder. The app's config is read from Claude Code's own
+`~/.claude.json` (user scope, then local to the agents folder) and passed
+verbatim; a claude.ai connector has no config there and isn't loaded under
+`--strict-mcp-config`, so it can't be used (the composer doesn't offer one,
+and `watch_for` refuses it).
+
+Verified once on Claude Code 2.1.318 against a stub stdio server offering
+`list_items` and `create_item` (one Haiku call, $0.0007): `init` listed only
+the stub (no claude.ai connectors, no other servers), no built-in tools,
+`permissionMode: dontAsk`, no slash commands or skills; `list_items` ran
+(so the `list*` pattern is honoured), and the stub's log shows no call to
+`create_item`. The model declined to try it, though asked to, so a refused
+*attempt* (`permission_denials`) was not observed. **Not verified:** a real
+write attempt being denied; a real Linear or Gmail app, including whether an
+OAuth app's saved sign-in is found when its config is passed this way.
+
+**Cost.** A model check is counted as a *check*, not a turn
+(`UsageTotals::checks`/`priced_checks`), in the agent's usage and the
+routine's own (`CheckIn::usage`, the one store runs use too), so the row
+shows one line for checks and runs: "46 checks · $0.19 at API prices this
+week", or tokens on a Claude plan. Model checks are at least 15 minutes
+apart (default 30) and at most 24 a day per routine (`max_checks_per_day`;
+the 25th waits for tomorrow and the row says so). An empty first answer
+isn't trusted as a baseline until a second check agrees. Items are known by
+their link, else their id, else a hash of title and date (`stable_id`),
+because Haiku may name the same issue by key one time and uuid the next. An
+agent setting one up gets an Allow card first naming the app, the interval,
+checks a day, and what checks on this Mac have measured this week (or that
+nothing has been). Every routine created, by an agent or the user, leaves a
+line in the chat. At most one model check starts per tick.
 
 They're `CheckIn`s with a `watch` (no `repeat`; `next_at` is the next check),
 so cancel, pause, list and the 12-per-agent cap are shared. The time tick
 ignores them. In the schedule popover, "At a time / When…" switches the
 composer; a When… row shows what it waits for, what it does, how its last
-check went, Check now (`agents_watch_check_now`, which says what it found),
-Edit, Pause and Cancel. ⌘K: "Start work for <agent> when something happens…".
+check went, its week's cost, Check now (`agents_watch_check_now`), Edit,
+Pause and Cancel. ⌘K: "Start work for <agent> when something happens…".
 Agents set them with the `watch_for` tool. The phone gets them apart from
-timed routines as `agent.watches` (an older phone would take one for a
-one-time check-in), without `seen`/`pending`, and shows them read-only when
-`welcome.features` has `routines.when`.
+timed routines as `agent.watches` (without `seen`/`pending`) and shows them
+read-only when `welcome.features` has `routines.when`; the Mac refuses any
+schedule operation the phone sends for one (`refuse_watch_from_phone`).
 
-Not verified against live accounts: a model check through a real Linear or
-Gmail connector (whether plan mode lets every connector's read tools run
-headless is unverified), and the GitHub search source. The notifications
+Not verified against live accounts: a model check through a real connector,
+and the GitHub search source (pagination included). The notifications
 call's shape was checked with one read-only `gh api notifications` call.
 
 ## Usage before the wall (`agents/usage.rs`, `agents/quota.rs`)

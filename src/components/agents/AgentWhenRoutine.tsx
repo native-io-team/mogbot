@@ -6,9 +6,12 @@
  * The form is a short list of sources in plain words, the one detail a
  * source needs (a folder, or what to look out for), how often to check, and
  * what to do. Under it, what it costs, said before you add it: GitHub and
- * folders are checked for free; a connector source (Linear, anything else)
- * is a short Claude Code call per check. Linear is offered only when a
- * Linear connector is there. Backend: `src-tauri/src/agents/watch.rs`.
+ * folders are checked for free; an app source (Linear, anything else) is a
+ * short read-only Claude Code call per check, at least 15 minutes apart and
+ * at most 24 a day, sealed to that one app (`watch_seal.rs`). It checks
+ * through an app set up in Claude Code; a claude.ai connector can't be
+ * loaded into the sealed check, so it isn't offered. Linear is offered only
+ * when such a Linear app is there. Backend: `src-tauri/src/agents/watch.rs`.
  *
  * @module components/agents/AgentWhenRoutine
  */
@@ -19,6 +22,7 @@ import { SegmentedControl } from '../primitives/SegmentedControl';
 import { TextField } from '../primitives/TextField';
 import {
   createWatch,
+  DEFAULT_MAX_CHECKS_PER_DAY,
   describeEvery,
   describeWatchSource,
   updateWatch,
@@ -55,13 +59,13 @@ const SOURCES: SourceChoice[] = [
   {
     kind: 'linear_assigned',
     label: 'A Linear issue is assigned to me',
-    how: 'Through your Linear connector · a short Claude Code call per check',
+    how: 'Through your Linear app · a short read-only Claude Code call per check',
   },
   { kind: 'new_file', label: 'A new file appears in a folder', how: 'Free · reads the folder' },
   {
     kind: 'custom',
     label: 'Something else…',
-    how: 'You say what · a short Claude Code call per check',
+    how: 'You say what, in one app · a short read-only Claude Code call per check',
   },
 ];
 
@@ -69,10 +73,14 @@ const SOURCES: SourceChoice[] = [
 function intervalsFor(kind: Kind): number[] {
   if (kind === 'new_file') return [1, 5, 10, 30];
   if (kind === 'github_mentions' || kind === 'github_assigned') return [5, 10, 30, 60];
-  return [10, 30, 60, 240];
+  return [15, 30, 60, 240];
 }
 
 export const DEFAULT_EVERY = 10;
+/** An app check's default: each one is a Claude Code call. */
+export const DEFAULT_MODEL_EVERY = 30;
+
+const isModelKind = (kind: Kind) => kind === 'linear_assigned' || kind === 'custom';
 
 /** "10 min", "1 hour": the interval chips, after "Check every". */
 function shortEvery(minutes: number): string {
@@ -80,9 +88,9 @@ function shortEvery(minutes: number): string {
   return minutes === 60 ? '1 hour' : `${minutes / 60} hours`;
 }
 
-function sourceOf(kind: Kind, folder: string, check: string): WatchSource {
+function sourceOf(kind: Kind, folder: string, check: string, app: string): WatchSource {
   if (kind === 'new_file') return { kind, folder };
-  if (kind === 'custom') return { kind, check };
+  if (kind === 'custom') return { kind, check, app };
   return { kind };
 }
 
@@ -107,17 +115,26 @@ export function WhenComposer({ agent, editing, onDone }: WhenComposerProps) {
   const [kind, setKind] = useState<Kind>(startKind);
   const [folder, setFolder] = useState(start?.kind === 'new_file' ? start.folder : '');
   const [check, setCheck] = useState(start?.kind === 'custom' ? start.check : '');
+  const [app, setApp] = useState(start?.kind === 'custom' ? (start.app ?? '') : '');
+  // Apps set up in Claude Code itself: a claude.ai connector can't be loaded
+  // into the sealed check.
+  const [apps, setApps] = useState<string[]>([]);
   const [every, setEvery] = useState(editing?.watch?.everyMinutes ?? DEFAULT_EVERY);
   const [note, setNote] = useState(editing?.note ?? '');
   const [error, setError] = useState<string | null>(null);
   const [hasLinear, setHasLinear] = useState(startKind === 'linear_assigned');
 
-  // Linear is offered only when Claude Code has a Linear connector.
+  // Linear is offered only when Claude Code has a Linear app of its own.
   useEffect(() => {
     let live = true;
     listAgentApps()
-      .then((apps) => {
-        if (live && apps.connected.some((a) => /linear/i.test(a.name))) setHasLinear(true);
+      .then((list) => {
+        if (!live) return;
+        const own = list.connected.filter((a) => a.source !== 'claudeAi');
+        setApps(own.map((a) => a.name));
+        if (own.some((a) => /linear/i.test(a.name) || /linear\.app/i.test(a.target))) {
+          setHasLinear(true);
+        }
       })
       .catch(() => {
         /* Not knowing isn't an error worth showing: Linear just isn't offered. */
@@ -130,15 +147,18 @@ export function WhenComposer({ agent, editing, onDone }: WhenComposerProps) {
   const choices = SOURCES.filter((s) => s.kind !== 'linear_assigned' || hasLinear);
   const offered = intervalsFor(kind);
   const intervals = offered.includes(every) ? offered : [...offered, every].sort((a, b) => a - b);
-  const source = sourceOf(kind, folder.trim(), check.trim());
+  const source = sourceOf(kind, folder.trim(), check.trim(), app);
+  const appMissing = kind === 'custom' && !app;
   const detailMissing =
-    (kind === 'new_file' && !folder.trim()) || (kind === 'custom' && !check.trim());
+    (kind === 'new_file' && !folder.trim()) || (kind === 'custom' && !check.trim()) || appMissing;
 
   const pick = (next: Kind) => {
     setKind(next);
     setError(null);
     const allowed = intervalsFor(next);
-    if (every < allowed[0]) setEvery(allowed.includes(DEFAULT_EVERY) ? DEFAULT_EVERY : allowed[0]);
+    if (isModelKind(next) && !isModelKind(kind)) setEvery(DEFAULT_MODEL_EVERY);
+    else if (every < allowed[0])
+      setEvery(allowed.includes(DEFAULT_EVERY) ? DEFAULT_EVERY : allowed[0]);
   };
 
   const { execute: save, isLoading: saving } = useAsyncState(async () => {
@@ -160,8 +180,9 @@ export function WhenComposer({ agent, editing, onDone }: WhenComposerProps) {
     if (canSave) void save();
   };
 
+  const perDay = Math.min(Math.floor((24 * 60) / Math.max(every, 1)), DEFAULT_MAX_CHECKS_PER_DAY);
   const cost = watchUsesModel(source)
-    ? `Each check is a short Claude Code call on Haiku, counted in ${agent.name}’s usage.`
+    ? `Each check is a short read-only Claude Code call on Haiku, up to ${perDay} a day, counted in ${agent.name}’s usage.`
     : 'Checks are free.';
 
   return (
@@ -197,11 +218,31 @@ export function WhenComposer({ agent, editing, onDone }: WhenComposerProps) {
           value={check}
           onChange={(e) => setCheck(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="e.g. a new email from dana@acme.com in Gmail"
+          placeholder="e.g. a new email from dana@acme.com"
           aria-label="What to look out for"
           maxLength={400}
         />
       )}
+      {kind === 'custom' &&
+        (apps.length > 0 ? (
+          <div className="agent-when__every">
+            <span className="agent-when__every-label">Through</span>
+            <SegmentedControl
+              aria-label="Which app to check through"
+              value={app}
+              onValueChange={(v) => {
+                setApp(v);
+                setError(null);
+              }}
+              options={apps.map((name) => ({ value: name, label: name }))}
+            />
+          </div>
+        ) : (
+          <p className="agent-when__cost">
+            Checks go through one app set up in Claude Code (Apps). claude.ai connectors can’t be
+            used here.
+          </p>
+        ))}
       <TextField
         value={note}
         onChange={(e) => setNote(e.target.value)}
@@ -235,7 +276,9 @@ export function WhenComposer({ agent, editing, onDone }: WhenComposerProps) {
           (detailMissing
             ? kind === 'new_file'
               ? 'Which folder?'
-              : 'What should it look out for?'
+              : appMissing && check.trim()
+                ? 'Which app should it check?'
+                : 'What should it look out for?'
             : `When ${describeWatchSource(source)}, ${agent.name} gets a turn.`)}
       </p>
       <p className="agent-when__cost">

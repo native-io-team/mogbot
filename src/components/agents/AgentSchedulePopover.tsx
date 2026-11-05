@@ -252,7 +252,9 @@ function ScheduleBody({
               key={c.id}
               item={c}
               spent={routineWeekLine(weekOf(c.id), onPlan)}
-              priced={!onPlan && (weekOf(c.id)?.pricedTurns ?? 0) > 0}
+              priced={
+                !onPlan && (weekOf(c.id)?.pricedTurns ?? 0) + (weekOf(c.id)?.pricedChecks ?? 0) > 0
+              }
               busy={busy}
               editing={editing?.id === c.id || editingWhen?.id === c.id}
               onRunNow={() =>
@@ -404,6 +406,7 @@ function ScheduleRow({
             >
               {describeWatchStatus(item)}
             </span>
+            {watch.coverage && <span className="agent-schedule__spent">{watch.coverage}</span>}
             {checked && (
               <span className="agent-when__checked" aria-live="polite">
                 {checked}
@@ -501,6 +504,8 @@ function describeCheck(o: WatchCheckOutcome): string {
   if (o.paused) return o.paused;
   if (o.error) return `Check failed: ${o.error}`;
   if (o.baseline) return 'Noted what’s there now; anything new from here starts work.';
+  if (o.unconfirmed)
+    return 'Found nothing. The next check confirms that before anything starts work.';
   if (o.found > 0) return `Found ${o.found} new; it’s on it.`;
   return 'Nothing new.';
 }

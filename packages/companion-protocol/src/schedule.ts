@@ -403,12 +403,20 @@ export function describeEvery(minutes: number): string {
   return minutes === 60 ? 'every hour' : `every ${minutes / 60} hours`;
 }
 
-/** "$0.17" from what Claude Code reported; null when any check reported none. */
-export function describeWatchCost(watch: Watch): string | null {
-  const c = watch.cost;
-  if (!c || c.checks === 0 || c.priced !== c.checks) return null;
-  const usd = c.costUsd < 0.01 && c.costUsd > 0 ? '<$0.01' : `$${c.costUsd.toFixed(2)}`;
-  return `${c.checks} check${c.checks === 1 ? '' : 's'} so far cost ${usd}`;
+/** Model checks a routine makes in a day, at most, unless it says otherwise (`watch::DEFAULT_MAX_CHECKS_PER_DAY`). */
+export const DEFAULT_MAX_CHECKS_PER_DAY = 24;
+
+/** A local day, as `watch::DayChecks::day` writes it. */
+function dayKey(ts: number): string {
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** It has made today's model checks: none more until tomorrow. */
+export function watchCappedToday(w: Watch, now = Date.now()): boolean {
+  const cap = w.maxChecksPerDay ?? DEFAULT_MAX_CHECKS_PER_DAY;
+  return !!w.dayChecks && w.dayChecks.day === dayKey(now) && w.dayChecks.checks >= cap;
 }
 
 /** "3 min ago", "just now": how long since a check, for a row. */
@@ -434,6 +442,12 @@ export function describeWatchStatus(c: CheckIn, now = Date.now()): string {
     return `Didn’t finish · retrying ${formatWhen(c.retry.at, now).replace(/^(Today|Tomorrow)/, (x) => x.toLowerCase())}`;
   }
   if (w.failures > 0 && w.lastError) return `Last check failed: ${w.lastError}`;
+  if (watchCappedToday(w, now)) {
+    const cap = w.maxChecksPerDay ?? DEFAULT_MAX_CHECKS_PER_DAY;
+    return `Made today’s ${cap} checks · checks again tomorrow`;
+  }
+  if (w.baselineAt === undefined && w.emptyAnswers)
+    return `${every} · found nothing yet; the next check confirms that before anything starts work`;
   if (w.baselineAt === undefined)
     return `${every} · first check soon, to note what’s already there`;
   const parts = [every];

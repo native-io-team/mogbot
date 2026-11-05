@@ -32,6 +32,7 @@ fn user(text: &str) -> Inbound {
         reply: false,
         routine: false,
         ticket: None,
+        outside: false,
     }
 }
 
@@ -49,6 +50,7 @@ fn from_chief(text: &str, reply: bool) -> Inbound {
         reply,
         routine: false,
         ticket: None,
+        outside: false,
     }
 }
 

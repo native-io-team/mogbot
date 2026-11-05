@@ -52,12 +52,12 @@ fn check_ins() -> Value {
         { "id": "c3", "note": "Remind me about the VAT return", "nextAt": 1_762_400_000_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": false },
         { "id": "c4", "note": "File it under this month", "nextAt": 1_762_300_600_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": true,
           "runs": [{ "at": 1_762_250_000_000_i64, "outcome": "ran", "attempt": 1 }],
-          "watch": { "source": { "kind": "custom", "check": "a new invoice email from Northwind in Gmail" }, "everyMinutes": 15,
+          "watch": { "source": { "kind": "custom", "check": "a new invoice email from Northwind", "app": "gmail" }, "everyMinutes": 15,
                      "seen": ["msg-1", "msg-2"], "baselineAt": 1_762_200_000_000_i64, "lastCheckedAt": 1_762_290_000_000_i64,
                      "lastFoundAt": 1_762_250_000_000_i64, "lastFound": 1, "failures": 5, "lastError": "Gmail needs signing in again.",
                      "pending": [{ "id": "msg-2", "title": "Invoice #1182", "detail": "From billing@northwind.example", "url": "https://mail.google.com/mail/u/0/#inbox/msg-2" }],
                      "pausedNote": "Paused after 5 checks in a row failed: Gmail needs signing in again.",
-                     "cost": { "checks": 40, "priced": 40, "costUsd": 0.168, "since": 1_762_200_000_000_i64 } } },
+                     "dayChecks": { "day": "2025-11-04", "checks": 3 } } },
         { "id": "c5", "note": "Triage it", "nextAt": 1_762_300_600_000_i64, "createdAt": 1_762_200_000_000_i64, "paused": false,
           "watch": { "source": { "kind": "new_file", "folder": "/Users/julian/Downloads/invoices" }, "everyMinutes": 1, "lastFound": 0, "failures": 0 } }
     ])

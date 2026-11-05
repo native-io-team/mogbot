@@ -10,7 +10,6 @@
 
 import {
   describeCheckInTime,
-  describeWatchCost,
   describeWatchStatus,
   describeWatchTitle,
   MAC_FEATURES,
@@ -285,7 +284,13 @@ function AgentSheet() {
             <SectionTitle title="When something happens" style={styles.sectionTitle} />
             <View style={styles.list}>
               {watches.map((c, i) => (
-                <WatchRow key={c.id} checkIn={c} last={i === watches.length - 1} />
+                <WatchRow
+                  key={c.id}
+                  checkIn={c}
+                  // One cost store for checks and runs, worded for the plan.
+                  spent={routineWeekLine(usage?.routines?.find((r) => r.id === c.id)?.week, onPlan)}
+                  last={i === watches.length - 1}
+                />
               ))}
             </View>
             <T variant="caption" color={colors.textMuted} style={styles.none}>
@@ -392,12 +397,20 @@ function CheckInRow({
  * A "When…" routine, read-only: what it waits for, what it does, and what
  * its last check came to. It's set up and changed on the Mac.
  */
-function WatchRow({ checkIn: c, last }: { checkIn: CheckIn; last: boolean }) {
+function WatchRow({
+  checkIn: c,
+  spent: cost,
+  last,
+}: {
+  checkIn: CheckIn;
+  /** Its checks' and runs' week, as `routineWeekLine` words it. */
+  spent: string | null;
+  last: boolean;
+}) {
   const colors = useColors();
   const styles = useStyles();
   const now = useNow(30_000);
   if (!c.watch) return null;
-  const cost = describeWatchCost(c.watch);
   const title = describeWatchTitle(c.watch.source);
   const status = describeWatchStatus(c, now);
   return (

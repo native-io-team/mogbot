@@ -192,7 +192,8 @@ export type WatchSource =
   | { kind: 'github_assigned' }
   | { kind: 'linear_assigned' }
   | { kind: 'new_file'; folder: string }
-  | { kind: 'custom'; check: string }
+  /** `app`: the Claude Code app it checks through. Absent on older Macs' routines. */
+  | { kind: 'custom'; check: string; app?: string }
   /** Written by a newer Mac. */
   | { kind: 'unknown' };
 
@@ -222,8 +223,14 @@ export interface Watch {
   pending?: WatchEvent[];
   /** Why it paused itself. */
   pausedNote?: string;
-  /** What its checks cost, as Claude Code reported it (connector checks only). */
-  cost?: { checks: number; priced: number; costUsd: number; since: number };
+  /** Model checks only: how many ran on a local day, for the daily cap. */
+  dayChecks?: { day: string; checks: number };
+  /** Model checks only: the daily cap when not the default (24). */
+  maxChecksPerDay?: number;
+  /** Model checks only: an empty answer before the baseline, not yet trusted as one. */
+  emptyAnswers?: number;
+  /** What part of the source its checks cover, when not all of it. */
+  coverage?: string;
 }
 
 /** One scheduled run and what came of it; mirrors `runs::Run`. */
@@ -617,6 +624,10 @@ export interface UsageTotals {
   costUsd: number;
   pricedTurns: number;
   durationMs: number;
+  /** "When…" routines' model checks: counted apart from turns, their cost included above. Newer Macs only. */
+  checks?: number;
+  /** Checks that reported a cost. */
+  pricedChecks?: number;
 }
 
 export interface UsageSummary {

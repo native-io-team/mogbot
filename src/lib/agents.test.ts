@@ -22,7 +22,9 @@ import {
   PROSE_PATH,
   describeCheckInTime,
   describeEvery,
-  describeWatchCost,
+  watchCappedToday,
+  fullyPriced,
+  routineWeekLine,
   describeWatchSource,
   describeWatchStatus,
   describeWatchTitle,
@@ -951,16 +953,48 @@ describe('"When…" routines in words', () => {
     );
   });
 
-  it('shows a cost only when every check reported one', () => {
-    expect(describeWatchCost(watch())).toBeNull();
-    expect(
-      describeWatchCost(watch({ cost: { checks: 40, priced: 40, costUsd: 0.168, since: 0 } }))
-    ).toBe('40 checks so far cost $0.17');
-    expect(
-      describeWatchCost(watch({ cost: { checks: 2, priced: 1, costUsd: 0.004, since: 0 } }))
-    ).toBeNull();
-    expect(
-      describeWatchCost(watch({ cost: { checks: 1, priced: 1, costUsd: 0.004, since: 0 } }))
-    ).toBe('1 check so far cost <$0.01');
+  it('says when today’s model checks are done, and an unconfirmed empty first check', () => {
+    const day = (ts: number) => {
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const capped = watch({
+      source: { kind: 'linear_assigned' },
+      baselineAt: now - 60 * min,
+      dayChecks: { day: day(now), checks: 24 },
+    });
+    expect(watchCappedToday(capped, now)).toBe(true);
+    expect(describeWatchStatus(row(capped), now)).toBe(
+      'Made today’s 24 checks · checks again tomorrow'
+    );
+    // Yesterday's count doesn't hold today back.
+    const yesterday = { ...capped, dayChecks: { day: '2001-01-01', checks: 24 } };
+    expect(watchCappedToday(yesterday, now)).toBe(false);
+    expect(describeWatchStatus(row(watch({ emptyAnswers: 1 })), now)).toBe(
+      'Checks every 10 min · found nothing yet; the next check confirms that before anything starts work'
+    );
+  });
+
+  it('counts model checks apart from turns, priced only when every one was', () => {
+    const t = {
+      turns: 0,
+      inputTokens: 9000,
+      outputTokens: 1000,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costUsd: 0.168,
+      pricedTurns: 0,
+      durationMs: 0,
+      checks: 40,
+      pricedChecks: 40,
+    };
+    expect(routineWeekLine(t)).toBe('40 checks · $0.17 at API prices this week');
+    // On a plan the price isn't the bill.
+    expect(routineWeekLine(t, true)).toBe('40 checks · 10k tokens this week');
+    expect(routineWeekLine({ ...t, pricedChecks: 39 })).toBe('40 checks · 10k tokens this week');
+    expect(formatUsage({ ...t, turns: 2, pricedTurns: 2 })).toBe(
+      '$0.17 at API prices · 10k tokens · 2 turns · 40 checks'
+    );
+    expect(fullyPriced({ ...t, turns: 1, pricedTurns: 0 })).toBe(false);
   });
 });

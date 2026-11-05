@@ -189,7 +189,7 @@ pub fn suggestions(connected: &[App]) -> Vec<Suggestion> {
 }
 
 /// Claude Code's own config file: `$CLAUDE_CONFIG_DIR/.claude.json`, or `~/.claude.json`.
-fn claude_config_path() -> Option<PathBuf> {
+pub(super) fn claude_config_path() -> Option<PathBuf> {
     match std::env::var_os("CLAUDE_CONFIG_DIR") {
         Some(dir) if !dir.is_empty() => Some(PathBuf::from(dir).join(".claude.json")),
         _ => dirs::home_dir().map(|h| h.join(".claude.json")),

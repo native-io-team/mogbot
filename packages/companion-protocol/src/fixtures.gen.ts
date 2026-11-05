@@ -264,11 +264,9 @@ export const agentsOverview = {
           ],
           "watch": {
             "baselineAt": 1762200000000,
-            "cost": {
-              "checks": 40,
-              "costUsd": 0.168,
-              "priced": 40,
-              "since": 1762200000000
+            "dayChecks": {
+              "checks": 3,
+              "day": "2025-11-04"
             },
             "everyMinutes": 15,
             "failures": 5,
@@ -278,7 +276,8 @@ export const agentsOverview = {
             "lastFoundAt": 1762250000000,
             "pausedNote": "Paused after 5 checks in a row failed: Gmail needs signing in again.",
             "source": {
-              "check": "a new invoice email from Northwind in Gmail",
+              "app": "gmail",
+              "check": "a new invoice email from Northwind",
               "kind": "custom"
             }
           }
@@ -1522,11 +1521,9 @@ export const agentsUpdate = {
       ],
       "watch": {
         "baselineAt": 1762200000000,
-        "cost": {
-          "checks": 40,
-          "costUsd": 0.168,
-          "priced": 40,
-          "since": 1762200000000
+        "dayChecks": {
+          "checks": 3,
+          "day": "2025-11-04"
         },
         "everyMinutes": 15,
         "failures": 5,
@@ -1548,7 +1545,8 @@ export const agentsUpdate = {
           "msg-2"
         ],
         "source": {
-          "check": "a new invoice email from Northwind in Gmail",
+          "app": "gmail",
+          "check": "a new invoice email from Northwind",
           "kind": "custom"
         }
       }
@@ -1757,11 +1755,9 @@ export const agentsStartFresh = {
       ],
       "watch": {
         "baselineAt": 1762200000000,
-        "cost": {
-          "checks": 40,
-          "costUsd": 0.168,
-          "priced": 40,
-          "since": 1762200000000
+        "dayChecks": {
+          "checks": 3,
+          "day": "2025-11-04"
         },
         "everyMinutes": 15,
         "failures": 5,
@@ -1783,7 +1779,8 @@ export const agentsStartFresh = {
           "msg-2"
         ],
         "source": {
-          "check": "a new invoice email from Northwind in Gmail",
+          "app": "gmail",
+          "check": "a new invoice email from Northwind",
           "kind": "custom"
         }
       }
@@ -2458,11 +2455,9 @@ export const frames = [
                 ],
                 "watch": {
                   "baselineAt": 1762200000000,
-                  "cost": {
-                    "checks": 40,
-                    "costUsd": 0.168,
-                    "priced": 40,
-                    "since": 1762200000000
+                  "dayChecks": {
+                    "checks": 3,
+                    "day": "2025-11-04"
                   },
                   "everyMinutes": 15,
                   "failures": 5,
@@ -2472,7 +2467,8 @@ export const frames = [
                   "lastFoundAt": 1762250000000,
                   "pausedNote": "Paused after 5 checks in a row failed: Gmail needs signing in again.",
                   "source": {
-                    "check": "a new invoice email from Northwind in Gmail",
+                    "app": "gmail",
+                    "check": "a new invoice email from Northwind",
                     "kind": "custom"
                   }
                 }
@@ -2838,11 +2834,9 @@ export const frames = [
                 ],
                 "watch": {
                   "baselineAt": 1762200000000,
-                  "cost": {
-                    "checks": 40,
-                    "costUsd": 0.168,
-                    "priced": 40,
-                    "since": 1762200000000
+                  "dayChecks": {
+                    "checks": 3,
+                    "day": "2025-11-04"
                   },
                   "everyMinutes": 15,
                   "failures": 5,
@@ -2852,7 +2846,8 @@ export const frames = [
                   "lastFoundAt": 1762250000000,
                   "pausedNote": "Paused after 5 checks in a row failed: Gmail needs signing in again.",
                   "source": {
-                    "check": "a new invoice email from Northwind in Gmail",
+                    "app": "gmail",
+                    "check": "a new invoice email from Northwind",
                     "kind": "custom"
                   }
                 }
