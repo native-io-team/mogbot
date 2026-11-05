@@ -671,6 +671,8 @@ pub fn run() {
             commands::agents::agents_import_paste_prompt,
             commands::agents::agents_import_paste_preview,
             commands::agents::agents_import_paste,
+            commands::agents::agents_other_app_preview,
+            commands::agents::agents_other_app_import,
             commands::agents::agents_schedule_preview,
             commands::agents::agents_schedule_create,
             commands::agents::agents_schedule_cancel,

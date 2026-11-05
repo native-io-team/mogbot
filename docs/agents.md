@@ -491,6 +491,44 @@ The **Import agents** button in Agents mode offers two paths, as tabs:
 What doesn't come across: the other platform's own connectors (its Gmail,
 Calendar…). Here, agents use what this Mac and Claude Code are connected to.
 
+### From Ship Studio on this Mac (`src-tauri/src/agents/other_app.rs`)
+
+When the app this one grew out of has agents on this Mac, **Import agents**
+gains a first tab, "From Ship Studio" (and ⌘K gains "Import agents from Ship
+Studio…"). The name is `OTHER_APP_NAME` in `other_app.rs`, mirrored in
+`src/lib/agents.ts`; nothing else in the UI spells it. Its agents are found
+under its projects folder (`<its projects root>/.shipstudio/agents`, the root
+read from its own `app_state.json`), else `~/ShipStudio/.shipstudio/agents`.
+
+Both apps use the same layout, so it's a copy, not a translation. The tab
+previews every agent (new, merges into the Chief, already here, or stays
+behind and why), with its instructions, memory, message and file counts,
+routines and project, then **Import** copies:
+
+| Comes across | How |
+| --- | --- |
+| Registry entry | same id (so agent-to-agent lines still point at the right agent), name, role, avatar, engine, model, routine model, pinned/hidden/muted, "Always allow" rules, usage, unknown fields |
+| Home | whole folder: CLAUDE.md (instructions + memory), `messages.jsonl`, `approvals.jsonl`, `attachments/`, anything else it kept there. Symlinks are never followed or copied |
+| Project binding | kept when the folder still exists; otherwise dropped and said in its chat |
+| Routines | kept, **paused**, so nothing runs in both apps while both are open |
+| Chief of Staff | merged by `import.rs`'s rules: ours keeps its name, role, avatar and engine; theirs adds its instructions under `### From Ship Studio` (unless they're the stock Chief's), its memory section under `### Imported from Ship Studio`, its conversation merged in time order (`store::merge_log_lines`), its files (an existing name here wins, reported), its routines (paused) and rules, without doubling any |
+
+Not copied, on purpose: **saved secrets** (values in its Keychain items,
+`ship-studio-agent-<id>`; reading them would raise Keychain prompts owned by
+the other app and copy credentials without the user choosing to: the tab and
+the agent's chat name which secrets stayed behind, and the agent asks again
+with `request_secret`); **sessions** (tied to the folder they ran in; the
+agent starts fresh and is handed the recent conversation, `new_engine`);
+**a turn in flight** (`turn.json`, `inbox.json`). Waiting approval cards are
+expired, except secure input cards, which still work here.
+
+It's read-only: nothing under the other app's folder is written, moved or
+deleted (the Rust test hashes the whole source tree before and after). It's
+idempotent: `agents/imports.json` records each source id it brought over, so
+importing again skips them ("Already here"). An agent whose name is taken here
+stays behind until one is renamed; a newer build's entry this one can't read
+is listed, not guessed at.
+
 ## Check-ins and routines (`src-tauri/src/agents/schedule.rs`)
 
 An agent that says "I'll check back tomorrow" can: `schedule_check_in {when,

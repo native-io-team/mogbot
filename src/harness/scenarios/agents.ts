@@ -193,6 +193,67 @@ const IMPORTED = {
 
 const IMPORT_BUTTON = '.agents-import__footer .button--primary:not(:disabled)';
 
+/** One of the other app's agents as `agents_other_app_preview` describes it. */
+const otherAgent = (
+  sourceId: string,
+  name: string,
+  role: string,
+  color: string,
+  over: Record<string, unknown> = {}
+) => ({
+  sourceId,
+  name,
+  role,
+  color,
+  isMain: false,
+  plan: 'new',
+  instructions: `You are my ${name.toLowerCase()} agent. ${role}.\n\nAsk before spending money or sending anything on my behalf.`,
+  memory: ['Prefers mornings for anything that needs focus', 'Lives in Lisbon'],
+  messages: 31,
+  attachments: 0,
+  routines: [] as { schedule: string; what: string }[],
+  secrets: [] as string[],
+  projectMissing: false,
+  ...over,
+});
+
+/** The other app on this Mac with a team of five: two new, the Chief to merge, one done, one blocked. */
+const OTHER_APP_PREVIEW = {
+  appName: 'Ship Studio',
+  source: '/Users/you/ShipStudio/.shipstudio/agents',
+  agents: [
+    otherAgent('c0', 'Chief of Staff', 'Runs the team', 'white', {
+      isMain: true,
+      plan: 'merge',
+      messages: 214,
+      memory: ['Lives in Lisbon', 'Has two cats', 'Prefers short replies'],
+      routines: [{ schedule: 'every weekday at 08:00', what: 'Brief me on the day.' }],
+    }),
+    otherAgent('f1', 'Finance', 'Tracks spending and chases invoices', 'green', {
+      messages: 86,
+      attachments: 4,
+      memory: ['Accountant is Sam', 'Invoices go out on the 1st', 'Reports in EUR'],
+      routines: [
+        { schedule: 'every 2 hours', what: 'Check for new invoices.' },
+        { schedule: 'every Monday at 09:00', what: 'Send me last week’s spending.' },
+      ],
+      secrets: ['Stripe key', 'Bank login'],
+      project: '/Users/you/ShipStudio/books',
+    }),
+    otherAgent('t1', 'Travel', 'Plans trips and keeps bookings straight', 'blue', {
+      routines: [{ schedule: 'every Friday at 17:00', what: 'Check next week’s flights.' }],
+    }),
+    otherAgent('r1', 'Research', 'Reads so you don’t have to', 'purple', {
+      plan: 'imported',
+      reason: 'Already brought over.',
+    }),
+    otherAgent('i1', 'Inbox', 'Triage email', 'orange', {
+      plan: 'skip',
+      reason: 'You already have an agent called Inbox here. Rename one, then import again.',
+    }),
+  ],
+};
+
 export const status = (state: 'idle' | 'working' | 'waiting', activity: string | null = null) => ({
   state,
   activity,
@@ -1844,6 +1905,57 @@ export const agentsScenarios: Scenario[] = [
             detail: 'Give it a day and a time.',
           },
         ],
+      },
+    },
+  },
+  {
+    id: 'agents-import-other-app',
+    title: 'Agents — import, the other app’s team is on this Mac',
+    looksRightWhen:
+      'A first tab “From Ship Studio” is chosen, before Paste a reply and Connected assistant. One lede line saying the team is on this Mac and the other app keeps its copy. “5 agents in Ship Studio · 3 to bring over”, then one row each: Chief of Staff with “Merges into Chief of Staff”, Finance and Travel with green “New”, Research muted with “Already here”, Inbox muted with an amber “Stays behind” chip and, in amber where the counts go, why. Counts read like “214 messages · 3 memories · 1 routine”; Finance ends in amber “2 secrets to re-enter”. Under the list a quiet recessed note with an info mark: saved secrets stay in the other app and who will ask again; 4 routines arrive paused. The footer: “Nothing in Ship Studio changes…”, Cancel, and a primary “Import 3 agents”.',
+    command: 'agents.import',
+    requires: '.agents-import-behind',
+    clipSelector: '.agents-import',
+    commands: { agents_other_app_preview: OTHER_APP_PREVIEW },
+  },
+  {
+    id: 'agents-import-other-app-detail',
+    title: 'Agents — import from the other app, reading an agent',
+    looksRightWhen:
+      'The same list with Finance open — its instructions in a recessed box, memory as a list, “Routines, arriving paused” with each schedule in bold, and its project path.',
+    // Steps run before a palette command, so these walk in from the sidebar note.
+    openSelector: AGENTS_TAB,
+    requires: '.agents-import-agent[data-open]',
+    clipSelector: '.agents-import',
+    steps: [
+      { click: IMPORT_STARTER },
+      { click: '.agents-import-agent:nth-child(2) .agents-import-agent__row' },
+    ],
+    commands: { agents_other_app_preview: OTHER_APP_PREVIEW },
+  },
+  {
+    id: 'agents-import-other-app-done',
+    title: 'Agents — import from the other app, done',
+    looksRightWhen:
+      'The shared done state: “Your team is here”, “2 new agents · 1 updated”, three pills (Chief of Staff, Finance, Travel), then a calm amber note “Before they get going”: Finance will ask again for Stripe key and Bank login; 4 routines arrived paused; Research came across before. Then “Say hi to your team.”',
+    openSelector: AGENTS_TAB,
+    requires: '.agents-import-done .agents-import-problems',
+    clipSelector: '.agents-import',
+    steps: [{ click: IMPORT_STARTER }, { click: IMPORT_BUTTON }],
+    commands: {
+      agents_other_app_preview: OTHER_APP_PREVIEW,
+      agents_other_app_import: {
+        created: ['Finance', 'Travel'],
+        updated: ['Chief of Staff'],
+        skipped: [['Inbox', 'You already have an agent called Inbox here.']],
+        routinesSet: [],
+        routinesRefused: [],
+        appName: 'Ship Studio',
+        already: ['Research'],
+        routinesPaused: 4,
+        messages: 331,
+        secretsLeft: [{ agent: 'Finance', secrets: ['Stripe key', 'Bank login'] }],
+        filesSkipped: [],
       },
     },
   },

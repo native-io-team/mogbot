@@ -10,6 +10,7 @@ vi.mock('../../lib/remoteAccess', () => ({
 vi.mock('../../lib/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/agents')>()),
   getImportPrompt: () => Promise.resolve('prompt'),
+  previewOtherAppImport: () => Promise.resolve(null),
 }));
 vi.mock('../../lib/agentsStore', () => ({
   useAgentsList: () => [{ id: 'chief', name: 'Chief of Staff', isMain: true }],

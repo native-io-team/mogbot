@@ -88,7 +88,9 @@ Ship Studio is a desktop app for web developers that provides:
     Don't add a new shared file without accepting that, or adding a cross-process lock
 - **Read-only from Ship Studio:** with no projects folder set here, the Default workspace starts
   at the folder Ship Studio's Default workspace uses (read from its `app_state.json`, never
-  written; `utils::ship_studio_projects_root`)
+  written; `utils::ship_studio_projects_root`). Agents → Import → "From Ship Studio" copies its
+  agents in (`agents/other_app.rs`, `OTHER_APP_NAME` is the one place the UI gets its name):
+  read-only on its side, secrets never copied, routines arrive paused (see docs/agents.md)
 - **Each other's agents:** both apps' preview MCP servers are registered in shared agent configs.
   Agents we spawn are told to ignore Ship Studio's (`preview_isolation.rs`: Claude
   `--disallowedTools=mcp__shipstudio-preview`; Codex `-c mcp_servers.shipstudio-preview.enabled=false`

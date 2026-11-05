@@ -10,7 +10,7 @@
  * @module components/agents/ImportPastePanel
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { TextArea } from '../primitives/TextField';
@@ -31,7 +31,9 @@ const PREVIEW_DELAY_MS = 200;
 
 export interface ImportResult {
   summary: ImportSummary;
-  agents: PasteImportAgent[];
+  agents: Pick<PasteImportAgent, 'name' | 'isMain' | 'color'>[];
+  /** Shown in the done state under the shared summary. */
+  extra?: ReactNode;
 }
 
 interface ImportPastePanelProps {

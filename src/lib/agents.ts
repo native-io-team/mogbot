@@ -788,6 +788,59 @@ export const getPasteImportPrompt = () => invoke<string>('agents_import_paste_pr
 export const previewPasteImport = (text: string) =>
   invoke<PasteImportPreview>('agents_import_paste_preview', { text });
 export const importPaste = (text: string) => invoke<ImportSummary>('agents_import_paste', { text });
+/* ------------------------------------------ import from the other app */
+
+/**
+ * The app this one grew out of, by name: the one compat source for it in the
+ * UI. Mirrors `OTHER_APP_NAME` in `src-tauri/src/agents/other_app.rs`, which
+ * also knows where its agents live on disk.
+ */
+export const OTHER_APP_NAME = 'Ship Studio';
+
+/** What happens to one of its agents (`other_app::Plan`). */
+export type OtherAppPlan = 'new' | 'merge' | 'imported' | 'skip';
+
+export interface OtherAppAgent {
+  sourceId: string;
+  name: string;
+  role: string;
+  color: string;
+  isMain: boolean;
+  plan: OtherAppPlan;
+  /** Why it's skipped, or that it's already here. */
+  reason?: string;
+  instructions: string;
+  memory: string[];
+  messages: number;
+  attachments: number;
+  routines: { schedule: string; what: string }[];
+  /** Names of secrets it had saved there; they don't come across. */
+  secrets: string[];
+  project?: string;
+  projectMissing: boolean;
+}
+
+export interface OtherAppPreview {
+  appName: string;
+  source?: string;
+  agents: OtherAppAgent[];
+}
+
+export interface OtherAppSummary extends ImportSummary {
+  appName: string;
+  already: string[];
+  routinesPaused: number;
+  messages: number;
+  secretsLeft: { agent: string; secrets: string[] }[];
+  filesSkipped: string[];
+}
+
+/** Null when the other app isn't on this Mac or has no agents. Reads only. */
+export const previewOtherAppImport = () =>
+  invoke<OtherAppPreview | null>('agents_other_app_preview');
+/** Copies its team in; never writes to its folder. */
+export const importFromOtherApp = () => invoke<OtherAppSummary>('agents_other_app_import');
+
 export const previewSchedule = (when: string) =>
   invoke<SchedulePreview>('agents_schedule_preview', { when });
 export const createCheckIn = (agentId: string, when: string, note: string) =>

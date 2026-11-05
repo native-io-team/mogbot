@@ -10,6 +10,11 @@
  *
  * Both end in the same merge (`agents/import.rs`).
  *
+ * A third tab appears when the other app this one grew out of
+ * (`OTHER_APP_NAME`) has agents on this Mac: they're read straight from its
+ * folder and copied in whole (`agents/other_app.rs`). It leads whenever it
+ * has someone left to bring over.
+ *
  * @module components/agents/ImportAgentsModal
  */
 
@@ -18,13 +23,19 @@ import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
 import { useOpenModal } from '../../contexts/ModalContext';
-import { getImportPrompt } from '../../lib/agents';
+import {
+  getImportPrompt,
+  OTHER_APP_NAME,
+  previewOtherAppImport,
+  type OtherAppPreview,
+} from '../../lib/agents';
 import { useAgentsList } from '../../lib/agentsStore';
 import { getRemoteAccessStatus } from '../../lib/remoteAccess';
 import { ImportPastePanel, type ImportResult } from './ImportPastePanel';
 import { ImportDone, ImportStep, MessageCard } from './ImportParts';
+import { arriving, OtherAppImportPanel } from './OtherAppImportPanel';
 
-type ImportPath = 'paste' | 'connected';
+export type ImportPath = 'paste' | 'connected' | 'otherApp';
 
 interface ImportAgentsModalProps {
   isOpen: boolean;
@@ -32,6 +43,8 @@ interface ImportAgentsModalProps {
   onClose: (imported: boolean) => void;
   /** Closes the modal and opens this agent's conversation. */
   onOpenAgent: (agentId: string) => void;
+  /** Open on this path when it's available (the palette's "from the other app"). */
+  initialPath?: ImportPath | null;
 }
 
 function ConnectedPanel({ connected, onClose }: { connected: boolean; onClose: () => void }) {
@@ -84,8 +97,14 @@ function ConnectedPanel({ connected, onClose }: { connected: boolean; onClose: (
   );
 }
 
-export function ImportAgentsModal({ isOpen, onClose, onOpenAgent }: ImportAgentsModalProps) {
+export function ImportAgentsModal({
+  isOpen,
+  onClose,
+  onOpenAgent,
+  initialPath,
+}: ImportAgentsModalProps) {
   const [path, setPath] = useState<ImportPath>('paste');
+  const [otherApp, setOtherApp] = useState<OtherAppPreview | null>(null);
   const [connected, setConnected] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const main = useAgentsList().find((a) => a.isMain);
@@ -119,21 +138,26 @@ export function ImportAgentsModal({ isOpen, onClose, onOpenAgent }: ImportAgents
     onClose(done);
   };
 
-  // Each time it opens: paste works anywhere, so it leads unless remote access is on.
+  // Each time it opens: the other app's team leads when there's someone left
+  // to bring over (or the palette asked for it); otherwise paste works
+  // anywhere, so it leads unless remote access is on.
   useEffect(() => {
     if (!isOpen) return;
     let live = true;
-    void getRemoteAccessStatus()
-      .then((s) => {
-        if (!live) return;
-        setConnected(s.enabled);
-        setPath(s.enabled ? 'connected' : 'paste');
-      })
-      .catch(() => undefined);
+    void Promise.all([
+      getRemoteAccessStatus().catch(() => null),
+      previewOtherAppImport().catch(() => null),
+    ]).then(([remote, other]) => {
+      if (!live) return;
+      setConnected(!!remote?.enabled);
+      setOtherApp(other);
+      const leads = !!other && (arriving(other).length > 0 || initialPath === 'otherApp');
+      setPath(leads ? 'otherApp' : remote?.enabled ? 'connected' : 'paste');
+    });
     return () => {
       live = false;
     };
-  }, [isOpen]);
+  }, [isOpen, initialPath]);
 
   return (
     <ModalFrame
@@ -146,7 +170,7 @@ export function ImportAgentsModal({ isOpen, onClose, onOpenAgent }: ImportAgents
       {result ? (
         <>
           <div className="agents-import__body" ref={doneRef} tabIndex={-1}>
-            <ImportDone summary={result.summary} agents={result.agents} />
+            <ImportDone summary={result.summary} agents={result.agents} extra={result.extra} />
           </div>
           <footer className="agents-import__footer agents-import__footer--done">
             <Button variant="secondary" onClick={close}>
@@ -173,9 +197,15 @@ export function ImportAgentsModal({ isOpen, onClose, onOpenAgent }: ImportAgents
             appearance="underline"
             aria-label="How to import"
           >
+            {otherApp && <TabsTab value="otherApp">From {OTHER_APP_NAME}</TabsTab>}
             <TabsTab value="paste">Paste a reply</TabsTab>
             <TabsTab value="connected">Connected assistant</TabsTab>
           </TabsList>
+          {otherApp && (
+            <TabsPanel value="otherApp">
+              <OtherAppImportPanel preview={otherApp} onCancel={close} onDone={setResult} />
+            </TabsPanel>
+          )}
           <TabsPanel value="paste">
             <ImportPastePanel onCancel={close} onDone={setResult} />
           </TabsPanel>

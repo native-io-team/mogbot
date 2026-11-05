@@ -728,3 +728,44 @@
     transition: none;
   }
 }
+
+/* ------------------------------------------- from the other app here */
+
+/* An agent that won't come across (already here, or can't): present, quieter. */
+.agents-import-agent[data-away] .agents-import-agent__name-text,
+.agents-import-agent[data-away] .agents-import-agent__role {
+  color: var(--text-muted);
+}
+
+.agents-import-chip[data-kind='skip'] {
+  color: var(--accent-warning);
+  background: rgba(var(--accent-warning-rgb), 0.12);
+}
+
+/* What stays behind, said before the import: informational, not a problem. */
+.agents-import-behind {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-card);
+}
+
+.agents-import-behind__icon {
+  flex: none;
+  margin-top: var(--spacing-3xs);
+  color: var(--text-muted);
+}
+
+.agents-import-behind ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

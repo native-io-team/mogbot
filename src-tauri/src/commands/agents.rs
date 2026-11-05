@@ -798,6 +798,39 @@ pub async fn agents_import_paste(
     .map_err(agents::err_other)?
 }
 
+/// The other app's agents on this Mac, and what importing them would do;
+/// `None` when it isn't here or has none. Reads only.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_other_app_preview() -> Result<Option<agents::other_app::Preview>, CommandError>
+{
+    tokio::task::spawn_blocking(agents::other_app::preview)
+        .await
+        .map_err(agents::err_other)?
+}
+
+/// Copy the other app's team in (`agents::other_app`). Never writes to its folder.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_other_app_import(
+    app: AppHandle,
+) -> Result<agents::other_app::Summary, CommandError> {
+    let summary = tokio::task::spawn_blocking(|| {
+        let root = agents::other_app::find_source().ok_or_else(|| {
+            CommandError::expected(format!(
+                "There are no {} agents on this Mac to import.",
+                agents::other_app::OTHER_APP_NAME
+            ))
+        })?;
+        agents::other_app::import_from(&root)
+    })
+    .await
+    .map_err(agents::err_other)??;
+    let _ = app.emit(agents::runner::EVENT_REGISTRY, ());
+    agents::tray::mark_used(&app);
+    Ok(summary)
+}
+
 /// What a `when` phrase means, as the user types it in the schedule popover:
 /// the resolved first time and, for a routine, how it repeats (structured, so
 /// the UI words it the same way it words the list). A parse error comes

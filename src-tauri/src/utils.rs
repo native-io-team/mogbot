@@ -1157,7 +1157,7 @@ static SHIP_STUDIO_ROOT_CACHE: RwLock<Option<Option<std::path::PathBuf>>> = RwLo
 /// The projects folder Ship Studio's Default workspace uses, when it set one
 /// that still exists. Its own Default workspace's folder wins over its legacy
 /// top-level setting, the same order [`account_root_in`] applies to ours.
-fn ship_studio_projects_root() -> Option<std::path::PathBuf> {
+pub(crate) fn ship_studio_projects_root() -> Option<std::path::PathBuf> {
     if let Some(cached) = SHIP_STUDIO_ROOT_CACHE
         .read()
         .unwrap_or_else(|e| e.into_inner())

@@ -22,6 +22,7 @@
 //! - [`failure`]: a failed turn in Agents' own words (usage limit, signed out)
 //! - [`files`]: files an agent shares back, the Files list, paths in prose
 //! - [`import`]: bring an existing setup over from another assistant
+//! - [`other_app`]: a one-time, read-only copy of the team from the app this grew out of
 //! - [`schedule`]: check-ins and routines that wake an agent on time
 //! - [`project`]: binding an agent to a project, and what its turns changed there
 //! - [`procs`]: a turn's whole process tree, so Stop and quit leave nothing running
@@ -50,6 +51,7 @@ pub mod import;
 pub mod mcp;
 pub mod memory;
 pub mod notify;
+pub mod other_app;
 pub mod paste;
 pub mod permissions;
 pub mod procs;

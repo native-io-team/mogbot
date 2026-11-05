@@ -5,7 +5,7 @@
  * @module commands/useAgentsCommands
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import {
   AgentsIcon,
@@ -20,11 +20,11 @@ import { useOptionalToast } from '../contexts/ToastContext';
 import { setStayOn, type StayOnChange } from '../lib/remoteAccess';
 import { useAgentsSelector, type AgentsState } from '../lib/agentsStore';
 import type { AppView } from '../lib/types';
-import { AGENT_EVENTS, TEAM_ID } from '../lib/agents';
+import { AGENT_EVENTS, OTHER_APP_NAME, previewOtherAppImport, TEAM_ID } from '../lib/agents';
 
 type AgentsIntent =
   | { kind: 'new' }
-  | { kind: 'import' }
+  | { kind: 'import'; from?: 'otherApp' }
   | { kind: 'apps' }
   | { kind: 'search' }
   | { kind: 'open'; agentId: string };
@@ -43,7 +43,8 @@ export function requestAgentsIntent(intent: AgentsIntent) {
 /** Agents mode consumes intents with this. */
 export function useAgentsIntents(handlers: {
   onNewAgent: () => void;
-  onImportAgents: () => void;
+  /** `otherApp`: open on the other app's team when it's on this Mac. */
+  onImportAgents: (from?: 'otherApp') => void;
   onApps: () => void;
   onOpenAgent: (agentId: string) => void;
   onSearch: () => void;
@@ -52,7 +53,7 @@ export function useAgentsIntents(handlers: {
   useEffect(() => {
     const listener = (intent: AgentsIntent) => {
       if (intent.kind === 'new') onNewAgent();
-      else if (intent.kind === 'import') onImportAgents();
+      else if (intent.kind === 'import') onImportAgents(intent.from);
       else if (intent.kind === 'apps') onApps();
       else if (intent.kind === 'search') onSearch();
       else onOpenAgent(intent.agentId);
@@ -112,6 +113,18 @@ const STAY_ON_COMMANDS: { id: string; title: string; change: StayOnChange; done:
 export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => void }) {
   const agents = useAgentsSelector(selectAgents, sameNames);
   const { showToast } = useOptionalToast();
+  // Whether the other app has agents on this Mac, asked once: it gates the
+  // palette's "Import agents from …", which only means something then.
+  const [otherApp, setOtherApp] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void previewOtherAppImport()
+      .then((p) => live && setOtherApp(!!p))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
   // A clicked notification (the backend already focused this window): open that agent.
   useEffect(() => {
     const unlisten = listen<string>(AGENT_EVENTS.open, (e) => {
@@ -185,6 +198,18 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         },
       },
       {
+        id: 'agents.importOtherApp',
+        title: `Import agents from ${OTHER_APP_NAME}…`,
+        icon: <DownloadIcon size={14} />,
+        category: 'navigation',
+        when: () => otherApp,
+        keywords: ['agents', 'migrate', 'bring over', 'team', 'move', 'copy'],
+        run: () => {
+          requestAgentsIntent({ kind: 'import', from: 'otherApp' });
+          setView('agents');
+        },
+      },
+      {
         id: 'agents.apps',
         title: 'Connect an app for agents…',
         icon: <PlugIcon size={14} />,
@@ -238,6 +263,6 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         },
       })),
     ],
-    [setView, agents, showToast]
+    [setView, agents, showToast, otherApp]
   );
 }

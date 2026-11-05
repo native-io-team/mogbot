@@ -110,7 +110,7 @@ impl ImportSummary {
 }
 
 /// Append imported memory under the agent's `## Memory` section.
-fn add_memory(id: &str, memory: &str, source: &str) -> Result<(), CommandError> {
+pub(crate) fn add_memory(id: &str, memory: &str, source: &str) -> Result<(), CommandError> {
     let memory = memory.trim();
     if memory.is_empty() {
         return Ok(());

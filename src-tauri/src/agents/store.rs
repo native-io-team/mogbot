@@ -674,16 +674,56 @@ pub fn write_instructions(
 pub fn read_instructions(id: &str) -> Result<String, CommandError> {
     let path = agent_home(id)?.join("CLAUDE.md");
     let raw = std::fs::read_to_string(path).unwrap_or_default();
+    Ok(instructions_of(&raw))
+}
+
+/// The `## Instructions` section of a CLAUDE.md, as [`write_instructions`] lays it out.
+pub fn instructions_of(raw: &str) -> String {
     let start = raw
         .find("## Instructions")
         .map(|i| i + "## Instructions".len());
     let Some(start) = start else {
-        return Ok(String::new());
+        return String::new();
     };
-    let end = super::memory::section_start(&raw)
+    let end = super::memory::section_start(raw)
         .filter(|&i| i >= start)
         .unwrap_or(raw.len());
-    Ok(raw[start..end].trim().to_string())
+    raw[start..end].trim().to_string()
+}
+
+/// Add an agent brought over whole from another app (`other_app`): its id,
+/// avatar and settings as they were there. Refused if the id or the name is
+/// already taken, or it would be a second Chief of Staff. Its home must
+/// already be in place.
+pub fn insert_imported(agent: Agent) -> Result<Agent, CommandError> {
+    validate_id(&agent.id)?;
+    validate_name(&agent.name)?;
+    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut registry = read_registry()?;
+    if registry.agents.iter().any(|a| a.id == agent.id) {
+        return Err(CommandError::expected("That agent is already here."));
+    }
+    if registry
+        .agents
+        .iter()
+        .any(|a| a.name.eq_ignore_ascii_case(&agent.name))
+    {
+        return Err(super::err_invalid(
+            "name",
+            format!("There's already an agent called {}.", agent.name),
+        ));
+    }
+    if agent.is_main {
+        return Err(CommandError::expected("There's already a Chief of Staff."));
+    }
+    registry.agents.push(agent.clone());
+    write_registry(&registry)?;
+    Ok(agent)
+}
+
+/// Write a small file beside the registry, atomically (the import ledger).
+pub(crate) fn write_beside(name: &str, bytes: &[u8]) -> Result<(), CommandError> {
+    write_atomic(&agents_root()?.join(name), bytes)
 }
 
 pub fn delete(id: &str) -> Result<Agent, CommandError> {
@@ -796,6 +836,78 @@ pub fn append_message(message: &AgentMessage) -> Result<(), CommandError> {
     let lock = log_lock(&message.agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     append_line(&log_path(&message.agent_id)?, message)
+}
+
+/// Fold another conversation's lines (already JSON, one message each) into
+/// this agent's log in time order, and its card answers into
+/// `approvals.jsonl`. The one place a log is rewritten rather than appended
+/// to: an import merging a whole earlier conversation, which appended would
+/// read as if it all happened after this one. A line with no readable `ts`
+/// keeps its place after the line before it. Written atomically.
+pub fn merge_log_lines(
+    agent_id: &str,
+    lines: Vec<String>,
+    answers: Vec<String>,
+) -> Result<(), CommandError> {
+    let lock = log_lock(agent_id);
+    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    let path = log_path(agent_id)?;
+    let existing = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(super::err_io(e)),
+    };
+    let keyed = |lines: Vec<String>| -> Vec<(i64, String)> {
+        let mut last = i64::MIN;
+        lines
+            .into_iter()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| {
+                if let Some(ts) = serde_json::from_str::<serde_json::Value>(&l)
+                    .ok()
+                    .and_then(|v| v.get("ts").and_then(serde_json::Value::as_i64))
+                {
+                    last = ts;
+                }
+                (last, l)
+            })
+            .collect()
+    };
+    let mut ours = keyed(existing.lines().map(str::to_string).collect()).into_iter();
+    let mut theirs = keyed(lines).into_iter();
+    let (mut a, mut b) = (ours.next(), theirs.next());
+    let mut out = String::with_capacity(existing.len());
+    loop {
+        let take_ours = match (&a, &b) {
+            (None, None) => break,
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (Some((ta, _)), Some((tb, _))) => ta <= tb,
+        };
+        let line = if take_ours {
+            std::mem::replace(&mut a, ours.next())
+        } else {
+            std::mem::replace(&mut b, theirs.next())
+        };
+        if let Some((_, l)) = line {
+            out.push_str(l.trim_end_matches(['\r', '\n']));
+            out.push('\n');
+        }
+    }
+    write_atomic(&path, out.as_bytes())?;
+    if !answers.is_empty() {
+        let answers_path = answers_path(agent_id)?;
+        let mut raw = std::fs::read_to_string(&answers_path).unwrap_or_default();
+        if !raw.is_empty() && !raw.ends_with('\n') {
+            raw.push('\n');
+        }
+        for line in answers.iter().filter(|l| !l.trim().is_empty()) {
+            raw.push_str(line.trim_end_matches(['\r', '\n']));
+            raw.push('\n');
+        }
+        write_atomic(&answers_path, raw.as_bytes())?;
+    }
+    Ok(())
 }
 
 /// True for an empty file, or one whose last byte is a newline.

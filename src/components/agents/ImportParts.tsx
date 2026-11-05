@@ -12,13 +12,14 @@ import { Button } from '../primitives/Button';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useAgentsList } from '../../lib/agentsStore';
 import type { ImportSummary, PasteImportAgent, PasteImportPreview } from '../../lib/agents';
+import { BRAND } from '../../lib/brand';
 import { AgentAvatar } from './AgentAvatar';
 
 export const plural = (n: number, word: string) =>
   `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 
 /** "and"-joined, the way a person lists names: "A", "A and B", "A, B and C". */
-const listOf = (names: string[]) =>
+export const listOf = (names: string[]) =>
   names.length < 2
     ? names.join('')
     : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
@@ -294,11 +295,14 @@ export function ImportPreview({ preview }: { preview: PasteImportPreview }) {
 
 interface ImportDoneProps {
   summary: ImportSummary;
-  agents: PasteImportAgent[];
+  /** Only `name`, `isMain` and `color` are read. */
+  agents: Pick<PasteImportAgent, 'name' | 'isMain' | 'color'>[];
+  /** What this path has to say beyond the shared summary. */
+  extra?: ReactNode;
 }
 
 /** A short celebration, what happened in one line, and what to do next. */
-export function ImportDone({ summary, agents }: ImportDoneProps) {
+export function ImportDone({ summary, agents, extra }: ImportDoneProps) {
   const team = useAgentsList();
   const mainName = team.find((a) => a.isMain)?.name ?? 'Chief of Staff';
   const skipped = new Set(summary.skipped.map(([name]) => name));
@@ -358,9 +362,10 @@ export function ImportDone({ summary, agents }: ImportDoneProps) {
           ]}
         />
       )}
+      {extra}
       <p className="agents-import-done__next">
         <strong>Say hi to your team.</strong> They start when you message them; routines run while
-        Ship Studio is open.
+        {` ${BRAND.name}`} is open.
       </p>
     </div>
   );
