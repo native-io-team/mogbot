@@ -101,5 +101,9 @@ export default defineConfig(async (env) => {
       },
     },
     server: { port: PORT, strictPort: true, host: '127.0.0.1' },
+    // Own dependency cache: the harness aliases Tauri modules to stubs, so a
+    // shared `node_modules/.vite` let it overwrite the dev server's pre-bundles
+    // and the real app failed to load main.tsx (504 "outdated optimize dep").
+    cacheDir: 'node_modules/.vite-harness',
   } satisfies UserConfig);
 });
