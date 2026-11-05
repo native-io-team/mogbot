@@ -285,7 +285,7 @@
 
 .sidebar-row-action:hover:not(:disabled) {
   background: var(--button-surface-hover);
-  color: var(--text-inverse);
+  color: var(--text-white);
 }
 
 .sidebar-row-action:disabled {

@@ -35,3 +35,24 @@ for (const [key, value] of Object.entries(scenario.storage ?? {})) {
     // its default state, and the screenshot shows that honestly.
   }
 }
+
+/**
+ * `?theme=light|dark|system` forces the colour theme for a capture
+ * (`harness-capture.mjs --theme light`). Seeded as the boot cache, so it takes
+ * the same path a real launch does; the fake backend's `get_app_theme`
+ * answers the same value, so nothing reconciles it away.
+ */
+export const harnessTheme = (() => {
+  const value = params.get('theme');
+  return value === 'light' || value === 'dark' || value === 'system' ? value : null;
+})();
+
+{
+  try {
+    // Unforced captures stay dark (the base fixture's saved theme), whatever
+    // headless Chrome reports for prefers-color-scheme.
+    localStorage.setItem('app.theme', harnessTheme ?? 'dark');
+  } catch {
+    // Storage blocked: the page renders dark, and the capture shows that.
+  }
+}

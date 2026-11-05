@@ -27,6 +27,7 @@
  *   node scripts/harness-capture.mjs --all
  *   node scripts/harness-capture.mjs hosting- # filter by id prefix
  *   node scripts/harness-capture.mjs --out /tmp/shots
+ *   node scripts/harness-capture.mjs --all --theme light
  *
  * Exits non-zero when anything crashed, never settled, or left Tauri commands
  * unmocked — so it gates CI as well as feeding a review.
@@ -71,8 +72,19 @@ const flag = (name) => args.includes(name);
 const outIdx = args.indexOf('--out');
 const outValueIdx = outIdx === -1 ? -1 : outIdx + 1;
 const outDir = path.resolve(outIdx === -1 ? 'harness/shots' : args[outValueIdx]);
-const filter = args.filter((a, i) => !a.startsWith('--') && i !== outValueIdx)[0] ?? '';
+const themeValueIdx = args.includes('--theme') ? args.indexOf('--theme') + 1 : -1;
+const filter =
+  args.filter((a, i) => !a.startsWith('--') && i !== outValueIdx && i !== themeValueIdx)[0] ??
+  '';
 const wantCommands = flag('--commands') || flag('--all');
+// `--theme light|dark|system` forces the colour theme for every capture
+// (src/harness/resetStorage.ts reads it). Unforced captures are dark.
+const theme = themeValueIdx === -1 ? null : args[themeValueIdx];
+if (theme !== null && !['light', 'dark', 'system'].includes(theme)) {
+  console.error(`--theme must be light, dark or system (got ${theme ?? 'nothing'})`);
+  process.exit(2);
+}
+const THEME_QS = theme ? `&theme=${theme}` : '';
 const wantScenarios = !flag('--commands') || flag('--all');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -628,7 +640,7 @@ async function main() {
 
   // Ask the running harness what exists, so this script never keeps a second,
   // drifting copy of either list.
-  const probe = await newPage(`${HARNESS_ORIGIN}/harness.html?chrome=off`);
+  const probe = await newPage(`${HARNESS_ORIGIN}/harness.html?chrome=off${THEME_QS}`);
   await waitFor(probe.page, 'window.__harness', 20_000, 'the harness module to load');
   const allScenarios = JSON.parse(
     await probe.page.eval(
@@ -643,7 +655,7 @@ async function main() {
     for (const s of allScenarios.filter((s) => s.id.startsWith(filter))) {
       const r = await capture({
         url:
-          `${HARNESS_ORIGIN}/harness.html?chrome=off&scenario=${s.id}` +
+          `${HARNESS_ORIGIN}/harness.html?chrome=off${THEME_QS}&scenario=${s.id}` +
           (s.command ? `&command=${encodeURIComponent(s.command)}` : ''),
         file: path.join(outDir, `${s.id}.png`),
         clipSelector: s.clipSelector,
@@ -670,14 +682,14 @@ async function main() {
 
     for (const ctx of contexts) {
       const base = await capture({
-        url: `${HARNESS_ORIGIN}/harness.html?chrome=off&scenario=${ctx.scenario}`,
+        url: `${HARNESS_ORIGIN}/harness.html?chrome=off${THEME_QS}&scenario=${ctx.scenario}`,
         file: path.join(outDir, 'commands', `_baseline-${ctx.name}.png`),
         identity,
         label: `baseline-${ctx.name}`,
       });
 
       const listPage = await newPage(
-        `${HARNESS_ORIGIN}/harness.html?chrome=off&scenario=${ctx.scenario}`
+        `${HARNESS_ORIGIN}/harness.html?chrome=off${THEME_QS}&scenario=${ctx.scenario}`
       );
       await waitFor(listPage.page, 'window.__harnessReady', 25_000, 'the app to settle');
       const cmds = JSON.parse(
@@ -697,7 +709,7 @@ async function main() {
         }
 
         const r = await capture({
-          url: `${HARNESS_ORIGIN}/harness.html?chrome=off&scenario=${ctx.scenario}&command=${encodeURIComponent(cmd.id)}`,
+          url: `${HARNESS_ORIGIN}/harness.html?chrome=off${THEME_QS}&scenario=${ctx.scenario}&command=${encodeURIComponent(cmd.id)}`,
           file: path.join(outDir, 'commands', `${cmd.id}.png`),
           identity,
           label: cmd.id,

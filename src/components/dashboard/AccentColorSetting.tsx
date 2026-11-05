@@ -27,6 +27,7 @@ import {
   isAccentKey,
 } from '../../lib/accent';
 import { asCommandError, formatCommandError } from '../../lib/errors';
+import { useResolvedTheme } from '../../lib/theme';
 
 const selectChief = (s: { agents: { id: string; isMain: boolean; color: string }[] }) =>
   s.agents.find((a) => a.isMain) ?? null;
@@ -37,6 +38,8 @@ export const ACCENT_COMMIT_DELAY_MS = 600;
 export function AccentColorSetting() {
   const { showToast } = useOptionalToast();
   const chief = useAgentsSelector(selectChief);
+  // The swatches are painted in the current theme's version of each colour.
+  const theme = useResolvedTheme();
   // Shown immediately on click; the registry confirms it a moment later.
   const [pending, setPending] = useState<AgentColor | null>(null);
   // Moved to with the arrow keys and painted, but not saved yet.
@@ -119,7 +122,7 @@ export function AccentColorSetting() {
               tabIndex={selected ? 0 : -1}
               disabled={!chief}
               className="settings-accent-swatch"
-              {...accentScopeProps(key)}
+              {...accentScopeProps(key, theme)}
               onClick={() => void choose(key)}
             >
               {selected && <CheckIcon size={12} aria-hidden="true" />}

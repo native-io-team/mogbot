@@ -269,8 +269,8 @@
 }
 
 .ss-tree-row.affected {
-  background: color-mix(in srgb, var(--color-orange-400) 14%, transparent);
-  color: var(--color-orange-400);
+  background: color-mix(in srgb, var(--syntax-class) 14%, transparent);
+  color: var(--syntax-class);
 }
 
 /* Tree drop zones are deliberately richer than the ordinary sortable gap:

@@ -19,7 +19,7 @@ import { createWebLinksAddon } from '../../lib/terminalLinks';
 import { loadNerdFonts } from '../../lib/fonts';
 import { logger } from '../../lib/logger';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { createTerminalOptions } from '../terminal/terminalTheme';
+import { createTerminalOptions, followAppTheme } from '../terminal/terminalTheme';
 import {
   workspaceConnectStart,
   workspaceConnectWrite,
@@ -74,6 +74,7 @@ export function WorkspaceConnectTerminal({
         ...createTerminalOptions('connection'),
         allowProposedApi: true,
       });
+      followAppTheme(term, 'connection');
 
       fitAddon = new FitAddon();
       const unicode11Addon = new Unicode11Addon();

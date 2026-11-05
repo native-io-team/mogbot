@@ -22,6 +22,13 @@
   --mig-diff-mark: #ff00c8;
 }
 
+/* Deeper on light, so a band reads as text and as a fill on white. */
+:root[data-theme='light'] {
+  --mig-band-close: #2e8a62;
+  --mig-band-off: #9a6200;
+  --mig-band-broken: #b8443a;
+}
+
 /*
  * The panel holds two full-page screenshots side by side. At the default modal
  * width each pane is narrower than a phone, which makes the comparison — the

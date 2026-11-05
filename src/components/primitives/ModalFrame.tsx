@@ -280,7 +280,13 @@ function focusInitialElement(
       // reachable by arrow keys, never where a dialog should start.
       (element) => element.tabIndex >= 0 && !element.closest('.modal-frame-header')
     ) ?? null;
-  if (focusElement(marked) || focusElement(firstFocusable)) return;
+  // A dialog that opens on its tabs (Settings) starts on the dialog itself.
+  // Opened from the keyboard (⌘K), focusing the selected tab painted its
+  // ring like a selection box, and skipping to the first control in the
+  // panel ringed a segment that wasn't the selected one. Tab enters the
+  // tablist from the dialog surface.
+  const startsOnTabs = firstFocusable?.getAttribute('role') === 'tab';
+  if (focusElement(marked) || (!startsOnTabs && focusElement(firstFocusable))) return;
   content.focus({ preventScroll: true });
 }
 

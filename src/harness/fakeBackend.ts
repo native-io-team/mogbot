@@ -26,6 +26,7 @@ import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 import type { CommandHandler, CommandMap, Scenario } from './types';
 import { baseCommands } from './scenarios/base';
 import { recordUnhandled } from './unhandled';
+import { harnessTheme } from './resetStorage';
 
 /** Tauri plugin channels answered inertly so boot never dies on them. */
 const PLUGIN_DEFAULTS: Record<string, unknown> = {
@@ -74,6 +75,8 @@ export function installFakeBackend(scenario: Scenario): void {
   mockWindows('main');
 
   const commands: CommandMap = { ...baseCommands, ...scenario.commands };
+  // A forced capture theme wins over any scenario's saved one.
+  if (harnessTheme) commands.get_app_theme = harnessTheme;
 
   mockIPC(
     (cmd, args) => {

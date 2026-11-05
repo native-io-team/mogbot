@@ -114,6 +114,54 @@ describe('ModalFrame', () => {
     expect(screen.getByRole('button', { name: 'Shortcuts' })).toHaveFocus();
   });
 
+  it('focuses the dialog, not the selected tab, when it opens on tabs', () => {
+    const body = (
+      <>
+        <div role="tablist">
+          <button type="button" role="tab" aria-selected="true" tabIndex={0}>
+            Appearance
+          </button>
+          <button type="button" role="tab" aria-selected="false" tabIndex={-1}>
+            Dock
+          </button>
+        </div>
+        <button type="button">Light</button>
+      </>
+    );
+    const { rerender } = render(
+      <ModalFrame isOpen={false} onClose={vi.fn()} title="Settings">
+        {body}
+      </ModalFrame>
+    );
+    rerender(
+      <ModalFrame isOpen onClose={vi.fn()} title="Settings">
+        {body}
+      </ModalFrame>
+    );
+    expect(screen.getByRole('dialog')).toHaveFocus();
+  });
+
+  it('focuses the dialog when its only controls are tabs', () => {
+    const body = (
+      <div role="tablist">
+        <button type="button" role="tab" aria-selected="true" tabIndex={0}>
+          Appearance
+        </button>
+      </div>
+    );
+    const { rerender } = render(
+      <ModalFrame isOpen={false} onClose={vi.fn()} title="Settings">
+        {body}
+      </ModalFrame>
+    );
+    rerender(
+      <ModalFrame isOpen onClose={vi.fn()} title="Settings">
+        {body}
+      </ModalFrame>
+    );
+    expect(screen.getByRole('dialog')).toHaveFocus();
+  });
+
   it('focuses the dialog itself rather than the close button when the body has no control', () => {
     const { rerender } = render(
       <ModalFrame isOpen={false} onClose={vi.fn()} title="Notice" showCloseButton>

@@ -6,7 +6,25 @@
     <title>Ship Studio harness</title>
     <style>
       html, body { margin: 0; padding: 0; background: #1e1e1e; }
+      html[data-theme='light'], html[data-theme='light'] body { background: #f5f5f5; }
     </style>
+    <script>
+      // index.html's theme boot, fed by `?theme=` (resetStorage.ts seeds the
+      // same cache key a moment later, before the app reads it).
+      (function () {
+        var forced = new URLSearchParams(location.search).get('theme');
+        var pref = forced === 'light' || forced === 'dark' ? forced : 'system';
+        var theme =
+          pref === 'system'
+            ? window.matchMedia && !window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'light'
+              : 'dark'
+            : pref;
+        if (!forced) theme = 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
