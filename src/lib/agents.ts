@@ -1012,7 +1012,7 @@ export const handBackAgent = (agentId: string, force = false) =>
 
 /** "Claude Code will ask…": the one thing to know before the terminal opens. */
 export const TRUST_HINT =
-  'Claude Code will ask whether to trust this folder — choose “Yes, proceed”. Choosing No ends the take-over.';
+  'Claude Code will ask whether to trust this folder — choose “Yes, proceed”. Choosing No hands it back.';
 
 /** What driving it means for edits, said once, on the banner. */
 export function takeoverPolicy(takeover: AgentTakeover, name: string): string {
@@ -1563,7 +1563,20 @@ export function failedTurn(agent: Agent): Failure | null {
 }
 
 /** Needs you, or its last turn didn't finish: what the "next needing you" key visits. */
-export const needsAttention = (agent: Agent) => needsYou(agent) || failedTurn(agent) !== null;
+/**
+ * Waiting on you: a request, or a turn that failed and needs you to act. A
+ * usage limit isn't one: it resets by itself and is quiet (docs/agents.md,
+ * "amber means needs you, only"), so it isn't counted in "Needs you · N".
+ */
+export const needsAttention = (agent: Agent) => {
+  if (needsYou(agent)) return true;
+  const failure = failedTurn(agent);
+  return failure !== null && failure.kind !== 'usage_limit';
+};
+
+/** Stopped by a usage limit: paused until it resets, not waiting on you. */
+export const usageLimited = (agent: Agent) =>
+  !needsYou(agent) && failedTurn(agent)?.kind === 'usage_limit';
 
 /** The text of a failure's first clause: "Didn't finish: Couldn't start Claude Code". */
 export function failureLine(failure: Failure, preview: string | null): string {
@@ -2028,6 +2041,8 @@ export interface TeamSummary {
   working: Agent[];
   /** Cards to answer, or the failed turn's line (newest in its chat) to act on. */
   needsYou: { agent: Agent; approvals: AgentMessage[]; failure: AgentMessage | null }[];
+  /** Stopped by a usage limit, with the line that says when it resets. */
+  paused: { agent: Agent; failure: AgentMessage | null }[];
   scheduled: { agent: Agent; checkIn: CheckIn }[];
   replies: { agent: Agent; message: AgentMessage }[];
 }
@@ -2069,6 +2084,11 @@ export function summarizeTeam(
         approvals: lines.filter((m) => m.approval?.status === 'pending'),
         failure: failedTurn(agent) && last?.kind === 'error' ? last : null,
       };
+    }),
+    paused: shown.filter(usageLimited).map((agent) => {
+      const lines = messages[agent.id] ?? [];
+      const last = lines[lines.length - 1];
+      return { agent, failure: last?.kind === 'error' ? last : null };
     }),
     scheduled,
     replies,

@@ -41,8 +41,6 @@ import {
   workSummary,
 } from '../../lib/agentWork';
 import { MessageAttachments } from './AgentAttachments';
-import { useAgentProjects } from './AgentProject';
-import { TakeOverButton } from './AgentTakeover';
 
 type IconComponent = ComponentType<{ size?: number }>;
 
@@ -122,27 +120,6 @@ function StepList({ work, agent, live }: StepListProps) {
         </p>
       )}
     </>
-  );
-}
-
-/**
- * A real way in, or nothing: the project a bound agent works in opens in the
- * workspace, where its session and preview are.
- */
-function OpenProject({ agent }: { agent: Agent }) {
-  const ctx = useAgentProjects();
-  if (!agent.project || !ctx) return null;
-  const project = agent.project;
-  const name = ctx.projects?.find((p) => p.path === project)?.name;
-  return (
-    <TextButton
-      tabIndex={0}
-      className="agent-work__open"
-      title={name ? `Open ${name} in the workspace` : 'Open the project in the workspace'}
-      onClick={() => ctx.openProject(project)}
-    >
-      Open project
-    </TextButton>
   );
 }
 
@@ -243,15 +220,7 @@ export function useLiveWork({ work, agent, activity, leaving }: LiveWorkProps) {
     <div className="agent-work agent-work--live" data-open={open || undefined}>
       <div className="agent-work__body" id={id} aria-hidden={!open}>
         <div className="agent-work__inner">
-          {(open || ever) && (
-            <>
-              <StepList work={work} agent={agent} live={{ activity }} />
-              <div className="agent-work__ways-in">
-                <OpenProject agent={agent} />
-                <TakeOverButton agent={agent} className="agent-work__open" />
-              </div>
-            </>
-          )}
+          {(open || ever) && <StepList work={work} agent={agent} live={{ activity }} />}
         </div>
       </div>
     </div>

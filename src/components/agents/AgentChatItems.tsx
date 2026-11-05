@@ -22,10 +22,15 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   CheckIcon,
   ChevronRightIcon,
+  CommentIcon,
   CopyIcon,
+  DownloadIcon,
+  ErrorIcon,
+  FolderIcon,
   HistoryIcon,
   MoreHorizontalIcon,
   PinIcon,
+  ShieldCheckIcon,
   WarningIcon,
 } from '@/components/icons';
 import { Button } from '../primitives/Button';
@@ -39,10 +44,11 @@ import type { DraftAttachment } from './useComposerAttachments';
 import { MentionText } from './AgentMentions';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
+import { AgentCard } from './AgentCard';
 import { ImportReviewCard } from './ImportReviewCard';
 import { useLiveWork, WorkTimeline } from './AgentWork';
 import { RevisesBar } from './AgentResult';
-import { TakeOverButton } from './AgentTakeover';
+import { WorkMenu } from './AgentTakeover';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
@@ -525,57 +531,72 @@ export const ErrorLine = memo(function ErrorLine({
     });
   };
   const onKeyDown = useCopyOnKey(message.text);
+  const limited = message.failure?.kind === 'usage_limit';
   return (
     <div
       tabIndex={-1}
       onKeyDown={onKeyDown}
       className="agent-chat__row agent-chat__row--agent agent-chat__row--card"
+      data-limit={limited || undefined}
       data-arrived={arrived || undefined}
       data-work={message.work && agent ? true : undefined}
       data-message-ids={message.id}
     >
-      <div
-        className="agent-bubble agent-bubble--error"
-        data-failure={message.failure?.kind}
-        role={message.failure?.kind === 'usage_limit' ? 'status' : 'alert'}
-      >
-        <ErrorText message={message} />
-        {(signIn || onRetry) && (
-          <div className="agent-bubble__remedy">
-            {signIn && (
-              <Button tabIndex={0} variant="secondary" onClick={onSignIn}>
-                Sign in to {ENGINE_LABEL[engine]}
-              </Button>
-            )}
-            {retryAt &&
-              (retryScheduled ? (
-                <span className="agent-bubble__scheduled">
-                  <HistoryIcon size={12} />
-                  Retries at {formatClock(retryAt)}
-                </span>
-              ) : (
-                <Button
-                  tabIndex={0}
-                  variant="secondary"
-                  disabled={scheduling}
-                  aria-busy={scheduling || undefined}
-                  onClick={() => scheduleRetry(retryAt)}
-                >
-                  {scheduling ? 'Scheduling…' : `Retry at ${formatClock(retryAt)}`}
-                </Button>
-              ))}
-            {onRetry && (
-              <Button
+      {limited ? (
+        // A usage limit heals by itself: a Line, with its one text action.
+        <div className="agent-bubble--error agent-limit" data-failure="usage_limit" role="status">
+          <ErrorText message={message} />
+          {retryAt &&
+            (retryScheduled ? (
+              <span className="agent-bubble__scheduled">
+                <HistoryIcon size={12} />
+                Retries at {formatClock(retryAt)}
+              </span>
+            ) : (
+              <TextButton
                 tabIndex={0}
-                variant={signIn || retryAt ? 'ghost' : 'secondary'}
-                onClick={onRetry}
+                variant="accent"
+                disabled={scheduling}
+                aria-busy={scheduling || undefined}
+                onClick={() => scheduleRetry(retryAt)}
               >
-                {retryAt ? 'Try anyway' : 'Retry'}
-              </Button>
-            )}
+                {scheduling ? 'Scheduling…' : `Retry at ${formatClock(retryAt)}`}
+              </TextButton>
+            ))}
+          {onRetry && (
+            <TextButton tabIndex={0} onClick={onRetry}>
+              {retryAt ? 'Try anyway' : 'Retry'}
+            </TextButton>
+          )}
+        </div>
+      ) : (
+        // A real failure: a card, with a red mark (not only a red hue) and
+        // its next step on the right.
+        <div
+          className="agent-card agent-bubble--error"
+          data-failure={message.failure?.kind}
+          role="alert"
+        >
+          <div className="agent-bubble__error-text">
+            <ErrorIcon size={14} className="inline-error-icon" />
+            <ErrorText message={message} />
           </div>
-        )}
-      </div>
+          {(signIn || onRetry) && (
+            <div className="agent-card__actions">
+              {onRetry && (
+                <Button tabIndex={0} variant={signIn ? 'ghost' : 'secondary'} onClick={onRetry}>
+                  Retry
+                </Button>
+              )}
+              {signIn && (
+                <Button tabIndex={0} variant="secondary" onClick={onSignIn}>
+                  Sign in to {ENGINE_LABEL[engine]}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <MessageActions text={message.text} ts={message.ts} />
       {message.work && agent && <WorkTimeline work={message.work} agent={agent} />}
     </div>
@@ -638,6 +659,31 @@ export const CheckInLine = memo(function CheckInLine({
  * Something Ship Studio did for the agent, said quietly so it never happens
  * invisibly: "Allowed automatically: npm test · Always allowed".
  */
+/**
+ * A take-over's terminal that closed by itself: the sentence as a Line, and
+ * its last screen one click away rather than a terminal dump in the chat.
+ */
+function TakeoverEndedLine({
+  message,
+  arrived,
+  tail,
+}: { message: AgentMessage; tail: [string, string] } & Arrival) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="agent-note agent-note--takeover"
+      data-arrived={arrived || undefined}
+      data-message-ids={message.id}
+    >
+      {tail[0].replace(/\s*The last thing it showed:\s*$/, '')}{' '}
+      <TextButton tabIndex={0} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        {open ? 'Hide its last screen' : 'Show its last screen'}
+      </TextButton>
+      {open && <pre className="agent-bubble__screen agent-note__screen">{tail[1]}</pre>}
+    </div>
+  );
+}
+
 export const NoteLine = memo(function NoteLine({
   message,
   arrived,
@@ -666,18 +712,7 @@ export const NoteLine = memo(function NoteLine({
   // A take-over's terminal that closed by itself: quiet, as any note, with
   // what it last showed. The agent didn't fail, so nothing offers a Retry.
   const tail = screenTail(message);
-  if (tail) {
-    return (
-      <div
-        className="agent-note agent-note--takeover"
-        data-arrived={arrived || undefined}
-        data-message-ids={message.id}
-      >
-        {tail[0]}
-        <pre className="agent-bubble__screen agent-note__screen">{tail[1]}</pre>
-      </div>
-    );
-  }
+  if (tail) return <TakeoverEndedLine message={message} arrived={arrived} tail={tail} />;
   // "Created Finance": the agent it names is a link, while that agent exists.
   const name = message.peer?.name;
   const at = name && onOpenPeer ? message.text.indexOf(name) : -1;
@@ -752,13 +787,10 @@ export const ConnectorBubble = memo(function ConnectorBubble({
         {outgoing ? (
           <>
             To {source}
-            <span className="agent-connector__via"> · from the import interview</span>
+            <span className="agent-connector__via"> · from the sealed conversation</span>
           </>
         ) : (
-          <>
-            From {source}
-            <span className="agent-connector__via"> · via connector</span>
-          </>
+          <>From {source}</>
         )}
       </span>
       {/* Plain text: never HTML or markdown, whatever the other assistant sent. */}
@@ -1056,20 +1088,93 @@ export const ApprovalCard = memo(function ApprovalCard({
       data-arrived={arrived || undefined}
       data-message-ids={message.id}
     >
-      <div
+      <AgentCard
         className="agent-approval"
-        data-status={approval.status}
-        data-clamped={(long && !showAll) || undefined}
+        data={{ status: approval.status, clamped: (long && !showAll) || undefined }}
+        icon={plainDeny ? <DownloadIcon size={14} /> : <ShieldCheckIcon size={14} />}
+        title={approval.title}
+        meta={
+          series && series.total > 1
+            ? `${series.index} of ${series.total} similar requests`
+            : undefined
+        }
+        note={
+          pending && paused && !plainDeny
+            ? 'It paused here for you. Allow it and it picks up where it left off.'
+            : undefined
+        }
+        actions={
+          pending && !noting ? (
+            <>
+              {approval.always && (
+                <Tooltip content={describeScope(approval.always, agentName)}>
+                  <TextButton
+                    tabIndex={0}
+                    className="agent-approval__always"
+                    disabled={busy}
+                    {...keyProps}
+                    onClick={guard(() => void answer(true, true))}
+                  >
+                    Always allow{' '}
+                    {approval.always.kind.startsWith('command') ? (
+                      <code>{approval.always.label}</code>
+                    ) : (
+                      approval.always.label
+                    )}
+                  </TextButton>
+                </Tooltip>
+              )}
+              {/* A note for what to do instead is the rarer answer: one menu away, as on
+                  the phone. A consent card has nothing to say instead: just Deny. */}
+              {!plainDeny && (
+                <Dropdown
+                  align="right"
+                  portal
+                  className="agent-approval__more"
+                  trigger={(p) => (
+                    <IconButton
+                      {...p}
+                      tabIndex={0}
+                      variant="ghost"
+                      size="compact"
+                      disabled={busy}
+                      icon={<MoreHorizontalIcon size={14} />}
+                      aria-label="More answers"
+                      title="More answers"
+                    />
+                  )}
+                >
+                  <DropdownItem onSelect={() => setNoting(true)}>Deny with a note…</DropdownItem>
+                </Dropdown>
+              )}
+              {/* tabIndex: WebKit leaves buttons out of the Tab order unless asked. */}
+              <Button
+                ref={denyRef}
+                tabIndex={0}
+                variant="secondary"
+                className="agent-approval__deny"
+                disabled={busy}
+                onClick={() => void answer(false)}
+              >
+                Deny
+              </Button>
+              <Button
+                tabIndex={0}
+                variant="strong"
+                data-allow
+                disabled={busy}
+                {...keyProps}
+                onClick={guard(() => void answer(true))}
+              >
+                Allow
+              </Button>
+            </>
+          ) : undefined
+        }
+        outcome={pending ? undefined : outcomeText(approval, agentName, compact)}
+        outcomeTone={approval.status === 'allowed' ? 'done' : undefined}
+        resolved={openedPending && !pending}
       >
-        <div className="agent-approval__title">
-          {pending && <WarningIcon size={14} className="agent-approval__icon" />}
-          {approval.title}
-          {series && series.total > 1 && (
-            <span className="agent-approval__series">
-              {series.index} of {series.total} similar requests
-            </span>
-          )}
-        </div>
         {fields ? (
           <dl className="agent-approval__fields">
             {fields.map(([label, value]) => (
@@ -1098,12 +1203,7 @@ export const ApprovalCard = memo(function ApprovalCard({
             {showAll ? 'Show less' : 'Show all'}
           </TextButton>
         )}
-        {pending && paused && !plainDeny && (
-          <p className="agent-approval__note">
-            It paused here for you. Allow it and it picks up where it left off.
-          </p>
-        )}
-        {pending && noting ? (
+        {pending && noting && (
           <form
             className="agent-approval__deny-note"
             onSubmit={(e) => {
@@ -1133,80 +1233,8 @@ export const ApprovalCard = memo(function ApprovalCard({
               Deny
             </Button>
           </form>
-        ) : pending ? (
-          <div className="agent-approval__actions">
-            {approval.always && (
-              <Tooltip content={describeScope(approval.always, agentName)}>
-                <TextButton
-                  tabIndex={0}
-                  className="agent-approval__always"
-                  disabled={busy}
-                  {...keyProps}
-                  onClick={guard(() => void answer(true, true))}
-                >
-                  Always allow{' '}
-                  {approval.always.kind.startsWith('command') ? (
-                    <code>{approval.always.label}</code>
-                  ) : (
-                    approval.always.label
-                  )}
-                </TextButton>
-              </Tooltip>
-            )}
-            {/* A note for what to do instead is the rarer answer: one menu away, as on
-                the phone. A consent card has nothing to say instead: just Deny. */}
-            {!plainDeny && (
-              <Dropdown
-                align="right"
-                portal
-                className="agent-approval__more"
-                trigger={(p) => (
-                  <IconButton
-                    {...p}
-                    tabIndex={0}
-                    variant="ghost"
-                    size="compact"
-                    disabled={busy}
-                    icon={<MoreHorizontalIcon size={14} />}
-                    aria-label="More answers"
-                    title="More answers"
-                  />
-                )}
-              >
-                <DropdownItem onSelect={() => setNoting(true)}>Deny with a note…</DropdownItem>
-              </Dropdown>
-            )}
-            {/* tabIndex: WebKit leaves buttons out of the Tab order unless asked. */}
-            <Button
-              ref={denyRef}
-              tabIndex={0}
-              variant="secondary"
-              className="agent-approval__deny"
-              disabled={busy}
-              onClick={() => void answer(false)}
-            >
-              Deny
-            </Button>
-            <Button
-              tabIndex={0}
-              variant="strong"
-              data-allow
-              disabled={busy}
-              {...keyProps}
-              onClick={guard(() => void answer(true))}
-            >
-              Allow
-            </Button>
-          </div>
-        ) : (
-          <div
-            className="agent-approval__outcome"
-            data-resolved={(openedPending && !pending) || undefined}
-          >
-            {outcomeText(approval, agentName, compact)}
-          </div>
         )}
-      </div>
+      </AgentCard>
     </div>
   );
 });
@@ -1250,81 +1278,86 @@ function SessionPromptCard({
   const allow = indexed.find(({ option }) => option.role === 'allow');
   const deny = indexed.find(({ option }) => option.role === 'deny');
   const others = indexed.filter(({ option }) => option.role === 'other');
-  const owner = prompt.owner.name === agentName ? 'Its' : `${prompt.owner.name}’s`;
   return (
     <div
       className="agent-chat__row agent-chat__row--agent agent-chat__row--card"
       data-arrived={arrived || undefined}
       data-message-ids={message.id}
     >
-      <div className="agent-approval" data-status={approval.status} data-prompt={prompt.kind}>
-        <div className="agent-approval__title">
-          {pending && <WarningIcon size={14} className="agent-approval__icon" />}
-          {approval.title}
-        </div>
-        <p className="agent-approval__source">
-          {owner} session in {folderName(prompt.project)} · Claude Code {prompt.tab}
-        </p>
+      <AgentCard
+        className="agent-approval"
+        data={{ status: approval.status, prompt: prompt.kind }}
+        icon={
+          prompt.kind === 'trust' ? (
+            <FolderIcon size={14} />
+          ) : prompt.kind === 'permission' ? (
+            <ShieldCheckIcon size={14} />
+          ) : (
+            <CommentIcon size={14} />
+          )
+        }
+        title={approval.title}
+        source={`${prompt.owner.name} · in ${folderName(prompt.project)}`}
+        wrapActions={others.length > 0}
+        actions={
+          pending ? (
+            <>
+              {others.map(({ option, index }) => (
+                <Button
+                  key={index}
+                  tabIndex={0}
+                  variant="secondary"
+                  size={compact ? 'compact' : undefined}
+                  className="agent-approval__choice"
+                  disabled={busy}
+                  {...keyProps}
+                  onClick={guard(() => void choose(true, index))}
+                >
+                  {option.label}
+                </Button>
+              ))}
+              {deny && (
+                <Tooltip content={deny.option.label}>
+                  <Button
+                    tabIndex={0}
+                    variant="secondary"
+                    className="agent-approval__deny"
+                    disabled={busy}
+                    onClick={() => void choose(false, deny.index)}
+                  >
+                    Deny
+                  </Button>
+                </Tooltip>
+              )}
+              {allow && (
+                <Tooltip content={allow.option.label}>
+                  <Button
+                    tabIndex={0}
+                    variant="strong"
+                    data-allow
+                    disabled={busy}
+                    {...keyProps}
+                    onClick={guard(() => void choose(true, allow.index))}
+                  >
+                    Allow
+                  </Button>
+                </Tooltip>
+              )}
+            </>
+          ) : undefined
+        }
+        outcome={pending ? undefined : outcomeText(approval, agentName, false)}
+        outcomeTone={approval.status === 'allowed' ? 'done' : undefined}
+        resolved={openedPending && !pending}
+      >
         {/* Folder trust is our explanation, not the session's text: prose. */}
         {approval.detail &&
           (prompt.kind === 'trust' ? (
-            <p className="agent-approval__note">{approval.detail}</p>
+            <p className="agent-card__note">{approval.detail}</p>
           ) : (
             <pre className="agent-approval__detail">{approval.detail}</pre>
           ))}
-        {pending ? (
-          <div className="agent-approval__actions" data-wrap={others.length > 0 || undefined}>
-            {others.map(({ option, index }) => (
-              <Button
-                key={index}
-                tabIndex={0}
-                variant="secondary"
-                size={compact ? 'compact' : undefined}
-                className="agent-approval__choice"
-                disabled={busy}
-                {...keyProps}
-                onClick={guard(() => void choose(true, index))}
-              >
-                {option.label}
-              </Button>
-            ))}
-            {deny && (
-              <Tooltip content={deny.option.label}>
-                <Button
-                  tabIndex={0}
-                  variant="secondary"
-                  className="agent-approval__deny"
-                  disabled={busy}
-                  onClick={() => void choose(false, deny.index)}
-                >
-                  Deny
-                </Button>
-              </Tooltip>
-            )}
-            {allow && (
-              <Tooltip content={allow.option.label}>
-                <Button
-                  tabIndex={0}
-                  variant="strong"
-                  data-allow
-                  disabled={busy}
-                  {...keyProps}
-                  onClick={guard(() => void choose(true, allow.index))}
-                >
-                  Allow
-                </Button>
-              </Tooltip>
-            )}
-          </div>
-        ) : (
-          <div
-            className="agent-approval__outcome"
-            data-resolved={(openedPending && !pending) || undefined}
-          >
-            {outcomeText(approval, agentName, false)}
-          </div>
-        )}
-      </div>
+      </AgentCard>
     </div>
   );
 }
@@ -1387,7 +1420,8 @@ export function WorkingIndicator({
           )}
         </div>
         {live.toggle}
-        {!leaving && agent && <TakeOverButton agent={agent} className="agent-working__takeover" />}
+        {/* Its project and its session, one ⋯ away: not a row under every turn. */}
+        {!leaving && agent && <WorkMenu agent={agent} />}
       </div>
     </div>
   );
@@ -1396,11 +1430,18 @@ export function WorkingIndicator({
 /**
  * The chat's gentle nudge once its engine reports the conversation nearly
  * full. Shown only from a real reading, never from a guess, and only while
- * idle: a turn in progress is still using the conversation it would leave.
+ * idle: a turn in progress is still using the conversation it would leave,
+ * and a take-over is driving it.
  */
 export function FreshHint({ agent, onStartFresh }: { agent: Agent; onStartFresh: () => void }) {
   const percent = contextPercent(agent);
-  if (percent === null || percent < CONTEXT_SUGGEST_AT || agent.status.state !== 'idle') {
+  // While you're driving it, Start fresh can't run: don't offer it.
+  if (
+    percent === null ||
+    percent < CONTEXT_SUGGEST_AT ||
+    agent.status.state !== 'idle' ||
+    agent.takeover
+  ) {
     return null;
   }
   return (

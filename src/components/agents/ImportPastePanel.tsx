@@ -180,7 +180,7 @@ export function ImportPastePanel({ onCancel, onDone, aside }: ImportPastePanelPr
           Cancel
         </Button>
         <Button
-          variant="primary"
+          variant="strong"
           disabled={!ready || importer.isLoading}
           aria-keyshortcuts="Meta+Enter"
           onClick={() => void submit()}

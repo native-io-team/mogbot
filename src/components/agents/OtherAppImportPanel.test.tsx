@@ -80,7 +80,10 @@ const SUMMARY: OtherAppSummary = {
 describe('OtherAppImportPanel', () => {
   it('counts the merge apart from new agents, and says what stays behind before importing', () => {
     render(<OtherAppImportPanel preview={PREVIEW} onCancel={vi.fn()} onDone={vi.fn()} />);
-    expect(screen.getByRole('button', { name: 'Import 1 agent and merge' })).toBeEnabled();
+    const importButton = screen.getByRole('button', { name: 'Import 1 agent and merge' });
+    expect(importButton).toBeEnabled();
+    // The affirmative is neutral, like the in-chat import review's.
+    expect(importButton.className).toMatch(/button--strong/);
     expect(screen.getByText(/1 new, 1 merges into Ada/)).toBeInTheDocument();
     expect(screen.getByText('Merges into Ada')).toBeInTheDocument();
     expect(screen.getByText(/credentials aren’t copied between apps/)).toBeInTheDocument();
@@ -94,7 +97,7 @@ describe('OtherAppImportPanel', () => {
     importFromOtherApp.mockResolvedValue(SUMMARY);
     render(<OtherAppImportPanel preview={PREVIEW} onCancel={vi.fn()} onDone={vi.fn()} />);
     fireEvent.click(screen.getByText('Finance'));
-    expect(screen.getByText('Always allows')).toBeInTheDocument();
+    expect(screen.getByText('Always allow rules')).toBeInTheDocument();
     expect(screen.getByText('git push')).toBeInTheDocument();
     const keep = screen.getByRole('checkbox', { name: 'Keep their “Always allow” rules' });
     expect(keep).not.toBeChecked();

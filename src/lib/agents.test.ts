@@ -58,6 +58,7 @@ import {
   mentionRuns,
   replyPreview,
   summarizeTeam,
+  needsAttention,
   isConnectorLine,
 } from './agents';
 
@@ -681,7 +682,7 @@ describe('Team overview', () => {
     expect(summary.replies.map((r) => r.message.id)).toEqual(['b1', 'a1']);
   });
 
-  it('lists a failed turn under Needs you, with its line', () => {
+  it('lists a failed turn under Needs you, with its line, and a usage limit as paused', () => {
     const failed = make('f', { failure: { kind: 'other' } });
     const limited = make('l', { failure: { kind: 'usage_limit' } });
     const retrying = make('r', {
@@ -691,10 +692,11 @@ describe('Team overview', () => {
     const summary = summarizeTeam([failed, limited, retrying], {
       f: [line('f1', 'f', 'user', 1), line('f2', 'f', 'error', 2)],
     });
-    expect(summary.needsYou.map((n) => [n.agent.id, n.failure?.id ?? null])).toEqual([
-      ['f', 'f2'],
-      ['l', null],
-    ]);
+    expect(summary.needsYou.map((n) => [n.agent.id, n.failure?.id ?? null])).toEqual([['f', 'f2']]);
+    // A usage limit resets by itself: it doesn't need you, and isn't counted as if it did.
+    expect(summary.paused.map((n) => n.agent.id)).toEqual(['l']);
+    expect(needsAttention(limited)).toBe(false);
+    expect(needsAttention(failed)).toBe(true);
   });
 });
 

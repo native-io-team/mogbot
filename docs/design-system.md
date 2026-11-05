@@ -196,10 +196,14 @@ agent's colour instead.
   branch or row is neutral (`--text-primary` on `--surface-selected`). A
   red, amber or green accent must never be readable as error, warning or
   success, and the Chief's colour may be any of them.
-- **Answers are neutral.** Allow on an approval or prompt card is
-  `variant="strong"` (the strongest neutral: near-white with dark ink on dark, near-black with white ink on light), never `primary` — a red
-  accent would make Allow look like the destructive choice.
-  `approvalNeutral.test.tsx` holds this.
+- **Answers are neutral.** The affirmative answer on any request or
+  decision card — Allow, Save (a secret), Keep changes (a copy), Import (an
+  import review), Keep there too — is `variant="strong"` (the strongest
+  neutral: near-white with dark ink on dark, near-black with white ink on
+  light), never `primary` — a red accent would make Allow look like the
+  destructive choice, and two different "yes" colours on one screen read as
+  two products. `approvalNeutral.test.tsx` holds this. The accent is for
+  starting things (Send, Create, a primary CTA), not for answering.
 - **Danger is not told apart by hue.** `<Button variant="danger">` gets a
   warning icon automatically when it has no icon of its own; pass a more
   specific one (a trash can) to replace it. Inline error text carries an

@@ -287,7 +287,7 @@ pub const CHIEF_INSTRUCTIONS: &str = "Your first message, already in the chat, i
 /// said this. No product name: the name isn't settled.
 pub const CHIEF_GREETING: &str = "Hi, I'm your Chief of Staff. \
 Tell me what's on your plate this week and I'll put a team of agents together for it. \
-When something needs your OK, you'll get an Allow or Deny card.";
+When something needs your OK, I'll ask first, and you Allow or Deny it.";
 
 /// The line a message with @mentions carries for its recipient. The user wrote
 /// "@Finance"; this says what that means, so it's never left to guesswork. For

@@ -93,7 +93,7 @@ describe('talkLine', () => {
   it('says how far it got in each state, and never that anything was created before import', () => {
     expect(talkLine({ ...TALK, staged: [] }, 'Ada')).toBe('Grok is answering Ada’s questions');
     expect(talkLine({ ...TALK, state: 'awaiting_consent' }, 'Ada')).toBe(
-      'Grok is asking to start: answer the card in Ada’s chat'
+      'Grok is asking to start: it needs your OK in Ada’s chat'
     );
     expect(talkLine({ ...TALK, state: 'review' }, 'Ada')).toBe(
       '2 agents ready for your review in Ada’s chat'
@@ -116,7 +116,7 @@ describe('ImportTalkBar', () => {
       await screen.findByText('Importing from Grok · Finance and Travel staged for review')
     ).toBeInTheDocument();
     expect(screen.getByText(/what you type here stays between you and Ada/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Stop import' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(stopImportTalk).toHaveBeenCalled();
   });
 
@@ -132,7 +132,7 @@ describe('ImportTalkBar', () => {
       /Nothing has been shared/
     );
     expect(barLines({ ...TALK, state: 'review' }, 'Ada').detail).toMatch(
-      /Nothing is created until you press Import/
+      /Nothing is created until you import/
     );
   });
 });

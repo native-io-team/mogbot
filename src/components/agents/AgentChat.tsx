@@ -44,6 +44,7 @@ import { TextArea } from '../primitives/TextField';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
+import { ConversationBar, ConversationBars } from './AgentCard';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
@@ -93,7 +94,6 @@ import {
   retryNote,
   whenAt,
   mentionedAgents,
-  needsYou,
   plainActivity,
   approvalSeries,
   withQuotes,
@@ -225,18 +225,6 @@ interface AgentChatProps extends AgentActions {
 
 /** Unsent composer text per agent, for the life of the window. */
 const unsentText = new Map<string, string>();
-
-function statusLabel(agent: Agent): string | null {
-  if (agent.takeover) return `You’re driving ${agent.name}`;
-  if (needsYou(agent)) return 'Needs your OK';
-  // Queued behind the cap on concurrent turns: working, but not started (no `since`).
-  if (agent.status.state === 'working') {
-    return agent.status.since == null
-      ? 'Waiting for a free slot'
-      : (plainActivity(agent.status.activity) ?? 'Working');
-  }
-  return null;
-}
 
 export function AgentChat({
   agent,
@@ -468,7 +456,33 @@ export function AgentChat({
     return (id: string) => colors.get(id);
   }, [colorKey]);
 
-  const items = useMemo(() => buildChatItems(shown), [shown]);
+  // Another agent's request (a question its project session is waiting on)
+  // is offered here one way only: the "Review <name>'s request" chip at the
+  // foot, which opens the same card in place. Not also as a full card inline.
+  // Keyed by the owners themselves: a status event elsewhere gives a new
+  // `agentsById` but the same owners, and must not rebuild the history.
+  const foreignKey = useMemo(() => {
+    const owners = new Set<string>();
+    for (const m of shown) {
+      const owner = m.approval?.prompt?.owner.id;
+      if (!owner || owner === agent.id) continue;
+      const asker = agentsById.get(owner);
+      if (asker && !asker.hidden) owners.add(owner);
+    }
+    return [...owners].sort().join(' ');
+  }, [shown, agent.id, agentsById]);
+  const foreignOwners = useMemo(
+    () => new Set(foreignKey ? foreignKey.split(' ') : []),
+    [foreignKey]
+  );
+  const listed = useMemo(
+    () =>
+      foreignOwners.size === 0
+        ? shown
+        : shown.filter((m) => !foreignOwners.has(m.approval?.prompt?.owner.id ?? '')),
+    [shown, foreignOwners]
+  );
+  const items = useMemo(() => buildChatItems(listed), [listed]);
   // The agent's open copy of its project: only its newest card offers Keep /
   // Discard, and that card reads the live status (it waits while working).
   const copyId = agent.copy?.id;
@@ -502,8 +516,8 @@ export function AgentChat({
     return ids;
   }, [items]);
   const shownRequestIds = useMemo(
-    () => new Set(shown.flatMap((m) => (m.approval ? [m.approval.requestId] : []))),
-    [shown]
+    () => new Set(listed.flatMap((m) => (m.approval ? [m.approval.requestId] : []))),
+    [listed]
   );
   const drivingId = useMemo(() => drivingBriefId(items, agent), [items, agent]);
   // Retry belongs to the newest failure only, and only if nothing was said
@@ -832,22 +846,17 @@ export function AgentChat({
     el.style.height = next;
   }, [draft]);
 
-  const status = statusLabel(agent);
+  // Identity only: who this is and what it's for. What it's doing is said
+  // once in the sidebar row and once in the conversation (a bar, the working
+  // line), never a third time up here.
   const title = (
     <>
       <AgentAvatar name={agent.name} color={agent.color} selected />
       <h2 className="agent-chat__name">{agent.name}</h2>
-      {status ? (
-        <span className="agent-chat__status" data-state={needsYou(agent) ? 'waiting' : 'working'}>
-          {status}
+      {agent.role && (
+        <span className="agent-chat__status" title={agent.role}>
+          {agent.role}
         </span>
-      ) : (
-        // Idle: what it's for, not what it runs on (that's in the … menu).
-        agent.role && (
-          <span className="agent-chat__status" title={agent.role}>
-            {agent.role}
-          </span>
-        )
       )}
     </>
   );
@@ -1124,11 +1133,6 @@ export function AgentChat({
           </div>
         </header>
 
-        <TakeoverBanner
-          agent={agent}
-          terminalShown={terminalShown}
-          onToggleTerminal={toggleTerminal}
-        />
         {/* Unmounted while the chat shows (a hidden xterm would fit itself to
             nothing); showing it again replays the session's scrollback. */}
         {takeover && terminalShown && (
@@ -1164,8 +1168,8 @@ export function AgentChat({
                   <>
                     {agent.role && <p className="agent-chat__empty-role">{agent.role}</p>}
                     <p className="agent-chat__empty-hint">
-                      It remembers what you tell it. Anything risky comes to you first, as an Allow
-                      or Deny card.
+                      It remembers what you tell it. Anything risky comes to you first, for you to
+                      Allow or Deny.
                     </p>
                     <TextButton tabIndex={0} onClick={() => actions.onEdit(agent)}>
                       View instructions
@@ -1200,6 +1204,7 @@ export function AgentChat({
                 agent={agent}
                 agentsById={agentsById}
                 peerIds={peerIds}
+                askers={foreignOwners}
                 shownRequestIds={shownRequestIds}
               />
             )}
@@ -1234,40 +1239,72 @@ export function AgentChat({
             />
           )}
 
-          {blocked && (
-            <p className="agent-composer__notice" role="alert">
-              <span>{blocked.message}</span>
-              {blocked.settings && (
-                <TextButton
-                  variant="accent"
-                  onClick={() => {
-                    const url = blocked.settings;
-                    if (url) void openPrivacySettings(url);
-                  }}
-                >
-                  Open System Settings
-                </TextButton>
-              )}
-              <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
-            </p>
-          )}
-
-          {agent.isMain && <ImportTalkBar chief={agent.name} />}
-
-          {engineReady && cantAsk && (
-            <p className="agent-composer__notice" data-testid="agent-cant-ask">
-              {cantAsk}
-            </p>
-          )}
-
-          {engineReady && (
-            <AgentSecretHint
-              agentId={agent.id}
-              agentName={agent.name}
-              draft={draft}
-              setDraft={setDraft}
-            />
-          )}
+          {/* This conversation's state, in one stack in a fixed order: you're
+              driving it, an import, what its engine can't do, a key in the
+              draft, dictation blocked. Two at most; the rest fold. */}
+          <ConversationBars
+            bars={[
+              {
+                id: 'takeover',
+                node: (
+                  <TakeoverBanner
+                    agent={agent}
+                    terminalShown={terminalShown}
+                    onToggleTerminal={toggleTerminal}
+                  />
+                ),
+              },
+              { id: 'import', node: agent.isMain && <ImportTalkBar chief={agent.name} /> },
+              {
+                id: 'engine',
+                node: engineReady && cantAsk && (
+                  <ConversationBar
+                    data-testid="agent-cant-ask"
+                    title={`${ENGINE_LABEL[agent.engine]} can’t stop to ask you here`}
+                    detail={`Anything that needs your OK is refused instead. Updating ${ENGINE_LABEL[agent.engine]} fixes this.`}
+                  />
+                ),
+              },
+              {
+                id: 'secret',
+                node: engineReady && (
+                  <AgentSecretHint
+                    agentId={agent.id}
+                    agentName={agent.name}
+                    draft={draft}
+                    setDraft={setDraft}
+                  />
+                ),
+              },
+              {
+                id: 'dictation',
+                node: blocked && (
+                  <ConversationBar
+                    role="alert"
+                    state="waiting"
+                    title={blocked.message}
+                    actions={
+                      <>
+                        <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
+                        {blocked.settings && (
+                          <Button
+                            size="compact"
+                            variant="secondary"
+                            onClick={() => {
+                              const url = blocked.settings;
+                              if (url) void openPrivacySettings(url);
+                            }}
+                          >
+                            Open System Settings
+                          </Button>
+                        )}
+                      </>
+                    }
+                  />
+                ),
+              },
+            ]}
+          />
 
           {engineReady ? (
             <form

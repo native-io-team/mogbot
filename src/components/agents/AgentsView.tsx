@@ -530,7 +530,8 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
         ? [
             {
               id: 'agents.startFresh',
-              title: `Start ${selected.name} fresh…`,
+              // The same words as the … menu and the nudge.
+              title: 'Start fresh…',
               icon: <ResetIcon size={14} />,
               category: 'action' as const,
               keywords: ['agents', 'new conversation', 'reset', 'clear', 'context', 'session'],
@@ -538,9 +539,13 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
             },
           ]
         : []),
+      // Take over is for the agent you're looking at, not one line per agent:
+      // most people never take over, and seven terminal commands drown the
+      // palette. Hand back stays for any agent you're driving (it's how you
+      // get it back from anywhere).
       ...(takeover
         ? agents
-            .filter((a) => !a.hidden || a.id === selected?.id)
+            .filter((a) => a.takeover || a.id === selected?.id)
             .flatMap((a) =>
               a.takeover
                 ? [
@@ -556,11 +561,11 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
                 : canTakeOver(a)
                   ? [
                       {
-                        id: `agents.takeOver.${a.id}`,
+                        id: 'agents.takeOver',
                         title: `Take over ${a.name}`,
                         icon: <TerminalIcon size={14} />,
                         category: 'action' as const,
-                        keywords: ['agents', 'terminal', 'session', 'drive', 'by hand', 'resume'],
+                        keywords: ['agents', 'terminal', 'conversation', 'drive', 'by hand'],
                         run: () => takeover.takeOver(a),
                       },
                     ]

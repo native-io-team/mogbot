@@ -14,35 +14,12 @@
   gap: var(--spacing-2xs);
 }
 
-.agent-result {
-  display: flex;
-  flex-direction: column;
+/* The surface, title row and actions are the shared card's
+   (agents-surfaces.css); only the result's own parts are here. */
+.agent-result__meta {
+  display: inline-flex;
+  align-items: center;
   gap: var(--spacing-sm);
-  width: var(--agents-bubble-max);
-  padding: var(--spacing-md);
-  font-size: var(--font-size-body-md);
-  line-height: var(--line-height-help);
-  color: var(--text-secondary);
-  background: var(--surface-control);
-  border-radius: var(--radius-lg);
-}
-
-.agent-result__head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-sm);
-  min-width: 0;
-}
-
-.agent-result__title {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: var(--font-size-subhead);
-  font-weight: var(--font-weight-heading);
-  line-height: var(--line-height-compact);
-  color: var(--text-primary);
-  overflow-wrap: anywhere;
 }
 
 .agent-result__version {
@@ -257,12 +234,6 @@
   color: var(--text-primary);
 }
 
-.agent-result__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
 /* A project copy's change card, inside the result: no second surface. */
 .agent-changes[data-in-result] {
   align-self: stretch;
@@ -271,6 +242,12 @@
   background: none;
   border-top: var(--border-width-default) solid var(--border-subtle);
   border-radius: 0;
+}
+
+/* Its title is a section of the result, not a second card's heading. */
+.agent-changes[data-in-result] > .agent-card__title {
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
 }
 
 /* An older version, folded to one line that points at the newer one. */

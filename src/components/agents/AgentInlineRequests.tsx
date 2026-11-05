@@ -6,9 +6,11 @@
  * one answer), so the card in Lead Gen's own chat resolves too.
  *
  * In the Chief's chat it offers every agent with a card open; in any other
- * chat, only the agents this one has worked with. A card already in this
- * chat (a session's question shows in every chat the work touched) isn't
- * offered twice.
+ * chat, only the agents this one has worked with. This is the one way
+ * another agent's request shows in a chat: a session's question that reached
+ * this chat (it goes to every chat the work touched) is left out of the
+ * conversation and offered here instead (`AgentChat`), so the Chief's chat
+ * never shows one request as a card and the next as a chip.
  *
  * @module components/agents/AgentInlineRequests
  */
@@ -33,6 +35,8 @@ interface AgentInlineRequestsProps {
   agentsById: Map<string, Agent>;
   /** Agents this chat has messaged or heard from. */
   peerIds: Set<string>;
+  /** Agents whose requests reached this chat (a session's question): offered here too. */
+  askers?: Set<string>;
   /** Request ids whose cards are already in this chat. */
   shownRequestIds: Set<string>;
 }
@@ -41,6 +45,7 @@ export function AgentInlineRequests({
   agent,
   agentsById,
   peerIds,
+  askers,
   shownRequestIds,
 }: AgentInlineRequestsProps) {
   // Opened here: kept on screen after its last card is answered, so you see
@@ -52,10 +57,10 @@ export function AgentInlineRequests({
         (a) =>
           a.id !== agent.id &&
           !a.hidden &&
-          (agent.isMain || peerIds.has(a.id)) &&
+          (agent.isMain || peerIds.has(a.id) || askers?.has(a.id)) &&
           (needsYou(a) || opened.has(a.id))
       ),
-    [agentsById, agent.id, agent.isMain, peerIds, opened]
+    [agentsById, agent.id, agent.isMain, peerIds, askers, opened]
   );
   if (asking.length === 0) return null;
   return (

@@ -81,6 +81,9 @@ describe('NoteLine', () => {
     const { container } = render(<NoteLine message={message} />);
     expect(container.querySelector('.agent-note--takeover')).not.toBeNull();
     expect(container.querySelector('.agent-bubble')).toBeNull();
+    // The sentence is a Line; the screen is one click away, not a dump in the chat.
+    expect(container.querySelector('pre')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show its last screen' }));
     expect(container.querySelector('pre')?.textContent).toBe('Trust it?\n❯ 2. No, exit');
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
   });
@@ -177,6 +180,17 @@ describe('Start fresh', () => {
     rerender(
       <FreshHint
         agent={agent({ ...full, status: { state: 'working', activity: null, since: 1 } })}
+        onStartFresh={onStartFresh}
+      />
+    );
+    expect(container).toBeEmptyDOMElement();
+    // Driven by hand: Start fresh can't run, so it isn't offered.
+    rerender(
+      <FreshHint
+        agent={agent({
+          ...full,
+          takeover: { ptySession: 'p', cli: 'claude', since: 1 } as unknown as Agent['takeover'],
+        })}
         onStartFresh={onStartFresh}
       />
     );

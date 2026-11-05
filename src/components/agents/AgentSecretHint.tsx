@@ -1,5 +1,5 @@
 /**
- * A quiet line over the composer when the draft holds something shaped like a
+ * A bar over the composer when the draft holds something shaped like a
  * key: offer to keep it in the Keychain for this agent and send its variable
  * instead. It never blocks the message; Dismiss (or sending) leaves it as is.
  *
@@ -7,7 +7,10 @@
  */
 
 import { useState } from 'react';
+import { LockedIcon } from '@/components/icons';
+import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
+import { ConversationBar } from './AgentCard';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { addSecret, findSecret, secretVars } from '../../lib/agentSecrets';
@@ -40,14 +43,20 @@ export function AgentSecretHint({ agentId, agentName, draft, setDraft }: AgentSe
   };
 
   return (
-    <p className="agent-composer__notice" role="status">
-      <span>That looks like {match.label}. Keep it out of the chat?</span>
-      <TextButton variant="accent" disabled={busy} onClick={() => void store()}>
-        Store it securely
-      </TextButton>
-      <TextButton disabled={busy} onClick={() => setDismissed(match.value)}>
-        Dismiss
-      </TextButton>
-    </p>
+    <ConversationBar
+      icon={<LockedIcon size={12} />}
+      title={`That looks like ${match.label}`}
+      detail="Keep it out of the chat: it goes to your Keychain for this agent instead."
+      actions={
+        <>
+          <TextButton disabled={busy} onClick={() => setDismissed(match.value)}>
+            Dismiss
+          </TextButton>
+          <Button size="compact" variant="secondary" disabled={busy} onClick={() => void store()}>
+            Store it securely
+          </Button>
+        </>
+      }
+    />
   );
 }

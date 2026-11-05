@@ -522,7 +522,7 @@ pub async fn pty_session_open(
     // plain CLI under that id would look like the take-over still going.
     if crate::agents::takeover::is_takeover_pty(&session_id) {
         return live_session(&session_id)
-            .ok_or_else(|| CommandError::expected("That take-over has ended. Close this tab."));
+            .ok_or_else(|| CommandError::expected("This agent was handed back. Close this tab."));
     }
     open_session(
         app,

@@ -31,8 +31,11 @@ empty screen.
 In Agents mode the sidebar's top row is the toggle (Home, Workflows and the
 Inbox belong to the Projects side). **What's in flight** — the one name for
 the cross-agent overview — is reached from a **"Needs you · N"** row at the
-top of the agent list, shown only while an agent waits on you (a card, or a
-turn that didn't finish; the same set ⌘J visits), and from ⌘K. There is no
+top of the agent list, shown only while an agent waits on you (a request, or a
+turn that didn't finish; the same set ⌘J visits), and from ⌘K. A usage limit
+is not waiting on you — it resets by itself — so it isn't counted: What's in
+flight lists it under **Paused**, and in a chat it is a quiet centred line
+with "Retry at 4:45 AM", not a tinted box. There is no
 icon for it: an unlabeled one was three names for one place. Its foot has the Phone row (the companion
 app: pair, or which phone is connected); remote access, for driving the app
 from another assistant, appears there only while it is on and is otherwise
@@ -431,6 +434,53 @@ so), and a Chrome call going through an approval card in the running app.
 `cargo test --lib agents::capabilities -- --ignored` repeats the headless
 check.
 
+## Lines, cards and bars (`components/agents/AgentCard.tsx`)
+
+Everything in a conversation that isn't something someone said is one of
+three surfaces, so a chat with a request, a copy to keep and an import going
+at once still reads as one product:
+
+- **Line** — one quiet centred sentence, no surface, that wraps (never cut
+  with an ellipsis: the cut half is usually the reassuring part). Something
+  that happened: notes, the fresh nudge, "Started fresh · memory kept", a
+  usage limit, a take-over that closed by itself. At most one text action.
+- **Card** (`AgentCard`) — something that wants a decision or holds a
+  result: approvals, a session's question, secret requests, import consent
+  and review, the change card, the result card (`share_result`; a project
+  copy's change card sits inside it, without a second surface), a real
+  failure. Icon (semantic — a shield,
+  a lock, a folder, a download; the warning triangle only for real danger),
+  title, a muted source line ("Acme Site · in demo-site"), the body, a muted
+  note, then the actions **right-aligned with the single affirmative last**.
+  The affirmative (Allow, Save, Keep changes, Import) is the neutral
+  `strong` button, never the accent (docs/design-system.md, "Answers are
+  neutral"). `danger` only for what destroys work (Discard, Delete).
+  Answered, a card becomes its outcome line.
+- **Bar** (`ConversationBar`, stacked by `ConversationBars`) — the state of
+  this conversation until it ends, in the reading column directly above the
+  composer, in a fixed order: take-over, import, what the engine can't do, a
+  key in the draft, dictation blocked. At most two show; the rest fold into
+  "N more". A bar says the state, never repeats the card's question, and
+  never points at "the card". Nothing spans the pane under the header.
+
+The **header is identity only** (badge, name, role, project chip). What an
+agent is doing is said once in its sidebar row and once in the conversation
+(a bar or the working line) — never a third time up there.
+
+Another agent's request shows in a chat one way: the "Review <name>'s
+request" chip at the foot, which opens the same card in place. A session's
+question reaches every chat its work touched; in a chat that isn't its
+owner's it is left out of the conversation and offered by that chip instead.
+
+Vocabulary, one word per idea: a **request** (answered with **Allow /
+Deny**; "Needs your OK" wherever something waits on you — sidebar row, What's
+in flight, the phone); **copy** only for a project copy; **conversation**,
+never "session", in what people read; **Take over / Hand back** (no noun
+"take-over" in copy); **Start fresh**, **Review changes**, **Preview**,
+**Open in <project>**; **logins** for what an agent needs signed in; "Mac"
+where the copy means this computer. No branch names, exit codes, tab
+numbers, "via connector" or "(import)" in anything a person reads.
+
 ## Approvals
 
 `acceptEdits` lets an agent edit files inside its home and every project
@@ -600,8 +650,9 @@ and URLs are put into words.
 ## Take over (`src-tauri/src/agents/takeover.rs`)
 
 Step into the agent's own session and drive it by hand, then hand it back.
-From the agent menu ("Take over" / "Hand back"), the working line and the
-live timeline, and ⌘K ("Take over <agent>", "Hand <agent> back"). Offered once
+From the agent menu ("Take over" / "Hand back"), the ⋯ beside the working
+line, and ⌘K ("Take over <agent>" for the agent you're looking at only;
+"Hand <agent> back" for any agent you're driving). Offered once
 the agent has a conversation on its engine (`sessionId`, not `newEngine`).
 
 - **Paused.** `runner::claim_for_takeover` sets `driven` on the agent's
@@ -654,13 +705,13 @@ the agent has a conversation on its engine (`sessionId`, not `newEngine`).
   checks the pid, so a respawn can't pass for the take-over.
 - **Edits are auto-accepted while you drive**, as they are for the agent
   (Claude Code's `acceptEdits`, Codex's `workspace-write`), in its projects
-  too. Bash still asks. The banner's tooltip says so once; Shift-Tab changes
+  too. Bash still asks. The bar's tooltip says so once; Shift-Tab changes
   it in Claude Code.
 - **Trust.** If Claude Code hasn't recorded the folder as trusted
   (`hasTrustDialogAccepted` on it or a folder above, in `.claude.json` under
-  `CLAUDE_CONFIG_DIR` or home — read, never written), the banner adds:
+  `CLAUDE_CONFIG_DIR` or home — read, never written), the bar adds:
   "Claude Code will ask whether to trust this folder — choose “Yes,
-  proceed”. Choosing No ends the take-over." Codex's trust prompt isn't
+  proceed”. Choosing No hands it back." Codex's trust prompt isn't
   checked.
 - **Where.** A bound agent's session becomes a tab in its project's workspace
   (`adoptTakeover` + focus, through `useRemoteAgentControl`), which opens. The
@@ -669,9 +720,13 @@ the agent has a conversation on its engine (`sessionId`, not `newEngine`).
   a quit, crash or hand-back leaves no ghost tab to respawn.
   Any other agent's shows in its chat in place of the conversation
   (`AttachedTerminal`, attach-only), with "Show chat" to see the conversation
-  and composer. Either way one line under the header says "You're driving
-  Finance in a terminal · Hand back"; the sidebar row and chat header read "You're driving Finance";
-  a message you send waits ("Waiting, sends when you hand Finance back").
+  and composer. Either way a bar above the composer (with the other bars;
+  under the terminal when it fills the column) says "You're driving
+  Finance in a terminal · Hand back"; the sidebar row reads "You're driving
+  Finance" unless a request outranks it; the header stays identity only.
+  A message you send waits ("Waiting, sends when you hand Finance back").
+  Keep changes and Discard on its copy are disabled until it's handed back
+  (the backend refuses them too), and the fresh nudge doesn't show.
 - **Hand back** (the button, ⌘K, or the process exiting, noticed within
   0.5s). If the terminal printed in the last 2s it is likely mid-response,
   so the button asks first ("Hand back anyway?"); anything typed but not sent
@@ -760,13 +815,15 @@ the full threat model in docs/remote-access.md):
    rules, and only `propose_agent` / `update_proposal` / `finish`, which
    stage a draft. The user watches it in the Chief's chat: the other
    assistant's lines are `from_agent` lines with a `connector:<source>` peer
-   ("From Grok · via connector"), the interview's replies `sent_to_agent`
-   lines to the same peer, indented as "To Grok". Neither ever reaches the
+   ("From Grok"), the interview's replies `sent_to_agent`
+   lines to the same peer, indented as "To Grok · from the sealed
+   conversation". Neither ever reaches the
    Chief's own session (`runner::recap_lines` skips them), and the other
    assistant only hears what the interview wrote. A bar above the composer
    says where it is, that what you type stays between you and the Chief, and
-   has a red **Stop import**; the Chief's own Stop (desktop or phone, where
-   its row reads "Talking to Grok (import)") stops it too.
+   has a plain **Stop** (stopping loses nothing); the Chief's own Stop
+   (desktop or phone, where its row reads "Bringing in agents from Grok")
+   stops it too.
 4. `finish` posts the review card: each agent ticked, with its role and the
    first lines of its instructions in view (**Show all** for the rest), its
    memory, routines (paused) and the logins it asks for a click away; a
@@ -1304,7 +1361,8 @@ cards.
   the top of the agent list while anything waits on you) shows,
   in a fixed order and present even when empty: who needs you (with their
   pending approval cards, answerable in place, and turns that didn't finish,
-  with Retry, Retry at the reset, or Sign in), who is working (their
+  with Retry or Sign in), who is paused by a usage limit (only when someone
+  is, with Retry at the reset), who is working (their
   activity line), the next five active check-ins, and the six latest
   replies. Every row opens that chat; a reply opens it at that line. It
   reads only the store: statuses and check-ins from the registry, cards and
@@ -1375,7 +1433,10 @@ prompt (`prompts::FILES`) tells it to for deliverables, never for chat.
   reply ends on it and "What it did" hangs under it. A turn that also changed
   a project puts the card **on its change card** (`results::ride_on`: same
   message, the staged id), so a project copy's card is the result card with
-  Keep · Review · Preview · Ask for changes · Discard inside it. A turn cut
+  the copy's row inside it, in the card order: ⋯ · Discard · Preview · Ask
+  for changes · Review changes · **Keep changes** (the affirmative last,
+  neutral). Without a copy, Ask for changes is the card's only action, a
+  text action on the right. A turn cut
   off by quitting loses a staged card (it was never shown); its copied files
   are swept on the next launch (`attachments::sweep_unreferenced`: any
   `attachments/<id>/` the raw log never mentions, older than two minutes).

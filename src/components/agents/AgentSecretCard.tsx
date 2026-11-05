@@ -10,6 +10,7 @@
 
 import { memo, useState } from 'react';
 import { Button } from '../primitives/Button';
+import { AgentCard } from './AgentCard';
 import { TextField } from '../primitives/TextField';
 import { ErrorIcon, LockedIcon } from '@/components/icons';
 import { asCommandError, formatCommandError } from '../../lib/errors';
@@ -68,24 +69,56 @@ export const SecretCard = memo(function SecretCard({
       data-arrived={arrived || undefined}
       data-message-ids={message.id}
     >
-      <form
+      <AgentCard
+        as="form"
         className="agent-approval agent-secret"
-        data-status={approval.status}
+        data={{ status: approval.status }}
         onSubmit={(e) => {
           e.preventDefault();
           void save();
         }}
-      >
-        <div className="agent-approval__title">
-          <LockedIcon size={14} className="agent-secret__icon" />
-          {/* The identifier and its variables are the agent's business: a
-              tooltip for the curious, not the headline. */}
+        icon={<LockedIcon size={14} />}
+        title={
+          // The identifier and its variables are the agent's business: a
+          // tooltip for the curious, not the headline.
           <span title={`${request.name} · ${secretVars(request)}`}>
             {agentName} needs your {secretTitle(request.name)}
           </span>
-        </div>
+        }
+        actions={
+          pending ? (
+            <>
+              <Button tabIndex={0} variant="secondary" disabled={busy} onClick={() => void deny()}>
+                Deny
+              </Button>
+              <Button
+                tabIndex={0}
+                type="submit"
+                variant="strong"
+                data-allow
+                disabled={!filled || busy}
+              >
+                Save
+              </Button>
+            </>
+          ) : undefined
+        }
+        outcome={
+          pending
+            ? undefined
+            : approval.status === 'allowed'
+              ? `Saved to your Keychain · ${agentName} can use it now`
+              : approval.status === 'denied'
+                ? approval.note
+                  ? `Declined · “${approval.note}”`
+                  : `Declined · ${agentName} was told`
+                : 'Not answered'
+        }
+        outcomeTone={approval.status === 'allowed' ? 'done' : undefined}
+        resolved={openedPending && !pending}
+      >
         <p className="agent-secret__purpose">{request.purpose}</p>
-        {pending ? (
+        {pending && (
           <>
             <div className="agent-secret__fields">
               {request.fields.map((field, i) => (
@@ -105,7 +138,7 @@ export const SecretCard = memo(function SecretCard({
                 </label>
               ))}
             </div>
-            <p className="agent-approval__note" title={secretVars(request)}>
+            <p className="agent-card__note" title={secretVars(request)}>
               Kept in your Keychain for {agentName} only. {agentName} can use it but never sees it.
             </p>
             {error && (
@@ -114,36 +147,9 @@ export const SecretCard = memo(function SecretCard({
                 {error}
               </p>
             )}
-            <div className="agent-approval__actions">
-              <Button tabIndex={0} variant="secondary" disabled={busy} onClick={() => void deny()}>
-                Deny
-              </Button>
-              <Button
-                tabIndex={0}
-                type="submit"
-                variant="strong"
-                data-allow
-                disabled={!filled || busy}
-              >
-                Save
-              </Button>
-            </div>
           </>
-        ) : (
-          <div
-            className="agent-approval__outcome"
-            data-resolved={(openedPending && !pending) || undefined}
-          >
-            {approval.status === 'allowed'
-              ? `Saved to your Keychain · ${agentName} can use it now`
-              : approval.status === 'denied'
-                ? approval.note
-                  ? `Declined · “${approval.note}”`
-                  : `Declined · ${agentName} was told`
-                : 'Not answered'}
-          </div>
         )}
-      </form>
+      </AgentCard>
     </div>
   );
 });

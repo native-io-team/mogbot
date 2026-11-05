@@ -42,7 +42,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'agents-quit-guard',
     title: 'Quit — agents still working (⌘Q, menu-bar Quit)',
     looksRightWhen:
-      'A small centred alert, not the plain “Are you sure?”: a semibold line “2 agents are still working. Quit anyway?”, then one muted paragraph naming them (“Quitting stops Acme Site and Native App mid-turn…”), saying Lead Gen’s request will still be here when you reopen, and that Keep running in background hides the window instead. Three full-width buttons stacked like a macOS alert: Keep running in background (green, focused), Quit (danger), Cancel (outline).',
+      'A small centred alert, not the plain “Are you sure?”: a semibold line “2 agents are still working. Quit anyway?”, then one muted paragraph naming them (“Quitting stops Acme Site and Native App mid-turn…”), saying Lead Gen’s request will still be here when you reopen, and that Keep running in background hides the window instead. Three full-width buttons stacked like a macOS alert: Keep running in background (the accent, focused), Quit (neutral: quitting loses nothing), Cancel (outline).',
     command: 'app.quit',
     requires: '.quit-confirm-modal--guard',
     commands: {
@@ -53,9 +53,9 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'agents-quit-guard-approval',
     title: 'Quit — only an approval waiting: no guard',
     looksRightWhen:
-      'An open request is no reason to stay (it is there on reopen), so this is the plain one-word “Quit?” with Cancel and a neutral Quit, no agent wording.',
+      'An open request is no reason to stay (it is there on reopen), so this is the plain dialog: “Quit now?” in the header, one muted line that agents and routines don’t run while the app is closed, Cancel and a neutral Quit, no agent names.',
     command: 'app.quit',
-    requires: '.quit-confirm-modal:not(.quit-confirm-modal--guard)',
+    requires: '.quit-confirm-plain',
     commands: {
       agents_quit_check: { working: [], waiting: ['Lead Gen'] },
     },
