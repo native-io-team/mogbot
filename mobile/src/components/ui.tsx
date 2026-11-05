@@ -22,7 +22,6 @@ import {
 } from 'react-native';
 import {
   alpha,
-  disabledPrimaryTint,
   chromeScale,
   fonts,
   iconSize,
@@ -32,7 +31,7 @@ import {
   type,
   type Palette,
 } from '../lib/theme';
-import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { makeStyles, useColors } from '../lib/appearance';
 import type { Tone } from '../lib/connection';
 import { useAccent, useAnswerAccent } from '../lib/accent';
 import { haptic } from '../lib/haptics';
@@ -179,7 +178,6 @@ export function Button({
   lines?: number;
 }) {
   const colors = useColors();
-  const appearance = useAppearance();
   const styles = useStyles();
   const ripple = useRipple();
   const accent = useAccent();
@@ -190,14 +188,9 @@ export function Button({
   // One disabled look for every variant: its own, faded. A filled answer that
   // turned a solid grey slab while its outline sibling faded read as the live
   // one of the pair (an offline Allow beside Deny).
-  // Not for an answer: a disabled Allow must keep fading beside its Deny.
-  const tint = variant === 'primary' && off ? disabledPrimaryTint[appearance] : null;
-  const c: ButtonColors =
-    tint != null
-      ? { bg: alpha(a.accent, tint), pressed: alpha(a.accent, tint), fg: a.accent }
-      : filled
-        ? { bg: a.accent, pressed: a.pressed, fg: a.onAccent }
-        : buttonColorsOf(colors)[variant];
+  const c: ButtonColors = filled
+    ? { bg: a.accent, pressed: a.pressed, fg: a.onAccent }
+    : buttonColorsOf(colors)[variant];
   const height = size === 'large' ? 50 : size === 'compact' ? 32 : 44;
   return (
     <Pressable
@@ -215,7 +208,7 @@ export function Button({
           paddingHorizontal: size === 'compact' ? space.md : space.lg,
           backgroundColor: pressed ? c.pressed : c.bg,
           borderColor: c.border ?? 'transparent',
-          opacity: off && tint == null ? DISABLED_OPACITY : 1,
+          opacity: off ? DISABLED_OPACITY : 1,
           transform: [{ scale: pressed ? 0.98 : 1 }],
         },
         style,
