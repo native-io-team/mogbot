@@ -5,6 +5,10 @@
   --dm-failed-red: #e5484d; /* build-failed state (was a dead var(--danger) fallback) */
 }
 
+:root[data-theme='light'] {
+  --dm-failed-red: #cf222e;
+}
+
 .device-mirror {
   flex: 1;
   display: flex;

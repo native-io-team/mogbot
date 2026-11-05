@@ -952,6 +952,10 @@ pub struct AppState {
     /// Selected app icon (`brand`, `dark`, or `light`). Defaults to `brand`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_icon: Option<String>,
+    /// Colour theme preference (`system`, `light`, or `dark`). Defaults to
+    /// `system`, which follows the macOS appearance live.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app_theme: Option<String>,
     /// Workspaces (org/client accounts) with isolated Claude/GitHub config and credentials
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub accounts: Vec<Account>,

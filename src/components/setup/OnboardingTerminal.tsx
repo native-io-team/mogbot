@@ -26,7 +26,7 @@ import {
 } from '../terminal/startupWatchdog';
 import { logger } from '../../lib/logger';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { createTerminalOptions } from '../terminal/terminalTheme';
+import { createTerminalOptions, followAppTheme } from '../terminal/terminalTheme';
 import '@xterm/xterm/css/xterm.css';
 
 /**
@@ -115,6 +115,7 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
       // a TUI agent's redraws, which makes the scrollbar jump around.
       allowProposedApi: true,
     });
+    followAppTheme(term, 'onboarding');
 
     const fitAddon = new FitAddon();
     const unicode11Addon = new Unicode11Addon();
@@ -585,14 +586,13 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
       {/* Loading indicator while terminal is initializing */}
       {!isReady && (
         <div
+          className="terminal-loading"
           style={{
             position: 'absolute',
             inset: 0,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: '#141414',
-            color: '#666666',
             fontFamily: 'var(--font-code)',
             fontSize: 13,
           }}

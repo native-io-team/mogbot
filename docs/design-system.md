@@ -197,7 +197,7 @@ agent's colour instead.
   red, amber or green accent must never be readable as error, warning or
   success, and the Chief's colour may be any of them.
 - **Answers are neutral.** Allow on an approval or prompt card is
-  `variant="strong"` (near-white fill, dark ink), never `primary` — a red
+  `variant="strong"` (the strongest neutral: near-white with dark ink on dark, near-black with white ink on light), never `primary` — a red
   accent would make Allow look like the destructive choice.
   `approvalNeutral.test.tsx` holds this.
 - **Danger is not told apart by hue.** `<Button variant="danger">` gets a
@@ -233,10 +233,56 @@ agent's colour instead.
 - **The picker previews, then saves.** Arrow keys in the accent picker move
   the selection and repaint at once; the registry write happens on Space or
   Enter, on click, or after the arrows stop.
-- **Theme-ready.** Nothing in the accent block assumes dark: shades are
-  computed from the colour itself, soft fills mix with surface tokens and
-  accent text with `--text-primary`. A light theme redefines surfaces and text
-  only.
+- **Per theme.** Shades are computed from the colour itself, soft fills mix
+  with surface tokens and accent text with `--text-primary` (at
+  `--accent-text-share`, 65% dark / 55% light). One rule differs by theme:
+  **white is near-black on light** (`LIGHT_THEME_WHITE` in `accent.ts`, mirrored
+  by `--color-accent-light-default` and the light `--agents-tint-white`). A
+  near-black accent's hover and pressed shades lift instead of darkening.
+  `accentVars(key, theme)` defaults to the theme currently painted; the boot
+  cache keeps one entry per theme (`app.accent`, `app.accent.light`).
+- **Allow on light** is the same `strong` variant: `--surface-inverse` is
+  near-black there with white ink (`--text-on-inverse`).
+
+### Themes (light and dark)
+
+Settings → Appearance → *Theme* (and ⌘K → "Theme…", "Use light theme", "Use
+dark theme", "Match system appearance") picks **System** (default), **Light** or
+**Dark**. The preference is saved by `set_app_theme` (settings.rs, which also
+sets each window's native appearance), cached in `localStorage` (`app.theme`)
+and applied by an inline script in `index.html` before the first paint, as
+`data-theme="light" | "dark"` on `<html>`. System follows
+`prefers-color-scheme`, live. `src/lib/theme.ts` owns all of it; every window
+follows a change through the cache's `storage` event.
+
+- **Semantic roles only.** `:root[data-theme='light']` in
+  `tokens-semantic.css` overrides surfaces, text, borders, status hues,
+  syntax roles, overlays and shadows. Components never branch on the theme.
+  If something looks wrong in one theme, it is reading a primitive it should
+  not — point it at a role (that is how `--syntax-*`, `--text-quiet`,
+  `--surface-busy` and `--surface-selected-strong` came to exist).
+- **Not an inversion.** Light keeps the dark theme's structure: a quiet
+  `--surface-app` (#f5f5f5), panels one step forward (white), controls one
+  step into the panel, hairline borders. Elevation reads as whiter, and the
+  tactile depth that dark gets from highlights comes from hairline-ringed
+  shadows. Scrims dim (≤ 18% black) rather than black out.
+- **`--text-white` is the emphasis role**, near-black on light; the name
+  predates themes. `--text-inverse` is ink on a coloured fill and stays white.
+- **Fixed in both themes:** anything drawn on the user's page
+  (`--accent-overlay*`, `--page-scrim*`), the focus ring hue, traffic lights.
+  The live preview iframe is the user's site and is never themed.
+- **Outside CSS:** the xterm palettes (`terminalTheme.ts`, `followAppTheme`
+  re-themes live terminals), the contribution calendar's ramp, and the
+  wordmark (`ship_studio_full_light.svg`) follow the theme explicitly.
+- **Tests.** `theme.test.ts` holds the light block complete (every
+  colour-bearing role has a light value), checks text/surface, status, syntax
+  and accent-text contrast against WCAG AA in both themes, the light accent
+  mapping, the terminal palette, and runs the boot script. Feature-local
+  colour tokens get a light value in a `:root[data-theme='light']` block in
+  the same file (the token checker accepts a same-file theme block as the
+  role's other half, not a duplicate).
+- **Harness:** `node scripts/harness-capture.mjs --theme light` (or
+  `?theme=light` on a harness URL). Unforced captures are dark.
 
 Need a value that doesn't exist? Add it to the smallest appropriate layer, update the inventory, and
 run `pnpm check:token-layers`. Do not add a new alias to the compatibility file unless it is a

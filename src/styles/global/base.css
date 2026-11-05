@@ -197,6 +197,11 @@ body.compact-mode-active html {
   width: auto;
 }
 
+/* The wordmark is white ink; the light theme swaps in its dark-ink twin. */
+:root[data-theme='light'] .app-logo {
+  content: url('/ship_studio_full_light.svg');
+}
+
 .app.loading .boot-progress {
   width: var(--size-boot-progress);
   max-width: calc(100vw - var(--spacing-2xl));

@@ -22,7 +22,7 @@
   /* The Review category has no semantic role of its own — purple is already
      spoken for by the variables system — so it gets a feature-local pair
      rather than borrowing a role that means something else. */
-  --team-review-accent: var(--color-purple-400);
+  --team-review-accent: var(--syntax-variable);
   --team-review-surface: var(--color-purple-500-o15);
 }
 

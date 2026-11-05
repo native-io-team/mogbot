@@ -6,7 +6,7 @@ use crate::commands::setup::{read_app_state, write_app_state};
 use crate::errors::CommandError;
 use crate::utils::{invalidate_projects_root_cache, projects_root};
 use std::path::Path;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
 const DEFAULT_APP_ICON: &str = "brand";
@@ -106,6 +106,85 @@ fn set_macos_dock_icon(bytes: &[u8]) -> Result<(), &'static str> {
         let _: () = msg_send![application, setApplicationIconImage: image];
         let _: () = msg_send![image, release];
     }
+    Ok(())
+}
+
+const DEFAULT_APP_THEME: &str = "system";
+const APP_THEME_IDS: &[&str] = &["system", "light", "dark"];
+
+fn normalized_app_theme(value: Option<&str>) -> &'static str {
+    match value {
+        Some("light") => "light",
+        Some("dark") => "dark",
+        _ => DEFAULT_APP_THEME,
+    }
+}
+
+fn validate_app_theme(theme: &str) -> Result<(), CommandError> {
+    if APP_THEME_IDS.contains(&theme) {
+        Ok(())
+    } else {
+        Err(CommandError::Validation {
+            field: "theme".to_string(),
+            reason: "Choose one of system, light, or dark".to_string(),
+        })
+    }
+}
+
+/// The native window appearance for a theme preference. `None` follows the
+/// system, which is what makes `prefers-color-scheme` track macOS live.
+fn native_theme_for(theme: &str) -> Option<tauri::Theme> {
+    match theme {
+        "light" => Some(tauri::Theme::Light),
+        "dark" => Some(tauri::Theme::Dark),
+        _ => None,
+    }
+}
+
+/// The saved preference as a native window appearance, for window builders.
+pub fn saved_native_theme() -> Option<tauri::Theme> {
+    native_theme_for(normalized_app_theme(read_app_state().app_theme.as_deref()))
+}
+
+/// The window background painted before the webview's first frame, matched to
+/// the saved theme so a light window doesn't open on a dark flash. `system`
+/// keeps the dark default: which appearance the OS will pick isn't known here.
+pub fn saved_window_background() -> tauri::utils::config::Color {
+    match saved_native_theme() {
+        Some(tauri::Theme::Light) => tauri::utils::config::Color(245, 245, 245, 255),
+        _ => tauri::utils::config::Color(45, 45, 45, 255),
+    }
+}
+
+/// Apply a theme preference to every open window's native appearance.
+pub fn apply_app_theme(app: &AppHandle, theme: &str) {
+    let native = native_theme_for(theme);
+    for window in app.webview_windows().values() {
+        if let Err(error) = window.set_theme(native) {
+            tracing::warn!(%error, label = window.label(), "Failed to set window theme");
+        }
+    }
+}
+
+/// Get the persisted colour theme preference (`system`, `light`, or `dark`).
+#[tauri::command]
+#[tracing::instrument]
+pub fn get_app_theme() -> Result<String, CommandError> {
+    Ok(normalized_app_theme(read_app_state().app_theme.as_deref()).to_string())
+}
+
+/// Persist the colour theme preference and apply it to every window. Each
+/// webview repaints itself (src/lib/theme.ts); this only sets the native
+/// appearance so system-drawn pieces (menus, the titlebar) agree.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub fn set_app_theme(app: AppHandle, theme: String) -> Result<(), CommandError> {
+    validate_app_theme(&theme)?;
+    apply_app_theme(&app, &theme);
+    let mut state = read_app_state();
+    state.app_theme = Some(theme.clone());
+    write_app_state(&state).map_err(CommandError::from)?;
+    let _ = app.emit("app-theme-changed", theme);
     Ok(())
 }
 
@@ -447,7 +526,22 @@ pub async fn pick_projects_root(app: AppHandle) -> Result<Option<String>, Comman
 
 #[cfg(test)]
 mod tests {
-    use super::{normalized_app_icon, validate_app_icon};
+    use super::{normalized_app_icon, normalized_app_theme, validate_app_icon, validate_app_theme};
+
+    #[test]
+    fn accepts_the_three_theme_preferences() {
+        for theme in ["system", "light", "dark"] {
+            assert!(validate_app_theme(theme).is_ok());
+        }
+        assert!(validate_app_theme("sepia").is_err());
+    }
+
+    #[test]
+    fn invalid_saved_themes_follow_the_system() {
+        assert_eq!(normalized_app_theme(Some("sepia")), "system");
+        assert_eq!(normalized_app_theme(None), "system");
+        assert_eq!(normalized_app_theme(Some("light")), "light");
+    }
 
     #[test]
     fn accepts_the_three_supported_icons() {

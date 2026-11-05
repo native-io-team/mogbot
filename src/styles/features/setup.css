@@ -58,6 +58,11 @@
   margin-bottom: var(--spacing-2xl);
 }
 
+/* The wordmark is white ink; the light theme swaps in its dark-ink twin. */
+:root[data-theme='light'] .onboarding-logo {
+  content: url('/ship_studio_full_light.svg');
+}
+
 .onboarding-header h1 {
   font-size: var(--font-size-h2);
   font-weight: 600;

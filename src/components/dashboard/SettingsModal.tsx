@@ -15,6 +15,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { AgentsDesktopSettings } from '../agents/AgentsDesktopSettings';
 import { AccentColorSetting } from './AccentColorSetting';
+import { ThemeSetting } from './ThemeSetting';
 import { Button } from '../primitives/Button';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
 import { getAnalyticsEnabled, setAnalyticsEnabled, trackEvent } from '../../lib/analytics';
@@ -711,6 +712,7 @@ export function SettingsModal({
             <div className="settings-modal-body">
               <div className="settings-section">
                 <div className="settings-group">
+                  <ThemeSetting />
                   <AccentColorSetting />
                   <div className="settings-row">
                     <div className="settings-row-info">

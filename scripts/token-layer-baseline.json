@@ -982,12 +982,6 @@
     },
     {
       "path": "src/styles/features/element-tree.css",
-      "token": "--color-orange-400",
-      "count": 2,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/features/element-tree.css",
       "token": "--font-size-11",
       "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."

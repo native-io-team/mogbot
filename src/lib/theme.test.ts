@@ -1,0 +1,340 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  __resetThemeForTests,
+  getResolvedTheme,
+  initTheme,
+  isThemePreference,
+  resolveTheme,
+  THEME_CACHE_KEY,
+} from './theme';
+import {
+  AA_TEXT,
+  accentVars,
+  accentHex,
+  ACCENT_SHADE_VARS,
+  contrastRatio,
+  LIGHT_THEME_WHITE,
+  mixOklchWithNeutral,
+  parseHex,
+} from './accent';
+import { AGENT_COLORS } from './agents';
+
+const AGENT_COLORS_FOR_TESTS = [...AGENT_COLORS];
+import { terminalTheme } from '../components/terminal/terminalTheme';
+
+const css = (path: string) => readFileSync(resolve('src/styles/global', path), 'utf8');
+
+// ---------------------------------------------------------------------------
+// A tiny resolver for the token files: enough to turn a semantic role into the
+// hex it paints in each theme, so contrast can be checked against the real
+// stylesheet rather than a copy of its values.
+// ---------------------------------------------------------------------------
+
+type Decls = Map<string, string>;
+
+/** Every `--name: value;` inside blocks whose selector matches `selector`. */
+function declarations(source: string, selector: (s: string) => boolean): Decls {
+  const out: Decls = new Map();
+  const clean = source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/@supports[^{]*\{[\s\S]*?\}\s*\}/g, '');
+  for (const [, sel, body] of clean.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!selector(sel.trim())) continue;
+    for (const [, name, value] of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
+      out.set(name, value.trim().replace(/\s+/g, ' '));
+    }
+  }
+  return out;
+}
+
+const isRoot = (s: string) => s === ':root' || /^:root,\s*\[data-accent-scope\]$/.test(s);
+const isLight = (s: string) => s === ":root[data-theme='light']";
+
+const core = declarations(css('tokens-core.css'), isRoot);
+const semanticSource = css('tokens-semantic.css');
+const semanticDark = declarations(semanticSource, isRoot);
+const semanticLight = declarations(semanticSource, isLight);
+
+function tokens(theme: 'dark' | 'light'): Decls {
+  return new Map([...core, ...semanticDark, ...(theme === 'light' ? semanticLight : [])]);
+}
+
+function resolveHex(name: string, theme: 'dark' | 'light'): string {
+  const all = tokens(theme);
+  let value = all.get(name);
+  for (let i = 0; i < 10 && value; i++) {
+    const ref = /^var\((--[\w-]+)\)$/.exec(value);
+    if (!ref) break;
+    value = all.get(ref[1]);
+  }
+  if (!value || !/^#[0-9a-f]{6}$/i.test(value)) {
+    throw new Error(`${name} (${theme}) does not resolve to a hex colour: ${value}`);
+  }
+  return value.toLowerCase();
+}
+
+const ratio = (fg: string, bg: string, theme: 'dark' | 'light') =>
+  contrastRatio(parseHex(resolveHex(fg, theme))!, parseHex(resolveHex(bg, theme))!);
+
+// ---------------------------------------------------------------------------
+
+describe('theme preference', () => {
+  afterEach(() => {
+    __resetThemeForTests();
+    localStorage.clear();
+    document.documentElement.removeAttribute('data-theme');
+  });
+
+  it('resolves System against the OS appearance, and Light / Dark as themselves', () => {
+    expect(resolveTheme('system', true)).toBe('dark');
+    expect(resolveTheme('system', false)).toBe('light');
+    expect(resolveTheme('light', true)).toBe('light');
+    expect(resolveTheme('dark', false)).toBe('dark');
+  });
+
+  it('only accepts the three preferences', () => {
+    expect(['system', 'light', 'dark'].every(isThemePreference)).toBe(true);
+    expect(isThemePreference('sepia')).toBe(false);
+    expect(isThemePreference(null)).toBe(false);
+  });
+
+  it('applies the cached preference to <html> on init', () => {
+    localStorage.setItem(THEME_CACHE_KEY, 'light');
+    initTheme();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    expect(getResolvedTheme()).toBe('light');
+  });
+});
+
+describe('boot script (index.html)', () => {
+  const html = readFileSync(resolve('index.html'), 'utf8');
+  const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+    .map((m) => m[1])
+    .find((body) => body.includes('app.theme'))!;
+
+  function boot(cached: string | null, systemDark: boolean) {
+    const el = document.createElement('html');
+    if (cached === null) localStorage.removeItem(THEME_CACHE_KEY);
+    else localStorage.setItem(THEME_CACHE_KEY, cached);
+    const win = { matchMedia: vi.fn(() => ({ matches: systemDark })) };
+    // Runs index.html's own boot script: testing that exact code is the point.
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const run = new Function('document', 'window', 'localStorage', script) as (
+      d: { documentElement: HTMLElement },
+      w: typeof win,
+      s: Storage
+    ) => void;
+    run({ documentElement: el }, win, localStorage);
+    return el;
+  }
+
+  afterEach(() => localStorage.clear());
+
+  it('applies the saved theme before the bundle loads', () => {
+    expect(boot('light', true).getAttribute('data-theme')).toBe('light');
+    expect(boot('dark', false).getAttribute('data-theme')).toBe('dark');
+    expect(boot('light', true).style.colorScheme).toBe('light');
+  });
+
+  it('follows the system for System, a missing cache, or a corrupt one', () => {
+    expect(boot('system', false).getAttribute('data-theme')).toBe('light');
+    expect(boot(null, true).getAttribute('data-theme')).toBe('dark');
+    expect(boot('url(evil)', false).getAttribute('data-theme')).toBe('light');
+  });
+
+  it('reads the key theme.ts writes, and picks the accent cache for that theme', () => {
+    expect(html).toContain(`localStorage.getItem('${THEME_CACHE_KEY}')`);
+    expect(html).toContain("'app.accent.light'");
+  });
+});
+
+describe('light token completeness', () => {
+  // Roles that are deliberately the same in both themes: they draw on the
+  // user's page, are fixed brand/traffic hues, or are ink on a coloured fill.
+  const THEME_INVARIANT = new Set([
+    '--surface-canvas',
+    '--accent-overlay',
+    '--accent-overlay-ink',
+    '--page-scrim',
+    '--page-scrim-strong',
+    '--mask-opaque',
+    // The rgba() fallback of an accent tint: follows the accent, not the theme.
+    '--accent-active-soft',
+    '--accent-warning-light',
+    '--shadow-source-control-attention',
+    // Accent inputs live in their own light block (checked below).
+    '--accent-user',
+    '--accent-on-user',
+    '--accent-user-rgb',
+    '--accent-user-hover',
+    '--accent-user-strong',
+    '--accent-user-start',
+    '--accent-user-end',
+  ]);
+  const colourBearing = (value: string) =>
+    /#[0-9a-f]{3,8}\b|rgba?\(|var\(--color-|^\d{1,3}, \d{1,3}, \d{1,3}$/i.test(value);
+
+  it('gives every colour-bearing semantic role a light value', () => {
+    const missing = [...semanticDark]
+      // The macOS traffic-light hues are the same in both themes.
+      .filter(([name]) => !name.endsWith('-traffic'))
+      .filter(([name, value]) => colourBearing(value) && !THEME_INVARIANT.has(name))
+      .filter(([name]) => !semanticLight.has(name))
+      .map(([name]) => name);
+    expect(missing).toEqual([]);
+  });
+
+  it('only overrides roles that exist (no typos creating new tokens)', () => {
+    const unknown = [...semanticLight.keys()].filter((name) => !semanticDark.has(name));
+    expect(unknown).toEqual([]);
+  });
+
+  it('keeps every RGB triplet equal to its solid colour in light', () => {
+    for (const [triplet, solid] of [
+      ['--accent-success-rgb', '--accent-success'],
+      ['--accent-warning-rgb', '--accent-warning'],
+      ['--accent-error-rgb', '--accent-error'],
+      ['--accent-error-light-rgb', '--accent-error-light'],
+      ['--accent-error-deep-rgb', '--accent-error-deep'],
+    ]) {
+      const rgb = parseHex(resolveHex(solid, 'light'))!.join(', ');
+      expect(semanticLight.get(triplet), triplet).toBe(rgb);
+    }
+  });
+
+  it('defaults the light accent inputs to accentVars("white", "light")', () => {
+    const lightWhite = accentVars('white', 'light');
+    for (const name of ['--accent-user', ...ACCENT_SHADE_VARS] as const) {
+      expect(resolveHex(name, 'light'), name).toBe(lightWhite[name]);
+    }
+  });
+});
+
+describe('contrast (WCAG AA) in both themes', () => {
+  const themes = ['dark', 'light'] as const;
+  const surfaces = ['--surface-app', '--surface-panel', '--surface-control'];
+
+  it.each(themes)('primary text clears AA on every surface (%s)', (theme) => {
+    for (const bg of [...surfaces, '--surface-control-hover', '--surface-selected']) {
+      expect(ratio('--text-primary', bg, theme), bg).toBeGreaterThanOrEqual(AA_TEXT);
+      expect(ratio('--text-white', bg, theme), bg).toBeGreaterThanOrEqual(AA_TEXT);
+    }
+  });
+
+  it.each(themes)('secondary text clears AA on app, panel and controls (%s)', (theme) => {
+    for (const bg of [...surfaces, '--surface-control-hover']) {
+      expect(ratio('--text-secondary', bg, theme), bg).toBeGreaterThanOrEqual(AA_TEXT);
+    }
+  });
+
+  it('muted text clears AA on the light theme’s app and panel surfaces', () => {
+    for (const bg of ['--surface-app', '--surface-panel']) {
+      expect(ratio('--text-muted', bg, 'light'), bg).toBeGreaterThanOrEqual(AA_TEXT);
+    }
+  });
+
+  it.each(themes)('muted text stays readable (≥ 3:1) on app and panel (%s)', (theme) => {
+    for (const bg of ['--surface-app', '--surface-panel']) {
+      expect(ratio('--text-muted', bg, theme), bg).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it.each(themes)('status colours read as text on the panel (%s)', (theme) => {
+    for (const fg of ['--accent-success', '--accent-warning', '--accent-error', '--status-info']) {
+      expect(ratio(fg, '--surface-panel', theme), fg).toBeGreaterThanOrEqual(AA_TEXT);
+    }
+  });
+
+  it.each(themes)('syntax roles read on the control surface (%s)', (theme) => {
+    for (const fg of [
+      '--syntax-property',
+      '--syntax-variable',
+      '--syntax-class',
+      '--syntax-tag',
+      '--syntax-function',
+      '--syntax-keyword',
+    ]) {
+      expect(ratio(fg, '--surface-control', theme), fg).toBeGreaterThanOrEqual(AA_TEXT);
+    }
+  });
+
+  it.each(themes)('the strong (Allow) fill carries its ink (%s)', (theme) => {
+    expect(ratio('--text-on-inverse', '--surface-inverse', theme)).toBeGreaterThanOrEqual(AA_TEXT);
+    expect(ratio('--text-on-inverse', '--surface-inverse-hover', theme)).toBeGreaterThanOrEqual(
+      AA_TEXT
+    );
+  });
+
+  it('makes the strong (Allow) fill near-black with white ink on light', () => {
+    expect(resolveHex('--surface-inverse', 'light')).toBe('#1c1c1c');
+    expect(resolveHex('--text-on-inverse', 'light')).toBe('#ffffff');
+  });
+});
+
+describe('the accent on each theme', () => {
+  it('maps the white accent to near-black on light, and nothing else', () => {
+    expect(accentHex('white', 'light')).toBe(LIGHT_THEME_WHITE);
+    expect(accentHex('white', 'dark')).toBe('#e6e6e6');
+    for (const key of AGENT_COLORS_FOR_TESTS.filter((k) => k !== 'white')) {
+      expect(accentHex(key, 'light'), key).toBe(accentHex(key, 'dark'));
+    }
+    expect(accentVars('white', 'light')['--accent-on-user']).toBe('#ffffff');
+  });
+
+  it.each(['dark', 'light'] as const)('keeps accent ink at AA on every fill (%s)', (theme) => {
+    for (const key of AGENT_COLORS_FOR_TESTS) {
+      const vars = accentVars(key, theme);
+      const ink = parseHex(vars['--accent-on-user'])!;
+      for (const fill of ['--accent-user', ...ACCENT_SHADE_VARS] as const) {
+        expect(contrastRatio(parseHex(vars[fill])!, ink), `${key} ${fill}`).toBeGreaterThanOrEqual(
+          AA_TEXT
+        );
+      }
+    }
+  });
+
+  it.each(['dark', 'light'] as const)(
+    'keeps accent-coloured text (--accent-text) at AA on the panel (%s)',
+    (theme) => {
+      const panel = parseHex(resolveHex('--surface-panel', theme))!;
+      const text = resolveHex('--text-primary', theme);
+      for (const key of AGENT_COLORS_FOR_TESTS) {
+        const share = parseFloat(tokens(theme).get('--accent-text-share')!) / 100;
+        const mixed = mixOklchWithNeutral(accentHex(key, theme), text, share);
+        expect(contrastRatio(parseHex(mixed)!, panel), key).toBeGreaterThanOrEqual(AA_TEXT);
+      }
+    }
+  );
+
+  it('keeps the light white accent distinct from the light surfaces', () => {
+    const accent = parseHex(accentHex('white', 'light'))!;
+    for (const bg of ['--surface-app', '--surface-panel']) {
+      expect(contrastRatio(accent, parseHex(resolveHex(bg, 'light'))!)).toBeGreaterThan(10);
+    }
+  });
+});
+
+describe('terminal palette', () => {
+  it('matches the app surface in each theme', () => {
+    expect(terminalTheme('normal', 'dark').background).toBe(resolveHex('--surface-app', 'dark'));
+    expect(terminalTheme('normal', 'light').background).toBe(resolveHex('--surface-app', 'light'));
+  });
+
+  it('keeps the foreground and ANSI colours readable on the light background', () => {
+    const t = terminalTheme('normal', 'light');
+    const bg = parseHex(t.background!)!;
+    for (const key of [
+      'foreground',
+      'red',
+      'green',
+      'yellow',
+      'blue',
+      'magenta',
+      'cyan',
+    ] as const) {
+      expect(contrastRatio(parseHex(t[key]!)!, bg), key).toBeGreaterThanOrEqual(AA_TEXT);
+    }
+  });
+});

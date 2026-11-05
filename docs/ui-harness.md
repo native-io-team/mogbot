@@ -29,6 +29,7 @@ node scripts/harness-capture.mjs                # scenarios only
 node scripts/harness-capture.mjs --commands     # palette sweep only
 node scripts/harness-capture.mjs hosting-       # filter by id prefix
 node scripts/harness-capture.mjs --out /tmp/a   # capture somewhere else
+node scripts/harness-capture.mjs --all --theme light   # force light (or dark / system)
 ```
 
 A full run owns the output directory and clears it, so nothing stale can be

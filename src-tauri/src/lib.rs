@@ -260,7 +260,8 @@ pub fn run() {
                 .resizable(true)
                 .fullscreen(false)
                 .transparent(true)
-                .background_color(tauri::utils::config::Color(45, 45, 45, 255))
+                .background_color(commands::settings::saved_window_background())
+                .theme(commands::settings::saved_native_theme())
                 .initialization_script_for_all_frames(webview_scripts::INSPECTOR_SHIM);
 
                 #[cfg(target_os = "macos")]
@@ -856,6 +857,8 @@ pub fn run() {
             commands::settings::set_thumbnails_enabled,
             commands::settings::get_app_icon,
             commands::settings::set_app_icon,
+            commands::settings::get_app_theme,
+            commands::settings::set_app_theme,
             // Accounts (Workspaces)
             commands::accounts::list_accounts,
             commands::accounts::create_account,
