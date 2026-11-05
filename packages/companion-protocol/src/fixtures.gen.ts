@@ -223,7 +223,22 @@ export const agentsOverview = {
       "status": {
         "activity": "Running npm test",
         "since": 1762290000000,
-        "state": "waiting"
+        "state": "waiting",
+        "work": {
+          "fileCount": 1,
+          "files": [
+            "App.tsx"
+          ],
+          "startedAt": 1762290000000,
+          "stepCount": 3,
+          "steps": [
+            {
+              "at": 1762290030000,
+              "kind": "command",
+              "label": "Ran npm test"
+            }
+          ]
+        }
       },
       "unread": 2
     }
@@ -752,6 +767,91 @@ export const agentsMessages = {
       "kind": "approval",
       "text": "",
       "ts": 1762290024000
+    },
+    {
+      "agentId": "a1",
+      "id": "m25",
+      "kind": "agent",
+      "text": "Fixed the header.",
+      "ts": 1762290025000,
+      "work": {
+        "endedAt": 1762290025000,
+        "fileCount": 2,
+        "files": [
+          "Header.tsx",
+          "Nav.tsx"
+        ],
+        "startedAt": 1762290013000,
+        "stepCount": 14,
+        "steps": [
+          {
+            "at": 1762290013000,
+            "kind": "plan",
+            "label": "Updated its plan"
+          },
+          {
+            "at": 1762290014000,
+            "kind": "read",
+            "label": "Read Header.tsx"
+          },
+          {
+            "at": 1762290014000,
+            "kind": "search",
+            "label": "Searched for “padding”"
+          },
+          {
+            "at": 1762290015000,
+            "kind": "web",
+            "label": "Searched the web for “header spacing”"
+          },
+          {
+            "at": 1762290015000,
+            "kind": "edit",
+            "label": "Edited Header.tsx"
+          },
+          {
+            "at": 1762290016000,
+            "kind": "command",
+            "label": "Ran npm test"
+          },
+          {
+            "at": 1762290017000,
+            "kind": "approval",
+            "label": "Asked you to approve: Run a command"
+          },
+          {
+            "at": 1762290018000,
+            "kind": "message",
+            "label": "Messaged Ops"
+          },
+          {
+            "at": 1762290019000,
+            "kind": "delegate",
+            "label": "Ran a sub-task: check the nav"
+          },
+          {
+            "at": 1762290020000,
+            "kind": "project",
+            "label": "Worked in site"
+          },
+          {
+            "at": 1762290021000,
+            "image": {
+              "mime": "image/jpeg",
+              "name": "Desktop.jpg",
+              "path": "attachments/m17/Desktop.jpg",
+              "size": 184000
+            },
+            "kind": "screenshot",
+            "label": "Took a screenshot of site"
+          },
+          {
+            "at": 1762290022000,
+            "kind": "tool",
+            "label": "Used navigate (claude-in-chrome)"
+          }
+        ]
+      }
     }
   ],
   "more": false
@@ -1635,7 +1735,22 @@ export const frames = [
             "status": {
               "activity": "Running npm test",
               "since": 1762290000000,
-              "state": "waiting"
+              "state": "waiting",
+              "work": {
+                "fileCount": 1,
+                "files": [
+                  "App.tsx"
+                ],
+                "startedAt": 1762290000000,
+                "stepCount": 3,
+                "steps": [
+                  {
+                    "at": 1762290030000,
+                    "kind": "command",
+                    "label": "Ran npm test"
+                  }
+                ]
+              }
             },
             "unread": 2
           }
@@ -1947,7 +2062,22 @@ export const frames = [
             "status": {
               "activity": "Running npm test",
               "since": 1762290000000,
-              "state": "waiting"
+              "state": "waiting",
+              "work": {
+                "fileCount": 1,
+                "files": [
+                  "App.tsx"
+                ],
+                "startedAt": 1762290000000,
+                "stepCount": 3,
+                "steps": [
+                  {
+                    "at": 1762290030000,
+                    "kind": "command",
+                    "label": "Ran npm test"
+                  }
+                ]
+              }
             },
             "unread": 2
           }

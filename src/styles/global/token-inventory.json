@@ -4610,7 +4610,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 480
+      "consumerCount": 483
     },
     {
       "name": "--text-muted",
@@ -4619,7 +4619,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 792
+      "consumerCount": 796
     },
     {
       "name": "--text-faint",
@@ -5033,7 +5033,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 385
+      "consumerCount": 388
     },
     {
       "name": "--font-size-control",
@@ -5186,7 +5186,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 70
+      "consumerCount": 72
     },
     {
       "name": "--line-height-help",
@@ -5222,7 +5222,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 79
+      "consumerCount": 80
     },
     {
       "name": "--transition-interaction-slow",
@@ -5231,7 +5231,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 2
+      "consumerCount": 4
     },
     {
       "name": "--transition-icon-swap",
@@ -5339,7 +5339,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 233
+      "consumerCount": 234
     },
     {
       "name": "--spacing-xs",
@@ -5348,7 +5348,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 560
+      "consumerCount": 563
     },
     {
       "name": "--spacing-sm",
@@ -5357,7 +5357,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 674
+      "consumerCount": 683
     },
     {
       "name": "--spacing-md",
@@ -5366,7 +5366,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 489
+      "consumerCount": 491
     },
     {
       "name": "--spacing-lg",

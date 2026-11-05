@@ -379,7 +379,7 @@ impl Conversation {
                             }
                         }
                         activity(item)
-                            .map(|a| vec![Out::Step(Step::Activity(a))])
+                            .map(|a| vec![Out::Step(Step::Action(a))])
                             .unwrap_or_default()
                     }
                     None => Vec::new(),
@@ -615,8 +615,8 @@ fn quoted(message: &str) -> Option<String> {
 }
 
 /// An app-server item as the `exec` item it corresponds to, labelled the
-/// same way on the activity line.
-fn activity(item: &Value) -> Option<String> {
+/// same way on the activity line and in the timeline.
+fn activity(item: &Value) -> Option<super::work::Action> {
     let kind = match item.get("type")?.as_str()? {
         "commandExecution" => "command_execution",
         "fileChange" => "file_change",
@@ -627,7 +627,7 @@ fn activity(item: &Value) -> Option<String> {
     };
     let mut item = item.clone();
     item["type"] = json!(kind);
-    super::codex::activity(&item)
+    super::codex::action(&item)
 }
 
 /// Answer one of Codex's requests: the same decision a Claude Code call gets
@@ -848,7 +848,7 @@ mod tests {
         assert!(out.contains(&Out::Step(Step::Reply("Ran it.".into()))));
         assert!(out
             .iter()
-            .any(|o| matches!(o, Out::Step(Step::Activity(a)) if a.contains("echo esc-ok"))));
+            .any(|o| matches!(o, Out::Step(Step::Action(a)) if a.label.contains("echo esc-ok"))));
         let asks: Vec<&Ask> = out
             .iter()
             .filter_map(|o| match o {

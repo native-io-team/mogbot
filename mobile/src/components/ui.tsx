@@ -190,6 +190,13 @@ type SFName = Extract<SymbolViewProps['name'], string>;
  */
 const MATERIAL: Partial<Record<SFName, string>> = {
   'arrow.up': 'arrow_upward',
+  'bubble.left': 'chat_bubble',
+  'checkmark.shield': 'verified_user',
+  globe: 'public',
+  'list.bullet': 'list',
+  pencil: 'edit',
+  'person.2': 'group',
+  puzzlepiece: 'extension',
   'arrow.down': 'arrow_downward',
   'arrow.clockwise': 'refresh',
   'arrow.trianglehead.2.clockwise': 'sync',

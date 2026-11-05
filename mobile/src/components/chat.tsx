@@ -22,6 +22,7 @@ import { Spinner } from './agent';
 import { ApprovalCard } from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
+import { WorkLine } from './work';
 import { useApp } from '../lib/store';
 
 const enter = FadeInDown.duration(220).springify().damping(18);
@@ -91,6 +92,7 @@ export const MessageRow = memo(function MessageRow({
               Stopped
             </T>
           )}
+          {message.work && <WorkLine message={message} work={message.work} onError={onError} />}
         </Pressable>
       );
     case 'approval':
@@ -124,8 +126,8 @@ export const MessageRow = memo(function MessageRow({
           onError={onError}
         />
       ) : null;
-    case 'error':
-      return (
+    case 'error': {
+      const line = (
         <View style={styles.errorRow}>
           <Icon name="exclamationmark.circle" size={14} color={colors.accentErrorLight} />
           <T variant="small" color={colors.accentErrorLight} style={{ flex: 1 }}>
@@ -133,9 +135,25 @@ export const MessageRow = memo(function MessageRow({
           </T>
         </View>
       );
+      if (!message.work) return line;
+      return (
+        <View style={styles.agentRow}>
+          {line}
+          <WorkLine message={message} work={message.work} onError={onError} />
+        </View>
+      );
+    }
     case 'session':
       return message.session ? <SessionCard message={message} onError={onError} /> : null;
     default:
+      if (message.work) {
+        return (
+          <View style={styles.agentRow}>
+            <SystemLine message={message} />
+            <WorkLine message={message} work={message.work} onError={onError} />
+          </View>
+        );
+      }
       return <SystemLine message={message} />;
   }
 });

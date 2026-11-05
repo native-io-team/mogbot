@@ -30,6 +30,7 @@
 //! - [`secrets`]: credentials an agent asked for, kept in the Keychain, never shown to it
 //! - [`stream`]: a reply while it is being written (drafts)
 //! - [`usage`]: tokens and cost per agent, from each turn's `result` event
+//! - [`work`]: what a turn did, step by step, for the timeline under its reply
 //!
 //! Full design: docs/agents.md.
 
@@ -66,6 +67,7 @@ pub mod store;
 pub mod stream;
 pub mod tray;
 pub mod usage;
+pub mod work;
 
 use crate::errors::CommandError;
 
@@ -107,6 +109,7 @@ fn greet(agent_id: &str) {
         changes: None,
         session: None,
         client_id: None,
+        work: None,
     };
     if let Err(e) = store::append_message(&message) {
         tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");

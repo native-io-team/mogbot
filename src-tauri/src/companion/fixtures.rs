@@ -65,6 +65,7 @@ fn status_value(state: &'static str) -> Value {
         state,
         activity: (state != "idle").then(|| "Reading src/App.tsx".to_string()),
         since: (state != "idle").then_some(1_762_290_000_000),
+        work: None,
     })
     .unwrap()
 }
@@ -146,6 +147,7 @@ fn frames() -> Vec<ServerFrame> {
                     state: "working",
                     activity: Some("Waiting for a free slot (4 agents already working)".into()),
                     since: None,
+                    work: None,
                 })
                 .unwrap(),
             },

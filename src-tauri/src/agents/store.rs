@@ -11,6 +11,7 @@
 //!     messages.jsonl         the conversation as the user sees it (append-only)
 //!     approvals.jsonl        how its approval cards were answered
 //!     turn.json, inbox.json  a turn in flight and what's queued behind it
+//!     turns/<message-id>.json  what the turn ending on that message did (`work`)
 //! ```
 //!
 //! The chat log is ours, not Claude Code's session file. It records exactly
@@ -272,6 +273,10 @@ pub struct AgentMessage {
     /// phone swaps its optimistic bubble by id. Absent everywhere else.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
+    /// What the turn that ended on this message did (`agents::work`). Never in
+    /// `messages.jsonl`: it is kept beside it, in `turns/<id>.json`, and added on read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work: Option<super::work::TurnWork>,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -972,6 +977,7 @@ pub fn messages_page(
     all.truncate(end);
     let mut page = all.split_off(start);
     apply_answers(agent_id, &mut page)?;
+    super::work::apply(agent_id, &mut page);
     Ok(page)
 }
 
@@ -1232,6 +1238,7 @@ mod tests {
                         cli: Some("claude".into()),
                     }),
                     client_id: None,
+                    work: None,
                 })
                 .unwrap();
             }
@@ -1442,6 +1449,7 @@ mod tests {
                 changes: None,
                 session: None,
                 client_id: None,
+                work: None,
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -1482,6 +1490,7 @@ mod tests {
             failure: None,
             session: None,
             client_id: None,
+            work: None,
         }
     }
 

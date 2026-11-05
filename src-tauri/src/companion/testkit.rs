@@ -173,6 +173,24 @@ pub fn messages() -> Vec<AgentMessage> {
                 "approval": { "requestId": "q11", "title": "Other", "detail": "Other", "status": "expired",
                               "secret": { "name": "Other", "purpose": "Other", "kind": "other",
                                           "fields": [{ "label": "Value", "env": "OTHER" }], "reference": "secret:finance/other" } } }),
+        // A reply with the timeline of the turn it ended (`agents::work`): every step kind.
+        json!({ "id": "m25", "agentId": AGENT, "ts": at(25), "kind": "agent", "text": "Fixed the header.",
+                "work": { "startedAt": at(13), "endedAt": at(25), "stepCount": 14, "fileCount": 2, "files": ["Header.tsx", "Nav.tsx"],
+                          "steps": [
+                              { "at": at(13), "kind": "plan", "label": "Updated its plan" },
+                              { "at": at(14), "kind": "read", "label": "Read Header.tsx" },
+                              { "at": at(14), "kind": "search", "label": "Searched for “padding”" },
+                              { "at": at(15), "kind": "web", "label": "Searched the web for “header spacing”" },
+                              { "at": at(15), "kind": "edit", "label": "Edited Header.tsx" },
+                              { "at": at(16), "kind": "command", "label": "Ran npm test" },
+                              { "at": at(17), "kind": "approval", "label": "Asked you to approve: Run a command" },
+                              { "at": at(18), "kind": "message", "label": "Messaged Ops" },
+                              { "at": at(19), "kind": "delegate", "label": "Ran a sub-task: check the nav" },
+                              { "at": at(20), "kind": "project", "label": "Worked in site" },
+                              { "at": at(21), "kind": "screenshot", "label": "Took a screenshot of site",
+                                "image": { "name": "Desktop.jpg", "path": "attachments/m17/Desktop.jpg", "mime": "image/jpeg", "size": 184_000 } },
+                              { "at": at(22), "kind": "tool", "label": "Used navigate (claude-in-chrome)" }
+                          ] } }),
     ];
     list.into_iter().map(|m| round_trip(m, &[])).collect()
 }
@@ -219,6 +237,19 @@ pub fn overview() -> Value {
         state: "waiting",
         activity: Some("Running npm test".into()),
         since: Some(1_762_290_000_000),
+        work: Some(crate::agents::work::TurnWork {
+            started_at: 1_762_290_000_000,
+            ended_at: None,
+            step_count: 3,
+            steps: vec![crate::agents::work::WorkStep {
+                at: 1_762_290_030_000,
+                kind: crate::agents::work::StepKind::Command,
+                label: "Ran npm test".into(),
+                image: None,
+            }],
+            files: vec!["App.tsx".into()],
+            file_count: 1,
+        }),
     };
     let view = crate::commands::agents::AgentView {
         agent: stored_agent(),
@@ -388,6 +419,7 @@ fn status(state: &'static str) -> Value {
         state,
         activity: (state == "working").then(|| "Thinking".to_string()),
         since: None,
+        work: None,
     })
     .unwrap()
 }

@@ -909,6 +909,7 @@ pub(super) async fn ask_user(
             state: "waiting",
             activity: Some("Waiting for your OK".into()),
             since: before.since,
+            work: None,
         },
     );
 
@@ -949,6 +950,7 @@ pub(super) async fn ask_user(
                 state: "working",
                 activity: None,
                 since: before.since,
+                work: None,
             },
         );
     }

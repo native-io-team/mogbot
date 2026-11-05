@@ -149,6 +149,35 @@ far back as the page needs, and apply `approvals.jsonl` to the page read. A log 
 fails with the reason; a reply mid-turn is still shown, with one error line
 (at most a minute) saying it won't survive a restart.
 
+### What it did (`src-tauri/src/agents/work.rs`)
+
+Under the last message a turn leaves (its reply, its error, or "Stopped"),
+one quiet line: "Worked 6 min · 23 steps · edited 2 files". It opens into
+the steps in order, each with its time into the turn and any screenshot it
+produced. Every step is something observed: a tool call in the engine's own
+output (Claude Code's `tool_use`, a Codex item; a call reported twice is one
+step), an approval card, a preview screenshot. "Edited n files" counts the
+distinct paths its edit calls named. A turn with no steps has no line.
+
+- **Words, not tool names**: `work::describe_tool` is the one table ("Read
+  Hero.tsx", "Ran npm test", "Searched the web for “…”", "Messaged Acme
+  Site"); the working line uses its present tense ("Reading Hero.tsx").
+- **Live**: while the turn runs, the status carries `work` (the newest 12
+  steps). The desktop's working line gets a "5 steps" toggle that opens the
+  steps so far above it; the working line stays the current step. A bound
+  agent's list offers **Open project** (its workspace), the only real way in.
+- **Stored** beside the log, never in it: `turns/<message-id>.json`, applied
+  to a page on read and sent again on `agents://message` when the turn ends.
+  `messages.jsonl` stays append-only; older builds show no timeline.
+- **Bounded and scrubbed**: at most 60 steps (the newest; `stepCount` says
+  how many there were), labels of at most 100 characters, 30 file names. Tool
+  inputs are never stored, only the label made from them, after Keychain
+  redaction plus `work::scrub` (blanks `TOKEN=…`, bearer headers, URL
+  passwords, `--token x`, key-shaped strings).
+- **Phone**: `work` is an optional field on the message and the status; the
+  companion shows the folded line and the list under the message
+  (`mobile/src/components/work.tsx`). Older phones ignore it.
+
 ## Tools agents get (`src-tauri/src/agents/mcp.rs`)
 
 Served by the existing loopback agent bridge at
