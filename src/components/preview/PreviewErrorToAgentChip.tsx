@@ -40,7 +40,8 @@ export function PreviewErrorToAgentChip({
   return (
     <div
       className="preview-error-agent-chip"
-      role="dialog"
+      role="region"
+      aria-live="polite"
       aria-label="Send this error to the agent?"
       data-testid="preview-error-agent-chip"
     >
