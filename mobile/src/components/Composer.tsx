@@ -510,6 +510,10 @@ function RoundButton({
   );
 }
 
+/** A one-line field: its line plus its vertical padding and hairline borders. */
+const FIELD_MIN =
+  lineHeight(type.body, 1.35) + space.md * 2 + StyleSheet.hairlineWidth * 2;
+
 const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: space.md,
@@ -560,7 +564,11 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: space.xs },
   hit: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  // The + is a circle exactly as tall as the one-line field beside it.
   attach: {
+    width: FIELD_MIN,
+    height: FIELD_MIN,
+    borderRadius: FIELD_MIN / 2,
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderStrong,
