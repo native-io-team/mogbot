@@ -389,13 +389,13 @@ body.compact-mode-active html {
 }
 
 .toggle-pill-switch.is-on {
-  background: var(--accent-success);
-  border-color: var(--accent-success);
+  background: var(--accent-active);
+  border-color: var(--accent-active);
 }
 
 .toggle-pill-switch.is-on::after {
   transform: translateX(10px);
-  background: var(--text-inverse);
+  background: var(--text-on-accent);
 }
 
 /* Rotate the chevron 180° when its parent dropdown is open. */
@@ -508,6 +508,20 @@ body.compact-mode-active html {
   background: transparent;
   color: var(--button-text-hover);
   border-color: var(--button-border-outline);
+}
+
+/* Neutral emphasis: the strongest button that carries no colour. Used where a
+   coloured fill would say something it shouldn't — Allow on an approval card
+   must not take the accent, which may be red. */
+.button--strong {
+  background: var(--button-strong-surface);
+  color: var(--button-strong-text);
+  border-color: transparent;
+}
+
+.button--strong:hover:not(:disabled) {
+  background: var(--button-strong-surface-hover);
+  color: var(--button-strong-text);
 }
 
 .button--danger {
@@ -664,4 +678,12 @@ body.compact-mode-active html {
   50% {
     opacity: 0.7;
   }
+}
+
+/* An inline error's leading icon. The accent is user-chosen and may be red, so
+   an error message carries a glyph as well as a colour. */
+.inline-error-icon {
+  flex-shrink: 0;
+  margin-right: var(--spacing-2xs);
+  vertical-align: -0.125em;
 }

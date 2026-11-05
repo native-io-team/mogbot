@@ -90,6 +90,32 @@ pub(crate) fn err_invalid(field: &str, reason: impl Into<String>) -> CommandErro
     }
 }
 
+/// The Chief speaks first: a new Chief's chat opens on its greeting. A
+/// failure here is logged, never fatal; the chat is only emptier.
+fn greet(agent_id: &str) {
+    let message = store::AgentMessage {
+        id: store::new_id(),
+        agent_id: agent_id.to_string(),
+        ts: store::now_ms(),
+        kind: store::MessageKind::Agent,
+        text: prompts::CHIEF_GREETING.to_string(),
+        peer: None,
+        approval: None,
+        attachments: Vec::new(),
+        check_in: None,
+        stopped: false,
+        mentions: Vec::new(),
+        failure: None,
+        changes: None,
+        session: None,
+        client_id: None,
+        fresh: false,
+    };
+    if let Err(e) = store::append_message(&message) {
+        tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");
+    }
+}
+
 /// The Chief of Staff exists from the first time anyone looks.
 pub fn ensure_main() -> Result<store::Agent, CommandError> {
     if let Some(main) = store::list()?.into_iter().find(|a| a.is_main) {
@@ -104,11 +130,38 @@ pub fn ensure_main() -> Result<store::Agent, CommandError> {
         is_main: true,
     });
     match created {
-        Ok(agent) => Ok(agent),
+        Ok(agent) => {
+            greet(&agent.id);
+            Ok(agent)
+        }
         // Two callers raced; the other one made it.
         Err(_) => store::list()?
             .into_iter()
             .find(|a| a.is_main)
             .ok_or_else(|| err_other("Couldn't create the Chief of Staff.")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_new_chief_opens_on_its_greeting_once() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let chief = ensure_main().unwrap();
+        let again = ensure_main().unwrap();
+        let log = store::messages(&chief.id, 10).unwrap();
+        store::set_root_for_tests(None);
+        assert_eq!(chief.id, again.id);
+        assert_eq!(
+            log.len(),
+            1,
+            "one greeting, however often the Chief is looked up"
+        );
+        assert_eq!(log[0].kind, store::MessageKind::Agent);
+        assert_eq!(log[0].text, prompts::CHIEF_GREETING);
     }
 }

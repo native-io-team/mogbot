@@ -19,7 +19,7 @@ import { trackEvent, trackError } from '../lib/analytics';
 import { logger } from '../lib/logger';
 import { asCommandError, formatCommandError } from '../lib/errors';
 import { usePolling } from '../hooks/usePolling';
-import { AlertIcon, CloseIcon, DownloadIcon, ResetIcon } from '@/components/icons';
+import { AlertIcon, CloseIcon, DownloadIcon, ErrorIcon, ResetIcon } from '@/components/icons';
 import { Button } from './primitives/Button';
 import { IconButton } from './primitives/IconButton';
 import { ModalFrame } from './primitives/ModalFrame';
@@ -312,6 +312,8 @@ export function UpdateBanner() {
                     <DownloadIcon size={14} />
                   </span>
                 </>
+              ) : status === 'error' ? (
+                <ErrorIcon size={14} />
               ) : (
                 <DownloadIcon size={14} />
               )}

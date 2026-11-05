@@ -17,6 +17,23 @@ which. New agent is ⌘N, the row at the foot of the agent list, or ⌘K. In the
 collapsed rail the toggle is two stacked icons; below the compact breakpoint
 it is an icon pair at the top bar's leading edge.
 
+Agents is the primary view: the app opens on it (a project window opens its
+workspace instead), and onboarding ends there. A new Chief's chat opens on its
+greeting, `prompts::CHIEF_GREETING`, appended by `ensure_main` when it creates
+the Chief: what it can do (create agents, delegate, approvals, projects, the
+phone) and a question. It is stored, not generated, so nothing runs on the
+user's plan until they reply, and `CHIEF_INSTRUCTIONS` tells the Chief it said
+it. Three starters sit under it until the user's first message.
+
+In Agents mode the sidebar's top row is the toggle and a bell: What's in
+flight, badged amber with how many agents need you (Home, Workflows and the
+Inbox belong to the Projects side). Its foot has the Phone row (the companion
+app: pair, or which phone is connected); remote access, for driving the app
+from another assistant, appears there only while it is on and is otherwise
+reached from the Phone panel's last line or ⌘K. In a project's workspace
+sidebar, agents bound to that project are listed above its terminal
+Sessions; clicking one opens its chat.
+
 ## What an agent is
 
 | Piece | Where | Notes |
@@ -660,9 +677,11 @@ back from the thing itself:
   here shows in remote access's checklist too. Hidden in a dev build, which has
   no installed app to reopen.
 
-They are offered in two quiet places only: under the Chief of Staff's
-first-run starters, with a line that says what happens ("Closing Ship Studio
-stops them, and sleep pauses them.", or with Keep running on, "Closing the
+They are offered in two quiet places only, and only once they matter: at the
+foot of What's in flight while an agent is working or something is scheduled
+(not on a new user's first screen, which is the Chief's hello), with a line
+that says what happens ("Quitting the app stops them, and sleep pauses
+them.", or with Keep running on, "Closing the
 window keeps them going; quitting stops them, and sleep pauses them.") and one
 line suggesting an always-on Mac, such as a Mac mini or a cloud Mac, for
 round-the-clock agents; and as a "Keep this Mac awake" link at the end of the

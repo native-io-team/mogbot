@@ -11,7 +11,7 @@
  * next agent that needs you (a card, or a turn that didn't finish); ⌘F
  * search, Esc to put it away; Esc twice in an empty composer stops a working
  * agent (AgentChat); ⌘K "Open <agent>", "Stop <agent>", "What's in flight"
- * (the cross-agent overview, reachable only from there), and Allow / Deny for
+ * (the cross-agent overview, also the bell beside the sidebar toggle), and Allow / Deny for
  * the oldest card waiting on you.
  *
  * @module components/agents/AgentsView
@@ -31,6 +31,8 @@ import { ImportAgentsModal } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
 import { ProjectActionConfirmModal } from '../dashboard/ProjectActionConfirmModal';
 import { Spinner } from '../primitives/Spinner';
+import { Button } from '../primitives/Button';
+import { TextButton } from '../primitives/TextButton';
 import {
   answerApproval,
   canStartFresh,
@@ -39,6 +41,7 @@ import {
   markAgentUnread,
   needsAttention,
   needsYou,
+  noEngineInstalled,
   sortAgents,
   startAgentFresh,
   stopAgent,
@@ -59,14 +62,22 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { useAgentsIntents } from '../../commands/useAgentsCommands';
 import { useCommands } from '../../commands/useCommands';
-import { AgentsModeIcon, CheckIcon, CloseIcon, EditFieldIcon, ResetIcon } from '@/components/icons';
+import {
+  ActivityIcon,
+  AgentsModeIcon,
+  CheckIcon,
+  CloseIcon,
+  EditFieldIcon,
+  ResetIcon,
+} from '@/components/icons';
+import { IconButton } from '../primitives/IconButton';
 import { kbd } from '../../lib/shortcuts';
 
 const SELECTED_KEY = 'shipstudio.agents.selected';
 
 function readSelected(): string | null {
   try {
-    // "What's in flight" is a ⌘K detour, never where Agents reopens.
+    // "What's in flight" (the bell, or ⌘K) is a detour, never where Agents reopens.
     const id = localStorage.getItem(SELECTED_KEY);
     return id === TEAM_ID ? null : id;
   } catch {
@@ -123,7 +134,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const [jump, setJump] = useState<{ agentId: string; messageId: string } | null>(null);
 
   const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
-  // "What's in flight" (⌘K only), else the last agent you had open, else the Chief of Staff.
+  // "What's in flight" (the bell or ⌘K), else the last agent you had open, else the Chief of Staff.
   const teamOpen = selectedId === TEAM_ID;
   const selected = teamOpen
     ? null
@@ -317,6 +328,8 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [openAgent]);
 
+  const needsYouCount = agents.filter((a) => !a.hidden && needsYou(a)).length;
+
   // The oldest card waiting on you, on the first agent (sidebar order) with one.
   const waitingOn = sortAgents(agents).find((a) => !a.hidden && needsYou(a)) ?? null;
   const topCard = useAgentsSelector((s) =>
@@ -473,6 +486,13 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
           <HomeSidebar
             {...sidebarProps}
             activeNav="agents"
+            navContent={
+              <InFlightButton
+                active={teamOpen}
+                needsYouCount={needsYouCount}
+                onOpen={() => setSelectedId(TEAM_ID)}
+              />
+            }
             searchContent={
               <AgentsTopSearch
                 search={search}
@@ -511,6 +531,11 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
           )}
           {error && !loaded ? (
             <div className="agents-main__state">{error}</div>
+          ) : loaded && noEngineInstalled(engines) ? (
+            <NoEngine
+              onSetUp={(engine) => setEngineSetup({ engine, step: 'install' })}
+              onGoProjects={sidebarProps.onGoProjects}
+            />
           ) : teamOpen ? (
             <AgentsTeamView
               onOpenAgent={openAgent}
@@ -638,6 +663,77 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
           onConfirm={() => void confirmDelete()}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Beside the sidebar toggle: What's in flight, the overview of every agent,
+ * with how many are waiting on you. Its own icon (activity, not the bell): on
+ * the Projects side the bell is the Workflows inbox, and one icon meaning two
+ * things would send people to the wrong place.
+ */
+function InFlightButton({
+  active,
+  needsYouCount,
+  onOpen,
+}: {
+  active: boolean;
+  needsYouCount: number;
+  onOpen: () => void;
+}) {
+  const label =
+    needsYouCount > 0 ? `What’s in flight — ${needsYouCount} need you` : 'What’s in flight';
+  return (
+    <span className="workspace-sidebar-inbox">
+      <IconButton
+        variant="ghost"
+        className={`workspace-sidebar-home ${active ? 'is-active' : ''}`}
+        icon={<ActivityIcon size={12} />}
+        onClick={onOpen}
+        disabled={active}
+        aria-current={active ? 'page' : undefined}
+        title={label}
+        aria-label={label}
+      />
+      {needsYouCount > 0 && (
+        <span className="workspace-sidebar-inbox-badge agents-inflight-badge" aria-hidden>
+          {needsYouCount > 9 ? '9+' : needsYouCount}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Neither engine is on this computer: someone set up on Opencode, Cursor or
+ * their own agent. Their projects work as before; agents need one of these.
+ */
+function NoEngine({
+  onSetUp,
+  onGoProjects,
+}: {
+  onSetUp: (engine: AgentEngine) => void;
+  onGoProjects: () => void;
+}) {
+  return (
+    <div className="agents-main__state">
+      <div className="agents-no-engine">
+        <h2 className="agents-no-engine__title">Agents run on Claude Code or Codex</h2>
+        <p className="agents-no-engine__body">
+          Each agent is a Claude Code or Codex session on this computer, on your own account. Set
+          one up and your Chief of Staff is ready to talk.
+        </p>
+        <div className="agents-no-engine__actions">
+          <Button variant="primary" onClick={() => onSetUp('claude')}>
+            Set up Claude Code
+          </Button>
+          <Button variant="secondary" onClick={() => onSetUp('codex')}>
+            Set up Codex
+          </Button>
+        </div>
+        <TextButton onClick={onGoProjects}>Your projects are where you left them</TextButton>
+      </div>
     </div>
   );
 }

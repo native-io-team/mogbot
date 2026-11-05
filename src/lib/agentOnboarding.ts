@@ -1,12 +1,17 @@
 /**
- * Agent-led onboarding: the agent does the setup work, the app verifies it.
+ * Agent-led setup: the agent does the setup work, the app verifies it.
  *
- * The flow inverts the classic wizard. Phase 0 gets exactly one AI agent
- * installed + signed in (the only part that can't be agent-led). Phase 1
- * spawns that agent in a terminal with a prescriptive setup prompt and lets
- * it install everything else (Homebrew/winget, Node, Git, GitHub CLI, GitHub
- * sign-in) while a checklist polls `get_full_setup_status` — the backend's
- * real checks, never the agent's own claims, decide when setup is complete.
+ * Onboarding needs exactly one thing: an engine that can run Agents (Claude
+ * Code or Codex) installed and signed in. That is the only part that can't
+ * be agent-led, and it is all a person needs to start talking to their Chief
+ * of Staff.
+ *
+ * Project tools (Homebrew/winget, Node, Git, GitHub CLI, GitHub sign-in) are
+ * asked for later, the first time work becomes a project
+ * (`ProjectToolsModal`): the agent is spawned in a terminal with a
+ * prescriptive prompt and installs them while a checklist polls
+ * `get_full_setup_status` — the backend's real checks, never the agent's own
+ * claims, decide when it is done.
  *
  * @module lib/agentOnboarding
  */
@@ -14,6 +19,50 @@
 import { agentPromptArgs } from './agent';
 import { invoke } from '@tauri-apps/api/core';
 import { SetupItem, isSetupItemReady, isWindows, TerminalCommand } from './setup';
+import { getAgentsOverview, updateAgent } from './agents';
+import { logger } from './logger';
+
+// ============ Engines ============
+
+/**
+ * The setup ids of the engines Agents runs on (`agents::engine`). Onboarding
+ * offers only these: an agent CLI that can't run Agents would finish setup
+ * into a product that can't start.
+ */
+export const AGENTS_ENGINE_BINARY_IDS = ['claude', 'codex'] as const;
+export type AgentsEngineBinaryId = (typeof AGENTS_ENGINE_BINARY_IDS)[number];
+
+/** Installed and signed in, by the app's own checks. */
+export function isEnginePairReady(items: SetupItem[], binaryId: string): boolean {
+  return (
+    items.find((i) => i.id === binaryId)?.status === 'ready' &&
+    items.find((i) => i.id === `${binaryId}_auth`)?.status === 'ready'
+  );
+}
+
+/** The first engine that can run Agents and is ready, if any. */
+export function readyAgentsEngine(items: SetupItem[]): AgentsEngineBinaryId | null {
+  return AGENTS_ENGINE_BINARY_IDS.find((id) => isEnginePairReady(items, id)) ?? null;
+}
+
+/**
+ * Put a Chief of Staff that has never run onto the engine onboarding just
+ * set up. The Chief defaults to Claude Code; someone who set up only Codex
+ * would otherwise land on a Chief that can't answer. A Chief that has run
+ * keeps its engine. Failure is logged: the chat offers the engine switch too.
+ */
+export async function putChiefOnEngine(defaultAgentId: string | null): Promise<void> {
+  if (defaultAgentId !== 'codex') return;
+  try {
+    const { agents } = await getAgentsOverview();
+    const chief = agents.find((a) => a.isMain);
+    if (chief && chief.engine !== 'codex' && !chief.sessionId) {
+      await updateAgent(chief.id, { engine: 'codex' });
+    }
+  } catch (err) {
+    logger.warn('Could not move the Chief of Staff onto Codex', { error: String(err) });
+  }
+}
 
 // ============ Test-mode API ============
 
@@ -39,47 +88,27 @@ export async function mockMarkSetupItemReady(itemId: string): Promise<void> {
 }
 
 /**
- * Persist that the user brings their own agent ("Other" in the agent pick).
- * Setup checks then treat the agent requirement as satisfied so the user
- * isn't redirected back to onboarding on every launch.
- */
-export async function setExternalAgentOptIn(enabled: boolean): Promise<void> {
-  return invoke('set_external_agent_opt_in', { enabled });
-}
-
-/**
  * Directory the guided agent session runs in — the projects root
  * (~/ShipStudio), created if missing. Never the user's home: an agent
  * scanning $HOME trips macOS permission prompts (Photos, Desktop, Documents)
- * attributed to Ship Studio, and the pending dialog freezes the agent
+ * attributed to this app, and the pending dialog freezes the agent
  * mid-scan.
  */
 export async function ensureAgentWorkdir(): Promise<string> {
   return invoke<string>('ensure_agent_workdir');
 }
 
-// ============ Default host ============
-
-/** Hosting providers offered during onboarding. */
-export type HostChoice = 'vercel' | 'cloudflare';
+// ============ Project tools & completion ============
 
 /**
- * Persist the workspace-wide default hosting provider. New projects default
- * to this host (the way Vercel is used for all projects today).
+ * What a project can need on the machine, in install order. None of it gates
+ * onboarding; it is asked for when work first becomes a project. Only Node
+ * and Git are required (and the package manager while it's needed to install
+ * something). GitHub is offered, never required: projects work without it,
+ * and it's only where they're backed up and reviewed. Hosting stays optional
+ * (connectable later from a project's Push popover).
  */
-export async function setDefaultHost(host: HostChoice): Promise<void> {
-  return invoke('set_default_host', { host });
-}
-
-// ============ Required items & completion ============
-
-/**
- * Everything the guided phase is responsible for, in install order. The agent
- * pair itself is handled in Phase 0 and checked separately; Vercel stays
- * optional (connectable later from the dashboard), matching the classic
- * wizard's skippable hosting step.
- */
-export const AGENT_LED_REQUIRED_ITEM_IDS = [
+export const PROJECT_TOOL_ITEM_IDS = [
   'homebrew',
   'node',
   'npm_fix',
@@ -88,42 +117,75 @@ export const AGENT_LED_REQUIRED_ITEM_IDS = [
   'gh_auth',
 ] as const;
 
+/** Offered alongside, never required. */
+export const OPTIONAL_PROJECT_TOOL_IDS: readonly string[] = ['gh', 'gh_auth'];
+
+/** Installed with the package manager (npm_fix and the sign-in aren't). */
+const NEEDS_INSTALLER = new Set(['node', 'git', 'gh']);
+
 /**
- * Required items that are present in the status and not yet ready.
- * Absent items count as ready (`npm_fix` only exists while ~/.npm is broken).
+ * The items a setup run covers and checks, in install order: Node, Git (and
+ * the npm fix while ~/.npm is broken), GitHub when asked for, and the package
+ * manager when one of those still has to be installed. Absent items (npm_fix
+ * once permissions are fine) are left out.
  */
-export function getMissingRequiredItems(items: SetupItem[]): SetupItem[] {
-  return AGENT_LED_REQUIRED_ITEM_IDS.map((id) => items.find((i) => i.id === id)).filter(
-    (item): item is SetupItem => item !== undefined && item.status !== 'ready'
-  );
+export function projectToolIds(items: SetupItem[], includeGitHub: boolean): string[] {
+  const ids = PROJECT_TOOL_ITEM_IDS.filter(
+    (id) => id !== 'homebrew' && (includeGitHub || !OPTIONAL_PROJECT_TOOL_IDS.includes(id))
+  ).filter((id) => items.some((i) => i.id === id));
+  const installs = ids.some((id) => NEEDS_INSTALLER.has(id) && !isSetupItemReady(items, id));
+  const withInstaller = installs && items.some((i) => i.id === 'homebrew');
+  return withInstaller ? ['homebrew', ...ids] : ids;
 }
 
-/** Required items already detected as ready — the prompt names these so the
- *  agent confirms them to the user instead of silently skipping them. */
-export function getReadyRequiredItems(items: SetupItem[]): SetupItem[] {
-  return AGENT_LED_REQUIRED_ITEM_IDS.map((id) => items.find((i) => i.id === id)).filter(
-    (item): item is SetupItem => item !== undefined && item.status === 'ready'
-  );
+/** Of `ids`, the items present in the status and not yet ready. */
+export function getMissingProjectTools(
+  items: SetupItem[],
+  ids: readonly string[] = PROJECT_TOOL_ITEM_IDS
+): SetupItem[] {
+  return ids
+    .map((id) => items.find((i) => i.id === id))
+    .filter((item): item is SetupItem => item !== undefined && item.status !== 'ready');
+}
+
+/** What a project can't be made without and isn't here yet. */
+export function getMissingRequiredTools(items: SetupItem[]): SetupItem[] {
+  return getMissingProjectTools(items, projectToolIds(items, false));
+}
+
+/** GitHub, if it isn't set up: offered, never required. */
+export function getMissingOptionalTools(items: SetupItem[]): SetupItem[] {
+  return getMissingProjectTools(items, OPTIONAL_PROJECT_TOOL_IDS);
+}
+
+/** Of `ids`, the ones already ready — the prompt names these so the agent
+ *  confirms them to the user instead of silently skipping them. */
+export function getReadyProjectTools(
+  items: SetupItem[],
+  ids: readonly string[] = PROJECT_TOOL_ITEM_IDS
+): SetupItem[] {
+  return ids
+    .map((id) => items.find((i) => i.id === id))
+    .filter((item): item is SetupItem => item !== undefined && item.status === 'ready');
 }
 
 /**
- * The agent-led flow is complete when every required item is ready AND the
- * chosen agent pair is ready. Computed from items (not `allReady`) so it
- * stays truthful under SHIPSTUDIO_FORCE_ONBOARDING, which pins `allReady`
- * to false while onboarding is open.
+ * The guided phase is done when every item it covers (`ids`) is ready AND the
+ * agent running it is still installed and signed in. Computed from items (not
+ * `allReady`, which only means "an engine is ready") so the checklist and the
+ * Continue button agree.
  *
- * `agentBinaryId: null` means the "Other" path — an agent we don't manage —
- * so only the required items gate completion. The backend's own `allReady`
- * still requires a known agent pair, so a user going this route will be
- * offered agent setup again from the dashboard; that's honest, not a bug.
+ * `agentBinaryId: null` means an agent we don't manage, so only the tools
+ * gate completion.
  */
-export function isAgentLedSetupComplete(items: SetupItem[], agentBinaryId: string | null): boolean {
-  const requiredReady = AGENT_LED_REQUIRED_ITEM_IDS.every((id) => isSetupItemReady(items, id));
+export function areProjectToolsReady(
+  items: SetupItem[],
+  agentBinaryId: string | null = null,
+  ids: readonly string[] = projectToolIds(items, false)
+): boolean {
+  const requiredReady = ids.every((id) => isSetupItemReady(items, id));
   if (agentBinaryId === null) return requiredReady;
-  const pairReady =
-    items.find((i) => i.id === agentBinaryId)?.status === 'ready' &&
-    items.find((i) => i.id === `${agentBinaryId}_auth`)?.status === 'ready';
-  return requiredReady && pairReady;
+  return requiredReady && isEnginePairReady(items, agentBinaryId);
 }
 
 // ============ Guided prompt ============
@@ -185,74 +247,58 @@ const PROMPT_ITEM_NAMES: Record<string, string> = {
  */
 export function buildGuidedSetupPrompt(
   missing: SetupItem[],
-  host: HostChoice | null = null,
-  alreadyReady: SetupItem[] = []
+  alreadyReady: SetupItem[] = [],
+  ids: readonly string[] = ['homebrew', 'node', 'git']
 ): string {
   const win = isWindows();
 
-  // The agent is the source of discovery: it gets the FULL required list
+  // The agent is the source of discovery: it gets the FULL list for this run
   // with check commands and verifies everything itself. Our detection rides
   // along only as a reference hint it can override — the app's probes and
   // the agent's terminal can see different PATHs, and the terminal is where
-  // the work actually happens.
-  const requiredIds: string[] = ['homebrew', 'node', 'git', 'gh', 'gh_auth'];
-  // npm_fix is conditional — it only exists while ~/.npm is broken, so it
-  // joins the list only when our checks actually surfaced it.
-  if (missing.some((i) => i.id === 'npm_fix')) {
-    requiredIds.splice(1, 0, 'npm_fix');
-  }
+  // the work actually happens. npm_fix only exists while ~/.npm is broken, so
+  // it joins only when our checks actually surfaced it.
+  const requiredIds = ids.filter((id) => id !== 'npm_fix' || missing.some((i) => i.id === id));
   const instructions = requiredIds
     .map((id) => itemInstruction(id, win))
     .filter((s): s is string => s !== null);
 
-  const pkgCheck = win ? '`winget --version`' : '`brew --version`';
-  const checkCommands = [
-    pkgCheck,
-    '`node --version`',
-    '`git --version`',
-    '`gh --version`',
-    '`gh auth status`',
-  ];
+  const CHECKS: Record<string, string> = {
+    homebrew: win ? '`winget --version`' : '`brew --version`',
+    node: '`node --version`',
+    git: '`git --version`',
+    gh: '`gh --version`',
+    gh_auth: '`gh auth status`',
+  };
+  const checkCommands = requiredIds.map((id) => CHECKS[id]).filter(Boolean);
 
-  // The chosen hosting provider's CLI is installed last (both are npm
-  // packages, so Node must land first) and signed in via its browser flow.
-  if (host === 'vercel') {
-    instructions.push(
-      'Vercel CLI (their hosting provider): run `npm install -g vercel --force`, then sign them in with `vercel login` — a browser opens where they sign in or create a free Vercel account'
-    );
-    checkCommands.push('`vercel whoami`');
-  } else if (host === 'cloudflare') {
-    instructions.push(
-      'Cloudflare Wrangler CLI (their hosting provider): run `npm install -g wrangler --force`, then sign them in with `wrangler login` — a browser opens where they sign in or create a free Cloudflare account'
-    );
-    checkCommands.push('`wrangler whoami`');
-  }
-
+  missing = missing.filter((i) => ids.includes(i.id));
+  alreadyReady = alreadyReady.filter((i) => ids.includes(i.id));
   const missingNames = missing.map((i) => PROMPT_ITEM_NAMES[i.id] ?? i.id).join(', ');
   const readyNames = alreadyReady.map((i) => PROMPT_ITEM_NAMES[i.id] ?? i.id).join(', ');
   const detectionHint =
     missingNames && readyNames
-      ? `For reference, Ship Studio's own detection currently reports installed: ${readyNames}; missing: ${missingNames} — but trust what your checks find over this list. `
+      ? `For reference, the app's own detection currently reports installed: ${readyNames}; missing: ${missingNames} — but trust what your checks find over this list. `
       : missingNames
-        ? `For reference, Ship Studio's own detection currently reports everything missing: ${missingNames} — but trust what your checks find over this list. `
-        : "For reference, Ship Studio's own detection reports everything already installed — but trust what your checks find over this list. ";
+        ? `For reference, the app's own detection currently reports everything missing: ${missingNames} — but trust what your checks find over this list. `
+        : "For reference, the app's own detection reports everything already installed — but trust what your checks find over this list. ";
 
   const steps = instructions.map((s, idx) => `${String(idx + 1)}) ${s}`).join('; ');
 
   return (
-    'You are helping a brand-new Ship Studio user get their computer ready. ' +
-    'Ship Studio is a desktop app for building websites with AI agents, and you are that agent — this is their first impression of you, so be warm, brief, and clear. ' +
+    'You are helping someone get their computer ready for projects (sites and apps their agents build). ' +
+    'They use a desktop app where a team of AI agents works for them, and you are one of those agents — be warm, brief, and clear. ' +
     'Assume the user is not technical: before each step, say what you are about to do in one short sentence. ' +
     `Start by checking what is already installed yourself: run ${checkCommands.join(', ')}, then give the user one short summary of what's already good and what's missing. ` +
     detectionHint +
     `Then set up ONLY what is actually missing, one at a time, in this order, using these exact commands as the standard path: ${steps}. ` +
     'Skip any step whose tool already works. ' +
     'When you are asked to approve a command permission, reassure the user it is safe to approve the commands listed above. ' +
-    'After each install, verify it actually worked (run the tool with --version, or `gh auth status` for the sign-in) before moving on — a clean exit is a claim, not proof. ' +
+    `After each install, verify it actually worked (run the tool with --version${requiredIds.includes('gh_auth') ? ', or `gh auth status` for the sign-in' : ''}) before moving on — a clean exit is a claim, not proof. ` +
     'Your job is to get every listed tool working no matter what this machine throws at you: if a standard command fails, read the error, explain it in plain words, and fix the underlying problem — installing prerequisites (like Xcode Command Line Tools), repairing PATH or npm permissions, or retrying another official install method are all fair game. ' +
     'If the user has to do something themselves (type a password, click through a browser), tell them exactly what to expect. ' +
     'Do not set up anything unrelated to the tools listed above. ' +
-    'When everything is verified, tell the user they are all set and to look at the checklist beside this window — Ship Studio runs its own checks and will turn every item green, then show a Continue button.'
+    'When everything is verified, tell the user they are all set and to look at the checklist beside this window — the app runs its own checks and will turn every item green, then show a Continue button.'
   );
 }
 

@@ -149,7 +149,7 @@
 }
 
 .extension-state__spinner {
-  color: var(--accent-active);
+  color: var(--text-secondary);
 }
 
 .extension-state--error {

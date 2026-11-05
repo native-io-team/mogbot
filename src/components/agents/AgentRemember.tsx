@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { ErrorIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { TextArea } from '../primitives/TextField';
@@ -104,6 +105,7 @@ export function RememberModal({ agent, message, onClose }: RememberModalProps) {
         </p>
         {error && (
           <p className="agent-editor__error" role="alert">
+            <ErrorIcon size={12} className="inline-error-icon" />
             {error}
           </p>
         )}

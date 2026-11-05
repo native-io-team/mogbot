@@ -166,6 +166,8 @@ interface QuickSetupCheck {
   allPresent: boolean;
   /** Whether we have a cached setup_complete state */
   setupCompleteCached: boolean;
+  /** An engine Agents runs on (Claude Code, Codex) is present. */
+  agentsEngine: boolean;
 }
 
 /** Dependency graph: which items must be ready before each item can be installed */

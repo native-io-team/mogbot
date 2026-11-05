@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
     gap: space.md,
     marginRight: space.xs,
   },
-  agentRow: { gap: space.xs, paddingRight: space.sm },
+  agentRow: { gap: space.sm, paddingRight: space.sm },
   day: { alignItems: 'center', paddingTop: space.md, paddingBottom: space.xs },
   dayText: { letterSpacing: 0.2 },
   errorRow: {

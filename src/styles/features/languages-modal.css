@@ -200,7 +200,7 @@
 }
 
 .languages-search:focus {
-  border-color: var(--accent-active);
+  border-color: var(--focus-ring);
 }
 
 .languages-search::placeholder {

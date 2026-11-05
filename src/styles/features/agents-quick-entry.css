@@ -99,7 +99,7 @@ html[data-window='quick-entry'] #root {
 }
 
 .quick-entry__sent-icon {
-  color: var(--accent-active);
+  color: var(--accent-success);
 }
 
 .quick-entry__sent-text {

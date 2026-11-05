@@ -130,7 +130,7 @@
 }
 
 .settings-icon-option.is-selected {
-  color: var(--accent-active);
+  color: var(--text-white);
 }
 
 .settings-icon-option.is-selected::after {
@@ -345,7 +345,7 @@
 
 .settings-toggle.on .settings-toggle-thumb {
   transform: translateX(16px);
-  background: var(--text-inverse);
+  background: var(--text-on-accent);
   box-shadow: 0 1px 3px var(--overlay-30);
 }
 
@@ -379,4 +379,46 @@
 
 .agents-desktop-settings {
   margin-top: var(--spacing-lg);
+}
+
+/* Accent color. Each swatch is its own accent scope (accentScopeProps), so it
+   paints with the same derived tokens the app will use — and its check mark
+   is the ink the app would put on that colour. Selected = ring + check, never
+   hue alone: on the white swatch, hue says nothing. */
+.settings-accent-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.settings-accent-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--spacing-xl);
+  height: var(--spacing-xl);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--accent-active);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  transition: box-shadow var(--transition-interaction-fast);
+}
+
+.settings-accent-swatch:disabled {
+  cursor: not-allowed;
+  opacity: var(--button-disabled-opacity);
+}
+
+.settings-accent-swatch[aria-checked='true'] {
+  box-shadow:
+    0 0 0 var(--border-width-emphasis) var(--surface-panel),
+    0 0 0 var(--spacing-xs) var(--accent-active);
+}
+
+.settings-accent-swatch:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--spacing-xs);
 }

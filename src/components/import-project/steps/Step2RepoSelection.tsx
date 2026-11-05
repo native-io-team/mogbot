@@ -7,7 +7,7 @@
 
 import { Button } from '../../primitives/Button';
 import { Spinner } from '../../primitives/Spinner';
-import { CloseIcon } from '@/components/icons';
+import { CloseIcon, ErrorIcon } from '@/components/icons';
 import type { GitHubRepo } from '../../../lib/github';
 
 export interface Step2RepoSelectionProps {
@@ -111,7 +111,12 @@ export function Step2RepoSelection({
         )}
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error">
+          <ErrorIcon size={12} className="inline-error-icon" />
+          {error}
+        </p>
+      )}
 
       <div className="create-actions">
         <Button variant="secondary" type="button" onClick={onBack}>

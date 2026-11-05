@@ -1,11 +1,5 @@
 /* Merge Conflict Resolution Modal */
 
-/* Conflict-local colors — intentional one-offs, not part of the global scale. */
-:root {
-  /* Hover state for the "theirs" (green) button — darker step of --accent-success. */
-  --conflict-theirs-hover: #16a34a;
-}
-
 .conflict-modal {
   position: fixed;
   inset: 0;
@@ -145,16 +139,14 @@
   border-bottom: 2px solid;
 }
 
-.conflict-panel-header.yours {
-  color: var(--info);
-  border-color: var(--info);
-  background: rgba(var(--info-rgb), 0.05);
-}
-
+/* Yours and theirs are equals, so neither gets a hue: green here would say
+   "go", blue would say "info", and both collide with the accent. The branch
+   names beside each heading carry the identity. */
+.conflict-panel-header.yours,
 .conflict-panel-header.theirs {
-  color: var(--accent-success);
-  border-color: var(--accent-success);
-  background: rgba(var(--accent-success-rgb), 0.05);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--surface-control);
 }
 
 .conflict-branch-name {
@@ -246,24 +238,17 @@
   background: var(--accent-active-hover);
 }
 
-.conflict-btn.yours {
-  background: var(--info);
-  border: 1px solid var(--info);
-  color: var(--text-inverse);
-}
-
-.conflict-btn.yours:hover:not(:disabled) {
-  background: var(--info-hover);
-}
-
+.conflict-btn.yours,
 .conflict-btn.theirs {
-  background: var(--accent-success);
-  border: 1px solid var(--accent-success);
-  color: var(--text-inverse);
+  background: var(--surface-control);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
 }
 
+.conflict-btn.yours:hover:not(:disabled),
 .conflict-btn.theirs:hover:not(:disabled) {
-  background: var(--conflict-theirs-hover);
+  background: var(--surface-control-hover);
+  color: var(--text-white);
 }
 
 .conflict-btn.secondary {
@@ -323,16 +308,17 @@
   flex-shrink: 0;
 }
 
-/* Same chrome as the copy button, but accent-colored — it's the "do it for me" action */
+/* Same chrome as the copy button. Secondary weight: the accent is kept for the
+   one commit action, so this modal doesn't offer two primaries. */
 .conflict-send-btn {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: var(--accent-active);
-  border: 1px solid var(--accent-active);
+  background: var(--surface-control);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
-  color: var(--surface-app);
+  color: var(--text-primary);
   font-size: var(--font-size-body-md);
   font-weight: 500;
   cursor: pointer;
@@ -342,7 +328,8 @@
 }
 
 .conflict-send-btn:hover {
-  opacity: 0.85;
+  background: var(--surface-control-hover);
+  color: var(--text-white);
 }
 
 /* More information section */
@@ -454,12 +441,9 @@
   letter-spacing: 0.5px;
 }
 
-.conflict-diff-label.yours {
-  color: var(--info);
-}
-
+.conflict-diff-label.yours,
 .conflict-diff-label.theirs {
-  color: var(--accent-success);
+  color: var(--text-secondary);
 }
 
 .conflict-diff-section pre {

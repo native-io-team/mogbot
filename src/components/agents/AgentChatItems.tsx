@@ -990,7 +990,7 @@ export const ApprovalCard = memo(function ApprovalCard({
             </Tooltip>
             <Button
               tabIndex={0}
-              variant="primary"
+              variant="strong"
               data-allow
               disabled={busy}
               {...keyProps}
@@ -1106,7 +1106,7 @@ function SessionPromptCard({
               <Tooltip content={allow.option.label}>
                 <Button
                   tabIndex={0}
-                  variant="primary"
+                  variant="strong"
                   data-allow
                   disabled={busy}
                   {...keyProps}

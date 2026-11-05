@@ -75,33 +75,6 @@
       "consumerCount": 0
     },
     {
-      "name": "--action",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--action-hover",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--action-text",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
       "name": "--border",
       "definitionFile": "src/styles/global/tokens-compatibility.css",
       "layer": "compatibility",
@@ -168,15 +141,6 @@
     },
     {
       "name": "--error-deep",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--action-rgb",
       "definitionFile": "src/styles/global/tokens-compatibility.css",
       "layer": "compatibility",
       "owner": "plugin-compatibility",
@@ -268,6 +232,42 @@
       "consumerCount": 4
     },
     {
+      "name": "--action",
+      "definitionFile": "src/styles/global/tokens-compatibility.css",
+      "layer": "compatibility",
+      "owner": "plugin-compatibility",
+      "status": "compatibility",
+      "pluginStable": true,
+      "consumerCount": 0
+    },
+    {
+      "name": "--action-hover",
+      "definitionFile": "src/styles/global/tokens-compatibility.css",
+      "layer": "compatibility",
+      "owner": "plugin-compatibility",
+      "status": "compatibility",
+      "pluginStable": true,
+      "consumerCount": 0
+    },
+    {
+      "name": "--action-text",
+      "definitionFile": "src/styles/global/tokens-compatibility.css",
+      "layer": "compatibility",
+      "owner": "plugin-compatibility",
+      "status": "compatibility",
+      "pluginStable": true,
+      "consumerCount": 0
+    },
+    {
+      "name": "--action-rgb",
+      "definitionFile": "src/styles/global/tokens-compatibility.css",
+      "layer": "compatibility",
+      "owner": "plugin-compatibility",
+      "status": "compatibility",
+      "pluginStable": true,
+      "consumerCount": 0
+    },
+    {
       "name": "--modified-yellow",
       "definitionFile": "src/styles/global/tokens-compatibility.css",
       "layer": "compatibility",
@@ -285,7 +285,7 @@
       "status": "migration",
       "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 26
+      "consumerCount": 19
     },
     {
       "name": "--info-hover",
@@ -295,7 +295,7 @@
       "status": "migration",
       "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 2
+      "consumerCount": 1
     },
     {
       "name": "--info-light",
@@ -395,7 +395,7 @@
       "status": "migration",
       "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 12
+      "consumerCount": 11
     },
     {
       "name": "--info-light-rgb",
@@ -650,7 +650,7 @@
       "owner": "WorkspaceSidebar",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 7
+      "consumerCount": 8
     },
     {
       "name": "--size-sidebar-project",
@@ -888,15 +888,6 @@
     },
     {
       "name": "--pixel-loader-gap",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "global/component",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 1
-    },
-    {
-      "name": "--pixel-loader-color",
       "definitionFile": "src/styles/global/tokens-components.css",
       "layer": "components",
       "owner": "global/component",
@@ -1194,24 +1185,6 @@
     },
     {
       "name": "--progress-radius",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "global/component",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 1
-    },
-    {
-      "name": "--progress-track",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "global/component",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 1
-    },
-    {
-      "name": "--progress-indicator",
       "definitionFile": "src/styles/global/tokens-components.css",
       "layer": "components",
       "owner": "global/component",
@@ -1865,7 +1838,7 @@
       "owner": "Button",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 10
+      "consumerCount": 11
     },
     {
       "name": "--button-active-scale",
@@ -1875,42 +1848,6 @@
       "status": "canonical",
       "pluginStable": false,
       "consumerCount": 10
-    },
-    {
-      "name": "--button-primary-start",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "Button",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 2
-    },
-    {
-      "name": "--button-primary-mid",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "Button",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 5
-    },
-    {
-      "name": "--button-primary-end",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "Button",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 2
-    },
-    {
-      "name": "--button-primary-busy",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "Button",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 1
     },
     {
       "name": "--button-success-border",
@@ -1947,6 +1884,33 @@
       "status": "canonical",
       "pluginStable": false,
       "consumerCount": 1
+    },
+    {
+      "name": "--button-strong-surface",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "Button",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
+      "name": "--button-strong-surface-hover",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "Button",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
+      "name": "--button-strong-text",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "Button",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 2
     },
     {
       "name": "--button-variable-surface",
@@ -2355,24 +2319,6 @@
     },
     {
       "name": "--compact-topbar-menu-z-index",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "global/component",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 1
-    },
-    {
-      "name": "--compact-topbar-pin-active-surface",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "global/component",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 1
-    },
-    {
-      "name": "--compact-topbar-pin-active-border",
       "definitionFile": "src/styles/global/tokens-components.css",
       "layer": "components",
       "owner": "global/component",
@@ -2802,15 +2748,6 @@
       "status": "canonical",
       "pluginStable": false,
       "consumerCount": 2
-    },
-    {
-      "name": "--drag-sort-target-indicator",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "global/component",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 4
     },
     {
       "name": "--drag-sort-target-indicator-width",
@@ -3260,7 +3197,7 @@
       "owner": "GlobalOverlay",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 20
+      "consumerCount": 19
     },
     {
       "name": "--z-modal",
@@ -3384,6 +3321,96 @@
       "definitionFile": "src/styles/global/tokens-components.css",
       "layer": "components",
       "owner": "global/component",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
+      "name": "--pixel-loader-color",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 2
+    },
+    {
+      "name": "--progress-track",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
+      "name": "--progress-indicator",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
+      "name": "--compact-topbar-pin-active-surface",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
+      "name": "--compact-topbar-pin-active-border",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
+      "name": "--drag-sort-target-indicator",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 4
+    },
+    {
+      "name": "--button-primary-start",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "Button",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 2
+    },
+    {
+      "name": "--button-primary-mid",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "Button",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 4
+    },
+    {
+      "name": "--button-primary-end",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "Button",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 2
+    },
+    {
+      "name": "--button-primary-busy",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "Button",
       "status": "canonical",
       "pluginStable": false,
       "consumerCount": 1
@@ -3602,7 +3629,7 @@
       "owner": "global/core",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 4
+      "consumerCount": 0
     },
     {
       "name": "--color-blue-700",
@@ -3822,6 +3849,51 @@
     },
     {
       "name": "--color-green-tag",
+      "definitionFile": "src/styles/global/tokens-core.css",
+      "layer": "core",
+      "owner": "global/core",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--color-accent-default",
+      "definitionFile": "src/styles/global/tokens-core.css",
+      "layer": "core",
+      "owner": "global/core",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--color-accent-default-hover",
+      "definitionFile": "src/styles/global/tokens-core.css",
+      "layer": "core",
+      "owner": "global/core",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--color-accent-default-strong",
+      "definitionFile": "src/styles/global/tokens-core.css",
+      "layer": "core",
+      "owner": "global/core",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--color-accent-default-start",
+      "definitionFile": "src/styles/global/tokens-core.css",
+      "layer": "core",
+      "owner": "global/core",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--color-accent-default-end",
       "definitionFile": "src/styles/global/tokens-core.css",
       "layer": "core",
       "owner": "global/core",
@@ -4439,7 +4511,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 87
+      "consumerCount": 85
     },
     {
       "name": "--surface-panel",
@@ -4457,7 +4529,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 354
+      "consumerCount": 356
     },
     {
       "name": "--surface-control-hover",
@@ -4466,7 +4538,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 42
+      "consumerCount": 44
     },
     {
       "name": "--surface-selected",
@@ -4475,7 +4547,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 25
+      "consumerCount": 26
     },
     {
       "name": "--surface-recessed",
@@ -4520,7 +4592,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 12
+      "consumerCount": 20
     },
     {
       "name": "--text-primary",
@@ -4529,7 +4601,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 519
+      "consumerCount": 529
     },
     {
       "name": "--text-secondary",
@@ -4538,7 +4610,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 470
+      "consumerCount": 480
     },
     {
       "name": "--text-muted",
@@ -4547,7 +4619,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 791
+      "consumerCount": 793
     },
     {
       "name": "--text-faint",
@@ -4583,7 +4655,43 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 27
+      "consumerCount": 16
+    },
+    {
+      "name": "--surface-inverse",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--surface-inverse-hover",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--text-on-inverse",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": true,
+      "consumerCount": 0
+    },
+    {
+      "name": "--text-on-success",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": true,
+      "consumerCount": 1
     },
     {
       "name": "--border-default",
@@ -4610,7 +4718,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 39
+      "consumerCount": 43
     },
     {
       "name": "--border-accent",
@@ -4628,7 +4736,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 228
+      "consumerCount": 229
     },
     {
       "name": "--border-width-emphasis",
@@ -4637,25 +4745,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 30
-    },
-    {
-      "name": "--accent-active",
-      "definitionFile": "src/styles/global/tokens-semantic.css",
-      "layer": "semantic",
-      "owner": "global/semantic",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 238
-    },
-    {
-      "name": "--accent-active-hover",
-      "definitionFile": "src/styles/global/tokens-semantic.css",
-      "layer": "semantic",
-      "owner": "global/semantic",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 9
+      "consumerCount": 31
     },
     {
       "name": "--accent-selected",
@@ -4676,13 +4766,22 @@
       "consumerCount": 50
     },
     {
+      "name": "--focus-ring",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 44
+    },
+    {
       "name": "--focus-ring-width",
       "definitionFile": "src/styles/global/tokens-semantic.css",
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 24
+      "consumerCount": 25
     },
     {
       "name": "--focus-ring-offset",
@@ -4700,7 +4799,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 94
+      "consumerCount": 91
     },
     {
       "name": "--accent-warning",
@@ -4709,7 +4808,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 109
+      "consumerCount": 110
     },
     {
       "name": "--accent-error",
@@ -4766,13 +4865,40 @@
       "consumerCount": 1
     },
     {
-      "name": "--text-on-accent",
+      "name": "--status-info",
       "definitionFile": "src/styles/global/tokens-semantic.css",
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
-      "consumerCount": 18
+      "pluginStable": false,
+      "consumerCount": 23
+    },
+    {
+      "name": "--status-running",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 20
+    },
+    {
+      "name": "--accent-overlay",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--accent-overlay-ink",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
     },
     {
       "name": "--color-red-traffic",
@@ -4835,7 +4961,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 2
+      "consumerCount": 3
     },
     {
       "name": "--font-size-h2",
@@ -4853,7 +4979,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 18
+      "consumerCount": 19
     },
     {
       "name": "--font-size-h4",
@@ -4871,7 +4997,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 4
+      "consumerCount": 5
     },
     {
       "name": "--font-size-subhead",
@@ -4889,7 +5015,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 180
+      "consumerCount": 184
     },
     {
       "name": "--font-size-body-md",
@@ -4898,7 +5024,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 307
+      "consumerCount": 310
     },
     {
       "name": "--font-size-body-sm",
@@ -4907,7 +5033,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 384
+      "consumerCount": 386
     },
     {
       "name": "--font-size-control",
@@ -4961,7 +5087,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 116
+      "consumerCount": 114
     },
     {
       "name": "--font-size-3xl",
@@ -5006,7 +5132,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 85
+      "consumerCount": 86
     },
     {
       "name": "--font-weight-heading",
@@ -5015,7 +5141,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 30
+      "consumerCount": 31
     },
     {
       "name": "--font-weight-title",
@@ -5060,7 +5186,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 70
+      "consumerCount": 71
     },
     {
       "name": "--line-height-help",
@@ -5069,7 +5195,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 73
+      "consumerCount": 75
     },
     {
       "name": "--line-height-reading",
@@ -5087,7 +5213,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 52
+      "consumerCount": 54
     },
     {
       "name": "--transition-interaction",
@@ -5096,7 +5222,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 80
+      "consumerCount": 79
     },
     {
       "name": "--transition-interaction-slow",
@@ -5153,22 +5279,13 @@
       "consumerCount": 3
     },
     {
-      "name": "--accent-active-rgb",
-      "definitionFile": "src/styles/global/tokens-semantic.css",
-      "layer": "semantic",
-      "owner": "global/semantic",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 27
-    },
-    {
       "name": "--accent-success-rgb",
       "definitionFile": "src/styles/global/tokens-semantic.css",
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 36
+      "consumerCount": 34
     },
     {
       "name": "--accent-warning-rgb",
@@ -5222,7 +5339,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 232
+      "consumerCount": 234
     },
     {
       "name": "--spacing-xs",
@@ -5231,7 +5348,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 552
+      "consumerCount": 560
     },
     {
       "name": "--spacing-sm",
@@ -5240,7 +5357,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 667
+      "consumerCount": 676
     },
     {
       "name": "--spacing-md",
@@ -5249,7 +5366,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 485
+      "consumerCount": 489
     },
     {
       "name": "--spacing-lg",
@@ -5258,7 +5375,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 197
+      "consumerCount": 199
     },
     {
       "name": "--spacing-xl",
@@ -5267,7 +5384,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 121
+      "consumerCount": 126
     },
     {
       "name": "--spacing-2xl",
@@ -5285,7 +5402,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 24
+      "consumerCount": 25
     },
     {
       "name": "--radius-control",
@@ -5303,7 +5420,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 192
+      "consumerCount": 191
     },
     {
       "name": "--radius-sm",
@@ -5321,7 +5438,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 42
+      "consumerCount": 43
     },
     {
       "name": "--radius-pill",
@@ -5330,7 +5447,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 55
+      "consumerCount": 56
     },
     {
       "name": "--mask-opaque",
@@ -5574,6 +5691,141 @@
       "status": "canonical",
       "pluginStable": false,
       "consumerCount": 19
+    },
+    {
+      "name": "--accent-user",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--accent-on-user",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--accent-user-rgb",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--accent-user-hover",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--accent-user-strong",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--accent-user-start",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--accent-user-end",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--accent-active",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 165
+    },
+    {
+      "name": "--accent-active-hover",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 10
+    },
+    {
+      "name": "--accent-active-strong",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--accent-active-soft",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
+      "name": "--accent-text",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
+    },
+    {
+      "name": "--text-on-accent",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": true,
+      "consumerCount": 29
+    },
+    {
+      "name": "--accent-active-soft",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
+      "name": "--accent-text",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 0
     }
   ]
 }
