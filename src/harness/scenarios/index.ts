@@ -6,6 +6,7 @@ import { agentsDesktopScenarios } from './agentsDesktop';
 import { agentsProjectScenarios } from './agentsProject';
 import { agentsWorkScenarios } from './agentsWork';
 import { agentsTakeoverScenarios } from './agentsTakeover';
+import { agentsStackScenarios } from './agentsStack';
 import { appScenarios } from './app';
 import { featureScenarios } from './features';
 import { hostingScenarios } from './hosting';
@@ -24,6 +25,7 @@ export const scenarios: Scenario[] = [
   ...agentsProjectScenarios,
   ...agentsWorkScenarios,
   ...agentsTakeoverScenarios,
+  ...agentsStackScenarios,
   ...appScenarios,
   ...featureScenarios,
   ...hostingScenarios,

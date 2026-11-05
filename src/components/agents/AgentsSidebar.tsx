@@ -74,8 +74,9 @@ interface AgentsSidebarProps {
 }
 
 function subtitle(agent: Agent): string {
-  if (agent.takeover) return `You’re driving ${agent.name}`;
+  // A request outranks driving: the row's words and its amber dot agree.
   if (needsYou(agent)) return 'Needs your OK';
+  if (agent.takeover) return `You’re driving ${agent.name}`;
   if (agent.status.state === 'working') return plainActivity(agent.status.activity) ?? 'Working…';
   const failure = failedTurn(agent);
   if (failure) return failureLine(failure, agent.preview);
@@ -84,8 +85,8 @@ function subtitle(agent: Agent): string {
 
 /** The row's second line takes the colour of its state. */
 function lineState(agent: Agent): string | undefined {
-  if (agent.takeover) return 'working';
   if (needsYou(agent)) return 'waiting';
+  if (agent.takeover) return 'working';
   if (agent.status.state === 'working') return 'working';
   const failure = failedTurn(agent);
   if (failure) return failure.kind === 'usage_limit' ? 'limited' : 'failed';

@@ -236,7 +236,7 @@ const IMPORT_TALK = {
   imported: [] as string[],
   busy: false,
 };
-const gateWith = (talk: Record<string, unknown> | null, armed = false) => ({
+export const gateWith = (talk: Record<string, unknown> | null, armed = false) => ({
   armed,
   talk: talk ? { ...IMPORT_TALK, ...talk } : null,
 });
@@ -443,7 +443,7 @@ const consentCard = (status: 'pending' | 'allowed') =>
       requestId: 'consent1',
       title: 'Grok wants to bring its agents over',
       detail:
-        'It will talk to a separate, sealed copy of Chief of Staff that can only stage agents for you to review. It can’t see your chats, files or other agents, and nothing is created until you press Import.\n\nIts first message: “Hi, I’m Grok. I run three agents for Sam: Main (manages the others), Finance (spending and invoices) and Travel (trips and bookings).”',
+        'It will talk to a separate, sealed conversation that can only stage agents for you to review. It can’t see your chats, files or other agents, and nothing is created until you import.\n\nIts first message: “Hi, I’m Grok. I run three agents for Sam: Main (manages the others), Finance (spending and invoices) and Travel (trips and bookings).”',
       status,
       connector: { kind: 'consent', talkId: 'talk1', source: 'Grok' },
     },
@@ -454,7 +454,7 @@ const IMPORT_TALK_CHAT = [
   consentCard('allowed'),
   msg(
     'note',
-    'Grok is talking to a sealed interview, separate from your chat. Nothing is created until you review it. Stop it any time.',
+    'Grok is talking to a separate, sealed conversation, not this chat. Nothing is created until you review it. Stop it any time.',
     6
   ),
   msg(
@@ -490,7 +490,7 @@ const IMPORT_TALK_CHAT = [
 ];
 
 /** The review card (`connector::post_review`): Finance clashes with yours, Travel is new. */
-const REVIEW = {
+export const REVIEW = {
   proposals: [
     {
       key: 'p1',
@@ -543,7 +543,7 @@ const REVIEW = {
   summary: 'Two agents: Finance and Travel. Main manages them; its notes are offered to you.',
 };
 
-const REVIEW_CARD = (status = 'pending', choice?: string) =>
+export const REVIEW_CARD = (status = 'pending', choice?: string) =>
   msg('approval', '', 0, {
     approval: {
       requestId: 'review1',
@@ -556,7 +556,7 @@ const REVIEW_CARD = (status = 'pending', choice?: string) =>
     },
   });
 
-const REVIEW_CHAT = [
+export const REVIEW_CHAT = [
   ...IMPORT_TALK_CHAT,
   msg(
     'sent_to_agent',
@@ -1252,7 +1252,7 @@ const QUEUED_CHAT = [
  * Start fresh. Acme Site's conversation as its engine last reported it: the
  * latest request carried 174k of a 200k window (87%, past the 85% nudge).
  */
-const ACME_FULL = {
+export const ACME_FULL = {
   status: status('idle'),
   context: { used: 174_000, window: 200_000, at: now - 19 * MIN },
 };
@@ -1637,7 +1637,7 @@ export const agentsScenarios: Scenario[] = [
     steps: [
       { click: '[data-agent-id="acme"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(4)' },
+      { click: '[role="menuitem"]', text: 'Files' },
     ],
     commands: {
       agents_overview: overview(),
@@ -1655,7 +1655,7 @@ export const agentsScenarios: Scenario[] = [
     steps: [
       { click: '[data-agent-id="acme"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(4)' },
+      { click: '[role="menuitem"]', text: 'Files' },
       { click: '.agent-files__filter button:nth-child(2)' },
     ],
     commands: {
@@ -1797,7 +1797,7 @@ export const agentsScenarios: Scenario[] = [
     requires: '.agent-editor__usage',
     steps: [
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(6)' },
+      { click: '[role="menuitem"]', text: 'Edit agent' },
     ],
     commands: {
       agents_overview: overview(
@@ -1821,7 +1821,7 @@ export const agentsScenarios: Scenario[] = [
     steps: [
       { click: '[data-agent-id="finance"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(6)' },
+      { click: '[role="menuitem"]', text: 'Edit agent' },
       { click: '.agent-editor__tabs [data-tab-value="memory"]' },
       { hover: '.agent-memory__item:nth-child(2)' },
     ],
@@ -1843,7 +1843,7 @@ export const agentsScenarios: Scenario[] = [
     steps: [
       { click: '[data-agent-id="finance"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(6)' },
+      { click: '[role="menuitem"]', text: 'Edit agent' },
       { click: '.agent-editor__tabs [data-tab-value="memory"]' },
       { click: '.agent-memory__item:nth-child(2) [aria-label^="Edit"]' },
     ],
@@ -1916,7 +1916,7 @@ export const agentsScenarios: Scenario[] = [
     clipSelector: '.agent-editor',
     steps: [
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(6)' },
+      { click: '[role="menuitem"]', text: 'Edit agent' },
       { click: '.agent-editor__more' },
       { click: '[aria-label="Runs on"] button:nth-child(2)' },
     ],
@@ -2307,7 +2307,7 @@ export const agentsScenarios: Scenario[] = [
     looksRightWhen:
       'The Chief’s chat ends on an approval card titled “Grok wants to bring its agents over”: it says Grok talks to a separate, sealed copy of Chief of Staff that can only stage agents, can’t see chats, files or other agents, and nothing is created until you press Import; then Grok’s first message in quotes. Deny (no ellipsis: no note to write) and Allow. Above the composer a recessed bar with an amber dot: “Grok wants to bring its agents over” / “Allow or deny it on the card above. Nothing has been shared.” and a red Stop import button. No “Coming from Grok Bot…” note in the sidebar.',
     command: 'agents.open',
-    requires: '.agent-import-talk[data-state="awaiting_consent"]',
+    requires: '[data-testid="agent-import-talk"][data-state="awaiting_consent"]',
     commands: {
       agents_overview: overview([{ ...TEAM[0], pendingApprovals: 1 }]),
       agents_messages: (args: Record<string, unknown>) =>
@@ -2321,7 +2321,7 @@ export const agentsScenarios: Scenario[] = [
     looksRightWhen:
       'The Chief’s chat. The answered consent card (“Allowed”), then a quiet note that Grok is talking to a sealed interview separate from your chat. Grok’s lines sit on the left, labelled “From Grok · via connector” over outlined recessed bubbles, in plain text exactly as sent: “**Main**” keeps its asterisks, “[in my docs](…)” its brackets, and the <img …> tag shows as text with no image; only the https addresses are underlined links. Each reply to Grok is indented further right, labelled “To Grok · from the import interview” over a dashed, unfilled bubble: never mistakable for the Chief talking to you. The Chief’s row reads “Talking to Grok (import)”. Above the composer: “Importing from Grok · Finance staged for review”, a muted line that what you type here stays between you and Chief of Staff, and a red Stop import button. No import note in the sidebar.',
     command: 'agents.open',
-    requires: '.agent-import-talk[data-state="interviewing"]',
+    requires: '[data-testid="agent-import-talk"][data-state="interviewing"]',
     commands: {
       agents_overview: overview([
         { ...TEAM[0], status: status('working', 'Talking to Grok (import)') },
@@ -2358,7 +2358,10 @@ export const agentsScenarios: Scenario[] = [
     command: 'agents.open',
     requires: '.agent-import-review__diff',
     steps: [
-      { click: '.agent-import-review__agent:first-child .agent-import-review__summary' },
+      {
+        click:
+          '[data-testid="agent-import-review"] .agents-import-agent:first-child .agents-import-agent__row',
+      },
       { click: '.agent-import-review__clash .segmented-control button:last-child' },
     ],
     commands: {
@@ -2497,7 +2500,7 @@ export const agentsScenarios: Scenario[] = [
       'One quiet line above the composer says the app (by its brand name) needs microphone access, with a link to open System Settings. The composer still works for typing.',
     // Steps run before a palette command, so walk in through the sidebar.
     openSelector: AGENTS_TAB,
-    requires: '.agent-composer__notice',
+    requires: '[data-bar="dictation"] .agent-bar',
     clipSelector: '.agent-chat__footer',
     steps: [{ click: '.agent-composer__mic' }],
     commands: {
@@ -2545,7 +2548,7 @@ export const agentsScenarios: Scenario[] = [
     steps: [
       { click: '[data-agent-id="acme"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(6)' },
+      { click: '[role="menuitem"]', text: 'Edit agent' },
     ],
     commands: {
       agents_overview: acmeWith({
@@ -2625,7 +2628,7 @@ export const agentsScenarios: Scenario[] = [
     steps: [
       { click: '[data-agent-id="acme"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(7)' },
+      { click: '[role="menuitem"]', text: 'Start fresh' },
     ],
     commands: {
       agents_overview: acmeWith(ACME_FULL),
@@ -2657,7 +2660,7 @@ export const agentsScenarios: Scenario[] = [
     steps: [
       { click: '[data-agent-id="acme"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(6)' },
+      { click: '[role="menuitem"]', text: 'Edit agent' },
     ],
     commands: {
       agents_overview: acmeWith(ACME_FRESH),
@@ -2840,7 +2843,7 @@ export const agentsScenarios: Scenario[] = [
     steps: [
       { click: '[data-agent-id="finance"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]:nth-child(6)' },
+      { click: '[role="menuitem"]', text: 'Edit agent' },
     ],
     commands: {
       agents_overview: financeWith({
@@ -2878,7 +2881,7 @@ export const agentsScenarios: Scenario[] = [
     looksRightWhen:
       'Above Finance’s composer, a quiet line: “That looks like a Stripe key. Keep it out of the chat?” with “Store it securely” and “Dismiss”. The composer holds the message with the key; nothing is blocked.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-composer__notice',
+    requires: '[data-bar="secret"] .agent-bar',
     steps: [
       { click: '[data-agent-id="finance"]' },
       {

@@ -110,7 +110,10 @@ export const agentsTakeoverScenarios: Scenario[] = [
     looksRightWhen:
       'The same line under the header, now offering “Show terminal” and “Hand back”. The chat is back with its composer. Your newest message (“Also: did Globex reply?”) is dimmed with “Waiting, sends when you hand Finance back” under it, and no Interrupt link.',
     openSelector: AGENTS_TAB,
-    steps: [openFinance, { click: '.agent-takeover__actions .text-button' }],
+    steps: [
+      openFinance,
+      { click: '[data-testid="agent-takeover"] .agent-bar__actions .text-button' },
+    ],
     requires:
       '.agent-takeover + .agent-chat__scroll, .agent-chat:not([data-takeover-terminal]) .agent-takeover',
     commands: {
@@ -126,7 +129,7 @@ export const agentsTakeoverScenarios: Scenario[] = [
       'Acme Site works in acme-marketing, so its session is a tab in that project’s workspace, not here. The chat stays as it was, with one line under the header: “You’re driving Acme Site in acme-marketing”, “Open in acme-marketing”, and “Hand back”. No trust hint (the fixture’s folder is trusted).',
     openSelector: AGENTS_TAB,
     steps: [openAcme],
-    requires: '.agent-takeover',
+    requires: '[data-testid="agent-takeover"]',
     commands: {
       agents_overview: drivenTeam('acme'),
       agents_messages: messagesFor,
@@ -139,7 +142,10 @@ export const agentsTakeoverScenarios: Scenario[] = [
     looksRightWhen:
       'A dialog over Finance’s terminal: “Hand Finance back?”, “Finance is in the middle of something in the terminal. Handing back now stops it there.”, the hint “Anything typed in the terminal but not sent is dropped.”, then “Keep driving” and a red “Hand back anyway”.',
     openSelector: AGENTS_TAB,
-    steps: [openFinance, { click: '.agent-takeover__actions > button:last-child' }],
+    steps: [
+      openFinance,
+      { click: '[data-testid="agent-takeover"] .agent-bar__actions > button:last-child' },
+    ],
     requires: '[aria-modal="true"]',
     commands: {
       agents_overview: drivenTeam('finance'),
@@ -179,7 +185,11 @@ export const agentsTakeoverScenarios: Scenario[] = [
     looksRightWhen:
       'A dialog over Acme Site’s chat: “Acme Site is working”, “Its session is in use, so you can’t step into it while it works. Stop it and take over now, or wait until it’s done.”, the hint “Stopping keeps what it already did, and drops what’s queued for it.”, then “Wait” and a red “Stop and take over”.',
     openSelector: AGENTS_TAB,
-    steps: [openAcme, { click: '.agent-working__takeover' }],
+    steps: [
+      openAcme,
+      { click: '.agent-working__more button' },
+      { click: '[role="menuitem"]', text: 'Take over' },
+    ],
     requires: '[aria-modal="true"]',
     commands: workCommands(true),
   },

@@ -243,7 +243,7 @@ describe('TakeoverBanner', () => {
     );
     expect(screen.getByText(TRUST_HINT)).toBeInTheDocument();
     expect(TRUST_HINT).toBe(
-      'Claude Code will ask whether to trust this folder — choose “Yes, proceed”. Choosing No ends the take-over.'
+      'Claude Code will ask whether to trust this folder — choose “Yes, proceed”. Choosing No hands it back.'
     );
     expect(screen.getByText('You’re driving Finance in a terminal')).toHaveAttribute(
       'title',

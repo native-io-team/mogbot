@@ -249,7 +249,8 @@
 
 /* The buttons resolve into the outcome: the row eases down from the
    buttons' height to the text's while the text fades in. */
-.agent-approval__outcome[data-resolved] {
+.agent-approval__outcome[data-resolved],
+.agent-card__outcome[data-resolved] {
   animation: agents-motion-resolve var(--agents-motion-enter) backwards;
 }
 
@@ -424,6 +425,7 @@
   .agent-chat__row--working[data-leaving],
   .agent-working__activity[data-changed],
   .agent-approval__outcome[data-resolved],
+  .agent-card__outcome[data-resolved],
   .agent-chat__jump,
   .agent-composer__send,
   .agent-composer__stop,

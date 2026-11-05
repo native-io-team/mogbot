@@ -58,7 +58,7 @@ export function useImportGate(): ImportGate & { set: (g: ImportGate) => void } {
 export function talkLine(talk: ImportTalk, chief: string): string {
   switch (talk.state) {
     case 'awaiting_consent':
-      return `${talk.source} is asking to start: answer the card in ${chief}’s chat`;
+      return `${talk.source} is asking to start: it needs your OK in ${chief}’s chat`;
     case 'interviewing':
       return talk.staged.length
         ? `${talk.source} is answering ${chief}’s questions · ${listOf(talk.staged)} staged`
@@ -205,8 +205,8 @@ export function ImportConnectorPanel({
                 </p>
               ) : (
                 <p>
-                  {chief} asks you first, then shows each agent on one card to import or not. Logins
-                  are asked for on secure cards, never in the conversation.
+                  {chief} asks you first, then lists every agent in its chat for you to import or
+                  not. Logins are asked for securely, never in the conversation.
                 </p>
               )}
               {main && (

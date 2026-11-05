@@ -5,9 +5,10 @@
  * - **Where it opens.** A bound agent's session becomes a tab in its
  *   project's workspace, which opens on it. Any other agent's opens here, in
  *   its chat, as a terminal in place of the conversation.
- * - **While you drive.** The chat says so in one line ("You're driving
- *   Finance in a terminal · Hand back"). The agent starts no turn; what's
- *   sent to it waits.
+ * - **While you drive.** The chat says so in one bar above the composer
+ *   ("You're driving Finance in a terminal · Hand back"), and the sidebar row
+ *   says it too; the header stays identity only. The agent starts no turn;
+ *   what's sent to it waits, and its copy can't be kept or discarded.
  * - **Mid-turn.** The session is in use, so you choose: stop it and take
  *   over, or wait.
  * - **Handing back** while the terminal is printing asks first: it is likely
@@ -28,7 +29,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { TerminalIcon } from '@/components/icons';
+import { FolderIcon, MoreHorizontalIcon, TerminalIcon } from '@/components/icons';
+import { Dropdown, DropdownItem } from '../primitives/Dropdown';
+import { IconButton } from '../primitives/IconButton';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { AttachedTerminal } from '../terminal/AttachedTerminal';
@@ -48,6 +51,7 @@ import {
 } from '../../lib/agents';
 import { getAgentsSnapshot, refreshAgents, useAgentsSelector } from '../../lib/agentsStore';
 import { useAgentProjects } from './AgentProject';
+import { ConversationBar } from './AgentCard';
 
 /** The PTY's size until the terminal that shows it fits it. */
 const START_COLS = 100;
@@ -68,8 +72,8 @@ const TakeoverContext = createContext<TakeoverActions | null>(null);
 export const useTakeover = () => useContext(TakeoverContext);
 
 /** Show a bound agent's session in its workspace. */
-function showInWorkspace(view: AgentTakeover): boolean {
-  if (!view.project) return true;
+function showInWorkspace(view: AgentTakeover | null | undefined): boolean {
+  if (!view?.project) return true;
   return openTakenOverSession({
     projectPath: view.project,
     sessionId: view.ptySession,
@@ -98,8 +102,9 @@ export function TakeoverProvider({ children }: { children: ReactNode }) {
       try {
         const view = await takeOverAgent(agent.id, START_COLS, START_ROWS, stopFirst);
         await refreshAgents();
-        if (!showInWorkspace(view)) {
-          showToast(`${agent.name}’s session is open. Open its project to see it.`, 'info');
+        // The backend answers with the take-over or an error; never read a blank.
+        if (view && !showInWorkspace(view)) {
+          showToast(`You’re driving ${agent.name}. Open its project to see it.`, 'info');
         }
       } finally {
         opening.current.delete(agent.id);
@@ -181,15 +186,15 @@ export function TakeoverProvider({ children }: { children: ReactNode }) {
           title={`${asking.name} is working`}
           body={
             <p>
-              Its session is in use, so you can’t step into it while it works. Stop it and take over
-              now, or wait until it’s done.
+              It’s in the middle of something, so you can’t step in while it works. Stop it and take
+              over now, or wait until it’s done.
             </p>
           }
           hint="Stopping keeps what it already did, and drops what’s queued for it."
           loading={busy}
           confirmLabel="Stop and take over"
           loadingLabel="Stopping…"
-          confirmVariant="danger"
+          confirmVariant="strong"
           cancelLabel="Wait"
           onCancel={() => setAsking(null)}
           onConfirm={() => void confirmStop()}
@@ -228,7 +233,7 @@ export function TakeOverButton({ agent: given, className }: { agent: Agent; clas
     <TextButton
       tabIndex={0}
       className={className}
-      title={`Step into ${agent.name}’s session in a terminal and carry on by hand`}
+      title={`Step into ${agent.name}’s conversation in a terminal and carry on by hand`}
       onClick={() => actions.takeOver(agent)}
     >
       Take over
@@ -237,8 +242,60 @@ export function TakeOverButton({ agent: given, className }: { agent: Agent; clas
 }
 
 /**
- * The one line that says you're driving, above the conversation: where, and
- * Hand back. For a session shown here, also hiding or showing the terminal.
+ * The ways into a working agent, one ⋯ beside its working line: its project,
+ * and its session. Rarely wanted, so never a row of their own under every
+ * turn. Nothing to offer: no menu.
+ */
+export function WorkMenu({ agent: given }: { agent: Agent }) {
+  const actions = useTakeover();
+  const projects = useAgentProjects();
+  const agent = useAgentsSelector((s) => s.agents.find((a) => a.id === given.id)) ?? given;
+  const project = agent.project && projects ? agent.project : null;
+  const projectName = project
+    ? (projects?.projects?.find((p) => p.path === project)?.name ?? folderOf(project))
+    : null;
+  const takeOver = Boolean(actions && canTakeOver(agent) && !agent.takeover);
+  if (!project && !takeOver) return null;
+  return (
+    <Dropdown
+      align="left"
+      portal
+      className="agent-working__more"
+      trigger={(p) => (
+        <IconButton
+          {...p}
+          tabIndex={0}
+          variant="ghost"
+          size="compact"
+          icon={<MoreHorizontalIcon size={14} />}
+          aria-label={`More for ${agent.name}`}
+          title="More"
+        />
+      )}
+    >
+      {project && projectName && (
+        <DropdownItem
+          icon={<FolderIcon size={12} />}
+          onSelect={() => projects?.openProject(project)}
+        >
+          Open in {projectName}
+        </DropdownItem>
+      )}
+      {takeOver && (
+        <DropdownItem icon={<TerminalIcon size={12} />} onSelect={() => actions?.takeOver(agent)}>
+          Take over
+        </DropdownItem>
+      )}
+    </Dropdown>
+  );
+}
+
+const folderOf = (path: string) => path.split('/').filter(Boolean).pop() ?? path;
+
+/**
+ * The bar that says you're driving, above the composer with the others:
+ * where, and Hand back. For a session shown here, also hiding or showing the
+ * terminal (which then fills the column above it).
  */
 export function TakeoverBanner({
   agent,
@@ -259,16 +316,18 @@ export function TakeoverBanner({
   const where = takeoverWhere(takeover, projectName);
   const handing = actions?.handingBack === agent.id;
   return (
-    <div className="agent-takeover" role="status">
-      <div className="agent-takeover__row">
-        <span className="agent-takeover__icon" aria-hidden>
-          <TerminalIcon size={12} />
-        </span>
-        {/* Said once, here: what driving it means for edits. */}
+    <ConversationBar
+      state="active"
+      icon={<TerminalIcon size={12} />}
+      data-testid="agent-takeover"
+      title={
+        // Said once, here: what driving it means for edits.
         <span className="agent-takeover__text" title={takeoverPolicy(takeover, agent.name)}>
           You’re driving {agent.name} {where}
         </span>
-        <span className="agent-takeover__actions">
+      }
+      actions={
+        <>
           {takeover.project ? (
             <TextButton tabIndex={0} onClick={() => actions?.takeOver(agent)}>
               Open {where}
@@ -287,10 +346,11 @@ export function TakeoverBanner({
           >
             {handing ? 'Handing back…' : 'Hand back'}
           </Button>
-        </span>
-      </div>
-      {takeover.trustPrompt && <p className="agent-takeover__hint">{TRUST_HINT}</p>}
-    </div>
+        </>
+      }
+    >
+      {takeover.trustPrompt && <p className="agent-bar__extra">{TRUST_HINT}</p>}
+    </ConversationBar>
   );
 }
 

@@ -4,6 +4,11 @@
  * that the interview is separate from this chat, and a real Stop. Gone when
  * there's no import going.
  *
+ * It says the state, not the question: the request itself is in the
+ * conversation, and the bar never repeats it or points at "the card".
+ * Stopping loses nothing (nothing is created until you import), so Stop is a
+ * plain secondary button, not a red one.
+ *
  * @module components/agents/ImportTalkBar
  */
 
@@ -11,6 +16,7 @@ import { Button } from '../primitives/Button';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { stopImportTalk, talkIsLive, type ImportTalk } from '../../lib/agents';
+import { ConversationBar } from './AgentCard';
 import { listOf } from './ImportParts';
 import { useImportGate } from './ImportConnectorPanel';
 
@@ -19,20 +25,20 @@ export function barLines(talk: ImportTalk, chief: string): { title: string; deta
   switch (talk.state) {
     case 'awaiting_consent':
       return {
-        title: `${talk.source} wants to bring its agents over`,
-        detail: 'Allow or deny it on the card above. Nothing has been shared.',
+        title: `Import from ${talk.source} · Needs your OK`,
+        detail: 'Nothing has been shared yet.',
       };
     case 'review':
       return {
-        title: `${talk.source}’s agents are ready for you to review`,
-        detail: 'Nothing is created until you press Import on the card.',
+        title: `Import from ${talk.source} · ready to review`,
+        detail: 'Nothing is created until you import.',
       };
     default:
       return {
         title: `Importing from ${talk.source}${
           talk.staged.length ? ` · ${listOf(talk.staged)} staged for review` : ''
         }`,
-        detail: `${talk.source} talks to a sealed interview, not this chat: what you type here stays between you and ${chief}.`,
+        detail: `${talk.source} talks to a separate, sealed conversation, not this chat: what you type here stays between you and ${chief}.`,
       };
   }
 }
@@ -42,29 +48,27 @@ export function ImportTalkBar({ chief }: { chief: string }) {
   const { showToast } = useOptionalToast();
   if (!talkIsLive(talk)) return null;
   const { title, detail } = barLines(talk, chief);
+  const waiting = talk.state === 'awaiting_consent' || talk.state === 'review';
   return (
-    <div
-      className="agent-import-talk"
-      role="status"
+    <ConversationBar
+      state={waiting ? 'waiting' : 'active'}
       data-testid="agent-import-talk"
-      data-state={talk.state}
-    >
-      <span className="agent-import-talk__dot" aria-hidden />
-      <span className="agent-import-talk__text">
-        <strong>{title}</strong>
-        <span className="agent-import-talk__detail">{detail}</span>
-      </span>
-      <Button
-        variant="danger"
-        size="compact"
-        onClick={() => {
-          stopImportTalk().catch((e: unknown) =>
-            showToast(formatCommandError(asCommandError(e)), 'error')
-          );
-        }}
-      >
-        Stop import
-      </Button>
-    </div>
+      dataState={talk.state}
+      title={title}
+      detail={detail}
+      actions={
+        <Button
+          variant="secondary"
+          size="compact"
+          onClick={() => {
+            stopImportTalk().catch((e: unknown) =>
+              showToast(formatCommandError(asCommandError(e)), 'error')
+            );
+          }}
+        >
+          Stop
+        </Button>
+      }
+    />
   );
 }

@@ -94,7 +94,7 @@ describe('OtherAppImportPanel', () => {
     importFromOtherApp.mockResolvedValue(SUMMARY);
     render(<OtherAppImportPanel preview={PREVIEW} onCancel={vi.fn()} onDone={vi.fn()} />);
     fireEvent.click(screen.getByText('Finance'));
-    expect(screen.getByText('Always allows')).toBeInTheDocument();
+    expect(screen.getByText('Always allow rules')).toBeInTheDocument();
     expect(screen.getByText('git push')).toBeInTheDocument();
     const keep = screen.getByRole('checkbox', { name: 'Keep their “Always allow” rules' });
     expect(keep).not.toBeChecked();

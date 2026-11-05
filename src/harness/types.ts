@@ -34,6 +34,17 @@ export interface ScenarioStep {
   select?: string;
   /** The text `fill` types. */
   value?: string;
+  /**
+   * Press a key on the window, e.g. `mod+k` for the palette (`mod` is ⌘).
+   * How the per-agent palette commands are reached: they exist only with an
+   * agent selected, which the default-context palette sweep never has.
+   */
+  key?: string;
+  /**
+   * Act on the first match whose text contains this, not the first match.
+   * Menus gain items; "the seventh item" silently becomes a different one.
+   */
+  text?: string;
 }
 
 export interface Scenario {

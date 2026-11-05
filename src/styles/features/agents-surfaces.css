@@ -1,0 +1,220 @@
+/*
+ * Agents — the three surfaces besides messages (components/agents/AgentCard.tsx):
+ * a Line (one quiet centred sentence), a Card (a decision or a result) and a
+ * Bar (this conversation's state, above the composer). Every card and bar in
+ * a chat is drawn from these rules, so two of them side by side are visibly
+ * the same thing.
+ */
+
+/* ------------------------------------------------------------------ card */
+
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  width: var(--agents-bubble-max);
+  max-width: 100%;
+  padding: var(--spacing-md);
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+  background: var(--surface-control);
+  border-radius: var(--radius-lg);
+}
+
+.agent-card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  font-size: var(--font-size-subhead);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-compact);
+  color: var(--text-primary);
+}
+
+.agent-card__title-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Semantic, not an alarm: who or what is asking. */
+.agent-card__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+}
+
+.agent-card__icon[data-tone='warning'] {
+  color: var(--accent-warning);
+}
+
+/* "1 of 3 similar requests": quiet, after the title. */
+.agent-card__meta {
+  margin-left: auto;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-body);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.agent-card__source,
+.agent-card__note {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+}
+
+/* Right-aligned, the single affirmative last (the macOS order). */
+.agent-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+.agent-card__outcome {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-card__outcome[data-tone='done'] {
+  color: var(--text-secondary);
+}
+
+.agent-card__outcome[data-tone='done'] > svg {
+  color: var(--accent-success);
+}
+
+/* ------------------------------------------------------------------ bars */
+
+/* Above the composer, in the reading column, in a fixed order. */
+.agent-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  width: calc(100% - (var(--spacing-xl) * 2));
+  max-width: var(--agents-chat-width);
+  margin: 0 auto var(--spacing-sm);
+}
+
+.agent-bars[data-empty] {
+  display: none;
+}
+
+.agent-bars__slot {
+  min-width: 0;
+}
+
+.agent-bars__slot[hidden] {
+  display: none;
+}
+
+.text-button.button.agent-bars__more {
+  align-self: center;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-md);
+  font-size: var(--font-size-body-md);
+  color: var(--text-secondary);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-card);
+  animation: agents-motion-swap-in var(--agents-motion-enter) backwards;
+}
+
+.agent-bar__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  min-height: var(--control-height-compact);
+}
+
+.agent-bar__dot {
+  flex: none;
+  width: var(--spacing-xs);
+  height: var(--spacing-xs);
+  border-radius: var(--radius-pill);
+  background: var(--text-faint);
+  /* Centred where a 12px icon would be, so dots and icons line up. */
+  margin: 0 var(--spacing-xs);
+}
+
+.agent-bar[data-tone='active'] .agent-bar__dot {
+  background: var(--accent-active);
+  animation: agent-bar-live var(--agents-motion-typing-period) ease-in-out infinite;
+}
+
+.agent-bar[data-tone='waiting'] .agent-bar__dot {
+  background: var(--accent-warning);
+}
+
+.agent-bar__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.agent-bar[data-tone='active'] .agent-bar__icon {
+  color: var(--accent-active);
+}
+
+.agent-bar__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.agent-bar__title {
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-compact);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.agent-bar__detail {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+}
+
+.agent-bar__actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+/* A wrapped extra line under the row (what Claude Code asks first). */
+.agent-bar__extra {
+  margin: 0;
+  padding-left: calc(var(--spacing-xs) + var(--spacing-sm));
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+}
+
+@keyframes agent-bar-live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-bar,
+  .agent-bar[data-tone='active'] .agent-bar__dot {
+    animation: none;
+  }
+}

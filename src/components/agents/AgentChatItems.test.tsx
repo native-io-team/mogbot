@@ -181,5 +181,16 @@ describe('Start fresh', () => {
       />
     );
     expect(container).toBeEmptyDOMElement();
+    // Driven by hand: Start fresh can't run, so it isn't offered.
+    rerender(
+      <FreshHint
+        agent={agent({
+          ...full,
+          takeover: { ptySession: 'p', cli: 'claude', since: 1 } as unknown as Agent['takeover'],
+        })}
+        onStartFresh={onStartFresh}
+      />
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });
