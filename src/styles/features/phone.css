@@ -499,14 +499,18 @@
 .phone-abilities__item {
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
   font-size: var(--font-size-caption);
+  line-height: var(--line-height-help);
   color: var(--text-muted);
 }
 
 .phone-abilities__item svg {
   flex: none;
-  transform: translateY(1px); /* css-ok: centres the icon on the caption's first line */
+  /* Centre the 12px icon on the first line of text, whatever the line height. */
+  margin-block-start: calc(
+    (1lh - 12px) / 2
+  ); /* css-ok: 12px is the CheckIcon/CloseIcon size prop */
 }
 
 .phone-abilities__item[data-can] {

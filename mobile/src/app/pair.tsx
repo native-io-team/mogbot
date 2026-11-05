@@ -83,6 +83,8 @@ export default function Pair() {
       const { status } = await Notifications.getPermissionsAsync().catch(() => ({
         status: Notifications.PermissionStatus.DENIED,
       }));
+      // Left the screen meanwhile: paired all the same, nothing to show.
+      if (controller.signal.aborted) return;
       setPhase({
         kind: 'paired',
         mac: credentials.name,
@@ -439,7 +441,7 @@ function BeforeYouScan() {
       note="This phone reaches your Mac only through Tailscale. Without it, the Mac never sees the request."
       actions={
         <Button
-          title={installed ? 'Open Tailscale' : 'Get Tailscale'}
+          title={installed === true ? 'Open Tailscale' : installed === false ? 'Get Tailscale' : 'Tailscale'}
           variant="outline"
           icon="network"
           onPress={() => void openTailscale()}

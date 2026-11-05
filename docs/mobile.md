@@ -271,7 +271,10 @@ CA and no trust-on-first-use.
    "Reaching *Mac*…" while `/v1/identity` is out, and "Allow on your Mac"
    only once the Mac has proved itself and `/v1/pair` has gone. A tailnet
    host the phone can't reach doesn't fail, it hangs, so the identity
-   request gets 9 s (`IDENTITY_TIMEOUT_MS`) and is then diagnosed
+   request gets 12 s (`IDENTITY_TIMEOUT_MS`), and one more try on a fresh
+   connection if that ran out (a first request over a DERP relay, or a
+   phone whose Tailscale is waking on demand, can be slow but working; a
+   fast failure isn't retried), and is then diagnosed
    (`diagnose`: a `*.ts.net` name that doesn't resolve is "this phone isn't
    on your Mac's tailnet", anything else "can't reach *Mac*"), each naming
    the host and the checks: Tailscale connected here, signed in to the same

@@ -226,8 +226,13 @@ const TAILSCALE_STORE =
     ? 'https://play.google.com/store/apps/details?id=com.tailscale.ipn'
     : 'https://apps.apple.com/app/tailscale/id1470499037';
 
-/** Whether the Tailscale app is on this phone; `null` when the OS won't say. */
+/**
+ * Whether the Tailscale app is on this phone; `null` when the OS won't say.
+ * Android 11+ answers `false` for any app not declared in `<queries>`, so
+ * there its "no" means nothing: unknown, not "not installed".
+ */
 export async function tailscaleInstalled(): Promise<boolean | null> {
+  if (Platform.OS === 'android') return null;
   try {
     return await Linking.canOpenURL('tailscale://');
   } catch {

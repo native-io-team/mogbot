@@ -421,6 +421,28 @@ describe('pairing', () => {
     await new Promise<void>((r) => silent.close(() => r()));
   });
 
+  it('a slow first try over a relay is tried again, not called unreachable', async () => {
+    const mock = createMockServer({ quiet: true, allowAfterMs: 50 });
+    await mock.listen();
+    const link = parsePairingLink(mock.pairingLink(), { allowHost: () => true })!;
+    let calls = 0;
+    // The first identity request stalls (a relay still being set up); the
+    // second goes straight through.
+    const stalling: typeof fetch = (input, init) => {
+      calls += 1;
+      if (calls === 1 && String(input).endsWith('/v1/identity')) {
+        return new Promise((_, reject) =>
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+        );
+      }
+      return deps.fetch(input, init);
+    };
+    const paired = await pairWith(link, { ...deps, fetch: stalling, identityTimeoutMs: 300 });
+    expect(paired.token).toBeTruthy();
+    expect(calls).toBe(3);
+    await mock.close();
+  });
+
   it('stops waiting on the desk a little after its window, and says so', async () => {
     // A desk that never decides inside the phone's (shortened) window.
     const mock = createMockServer({ quiet: true, allowAfterMs: 800 });
@@ -434,6 +456,9 @@ describe('pairing', () => {
     }).catch((e: PairError) => e.failure);
     expect(err).toEqual({ kind: 'no_answer' });
     expect(steps).toEqual(['reaching', 'asking']);
+    // Let the mock desk's own 800 ms decision run out before closing it, so
+    // its timer doesn't outlive the suite.
+    await new Promise((r) => setTimeout(r, 600));
     await mock.close();
   });
 
@@ -449,6 +474,7 @@ describe('pairing', () => {
     });
     const err = await going.catch((e: unknown) => e);
     expect(err).not.toBeInstanceOf(PairError);
+    await new Promise((r) => setTimeout(r, 800)); // the mock desk's decision timer
     await mock.close();
   });
 

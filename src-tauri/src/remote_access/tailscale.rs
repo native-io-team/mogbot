@@ -595,6 +595,21 @@ mod tests {
         );
     }
 
+    /// Against this Mac's real Tailscale, with PATH cut down to what a GUI
+    /// launch gets (no `/usr/local/bin`, no Homebrew): the app bundle's CLI
+    /// must still be found, and a signed-in Mac must name its account.
+    #[tokio::test]
+    #[ignore = "reads this Mac's real Tailscale (read-only `status --json`)"]
+    async fn reads_this_macs_account_without_tailscale_on_path() {
+        std::env::set_var("PATH", "/usr/bin:/bin");
+        let s = status().await;
+        println!("{s:?}");
+        assert!(
+            matches!(s, TailscaleState::Connected { login: Some(ref l), .. } if l.contains('@')),
+            "{s:?}"
+        );
+    }
+
     #[test]
     fn names_the_account_only_when_tailscale_does() {
         let s = parse_status(&json!({

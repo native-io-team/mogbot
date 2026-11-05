@@ -68,8 +68,14 @@ export interface Paired {
  */
 export type PairStep = 'reaching' | 'asking';
 
-/** The identity answer is instant on a reachable Mac: longer means it isn't. */
-export const IDENTITY_TIMEOUT_MS = 9_000;
+/**
+ * The identity answer is near-instant on a direct path, but a first request
+ * over a DERP relay (or while the phone's Tailscale wakes up on demand) can
+ * take seconds: each try gets this long, and a try that times out gets one
+ * more on a fresh connection before the phone says the Mac is unreachable.
+ */
+export const IDENTITY_TIMEOUT_MS = 12_000;
+export const IDENTITY_TRIES = 2;
 /** The desk's 120 s (`pairing::DECISION_TIMEOUT`), and room for its answer to arrive. */
 export const PAIR_TIMEOUT_MS = 135_000;
 
@@ -130,17 +136,23 @@ const unreachable = async (deps: PairDeps, route: Route) =>
 export async function proveMac(link: PairingLink, route: Route, deps: PairDeps): Promise<void> {
   const base = route.url.replace(/\/$/, '');
   const challenge = newChallenge(deps.random);
-  const clock = within(deps.signal, deps.identityTimeoutMs ?? IDENTITY_TIMEOUT_MS);
-  let res: Response;
-  let answer: IdentityResponse | null;
-  try {
-    res = await post(deps, base + HTTP.identity, { protocol: SUPPORTED, challenge }, clock.signal);
-    answer = res.ok ? ((await res.json().catch(() => null)) as IdentityResponse | null) : null;
-  } catch (error) {
-    if (deps.signal?.aborted) throw error;
-    throw await unreachable(deps, route);
-  } finally {
-    clock.done();
+  let res!: Response;
+  let answer: IdentityResponse | null = null;
+  for (let attempt = 1; ; attempt++) {
+    const clock = within(deps.signal, deps.identityTimeoutMs ?? IDENTITY_TIMEOUT_MS);
+    try {
+      res = await post(deps, base + HTTP.identity, { protocol: SUPPORTED, challenge }, clock.signal);
+      answer = res.ok ? ((await res.json().catch(() => null)) as IdentityResponse | null) : null;
+      break;
+    } catch (error) {
+      if (deps.signal?.aborted) throw error;
+      // Slow is not gone: a timed-out try gets one more. A fast failure
+      // (no such host, refused) is an answer already.
+      if (clock.timedOut() && attempt < IDENTITY_TRIES) continue;
+      throw await unreachable(deps, route);
+    } finally {
+      clock.done();
+    }
   }
   // Every Mac that can prove itself has this route; a bare 404 is one that can't.
   if (res.status === 404) {
