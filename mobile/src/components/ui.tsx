@@ -121,7 +121,7 @@ export const tap = haptic.select;
  * neutral accent (`answerAccent`: near-white in dark, near-black in light),
  * never the agent's colour.
  */
-type ButtonVariant = 'primary' | 'answer' | 'secondary' | 'ghost' | 'danger';
+type ButtonVariant = 'primary' | 'answer' | 'secondary' | 'outline' | 'ghost' | 'danger';
 
 type ButtonColors = { bg: string; pressed: string; fg: string; border?: string };
 
@@ -135,6 +135,13 @@ const buttonColorsOf = (
     bg: colors.surfaceControl,
     pressed: colors.surfaceControlHover,
     fg: colors.textStrong,
+  },
+  // The quieter of a pair (Discard beside Keep): a line, no fill.
+  outline: {
+    bg: 'transparent',
+    pressed: colors.surfaceControl,
+    fg: colors.textStrong,
+    border: colors.borderStrong,
   },
   ghost: { bg: 'transparent', pressed: colors.surfaceControl, fg: colors.textSecondary },
   danger: {

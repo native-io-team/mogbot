@@ -849,7 +849,7 @@ const SECRET_NAMES: [&str; 6] = [
     "code",
 ];
 
-const SECRET_PREFIXES: [&str; 12] = [
+pub(crate) const SECRET_PREFIXES: [&str; 12] = [
     "sk-",
     "sk_",
     "pk_live",
@@ -1317,6 +1317,20 @@ pub fn on_action(agent_id: &str, action: Action, now: i64) -> String {
     let doing = clean(&action.doing);
     with_live(agent_id, |live| live.action(action, now));
     doing
+}
+
+/// A step the app took for the turn itself ("Started a copy of acme-site").
+pub fn on_step(agent_id: &str, kind: StepKind, label: &str, now: i64) {
+    let label = clean(label);
+    with_live(agent_id, |live| {
+        live.push(WorkStep {
+            at: now,
+            kind,
+            label,
+            outcome: None,
+            image: None,
+        });
+    });
 }
 
 /// What came back for a call the turn made.

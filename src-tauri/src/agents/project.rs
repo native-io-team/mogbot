@@ -28,27 +28,37 @@ use crate::errors::CommandError;
 pub struct Layout {
     pub cwd: PathBuf,
     pub add_dirs: Vec<String>,
-    /// Set for a bound agent: its project, the turn's working directory.
+    /// Set for a bound agent: its project (the turn's working directory,
+    /// unless it works in a copy).
     pub project: Option<PathBuf>,
+    /// The copy of the project the turn runs in (see `task`).
+    pub copy: Option<super::task::TaskCopy>,
 }
 
 /// An unbound agent runs in its home with every project added, exactly as
 /// before binding existed. A bound one runs in its project, with its home
-/// added first (so it can keep its memory) and the other folders after.
+/// added first (so it can keep its memory) and the other folders after; with
+/// an open copy of the project, it runs in that copy instead.
 pub fn layout(agent: &Agent, home: &Path, work_dirs: Vec<String>) -> Layout {
     match &agent.project {
         None => Layout {
             cwd: home.to_path_buf(),
             add_dirs: work_dirs,
             project: None,
+            copy: None,
         },
         Some(project) => {
             let mut add_dirs = vec![home.to_string_lossy().to_string()];
             add_dirs.extend(work_dirs.into_iter().filter(|d| d != project));
+            let copy = super::task::active(agent).cloned();
             Layout {
-                cwd: PathBuf::from(project),
+                cwd: copy
+                    .as_ref()
+                    .map(|c| PathBuf::from(&c.path))
+                    .unwrap_or_else(|| PathBuf::from(project)),
                 add_dirs,
                 project: Some(PathBuf::from(project)),
+                copy,
             }
         }
     }
@@ -122,6 +132,18 @@ pub struct ChangeSummary {
     pub file_count: u32,
     pub added: u32,
     pub removed: u32,
+    /// Set when the turn worked in a copy of the project: the card then
+    /// lists everything in the copy so far (what Keep would bring over).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy: Option<super::task::CopyRef>,
+    /// In a copy: files it changed that Keep won't bring over, and why
+    /// (secrets, dependencies, big files, files git ignores).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub left_out: Vec<super::task::LeftOut>,
+    /// In a copy: why its changes couldn't be saved this turn (it was moved
+    /// off its own branch, or a file still has conflict markers in it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -203,6 +225,12 @@ pub async fn snapshot(project: &Path) -> Option<String> {
 /// `None` when nothing did, or git couldn't say.
 pub async fn summary(project: &Path, from: &str) -> Option<ChangeSummary> {
     let to = snapshot(project).await?;
+    summary_to(project, from, &to).await
+}
+
+/// What changed between two trees of `project`. `None` when nothing did.
+pub async fn summary_to(project: &Path, from: &str, to: &str) -> Option<ChangeSummary> {
+    let to = to.to_string();
     if to == from {
         return None;
     }
@@ -245,6 +273,9 @@ pub async fn summary(project: &Path, from: &str) -> Option<ChangeSummary> {
         file_count,
         added,
         removed,
+        copy: None,
+        left_out: Vec::new(),
+        warning: None,
     })
 }
 
@@ -338,7 +369,8 @@ mod tests {
             Layout {
                 cwd: home.to_path_buf(),
                 add_dirs: dirs,
-                project: None
+                project: None,
+                copy: None,
             }
         );
     }

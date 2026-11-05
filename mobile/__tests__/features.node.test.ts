@@ -286,6 +286,18 @@ describe('files, search, schedules and projects against the mock Mac', () => {
     );
   });
 
+  it('keeps an agent’s copy of its project, once, from its card', async () => {
+    const site = () => state.overview?.agents.find((a) => a.id === 'site');
+    await until(() => site()?.copy?.id === 'copy_hero');
+    const kept = await t.request('agents.keepCopy', { agentId: 'site', copyId: 'copy_hero' });
+    expect(kept).toEqual({ outcome: 'kept', files: 2, branch: 'main' });
+    await until(() => site() !== undefined && site()?.copy === undefined);
+    // The same card again: refused, never applied to a newer copy.
+    await expect(
+      t.request('agents.discardCopy', { agentId: 'site', copyId: 'copy_hero' })
+    ).rejects.toBeTruthy();
+  });
+
   it('opens a change card’s diff, starts a session and photographs a preview', async () => {
     const diff = await t.request('agents.changeDiff', {
       agentId: 'site',

@@ -132,6 +132,13 @@ export interface Agent {
   failure?: Failure;
   /** The project it works in (a path from `project_list`); omitted when unbound. */
   project?: string;
+  /**
+   * Its open copy of that project (`agents/task.rs`): where its turns run
+   * until the user keeps or discards the changes. Omitted when none is open.
+   */
+  copy?: TaskCopy;
+  /** "Work directly in the project": no copy, its turns edit the project itself. */
+  workDirectly?: boolean;
   /** What its last turn could use; omitted before its first turn. */
   capabilities?: Capabilities;
   /** Secrets it has in the Keychain (names only); omitted when none. */
@@ -448,7 +455,90 @@ export interface ChangeSummary {
   fileCount: number;
   added: number;
   removed: number;
+  /**
+   * The turn worked in a copy of the project: the files are everything in
+   * the copy so far (what Keep would bring over), not only this turn's.
+   */
+  copy?: CopyRef;
+  /** In a copy: files it changed that Keep won't bring over, and why. */
+  leftOut?: LeftOut[];
+  /** In a copy: why its changes couldn't be saved this turn, in a sentence. */
+  warning?: string;
 }
+
+/** Mirrors `task::LeftOut`: a file in the copy that Keep leaves behind. */
+export interface LeftOut {
+  path: string;
+  /** `ignored`: git ignores it (an edited `.env`), so it never leaves the copy. */
+  why: 'secrets' | 'dependencies' | 'tooLarge' | 'ignored';
+}
+
+/**
+ * The card's line for what Keep won't bring over (mirrors `task::left_out_line`):
+ * "Not included: .env.local (looks like secrets) · changed .env — not included (git ignores it)".
+ */
+export function leftOutLine(items: LeftOut[] | undefined): string | null {
+  if (!items?.length) return null;
+  const why = {
+    secrets: 'looks like secrets',
+    dependencies: 'dependencies',
+    tooLarge: 'over 5 MB',
+  };
+  const parts: string[] = [];
+  const skipped = items.filter((l) => l.why !== 'ignored').slice(0, 5);
+  if (skipped.length) {
+    parts.push(
+      `Not included: ${skipped.map((l) => `${l.path} (${why[l.why as keyof typeof why]})`).join(', ')}`
+    );
+  }
+  const ignored = items.filter((l) => l.why === 'ignored').slice(0, 5);
+  if (ignored.length) {
+    parts.push(`changed ${ignored.map((l) => l.path).join(', ')} — not included (git ignores it)`);
+  }
+  return parts.join(' · ');
+}
+
+/** Mirrors `task::CopyRef`: the copy a change card describes. */
+export interface CopyRef {
+  id: string;
+  /** The copy's folder: a git worktree outside the project. */
+  path: string;
+  branch: string;
+}
+
+/** Mirrors `task::TaskCopy`: an agent's open copy of its project. */
+export interface TaskCopy extends CopyRef {
+  /** The user's own project folder. */
+  project: string;
+  /** The commit it started from. */
+  base: string;
+  /** The branch the project was on when the copy was made. */
+  baseBranch?: string;
+  createdAt: number;
+  /** The project's dependencies were cloned in. */
+  deps: boolean;
+  /**
+   * The last Keep that couldn't go through, kept on the Mac so every card
+   * shows what's in the way. Cleared by the next turn or Keep.
+   */
+  stuck?: Extract<KeptCopy, { outcome: 'conflict' | 'markers' | 'otherBranch' }>;
+}
+
+/** Mirrors `task::Kept`: what "Keep changes" did. */
+export type KeptCopy =
+  /** In the project's `branch` now. */
+  | { outcome: 'kept'; files: number; branch: string; leftOut?: LeftOut[] }
+  | { outcome: 'nothing'; leftOut?: LeftOut[] }
+  /** Some changes overlap with edits made in the project since; resolved in the copy. */
+  | { outcome: 'conflict'; files: string[] }
+  /** These files still have conflict markers in them: nothing was kept. */
+  | { outcome: 'markers'; files: string[] }
+  /**
+   * The project is on `current`, not the branch the copy was made from
+   * (`base`; absent when it was made from no branch). Nothing was kept;
+   * keeping there takes `keepCopy(…, current)`.
+   */
+  | { outcome: 'otherBranch'; current: string; base?: string };
 
 /** A file sent with a message, as kept in the agent's home. */
 export interface Attachment {
@@ -534,6 +624,8 @@ export interface UpdateAgentInput {
   routineModel?: string;
   /** A project path from `list_projects`, or '' to unbind it. */
   project?: string;
+  /** Work directly in the project instead of in a copy of it. */
+  workDirectly?: boolean;
 }
 
 /**
@@ -806,6 +898,16 @@ export const getAgentInstructions = (agentId: string) =>
 /** One file of a change card, as this turn changed it. */
 export const getChangeDiff = (agentId: string, messageId: string, path: string) =>
   invoke<FileDiff>('agents_change_diff', { agentId, messageId, path });
+/**
+ * "Keep changes": the agent's copy of its project, merged into the branch it
+ * was made from. `into` confirms the project's current branch by name, after
+ * an `otherBranch` answer.
+ */
+export const keepCopy = (agentId: string, copyId: string, into?: string) =>
+  invoke<KeptCopy>('agents_copy_keep', { agentId, copyId, ...(into ? { into } : {}) });
+/** "Discard": the agent's copy of its project and everything in it. */
+export const discardCopy = (agentId: string, copyId: string) =>
+  invoke<void>('agents_copy_discard', { agentId, copyId });
 export const deleteAgent = (agentId: string) => invoke<void>('agents_delete', { agentId });
 export const stopAgent = (agentId: string) => invoke<boolean>('agents_stop', { agentId });
 /** How many agents are mid-turn (running or waiting for a slot). */

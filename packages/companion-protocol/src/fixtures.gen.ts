@@ -156,6 +156,16 @@ export const agentsOverview = {
         "used": 30099,
         "window": 200000
       },
+      "copy": {
+        "base": "abc123",
+        "baseBranch": "main",
+        "branch": "finance/invoice-totals-ab12",
+        "createdAt": 1762280000000,
+        "deps": true,
+        "id": "copy-1",
+        "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12",
+        "project": "/Users/julian/ShipStudio/site"
+      },
       "createdAt": 1762200000000,
       "engine": "claude",
       "failure": {
@@ -230,7 +240,8 @@ export const agentsOverview = {
         "since": 1762290000000,
         "state": "waiting"
       },
-      "unread": 2
+      "unread": 2,
+      "workDirectly": true
     }
   ],
   "engineReady": true,
@@ -459,6 +470,11 @@ export const agentsMessages = {
       "changes": {
         "added": 12,
         "branch": "main",
+        "copy": {
+          "branch": "finance/invoice-totals-ab12",
+          "id": "copy-1",
+          "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12"
+        },
         "fileCount": 3,
         "files": [
           {
@@ -1221,6 +1237,16 @@ export const agentsUpdate = {
     "used": 30099,
     "window": 200000
   },
+  "copy": {
+    "base": "abc123",
+    "baseBranch": "main",
+    "branch": "finance/invoice-totals-ab12",
+    "createdAt": 1762280000000,
+    "deps": true,
+    "id": "copy-1",
+    "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12",
+    "project": "/Users/julian/ShipStudio/site"
+  },
   "createdAt": 1762200000000,
   "engine": "claude",
   "failure": {
@@ -1289,7 +1315,8 @@ export const agentsUpdate = {
   ],
   "sessionId": "8c1d7a52-0000-4000-8000-000000000001",
   "shape": 2,
-  "unread": 2
+  "unread": 2,
+  "workDirectly": true
 } satisfies Result<'agents.update'>;
 export const agentsStartFresh = {
   "capabilities": {
@@ -1378,6 +1405,16 @@ export const agentsStartFresh = {
     }
   ],
   "color": "green",
+  "copy": {
+    "base": "abc123",
+    "baseBranch": "main",
+    "branch": "finance/invoice-totals-ab12",
+    "createdAt": 1762280000000,
+    "deps": true,
+    "id": "copy-1",
+    "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12",
+    "project": "/Users/julian/ShipStudio/site"
+  },
   "createdAt": 1762200000000,
   "engine": "claude",
   "failure": {
@@ -1446,10 +1483,21 @@ export const agentsStartFresh = {
   ],
   "sessionId": null,
   "shape": 2,
-  "unread": 2
+  "unread": 2,
+  "workDirectly": true
 } satisfies Result<'agents.startFresh'>;
 export const agentsCreate = {
   "color": "teal",
+  "copy": {
+    "base": "abc123",
+    "baseBranch": "main",
+    "branch": "finance/invoice-totals-ab12",
+    "createdAt": 1762280000000,
+    "deps": true,
+    "id": "copy-1",
+    "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12",
+    "project": "/Users/julian/ShipStudio/site"
+  },
   "createdAt": 1762200000000,
   "engine": "claude",
   "hidden": false,
@@ -1465,7 +1513,8 @@ export const agentsCreate = {
   "role": "Keeps my inbox down to what matters",
   "sessionId": null,
   "shape": 2,
-  "unread": 0
+  "unread": 0,
+  "workDirectly": true
 } satisfies Result<'agents.create'>;
 export const sessionsSend = {
   "sessionId": "pty-1"
@@ -1505,6 +1554,8 @@ export const frames = [
       "agents.memorySuggest",
       "agents.usage",
       "agents.changeDiff",
+      "agents.keepCopy",
+      "agents.discardCopy",
       "agents.files",
       "agents.fetchPath",
       "agents.search",
@@ -1883,6 +1934,16 @@ export const frames = [
               "used": 30099,
               "window": 200000
             },
+            "copy": {
+              "base": "abc123",
+              "baseBranch": "main",
+              "branch": "finance/invoice-totals-ab12",
+              "createdAt": 1762280000000,
+              "deps": true,
+              "id": "copy-1",
+              "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12",
+              "project": "/Users/julian/ShipStudio/site"
+            },
             "createdAt": 1762200000000,
             "engine": "claude",
             "failure": {
@@ -1957,7 +2018,8 @@ export const frames = [
               "since": 1762290000000,
               "state": "waiting"
             },
-            "unread": 2
+            "unread": 2,
+            "workDirectly": true
           }
         ],
         "engineReady": true,
@@ -2200,6 +2262,16 @@ export const frames = [
               "used": 30099,
               "window": 200000
             },
+            "copy": {
+              "base": "abc123",
+              "baseBranch": "main",
+              "branch": "finance/invoice-totals-ab12",
+              "createdAt": 1762280000000,
+              "deps": true,
+              "id": "copy-1",
+              "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12",
+              "project": "/Users/julian/ShipStudio/site"
+            },
             "createdAt": 1762200000000,
             "engine": "claude",
             "failure": {
@@ -2274,7 +2346,8 @@ export const frames = [
               "since": 1762290000000,
               "state": "waiting"
             },
-            "unread": 2
+            "unread": 2,
+            "workDirectly": true
           }
         ],
         "engineReady": true,

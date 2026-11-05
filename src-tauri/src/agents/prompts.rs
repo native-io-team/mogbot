@@ -155,17 +155,44 @@ pub struct Bound<'a> {
     /// Its CLAUDE.md as the turn began. Claude Code doesn't load a CLAUDE.md
     /// from an `--add-dir` folder (see `project`), so it comes in here.
     pub identity: &'a str,
+    /// Its own copy of the project, when its turns run in one.
+    pub copy: Option<&'a super::task::TaskCopy>,
 }
 
-fn bound_sections(b: &Bound) -> [String; 2] {
-    [
-        format!(
+fn project_section(b: &Bound) -> String {
+    let Some(copy) = b.copy else {
+        return format!(
             "## Your project\n\nYou work in `{project}`. It is your working directory, so its own \
 CLAUDE.md and settings apply: follow them. Code work for the user happens here. \
 Commit locally when it helps; the user sees a card listing the files you changed \
 in this chat after each turn.",
             project = b.project
-        ),
+        );
+    };
+    let deps = if copy.deps {
+        ""
+    } else {
+        " The project's dependencies weren't copied in: install them here if you need to run anything."
+    };
+    format!(
+        "## Your project\n\nThe project is `{project}`. You work in your own copy of it, \
+`{path}`, your working directory, on its own branch, so the project's CLAUDE.md and settings \
+apply: follow them. Nobody else edits this copy, and you never edit `{project}` itself: \
+that is the user's own folder (other agents have copies of their own). Whatever you change \
+here is offered to the user as one set of changes they can keep, review or discard, \
+and it carries over from turn to turn until they do. Don't merge, push, rebase, switch \
+branches or delete the copy yourself, and never leave conflict markers in a file. You don't \
+need to commit: what you leave is committed for you when the turn ends (except `.env` files, \
+`node_modules`, files over 5 MB and anything holding a credential, which stay out). If the user asks for the changes, \
+tell them to use Keep on the card above.{deps}",
+        project = b.project,
+        path = copy.path,
+    )
+}
+
+fn bound_sections(b: &Bound) -> [String; 2] {
+    [
+        project_section(b),
         format!(
             "## Memory\n\nYour home is `{home}`. Its CLAUDE.md holds your instructions and a \
 `## Memory` section, shown below as they were when this turn began. When you learn \
@@ -318,12 +345,37 @@ mod tests {
                 home: "/h",
                 project: "/p/acme",
                 identity: "# Acme Site\n\n## Memory\n\n- Deploys go through Sam.",
+                copy: None,
             }),
         );
         assert!(bound.contains("You work in `/p/acme`"));
         assert!(bound.contains("### /h/CLAUDE.md"));
         assert!(bound.contains("- Deploys go through Sam."));
         assert!(!bound.contains("Your working directory is your home"));
+
+        let copy = super::super::task::TaskCopy {
+            id: "c".into(),
+            project: "/p/acme".into(),
+            path: "/p/.worktrees/acme/acme-site-blue-c".into(),
+            branch: "acme-site/blue-c".into(),
+            base: "abc".into(),
+            base_branch: Some("main".into()),
+            created_at: 0,
+            deps: false,
+            stuck: None,
+        };
+        let in_copy = system_prompt(
+            &agent,
+            Some(&Bound {
+                home: "/h",
+                project: "/p/acme",
+                identity: "",
+                copy: Some(&copy),
+            }),
+        );
+        assert!(in_copy.contains("your own copy of it, `/p/.worktrees/acme/acme-site-blue-c`"));
+        assert!(in_copy.contains("you never edit `/p/acme` itself"));
+        assert!(in_copy.contains("dependencies weren't copied in"));
     }
 
     #[test]

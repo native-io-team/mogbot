@@ -26,6 +26,7 @@
 //! - [`other_app`]: a one-time, read-only copy of the team from the app this grew out of
 //! - [`schedule`]: check-ins and routines that wake an agent on time
 //! - [`project`]: binding an agent to a project, and what its turns changed there
+//! - [`task`]: a copy of the project (a git worktree) per task, kept or discarded
 //! - [`procs`]: a turn's whole process tree, so Stop and quit leave nothing running
 //! - [`prompts`]: voice and role
 //! - [`search`]: find a message across every conversation
@@ -72,6 +73,7 @@ pub mod secrets;
 pub mod sessions;
 pub mod store;
 pub mod stream;
+pub mod task;
 pub mod tray;
 pub mod usage;
 pub mod work;

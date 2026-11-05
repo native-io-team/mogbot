@@ -113,6 +113,16 @@ pub struct Status {
 }
 
 impl Status {
+    /// Working, with what it's doing.
+    pub fn working(activity: String) -> Self {
+        Status {
+            state: "working",
+            activity: Some(activity),
+            since: Some(store::now_ms()),
+            work: None,
+        }
+    }
+
     fn idle() -> Self {
         Status {
             state: "idle",
@@ -370,6 +380,8 @@ fn resent_note(queued: &[Inbound]) -> String {
 /// keep writing the same session as the next turn, so it is stopped; and the
 /// chat says the turn ended, instead of a message sitting there unanswered.
 pub async fn recover_after_restart(app: &AppHandle) {
+    // Copies whose folder went, or that no agent holds any more.
+    super::task::sweep().await;
     let Ok(agents) = store::list() else { return };
     for agent in agents {
         if let Some(path) = mark_path(&agent.id).filter(|p| p.exists()) {
@@ -943,6 +955,7 @@ async fn drain(app: AppHandle, agent_id: String) {
             None
         };
         let routine: bool;
+        let request: String;
         let prompt: String = {
             let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
             let runtime = runtimes.entry(agent_id.clone()).or_default();
@@ -959,6 +972,7 @@ async fn drain(app: AppHandle, agent_id: String) {
             let batch: Vec<Inbound> = runtime.queue.drain(..).collect();
             save_inbox(&agent_id, &runtime.queue);
             routine = batch.iter().all(|m| m.routine);
+            request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
             // The turn inherits the deepest hop it is answering; a user message
             // in the batch resets the chain.
             runtime.origin = if batch.iter().any(|m| matches!(m.from, From::User)) {
@@ -998,9 +1012,20 @@ async fn drain(app: AppHandle, agent_id: String) {
                 None => prompt,
             }
         };
-        // A bound agent's project, as it stood before the turn touched it.
-        // On disk too, so a turn cut short by a quit still gets its card.
-        let start = turn_start(&agent_id).await;
+        // A bound agent works in its own copy of its project (`task`): the
+        // open one, or one made now. Refused (too many copies, no disk) is
+        // the turn's failure; it never falls back to the user's folder.
+        let prepared = super::task::prepare(&app, &agent_id, &request).await;
+        let made = match &prepared {
+            Ok(Some((copy, true))) => Some(copy.clone()),
+            _ => None,
+        };
+        // Where it works, as it stood before the turn touched it. On disk
+        // too, so a turn cut short by a quit still gets its card.
+        let start = match &prepared {
+            Ok(_) => turn_start(&agent_id).await,
+            Err(_) => None,
+        };
         write_mark(
             &agent_id,
             TurnMark {
@@ -1014,7 +1039,17 @@ async fn drain(app: AppHandle, agent_id: String) {
         );
         let since = store::now_ms();
         super::work::begin(&agent_id, since);
-        let result = run_turn(&app, &agent_id, &prompt, routine, true).await;
+        if let Some(copy) = &made {
+            let label = format!(
+                "Started a copy of {}",
+                super::project::folder_name(&copy.project)
+            );
+            super::work::on_step(&agent_id, super::work::StepKind::Project, &label, since);
+        }
+        let result = match prepared {
+            Ok(_) => run_turn(&app, &agent_id, &prompt, routine, true).await,
+            Err(e) => Err(e),
+        };
         if QUITTING.load(Ordering::SeqCst) {
             // The app is going: the mark stays, for the next launch to report.
             return;
@@ -1024,6 +1059,10 @@ async fn drain(app: AppHandle, agent_id: String) {
         // ends on its error line (Retry and the sidebar's failure read the newest line).
         if let Some((project, from)) = start {
             record_changes(&app, &agent_id, project, from).await;
+        }
+        // A copy made for a turn that changed nothing (a question) goes again.
+        if let Some(copy) = &made {
+            super::task::drop_if_unused(&app, &agent_id, copy).await;
         }
         // The error line (below) is the last thing a failed turn leaves, so
         // its timeline hangs under that; anything else's is settled now.
@@ -1107,12 +1146,17 @@ fn return_results(app: &AppHandle, agent_id: &str, since: i64, error: Option<Str
     }
 }
 
-/// For a bound agent whose project is a git repository: the project and a
-/// snapshot of its working tree, taken before the turn starts.
+/// For a bound agent whose project is a git repository: where it works (its
+/// copy, or the project itself) and a snapshot of that working tree, taken
+/// before the turn starts.
 async fn turn_start(agent_id: &str) -> Option<(std::path::PathBuf, String)> {
-    let project = std::path::PathBuf::from(store::get(agent_id).ok()?.project?);
-    let tree = super::project::snapshot(&project).await?;
-    Some((project, tree))
+    let agent = store::get(agent_id).ok()?;
+    let dir = match super::task::active(&agent) {
+        Some(copy) => std::path::PathBuf::from(&copy.path),
+        None => std::path::PathBuf::from(agent.project?),
+    };
+    let tree = super::project::snapshot(&dir).await?;
+    Some((dir, tree))
 }
 
 /// After the turn: if it changed files in the project, one card saying which.
@@ -1123,17 +1167,27 @@ async fn record_changes(
     project: std::path::PathBuf,
     from: String,
 ) {
-    let Some(summary) = super::project::summary(&project, &from).await else {
+    // In a copy, the card lists everything in the copy so far.
+    let copy = store::get(agent_id)
+        .ok()
+        .and_then(|a| a.copy)
+        .filter(|c| std::path::Path::new(&c.path) == project);
+    let summary = match &copy {
+        Some(copy) => super::task::record_turn(agent_id, copy, &from).await,
+        None => super::project::summary(&project, &from).await,
+    };
+    let Some(summary) = summary else {
         return;
     };
     let files = match summary.file_count {
         1 => "1 file".to_string(),
         n => format!("{n} files"),
     };
-    let text = format!(
-        "Changed {files} in {}",
-        super::project::folder_name(&summary.project)
-    );
+    let name = super::project::folder_name(&summary.project);
+    let text = match copy {
+        Some(_) => format!("Changed {files} in a copy of {name}"),
+        None => format!("Changed {files} in {name}"),
+    };
     let mut message = new_message(agent_id, MessageKind::Changes, text);
     message.changes = Some(summary);
     let _ = record(app, message);
@@ -1309,6 +1363,7 @@ fn system_prompt_base(
             home: &home.to_string_lossy(),
             project: &project.to_string_lossy(),
             identity: &identity,
+            copy: layout.copy.as_ref(),
         }),
     )
 }

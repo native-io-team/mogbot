@@ -16,6 +16,7 @@ import type {
   Device,
   FileDiff,
   ImportSummary,
+  KeptCopy,
   MacStatus,
   MemoryChange,
   MemoryView,
@@ -166,6 +167,18 @@ export interface Methods {
     params: { agentId: string; messageId: string; path: string };
     result: FileDiff;
   };
+  /**
+   * "Keep changes" on a change card: the agent's copy merged into the
+   * project's current branch. `copyId` is the card's `changes.copy.id`; a
+   * copy already kept or discarded is refused.
+   */
+  'agents.keepCopy': {
+    /** `into`: the project's current branch, confirmed after an `otherBranch` answer. */
+    params: { agentId: string; copyId: string; into?: string };
+    result: KeptCopy;
+  };
+  /** "Discard" on a change card: the copy and everything in it, gone. */
+  'agents.discardCopy': { params: { agentId: string; copyId: string }; result: null };
   /**
    * The phone's stand-in for `agents_open_path` (which opens Finder on the
    * Mac): a path written in an agent's reply, made downloadable. Only paths

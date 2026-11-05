@@ -753,6 +753,11 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if project.as_ref().is_some_and(|p| *p != agent.project) {
         fields.push("project");
     }
+    if let Some(p) = &project {
+        if let Err(e) = super::task::refuse_rebind(&agent, p.as_deref()) {
+            return error(e.to_string());
+        }
+    }
     if engine.is_some() {
         fields.push("engine");
     }
@@ -815,6 +820,10 @@ async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     runner::stop(&agent.id);
     match store::delete(&agent.id) {
         Ok(_) => {
+            // Its copy's folder goes; a branch with work on it stays.
+            if let Some(copy) = agent.copy.clone() {
+                tauri::async_runtime::spawn(super::task::abandon(copy));
+            }
             let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
             // No link: there's nothing left to open.
             let line = audit_note(&caller.id, format!("Deleted {}", agent.name), None);
@@ -1493,6 +1502,8 @@ mod tests {
             permissions: Vec::new(),
             failure: None,
             project: None,
+            copy: None,
+            work_directly: false,
             capabilities: None,
             secrets: Vec::new(),
             extra: Default::default(),

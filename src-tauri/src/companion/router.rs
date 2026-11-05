@@ -42,6 +42,8 @@ pub const METHODS: &[&str] = &[
     "agents.memorySuggest",
     "agents.usage",
     "agents.changeDiff",
+    "agents.keepCopy",
+    "agents.discardCopy",
     "agents.files",
     "agents.fetchPath",
     "agents.search",
@@ -299,6 +301,18 @@ pub trait Backend: Send + Sync + 'static {
         message_id: &str,
         path: &str,
     ) -> Result<Value, CommandError>;
+    /// `agents_copy_keep`: the agent's copy of its project, kept. Returns
+    /// `Kept` (`{outcome: kept|nothing|conflict}`).
+    /// `into` names the project's current branch when the user confirmed
+    /// keeping there after an `otherBranch` answer.
+    async fn keep_copy(
+        &self,
+        agent_id: &str,
+        copy_id: &str,
+        into: Option<&str>,
+    ) -> Result<Value, CommandError>;
+    /// `agents_copy_discard`: the agent's copy of its project, discarded.
+    async fn discard_copy(&self, agent_id: &str, copy_id: &str) -> Result<(), CommandError>;
     /// `agents_files`: everything shared in one conversation, newest first.
     async fn files(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// A path from an agent's reply, resolved as `share_file` resolves it
@@ -507,6 +521,16 @@ struct DiffParams {
     agent_id: String,
     message_id: String,
     path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CopyParams {
+    agent_id: String,
+    copy_id: String,
+    /// Keep: the branch the user confirmed, after `otherBranch`.
+    #[serde(default)]
+    into: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -981,6 +1005,16 @@ async fn run(
         "agents.changeDiff" => {
             let p: DiffParams = parse(params)?;
             Ok(b.change_diff(&p.agent_id, &p.message_id, &p.path).await?)
+        }
+        "agents.keepCopy" => {
+            let p: CopyParams = parse(params)?;
+            Ok(b.keep_copy(&p.agent_id, &p.copy_id, p.into.as_deref())
+                .await?)
+        }
+        "agents.discardCopy" => {
+            let p: CopyParams = parse(params)?;
+            b.discard_copy(&p.agent_id, &p.copy_id).await?;
+            Ok(Value::Null)
         }
         "agents.fetchPath" => {
             let p: PathParams = parse(params)?;
@@ -1591,6 +1625,67 @@ mod tests {
         let audit = stub.audited();
         assert_eq!(audit.len(), 1);
         assert_eq!(audit[0].1, "agents.revokePermission");
+    }
+
+    #[tokio::test]
+    async fn keeping_and_discarding_a_copy_name_the_copy_and_are_audited() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let kept = dispatch(
+            &c,
+            &me,
+            "agents.keepCopy",
+            json!({ "agentId": AGENT, "copyId": "copy-1" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(kept["outcome"], "kept");
+        assert_eq!(kept["files"], 2);
+        // Keeping into another branch names it: the confirmation travels.
+        let into = dispatch(
+            &c,
+            &me,
+            "agents.keepCopy",
+            json!({ "agentId": AGENT, "copyId": "copy-1", "into": "feature" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(into["branch"], "feature");
+        dispatch(
+            &c,
+            &me,
+            "agents.discardCopy",
+            json!({ "agentId": AGENT, "copyId": "copy-1" }),
+        )
+        .await
+        .unwrap();
+        // A card for a copy that's gone is refused, not applied to a newer one.
+        assert!(dispatch(
+            &c,
+            &me,
+            "agents.keepCopy",
+            json!({ "agentId": AGENT, "copyId": "old" }),
+        )
+        .await
+        .is_err());
+        // The copy is named: a bare agent id is not enough.
+        assert!(
+            dispatch(&c, &me, "agents.discardCopy", json!({ "agentId": AGENT }))
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            *stub.copies.lock().unwrap(),
+            vec![
+                "keep copy-1".to_string(),
+                "keep copy-1 into feature".to_string(),
+                "discard copy-1".to_string()
+            ]
+        );
+        let audit = stub.audited();
+        assert!(audit.iter().any(|a| a.1 == "agents.keepCopy"));
+        assert!(audit.iter().any(|a| a.1 == "agents.discardCopy"));
     }
 
     #[tokio::test]

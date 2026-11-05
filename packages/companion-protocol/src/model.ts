@@ -112,6 +112,10 @@ export interface Agent {
   home: string;
   failure?: Failure;
   project?: string;
+  /** Its open copy of that project, where its turns run until kept or discarded. */
+  copy?: TaskCopy;
+  /** Set to work directly in the project instead of in a copy. */
+  workDirectly?: boolean;
   capabilities?: Capabilities;
   /** Secrets it has in the Keychain (names only); omitted when none. */
   secrets?: AgentSecret[];
@@ -411,7 +415,63 @@ export interface ChangeSummary {
   fileCount: number;
   added: number;
   removed: number;
+  /**
+   * The turn worked in a copy of the project: the card lists everything in
+   * the copy so far, and offers Keep / Discard while `Agent.copy.id` matches.
+   */
+  copy?: CopyRef;
+  /** In a copy: files it changed that Keep won't bring over, and why. */
+  leftOut?: LeftOut[];
+  /** In a copy: why its changes couldn't be saved this turn, in a sentence. */
+  warning?: string;
 }
+
+/** A file in the copy that Keep leaves behind. */
+export interface LeftOut {
+  path: string;
+  /** `ignored`: git ignores it (an edited `.env`), so it never leaves the copy. */
+  why: 'secrets' | 'dependencies' | 'tooLarge' | 'ignored';
+}
+
+/** The copy a change card describes. */
+export interface CopyRef {
+  id: string;
+  /** The copy's folder (a linked git worktree), outside the project. */
+  path: string;
+  branch: string;
+}
+
+/** A project-bound agent's open copy of its project. */
+export interface TaskCopy extends CopyRef {
+  /** The user's own project folder. */
+  project: string;
+  /** The commit it started from. */
+  base: string;
+  baseBranch?: string;
+  createdAt: number;
+  /** The project's dependencies were cloned in. */
+  deps: boolean;
+  /**
+   * The last Keep that couldn't go through, kept on the Mac so every card
+   * shows what's in the way. Cleared by the next turn or Keep.
+   */
+  stuck?: Extract<KeptCopy, { outcome: 'conflict' | 'markers' | 'otherBranch' }>;
+}
+
+/** What `agents.keepCopy` did. */
+export type KeptCopy =
+  /** In the project's `branch` now. */
+  | { outcome: 'kept'; files: number; branch: string; leftOut?: LeftOut[] }
+  | { outcome: 'nothing'; leftOut?: LeftOut[] }
+  /** Overlaps with edits made in the project since: the copy is mid-merge. */
+  | { outcome: 'conflict'; files: string[] }
+  /** These files still have conflict markers in them: nothing was kept. */
+  | { outcome: 'markers'; files: string[] }
+  /**
+   * The project is on `current`, not the branch the copy was made from
+   * (`base`). Nothing was kept; keeping there sends `into: current`.
+   */
+  | { outcome: 'otherBranch'; current: string; base?: string };
 
 export interface Attachment {
   name: string;
@@ -451,6 +511,7 @@ export interface UpdateAgentInput {
   model?: string;
   routineModel?: string;
   project?: string;
+  workDirectly?: boolean;
 }
 
 /** What `agents.create` / `agents.update` return: the stored agent, no live state. */

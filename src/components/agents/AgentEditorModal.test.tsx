@@ -109,3 +109,101 @@ describe('AgentEditorModal: what a new agent runs on', () => {
     expect(screen.getByRole('button', { name: 'Set up Claude Code' })).toBeInTheDocument();
   });
 });
+
+describe('AgentEditorModal: moving an agent that has a copy open', () => {
+  const PROJECT = '/u/ShipStudio/acme-site';
+  const agent = {
+    id: 'site',
+    name: 'Acme Site',
+    color: 'blue',
+    role: '',
+    engine: 'claude',
+    model: '',
+    home: '/h/site',
+    project: PROJECT,
+    copy: {
+      id: 'copy-1',
+      project: PROJECT,
+      path: '/u/ShipStudio/.worktrees/acme-site/acme-site-x-ab12',
+      branch: 'acme-site/x-ab12',
+      base: 'abc',
+      baseBranch: 'main',
+      createdAt: 1,
+      deps: true,
+    },
+    permissions: [],
+    status: { state: 'idle', activity: null, since: null },
+  } as unknown as import('../../lib/agents').Agent;
+
+  function edit(keep: unknown = { outcome: 'kept', files: 1, branch: 'main' }) {
+    store.engines = [CLAUDE];
+    const calls: { cmd: string; args: unknown }[] = [];
+    mockIPC((cmd, args) => {
+      calls.push({ cmd, args });
+      if (cmd === 'list_projects') return [{ name: 'acme-site', path: PROJECT }];
+      if (cmd === 'agents_instructions') return '';
+      if (cmd === 'agents_copy_keep') return keep;
+      if (cmd === 'agents_update') return { id: 'site' };
+      return null;
+    });
+    render(
+      <ModalProvider>
+        <AgentEditorModal isOpen agent={agent} onClose={vi.fn()} onSaved={vi.fn()} />
+      </ModalProvider>
+    );
+    return calls;
+  }
+
+  async function moveToNoProjectAndSave() {
+    await act(() => Promise.resolve());
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+    fireEvent.click(screen.getByRole('button', { name: /Works in:/ }));
+    fireEvent.click(screen.getByText('No project'));
+    await act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      return Promise.resolve();
+    });
+  }
+
+  it('asks Keep / Discard / Cancel first, and saves only once the copy is settled', async () => {
+    const calls = edit();
+    await moveToNoProjectAndSave();
+    expect(
+      screen.getByText(/Acme Site has a copy of acme-site open with changes that haven't been kept/)
+    ).toBeInTheDocument();
+    expect(calls.some((c) => c.cmd === 'agents_update')).toBe(false);
+    await act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Keep changes' }));
+      return Promise.resolve();
+    });
+    await waitFor(() => expect(calls.some((c) => c.cmd === 'agents_update')).toBe(true));
+    const order = calls
+      .map((c) => c.cmd)
+      .filter((c) => c.startsWith('agents_copy') || c === 'agents_update');
+    expect(order).toEqual(['agents_copy_keep', 'agents_update']);
+  });
+
+  it('stays put when the copy can’t be kept from here', async () => {
+    const calls = edit({ outcome: 'conflict', files: ['a.css'] });
+    await moveToNoProjectAndSave();
+    await act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Keep changes' }));
+      return Promise.resolve();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/can't be kept from here yet/)
+    );
+    expect(calls.some((c) => c.cmd === 'agents_update')).toBe(false);
+  });
+
+  it('Cancel leaves everything as it was', async () => {
+    const calls = edit();
+    await moveToNoProjectAndSave();
+    // The rebind panel's Cancel comes first; the form's own is the footer's.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' })[0]);
+    expect(screen.queryByText(/has a copy of acme-site open/)).toBeNull();
+    expect(calls.some((c) => c.cmd.startsWith('agents_copy') || c.cmd === 'agents_update')).toBe(
+      false
+    );
+  });
+});

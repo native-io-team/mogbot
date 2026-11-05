@@ -105,6 +105,15 @@ pub struct Agent {
     /// CLAUDE.md and settings load; `None` runs in its home, as before.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
+    /// Its open copy of that project (a git worktree on its own branch),
+    /// where its turns run until the user keeps or discards the changes
+    /// (see `task`). `None` when it has none open.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy: Option<super::task::TaskCopy>,
+    /// "Work directly in the project": no copy; its turns edit the user's
+    /// own folder, as before copies existed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub work_directly: bool,
     /// What its last turn could use, as Claude Code itself listed it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<super::capabilities::Capabilities>,
@@ -674,6 +683,8 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         permissions: Vec::new(),
         failure: None,
         project: None,
+        copy: None,
+        work_directly: false,
         capabilities: None,
         secrets: Vec::new(),
         extra: Default::default(),

@@ -33,6 +33,7 @@ import { trackEvent, trackError } from '../lib/analytics';
 import type { PreviewHandle } from '../components/preview/Preview';
 import type { HealthTabPanelRef } from '../components/code/HealthTabPanel';
 import { usePolling } from './usePolling';
+import { useReviewHandoff } from './useReviewHandoff';
 import type { Project } from '../lib/project';
 
 export interface UseBranchManagementParams {
@@ -56,6 +57,8 @@ export function useBranchManagement({
   const [hasUncommittedChanges, setHasUncommittedChanges] = useState(false);
   const [changedFiles, setChangedFiles] = useState<ChangedFile[]>([]);
   const [showSubmitReview, setShowSubmitReview] = useState<string | null>(null);
+  // "Open a pull request" on an agent's change card (lib/reviewHandoff).
+  useReviewHandoff(currentProject?.path ?? null, currentBranch, setShowSubmitReview);
   const [isBranchSwitching, setIsBranchSwitching] = useState(false);
   const [gitError, setGitError] = useState<{
     errorType: 'push_rejected' | 'auth_error' | 'merge_conflict' | 'generic';

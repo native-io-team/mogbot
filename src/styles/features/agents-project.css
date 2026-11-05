@@ -21,6 +21,23 @@
   color: var(--text-primary);
 }
 
+/* "copy": it works on its own copy of the project, not the folder itself. */
+.agent-chat__project-copy {
+  margin-left: var(--spacing-xs);
+  color: var(--text-muted);
+  font-weight: var(--font-weight-body);
+}
+
+.agent-editor__direct {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  align-self: flex-start;
+  font-weight: var(--font-weight-body);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
 /* ---------------------------------------------------------------- editor */
 
 .agent-editor__project {
@@ -162,6 +179,62 @@
 .agent-changes__actions {
   display: flex;
   gap: var(--spacing-md);
+}
+
+/* --------------------------------------------- a change card for a copy */
+
+/* "On a copy of acme-site · acme-site itself is unchanged" */
+.agent-copy__line {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.agent-copy__actions {
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: var(--spacing-2xs);
+}
+
+.agent-copy__more {
+  margin-left: auto;
+}
+
+.agent-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-2xs);
+}
+
+.agent-copy__note {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.agent-copy[data-state='conflict'] .agent-copy__note {
+  color: var(--text-primary);
+}
+
+.agent-copy__files {
+  font-family: var(--font-code);
+}
+
+/* "Not included: .env.local (looks like secrets)" — what Keep leaves behind. */
+.agent-copy__left-out {
+  margin: 0;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* "The copy isn't on its own branch any more — open it to check." */
+.agent-copy__warning {
+  margin: 0;
+  color: var(--accent-warning);
+}
+
+.agent-copy[data-state='markers'] .agent-copy__note,
+.agent-copy[data-state='other-branch'] .agent-copy__note {
+  color: var(--text-primary);
 }
 
 /* ------------------------------------------------- notes and peer lines */

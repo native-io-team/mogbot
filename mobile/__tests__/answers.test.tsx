@@ -1,5 +1,5 @@
 import type { AgentMessage, Approval, SessionPrompt } from '@shipstudio/companion-protocol';
-import { act, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import {
   agentAccent,
   answerAccent,
@@ -13,6 +13,10 @@ import { readBrand } from '../src/lib/brand';
 import { agentTints, APPEARANCES, contrast, luminance, palettes } from '../src/lib/theme';
 import { PromptCard } from '../src/components/PromptCard';
 import { ARM_MS, ReviewOnMacCard, useArmed } from '../src/components/ApprovalCard';
+import { CopyActions, keptLine } from '../src/components/copy';
+import { useApp } from '../src/lib/store';
+import * as session from '../src/lib/session';
+import type { WelcomeFrame } from '@shipstudio/companion-protocol';
 import { Text } from 'react-native';
 import { agent } from './helpers';
 
@@ -31,7 +35,21 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 jest.mock('expo-haptics', () => ({}));
-jest.mock('../src/lib/session', () => ({ answerApproval: jest.fn(), describeError: String }));
+jest.mock('../src/lib/haptics', () => ({
+  haptic: {
+    light: jest.fn(),
+    select: jest.fn(),
+    success: jest.fn(),
+    warning: jest.fn(),
+    error: jest.fn(),
+  },
+}));
+jest.mock('../src/lib/session', () => ({
+  answerApproval: jest.fn(),
+  keepCopy: jest.fn(),
+  discardCopy: jest.fn(),
+  describeError: String,
+}));
 
 describe.each(APPEARANCES)('accent maths, %s', (appearance) => {
   const colors = palettes[appearance];
@@ -291,5 +309,74 @@ describe('useArmed', () => {
     expect(armed()).toBe('false');
     await act(() => jest.advanceTimersByTime(1));
     expect(armed()).toBe('true');
+  });
+});
+
+describe('CopyActions: Keep / Discard on the phone', () => {
+  const PROJECT = '/Users/me/ShipStudio/acme-site';
+  const COPY = { id: 'copy-1', path: '/Users/me/ShipStudio/.worktrees/acme-site/x', branch: 'a/x' };
+  const withCopy = (stuck?: object) =>
+    agent({
+      copy: {
+        ...COPY,
+        project: PROJECT,
+        base: 'abc',
+        baseBranch: 'main',
+        createdAt: 1,
+        deps: true,
+        ...(stuck ? { stuck } : {}),
+      },
+    } as never);
+
+  beforeEach(() => {
+    useApp.setState({
+      welcome: { methods: ['agents.keepCopy'] } as unknown as WelcomeFrame,
+      link: { kind: 'connected' } as never,
+      projects: [{ name: 'Acme Site', path: PROJECT }] as never,
+    });
+    (session.keepCopy as jest.Mock)
+      .mockReset()
+      .mockResolvedValue({ outcome: 'kept', files: 1, branch: 'main' });
+  });
+
+  it('is a card: the project by its own name, Discard then the neutral Keep', async () => {
+    await render(
+      <CopyActions agent={withCopy()} copy={COPY} project={PROJECT} onError={() => {}} />
+    );
+    expect(screen.getByText('Changes are ready')).toBeTruthy();
+    expect(screen.getByText('On a copy of Acme Site · Acme Site itself is unchanged')).toBeTruthy();
+    const answers = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel as string);
+    expect(answers).toEqual(['Discard', 'Keep changes']);
+  });
+
+  it('shows what stopped the last Keep from the agent’s copy, so a remount keeps it', async () => {
+    const stuck = { outcome: 'conflict', files: ['style.css'] };
+    const view = await render(
+      <CopyActions agent={withCopy(stuck)} copy={COPY} project={PROJECT} onError={() => {}} />
+    );
+    const line = keptLine('Acme Site', agent().name, stuck as never);
+    expect(screen.getByText(line)).toBeTruthy();
+    await view.unmount();
+    await render(
+      <CopyActions agent={withCopy(stuck)} copy={COPY} project={PROJECT} onError={() => {}} />
+    );
+    expect(screen.getByText(line)).toBeTruthy();
+  });
+
+  it('on another branch, the button names it and keeps there only when pressed', async () => {
+    await render(
+      <CopyActions
+        agent={withCopy({ outcome: 'otherBranch', current: 'feature', base: 'main' })}
+        copy={COPY}
+        project={PROJECT}
+        onError={() => {}}
+      />
+    );
+    expect(screen.getByText(/on feature now, but these changes were made from main/)).toBeTruthy();
+    const keepButton = screen
+      .getAllByRole('button')
+      .find((b) => b.props.accessibilityLabel === 'Keep into feature');
+    await fireEvent.press(keepButton!);
+    expect(session.keepCopy).toHaveBeenCalledWith(agent().id, 'copy-1', 'feature');
   });
 });

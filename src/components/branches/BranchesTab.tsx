@@ -30,7 +30,13 @@ import {
   sanitizeBranchName,
 } from '../../lib/branches';
 import { gitPull } from '../../lib/git';
-import { removeWorktree, pruneWorktrees, type WorktreeInfo } from '../../lib/worktrees';
+import {
+  agentCopyHolder,
+  removeWorktree,
+  pruneWorktrees,
+  type WorktreeInfo,
+} from '../../lib/worktrees';
+import { getAgentsOverview } from '../../lib/agents';
 import { openProjectInNewWindow } from '../../lib/project';
 import {
   BranchIcon,
@@ -272,6 +278,24 @@ export function BranchesTab({
 
   // ---- Worktrees (git worktree remove / prune) ----
   const [worktreeToRemove, setWorktreeToRemove] = useState<WorktreeInfo | null>(null);
+  // An agent's copy of the project: force-removing it throws away that
+  // agent's unkept changes, so the confirm names the agent (and the backend
+  // refuses without that confirmation).
+  const copyHolder = worktreeToRemove ? agentCopyHolder(worktreeToRemove) : null;
+  const [copyHolderName, setCopyHolderName] = useState<string | null>(null);
+  useEffect(() => {
+    setCopyHolderName(null);
+    if (!copyHolder) return;
+    let live = true;
+    getAgentsOverview()
+      .then((o) => {
+        if (live) setCopyHolderName(o.agents.find((a) => a.id === copyHolder)?.name ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [copyHolder]);
   const [isRemovingWorktree, setIsRemovingWorktree] = useState(false);
   const [worktreeRemoveError, setWorktreeRemoveError] = useState<string | null>(null);
   const [isPruningWorktrees, setIsPruningWorktrees] = useState(false);
@@ -296,7 +320,7 @@ export function BranchesTab({
   // command's cwd sits inside would fail (or leave a dangling cwd).
   const mainWorktreePath = worktrees.find((w) => w.isMain)?.path ?? projectPath;
 
-  const handleRemoveWorktree = async (force: boolean) => {
+  const handleRemoveWorktree = async (force: boolean, confirmAgent?: string) => {
     if (!worktreeToRemove) return;
     const wt = worktreeToRemove;
     setIsRemovingWorktree(true);
@@ -309,7 +333,7 @@ export function BranchesTab({
       }
       // Stop its dev server / PTYs and drop the session before the folder goes.
       onCloseWorktreeSession?.(wt.path);
-      await removeWorktree(mainWorktreePath, wt.path, force);
+      await removeWorktree(mainWorktreePath, wt.path, force, confirmAgent);
       void trackEvent('worktree_removed', { forced: force });
       onToast?.(
         wt.branch ? `Removed worktree — branch ${wt.branch} is kept` : 'Removed worktree',
@@ -911,7 +935,12 @@ export function BranchesTab({
             {worktreeRemoveError && (
               <div className="worktree-remove-error">
                 <p>{worktreeRemoveError}</p>
-                {isLockedWorktreeError(worktreeRemoveError) ? (
+                {copyHolderName ? (
+                  <p>
+                    <strong>This is {copyHolderName}&apos;s copy of the project.</strong> Removing
+                    it throws away {copyHolderName}&apos;s changes that haven&apos;t been kept.
+                  </p>
+                ) : isLockedWorktreeError(worktreeRemoveError) ? (
                   <p>
                     <strong>The worktree is locked</strong>, usually by an agent session that may
                     still be working in it. Force-removing deletes the folder anyway, including any
@@ -944,10 +973,19 @@ export function BranchesTab({
               isLockedWorktreeError(worktreeRemoveError)) ? (
               <Button
                 variant="danger"
-                onClick={() => void handleRemoveWorktree(true)}
+                onClick={() =>
+                  void handleRemoveWorktree(
+                    true,
+                    copyHolderName ? (copyHolder ?? undefined) : undefined
+                  )
+                }
                 disabled={isRemovingWorktree}
               >
-                {isRemovingWorktree ? 'Removing...' : 'Force Remove'}
+                {isRemovingWorktree
+                  ? 'Removing...'
+                  : copyHolderName
+                    ? `Remove ${copyHolderName}'s copy`
+                    : 'Force Remove'}
               </Button>
             ) : (
               <Button
