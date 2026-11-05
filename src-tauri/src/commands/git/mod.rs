@@ -286,23 +286,43 @@ pub(crate) fn ensure_shipstudio_excluded(path: &std::path::Path) {
     };
     let exclude_path = git_dir.join("info").join("exclude");
     let existing = std::fs::read_to_string(&exclude_path).unwrap_or_default();
-    let already = existing.lines().any(|l| {
-        let t = l.trim();
-        t == ".shipstudio/" || t == ".shipstudio" || t == "/.shipstudio/" || t == "/.shipstudio"
-    });
-    if already {
+    let Some(updated) = with_shipstudio_excluded(&existing) else {
         return;
-    }
+    };
     let _ = std::fs::create_dir_all(git_dir.join("info"));
+    let _ = std::fs::write(&exclude_path, updated);
+}
+
+/// The comment written above the entry. Name-free: the folder is shared with
+/// Ship Studio, and this file is the user's.
+const EXCLUDE_COMMENT: &str = "# app metadata (.shipstudio/)";
+/// What older builds wrote. Still recognised, so its block is never repeated.
+const LEGACY_EXCLUDE_COMMENT: &str = "# ShipStudio metadata (added by Ship Studio)";
+
+/// `existing` with the `.shipstudio/` entry appended, or `None` when it is
+/// already there (in any spelling, under either comment).
+fn with_shipstudio_excluded(existing: &str) -> Option<String> {
+    let lines: Vec<&str> = existing.lines().map(str::trim).collect();
+    let entry = lines.iter().any(|t| {
+        matches!(
+            *t,
+            ".shipstudio/" | ".shipstudio" | "/.shipstudio/" | "/.shipstudio"
+        )
+    });
+    if entry {
+        return None;
+    }
     let sep = if existing.is_empty() || existing.ends_with('\n') {
         ""
     } else {
         "\n"
     };
-    let _ = std::fs::write(
-        &exclude_path,
-        format!("{existing}{sep}# ShipStudio metadata (added by Ship Studio)\n.shipstudio/\n"),
-    );
+    // A comment left without its entry: add the entry under it rather than
+    // a second block.
+    if matches!(lines.last(), Some(&l) if l == LEGACY_EXCLUDE_COMMENT || l == EXCLUDE_COMMENT) {
+        return Some(format!("{existing}{sep}.shipstudio/\n"));
+    }
+    Some(format!("{existing}{sep}{EXCLUDE_COMMENT}\n.shipstudio/\n"))
 }
 
 /// A failed `git commit` whose stdout says the commit was a no-op. Git has
@@ -980,6 +1000,28 @@ mod tests {
             ".shipstudio must not be staged, got: {listing}"
         );
         assert!(listing.contains("a.txt"));
+    }
+
+    #[test]
+    fn exclude_comment_is_name_free_and_the_old_block_is_not_repeated() {
+        let fresh = with_shipstudio_excluded("").unwrap();
+        assert_eq!(fresh, "# app metadata (.shipstudio/)\n.shipstudio/\n");
+        assert!(!fresh.contains("Ship Studio") && !fresh.contains("ShipStudio"));
+        // A file an older build wrote is left alone.
+        let old = "*.log\n# ShipStudio metadata (added by Ship Studio)\n.shipstudio/\n";
+        assert_eq!(with_shipstudio_excluded(old), None);
+        // Ours, run twice, is one block.
+        assert_eq!(with_shipstudio_excluded(&fresh), None);
+        // Appended after a last line with no newline.
+        assert_eq!(
+            with_shipstudio_excluded("*.log").unwrap(),
+            "*.log\n# app metadata (.shipstudio/)\n.shipstudio/\n"
+        );
+        // An old comment whose entry was lost gets the entry, not a second comment.
+        assert_eq!(
+            with_shipstudio_excluded("# ShipStudio metadata (added by Ship Studio)\n").unwrap(),
+            "# ShipStudio metadata (added by Ship Studio)\n.shipstudio/\n"
+        );
     }
 
     // The #702 shape: `git add -A` can't stage a nested git repo, so the

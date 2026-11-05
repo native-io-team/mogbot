@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { addressLine, addressed, roomActivity, roomIdOf, roomKey, type Room } from './agentRooms';
+import {
+  addressLine,
+  addressed,
+  askedLine,
+  defaultRoomName,
+  roomActivity,
+  roomIdOf,
+  roomKey,
+  type Room,
+} from './agentRooms';
+import { tintMentionsIn } from '../components/agents/AgentMentions';
 import { buildChatItems, type Agent, type AgentMessage } from './agents';
 
 const agent = (id: string, name: string, over: Partial<Agent> = {}) =>
@@ -131,5 +141,59 @@ describe('an agent’s own chat', () => {
       .filter((i) => i.type !== 'day')
       .map((i) => (i.type === 'message' ? i.message.id : i.type));
     expect(shape).toEqual(['room', 'm2', 'm3']);
+  });
+});
+
+describe('who it was for, under your message', () => {
+  const ref = (id: string, name: string) => ({ id, name });
+  it('says everyone when every member was asked, whatever the room’s size', () => {
+    expect(askedLine([ref('a', 'Finance'), ref('b', 'Ops')], ['a', 'b'])).toBe('To everyone');
+    expect(
+      askedLine([ref('a', 'A'), ref('b', 'B'), ref('c', 'C'), ref('d', 'D')], ['a', 'b', 'c', 'd'])
+    ).toBe('To everyone');
+  });
+  it('names who was asked otherwise', () => {
+    expect(askedLine([ref('a', 'Finance'), ref('b', 'Ops')], ['a', 'b', 'c'])).toBe(
+      'To Finance and Ops'
+    );
+    expect(askedLine([ref('a', 'Finance')], ['a'])).toBe('To Finance');
+  });
+});
+
+describe('a room’s name before it has one', () => {
+  it('lists up to three, then stays short', () => {
+    expect(defaultRoomName(['Finance', 'Ops'])).toBe('Finance & Ops');
+    expect(defaultRoomName(['Chief of Staff', 'Finance', 'Ops'])).toBe(
+      'Chief of Staff, Finance & Ops'
+    );
+    expect(
+      defaultRoomName(['Chief of Staff', 'Acme Site', 'Finance', 'Lead Gen', 'Hiring', 'Social'])
+    ).toBe('Chief of Staff & 5 others');
+  });
+});
+
+describe('a member’s @mentions in its reply', () => {
+  const members = [
+    { id: 'fin', name: 'Finance', color: 'orange' },
+    { id: 'acme', name: 'Acme Site', color: 'green' },
+    { id: 'acme2', name: 'Acme', color: 'blue' },
+  ];
+  const tint = (html: string) => {
+    const root = document.createElement('div');
+    root.innerHTML = html;
+    tintMentionsIn(root, members);
+    return [...root.querySelectorAll('.agent-mention')].map(
+      (el) => `${el.textContent}:${el.getAttribute('data-color')}`
+    );
+  };
+  it('tints whole member names, longest first', () => {
+    expect(tint('<p>@Finance can you check? Then @acme site ships.</p>')).toEqual([
+      '@Finance:orange',
+      '@acme site:green',
+    ]);
+  });
+  it('leaves emails, partial names, links and code alone', () => {
+    expect(tint('<p>mail ops@Finance.com or @Financed</p>')).toEqual([]);
+    expect(tint('<p><a href="#">@Finance</a> <code>@Finance</code></p>')).toEqual([]);
   });
 });

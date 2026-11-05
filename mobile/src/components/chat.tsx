@@ -119,7 +119,9 @@ export const MessageRow = memo(function MessageRow({
         <View style={styles.userRow}>
           {!!message.attachments?.length && (
             <Attachments
-              agentId={message.agentId}
+              // A room's own line has no agent: its files are in every
+              // member's home, so the member drawing it serves them.
+              agentId={message.agentId || agent.id}
               attachments={message.attachments}
               align="right"
               onError={onError}

@@ -1403,7 +1403,7 @@ runs late, on reopen). An open card is not: it survives the restart and a late
 Allow resumes the turn, so it is only said, as "Lead Gen's request will still
 be here when you reopen". Nothing stopped: the old "Are you sure?" (and the
 icon's Quit just quits). Otherwise "2 agents are still working. Quit anyway?"
-(or "Finance has a check-in coming up."), naming them, with **Keep running in
+(or "Finance has a routine coming up."), naming them, with **Keep running in
 background** (macOS; hides every window, `hide_all_to_background`) as the
 default, then Quit, then Cancel. The backend brings the main window forward
 first, since it may be hidden. The updater's restart is untouched: it still
@@ -1828,8 +1828,14 @@ of their own is open.
   lines opens with its badge and name in its own colour.
 - **Managing.** "New room" at the foot of the agent list (once there are two
   agents), ⌘K → New room…, Open <room>, <room>: members and name…,
-  Mute/Unmute, Delete…. Rooms sit in a "Rooms" section of the list with a
-  paired badge. Mute stops the unread count. Deleting a room removes its
+  Mute/Unmute, Delete…. Rooms sit in a "Rooms" section right after the
+  agents (above Hidden, as on the phone). A room's badge is its own: its
+  initials on an outlined neutral tile, so rooms with the same members still
+  look different and none passes for an agent; member faces (three, then
+  "+N") are in the room's header and empty state. A quiet room's row is one
+  line; its newest words show (one line) while unread or while someone is
+  replying or waiting on you there. An unnamed room of four or more is
+  "Chief of Staff & 3 others" (`rooms::room_name`). Mute stops the unread count. Deleting a room removes its
   thread and never an agent; deleting an agent takes it out of its rooms
   (and as lead); a room left with fewer than two says so above the composer
   ("Only Finance is left in this room", Delete room / Add members), and with
@@ -1843,7 +1849,24 @@ of their own is open.
   older phones see no rooms, no room-only lines and no room-only search hits;
   a member's line said in a room is a hit in that agent's chat there
   (`wire::search_for_app`, docs/mobile.md).
-- **Not built.** Attachments and quotes in a room composer; jumping to a
+- **Composer.** As in a 1:1 chat: paperclip, paste and drop for files,
+  dictation, and the send button turns into Stop ("Stop replies here")
+  while members are replying and nothing is typed. Files are saved into the
+  first member's home and copied to every other member's under the same
+  `attachments/<message id>/` path, so the room (desk and phone) shows them
+  through any member who was there when they were sent; each asked member is
+  told where they are in its own home. A member added later gets no copy. The startup sweep keeps those copies
+  (`rooms::any_log_mentions`), since a member's own log never mentions them.
+  A member's @mention of another member is tinted in that member's colour
+  (whole names, as `rooms::mentioned_in` matches them). Under your message,
+  "To everyone" when every member was asked, else "To Finance and Ops". The
+  mention menu's @everyone is a group glyph, never initials, and the foot
+  line stays empty while the menu is open. A stopped or cut-off member is one
+  centred line with its name in its colour, whoever wrote the note.
+- **What's in flight** knows rooms: a card or reply said in a room says
+  "in <room>" after the agent's name, the card is answered there, and the row
+  opens the room. A card waiting in a room is read from the room's thread too.
+- **Not built.** Quotes in a room composer; the phone sending files to a room; jumping to a
   search hit's exact line in a room; OS notifications for room replies (cards
   still notify, as the agent's); a user "leave" separate from delete (a room
   with one person in it has nothing to leave; "leave" is an agent leaving,

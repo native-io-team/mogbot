@@ -229,7 +229,7 @@ const DID: Record<string, string> = {
   'devices.unpairSelf': 'Forgot this Mac',
 };
 
-/** "Sent a message · 3 min ago"; "Allowed a request", "Paused a check-in". */
+/** "Sent a message · 3 min ago"; "Allowed a request", "Paused a routine". */
 export function activityLine(a: PhoneActivity, now: number): string {
   let what = DID[a.tool];
   if (a.tool === 'agents.answerApproval') {
@@ -256,9 +256,11 @@ export function phoneCapabilities(methods: string[]): { can: string[]; cannot: s
   if (has('agents.files')) can.push('Browse every file in a conversation');
   if (has('agents.search')) can.push('Search every conversation');
   if (has('agents.schedule.create')) can.push('Add, edit, pause and run routines');
-  if (has('projects.list', 'sessions.read')) can.push('See projects and read their agent sessions');
+  if (has('projects.list', 'sessions.read'))
+    can.push('See projects and read their agents’ conversations');
   const cannot = ['Push to git', 'Edit code', 'Type into a plain terminal', 'Manage other phones'];
-  if (has('projects.list') && !has('sessions.send')) cannot.unshift('Type into project sessions');
+  if (has('projects.list') && !has('sessions.send'))
+    cannot.unshift('Type to the agents in projects');
   return { can, cannot };
 }
 

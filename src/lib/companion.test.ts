@@ -135,7 +135,7 @@ describe('phoneCapabilities', () => {
     const p1 = phoneCapabilities(['agents.send', 'agents.answerApproval']);
     expect(p1.can).toEqual(['Chat with agents and answer what they ask']);
     expect(p1.cannot).toContain('Push to git');
-    expect(p1.cannot).not.toContain('Type into project sessions');
+    expect(p1.cannot).not.toContain('Type to the agents in projects');
 
     const p2 = phoneCapabilities([
       'agents.send',
@@ -145,7 +145,7 @@ describe('phoneCapabilities', () => {
       'projects.list',
       'sessions.read',
     ]);
-    expect(p2.can).toContain('See projects and read their agent sessions');
-    expect(p2.cannot[0]).toBe('Type into project sessions');
+    expect(p2.can).toContain('See projects and read their agents’ conversations');
+    expect(p2.cannot[0]).toBe('Type to the agents in projects');
   });
 });

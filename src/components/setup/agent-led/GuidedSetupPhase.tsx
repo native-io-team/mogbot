@@ -153,8 +153,8 @@ export function GuidedSetupPhase({
             <div className="agent-guided-exit-notice">
               <span>
                 {isOther
-                  ? 'The terminal session ended before setup finished.'
-                  : 'The agent session ended before setup finished.'}
+                  ? 'The terminal closed before setup finished.'
+                  : 'The agent stopped before setup finished.'}
               </span>
               <Button variant="secondary" onClick={handleRestart}>
                 {isOther ? 'Reopen terminal' : 'Restart the agent'}

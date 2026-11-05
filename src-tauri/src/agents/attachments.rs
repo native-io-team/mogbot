@@ -358,6 +358,10 @@ pub fn sweep_unreferenced(home: &Path, log: &str, older_than: std::time::SystemT
         if meta.modified().map_or(true, |t| t > older_than) {
             continue;
         }
+        // Files sent in a room are in its thread, not in this agent's log.
+        if super::rooms::any_log_mentions(&name) {
+            continue;
+        }
         if std::fs::remove_dir_all(entry.path()).is_ok() {
             removed += 1;
         }
