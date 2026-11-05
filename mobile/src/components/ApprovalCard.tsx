@@ -570,9 +570,10 @@ export function PhoneReviewCard({
   if (!pending) {
     return (
       <Receipt status={approval.status} title={approval.title} outcome={cardOutcome(approval)}>
-        {reviewLines(proposals).map((line, i) => (
-          <T key={i} variant="small" color={colors.textSecondary}>
-            {line}
+        {/* Not reviewLines: from here a taken name came in as a copy, never a replacement. */}
+        {proposals.map((p) => (
+          <T key={p.key} variant="small" color={colors.textSecondary}>
+            {p.role ? `${p.name} · ${p.role}` : p.name}
           </T>
         ))}
       </Receipt>

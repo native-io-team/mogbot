@@ -186,6 +186,8 @@ fn expire(state: &mut State, now: i64) {
             t.state = TalkState::Stopped;
             t.outbox.clear();
             t.held = None;
+            // Its past conversations go with it: nothing left on disk.
+            super::harvest::discard(&t.id);
             if let Some(s) = &t.session {
                 s.remove();
             }
