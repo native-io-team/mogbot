@@ -1268,7 +1268,9 @@ neutralised inside, so a title can't close it and pass for us (as the import
 interview's `<from_assistant>`). The turn that answers them (or replaces one
 that did: `runner::from_outside`) needs an Allow card for `create_agent`,
 `update_agent`, `delete_agent`, `watch_for` and `schedule_check_in`
-(`mcp::needs_card_in_routine_turn`), and can't write its own CLAUDE.md: on
+(`mcp::needs_card_in_routine_turn`), passes the taint on with what it says to
+another agent (`message_agent`, and its answer to one that asked), and
+can't write its own CLAUDE.md: on
 Claude Code its edit tools are denied for that file (`--disallowedTools
 Edit(//<home>/CLAUDE.md),…`), and for any engine a change to it is put back
 when the turn ends, with a note in the chat, unless the app itself wrote it
@@ -1568,7 +1570,8 @@ never slow down for limits unless the user chose that.
 - **Other compute**, detected, never assumed (`inventory::local_compute`,
   cached a minute): Opencode's binary; Ollama (binary or app) and LM Studio
   (`lms` or the app), each asked over loopback for its model list
-  (`127.0.0.1:11434/api/tags`, `127.0.0.1:1234/v1/models`, 800 ms) and said
+  (`127.0.0.1:11434/api/tags`, `127.0.0.1:1234/v1/models`, 800 ms, no proxy,
+  no redirects, so nothing leaves this Mac) and said
   "installed, not running" when it doesn't answer. Agents don't run on these;
   they are listed so the Chief can say what's there.
 
@@ -1626,16 +1629,24 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
 **The spare-capacity list**: users add in Settings; any agent adds with
 `add_spare_work` ("sometime", "when there's spare capacity"). At most 50
 items of 600 characters. A turn answering outside text (a "When…" routine's
-items) can't add to it or run a routine.
+items) can't add to it, take items off it or run a routine; and what such a
+turn sends with `message_agent` (or answers back to whoever asked it)
+carries the taint, so it can't ask the Chief to do it instead. A wake
+already recorded for a window (`nudged`, on disk before the Chief is woken,
+so a restart doesn't wake it again) also covers a later reading that puts
+the same reset up to 30 minutes off.
 
 **Instructions, for every agent, old or new.** The behaviour lives in the
 app-owned system prompt (`prompts::usage_section`, built every turn by
 `runner::system_prompt_for`) with the user's current mode, so every agent,
 including ones created or imported by older builds, has it on its next turn,
 and nothing in its own `CLAUDE.md` is rewritten (the safest upgrade: there
-is no file text to migrate). The Chief also gets `set_usage_mode` and, when
-`quota.json` shows a window near its reset with capacity left, a
-"Capacity about to expire" section, as reported.
+is no file text to migrate). The Chief also gets a line on `set_usage_mode`.
+It is kept short (it is on every turn) and changes only with the mode:
+nothing time-dependent goes in it, since a system prompt that changes every
+turn costs the engine's prompt cache on the whole conversation. Spare
+capacity reaches the Chief through the nudge, and the user through What's
+in flight.
 
 **UI.** Settings → Agents → Usage (⌘K "Usage limits and spare capacity…"):
 the mode, each account's reading or "No reading yet", tags ("Plus plan",

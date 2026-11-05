@@ -327,8 +327,13 @@ static LOCAL: LazyLock<Mutex<Found>> = LazyLock::new(|| Mutex::new(None));
 const LOCAL_FOR: Duration = Duration::from_secs(60);
 
 async fn models_at(url: &str, list: &str, name: &str) -> Option<Vec<String>> {
+    // Loopback only: no proxy (a system proxy would carry the request off
+    // this Mac) and no redirects (whatever answers on that port could point
+    // anywhere).
     let client = reqwest::Client::builder()
         .timeout(Duration::from_millis(800))
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .ok()?;
     let body: serde_json::Value = client.get(url).send().await.ok()?.json().await.ok()?;

@@ -56,9 +56,13 @@ function compact(n: number): string {
   return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
 }
 
+/** The fewest past runs an estimate may rest on (the Mac's `forecast::MIN_RUNS`). */
+export const MIN_ESTIMATE_RUNS = 5;
+
 /** "About 41k tokens a turn · estimate from 37 past runs". */
 export function estimateLine(e: UsageEstimate | undefined, unit = 'turn'): string | null {
-  if (!e) return null;
+  // The Mac never sends one under the floor; a guard, so a bad value can't show as a figure.
+  if (!e || e.estimate !== true || e.runs < MIN_ESTIMATE_RUNS) return null;
   return `About ${compact(e.tokens)} tokens a ${unit} · estimate from ${e.runs} past run${e.runs === 1 ? '' : 's'}`;
 }
 

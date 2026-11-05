@@ -239,7 +239,25 @@ pub fn should_nudge<'a>(
     }
     spare
         .iter()
-        .find(|s| s.next && !nudged.contains(&spare_key(s)))
+        .find(|s| s.next && !nudged.iter().any(|k| same_window(k, s)))
+}
+
+/// Whether `key` (a `spare_key`) is `s`'s window instance. A reset time
+/// reported a little differently by a later reading (rounding, a second's
+/// drift) is still the same instance: windows are hours long, so any two
+/// resets of one kind within the slack are one window, and the Chief is
+/// never woken twice for it.
+fn same_window(key: &str, s: &Spare) -> bool {
+    const SLACK_MS: i64 = 30 * 60 * 1000;
+    let Some((prefix, at)) = key.rsplit_once(':') else {
+        return false;
+    };
+    let Ok(at) = at.parse::<i64>() else {
+        return key == spare_key(s);
+    };
+    let want = spare_key(s);
+    let want_prefix = want.rsplit_once(':').map_or(want.as_str(), |(p, _)| p);
+    prefix == want_prefix && (at - s.resets_at).abs() <= SLACK_MS
 }
 
 /// Whether work forecast to use `percent` of a window needs the user's OK
@@ -572,6 +590,19 @@ mod tests {
         assert_eq!(chosen.account_id, "next");
         let done = [spare_key(chosen)];
         assert_eq!(should_nudge(Mode::UseItAll, &s, 3, false, &done), None);
+        // A later reading that puts the same reset a few seconds off is the
+        // same window: not a second wake.
+        let drifted = [spare_key(&Spare {
+            resets_at: chosen.resets_at + 7_000,
+            ..chosen.clone()
+        })];
+        assert_eq!(should_nudge(Mode::UseItAll, &s, 3, false, &drifted), None);
+        // The next window of that kind (hours later) is a new one.
+        let earlier = [spare_key(&Spare {
+            resets_at: chosen.resets_at - 5 * HOUR_MS,
+            ..chosen.clone()
+        })];
+        assert!(should_nudge(Mode::UseItAll, &s, 3, false, &earlier).is_some());
     }
 
     #[test]

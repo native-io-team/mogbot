@@ -75,6 +75,10 @@ describe('the capacity inventory, in words', () => {
     expect(
       estimateLine({ estimate: true, tokens: 41_000, low: 1, high: 2, runs: 37, days: 5 })
     ).toBe('About 41k tokens a turn · estimate from 37 past runs');
+    // Never a figure under five runs.
+    expect(
+      estimateLine({ estimate: true, tokens: 41_000, low: 1, high: 2, runs: 4, days: 1 })
+    ).toBeNull();
   });
 
   it('names a plan only when the engine did', () => {

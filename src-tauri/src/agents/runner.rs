@@ -1325,20 +1325,56 @@ impl Drop for MemorySeal {
 
 /// Queue an agent's answer to a request `agent_id` sent it.
 pub fn enqueue_reply(app: &AppHandle, agent_id: &str, text: String, sender: AgentRef, hop: u8) {
+    enqueue_reply_from(app, agent_id, text, sender, hop, false);
+}
+
+/// [`enqueue_reply`], carrying the outside taint of the sender's turn (see
+/// [`from_outside`]): what a turn answering a "When…" routine's items says
+/// to another agent is as much outside text as the items were.
+pub fn enqueue_reply_from(
+    app: &AppHandle,
+    agent_id: &str,
+    text: String,
+    sender: AgentRef,
+    hop: u8,
+    outside: bool,
+) {
     push(
         app,
         agent_id,
-        Inbound {
-            id: String::new(),
-            text,
-            from: From::Agent { sender, hop },
-            reply: true,
-            routine: false,
-            ticket: None,
-            room: None,
-            outside: false,
-        },
+        agent_inbound(text, sender, hop, true, outside),
     );
+}
+
+/// A request from another agent (`message_agent`), carrying the outside
+/// taint of the sender's turn, as a room's @mention does.
+pub fn enqueue_request(
+    app: &AppHandle,
+    agent_id: &str,
+    text: String,
+    sender: AgentRef,
+    hop: u8,
+    outside: bool,
+) {
+    push(
+        app,
+        agent_id,
+        agent_inbound(text, sender, hop, false, outside),
+    );
+}
+
+/// What another agent's request (or answer, `reply`) queues.
+fn agent_inbound(text: String, sender: AgentRef, hop: u8, reply: bool, outside: bool) -> Inbound {
+    Inbound {
+        id: String::new(),
+        text,
+        from: From::Agent { sender, hop },
+        reply,
+        routine: false,
+        ticket: None,
+        room: None,
+        outside,
+    }
 }
 
 /// `from` is messaging `to`. If `from`'s turn is answering a request `to`
@@ -2651,6 +2687,8 @@ fn return_results(app: &AppHandle, agent_id: &str, since: i64, error: Option<Str
         return;
     }
     let hop = current_hop(agent_id).saturating_add(1);
+    // A turn answering outside text passes the taint to whoever it answers.
+    let outside = from_outside(agent_id);
     let Ok(me) = store::get(agent_id) else { return };
     let said: Vec<String> = store::messages(agent_id, 40)
         .unwrap_or_default()
@@ -2678,7 +2716,7 @@ fn return_results(app: &AppHandle, agent_id: &str, since: i64, error: Option<Str
         let mut line = new_message(&to.id, MessageKind::FromAgent, text.clone());
         line.peer = Some(sender.clone());
         let _ = record(app, line);
-        enqueue_reply(app, &to.id, text.clone(), sender.clone(), hop);
+        enqueue_reply_from(app, &to.id, text.clone(), sender.clone(), hop, outside);
     }
 }
 
@@ -2882,28 +2920,6 @@ pub(super) fn system_prompt_for(
         super::usage_plan::mode().0,
         agent.is_main,
     ));
-    if agent.is_main {
-        let now = store::now_ms();
-        let readings: Vec<super::usage_plan::AccountReading> =
-            super::quota::shown(&super::quota::load(), now)
-                .into_iter()
-                .map(|q| super::usage_plan::AccountReading {
-                    engine: q.engine,
-                    account_id: String::new(),
-                    account_name: q.engine.label().to_string(),
-                    next: true,
-                    quota: q,
-                })
-                .collect();
-        if let Some(hint) = prompts::spare_hint(
-            &super::usage_plan::spare(&readings, now),
-            &chrono::Local,
-            now,
-        ) {
-            prompt.push_str("\n\n");
-            prompt.push_str(&hint);
-        }
-    }
     if agent.is_main {
         if let Some(team) = store::list()
             .ok()

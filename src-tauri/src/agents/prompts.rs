@@ -159,84 +159,45 @@ codebase: its own turns then run inside it.
 - `update_agent` changes an agent's name, role, instructions or project; \
 `delete_agent` removes one (the user confirms in the chat).";
 
+// On every turn of every agent, so kept short: the tools' own descriptions
+// say what they answer.
 const USAGE: &str = "\
 ## Usage limits
 
-The user runs you on their own subscriptions (Claude Code and Codex accounts), which have usage \
-limits that reset on a schedule. `usage_overview` shows every account, what each engine last \
-reported of its limits, which account the next turn runs on, other compute on this Mac, and \
-estimates of what turns and routines use here. `forecast_usage` estimates planned work.
-
-- Never slow down, cut corners or do less because of limits, unless the user's usage mode says \
-otherwise (below). Do the work properly.
-- Before something big (handing work to several agents at once, a long routine, a nightly \
-pipeline), say in one line what it will likely use and which account it runs on, from \
-`forecast_usage`, then go ahead.
-- A reading is what an engine reported, with when; an estimate is from past runs. Say which: \
-\"Claude reported 62% of the weekly limit used this morning\", \"likely about 400k tokens, from \
-past runs\". Never present an estimate as a reading, and never invent either: with no reading or \
-too little history, say so.
-- When there's a choice of agent or engine for the same work, prefer the one whose limit resets \
-soonest and still has room.
-- When the user wants something done \"sometime\" or \"when there's spare capacity\", put it on \
-the spare-capacity list with `add_spare_work`.";
+Turns run on the user's own subscriptions, whose limits reset on a schedule (`usage_overview`, \
+`forecast_usage`).
+- Don't do less because of limits unless the usage mode below says so.
+- Before something big (a fan-out, a long routine), say in one line what `forecast_usage` puts it \
+at and which account it runs on, then go ahead.
+- Say whether a figure is a reading (an engine reported it, with when) or an estimate (from past \
+runs). Never present one as the other, and never invent either.
+- Given a choice of engine for the same work, prefer the one whose limit resets soonest with room left.
+- Work wanted \"sometime\" or \"when there's spare capacity\" goes on the list with `add_spare_work`.";
 
 const USAGE_CHIEF: &str = "\
-- You set the usage mode with `set_usage_mode` when the user asks (they confirm on a card). When a \
-limit is near its reset with capacity left, tell the user once, and in \"Use it all before \
-reset\" use it on the spare-capacity list (you'll be woken for it).";
+- `set_usage_mode` changes the mode when the user asks (they confirm on a card).";
 
 /// The usage section, with the user's mode. App-owned, built every turn
 /// from code, so every agent (whenever it was created or imported) has it,
-/// and nothing in its own CLAUDE.md is touched.
+/// and nothing in its own CLAUDE.md is touched. It changes only with the
+/// mode, never per turn: anything time-dependent here would change the
+/// system prompt every turn and cost the engine's prompt cache.
 pub fn usage_section(mode: super::usage_plan::Mode, is_main: bool) -> String {
     use super::usage_plan::Mode;
     let mode_line = match mode {
-        Mode::Normal => "The user's usage mode is Normal: no throttling. Use what the work needs.",
-        Mode::Save => "The user's usage mode is \"Save my limits\": ask before heavy work (anything \
-`forecast_usage` puts at a tenth of a limit or more, or a fan-out to several agents), and hand light \
-work (lookups, short summaries, triage) to agents on lighter models or engines.",
-        Mode::UseItAll => "The user's usage mode is \"Use it all before reset\": their standing OK to \
-use capacity that would otherwise expire on the spare-capacity list and their routines. It changes no \
-approval: anything that sends, spends, pushes or changes what others see still waits for their Allow.",
+        Mode::Normal => "Usage mode: Normal. Use what the work needs.",
+        Mode::Save => "Usage mode: \"Save my limits\". Ask before heavy work (a tenth of a limit or \
+more by `forecast_usage`, or a fan-out), and hand light work to agents on lighter models or engines.",
+        Mode::UseItAll => "Usage mode: \"Use it all before reset\", the user's standing OK to spend \
+capacity that would otherwise expire on the spare-capacity list and their routines (the Chief of \
+Staff is woken for it). No approval changes.",
     };
     let mut s = format!("{USAGE}\n\n{mode_line}");
     if is_main {
-        s.push_str("\n");
+        s.push('\n');
         s.push_str(USAGE_CHIEF);
     }
     s
-}
-
-/// For the Chief's prompt: windows near their reset with capacity left, as
-/// the engines last reported them (`quota.json`). `None` when there are none.
-pub fn spare_hint<Tz: chrono::TimeZone>(
-    spare: &[super::usage_plan::Spare],
-    tz: &Tz,
-    now: i64,
-) -> Option<String>
-where
-    Tz::Offset: std::fmt::Display,
-{
-    let lines: Vec<String> = spare
-        .iter()
-        .map(|s| {
-            format!(
-                "- {}: the {} limit resets {} and was {}% used when reported {}.",
-                s.engine.label(),
-                super::inventory::window_name(&s.kind, s.window_minutes),
-                super::failure::clock_phrase(tz, s.resets_at, now),
-                s.used_percent.floor(),
-                super::failure::clock_phrase(tz, s.observed_at, now),
-            )
-        })
-        .collect();
-    (!lines.is_empty()).then(|| {
-        format!(
-            "## Capacity about to expire\n\nAs reported (not estimated):\n{}\n\nMention it to the user once if it's relevant.",
-            lines.join("\n")
-        )
-    })
 }
 
 /// Where a project-bound agent's identity lives, and what it says right now.
