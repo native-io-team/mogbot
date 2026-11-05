@@ -70,7 +70,12 @@ pub async fn claude_auth_truth(account_id: &str) -> bool {
         // NeedsReconnect (expired token) counts as not authenticated so the
         // wizard prompts a reconnect instead of green-lighting a dead token.
         let identity = resolve_claude_identity(account_id).await;
-        let authed = identity.state == ClaudeConnState::Connected;
+        // A Keychain that didn't answer isn't "signed out": counting it so
+        // would send the wizard to reconnect over a token that is fine.
+        let authed = matches!(
+            identity.state,
+            ClaudeConnState::Connected | ClaudeConnState::KeychainUnavailable
+        );
         tracing::info!(account_id, authed, source = "vault", "claude auth verdict");
         return authed;
     }

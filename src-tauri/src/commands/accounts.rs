@@ -156,16 +156,9 @@ fn write_to_keychain(account_id: &str, key: &str, value: &str) -> Result<(), Com
 }
 
 /// Store `value` under (`service`, `key`). Shared with Agents' secrets
-/// (`agents::secrets`), which keep their own service namespace per agent.
-///
-/// The item is created by this app through the Security framework
-/// (`SecItemAdd`), so its access list trusts this app alone: any other
-/// program asking for it, `security` included, makes macOS ask the user.
-/// Items written before by `security add-generic-password` trusted
-/// `/usr/bin/security`, which meant any process running as the user could
-/// read every secret with `security find-generic-password -w`, silently.
-/// Those are moved over on first read ([`keychain_read`]) and replaced on
-/// write, and our own are told apart by their comment ([`owned::MARK`]).
+/// (`agents::secrets`), which keep their own service namespace per agent,
+/// and the companion's identity key. How items are kept, and how older ones
+/// move over without ever being at risk, is [`crate::keychain`].
 pub(crate) fn keychain_write(service: &str, key: &str, value: &str) -> Result<(), CommandError> {
     if !KEYCHAIN_SUPPORTED {
         return Err(CommandError::expected(
@@ -174,10 +167,7 @@ pub(crate) fn keychain_write(service: &str, key: &str, value: &str) -> Result<()
     }
     #[cfg(target_os = "macos")]
     {
-        // A service + account names one item: a CLI-made one must go first,
-        // or the add is a duplicate and the update can't reach it.
-        legacy::delete(service, key);
-        owned::set(service, key, value.as_bytes()).map_err(|e| {
+        crate::keychain::write(service, key, value).map_err(|e| {
             CommandError::from(format!(
                 "Failed to store credential '{key}' in keychain: {e}"
             ))
@@ -194,137 +184,38 @@ fn read_from_keychain(account_id: &str, key: &str) -> Option<String> {
     keychain_read(&keychain_service(account_id), key)
 }
 
-/// The value under (`service`, `key`): ours, or a legacy one, which is moved
-/// into an app-owned item on the way (transparently: no prompt either way,
-/// since `security` reads its own item and we read ours).
+fn read_from_keychain_checked(account_id: &str, key: &str) -> crate::keychain::Read {
+    keychain_read_checked(&keychain_service(account_id), key)
+}
+
+/// The value under (`service`, `key`), or `None` for "no value" and "the
+/// Keychain didn't answer" alike. Where the two must be told apart (status
+/// shown to the user, the companion's identity key) use
+/// [`keychain_read_checked`].
 pub(crate) fn keychain_read(service: &str, key: &str) -> Option<String> {
+    match keychain_read_checked(service, key) {
+        crate::keychain::Read::Found(v) => Some(v),
+        crate::keychain::Read::NotFound => None,
+        crate::keychain::Read::Error(e) => {
+            tracing::warn!(service, error = %e, "[Keychain] read failed");
+            None
+        }
+    }
+}
+
+/// Found / definitely not there / couldn't check.
+pub(crate) fn keychain_read_checked(service: &str, key: &str) -> crate::keychain::Read {
     if !KEYCHAIN_SUPPORTED {
-        return None;
+        return crate::keychain::Read::Error("there's no Keychain on this platform".into());
     }
     #[cfg(target_os = "macos")]
     {
-        match owned::get(service, key) {
-            Ok(Some(bytes)) => return String::from_utf8(bytes).ok().filter(|v| !v.is_empty()),
-            Ok(None) => {}
-            Err(e) => {
-                tracing::warn!(service, error = %e, "[Keychain] read failed");
-                return None;
-            }
-        }
-        let value = legacy::read(service, key)?;
-        legacy::delete(service, key);
-        if let Err(e) = owned::set(service, key, value.as_bytes()) {
-            // Keep it readable rather than lose it: put the old item back.
-            tracing::warn!(service, error = %e, "[Keychain] couldn't move a credential to an app-owned item");
-            legacy::write(service, key, &value);
-        }
-        Some(value)
+        crate::keychain::read(service, key)
     }
     #[cfg(not(target_os = "macos"))]
     {
         let _ = (service, key);
-        None
-    }
-}
-
-/// Items this app created itself.
-#[cfg(target_os = "macos")]
-pub(crate) mod owned {
-    use security_framework::passwords::{
-        delete_generic_password_options, generic_password, set_generic_password_options,
-        PasswordOptions,
-    };
-
-    /// The comment on every item we create: how ours are told from items a
-    /// `security` command made (which trust `/usr/bin/security`).
-    pub const MARK: &str = "app-owned v1";
-    const NOT_FOUND: i32 = -25300; // errSecItemNotFound
-
-    fn options(service: &str, key: &str) -> PasswordOptions {
-        let mut o = PasswordOptions::new_generic_password(service, key);
-        o.set_comment(MARK);
-        o
-    }
-
-    pub fn get(
-        service: &str,
-        key: &str,
-    ) -> Result<Option<Vec<u8>>, security_framework::base::Error> {
-        match generic_password(options(service, key)) {
-            Ok(v) => Ok(Some(v)),
-            Err(e) if e.code() == NOT_FOUND => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-
-    pub fn set(
-        service: &str,
-        key: &str,
-        value: &[u8],
-    ) -> Result<(), security_framework::base::Error> {
-        set_generic_password_options(value, options(service, key))
-    }
-
-    pub fn delete(service: &str, key: &str) {
-        let _ = delete_generic_password_options(options(service, key));
-    }
-}
-
-/// Items `security add-generic-password` made in older builds. Read and
-/// deleted by `security` itself, which they trust, so neither asks the user.
-#[cfg(target_os = "macos")]
-mod legacy {
-    use crate::utils::create_command;
-
-    pub fn read(service: &str, key: &str) -> Option<String> {
-        let output = create_command("security")
-            .args(["find-generic-password", "-a", key, "-s", service, "-w"])
-            .output()
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        (!value.is_empty()).then_some(value)
-    }
-
-    /// Every item under (service, key) that isn't ours. Ours is deleted
-    /// through the framework first so this can't remove it by accident.
-    pub fn delete(service: &str, key: &str) {
-        if super::owned::get(service, key).ok().flatten().is_some() {
-            // The one item under this name is ours.
-            return;
-        }
-        for _ in 0..4 {
-            let ok = create_command("security")
-                .args(["delete-generic-password", "-a", key, "-s", service])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .is_ok_and(|s| s.success());
-            if !ok {
-                break;
-            }
-        }
-    }
-
-    /// Only to put back a value that couldn't be moved (stdin, never argv).
-    pub fn write(service: &str, key: &str, value: &str) {
-        use std::io::Write;
-        use std::process::Stdio;
-        let Ok(mut child) = create_command("security")
-            .args(["add-generic-password", "-U", "-a", key, "-s", service, "-w"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-        else {
-            return;
-        };
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(format!("{value}\n{value}\n").as_bytes());
-        }
-        let _ = child.wait();
+        crate::keychain::Read::Error("there's no Keychain on this platform".into())
     }
 }
 
@@ -337,9 +228,8 @@ pub(crate) fn keychain_delete(service: &str, key: &str) {
         return;
     }
     #[cfg(target_os = "macos")]
-    {
-        owned::delete(service, key);
-        legacy::delete(service, key);
+    if let Err(e) = crate::keychain::delete(service, key) {
+        tracing::warn!(service, error = %e, "[Keychain] delete failed");
     }
     #[cfg(not(target_os = "macos"))]
     let _ = (service, key);
@@ -474,6 +364,10 @@ pub enum ClaudeConnState {
     Connected,
     /// Was connected but the token has expired — red stroke + inline Reconnect.
     NeedsReconnect,
+    /// The Keychain didn't answer (locked, refused): whether it's connected
+    /// isn't known. Never shown as "not connected", which would invite a
+    /// reconnect over a token that is fine.
+    KeychainUnavailable,
 }
 
 /// Resolved Claude identity for a workspace: connection state + the email to show.
@@ -496,12 +390,22 @@ pub async fn resolve_claude_identity(account_id: &str) -> ClaudeIdentity {
         return resolve_default_claude_identity().await;
     }
 
-    let Some(_token) = read_from_keychain(account_id, CLAUDE_TOKEN_KEY) else {
-        return ClaudeIdentity {
-            state: ClaudeConnState::NotConnected,
-            email: None,
-        };
-    };
+    match read_from_keychain_checked(account_id, CLAUDE_TOKEN_KEY) {
+        crate::keychain::Read::Found(_) => {}
+        crate::keychain::Read::NotFound => {
+            return ClaudeIdentity {
+                state: ClaudeConnState::NotConnected,
+                email: None,
+            }
+        }
+        crate::keychain::Read::Error(e) => {
+            tracing::warn!(account_id, error = %e, "[Keychain] couldn't check the Claude token");
+            return ClaudeIdentity {
+                state: ClaudeConnState::KeychainUnavailable,
+                email: None,
+            };
+        }
+    }
     let email = read_from_keychain(account_id, CLAUDE_EMAIL_KEY);
     // No expiry recorded (older connect): treat as still valid rather than
     // nagging the user with a false red (see should_inject_claude_token).
@@ -1112,6 +1016,7 @@ pub async fn get_account_credential_status(
                 .unwrap_or_else(|| "Connected".to_string()),
         ),
         ClaudeConnState::NeedsReconnect => Some("Reconnect needed".to_string()),
+        ClaudeConnState::KeychainUnavailable => Some("Couldn't check the Keychain".to_string()),
         ClaudeConnState::NotConnected => None,
     };
     let codex_auth_email = agent_connected("codex");
@@ -1150,18 +1055,37 @@ pub async fn get_account_credential_status(
         }
     };
 
+    // Presence of each credential, three-way: one the Keychain couldn't
+    // answer for is reported as such, not as "not set".
+    let mut keychain_unavailable = claude.state == ClaudeConnState::KeychainUnavailable;
+    let mut has = |key: &str| match read_from_keychain_checked(&id, key) {
+        crate::keychain::Read::Found(_) => true,
+        crate::keychain::Read::NotFound => false,
+        crate::keychain::Read::Error(_) => {
+            keychain_unavailable = true;
+            false
+        }
+    };
+    let has_anthropic_base_url = has("anthropic_base_url");
+    let has_vercel_token = has("vercel_token");
+    let has_cloudflare_api_token = has("cloudflare_api_token");
+    let has_netlify_auth_token = has("netlify_auth_token");
+    let has_git_name = has("git_name");
+    let has_git_email = has("git_email");
+
     Ok(AccountCredentialStatus {
         claude_auth_email,
         codex_auth_email,
         opencode_auth_email,
         github_auth_email,
         vercel_username,
-        has_anthropic_base_url: read_from_keychain(&id, "anthropic_base_url").is_some(),
-        has_vercel_token: read_from_keychain(&id, "vercel_token").is_some(),
-        has_cloudflare_api_token: read_from_keychain(&id, "cloudflare_api_token").is_some(),
-        has_netlify_auth_token: read_from_keychain(&id, "netlify_auth_token").is_some(),
-        has_git_name: read_from_keychain(&id, "git_name").is_some(),
-        has_git_email: read_from_keychain(&id, "git_email").is_some(),
+        has_anthropic_base_url,
+        has_vercel_token,
+        has_cloudflare_api_token,
+        has_netlify_auth_token,
+        has_git_name,
+        has_git_email,
+        keychain_unavailable,
     })
 }
 
@@ -2410,84 +2334,5 @@ mod tests {
     fn validate_account_id_rejects_overlong() {
         let long = "a".repeat(65);
         assert!(validate_account_id(&long).is_err());
-    }
-}
-
-/// Against the real login keychain, with a throwaway item only (its own
-/// service name, deleted at the end). Run by hand:
-/// `cargo test --lib keychain_live -- --ignored`.
-#[cfg(all(test, target_os = "macos"))]
-mod keychain_live_tests {
-    use super::*;
-
-    fn exists_any(service: &str, key: &str) -> bool {
-        // Attributes only (no -w): never asks for the value, so never prompts.
-        std::process::Command::new("security")
-            .args(["find-generic-password", "-a", key, "-s", service])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .is_ok_and(|s| s.success())
-    }
-
-    /// The item's comment, from its attributes (no -w: no prompt).
-    fn comment_of(service: &str, key: &str) -> Option<String> {
-        let out = std::process::Command::new("security")
-            .args(["find-generic-password", "-a", key, "-s", service])
-            .output()
-            .ok()?;
-        let text = String::from_utf8_lossy(&out.stdout).into_owned();
-        text.lines().find(|l| l.contains("\"icmt\"")).and_then(|l| {
-            l.split_once("=\"")
-                .map(|(_, v)| v.trim_end_matches('"').to_string())
-        })
-    }
-
-    #[test]
-    #[ignore = "touches the real keychain (a temporary item it creates and deletes)"]
-    fn keychain_live_items_are_app_owned_and_legacy_ones_move_over() {
-        let service = format!(
-            "{}-selftest-{}",
-            crate::brand::keychain_prefix("account"),
-            uuid::Uuid::new_v4().simple()
-        );
-        let key = "SELFTEST";
-
-        // A new value is an app-owned item.
-        keychain_write(&service, key, "one").unwrap();
-        assert_eq!(comment_of(&service, key).as_deref(), Some(owned::MARK));
-        assert_eq!(
-            owned::get(&service, key).unwrap().as_deref(),
-            Some(&b"one"[..])
-        );
-        assert_eq!(keychain_read(&service, key).as_deref(), Some("one"));
-        keychain_write(&service, key, "two").unwrap();
-        assert_eq!(keychain_read(&service, key).as_deref(), Some("two"));
-        keychain_delete(&service, key);
-        assert!(!exists_any(&service, key));
-
-        // An item made the old way (by `security`) is read once, moved into
-        // an app-owned item, and the old one is gone.
-        legacy::write(&service, key, "legacy-value");
-        assert!(exists_any(&service, key));
-        assert_eq!(
-            owned::get(&service, key).unwrap(),
-            None,
-            "a CLI item isn't ours"
-        );
-        assert_eq!(
-            keychain_read(&service, key).as_deref(),
-            Some("legacy-value")
-        );
-        assert_eq!(
-            owned::get(&service, key).unwrap().as_deref(),
-            Some(&b"legacy-value"[..])
-        );
-        // One item, and it's ours. (Never `security -w` here: on an
-        // app-owned item that is exactly the prompt this change is for.)
-        assert_eq!(comment_of(&service, key).as_deref(), Some(owned::MARK));
-
-        keychain_delete(&service, key);
-        assert!(!exists_any(&service, key));
     }
 }

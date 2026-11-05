@@ -53,6 +53,7 @@ const EMPTY_CREDENTIAL_STATUS = {
   hasNetlifyAuthToken: false,
   hasGitName: false,
   hasGitEmail: false,
+  keychainUnavailable: false,
 };
 
 function SettingsHarness({ initialAccount }: { initialAccount: Account }) {

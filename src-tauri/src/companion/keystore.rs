@@ -4,8 +4,8 @@
 //! In the JSON it was readable by any process running as this user (the
 //! agents the app runs among them), copied in plain text by Time Machine,
 //! and lost whenever an older build rewrote the file without the field. The
-//! Keychain keeps it out of all three. Through the `security` tool, as the
-//! other Keychain items here are (`commands::accounts`).
+//! Keychain keeps it out of all three, through the same path as every other
+//! secret here (`crate::keychain`).
 //!
 //! The one distinction that matters is "there is no key" (make one) versus
 //! "the Keychain didn't answer" (locked, refused): treating the second as
@@ -45,38 +45,17 @@ impl Keychain {
     }
 }
 
-/// `security find-generic-password` exits 44 for "no such item".
-const ERR_SEC_ITEM_NOT_FOUND: i32 = 44;
-
 impl KeyStore for Keychain {
-    // A local tool that answers at once, read once per launch, from code
-    // that isn't async; the same call `commands::accounts::keychain_read` makes.
-    #[allow(clippy::disallowed_methods)]
+    // The same owned-then-legacy path as every other secret
+    // (`crate::keychain`), three-way: an app-owned item is read through the
+    // framework, never with `security -w` (which would prompt), and "the
+    // Keychain didn't answer" is never mistaken for "there is no key".
     fn load(&self) -> Result<Option<String>, String> {
-        if !cfg!(target_os = "macos") {
-            return Err("there's no Keychain on this platform".into());
-        }
-        let output = crate::utils::create_command("security")
-            .args([
-                "find-generic-password",
-                "-a",
-                &self.account,
-                "-s",
-                &self.service,
-                "-w",
-            ])
-            .output()
-            .map_err(|e| format!("couldn't run security: {e}"))?;
-        if output.status.success() {
-            let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            return Ok((!value.is_empty()).then_some(value));
-        }
-        match output.status.code() {
-            Some(ERR_SEC_ITEM_NOT_FOUND) => Ok(None),
-            code => Err(format!(
-                "the Keychain refused (security exited {})",
-                code.map_or("by signal".to_string(), |c| c.to_string())
-            )),
+        use crate::keychain::Read;
+        match crate::commands::accounts::keychain_read_checked(&self.service, &self.account) {
+            Read::Found(v) => Ok(Some(v)),
+            Read::NotFound => Ok(None),
+            Read::Error(e) => Err(e),
         }
     }
 

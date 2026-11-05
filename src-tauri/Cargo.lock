@@ -986,6 +986,7 @@ dependencies = [
  "block2 0.5.1",
  "bytes",
  "chrono",
+ "core-foundation 0.10.1",
  "data-encoding",
  "dirs 5.0.1",
  "dunce",

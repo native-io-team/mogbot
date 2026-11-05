@@ -457,6 +457,7 @@ export const baseCommands: CommandMap = {
     hasNetlifyAuthToken: false,
     hasGitName: true,
     hasGitEmail: true,
+    keychainUnavailable: false,
   },
 
   // ---- git --------------------------------------------------------------

@@ -21,6 +21,7 @@ pub mod companion;
 pub mod error_reporting;
 pub mod errors;
 pub mod external_command;
+pub mod keychain;
 pub mod logging;
 pub mod navigation_guard;
 pub mod preview_isolation;

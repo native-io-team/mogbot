@@ -1013,6 +1013,9 @@ pub struct AccountCredentialStatus {
     pub has_netlify_auth_token: bool,
     pub has_git_name: bool,
     pub has_git_email: bool,
+    /// The Keychain didn't answer for at least one credential, so a `false`
+    /// above may mean "couldn't check" rather than "not set".
+    pub keychain_unavailable: bool,
 }
 
 // ============ Compact Mode ============
