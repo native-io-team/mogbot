@@ -74,6 +74,7 @@ import {
   radius,
   space,
   type,
+  PRESSED,
 } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AgentAvatar } from './agent';
@@ -387,6 +388,7 @@ export function Composer({
                 accessibilityRole="button"
                 accessibilityLabel="Remove quote"
                 hitSlop={16}
+                style={({ pressed }) => pressed && PRESSED}
                 onPress={() =>
                   setComposer(agent.id, { quotes: draft.quotes.filter((_, j) => j !== i) })
                 }

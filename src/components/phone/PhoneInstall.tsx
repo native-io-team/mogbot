@@ -41,6 +41,8 @@ import {
   type InstallState,
 } from '../../lib/companionInstall';
 import { InstallChecklist, InstallDone } from './PhoneInstallSteps';
+import { TailscaleStoreLinks } from './PhoneTailscale';
+import { phoneTailscaleText, type TailscaleState } from '../../lib/companion';
 
 const PLATFORMS = [
   { value: 'ios', label: 'iPhone', ariaLabel: 'iPhone' },
@@ -52,12 +54,14 @@ const NAME: Record<InstallPlatform, string> = { ios: 'iPhone', android: 'Android
 interface PhoneInstallProps {
   /** Reinstall from the Phone panel skips the route choice. */
   reinstall?: InstallPlatform;
+  /** This Mac's Tailscale, for who the phone signs in as; null before it's read. */
+  tailscale: TailscaleState | null;
   onBack: () => void;
   /** The app is on the phone: show the pairing code. */
   onPair: () => void;
 }
 
-export function PhoneInstall({ reinstall, onBack, onPair }: PhoneInstallProps) {
+export function PhoneInstall({ reinstall, tailscale, onBack, onPair }: PhoneInstallProps) {
   const [platform, setPlatform] = useState<InstallPlatform>(reinstall ?? 'ios');
   const [building, setBuilding] = useState(reinstall !== undefined);
 
@@ -65,6 +69,7 @@ export function PhoneInstall({ reinstall, onBack, onPair }: PhoneInstallProps) {
     return (
       <RouteChoice
         platform={platform}
+        tailscale={tailscale}
         onPlatform={setPlatform}
         onBuild={() => setBuilding(true)}
         onBack={onBack}
@@ -74,6 +79,7 @@ export function PhoneInstall({ reinstall, onBack, onPair }: PhoneInstallProps) {
   return (
     <BuildOnMac
       platform={platform}
+      tailscale={tailscale}
       reinstall={reinstall !== undefined}
       onBack={reinstall ? onBack : () => setBuilding(false)}
       onPair={onPair}
@@ -85,12 +91,13 @@ export function PhoneInstall({ reinstall, onBack, onPair }: PhoneInstallProps) {
 
 interface ChoiceProps {
   platform: InstallPlatform;
+  tailscale: TailscaleState | null;
   onPlatform: (p: InstallPlatform) => void;
   onBuild: () => void;
   onBack: () => void;
 }
 
-function RouteChoice({ platform, onPlatform, onBuild, onBack }: ChoiceProps) {
+function RouteChoice({ platform, tailscale, onPlatform, onBuild, onBack }: ChoiceProps) {
   const official = platform === 'ios' ? TESTFLIGHT_URL : ANDROID_APK_URL;
   // Building it yourself is the advanced route: folded away while there is an
   // official build to get, open when it is the only way.
@@ -133,6 +140,8 @@ function RouteChoice({ platform, onPlatform, onBuild, onBack }: ChoiceProps) {
         )}
       </div>
 
+      <PhoneTailscaleRoute platform={platform} tailscale={tailscale} />
+
       <TextButton
         className="phone-route__advanced"
         aria-expanded={advanced}
@@ -163,18 +172,44 @@ function RouteChoice({ platform, onPlatform, onBuild, onBack }: ChoiceProps) {
   );
 }
 
+/**
+ * Part of setting the phone up, whichever route the app came by: without
+ * Tailscale on it, the phone never reaches this Mac to pair.
+ */
+function PhoneTailscaleRoute({
+  platform,
+  tailscale,
+}: {
+  platform: InstallPlatform;
+  tailscale: TailscaleState | null;
+}) {
+  return (
+    <div className="phone-route" data-tailscale>
+      <div className="phone-route__body">
+        <span className="phone-route__title">And Tailscale on the {NAME[platform]}</span>
+        <span className="phone-route__detail">
+          {phoneTailscaleText(tailscale)} It’s how the phone reaches this Mac, so pairing waits for
+          it.
+        </span>
+        <TailscaleStoreLinks platform={platform} />
+      </div>
+    </div>
+  );
+}
+
 // ---- Build on this Mac ---------------------------------------------------------
 
 type Run = { kind: 'agent' | 'reinstall'; key: number } | null;
 
 interface BuildProps {
   platform: InstallPlatform;
+  tailscale: TailscaleState | null;
   reinstall: boolean;
   onBack: () => void;
   onPair: () => void;
 }
 
-function BuildOnMac({ platform, reinstall, onBack, onPair }: BuildProps) {
+function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildProps) {
   const { showToast } = useOptionalToast();
   const load = useCallback(() => loadInstallState(platform), [platform]);
   const state = useAsyncState<InstallState>(load, { immediate: true });
@@ -281,6 +316,7 @@ function BuildOnMac({ platform, reinstall, onBack, onPair }: BuildProps) {
               <InstallDone
                 platform={platform}
                 deviceName={target.name}
+                tailscaleLine={phoneTailscaleText(tailscale)}
                 expiresAt={expiresAt}
                 now={now}
                 opening={opening}

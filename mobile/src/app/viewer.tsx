@@ -15,7 +15,7 @@ import { Spinner } from '../components/agent';
 import { T } from '../components/ui';
 import { share } from '../lib/files';
 import { attachmentSource, describeError, download } from '../lib/session';
-import { alpha, iconSize, radius, space } from '../lib/theme';
+import { alpha, iconSize, radius, space, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 
 export default function Viewer() {
@@ -80,7 +80,7 @@ export default function Viewer() {
           onPress={() => router.back()}
           hitSlop={10}
           accessibilityRole="button"
-          style={styles.pill}
+          style={({ pressed }) => [styles.pill, pressed && PRESSED]}
         >
           <T variant="subhead" color={colors.onMedia}>
             Done
@@ -97,7 +97,7 @@ export default function Viewer() {
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel="Share"
-          style={styles.pill}
+          style={({ pressed }) => [styles.pill, pressed && PRESSED]}
         >
           {sharing ? (
             <Spinner size={iconSize.body} color={colors.onMedia} />

@@ -53,7 +53,7 @@ import {
   unpair,
 } from '../../../lib/session';
 import { setApp, useApp } from '../../../lib/store';
-import { chromeScale, fonts, iconSize, radius, space } from '../../../lib/theme';
+import { chromeScale, fonts, iconSize, PRESSED, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
 
 type Row =
@@ -70,6 +70,9 @@ const SPLIT_AT = 700;
  * was a strip with three buttons and no question, so it stays single-pane.
  */
 const SPLIT_MIN_HEIGHT = 600;
+
+/** The list's content box: a little room under the last row, and nothing else. */
+const LIST_CONTENT = { paddingBottom: space['2xl'] } as const;
 
 /** What an undoable toggle says it did ("Inbox hidden"), and the toggle that undoes it. */
 const UNDO: Partial<Record<AgentAction, [string, AgentAction]>> = {
@@ -251,7 +254,11 @@ export default function Agents() {
       keyExtractor={(r) => r.key}
       contentInsetAdjustmentBehavior="automatic"
       itemLayoutAnimation={LinearTransition.springify().damping(20).mass(0.6)}
-      contentContainerStyle={{ paddingBottom: space['2xl'], flexGrow: 1 }}
+      // No flexGrow: with the automatic insets (the large title above, the
+      // tab bar below) a content box grown to the list's own height is that
+      // height *plus* both insets, so a list with only the Chief scrolled a
+      // screen's worth into nothing. The empty state keeps its own minHeight.
+      contentContainerStyle={LIST_CONTENT}
       refreshControl={
         live ? (
           <RefreshControl
@@ -292,7 +299,7 @@ export default function Agents() {
             android_ripple={ripple}
             accessibilityRole="button"
             accessibilityState={{ expanded: showHidden }}
-            style={styles.hiddenToggle}
+            style={({ pressed }) => [styles.hiddenToggle, pressed && PRESSED]}
           >
             <Icon
               name={showHidden ? 'chevron.down' : 'chevron.right'}

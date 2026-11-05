@@ -333,6 +333,18 @@
   animation: agents-motion-pop-in var(--agents-motion-enter) backwards;
 }
 
+/* The pop-in replaces the dot's glow here, so its halo layers hold still too. */
+.agents-list__status > .sidebar-row-dot::before,
+.agents-list__status > .sidebar-row-dot::after {
+  animation: none;
+}
+
+/* Collapsed, the dot is ringed against its avatar instead (agents.css): no halo. */
+.workspace-sidebar.is-hidden .agents-list__status .sidebar-row-dot::before,
+.workspace-sidebar.is-hidden .agents-list__status .sidebar-row-dot::after {
+  box-shadow: none;
+}
+
 /* A press acknowledges before the conversation swaps. */
 .agents-list__row:active:not(.is-current) {
   background: var(--tint-strong);

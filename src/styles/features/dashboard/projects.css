@@ -26,7 +26,7 @@
 }
 
 .dashboard-section-count {
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 /* Workspace indicator beside "All Projects" — click to open the switcher.

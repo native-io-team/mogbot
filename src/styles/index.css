@@ -141,6 +141,7 @@
 @import './features/agents-team.css';
 @import './features/agents-requests.css';
 @import './features/agents-motion.css';
+@import './features/agents-chat-history.css';
 @import './features/agents-attachments.css';
 @import './features/agents-control.css';
 @import './features/agents-when.css';

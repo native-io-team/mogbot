@@ -38,8 +38,8 @@ generated fixtures (`packages/companion-protocol/src/fixtures.gen.ts`); the hidd
 
 Flags for states a Mac causes: `--codex-only`, `--takeover` (Designer driven
 on the Mac), `--bars` (three bars in the Chief's chat, so "1 more" shows),
-`--impostor` (signs with a stranger's key: "This isn't your Mac"), and `--cors`
-for the web build.
+`--impostor` (signs with a stranger's key: "This isn't your Mac"), `--solo` (only the
+Chief and no rooms: a Mac just set up), and `--cors` for the web build.
 
 Things to try against it: send a message (a streamed reply), send "deploy"
 (an approval card first), Stop while it streams, open Chief of Staff and scroll
@@ -82,7 +82,7 @@ See docs/mobile.md, "Phone screens without a simulator".
 
 | Variable | Default | |
 | --- | --- | --- |
-| `SHIPSTUDIO_BUNDLE_ID` | `com.shipstudio.companion` | **Placeholder** until the App Store Connect record exists |
+| `COMPANION_BUNDLE_ID` | `companion.bundleId` in `brand.json` | **Placeholder** until the App Store Connect record exists |
 | `EAS_PROJECT_ID` | none | Without it, OTA updates are off, so an official update can never reach a fork |
 | `UPDATES_URL` | `https://u.expo.dev/<project id>` | |
 

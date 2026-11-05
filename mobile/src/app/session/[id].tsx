@@ -50,6 +50,7 @@ import {
   radius,
   space,
   type,
+  PRESSED,
 } from '../../lib/theme';
 import { ComposerField, RoundButton } from '../../components/Composer';
 import { makeStyles, useColors } from '../../lib/appearance';
@@ -323,7 +324,13 @@ export default function Session() {
           <T variant="small" color={colors.textStrong} style={{ flex: 1 }}>
             {error}
           </T>
-          <Pressable accessibilityLabel="Dismiss" hitSlop={14} onPress={() => setError(null)}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss"
+            hitSlop={14}
+            onPress={() => setError(null)}
+            style={({ pressed }) => pressed && PRESSED}
+          >
             <Icon
               name="xmark"
               size={iconSize.inline}

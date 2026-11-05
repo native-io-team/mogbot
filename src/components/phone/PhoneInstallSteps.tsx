@@ -16,6 +16,7 @@ import {
   type InstallPlatform,
   type InstallStep,
 } from '../../lib/companionInstall';
+import { TailscaleStoreLinks } from './PhoneTailscale';
 
 const WHO: Record<InstallStep['state'], string | null> = {
   done: null,
@@ -61,6 +62,8 @@ export function InstallChecklist({ steps }: { steps: InstallStep[] }) {
 interface DoneProps {
   platform: InstallPlatform;
   deviceName: string;
+  /** "Install Tailscale on your phone and sign in as …": the step before pairing. */
+  tailscaleLine: string;
   expiresAt: number | null;
   now: number;
   opening: boolean;
@@ -72,6 +75,7 @@ interface DoneProps {
 export function InstallDone({
   platform,
   deviceName,
+  tailscaleLine,
   expiresAt,
   now,
   opening,
@@ -101,6 +105,10 @@ export function InstallDone({
       ) : (
         <p className="phone-install-done__line">Android builds don’t expire.</p>
       )}
+      <p className="phone-install-done__line" data-tailscale>
+        Before you pair: {tailscaleLine}
+      </p>
+      <TailscaleStoreLinks platform={platform} />
       <div className="phone-install-done__actions">
         {onOpen && (
           <Button

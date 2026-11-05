@@ -10,7 +10,7 @@
  */
 
 import type { Extension } from '@codemirror/state';
-import { Prec, Range } from '@codemirror/state';
+import { Compartment, Prec, Range } from '@codemirror/state';
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
@@ -19,6 +19,7 @@ import { html } from '@codemirror/lang-html';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
+import { getResolvedTheme, subscribeTheme, type ResolvedTheme } from './theme';
 
 /* Shared syntax palette, with semantic colors matching the visual editor. */
 export const ghDarkHighlight = HighlightStyle.define([
@@ -45,62 +46,92 @@ export const ghDarkHighlight = HighlightStyle.define([
 ]);
 
 /* Editor chrome, themed with our tokens so it matches the panel surface. */
-export const ssEditorTheme = EditorView.theme(
-  {
-    '&': {
-      height: '100%',
-      color: 'var(--text-primary)',
-      backgroundColor: 'var(--surface-control)',
-      fontSize: 'var(--font-size-badge)',
-    },
-    '&.cm-focused': { outline: 'none' },
-    // CSS `--custom-property` names (see cssVarHighlight) in Variable-purple.
-    '.cm-css-var': { color: 'var(--variable-text)' },
-    '.cm-scroller': {
-      fontFamily: 'var(--font-code)',
-      lineHeight: '1.6',
-      overflow: 'auto',
-      // Custom, theme-matched scrollbars (never the device's white default).
-      scrollbarWidth: 'thin',
-      scrollbarColor: 'var(--border-default) transparent',
-      // Promote to its own compositing layer so the native caret has a clean
-      // backing store and paints inside the panel's fixed, rounded, clipped box
-      // (without this, WebKit drops the caret entirely — see .cm-content).
-      transform: 'translateZ(0)',
-    },
-    '.cm-scroller::-webkit-scrollbar': { width: '10px', height: '10px' },
-    '.cm-scroller::-webkit-scrollbar-track': { background: 'transparent' },
-    '.cm-scroller::-webkit-scrollbar-thumb': {
-      background: 'var(--border-default)',
-      borderRadius: '999px',
-      border: '2px solid var(--surface-control)',
-    },
-    '.cm-scroller::-webkit-scrollbar-thumb:hover': { background: 'var(--text-muted)' },
-    '.cm-scroller::-webkit-scrollbar-corner': { background: 'transparent' },
-    // Native caret, tinted bright. It renders invisibly inside the panel's
-    // rounded `overflow:hidden` compositing layer (a known WebKit bug) unless the
-    // editor is promoted to its own backing layer — see `.cm-scroller` above.
-    '.cm-content': {
-      padding: 'var(--spacing-sm) 0',
-      caretColor: 'var(--text-white)',
-    },
-    '.cm-line': { padding: '0 var(--spacing-sm)' },
-    '.cm-cursor, .cm-cursor-primary': {
-      borderLeftColor: 'var(--text-white)',
-      borderLeftWidth: '2px',
-    },
-    '.cm-selectionBackground, ::selection': { backgroundColor: 'var(--tint)' },
-    '&.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--tint-strong)' },
-    '.cm-activeLine': { backgroundColor: 'transparent' },
-    '.cm-gutters': {
-      backgroundColor: 'var(--surface-control)',
-      color: 'var(--text-muted)',
-      border: 'none',
-    },
-    '.cm-activeLineGutter': { backgroundColor: 'transparent' },
+const editorChrome: Parameters<typeof EditorView.theme>[0] = {
+  '&': {
+    height: '100%',
+    color: 'var(--text-primary)',
+    backgroundColor: 'var(--surface-control)',
+    fontSize: 'var(--font-size-badge)',
   },
-  { dark: true }
+  '&.cm-focused': { outline: 'none' },
+  // CSS `--custom-property` names (see cssVarHighlight) in Variable-purple.
+  '.cm-css-var': { color: 'var(--variable-text)' },
+  '.cm-scroller': {
+    fontFamily: 'var(--font-code)',
+    lineHeight: '1.6',
+    overflow: 'auto',
+    // Custom, theme-matched scrollbars (never the device's white default).
+    scrollbarWidth: 'thin',
+    scrollbarColor: 'var(--border-default) transparent',
+    // Promote to its own compositing layer so the native caret has a clean
+    // backing store and paints inside the panel's fixed, rounded, clipped box
+    // (without this, WebKit drops the caret entirely — see .cm-content).
+    transform: 'translateZ(0)',
+  },
+  '.cm-scroller::-webkit-scrollbar': { width: '10px', height: '10px' },
+  '.cm-scroller::-webkit-scrollbar-track': { background: 'transparent' },
+  '.cm-scroller::-webkit-scrollbar-thumb': {
+    background: 'var(--border-default)',
+    borderRadius: '999px',
+    border: '2px solid var(--surface-control)',
+  },
+  '.cm-scroller::-webkit-scrollbar-thumb:hover': { background: 'var(--text-muted)' },
+  '.cm-scroller::-webkit-scrollbar-corner': { background: 'transparent' },
+  // Native caret, tinted bright. It renders invisibly inside the panel's
+  // rounded `overflow:hidden` compositing layer (a known WebKit bug) unless the
+  // editor is promoted to its own backing layer — see `.cm-scroller` above.
+  '.cm-content': {
+    padding: 'var(--spacing-sm) 0',
+    caretColor: 'var(--text-white)',
+  },
+  '.cm-line': { padding: '0 var(--spacing-sm)' },
+  '.cm-cursor, .cm-cursor-primary': {
+    borderLeftColor: 'var(--text-white)',
+    borderLeftWidth: '2px',
+  },
+  '.cm-selectionBackground, ::selection': { backgroundColor: 'var(--tint)' },
+  '&.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--tint-strong)' },
+  '.cm-activeLine': { backgroundColor: 'transparent' },
+  '.cm-gutters': {
+    backgroundColor: 'var(--surface-control)',
+    color: 'var(--text-muted)',
+    border: 'none',
+  },
+  '.cm-activeLineGutter': { backgroundColor: 'transparent' },
+};
+
+/* The chrome is all tokens, so it themes itself; the `dark` flag is for
+   CodeMirror's own base styles (search panel, tooltips, default selection),
+   which must match the app's theme too. */
+const editorChromeVariants: Record<ResolvedTheme, Extension> = {
+  dark: EditorView.theme(editorChrome, { dark: true }),
+  light: EditorView.theme(editorChrome, { dark: false }),
+};
+const editorChromeTheme = new Compartment();
+
+/** Swaps the chrome variant when the app theme changes, for as long as the view lives. */
+const followAppTheme = ViewPlugin.fromClass(
+  class {
+    private readonly unsubscribe: () => void;
+
+    constructor(view: EditorView) {
+      this.unsubscribe = subscribeTheme(() => {
+        view.dispatch({
+          effects: editorChromeTheme.reconfigure(editorChromeVariants[getResolvedTheme()]),
+        });
+      });
+    }
+
+    destroy() {
+      this.unsubscribe();
+    }
+  }
 );
+
+/** The editor chrome for a new view, in the current app theme and following it. */
+export function ssEditorTheme(): Extension {
+  return [editorChromeTheme.of(editorChromeVariants[getResolvedTheme()]), followAppTheme];
+}
 
 /**
  * Purple-mark `--custom-property` names wherever they appear (e.g. the

@@ -102,6 +102,10 @@ struct Failures {
 #[derive(Default)]
 struct State {
     code: Option<ActiveCode>,
+    /// When something first asked this Mac to prove itself while the code
+    /// was out (`POST /v1/identity`). Unauthenticated: it says a device got
+    /// through, never which one.
+    reached_at: Option<u64>,
     request: Option<Request>,
     failures: HashMap<String, Failures>,
 }
@@ -147,6 +151,12 @@ pub struct PairingView {
     pub active: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<u64>,
+    /// While the code is out: when something first reached this Mac and
+    /// asked it to prove itself, which a phone does just before it sends
+    /// the code. Anyone on the tailnet can ask, so it's "a device reached
+    /// this Mac", never "your phone".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reached_at: Option<u64>,
     /// A phone used the code and is waiting for Allow or Deny.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request: Option<RequestView>,
@@ -172,6 +182,7 @@ impl Pairing {
             let _ = r.decide.send(Decision::Deny);
         }
         s.failures.clear();
+        s.reached_at = None;
         s.code = Some(ActiveCode {
             code: code.clone(),
             expires_at,
@@ -184,9 +195,26 @@ impl Pairing {
     pub fn cancel(&self) {
         let mut s = self.state();
         s.code = None;
+        s.reached_at = None;
         if let Some(r) = s.request.take() {
             let _ = r.decide.send(Decision::Deny);
         }
+    }
+
+    /// Something asked this Mac to prove itself. Kept only while a code is
+    /// out and not yet used; `true` the first time for that code, so the
+    /// panel is told once, however many times a stranger asks.
+    pub fn note_reached(&self, now_ms: u64) -> bool {
+        let mut s = self.state();
+        let live = s
+            .code
+            .as_ref()
+            .is_some_and(|c| !c.used && now_ms <= c.expires_at);
+        if !live || s.reached_at.is_some() {
+            return false;
+        }
+        s.reached_at = Some(now_ms);
+        true
     }
 
     /// `source` presents `given`. Compared in constant time. A source that
@@ -278,6 +306,7 @@ impl Pairing {
         PairingView {
             active: code.is_some(),
             expires_at: code.map(|c| c.expires_at),
+            reached_at: code.and(s.reached_at),
             request: s
                 .request
                 .as_ref()
@@ -484,6 +513,29 @@ mod tests {
             note_failure(&mut f, &format!("x{i}"), i as u64 + 1);
         }
         assert!(f.len() <= MAX_SOURCES, "bounded");
+    }
+
+    #[test]
+    fn a_device_reaching_the_mac_is_noted_once_and_only_while_a_code_is_out() {
+        let p = Pairing::default();
+        assert!(!p.note_reached(1_000), "no code out: nothing to say");
+        assert_eq!(p.view(1_000).reached_at, None);
+        p.start(1_000);
+        assert!(p.note_reached(2_000));
+        assert!(!p.note_reached(3_000), "told once per code");
+        assert_eq!(p.view(3_000).reached_at, Some(2_000));
+        // A new code starts over.
+        p.start(4_000);
+        assert_eq!(p.view(4_000).reached_at, None);
+        assert!(p.note_reached(5_000));
+        // Cancelled: gone.
+        p.cancel();
+        assert_eq!(p.view(6_000).reached_at, None);
+        assert!(!p.note_reached(6_000));
+        // Expired: not shown.
+        p.start(10_000);
+        assert!(p.note_reached(11_000));
+        assert_eq!(p.view(10_000 + CODE_TTL_MS + 1).reached_at, None);
     }
 
     #[test]

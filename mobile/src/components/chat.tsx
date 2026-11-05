@@ -22,7 +22,7 @@ import { drivenWait } from '../lib/bars';
 import { haptic } from '../lib/haptics';
 import { discardPending, editPending, resend } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
-import { avatarSize, composer, fonts, iconSize, space, type } from '../lib/theme';
+import { avatarSize, composer, fonts, iconSize, space, type, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Attachments } from './attachments';
 import { useReveal } from '../lib/reveal';
@@ -564,7 +564,7 @@ function PeerRow({ message }: { message: AgentMessage }) {
       accessibilityRole={long ? 'button' : 'text'}
       accessibilityLabel={`${label}: ${message.text}`}
       accessibilityState={long ? { expanded: open } : undefined}
-      style={styles.peer}
+      style={({ pressed }) => [styles.peer, pressed && PRESSED]}
       testID="peer-row"
     >
       <AgentAvatar name={peer.name} color={color} size={avatarSize.group} />

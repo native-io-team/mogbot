@@ -149,8 +149,10 @@ pub fn saved_native_theme() -> Option<tauri::Theme> {
 
 const LIGHT_WINDOW_BACKGROUND: tauri::utils::config::Color =
     tauri::utils::config::Color(245, 245, 245, 255);
+/// `--surface-app` in each theme (#f5f5f5 / #141414), so the native fill under
+/// the webview is the colour the app paints over it.
 const DARK_WINDOW_BACKGROUND: tauri::utils::config::Color =
-    tauri::utils::config::Color(45, 45, 45, 255);
+    tauri::utils::config::Color(20, 20, 20, 255);
 
 /// Whether macOS's global `AppleInterfaceStyle` value means dark. The key is
 /// absent in light mode and `"Dark"` in dark mode (Auto updates it as it flips).
@@ -215,12 +217,24 @@ pub fn saved_window_background() -> tauri::utils::config::Color {
     window_background_for(effective_theme(preference, system))
 }
 
-/// Apply a theme preference to every open window's native appearance.
+/// Apply a theme preference to every open window's native appearance and
+/// background (what shows during a resize before the webview repaints). For
+/// `system` the background is resolved once here; a later macOS appearance
+/// flip changes the webview but not this fill until the next window opens.
 pub fn apply_app_theme(app: &AppHandle, theme: &str) {
     let native = native_theme_for(theme);
+    let system = if native.is_none() {
+        system_theme()
+    } else {
+        None
+    };
+    let background = window_background_for(effective_theme(native, system));
     for window in app.webview_windows().values() {
         if let Err(error) = window.set_theme(native) {
             tracing::warn!(%error, label = window.label(), "Failed to set window theme");
+        }
+        if let Err(error) = window.set_background_color(Some(background)) {
+            tracing::warn!(%error, label = window.label(), "Failed to set window background");
         }
     }
 }
@@ -623,6 +637,21 @@ mod tests {
     fn window_background_matches_the_theme() {
         assert_eq!(window_background_for(Theme::Light), LIGHT_WINDOW_BACKGROUND);
         assert_eq!(window_background_for(Theme::Dark), DARK_WINDOW_BACKGROUND);
+    }
+
+    #[test]
+    fn window_backgrounds_are_the_surface_app_colours() {
+        // --surface-app is --color-gray-950 (dark) and --color-paper-100 (light).
+        let core = include_str!("../../../src/styles/global/tokens-core.css");
+        let hex = |c: tauri::utils::config::Color| format!("#{:02x}{:02x}{:02x}", c.0, c.1, c.2);
+        assert!(core.contains(&format!(
+            "--color-gray-950: {};",
+            hex(DARK_WINDOW_BACKGROUND)
+        )));
+        assert!(core.contains(&format!(
+            "--color-paper-100: {};",
+            hex(LIGHT_WINDOW_BACKGROUND)
+        )));
     }
 
     #[test]

@@ -281,7 +281,18 @@ follows a change through the cache's `storage` event.
   `--surface-app` (#f5f5f5), panels one step forward (white), controls one
   step into the panel, hairline borders. Elevation reads as whiter, and the
   tactile depth that dark gets from highlights comes from hairline-ringed
-  shadows. Scrims dim (≤ 18% black) rather than black out.
+  shadows. Scrims dim rather than black out: the `--overlay-*` ramp stays
+  ≤ 18% black (it also feeds shadows), and every dialog's scrim is
+  `--scrim-modal`, 32% black, so a dialog still separates from the page
+  (15% didn't; dark's is 70%).
+- **Muted clears AA everywhere it sits.** Light `--text-muted` (#606060)
+  passes 4.5:1 up to `--surface-selected-strong`, and `--text-quiet` sits
+  between it and secondary. `--text-faint` is decoration only (rules,
+  disabled glyphs), never words.
+- **Fixed hues carry fixed ink.** A fill that doesn't change with the theme
+  (the visual editor's property blue, the variable purple) takes
+  `--text-inverse` through its own role (`--property-surface-text`,
+  `--button-variable-text`), never a theme text role.
 - **`--text-white` is the emphasis role**, near-black on light; the name
   predates themes. `--text-inverse` is ink on a coloured fill and stays white.
 - **Fixed in both themes:** anything drawn on the user's page

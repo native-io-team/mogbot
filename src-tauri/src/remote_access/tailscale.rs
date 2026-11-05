@@ -53,8 +53,14 @@ pub enum TailscaleState {
     NotInstalled,
     /// Installed, but the daemon isn't running or isn't logged in.
     NeedsLogin,
-    /// Logged in. `dns_name` is this machine's tailnet name.
-    Connected { dns_name: String },
+    /// Logged in. `dns_name` is this machine's tailnet name; `login` the
+    /// account it's signed in as (`User[Self.UserID].LoginName`), when
+    /// Tailscale names a person: a tagged machine has none.
+    Connected {
+        dns_name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        login: Option<String>,
+    },
     /// The CLI answered with something we could not read.
     Unknown { detail: String },
 }
@@ -77,7 +83,33 @@ async fn run_cli(args: &[&str], timeout_secs: u64) -> Result<std::process::Outpu
     crate::external_command::run_with_timeout(cmd, "tailscale", timeout_secs).await
 }
 
-/// Read `BackendState` and `Self.DNSName` out of `tailscale status --json`.
+/// The account this machine is signed in as, from `tailscale status --json`:
+/// `User[<Self.UserID>].LoginName`. `None` for a tagged machine (owned by
+/// its tags, not a person) or when the field isn't there: never guessed.
+fn self_login(json: &Value) -> Option<String> {
+    let tagged = json
+        .pointer("/Self/Tags")
+        .and_then(Value::as_array)
+        .is_some_and(|t| !t.is_empty());
+    if tagged {
+        return None;
+    }
+    let key = match json.pointer("/Self/UserID")? {
+        Value::Number(n) => n.to_string(),
+        Value::String(s) => s.clone(),
+        _ => return None,
+    };
+    let login = json
+        .get("User")?
+        .get(&key)?
+        .get("LoginName")?
+        .as_str()?
+        .trim();
+    (!login.is_empty() && login != "tagged-devices").then(|| login.to_string())
+}
+
+/// Read `BackendState`, `Self.DNSName` and the signed-in account out of
+/// `tailscale status --json`.
 pub fn parse_status(json: &Value) -> TailscaleState {
     let backend = json
         .get("BackendState")
@@ -93,6 +125,7 @@ pub fn parse_status(json: &Value) -> TailscaleState {
     {
         Some(name) if !name.is_empty() => TailscaleState::Connected {
             dns_name: name.to_string(),
+            login: self_login(json),
         },
         _ => TailscaleState::Unknown {
             detail: "Tailscale is running but didn't report this machine's name.".to_string(),
@@ -556,9 +589,58 @@ mod tests {
         assert_eq!(
             s,
             TailscaleState::Connected {
-                dns_name: "studio-mac.tail1234.ts.net".to_string()
+                dns_name: "studio-mac.tail1234.ts.net".to_string(),
+                login: None,
             }
         );
+    }
+
+    /// Against this Mac's real Tailscale, with PATH cut down to what a GUI
+    /// launch gets (no `/usr/local/bin`, no Homebrew): the app bundle's CLI
+    /// must still be found, and a signed-in Mac must name its account.
+    #[tokio::test]
+    #[ignore = "reads this Mac's real Tailscale (read-only `status --json`)"]
+    async fn reads_this_macs_account_without_tailscale_on_path() {
+        std::env::set_var("PATH", "/usr/bin:/bin");
+        let s = status().await;
+        println!("{s:?}");
+        assert!(
+            matches!(s, TailscaleState::Connected { login: Some(ref l), .. } if l.contains('@')),
+            "{s:?}"
+        );
+    }
+
+    #[test]
+    fn names_the_account_only_when_tailscale_does() {
+        let s = parse_status(&json!({
+            "BackendState": "Running",
+            "Self": { "DNSName": "studio-mac.tail1234.ts.net.", "UserID": 1234 },
+            "User": { "1234": { "LoginName": "julian@example.com" } }
+        }));
+        assert!(matches!(
+            s,
+            TailscaleState::Connected { login: Some(ref l), .. } if l == "julian@example.com"
+        ));
+        // A tagged machine belongs to its tags: no person to sign in as.
+        let tagged = parse_status(&json!({
+            "BackendState": "Running",
+            "Self": { "DNSName": "m.t.ts.net.", "UserID": 9, "Tags": ["tag:server"] },
+            "User": { "9": { "LoginName": "tagged-devices" } }
+        }));
+        assert!(matches!(
+            tagged,
+            TailscaleState::Connected { login: None, .. }
+        ));
+        // An id with no user entry: unknown, not guessed.
+        let missing = parse_status(&json!({
+            "BackendState": "Running",
+            "Self": { "DNSName": "m.t.ts.net.", "UserID": 1 },
+            "User": {}
+        }));
+        assert!(matches!(
+            missing,
+            TailscaleState::Connected { login: None, .. }
+        ));
     }
 
     #[test]
@@ -632,6 +714,7 @@ mod tests {
     fn serializes_the_shape_the_frontend_reads() {
         let s = TailscaleState::Connected {
             dns_name: "m.t.ts.net".into(),
+            login: None,
         };
         assert_eq!(
             serde_json::to_value(&s).unwrap(),

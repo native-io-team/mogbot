@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type FlatList,
   type LayoutChangeEvent,
+  Platform,
   Pressable,
   StyleSheet,
   View,
@@ -53,7 +54,7 @@ import {
 import { useAccent } from '../lib/accent';
 import { useApp } from '../lib/store';
 import { chatItems, sentAt, type Item } from '../lib/timeline';
-import { alpha, avatarSize, chromeScale, iconSize, radius, space } from '../lib/theme';
+import { alpha, avatarSize, chromeScale, iconSize, radius, space, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
@@ -107,9 +108,10 @@ function PinnedQuestion({
         accessibilityHint="Scrolls to its answers"
         onPress={onPress}
         android_ripple={ripple}
-        style={[
+        style={({ pressed }) => [
           styles.pinned,
           { paddingLeft: space.lg + inset.left, paddingRight: space.lg + inset.right },
+          pressed && Platform.OS === 'ios' && PRESSED,
         ]}
       >
         <Icon
@@ -389,7 +391,11 @@ export function ChatView({
     <View style={{ flex: 1 }}>
       {embedded ? (
         <View style={styles.embeddedHeader}>
-          <Pressable accessibilityRole="button" onPress={openSheet} style={{ flex: 1 }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={openSheet}
+            style={({ pressed }) => [{ flex: 1 }, pressed && PRESSED]}
+          >
             {header}
           </Pressable>
           <IconButton name="info.circle" label={`About ${agent.name}`} onPress={openSheet} />
@@ -404,6 +410,7 @@ export function ChatView({
                 accessibilityRole="button"
                 accessibilityHint="Instructions, memory, files and routines"
                 onPress={openSheet}
+                style={({ pressed }) => pressed && PRESSED}
               >
                 {header}
               </Pressable>
@@ -550,7 +557,7 @@ export function ChatView({
             android_ripple={ripple}
             onPress={() => list.current?.scrollToOffset({ offset: 0, animated: true })}
             // Neutral like any jump control: an amber dot says it's waiting on you, not a fill.
-            style={styles.jump}
+            style={({ pressed }) => [styles.jump, pressed && Platform.OS === 'ios' && PRESSED]}
           >
             {urgentBelow && (
               <View style={{ marginLeft: space.xs }}>

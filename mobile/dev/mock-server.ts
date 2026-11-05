@@ -123,6 +123,11 @@ export interface MockOptions {
   bars?: boolean;
   /** Answer CORS preflights and tag every response, for the web build (dev only). */
   cors?: boolean;
+  /**
+   * A Mac just set up: only the Chief of Staff, no rooms. What a phone sees
+   * minutes after pairing, and the shortest list Home can have.
+   */
+  solo?: boolean;
 }
 
 /** The key in `file`, or a new one written there. */
@@ -536,6 +541,9 @@ export function createMockServer(opts: MockOptions = {}) {
   ]);
   const agent = (id: string) => agents.find((a) => a.id === id);
   seedShared(now);
+  // A Mac just set up has only the Chief: the others are seeded (their
+  // fixtures refer to each other) and then left out of what the phone sees.
+  if (opts.solo) agents.splice(0, agents.length, ...agents.filter((a) => a.id === 'chief'));
 
   // ---- Frames ----------------------------------------------------------------------
 
@@ -736,7 +744,7 @@ export function createMockServer(opts: MockOptions = {}) {
       turnCap: 8,
       waiting: [],
     },
-  ];
+  ].filter(() => !opts.solo);
   const roomLines = new Map<string, AgentMessage[]>([
     [
       'launch',

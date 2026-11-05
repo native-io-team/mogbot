@@ -87,7 +87,10 @@ export async function refreshAgents(): Promise<void> {
       ...state,
       agents: keepUnchanged(state.agents, overview.agents),
       engineReady: overview.engineReady,
-      engines: overview.engines ?? [],
+      // Kept when unchanged, like the agents: a new array re-renders everything reading it.
+      engines: sameJson(state.engines, overview.engines ?? [])
+        ? state.engines
+        : (overview.engines ?? []),
       defaults: overview.defaults ?? null,
       loaded: true,
       error: null,
@@ -107,7 +110,7 @@ function keepUnchanged(previous: Agent[], next: Agent[]): Agent[] {
   let same = previous.length === next.length;
   const merged = next.map((agent, i) => {
     const old = before.get(agent.id);
-    if (old && JSON.stringify(old) === JSON.stringify(agent)) {
+    if (old && sameJson(old, agent)) {
       if (previous[i] !== old) same = false;
       return old;
     }
@@ -164,6 +167,42 @@ export async function loadOlderRoomMessages(roomId: string): Promise<void> {
   } catch (error) {
     logger.error('[Agents] older room messages failed', { roomId, error: String(error) });
   }
+}
+
+/**
+ * Deep equality for JSON values: what comparing the two `JSON.stringify`s
+ * said, without building both strings (a working agent's timeline makes them
+ * long) and stopping at the first difference. Like `JSON.stringify`, key
+ * order counts and a key whose value is `undefined` counts as absent.
+ */
+// NaN and the infinities stringify as null.
+const asJson = (v: unknown) => (typeof v === 'number' && !isFinite(v) ? null : v);
+
+export function sameJson(x0: unknown, y0: unknown): boolean {
+  const a = asJson(x0);
+  const b = asJson(y0);
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    const mine = a as unknown[];
+    const other = b as unknown[];
+    if (mine.length !== other.length) return false;
+    for (let i = 0; i < mine.length; i++) {
+      // In an array, undefined (like a function) stringifies as null.
+      const x = mine[i] === undefined ? null : mine[i];
+      const y = other[i] === undefined ? null : other[i];
+      if (!sameJson(x, y)) return false;
+    }
+    return true;
+  }
+  const x = a as Record<string, unknown>;
+  const y = b as Record<string, unknown>;
+  // In key order, as the strings would have been.
+  const keys = Object.keys(x).filter((k) => x[k] !== undefined);
+  const others = Object.keys(y).filter((k) => y[k] !== undefined);
+  if (keys.length !== others.length) return false;
+  return keys.every((k, i) => k === others[i] && sameJson(x[k], y[k]));
 }
 
 /** Coalesce bursts of registry events (every message bumps the row). */
@@ -363,6 +402,17 @@ export function useAgentsSelector<T>(
 }
 
 const selectAgents = (s: AgentsState) => s.agents;
+
+const indexes = new WeakMap<Agent[], Map<string, Agent>>();
+/** One agent by id, from a list indexed once per list (the store's list changes per event). */
+export function agentIn(agents: Agent[], id: string): Agent | undefined {
+  let index = indexes.get(agents);
+  if (!index) {
+    index = new Map(agents.map((a) => [a.id, a]));
+    indexes.set(agents, index);
+  }
+  return index.get(id);
+}
 export const useAgentsList = () => useAgentsSelector(selectAgents);
 const selectRooms = (s: AgentsState) => s.rooms;
 export const useRoomsList = () => useAgentsSelector(selectRooms);

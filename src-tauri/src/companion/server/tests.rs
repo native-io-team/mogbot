@@ -1034,8 +1034,20 @@ async fn the_mac_proves_itself_before_any_secret_is_sent() {
         &mac_message(CHALLENGE, &server_id, &hosts(&res))
     ));
 
+    // No code was out: nothing for the panel to say.
+    assert_eq!(c.pairing.view(now_ms()).reached_at, None);
+
     // The pairing answer signs the hosts and the device it made.
     let (code, _) = c.pairing.start(now_ms());
+    // With a code out, the panel hears that a device reached this Mac.
+    let again = reqwest::Client::new()
+        .post(format!("http://127.0.0.1:{port}/v1/identity"))
+        .json(&json!({ "protocol": { "min": 2, "max": 2 }, "challenge": CHALLENGE }))
+        .send()
+        .await
+        .unwrap();
+    assert!(again.status().is_success());
+    assert!(c.pairing.view(now_ms()).reached_at.is_some());
     desk(&c, true);
     let paired: Value = post_pair(port, &pair_body(&code))
         .await

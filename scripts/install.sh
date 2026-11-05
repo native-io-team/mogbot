@@ -31,7 +31,7 @@ DEST="${SHIPSTUDIO_DEST:-/Applications}"
 say()  { printf '\033[1;32m==>\033[0m %s\n' "$1"; }
 err()  { printf '\033[1;31mError:\033[0m %s\n' "$1" >&2; exit 1; }
 
-[ -n "$BRAND_RELEASES" ] || err "${BRAND_NAME} has no published releases to install yet. Build it from source instead: see docs/INSTALLATION.md in its repository."
+[ -n "$BRAND_RELEASES" ] || err "${BRAND_NAME} has no published releases to install yet. Build it from source instead: see docs/INSTALL.md in its repository."
 MANIFEST="${BRAND_RELEASES%/}/latest/download/latest.json"
 
 [ "$(uname -s)" = "Darwin" ] || err "This installer is for macOS. On Windows, use scripts/install.ps1."

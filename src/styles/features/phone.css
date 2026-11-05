@@ -301,6 +301,32 @@
   line-height: 1.45;
 }
 
+/* Tailscale on the phone: the step people miss, so it reads first and strongest. */
+.phone-code__step-strong {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-heading);
+}
+
+.phone-tailscale__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-3xs);
+}
+
+.phone-code__steps .phone-tailscale__links {
+  font-size: var(--font-size-body-sm);
+}
+
+/* A Line: something happened at the Mac while the code is out. */
+.phone-code__reached {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
 .phone-code__expiry {
   font-size: var(--font-size-caption);
   color: var(--text-muted);
@@ -473,14 +499,18 @@
 .phone-abilities__item {
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
   font-size: var(--font-size-caption);
+  line-height: var(--line-height-help);
   color: var(--text-muted);
 }
 
 .phone-abilities__item svg {
   flex: none;
-  transform: translateY(1px); /* css-ok: centres the icon on the caption's first line */
+  /* Centre the 12px icon on the first line of text, whatever the line height. */
+  margin-block-start: calc(
+    (1lh - 12px) / 2
+  ); /* css-ok: 12px is the CheckIcon/CloseIcon size prop */
 }
 
 .phone-abilities__item[data-can] {

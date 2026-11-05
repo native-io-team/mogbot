@@ -11,7 +11,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--overlay-70);
+  background: var(--scrim-modal);
   display: flex;
   align-items: center;
   justify-content: center;

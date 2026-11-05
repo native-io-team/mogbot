@@ -19,7 +19,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { haptic } from '../lib/haptics';
 import { splitMentions } from '../lib/rooms';
 import { makeStyles, useColors } from '../lib/appearance';
-import { alpha, fonts, lineHeight, radius, space, type, type Palette } from '../lib/theme';
+import { alpha, fonts, lineHeight, radius, space, type, type Palette, PRESSED } from '../lib/theme';
 import { T } from './ui';
 
 /** Opens a path written in a reply; absent where paths can't be opened. */
@@ -371,6 +371,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
           accessibilityRole="button"
           accessibilityLabel="Copy code"
           hitSlop={14}
+          style={({ pressed }) => pressed && PRESSED}
           onPress={() => {
             void Clipboard.setStringAsync(code);
             haptic.success();

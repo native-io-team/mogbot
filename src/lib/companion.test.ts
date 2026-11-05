@@ -5,6 +5,7 @@ import {
   phoneCapabilities,
   expiresIn,
   phoneStep,
+  phoneTailscaleText,
   presenceLine,
   requestPairOnOpen,
   takePairOnOpen,
@@ -147,5 +148,23 @@ describe('phoneCapabilities', () => {
     ]);
     expect(p2.can).toContain('See projects and read their agents’ conversations');
     expect(p2.cannot[0]).toBe('Type to the agents in projects');
+  });
+});
+
+describe('phoneTailscaleText', () => {
+  it('names the account this Mac is signed in as, and only when Tailscale says it', () => {
+    expect(
+      phoneTailscaleText({ state: 'connected', dnsName: 'mac.ts.net', login: 'julian@example.com' })
+    ).toBe('Install Tailscale on your phone and sign in as julian@example.com.');
+    // No account reported (a tagged machine, an older CLI), or not connected: no guess.
+    for (const t of [
+      { state: 'connected', dnsName: 'mac.ts.net' } as const,
+      { state: 'needsLogin' } as const,
+      null,
+    ]) {
+      expect(phoneTailscaleText(t)).toBe(
+        'Install Tailscale on your phone and sign in with the same account as this Mac.'
+      );
+    }
   });
 });

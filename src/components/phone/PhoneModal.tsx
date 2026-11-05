@@ -34,6 +34,7 @@ import {
   getPhoneStatus,
   phoneCapabilities,
   phoneStep,
+  phoneTailscaleText,
   PUSH_COPY,
   removePhone,
   retryPhoneTailscale,
@@ -49,6 +50,7 @@ import {
 } from '../../lib/companion';
 import { PairCode, PairConfirm, PairOffer } from './PhonePairing';
 import { PhoneDevices } from './PhoneDevices';
+import { TailscaleStoreLinks } from './PhoneTailscale';
 import { PhoneInstall } from './PhoneInstall';
 import { PhoneInstallEntry } from './PhoneInstallEntry';
 import {
@@ -186,6 +188,7 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
       >
         <PhoneInstall
           reinstall={install.reinstall}
+          tailscale={s?.tailscale ?? null}
           onBack={() => setInstall(null)}
           onPair={() => {
             setInstall(null);
@@ -245,6 +248,8 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
                     code={code}
                     now={now}
                     busy={busy !== null}
+                    tailscale={s.tailscale}
+                    reachedAt={pairing?.reachedAt}
                     onCopy={() => void copy(code.link)}
                     onCancel={() => void run('cancel', cancelPairing)}
                   />
@@ -351,24 +356,30 @@ function PhoneGetApp({
             </Button>
           </div>
         </li>
-        <li className="phone-step" data-done={tailscaleReady || undefined}>
-          <h3 className="phone-step__title">
-            {tailscaleReady && <CheckIcon size={12} className="phone-step__done" />}
-            Tailscale, once
-          </h3>
+        <li className="phone-step">
+          <h3 className="phone-step__title">Tailscale, on this Mac and your phone</h3>
           <p className="phone-step__text">
+            How your phone reaches this Mac, privately. Without it on the phone, a scan never gets
+            here.
+          </p>
+          <p className="phone-step__text" data-done={tailscaleReady || undefined}>
+            {tailscaleReady && <CheckIcon size={12} className="phone-step__done" />}
             {tailscaleReady
-              ? 'Set up on this Mac. Sign in on your phone with the same account.'
-              : 'How your phone reaches this Mac, privately. Install it on both, signed in to the same account.'}
+              ? 'This Mac: set up.'
+              : 'This Mac: install it and sign in, then turn on phone access here.'}
           </p>
           {!tailscaleReady && (
             <TextButton
               rightIcon={<ExternalLinkIcon size={12} />}
               onClick={() => void openUrl(TAILSCALE_DOWNLOAD_URL)}
             >
-              Get Tailscale
+              Get Tailscale for Mac
             </TextButton>
           )}
+          <p className="phone-step__text" data-tailscale-phone>
+            Your phone: {phoneTailscaleText(tailscale)}
+          </p>
+          <TailscaleStoreLinks />
         </li>
         <li className="phone-step" data-later>
           <h3 className="phone-step__title">Pair</h3>
