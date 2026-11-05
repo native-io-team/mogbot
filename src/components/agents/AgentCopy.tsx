@@ -21,6 +21,7 @@ import { MenuButton } from '../primitives/MenuButton';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { queueSubmitReview } from '../../lib/reviewHandoff';
+import { isFocusClick } from '../../lib/firstClick';
 import {
   discardCopy,
   keepCopy,
@@ -279,7 +280,7 @@ export function CopyActions({
           <Tooltip content={waitHint ?? 'Throw these changes away'}>
             <Button
               variant="danger"
-              onClick={() => void discard()}
+              onClick={(event) => !isFocusClick(event) && void discard()}
               disabled={busy !== null || held}
               leftIcon={busy === 'discard' ? <Spinner size="sm" /> : <TrashIcon size={14} />}
             >
@@ -352,7 +353,8 @@ export function CopyActions({
       <Tooltip content={waitHint ?? keepHint(agent.name, project)}>
         <Button
           variant="strong"
-          onClick={() => void keep()}
+          // Not the click that only brought the window forward (lib/firstClick).
+          onClick={(event) => !isFocusClick(event) && void keep()}
           disabled={busy !== null || held}
           leftIcon={busy === 'keep' ? <Spinner size="sm" /> : undefined}
         >
