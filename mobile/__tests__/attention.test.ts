@@ -139,13 +139,14 @@ describe('usage', () => {
   });
   it('prices only the turns the Mac could price', () => {
     expect(usageLine(totals({}))).toBe('Nothing yet');
+    // In a person's words: messages, never turns or tokens.
     expect(usageLine(totals({ turns: 3, inputTokens: 1500, costUsd: 0.4, pricedTurns: 3 }))).toBe(
-      '3 turns · 2k tokens · $0.40'
+      '3 messages · $0.40'
     );
     expect(
       usageLine(totals({ turns: 4, inputTokens: 2_500_000, costUsd: 1, pricedTurns: 2 }))
-    ).toBe('4 turns · 2.5M tokens · $1.00 for 2 of them');
-    expect(usageLine(totals({ turns: 1, outputTokens: 10 }))).toBe('1 turn · 10 tokens');
+    ).toBe('4 messages · $1.00 for 2 of them');
+    expect(usageLine(totals({ turns: 1, outputTokens: 10 }))).toBe('1 message');
   });
 });
 

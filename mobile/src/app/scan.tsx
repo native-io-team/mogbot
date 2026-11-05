@@ -50,7 +50,7 @@ export default function Scan() {
         </>
       ) : (
         <View style={styles.ask}>
-          <T variant="title" color={colors.textStrong}>
+          <T variant="title" color={colors.textStrong} accessibilityRole="header">
             Scan the code on your Mac
           </T>
           <T color={colors.textSecondary}>

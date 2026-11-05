@@ -1,8 +1,8 @@
 /**
  * An agent's badge and its status mark, drawn as the desktop sidebar draws
  * them: initials on a tile tinted with the agent's colour; one mark for
- * needs-you (amber), working (a spinner), didn't finish (red), usage limit
- * (amber) or unread (green).
+ * needs-you (amber), waiting on the Mac (grey), working (a spinner), didn't
+ * finish (red), usage limit (amber) or unread (a strong dot).
  */
 
 import type { Agent } from '@shipstudio/companion-protocol';
@@ -79,7 +79,16 @@ export function AgentAvatar({
  * said. Marks go grey and nothing turns: a spinner would claim work we can't
  * see.
  */
-export function StatusMark({ agent, live = true }: { agent: Agent; live?: boolean }) {
+export function StatusMark({
+  agent,
+  live = true,
+  onMac = false,
+}: {
+  agent: Agent;
+  live?: boolean;
+  /** All it waits on is answered on the Mac (`waitingOnMac`): not amber, nothing to do here. */
+  onMac?: boolean;
+}) {
   const colors = useColors();
   const styles = useStyles();
   const failure = failedTurn(agent);
@@ -88,6 +97,7 @@ export function StatusMark({ agent, live = true }: { agent: Agent; live?: boolea
     if (needsYou(agent) || failure || agent.unread > 0) return <Dot color={colors.textMuted} />;
     return null;
   }
+  if (onMac) return <Dot color={colors.textSecondary} />;
   if (needsYou(agent)) return <Dot color={colors.accentWarning} glow />;
   // Queued for a slot: a still ring, since nothing is running yet.
   if (waitingForSlot(agent)) {
@@ -98,7 +108,7 @@ export function StatusMark({ agent, live = true }: { agent: Agent; live?: boolea
       />
     );
   }
-  if (agent.status.state === 'working') return <Spinner />;
+  if (agent.status.state === 'working') return <Spinner label="Working" />;
   if (failure) {
     return (
       <Dot color={failure.kind === 'usage_limit' ? colors.accentWarning : colors.accentError} />
@@ -108,13 +118,19 @@ export function StatusMark({ agent, live = true }: { agent: Agent; live?: boolea
   return null;
 }
 
-/** A small arc that turns: the working state, quiet enough to sit in a list. */
+/**
+ * A small arc that turns: the working state, quiet enough to sit in a list,
+ * and every loading indicator. Silent to VoiceOver unless given a `label`:
+ * only an agent's status says "Working"; a page loading says nothing.
+ */
 export function Spinner({
   size = iconSize.inline,
   color,
+  label,
 }: {
   size?: (typeof iconSize)[keyof typeof iconSize];
   color?: string;
+  label?: string;
 }) {
   const colors = useColors();
   color ??= colors.textSecondary;
@@ -126,7 +142,9 @@ export function Spinner({
   const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value * 360}deg` }] }));
   return (
     <Animated.View
-      accessibilityLabel="Working"
+      accessible={!!label}
+      accessibilityLabel={label}
+      importantForAccessibility={label ? 'auto' : 'no-hide-descendants'}
       style={[
         {
           width: size,

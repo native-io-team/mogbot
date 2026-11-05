@@ -5,7 +5,7 @@
  */
 
 import { NativeTabs } from 'expo-router/native-tabs';
-import { needsAttention } from '../../lib/agents';
+import { attentionCounts } from '../../lib/agents';
 import { useApp } from '../../lib/store';
 import { useColors } from '../../lib/appearance';
 
@@ -15,8 +15,9 @@ export default function TabsLayout() {
   // is live news, so it shows only while the Mac is answering: offline the
   // rows say "as of …", and a red number would claim more than is known.
   const live = useApp((s) => s.link.kind === 'connected');
-  const waiting = useApp(
-    (s) => s.overview?.agents.filter((a) => !a.hidden && needsAttention(a)).length ?? 0
+  // The same number as Home's "N need you": what you can answer from here.
+  const waiting = useApp((s) =>
+    s.overview ? attentionCounts(s.overview.agents, s.chats).needYou : 0
   );
   const asking = useApp(
     (s) =>

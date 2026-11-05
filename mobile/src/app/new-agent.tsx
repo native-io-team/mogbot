@@ -16,6 +16,7 @@ import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { AgentAvatar } from '../components/agent';
 import { ColorSwatches } from '../components/pickers';
 import { Button, SheetPage, T } from '../components/ui';
+import { SheetTitle } from '../components/SheetTitle';
 import { AccentProvider, useAccent } from '../lib/accent';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { setComposer } from '../lib/drafts';
@@ -88,9 +89,7 @@ export default function NewAgent() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
       >
-        <T variant="title" color={colors.textStrong} accessibilityRole="header">
-          New agent
-        </T>
+        <SheetTitle>New agent</SheetTitle>
         {!canCreate && (
           <T variant="small" color={colors.textSecondary}>
             The app on {macName} needs updating to create agents from this phone. Your Chief of

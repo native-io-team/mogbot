@@ -23,6 +23,7 @@ import {
 } from './errors';
 import { trackError } from './analytics';
 import { isWindows } from './setup';
+import { assertDevServerApproved } from './devServerConsent';
 import { detectPackageManager } from './github';
 import {
   PackageManager,
@@ -330,6 +331,13 @@ export function hasMergeConflictMarkers(content: string): boolean {
 }
 
 /**
+ * Whose consent a dev-server spawn needs: the project's (by its root, which
+ * is what approvals are keyed on — the spawn's cwd can be a workspace
+ * subpath), or none for a command the app itself defines.
+ */
+export type DevServerSpawnConsent = { root: string } | 'app-defined';
+
+/**
  * Start the development server for a project.
  * Intelligently handles different frameworks (Vite, Next.js, etc.)
  * by parsing the dev script and ensuring the correct port is used.
@@ -339,6 +347,7 @@ export function hasMergeConflictMarkers(content: string): boolean {
  * @param windowLabel - Window label for backend PTY tracking (required for cleanup on window close)
  * @param onOutput - Optional callback for terminal output
  * @param customCommand - Optional custom command string (bypasses package.json parsing)
+ * @param consent - Whose approval this spawn needs (default: the project at `projectPath`)
  * @returns Handle with PTY and stop function
  */
 export async function startDevServer(
@@ -346,8 +355,14 @@ export async function startDevServer(
   port: number = 3000,
   windowLabel: string = 'main',
   onOutput?: (data: string) => void,
-  customCommand?: string
+  customCommand?: string,
+  consent: DevServerSpawnConsent = { root: projectPath }
 ): Promise<DevServerHandle> {
+  // Never run a project's own command the user hasn't approved — whatever
+  // called this (see lib/devServerConsent.ts). Shopify's `shopify theme dev`
+  // is the app's command, not the project's.
+  if (consent !== 'app-defined') await assertDevServerApproved(consent.root);
+
   const decoder = new TextDecoder();
 
   // Get extended PATH from backend (includes nvm, Homebrew, etc.)

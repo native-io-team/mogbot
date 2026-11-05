@@ -7,10 +7,12 @@
 //! - `metadata` — reading/writing `.shipstudio/project.json` metadata
 //! - `ui_state` — per-project UI state (last-opened, branch prefix, etc.)
 //! - `dev_server` — dev server configuration + cache clearing
+//! - `dev_consent` — the user's approval before a project's own dev command runs
 //! - `templates` — zip template extraction and export
 //! - `window_registry` — multi-window project management
 
 mod detection;
+mod dev_consent;
 mod dev_server;
 mod metadata;
 mod pins;
@@ -20,6 +22,7 @@ mod ui_state;
 mod window_registry;
 
 pub use detection::*;
+pub use dev_consent::*;
 pub use dev_server::*;
 pub use metadata::*;
 pub use pins::*;
