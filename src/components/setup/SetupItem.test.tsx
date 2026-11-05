@@ -96,7 +96,7 @@ describe('SetupItem', () => {
     const item = makeItem({ status: 'in_progress' });
     render(<SetupItem item={item} />);
 
-    expect(screen.getByText('Installing Node.js...')).toBeInTheDocument();
+    expect(screen.getByText('Installing Node.js…')).toBeInTheDocument();
     expect(document.querySelector('.ss-spinner')).toBeInTheDocument();
   });
 

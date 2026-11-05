@@ -149,14 +149,14 @@ export function UnsavedChangesModal({
           Cancel
         </Button>
         <Button variant="danger" onClick={() => void handleDiscardAndSwitch()} disabled={isLoading}>
-          {isDiscarding ? 'Discarding...' : 'Discard Changes'}
+          {isDiscarding ? 'Discarding…' : 'Discard Changes'}
         </Button>
         <Button
           variant="primary"
           onClick={() => void handlePublishAndSwitch()}
           disabled={isLoading}
         >
-          {isPublishing ? 'Publishing...' : 'Publish & Switch'}
+          {isPublishing ? 'Publishing…' : 'Publish & Switch'}
         </Button>
       </div>
     </ModalFrame>

@@ -6,8 +6,14 @@
   display: contents;
 }
 
-.agents-panel-spinner {
-  color: var(--text-muted);
+/* Loading, or a check that failed: one quiet line where the rows will be. */
+.agents-panel-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding: var(--spacing-sm) 0;
+  color: var(--text-secondary);
 }
 
 /* Inline workspace name in the subtitle — no bordered chip treatment. */
@@ -77,7 +83,6 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
 .agents-panel-row-name {
@@ -263,7 +268,6 @@ button.dashboard-card-row {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
 .dashboard-card-row-name {
@@ -278,6 +282,17 @@ button.dashboard-card-row {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A clipped one-liner at the type scale's line-height of 1 shaves its
+   descenders: "Settings & Help" lost the foot of its p, and every row's
+   email its g and p. The compact leading gives the glyphs their room; it
+   replaces the 2px gap the two lines used to sit apart by. */
+.agents-panel-row-name,
+.agents-panel-row-status,
+.dashboard-card-row-name,
+.dashboard-card-row-status {
+  line-height: var(--line-height-compact);
 }
 
 .dashboard-card-row-status.success {

@@ -8,6 +8,7 @@ import type { Scenario } from '../types';
 import { projects, readySetupItems } from './base';
 import { workspaceCommands, WORKSPACE_PROJECT } from './workspace';
 import { messagesFor, overview } from './agents';
+import { neverAnswers } from '../reject';
 
 const notInstalled = (id: string, friendlyName: string) => ({
   id,
@@ -133,6 +134,34 @@ export const appScenarios: Scenario[] = [
       'shipstudio.dashboard.machineToolsExpanded': '0',
     },
     commands: {},
+  },
+  {
+    id: 'dashboard-loading',
+    startOn: 'projects',
+    requires: '.project-list-loading',
+    title: 'Dashboard — still scanning, accounts still checking',
+    looksRightWhen:
+      'The projects heading has no count beside "Loading projects…" (a stale count would contradict ' +
+      'it). Accounts shows one quiet "Checking sign-ins…" line, never an Engines or Services ' +
+      'heading with nothing under it, and no second spinner in its header.',
+    commands: {
+      get_dashboard_projects: neverAnswers(),
+      list_projects: neverAnswers(),
+      get_projects: neverAnswers(),
+      get_agents_status: neverAnswers(),
+      get_account_credential_status: neverAnswers(),
+    },
+  },
+  {
+    id: 'dashboard-accounts-checking',
+    startOn: 'projects',
+    requires: '.agents-panel-loading',
+    clipSelector: '.agents-panel',
+    title: 'Dashboard — engines known, GitHub and Vercel still checking',
+    looksRightWhen:
+      'Engines lists its rows; Services shows one "Checking GitHub and Vercel…" line in place of ' +
+      'its rows rather than two rows reading "Checking…" beside Connect buttons that may be wrong.',
+    commands: { get_account_credential_status: neverAnswers() },
   },
   {
     id: 'dashboard-empty',

@@ -271,7 +271,7 @@ export function SkillsModal({
                   <div className="skills-installed-controls">
                     <ExtensionSearchField
                       ref={installedSearchRef}
-                      placeholder="Filter skills..."
+                      placeholder="Filter skills…"
                       aria-label="Filter installed skills"
                       value={installedSearchQuery}
                       onChange={(e) => setInstalledSearchQuery(e.target.value)}
@@ -295,7 +295,7 @@ export function SkillsModal({
 
                   {isLoadingSkills && skills.length === 0 && (
                     <ExtensionState kind="loading" loadingLabel="Loading skills">
-                      Loading skills...
+                      Loading skills…
                     </ExtensionState>
                   )}
 
@@ -324,7 +324,7 @@ export function SkillsModal({
                               onClick={() => void handleRemove(skill)}
                               disabled={removingSkill === skillKey}
                             >
-                              {removingSkill === skillKey ? 'Removing...' : 'Remove'}
+                              {removingSkill === skillKey ? 'Removing…' : 'Remove'}
                             </Button>
                           }
                         >
@@ -375,7 +375,7 @@ export function SkillsModal({
                             onClick={() => void handleSearch()}
                             disabled={isSearching || !searchQuery.trim()}
                           >
-                            {isSearching ? 'Searching...' : 'Search'}
+                            {isSearching ? 'Searching…' : 'Search'}
                           </Button>
                         </div>
                         <div className="skills-scope-toggle">
@@ -396,7 +396,7 @@ export function SkillsModal({
 
                       {isSearching && (
                         <ExtensionState kind="loading" loadingLabel="Searching skills">
-                          Searching skills...
+                          Searching skills…
                         </ExtensionState>
                       )}
 
@@ -430,7 +430,7 @@ export function SkillsModal({
                                 onClick={() => void handleInstall(result.package)}
                                 disabled={installingPackage !== null}
                               >
-                                {installingPackage === result.package ? 'Installing...' : 'Install'}
+                                {installingPackage === result.package ? 'Installing…' : 'Install'}
                               </Button>
                             </div>
                             {result.description && (

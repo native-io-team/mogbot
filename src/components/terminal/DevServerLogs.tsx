@@ -361,7 +361,7 @@ export function DevServerLogs({
             <input
               className="code-selection-input"
               type="text"
-              placeholder="Ask about this..."
+              placeholder="Ask about this…"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => {

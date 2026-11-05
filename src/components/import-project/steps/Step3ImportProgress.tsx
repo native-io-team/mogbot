@@ -22,10 +22,10 @@ export const STEPS: { id: Step; label: string }[] = [
 
 /** User-facing status messages for each import step */
 export const STATUS_MESSAGES: Record<Step, string> = {
-  clone: 'Cloning repository...',
+  clone: 'Cloning repository…',
   install: 'Installing dependencies... This may take a minute.',
-  setup: 'Setting up project...',
-  done: 'Almost done...',
+  setup: 'Setting up project…',
+  done: 'Almost done…',
 };
 
 export interface Step3ImportProgressProps {

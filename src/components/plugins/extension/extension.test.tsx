@@ -15,7 +15,7 @@ describe('extension management primitives', () => {
     render(
       <ExtensionSearchField
         aria-label="Filter extensions"
-        placeholder="Filter..."
+        placeholder="Filter…"
         value="mcp"
         onChange={onChange}
       />
@@ -44,12 +44,12 @@ describe('extension management primitives', () => {
   it('gives loading, empty, and error states stable semantic contracts', () => {
     const { rerender } = render(
       <ExtensionState kind="loading" loadingLabel="Loading extensions">
-        Loading extensions...
+        Loading extensions…
       </ExtensionState>
     );
 
     expect(screen.getByRole('status', { name: 'Loading extensions' })).toBeInTheDocument();
-    expect(screen.getByText('Loading extensions...')).toBeInTheDocument();
+    expect(screen.getByText('Loading extensions…')).toBeInTheDocument();
 
     rerender(<ExtensionState kind="empty">No extensions found.</ExtensionState>);
     expect(screen.getByText('No extensions found.')).toBeInTheDocument();

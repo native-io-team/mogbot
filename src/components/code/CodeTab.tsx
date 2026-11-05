@@ -160,7 +160,7 @@ export function CodeTab({ projectPath, onSendToAgent, revealTarget }: CodeTabPro
           value={searchQuery}
           onChange={handleSearchChange}
           aria-label="Search project files"
-          placeholder="Search files..."
+          placeholder="Search files…"
           autoCorrect="off"
           autoCapitalize="off"
         />

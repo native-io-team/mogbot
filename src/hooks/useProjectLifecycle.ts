@@ -219,7 +219,7 @@ export function useProjectLifecycle({
   // Current preview page (tracked for potential future use)
   const [, setCurrentPreviewPage] = useState('/');
 
-  // Publishing state (lifted from PublishDropdown so button shows "Publishing..." even when dropdown closed)
+  // Publishing state (lifted from PublishDropdown so button shows "Publishing…" even when dropdown closed)
   const [isPublishing, setIsPublishing] = useState(false);
   // Force publish dropdown to open (triggered by Save button in BranchIndicator) - trigger mode
   const [forcePublishOpen, setForcePublishOpen] = useState(false);

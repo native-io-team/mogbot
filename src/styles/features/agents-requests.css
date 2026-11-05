@@ -1,0 +1,192 @@
+/* Agents mode: what arrives from elsewhere — other agents asking for an
+ * answer, and another assistant importing over the connector. */
+
+/* ------------------------------------------------- other agents' requests */
+
+/* "● Review Lead Gen's request ›" at the foot of a chat; opens the card in place. */
+.agent-requests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
+}
+
+.agent-requests__group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
+
+.agent-requests__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  font: inherit;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
+  color: var(--text-secondary);
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition:
+    color var(--transition-interaction),
+    background var(--transition-interaction);
+}
+
+.agent-requests__chip:hover {
+  color: var(--text-primary);
+  background: var(--surface-control-hover);
+}
+
+.agent-requests__chip:focus-visible {
+  outline: var(--border-width-emphasis) solid var(--accent-focus);
+  outline-offset: var(--spacing-2xs);
+}
+
+.agent-requests__chevron {
+  transition: transform var(--transition-interaction-fast);
+}
+
+.agent-requests__chip[aria-expanded='true'] .agent-requests__chevron {
+  transform: rotate(90deg);
+}
+
+.agent-requests__group > .agent-chat__row {
+  width: 100%;
+}
+
+.agent-requests__loading {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------ import over the connector */
+
+/* The other assistant's side of an import (agents/connector.rs): on the left
+   like the agent's words, outlined and labelled so it reads as neither the
+   agent nor you. */
+.agent-chat__row--connector {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-2xs);
+}
+
+.agent-chat__messages > .agent-chat__row--connector,
+.agent-chat__row--connector + .agent-chat__row--agent,
+.agent-chat__row--agent + .agent-chat__row--connector {
+  margin-top: var(--spacing-lg);
+}
+
+.agent-connector__who {
+  padding-left: var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+}
+
+.agent-connector__via {
+  font-weight: var(--font-weight-body);
+  color: var(--text-muted);
+}
+
+.agent-bubble--connector {
+  max-width: min(var(--agents-prose-measure), 100%);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface-recessed);
+  border: var(--border-width-default) solid var(--border-subtle);
+}
+
+/* As a link in the agents' prose looks. */
+.agent-connector__link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+  text-underline-offset: 2px;
+}
+
+/* What the sealed interview wrote back: indented under the other
+   assistant's line, dashed rather than solid, so a reply to Grok never
+   passes for the Chief talking to you. */
+.agent-chat__row--to-connector {
+  padding-left: var(--spacing-xl);
+}
+
+.agent-bubble--to-connector {
+  max-width: min(calc(var(--agents-prose-measure) - var(--spacing-xl)), 100%);
+  background: transparent;
+  border-style: dashed;
+}
+
+/* Above the Chief's composer while an import conversation is going. */
+.agent-import-talk {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: calc(100% - (var(--spacing-xl) * 2));
+  max-width: var(--agents-chat-width);
+  margin: 0 auto var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-md);
+  font-size: var(--font-size-body-md);
+  color: var(--text-secondary);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-card);
+}
+
+.agent-import-talk__dot {
+  flex: none;
+  width: var(--spacing-xs);
+  height: var(--spacing-xs);
+  border-radius: var(--radius-pill);
+  background: var(--status-running);
+  animation: agent-import-talk-live var(--agents-motion-typing-period) ease-in-out infinite;
+}
+
+.agent-import-talk__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-import-talk__text strong {
+  display: block;
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agent-import-talk__detail {
+  display: block;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-import-talk[data-state='awaiting_consent'] .agent-import-talk__dot,
+.agent-import-talk[data-state='review'] .agent-import-talk__dot {
+  background: var(--accent-warning);
+}
+
+@keyframes agent-import-talk-live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-import-talk__dot {
+    animation: none;
+  }
+}
+
+/* Another assistant asking to start an import: what it means, in prose. */
+.agent-approval__detail--prose {
+  max-height: none;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--font-size-body-md);
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+}

@@ -258,6 +258,8 @@ export function AgentsPanel() {
   // Workspace-scoped login/credential status for the Services rows (GitHub,
   // Vercel). Same source the Settings modal reads, so the two surfaces agree.
   const [credStatus, setCredStatus] = useState<AccountCredentialStatus | null>(null);
+  // The status check failed outright, so the rows say so instead of "Checking…" forever.
+  const [credFailed, setCredFailed] = useState(false);
   // When set, the Claude connect/reconnect modal is open for the active workspace.
   const [claudeConnect, setClaudeConnect] = useState<{ reconnect: boolean } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -322,8 +324,10 @@ export function AgentsPanel() {
   const loadCredStatus = useCallback(async (accountId: string) => {
     try {
       setCredStatus(await getAccountCredentialStatus(accountId));
+      setCredFailed(false);
     } catch {
       logger.warn('Failed to load workspace credential status');
+      setCredFailed(true);
     }
   }, []);
 
@@ -507,7 +511,7 @@ export function AgentsPanel() {
         subtitle={
           <p className="dashboard-card-subtitle text-style-body-medium">
             Logins for{' '}
-            {activeAccount && (
+            {activeAccount ? (
               <span className="agents-panel-workspace-name">
                 <span
                   className="agents-panel-badge-dot"
@@ -515,13 +519,37 @@ export function AgentsPanel() {
                 />
                 {activeAccount.name}
               </span>
+            ) : (
+              'this workspace'
             )}{' '}
             — each workspace signs in separately.
           </p>
         }
-        aside={loading && <Spinner size="sm" className="agents-panel-spinner" />}
       >
-        <p className="agents-section-title text-style-label">ENGINES</p>
+        {/* Until the engines are known, one calm line rather than a labelled
+            section with nothing under it. */}
+        {loading && agents.length === 0 && (
+          <p className="agents-panel-loading text-style-control" role="status">
+            <Spinner size="sm" />
+            Checking sign-ins…
+          </p>
+        )}
+        {!loading && agents.length === 0 && (
+          <div className="agents-panel-loading text-style-control" role="alert">
+            Couldn&rsquo;t check which engines are installed.
+            <Button
+              variant="secondary"
+              size="compact"
+              onClick={() => {
+                setLoading(true);
+                void refresh();
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
+        {agents.length > 0 && <p className="agents-section-title text-style-label">Engines</p>}
         <div className="agents-panel-list">
           {agents.map((agent) => {
             // "Ready" (eligible to be the default agent) means connected AND valid.
@@ -658,115 +686,127 @@ export function AgentsPanel() {
           })}
         </div>
 
-        {activeAccount && (
+        {activeAccount && agents.length > 0 && (
           <>
-            <p className="agents-section-title text-style-label">SERVICES</p>
-            <div className="agents-panel-list">
-              {(
-                [
-                  {
-                    id: 'github' as const,
-                    name: 'GitHub',
-                    icon: <GitHubIcon size={18} />,
-                    identity: credStatus?.githubAuthEmail ?? null,
-                  },
-                  {
-                    id: 'vercel' as const,
-                    name: 'Vercel',
-                    icon: <VercelIcon size={16} />,
-                    identity: credStatus?.vercelUsername ?? null,
-                  },
-                ] as const
-              ).map((svc) => {
-                const connected = !!svc.identity;
-                const menuKey = `service:${svc.id}`;
-                const menuOpen = openMenuId === menuKey;
-                // Until the (slow) status fetch resolves, say "Checking…" rather
-                // than flashing a false "Not connected".
-                const statusText = connected
-                  ? svc.identity
-                  : credStatus
-                    ? 'Not connected'
-                    : 'Checking…';
-                // Services never show the red reconnect stroke — there's no expiry
-                // signal here, only connected vs. never-connected (neutral border).
-                const stateClass = connected ? 'is-connected' : '';
-                // Disconnect manages the workspace's own credential; the Default
-                // workspace's logins are the machine's native ones — leave untouched.
-                const canDisconnect = connected && !activeAccount.isDefault;
+            <p className="agents-section-title text-style-label">Services</p>
+            {!credStatus && !credFailed && (
+              <p className="agents-panel-loading text-style-control" role="status">
+                <Spinner size="sm" />
+                Checking GitHub and Vercel…
+              </p>
+            )}
+            {(credStatus || credFailed) && (
+              <div className="agents-panel-list">
+                {(
+                  [
+                    {
+                      id: 'github' as const,
+                      name: 'GitHub',
+                      icon: <GitHubIcon size={18} />,
+                      identity: credStatus?.githubAuthEmail ?? null,
+                    },
+                    {
+                      id: 'vercel' as const,
+                      name: 'Vercel',
+                      icon: <VercelIcon size={16} />,
+                      identity: credStatus?.vercelUsername ?? null,
+                    },
+                  ] as const
+                ).map((svc) => {
+                  const connected = !!svc.identity;
+                  const menuKey = `service:${svc.id}`;
+                  const menuOpen = openMenuId === menuKey;
+                  // The rows only show once the (slow) status fetch has answered;
+                  // a failed one says so rather than claiming "Not connected".
+                  const statusText = connected
+                    ? svc.identity
+                    : credStatus
+                      ? 'Not connected'
+                      : 'Couldn’t check';
+                  // Services never show the red reconnect stroke — there's no expiry
+                  // signal here, only connected vs. never-connected (neutral border).
+                  const stateClass = connected ? 'is-connected' : '';
+                  // Disconnect manages the workspace's own credential; the Default
+                  // workspace's logins are the machine's native ones — leave untouched.
+                  const canDisconnect = connected && !activeAccount.isDefault;
 
-                return (
-                  <div key={svc.id} className={`agents-panel-row ${stateClass}`}>
-                    <div className="agents-panel-row-icon">{svc.icon}</div>
+                  return (
+                    <div key={svc.id} className={`agents-panel-row ${stateClass}`}>
+                      <div className="agents-panel-row-icon">{svc.icon}</div>
 
-                    <div className="agents-panel-row-main">
-                      <div className="agents-panel-row-name text-style-body-medium">{svc.name}</div>
-                      <div className="agents-panel-row-status text-style-control">{statusText}</div>
-                    </div>
+                      <div className="agents-panel-row-main">
+                        <div className="agents-panel-row-name text-style-body-medium">
+                          {svc.name}
+                        </div>
+                        <div className="agents-panel-row-status text-style-control">
+                          {statusText}
+                        </div>
+                      </div>
 
-                    <div className="agents-panel-row-actions">
-                      {!connected && (
-                        <Button
-                          variant="secondary"
-                          size="default"
-                          width="hug"
-                          leftIcon={<PlugIcon size={14} />}
-                          onClick={() => connectService(svc.id)}
-                        >
-                          Connect
-                        </Button>
-                      )}
-
-                      {connected && (
-                        <span className="agents-panel-status">
-                          <span className="agents-panel-status-dot" aria-hidden />
-                          Connected
-                        </span>
-                      )}
-
-                      {connected && (
-                        <div className="agents-panel-menu-wrap">
-                          <MenuButton
-                            variant="ghost"
+                      <div className="agents-panel-row-actions">
+                        {!connected && (
+                          <Button
+                            variant="secondary"
                             size="default"
                             width="hug"
-                            leftIcon={<MoreHorizontalIcon />}
-                            className="agents-panel-kebab"
-                            expanded={menuOpen}
-                            onClick={() => setOpenMenuId(menuOpen ? null : menuKey)}
-                            title={`More actions for ${svc.name}`}
-                            aria-label={`More actions for ${svc.name}`}
-                          ></MenuButton>
-                          {menuOpen && (
-                            <div className="ss-dropdown__menu agents-panel-menu" role="menu">
-                              <DropdownItem
-                                onSelect={() => {
-                                  setOpenMenuId(null);
-                                  connectService(svc.id);
-                                }}
-                              >
-                                {activeAccount.isDefault ? 'Sign in again' : 'Switch account'}
-                              </DropdownItem>
-                              {canDisconnect && (
+                            leftIcon={<PlugIcon size={14} />}
+                            onClick={() => connectService(svc.id)}
+                          >
+                            Connect
+                          </Button>
+                        )}
+
+                        {connected && (
+                          <span className="agents-panel-status">
+                            <span className="agents-panel-status-dot" aria-hidden />
+                            Connected
+                          </span>
+                        )}
+
+                        {connected && (
+                          <div className="agents-panel-menu-wrap">
+                            <MenuButton
+                              variant="ghost"
+                              size="default"
+                              width="hug"
+                              leftIcon={<MoreHorizontalIcon />}
+                              className="agents-panel-kebab"
+                              expanded={menuOpen}
+                              onClick={() => setOpenMenuId(menuOpen ? null : menuKey)}
+                              title={`More actions for ${svc.name}`}
+                              aria-label={`More actions for ${svc.name}`}
+                            ></MenuButton>
+                            {menuOpen && (
+                              <div className="ss-dropdown__menu agents-panel-menu" role="menu">
                                 <DropdownItem
-                                  variant="danger"
                                   onSelect={() => {
                                     setOpenMenuId(null);
-                                    void disconnectService(svc.id);
+                                    connectService(svc.id);
                                   }}
                                 >
-                                  Disconnect
+                                  {activeAccount.isDefault ? 'Sign in again' : 'Switch account'}
                                 </DropdownItem>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                                {canDisconnect && (
+                                  <DropdownItem
+                                    variant="danger"
+                                    onSelect={() => {
+                                      setOpenMenuId(null);
+                                      void disconnectService(svc.id);
+                                    }}
+                                  >
+                                    Disconnect
+                                  </DropdownItem>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
       </DashboardCardDisclosure>

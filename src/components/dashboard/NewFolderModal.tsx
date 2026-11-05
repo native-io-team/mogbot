@@ -104,7 +104,7 @@ export function NewFolderModal({
             Cancel
           </Button>
           <Button variant="primary" type="submit" disabled={loading || !name.trim()}>
-            {loading ? 'Creating...' : buttonLabel}
+            {loading ? 'Creating…' : buttonLabel}
           </Button>
         </div>
       </form>

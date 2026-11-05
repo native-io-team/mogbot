@@ -19,7 +19,7 @@ interface ProjectListStatusProps {
  *
  * The error branch exists because there used not to be one. The spinner was
  * cleared only when the scan's promise settled, so a scan that hung left
- * "Loading projects..." up forever with nothing to click and no way to retry —
+ * "Loading projects…" up forever with nothing to click and no way to retry —
  * on a cold filesystem cache that was measured at tens of minutes. `loading`
  * deliberately wins over `loadError` so a retry shows the spinner rather than
  * the stale error it is retrying.
@@ -34,7 +34,7 @@ export function ProjectListStatus({
     return (
       <div className="project-list-loading">
         <Spinner size="lg" />
-        <p className="text-style-body-medium">Loading projects...</p>
+        <p className="text-style-body-medium">Loading projects…</p>
         {cleanupStatus && (
           <p className="project-list-cleanup-status text-style-control">{cleanupStatus}</p>
         )}

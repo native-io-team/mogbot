@@ -134,7 +134,7 @@ export function ScreenshotPreviewModal({ filePath, onClose }: ScreenshotPreviewM
         {imageSrc ? (
           <img src={imageSrc} alt="Full screenshot" />
         ) : (
-          <div className="screenshot-modal-loading">Loading...</div>
+          <div className="screenshot-modal-loading">Loading…</div>
         )}
       </div>
       <div className="screenshot-preview-footer">

@@ -43,10 +43,11 @@ import { useAgentDeliveries } from './hooks/useAgentDeliveries';
 import { useAccountSelectNavigation } from './hooks/useAccountSelectNavigation';
 import { useProjectRail } from './hooks/useProjectRail';
 import { useActiveAccount } from './hooks/useActiveAccount';
-import { Project, renameProject, setTerminalState } from './lib/project';
+import { Project } from './lib/project';
 import { setActiveAccountId, type Account } from './lib/accounts';
 import { sessionRegistry } from './lib/sessionRegistry';
 import { useCloseProject } from './hooks/useCloseProject';
+import { useProjectSessionHandlers } from './hooks/useProjectSessionHandlers';
 import { useOrphanedWorkspaceGuard } from './hooks/useOrphanedWorkspaceGuard';
 import { useProjectsViewCallbacks } from './hooks/useProjectsViewCallbacks';
 import { QuitConfirmModal } from './components/QuitConfirmModal';
@@ -69,7 +70,7 @@ import { useWorkspaceNumberShortcuts } from './hooks/useWorkspaceNumberShortcuts
 import { TooltipProvider } from './components/primitives/Tooltip';
 import { DevDesignSystemTools } from './components/design-system/DevDesignSystemTools';
 import { logger } from './lib/logger';
-import { asCommandError, formatCommandError, isExpectedRenameRefusal } from './lib/errors';
+import { asCommandError, formatCommandError } from './lib/errors';
 import { trackEvent, trackPageview } from './lib/analytics';
 import {
   getSnapshot as getWorkflowsSnapshot,
@@ -651,79 +652,16 @@ function AppContents({ initialProjectPath }: AppProps) {
     setView,
   });
 
-  const handleRenameProject = useCallback(
-    async (projectPath: string, newName: string) => {
-      try {
-        const renamedPath = await renameProject(projectPath, newName);
-
-        // The backend suspends a hot session before moving its folder. Release
-        // the matching client-side server, terminal, and registry state too.
-        if (renamedPath !== projectPath) {
-          await stopServer(projectPath);
-          closeAllTerminalsForProject(projectPath);
-          sessionRegistry.renamePath(projectPath, renamedPath);
-          sessionRegistry.suspend(renamedPath);
-        }
-
-        if (currentProject?.path === projectPath) {
-          setCurrentProject((project) =>
-            project && project.path === projectPath
-              ? { ...project, name: newName, path: renamedPath }
-              : project
-          );
-          currentProjectPathRef.current = renamedPath;
-        }
-
-        await refreshPinnedProjects();
-        showToast(`Renamed project to ${newName}`, 'success');
-        void trackEvent('project_renamed', { $screen_name: 'Workspace' });
-      } catch (error) {
-        const message = formatCommandError(asCommandError(error));
-        logger[isExpectedRenameRefusal(error) ? 'warn' : 'error']('[RenameProject] failed', {
-          projectPath,
-          error: message,
-        });
-        throw error;
-      }
-    },
-    [
-      closeAllTerminalsForProject,
-      currentProject?.path,
-      refreshPinnedProjects,
-      showToast,
-      stopServer,
-    ]
-  );
-
-  // Switch to another project AND focus a specific tab within it. Writes the
-  // desired active tab index to backend first so the restore flow on open
-  // comes up on the right tab.
-  const handleSelectProjectTab = useCallback(
-    (projectPath: string, tabSessionId: string) => {
-      void (async () => {
-        const snap = sessionRegistry.snapshot(projectPath);
-        const idx = snap?.terminalTabs.findIndex((t) => t.sessionId === tabSessionId) ?? -1;
-        if (snap && idx >= 0) {
-          try {
-            await setTerminalState(projectPath, {
-              tabs: snap.terminalTabs.map((t) => ({
-                agent_id: t.agentId,
-                session_id: t.sessionId,
-                custom_title: t.customTitle,
-              })),
-              active_tab_index: idx,
-            });
-          } catch (err) {
-            logger.warn('[SelectProjectTab] Failed to persist active tab', {
-              error: formatCommandError(asCommandError(err)),
-            });
-          }
-        }
-        handleRailClick(projectPath);
-      })();
-    },
-    [handleRailClick]
-  );
+  const { handleRenameProject, handleSelectProjectTab } = useProjectSessionHandlers({
+    currentProjectPath: currentProject?.path ?? null,
+    currentProjectPathRef,
+    setCurrentProject,
+    stopServer,
+    closeAllTerminalsForProject,
+    refreshPinnedProjects,
+    handleRailClick,
+    showToast,
+  });
 
   // App setup, onboarding, HMR recovery, auto-open, keyboard shortcuts
   const { projectsLoading, setProjectsLoading, bootProgress, handleOnboardingComplete } =

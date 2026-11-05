@@ -58,7 +58,7 @@ describe('dashboard home layout pieces', () => {
   it('opens the command palette from the standalone search', () => {
     render(<DashboardSearch />);
 
-    expect(screen.getByText('Search projects, actions, settings...')).toBeInTheDocument();
+    expect(screen.getByText('Search projects, actions, settings…')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open command palette' }));
 
     expect(mocks.openPalette).toHaveBeenCalledOnce();

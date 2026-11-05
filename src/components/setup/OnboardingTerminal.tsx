@@ -598,7 +598,7 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
             fontSize: 13,
           }}
         >
-          Starting...
+          Starting…
         </div>
       )}
     </div>

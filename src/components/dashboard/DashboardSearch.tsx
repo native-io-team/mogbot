@@ -24,7 +24,7 @@ export function DashboardSearch() {
       <span className="dashboard-search-inner">
         <SearchIcon size={12} />
         <span className="dashboard-search-placeholder text-style-body-medium">
-          Search projects, actions, settings...
+          Search projects, actions, settings…
         </span>
         <span className="workspace-sidebar-filter-shortcut dashboard-search-shortcut">
           {kbd('mod', 'K')}

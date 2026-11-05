@@ -143,8 +143,8 @@ export function Changelog({ className = '' }: ChangelogProps) {
               <WarningIcon size={18} />
               <h3>
                 {rewindStage === 'confirm' && `Install v${rewindVersion}?`}
-                {rewindStage === 'downloading' && 'Downloading...'}
-                {rewindStage === 'installing' && 'Installing...'}
+                {rewindStage === 'downloading' && 'Downloading…'}
+                {rewindStage === 'installing' && 'Installing…'}
                 {rewindStage === 'done' && 'Ready to restart'}
                 {rewindStage === 'error' && 'Installation failed'}
               </h3>

@@ -222,10 +222,10 @@ export const STEPS: { id: Step; label: string }[] = [
 
 /** User-facing status messages for each creation step */
 export const STATUS_MESSAGES: Record<Step, string> = {
-  clone: 'Downloading template...',
-  init: 'Setting up project...',
+  clone: 'Downloading template…',
+  init: 'Setting up project…',
   install: 'Installing dependencies... This may take a minute.',
-  done: 'Almost done...',
+  done: 'Almost done…',
 };
 
 // ---------------------------------------------------------------------------

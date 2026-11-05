@@ -568,7 +568,7 @@ describe('useBranchManagement', () => {
         await result.current.handleResolveConflicts('user/mccu-merged', 'main');
       });
 
-      const [message, type] = vi.mocked(params.showToast).mock.calls[1]; // [0] is the "Preparing..." toast
+      const [message, type] = vi.mocked(params.showToast).mock.calls[1]; // [0] is the "Preparing…" toast
       // A worktree collision is a recognized, by-design git refusal — 'info',
       // not the 'error' channel that auto-files a bug report (issue #843).
       expect(type).toBe('info');

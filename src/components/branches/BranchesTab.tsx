@@ -585,7 +585,7 @@ export function BranchesTab({
                 title="Discard local changes and pull from GitHub"
                 leftIcon={isReverting ? undefined : <PullIcon size={14} />}
               >
-                {isReverting ? 'Reverting...' : `Revert to ${remoteName}`}
+                {isReverting ? 'Reverting…' : `Revert to ${remoteName}`}
               </Button>
             </div>
           </div>
@@ -683,7 +683,7 @@ export function BranchesTab({
                   onClick={() => void handleCreateBranch()}
                   disabled={!sanitizedNewBranchName || isCreatingBranch}
                 >
-                  {isCreatingBranch ? 'Creating...' : 'Create'}
+                  {isCreatingBranch ? 'Creating…' : 'Create'}
                 </Button>
               </div>
             </div>
@@ -900,7 +900,7 @@ export function BranchesTab({
               onClick={() => void handleDeleteConfirm()}
               disabled={!!deletingBranch}
             >
-              {deletingBranch ? 'Deleting...' : 'Delete'}
+              {deletingBranch ? 'Deleting…' : 'Delete'}
             </Button>
           </div>
         </ModalFrame>
@@ -984,7 +984,7 @@ export function BranchesTab({
                 disabled={isRemovingWorktree}
               >
                 {isRemovingWorktree
-                  ? 'Removing...'
+                  ? 'Removing…'
                   : copyHolderName
                     ? `Remove ${copyHolderName}'s copy`
                     : 'Force Remove'}
@@ -995,7 +995,7 @@ export function BranchesTab({
                 onClick={() => void handleRemoveWorktree(false)}
                 disabled={isRemovingWorktree}
               >
-                {isRemovingWorktree ? 'Removing...' : 'Remove'}
+                {isRemovingWorktree ? 'Removing…' : 'Remove'}
               </Button>
             )}
           </div>
@@ -1036,7 +1036,7 @@ export function BranchesTab({
               disabled={!!publishingBranch}
               leftIcon={publishingBranch ? undefined : <PushIcon size={14} />}
             >
-              {publishingBranch ? 'Sending...' : `Send to ${remoteName}`}
+              {publishingBranch ? 'Sending…' : `Send to ${remoteName}`}
             </Button>
           </div>
         </ModalFrame>
@@ -1071,7 +1071,7 @@ export function BranchesTab({
               disabled={isReverting}
               leftIcon={isReverting ? undefined : <PullIcon size={14} />}
             >
-              {isReverting ? 'Reverting...' : 'Revert'}
+              {isReverting ? 'Reverting…' : 'Revert'}
             </Button>
           </div>
         </ModalFrame>

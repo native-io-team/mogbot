@@ -1,0 +1,239 @@
+/* Agents mode: the composer under the conversation, and dictation. */
+
+/* ------------------------------------------------------------ composer */
+
+/* The composer and the jump button share a positioned footer, so the
+   button always rides just above the composer at whatever height it grows. */
+.agent-chat__footer {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.agent-chat__jump {
+  position: absolute;
+  bottom: calc(100% + var(--spacing-sm));
+  left: 50%;
+  z-index: var(--z-sticky-band);
+  transform: translateX(-50%);
+}
+
+/* Same column as the messages, same field language as the sidebar search. */
+/* Same column as the messages. One slim row like a messaging app: the
+   paperclip, the text, then [mic] [send], ~44px tall at one line. The text
+   grows to about eight lines, then scrolls; the icons stay on its last line.
+   Quotes, attachments and hints take full-width rows above it. */
+.agent-composer {
+  /* One line of text: 22px, so 6 + 4 + 22 + 4 + 6 + hairlines is 44px. */
+  --agent-composer-line: calc(var(--spacing-xl) - var(--spacing-2xs));
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  width: calc(100% - (var(--spacing-xl) * 2));
+  max-width: var(--agents-chat-width);
+  margin: 0 auto var(--spacing-lg);
+  padding: var(--spacing-tight);
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-lg);
+}
+
+/* Anything above the text row (mention menu, quotes, attachments, hints). */
+.agent-composer > :not(.agent-composer__input):not(.agent-composer__bar) {
+  grid-column: 1 / -1;
+  order: -1;
+}
+
+/* The bar is only a grouping in the markup; its parts sit in the grid. */
+.agent-composer__bar {
+  display: contents;
+}
+
+.agent-composer__bar > .agent-composer__attach,
+.agent-composer__bar > .agent-composer__listening {
+  grid-column: 1;
+  order: 1;
+}
+
+.agent-composer__bar > .agent-composer__hint {
+  grid-column: 1 / -1;
+  order: 0;
+  justify-self: end;
+  margin: 0 var(--spacing-xs) var(--spacing-2xs);
+}
+
+.agent-composer:focus-within {
+  border-color: var(--border-strong);
+}
+
+.agent-composer .agent-composer__input {
+  grid-column: 2;
+  order: 2;
+  align-self: stretch;
+  min-height: calc(var(--agent-composer-line) + (var(--spacing-xs) * 2));
+  max-height: calc((var(--agent-composer-line) * 8) + (var(--spacing-xs) * 2));
+  padding: var(--spacing-xs) var(--spacing-xs);
+  font-size: var(--font-size-subhead);
+  line-height: var(--agent-composer-line);
+  color: var(--text-primary);
+  resize: none;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.agent-composer .agent-composer__input:focus,
+.agent-composer .agent-composer__input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* [mic] [send] on the right of the text's last line. */
+.agent-composer__actions {
+  grid-column: 3;
+  order: 3;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--spacing-2xs);
+}
+
+.agent-composer__attach,
+.agent-composer__send,
+.agent-composer__stop {
+  flex: 0 0 auto;
+}
+
+/* A square, as every media Stop is: at 8px with a 4px radius it was a dot. */
+.agent-composer__stop-square {
+  display: block;
+  width: 10px; /* css-ok: stop glyph */
+  height: 10px; /* css-ok: stop glyph */
+  background: currentColor;
+  border-radius: 2px; /* css-ok: stop glyph's corner, square not dot */
+}
+
+/* No engine: the composer's slot says why, and offers the fix. */
+.agent-composer--blocked {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-xs) var(--spacing-md);
+  gap: var(--spacing-sm);
+}
+
+.agent-composer__blocked-icon {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.agent-composer__blocked-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-body-lg);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+}
+
+/* ----------------------------------------------------------- dictation */
+
+/* The mic sits beside Send. While listening it brightens and a soft,
+   neutral halo behind it breathes with the input level (--dictation-level,
+   0..1, written by useDictation). Deliberately not red: listening is a calm
+   state, and red here read as an error. */
+.agent-composer__mic {
+  position: relative;
+  flex: 0 0 auto;
+  isolation: isolate;
+  --dictation-level: 0;
+}
+
+.agent-composer__mic::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: '';
+  background: var(--text-primary);
+  border-radius: var(--radius-pill);
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+.agent-composer:not([data-dictation='idle']) .agent-composer__mic,
+.agent-composer:not([data-dictation='idle']) .agent-composer__mic:hover:not(:disabled) {
+  color: var(--accent-active);
+  /* The round halo is the state; a square hover plate on top muddies it. */
+  background: transparent;
+}
+
+.agent-composer__mic::before {
+  background: var(--accent-active);
+}
+
+.agent-composer[data-dictation='starting'] .agent-composer__mic::before {
+  opacity: 0.1;
+  transform: scale(0.85);
+}
+
+.agent-composer[data-dictation='listening'] .agent-composer__mic::before {
+  opacity: calc(0.16 + var(--dictation-level) * 0.2);
+  transform: scale(calc(0.9 + var(--dictation-level) * 0.4));
+}
+
+/* What arrives reads as words, never as placeholder: the full text colour,
+   and it settles (stops being editable) only when dictation ends. */
+.agent-composer[data-dictation='listening'] .agent-composer__input,
+.agent-composer[data-dictation='finishing'] .agent-composer__input {
+  color: var(--text-primary);
+}
+
+.agent-composer:not([data-dictation='idle']) {
+  border-color: color-mix(in srgb, var(--accent-active) 45%, transparent);
+  box-shadow: 0 0 0 var(--border-width-default)
+    color-mix(in srgb, var(--accent-active) 12%, transparent);
+}
+
+/* "● Listening · Esc to cancel", in the paperclip's place. */
+.agent-composer__listening {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding-left: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agent-composer__listening-dot {
+  width: var(--size-sidebar-status-indicator);
+  height: var(--size-sidebar-status-indicator);
+  background: var(--accent-active);
+  border-radius: var(--radius-pill);
+  animation: agents-listening-pulse 1.4s ease-in-out infinite; /* css-ok: breathing loop */
+}
+
+@keyframes agents-listening-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-composer__listening-dot {
+    animation: none;
+  }
+}
+
+.agent-composer__notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs) var(--spacing-md);
+  align-items: baseline;
+  width: calc(100% - (var(--spacing-xl) * 2));
+  max-width: var(--agents-chat-width);
+  margin: 0 auto var(--spacing-sm);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}

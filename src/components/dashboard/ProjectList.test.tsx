@@ -101,7 +101,7 @@ import { ProjectList } from './ProjectList';
 /** The spinner's own copy. Matched exactly, because the timeout error text
  *  also starts with "Loading projects" and a loose regex would let the
  *  spinner-is-gone assertion pass for the wrong reason. */
-const SPINNER_LABEL = 'Loading projects...';
+const SPINNER_LABEL = 'Loading projects…';
 
 function renderList() {
   return render(<ProjectList onSelectProject={vi.fn()} onCreateProject={vi.fn()} />);

@@ -1,0 +1,277 @@
+/* Agents mode: the search field and its results, the model and usage
+ * menu, and the @mention menu. */
+
+/* -------------------------------------------------------------- search */
+
+/* Agents mode's top field: the palette trigger's place and look (the app
+   surface, no border, its shortcut chip at the trailing edge), but a real
+   field that searches conversations. */
+.agents-top-search {
+  position: relative;
+}
+
+.agents-top-search .agents-top-search__field {
+  height: var(--control-height-standard);
+  padding: 0 var(--spacing-tight) 0 var(--spacing-sm);
+  border-color: transparent;
+  border-radius: var(--radius-card);
+}
+
+.agents-top-search .agents-top-search__field:hover:not(:focus-within) {
+  background: var(--surface-control);
+}
+
+.agents-top-search .agents-top-search__field > .ss-search-field__input {
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+}
+
+.agents-top-search .ss-search-field__input::placeholder {
+  color: var(--text-faint);
+}
+
+.agents-top-search__kbd {
+  position: absolute;
+  top: 50%;
+  right: var(--spacing-tight);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* No sidebar to hold it (compact, or the rail collapsed): over the chat. */
+.agents-search-popover {
+  position: absolute;
+  top: var(--spacing-sm);
+  left: 50%;
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100% - 2 * var(--spacing-md)));
+  max-height: min(560px, calc(100% - 2 * var(--spacing-sm)));
+  padding-bottom: var(--spacing-xs);
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-md);
+  transform: translateX(-50%);
+  animation: agents-search-popover-in var(--transition-interaction);
+}
+
+.agents-search-popover__field {
+  flex: 0 0 auto;
+  margin: var(--spacing-sm) var(--spacing-md);
+}
+
+.agents-search-popover__results {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@keyframes agents-search-popover-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(calc(var(--spacing-xs) * -1));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agents-search-popover {
+    animation: none;
+  }
+}
+
+.agents-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+/* Same grid as the rows: the badge in the avatar column, the name and every
+   snippet on the text column. */
+.agents-search__agent {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-2xs) var(--spacing-sm);
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agents-search__agent-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agents-search__hit {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs)
+    calc(var(--spacing-sm) * 2 + var(--size-sidebar-project-shortcut));
+  text-align: left;
+  font: inherit;
+  background: none;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background var(--transition-interaction-fast);
+}
+
+.agents-search__hit:hover {
+  background: var(--surface-control);
+}
+
+/* The hit last opened, marked like the open row, so ↓ and Enter walk on. */
+.agents-search__hit.is-current {
+  background: var(--surface-selected);
+}
+
+.agents-search__hit:focus-visible {
+  outline: none;
+  background: var(--surface-control);
+  box-shadow: inset 0 0 0 var(--border-width-emphasis) var(--accent-focus);
+}
+
+/* Two lines of context, then cut. */
+.agents-search__snippet {
+  display: -webkit-box;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.agents-search__snippet mark {
+  color: var(--text-primary);
+  background: rgba(var(--accent-warning-rgb), 0.22);
+  border-radius: var(--radius-sm);
+}
+
+.agents-search__speaker {
+  color: var(--text-secondary);
+}
+
+.agents-search__time {
+  flex: 0 0 auto;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agents-search__note {
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------- model, usage */
+
+/* The conversation's … menu carries its actions and then its model: taller
+   than the shared 360px cap, so the model choices aren't hidden below a
+   scroll. Still never taller than the window. */
+.ss-dropdown__menu.agent-model-menu {
+  max-height: calc(100vh - var(--spacing-2xl) * 3);
+}
+
+/* The engine's own name for a model, small beside its plain one. */
+.agent-model-menu .agent-model-menu__detail {
+  margin-left: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-editor__usage {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--spacing-2xs) var(--spacing-md);
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-editor__usage dt {
+  color: var(--text-muted);
+}
+
+.agent-editor__usage dd {
+  margin: 0;
+}
+
+.agent-editor__label .segmented-control {
+  align-self: flex-start;
+}
+
+/* Model menu: plain text, a check on the current choice in a fixed column. */
+.agent-model-menu .agent-model-menu__label {
+  flex: 1;
+}
+
+.agent-model-menu .agent-model-menu__heading {
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-model-menu .agent-model-menu__check,
+.agent-model-menu .agent-switcher__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: var(--spacing-lg);
+  color: var(--text-secondary);
+}
+
+/* The sidebar's status slot, so its loader keeps its size in a menu. */
+.agent-model-menu .agent-switcher__mark {
+  flex: 0 0 auto;
+  justify-content: center;
+  width: var(--pixel-loader-size-sm);
+  height: var(--pixel-loader-size-sm);
+}
+
+/* ------------------------------------------------------------ mentions */
+
+/* The app's menu surface, opening upward from the composer's left edge. The
+   field keeps focus, so the highlighted row is the list's own state. */
+.ss-dropdown__menu.agent-mention-menu {
+  top: auto;
+  bottom: calc(100% + var(--spacing-xs));
+  left: 0;
+  margin-top: 0;
+  min-width: 240px;
+}
+
+.agent-mention-menu__item[aria-selected='true'] {
+  background: var(--tint-subtle);
+}
+
+.agent-mention-menu__name {
+  flex: 0 0 auto;
+}
+
+.agent-mention-menu__role {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* An @name in your bubble: the agent's colour, at text weight, no pill. */
+.agent-mention {
+  font-weight: var(--font-weight-label);
+  color: color-mix(in srgb, var(--agents-tint, var(--text-secondary)) 70%, var(--text-primary));
+}

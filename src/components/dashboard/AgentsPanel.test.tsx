@@ -431,24 +431,27 @@ describe('AgentsPanel', () => {
     createdAt: 0,
   };
 
+  const NOT_CONNECTED = { githubAuthEmail: null, vercelUsername: null };
+
   function mockWorkspace(account: typeof CIRCA | typeof DEFAULT_WS) {
     mockInvoke('get_active_account_id', account.id);
     mockInvoke('list_accounts', [account]);
   }
 
-  it('names the active workspace and groups rows under AGENTS / SERVICES', async () => {
+  it('names the active workspace and groups rows under Engines / Services', async () => {
     mockInvoke('get_agents_status', [CLAUDE_DEFAULT]);
     mockWorkspace(CIRCA);
+    mockInvoke('get_account_credential_status', NOT_CONNECTED);
     render(<AgentsPanel />);
 
     await waitFor(() => expect(invokeCalls.some((c) => c.cmd === 'list_accounts')).toBe(true));
     // Workspace badge names the active workspace.
     await waitFor(() => expect(screen.getAllByText(/Circa/).length).toBeGreaterThan(0));
     // The two section subheaders are present.
-    expect(screen.getByText('ENGINES')).toBeInTheDocument();
-    expect(screen.getByText('SERVICES')).toBeInTheDocument();
-    // The Services rows render for GitHub + Vercel.
-    expect(screen.getByText('GitHub')).toBeInTheDocument();
+    expect(screen.getByText('Engines')).toBeInTheDocument();
+    expect(screen.getByText('Services')).toBeInTheDocument();
+    // The Services rows render for GitHub + Vercel once their status is known.
+    expect(await screen.findByText('GitHub')).toBeInTheDocument();
     expect(screen.getByText('Vercel')).toBeInTheDocument();
   });
 
@@ -472,7 +475,8 @@ describe('AgentsPanel', () => {
   it('non-default workspace: Vercel "Connect" opens the token modal and saves the credential', async () => {
     mockInvoke('get_agents_status', [CLAUDE_DEFAULT]);
     mockWorkspace(CIRCA);
-    // No credential status → both services read "Connect".
+    // Neither service signed in → both read "Connect".
+    mockInvoke('get_account_credential_status', NOT_CONNECTED);
     render(<AgentsPanel />);
 
     await waitFor(() => expect(screen.getByText('Vercel')).toBeInTheDocument());
@@ -501,9 +505,12 @@ describe('AgentsPanel', () => {
   it('non-default workspace: GitHub "Connect" routes through the backend PTY modal', async () => {
     mockInvoke('get_agents_status', [CLAUDE_DEFAULT]);
     mockWorkspace(CIRCA);
+    mockInvoke('get_account_credential_status', NOT_CONNECTED);
     render(<AgentsPanel />);
 
-    await waitFor(() => expect(screen.getByText('GitHub')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: 'Connect' }).length).toBeGreaterThan(0)
+    );
     fireEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]); // GitHub row
 
     // The generic workspace-connect terminal mounts (config-dir PTY login),
@@ -517,9 +524,12 @@ describe('AgentsPanel', () => {
   it('Default workspace: GitHub + Vercel "Connect" use the native machine terminal', async () => {
     mockInvoke('get_agents_status', [CLAUDE_DEFAULT]);
     mockWorkspace(DEFAULT_WS);
+    mockInvoke('get_account_credential_status', NOT_CONNECTED);
     render(<AgentsPanel />);
 
-    await waitFor(() => expect(screen.getByText('GitHub')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: 'Connect' }).length).toBeGreaterThan(0)
+    );
     fireEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]); // GitHub row
 
     // Default uses the machine's native logins — the native OnboardingTerminal,

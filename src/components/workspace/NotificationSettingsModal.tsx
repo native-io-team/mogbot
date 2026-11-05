@@ -136,7 +136,7 @@ export function NotificationSettingsModal({
                     }`}
                     onClick={handleSelectCustomSound}
                   >
-                    Custom...
+                    Custom…
                   </button>
                 </div>
 

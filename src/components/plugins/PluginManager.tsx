@@ -36,17 +36,13 @@ import { useModal } from '../../contexts/ModalContext';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { PluginInstallForm } from './PluginInstallForm';
 import { PluginStatusGrid } from './PluginStatusGrid';
+import { PluginLibraryList, type RegistryFailure } from './PluginLibraryList';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { ToggleButton } from '../primitives/ToggleButton';
 import { TextButton } from '../primitives/TextButton';
-import {
-  ExtensionListRow,
-  ExtensionManagerLayout,
-  ExtensionSearchField,
-  ExtensionState,
-} from './extension';
+import { ExtensionManagerLayout, ExtensionSearchField, ExtensionState } from './extension';
 
 type Tab = 'installed' | 'library';
 
@@ -75,11 +71,7 @@ export function PluginManager({
   // Library state
   const [registry, setRegistry] = useState<PluginRegistryEntry[]>([]);
   const [isLoadingRegistry, setIsLoadingRegistry] = useState(false);
-  /** Why the library fetch failed, so an empty list isn't read as "the library
-   *  is empty" (#713). `unreachable` is the user's network or GitHub's rate
-   *  limiter; `malformed` is a registry body we couldn't parse — a different
-   *  problem, with a different fix, so it gets its own copy. */
-  const [registryFailure, setRegistryFailure] = useState<'unreachable' | 'malformed' | null>(null);
+  const [registryFailure, setRegistryFailure] = useState<RegistryFailure>(null);
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -114,18 +106,6 @@ export function PluginManager({
       setDebouncedQuery('');
     }
   }, [isOpen]);
-
-  // Handle Escape key
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
 
   // Plugins already background-checked for updates this modal-open, so a
   // refetch (toggle, uninstall, …) doesn't re-hit the network per plugin.
@@ -540,7 +520,7 @@ export function PluginManager({
             projectPath ? (
               <ExtensionSearchField
                 className="plugins-search"
-                placeholder="Filter plugins..."
+                placeholder="Filter plugins…"
                 aria-label="Filter plugins"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -566,7 +546,7 @@ export function PluginManager({
               <>
                 {isLoading && plugins.length === 0 && (
                   <ExtensionState kind="loading" loadingLabel="Loading plugins">
-                    Loading plugins...
+                    Loading plugins…
                   </ExtensionState>
                 )}
 
@@ -653,78 +633,15 @@ export function PluginManager({
                   &amp; Help → Report a bug.
                 </div>
 
-                {isLoadingRegistry && registry.length === 0 && (
-                  <ExtensionState kind="loading" loadingLabel="Loading plugin library">
-                    Loading plugin library...
-                  </ExtensionState>
-                )}
-
-                {!isLoadingRegistry && registry.length === 0 && (
-                  <ExtensionState kind="empty">
-                    {registryFailure === 'unreachable' && (
-                      <>
-                        Couldn&apos;t reach the plugin library. Check your connection, or try again
-                        in a minute — GitHub sometimes rate-limits this request. You can still
-                        install from a URL below.
-                      </>
-                    )}
-                    {registryFailure === 'malformed' && (
-                      <>
-                        The plugin library loaded but we couldn&apos;t read it — that&apos;s a
-                        problem on our side, not your connection. You can still install from a URL
-                        below.
-                      </>
-                    )}
-                    {registryFailure === null &&
-                      'The plugin library is empty right now. You can still install from a URL below.'}
-                  </ExtensionState>
-                )}
-
-                {!isLoadingRegistry && registry.length > 0 && filteredRegistry.length === 0 && (
-                  <ExtensionState kind="empty">No matching plugins</ExtensionState>
-                )}
-
-                <div className="plugins-list">
-                  {filteredRegistry.map((entry) => {
-                    const isInstalled = isEntryInstalled(entry);
-                    const isThisInstalling = installingId === entry.id;
-
-                    return (
-                      <ExtensionListRow
-                        key={entry.id}
-                        className="plugin-row"
-                        action={
-                          isInstalled ? (
-                            <span className="plugin-installed-badge">Installed</span>
-                          ) : (
-                            <Button
-                              variant="primary"
-                              onClick={() => {
-                                void handleLibraryInstall(entry);
-                              }}
-                              disabled={isThisInstalling || installingId !== null}
-                            >
-                              {isThisInstalling ? 'Installing...' : 'Install'}
-                            </Button>
-                          )
-                        }
-                      >
-                        <div className="plugin-info">
-                          <div className="plugin-header">
-                            <div>
-                              <span className="plugin-name">{entry.name}</span>
-                              <span className="plugin-meta">{entry.author}</span>
-                            </div>
-                          </div>
-                          <div className="plugin-desc">{entry.description}</div>
-                          {entry.category && (
-                            <div className="plugin-category-badge">{entry.category}</div>
-                          )}
-                        </div>
-                      </ExtensionListRow>
-                    );
-                  })}
-                </div>
+                <PluginLibraryList
+                  registry={registry}
+                  entries={filteredRegistry}
+                  isLoading={isLoadingRegistry}
+                  failure={registryFailure}
+                  installingId={installingId}
+                  isInstalled={isEntryInstalled}
+                  onInstall={(entry) => void handleLibraryInstall(entry)}
+                />
 
                 {error && <ExtensionState kind="error">{error}</ExtensionState>}
 

@@ -93,6 +93,9 @@ check_file src/components/dashboard/ImportProject.tsx 500
 # previous raise. The ceiling is pinned to the exact current count so it grants
 # zero headroom -- the next line added to App.tsx fails the gate again. Extract
 # the session-lifecycle handlers rather than raising this a third time.
+#
+# Paid: rename and select-tab moved to hooks/useProjectSessionHandlers.ts
+# (audit r10), so the ceiling stands with headroom earned, not granted.
 check_file src/App.tsx 1334
 echo
 echo "CSS (limit 1200 per file):"

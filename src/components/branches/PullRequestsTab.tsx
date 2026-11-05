@@ -263,7 +263,7 @@ export function PullRequestsTab({
       <div className="prs-tab">
         <div className="prs-tab-loading">
           <Spinner size="lg" />
-          <span>Loading pull requests...</span>
+          <span>Loading pull requests…</span>
         </div>
       </div>
     );
@@ -372,7 +372,7 @@ export function PullRequestsTab({
               }}
               disabled={!!mergingPr}
             >
-              {mergingPr ? 'Merging...' : 'Merge'}
+              {mergingPr ? 'Merging…' : 'Merge'}
             </Button>
           </div>
         </ModalFrame>
@@ -406,7 +406,7 @@ export function PullRequestsTab({
               onClick={() => void handlePostMergeCleanup()}
               disabled={isCleaningUp}
             >
-              {isCleaningUp ? 'Cleaning up...' : 'Yes, clean up'}
+              {isCleaningUp ? 'Cleaning up…' : 'Yes, clean up'}
             </Button>
           </div>
         </ModalFrame>
@@ -446,7 +446,7 @@ export function PullRequestsTab({
               }}
               disabled={!!closingPr}
             >
-              {closingPr ? 'Closing...' : 'Close PR'}
+              {closingPr ? 'Closing…' : 'Close PR'}
             </Button>
           </div>
         </ModalFrame>
@@ -485,7 +485,7 @@ export function PullRequestsTab({
               }}
               disabled={!!checkingOutPr}
             >
-              {checkingOutPr ? 'Pulling...' : 'Pull'}
+              {checkingOutPr ? 'Pulling…' : 'Pull'}
             </Button>
           </div>
         </ModalFrame>
@@ -597,7 +597,7 @@ function PrCard({
               onClick={onCheckout}
               disabled={isCheckingOut}
             >
-              {isCheckingOut ? 'Pulling...' : 'Pull'}
+              {isCheckingOut ? 'Pulling…' : 'Pull'}
             </Button>
           )}
           {hasConflicts && onResolveConflicts ? (
@@ -616,13 +616,13 @@ function PrCard({
                 onClick={onMerge}
                 disabled={isMerging || !canMerge}
               >
-                {isMerging ? 'Merging...' : 'Merge'}
+                {isMerging ? 'Merging…' : 'Merge'}
               </Button>
             )
           )}
           {onClose && (
             <Button variant="danger" size="compact" onClick={onClose} disabled={isClosing}>
-              {isClosing ? 'Closing...' : 'Close'}
+              {isClosing ? 'Closing…' : 'Close'}
             </Button>
           )}
         </div>

@@ -207,7 +207,7 @@
 /* ----------------------------------------------- working indicator */
 
 /* The indicator's height is known (one line, fixed min-height in
-   agents.css), so it can open and close instead of popping. The chat's
+   agents-chat.css), so it can open and close instead of popping. The chat's
    ResizeObserver keeps the bottom pinned while it does, which turns the
    height change into a smooth scroll rather than a jump. */
 .agent-chat__row--working[data-entering] {
@@ -275,7 +275,7 @@
 /* ------------------------------------------------------ jump button */
 
 /* Floats a clear step above the composer, centred without a transform
-   (agents.css centres it with translateX, which the button's own :active
+   (agents-composer.css centres it with translateX, which the button's own :active
    scale replaced, so a press threw it sideways). Leaves as it came. */
 .agent-chat__footer .agent-chat__jump {
   bottom: calc(100% + var(--spacing-md));

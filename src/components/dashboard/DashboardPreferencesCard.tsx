@@ -59,8 +59,10 @@ export function DashboardPreferencesCard({
                 <SettingsIcon size={18} />
               </div>
               <div className="dashboard-card-row-main">
+                {/* The sidebar's word for the same place. With no reports or
+                    release notes there is no Help behind it to name. */}
                 <div className="dashboard-card-row-name text-style-body-medium">
-                  Settings &amp; Help
+                  {SETTINGS_ONLY ? 'Settings' : 'Settings & Help'}
                 </div>
                 <div className="dashboard-card-row-status text-style-control">
                   {SETTINGS_ONLY

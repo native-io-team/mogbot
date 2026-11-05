@@ -338,7 +338,7 @@
   --agents-motion-typing-stagger: var(--duration-standard);
   /* The beat between parts of one arrival (the import's done state). */
   --agents-motion-stagger: var(--duration-fast);
-  /* The working pill's height (agents.css, .agent-working). A reply's first
+  /* The working pill's height (agents-chat.css, .agent-working). A reply's first
      streamed line holds this height so the pill hands off in place. */
   --agents-motion-working-height: calc(var(--font-size-subhead) * 1.4 + var(--spacing-sm) * 2);
   /* The soft fade at the transcript's top and bottom edges. */
