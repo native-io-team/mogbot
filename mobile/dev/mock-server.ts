@@ -164,9 +164,9 @@ const LOGIN_OPTIONS: Record<string, LoginOption> = {
   gmail: {
     id: 'claude_ai',
     method: 'claude_ai',
-    label: 'Connect Gmail',
+    label: 'Connect in Claude instead',
     detail:
-      'Uses claude.ai’s Gmail connector, which keeps the sign-in with your Claude account. If it isn’t added yet, claude.ai opens in your Mac’s browser to add it. Never a password.',
+      'Connect Gmail in Claude: it opens Claude’s connectors page; turn on Gmail, then come back. The sign-in stays with your Claude account; never a password.',
   },
   browser: {
     id: 'browser',
@@ -208,7 +208,7 @@ export function loginCard(
       title: 'Gmail',
       why: 'Read the invoices that arrive by email',
       abilities: [{ id: 'read', label: 'Read and search your email' }],
-      options: [LOGIN_OPTIONS.gmail, LOGIN_OPTIONS.browser],
+      options: [LOGIN_OPTIONS.browser, LOGIN_OPTIONS.gmail],
       noConnector:
         'Google only lets apps it has approved use Gmail’s own connector, so Gmail comes through claude.ai’s connector or your browser.',
     },
@@ -1364,6 +1364,38 @@ export function createMockServer(opts: MockOptions = {}) {
         ...(x.lastUsedAt ? { lastUsedAt: x.lastUsedAt } : {}),
       })),
       blockedApps: [],
+      ...(declined.length ? { declined: declined.map(({ key, title, declinedAt }) => ({ key, title, declinedAt })) } : {}),
+    };
+  }
+
+  /** Apps the user chose not to connect (the Mac's `declined-services.json`), with the cards each put away. */
+  const declined: { key: string; title: string; declinedAt: number; closed: [string, string][] }[] = [];
+  const declineKey = (service: string, title: string) =>
+    service === 'other' ? `other:${title.trim().toLowerCase()}` : service;
+
+  /** "Not needed" for the team: every waiting card for these apps put away, remembered. */
+  function declineApps(apps: { key: string; title: string }[]) {
+    const closed: [string, string][] = [];
+    for (const a of agents) {
+      for (const m of messages.get(a.id) ?? []) {
+        const l = m.approval?.login;
+        if (!l || m.approval!.status !== 'pending') continue;
+        if (!apps.some((x) => x.key === declineKey(l.service, l.title))) continue;
+        answerLogin(a.id, m.approval!.requestId, 'denied', 'Not needed');
+        closed.push([a.id, m.approval!.requestId]);
+      }
+    }
+    for (const app of apps) {
+      const at = declined.findIndex((d) => d.key === app.key);
+      if (at >= 0) declined.splice(at, 1);
+      declined.push({ ...app, declinedAt: Date.now(), closed });
+    }
+    const titles = apps.map((x) => x.title);
+    const names = titles.length <= 1 ? titles.join('') : `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}`;
+    return {
+      keys: apps.map((x) => x.key),
+      line: `Not connecting ${names}. No agent will ask for ${titles.length === 1 ? 'it' : 'them'} again.`,
+      closed: closed.length,
     };
   }
 
@@ -1379,7 +1411,7 @@ export function createMockServer(opts: MockOptions = {}) {
           ap.status === 'pending' ? 'waiting' : ap.status === 'allowed' ? 'connected' : ap.status === 'denied' ? 'skipped' : 'covered';
         if (state !== 'waiting' && (since === undefined || m.ts < since)) continue;
         const google = ['gmail', 'google_calendar', 'google_drive'].includes(l.service);
-        const key = google ? 'google' : l.service;
+        const key = google ? 'google' : declineKey(l.service, l.title);
         let need = needs.find((n) => n.key === key);
         if (!need) {
           need = { key, title: google ? 'Google' : l.title, services: [], options: [], cards: [], done: false };
@@ -1767,6 +1799,37 @@ export function createMockServer(opts: MockOptions = {}) {
     },
     'agents.loginDecline': (p) => answerLogin(String(p.agentId), String(p.requestId), 'denied', typeof p.note === 'string' && p.note ? p.note : undefined),
     'agents.loginDismiss': (p) => answerLogin(String(p.agentId), String(p.requestId), 'denied', 'Not needed'),
+    'agents.loginNotNeeded': (p) => {
+      const l = loginCardOf(String(p.agentId), String(p.requestId))?.approval?.login;
+      if (!l) return fail({ type: 'Other', message: 'That card no longer exists.' });
+      return declineApps([{ key: declineKey(l.service, l.title), title: l.title }]);
+    },
+    'agents.loginsNotNeeded': (p) => {
+      const keys = Array.isArray(p.keys) ? p.keys.map(String) : undefined;
+      const apps: { key: string; title: string }[] = [];
+      for (const n of teamLogins().needs) {
+        if (keys && !keys.includes(n.key)) continue;
+        for (const c of n.cards) {
+          const k = declineKey(c.service, c.title);
+          if (c.state === 'waiting' && !apps.some((x) => x.key === k)) apps.push({ key: k, title: c.title });
+        }
+      }
+      if (!apps.length) return fail({ type: 'Other', message: 'Nothing to skip.' });
+      return declineApps(apps);
+    },
+    // The mock turns them back on and says how many cards it would bring back.
+    'agents.loginsUndecline': (p) => {
+      const keys = Array.isArray(p.keys) ? p.keys.map(String) : [];
+      let back = 0;
+      for (const k of keys) {
+        const at = declined.findIndex((d) => d.key === k);
+        if (at < 0) continue;
+        back += declined[at].closed.length;
+        declined.splice(at, 1);
+      }
+      return back;
+    },
+    'agents.loginsRecheck': () => null,
     // The value goes nowhere, as with saveSecret.
     'agents.loginSaveKey': (p) => {
       const agentId = String(p.agentId);

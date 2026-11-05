@@ -1526,6 +1526,12 @@ fn request_secret_as(app: &AppHandle, caller: &store::Agent, args: &Value, quiet
         Err(e) => return error(e.to_string()),
     };
     request.quiet = quiet;
+    // An app the user chose not to connect isn't asked for by another door.
+    if let Some(refused) =
+        super::declined::refusal_for_text(&format!("{} {}", request.name, request.purpose))
+    {
+        return text(refused);
+    }
     let open = store::pending_approvals(&caller.id).unwrap_or_default();
     if open
         .iter()

@@ -3,7 +3,9 @@
  * service, not per agent. "Google · Gmail + Calendar — Recruiter, Mailroom and
  * Calendar · Connect" is one sign-in for all three; three agents asking for
  * GitHub is one "Use GitHub on this Mac". Each agent on a row can be unticked
- * (left waiting in its own chat) or put away with "Not needed"; a progress
+ * (left waiting in its own chat) or put away with "Skip"; "Not needed" on a
+ * row (or "Skip the rest" for the list) declines the app for the whole team,
+ * remembered, with Undo on its receipt (`agents/declined.rs`); a progress
  * line says how many rows are done, and done rows fold to the end.
  *
  * Embeddable: `<TeamLogins since={importStartedAt} onDone={…} />` is what the
@@ -30,6 +32,7 @@ import { Spinner } from '../primitives/Spinner';
 import { CheckIcon, ErrorIcon } from '@/components/icons';
 import { useModal } from '../../contexts/ModalContext';
 import { useAsyncState } from '../../hooks/useAsyncState';
+import { SignInHelp, useNotNeeded } from './SignInHelp';
 import { usePolling } from '../../hooks/usePolling';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { AGENT_EVENTS } from '../../lib/agents';
@@ -37,6 +40,7 @@ import {
   connectTeamNeed,
   dismissLogin,
   listNames,
+  loginsNotNeeded,
   needPrimary,
   progressLine,
   scopeTeam,
@@ -74,6 +78,8 @@ export function TeamLogins({ since, onDone, agentIds, empty }: TeamLoginsProps) 
     };
   }, [refresh]);
   usePolling(() => execute(), { intervalMs: 3000, enabled: teamBusy(team), name: 'team-logins' });
+  const waitingKeys = (team?.needs ?? []).filter((n) => !n.done).map((n) => n.key);
+  const waitingRows = waitingKeys.length;
   const told = useRef(false);
   useEffect(() => {
     if (!team || told.current || team.total === 0 || team.done < team.total) return;
@@ -106,9 +112,12 @@ export function TeamLogins({ since, onDone, agentIds, empty }: TeamLoginsProps) 
   }
   return (
     <div className="team-logins">
-      <p className="team-logins__progress" aria-live="polite">
-        {progressLine(team)}
-      </p>
+      <div className="team-logins__top">
+        <p className="team-logins__progress" aria-live="polite">
+          {progressLine(team)}
+        </p>
+        {waitingRows > 1 && <SkipRest rows={waitingKeys} onChanged={refresh} />}
+      </div>
       <ul className="team-logins__rows">
         {team.needs.map((need) => (
           <NeedRow key={need.key} need={need} onChanged={refresh} />
@@ -118,7 +127,38 @@ export function TeamLogins({ since, onDone, agentIds, empty }: TeamLoginsProps) 
   );
 }
 
+/**
+ * "Skip the rest": every row still waiting, declined for the team. Only the
+ * rows this list shows (a scoped list names its own keys).
+ */
+function SkipRest({ rows, onChanged }: { rows: string[]; onChanged: () => void }) {
+  const notNeeded = useNotNeeded();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <span className="team-logins__skip-rest">
+      <TextButton
+        tabIndex={0}
+        data-skip-rest
+        onClick={() => {
+          setError(null);
+          void notNeeded(() => loginsNotNeeded(rows))
+            .then(onChanged)
+            .catch((err) => setError(formatCommandError(asCommandError(err))));
+        }}
+      >
+        Skip the rest
+      </TextButton>
+      {error && (
+        <span className="agent-editor__error" role="alert">
+          {error}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function NeedRow({ need, onChanged }: { need: TeamNeed; onChanged: () => void }) {
+  const notNeeded = useNotNeeded();
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,6 +187,7 @@ function NeedRow({ need, onChanged }: { need: TeamNeed; onChanged: () => void })
   const connect = (o: LoginOption) =>
     run(() => connectTeamNeed(need.key, o.id, [...skipped, ...hidden]));
   const names = need.cards.map((c) => c.agentName);
+  const live = waiting.find((c) => c.flow?.state === 'waiting' && c.flow.url);
 
   return (
     <li className="team-logins__row" data-need={need.key} data-done={need.done || undefined}>
@@ -195,9 +236,11 @@ function NeedRow({ need, onChanged }: { need: TeamNeed; onChanged: () => void })
                       tabIndex={0}
                       className="team-logins__dismiss"
                       disabled={busy}
+                      aria-label={`Skip ${c.agentName}`}
+                      title={`Puts away ${c.agentName}’s card only. “Not needed” below is for every agent.`}
                       onClick={() => void run(() => dismissLogin(c.agentId, c.requestId))}
                     >
-                      Not needed
+                      Skip
                     </TextButton>
                   )}
                 </li>
@@ -209,13 +252,28 @@ function NeedRow({ need, onChanged }: { need: TeamNeed; onChanged: () => void })
           )}
           {/* The backend's detail names one agent; it reads right only when there's one. */}
           {waiting.length === 1 && primary && <p className="team-logins__note">{primary.detail}</p>}
+          {live && (
+            <SignInHelp agentId={live.agentId} requestId={live.requestId} flow={live.flow} />
+          )}
           {waiting.length > 0 && need.options.length === 0 && (
             <p className="team-logins__note">
               Nothing on this Mac can sign these agents in. Answer each in its own chat.
             </p>
           )}
+          {waiting.length > 0 && need.options.length === 0 && (
+            <div className="team-logins__actions">
+              <NotNeededButton
+                disabled={busy}
+                onClick={() => void run(() => notNeeded(() => loginsNotNeeded([need.key])))}
+              />
+            </div>
+          )}
           {waiting.length > 0 && need.options.length > 0 && (
             <div className="team-logins__actions">
+              <NotNeededButton
+                disabled={busy || signingIn}
+                onClick={() => void run(() => notNeeded(() => loginsNotNeeded([need.key])))}
+              />
               {others.map((o) => (
                 <Button
                   key={o.id}
@@ -250,6 +308,22 @@ function NeedRow({ need, onChanged }: { need: TeamNeed; onChanged: () => void })
         </>
       )}
     </li>
+  );
+}
+
+/** A row's "Not needed": the app, for every agent, remembered. */
+function NotNeededButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
+  return (
+    <Button
+      tabIndex={0}
+      variant="secondary"
+      data-not-needed
+      disabled={disabled}
+      title="No agent asks for it again. Turn it back on from Settings → Agents."
+      onClick={onClick}
+    >
+      Not needed
+    </Button>
   );
 }
 

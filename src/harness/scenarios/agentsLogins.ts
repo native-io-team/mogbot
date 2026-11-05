@@ -30,9 +30,9 @@ const TEAM = BASE_TEAM.map((a) => (RENAMED[a.id] ? { ...a, name: RENAMED[a.id] }
 const CLAUDE_AI = {
   id: 'claude_ai',
   method: 'claude_ai',
-  label: 'Connect Gmail',
+  label: 'Connect in Claude instead',
   detail:
-    'Uses claude.ai’s Gmail connector, which keeps the sign-in with your Claude account. If it isn’t added yet, claude.ai opens in this Mac’s browser to add it. Recruiter never sees a password.',
+    'Connect Gmail in Claude: it opens Claude’s connectors page; turn on Gmail, then come back. The sign-in stays with your Claude account and Recruiter never sees a password.',
 };
 const BROWSER = (site: string, name = 'Recruiter') => ({
   id: 'browser',
@@ -58,7 +58,7 @@ const GMAIL_LOGIN = {
     { id: 'read', label: 'Read and search your email' },
     { id: 'write', label: 'Draft and send email — it asks you on a card each time' },
   ],
-  options: [CLAUDE_AI, BROWSER('mail.google.com')],
+  options: [BROWSER('mail.google.com'), CLAUDE_AI],
   quiet: true,
 };
 
@@ -193,10 +193,7 @@ const TEAM_NEEDS = (connectedGithub: boolean) => {
       key: 'google',
       title: 'Google · Gmail + Calendar',
       services: ['gmail', 'google_calendar'],
-      options: [
-        { ...CLAUDE_AI, label: 'Connect Google' },
-        BROWSER('mail.google.com', 'Each agent'),
-      ],
+      options: [BROWSER('mail.google.com', 'Each agent'), CLAUDE_AI],
       noConnector:
         'Google only lets apps it has approved use Gmail’s own connector, so Gmail comes through claude.ai’s connector or your browser.',
       cards: [
@@ -261,7 +258,7 @@ export const agentsLoginsScenarios: Scenario[] = [
   recruiterScenario(
     'agents-login-card',
     'Agents — a login card (Gmail: Connect, or use my browser)',
-    'Recruiter’s chat: a lock card “Recruiter needs your Gmail (work)”, a muted “Asked for as “gmail work””, the reason, then two bullet lines: “Read and search your email” and “Draft and send email — it asks you on a card each time”. A muted line saying it uses claude.ai’s Gmail connector and Recruiter never sees a password. Under a hairline, “Use my browser” as a quiet text action with its explanation (every click, post, send or payment asks first). Right-aligned: secondary “Not now”, neutral (not accent) “Connect Gmail”. No password field anywhere.',
+    'Recruiter’s chat: a lock card “Recruiter needs your Gmail (work)”, a muted “Asked for as “gmail work””, the reason, then two bullet lines: “Read and search your email” and “Draft and send email — it asks you on a card each time”. A muted line saying Recruiter works in your own Chrome where you’re signed in, asking before every click, post, send or payment. Under a hairline, “Connect in Claude instead” as a quiet text action with “Connect Gmail in Claude: it opens Claude’s connectors page; turn on Gmail, then come back.” Right-aligned: secondary “Not now”, secondary “Not needed”, neutral (not accent) “Use my browser”. No password field anywhere.',
     loginCard('hiring', 'Recruiter needs your Gmail (work)', GMAIL_LOGIN)
   ),
   recruiterScenario(
@@ -277,6 +274,23 @@ export const agentsLoginsScenarios: Scenario[] = [
           'claude.ai’s connectors are open in this Mac’s browser. Add Gmail there; this card notices when it’s connected.',
         startedAt: now - MIN,
         fromPhone: true,
+      },
+    })
+  ),
+  recruiterScenario(
+    'agents-login-opened-quiet',
+    'Agents — a sign-in opened in this Mac’s browser, nothing back after 20 s',
+    'The Gmail card mid sign-in on this Mac: a spinner and “Claude’s connectors page opened in your browser. Find Gmail, choose Connect, then come back: this card turns on by itself.”, then a muted line “Still not connected. If Claude’s connectors page didn’t open, open it again or copy the link.” with two quiet text actions “Open again · Copy link”. Only a secondary Cancel on the right. Never a spinner alone.',
+    loginCard('hiring', 'Recruiter needs your Gmail (work)', {
+      ...GMAIL_LOGIN,
+      flow: {
+        state: 'waiting',
+        option: 'claude_ai',
+        message:
+          'Claude’s connectors page opened in your browser. Find Gmail, choose Connect, then come back: this card turns on by itself.',
+        startedAt: now - MIN,
+        url: 'https://claude.ai/customize/connectors',
+        openedAt: now - MIN,
       },
     })
   ),

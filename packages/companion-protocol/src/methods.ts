@@ -12,6 +12,7 @@ import type {
   AgentMessage,
   AgentReach,
   LoginPhoneBegin,
+  DeclineReceipt,
   TeamLogins,
   AgentSecret,
   AgentsOverview,
@@ -193,8 +194,23 @@ export interface Methods {
     params: { key: string; optionId: string; skip?: string[]; onPhone?: boolean };
     result: null;
   };
-  /** "Not needed": the card is put away and the agent isn't woken. */
+  /** One agent's card put away (the agent isn't woken). */
   'agents.loginDismiss': { params: { agentId: string; requestId: string }; result: null };
+  /**
+   * "Not needed" on a card: its app, declined for the whole team and
+   * remembered; every waiting ask for it closes and no agent asks again.
+   * Present when the Mac lists it in `welcome.methods`.
+   */
+  'agents.loginNotNeeded': {
+    params: { agentId: string; requestId: string };
+    result: DeclineReceipt;
+  };
+  /** "Not needed" on rows of "What your team needs" (`keys`), or "Skip the rest" (no `keys`). */
+  'agents.loginsNotNeeded': { params: { keys?: string[] }; result: DeclineReceipt };
+  /** Undo a decline, or turn one back on: how many cards came back (only right after). */
+  'agents.loginsUndecline': { params: { keys: string[] }; result: number };
+  /** The phone is back in front of the user: the Mac checks claude.ai connectors now. */
+  'agents.loginsRecheck': { params: Record<string, never>; result: null };
   /** `agents_memory`: the agent's `## Memory` entries. */
   'agents.memory': { params: { agentId: string }; result: MemoryView };
   /** `agents_memory_change`: add, edit or delete one entry. */

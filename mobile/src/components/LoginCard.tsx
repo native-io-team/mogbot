@@ -38,6 +38,7 @@ import {
   signInWithSheet,
   loginCancel,
   loginDecline,
+  loginNotNeeded,
   loginOutcome,
   loginPhase,
   loginStart,
@@ -52,6 +53,7 @@ import { useApp, useServed } from '../lib/store';
 import { CARD_TITLE_SCALE, fonts, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { Receipt, useArmed, useCardStyles } from './ApprovalCard';
+import { DeclineReceiptLine, useDeclineReceipt, useRecheckWhenBack } from './loginExtras';
 import { ACTION, Card, CardActions, OFFLINE_NOTE } from './surfaces';
 import { Button, T } from './ui';
 
@@ -86,6 +88,11 @@ export function LoginCard({
   const title = loginTitle(approval, login, agent.name);
   const phoneSignIn = useServed('agents.loginPhoneBegin', MAC_FEATURES.loginsPhone);
   const way = (o: LoginOption) => phoneWay(o, phoneSignIn, hasSignInSheet());
+  const canDecline = useServed('agents.loginNotNeeded');
+  const [receipt, setReceipt] = useDeclineReceipt();
+  useRecheckWhenBack(
+    login.flow?.state === 'waiting' && login.flow.onPhone === true && login.flow.option === 'claude_ai'
+  );
 
   const wipe = () => {
     value.current = '';
@@ -143,6 +150,11 @@ export function LoginCard({
       haptic.warning();
     });
   const cancel = () => run('cancel', () => loginCancel(message.agentId, approval.requestId));
+  const notNeeded = () =>
+    run('notNeeded', async () => setReceipt(await loginNotNeeded(message.agentId, approval.requestId)), () => {
+      wipe();
+      haptic.select();
+    });
   const saveKey = () =>
     run(
       'key',
@@ -159,6 +171,9 @@ export function LoginCard({
         <T variant="small" color={colors.textSecondary}>
           {login.why}
         </T>
+        {receipt && (
+          <DeclineReceiptLine receipt={receipt} onDone={() => setReceipt(null)} onError={onError} />
+        )}
       </Receipt>
     );
   }
@@ -235,7 +250,7 @@ export function LoginCard({
           )}
           {!!flow?.onPhone && flowOption?.method === 'claude_ai' && (
             <Button
-              title="Open claude.ai"
+              title="Open Claude’s connectors"
               variant="answer"
               onPress={() => void openHere(CLAUDE_AI_CONNECTORS).catch((e) => setError(describeError(e)))}
               style={ACTION}
@@ -299,6 +314,17 @@ export function LoginCard({
           onPress={() => void decline()}
           style={ACTION}
         />
+        {canDecline && (
+          <Button
+            title="Not needed"
+            variant="outline"
+            busy={busy === 'notNeeded'}
+            disabled={off}
+            onPress={() => void notNeeded()}
+            style={ACTION}
+            testID="login-not-needed"
+          />
+        )}
         {first && first.method !== 'key' && (
           <Button
             title={failed && login.flow?.option === first.id ? 'Try again' : first.label}

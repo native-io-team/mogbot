@@ -28,6 +28,7 @@ import {
   connectNeed,
   hasSignInSheet,
   loginDismiss,
+  loginsNotNeeded,
   openHere,
   phoneDetail,
   phoneWay,
@@ -42,6 +43,7 @@ import { describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
 import { fonts, space, type } from '../lib/theme';
 import { ACTION_ROW, Card, CardActions, Line, TextAction } from './surfaces';
+import { DeclineReceiptLine, useDeclineReceipt, useRecheckWhenBack } from './loginExtras';
 import { Button, T } from './ui';
 
 /** How often the list is read again while a sign-in runs on the Mac. */
@@ -92,6 +94,13 @@ export function TeamLoginsList({
     if (live) load();
   }, [live, load, stamp]);
   const signingIn = !!team?.needs.some((n) => n.cards.some(onMac));
+  const canDecline = useServed('agents.loginsNotNeeded');
+  const [receipt, setReceipt] = useDeclineReceipt();
+  useRecheckWhenBack(
+    !!team?.needs.some((n) =>
+      n.cards.some((c) => c.flow?.state === 'waiting' && c.flow.onPhone && c.flow.option === 'claude_ai')
+    )
+  );
   useEffect(() => {
     if (!signingIn || !live) return;
     const timer = setInterval(load, LIVE_MS);
@@ -113,6 +122,7 @@ export function TeamLoginsList({
     }
   };
 
+  const waitingKeys = (team?.needs ?? []).filter((n) => !n.done).map((n) => n.key);
   if (!team) {
     return (
       <View style={styles.loading}>
@@ -128,9 +138,31 @@ export function TeamLoginsList({
   }
   return (
     <View style={styles.root} testID="team-logins">
-      <T variant="small" color={colors.textSecondary} testID="team-progress">
-        {teamProgress(team)}
-      </T>
+      <View style={styles.top}>
+        <T variant="small" color={colors.textSecondary} testID="team-progress" style={{ flex: 1 }}>
+          {teamProgress(team)}
+        </T>
+        {canDecline && waitingKeys.length > 1 && (
+          <TextAction
+            label="Skip the rest"
+            muted
+            disabled={!live || !!busy}
+            onPress={() =>
+              void act('skip-rest', async () => setReceipt(await loginsNotNeeded(waitingKeys)))
+            }
+          />
+        )}
+      </View>
+      {receipt && (
+        <DeclineReceiptLine
+          receipt={receipt}
+          onDone={() => {
+            setReceipt(null);
+            load();
+          }}
+          onError={setError}
+        />
+      )}
       {team.total === 0 && !embedded && (
         <Line text="Nothing waiting. When an agent needs an app, it shows here and in its chat." />
       )}
@@ -159,6 +191,11 @@ export function TeamLoginsList({
             })
           }
           onDismiss={(c) => void act(c.requestId, () => loginDismiss(c.agentId, c.requestId))}
+          onNotNeeded={
+            canDecline
+              ? () => void act(`${n.key}:not-needed`, async () => setReceipt(await loginsNotNeeded([n.key])))
+              : undefined
+          }
         />
       ))}
       {error && (
@@ -177,6 +214,7 @@ function Need({
   way,
   onConnect,
   onDismiss,
+  onNotNeeded,
 }: {
   need: TeamNeed;
   live: boolean;
@@ -184,6 +222,8 @@ function Need({
   way: (o: LoginOption) => ReturnType<typeof phoneWay>;
   onConnect: (option: LoginOption) => void;
   onDismiss: (card: TeamCard) => void;
+  /** The app, declined for the whole team (a Mac that serves it). */
+  onNotNeeded?: () => void;
 }) {
   const colors = useColors();
   const styles = useStyles();
@@ -215,7 +255,8 @@ function Need({
             </T>
             {c.state === 'waiting' && !onMac(c) && (
               <TextAction
-                label="Not needed"
+                label={onNotNeeded ? 'Skip' : 'Not needed'}
+                hint={onNotNeeded ? `Puts away ${c.agentName}’s card only` : undefined}
                 muted
                 disabled={!live || !!busy}
                 onPress={() => onDismiss(c)}
@@ -242,6 +283,17 @@ function Need({
       )}
       {running ? null : first ? (
         <CardActions>
+          {onNotNeeded && (
+            <Button
+              title="Not needed"
+              variant="outline"
+              busy={busy === `${need.key}:not-needed`}
+              disabled={off}
+              onPress={onNotNeeded}
+              style={ACTION_ROW}
+              testID={`need-not-needed-${need.key}`}
+            />
+          )}
           <Button
             title={`${first.label}${waiting.length > 1 ? ` for ${waiting.length}` : ''}`}
             variant="answer"
@@ -263,10 +315,25 @@ function Need({
           ))}
         </CardActions>
       ) : (
-        <T variant="small" color={colors.textMuted}>
-          Nothing on your Mac can connect this. Open each agent’s card to enter a key, or mark it
-          Not needed.
-        </T>
+        <>
+          <T variant="small" color={colors.textMuted}>
+            Nothing on your Mac can connect this. Open each agent’s card to enter a key, or mark it
+            Not needed.
+          </T>
+          {onNotNeeded && (
+            <CardActions>
+              <Button
+                title="Not needed"
+                variant="outline"
+                busy={busy === `${need.key}:not-needed`}
+                disabled={!live || !!busy}
+                onPress={onNotNeeded}
+                style={ACTION_ROW}
+                testID={`need-not-needed-${need.key}`}
+              />
+            </CardActions>
+          )}
+        </>
       )}
     </Card>
   );
@@ -314,7 +381,7 @@ function RunningLine({ card }: { card?: TeamCard }) {
         )}
         {flow.option === 'claude_ai' && (
           <Button
-            title="Open claude.ai"
+            title="Open Claude’s connectors"
             variant="answer"
             onPress={() => void openHere(CLAUDE_AI_CONNECTORS)}
             style={ACTION_ROW}
@@ -329,6 +396,7 @@ const useStyles = makeStyles((colors) => ({
   running: { gap: space.sm },
   code: { fontFamily: fonts.mono, fontSize: type.title },
   root: { gap: space.md },
+  top: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   // On a sheet the page is the card's own colour: the grouped surface sets it apart.
   card: { backgroundColor: colors.surfaceGroup },
   loading: { padding: space.xl, alignItems: 'center' },

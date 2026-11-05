@@ -644,6 +644,33 @@ impl Backend for DesktopBackend {
         .await
     }
 
+    async fn login_not_needed(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_login_not_needed(
+                self.app.clone(),
+                agent_id.to_string(),
+                request_id.to_string(),
+            )
+            .await?,
+        )
+    }
+
+    async fn logins_not_needed(&self, keys: Option<Vec<String>>) -> Result<Value, CommandError> {
+        json(cmd::agents_logins_not_needed(self.app.clone(), keys).await?)
+    }
+
+    async fn logins_undecline(&self, keys: Vec<String>) -> Result<Value, CommandError> {
+        json(cmd::agents_logins_undecline(self.app.clone(), keys).await?)
+    }
+
+    async fn logins_recheck(&self) -> Result<(), CommandError> {
+        cmd::agents_logins_recheck().await
+    }
+
     async fn team_setup(
         &self,
         action: super::router::TeamSetupAction,

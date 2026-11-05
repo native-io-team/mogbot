@@ -319,6 +319,41 @@ pub struct Flow {
     pub user_code: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verification_uri: Option<String>,
+    /// The page this Mac's browser was asked to open (a sign-in, claude.ai's
+    /// connectors), for "Open again" and "Copy link". Only while waiting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// When the OS was last asked to open `url`. The card says plainly when
+    /// nothing has come back [`NO_CALLBACK_MS`] after it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opened_at: Option<i64>,
+}
+
+/// How long a sign-in opened in the browser waits before the card says
+/// nothing came back (with Open again · Copy link), rather than spinning.
+pub const NO_CALLBACK_MS: i64 = 20_000;
+
+/// Open `url` in this Mac's default browser (Tauri's opener, which is
+/// `open` on macOS). A failure is logged plainly: on a Mac where something
+/// else answers for the browser, the user sees nothing, and the log says
+/// what the OS reported.
+pub(crate) fn open_in_browser(url: &str) -> Result<(), CommandError> {
+    let host = url::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+        .unwrap_or_default();
+    match tauri_plugin_opener::open_url(url, None::<&str>) {
+        Ok(()) => {
+            tracing::info!(%host, "asked the OS to open a sign-in page in the default browser");
+            Ok(())
+        }
+        Err(e) => {
+            tracing::warn!(%host, error = %e, "the OS couldn't open the default browser for a sign-in");
+            Err(CommandError::expected(
+                "Couldn't open this Mac's browser. Copy the link and open it yourself.",
+            ))
+        }
+    }
 }
 
 /// What a login card carries (`Approval.login`).
@@ -501,7 +536,7 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
             id: "claude_ai".into(),
             method: Method::ClaudeAi,
             label: format!("Connect {title}"),
-            detail: format!("Uses claude.ai's {on} connector, which keeps the sign-in with your Claude account. If it isn't added yet, claude.ai opens in this Mac's browser to add it. {name} never sees a password."),
+            detail: format!("Connect {on} in Claude: it opens Claude's connectors page; turn on {on}, then come back. The sign-in stays with your Claude account and {name} never sees a password."),
             connection_id: None,
         }),
         Connector::ClaudeAi(_) => {
@@ -545,6 +580,19 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
             no_connector = no_connector.map(|n| {
                 format!("{n} Using your browser needs Claude Code, and {name} runs on Codex.")
             });
+        }
+    }
+    // Browser first for a claude.ai service (Gmail, Calendar, Drive, Slack):
+    // the user's own signed-in Chrome is the way in that works; claude.ai's
+    // connector stays as the secondary "Connect in Claude instead".
+    if let (Some(c), Some(b)) = (
+        options.iter().position(|o| o.method == Method::ClaudeAi),
+        options.iter().position(|o| o.method == Method::Browser),
+    ) {
+        let browser = options.remove(b);
+        options.insert(c, browser);
+        if let Some(o) = options.iter_mut().find(|o| o.method == Method::ClaudeAi) {
+            o.label = "Connect in Claude instead".into();
         }
     }
     // A key only where a raw API key is a real way in, or for a service
@@ -713,6 +761,10 @@ fn set_flow(
     emit_card(app, agent_id, request_id);
 }
 
+pub(crate) fn forget_flow(request_id: &str) {
+    clear_flow(request_id);
+}
+
 fn clear_flow(request_id: &str) {
     super::login_relay::forget_request(request_id);
     if let Some(live) = FLOWS
@@ -846,10 +898,19 @@ impl Run {
             on_phone: self.origin.on_phone,
             user_code: None,
             verification_uri: None,
+            url: None,
+            opened_at: None,
         }
     }
     pub fn set(&self, state: FlowState, message: Option<String>) {
         self.set_flow(self.flow(state, message), None);
+    }
+    /// Waiting on a page this Mac's browser was just asked to open.
+    pub fn opened(&self, url: &str, message: String) {
+        let mut flow = self.flow(FlowState::Waiting, Some(message));
+        flow.url = Some(url.to_string());
+        flow.opened_at = Some(store::now_ms());
+        self.set_flow(flow, None);
     }
     pub fn set_flow(&self, flow: Flow, task: Option<tokio::task::AbortHandle>) {
         set_flow(&self.app, &self.agent_id, &self.request_id, flow, task);
@@ -1068,14 +1129,18 @@ pub async fn start(
             let task = tokio::spawn(async move {
                 let outcome = async {
                     let pending = super::oauth::begin(url).await?;
-                    tauri_plugin_opener::open_url(&pending.url, None::<&str>)
-                        .map_err(|_| CommandError::expected("Couldn't open this Mac's browser."))?;
-                    run2.set(
-                        FlowState::Waiting,
-                        Some(format!(
-                            "{}'s sign-in is open in this Mac's browser.",
-                            r2.title
-                        )),
+                    // Opening can fail, or "succeed" into a browser the user
+                    // can't see: either way the card keeps the link.
+                    let opened = open_in_browser(&pending.url);
+                    run2.opened(
+                        &pending.url,
+                        match opened {
+                            Ok(()) => format!("{}'s sign-in opened in your browser.", r2.title),
+                            Err(_) => format!(
+                                "Couldn't open your browser. Copy the link to sign in to {}.",
+                                r2.title
+                            ),
+                        },
                     );
                     pending.finish().await
                 }
@@ -1120,17 +1185,29 @@ async fn watch_claude_ai(run: &Run, name: &str) -> Result<String, CommandError> 
     if let Some(found) = connected().await {
         return Ok(found);
     }
-    let message = if run.origin.on_phone {
-        format!("Add {name} on claude.ai on your phone, signed in to the same Claude account as this Mac; this card notices when it's connected.")
+    if run.origin.on_phone {
+        run.set(
+            FlowState::Waiting,
+            Some(format!("Connect {name} in Claude on your phone, signed in to the same Claude account as this Mac: Customize, then Connectors. This card turns on by itself.")),
+        );
     } else {
-        tauri_plugin_opener::open_url(CLAUDE_AI_CONNECTORS, None::<&str>)
-            .map_err(|_| CommandError::expected("Couldn't open this Mac's browser."))?;
-        format!("claude.ai's connectors are open in this Mac's browser. Add {name} there; this card notices when it's connected.")
-    };
-    run.set(FlowState::Waiting, Some(message));
+        let opened = open_in_browser(CLAUDE_AI_CONNECTORS);
+        run.opened(
+            CLAUDE_AI_CONNECTORS,
+            match opened {
+                Ok(()) => format!("Claude's connectors page opened in your browser. Find {name}, choose Connect, then come back: this card turns on by itself."),
+                Err(_) => format!("Couldn't open your browser. Copy the link, connect {name} on Claude's connectors page, then come back."),
+            },
+        );
+    }
+    // Checked every 20 seconds, and at once when the user comes back to
+    // the app ([`recheck`]), for up to ten minutes.
     let until = std::time::Instant::now() + super::oauth::SIGN_IN_TIMEOUT;
     while std::time::Instant::now() < until {
-        tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+        tokio::select! {
+            _ = tokio::time::sleep(std::time::Duration::from_secs(20)) => {}
+            _ = RECHECK.notified() => {}
+        }
         if let Some(found) = connected().await {
             return Ok(found);
         }
@@ -1138,8 +1215,43 @@ async fn watch_claude_ai(run: &Run, name: &str) -> Result<String, CommandError> 
     Err(CommandError::expected(format!("{name} didn't show up as connected within ten minutes. Try again once it's added on claude.ai.")))
 }
 
-/// Where claude.ai's connectors are added (opened on the Mac, or the phone).
-pub const CLAUDE_AI_CONNECTORS: &str = "https://claude.ai/settings/connectors";
+/// Where claude.ai's connectors are added (opened on the Mac, or the
+/// phone): Customize → Connectors. The one copy the TypeScript side has is
+/// `packages/companion-protocol/src/links.ts`; a test holds them equal.
+/// Verified 2026-11-05 against claude.com/docs/connectors (Gmail, directory):
+/// `/settings/connectors` now says it moved to Customize, and there's no
+/// documented link to a single connector.
+pub const CLAUDE_AI_CONNECTORS: &str = "https://claude.ai/customize/connectors";
+
+/// Wakes every claude.ai watcher to check now: the user is back in the app.
+static RECHECK: tokio::sync::Notify = tokio::sync::Notify::const_new();
+
+/// Check claude.ai connectors waiting on a card now (the window regained
+/// focus, or the phone app came back).
+pub fn recheck() {
+    RECHECK.notify_waiters();
+}
+
+/// "Open again": the page a waiting card opened, opened again on this Mac.
+pub fn reopen(app: &AppHandle, agent_id: &str, request_id: &str) -> Result<(), CommandError> {
+    let flow = flow_of(request_id)
+        .filter(|f| f.state == FlowState::Waiting)
+        .ok_or_else(|| CommandError::expected("Nothing is waiting to sign in on this card."))?;
+    let url = flow
+        .url
+        .clone()
+        .ok_or_else(|| CommandError::expected("This sign-in isn't in this Mac's browser."))?;
+    let opened = open_in_browser(&url);
+    let mut next = flow;
+    next.opened_at = Some(store::now_ms());
+    if opened.is_err() {
+        next.message =
+            Some("Couldn't open your browser. Copy the link and open it yourself.".into());
+    }
+    set_flow(app, agent_id, request_id, next, None);
+    recheck();
+    opened
+}
 
 /// Stop a sign-in under way. The card stays, to try again or decline.
 pub fn cancel(app: &AppHandle, agent_id: &str, request_id: &str) -> Result<(), CommandError> {
@@ -1264,8 +1376,28 @@ pub async fn allow_from_old_client(
 
 /* --------------------------------------------------------------- cards */
 
+/// The user chose not to connect what this asks for: the answer instead
+/// of a card (`declined.rs`).
+pub fn declined_reply(agent: &Agent, ask: &Ask) -> Option<String> {
+    let r = build(agent, ask).ok()?;
+    super::declined::find(&super::declined::key_of(&r)).map(|d| super::declined::refusal(&d.title))
+}
+
+/// "Gmail", "Gmail and Slack", "Gmail, Slack and X".
+pub fn list_names(names: &[String]) -> String {
+    match names {
+        [] => String::new(),
+        [one] => one.clone(),
+        [a, b] => format!("{a} and {b}"),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
 /// A login card in `agent`'s chat. One per service at a time.
 pub fn raise(app: &AppHandle, agent: &Agent, ask: &Ask) -> Result<String, CommandError> {
+    if let Some(reply) = declined_reply(agent, ask) {
+        return Ok(reply);
+    }
     let r = build(agent, ask)?;
     if let Some(open) = store::pending_approvals(&agent.id)
         .unwrap_or_default()
@@ -1301,7 +1433,29 @@ pub fn raise(app: &AppHandle, agent: &Agent, ask: &Ask) -> Result<String, Comman
     Ok(reply)
 }
 
-fn record_card(app: &AppHandle, agent: &Agent, r: LoginRequest) -> Result<(), CommandError> {
+pub(crate) fn record_card(
+    app: &AppHandle,
+    agent: &Agent,
+    r: LoginRequest,
+) -> Result<(), CommandError> {
+    runner::record_own(app, card_message(agent, r))?;
+    store::refresh_pending(&agent.id);
+    super::notify::refresh_badge(app);
+    let _ = app.emit(runner::EVENT_REGISTRY, ());
+    Ok(())
+}
+
+/// The card in the log without the app (tests): its request id.
+#[cfg(test)]
+pub(crate) fn store_card(agent: &Agent, r: LoginRequest) -> Result<String, CommandError> {
+    let m = card_message(agent, r);
+    let id = m.approval.as_ref().unwrap().request_id.clone();
+    store::append_message(&m)?;
+    store::refresh_pending(&agent.id);
+    Ok(id)
+}
+
+fn card_message(agent: &Agent, r: LoginRequest) -> AgentMessage {
     let mut card = runner::new_message(&agent.id, MessageKind::Approval, "");
     card.approval = Some(Approval {
         request_id: store::new_id(),
@@ -1321,11 +1475,7 @@ fn record_card(app: &AppHandle, agent: &Agent, r: LoginRequest) -> Result<(), Co
         login: Some(r),
         set_aside: None,
     });
-    runner::record_own(app, card)?;
-    store::refresh_pending(&agent.id);
-    super::notify::refresh_badge(app);
-    let _ = app.emit(runner::EVENT_REGISTRY, ());
-    Ok(())
+    card
 }
 
 /// A secret request an older build (or an import) would have raised, as a
@@ -1563,8 +1713,10 @@ pub fn team(since: Option<i64>) -> TeamLogins {
                 continue;
             }
             let (fam, fam_title) = family(&l.service);
+            // An app the catalogue doesn't know is its own row, by title,
+            // never one "other" row for every unknown app.
             let key = if fam.is_empty() {
-                l.service.clone()
+                super::declined::key(&l.service, &l.title)
             } else {
                 fam.to_string()
             };
@@ -1638,11 +1790,13 @@ pub fn team(since: Option<i64>) -> TeamLogins {
             }
         }
     }
+    // A claude.ai connector comes after the browser, as on the card.
     let rank = |m: Method| match m {
-        Method::Oauth | Method::ClaudeAi | Method::Gh => 0,
+        Method::Oauth | Method::Gh => 0,
         Method::Browser => 1,
-        Method::Key => 2,
-        Method::Existing => 3,
+        Method::ClaudeAi => 2,
+        Method::Key => 3,
+        Method::Existing => 4,
     };
     for n in &mut needs {
         n.options.sort_by_key(|o| rank(o.method));
@@ -1897,6 +2051,30 @@ pub struct Reach {
     pub secrets: Vec<ReachSecret>,
     /// Claude Code apps this agent is kept from (by name in Claude Code).
     pub blocked_apps: Vec<String>,
+    /// Apps the user chose not to connect, for the whole team (`declined.rs`):
+    /// each can be turned back on here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub declined: Vec<ReachDeclined>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReachDeclined {
+    pub key: String,
+    pub title: String,
+    pub declined_at: i64,
+}
+
+/// Everything declined, as "What it can reach" and Settings list it.
+pub fn reach_declined() -> Vec<ReachDeclined> {
+    super::declined::list()
+        .into_iter()
+        .map(|d| ReachDeclined {
+            key: d.key,
+            title: d.title,
+            declined_at: d.declined_at,
+        })
+        .collect()
 }
 
 pub fn reach(agent: &Agent) -> Reach {
@@ -1931,6 +2109,7 @@ pub fn reach(agent: &Agent) -> Reach {
             })
             .collect(),
         blocked_apps: agent.reach.blocked_apps.clone(),
+        declined: reach_declined(),
     }
 }
 
@@ -1959,6 +2138,11 @@ pub enum Removal {
     #[serde(rename_all = "camelCase")]
     UnblockApp {
         name: String,
+    },
+    /// Turn a declined app back on (for the whole team): agents may ask again.
+    #[serde(rename_all = "camelCase")]
+    Undecline {
+        key: String,
     },
 }
 
@@ -1989,6 +2173,7 @@ pub fn remove(agent_id: &str, removal: &Removal) -> Result<Reach, CommandError> 
         Removal::UnblockApp { name } => {
             store::update(agent_id, |a| a.reach.blocked_apps.retain(|n| n != name))?;
         }
+        Removal::Undecline { key } => super::declined::forget(key)?,
     }
     Ok(reach(&store::get(agent_id)?))
 }
@@ -2029,6 +2214,48 @@ mod tests {
     }
 
     #[test]
+    fn the_connectors_link_is_the_one_the_desk_and_phone_use() {
+        let ts = include_str!("../../../packages/companion-protocol/src/links.ts");
+        assert!(
+            ts.contains(&format!(
+                "CLAUDE_AI_CONNECTORS_URL = '{CLAUDE_AI_CONNECTORS}'"
+            )),
+            "links.ts and logins.rs disagree on claude.ai's connectors page"
+        );
+        let u = url::Url::parse(CLAUDE_AI_CONNECTORS).unwrap();
+        assert_eq!(u.scheme(), "https");
+        assert_eq!(u.host_str(), Some("claude.ai"));
+        assert_eq!(u.path(), "/customize/connectors");
+    }
+
+    #[test]
+    fn a_claude_ai_card_says_where_to_go_and_to_come_back() {
+        with_root(|| {
+            let recruiter = agent("Recruiter", Engine::Claude);
+            let gmail = build(&recruiter, &ask("gmail", &[])).unwrap();
+            let o = gmail
+                .options
+                .iter()
+                .find(|o| o.method == Method::ClaudeAi)
+                .unwrap();
+            assert!(o.detail.starts_with(
+                "Connect Gmail in Claude: it opens Claude's connectors page; turn on Gmail, then come back."
+            ));
+        });
+    }
+
+    #[test]
+    fn unknown_apps_get_a_row_each() {
+        with_root(|| {
+            let books = agent("Bookkeeper", Engine::Claude);
+            store_card(&books, build(&books, &ask("Acme Bank", &[])).unwrap()).unwrap();
+            store_card(&books, build(&books, &ask("Notetaker Pro", &[])).unwrap()).unwrap();
+            let keys: Vec<String> = team(None).needs.into_iter().map(|n| n.key).collect();
+            assert_eq!(keys, vec!["other:acme bank", "other:notetaker pro"]);
+        });
+    }
+
+    #[test]
     fn free_text_names_find_their_service() {
         let id = |t: &str| match_service(t).map(|s| s.id);
         assert_eq!(id("Work Gmail inbox (gmail_work)"), Some("gmail"));
@@ -2049,8 +2276,10 @@ mod tests {
         with_root(|| {
             let recruiter = agent("Recruiter", Engine::Claude);
             let gmail = build(&recruiter, &ask("gmail", &["read", "send"])).unwrap();
-            assert_eq!(gmail.options[0].method, Method::ClaudeAi);
-            assert_eq!(gmail.options[1].method, Method::Browser);
+            // Browser first; claude.ai's connector is the secondary way in.
+            assert_eq!(gmail.options[0].method, Method::Browser);
+            assert_eq!(gmail.options[1].method, Method::ClaudeAi);
+            assert_eq!(gmail.options[1].label, "Connect in Claude instead");
             assert!(gmail.key.is_none(), "no password field for Gmail");
             assert_eq!(gmail.access(), Access::Full);
             assert!(gmail.abilities[1].label.contains("asks you"));
@@ -2437,7 +2666,8 @@ mod tests {
                     .collect::<Vec<_>>(),
                 vec!["Recruiter", "Mailroom", "Calendar"]
             );
-            assert_eq!(google.options[0].method, Method::ClaudeAi);
+            assert_eq!(google.options[0].method, Method::Browser);
+            assert_eq!(google.options[1].method, Method::ClaudeAi);
             let gh = t.needs.iter().find(|n| n.key == "github").unwrap();
             assert_eq!(
                 gh.cards.len(),

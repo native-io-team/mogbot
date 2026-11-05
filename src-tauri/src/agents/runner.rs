@@ -2946,6 +2946,11 @@ pub(super) fn system_prompt_for(
     prompt.push_str(&super::independence::prompt_section(
         super::independence::for_turn(super::independence::level(), from_outside(&agent.id)),
     ));
+    // Apps the user chose not to connect: don't ask, work around them.
+    if let Some(declined) = super::declined::prompt_section() {
+        prompt.push_str("\n\n");
+        prompt.push_str(&declined);
+    }
     if agent.is_main {
         if let Some(team) = store::list()
             .ok()

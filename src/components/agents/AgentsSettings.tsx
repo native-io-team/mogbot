@@ -32,6 +32,7 @@ import { AgentDefaultsSettings } from './AgentDefaultsSettings';
 import { AgentAccounts } from './AgentAccounts';
 import { AgentUsageSettings } from './AgentsUsage';
 import { AgentIndependenceSettings } from './AgentIndependenceSettings';
+import { DeclinedAppsSettings } from './DeclinedAppsSettings';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
@@ -153,6 +154,8 @@ export function AgentsSettings({
       {engines.some((e) => e.installed) && <AgentUsageSettings />}
 
       {engines.some((e) => e.installed) && <AgentAccounts engines={engines} />}
+
+      <DeclinedAppsSettings />
 
       <section className="settings-group" aria-labelledby="agents-settings-notify">
         <h3 className="settings-group__title" id="agents-settings-notify">

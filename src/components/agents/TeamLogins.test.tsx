@@ -77,7 +77,7 @@ describe('TeamLogins', () => {
     expect(screen.queryByText('Recruiter')).toBeNull();
   });
 
-  it('Not needed puts one agent’s card away', async () => {
+  it('Skip puts one agent’s card away', async () => {
     const calls: [string, unknown][] = [];
     mockIPC((cmd, args) => {
       calls.push([cmd, args]);
@@ -86,13 +86,94 @@ describe('TeamLogins', () => {
     render(<TeamLogins />);
     await screen.findByText('Used by Site, Docs and Release');
     await act(async () => {
-      fireEvent.click(screen.getAllByRole('button', { name: 'Not needed' })[0]);
+      fireEvent.click(screen.getByRole('button', { name: 'Skip Site' }));
       await Promise.resolve();
     });
     expect(calls).toContainEqual([
       'agents_login_dismiss',
       { agentId: 'site', requestId: 'r-site' },
     ]);
+  });
+});
+
+describe('TeamLogins — Not needed', () => {
+  const OTHER = {
+    key: 'other:acme bank',
+    title: 'Acme Bank',
+    services: ['other'],
+    options: [],
+    cards: [{ ...card('books', 'Bookkeeper'), service: 'other', title: 'Acme Bank' }],
+    done: false,
+  };
+  const WITH_BANK: Team = { needs: [TEAM.needs[0], OTHER, TEAM.needs[1]], done: 1, total: 3 };
+
+  it('every row offers Not needed beside its main action, even one nothing can connect', async () => {
+    const calls: [string, unknown][] = [];
+    mockIPC((cmd, args) => {
+      calls.push([cmd, args]);
+      if (cmd === 'agents_logins_team') return WITH_BANK;
+      if (cmd === 'agents_logins_not_needed')
+        return { keys: ['other:acme bank'], line: 'Not connecting Acme Bank.', closed: 1 };
+      return null;
+    });
+    render(<TeamLogins />);
+    await screen.findByText('Used by Bookkeeper');
+    const rows = screen.getAllByRole('button', { name: 'Not needed' });
+    expect(rows).toHaveLength(2);
+    await act(async () => {
+      fireEvent.click(rows[1]);
+      await Promise.resolve();
+    });
+    expect(calls).toContainEqual(['agents_logins_not_needed', { keys: ['other:acme bank'] }]);
+  });
+
+  it('Skip the rest declines every row still waiting', async () => {
+    const calls: [string, unknown][] = [];
+    mockIPC((cmd, args) => {
+      calls.push([cmd, args]);
+      if (cmd === 'agents_logins_team') return WITH_BANK;
+      if (cmd === 'agents_logins_not_needed')
+        return { keys: ['github', 'other:acme bank'], line: 'Not connecting them.', closed: 4 };
+      return null;
+    });
+    render(<TeamLogins />);
+    await screen.findByText('Used by Bookkeeper');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Skip the rest' }));
+      await Promise.resolve();
+    });
+    expect(calls).toContainEqual([
+      'agents_logins_not_needed',
+      { keys: ['github', 'other:acme bank'] },
+    ]);
+  });
+});
+
+describe('AgentReach — declined apps', () => {
+  it('lists apps the user chose not to connect, each turned back on in one click', async () => {
+    const calls: [string, unknown][] = [];
+    const reach = {
+      connections: [],
+      secrets: [],
+      blockedApps: [],
+      declined: [{ key: 'other:acme bank', title: 'Acme Bank', declinedAt: 1 }],
+    };
+    mockIPC((cmd, args) => {
+      calls.push([cmd, args]);
+      if (cmd === 'agents_reach') return reach;
+      return { ...reach, declined: [] };
+    });
+    render(<AgentReach agent={{ id: 'books', name: 'Bookkeeper' } as Agent} />);
+    await screen.findByText('Acme Bank');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Turn back on' }));
+      await Promise.resolve();
+    });
+    expect(calls).toContainEqual([
+      'agents_reach_remove',
+      { agentId: 'books', removal: { kind: 'undecline', key: 'other:acme bank' } },
+    ]);
+    await waitFor(() => expect(screen.queryByText('Acme Bank')).toBeNull());
   });
 });
 

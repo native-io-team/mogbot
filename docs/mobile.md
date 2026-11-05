@@ -149,7 +149,10 @@ inside it.
   `agents.loginSaveKey` (as `saveSecret`), `agents.loginsTeam|loginsConnect` ("What your team needs"),
   `agents.reach` (read-only); Mac feature `logins.phone`: `agents.loginPhoneBegin|loginPhoneFinish`
   (the sign-in sheet; the finish goes only to an identity-verified Mac) and `onPhone` on
-  `agents.loginStart|loginsConnect`
+  `agents.loginStart|loginsConnect`; "Not needed" for the team (docs/agents.md, "Not needed"):
+  `agents.loginNotNeeded|loginsNotNeeded|loginsUndecline` (shown only when the Mac lists them),
+  `agents.reach`'s `declined` (each with "Turn back on"), and `agents.loginsRecheck` when the app
+  comes back while claude.ai is being connected here
 - `agents.update` (`pinned`, `muted`, `hidden`, `instructions`),
   `agents.instructions|usage|revokePermission|changeDiff`
 - `agents.files|fetchPath|search`, `agents.schedule.preview|create|update|pause|cancel|runNow`
