@@ -1080,7 +1080,7 @@ pub(crate) fn preview_for(message: &AgentMessage) -> Option<String> {
             .approval
             .as_ref()
             .map(|a| format!("Needs your OK: {}", a.title)),
-        MessageKind::CheckIn => Some("Scheduled check-in".to_string()),
+        MessageKind::CheckIn => Some("Scheduled routine".to_string()),
         MessageKind::Note | MessageKind::Changes | MessageKind::Session => None,
     }
 }

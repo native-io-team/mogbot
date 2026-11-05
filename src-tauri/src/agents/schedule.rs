@@ -743,7 +743,7 @@ impl Refused {
         match self {
             Refused::Invalid { why, .. } => plain_reason(why),
             Refused::Full => {
-                format!("the agent already has {MAX_PER_AGENT} check-ins and routines.")
+                format!("the agent already has {MAX_PER_AGENT} routines.")
             }
             Refused::Duplicate => "it's already set.".into(),
             Refused::Store(e) => e.to_string(),
@@ -895,7 +895,7 @@ fn edit_in<Tz: TimeZone>(
     };
     let note = note.trim();
     let mut outcome: Result<CheckIn, CommandError> =
-        Err(CommandError::expected("That check-in no longer exists."));
+        Err(CommandError::expected("That routine no longer exists."));
     store::update(agent_id, |agent| {
         let Some(i) = agent.check_ins.iter().position(|c| c.id == id) else {
             return;
@@ -928,7 +928,7 @@ fn edit_in<Tz: TimeZone>(
             .any(|c| c.id != id && same_schedule(c, &edited));
         if clash {
             outcome = Err(CommandError::expected(
-                "That check-in is already scheduled.",
+                "That routine is already scheduled.",
             ));
             return;
         }
@@ -984,7 +984,7 @@ fn manual_firing(agent: &store::Agent, id: &str) -> Result<Firing, CommandError>
         .iter()
         .find(|c| c.id == id)
         .cloned()
-        .ok_or_else(|| CommandError::expected("That check-in no longer exists."))?;
+        .ok_or_else(|| CommandError::expected("That routine no longer exists."))?;
     Ok(Firing {
         agent_id: agent.id.clone(),
         check_in,
@@ -1068,7 +1068,7 @@ pub fn set_paused(agent_id: &str, id: &str, paused: bool) -> Result<(), CommandE
     if found {
         Ok(())
     } else {
-        Err(CommandError::expected("That check-in no longer exists."))
+        Err(CommandError::expected("That routine no longer exists."))
     }
 }
 

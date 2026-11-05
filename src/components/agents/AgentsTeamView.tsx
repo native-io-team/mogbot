@@ -11,6 +11,11 @@
  * session is already live in the store; for the rest this reads the last
  * few lines, again whenever that agent's row changes. Nothing is inferred.
  *
+ * Rooms: a card or reply said in a room says which room ("in Pricing
+ * launch"), is answered here like any other, and its row opens the room. A
+ * card waiting in a room is also read from the room's own thread, so it is
+ * here even when the agent's own recent lines don't reach it.
+ *
  * @module components/agents/AgentsTeamView
  */
 
@@ -47,6 +52,7 @@ import {
   type AgentMessage,
 } from '../../lib/agents';
 import { refreshAgents, upsertMessage, useAgentsSelector } from '../../lib/agentsStore';
+import { getRoomMessages, roomKey, type Room } from '../../lib/agentRooms';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { AgentsStayOnNote } from './AgentsStayOn';
@@ -99,6 +105,57 @@ function useRecentLines(agents: Agent[], loaded: Record<string, AgentMessage[]>)
   }, [fetched, loaded]);
 }
 
+/**
+ * Cards waiting in rooms, read from each room's own thread while one of its
+ * members is waiting on you there; refetched when that member's row changes.
+ */
+function useRoomCards(agents: Agent[], rooms: Room[], loaded: Record<string, AgentMessage[]>) {
+  const [fetched, setFetched] = useState<Record<string, { key: string; lines: AgentMessage[] }>>(
+    {}
+  );
+  const wanted = rooms
+    .map((room) => {
+      const asking = agents.filter(
+        (a) => !a.hidden && room.members.includes(a.id) && needsYou(a) && a.status.room === room.id
+      );
+      return {
+        id: room.id,
+        key: asking.map((a) => `${a.id}:${a.lastActivityAt}:${a.pendingApprovals}`).join(' '),
+        live: Boolean(loaded[roomKey(room.id)]),
+      };
+    })
+    .filter((w) => w.key);
+  const signature = wanted.map((w) => `${w.id}@${w.key}`).join(' ');
+
+  useEffect(() => {
+    let live = true;
+    for (const w of wanted) {
+      if (w.live || fetched[w.id]?.key === w.key) continue;
+      getRoomMessages(w.id, CARD_LINES)
+        .then((lines) => {
+          if (live) setFetched((current) => ({ ...current, [w.id]: { key: w.key, lines } }));
+        })
+        .catch(() => {
+          /* that room just doesn't contribute; its member's own lines still do */
+        });
+    }
+    return () => {
+      live = false;
+    };
+  }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A few rooms' lines at most: cheap enough to read on every render.
+  const byAgent = new Map<string, AgentMessage[]>();
+  for (const w of wanted) {
+    const lines = loaded[roomKey(w.id)] ?? fetched[w.id]?.lines ?? [];
+    for (const m of lines) {
+      if (m.approval?.status !== 'pending' || !m.agentId) continue;
+      byAgent.set(m.agentId, [...(byAgent.get(m.agentId) ?? []), { ...m, room: w.id }]);
+    }
+  }
+  return byAgent;
+}
+
 function Section({
   title,
   hint,
@@ -123,19 +180,22 @@ function Section({
 
 interface RowProps {
   agent: Agent;
+  /** Said in a room: its name, after the agent's ("in Pricing launch"). */
+  place?: string;
   line: string;
   meta?: ReactNode;
   state?: 'working' | 'waiting' | 'failed' | 'limited';
   onOpen: () => void;
 }
 
-function Row({ agent, line, meta, state, onOpen }: RowProps) {
+function Row({ agent, place, line, meta, state, onOpen }: RowProps) {
   return (
     <button type="button" tabIndex={0} className="agents-team__row" onClick={onOpen}>
       <AgentAvatar name={agent.name} color={agent.color} />
       <span className="agents-team__text">
         <span className="agents-team__name">
           <span className="agents-team__name-text">{agent.name}</span>
+          {place && <span className="agents-team__place">in {place}</span>}
           <AgentEngineBadge engine={agent.engine} />
         </span>
         <span className="agents-team__line" data-state={state}>
@@ -188,7 +248,17 @@ export function AgentsTeamView({
   compact,
 }: AgentsTeamViewProps) {
   const agents = useAgentsSelector((s) => s.agents);
+  const rooms = useAgentsSelector((s) => s.rooms);
   const messages = useAgentsSelector((s) => s.messages);
+  const roomCards = useRoomCards(agents, rooms, messages);
+  const roomName = (id: string | undefined) =>
+    id ? rooms.find((r) => r.id === id)?.name : undefined;
+  /** Where a line was said: its room when it was said in one, else the agent's chat. */
+  const openWhere = (agent: Agent, room: string | undefined, messageId?: string) => {
+    if (room && roomName(room)) onOpenAgent(roomKey(room));
+    else if (messageId) onOpenMessage(agent.id, messageId);
+    else onOpenAgent(agent.id);
+  };
   const { showToast } = useOptionalToast();
   const lines = useRecentLines(agents, messages);
   const team = useMemo(() => summarizeTeam(agents, lines), [agents, lines]);
@@ -289,9 +359,18 @@ export function AgentsTeamView({
     }
   };
 
-  // Needs you, with the cards just answered here still in their places.
+  // Needs you, with the cards waiting in rooms and those just answered here
+  // still in their places.
   const groups = useMemo(() => {
     const byAgent = new Map(team.needsYou.map((g) => [g.agent.id, { ...g }]));
+    for (const [agentId, cards] of roomCards) {
+      const group = byAgent.get(agentId);
+      if (!group) continue;
+      const known = new Set(group.approvals.map((m) => m.id));
+      group.approvals = [...group.approvals, ...cards.filter((m) => !known.has(m.id))].sort(
+        (a, b) => a.ts - b.ts
+      );
+    }
     for (const h of Object.values(held)) {
       const agent = agents.find((a) => a.id === h.agentId);
       if (!agent) continue;
@@ -302,7 +381,7 @@ export function AgentsTeamView({
       byAgent.set(agent.id, group);
     }
     return [...byAgent.values()];
-  }, [team.needsYou, held, agents]);
+  }, [team.needsYou, held, agents, roomCards]);
 
   const title = (
     <>
@@ -351,6 +430,10 @@ export function AgentsTeamView({
             {groups.map(({ agent, approvals, failure }) => {
               const kind = failedTurn(agent);
               const pending = approvals.some((m) => m.approval?.status === 'pending');
+              // The room the card waits in: the card's own tag, else where the turn is.
+              const room =
+                approvals.find((m) => m.approval?.status === 'pending')?.room ??
+                (needsYou(agent) ? agent.status.room : undefined);
               // The group folds with its last answered card, rather than vanish after it.
               const stays =
                 pending ||
@@ -363,6 +446,7 @@ export function AgentsTeamView({
                   <div className="agents-team__group">
                     <Row
                       agent={agent}
+                      place={roomName(room)}
                       line={
                         pending || !kind
                           ? needsYou(agent) || pending
@@ -380,7 +464,7 @@ export function AgentsTeamView({
                             : undefined
                       }
                       meta={<AgentMark agent={agent} />}
-                      onOpen={() => onOpenAgent(agent.id)}
+                      onOpen={() => openWhere(agent, room)}
                     />
                     {approvals.map((m) => (
                       <Fold key={m.id} open={!held[m.id]?.folding}>
@@ -456,10 +540,11 @@ export function AgentsTeamView({
               <Row
                 key={agent.id}
                 agent={agent}
+                place={roomName(agent.status.room)}
                 line={plainActivity(agent.status.activity) ?? 'Working…'}
                 state="working"
                 meta={<PixelLoaderRings size="sm" label={`${agent.name} is working`} />}
-                onOpen={() => onOpenAgent(agent.id)}
+                onOpen={() => openWhere(agent, agent.status.room)}
               />
             ))}
           </Section>
@@ -481,9 +566,10 @@ export function AgentsTeamView({
               <Row
                 key={message.id}
                 agent={agent}
+                place={roomName(message.room)}
                 line={replyPreview(message.text)}
                 meta={formatHitTime(message.ts)}
-                onOpen={() => onOpenMessage(agent.id, message.id)}
+                onOpen={() => openWhere(agent, message.room, message.id)}
               />
             ))}
           </Section>

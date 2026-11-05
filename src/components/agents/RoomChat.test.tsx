@@ -152,7 +152,11 @@ const RESULT: AgentMessage = {
 describe('RoomChat', () => {
   it('shows each agent under its own name and who your message was for', async () => {
     await open(room());
-    expect(screen.getByText('Not yet. @Ops can chase.')).toBeTruthy();
+    // Finance's @Ops is tinted in Ops's colour, as your own mentions are.
+    const tinted = document.querySelector('.agent-room__prose .agent-mention');
+    expect(tinted?.textContent).toBe('@Ops');
+    expect(tinted?.getAttribute('data-color')).toBe('teal');
+    expect(tinted?.parentElement?.textContent).toBe('Not yet. @Ops can chase.');
     const names = [...document.querySelectorAll('.agent-room__speaker-name')].map(
       (n) => n.textContent
     );
@@ -197,7 +201,12 @@ describe('RoomChat', () => {
     fireEvent.select(input);
     const options = screen.getAllByRole('option').map((o) => o.textContent);
     expect(options.some((t) => t?.includes('Finance'))).toBe(true);
-    expect(options.some((t) => t?.includes('everyone'))).toBe(true);
+    expect(options.some((t) => t?.includes('Everyone'))).toBe(true);
+    // The whole room, not an agent: a glyph, never "EV" initials.
+    expect(document.querySelector('.agent-mention-menu__group')).toBeTruthy();
+    expect(options.some((t) => t?.includes('EV'))).toBe(false);
+    // The foot line stays quiet while a name is being picked.
+    expect(document.querySelector('.agent-room__address')?.textContent).toBe('');
     expect(options).toHaveLength(3);
   });
 

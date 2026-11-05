@@ -598,3 +598,64 @@ fn the_docs_say_a_room_turn_shares_the_members_session() {
     assert!(doc.contains("posted for everyone in it"));
     assert!(!doc.contains("nothing said in a room reaches a private turn"));
 }
+
+#[test]
+fn an_unnamed_room_of_four_or_more_is_not_a_sentence() {
+    let names = |n: &[&str]| n.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    assert_eq!(room_name(&names(&["Finance", "Ops"])), "Finance & Ops");
+    assert_eq!(
+        room_name(&names(&["Chief of Staff", "Finance", "Ops"])),
+        "Chief of Staff, Finance & Ops"
+    );
+    assert_eq!(
+        room_name(&names(&[
+            "Chief of Staff",
+            "Acme Site",
+            "Finance",
+            "Lead Gen",
+            "Hiring",
+            "Social Posts"
+        ])),
+        "Chief of Staff & 5 others"
+    );
+    // The prompt still names everyone.
+    assert_eq!(default_name(&names(&["A", "B", "C", "D"])), "A, B, C & D");
+}
+
+#[test]
+fn files_sent_in_a_room_reach_every_members_home_and_survive_the_sweep() {
+    use base64::Engine as _;
+    scratch(|| {
+        let fin = agent("Finance", false);
+        let ops = agent("Ops", false);
+        let members = vec![
+            AgentRef { id: fin.id.clone(), name: fin.name.clone() },
+            AgentRef { id: ops.id.clone(), name: ops.name.clone() },
+        ];
+        let incoming = vec![super::super::attachments::OutgoingAttachment {
+            name: "notes.txt".into(),
+            path: None,
+            data: Some(base64::engine::general_purpose::STANDARD.encode(b"hello")),
+        }];
+        let saved = save_attachments(&members, "msg1234", incoming).unwrap();
+        assert_eq!(saved.len(), 1);
+        for m in &members {
+            let home = store::agent_home(&m.id).unwrap();
+            assert_eq!(std::fs::read(home.join(&saved[0].path)).unwrap(), b"hello");
+        }
+        // Nothing but the room's thread mentions the folder: the sweep keeps it.
+        let room = create(None, &[fin.id.clone(), ops.id.clone()]).unwrap();
+        let mut line = runner::new_message("", MessageKind::User, "");
+        line.id = "msg1234".into();
+        line.room = Some(room.id.clone());
+        line.attachments = saved.clone();
+        append(&room.id, &line).unwrap();
+        let home = store::agent_home(&ops.id).unwrap();
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+        assert_eq!(
+            super::super::attachments::sweep_unreferenced(&home, "{\"id\":\"other\"}\n", later),
+            0
+        );
+        assert!(home.join(&saved[0].path).exists());
+    });
+}

@@ -468,14 +468,14 @@ pub fn answer(
     choice: Option<usize>,
 ) -> Result<(), CommandError> {
     let Some(prompt) = approval.prompt.as_ref() else {
-        return Err(CommandError::expected("That isn't a session's question."));
+        return Err(CommandError::expected("That isn't a question from an agent in a project."));
     };
     let request_id = approval.request_id.as_str();
     let asking = shared::asking_now(&prompt.session_id);
     if asking.as_ref().map(|d| d.question.as_str()) != Some(prompt.question.as_str()) {
         settle_everywhere(app, prompt, request_id, ApprovalStatus::Expired, None);
         return Err(CommandError::expected(
-            "The session isn't asking that any more.",
+            "That agent isn't asking that any more.",
         ));
     }
     let Plan {

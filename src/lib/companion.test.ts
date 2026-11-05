@@ -118,7 +118,7 @@ describe('activityLine', () => {
       activityLine({ tool, detail, ok: true, atMs: now }, now);
     expect(a('agents.answerApproval', 'always allow')).toBe('Allowed a request · just now');
     expect(a('agents.answerApproval', 'deny with note: no')).toBe('Denied a request · just now');
-    expect(a('agents.schedule.pause', 'resume c1')).toBe('Resumed a check-in · just now');
+    expect(a('agents.schedule.pause', 'resume c1')).toBe('Resumed a routine · just now');
   });
   it('says when it was refused, and falls back to the method name', () => {
     expect(activityLine({ tool: 'agents.send', detail: '', ok: false, atMs: now }, now)).toBe(
@@ -135,7 +135,7 @@ describe('phoneCapabilities', () => {
     const p1 = phoneCapabilities(['agents.send', 'agents.answerApproval']);
     expect(p1.can).toEqual(['Chat with agents and answer what they ask']);
     expect(p1.cannot).toContain('Push to git');
-    expect(p1.cannot).not.toContain('Type into project sessions');
+    expect(p1.cannot).not.toContain('Type to the agents in projects');
 
     const p2 = phoneCapabilities([
       'agents.send',
@@ -145,7 +145,7 @@ describe('phoneCapabilities', () => {
       'projects.list',
       'sessions.read',
     ]);
-    expect(p2.can).toContain('See projects and read their agent sessions');
-    expect(p2.cannot[0]).toBe('Type into project sessions');
+    expect(p2.can).toContain('See projects and read their agents’ conversations');
+    expect(p2.cannot[0]).toBe('Type to the agents in projects');
   });
 });

@@ -25,7 +25,15 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { ArrowDownIcon, ArrowUpIcon, MoreHorizontalIcon } from '@/components/icons';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CollaboratorsIcon,
+  MicrophoneIcon,
+  MoreHorizontalIcon,
+  PaperclipIcon,
+} from '@/components/icons';
+import { TextButton } from '../primitives/TextButton';
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { TextArea } from '../primitives/TextField';
@@ -35,7 +43,15 @@ import { CompactModeToggle } from '../workspace/ModeToggle';
 import { AgentAvatar } from './AgentAvatar';
 import { RoomAvatars, type RoomActions } from './AgentRoomParts';
 import { ConversationBar, ConversationBars } from './AgentCard';
-import { useMentionPicker } from './AgentMentions';
+import { tintMentionsIn, useMentionPicker } from './AgentMentions';
+import { useDictation } from './useDictation';
+import { ComposerAttachments } from './AgentAttachments';
+import {
+  toOutgoing,
+  useComposerAttachments,
+  useFileDrop,
+  type DraftAttachment,
+} from './useComposerAttachments';
 import { useArrivals, useFollowBottom, usePresence } from './useAgentMotion';
 import {
   AgentBubble,
@@ -52,6 +68,7 @@ import { SessionCard } from './AgentSession';
 import {
   answerApproval,
   buildChatItems,
+  engineIsReady,
   newestResults,
   plainActivity,
   type Agent,
@@ -62,6 +79,7 @@ import {
 import {
   addressLine,
   addressed,
+  askedLine,
   everyoneEntry,
   EVERYONE_ID,
   handRevisionTo,
@@ -80,6 +98,8 @@ import { loadOlderRoomMessages, upsertMessage, useAgentsSelector } from '../../l
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { accentScopeProps, useAccentScope } from '../../lib/accent';
+import { blockedCopy, dictationVocabulary, openPrivacySettings } from '../../lib/dictation';
+import { listProjects } from '../../lib/project';
 import { useResolvedTheme } from '../../lib/theme';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 
@@ -92,6 +112,8 @@ interface Pending {
   ts: number;
   mentions: AgentRef[];
   failed?: boolean;
+  /** Files still being copied in: shown as staged, "Sending…", until it lands. */
+  files?: DraftAttachment[];
 }
 
 interface RoomChatProps extends RoomActions {
@@ -141,22 +163,70 @@ export function RoomChat({
   const messagesRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
+  const sectionRef = useRef<HTMLElement>(null);
+
+  // Files and dictation, as in an agent's own chat: there while any engine
+  // here can run a turn.
+  const engineReady = useAgentsSelector((s) =>
+    s.engines.length > 0
+      ? s.engines.some((e) => engineIsReady(e.id, s.engines, s.engineReady))
+      : s.engineReady
+  );
+  const toastError = useCallback((message: string) => showToast(message, 'error'), [showToast]);
+  const attachments = useComposerAttachments(toastError);
+  const staged = attachments.items;
+  const { over: dropping, dom: dropHandlers } = useFileDrop(
+    sectionRef,
+    engineReady,
+    (paths) => void attachments.addPaths(paths),
+    attachments.addFiles
+  );
+  const { pick } = attachments;
+  const pickFiles = useCallback(() => {
+    pick().catch((error: unknown) => toastError(String(error)));
+  }, [pick, toastError]);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const getDraft = useCallback(() => draftRef.current, []);
+  const getVocabulary = useCallback(
+    async () =>
+      dictationVocabulary(
+        [...agentsById.values()].map((a) => a.name),
+        (await listProjects().catch(() => [])).map((p) => p.name)
+      ),
+    [agentsById]
+  );
+  const micRef = useRef<HTMLButtonElement>(null);
+  const dictation = useDictation({
+    getDraft,
+    setDraft,
+    getVocabulary,
+    meterRef: micRef,
+    enabled: engineReady,
+  });
+  const dictating = dictation.phase !== 'idle';
+  const blocked = dictation.blocked ? blockedCopy(dictation.blocked) : null;
 
   // @ offers the room's members and @everyone, nobody else.
   const mentionable = useMemo(() => [...members, everyoneEntry(members.length)], [members]);
   const mentionPicker = useMentionPicker(mentionable, inputRef, setDraft);
   const to: Addressed = addressed(draft, members, room.lead);
-  const toLine = draft.trim() ? addressLine(to, members) : null;
+  // Quiet while the mention menu is up: who answers is still being picked.
+  const toLine =
+    (draft.trim() || staged.length > 0) && !mentionPicker.showing
+      ? addressLine(to, members)
+      : null;
 
   useEffect(() => {
     inputRef.current?.focus({ preventScroll: true });
   }, [room.id]);
 
   // Your messages show at once; the stored one takes over the same row.
-  const { shown, aliases, failed } = useMemo(() => {
+  const { shown, aliases, failed, sending } = useMemo(() => {
     const list = messages ?? [];
     const aliases = new Map<string, string>();
     const failed = new Set<string>();
+    const sending = new Map<string, DraftAttachment[]>();
     const local: AgentMessage[] = [];
     for (const p of pending) {
       const match =
@@ -178,11 +248,12 @@ export function RoomChat({
         room: room.id,
       });
       if (p.failed) failed.add(p.key);
+      else if (p.files) sending.set(p.key, p.files);
     }
     const streaming = drafts
       .filter((d) => d.text.trim() && !list.some((m) => m.id === d.id))
       .map((d) => ({ ...d, room: room.id }));
-    return { shown: [...list, ...local, ...streaming], aliases, failed };
+    return { shown: [...list, ...local, ...streaming], aliases, failed, sending };
   }, [messages, pending, drafts, room.id]);
 
   // Room lines never fold here: this is the room.
@@ -268,10 +339,32 @@ export function RoomChat({
     }
   };
 
+  /** Files are copied into the members' homes first; a failure puts everything back. */
+  const deliverWithFiles = async (
+    entry: Pending,
+    files: DraftAttachment[],
+    mentionIds: string[],
+    everyone: boolean
+  ) => {
+    try {
+      const outgoing = await toOutgoing(files);
+      const sent = await sendRoomMessage(room.id, entry.text, mentionIds, everyone, outgoing);
+      setPending((list) =>
+        list.map((p) => (p.key === entry.key ? { ...p, id: sent.message.id, files: undefined } : p))
+      );
+      upsertMessage(sent.message);
+    } catch (error) {
+      setPending((list) => list.filter((p) => p.key !== entry.key));
+      setDraft(entry.text);
+      attachments.setItems(files);
+      showToast(formatCommandError(asCommandError(error)), 'error');
+    }
+  };
+
   /** Send what's typed to `target`, or to whoever it names. */
   const send = (target?: Addressed) => {
     const text = draft.trim();
-    if (!text || members.length === 0) return;
+    if ((!text && staged.length === 0) || members.length === 0 || dictating) return;
     const aim = target ?? to;
     if (aim.kind === 'ask') {
       setAsking(true);
@@ -287,12 +380,24 @@ export function RoomChat({
       text,
       ts: Date.now(),
       mentions: refs,
+      ...(staged.length > 0 ? { files: staged } : {}),
     };
     setPending((list) => [...list, entry]);
     setDraft('');
     atBottomRef.current = true;
-    void deliver(entry, aim.kind === 'lead' ? [] : ids, aim.kind === 'everyone');
+    const mentionIds = aim.kind === 'lead' ? [] : ids;
+    if (staged.length > 0) {
+      attachments.setItems([]);
+      void deliverWithFiles(entry, staged, mentionIds, aim.kind === 'everyone');
+    } else {
+      void deliver(entry, mentionIds, aim.kind === 'everyone');
+    }
   };
+
+  const stop = () =>
+    void stopRoom(room.id).catch((error: unknown) =>
+      showToast(formatCommandError(asCommandError(error)), 'error')
+    );
 
   const retry = (key: string) => {
     const entry = pending.find((p) => p.key === key);
@@ -329,16 +434,37 @@ export function RoomChat({
               failed={failed.has(m.id)}
               onRetry={retry}
               colorOf={colorOf}
+              sending={sending.get(m.id)}
             />
           )}
           {m.mentions && m.mentions.length > 0 && (
-            <span className="agent-room__to">To {listNames(m.mentions.map((r) => r.name))}</span>
+            <span className="agent-room__to">{askedLine(m.mentions, room.members)}</span>
           )}
         </div>
       );
     }
-    if (!m.agentId) return <NoteLine key={m.id} message={m} arrived={arrived} />;
+    if (!m.agentId) {
+      // The room's own note about a member ("Finance was stopped before
+      // answering.") reads as that member's: its name in its colour.
+      const about =
+        m.kind === 'note'
+          ? [...members]
+              .sort((a, b) => b.name.length - a.name.length)
+              .find((a) => m.text.startsWith(`${a.name} `))
+          : undefined;
+      return about ? (
+        <MemberNote key={m.id} m={m} speaker={about} arrived={arrived} theme={theme} />
+      ) : (
+        <NoteLine key={m.id} message={m} arrived={arrived} />
+      );
+    }
     const speaker = agentsById.get(m.agentId);
+    // "Acme Site stopped before finishing its reply." is about the room, like
+    // "Finance was stopped before answering.": one centred line, its name in
+    // its colour, never a speaker block repeating the name.
+    if (m.kind === 'note' && !m.work && speaker) {
+      return <MemberNote key={m.id} m={m} speaker={speaker} arrived={arrived} theme={theme} />;
+    }
     const previous = items[index - 1];
     const sameSpeaker =
       previous?.type === 'message' &&
@@ -356,13 +482,17 @@ export function RoomChat({
           liveCopy={liveCopyCards.has(m.id)}
           newestResult={newestResult.has(m.id)}
           onAskForChanges={askForChanges}
+          members={members}
         />
       </SpeakerBlock>
     );
   });
 
   // Nobody left to answer: nothing can be sent until someone is added.
-  const canSend = draft.trim().length > 0 && members.length > 0;
+  const canSend = (draft.trim().length > 0 || staged.length > 0) && members.length > 0;
+  // Replying here and nothing typed: the send button is Stop, as in a 1:1 chat.
+  const replying = working.length > 0 || waiting.length > 0;
+  const showStop = replying && !canSend && !dictating;
   const memberNames = listNames(members.map((m) => m.name));
   const memberLine =
     room.lead && agentsById.get(room.lead)
@@ -371,7 +501,14 @@ export function RoomChat({
 
   return (
     <AccentScopeProvider scope={accentScope}>
-      <section className="agent-chat agent-room" aria-label={`Room ${room.name}`} {...accentScope}>
+      <section
+        ref={sectionRef}
+        className="agent-chat agent-room"
+        aria-label={`Room ${room.name}`}
+        data-dropping={dropping || undefined}
+        {...accentScope}
+        {...dropHandlers}
+      >
         <header className="agent-chat__header">
           {compact && (
             <CompactModeToggle
@@ -415,15 +552,8 @@ export function RoomChat({
               >
                 {room.muted ? 'Unmute' : 'Mute'}
               </DropdownItem>
-              {(working.length > 0 || waiting.length > 0) && (
-                <DropdownItem
-                  icon={<CloseIcon size={12} />}
-                  onSelect={() =>
-                    void stopRoom(room.id).catch((error: unknown) =>
-                      showToast(formatCommandError(asCommandError(error)), 'error')
-                    )
-                  }
-                >
+              {replying && (
+                <DropdownItem icon={<CloseIcon size={12} />} onSelect={stop}>
                   Stop replies here
                 </DropdownItem>
               )}
@@ -479,6 +609,37 @@ export function RoomChat({
               title="Jump to latest"
             />
           )}
+          <ConversationBars
+            bars={[
+              {
+                id: 'dictation',
+                node: blocked && (
+                  <ConversationBar
+                    role="alert"
+                    state="waiting"
+                    title={blocked.message}
+                    actions={
+                      <>
+                        <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
+                        {blocked.settings && (
+                          <Button
+                            size="compact"
+                            variant="secondary"
+                            onClick={() => {
+                              const url = blocked.settings;
+                              if (url) void openPrivacySettings(url);
+                            }}
+                          >
+                            Open System Settings
+                          </Button>
+                        )}
+                      </>
+                    }
+                  />
+                ),
+              },
+            ]}
+          />
           {members.length < MIN_ROOM_MEMBERS && (
             <ConversationBars
               bars={[
@@ -486,6 +647,7 @@ export function RoomChat({
                   id: 'engine',
                   node: (
                     <ConversationBar
+                      icon={<CollaboratorsIcon size={14} />}
                       data-testid="room-too-few"
                       title={
                         members.length === 1
@@ -531,25 +693,37 @@ export function RoomChat({
           )}
           <form
             className="agent-composer"
+            data-dictation={dictation.phase}
+            data-has-attachments={staged.length > 0 || undefined}
             onSubmit={(e) => {
               e.preventDefault();
               send();
             }}
           >
             {mentionPicker.menu}
+            <ComposerAttachments items={staged} onRemove={attachments.remove} />
             <TextArea
               ref={inputRef}
               className="agent-composer__input"
               rows={1}
               value={draft}
-              placeholder={`Message ${room.name} · @ to pick who answers`}
+              placeholder={
+                dictating
+                  ? ''
+                  : members.length === 1
+                    ? `Message ${members[0].name}`
+                    : `Message ${room.name} · @ to pick who answers`
+              }
+              readOnly={dictating}
               onChange={(e) => {
                 setDraft(e.target.value);
                 mentionPicker.sync();
                 if (asking) setAsking(false);
               }}
               onSelect={mentionPicker.sync}
+              onPaste={attachments.onPaste}
               onKeyDown={(e) => {
+                if (dictation.onComposerKeyDown(e)) return;
                 if (mentionPicker.onKeyDown(e)) return;
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault();
@@ -562,24 +736,89 @@ export function RoomChat({
               aria-label={`Message ${room.name}`}
             />
             <div className="agent-composer__bar">
-              <span className="agent-composer__hint agent-room__address" aria-live="polite">
-                {toLine ??
-                  (canSend && to.kind === 'ask' && !asking ? 'Who should answer? @ someone' : '')}
-              </span>
+              {dictating ? (
+                <span className="agent-composer__listening" role="status">
+                  <span className="agent-composer__listening-dot" aria-hidden />
+                  {dictation.phase === 'finishing' ? 'Finishing…' : 'Listening'}
+                  <span aria-hidden>·</span>
+                  <TextButton tabIndex={0} onClick={dictation.cancel}>
+                    Cancel
+                  </TextButton>
+                </span>
+              ) : (
+                engineReady && (
+                  <IconButton
+                    tabIndex={0}
+                    variant="ghost"
+                    className="agent-composer__attach"
+                    icon={<PaperclipIcon size={14} />}
+                    onClick={pickFiles}
+                    aria-label="Attach files"
+                    title="Attach files, or paste or drop them here"
+                  />
+                )
+              )}
+              {!dictating && (
+                <span className="agent-composer__hint agent-room__address" aria-live="polite">
+                  {toLine ??
+                    (canSend && to.kind === 'ask' && !asking && !mentionPicker.showing
+                      ? 'Who should answer? @ someone'
+                      : '')}
+                </span>
+              )}
               <div className="agent-composer__actions">
-                <IconButton
-                  tabIndex={0}
-                  type="submit"
-                  variant={canSend ? 'primary' : 'secondary'}
-                  className="agent-composer__send"
-                  icon={<ArrowUpIcon size={14} />}
-                  disabled={!canSend}
-                  aria-label="Send"
-                  title="Send"
-                />
+                {engineReady && (
+                  <IconButton
+                    ref={micRef}
+                    tabIndex={0}
+                    variant="ghost"
+                    className="agent-composer__mic"
+                    icon={<MicrophoneIcon size={14} />}
+                    onClick={dictation.toggle}
+                    disabled={dictation.phase === 'finishing'}
+                    aria-pressed={dictating}
+                    aria-label={dictating ? 'Stop dictating' : 'Dictate'}
+                    title={
+                      dictating
+                        ? 'Stop dictating (Esc to discard)'
+                        : 'Dictate (⌘⇧D, or hold ⌥Space)'
+                    }
+                  />
+                )}
+                {showStop ? (
+                  <IconButton
+                    tabIndex={0}
+                    variant="secondary"
+                    className="agent-composer__stop"
+                    icon={<span className="agent-composer__stop-square" aria-hidden />}
+                    onClick={stop}
+                    aria-label={`Stop replies in ${room.name}`}
+                    title="Stop replies here"
+                  />
+                ) : (
+                  <IconButton
+                    tabIndex={0}
+                    type="submit"
+                    variant={canSend && !dictating ? 'primary' : 'secondary'}
+                    className="agent-composer__send"
+                    icon={<ArrowUpIcon size={14} />}
+                    disabled={!canSend || dictating}
+                    aria-label="Send"
+                    title="Send"
+                  />
+                )}
               </div>
             </div>
           </form>
+        </div>
+
+        <div className="agent-chat__drop" aria-hidden={!dropping}>
+          <div className="agent-chat__drop-label">
+            <span className="agent-chat__drop-icon">
+              <PaperclipIcon size={18} />
+            </span>
+            Drop files for {room.name}
+          </div>
         </div>
       </section>
     </AccentScopeProvider>
@@ -637,9 +876,12 @@ const MemberRow = memo(function MemberRow({
   liveCopy,
   newestResult,
   onAskForChanges,
+  members,
 }: {
   m: AgentMessage;
   speaker: Agent | undefined;
+  /** The room's members: an @ of one of them in this reply is tinted its colour. */
+  members: Agent[];
   arrived: boolean;
   streaming: boolean;
   /** The newest card for the member's open copy: it offers Keep / Discard. */
@@ -675,7 +917,11 @@ const MemberRow = memo(function MemberRow({
           />
         );
       }
-      return <AgentBubble message={m} agent={speaker} arrived={arrived} streaming={streaming} />;
+      return (
+        <TintedMentions text={m.text} members={members} author={speaker.id}>
+          <AgentBubble message={m} agent={speaker} arrived={arrived} streaming={streaming} />
+        </TintedMentions>
+      );
     case 'approval':
       return (
         <ApprovalCard
@@ -711,6 +957,71 @@ const MemberRow = memo(function MemberRow({
       return null;
   }
 });
+
+/**
+ * A member's @mention of another member, tinted in that member's colour, as
+ * your own are: a hand-off is the point of a room. The prose is sanitized
+ * HTML, so the names are wrapped in its text nodes after it renders.
+ */
+function TintedMentions({
+  text,
+  members,
+  author,
+  children,
+}: {
+  text: string;
+  members: Agent[];
+  author: string;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const others = useMemo(() => members.filter((m) => m.id !== author), [members, author]);
+  useLayoutEffect(() => {
+    const prose = ref.current?.querySelectorAll<HTMLElement>('.agent-markdown__prose');
+    prose?.forEach((el) => tintMentionsIn(el, others));
+  }, [text, others]);
+  return (
+    <div ref={ref} className="agent-room__prose">
+      {children}
+    </div>
+  );
+}
+
+/** A member's own note in the room: the room's centred line, its name in its colour. */
+function MemberNote({
+  m,
+  speaker,
+  arrived,
+  theme,
+}: {
+  m: AgentMessage;
+  speaker: Agent;
+  arrived: boolean;
+  theme: ReturnType<typeof useResolvedTheme>;
+}) {
+  const scope = useMemo(() => accentScopeProps(speaker.color, theme), [speaker.color, theme]);
+  const at = m.text.indexOf(speaker.name);
+  return (
+    <div
+      className="agent-note agent-room__member-note"
+      data-arrived={arrived || undefined}
+      data-message-ids={m.id}
+      {...scope}
+    >
+      {at < 0 ? (
+        m.text
+      ) : (
+        <>
+          {m.text.slice(0, at)}
+          <span className="agent-mention" data-color={speaker.color}>
+            {speaker.name}
+          </span>
+          {m.text.slice(at + speaker.name.length)}
+        </>
+      )}
+    </div>
+  );
+}
 
 /** "Messaged Ops": an agent handing work on outside the room. */
 function SpeakerLine({ m }: { m: AgentMessage }) {
@@ -841,7 +1152,7 @@ function RoomEmpty({
   const lead = members.find((m) => m.id === room.lead);
   return (
     <div className="agent-chat__empty agent-room__empty">
-      <RoomAvatars members={members} size="wide" />
+      <RoomAvatars members={members} />
       <p className="agent-chat__empty-name">{room.name}</p>
       <p className="agent-chat__empty-role">
         {lead
@@ -849,7 +1160,7 @@ function RoomEmpty({
           : `Talk to everyone here at once. @ who should answer, or @everyone to ask all ${members.length}.`}
       </p>
       <p className="agent-chat__empty-hint">
-        Each agent keeps its own memory, and sees the room’s recent messages when it’s asked.
+        Each agent keeps its own memory, and remembers what it says here in its own chat too.
       </p>
       <div className="agent-chat__starters">
         {members.map((m) => (

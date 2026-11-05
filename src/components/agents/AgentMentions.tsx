@@ -12,7 +12,9 @@
  */
 
 import { useCallback, useState, type KeyboardEvent, type RefObject } from 'react';
+import { CollaboratorsIcon } from '@/components/icons';
 import { AgentAvatar } from './AgentAvatar';
+import { EVERYONE_ID } from '../../lib/agentRooms';
 import {
   mentionAt,
   mentionCandidates,
@@ -87,6 +89,8 @@ export function useMentionPicker(
   return {
     sync,
     onKeyDown,
+    /** The menu is up: the composer's foot line stays quiet until a name is picked. */
+    showing,
     menu: showing ? (
       <MentionMenu candidates={candidates} active={active} onHover={setActive} onPick={pick} />
     ) : null,
@@ -120,8 +124,18 @@ function MentionMenu({ candidates, active, onHover, onPick }: MentionMenuProps) 
           onMouseEnter={() => onHover(i)}
           onClick={() => onPick(agent)}
         >
-          <AgentAvatar name={agent.name} color={agent.color} size="mini" />
-          <span className="agent-mention-menu__name">{agent.name}</span>
+          {agent.id === EVERYONE_ID ? (
+            // A room's @everyone is the whole room, not an agent: a group
+            // glyph on a neutral tile, never someone's initials.
+            <span className="agent-avatar agent-avatar--mini agent-mention-menu__group" aria-hidden>
+              <CollaboratorsIcon size={10} />
+            </span>
+          ) : (
+            <AgentAvatar name={agent.name} color={agent.color} size="mini" />
+          )}
+          <span className="agent-mention-menu__name">
+            {agent.id === EVERYONE_ID ? 'Everyone' : agent.name}
+          </span>
           {agent.role && <span className="agent-mention-menu__role">{agent.role}</span>}
         </button>
       ))}
@@ -153,4 +167,60 @@ export function MentionText({
       )}
     </>
   );
+}
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Tints an agent's @mentions of the people in `members` inside rendered
+ * prose, by the backend's rule (`rooms::mentioned_in`): an @ that starts a
+ * word, then a whole member name (longest first, any case), never inside an
+ * email address, a link or code. Only text nodes change; markup the
+ * sanitizer produced is left as it is. Returns how many it tinted.
+ */
+export function tintMentionsIn(
+  root: HTMLElement,
+  members: Pick<Agent, 'id' | 'name' | 'color'>[]
+): number {
+  const named = [...members]
+    .filter((m) => m.name.trim())
+    .sort((a, b) => b.name.length - a.name.length);
+  if (named.length === 0) return 0;
+  const pattern = new RegExp(
+    `(^|[^\\p{L}\\p{N}_.@])@(${named.map((m) => escapeRegExp(m.name)).join('|')})(?![\\p{L}\\p{N}_])`,
+    'giu'
+  );
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      node.parentElement?.closest('code, pre, a, .agent-mention')
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT,
+  });
+  const nodes: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
+  let count = 0;
+  for (const node of nodes) {
+    const text = node.data;
+    pattern.lastIndex = 0;
+    if (!pattern.test(text)) continue;
+    pattern.lastIndex = 0;
+    const fragment = document.createDocumentFragment();
+    let last = 0;
+    for (const match of text.matchAll(pattern)) {
+      const at = (match.index ?? 0) + match[1].length;
+      const member = named.find((m) => m.name.toLowerCase() === match[2].toLowerCase());
+      if (!member) continue;
+      fragment.append(text.slice(last, at));
+      const span = document.createElement('span');
+      span.className = 'agent-mention';
+      span.dataset.color = member.color;
+      span.textContent = text.slice(at, at + 1 + match[2].length);
+      fragment.append(span);
+      last = at + 1 + match[2].length;
+      count++;
+    }
+    fragment.append(text.slice(last));
+    node.replaceWith(fragment);
+  }
+  return count;
 }

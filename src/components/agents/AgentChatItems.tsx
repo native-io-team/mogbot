@@ -627,7 +627,7 @@ function ErrorText({ message }: { message: AgentMessage }) {
 }
 
 /**
- * "Scheduled check-in", centred like the agent-to-agent lines, with the note
+ * "One-time routine" (or "Routine"), centred like the agent-to-agent lines, with the note
  * the agent left itself. A late one says so: the app was closed when it was due.
  * One you ran from the schedule popover says that instead.
  */
@@ -636,7 +636,7 @@ export const CheckInLine = memo(function CheckInLine({
   arrived,
 }: { message: AgentMessage } & Arrival) {
   const mark = message.checkIn;
-  const label = mark?.repeats ? 'Routine' : 'Scheduled check-in';
+  const label = mark?.repeats ? 'Routine' : 'One-time routine';
   return (
     <div
       className="agent-checkin"

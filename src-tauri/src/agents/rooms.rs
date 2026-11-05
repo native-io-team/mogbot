@@ -296,11 +296,21 @@ pub fn default_name(names: &[String]) -> String {
     }
 }
 
+/// What a room is called until it's named: [`default_name`] for up to three
+/// members, then "Chief of Staff & 3 others" rather than a sentence of names.
+/// The frontend's `defaultRoomName` says the same.
+pub fn room_name(names: &[String]) -> String {
+    match names {
+        [first, rest @ ..] if rest.len() >= 3 => format!("{first} & {} others", rest.len()),
+        _ => default_name(names),
+    }
+}
+
 fn clean_name(name: Option<&str>, members: &[store::Agent]) -> Result<String, CommandError> {
     let typed = name.map(str::trim).unwrap_or_default();
     if typed.is_empty() {
         let names: Vec<String> = members.iter().map(|a| a.name.clone()).collect();
-        return Ok(default_name(&names));
+        return Ok(room_name(&names));
     }
     if typed.chars().count() > NAME_CHARS {
         return Err(super::err_invalid(
@@ -739,9 +749,10 @@ pub fn send(
     mentions: &[String],
     everyone: bool,
     client_id: Option<String>,
+    incoming: Vec<super::attachments::OutgoingAttachment>,
 ) -> Result<Sent, CommandError> {
     let text = text.trim();
-    if text.is_empty() {
+    if text.is_empty() && incoming.is_empty() {
         return Err(super::err_invalid("text", "Type a message first."));
     }
     let room = get(id)?;
@@ -768,6 +779,7 @@ pub fn send(
     message.room = Some(id.to_string());
     message.mentions = asked.clone();
     message.client_id = client_id.filter(|c| !c.is_empty());
+    message.attachments = save_attachments(&members, &message.id, incoming)?;
     let message = super::secrets::redact_message(message);
     append(id, &message)?;
     let _ = update(id, |room| {
@@ -778,10 +790,19 @@ pub fn send(
     start_round(id, asked.len());
     let _ = app.emit(runner::EVENT_MESSAGE, &message);
     for member in &asked {
+        // Each member is told where the files are in its own home.
+        let block = store::agent_home(&member.id)
+            .map(|home| super::attachments::prompt_block(&home, &message.attachments))
+            .unwrap_or_default();
+        let ask = [text, block.as_str()]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n\n");
         runner::enqueue_room(
             app,
             &member.id,
-            text.to_string(),
+            ask,
             RoomRef {
                 room_id: id.to_string(),
                 hop: 0,
@@ -793,6 +814,57 @@ pub fn send(
     let _ = app.emit(EVENT_ROOMS, ());
     super::tray::mark_used(app);
     Ok(Sent { message, asked })
+}
+
+/// Files sent into a room: saved into the first member's home, then copied
+/// to every other member's under the same `attachments/<message id>/` path,
+/// so the room shows them through any member and whoever is brought in
+/// later can read them. All or nothing: a failed copy removes every copy.
+fn save_attachments(
+    members: &[AgentRef],
+    message_id: &str,
+    incoming: Vec<super::attachments::OutgoingAttachment>,
+) -> Result<Vec<super::attachments::Attachment>, CommandError> {
+    if incoming.is_empty() {
+        return Ok(Vec::new());
+    }
+    let homes = members
+        .iter()
+        .map(|m| store::agent_home(&m.id))
+        .collect::<Result<Vec<_>, _>>()?;
+    let Some((first, rest)) = homes.split_first() else {
+        return Ok(Vec::new());
+    };
+    let saved = super::attachments::save(first, message_id, incoming)?;
+    let rel_dir = format!("attachments/{message_id}");
+    let copied = rest.iter().try_for_each(|home| {
+        std::fs::create_dir_all(home.join(&rel_dir)).map_err(super::err_io)?;
+        saved.iter().try_for_each(|a| {
+            std::fs::copy(first.join(&a.path), home.join(&a.path))
+                .map(|_| ())
+                .map_err(super::err_io)
+        })
+    });
+    if let Err(e) = copied {
+        for home in &homes {
+            let _ = std::fs::remove_dir_all(home.join(&rel_dir));
+        }
+        return Err(e);
+    }
+    Ok(saved)
+}
+
+/// Whether any room's thread mentions `needle` (an attachment folder's
+/// name): the startup sweep keeps a member's copy of files sent in a room,
+/// which its own log never mentions.
+pub fn any_log_mentions(needle: &str) -> bool {
+    let Ok(entries) = rooms_root().and_then(|r| std::fs::read_dir(r).map_err(super::err_io)) else {
+        return false;
+    };
+    entries.flatten().any(|e| {
+        std::fs::read_to_string(e.path().join("messages.jsonl"))
+            .is_ok_and(|log| log.contains(needle))
+    })
 }
 
 /// A quiet line in the room, from the room itself: what happened to an ask

@@ -351,7 +351,7 @@ const CAPABILITIES = {
     {
       what: 'On this Mac',
       detail:
-        'Run commands, read and edit files, use the web, send you files and schedule check-ins.',
+        'Run commands, read and edit files, use the web, send you files and schedule routines.',
     },
     { what: 'Connectors', detail: 'Gmail, Google Calendar, Sanity and Figma' },
     {

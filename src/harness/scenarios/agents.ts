@@ -949,7 +949,7 @@ const CODEX_TEAM = [
         {
           what: 'On this Mac',
           detail:
-            "Run commands, read and edit files, use the web, send you files and schedule check-ins, in Codex's sandbox: your projects and its own folder, with no network for commands unless you allow it.",
+            "Run commands, read and edit files, use the web, send you files and schedule routines, in Codex's sandbox: your projects and its own folder, with no network for commands unless you allow it.",
         },
       ],
     },
@@ -1700,7 +1700,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-check-in',
     title: 'Agents — a scheduled check-in fired in the chat',
     looksRightWhen:
-      'The Finance chat shows a centred “Scheduled check-in · late, was due …” line with the note under it, then the reply. The header shows “3 scheduled” beside the … menu.',
+      'The Finance chat shows a centred “One-time routine · late, was due …” line with the note under it, then the reply. The header shows “3 scheduled” beside the … menu.',
     requires: '.agent-checkin',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }],

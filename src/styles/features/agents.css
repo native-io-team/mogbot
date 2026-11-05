@@ -297,6 +297,7 @@
    Actions, not rows: shorter than an agent, one after the other with no gap,
    and in the secondary text colour so they read as available. */
 .workspace-sidebar:not(.is-hidden) .agents-list__new,
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room,
 .workspace-sidebar:not(.is-hidden) .agents-list__import {
   justify-content: flex-start;
   gap: var(--spacing-sm);
@@ -307,6 +308,7 @@
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new:hover:not(:disabled),
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room:hover:not(:disabled),
 .workspace-sidebar:not(.is-hidden) .agents-list__import:hover:not(:disabled) {
   color: var(--text-primary);
 }
@@ -376,6 +378,7 @@
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new > svg,
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room > svg,
 .workspace-sidebar:not(.is-hidden) .agents-list__import > svg {
   box-sizing: content-box;
   padding: 0 calc((var(--size-sidebar-project-shortcut) - 16px) / 2); /* css-ok: centre a 16px icon in the badge width */

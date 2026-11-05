@@ -420,7 +420,7 @@ mod tests {
     fn a_fired_check_in_notifies() {
         let line = new_message("fin", MessageKind::CheckIn, "Brief me.");
         let alert = alert_for(&agent(false), &line).unwrap();
-        assert_eq!(alert.body, "Scheduled check-in");
+        assert_eq!(alert.body, "Scheduled routine");
         assert!(!alert.sound);
     }
 

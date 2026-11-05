@@ -251,19 +251,8 @@ export function AgentsSidebar({
             </button>
           )}
           {visible.map(row)}
-          {hidden.length > 0 && (
-            <button
-              type="button"
-              tabIndex={0}
-              className="agents-list__hidden-toggle"
-              aria-expanded={showHidden}
-              onClick={onToggleShowHidden}
-            >
-              <ChevronRightIcon size={10} className="agents-list__hidden-chevron" />
-              Hidden ({hidden.length})
-            </button>
-          )}
-          {showHidden && hidden.map(row)}
+          {/* Rooms right after the agents, before the hidden ones (as on the
+              phone), so they're seen without scrolling past the hidden list. */}
           {rooms.length > 0 && (
             <div className="agents-list__section" role="group" aria-label="Rooms">
               <div className="agents-list__section-title">Rooms</div>
@@ -279,6 +268,19 @@ export function AgentsSidebar({
               ))}
             </div>
           )}
+          {hidden.length > 0 && (
+            <button
+              type="button"
+              tabIndex={0}
+              className="agents-list__hidden-toggle"
+              aria-expanded={showHidden}
+              onClick={onToggleShowHidden}
+            >
+              <ChevronRightIcon size={10} className="agents-list__hidden-chevron" />
+              Hidden ({hidden.length})
+            </button>
+          )}
+          {showHidden && hidden.map(row)}
           {showNudge && <ImportNudge onImport={onImport} onDismiss={nudge.dismiss} />}
           <div className="workspace-sidebar-active-actions">
             <Button

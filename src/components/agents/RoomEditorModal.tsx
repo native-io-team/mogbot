@@ -13,6 +13,9 @@ import { Button } from '../primitives/Button';
 import { Checkbox } from '../primitives/Checkbox';
 import { TextField } from '../primitives/TextField';
 import { SegmentedControl } from '../primitives/SegmentedControl';
+import { Dropdown, DropdownItem } from '../primitives/Dropdown';
+import { MenuButton } from '../primitives/MenuButton';
+import { CheckIcon, ChevronIcon } from '@/components/icons';
 import { AgentAvatar } from './AgentAvatar';
 import { sortAgents, type Agent } from '../../lib/agents';
 import {
@@ -35,6 +38,8 @@ interface RoomEditorModalProps {
 }
 
 const NOBODY = '';
+/** Choices (Ask me and the members) a segmented row holds before it becomes a menu. */
+const LEAD_SEGMENTS = 3;
 
 export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: RoomEditorModalProps) {
   const team = useMemo(
@@ -56,6 +61,10 @@ export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: Room
       ? NOBODY
       : (chosen.find((a) => a.isMain)?.id ?? NOBODY);
   const placeholder = defaultRoomName(chosen.map((a) => a.name));
+  const leadOptions = [
+    { value: NOBODY, label: 'Ask me' },
+    ...chosen.map((a) => ({ value: a.id, label: a.name })),
+  ];
 
   const toggle = (id: string, on: boolean) =>
     setPicked((list) => (on ? [...list, id] : list.filter((x) => x !== id)));
@@ -145,17 +154,45 @@ export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: Room
             <div className="agent-room-editor__label" id="room-lead">
               When nobody is mentioned
             </div>
-            <SegmentedControl
-              aria-label="Who answers when nobody is mentioned"
-              size="compact"
-              className="agent-room-editor__leads"
-              value={leadNow}
-              onValueChange={setLead}
-              options={[
-                { value: NOBODY, label: 'Ask me' },
-                ...chosen.map((a) => ({ value: a.id, label: a.name })),
-              ]}
-            />
+            {leadOptions.length <= LEAD_SEGMENTS ? (
+              <SegmentedControl
+                aria-label="Who answers when nobody is mentioned"
+                size="compact"
+                className="agent-room-editor__leads"
+                value={leadNow}
+                onValueChange={setLead}
+                options={leadOptions}
+              />
+            ) : (
+              // Past three choices a segmented row wraps and orphans a name:
+              // a menu holds any number on one line.
+              <Dropdown
+                portal
+                className="agent-room-editor__lead-select"
+                trigger={(p) => (
+                  <MenuButton
+                    {...p}
+                    tabIndex={0}
+                    variant="secondary"
+                    expanded={p['aria-expanded']}
+                    aria-labelledby="room-lead"
+                    rightIcon={<ChevronIcon size={12} />}
+                  >
+                    {leadOptions.find((o) => o.value === leadNow)?.label ?? 'Ask me'}
+                  </MenuButton>
+                )}
+              >
+                {leadOptions.map((o) => (
+                  <DropdownItem
+                    key={o.value}
+                    onSelect={() => setLead(o.value)}
+                    icon={o.value === leadNow ? <CheckIcon size={12} /> : undefined}
+                  >
+                    {o.label}
+                  </DropdownItem>
+                ))}
+              </Dropdown>
+            )}
           </>
         )}
         {error && (

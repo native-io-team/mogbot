@@ -62,9 +62,9 @@ export const agentsDesktopScenarios: Scenario[] = [
   },
   {
     id: 'agents-quit-guard-scheduled',
-    title: 'Quit — a check-in due soon',
+    title: 'Quit — a routine due soon',
     looksRightWhen:
-      'The guard leads with “Finance has a check-in coming up. Quit anyway?”, says check-ins don’t run while the app is closed and run when you reopen it, and that Lead Gen’s request will still be here. Same three stacked buttons.',
+      'The guard leads with “Finance has a routine coming up. Quit anyway?”, says routines don’t run while the app is closed and run when you reopen it, and that Lead Gen’s request will still be here. Same three stacked buttons.',
     command: 'app.quit',
     requires: '.quit-confirm-modal--guard',
     commands: {

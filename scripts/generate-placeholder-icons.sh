@@ -7,6 +7,8 @@
 #
 # Writes:
 #   src-tauri/icons/*            every desktop size + .icns/.ico, via `tauri icon`
+#   src-tauri/icons/ios/*        the Tauri mobile sets `tauri icon` writes beside them
+#   src-tauri/icons/android/*
 #   src-tauri/icons/tray/*       the menu-bar template (black, tinted by macOS)
 #   public/app-icon-dark.png     Dock icon option (also the default)
 #   public/app-icon-light.png    Dock icon option, inverted
@@ -36,12 +38,15 @@ icon_svg '#ffffff' '#000000' >"$WORK/light.svg"
 rsvg-convert -w 1024 -h 1024 "$WORK/dark.svg" -o "$WORK/dark.png"
 rsvg-convert -w 1024 -h 1024 "$WORK/light.svg" -o "$WORK/light.png"
 
-# Desktop bundle icons (all sizes, .icns, .ico). Mobile icons are owned elsewhere,
-# so the android/ and ios/ folders `tauri icon` writes are thrown away.
+# Desktop bundle icons (all sizes, .icns, .ico), and the Tauri mobile sets
+# (ios/, android/) from the same run, so no old artwork is left in either.
+# The companion app's own icons live in mobile/ and are not touched here.
 (cd "$ROOT" && pnpm exec tauri icon "$WORK/dark.png" -o "$WORK/tauri-icons" >/dev/null)
 for f in "$WORK"/tauri-icons/*.png "$WORK"/tauri-icons/icon.icns "$WORK"/tauri-icons/icon.ico; do
   cp "$f" "$ROOT/src-tauri/icons/"
 done
+cp -R "$WORK/tauri-icons/ios/." "$ROOT/src-tauri/icons/ios/"
+cp -R "$WORK/tauri-icons/android/." "$ROOT/src-tauri/icons/android/"
 
 magick "$WORK/dark.png" -resize 512x512 "$ROOT/public/app-icon-dark.png"
 magick "$WORK/light.png" -resize 512x512 "$ROOT/public/app-icon-light.png"

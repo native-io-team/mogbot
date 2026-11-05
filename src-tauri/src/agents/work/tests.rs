@@ -237,7 +237,7 @@ fn tool_calls_read_as_plain_past_tense_words() {
     );
     assert_eq!(
         d(&ours("schedule_check_in"), json!({})),
-        "Scheduled a check-in"
+        "Scheduled a routine"
     );
     assert_eq!(d(&ours("something_new"), json!({})), "Used a tool");
     assert_eq!(
@@ -441,7 +441,7 @@ fn the_scrubber_keeps_ordinary_words() {
             "Asked you for a password or key",
             "Asked you for a password or key",
         ),
-        ("Scheduled a check-in", "Scheduled a check-in"),
+        ("Scheduled a routine", "Scheduled a routine"),
     ] {
         assert_eq!(scrub(raw), want, "{raw}");
     }

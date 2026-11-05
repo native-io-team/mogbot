@@ -45,4 +45,10 @@ describe('scoreMatch', () => {
     expect(scoreMatch('zzz', 'home')).toBe(0);
     expect(scoreMatch('zzz', 'home', ['nope', 'never'])).toBe(0);
   });
+
+  it('matches straight and curly quotes either way round', () => {
+    expect(scoreMatch("what's in flight", 'What\u2019s in flight')).toBe(1);
+    expect(scoreMatch('what\u2019s', "What's new")).toBe(0.95);
+    expect(scoreMatch('"draft"', 'Open \u201Cdraft\u201D')).toBeGreaterThan(0);
+  });
 });
