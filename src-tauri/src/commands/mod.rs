@@ -191,3 +191,31 @@ mod log_hygiene_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod asset_scope_tests {
+    /// Any script in the main frame can read whatever the asset protocol
+    /// serves. Everything the app shows through it is an image, so the static
+    /// scope names image files only — never a project's source, `.env` or the
+    /// app's own JSON.
+    #[test]
+    fn the_static_asset_scope_is_images_only() {
+        let raw = include_str!("../../tauri.conf.json");
+        let config: serde_json::Value = serde_json::from_str(raw).unwrap();
+        let scope = config["app"]["security"]["assetProtocol"]["scope"]
+            .as_array()
+            .expect("scope is a list");
+        assert!(!scope.is_empty());
+        let images = [
+            "png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "ico", "bmp", "tif", "tiff",
+        ];
+        for entry in scope {
+            let pattern = entry.as_str().unwrap();
+            let ext = pattern.rsplit_once("/*.").map(|(_, e)| e.to_lowercase());
+            assert!(
+                ext.as_deref().is_some_and(|e| images.contains(&e)),
+                "not an image pattern: {pattern}"
+            );
+        }
+    }
+}

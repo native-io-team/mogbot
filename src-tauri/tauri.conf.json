@@ -17,7 +17,28 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "$HOME/ShipStudio/**"
+          "$HOME/ShipStudio/**/*.png",
+          "$HOME/ShipStudio/**/*.PNG",
+          "$HOME/ShipStudio/**/*.jpg",
+          "$HOME/ShipStudio/**/*.JPG",
+          "$HOME/ShipStudio/**/*.jpeg",
+          "$HOME/ShipStudio/**/*.JPEG",
+          "$HOME/ShipStudio/**/*.gif",
+          "$HOME/ShipStudio/**/*.GIF",
+          "$HOME/ShipStudio/**/*.webp",
+          "$HOME/ShipStudio/**/*.WEBP",
+          "$HOME/ShipStudio/**/*.avif",
+          "$HOME/ShipStudio/**/*.AVIF",
+          "$HOME/ShipStudio/**/*.svg",
+          "$HOME/ShipStudio/**/*.SVG",
+          "$HOME/ShipStudio/**/*.ico",
+          "$HOME/ShipStudio/**/*.ICO",
+          "$HOME/ShipStudio/**/*.bmp",
+          "$HOME/ShipStudio/**/*.BMP",
+          "$HOME/ShipStudio/**/*.tif",
+          "$HOME/ShipStudio/**/*.TIF",
+          "$HOME/ShipStudio/**/*.tiff",
+          "$HOME/ShipStudio/**/*.TIFF"
         ]
       }
     }
