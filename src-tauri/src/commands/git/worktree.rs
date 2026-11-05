@@ -445,6 +445,7 @@ pub async fn remove_worktree(
     project_path: String,
     worktree_path: String,
     force: bool,
+    confirm_agent: Option<String>,
 ) -> Result<(), CommandError> {
     let validated_path = validate_project_path(&project_path)?;
     let validated_worktree = validate_project_path(&worktree_path)?;
@@ -464,6 +465,18 @@ pub async fn remove_worktree(
     }
 
     let worktree_str = validated_worktree.to_string_lossy().to_string();
+    // An agent's copy of the project (`agents::task`): force-removing it
+    // throws away that agent's unkept work, so it needs a confirmation that
+    // names the agent (the UI asks, saying whose copy it is).
+    let holder = crate::agents::task::holder_of(&worktree_str);
+    if let Some((id, name, project)) = &holder {
+        if force && confirm_agent.as_deref() != Some(id.as_str()) {
+            return Err(CommandError::expected(format!(
+                "This is {name}'s copy of {}, with changes that haven't been kept. Removing it throws those changes away.",
+                crate::agents::project::folder_name(project)
+            )));
+        }
+    }
     let mut args: Vec<&str> = vec!["worktree", "remove"];
     if force {
         // Twice: once for a dirty tree, once more in case the entry is locked.
@@ -490,6 +503,9 @@ pub async fn remove_worktree(
         return Err(process_error(&args, &output));
     }
 
+    if let Some((id, _, _)) = &holder {
+        crate::agents::task::forget(id, &worktree_str);
+    }
     GIT_CACHE.invalidate(&project_path);
     GIT_CACHE.invalidate(&worktree_path);
     Ok(())

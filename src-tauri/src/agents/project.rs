@@ -136,6 +136,14 @@ pub struct ChangeSummary {
     /// lists everything in the copy so far (what Keep would bring over).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copy: Option<super::task::CopyRef>,
+    /// In a copy: files it changed that Keep won't bring over, and why
+    /// (secrets, dependencies, big files, files git ignores).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub left_out: Vec<super::task::LeftOut>,
+    /// In a copy: why its changes couldn't be saved this turn (it was moved
+    /// off its own branch, or a file still has conflict markers in it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -217,6 +225,12 @@ pub async fn snapshot(project: &Path) -> Option<String> {
 /// `None` when nothing did, or git couldn't say.
 pub async fn summary(project: &Path, from: &str) -> Option<ChangeSummary> {
     let to = snapshot(project).await?;
+    summary_to(project, from, &to).await
+}
+
+/// What changed between two trees of `project`. `None` when nothing did.
+pub async fn summary_to(project: &Path, from: &str, to: &str) -> Option<ChangeSummary> {
+    let to = to.to_string();
     if to == from {
         return None;
     }
@@ -260,6 +274,8 @@ pub async fn summary(project: &Path, from: &str) -> Option<ChangeSummary> {
         added,
         removed,
         copy: None,
+        left_out: Vec::new(),
+        warning: None,
     })
 }
 

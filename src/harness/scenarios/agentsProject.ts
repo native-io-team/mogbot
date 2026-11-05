@@ -89,10 +89,15 @@ const copyTeam = (state: 'idle' | 'working' = 'idle') =>
     },
   });
 
-const copyCard = (minutesAgo: number, files: Record<string, unknown>[]) =>
+const copyCard = (
+  minutesAgo: number,
+  files: Record<string, unknown>[],
+  extra: Record<string, unknown> = {}
+) =>
   msg('changes', `Changed ${files.length} files in a copy of acme-marketing`, minutesAgo, {
     agentId: 'acme',
     changes: {
+      ...extra,
       project: ACME_PATH,
       from: 'base-tree',
       to: 'copy-tree',
@@ -139,6 +144,25 @@ const ACME_COPY_CHAT = [
     agentId: 'acme',
   }),
   copyCard(6, PRICING_FILES),
+];
+
+/** The newest card with what Keep won't bring over, and why it couldn't save. */
+const ACME_COPY_LEFT_OUT_CHAT = [
+  ...ACME_COPY_CHAT.slice(0, -1),
+  copyCard(6, PRICING_FILES, {
+    leftOut: [
+      { path: '.env.local', why: 'secrets' },
+      { path: 'public/hero.mov', why: 'tooLarge' },
+      { path: '.env', why: 'ignored' },
+    ],
+  }),
+];
+
+const ACME_COPY_OFF_BRANCH_CHAT = [
+  ...ACME_COPY_CHAT.slice(0, -1),
+  copyCard(6, PRICING_FILES, {
+    warning: 'The copy isn’t on its own branch any more — open it to check.',
+  }),
 ];
 
 const CHANGE_DIFF = {
@@ -558,6 +582,68 @@ export const agentsProjectScenarios: Scenario[] = [
       agents_messages: (args: Record<string, unknown>) =>
         args.agentId === 'acme' ? ACME_COPY_CHAT : messagesFor(args),
       agents_copy_keep: { outcome: 'conflict', files: ['src/styles/pricing.css'] },
+    },
+  },
+  {
+    id: 'agents-copy-other-branch',
+    title: 'Agents — Keep asks before keeping into a different branch',
+    looksRightWhen:
+      'After Keep changes, the newest card says “acme-marketing is on feature/pricing now, but these changes were made from main. Keeping them in feature/pricing also brings along whatever main has that feature/pricing doesn’t.”, then a primary “Keep into feature/pricing” and “Cancel”. Nothing was kept yet.',
+    requires: '.agent-copy[data-state="other-branch"]',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-copy__actions button:first-of-type' },
+    ],
+    commands: {
+      agents_overview: overview(copyTeam()),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? ACME_COPY_CHAT : messagesFor(args),
+      agents_copy_keep: { outcome: 'otherBranch', current: 'feature/pricing', base: 'main' },
+    },
+  },
+  {
+    id: 'agents-copy-markers',
+    title: 'Agents — Keep refuses while a file still has conflict markers',
+    looksRightWhen:
+      'After Keep changes, the newest card says “Some files still have conflict markers in them: src/styles/pricing.css (mono). Nothing was kept. Finish choosing in the copy, or ask Acme Site to.”, then a primary “Open the copy”, “Ask Acme Site” and “Not now”.',
+    requires: '.agent-copy[data-state="markers"]',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-copy__actions button:first-of-type' },
+    ],
+    commands: {
+      agents_overview: overview(copyTeam()),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? ACME_COPY_CHAT : messagesFor(args),
+      agents_copy_keep: { outcome: 'markers', files: ['src/styles/pricing.css'] },
+    },
+  },
+  {
+    id: 'agents-copy-left-out',
+    title: 'Agents — the card says what Keep won’t bring over',
+    looksRightWhen:
+      'The newest card (“Changes are ready”) has a quiet line under the counts: “Not included: .env.local (looks like secrets), public/hero.mov (over 5 MB) · changed .env — not included (git ignores it)”, then the usual copy line and Keep changes / Review / Preview / Discard.',
+    requires: '.agent-copy__left-out',
+    ...openAcme,
+    commands: {
+      agents_overview: overview(copyTeam()),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? ACME_COPY_LEFT_OUT_CHAT : messagesFor(args),
+    },
+  },
+  {
+    id: 'agents-copy-off-branch',
+    title: 'Agents — the copy was moved off its own branch',
+    looksRightWhen:
+      'The newest card shows an amber line “The copy isn’t on its own branch any more — open it to check.” above the copy line and the Keep / Discard actions.',
+    requires: '.agent-copy__warning',
+    ...openAcme,
+    commands: {
+      agents_overview: overview(copyTeam()),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? ACME_COPY_OFF_BRANCH_CHAT : messagesFor(args),
     },
   },
   {

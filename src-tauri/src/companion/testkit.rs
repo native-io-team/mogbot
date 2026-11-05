@@ -765,14 +765,23 @@ impl Backend for Stub {
         }))
     }
 
-    async fn keep_copy(&self, agent_id: &str, copy_id: &str) -> Result<Value, CommandError> {
+    async fn keep_copy(
+        &self,
+        agent_id: &str,
+        copy_id: &str,
+        into: Option<&str>,
+    ) -> Result<Value, CommandError> {
         if agent_id != AGENT || copy_id != "copy-1" {
             return Err(CommandError::expected(
                 "Those changes were already kept or discarded.",
             ));
         }
-        self.copies.lock().unwrap().push(format!("keep {copy_id}"));
-        Ok(json!({ "outcome": "kept", "files": 2 }))
+        let line = match into {
+            Some(branch) => format!("keep {copy_id} into {branch}"),
+            None => format!("keep {copy_id}"),
+        };
+        self.copies.lock().unwrap().push(line);
+        Ok(json!({ "outcome": "kept", "files": 2, "branch": into.unwrap_or("main") }))
     }
 
     async fn discard_copy(&self, agent_id: &str, copy_id: &str) -> Result<(), CommandError> {

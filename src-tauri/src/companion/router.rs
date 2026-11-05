@@ -303,7 +303,14 @@ pub trait Backend: Send + Sync + 'static {
     ) -> Result<Value, CommandError>;
     /// `agents_copy_keep`: the agent's copy of its project, kept. Returns
     /// `Kept` (`{outcome: kept|nothing|conflict}`).
-    async fn keep_copy(&self, agent_id: &str, copy_id: &str) -> Result<Value, CommandError>;
+    /// `into` names the project's current branch when the user confirmed
+    /// keeping there after an `otherBranch` answer.
+    async fn keep_copy(
+        &self,
+        agent_id: &str,
+        copy_id: &str,
+        into: Option<&str>,
+    ) -> Result<Value, CommandError>;
     /// `agents_copy_discard`: the agent's copy of its project, discarded.
     async fn discard_copy(&self, agent_id: &str, copy_id: &str) -> Result<(), CommandError>;
     /// `agents_files`: everything shared in one conversation, newest first.
@@ -521,6 +528,9 @@ struct DiffParams {
 struct CopyParams {
     agent_id: String,
     copy_id: String,
+    /// Keep: the branch the user confirmed, after `otherBranch`.
+    #[serde(default)]
+    into: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -998,7 +1008,8 @@ async fn run(
         }
         "agents.keepCopy" => {
             let p: CopyParams = parse(params)?;
-            Ok(b.keep_copy(&p.agent_id, &p.copy_id).await?)
+            Ok(b.keep_copy(&p.agent_id, &p.copy_id, p.into.as_deref())
+                .await?)
         }
         "agents.discardCopy" => {
             let p: CopyParams = parse(params)?;
@@ -1631,6 +1642,16 @@ mod tests {
         .unwrap();
         assert_eq!(kept["outcome"], "kept");
         assert_eq!(kept["files"], 2);
+        // Keeping into another branch names it: the confirmation travels.
+        let into = dispatch(
+            &c,
+            &me,
+            "agents.keepCopy",
+            json!({ "agentId": AGENT, "copyId": "copy-1", "into": "feature" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(into["branch"], "feature");
         dispatch(
             &c,
             &me,
@@ -1656,7 +1677,11 @@ mod tests {
         );
         assert_eq!(
             *stub.copies.lock().unwrap(),
-            vec!["keep copy-1".to_string(), "discard copy-1".to_string()]
+            vec![
+                "keep copy-1".to_string(),
+                "keep copy-1 into feature".to_string(),
+                "discard copy-1".to_string()
+            ]
         );
         let audit = stub.audited();
         assert!(audit.iter().any(|a| a.1 == "agents.keepCopy"));

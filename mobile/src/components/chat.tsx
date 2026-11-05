@@ -171,7 +171,9 @@ export const MessageRow = memo(function MessageRow({
             <CopyActions
               agent={agent}
               copy={message.changes.copy}
-              project={message.changes.project.split('/').pop() ?? message.changes.project}
+              project={message.changes.project}
+              leftOut={message.changes.leftOut}
+              warning={message.changes.warning}
               onError={onError}
             />
             {message.work && <WorkLine message={message} work={message.work} onError={onError} />}

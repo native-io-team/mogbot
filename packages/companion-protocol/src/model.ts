@@ -376,6 +376,17 @@ export interface ChangeSummary {
    * the copy so far, and offers Keep / Discard while `Agent.copy.id` matches.
    */
   copy?: CopyRef;
+  /** In a copy: files it changed that Keep won't bring over, and why. */
+  leftOut?: LeftOut[];
+  /** In a copy: why its changes couldn't be saved this turn, in a sentence. */
+  warning?: string;
+}
+
+/** A file in the copy that Keep leaves behind. */
+export interface LeftOut {
+  path: string;
+  /** `ignored`: git ignores it (an edited `.env`), so it never leaves the copy. */
+  why: 'secrets' | 'dependencies' | 'tooLarge' | 'ignored';
 }
 
 /** The copy a change card describes. */
@@ -396,14 +407,27 @@ export interface TaskCopy extends CopyRef {
   createdAt: number;
   /** The project's dependencies were cloned in. */
   deps: boolean;
+  /**
+   * The last Keep that couldn't go through, kept on the Mac so every card
+   * shows what's in the way. Cleared by the next turn or Keep.
+   */
+  stuck?: Extract<KeptCopy, { outcome: 'conflict' | 'markers' | 'otherBranch' }>;
 }
 
 /** What `agents.keepCopy` did. */
 export type KeptCopy =
-  | { outcome: 'kept'; files: number }
-  | { outcome: 'nothing' }
+  /** In the project's `branch` now. */
+  | { outcome: 'kept'; files: number; branch: string; leftOut?: LeftOut[] }
+  | { outcome: 'nothing'; leftOut?: LeftOut[] }
   /** Overlaps with edits made in the project since: the copy is mid-merge. */
-  | { outcome: 'conflict'; files: string[] };
+  | { outcome: 'conflict'; files: string[] }
+  /** These files still have conflict markers in them: nothing was kept. */
+  | { outcome: 'markers'; files: string[] }
+  /**
+   * The project is on `current`, not the branch the copy was made from
+   * (`base`). Nothing was kept; keeping there sends `into: current`.
+   */
+  | { outcome: 'otherBranch'; current: string; base?: string };
 
 export interface Attachment {
   name: string;

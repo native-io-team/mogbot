@@ -485,8 +485,9 @@ export const revokePermission = (agentId: string, ruleId: string) =>
 export const changeDiff = (agentId: string, messageId: string, path: string) =>
   call('agents.changeDiff', { agentId, messageId, path });
 /** "Keep changes" on the newest card of an agent's copy of its project. */
-export const keepCopy = (agentId: string, copyId: string) =>
-  call('agents.keepCopy', { agentId, copyId });
+/** `into` confirms the project's current branch, after an `otherBranch` answer. */
+export const keepCopy = (agentId: string, copyId: string, into?: string) =>
+  call('agents.keepCopy', into ? { agentId, copyId, into } : { agentId, copyId });
 export const discardCopy = (agentId: string, copyId: string) =>
   call('agents.discardCopy', { agentId, copyId });
 

@@ -1488,6 +1488,16 @@ export const agentsStartFresh = {
 } satisfies Result<'agents.startFresh'>;
 export const agentsCreate = {
   "color": "teal",
+  "copy": {
+    "base": "abc123",
+    "baseBranch": "main",
+    "branch": "finance/invoice-totals-ab12",
+    "createdAt": 1762280000000,
+    "deps": true,
+    "id": "copy-1",
+    "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12",
+    "project": "/Users/julian/ShipStudio/site"
+  },
   "createdAt": 1762200000000,
   "engine": "claude",
   "hidden": false,
@@ -1503,7 +1513,8 @@ export const agentsCreate = {
   "role": "Keeps my inbox down to what matters",
   "sessionId": null,
   "shape": 2,
-  "unread": 0
+  "unread": 0,
+  "workDirectly": true
 } satisfies Result<'agents.create'>;
 export const sessionsSend = {
   "sessionId": "pty-1"

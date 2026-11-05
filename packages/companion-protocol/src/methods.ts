@@ -172,7 +172,11 @@ export interface Methods {
    * project's current branch. `copyId` is the card's `changes.copy.id`; a
    * copy already kept or discarded is refused.
    */
-  'agents.keepCopy': { params: { agentId: string; copyId: string }; result: KeptCopy };
+  'agents.keepCopy': {
+    /** `into`: the project's current branch, confirmed after an `otherBranch` answer. */
+    params: { agentId: string; copyId: string; into?: string };
+    result: KeptCopy;
+  };
   /** "Discard" on a change card: the copy and everything in it, gone. */
   'agents.discardCopy': { params: { agentId: string; copyId: string }; result: null };
   /**

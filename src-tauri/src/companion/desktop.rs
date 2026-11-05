@@ -389,12 +389,18 @@ impl Backend for DesktopBackend {
         )
     }
 
-    async fn keep_copy(&self, agent_id: &str, copy_id: &str) -> Result<Value, CommandError> {
+    async fn keep_copy(
+        &self,
+        agent_id: &str,
+        copy_id: &str,
+        into: Option<&str>,
+    ) -> Result<Value, CommandError> {
         json(
             cmd::agents_copy_keep(
                 self.app.clone(),
                 agent_id.to_string(),
                 Some(copy_id.to_string()),
+                into.map(str::to_string),
             )
             .await?,
         )

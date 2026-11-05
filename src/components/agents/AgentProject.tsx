@@ -31,6 +31,7 @@ import { listProjects } from '../../lib/project';
 import {
   folderName,
   getChangeDiff,
+  leftOutLine,
   type Agent,
   type AgentMessage,
   type ChangedFile,
@@ -311,6 +312,14 @@ export const ChangeCard = memo(function ChangeCard({
           ))}
           {unlisted > 0 && <li className="agent-changes__more">and {unlisted} more</li>}
         </ul>
+      )}
+      {copy && changes.warning && (
+        <p className="agent-copy__warning" role="status">
+          {changes.warning}
+        </p>
+      )}
+      {copy && leftOutLine(changes.leftOut) && (
+        <p className="agent-copy__left-out">{leftOutLine(changes.leftOut)}</p>
       )}
       {offering && copy && agent && (
         <>

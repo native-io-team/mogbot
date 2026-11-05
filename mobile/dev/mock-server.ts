@@ -1046,16 +1046,17 @@ export function createMockServer(opts: MockOptions = {}) {
           expected: true,
         });
       const name = a.copy.project.split('/').pop() ?? a.copy.project;
+      const branch = a.copy.baseBranch ?? 'main';
       delete a.copy;
       putMessage({
         id: `m_kept_${Date.now()}`,
         agentId: a.id,
         ts: Date.now(),
         kind: 'note',
-        text: `Kept the changes in ${name} · 2 files`,
+        text: `Kept the changes in ${name} (${branch}) · 2 files`,
       });
       emit({ type: 'agents.registry', overview: overview() });
-      return { outcome: 'kept', files: 2 };
+      return { outcome: 'kept', files: 2, branch };
     },
     'agents.discardCopy': (p) => {
       const a = agent(String(p.agentId));

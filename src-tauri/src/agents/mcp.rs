@@ -753,6 +753,11 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if project.as_ref().is_some_and(|p| *p != agent.project) {
         fields.push("project");
     }
+    if let Some(p) = &project {
+        if let Err(e) = super::task::refuse_rebind(&agent, p.as_deref()) {
+            return error(e.to_string());
+        }
+    }
     if engine.is_some() {
         fields.push("engine");
     }

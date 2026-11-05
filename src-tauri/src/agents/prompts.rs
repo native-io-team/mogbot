@@ -181,8 +181,9 @@ apply: follow them. Nobody else edits this copy, and you never edit `{project}` 
 that is the user's own folder (other agents have copies of their own). Whatever you change \
 here is offered to the user as one set of changes they can keep, review or discard, \
 and it carries over from turn to turn until they do. Don't merge, push, rebase, switch \
-branches or delete the copy yourself; commit when it helps, and anything you leave \
-uncommitted is committed for you when the turn ends. If the user asks for the changes, \
+branches or delete the copy yourself, and never leave conflict markers in a file. You don't \
+need to commit: what you leave is committed for you when the turn ends (except `.env` files, \
+`node_modules`, files over 5 MB and anything holding a credential, which stay out). If the user asks for the changes, \
 tell them to use Keep on the card above.{deps}",
         project = b.project,
         path = copy.path,
@@ -361,6 +362,7 @@ mod tests {
             base_branch: Some("main".into()),
             created_at: 0,
             deps: false,
+            stuck: None,
         };
         let in_copy = system_prompt(
             &agent,

@@ -219,6 +219,24 @@
   font-family: var(--font-code);
 }
 
+/* "Not included: .env.local (looks like secrets)" — what Keep leaves behind. */
+.agent-copy__left-out {
+  margin: 0;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* "The copy isn't on its own branch any more — open it to check." */
+.agent-copy__warning {
+  margin: 0;
+  color: var(--accent-warning);
+}
+
+.agent-copy[data-state='markers'] .agent-copy__note,
+.agent-copy[data-state='other-branch'] .agent-copy__note {
+  color: var(--text-primary);
+}
+
 /* ------------------------------------------------- notes and peer lines */
 
 .agent-note__link {

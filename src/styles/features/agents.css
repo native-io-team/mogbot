@@ -1594,6 +1594,28 @@
   color: var(--accent-error-light);
 }
 
+/* Changing the project of an agent with an open copy: Keep / Discard / Cancel. */
+.agent-editor__rebind {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  color: var(--text-primary);
+}
+
+.agent-editor__rebind p {
+  margin: 0;
+}
+
+.agent-editor__rebind-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
 /* Save stays in reach however long the form gets (permissions, secrets and
    usage push it well below the fold): a footer pinned to the dialog's
    bottom edge, bled to its sides like Import agents' footer. */

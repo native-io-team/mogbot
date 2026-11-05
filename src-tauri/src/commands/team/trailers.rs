@@ -47,13 +47,20 @@ std::thread_local! {
 }
 
 #[cfg(test)]
-struct AttributionOverrideReset(Option<bool>);
+pub(crate) struct AttributionOverrideReset(Option<bool>);
 
 #[cfg(test)]
 impl Drop for AttributionOverrideReset {
     fn drop(&mut self) {
         TEST_ATTRIBUTION_OVERRIDE.with(|value| value.set(self.0));
     }
+}
+
+/// Attribution on or off for the rest of a test on this thread, restored
+/// when the guard drops (for async tests, which can't use a closure).
+#[cfg(test)]
+pub(crate) fn test_attribution(enabled: bool) -> AttributionOverrideReset {
+    AttributionOverrideReset(TEST_ATTRIBUTION_OVERRIDE.with(|value| value.replace(Some(enabled))))
 }
 
 #[cfg(test)]

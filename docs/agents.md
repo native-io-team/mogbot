@@ -1145,38 +1145,72 @@ can't trample each other. The UI says "a copy of acme-site", "Keep changes",
 - **Limits**: 4 open copies per project, and none made with under 2 GB free.
   Both fail the turn with a sentence saying what to do; nothing falls back to
   the user's folder.
+- **Its own branch, always**: committing, Keep and cleanup first check the
+  copy's HEAD is still `refs/heads/<its branch>`. If the agent switched branch
+  or detached, they refuse and touch nothing ("The copy isn't on its own branch
+  any more — open it to check"); the card shows that line. Even Discard keeps a
+  detached copy whose commits no branch holds.
 - **Commits**: what a turn leaves uncommitted is committed on the copy's
   branch at the end of the turn (`--no-verify`; bookkeeping, not the user's
-  commits). Never while conflicts are unresolved.
+  commits), with the `Made-With: <engine>` trailer when attribution is on.
+  Never staged: `.shipstudio/` (excluded, and a tracked `project.json` is
+  skip-worktree in the copy), `node_modules`, `.env*` (not `.env.example`),
+  files over 5 MB, and files whose *added* lines look like a credential (a
+  Keychain value, a known token prefix, a private key, `SECRET_NAME=literal`).
+  They stay in the copy and the card lists them ("Not included: .env.local
+  (looks like secrets)"); a root `.env` the agent edited that git ignores is
+  "changed .env — not included". Nothing is committed while conflicts are
+  unresolved or a file has added `<<<<<<<` / `>>>>>>>` lines (a bare `=======`
+  isn't counted: Markdown underlines).
 - **The card**: a turn that changed the copy leaves a `changes` card listing
-  *everything in the copy so far* (from the base commit's tree), with
-  `changes.copy`. Only the newest card of the open copy is live: "Changes are
-  ready" (or "Changes so far" while the agent works), Keep changes · Review ·
-  Preview · Discard, and ⋯ → Open a pull request. Older cards are records.
-- **Keep** (`agents_copy_keep`): the project's current branch is merged into
-  the copy first, so an overlap stops *in the copy* (`conflict`, the user's
-  folder untouched); the card offers "Open the copy" (the workspace's conflict
-  UI) or "Ask <agent>". Then the project fast-forwards. Unsaved edits in the
-  user's folder to the same files refuse with their names; nothing is
-  overwritten. A detached project is refused. The copy and (merged) branch go.
+  everything on the copy's branch (from the base commit's tree: what Keep
+  brings), plus `leftOut` and `warning`. Only the newest card of the open copy
+  is live: "Changes are ready" (or "Changes so far" while the agent works),
+  Keep changes · Review · Preview · Discard, and ⋯ → Open a pull request.
+  Keep's tooltip says it adds the agent's commits to `<branch>`.
+- **Keep** (`agents_copy_keep`): only into the branch the copy was made from.
+  If the project is on another branch now, it answers `otherBranch` and keeps
+  nothing; "Keep into <current>" (the note names both branches) sends `into`,
+  and only an `into` equal to the current branch keeps there. The project's
+  branch is then merged into the copy, so an overlap stops *in the copy*
+  (`conflict`); conflict markers stop it too (`markers`), checked before
+  committing and again on what the fast-forward would bring. Then the project
+  fast-forwards. A project mid-merge / cherry-pick / revert / rebase, unsaved
+  edits to the same files, and untracked files in the way each refuse in a
+  sentence. `conflict` / `markers` / `otherBranch` are kept on the copy
+  (`copy.stuck`) until the next turn or Keep, so the Mac's and the phone's
+  cards show them however often they re-render.
 - **Discard** (`agents_copy_discard`): asks first; the copy and its branch go.
-  Both refuse while the agent is working, and both name the copy, so a stale
-  card can't act on a newer one.
+  Both re-check "is it working?" under the repository lock: a turn claims the
+  agent before it prepares its copy, so a Keep can't remove the folder a turn
+  is about to start in. Both name the copy, so a stale card can't act on a
+  newer one.
 - **Preview** opens the copy as a workspace project; **Open a pull request**
   opens it and queues the workspace's own Submit for review modal
   (`lib/reviewHandoff.ts`), which only creates the PR when the user submits.
-- **Cleanup**: deleting the agent removes its copy's folder and keeps a branch
-  with unmerged work; at launch, copies whose folder is gone are forgotten and
-  locked copies no agent holds are removed the same way.
+- **Cleanup** (agent deleted, launch sweep): what's pending is committed to the
+  copy's branch first; a copy holding anything that can't be committed (a
+  secret, an unresolved merge, another branch) is kept. The branch goes only
+  when merged. Changing an agent's project while a copy is open is refused
+  (`agents_update`, `update_agent`); the editor asks Keep / Discard / Cancel
+  first. The workspace's Force Remove of an agent's copy needs a confirmation
+  naming the agent (`remove_worktree`'s `confirmAgent`).
+- **Lock**: one per repository (its common git dir), so agents bound to a
+  repo's main checkout and to one of its worktrees serialise. `git worktree
+  add` gets 300s.
 - **Opt out**: "Work directly in the project" in the editor (`workDirectly`).
   Unbound agents, non-git folders and repos without a commit run as before.
-- **Phone**: `agents.keepCopy` / `agents.discardCopy` (gated by
-  `welcome.methods`), shown under the newest copy card. Preview and pull
-  requests stay on the Mac.
-- Not built: a `start_task` tool to begin a fresh copy mid-conversation (new
-  work piles into the open copy until it's kept or discarded); Codex sandbox
-  writable roots untested with a worktree cwd; the agent's project `session_*`
-  tools still drive the user's own folder.
+- **Phone**: `agents.keepCopy` (with `into`) / `agents.discardCopy` (gated by
+  `welcome.methods`), as a card under the newest copy card: Discard outlined,
+  Keep the neutral answer colour (as Allow), never the agent's. What stopped
+  a Keep comes from `copy.stuck`. Preview and pull requests stay on the Mac.
+- **Codex**: its sandbox keeps every `.git` read-only, writable roots or not
+  (checked with `codex sandbox -P :workspace` on 0.166; adding the project's
+  `.git` to `writable_roots` didn't help), so a Codex agent can't commit in its
+  copy. It doesn't need to: the turn's end commits, and the prompt says so.
+- Not built: a `start_task` tool to begin a fresh copy mid-conversation; the
+  sidebar and dashboard still count agent copies as ordinary worktrees; the
+  agent's project `session_*` tools still drive the user's own folder.
 
 ## The Chief's audit trail and live hand-offs
 

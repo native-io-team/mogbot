@@ -849,7 +849,7 @@ const SECRET_NAMES: [&str; 6] = [
     "code",
 ];
 
-const SECRET_PREFIXES: [&str; 12] = [
+pub(crate) const SECRET_PREFIXES: [&str; 12] = [
     "sk-",
     "sk_",
     "pk_live",

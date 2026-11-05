@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { AgentProjectField, AgentProjectsProvider, ChangeCard } from './AgentProject';
-import { copyLine, resolvePrompt } from './AgentCopy';
+import { copyLine, keepHint, keptToast, otherBranchNote, resolvePrompt } from './AgentCopy';
 import { resetReviewHandoff, takeSubmitReview } from '../../lib/reviewHandoff';
 import type { Agent, AgentMessage, AgentStatus, KeptCopy } from '../../lib/agents';
 
@@ -53,14 +53,20 @@ function show(props: { agent?: Agent; live?: boolean }, onOpenProject = vi.fn())
   return onOpenProject;
 }
 
-function backend(keep: KeptCopy | Error = { outcome: 'kept', files: 2 }) {
+function backend(
+  keep: KeptCopy | Error | ((args: unknown) => KeptCopy) = {
+    outcome: 'kept',
+    files: 2,
+    branch: 'main',
+  }
+) {
   const calls: { cmd: string; args: unknown }[] = [];
   mockIPC((cmd, args) => {
     calls.push({ cmd, args });
     if (cmd === 'list_projects') return [{ name: 'acme-site', path: PROJECT }];
     if (cmd === 'agents_copy_keep') {
       if (keep instanceof Error) throw keep;
-      return keep;
+      return typeof keep === 'function' ? keep(args) : keep;
     }
     if (cmd === 'agents_copy_discard') return null;
     if (cmd === 'agents_send') return { id: 'u1' };
@@ -181,6 +187,99 @@ describe('a change card for a copy of the project', () => {
     expect(screen.getByText(/works on its own copy of this project/)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Work directly in the project'));
     expect(onDirect).toHaveBeenCalledWith(true);
+  });
+
+  it('asks before keeping into a branch the copy wasn’t made from, naming both', async () => {
+    const calls = backend((args) =>
+      (args as { into?: string }).into === 'feature'
+        ? { outcome: 'kept', files: 2, branch: 'feature' }
+        : { outcome: 'otherBranch', current: 'feature', base: 'main' }
+    );
+    show({ agent: agent(), live: true });
+    await act(async () => {
+      await Promise.resolve();
+      fireEvent.click(screen.getByRole('button', { name: 'Keep changes' }));
+    });
+    expect(screen.getByText(otherBranchNote('acme-site', 'feature', 'main'))).toBeInTheDocument();
+    expect(otherBranchNote('acme-site', 'feature', 'main')).toMatch(/on feature now.*from main/);
+    await act(async () => {
+      await Promise.resolve();
+      fireEvent.click(screen.getByRole('button', { name: 'Keep into feature' }));
+    });
+    const keeps = calls.filter((c) => c.cmd === 'agents_copy_keep').map((c) => c.args);
+    expect(keeps).toEqual([
+      { agentId: 'site', copyId: 'copy-1' },
+      { agentId: 'site', copyId: 'copy-1', into: 'feature' },
+    ]);
+  });
+
+  it('refuses while a file still has conflict markers, and says which', async () => {
+    backend({ outcome: 'markers', files: ['style.css'] });
+    show({ agent: agent(), live: true });
+    await act(async () => {
+      await Promise.resolve();
+      fireEvent.click(screen.getByRole('button', { name: 'Keep changes' }));
+    });
+    expect(screen.getByText(/still have conflict markers in them/)).toBeInTheDocument();
+    expect(screen.getByText('style.css')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ask Acme Site' })).toBeEnabled();
+  });
+
+  it('lists what Keep won’t bring over, and why the copy couldn’t save', async () => {
+    backend();
+    render(
+      <AgentProjectsProvider onOpenProject={vi.fn()}>
+        <ChangeCard
+          message={{
+            ...card,
+            changes: {
+              ...card.changes!,
+              leftOut: [
+                { path: '.env.local', why: 'secrets' },
+                { path: '.env', why: 'ignored' },
+              ],
+              warning: 'The copy isn’t on its own branch any more — open it to check.',
+            },
+          }}
+          agent={agent()}
+          live
+        />
+      </AgentProjectsProvider>
+    );
+    await act(() => Promise.resolve());
+    expect(
+      screen.getByText(
+        'Not included: .env.local (looks like secrets) · changed .env — not included (git ignores it)'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('isn’t on its own branch any more');
+  });
+
+  it('shows what stopped the last Keep from the agent’s copy, without pressing Keep again', async () => {
+    backend();
+    const stuckAgent = agent();
+    stuckAgent.copy = { ...stuckAgent.copy!, stuck: { outcome: 'markers', files: ['style.css'] } };
+    show({ agent: stuckAgent, live: true });
+    await act(() => Promise.resolve());
+    expect(screen.getByText(/still have conflict markers in them/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.getByRole('button', { name: 'Keep changes' })).toBeInTheDocument();
+  });
+
+  it('says where Keep puts the changes', () => {
+    expect(keepHint('Acme Site', 'acme-site', 'main')).toBe(
+      "Brings these changes into acme-site: adds Acme Site's commits to main"
+    );
+    expect(keptToast('acme-site', { outcome: 'kept', files: 2, branch: 'main' })).toBe(
+      'Kept the changes in acme-site (main)'
+    );
+    expect(
+      keptToast('acme-site', {
+        outcome: 'nothing',
+        leftOut: [{ path: '.env', why: 'ignored' }],
+      })
+    ).toBe('acme-site already has these changes · changed .env — not included (git ignores it)');
+    expect(resolvePrompt('acme-site', ['a.css'])).not.toMatch(/commit the result/);
   });
 
   it('words the sub-line by state', () => {

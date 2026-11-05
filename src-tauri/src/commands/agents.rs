@@ -392,6 +392,9 @@ pub async fn agents_update(
         Some(p) => Some(project::resolve(p).await?.map(|p| p.path)),
         None => None,
     };
+    if let Some(p) = &project {
+        agents::task::refuse_rebind(&current, p.as_deref())?;
+    }
     let updated = store::update(&agent_id, |a| {
         if let Some(n) = name {
             a.name = n;
@@ -478,18 +481,20 @@ pub async fn agents_change_diff(
     project::file_diff(&dir, &summary.from, &summary.to, &path).await
 }
 
-/// "Keep changes": the agent's copy of its project merged into the project's
-/// current branch. An overlap stops in the copy (`conflict`), never in the
-/// user's folder. `copy_id` names the card's copy, so a stale card can't keep
-/// a newer one.
+/// "Keep changes": the agent's copy of its project merged into the branch it
+/// was made from. An overlap stops in the copy (`conflict`), never in the
+/// user's folder; a project now on another branch answers `otherBranch`, and
+/// keeping there takes `into` naming that branch. `copy_id` names the card's
+/// copy, so a stale card can't keep a newer one.
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_copy_keep(
     app: AppHandle,
     agent_id: String,
     copy_id: Option<String>,
+    into: Option<String>,
 ) -> Result<agents::task::Kept, CommandError> {
-    agents::task::keep(&app, &agent_id, copy_id.as_deref()).await
+    agents::task::keep(&app, &agent_id, copy_id.as_deref(), into.as_deref()).await
 }
 
 /// "Discard": the agent's copy of its project and everything in it.

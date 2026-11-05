@@ -161,10 +161,7 @@ fn interface_style_is_dark(style: Option<&str>) -> bool {
 /// Which theme a window will actually be drawn in: the explicit preference, or
 /// for `system` (`None`) whatever the OS reports. `None` from the OS means it
 /// couldn't say, which keeps the historical dark default.
-fn effective_theme(
-    preference: Option<tauri::Theme>,
-    system: Option<tauri::Theme>,
-) -> tauri::Theme {
+fn effective_theme(preference: Option<tauri::Theme>, system: Option<tauri::Theme>) -> tauri::Theme {
     preference.or(system).unwrap_or(tauri::Theme::Dark)
 }
 
@@ -186,12 +183,12 @@ fn system_theme() -> Option<tauri::Theme> {
     use objc2_foundation::NSString;
 
     let key = NSString::from_str("AppleInterfaceStyle");
-    let defaults: *mut AnyObject = unsafe { msg_send![class!(NSUserDefaults), standardUserDefaults] };
+    let defaults: *mut AnyObject =
+        unsafe { msg_send![class!(NSUserDefaults), standardUserDefaults] };
     if defaults.is_null() {
         return None;
     }
-    let style: Option<Id<NSString>> =
-        unsafe { msg_send_id![&*defaults, stringForKey: &*key] };
+    let style: Option<Id<NSString>> = unsafe { msg_send_id![&*defaults, stringForKey: &*key] };
     let style = style.map(|value| value.to_string());
     Some(if interface_style_is_dark(style.as_deref()) {
         tauri::Theme::Dark
@@ -210,7 +207,11 @@ fn system_theme() -> Option<tauri::Theme> {
 /// a dark flash. For `system` the OS appearance is resolved here.
 pub fn saved_window_background() -> tauri::utils::config::Color {
     let preference = saved_native_theme();
-    let system = if preference.is_none() { system_theme() } else { None };
+    let system = if preference.is_none() {
+        system_theme()
+    } else {
+        None
+    };
     window_background_for(effective_theme(preference, system))
 }
 
@@ -601,8 +602,14 @@ mod tests {
 
     #[test]
     fn an_explicit_preference_beats_the_system() {
-        assert_eq!(effective_theme(Some(Theme::Light), Some(Theme::Dark)), Theme::Light);
-        assert_eq!(effective_theme(Some(Theme::Dark), Some(Theme::Light)), Theme::Dark);
+        assert_eq!(
+            effective_theme(Some(Theme::Light), Some(Theme::Dark)),
+            Theme::Light
+        );
+        assert_eq!(
+            effective_theme(Some(Theme::Dark), Some(Theme::Light)),
+            Theme::Dark
+        );
     }
 
     #[test]

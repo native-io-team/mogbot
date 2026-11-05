@@ -102,9 +102,26 @@ export async function addWorktree(
 export async function removeWorktree(
   projectPath: string,
   worktreePath: string,
-  force = false
+  force = false,
+  /** An agent's copy of the project: its id, confirming it by name. */
+  confirmAgent?: string
 ): Promise<void> {
-  return invoke<void>('remove_worktree', { projectPath, worktreePath, force });
+  return invoke<void>('remove_worktree', {
+    projectPath,
+    worktreePath,
+    force,
+    ...(confirmAgent ? { confirmAgent } : {}),
+  });
+}
+
+/** The lock reason on an agent's copy of a project (`task::LOCK_MARK`). */
+export const AGENT_COPY_LOCK = 'agent-copy:';
+
+/** The id of the agent whose copy this worktree is, or null. */
+export function agentCopyHolder(wt: Pick<WorktreeInfo, 'locked'>): string | null {
+  return wt.locked?.startsWith(AGENT_COPY_LOCK)
+    ? wt.locked.slice(AGENT_COPY_LOCK.length) || null
+    : null;
 }
 
 /** Clear worktree entries whose directories no longer exist (`git worktree prune`). */

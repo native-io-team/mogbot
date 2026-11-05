@@ -8,7 +8,7 @@
  * @module components/agents/AgentEditorModal
  */
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { ErrorIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
@@ -27,7 +27,10 @@ import {
   type AgentColor,
   type AgentEngine,
   createAgent,
+  discardCopy,
   ENGINE_LABEL,
+  folderName,
+  keepCopy,
   defaultEngine,
   formatContext,
   formatUsage,
@@ -227,8 +230,20 @@ export function AgentEditorModal({
     };
   }, [agent]);
 
+  // Moving an agent with an open copy to another project would strand the
+  // copy's work: Save asks first (Keep / Discard / Cancel), as the backend
+  // refuses it otherwise.
+  const [rebinding, setRebinding] = useState(false);
+  const copySettled = useRef(false);
+  const openCopy = agent?.copy;
+
   const save = useAsyncState(async () => {
     setError(null);
+    // Read at call time: Keep / Discard below saves straight after settling.
+    if (agent?.copy && !copySettled.current && (project || '') !== (agent.project ?? '')) {
+      setRebinding(true);
+      return;
+    }
     try {
       if (agent) {
         await updateAgent(agent.id, {
@@ -261,7 +276,33 @@ export function AgentEditorModal({
     }
   });
 
-  const canSave = name.trim().length > 0 && !save.isLoading;
+  const settle = useAsyncState(async (how: 'keep' | 'discard') => {
+    if (!agent || !openCopy) return;
+    setError(null);
+    try {
+      if (how === 'discard') {
+        await discardCopy(agent.id, openCopy.id);
+      } else {
+        const kept = await keepCopy(agent.id, openCopy.id);
+        if (kept.outcome !== 'kept' && kept.outcome !== 'nothing') {
+          setError(
+            `${agent.name}'s changes can't be kept from here yet. Finish keeping them in the chat, then change its project.`
+          );
+          setRebinding(false);
+          return;
+        }
+      }
+      copySettled.current = true;
+      setRebinding(false);
+      await save.execute();
+    } catch (err) {
+      setError(formatCommandError(asCommandError(err)));
+    }
+  });
+
+  const canSave = name.trim().length > 0 && !save.isLoading && !settle.isLoading;
+  const copyProject = openCopy ? folderName(openCopy.project) : '';
+  const destination = project ? folderName(project) : 'no project';
 
   const form = (
     <form
@@ -444,6 +485,43 @@ export function AgentEditorModal({
           <ErrorIcon size={12} className="inline-error-icon" />
           {error}
         </p>
+      )}
+
+      {rebinding && agent && openCopy && (
+        <div className="agent-editor__rebind" role="alert">
+          <p>
+            {agent.name} has a copy of {copyProject} open with changes that haven&apos;t been kept.
+            Keep them in {copyProject}
+            {openCopy.baseBranch ? ` (${openCopy.baseBranch})` : ''} or discard them before it moves
+            to {destination}.
+          </p>
+          <div className="agent-editor__rebind-actions">
+            <Button
+              variant="primary"
+              size="compact"
+              disabled={settle.isLoading}
+              onClick={() => void settle.execute('keep')}
+            >
+              Keep changes
+            </Button>
+            <Button
+              variant="danger"
+              size="compact"
+              disabled={settle.isLoading}
+              onClick={() => void settle.execute('discard')}
+            >
+              Discard
+            </Button>
+            <Button
+              variant="secondary"
+              size="compact"
+              disabled={settle.isLoading}
+              onClick={() => setRebinding(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
       )}
 
       <div className="agent-editor__actions">
