@@ -472,40 +472,72 @@ Accounts with your Apple ID. Then plug your iPhone into the Mac, tap Trust on
 the phone, and turn on Settings → Privacy & Security → Developer Mode (the
 phone restarts). Tell me when that's done."*
 
+**Accept the license (after installing *or updating* Xcode).** Until both of
+these pass, git and every build fail, so run them again after each Xcode
+update. Each `sudo` asks for the Mac password and shows nothing while you type.
+
+```bash
+xcodebuild -license check || sudo xcodebuild -license accept
+xcodebuild -checkFirstLaunchStatus || sudo xcodebuild -runFirstLaunch
+```
+
 **Check**
 
 ```bash
 xcodebuild -version | head -1
 security find-identity -v -p codesigning | grep "Apple Development"
-xcrun devicectl list devices
+xcrun xctrace list devices
 ```
 
 Expected: `Xcode 26.4` or later, at least one `Apple Development` identity,
-and the iPhone listed as `available (paired)`. No identity yet? Build once
-from Xcode or let the Run step create it (automatic signing).
+and the iPhone under `== Devices ==` as `<name> (<iOS version>) (<UDID>)`.
+That last bracket is the phone's **hardware UDID** (`00008140-…`), the id the
+build needs. Not the identifier `xcrun devicectl list devices` prints (a plain
+UUID like `D9365757-35EA-…`): xcodebuild refuses that one. No identity yet?
+The Run step's `-allowProvisioningUpdates` creates it with automatic signing.
+
+**Older Xcode:** if the build fails in `expo-modules-jsi` with a Swift error
+like *"sending 'slot' risks causing data races"*, this Xcode is older than
+Expo SDK 58 needs. Update it in the App Store (then accept the license again).
 
 **Run.** Use your team id: the `OU=` field of your Apple Development
-certificate, not the id in brackets.
+certificate, not the id in brackets. A free Apple ID's team is a *personal
+team*, which can't sign the Push Notifications capability; the prebuild
+leaves the push entitlement out on its own (no `EAS_PROJECT_ID` and no
+`COMPANION_PUSH_ENTITLEMENT=1`), so leave those unset.
 
 ```bash
 TEAM=$(security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject | sed -n 's/.*OU *= *\([A-Z0-9]*\).*/\1/p')
 echo "$TEAM"
+UDID=00008140-…   # the hardware UDID from xctrace above
+export COMPANION_BUNDLE_ID=io.native.dashbot.companion.$(printf %s "$TEAM" | shasum -a 256 | cut -c1-6) APPLE_TEAM_ID=$TEAM
 cd mobile && pnpm install
-COMPANION_BUNDLE_ID=io.native.dashbot.companion.$(printf %s "$TEAM" | shasum -a 256 | cut -c1-6) APPLE_TEAM_ID=$TEAM npx expo prebuild -p ios --clean
-COMPANION_BUNDLE_ID=io.native.dashbot.companion.$(printf %s "$TEAM" | shasum -a 256 | cut -c1-6) APPLE_TEAM_ID=$TEAM npx expo run:ios --device --configuration Release
+npx expo prebuild -p ios --clean
+cd ios
+xcodebuild -workspace Dashbot.xcworkspace -scheme Dashbot -configuration Release \
+  -destination id=$UDID -allowProvisioningUpdates -derivedDataPath build \
+  DEVELOPMENT_TEAM=$TEAM CODE_SIGN_STYLE=Automatic build
+xcrun devicectl device install app --device $UDID build/Build/Products/Release-iphoneos/Dashbot.app
 ```
 
 (The bundle id is the one the desktop app looks for: `companion.bundleId` from
-`brand.json`, plus six hex characters of the team id's SHA-256.)
+`brand.json`, plus six hex characters of the team id's SHA-256. The workspace,
+scheme and `.app` are named after `name` in `brand.json`, letters and digits
+only.) Not `npx expo run:ios`: it doesn't pass `-allowProvisioningUpdates`, so
+a free Apple ID's build can't create its provisioning profile, and its
+`--device` also needs the hardware UDID. If signing still names the Push
+Notifications capability, the `ios/` folder is from an older prebuild: run
+the prebuild again (it has `--clean`).
 
 **HUMAN** after it installs: *"On the iPhone, open Settings → General → VPN &
 Device Management, tap your Apple ID under Developer App, and tap Trust. Then
 open Dashbot and pair it as before (Step 14). In this build, the Camera app can
-open the pairing code too."*
+open the pairing code too."* Until then, opening it says "Untrusted
+Developer". Developer Mode must stay on.
 
-**A free Apple ID's build stops opening after 7 days.** Run the same two
-commands again to renew it (or Phone panel → Reinstall when running from
-source). A paid Apple Developer account makes it last a year.
+**A free Apple ID's build stops opening after 7 days.** Run the prebuild,
+build and install again to renew it (or Phone panel → Reinstall when running
+from source). A paid Apple Developer account makes it last a year.
 Push still doesn't work (no push entitlement on a self-build).
 
 Android: `COMPANION_BUNDLE_ID=io.native.dashbot.companion.self npx expo prebuild -p android --clean`, then the same with `npx expo run:android --variant release`, with a phone on adb. It

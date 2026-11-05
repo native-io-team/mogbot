@@ -87,7 +87,13 @@ pub enum XcodeCheck {
     TooOld {
         version: String,
     },
-    /// The license or first-launch components still need accepting.
+    /// The license isn't accepted (`xcodebuild -license check` fails). After
+    /// an Xcode update, every build (and the CLI tools behind it) fails
+    /// until it is.
+    NeedsLicense {
+        version: String,
+    },
+    /// The first-launch components still need installing.
     NeedsFirstLaunch {
         version: String,
     },
@@ -99,7 +105,13 @@ pub enum XcodeCheck {
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct IosDevice {
+    /// The id devicectl takes: the hardware UDID, or devicectl's own
+    /// CoreDevice identifier when the hardware one isn't reported.
     pub udid: String,
+    /// The hardware UDID (`00008140-…`) alone. `xcodebuild -destination id=`
+    /// needs this one; devicectl's CoreDevice identifier (a plain UUID) is
+    /// refused there.
+    pub hardware_udid: Option<String>,
     pub name: String,
     pub model: Option<String>,
     pub os_version: Option<String>,
@@ -167,6 +179,40 @@ async fn quick(program: &str, args: &[&str]) -> Option<String> {
     .ok()
 }
 
+/// `/Applications/Xcode.app/Contents/Developer` → that Xcode's
+/// `Contents/version.plist`, which says its version without running
+/// xcodebuild (which may refuse to while the license is unaccepted).
+fn xcode_version_plist(developer_dir: &str) -> Option<std::path::PathBuf> {
+    let contents = std::path::Path::new(developer_dir.trim()).parent()?;
+    contents
+        .to_string_lossy()
+        .ends_with(".app/Contents")
+        .then(|| contents.join("version.plist"))
+}
+
+/// `26.1` (a plist's CFBundleShortVersionString) → (26, 1).
+fn parse_bare_version(v: &str) -> Option<(u32, u32, String)> {
+    parse_xcode_version(&format!("Xcode {}", v.trim()))
+}
+
+async fn xcode_version(developer_dir: &str) -> Option<(u32, u32, String)> {
+    if let Some(v) = quick("xcodebuild", &["-version"])
+        .await
+        .as_deref()
+        .and_then(parse_xcode_version)
+    {
+        return Some(v);
+    }
+    let plist = xcode_version_plist(developer_dir)?;
+    let plist = plist.to_string_lossy();
+    let raw = quick(
+        "plutil",
+        &["-extract", "CFBundleShortVersionString", "raw", &plist],
+    )
+    .await?;
+    parse_bare_version(&raw)
+}
+
 async fn check_xcode() -> XcodeCheck {
     let Some(dir) = quick("xcode-select", &["-p"]).await else {
         return XcodeCheck::Missing;
@@ -174,15 +220,14 @@ async fn check_xcode() -> XcodeCheck {
     if !dir.contains(".app/") {
         return XcodeCheck::CltOnly;
     }
-    let Some((major, minor, version)) = quick("xcodebuild", &["-version"])
-        .await
-        .as_deref()
-        .and_then(parse_xcode_version)
-    else {
+    let Some((major, minor, version)) = xcode_version(&dir).await else {
         return XcodeCheck::Missing;
     };
     if !meets_minimum(major, minor) {
         return XcodeCheck::TooOld { version };
+    }
+    if quick("xcodebuild", &["-license", "check"]).await.is_none() {
+        return XcodeCheck::NeedsLicense { version };
     }
     if quick("xcodebuild", &["-checkFirstLaunchStatus"])
         .await
@@ -219,19 +264,27 @@ fn str_at<'a>(v: &'a serde_json::Value, path: &[&str]) -> Option<&'a str> {
 }
 
 /// iPhones and iPads from `devicectl list devices`; watches, TVs and
-/// simulators are left out.
+/// simulators are left out. devicectl lists simulators too, as
+/// `reality: "simulated"` (Xcode 27.2), so neither that nor "virtual" counts.
 fn parse_devicectl_devices(json: &serde_json::Value) -> Vec<IosDevice> {
     let Some(list) = json.pointer("/result/devices").and_then(|d| d.as_array()) else {
         return Vec::new();
     };
     list.iter()
         .filter(|d| str_at(d, &["hardwareProperties", "platform"]) == Some("iOS"))
-        .filter(|d| str_at(d, &["hardwareProperties", "reality"]) != Some("virtual"))
+        .filter(|d| {
+            !matches!(
+                str_at(d, &["hardwareProperties", "reality"]),
+                Some("virtual" | "simulated")
+            )
+        })
         .filter_map(|d| {
-            let udid = str_at(d, &["hardwareProperties", "udid"])
-                .or_else(|| str_at(d, &["identifier"]))?
-                .to_string();
+            let hardware_udid = str_at(d, &["hardwareProperties", "udid"]).map(str::to_string);
+            let udid = hardware_udid
+                .clone()
+                .or_else(|| str_at(d, &["identifier"]).map(str::to_string))?;
             Some(IosDevice {
+                hardware_udid,
                 name: str_at(d, &["deviceProperties", "name"])
                     .unwrap_or("iPhone")
                     .to_string(),
@@ -665,6 +718,29 @@ mod tests {
     }
 
     #[test]
+    fn xcode_version_without_running_xcodebuild() {
+        assert_eq!(
+            xcode_version_plist("/Applications/Xcode.app/Contents/Developer\n"),
+            Some(std::path::PathBuf::from(
+                "/Applications/Xcode.app/Contents/version.plist"
+            ))
+        );
+        assert_eq!(
+            xcode_version_plist("/Applications/Xcode-beta.app/Contents/Developer"),
+            Some(std::path::PathBuf::from(
+                "/Applications/Xcode-beta.app/Contents/version.plist"
+            ))
+        );
+        assert_eq!(
+            xcode_version_plist("/Library/Developer/CommandLineTools"),
+            None
+        );
+        let (maj, min, v) = parse_bare_version("27.2\n").unwrap();
+        assert_eq!((maj, min, v.as_str()), (27, 2, "27.2"));
+        assert!(parse_bare_version("").is_none());
+    }
+
+    #[test]
     fn devicectl_devices_keep_physical_iphones() {
         let json = serde_json::json!({ "result": { "devices": [
             {
@@ -684,11 +760,28 @@ mod tests {
                 "connectionProperties": { "pairingState": "paired" },
                 "deviceProperties": { "name": "Watch" },
                 "hardwareProperties": { "platform": "watchOS", "udid": "w" }
+            },
+            {
+                // How Xcode 27.2 lists a simulator: paired, iOS, "simulated".
+                "identifier": "F0ED6581-24FE-4761-9267-0993A5EB27FC",
+                "connectionProperties": { "pairingState": "paired" },
+                "deviceProperties": { "name": "iPhone 17 Pro" },
+                "hardwareProperties": { "platform": "iOS", "udid": "F0ED6581-24FE-4761-9267-0993A5EB27FC", "reality": "simulated" }
+            },
+            {
+                "identifier": "D9365757-35EA-5C91-8B97-D01B61F65328",
+                "connectionProperties": { "pairingState": "paired", "transportType": "wired" },
+                "deviceProperties": { "name": "No hardware id" },
+                "hardwareProperties": { "platform": "iOS", "reality": "physical" }
             }
         ]}});
         let devices = parse_devicectl_devices(&json);
-        assert_eq!(devices.len(), 2);
+        assert_eq!(devices.len(), 3);
         assert_eq!(devices[0].udid, "00008140-001");
+        assert_eq!(devices[0].hardware_udid.as_deref(), Some("00008140-001"));
+        // devicectl can still reach it by its CoreDevice id; xcodebuild can't.
+        assert_eq!(devices[2].udid, "D9365757-35EA-5C91-8B97-D01B61F65328");
+        assert_eq!(devices[2].hardware_udid, None);
         assert!(devices[0].connected && devices[0].paired);
         assert_eq!(devices[0].developer_mode, "disabled");
         assert!(!devices[1].connected);

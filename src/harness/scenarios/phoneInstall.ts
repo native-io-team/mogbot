@@ -40,6 +40,7 @@ const XCODE_OK = { ...THIS_MAC, xcode: { state: 'ok', version: '26.4' } };
 
 const IPHONE = {
   udid: '00008140-001A2B3C0E91801C',
+  hardwareUdid: '00008140-001A2B3C0E91801C',
   name: 'Julian’s iPhone',
   model: 'iPhone 16 Pro',
   osVersion: '26.1',

@@ -21,8 +21,10 @@ pnpm ios                        # build the dev client and open the simulator (f
 npx expo start --dev-client     # afterwards: just the bundler
 ```
 
-Expo SDK 58 needs **Xcode 26.4 or later** to build the dev client. With an
-older Xcode, run the JS in Expo Go instead (no native build; the app's modules
+Expo SDK 58 needs **Xcode 26.4 or later** to build the dev client. An older
+Xcode fails in `expo-modules-jsi` with a Swift error like "sending 'slot'
+risks causing data races"; that error means update Xcode. With an older
+Xcode, run the JS in Expo Go instead (no native build; the app's modules
 are all in Expo Go): `npx expo start --go --ios`. Expo Go can't receive the
 companion scheme (`companion.scheme` in `brand.json`), so open pairing links as
 `exp://<your-ip>:8081/--/pair?d=…` (the `d=` part of the mock's link).
@@ -85,6 +87,7 @@ See docs/mobile.md, "Phone screens without a simulator".
 | `COMPANION_BUNDLE_ID` | `companion.bundleId` in `brand.json` | **Placeholder** until the App Store Connect record exists |
 | `EAS_PROJECT_ID` | none | Without it, OTA updates are off, so an official update can never reach a fork |
 | `UPDATES_URL` | `https://u.expo.dev/<project id>` | |
+| `COMPANION_PUSH_ENTITLEMENT` | off | `1` adds the push entitlement (`aps-environment`) to a build without `EAS_PROJECT_ID`, which gets it automatically. Off, so a free Apple ID's personal team can sign a self-build |
 
 The runtime version uses the `fingerprint` policy, so a JS update only reaches
 binaries that can run it. `submit.production` in `eas.json` holds placeholders

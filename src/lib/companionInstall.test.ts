@@ -4,6 +4,7 @@ import {
   buildIosInstallPrompt,
   expiryLine,
   iosBuildCommand,
+  iosProjectName,
   iosSteps,
   isFreeTeamExpiry,
   readInstallRecord,
@@ -45,6 +46,7 @@ const thisMac: IosInstallStatus = {
 
 const iphone = {
   udid: '00008140-001',
+  hardwareUdid: '00008140-001' as string | null,
   name: 'Julian’s iPhone',
   model: 'iPhone 16 Pro',
   osVersion: '26.1',
@@ -77,6 +79,14 @@ describe('iosSteps', () => {
     const s = { ...thisMac, xcode: { state: 'needsFirstLaunch' as const, version: '26.4' } };
     expect(xcodeBlocks(s)).toBe(false);
     expect(state(iosSteps(s, null)).xcode).toBe('agent');
+  });
+
+  it('an unaccepted license (after an Xcode update) is the agent’s too', () => {
+    const s = { ...thisMac, xcode: { state: 'needsLicense' as const, version: '27.2' } };
+    expect(xcodeBlocks(s)).toBe(false);
+    const xcode = iosSteps(s, null).find((x) => x.id === 'xcode');
+    expect(xcode?.state).toBe('agent');
+    expect(xcode?.detail).toContain('license');
   });
 
   it('a phone that hasn’t trusted the Mac, then Developer Mode, then the build', () => {
@@ -135,13 +145,43 @@ describe('androidSteps', () => {
 });
 
 describe('the build', () => {
-  it('builds Release for the chosen phone with the team’s bundle id', () => {
-    const cmd = iosBuildCommand(thisMac, iphone);
+  it('builds Release with xcodebuild for the phone’s hardware UDID, then installs', () => {
+    const cmd = iosBuildCommand(thisMac, iphone)!;
     expect(cmd).toContain("cd '/Users/me/ShipStudio/.companion-build/mobile'");
     expect(cmd).toContain('COMPANION_BUNDLE_ID=io.native.dashbot.companion.a4c8c6');
     expect(cmd).toContain('APPLE_TEAM_ID=H8NN6DM6G6');
-    expect(cmd).toContain('--device 00008140-001 --configuration Release');
+    const name = iosProjectName();
+    expect(cmd).toContain(
+      `npx expo prebuild -p ios --clean && cd ios && COMPANION_BUNDLE_ID=io.native.dashbot.companion.a4c8c6 APPLE_TEAM_ID=H8NN6DM6G6 xcodebuild -workspace ${name}.xcworkspace -scheme ${name} -configuration Release -destination id=00008140-001 -allowProvisioningUpdates -derivedDataPath build DEVELOPMENT_TEAM=H8NN6DM6G6 CODE_SIGN_STYLE=Automatic build`
+    );
+    expect(cmd).toMatch(
+      new RegExp(
+        ` && xcrun devicectl device install app --device 00008140-001 build/Build/Products/Release-iphoneos/${name}\\.app$`
+      )
+    );
+    // expo run:ios can't make a free team's provisioning profile.
+    expect(cmd).not.toContain('run:ios');
     expect(iosBuildCommand({ ...thisMac, signing: null }, iphone)).toBeNull();
+  });
+
+  it('never builds for devicectl’s CoreDevice identifier', () => {
+    const coreDeviceOnly = {
+      ...iphone,
+      udid: 'D9365757-35EA-5C91-8B97-D01B61F65328',
+      hardwareUdid: null,
+    };
+    expect(iosBuildCommand(thisMac, coreDeviceOnly)).toBeNull();
+    const prompt = buildIosInstallPrompt({ ...thisMac, devices: [coreDeviceOnly] });
+    expect(prompt).toContain('xcrun xctrace list devices');
+    expect(prompt).toContain('-destination id=<UDID>');
+    expect(prompt).not.toContain('D9365757');
+  });
+
+  it('names the workspace the way expo prebuild does', () => {
+    expect(iosProjectName('Dashbot')).toBe('Dashbot');
+    expect(iosProjectName('Ship Studio')).toBe('ShipStudio');
+    expect(iosProjectName('my_app-2')).toBe('myapp2');
+    expect(iosProjectName('!!!')).toBe('app');
   });
 
   it('the prompt is one line, fetches the matching tag, and leaves done to the checklist', () => {
@@ -151,6 +191,19 @@ describe('the build', () => {
     expect(prompt).toContain('--branch v1.7.0');
     expect(prompt).toContain('App Store');
     expect(prompt).toContain('do not claim success');
+  });
+
+  it('the prompt covers what a free Apple ID on a fresh Xcode trips over', () => {
+    const prompt = buildIosInstallPrompt({ ...thisMac, devices: [iphone] });
+    expect(prompt).toContain('-destination id=00008140-001 -allowProvisioningUpdates');
+    expect(prompt).toContain('sudo xcodebuild -license accept');
+    expect(prompt).toContain('sudo xcodebuild -runFirstLaunch');
+    expect(prompt).toContain('Push Notifications');
+    expect(prompt).toContain('expo-modules-jsi');
+    expect(prompt).toContain('VPN & Device Management');
+    expect(prompt).toContain('Developer Mode');
+    expect(prompt).toContain('7 days');
+    expect(prompt).not.toContain('xctrace'); // the UDID is already known
   });
 });
 

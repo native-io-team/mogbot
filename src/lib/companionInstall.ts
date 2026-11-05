@@ -36,11 +36,18 @@ export type XcodeCheck =
   | { state: 'missing' }
   | { state: 'cltOnly' }
   | { state: 'tooOld'; version: string }
+  | { state: 'needsLicense'; version: string }
   | { state: 'needsFirstLaunch'; version: string }
   | { state: 'ok'; version: string };
 
 export interface IosDevice {
+  /** The id devicectl takes: the hardware UDID, or devicectl's CoreDevice id. */
   udid: string;
+  /**
+   * The hardware UDID (`00008140-…`), the one `xcodebuild -destination id=`
+   * accepts; null when devicectl didn't report it.
+   */
+  hardwareUdid: string | null;
   name: string;
   model: string | null;
   osVersion: string | null;
@@ -139,7 +146,11 @@ export function pickAndroidPhone(s: AndroidInstallStatus): AndroidPhone | null {
 
 /** Xcode is the one thing the agent can't fix: the App Store is the user's. */
 export function xcodeBlocks(s: IosInstallStatus): boolean {
-  return s.xcode.state !== 'ok' && s.xcode.state !== 'needsFirstLaunch';
+  return (
+    s.xcode.state !== 'ok' &&
+    s.xcode.state !== 'needsFirstLaunch' &&
+    s.xcode.state !== 'needsLicense'
+  );
 }
 
 function xcodeStep(s: IosInstallStatus): InstallStep {
@@ -147,11 +158,18 @@ function xcodeStep(s: IosInstallStatus): InstallStep {
   switch (s.xcode.state) {
     case 'ok':
       return { id: 'xcode', title, detail: `Xcode ${s.xcode.version}`, state: 'done' };
-    case 'needsFirstLaunch':
+    case 'needsLicense':
       return {
         id: 'xcode',
         title,
         detail: `Xcode ${s.xcode.version} needs its license accepted. The agent runs it; you type your Mac password.`,
+        state: 'agent',
+      };
+    case 'needsFirstLaunch':
+      return {
+        id: 'xcode',
+        title,
+        detail: `Xcode ${s.xcode.version} needs its first-launch parts installed. The agent runs it; you type your Mac password.`,
         state: 'agent',
       };
     case 'tooOld':
@@ -353,14 +371,56 @@ function sourceInstruction(src: SourceCheck): string {
   );
 }
 
-/** The one command that builds and installs: also what Reinstall runs. */
-export function iosBuildCommand(s: IosInstallStatus, device: IosDevice): string | null {
-  if (!s.signing) return null;
-  const env = `COMPANION_BUNDLE_ID=${s.signing.bundleId} APPLE_TEAM_ID=${s.signing.teamId}`;
+/**
+ * The Xcode workspace, scheme and .app name `expo prebuild` derives from the
+ * app's name: Expo keeps only letters and digits (its `sanitizedName`).
+ */
+export function iosProjectName(name: string = BRAND.name): string {
   return (
-    `cd ${sh(s.source.path)} && ${env} npx expo prebuild -p ios --clean && ` +
-    `${env} npx expo run:ios --device ${device.udid} --configuration Release`
+    name
+      .replace(/[\W_]+/g, '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '') || 'app'
   );
+}
+
+/**
+ * The three commands of an iPhone build, run in the app's `mobile/` folder:
+ * prebuild, build and sign, install. Not `expo run:ios`: it doesn't pass
+ * `-allowProvisioningUpdates`, so a free Apple ID's build can't make its own
+ * provisioning profile. The env goes on the build too, because the Release
+ * build's bundling step reads app.config.ts again. A self-build's prebuild
+ * leaves out the push entitlement, which a personal team can't sign
+ * (`pushEntitlement` in mobile/app.config.ts).
+ */
+export function iosBuildSteps(
+  env: string,
+  teamId: string,
+  udid: string
+): { prebuild: string; build: string; install: string } {
+  const name = iosProjectName();
+  return {
+    prebuild: `${env} npx expo prebuild -p ios --clean`,
+    build:
+      `cd ios && ${env} xcodebuild -workspace ${name}.xcworkspace -scheme ${name} -configuration Release ` +
+      `-destination id=${udid} -allowProvisioningUpdates -derivedDataPath build ` +
+      `DEVELOPMENT_TEAM=${teamId} CODE_SIGN_STYLE=Automatic build`,
+    install: `xcrun devicectl device install app --device ${udid} build/Build/Products/Release-iphoneos/${name}.app`,
+  };
+}
+
+const iosEnv = (signing: Signing) =>
+  `COMPANION_BUNDLE_ID=${signing.bundleId} APPLE_TEAM_ID=${signing.teamId}`;
+
+/**
+ * The one command that builds and installs: also what Reinstall runs. Null
+ * without a team, or without the phone's hardware UDID (xcodebuild refuses
+ * devicectl's CoreDevice identifier).
+ */
+export function iosBuildCommand(s: IosInstallStatus, device: IosDevice): string | null {
+  if (!s.signing || !device.hardwareUdid) return null;
+  const steps = iosBuildSteps(iosEnv(s.signing), s.signing.teamId, device.hardwareUdid);
+  return `cd ${sh(s.source.path)} && ${steps.prebuild} && ${steps.build} && ${steps.install}`;
 }
 
 export function androidBuildCommand(s: AndroidInstallStatus, phone: AndroidPhone): string {
@@ -380,20 +440,31 @@ export function androidBuildCommand(s: AndroidInstallStatus, phone: AndroidPhone
 export function buildIosInstallPrompt(s: IosInstallStatus): string {
   const device = pickIosDevice(s);
   const env = s.signing
-    ? `COMPANION_BUNDLE_ID=${s.signing.bundleId} APPLE_TEAM_ID=${s.signing.teamId}`
+    ? iosEnv(s.signing)
     : `COMPANION_BUNDLE_ID=${BRAND.companion.bundleId}.<first 6 hex characters of the sha256 of the team id> APPLE_TEAM_ID=<team id>`;
-  const target = device ? device.udid : '<the phone’s UDID from `xcrun devicectl list devices`>';
+  const team = s.signing?.teamId ?? '<team id>';
+  const target = device?.hardwareUdid ?? '<UDID>';
+  const findUdid = device?.hardwareUdid
+    ? ''
+    : 'For <UDID>, use the iPhone’s hardware UDID: the id in brackets after its name and iOS version under "== Devices ==" in `xcrun xctrace list devices` (it looks like 00008140-001600843E60801C). Not the identifier `xcrun devicectl list devices` prints (a plain UUID): xcodebuild refuses that one. ';
+  const steps = iosBuildSteps(env, team, target);
   return (
     `You are installing the ${BRAND.name} companion app on the user’s iPhone, built from source on this Mac. ` +
     'Be brief and plain: before each step, say in one sentence what you are about to do. ' +
     `${BRAND.name} shows a checklist beside this terminal and verifies every item with its own checks, so do not claim success; tell the user to look at the checklist. ` +
-    `Check first: \`xcodebuild -version\` (needs ${s.xcodeMinimum} or later; if it is older, stop and tell the user to update Xcode in the App Store, which you cannot do), \`xcodebuild -checkFirstLaunchStatus\` (if it fails, run \`sudo xcodebuild -runFirstLaunch\` and warn that macOS asks for their password and shows nothing while they type), \`pod --version\` (if missing, \`brew install cocoapods\`), \`node --version\`. ` +
+    `Check first: \`xcodebuild -version\` (needs ${s.xcodeMinimum} or later; if it is older, stop and tell the user to update Xcode in the App Store, which you cannot do), ` +
+    '`xcodebuild -license check` (if it fails, run `sudo xcodebuild -license accept`), `xcodebuild -checkFirstLaunchStatus` (if it fails, run `sudo xcodebuild -runFirstLaunch`); both are needed again after every Xcode update, and until then git and every build fail. For either sudo, warn that macOS asks for their password and shows nothing while they type. ' +
+    'Also `pod --version` (if missing, `brew install cocoapods`) and `node --version`. ' +
     'Things only the user can do, so ask them and wait: plug the iPhone in with a cable, unlock it and tap Trust; turn on Developer Mode (Settings → Privacy & Security → Developer Mode, the phone restarts, then tap Turn On); add their Apple ID in Xcode → Settings → Accounts if `security find-identity -v -p codesigning` lists no "Apple Development" identity (a free Apple ID works). ' +
     sourceInstruction(s.source) +
     ' ' +
-    `Then build and install a Release build (it bundles the JavaScript, so it runs without a bundler): in ${s.source.path} run \`${env} npx expo prebuild -p ios --clean\`, then \`${env} npx expo run:ios --device ${target} --configuration Release\`. Use exactly that bundle id: ${BRAND.name} checks the phone for it. ` +
-    'If signing fails, read the error and explain it plainly; with a free Apple ID, Xcode may need to be opened once with the generated ios/*.xcworkspace to pick the team under Signing & Capabilities. ' +
-    `When it is installed, tell the user: with a free Apple ID the app stops opening after 7 days and ${BRAND.name} has a one-click Reinstall; the first launch may say "Untrusted Developer", fixed on the phone in Settings → General → VPN & Device Management → their Apple ID → Trust. ` +
+    findUdid +
+    `Then build and install a Release build (it bundles the JavaScript, so it runs without a bundler), in ${s.source.path}: \`${steps.prebuild}\`, then \`${steps.build}\`, then \`${steps.install}\` (from the same ios folder). Use exactly that bundle id: ${BRAND.name} checks the phone for it. ` +
+    'Do not use `npx expo run:ios`: it does not pass -allowProvisioningUpdates, so a free Apple ID’s build cannot make its provisioning profile. ' +
+    'The prebuild leaves out the Push Notifications entitlement on its own, because a free Apple ID’s personal team cannot sign it and the app works without it; do not add it back, and do not set COMPANION_PUSH_ENTITLEMENT. If signing still says "Personal development teams … do not support the Push Notifications capability", the ios folder is stale: run the prebuild again (it has --clean). ' +
+    'If the build fails in expo-modules-jsi with a Swift error like "sending \'slot\' risks causing data races", this Xcode is too old for the app’s Expo SDK: stop and tell the user to update Xcode in the App Store. ' +
+    'If signing fails any other way, read the error and explain it plainly. ' +
+    `When it is installed, tell the user: the first launch says "Untrusted Developer" until they trust the certificate on the phone in Settings → General → VPN & Device Management → their Apple ID under Developer App → Trust; with a free Apple ID the app stops opening after 7 days and ${BRAND.name} has a one-click Reinstall. ` +
     'Do not change any of the app’s source code and do not set up anything unrelated.'
   );
 }

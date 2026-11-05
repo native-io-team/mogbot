@@ -50,6 +50,17 @@ const SPEECH =
  * module into every build, so the app gates on this, not on the module.
  */
 const shareExtension = process.env.SHIPSTUDIO_SHARE_EXTENSION === '1';
+/**
+ * The push entitlement (`aps-environment`), which expo-notifications adds by
+ * default. A free Apple ID's personal team can't sign it ("Personal
+ * development teams … do not support the Push Notifications capability"), so
+ * it's only in an official (EAS) build, or one that asks with
+ * COMPANION_PUSH_ENTITLEMENT=1 (a paid team that wants it). A self-build
+ * can't receive push anyway (src/lib/push.ts says so instead of asking), and
+ * local notifications don't need the entitlement.
+ */
+export const pushEntitlement = (env: Record<string, string | undefined> = process.env): boolean =>
+  Boolean(env.EAS_PROJECT_ID) || env.COMPANION_PUSH_ENTITLEMENT === '1';
 
 export default (): ExpoConfig => ({
   name: brand.name,
@@ -109,7 +120,14 @@ export default (): ExpoConfig => ({
       },
     ],
     // Placeholder art (assets/*.png are generated, neutral, unbranded) until real branding lands.
-    ['expo-notifications', { icon: './assets/notification-icon.png', color: '#0a0a0a' }],
+    [
+      'expo-notifications',
+      {
+        icon: './assets/notification-icon.png',
+        color: '#0a0a0a',
+        enableRemoteNotifications: pushEntitlement(),
+      },
+    ],
     [
       'expo-image-picker',
       {
