@@ -229,6 +229,13 @@ fn tool_calls_read_as_plain_past_tense_words() {
         "Shared a file"
     );
     assert_eq!(
+        d(
+            &ours("share_result"),
+            json!({"title": "Secret plan", "summary": "x"})
+        ),
+        "Put together its result"
+    );
+    assert_eq!(
         d(&ours("schedule_check_in"), json!({})),
         "Scheduled a check-in"
     );
@@ -376,6 +383,7 @@ fn credentials_never_reach_a_label_a_turn_file_or_a_status() {
         });
         let taken = LIVE.lock().unwrap().remove(&agent).unwrap();
         let (anchor, work) = settle(taken, 2).unwrap();
+        std::fs::create_dir_all(store::agent_home(&agent).unwrap()).unwrap();
         save(&agent, &anchor.id, &work).unwrap();
         let file = std::fs::read_to_string(path_for(&agent, &anchor.id).unwrap()).unwrap();
         assert_eq!(work.step_count, 7);
@@ -603,6 +611,45 @@ fn only_what_the_turn_said_is_an_anchor() {
 }
 
 #[test]
+fn a_result_card_is_where_the_turn_ends() {
+    // Its own message is a reply: the timeline hangs under it.
+    let mut live = Live::default();
+    live.action(call("Read", "r", json!({"file_path": "/a.ts"})), 1);
+    live.message(&message(MessageKind::Agent, "reply"));
+    live.message(&message(MessageKind::Agent, "result"));
+    assert_eq!(settle(live, 9).unwrap().0.id, "result");
+
+    // Riding on the change card, the change card is the result; a plain
+    // change card never is.
+    let mut live = Live::default();
+    live.action(call("Read", "r", json!({"file_path": "/a.ts"})), 1);
+    live.message(&message(MessageKind::Agent, "reply"));
+    live.message(&message(MessageKind::Changes, "plain-changes"));
+    assert_eq!(settle(live, 9).unwrap().0.id, "reply");
+    let mut live = Live::default();
+    live.action(call("Read", "r", json!({"file_path": "/a.ts"})), 1);
+    live.message(&message(MessageKind::Agent, "reply"));
+    let mut card = message(MessageKind::Agent, "staged");
+    card.result = Some(super::super::results::ResultCard {
+        id: "r1".into(),
+        version: 1,
+        title: "t".into(),
+        summary: "s".into(),
+        items: Vec::new(),
+        checked: Vec::new(),
+        not_verified: Vec::new(),
+        changes: None,
+    });
+    let merged = super::super::results::ride_on(message(MessageKind::Changes, "c"), card);
+    assert_eq!(
+        (merged.id.as_str(), merged.kind),
+        ("staged", MessageKind::Changes)
+    );
+    live.message(&merged);
+    assert_eq!(settle(live, 9).unwrap().0.id, "staged");
+}
+
+#[test]
 fn the_live_status_carries_what_is_running_only_while_it_runs() {
     let agent = "live-doing";
     begin(agent, 0);
@@ -633,6 +680,7 @@ fn kept_on_disk_beside_the_log_never_in_it() {
     let dir = tempfile::tempdir().unwrap();
     store::set_root_for_tests(Some(dir.path().to_path_buf()));
     let agent_id = "a1";
+    std::fs::create_dir_all(store::agent_home(agent_id).unwrap()).unwrap();
     let work = TurnWork {
         started_at: 1,
         ended_at: Some(2),
@@ -671,6 +719,7 @@ fn old_timelines_are_pruned_but_the_first_pages_keep_theirs() {
     let dir = tempfile::tempdir().unwrap();
     store::set_root_for_tests(Some(dir.path().to_path_buf()));
     let agent_id = "busy";
+    std::fs::create_dir_all(store::agent_home(agent_id).unwrap()).unwrap();
     let work = TurnWork {
         step_count: 1,
         ..TurnWork::default()
@@ -700,6 +749,7 @@ fn old_timelines_are_pruned_but_the_first_pages_keep_theirs() {
 
     // A quiet agent: old, but few, so all of them stay.
     let quiet = "quiet";
+    std::fs::create_dir_all(store::agent_home(quiet).unwrap()).unwrap();
     for i in 0..10 {
         let id = format!("q{i}");
         save(quiet, &id, &work).unwrap();

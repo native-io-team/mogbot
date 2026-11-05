@@ -738,6 +738,49 @@ describe('usePreviewConnection page-list load failures (issue #541)', () => {
   });
 });
 
+describe('usePreviewConnection — send-error-to-claude is only ever a chip', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({} as Response));
+  });
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  function post(message: unknown, origin = 'http://localhost:3000') {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'shipstudio:send-error-to-claude', message },
+        origin,
+      })
+    );
+  }
+
+  it('raises a pending, control-stripped error instead of writing anywhere', () => {
+    const { result, unmount } = renderHook(() => usePreviewConnection(baseParams));
+
+    act(() => post('Boom\x1b[201~\rrm -rf ~\r'));
+    expect(result.current.pendingAgentError).toBe('Boom[201~\nrm -rf ~');
+
+    act(() => result.current.dismissAgentError());
+    expect(result.current.pendingAgentError).toBeNull();
+    unmount();
+  });
+
+  it('ignores other origins, non-string and control-only messages', () => {
+    const { result, unmount } = renderHook(() => usePreviewConnection(baseParams));
+
+    act(() => post('evil', 'http://evil.example'));
+    act(() => post({ toString: () => 'x' }));
+    act(() => post('\x1b\x07'));
+    expect(result.current.pendingAgentError).toBeNull();
+    unmount();
+  });
+});
+
 describe('usePreviewConnection typed URLs (query + hash)', () => {
   beforeEach(() => {
     vi.useFakeTimers();

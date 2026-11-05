@@ -99,6 +99,8 @@ pub struct SendExtras {
     pub mentions: Vec<String>,
     pub attachments: Vec<Staged>,
     pub client_id: Option<String>,
+    /// "Ask for changes": the result this message asks to revise.
+    pub revises: Option<String>,
 }
 
 /// The schedule commands, one variant each.
@@ -571,6 +573,8 @@ struct SendParams {
     attachments: Vec<BlobParam>,
     #[serde(default)]
     mentions: Vec<String>,
+    #[serde(default)]
+    revises: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -822,6 +826,7 @@ async fn run(
                         mentions: p.mentions,
                         attachments,
                         client_id: Some(client_id),
+                        revises: p.revises.filter(|r| !r.trim().is_empty()),
                     };
                     let sent = b.send(&p.agent_id, text, extras).await?;
                     c.blobs.consume(&blob_ids);

@@ -56,7 +56,49 @@ pub fn shareable(raw: &str, home: &Path, roots: &[PathBuf]) -> Result<PathBuf, S
                 .into(),
         );
     }
+    if is_secret_file(&real) {
+        let name = real
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        return Err(format!(
+            "{name} looks like it holds secrets (an .env file or a private key), so it isn't copied into the chat, where it would also reach the user's phone. Nothing was shared. Tell the user where it is, or share what they need from it without the secret values."
+        ));
+    }
     Ok(real)
+}
+
+/// Key files by name (SSH's defaults) and by extension (keys and keystores).
+const KEY_NAMES: [&str; 4] = ["id_rsa", "id_dsa", "id_ecdsa", "id_ed25519"];
+const KEY_EXTENSIONS: [&str; 5] = ["key", "p12", "pfx", "jks", "keystore"];
+
+/// An `.env*` file (examples aside, `task::is_env_file`), a well-known key
+/// file, or any file whose first few KB hold a PEM private key block
+/// (`task::looks_like_secret`'s marker). A `.pem` holding only a certificate
+/// is shareable; one with a key in it is not.
+pub fn is_secret_file(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if super::task::is_env_file(&name) || KEY_NAMES.contains(&name.as_str()) {
+        return true;
+    }
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if KEY_EXTENSIONS.contains(&ext.as_str()) {
+        return true;
+    }
+    use std::io::Read;
+    let mut head = Vec::new();
+    if let Ok(file) = std::fs::File::open(path) {
+        let _ = file.take(8 * 1024).read_to_end(&mut head);
+    }
+    let head = String::from_utf8_lossy(&head);
+    head.lines()
+        .any(|l| l.contains("-----BEGIN") && l.contains("PRIVATE KEY-----"))
 }
 
 /// Copy a shareable file into the agent's attachments for `message_id`.
@@ -101,7 +143,8 @@ pub struct SharedFile {
 pub fn list(agent_id: &str) -> Result<Vec<SharedFile>, CommandError> {
     let mut files: Vec<SharedFile> = store::messages(agent_id, usize::MAX)?
         .into_iter()
-        .filter(|m| matches!(m.kind, MessageKind::User | MessageKind::Agent))
+        // A result card's files ride on the turn's change card when it had one.
+        .filter(|m| matches!(m.kind, MessageKind::User | MessageKind::Agent) || m.result.is_some())
         .flat_map(|m| {
             let from = if m.kind == MessageKind::User {
                 Sender::User
@@ -125,77 +168,76 @@ pub fn list(agent_id: &str) -> Result<Vec<SharedFile>, CommandError> {
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum PathAction {
-    /// A document: open it in its default app.
+    /// A document, image or text file: open it in its default app.
     Open,
-    /// Folders, apps, scripts and anything executable: show it in Finder,
-    /// never run it. A link in an agent's reply is not consent to launch.
+    /// Everything else — folders, apps, scripts, HTML, unknown types, anything
+    /// executable: show it in Finder, never run it. A link in an agent's reply
+    /// is not consent to launch.
     Reveal,
 }
 
-/// Extensions whose default "open" runs something rather than shows it.
-const LAUNCHES: &[&str] = &[
-    "app",
-    "command",
-    "tool",
-    "sh",
-    "bash",
-    "zsh",
-    "csh",
-    "fish",
-    "terminal",
-    "scpt",
-    "scptd",
-    "applescript",
-    "workflow",
-    "action",
-    "pkg",
-    "mpkg",
-    "dmg",
-    "jar",
-    "py",
-    "rb",
-    "pl",
-    "php",
-    "webloc",
-    "inetloc",
-    "fileloc",
-    "url",
-    "prefpane",
-    "kext",
-    "plugin",
-    "osax",
-    "shortcut",
+/// The only types a click opens. An allowlist, not a blocklist: the set of
+/// extensions whose default handler *runs* something (`.command`, `.terminal`,
+/// `.webloc`, `.fileloc`, `.scpt`, `.app`, `.workflow`, `.shortcut`, an HTML
+/// page with script, a `.svg` that opens in a browser …) is open-ended and
+/// grows with every installed app, while this one is short and boring.
+const OPENS: &[&str] = &[
+    // Documents
+    "pdf", "rtf", "rtfd", "doc", "docx", "odt", "pages", "xls", "xlsx", "ods", "numbers", "ppt",
+    "pptx", "odp", "key", "epub", // Text and data
+    "txt", "text", "md", "markdown", "csv", "tsv", "json", "log", "xml", "yaml", "yml", "toml",
+    // Images
+    "png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tif", "tiff", "bmp",
 ];
 
-fn launches(path: &Path, meta: &std::fs::Metadata) -> bool {
+fn opens(path: &Path, meta: &std::fs::Metadata) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         if meta.permissions().mode() & 0o111 != 0 {
-            return true;
+            return false;
         }
     }
-    path.extension()
-        .map(|e| e.to_string_lossy().to_ascii_lowercase())
-        .is_some_and(|e| LAUNCHES.contains(&e.as_str()))
+    meta.is_file()
+        && path
+            .extension()
+            .map(|e| e.to_string_lossy().to_ascii_lowercase())
+            .is_some_and(|e| OPENS.contains(&e.as_str()))
 }
 
 /// A path from an agent's prose, resolved to something that exists, and
 /// what clicking it may do. `reveal` asks for Finder whatever it is.
+///
+/// Only paths inside `roots` — the agent's home, the user's projects, the
+/// agent's own copy of its project — are acted on at all; they are judged
+/// after canonicalising, so `..` and symlinks count by where they lead. A path
+/// anywhere else is refused, not revealed: a reply that names
+/// `~/Library/Keychains` should not be a click away from it.
 pub fn local_path(
     raw: &str,
     home: &Path,
+    roots: &[PathBuf],
     reveal: bool,
 ) -> Result<(PathBuf, PathAction), CommandError> {
     let path = expand(raw, home);
     let real = path
         .canonicalize()
         .map_err(|_| CommandError::expected(format!("{} isn't there.", path.display())))?;
+    let inside = roots
+        .iter()
+        .filter_map(|r| r.canonicalize().ok())
+        .any(|root| real.starts_with(&root));
+    if !inside {
+        return Err(CommandError::expected(format!(
+            "{} is outside this agent's folder and your projects, so it wasn't opened.",
+            path.display()
+        )));
+    }
     let meta = std::fs::metadata(&real).map_err(super::err_io)?;
-    let action = if reveal || meta.is_dir() || launches(&real, &meta) {
-        PathAction::Reveal
-    } else {
+    let action = if !reveal && opens(&real, &meta) {
         PathAction::Open
+    } else {
+        PathAction::Reveal
     };
     Ok((real, action))
 }
@@ -251,6 +293,39 @@ mod tests {
         assert!(shareable("  ", &home, &roots).is_err());
     }
 
+    #[test]
+    fn refuses_env_files_and_private_keys_honestly() {
+        let (_dir, home, project) = setup();
+        let roots = [home.clone(), project.clone()];
+        for (name, body) in [
+            (".env", "STRIPE_KEY=sk_live_x"),
+            (".env.production", "A=1"),
+            ("id_ed25519", "x"),
+            ("server.key", "x"),
+            ("cert.p12", "x"),
+            ("deploy.pem", "-----BEGIN RSA PRIVATE KEY-----\nabc"),
+            ("notes.txt", "-----BEGIN OPENSSH PRIVATE KEY-----"),
+        ] {
+            std::fs::write(project.join(name), body).unwrap();
+            let path = project.join(name).display().to_string();
+            let err = shareable(&path, &home, &roots).unwrap_err();
+            assert!(
+                err.contains("holds secrets") && err.contains("Nothing was shared"),
+                "{name}: {err}"
+            );
+        }
+        // Examples, public keys and certificates are fine.
+        for (name, body) in [
+            (".env.example", "STRIPE_KEY="),
+            ("id_ed25519.pub", "ssh-ed25519 AAAA"),
+            ("cert.pem", "-----BEGIN CERTIFICATE-----"),
+        ] {
+            std::fs::write(project.join(name), body).unwrap();
+            let path = project.join(name).display().to_string();
+            assert!(shareable(&path, &home, &roots).is_ok(), "{name}");
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn refuses_symlinks_that_lead_outside() {
@@ -281,35 +356,67 @@ mod tests {
 
     #[test]
     fn prose_paths_open_documents_and_only_reveal_the_rest() {
-        let (dir, home, _project) = setup();
-        let (_, action) = local_path("report.md", &home, false).unwrap();
-        assert_eq!(action, PathAction::Open);
+        let (_dir, home, project) = setup();
+        let roots = [home.clone(), project.clone()];
+        let lp = |raw: &str, reveal: bool| local_path(raw, &home, &roots, reveal);
+        assert_eq!(lp("report.md", false).unwrap().1, PathAction::Open);
+        assert_eq!(lp("report.md", true).unwrap().1, PathAction::Reveal);
+        let csv = project.join("data.csv").display().to_string();
+        assert_eq!(lp(&csv, false).unwrap().1, PathAction::Open);
+        // Folders are only revealed.
         assert_eq!(
-            local_path("report.md", &home, true).unwrap().1,
+            lp(&project.display().to_string(), false).unwrap().1,
             PathAction::Reveal
         );
-        let folder = dir.path().display().to_string();
-        assert_eq!(
-            local_path(&folder, &home, false).unwrap().1,
-            PathAction::Reveal
-        );
-        std::fs::write(home.join("run.command"), b"rm -rf ~").unwrap();
-        assert_eq!(
-            local_path("run.command", &home, false).unwrap().1,
-            PathAction::Reveal
-        );
+        // Anything not on the allowlist is only revealed: launchers, pages,
+        // vector images that open in a browser, unknown and missing extensions.
+        for name in [
+            "run.command",
+            "x.terminal",
+            "x.webloc",
+            "x.fileloc",
+            "x.scpt",
+            "x.shortcut",
+            "page.html",
+            "logo.svg",
+            "thing.weird",
+            "Makefile",
+        ] {
+            std::fs::write(home.join(name), b"x").unwrap();
+            assert_eq!(lp(name, false).unwrap().1, PathAction::Reveal, "{name}");
+        }
+        // Case doesn't sneak past the list.
+        std::fs::write(home.join("SHOT.PNG"), b"x").unwrap();
+        assert_eq!(lp("SHOT.PNG", false).unwrap().1, PathAction::Open);
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let script = home.join("notes");
+            // An executable bit wins over an innocent extension.
+            let script = home.join("notes.txt");
             std::fs::write(&script, b"#!/bin/sh").unwrap();
             std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-            assert_eq!(
-                local_path("notes", &home, false).unwrap().1,
-                PathAction::Reveal
-            );
+            assert_eq!(lp("notes.txt", false).unwrap().1, PathAction::Reveal);
         }
-        assert!(local_path("nope.md", &home, false).is_err());
+        assert!(lp("nope.md", false).is_err());
+    }
+
+    #[test]
+    fn prose_paths_outside_the_roots_are_refused() {
+        let (dir, home, project) = setup();
+        let roots = [home.clone(), project.clone()];
+        let lp = |raw: &str| local_path(raw, &home, &roots, false);
+        let secret = dir.path().join("secret.txt").display().to_string();
+        assert!(lp(&secret).is_err());
+        assert!(lp("../../secret.txt").is_err());
+        assert!(lp(&format!("{}/../secret.txt", project.display())).is_err());
+        assert!(lp(&dir.path().display().to_string()).is_err());
+        // Even "reveal" doesn't reach outside.
+        assert!(local_path(&secret, &home, &roots, true).is_err());
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(dir.path().join("secret.txt"), home.join("s.txt")).unwrap();
+            assert!(lp("s.txt").is_err());
+        }
     }
 
     #[test]

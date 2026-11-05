@@ -53,16 +53,20 @@ struct Entry {
     seq: u64,
     at_ms: u64,
     key: Option<String>,
-    event: Event,
+    /// `None` once a newer event with the same key superseded it: replay
+    /// would skip it anyway, so it neither holds memory nor counts toward
+    /// [`JOURNAL_MAX_ENTRIES`] (status churn must not evict messages).
+    event: Option<Event>,
 }
 
 pub struct Journal {
     epoch: String,
     seq: u64,
     entries: VecDeque<Entry>,
-    /// For keyed events: the seq of the latest one. Older ones with the same
-    /// key stay in `entries` until trimmed but are skipped by replay.
+    /// For keyed events: the seq of the latest one, the only one kept.
     latest: HashMap<String, u64>,
+    /// Entries still holding an event.
+    live: usize,
     /// The highest seq dropped by trimming. A cursor below it has a gap.
     trimmed_through: u64,
     max_entries: usize,
@@ -76,6 +80,7 @@ impl Journal {
             seq: 0,
             entries: VecDeque::new(),
             latest: HashMap::new(),
+            live: 0,
             trimmed_through: 0,
             max_entries,
             max_age_ms,
@@ -93,21 +98,38 @@ impl Journal {
         self.seq += 1;
         let key = replay_key(&event);
         if let Some(k) = &key {
-            self.latest.insert(k.clone(), self.seq);
+            if let Some(old) = self.latest.insert(k.clone(), self.seq) {
+                self.blank(old);
+            }
         }
         self.entries.push_back(Entry {
             seq: self.seq,
             at_ms: now_ms,
             key,
-            event,
+            event: Some(event),
         });
+        self.live += 1;
         self.trim(now_ms);
         self.seq
     }
 
+    /// Drop the event a newer one with the same key superseded.
+    fn blank(&mut self, seq: u64) {
+        if let Ok(i) = self.entries.binary_search_by_key(&seq, |e| e.seq) {
+            if self.entries[i].event.take().is_some() {
+                self.live -= 1;
+            }
+        }
+        // Blanks only cost their seq and key; sweep them out now and then.
+        let blanks = self.entries.len() - self.live;
+        if blanks > self.live.max(1024) {
+            self.entries.retain(|e| e.event.is_some());
+        }
+    }
+
     fn trim(&mut self, now_ms: u64) {
         while let Some(front) = self.entries.front() {
-            let too_many = self.entries.len() > self.max_entries;
+            let too_many = self.live > self.max_entries;
             let too_old = now_ms.saturating_sub(front.at_ms) > self.max_age_ms;
             if !too_many && !too_old {
                 break;
@@ -116,6 +138,9 @@ impl Journal {
                 break;
             };
             self.trimmed_through = gone.seq;
+            if gone.event.is_some() {
+                self.live -= 1;
+            }
             if let Some(k) = gone.key {
                 if self.latest.get(&k) == Some(&gone.seq) {
                     self.latest.remove(&k);
@@ -136,11 +161,7 @@ impl Journal {
             self.entries
                 .iter()
                 .filter(|e| e.seq > cursor.seq)
-                .filter(|e| match &e.key {
-                    None => true,
-                    Some(k) => self.latest.get(k) == Some(&e.seq),
-                })
-                .map(|e| (e.seq, e.event.clone()))
+                .filter_map(|e| Some((e.seq, e.event.clone()?)))
                 .collect(),
         )
     }
@@ -210,6 +231,10 @@ impl Hub {
     /// after its replay.
     pub fn publish(&self, event: Event) -> u64 {
         let mut journal = self.journal();
+        // Journaled whole, timeline and all: a phone with `live_work` that
+        // reconnects mid-turn gets the steps back on replay, and the server
+        // strips them for phones without it. Only one status per agent is
+        // kept, so this is bounded by the number of agents.
         let seq = journal.append(event.clone(), super::now_ms());
         let _ = self.tx.send(HubItem::Journaled { seq, event });
         seq
@@ -377,6 +402,52 @@ mod tests {
             .map(|(s, _)| *s)
             .collect();
         assert_eq!(got, [5]);
+    }
+
+    #[test]
+    fn superseded_statuses_neither_hold_memory_nor_evict_messages() {
+        let mut j = Journal::new("e1".into(), 3, 1_000_000);
+        j.append(msg("m1"), 1);
+        for i in 0..5_000 {
+            j.append(status("a", if i % 2 == 0 { "working" } else { "idle" }), 1);
+        }
+        j.append(msg("m2"), 1);
+        // Two messages and one status: still within 3 live entries.
+        let got = j.since(&cur(&j, 0), 2).expect("nothing trimmed");
+        assert_eq!(got.len(), 3);
+        assert!(j.entries.len() < 2_100, "blanks swept: {}", j.entries.len());
+        assert_eq!(j.live, 3);
+    }
+
+    #[test]
+    fn the_journal_keeps_a_status_with_its_live_timeline() {
+        let hub = Hub::new("e1".into());
+        let mut rx = hub.tx.subscribe();
+        hub.publish(Event::Status {
+            agent_id: "a".into(),
+            status: json!({ "state": "working", "work": { "steps": [1, 2, 3] } }),
+        });
+        match rx.try_recv() {
+            Ok(HubItem::Journaled {
+                event: Event::Status { status, .. },
+                ..
+            }) => assert!(status.get("work").is_some(), "live: as sent"),
+            other => panic!("unexpected {other:?}"),
+        }
+        let start = Cursor {
+            epoch: "e1".into(),
+            seq: 0,
+        };
+        let (_, resume) = hub.resume(Some(&start));
+        let Resume::Replay { events, .. } = resume else {
+            panic!("expected replay")
+        };
+        match &events[0].1 {
+            // Replayed whole: a `live_work` phone back from sleep mid-turn
+            // sees the steps again (the server strips them for the others).
+            Event::Status { status, .. } => assert!(status.get("work").is_some()),
+            other => panic!("unexpected {other:?}"),
+        }
     }
 
     #[test]

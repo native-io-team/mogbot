@@ -74,6 +74,7 @@ export function CopyActions({
   project,
   onReview,
   onPreview,
+  onAskForChanges,
 }: {
   agent: Agent;
   copy: CopyRef;
@@ -82,6 +83,8 @@ export function CopyActions({
   onReview?: () => void;
   /** Opens the copy in the workspace; absent outside Agents mode. */
   onPreview?: (path: string) => void;
+  /** The card is a result card: open the composer on it. */
+  onAskForChanges?: () => void;
 }) {
   const { showToast } = useOptionalToast();
   const [busy, setBusy] = useState<'keep' | 'discard' | null>(null);
@@ -304,6 +307,11 @@ export function CopyActions({
           onClick={() => onPreview(copy.path)}
         >
           Preview
+        </TextButton>
+      )}
+      {onAskForChanges && (
+        <TextButton tabIndex={0} onClick={onAskForChanges}>
+          Ask for changes
         </TextButton>
       )}
       <Tooltip content={waitHint ?? 'Throw these changes away'}>

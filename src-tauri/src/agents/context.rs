@@ -82,9 +82,9 @@ impl ClaudeContext {
                 let usage = message.get("usage")?;
                 let n = |k: &str| usage.get(k).and_then(Value::as_u64).unwrap_or(0);
                 let size = n("input_tokens")
-                    + n("cache_read_input_tokens")
-                    + n("cache_creation_input_tokens")
-                    + n("output_tokens");
+                    .saturating_add(n("cache_read_input_tokens"))
+                    .saturating_add(n("cache_creation_input_tokens"))
+                    .saturating_add(n("output_tokens"));
                 self.last = Some((model.to_string(), size));
                 None
             }
@@ -112,7 +112,9 @@ pub fn from_codex_app(params: &Value, model: Option<&str>, now: i64) -> Option<C
     let n = |k: &str| last.get(k).and_then(Value::as_u64).unwrap_or(0);
     // `inputTokens` already includes the cached part; `outputTokens` includes
     // the reasoning, which the next request leaves behind.
-    let used = (n("inputTokens") + n("outputTokens")).saturating_sub(n("reasoningOutputTokens"));
+    let used = n("inputTokens")
+        .saturating_add(n("outputTokens"))
+        .saturating_sub(n("reasoningOutputTokens"));
     ContextFill::new(used, window, now, model.map(str::to_string))
 }
 

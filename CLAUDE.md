@@ -843,6 +843,22 @@ The Content Security Policy in `src-tauri/tauri.conf.json` MUST be set to `null`
 
 **If you change CSP:** Always test terminal font rendering in a production build (`pnpm tauri build`), not just dev mode. Dev mode works fine but production builds will break.
 
+**What stands in for a CSP.** With no CSP, nothing stops the webview loading a remote image or
+following a link, so untrusted text never gets the chance:
+- HTML from agents, outside assistants and workflows goes only through `sanitizeMessageHtml`
+  (`src/lib/safeHtml.ts`): a prose-only tag allowlist, no `style`, no forms/media/svg/iframes, and
+  every image rendered as an "Image from example.com" link chip, never loaded.
+- The preview iframe can only *ask* to send text to an agent; the user confirms it in an app chip
+  (`src/lib/previewErrorToAgent.ts`), and every paste into xterm strips ESC and C0/C1 controls.
+- `src-tauri/src/navigation_guard.rs` denies non-web schemes and `src/lib/navigationGuard.ts` sends
+  every unhandled link to the browser. On macOS the Rust handler also fires for the preview's
+  iframes and cannot tell them apart, so it must keep allowing web URLs — don't "tighten" it
+  without breaking every embed in a user's site.
+
+A CSP that keeps `style-src`/`font-src` open for xterm but restricts `img-src`, `connect-src`,
+`frame-src` and `form-action` would be a real second wall; it has not been tried because it can only
+be verified in a production build.
+
 ## Releasing New Versions
 
 Use `scripts/release.sh` to automate the release process. The script bumps the version in all 3 files (`package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`), updates `Cargo.lock`, commits, and tags.

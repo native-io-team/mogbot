@@ -31,6 +31,7 @@ import { usePreviewCapture } from '../../hooks/usePreviewCapture';
 import { usePreviewEditorFrame } from '../../hooks/usePreviewEditorFrame';
 import { DEFAULT_DEVICE_HEIGHT, DEVICE_HEIGHTS, type CanvasFrame } from '../../lib/previewCanvas';
 import { Button } from '../primitives/Button';
+import { PreviewErrorToAgentChip } from './PreviewErrorToAgentChip';
 import { MenuButton } from '../primitives/MenuButton';
 import { IconButton } from '../primitives/IconButton';
 import { parsePreviewAddress } from '../../lib/previewUrl';
@@ -388,7 +389,6 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     serverInstanceId,
     onServerReady,
     onPageChange,
-    onSendToClaude,
     onToast,
   });
 
@@ -1439,6 +1439,13 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
         </div>
       </div>
     ) : null;
+  const errorToAgentChip = conn.pendingAgentError ? (
+    <PreviewErrorToAgentChip
+      error={conn.pendingAgentError}
+      agents={commentAgents}
+      onDismiss={conn.dismissAgentError}
+    />
+  ) : null;
 
   return (
     // Three rows and one column. Every docked panel that used to be a column of
@@ -1769,6 +1776,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
         {canvasMode ? (
           <>
             {blankPageOverlay}
+            {errorToAgentChip}
             <PreviewCanvas
               frames={canvasFrames}
               // Passive frames follow wherever the page actually is; `navSignal`
@@ -1915,6 +1923,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
                 the page never proved it rendered inside the embedded iframe —
                 e.g. an auth redirect loop aborted the subframe load (issue #179). */}
               {blankPageOverlay}
+              {errorToAgentChip}
               {/* Branch switching overlay */}
               {isBranchSwitching && (
                 <div className="preview-branch-switching-overlay">

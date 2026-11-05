@@ -498,6 +498,7 @@ where
             Resume::Snapshot { .. } => ResumeMode::Snapshot,
         },
         methods: router::METHODS.to_vec(),
+        features: wire::MAC_FEATURES.to_vec(),
         time_zone: local_time_zone(),
     };
     if !send(ws, &welcome).await {

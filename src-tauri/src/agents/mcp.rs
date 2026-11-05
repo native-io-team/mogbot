@@ -17,7 +17,8 @@ use tokio::sync::oneshot;
 use super::engine::Engine;
 use super::files;
 use super::permissions;
-use super::runner::{self, From, Status};
+use super::results;
+use super::runner::{self, From};
 use super::schedule;
 use super::store::{self, AgentRef, Approval, ApprovalStatus, MessageKind};
 use crate::errors::CommandError;
@@ -204,6 +205,36 @@ const TOOLS: &[Tool] = &[
         }),
     },
     Tool {
+        name: "share_result",
+        description: "Hand back a finished piece of work as ONE result card at the end of your reply: a title, a short summary, the files you made (documents, CSVs, screenshots), the links you produced or relied on, what you checked, and what you did NOT verify. Call it once, when the work is done, instead of listing deliverables in prose. Be honest: list only checks you actually ran in `checked`, and put anything you assumed, couldn't test or couldn't reach in `not_verified` (the user sees it prominently). Files must exist in your own folder or one of the user's projects; they're copied into the chat. When the user asks for changes to a result, revise it: call this again with `revises` (the result's id) and `changes` (one line on what changed), and the same card becomes the next version. A second call in the same turn replaces the first.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "title": { "type": "string", "description": "A few words naming what you made (\"Q3 invoice summary\")." },
+                "summary": { "type": "string", "description": "Two or three sentences: what it is and what it's for." },
+                "items": {
+                    "type": "array",
+                    "description": "What the result is made of, most important first. Each has a `path` (a file: absolute, ~/…, or relative to your folder) or a `url` (http/https), an optional short `label`, and for screenshots an optional `role` of \"before\" or \"after\".",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "path": { "type": "string" },
+                            "url": { "type": "string" },
+                            "label": { "type": "string" },
+                            "role": { "type": "string", "enum": ["before", "after"] }
+                        }
+                    }
+                },
+                "checked": { "type": "array", "items": { "type": "string" }, "description": "Checks you actually ran, one short line each." },
+                "not_verified": { "type": "array", "items": { "type": "string" }, "description": "What you didn't or couldn't verify, one short line each. Leave nothing out to look better." },
+                "revises": { "type": "string", "description": "The id of a result you're revising (given when the user asks for changes)." },
+                "changes": { "type": "string", "description": "When revising: one line on what changed since the last version." }
+            },
+            "required": ["title", "summary"]
+        }),
+    },
+    Tool {
         name: "schedule_check_in",
         description: "Have the app wake you later with a note to yourself: use it whenever you tell the user you'll check back, follow up or remind them, so that actually happens. Once (\"tomorrow at 9:00\", \"in 2 hours\", \"friday 14:30\") or as a routine (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\"), in the user's local time. It only fires while the app is open; the answer says exactly when and what happens if it's closed. Tell the user that time.",
         main_only: false,
@@ -306,8 +337,9 @@ fn tools_list(caller: &store::Agent) -> Value {
     json!({ "tools": tools })
 }
 
-/// `turn` is the id on the caller's URL (`broker::open_turn`); only the
-/// approval broker needs it.
+/// `turn` is the id on the caller's URL (`broker::open_turn`): the approval
+/// broker needs it, and `share_result` uses it to tell a headless turn (stage
+/// for the turn's end) from a take-over's terminal (record now).
 pub async fn handle_rpc(
     app: &AppHandle,
     agent_id: &str,
@@ -351,7 +383,7 @@ pub async fn handle_rpc(
             if name == "approve" {
                 return ok(approve(app, &caller, turn, &args).await);
             }
-            ok(call(app, &caller, name, &args).await)
+            ok(call(app, &caller, turn, name, &args).await)
         }
         _ => fail(-32601, &format!("Method not found: {method}")),
     }
@@ -364,11 +396,18 @@ fn arg<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
         .filter(|s| !s.is_empty())
 }
 
-async fn call(app: &AppHandle, caller: &store::Agent, name: &str, args: &Value) -> Value {
+async fn call(
+    app: &AppHandle,
+    caller: &store::Agent,
+    turn: Option<u64>,
+    name: &str,
+    args: &Value,
+) -> Value {
     match name {
         "list_agents" => list_agents(caller),
         "message_agent" => message_agent(app, caller, args),
         "share_file" => share_file(app, caller, args).await,
+        "share_result" => share_result(app, caller, turn, args).await,
         "create_agent" => create_agent(app, caller, args).await,
         "update_agent" => update_agent(app, caller, args).await,
         "delete_agent" => delete_agent(app, caller, args).await,
@@ -512,11 +551,9 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
 
 /// Copy a file the agent made into its chat as a message from it. Only files
 /// in its own home or one of the user's projects (see `files::shareable`).
-async fn share_file(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
-    let Ok(home) = store::agent_home(&caller.id) else {
-        return error("Couldn't find your folder.");
-    };
-    let mut roots = vec![home.clone()];
+/// Where an agent may hand files from: its own home, and the user's projects.
+async fn share_roots(home: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut roots = vec![home.to_path_buf()];
     if let Ok(projects) = crate::commands::projects::list_projects().await {
         roots.extend(
             projects
@@ -524,6 +561,14 @@ async fn share_file(app: &AppHandle, caller: &store::Agent, args: &Value) -> Val
                 .map(|p| std::path::PathBuf::from(p.path)),
         );
     }
+    roots
+}
+
+async fn share_file(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+    let Ok(home) = store::agent_home(&caller.id) else {
+        return error("Couldn't find your folder.");
+    };
+    let roots = share_roots(&home).await;
     let source = match files::shareable(arg(args, "path").unwrap_or(""), &home, &roots) {
         Ok(source) => source,
         Err(e) => return error(e),
@@ -548,6 +593,58 @@ async fn share_file(app: &AppHandle, caller: &store::Agent, args: &Value) -> Val
         }
         Ok(Err(e)) => error(e.to_string()),
         Err(e) => error(e.to_string()),
+    }
+}
+
+/// The result card (`agents/results.rs`). Everything is checked and every
+/// file copied before anything is kept. Inside a live headless turn the card
+/// is staged and recorded when the turn ends, so the reply ends on it. With
+/// no such turn (a take-over's terminal: its URL has no `?turn=`, and nothing
+/// will ever `take` a staged card) it goes into the chat now, and the agent
+/// is told so: staging there would lose it.
+async fn share_result(
+    app: &AppHandle,
+    caller: &store::Agent,
+    turn: Option<u64>,
+    args: &Value,
+) -> Value {
+    let draft = match results::parse(args) {
+        Ok(draft) => draft,
+        Err(e) => return error(e),
+    };
+    let Ok(home) = store::agent_home(&caller.id) else {
+        return error("Couldn't find your folder.");
+    };
+    let roots = share_roots(&home).await;
+    let agent_id = caller.id.clone();
+    let built =
+        tokio::task::spawn_blocking(move || results::prepare(&agent_id, &home, &roots, draft))
+            .await;
+    let message = match built {
+        Ok(Ok(message)) => message,
+        Ok(Err(e)) => return error(e),
+        Err(e) => return error(e.to_string()),
+    };
+    let Some(card) = message.result.clone() else {
+        return error("Nothing was shared.");
+    };
+    match results::delivery(super::broker::is_live(&caller.id, turn)) {
+        results::Delivery::AtTurnEnd => {
+            let replaced = results::stage(message);
+            text(results::staged_reply(&card, replaced))
+        }
+        results::Delivery::Now => {
+            let copies = message.clone();
+            match super::runner::record(app, message) {
+                Ok(_) => text(results::recorded_reply(&card)),
+                Err(e) => {
+                    results::remove_files(&copies);
+                    error(format!(
+                        "Couldn't save the result to the chat ({e}). Nothing was shared."
+                    ))
+                }
+            }
+        }
     }
 }
 
@@ -927,17 +1024,8 @@ pub(super) async fn ask_user(
     let _ = runner::record(app, card);
     store::refresh_pending(&caller.id);
     super::notify::refresh_badge(app);
-    let before = runner::status_of(&caller.id);
-    runner::set_status(
-        app,
-        &caller.id,
-        Status {
-            state: "waiting",
-            activity: Some("Waiting for your OK".into()),
-            since: before.since,
-            work: None,
-        },
-    );
+    // "Waiting for your OK" until this card and any other open one are answered.
+    let wait = runner::begin_wait(app, &caller.id);
 
     let waited = tokio::time::timeout(approval_wait(), rx)
         .await
@@ -966,20 +1054,9 @@ pub(super) async fn ask_user(
     }
     let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
     super::notify::refresh_badge(app);
-    // Back to work, unless the turn already ended under the card (Stop, or
-    // the user interrupted it): then it isn't ours to change.
-    if runner::status_of(&caller.id).state == "waiting" {
-        runner::set_status(
-            app,
-            &caller.id,
-            Status {
-                state: "working",
-                activity: None,
-                since: before.since,
-                work: None,
-            },
-        );
-    }
+    // Back to work, unless another card is still open, or the turn already
+    // ended under this one (Stop, or the user interrupted it).
+    drop(wait);
     answer
 }
 
@@ -1522,6 +1599,7 @@ mod tests {
             .collect();
         assert!(names.contains(&"message_agent".to_string()));
         assert!(names.contains(&"share_file".to_string()));
+        assert!(names.contains(&"share_result".to_string()));
         assert!(!names.contains(&"create_agent".to_string()));
         assert!(!names.contains(&"delete_agent".to_string()));
     }

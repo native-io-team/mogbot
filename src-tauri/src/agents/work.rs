@@ -518,6 +518,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Sharing a file",
             "share a file",
         ),
+        "share_result" => act(
+            StepKind::Message,
+            "Put together its result",
+            "Putting together its result",
+            "put together its result",
+        ),
         "schedule_check_in" => act(
             StepKind::Plan,
             "Scheduled a check-in",
@@ -1219,6 +1225,11 @@ impl Live {
             MessageKind::Agent | MessageKind::Error => {
                 self.anchor = Some(message.clone());
             }
+            // A change card carrying the turn's result card is the result:
+            // the turn ends on it, so its timeline hangs under it.
+            MessageKind::Changes if message.result.is_some() => {
+                self.anchor = Some(message.clone());
+            }
             MessageKind::Approval => {
                 if let Some(approval) = &message.approval {
                     let title = approval.title.clone();
@@ -1450,6 +1461,10 @@ fn path_for(agent_id: &str, message_id: &str) -> Option<std::path::PathBuf> {
 }
 
 fn save(agent_id: &str, message_id: &str, work: &TurnWork) -> Result<(), String> {
+    // Never brings a deleted agent's folder back (see `store::append_message`).
+    if store::is_gone(agent_id) {
+        return Err("the agent no longer exists".into());
+    }
     let path = path_for(agent_id, message_id).ok_or("not a message id")?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;

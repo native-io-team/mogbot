@@ -200,6 +200,13 @@ pub fn admit(agent_id: &str, turn: Option<u64>, request_id: Option<&str>) -> Adm
     book().admit(agent_id, turn, request_id)
 }
 
+/// Whether `turn` is this agent's open headless turn. Asks without
+/// recording anything (unlike `admit`, which remembers request ids).
+pub fn is_live(agent_id: &str, turn: Option<u64>) -> bool {
+    let book = book();
+    turn.is_some_and(|t| book.open.get(agent_id) == Some(&t))
+}
+
 /// What Claude Code is told when a request is refused without asking.
 pub fn refusal(admission: Admission) -> &'static str {
     match admission {
@@ -391,6 +398,17 @@ mod tests {
             admit("guarded-agent", Some(id), Some("g2")),
             Admission::Closed
         );
+        assert!(!is_live("guarded-agent", Some(id)));
+    }
+
+    #[test]
+    fn only_the_open_turn_is_live() {
+        let guard = open_turn("live-agent");
+        assert!(is_live("live-agent", Some(guard.id())));
+        // A take-over's terminal names no turn.
+        assert!(!is_live("live-agent", None));
+        assert!(!is_live("live-agent", Some(guard.id() + 1000)));
+        assert!(!is_live("other-agent", Some(guard.id())));
     }
 
     #[test]

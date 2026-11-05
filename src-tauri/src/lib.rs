@@ -22,6 +22,7 @@ pub mod error_reporting;
 pub mod errors;
 pub mod external_command;
 pub mod logging;
+pub mod navigation_guard;
 pub mod preview_isolation;
 pub mod proxy;
 pub mod remote_access;
@@ -140,6 +141,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(navigation_guard::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_pty::init())
         .plugin(tauri_plugin_screenshots::init())
@@ -181,6 +183,9 @@ pub fn run() {
             // "pending" from the last run has nobody waiting on it any more;
             // the Dock badge starts from what's left once those expire.
             agents::notify::init(_app.handle());
+            // What the last run left mid-turn, noted before anything can
+            // start a turn: those agents' turns wait for recovery below.
+            agents::runner::prepare_recovery();
             let badge_app = _app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let _ = tauri::async_runtime::spawn_blocking(agents::store::expire_stale_approvals)
