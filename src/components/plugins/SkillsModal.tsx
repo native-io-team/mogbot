@@ -430,7 +430,7 @@ export function SkillsModal({
                                 onClick={() => void handleInstall(result.package)}
                                 disabled={installingPackage !== null}
                               >
-                                {installingPackage === result.package ? 'Installing...' : 'Install'}
+                                {installingPackage === result.package ? 'Installing…' : 'Install'}
                               </Button>
                             </div>
                             {result.description && (

@@ -51,7 +51,7 @@ export function PluginInstallForm({
             onClick={onInstall}
             disabled={isInstallingUrl || !repoUrl.trim()}
           >
-            {isInstallingUrl ? 'Installing...' : 'Install'}
+            {isInstallingUrl ? 'Installing…' : 'Install'}
           </Button>
         </div>
       )}

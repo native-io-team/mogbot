@@ -291,7 +291,7 @@
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
     },
     {
-      "path": "src/styles/features/agents.css",
+      "path": "src/styles/features/agents-dialogs.css",
       "token": "--font-weight-medium",
       "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
