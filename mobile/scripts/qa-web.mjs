@@ -614,6 +614,52 @@ const LIVE = [
     act: scrollToText('Ask for changes'),
     check: 'A result card with Ask for changes (needs welcome.features)',
   },
+  // Dictation against the scripted recognizer (dev/web/expo-speech-recognition.ts).
+  {
+    name: 'dictation-listening',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await page.clickLabel('Dictate');
+      await sleep(2300);
+    },
+    check:
+      'Listening: × in the +’s place, words streaming (the last lighter), the waveform and 0:0x beside ✓; no mic, no Send',
+    after: async (page) => {
+      await page.clickLabel('Cancel dictation').catch(() => {});
+      await sleep(600);
+    },
+  },
+  {
+    name: 'dictation-done',
+    // A chat no later shot opens: the kept words are its draft until sent.
+    route: '/chat/fin',
+    ready: 'Finance',
+    act: async (page) => {
+      await page.clickLabel('Dictate');
+      // The sentence, then three seconds of quiet: it stops by itself.
+      await sleep(9500);
+    },
+    check: 'Stopped by the silence: the whole sentence in the field, normal ink, mic and Send back',
+    after: async (page) => {
+      await page.clickLabel('Send').catch(() => {});
+      await sleep(800);
+    },
+  },
+  {
+    name: 'dictation-denied',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await page.eval(`globalThis.__qaDictation = { deny: true }`);
+      await page.clickLabel('Dictate');
+      await sleep(900);
+    },
+    check: 'Permission refused: the plain line over the field and an Open Settings chip; the mic still there',
+    after: async (page) => {
+      await page.eval(`globalThis.__qaDictation = {}`);
+    },
+  },
   {
     name: 'bar-revising',
     route: '/chat/fixtures',

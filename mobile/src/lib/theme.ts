@@ -350,6 +350,23 @@ export const composer = {
   inset: 4,
 } as const;
 
+/**
+ * The dictation waveform (`components/Waveform.tsx`), inside the field where
+ * the mic was: 2pt bars 2pt apart, a dot at silence and 18pt at full voice,
+ * centred on a send-tall slot so the field never changes height. Under Reduce
+ * Motion a 2pt-thick meter of the same width stands in. Twelve bars (48pt,
+ * about 0.85 s of voice) leave the words most of the field's width.
+ */
+export const waveform = {
+  bars: 12,
+  bar: 2,
+  gap: 2,
+  min: 2,
+  max: 18,
+  /** The left edge fades in over this much, so bars arrive and leave softly. */
+  fade: 16,
+} as const;
+
 /** Agent avatars: in a search group, a chat header, a list row, the agent sheet. */
 export const avatarSize = { group: 24, header: 28, list: 48, sheet: 56 } as const;
 

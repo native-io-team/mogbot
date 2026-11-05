@@ -34,13 +34,12 @@ const CAMERA =
  * iOS has one microphone string for the whole app, and expo-camera,
  * expo-image-picker and expo-speech-recognition each write it, so it says
  * only what the mic is for. Where the words are recognised is the speech
- * string's claim (iOS-only, and iOS enforces it: `requiresOnDeviceRecognition`).
- * Android shows neither; its mic stays off where recognition isn't on the
- * phone (src/lib/dictation.ts, `dictationSupport`).
+ * string's job: on the phone when it can be, else Apple's service, which the
+ * field also says while it listens (src/lib/dictation.ts, `listeningNote`).
  */
 const MICROPHONE = 'Used when you dictate a message to your agents.';
 const SPEECH =
-  'Turns what you dictate into text on this phone, for you to read before you send it.';
+  'Turns what you dictate into text, on this phone when it can, for you to read before you send it.';
 /**
  * "Send to agent…" in the share sheet is a native extension with an App
  * Group, which needs an Apple team that can sign one. Off unless asked for,
