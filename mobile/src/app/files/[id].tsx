@@ -16,11 +16,14 @@ import { formatAgo } from '../../lib/agents';
 import { extensionOf, formatSize, isPreviewableImage, share } from '../../lib/files';
 import { attachmentSource, describeError, download, listFiles } from '../../lib/session';
 import { useApp } from '../../lib/store';
+import { withAgentAccent } from '../../lib/accentScreen';
 import { colors, radius, space } from '../../lib/theme';
 
 type Filter = 'all' | 'user' | 'agent';
 
-export default function Files() {
+export default withAgentAccent(Files);
+
+function Files() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const agentName = useApp((s) => s.overview?.agents.find((a) => a.id === id)?.name ?? 'Agent');

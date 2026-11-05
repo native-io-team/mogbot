@@ -40,6 +40,7 @@ import Animated, {
   ZoomOut,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAccent } from '../lib/accent';
 import { needsYou } from '../lib/agents';
 import { mentionQuery, sendMode } from '../lib/composer';
 import {
@@ -80,6 +81,7 @@ export function Composer({
   onSent: () => void;
   onHeight?: (h: number) => void;
 }) {
+  const accent = useAccent();
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
   const draft = useComposerDraft(agent.id);
@@ -376,7 +378,7 @@ export function Composer({
             placeholderTextColor={colors.textMuted}
             multiline
             style={styles.input}
-            selectionColor={colors.accentActive}
+            selectionColor={accent.accent}
             keyboardAppearance="dark"
             accessibilityLabel={`Message ${agent.name}`}
           />
@@ -413,19 +415,20 @@ export function Composer({
                   <View
                     style={[
                       styles.queue,
+                      { backgroundColor: accent.accent },
                       !canSend && styles.off,
                       pressed && { transform: [{ scale: 0.95 }] },
                     ]}
                   >
                     <T
                       variant="small"
-                      color={colors.textOnAccent}
+                      color={accent.onAccent}
                       style={{ fontFamily: fonts.semibold }}
                       maxFontSizeMultiplier={chromeScale}
                     >
                       Queue
                     </T>
-                    <Icon name="arrow.up" size={13} color={colors.textOnAccent} />
+                    <Icon name="arrow.up" size={13} color={accent.onAccent} />
                   </View>
                 )}
               </Pressable>
@@ -441,8 +444,8 @@ export function Composer({
               <Icon
                 name="arrow.up"
                 size={16}
-                color={canSend ? colors.textOnAccent : colors.textMuted}
-                fallback={<T color={canSend ? colors.textOnAccent : colors.textMuted}>↑</T>}
+                color={canSend ? accent.onAccent : colors.textMuted}
+                fallback={<T color={canSend ? accent.onAccent : colors.textMuted}>↑</T>}
               />
             </RoundButton>
           )}
@@ -466,6 +469,7 @@ function RoundButton({
   tone: 'accent' | 'quiet' | 'off';
   children: ReactNode;
 }) {
+  const accent = useAccent();
   return (
     <Animated.View entering={ZoomIn.duration(160)}>
       <Pressable
@@ -481,7 +485,7 @@ function RoundButton({
             style={[
               styles.round,
               {
-                backgroundColor: tone === 'accent' ? colors.accentActive : colors.surfaceSelected,
+                backgroundColor: tone === 'accent' ? accent.accent : colors.surfaceSelected,
               },
               disabled && tone !== 'off' && styles.off,
               pressed && { transform: [{ scale: 0.92 }] },
@@ -587,7 +591,6 @@ const styles = StyleSheet.create({
     height: 34,
     paddingHorizontal: space.md,
     borderRadius: 17,
-    backgroundColor: colors.accentActive,
   },
   stopSquare: { width: 11, height: 11, borderRadius: 2, backgroundColor: colors.textPrimary },
 });

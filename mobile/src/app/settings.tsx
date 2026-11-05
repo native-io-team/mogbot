@@ -8,9 +8,11 @@ import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch } from 'react-
 import { Row, Section, T } from '../components/ui';
 import { appInfo } from '../lib/pairing';
 import { setPref } from '../lib/prefs';
-import { isOfficialBuild, pushLine } from '../lib/push';
+import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
 import { enableAlerts, unpair } from '../lib/session';
 import { useApp } from '../lib/store';
+import { useAccent } from '../lib/accent';
+import { brand } from '../lib/brand';
 import { colors, space } from '../lib/theme';
 
 type UpdateState =
@@ -21,6 +23,7 @@ type UpdateState =
   | { kind: 'failed'; message: string };
 
 export default function Settings() {
+  const accent = useAccent();
   const router = useRouter();
   const credentials = useApp((s) => s.credentials);
   const connected = useApp((s) => s.link.kind === 'connected');
@@ -64,7 +67,7 @@ export default function Settings() {
       `Forget ${credentials?.name ?? 'this Mac'}?`,
       connected
         ? 'This phone stops reaching your agents, and the Mac removes it from its paired devices. You can pair again any time.'
-        : `This phone stops reaching your agents now. ${macName} can’t be reached, so it keeps this phone in its paired devices until it can: the next time this phone reaches it, it asks the Mac to remove it. You can also remove it in Ship Studio → Phone.`,
+        : `This phone stops reaching your agents now. ${macName} can’t be reached, so it keeps this phone in its paired devices until it can: the next time this phone reaches it, it asks the Mac to remove it. You can also remove it on the Mac, in Settings → Phone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -75,7 +78,7 @@ export default function Settings() {
             if (result === 'queued' && connected) {
               Alert.alert(
                 'Forgotten on this phone',
-                `${macName} didn’t answer, so it still lists this phone. It’s asked again the next time this phone reaches it; or remove it in Ship Studio → Phone.`
+                `${macName} didn’t answer, so it still lists this phone. It’s asked again the next time this phone reaches it; or remove it on the Mac, in Settings → Phone.`
               );
             }
             router.replace('/pair');
@@ -115,7 +118,7 @@ export default function Settings() {
         footer={
           pushInfo && alerts === Notifications.PermissionStatus.GRANTED
             ? pushInfo.footer
-            : 'Alerts arrive while Ship Studio is open on your phone. Your Mac still notifies you at the desk.'
+            : ALERTS_WHILE_OPEN
         }
       >
         <Row
@@ -149,7 +152,7 @@ export default function Settings() {
             <Switch
               value={haptics}
               onValueChange={(on) => setPref('haptics', on)}
-              trackColor={{ true: colors.accentActive, false: colors.surfaceSelected }}
+              trackColor={{ true: accent.accent, false: colors.surfaceSelected }}
               accessibilityLabel="Haptics"
             />
           }
@@ -162,10 +165,10 @@ export default function Settings() {
         footer={
           Updates.isEnabled
             ? 'Updates download in the background and apply the next time the app starts.'
-            : 'Over-the-air updates are off in this build (a development or self-built app). Reinstall from Ship Studio on your Mac to update.'
+            : 'Over-the-air updates are off in this build (a development or self-built app). Reinstall it from your Mac to update.'
         }
       >
-        <Row label="Version" value={`${version} (${build})`} />
+        <Row label="App version" value={`${version} (${build})`} />
         {!!Updates.channel && <Row label="Channel" value={Updates.channel} />}
         <Row
           label="Runtime"
@@ -192,7 +195,7 @@ export default function Settings() {
         <Row
           label="Source code"
           value="GitHub"
-          onPress={() => void Linking.openURL('https://github.com/ship-studio/ship-studio')}
+          onPress={() => void Linking.openURL(brand.repository)}
           last
         />
       </Section>

@@ -97,7 +97,7 @@ export function StatusMark({ agent, live = true }: { agent: Agent; live?: boolea
       <Dot color={failure.kind === 'usage_limit' ? colors.accentWarning : colors.accentError} />
     );
   }
-  if (agent.unread > 0) return <Dot color={colors.accentActive} />;
+  if (agent.unread > 0) return <Dot color={colors.textWhite} />;
   return null;
 }
 

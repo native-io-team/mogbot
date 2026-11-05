@@ -34,7 +34,14 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { engineLine, isQueued, needsYou, workingLine } from '../lib/agents';
+import {
+  askingLine,
+  engineLine,
+  isQueued,
+  needsYou,
+  pendingApproval,
+  workingLine,
+} from '../lib/agents';
 import { messageActions, plainText, type MessageAction } from '../lib/actions';
 import { announce } from '../lib/a11y';
 import { addQuote } from '../lib/drafts';
@@ -50,13 +57,14 @@ import {
   setOpenChat,
 } from '../lib/session';
 import { useApp } from '../lib/store';
-import { chatItems, type Item } from '../lib/timeline';
+import { chatItems, sentAt, type Item } from '../lib/timeline';
 import { alpha, chromeScale, colors, radius, space } from '../lib/theme';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
 import { Composer } from './Composer';
 import { LinkBanner } from './ConnectionPill';
 import { PathContext } from './Markdown';
+import { PaneHeightContext, SHORT_PANE } from './ApprovalCard';
 import { showActions } from './menu';
 import { SelectSheet } from './SelectSheet';
 import { Button, Icon, IconButton, ripple, T } from './ui';
@@ -71,6 +79,43 @@ const glide = LinearTransition.duration(220);
  * line away: its start stays put and it grows down, as ChatGPT and Claude do.
  */
 const TALL_REPLY = 0.7;
+
+/** A pending approval's question, held at the top of a short pane. Tap: scroll to the card. */
+function PinnedQuestion({
+  title,
+  line,
+  onPress,
+}: {
+  title: string;
+  line: string;
+  onPress: () => void;
+}) {
+  return (
+    <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Needs your OK: ${title}`}
+        accessibilityHint="Shows the whole request"
+        onPress={onPress}
+        android_ripple={ripple}
+        style={styles.pinned}
+      >
+        <Icon name="exclamationmark.triangle.fill" size={13} color={colors.accentWarning} />
+        <View style={{ flex: 1 }}>
+          <T variant="small" color={colors.textWhite} numberOfLines={1}>
+            {title}
+          </T>
+          {line !== title && (
+            <T variant="caption" color={colors.textSecondary} numberOfLines={1}>
+              {line}
+            </T>
+          )}
+        </View>
+        <Icon name="chevron.down" size={11} color={colors.textMuted} />
+      </Pressable>
+    </Animated.View>
+  );
+}
 
 export function ChatView({
   id,
@@ -139,6 +184,10 @@ export function ChatView({
     () => messages.some((m) => m.kind === 'approval' && m.approval?.status === 'pending'),
     [messages]
   );
+  // In a pane too short for a whole card, the question it's asking stays
+  // pinned at the top, so the answers at the bottom never stand alone.
+  const card = useMemo(() => pendingApproval(messages), [messages]);
+  const pinQuestion = !!card?.approval && listHeight > 0 && listHeight < SHORT_PANE;
   const tall = !!draft && listHeight > 0 && draftHeight > listHeight * TALL_REPLY;
   const newest = items[0]?.key ?? null;
   const newReply =
@@ -193,7 +242,8 @@ export function ChatView({
     (m: AgentMessage) => {
       haptic.select();
       const remember = canCall('agents.memoryChange') && canCall('agents.memorySuggest');
-      showActions(undefined, messageActions(m, remember), (action: MessageAction) => {
+      // The time it was sent lives here, not under every bubble.
+      showActions(sentAt(m.ts), messageActions(m, remember), (action: MessageAction) => {
         switch (action) {
           case 'copy':
             void Clipboard.setStringAsync(m.kind === 'agent' ? plainText(m.text) : m.text);
@@ -284,79 +334,94 @@ export function ChatView({
         />
       )}
       <LinkBanner />
-      <PathContext.Provider value={openPath}>
-        <Animated.FlatList
-          ref={list}
-          inverted
-          data={items}
-          keyExtractor={(i) => i.key}
-          itemLayoutAnimation={glide}
-          onLayout={(e: LayoutChangeEvent) => setListHeight(e.nativeEvent.layout.height)}
-          // Scrolled up, or reading a reply taller than the screen: the rows
-          // above the newest stay where they are while it grows below them.
-          maintainVisibleContentPosition={scrolled || tall ? { minIndexForVisible: 1 } : undefined}
-          renderItem={({ item }) => (
-            <ItemView
-              item={item}
-              agent={agent}
-              onError={showError}
-              onLongPress={onMessageAction}
-              onDraftHeight={setDraftHeight}
-              lit={item.key === target}
-            />
-          )}
-          onScrollToIndexFailed={(info) => {
-            // Not measured yet: get near it, then try again once it's laid out.
-            list.current?.scrollToOffset({
-              offset: info.averageItemLength * info.index,
-              animated: false,
-            });
-            setTimeout(
-              () =>
-                list.current?.scrollToIndex({
-                  index: info.index,
-                  viewPosition: 0.5,
-                  animated: true,
-                }),
-              120
-            );
+      {pinQuestion && card?.approval && (
+        <PinnedQuestion
+          title={card.approval.title}
+          line={askingLine(card.approval)}
+          onPress={() => {
+            const index = items.findIndex((i) => i.key === card.id);
+            // The card's top edge to the top of the pane: its question and detail first.
+            if (index >= 0) list.current?.scrollToIndex({ index, viewPosition: 1, animated: true });
           }}
-          renderScrollComponent={renderScroll}
-          contentContainerStyle={styles.content}
-          keyboardDismissMode="interactive"
-          keyboardShouldPersistTaps="handled"
-          onEndReached={older}
-          onEndReachedThreshold={0.6}
-          onScroll={(e) => {
-            const y = e.nativeEvent.contentOffset.y;
-            const isAway = y > 360;
-            setScrolled(y > 8);
-            if (isAway !== away) {
-              setAway(isAway);
-              setAwayFrom(isAway ? newest : null);
-            }
-          }}
-          scrollEventThrottle={64}
-          initialNumToRender={16}
-          maxToRenderPerBatch={12}
-          windowSize={13}
-          ListFooterComponent={
-            chat?.loaded && !chat.more ? (
-              <T variant="caption" color={colors.textSecondary} style={styles.start}>
-                Start of your conversation with {agent.name}
-              </T>
-            ) : chat?.loaded ? (
-              <View style={styles.start}>{loadingOlder && <Spinner />}</View>
-            ) : undefined
-          }
-          ListEmptyComponent={
-            chat?.loaded || !connected ? undefined : (
-              <View style={[styles.start, { transform: [{ scaleY: -1 }] }]}>
-                <Spinner />
-              </View>
-            )
-          }
         />
+      )}
+      <PathContext.Provider value={openPath}>
+        <PaneHeightContext.Provider value={listHeight}>
+          <Animated.FlatList
+            ref={list}
+            inverted
+            data={items}
+            keyExtractor={(i) => i.key}
+            itemLayoutAnimation={glide}
+            onLayout={(e: LayoutChangeEvent) => setListHeight(e.nativeEvent.layout.height)}
+            // Scrolled up, or reading a reply taller than the screen: the rows
+            // above the newest stay where they are while it grows below them.
+            maintainVisibleContentPosition={
+              scrolled || tall ? { minIndexForVisible: 1 } : undefined
+            }
+            renderItem={({ item }) => (
+              <ItemView
+                item={item}
+                agent={agent}
+                onError={showError}
+                onLongPress={onMessageAction}
+                onDraftHeight={setDraftHeight}
+                lit={item.key === target}
+              />
+            )}
+            onScrollToIndexFailed={(info) => {
+              // Not measured yet: get near it, then try again once it's laid out.
+              list.current?.scrollToOffset({
+                offset: info.averageItemLength * info.index,
+                animated: false,
+              });
+              setTimeout(
+                () =>
+                  list.current?.scrollToIndex({
+                    index: info.index,
+                    viewPosition: 0.5,
+                    animated: true,
+                  }),
+                120
+              );
+            }}
+            renderScrollComponent={renderScroll}
+            contentContainerStyle={styles.content}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            onEndReached={older}
+            onEndReachedThreshold={0.6}
+            onScroll={(e) => {
+              const y = e.nativeEvent.contentOffset.y;
+              const isAway = y > 360;
+              setScrolled(y > 8);
+              if (isAway !== away) {
+                setAway(isAway);
+                setAwayFrom(isAway ? newest : null);
+              }
+            }}
+            scrollEventThrottle={64}
+            initialNumToRender={16}
+            maxToRenderPerBatch={12}
+            windowSize={13}
+            ListFooterComponent={
+              chat?.loaded && !chat.more ? (
+                <T variant="caption" color={colors.textSecondary} style={styles.start}>
+                  Start of your conversation with {agent.name}
+                </T>
+              ) : chat?.loaded ? (
+                <View style={styles.start}>{loadingOlder && <Spinner />}</View>
+              ) : undefined
+            }
+            ListEmptyComponent={
+              chat?.loaded || !connected ? undefined : (
+                <View style={[styles.start, { transform: [{ scaleY: -1 }] }]}>
+                  <Spinner />
+                </View>
+              )
+            }
+          />
+        </PaneHeightContext.Provider>
       </PathContext.Provider>
       {away && (
         <Animated.View
@@ -380,7 +445,7 @@ export function ChatView({
             {(urgentBelow || newReply) && (
               <T
                 variant="small"
-                color={urgentBelow ? colors.textOnAccent : colors.textPrimary}
+                color={urgentBelow ? colors.inkDark : colors.textPrimary}
                 maxFontSizeMultiplier={chromeScale}
                 style={{ marginLeft: space.xs }}
               >
@@ -390,7 +455,7 @@ export function ChatView({
             <Icon
               name="arrow.down"
               size={15}
-              color={urgentBelow ? colors.textOnAccent : colors.textPrimary}
+              color={urgentBelow ? colors.inkDark : colors.textPrimary}
               fallback={<T>↓</T>}
             />
           </Pressable>
@@ -452,7 +517,6 @@ function ItemView({
         message={item.message}
         agent={agent}
         queued={isQueued(item.message, agent)}
-        time={item.time}
         onError={onError}
         onLongPress={onLongPress}
       />
@@ -465,8 +529,10 @@ function ItemView({
     ) : (
       <WorkingRow label={item.label} />
     );
+  // A run from one side sits close together; a new speaker gets room.
+  const grouped = item.kind === 'message' && item.grouped;
   return (
-    <View style={styles.item}>
+    <View style={[styles.item, grouped && styles.itemGrouped]}>
       {lit && <Glow />}
       {body}
     </View>
@@ -557,7 +623,10 @@ function Gone({
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: space.lg, paddingVertical: space.md },
-  item: { paddingVertical: space.sm },
+  // Each cell is drawn upright, so paddingTop is the space between a row and
+  // the older one above it: a grouped row (same side, same run) trims it.
+  item: { paddingTop: space.md, paddingBottom: space.xs },
+  itemGrouped: { paddingTop: space['2xs'] },
   glow: {
     position: 'absolute',
     top: 0,
@@ -575,6 +644,17 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
+  },
+  pinned: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    minHeight: 44,
+    backgroundColor: colors.surfacePanel,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: alpha(colors.accentWarning, 0.45),
   },
   jumpWrap: { position: 'absolute', right: space.lg },
   jump: {

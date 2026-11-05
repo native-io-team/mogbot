@@ -15,6 +15,7 @@ import type {
   SessionMark,
   UsageTotals,
 } from '@shipstudio/companion-protocol';
+import { diffLineKind } from './diff';
 
 /** Pinned first, then most recently active. */
 export function sortAgents(agents: Agent[]): Agent[] {
@@ -232,11 +233,24 @@ export function pendingApproval(messages: AgentMessage[] | undefined): AgentMess
  */
 export function needsLine(agent: Agent, messages: AgentMessage[] | undefined): string {
   const asking = pendingApproval(messages)?.approval;
-  return asking?.detail
-    ? `Needs your OK · ${asking.detail.split('\n')[0]}`
-    : asking
-      ? `Needs your OK · ${asking.title}`
-      : subtitle(agent);
+  return asking ? `Needs your OK · ${askingLine(asking)}` : subtitle(agent);
+}
+
+/**
+ * What an approval asks, in a line a person reads: the command itself when
+ * it's one line of words, but never a diff's `@@ -18,3 +18,3 @@` or a file
+ * header. An edit says which file ("Wants to edit Header.tsx").
+ */
+export function askingLine(approval: Pick<Approval, 'title' | 'detail'>): string {
+  const lines = (approval.detail ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const diff = lines.some((l) => diffLineKind(l) !== 'context' || /^(\+\+\+|---)\s/.test(l));
+  if (!diff && lines[0]) return lines[0];
+  const edit = /^do you want to make this edit to (.+?)\?*$/i.exec(approval.title.trim());
+  if (edit) return `Wants to edit ${edit[1]}`;
+  return approval.title;
 }
 
 /** "2 need you · 3 working", over the agents shown on Home. */

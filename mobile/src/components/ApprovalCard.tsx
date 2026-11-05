@@ -5,8 +5,9 @@
  */
 
 import type { Agent, AgentMessage, Approval } from '@shipstudio/companion-protocol';
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import {
+  type LayoutChangeEvent,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,7 +21,7 @@ import { haptic } from '../lib/haptics';
 import { answerApproval, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
 import { alpha, chromeScale, colors, fonts, radius, space, type } from '../lib/theme';
-import { Button, Icon, T } from './ui';
+import { Button, choose, Icon, T } from './ui';
 
 /**
  * How long a new card's answers stay inert: the desktop's anti-misclick
@@ -38,6 +39,74 @@ export function useArmed(pending: boolean) {
     return () => clearTimeout(timer);
   }, [pending]);
   return armed;
+}
+
+/**
+ * The height of the chat pane a card sits in (0 when unknown). A pending card
+ * caps its detail by it, so the question, what it's about and the answers
+ * are on screen together: in a short pane (a phone in landscape, the split
+ * view) a 12-line diff would otherwise push the question off the top and
+ * leave three buttons with no context.
+ */
+export const PaneHeightContext = createContext(0);
+
+/**
+ * Below this a pending card can't fit whole (a phone in landscape, the split
+ * view): the chat pins the question above the list, and cards go compact,
+ * Deny | Allow with the broader answers one tap away.
+ */
+export const SHORT_PANE = 480;
+
+export function useShortPane() {
+  const pane = useContext(PaneHeightContext);
+  return pane > 0 && pane < SHORT_PANE;
+}
+
+/** Room kept clear around a fitted card: the list's and the row's padding. */
+const FIT_MARGIN = 40;
+/** Never squeeze the detail below a few lines; past that the pane scrolls as usual. */
+const MIN_DETAIL = 88;
+
+/**
+ * Measure the card and its detail; while pending, the detail's max height is
+ * whatever the pane has left once the rest of the card (title, answers) fits.
+ * The rest's height is the card's less the detail's, which a cap doesn't
+ * change, so the fit settles in one pass.
+ */
+export function useFitDetail(pending: boolean) {
+  const pane = useContext(PaneHeightContext);
+  const [card, setCard] = useState(0);
+  const [detail, setDetail] = useState(0);
+  const rest = card - detail;
+  const maxHeight =
+    pending && pane > 0 && card > 0 ? Math.max(MIN_DETAIL, pane - rest - FIT_MARGIN) : undefined;
+  return {
+    onCardLayout: (e: LayoutChangeEvent) => setCard(e.nativeEvent.layout.height),
+    onDetailLayout: (e: LayoutChangeEvent) => setDetail(e.nativeEvent.layout.height),
+    maxHeight,
+  };
+}
+
+/** A card's detail, scrolling inside itself when it has been fitted to the pane. */
+export function FittedDetail({
+  fit,
+  children,
+}: {
+  fit: ReturnType<typeof useFitDetail>;
+  children: ReactNode;
+}) {
+  return (
+    <ScrollView
+      style={{ maxHeight: fit.maxHeight, flexGrow: 0 }}
+      onLayout={fit.onDetailLayout}
+      nestedScrollEnabled
+      scrollEnabled={fit.maxHeight !== undefined}
+      showsVerticalScrollIndicator
+      indicatorStyle="white"
+    >
+      {children}
+    </ScrollView>
+  );
 }
 
 /** At this text size the explanation folds away, so the answers stay in reach. */
@@ -85,17 +154,24 @@ export function ApprovalCard({
   const outcome = cardOutcome(approval);
   const scope = approval.always ? describeScope(approval.always, agent.name) : null;
   const off = !!busy || !connected;
+  const fit = useFitDetail(pending);
+  const compact = useShortPane();
 
   return (
     <Animated.View
       layout={LinearTransition.duration(220)}
+      onLayout={fit.onCardLayout}
       style={[cardStyles.card, pending && cardStyles.cardPending]}
     >
       {pending && <Eyebrow />}
       <T variant="subhead" color={colors.textWhite} maxFontSizeMultiplier={2}>
         {approval.title}
       </T>
-      {!!approval.detail && <Command text={approval.detail} lines={large ? 6 : 12} />}
+      {!!approval.detail && (
+        <FittedDetail fit={fit}>
+          <Command text={approval.detail} lines={large ? 6 : 12} />
+        </FittedDetail>
+      )}
       {paused && (
         <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>
           It paused here for you. Allow it and it picks up where it left off.
@@ -166,8 +242,32 @@ export function ApprovalCard({
               accessibilityHint={approval.detail || undefined}
               style={{ flex: 1 }}
             />
+            {compact && (
+              // A short pane: Deny | Allow are the card's last line, under the
+              // thumb; the broader answers wait one tap away, with what they cover.
+              <MoreAnswers
+                disabled={off || !armed}
+                onPress={() =>
+                  choose(
+                    approval.title,
+                    [
+                      ...(approval.always
+                        ? [
+                            {
+                              label: `Always allow ${approval.always.label}`,
+                              run: () => void answer(true, true),
+                            },
+                          ]
+                        : []),
+                      { label: 'Deny with note…', run: () => setNoting(true) },
+                    ],
+                    scope ?? undefined
+                  )
+                }
+              />
+            )}
           </View>
-          {approval.always && (
+          {!compact && approval.always && (
             <View style={{ gap: space.xs }}>
               <Button
                 title={`Always allow ${approval.always.label}`}
@@ -197,13 +297,15 @@ export function ApprovalCard({
               )}
             </View>
           )}
-          <Button
-            title="Deny with note…"
-            variant="ghost"
-            disabled={off}
-            focusable={armed}
-            onPress={() => setNoting(true)}
-          />
+          {!compact && (
+            <Button
+              title="Deny with note…"
+              variant="ghost"
+              disabled={off}
+              focusable={armed}
+              onPress={() => setNoting(true)}
+            />
+          )}
         </Animated.View>
       ) : (
         <Animated.View entering={FadeIn.duration(200).delay(100)}>
@@ -216,6 +318,26 @@ export function ApprovalCard({
         </Animated.View>
       )}
     </Animated.View>
+  );
+}
+
+/** The "⋯" beside Deny | Allow on a compact card: the other answers, in a sheet. */
+export function MoreAnswers({ disabled, onPress }: { disabled: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="More answers"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        cardStyles.more,
+        pressed && { backgroundColor: colors.surfaceControl },
+        disabled && { opacity: 0.4 },
+      ]}
+    >
+      <Icon name="ellipsis" size={16} color={colors.textPrimary} fallback={<T>…</T>} />
+    </Pressable>
   );
 }
 
@@ -288,6 +410,15 @@ export const cardStyles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   actions: { flexDirection: 'row', gap: space.sm },
+  more: {
+    width: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: colors.borderStrong,
+  },
   noteInput: {
     fontFamily: fonts.regular,
     fontSize: type.body,

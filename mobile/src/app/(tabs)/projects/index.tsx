@@ -4,6 +4,10 @@
  * sends each change as it happens (`projects.changed`); pull to re-read.
  * Tap a tab to watch it, answer it, or type to it; start a new one; or
  * photograph the project's live preview.
+ *
+ * The phone is for the chat, so this is the plain-language view of what's
+ * running: no branch names or git counts up front, just how many files
+ * have changed, and each tab as its engine names it.
  */
 
 import type { ProjectSummary, SessionSummary } from '@shipstudio/companion-protocol';
@@ -76,7 +80,7 @@ export default function Projects() {
         <ConnectionNotice />
         {!served ? (
           <T color={colors.textSecondary} style={styles.note}>
-            Update Ship Studio on {macName} to see its projects here.
+            Update the app on {macName} to see its projects here.
           </T>
         ) : projects == null ? (
           <View style={styles.note}>
@@ -135,12 +139,10 @@ function ProjectCard({
     }
   };
 
-  const meta = [
-    project.branch,
-    project.dirtyFiles ? `${project.dirtyFiles} uncommitted` : project.branch ? 'clean' : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  // What's changed, in words: not the branch, and not git's "uncommitted".
+  const meta = project.dirtyFiles
+    ? `${project.dirtyFiles} file${project.dirtyFiles === 1 ? '' : 's'} changed`
+    : null;
   return (
     <Animated.View layout={LinearTransition.springify().damping(20)} style={styles.card}>
       <View style={styles.cardHead}>
@@ -157,7 +159,7 @@ function ProjectCard({
       </View>
       {project.sessions.length === 0 ? (
         <T variant="small" color={colors.textSecondary} style={styles.empty}>
-          No sessions open
+          Nothing running here
         </T>
       ) : (
         project.sessions.map((s, i) => (
@@ -168,7 +170,7 @@ function ProjectCard({
         <View style={styles.tools}>
           {canStart && (
             <Button
-              title="New session"
+              title="New task"
               icon="plus"
               size="compact"
               variant="ghost"

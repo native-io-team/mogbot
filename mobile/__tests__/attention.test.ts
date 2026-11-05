@@ -1,6 +1,7 @@
 import type { Agent, AgentMessage, UsageTotals } from '@shipstudio/companion-protocol';
 import type { NotificationRequest } from 'expo-notifications';
 import {
+  askingLine,
   attentionCounts,
   cardOutcome,
   describeScope,
@@ -80,6 +81,20 @@ describe('attention', () => {
     );
     expect(needsLine(a, [approval('m1', 'allowed')])).toBe('Needs your OK');
     expect(needsLine(a, undefined)).toBe('Needs your OK');
+  });
+
+  it('never previews a diff: an edit says which file it wants to change', () => {
+    expect(
+      askingLine({
+        title: 'Do you want to make this edit to Hero.tsx?',
+        detail: '@@ -18,3 +18,3 @@\n-  <h1>Old</h1>\n+  <h1>New</h1>',
+      })
+    ).toBe('Wants to edit Hero.tsx');
+    expect(
+      askingLine({ title: 'Edit a file', detail: '--- a/x.ts\n+++ b/x.ts\n@@ -1 +1 @@' })
+    ).toBe('Edit a file');
+    expect(askingLine({ title: 'Run a command', detail: 'npm test\n' })).toBe('npm test');
+    expect(askingLine({ title: 'Fetch a page', detail: '' })).toBe('Fetch a page');
   });
 
   it('counts who needs you and who is working, and finds the next card', () => {

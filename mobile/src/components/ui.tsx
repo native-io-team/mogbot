@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { alpha, chromeScale, colors, fonts, lineHeight, radius, space, type } from '../lib/theme';
 import type { Tone } from '../lib/connection';
+import { useAccent } from '../lib/accent';
 import { haptic } from '../lib/haptics';
 import { useApp } from '../lib/store';
 
@@ -85,11 +86,10 @@ export const tap = haptic.select;
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
-const buttonColors: Record<
-  ButtonVariant,
-  { bg: string; pressed: string; fg: string; border?: string }
-> = {
-  primary: { bg: colors.accentActive, pressed: colors.accentSuccess, fg: colors.textOnAccent },
+type ButtonColors = { bg: string; pressed: string; fg: string; border?: string };
+
+/** Primary takes the accent in scope (lib/accent.tsx); the rest are the palette's. */
+const buttonColors: Record<Exclude<ButtonVariant, 'primary'>, ButtonColors> = {
   secondary: {
     bg: 'transparent',
     pressed: colors.surfaceControl,
@@ -125,7 +125,16 @@ export function Button({
   /** A choice someone must read in full (a session's options) wraps instead of truncating. */
   lines?: number;
 }) {
-  const c = buttonColors[variant];
+  const a = useAccent();
+  const off = !!disabled && !busy;
+  // A disabled primary is a plain grey control, not a faded accent: a
+  // half-transparent colour reads as muddy, and as almost-on.
+  const c: ButtonColors =
+    variant === 'primary'
+      ? off
+        ? { bg: colors.surfaceControl, pressed: colors.surfaceControl, fg: colors.textMuted }
+        : { bg: a.accent, pressed: a.pressed, fg: a.onAccent }
+      : buttonColors[variant];
   const height = size === 'large' ? 50 : size === 'compact' ? 32 : 44;
   return (
     <Pressable
@@ -143,7 +152,7 @@ export function Button({
           paddingHorizontal: size === 'compact' ? space.md : space.lg,
           backgroundColor: pressed ? c.pressed : c.bg,
           borderColor: c.border ?? 'transparent',
-          opacity: disabled ? 0.4 : 1,
+          opacity: off && variant !== 'primary' ? 0.4 : 1,
           transform: [{ scale: pressed ? 0.98 : 1 }],
         },
         style,
@@ -184,6 +193,7 @@ const MATERIAL: Partial<Record<SFName, string>> = {
   'arrow.uturn.left': 'undo',
   bell: 'notifications',
   brain: 'psychology',
+  checkmark: 'check',
   'bell.slash': 'notifications_off',
   'bell.slash.fill': 'notifications_off',
   'chevron.right': 'chevron_right',
@@ -201,6 +211,7 @@ const MATERIAL: Partial<Record<SFName, string>> = {
   gearshape: 'settings',
   'info.circle': 'info',
   'lock.fill': 'lock',
+  magnifyingglass: 'search',
   iphone: 'smartphone',
   'message.badge': 'mark_chat_unread',
   pin: 'keep',
@@ -356,8 +367,11 @@ export function Row({
   last,
   destructive,
   trailing,
+  detail,
 }: {
   label: string;
+  /** A line under the label saying what it does. */
+  detail?: string;
   value?: string;
   leading?: ReactNode;
   onPress?: () => void;
@@ -379,9 +393,18 @@ export function Row({
       ]}
     >
       {leading}
-      <T color={destructive ? colors.accentErrorLight : colors.textPrimary} style={{ flex: 1 }}>
-        {label}
-      </T>
+      {detail ? (
+        <View style={{ flex: 1, gap: space['2xs'] }}>
+          <T color={destructive ? colors.accentErrorLight : colors.textPrimary}>{label}</T>
+          <T variant="small" color={colors.textSecondary}>
+            {detail}
+          </T>
+        </View>
+      ) : (
+        <T color={destructive ? colors.accentErrorLight : colors.textPrimary} style={{ flex: 1 }}>
+          {label}
+        </T>
+      )}
       {value != null && (
         <T color={colors.textSecondary} numberOfLines={1} style={styles.rowValue}>
           {value}

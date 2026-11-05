@@ -1,7 +1,7 @@
 /**
  * What the phone can honestly say about the link (docs/mobile.md,
  * "Connection status"). Each layer is ok, a problem, or unknown, and nothing
- * is claimed that wasn't observed: "Ship Studio running" is only ever yes
+ * is claimed that wasn't observed: "App open on your Mac" is only ever yes
  * when the server answered, because silence looks the same either way.
  */
 
@@ -119,7 +119,7 @@ export function layers(
   );
 
   out.push({
-    title: 'Ship Studio running',
+    title: 'App open on your Mac',
     tone: connected ? 'ok' : 'unknown',
     detail: connected
       ? `Yes${mac ? ` · ${mac.appVersion}` : ''}`

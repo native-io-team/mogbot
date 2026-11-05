@@ -22,12 +22,17 @@ import { Button, choose, Icon, T } from '../components/ui';
 import { haptic } from '../lib/haptics';
 import { changeMemory, describeError, readMemory } from '../lib/session';
 import { useApp } from '../lib/store';
+import { useAccent } from '../lib/accent';
+import { withAgentAccent } from '../lib/accentScreen';
 import { colors, fonts, radius, space, type } from '../lib/theme';
 
 const MAX = 2_000;
 const clip = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}…` : s);
 
-export default function Memory() {
+export default withAgentAccent(Memory);
+
+function Memory() {
+  const accent = useAccent();
   const { id } = useLocalSearchParams<{ id: string }>();
   const name = useApp((s) => s.overview?.agents.find((a) => a.id === id)?.name ?? 'This agent');
   const connected = useApp((s) => s.link.kind === 'connected');
@@ -195,7 +200,7 @@ export default function Memory() {
                           maxLength={MAX}
                           editable={!busy}
                           keyboardAppearance="dark"
-                          selectionColor={colors.accentActive}
+                          selectionColor={accent.accent}
                           accessibilityLabel="Edit memory"
                           style={styles.input}
                         />
@@ -251,7 +256,7 @@ export default function Memory() {
             placeholderTextColor={colors.textMuted}
             editable={connected && !busy}
             keyboardAppearance="dark"
-            selectionColor={colors.accentActive}
+            selectionColor={accent.accent}
             returnKeyType="done"
             onSubmitEditing={() => void add()}
             style={[styles.input, { flex: 1 }]}
