@@ -1151,7 +1151,46 @@ const CONNECTED_APPS = [
   { name: 'playwright', target: 'npx @playwright/mcp@latest', status: 'error', source: 'other' },
 ];
 
+/** A chat with a long message of yours, to check the bubble wraps at ~70%. */
+const LONG_USER_CHAT = [
+  msg('user', 'Morning. What’s on fire?', 30),
+  msg('agent', 'Nothing’s on fire. Lead Gen is waiting for your OK on the first email.', 29),
+  msg(
+    'user',
+    'Thanks. Before Lead Gen sends anything, can you have it show me the three best leads with a line on why each one, and hold the rest until I have looked at those? Also remind me tomorrow at nine to check the Northwind invoice.',
+    28
+  ),
+];
+
+const COMPOSER_LINES = (n: number) =>
+  Array.from({ length: n }, (_, i) =>
+    i === 0 ? 'Draft the Northwind follow-up' : `and point ${i + 1} to cover in it`
+  ).join('\n');
+
+const composerScenario = (lines: number): Scenario => ({
+  id: `agents-composer-${lines}-line${lines === 1 ? '' : 's'}`,
+  title: `Agents — the composer at ${lines} line${lines === 1 ? '' : 's'}`,
+  looksRightWhen:
+    lines === 1
+      ? 'A slim one-row composer (~44px): paperclip left, the text, then mic and a filled send button right, all on one row; 12px-radius corners and a hairline border, the width of the message column. Your long message above is a bubble about 70% of the column wide, with even 12×8 padding and the same corners on every line.'
+      : lines === 3
+        ? 'The field has grown to three lines with the same 12px corners (no pill); paperclip, mic and send sit on the last line’s baseline row.'
+        : 'Ten lines typed: the field stops at about eight lines and scrolls; the icons stay on the bottom row; corners unchanged.',
+  command: 'agents.open',
+  requires: '.agent-composer__input',
+  clipSelector: '.agent-chat',
+  steps: [{ fill: '.agent-composer__input', value: COMPOSER_LINES(lines) }],
+  commands: {
+    agents_overview: overview([{ ...TEAM[0], preview: null }]),
+    agents_messages: (args: Record<string, unknown>) =>
+      args.agentId === 'chief' ? LONG_USER_CHAT : [],
+  },
+});
+
 export const agentsScenarios: Scenario[] = [
+  composerScenario(1),
+  composerScenario(3),
+  composerScenario(10),
   {
     id: 'agents-team',
     title: 'Agents — a working team, Chief of Staff open',

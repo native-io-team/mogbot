@@ -737,7 +737,9 @@ export function AgentChat({
     const previous = el.style.height;
     el.style.transition = 'none';
     el.style.height = 'auto';
-    const next = `${Math.min(el.scrollHeight, 180)}px`;
+    // The cap is CSS's (about eight lines); past it the field scrolls.
+    const cap = parseFloat(getComputedStyle(el).maxHeight) || 180;
+    const next = `${Math.min(el.scrollHeight, cap)}px`;
     el.style.height = previous || next;
     void el.offsetHeight;
     el.style.transition = '';
@@ -1163,20 +1165,21 @@ export function AgentChat({
                     title="Attach files, or paste or drop them here"
                   />
                 )}
-                <div className="agent-composer__actions">
-                  {escArmed && working && !canSend && !dictating ? (
-                    <span className="agent-composer__hint" data-armed role="status">
-                      Esc again to stop {agent.name}
+                {/* Its own row above the text, so a long hint never squeezes it. */}
+                {escArmed && working && !canSend && !dictating ? (
+                  <span className="agent-composer__hint" data-armed role="status">
+                    Esc again to stop {agent.name}
+                  </span>
+                ) : (
+                  busy &&
+                  canSend &&
+                  !dictating && (
+                    <span className="agent-composer__hint" aria-hidden>
+                      ↵ queues · ⌘↵ interrupts and sends now
                     </span>
-                  ) : (
-                    busy &&
-                    canSend &&
-                    !dictating && (
-                      <span className="agent-composer__hint" aria-hidden>
-                        ↵ queues · ⌘↵ interrupts and sends now
-                      </span>
-                    )
-                  )}
+                  )
+                )}
+                <div className="agent-composer__actions">
                   <IconButton
                     ref={micRef}
                     tabIndex={0}
