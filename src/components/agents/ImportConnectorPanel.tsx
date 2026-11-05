@@ -59,10 +59,14 @@ export function talkLine(talk: ImportTalk, chief: string): string {
   switch (talk.state) {
     case 'awaiting_consent':
       return `${talk.source} is asking to start: it needs your OK in ${chief}’s chat`;
-    case 'interviewing':
+    case 'interviewing': {
+      const got = talk.conversations ? ` · ${plural(talk.conversations, 'past conversation')}` : '';
       return talk.staged.length
-        ? `${talk.source} is answering ${chief}’s questions · ${listOf(talk.staged)} staged`
-        : `${talk.source} is answering ${chief}’s questions`;
+        ? `${talk.source} is answering ${chief}’s questions · ${listOf(talk.staged)} staged${got}`
+        : `${talk.source} is answering ${chief}’s questions${got}`;
+    }
+    case 'playback':
+      return `${chief} is playing back the plan: tell it what’s missing`;
     case 'review':
       return `${plural(talk.staged.length, 'agent')} ready for your review in ${chief}’s chat`;
     case 'imported':
@@ -129,23 +133,25 @@ export function ImportConnectorPanel({
     <>
       <div className="agents-import__body">
         <p className="agents-import__lede">
-          Your other assistant (Grok, ChatGPT, Claude…) can send its agents here. It answers a short
-          interview run as {chief}, and you review every agent before anything is created.
+          Bring the agents your other assistant runs for you (Grok, ChatGPT, Claude…) so each one
+          carries on where it left off. Your assistant tells {chief} everything each agent does, and{' '}
+          {chief} plays it back to you before anything is created.
         </p>
         <div className="agents-import-limits" data-testid="agents-import-limits">
           <div>
-            <h4>It can</h4>
+            <h4>It brings</h4>
             <ul>
-              <li>Answer questions about the agents it runs for you</li>
-              <li>Stage them for your review</li>
+              <li>Each agent’s instructions, routines and what it watches for</li>
+              <li>Your preferences, and what it knows about you</li>
+              <li>Past conversations, if your assistant can send them</li>
             </ul>
           </div>
           <div>
-            <h4>It can’t</h4>
+            <h4>You decide</h4>
             <ul>
-              <li>See your chats, files, memory or other agents</li>
-              <li>Create or change anything: you import what you keep</li>
-              <li>Start without you: press Start, then allow it</li>
+              <li>Your assistant chooses what it can send; you see what arrived</li>
+              <li>{chief} plays back the plan, and you add what’s missing</li>
+              <li>Nothing is created until you import. Logins are asked for securely</li>
             </ul>
           </div>
         </div>
@@ -158,7 +164,10 @@ export function ImportConnectorPanel({
             aside={connected && 'Remote access is on'}
           >
             <div className="agents-import__inline">
-              <span>It reaches this Mac through Remote access.</span>
+              <span>
+                Turn on Remote access, then add its link to your assistant as a connector. This app
+                gets its own address, so another app’s Remote access keeps working beside it.
+              </span>
               <Button variant="secondary" size="compact" onClick={() => openModal('remoteAccess')}>
                 Set up Remote access…
               </Button>
@@ -195,7 +204,7 @@ export function ImportConnectorPanel({
           <ImportStep
             n={3}
             state={talk?.state === 'imported' ? 'done' : sent ? 'current' : 'todo'}
-            title={`Allow it, then review in ${chief}’s chat`}
+            title={`Allow it, then check the plan in ${chief}’s chat`}
           >
             <div className="agents-import-watch">
               {talk ? (
@@ -205,8 +214,8 @@ export function ImportConnectorPanel({
                 </p>
               ) : (
                 <p>
-                  {chief} asks you first, then lists every agent in its chat for you to import or
-                  not. Logins are asked for securely, never in the conversation.
+                  {chief} asks you first. Then it tells you what each agent will do and asks what’s
+                  missing, and you choose which agents to import.
                 </p>
               )}
               {main && (

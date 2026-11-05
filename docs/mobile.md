@@ -153,8 +153,9 @@ inside it.
 - `projects.list`, `sessions.read|send|key|start`, `preview.screenshot`
 - `rooms.list|messages|send|focus` (a Mac whose `welcome.features` has
   `rooms`; see "Rooms")
+- `agents.import.status|start|stop|review` (see "Starting things", Import)
 
-Declared in the package but not served: `agents.delete`, the import
+Declared in the package but not served: `agents.delete`, the paste import
 methods. Pure reads (`READ_ONLY_METHODS`, mirrored in Rust) are not audited.
 
 ### Events, cursors and resync
@@ -454,8 +455,8 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   line ("Acme Site · in acme-site"), the body, a muted note, then the answers
   right-aligned with the single affirmative last, in the neutral `answer`
   style (never the agent's colour); the rest are `outline`. Approvals, a
-  task's question, secrets, results, a copy's Keep / Discard, an import to
-  review on the Mac and a real failure (what it ran on, what to do) all use it;
+  task's question, secrets, results, a copy's Keep / Discard, an import's
+  consent, playback and review and a real failure (what it ran on, what to do) all use it;
   answered, a card becomes its outcome line. Offline every card keeps its
   answers, disabled, with one note (`OFFLINE_NOTE`), drawn from what the Mac
   last said it serves (`served`, kept in the offline copy). A **Bar** is this conversation's state, directly above
@@ -585,6 +586,27 @@ before is drawn.
 
 The phone can start work as well as answer it. Each piece is gated by
 `welcome.methods`, so an older Mac shows less instead of failing.
+
+- **Import agents** (the download mark beside New agent on Agents;
+  `app/import.tsx`, on a Mac that serves `agents.import.status`). Three
+  steps, polled every 3 s while open: (1) Remote access on and the
+  assistant connected, ticked from what the Mac reports
+  (`remoteAccess.enabled|funnelOn|everConnected`); when it isn't, the screen
+  says exactly what to do **at the Mac**, once: turn on Remote access (this
+  app's own Funnel mount, beside Ship Studio's) and Copy link into the
+  assistant's connectors. The link is a key, so it never comes to the phone
+  (docs/remote-access.md, "Security"). (2) **Start** (`agents.import.start`,
+  the desk's `connector::arm`), then **Copy message**: the import prompt,
+  which holds no secret. (3) Where it has got to, in one line, and **Open
+  Chief of Staff**, where every import card is answerable here: the consent
+  card (Allow / Deny), the plan played back ("Add something" sends the
+  words as the card's note, "That's all" is its Allow), and the review card
+  (`PhoneReviewCard`: each agent's role and instructions, then **Import N
+  agents** through `agents.import.review`). From the phone every kept agent
+  comes in new (a name already here arrives as a copy) and the Chief's
+  notes aren't added: Replace, with its diff and consequences, stays on the
+  Mac's card. An older Mac's review card still says "Review on your Mac".
+  **Stop import** is `agents.import.stop`.
 
 - **New agent** (the pencil on Agents, or the empty list's button;
   `app/new-agent.tsx`). One question, "What should it do?", then an optional

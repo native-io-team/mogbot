@@ -1175,12 +1175,14 @@ export interface ImportTalk {
   chiefId: string;
   /**
    * `awaiting_consent`: the card asking you is up. `interviewing`: the sealed
-   * interview is going. `review`: the staged agents wait on your card. The rest
+   * interview is going. `playback`: the plan is played back to you, asking
+   * what's missing. `review`: the staged agents wait on your card. The rest
    * are how it ended.
    */
   state:
     | 'awaiting_consent'
     | 'interviewing'
+    | 'playback'
     | 'review'
     | 'imported'
     | 'declined'
@@ -1195,6 +1197,10 @@ export interface ImportTalk {
   imported: string[];
   /** The interview is writing its answer. */
   busy: boolean;
+  /** Past conversations received so far, across agents (`import_history`). */
+  conversations?: number;
+  /** Times the plan has been played back to you. */
+  playbacks?: number;
 }
 
 /** Whether an import may begin (you pressed Start), and the one going on. */
@@ -1205,7 +1211,11 @@ export interface ImportGate {
 
 /** An import that is still going (not ended one way or another). */
 export const talkIsLive = (t: ImportTalk | null | undefined): t is ImportTalk =>
-  !!t && (t.state === 'awaiting_consent' || t.state === 'interviewing' || t.state === 'review');
+  !!t &&
+  (t.state === 'awaiting_consent' ||
+    t.state === 'interviewing' ||
+    t.state === 'playback' ||
+    t.state === 'review');
 
 export const getImportTalk = () => invoke<ImportGate>('agents_import_talk');
 /** Start: one import over the connector may begin (it still asks on a card first). */
@@ -1214,11 +1224,51 @@ export const stopImportTalk = () => invoke<boolean>('agents_import_talk_stop');
 
 /** An import connector card, carried on an approval (`agents/review.rs`). */
 export interface ConnectorCard {
-  kind: 'consent' | 'review';
+  kind: 'consent' | 'playback' | 'review';
   talkId: string;
   source: string;
   review?: ImportReview;
+  /** Playback only: the plan, agent by agent, in plain words (`agents/harvest.rs`). */
+  playback?: PlaybackAgent[];
 }
+
+/** One agent's plan as the Chief plays it back, in the first person. */
+export interface PlaybackAgent {
+  key: string;
+  name: string;
+  lines: { kind: PlaybackKind; text: string }[];
+}
+
+export type PlaybackKind =
+  | 'job'
+  | 'routine'
+  | 'watch'
+  | 'app'
+  | 'keep'
+  | 'login'
+  | 'history'
+  | 'gap';
+
+/** Past conversations that arrived for one agent, as counted. */
+export interface ImportHistoryCount {
+  conversations: number;
+  messages: number;
+  masked?: number;
+  chars?: number;
+  /** Some were left out: a limit was reached. */
+  capped?: boolean;
+}
+
+/**
+ * Answer the plan's playback: nothing (`addition` empty) brings up the review;
+ * what's missing goes back to the interview, which plays the plan back again.
+ */
+export const answerImportPlayback = (agentId: string, requestId: string, addition?: string) =>
+  invoke<void>('agents_import_playback_answer', {
+    agentId,
+    requestId,
+    addition: addition?.trim() ? addition : null,
+  });
 
 /** What the other assistant proposed, staged for you. Nothing exists until you import. */
 export interface ImportReview {
@@ -1236,6 +1286,16 @@ export interface ImportProposal {
   memory: string;
   routines: { when: string; what: string; schedule?: string; refused?: string }[];
   logins: { name: string; purpose: string; kind: string }[];
+  /** What it watches for and does then. Not set up here by itself: it lands in memory. */
+  watches?: { when: string; what: string }[];
+  /** Apps and connectors it used there. */
+  apps?: { name: string; purpose: string }[];
+  /** How you like things done, one per line. */
+  preferences?: string;
+  /** Standing context: people, projects, accounts by name. */
+  context?: string;
+  /** Past conversations that arrived for it. */
+  history?: ImportHistoryCount;
   /** An agent here already has this name (or one that looks like it): what it is now. */
   clash?: ImportClash;
 }
@@ -1983,7 +2043,6 @@ const isPeerLine = (m: AgentMessage) => m.kind === 'sent_to_agent' || m.kind ===
  * of quiet. Any more often and they become noise between every few lines.
  */
 const DIVIDER_GAP_MS = 3 * 60 * 60 * 1000;
-
 
 /** How an agent's own chat folds what its members said in rooms. */
 export interface ChatFolding {

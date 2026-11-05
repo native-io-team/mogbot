@@ -83,6 +83,14 @@ pub(crate) fn audit_detail(tool: &str, args: &Value) -> String {
         "import_conversation" => {
             format!("{}: {}", field("source"), super::preview(field("message")))
         }
+        "import_history" => format!(
+            "{} conversation(s) for {} from {}",
+            args.get("conversations")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len),
+            super::preview(field("agent")),
+            super::preview(field("source"))
+        ),
         "import_agents" => format!(
             "{} agent(s) from {}",
             args.get("agents")
@@ -544,7 +552,7 @@ mod tests {
             let end = tools[start..].find("\n}\n").unwrap();
             &tools[start..start + end]
         };
-        for name in ["import_agents", "import_conversation"] {
+        for name in ["import_agents", "import_conversation", "import_history"] {
             assert!(!body(name).contains("audit("), "{name} audits itself");
         }
     }

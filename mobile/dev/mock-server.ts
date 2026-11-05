@@ -953,6 +953,26 @@ export function createMockServer(opts: MockOptions = {}) {
   const fail = (error: WireError) => {
     throw new Failure(error);
   };
+  let importArmed = false;
+  let importTalk: Record<string, unknown> | null = {
+    id: 'talk_seed',
+    source: 'Grok',
+    chiefId: 'chief',
+    state: 'interviewing',
+    startedAt: Date.now() - 6 * 60_000,
+    lastAt: Date.now() - 60_000,
+    exchanges: 4,
+    staged: ['Scout', 'Finance'],
+    imported: [],
+    busy: true,
+    conversations: 37,
+    playbacks: 0,
+  };
+  const importStatus = () => ({
+    ...structuredClone(real.agentsImportStatus),
+    armed: importArmed,
+    talk: importTalk,
+  });
   const methods: Partial<Record<MethodName, Handler>> = {
     'system.status': () => status,
     'devices.self': (_, c) => devices.get(c.deviceId)!.device,
@@ -1324,6 +1344,24 @@ export function createMockServer(opts: MockOptions = {}) {
       emit({ type: 'agents.registry', overview: overview() });
       return defaults();
     },
+    // An import going on, as the phone's Import screen follows it.
+    'agents.import.status': () => importStatus(),
+    'agents.import.start': () => {
+      importArmed = true;
+      return importStatus();
+    },
+    'agents.import.stop': () => {
+      importArmed = false;
+      importTalk = null;
+      return importStatus();
+    },
+    'agents.import.review': (p) => ({
+      agents: ((p.keys as string[] | undefined) ?? []).map((k) => k[0].toUpperCase() + k.slice(1)),
+      replaced: [],
+      skipped: [],
+      chiefNotes: false,
+      routinesRefused: [],
+    }),
     // The router's rules (router.rs `check_new_agent`): a name, a role, a colour and a template only.
     'agents.create': (p, c) => {
       const input = (p.input ?? {}) as Record<string, unknown>;
@@ -2181,6 +2219,52 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
       memory: '',
       routines: [],
       logins: [],
+    });
+    // The plan played back (harvest.rs), answerable from the phone.
+    add({
+      ts: now - 150_000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_playback',
+        title: 'Here’s what your 2 agents will do for you',
+        detail: 'Scout\n· My job: research\n\nIs there anything I’m missing? Answer on your Mac.',
+        status: 'pending',
+        connector: {
+          kind: 'playback',
+          talkId: 'talk_seed',
+          source: 'Grok',
+          playback: [
+            {
+              key: 'scout',
+              name: 'Scout',
+              lines: [
+                { kind: 'job', text: 'My job: research' },
+                {
+                  kind: 'routine',
+                  text: 'Every weekday at 09:00: send you a news brief (arrives paused: you switch it on)',
+                },
+                { kind: 'keep', text: 'I’ll keep in mind: Sources first, then the summary' },
+                {
+                  kind: 'history',
+                  text: 'I’ll have 37 past conversations from Grok to look back on',
+                },
+              ],
+            },
+            {
+              key: 'finance',
+              name: 'Finance',
+              lines: [
+                { kind: 'job', text: 'My job: money' },
+                {
+                  kind: 'gap',
+                  text: 'Nothing on a schedule, and nothing I watch for. If I did something regularly, tell me',
+                },
+              ],
+            },
+          ],
+        },
+      },
     });
     add({
       ts: now - 2 * 60_000,

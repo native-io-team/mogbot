@@ -86,6 +86,9 @@ pub enum TalkState {
     AwaitingConsent,
     /// The sealed interview is going.
     Interviewing,
+    /// The plan is played back to the user ("Here's what I'll do for you …
+    /// Is there anything I'm missing?"); nothing is created yet.
+    Playback,
     /// The review card is up; nothing is created yet.
     Review,
     /// The user pressed Import.
@@ -102,7 +105,7 @@ impl TalkState {
     pub fn live(self) -> bool {
         matches!(
             self,
-            Self::AwaitingConsent | Self::Interviewing | Self::Review
+            Self::AwaitingConsent | Self::Interviewing | Self::Playback | Self::Review
         )
     }
 }
@@ -125,6 +128,10 @@ pub struct Talk {
     pub imported: Vec<String>,
     /// The interview is writing its answer.
     pub busy: bool,
+    /// Past conversations received so far, across agents (`import_history`).
+    pub conversations: usize,
+    /// Times the plan has been played back to the user.
+    pub playbacks: u32,
     /// The interview's MCP path: only this import's session can call it.
     #[serde(skip)]
     secret: String,
@@ -146,6 +153,11 @@ pub struct Talk {
     consent_card: Option<String>,
     #[serde(skip)]
     review_card: Option<String>,
+    #[serde(skip)]
+    playback_card: Option<String>,
+    /// Characters of past conversation staged, for the import's cap.
+    #[serde(skip)]
+    history_chars: usize,
     #[serde(skip)]
     next_key: u32,
 }
@@ -174,6 +186,8 @@ fn expire(state: &mut State, now: i64) {
             t.state = TalkState::Stopped;
             t.outbox.clear();
             t.held = None;
+            // Its past conversations go with it: nothing left on disk.
+            super::harvest::discard(&t.id);
             if let Some(s) = &t.session {
                 s.remove();
             }
@@ -318,7 +332,8 @@ pub fn stop(app: &AppHandle) -> bool {
         }
         return was_armed;
     };
-    for card in [&talk.consent_card, &talk.review_card]
+    super::harvest::discard(&talk.id);
+    for card in [&talk.consent_card, &talk.playback_card, &talk.review_card]
         .into_iter()
         .flatten()
     {
@@ -390,43 +405,12 @@ pub fn looks_like_secret(text: &str) -> Option<&'static str> {
         return Some("a private key");
     }
     let word_char = |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.';
-    for token in text
+    if text
         .split(|c: char| !word_char(c))
         .filter(|t| t.len() >= 16)
+        .any(token_is_key)
     {
-        let body = |prefix: &str, min: usize, ok: fn(char) -> bool| {
-            token
-                .strip_prefix(prefix)
-                .is_some_and(|rest| rest.len() >= min && rest.chars().all(ok))
-        };
-        let alnum = |c: char| c.is_ascii_alphanumeric();
-        let key = |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '-';
-        let shapes = [
-            body("sk_live_", 16, alnum)
-                || body("sk_test_", 16, alnum)
-                || body("rk_live_", 16, alnum),
-            body("sk-ant-", 20, key),
-            body("sk-proj-", 20, key) || body("sk-", 32, key),
-            ["ghp_", "gho_", "ghu_", "ghs_", "ghr_"]
-                .iter()
-                .any(|p| body(p, 30, alnum))
-                || body("github_pat_", 22, key),
-            token.len() == 20
-                && token.starts_with("AKIA")
-                && token[4..]
-                    .chars()
-                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()),
-            ["xoxb-", "xoxp-", "xoxa-", "xoxo-", "xoxs-", "xoxr-"]
-                .iter()
-                .any(|p| body(p, 10, key)),
-            body("AIza", 35, key),
-            token.starts_with("eyJ")
-                && token.split('.').count() == 3
-                && token.split('.').all(|p| p.len() >= 10),
-        ];
-        if shapes.iter().any(|s| *s) {
-            return Some("an API key or token");
-        }
+        return Some("an API key or token");
     }
     for marker in [
         "password:",
@@ -451,6 +435,43 @@ pub fn looks_like_secret(text: &str) -> Option<&'static str> {
         }
     }
     None
+}
+
+/// Whether one run of word characters is shaped like a key or token: the
+/// shapes the composer warns about (`src/lib/agentSecrets.ts`).
+pub fn token_is_key(token: &str) -> bool {
+    if token.len() < 16 {
+        return false;
+    }
+    let body = |prefix: &str, min: usize, ok: fn(char) -> bool| {
+        token
+            .strip_prefix(prefix)
+            .is_some_and(|rest| rest.len() >= min && rest.chars().all(ok))
+    };
+    let alnum = |c: char| c.is_ascii_alphanumeric();
+    let key = |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '-';
+    body("sk_live_", 16, alnum)
+        || body("sk_test_", 16, alnum)
+        || body("rk_live_", 16, alnum)
+        || body("sk-ant-", 20, key)
+        || body("sk-proj-", 20, key)
+        || body("sk-", 32, key)
+        || ["ghp_", "gho_", "ghu_", "ghs_", "ghr_"]
+            .iter()
+            .any(|p| body(p, 30, alnum))
+        || body("github_pat_", 22, key)
+        || (token.len() == 20
+            && token.starts_with("AKIA")
+            && token[4..]
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()))
+        || ["xoxb-", "xoxp-", "xoxa-", "xoxo-", "xoxs-", "xoxr-"]
+            .iter()
+            .any(|p| body(p, 10, key))
+        || body("AIza", 35, key)
+        || (token.starts_with("eyJ")
+            && token.split('.').count() == 3
+            && token.split('.').all(|p| p.len() >= 10))
 }
 
 fn audit(source: &str, what: &str, ok: bool) {
@@ -482,6 +503,9 @@ pub enum Status {
     Working,
     /// The user hasn't answered the consent card yet.
     WaitingOnUser,
+    /// The plan is with the user: Chief is playing it back and asking what's
+    /// missing.
+    WithUser,
     /// Every agent is staged; the user is reviewing them.
     InReview,
     /// The user imported.
@@ -500,6 +524,7 @@ impl Status {
             Status::Replied => "replied",
             Status::Working => "working",
             Status::WaitingOnUser => "waiting_on_user",
+            Status::WithUser => "with_user",
             Status::InReview => "in_review",
             Status::Done => "done",
             Status::Declined => "declined",
@@ -583,6 +608,10 @@ pub(crate) fn admit(
             cancel: Arc::new(Notify::new()),
             consent_card: None,
             review_card: None,
+            playback_card: None,
+            history_chars: 0,
+            conversations: 0,
+            playbacks: 0,
             next_key: 0,
         });
         return Ok(Admit::AskConsent { talk_id: id });
@@ -603,6 +632,10 @@ pub(crate) fn admit(
         TalkState::AwaitingConsent => Err(format!(
             "STATUS: waiting_on_user\n\nThe user hasn't allowed the import yet. Your first message is held until they do; this one was NOT delivered.\n\nNEXT: Tell the user in one line to answer the card in their {}'s chat, then call import_conversation with no message to wait.",
             chief.name
+        )),
+        TalkState::Playback => Err(format!(
+            "STATUS: with_user\n\n{} is playing the plan back to the user and asking what's missing; this message was NOT delivered.\n\nNEXT: Call import_conversation with no message to wait. {} may come back to you with a question about what the user added.",
+            chief.name, chief.name
         )),
         TalkState::Review => Err("STATUS: in_review\n\nEvery agent is staged and the user is reviewing them; this message was NOT delivered.\n\nNEXT: Tell the user their agents are waiting for review in the app, then call import_conversation with no message to hear what they imported.".into()),
         TalkState::Interviewing if talk.busy => Err(format!(
@@ -650,6 +683,7 @@ pub(crate) fn consent_state(talk_id: &str, allow: bool, now: i64) -> Option<Opti
     } else {
         t.state = TalkState::Denied;
         t.held = None;
+        super::harvest::discard(&t.id);
         state.armed = false;
         Some(None)
     }
@@ -668,7 +702,10 @@ pub(crate) fn answer(status: Status, talk: &Talk, chief: &str, replies: &[String
         out.push_str(&format!("\n\n{chief} says:\n\n{}", replies.join("\n\n")));
     }
     if !talk.staged.is_empty()
-        && matches!(status, Status::Replied | Status::Working | Status::InReview)
+        && matches!(
+            status,
+            Status::Replied | Status::Working | Status::WithUser | Status::InReview
+        )
     {
         out.push_str(&format!(
             "\n\nStaged for the user's review so far: {}. Nothing is created until they import.",
@@ -677,7 +714,10 @@ pub(crate) fn answer(status: Status, talk: &Talk, chief: &str, replies: &[String
     }
     let next = match status {
         Status::Replied => format!(
-            "Answer {chief} by calling import_conversation again with your reply, from what you know about the user's agents. Send what it asks for in full (instructions word for word). Never include passwords, API keys, tokens or card numbers: the app asks the user for those. Keep going until STATUS is in_review."
+            "Answer {chief} by calling import_conversation again with your reply, from everything you know about the user's agents. Send what it asks for in full and leave nothing out: instructions word for word, every routine and schedule, everything each agent watches for, the apps it uses, the user's preferences and standing context. Optionally, once an agent is staged, send its past conversations with import_history. Never include passwords, API keys, tokens or card numbers: the app asks the user for those. Keep going until STATUS is in_review."
+        ),
+        Status::WithUser => format!(
+            "{chief} is playing the plan back to the user and asking if anything is missing. Call import_conversation with no message to wait: {chief} may come back with a question about what the user added. You can still send past conversations with import_history meanwhile."
         ),
         Status::Working => format!(
             "{chief} is still answering. Call import_conversation with no message to keep waiting. If this has gone on for a few minutes, tell the user in one line that the import is still going."
@@ -779,6 +819,7 @@ pub async fn converse(
         match t.state {
             TalkState::AwaitingConsent if late => break Status::WaitingOnUser,
             TalkState::Interviewing if !t.busy => break Status::Replied,
+            TalkState::Playback if late => break Status::WithUser,
             TalkState::Interviewing | TalkState::Review if late => break Status::Working,
             _ => {}
         }
@@ -801,7 +842,7 @@ fn ask_consent(app: &AppHandle, chief: &store::Agent, talk_id: &str, first: &str
         store::new_id(),
         format!("{source} wants to bring its agents over"),
         format!(
-            "It will talk to a separate conversation that can only stage agents for you to review. It can't see your chats, files or other agents, and nothing is created until you import.\n\nIts first message: “{}{}”",
+            "It will tell a separate conversation everything each agent does, and may send past conversations, for you to check. That conversation can’t see your chats, files or other agents here, and nothing is created until you import.\n\nIts first message: “{}{}”",
             preview,
             if first.chars().count() > 400 { "…" } else { "" }
         ),
@@ -812,6 +853,7 @@ fn ask_consent(app: &AppHandle, chief: &store::Agent, talk_id: &str, first: &str
         talk_id: talk_id.to_string(),
         source: source.clone(),
         review: None,
+        playback: None,
     });
     let request_id = approval.request_id.clone();
     let mut card = runner::new_message(&chief.id, MessageKind::Approval, "");
@@ -838,6 +880,7 @@ pub fn answer_card(
     chief_id: &str,
     approval: &store::Approval,
     allow: bool,
+    addition: Option<String>,
 ) -> Result<(), CommandError> {
     let Some(card) = approval.connector.as_ref() else {
         return Ok(());
@@ -868,7 +911,7 @@ pub fn answer_card(
                 note(
                     app,
                     chief_id,
-                    format!("{} is talking to a separate conversation that can't see your chats, not this one. Nothing is created until you review it. Stop it any time.", card.source),
+                    format!("{} is telling a separate conversation what each agent does. It can't see your chats here. You'll check the plan before anything is created; stop it any time.", card.source),
                 );
                 audit(&card.source, "the user allowed the import", true);
                 if let Some(first) = held {
@@ -885,6 +928,17 @@ pub fn answer_card(
             emit(app, Some(chief_id));
             Ok(())
         }
+        // Allow is "That's everything" (from any client: the review that
+        // follows is still only answered on the Mac); Deny stops the import.
+        CardKind::Playback if allow => answer_playback(app, chief_id, &approval.request_id, None),
+        // The phone adds what is missing as a note on Deny; Deny alone stops.
+        CardKind::Playback => match addition.filter(|n| !n.trim().is_empty()) {
+            Some(addition) => answer_playback(app, chief_id, &approval.request_id, Some(addition)),
+            None => {
+                stop(app);
+                Ok(())
+            }
+        },
         CardKind::Review if allow => Err(CommandError::expected(review::REVIEW_ON_MAC)),
         CardKind::Review => dismiss_review(app, chief_id, &approval.request_id, card),
     }
@@ -898,6 +952,8 @@ pub fn apply_review(
     picks: &Picks,
 ) -> Result<review::Applied, CommandError> {
     let (card, applied, answered) = review::apply_card(Some(app), chief_id, request_id, picks)?;
+    // Written home by now (or not kept): the staging copy goes.
+    super::harvest::discard(&card.talk_id);
     if let Some(m) = answered {
         let _ = app.emit(runner::EVENT_MESSAGE, &m);
     }
@@ -979,6 +1035,7 @@ fn dismiss_review(
         if let Some(t) = state.talk.as_mut().filter(|t| t.id == card.talk_id) {
             t.state = TalkState::Declined;
             t.last_at = store::now_ms();
+            super::harvest::discard(&t.id);
             if let Some(s) = &t.session {
                 s.remove();
             }
@@ -1048,18 +1105,32 @@ impl Drop for Busy {
 /// Hand `message` to the interview: show it in the Chief's chat and run one
 /// exchange in the sealed session.
 fn deliver(app: &AppHandle, talk_id: &str, message: &str) {
+    deliver_from(app, talk_id, message, false)
+}
+
+/// `from_user`: what the user added to the playback. It isn't a line from
+/// the other assistant (the card's receipt shows it), and it reaches the
+/// interview in its own envelope.
+fn deliver_from(app: &AppHandle, talk_id: &str, message: &str, from_user: bool) {
     let busy = Busy::new(talk_id);
     let Some(t) = claim_delivery(talk_id) else {
         // Stopped meanwhile: nothing to report to.
         busy.disarm();
         return;
     };
-    let mut line = runner::new_message(&t.chief_id, MessageKind::FromAgent, message.to_string());
-    line.peer = Some(peer(&t.source));
-    let _ = runner::record(app, line);
+    if !from_user {
+        let mut line =
+            runner::new_message(&t.chief_id, MessageKind::FromAgent, message.to_string());
+        line.peer = Some(peer(&t.source));
+        let _ = runner::record(app, line);
+    }
     emit(app, Some(&t.chief_id));
     let app = app.clone();
-    let prompt = interview::envelope(&t.source, message);
+    let prompt = if from_user {
+        interview::user_envelope(message)
+    } else {
+        interview::envelope(&t.source, message)
+    };
     tauri::async_runtime::spawn(async move {
         let done = run_exchange(&app, &t, &prompt).await;
         let failed = match done.result {
@@ -1177,6 +1248,32 @@ fn tool_defs() -> serde_json::Value {
             "required": ["name", "purpose", "kind"]
         }
     });
+    let watches = json!({
+        "type": "array",
+        "description": "What it watches for and does when it happens.",
+        "items": {
+            "type": "object",
+            "properties": {
+                "when": { "type": "string", "description": "What happens: \"an invoice email arrives\", \"someone mentions me on GitHub\"." },
+                "what": { "type": "string", "description": "What it does then." }
+            },
+            "required": ["when", "what"]
+        }
+    });
+    let apps = json!({
+        "type": "array",
+        "description": "Apps, tools and connectors it uses.",
+        "items": {
+            "type": "object",
+            "properties": {
+                "name": { "type": "string", "description": "e.g. Gmail, Google Calendar, Notion." },
+                "purpose": { "type": "string", "description": "What it uses it for, in one line." }
+            },
+            "required": ["name"]
+        }
+    });
+    let preferences = json!({ "type": "string", "description": "How the user likes things done (tone, format, timing, what never to do), one per line." });
+    let context = json!({ "type": "string", "description": "Standing context it relies on: people, projects, accounts by name, facts. One per line." });
     json!({ "tools": [
         {
             "name": "propose_agent",
@@ -1190,6 +1287,10 @@ fn tool_defs() -> serde_json::Value {
                     "memory": { "type": "string", "description": "What it knows about the user that it still needs, one fact per line." },
                     "manages_others": { "type": "boolean" },
                     "routines": routines,
+                    "watches": watches,
+                    "apps": apps,
+                    "preferences": preferences,
+                    "context": context,
                     "logins": logins
                 },
                 "required": ["name"]
@@ -1207,6 +1308,10 @@ fn tool_defs() -> serde_json::Value {
                     "instructions": { "type": "string" },
                     "memory": { "type": "string" },
                     "routines": routines,
+                    "watches": watches,
+                    "apps": apps,
+                    "preferences": preferences,
+                    "context": context,
                     "logins": logins
                 },
                 "required": ["name"]
@@ -1214,7 +1319,7 @@ fn tool_defs() -> serde_json::Value {
         },
         {
             "name": "finish",
-            "description": "Every agent is staged: hand them to the user for review. Then tell the other assistant the user is reviewing them.",
+            "description": "Every agent is staged: play the plan back to the user in plain words and ask if anything is missing. What they add comes back to you in <from_user>; fold it in and call finish again. Then tell the other assistant the user is checking the plan.",
             "inputSchema": {
                 "type": "object",
                 "properties": { "summary": { "type": "string", "description": "One paragraph: what was staged." } },
@@ -1230,6 +1335,10 @@ pub(crate) enum ToolEffect {
     None,
     /// Put the review card up.
     Review {
+        talk_id: String,
+    },
+    /// Play the plan back to the user.
+    Playback {
         talk_id: String,
     },
 }
@@ -1318,8 +1427,21 @@ pub(crate) fn tool_call(
                 "name": old.name, "role": old.role, "instructions": old.instructions, "memory": old.memory,
                 "routines": old.routines.iter().map(|r| serde_json::json!({"when": r.when, "what": r.what})).collect::<Vec<_>>(),
                 "logins": old.logins.iter().map(|l| serde_json::json!({"name": l.name, "purpose": l.purpose, "kind": l.kind})).collect::<Vec<_>>(),
+                "watches": old.watches.iter().map(|w| serde_json::json!({"when": w.when, "what": w.what})).collect::<Vec<_>>(),
+                "apps": old.apps.iter().map(|a| serde_json::json!({"name": a.name, "purpose": a.purpose})).collect::<Vec<_>>(),
+                "preferences": old.preferences, "context": old.context,
             });
-            for k in ["role", "instructions", "memory", "routines", "logins"] {
+            for k in [
+                "role",
+                "instructions",
+                "memory",
+                "routines",
+                "logins",
+                "watches",
+                "apps",
+                "preferences",
+                "context",
+            ] {
                 if let Some(v) = args.get(k) {
                     merged[k] = v.clone();
                 }
@@ -1327,7 +1449,8 @@ pub(crate) fn tool_call(
             if let Some(n) = args.get("new_name").and_then(|v| v.as_str()) {
                 merged["name"] = serde_json::Value::String(n.to_string());
             }
-            let p: Proposal = review::proposal(old.key.clone(), &merged, chief)?;
+            let mut p: Proposal = review::proposal(old.key.clone(), &merged, chief)?;
+            p.history = old.history.clone();
             if t.draft
                 .proposals
                 .iter()
@@ -1350,6 +1473,16 @@ pub(crate) fn tool_call(
                 2_000,
             );
             t.draft.summary = Some(summary).filter(|s| !s.is_empty());
+            // The plan is played back to the user first, unless there are no
+            // agents to play back or it has been played back enough times.
+            if !t.draft.proposals.is_empty() && t.playbacks < super::harvest::MAX_PLAYBACKS {
+                t.state = TalkState::Playback;
+                t.playbacks += 1;
+                return Ok((
+                    format!("The plan for {} is with the user now, played back in plain words, and they're asked if anything is missing. Tell {} in one short message that the user is checking the plan. If the user adds something, it reaches you inside <from_user>.", t.staged.join(", "), t.source),
+                    ToolEffect::Playback { talk_id: t.id.clone() },
+                ));
+            }
             t.state = TalkState::Review;
             Ok((
                 format!("Handed {} to the user for review. Now tell {} in one short message that the user is reviewing them and nothing is created until they import.", if t.staged.is_empty() { "the notes".to_string() } else { t.staged.join(", ") }, t.source),
@@ -1386,6 +1519,7 @@ fn post_review(app: &AppHandle, talk_id: &str) {
         talk_id: t.id.clone(),
         source: t.source.clone(),
         review: Some(review),
+        playback: None,
     });
     let request_id = approval.request_id.clone();
     let mut card = runner::new_message(&t.chief_id, MessageKind::Approval, "");
@@ -1404,6 +1538,232 @@ fn post_review(app: &AppHandle, talk_id: &str) {
         true,
     );
     emit(app, Some(&t.chief_id));
+}
+
+/// The plan, played back in the Chief's chat: "Here's what I'll do for you
+/// … Is there anything I'm missing?"
+fn post_playback(app: &AppHandle, talk_id: &str) {
+    let Some(t) = lock().talk.clone().filter(|t| t.id == talk_id) else {
+        return;
+    };
+    let plan = super::harvest::playback(&t.draft, &t.source);
+    let count = plan.len();
+    let mut approval = super::mcp::new_card(
+        store::new_id(),
+        if t.playbacks > 1 {
+            "Here's the plan now".to_string()
+        } else if count == 1 {
+            format!("Here's what {} will do for you", plan[0].name)
+        } else {
+            format!("Here's what your {count} agents will do for you")
+        },
+        super::harvest::playback_text(&plan),
+        None,
+    );
+    approval.connector = Some(ConnectorCard {
+        kind: CardKind::Playback,
+        talk_id: t.id.clone(),
+        source: t.source.clone(),
+        review: Some(t.draft.clone()),
+        playback: Some(plan),
+    });
+    let request_id = approval.request_id.clone();
+    let mut card = runner::new_message(&t.chief_id, MessageKind::Approval, "");
+    card.approval = Some(approval);
+    if runner::record_own(app, card).is_ok() {
+        if let Some(t) = lock().talk.as_mut().filter(|t| t.id == talk_id) {
+            t.playback_card = Some(request_id);
+        }
+    }
+    store::refresh_pending(&t.chief_id);
+    super::notify::refresh_badge(app);
+    let _ = app.emit(runner::EVENT_REGISTRY, ());
+    audit(
+        &t.source,
+        &format!("played back the plan for {}", t.staged.join(", ")),
+        true,
+    );
+    emit(app, Some(&t.chief_id));
+}
+
+/// What answering the playback does, decided under the lock.
+#[derive(Debug, PartialEq)]
+pub(crate) enum PlaybackAnswer {
+    /// "That's everything": put the review card up.
+    Review,
+    /// Hand the user's addition to the interview.
+    Deliver(String),
+}
+
+pub(crate) fn playback_state(
+    talk_id: &str,
+    addition: Option<&str>,
+    now: i64,
+) -> Result<PlaybackAnswer, CommandError> {
+    let addition = match addition.map(str::trim).filter(|a| !a.is_empty()) {
+        Some(a) => Some(super::harvest::clean_addition(a).map_err(CommandError::expected)?),
+        None => None,
+    };
+    let mut state = lock();
+    let t = state
+        .talk
+        .as_mut()
+        .filter(|t| t.id == talk_id && t.state == TalkState::Playback)
+        .ok_or_else(|| CommandError::expected("That import has already moved on."))?;
+    t.last_at = now;
+    t.playback_card = None;
+    match addition {
+        // A session to hand it to: the one-shot import has none.
+        Some(text) if t.session.is_some() => {
+            t.state = TalkState::Interviewing;
+            t.busy = true;
+            Ok(PlaybackAnswer::Deliver(text))
+        }
+        _ => {
+            t.state = TalkState::Review;
+            Ok(PlaybackAnswer::Review)
+        }
+    }
+}
+
+/// The user answered the playback: nothing to add (the review comes up), or
+/// what's missing, which goes back to the interview to fold in. Its next
+/// `finish` plays the plan back again.
+pub fn answer_playback(
+    app: &AppHandle,
+    chief_id: &str,
+    request_id: &str,
+    addition: Option<String>,
+) -> Result<(), CommandError> {
+    let (_, card) = review::find_card(chief_id, request_id)?;
+    if card.kind != CardKind::Playback {
+        return Err(CommandError::expected("That isn't a playback."));
+    }
+    let next = playback_state(&card.talk_id, addition.as_deref(), store::now_ms())?;
+    let summary = match &next {
+        PlaybackAnswer::Review => "That's everything".to_string(),
+        PlaybackAnswer::Deliver(text) => format!("You added: {text}"),
+    };
+    if let Some(m) = store::answer_prompt(chief_id, request_id, ApprovalStatus::Allowed, &summary)?
+    {
+        let _ = app.emit(runner::EVENT_MESSAGE, &m);
+    }
+    store::refresh_pending(chief_id);
+    super::notify::refresh_badge(app);
+    match next {
+        PlaybackAnswer::Review => {
+            audit(&card.source, "the user confirmed the plan", true);
+            post_review(app, &card.talk_id);
+        }
+        PlaybackAnswer::Deliver(text) => {
+            audit(&card.source, "the user added to the plan", true);
+            deliver_from(app, &card.talk_id, &text, true);
+            emit(app, Some(chief_id));
+        }
+    }
+    Ok(())
+}
+
+/* --------------------------------------------------- past conversations */
+
+/// One `import_history` call: past conversations for one staged agent,
+/// staged beside the draft (never shown to the interview). Only while an
+/// import the user allowed is going and before its review is up. `Err` is
+/// an in-band answer.
+pub fn receive_history(source: &str, args: &serde_json::Value) -> Result<String, String> {
+    let chief = super::ensure_main().map_err(|e| e.to_string())?;
+    let source = clean_source(source, &chief.name)?;
+    let agent = review::clean_line(args.get("agent").and_then(|v| v.as_str()).unwrap_or(""), 40);
+    let incoming = super::harvest::read_conversations(args)?;
+    receive_history_state(&source, &agent, incoming, store::now_ms())
+}
+
+pub(crate) fn receive_history_state(
+    source: &str,
+    agent: &str,
+    incoming: Vec<super::harvest::Conversation>,
+    now: i64,
+) -> Result<String, String> {
+    let mut state = lock();
+    expire(&mut state, now);
+    let t = state
+        .talk
+        .as_mut()
+        .filter(|t| t.state.live())
+        .ok_or("STATUS: not_started\n\nThere's no import going.\n\nNEXT: Past conversations come with an import: use import_conversation first.")?;
+    if !t.source.eq_ignore_ascii_case(source) {
+        return Err(format!(
+            "STATUS: refused\n\nAn import from {} is going, not from you.",
+            t.source
+        ));
+    }
+    match t.state {
+        TalkState::AwaitingConsent => {
+            return Err("STATUS: waiting_on_user\n\nThe user hasn't allowed the import yet. Nothing was kept.\n\nNEXT: Wait until import_conversation says it has started.".into())
+        }
+        TalkState::Review => {
+            return Err("STATUS: in_review\n\nThe user is already reviewing what's staged. Nothing was kept.\n\nNEXT: Don't send more.".into())
+        }
+        _ => {}
+    }
+    let Some(i) = t
+        .draft
+        .proposals
+        .iter()
+        .position(|p| review::same_name(&p.name, agent))
+    else {
+        return Err(format!(
+            "Nothing called \"{agent}\" is staged{}. Send past conversations only for agents the interview has staged, using the name it staged.",
+            if t.staged.is_empty() { String::new() } else { format!(" (staged: {})", t.staged.join(", ")) }
+        ));
+    };
+    let key = t.draft.proposals[i].key.clone();
+    let name = t.draft.proposals[i].name.clone();
+    let count = t.draft.proposals[i].history.clone().unwrap_or_default();
+    let got = super::harvest::stage(&t.id, &key, count, t.history_chars, incoming)
+        .map_err(|_| "STATUS: replied\n\nThose couldn't be saved on the computer. Nothing from this call was kept.\n\nNEXT: Try this call once more; if it fails again, carry on without past conversations.".to_string())?;
+    t.history_chars += got
+        .total
+        .chars
+        .saturating_sub(t.draft.proposals[i].history.as_ref().map_or(0, |h| h.chars));
+    t.conversations = t.conversations + got.kept;
+    t.draft.proposals[i].history = Some(got.total.clone());
+    t.last_at = now;
+    let source = t.source.clone();
+    drop(state);
+    audit(
+        &source,
+        &format!("sent {} past conversation(s) for {name}", got.kept),
+        true,
+    );
+    let mut out = format!(
+        "STATUS: received\n\nKept {} conversation(s) for {name}; {} so far ({} messages).",
+        got.kept, got.total.conversations, got.total.messages
+    );
+    if got.already_here > 0 {
+        out.push_str(&format!(
+            " {} were already here and weren't kept twice.",
+            got.already_here
+        ));
+    }
+    if got.masked > 0 {
+        out.push_str(&format!(
+            " {} thing(s) that looked like passwords or keys were removed.",
+            got.masked
+        ));
+    }
+    if got.left_out > 0 {
+        out.push_str(&format!(
+            " {} were left out: the limit for past conversations is reached.",
+            got.left_out
+        ));
+    }
+    out.push_str(if got.total.capped {
+        "\n\nNEXT: Stop sending past conversations for this agent; carry on with import_conversation."
+    } else {
+        "\n\nNEXT: Send more with import_history if there are any (most recent first), or carry on with import_conversation."
+    });
+    Ok(out)
 }
 
 /// The interview's MCP endpoint (`/mcp/import`, with the import's secret as
@@ -1447,10 +1807,10 @@ pub async fn handle_rpc(
             };
             match tool_call(secret, name, &args, &chief) {
                 Ok((text, effect)) => {
-                    if let ToolEffect::Review { talk_id } = &effect {
-                        post_review(app, talk_id);
-                    } else {
-                        emit(app, None);
+                    match &effect {
+                        ToolEffect::Review { talk_id } => post_review(app, talk_id),
+                        ToolEffect::Playback { talk_id } => post_playback(app, talk_id),
+                        ToolEffect::None => emit(app, None),
                     }
                     reply(text, false)
                 }
@@ -1555,6 +1915,10 @@ pub(crate) fn stage_one_shot_state(
         cancel: Arc::new(Notify::new()),
         consent_card: None,
         review_card: None,
+        playback_card: None,
+        history_chars: 0,
+        conversations: 0,
+        playbacks: 0,
         next_key: 0,
     });
     Ok(id)
@@ -1772,7 +2136,14 @@ mod tests {
         .unwrap();
         let (_, effect) =
             tool_call(&s, "finish", &json!({"summary": "One agent."}), &chief.name).unwrap();
-        assert!(matches!(effect, ToolEffect::Review { .. }));
+        // The plan is played back first; "That's everything" brings the review.
+        let ToolEffect::Playback { talk_id } = effect else {
+            panic!("plays back first");
+        };
+        assert_eq!(
+            playback_state(&talk_id, None, 3_000).unwrap(),
+            PlaybackAnswer::Review
+        );
         assert_eq!(
             store::list().unwrap().len(),
             before,
@@ -1833,6 +2204,7 @@ mod tests {
             talk_id: "t".into(),
             source: "Grok".into(),
             review: Some(review),
+            playback: None,
         };
         // Both kept, nothing replaced, no notes: a taken name comes in as a copy.
         let keep = |key: &str| review::Pick {
@@ -2147,6 +2519,169 @@ mod tests {
         assert!(clean_source("\u{0405}ite", "Morgan").is_err());
         assert!(clean_source("Chief \u{043E}f Staff", "Morgan").is_err());
         assert!(clean_source("Grok", "Morgan").is_ok());
+        store::set_root_for_tests(None);
+    }
+    #[test]
+    fn the_plan_is_played_back_and_what_the_user_adds_goes_to_the_interview() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let chief = super::super::ensure_main().unwrap();
+        let talk = interviewing();
+        let s = secret();
+        tool_call(
+            &s,
+            "propose_agent",
+            &json!({
+                "name": "Finance", "role": "Money",
+                "watches": [{"when": "an invoice arrives", "what": "file it"}],
+                "apps": ["Gmail"], "preferences": "Brief", "context": "Accountant is Sam"
+            }),
+            &chief.name,
+        )
+        .unwrap();
+        let (text, effect) =
+            tool_call(&s, "finish", &json!({"summary": "s"}), &chief.name).unwrap();
+        assert!(text.contains("<from_user>"), "{text}");
+        assert_eq!(
+            effect,
+            ToolEffect::Playback {
+                talk_id: talk.clone()
+            }
+        );
+        let t = lock().talk.clone().unwrap();
+        assert_eq!((t.state, t.playbacks), (TalkState::Playback, 1));
+
+        // While the user reads it, the other assistant waits.
+        let err = admit("Grok", "more", &chief, 3_000).unwrap_err();
+        assert!(err.starts_with("STATUS: with_user"), "{err}");
+        assert!(
+            !err.contains("Accountant"),
+            "the plan isn't sent back over the connector"
+        );
+
+        // A credential in what the user adds is refused, and nothing moves.
+        assert!(playback_state(&talk, Some("password: hunter22"), 3_100).is_err());
+        assert_eq!(lock().talk.as_ref().unwrap().state, TalkState::Playback);
+        // What they add goes back to the interview, busy, to fold in.
+        assert_eq!(
+            playback_state(&talk, Some("  Also pay rent on the 1st "), 3_200).unwrap(),
+            PlaybackAnswer::Deliver("Also pay rent on the 1st".into())
+        );
+        let t = lock().talk.clone().unwrap();
+        assert!(t.state == TalkState::Interviewing && t.busy);
+        on_exchange(&talk, &["Updated.".into()], false, true);
+        tool_call(
+            &s,
+            "update_proposal",
+            &json!({"name": "Finance",
+            "routines": [{"when": "every month on the 1st at 9am", "what": "pay rent"}]}),
+            &chief.name,
+        )
+        .unwrap();
+        let p = lock().talk.as_ref().unwrap().draft.proposals[0].clone();
+        assert_eq!(
+            p.apps[0].name, "Gmail",
+            "an update keeps what it doesn't name"
+        );
+        assert_eq!(p.preferences, "Brief");
+        // Played back again, then only so many times before the review.
+        for round in 2..=super::super::harvest::MAX_PLAYBACKS {
+            let (_, e) = tool_call(&s, "finish", &json!({"summary": "s"}), &chief.name).unwrap();
+            assert!(matches!(e, ToolEffect::Playback { .. }), "round {round}");
+            playback_state(&talk, Some("one more"), 4_000).unwrap();
+            on_exchange(&talk, &[], false, true);
+        }
+        let (_, e) = tool_call(&s, "finish", &json!({"summary": "s"}), &chief.name).unwrap();
+        assert!(matches!(e, ToolEffect::Review { .. }));
+        // A playback that has moved on can't be answered.
+        assert!(playback_state(&talk, None, 5_000).is_err());
+        reset_for_tests();
+        store::set_root_for_tests(None);
+    }
+
+    #[test]
+    fn past_conversations_arrive_only_for_staged_agents_after_allow() {
+        use super::super::harvest::{Conversation, Line};
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let chief = super::super::ensure_main().unwrap();
+        let one = |id: &str| Conversation {
+            id: id.into(),
+            title: "t".into(),
+            when: String::new(),
+            messages: vec![Line {
+                from: "user".into(),
+                text: "hi".into(),
+                at: String::new(),
+            }],
+        };
+        // Nothing going: refused.
+        reset_for_tests();
+        assert!(
+            receive_history_state("Grok", "Finance", vec![one("a")], 1_000)
+                .unwrap_err()
+                .starts_with("STATUS: not_started")
+        );
+        // Asked but not allowed: refused.
+        arm_state().unwrap();
+        admit("Grok", "Hi", &chief, 1_000).unwrap();
+        assert!(
+            receive_history_state("Grok", "Finance", vec![one("a")], 1_000)
+                .unwrap_err()
+                .starts_with("STATUS: waiting_on_user")
+        );
+        let talk = interviewing();
+        let s = secret();
+        // Not staged yet: refused, and says what is.
+        assert!(
+            receive_history_state("Grok", "Finance", vec![one("a")], 1_200)
+                .unwrap_err()
+                .contains("Nothing called")
+        );
+        tool_call(
+            &s,
+            "propose_agent",
+            &json!({"name": "Finance"}),
+            &chief.name,
+        )
+        .unwrap();
+        // Someone else's import: refused.
+        assert!(
+            receive_history_state("ChatGPT", "Finance", vec![one("a")], 1_300)
+                .unwrap_err()
+                .starts_with("STATUS: refused")
+        );
+        let ok = receive_history_state("Grok", "finance", vec![one("a"), one("b")], 1_400).unwrap();
+        assert!(
+            ok.starts_with("STATUS: received") && ok.contains("Kept 2"),
+            "{ok}"
+        );
+        let again = receive_history_state("Grok", "Finance", vec![one("b")], 1_500).unwrap();
+        assert!(again.contains("weren't kept twice"), "{again}");
+        let t = lock().talk.clone().unwrap();
+        assert_eq!(t.conversations, 2);
+        assert_eq!(
+            t.draft.proposals[0].history.as_ref().unwrap().conversations,
+            2
+        );
+        // A rename keeps them.
+        tool_call(
+            &s,
+            "update_proposal",
+            &json!({"name": "Finance", "new_name": "Money"}),
+            &chief.name,
+        )
+        .unwrap();
+        assert!(lock().talk.as_ref().unwrap().draft.proposals[0]
+            .history
+            .is_some());
+        // Stopping drops what was staged.
+        let _ = stop_state(2_000);
+        super::super::harvest::discard(&talk);
+        assert!(super::super::harvest::staged(&talk, "p1").is_empty());
+        reset_for_tests();
         store::set_root_for_tests(None);
     }
 }

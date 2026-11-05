@@ -57,6 +57,8 @@ const chief = (over: Partial<Agent> = {}) =>
 describe('a card only the Mac can answer', () => {
   it('is an import review; a consent card and an ordinary approval are answered here', () => {
     expect(answerableHere(review('a').approval!)).toBe(false);
+    // A Mac that serves agents.import.review lets the phone's review card import.
+    expect(answerableHere(review('a').approval!, true)).toBe(true);
     expect(answerableHere(consent('b').approval!)).toBe(true);
     expect(answerableHere(card('c').approval!)).toBe(true);
   });

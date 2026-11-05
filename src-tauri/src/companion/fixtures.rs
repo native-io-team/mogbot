@@ -438,6 +438,25 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "agentsImportStatus",
+        "Result<'agents.import.status'>",
+        call("agents.import.status", json!({})).await,
+    );
+    out += &entry(
+        "agentsImportStarted",
+        "Result<'agents.import.start'>",
+        call("agents.import.start", json!({})).await,
+    );
+    out += &entry(
+        "agentsImportReview",
+        "Result<'agents.import.review'>",
+        call(
+            "agents.import.review",
+            json!({ "agentId": "chief", "requestId": "r1", "keys": ["p1"] }),
+        )
+        .await,
+    );
+    out += &entry(
         "agentsAccounts",
         "Result<'agents.accounts'>",
         call("agents.accounts", json!({})).await,

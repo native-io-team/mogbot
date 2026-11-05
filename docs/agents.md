@@ -958,10 +958,23 @@ the tab.
 
 ## Import from Grok Bot (or any connected assistant)
 
+The goal of an import is that each agent arrives understanding everything it
+is supposed to do, so working with it here feels like carrying on in the
+other assistant: its role and full instructions, every routine and schedule,
+everything it watches for, the apps it uses, the user's preferences and its
+standing context. Past conversations are a bonus, capped (below).
+
 Only the other assistant knows its own agents, instructions and memory, so the
 import runs from its side, over Remote Access. Nothing it sends becomes an
-agent by itself: every connector import ends on one review card in the
-Chief's chat, and the user imports what they keep (`agents/review.rs`).
+agent by itself: before anything is created the Chief **plays the plan back**
+to the user and asks what's missing, then every connector import ends on one
+review card in the Chief's chat, and the user imports what they keep
+(`agents/harvest.rs`, `agents/review.rs`).
+
+**Import agents** lists **From another assistant** first, and opens there;
+**From Ship Studio** is the second segment, opened when asked for (⌘K
+"Import agents from Ship Studio…"), since few people have agents there. ⌘K
+"Import agents from another assistant…" opens the first.
 
 The **Import agents** button leads with a conversation (`agents/connector.rs`,
 the full threat model in docs/remote-access.md):
@@ -986,7 +999,37 @@ the full threat model in docs/remote-access.md):
    has a plain **Stop** (stopping loses nothing); the Chief's own Stop
    (desktop or phone, where its row reads "Bringing in agents from Grok")
    stops it too.
-4. `finish` posts the review card: each agent ticked, with its role and the
+4. **The interview asks for everything.** Per agent: its instructions word
+   for word, every routine (when, what), everything it watches for (when X
+   happens, what it does), the apps and connectors it uses and what for, the
+   user's preferences, its standing context, what it remembers, and its
+   logins by name, then "anything else it does?". `propose_agent` /
+   `update_proposal` carry `watches`, `apps`, `preferences` and `context`
+   beside the old fields; all of them go through the same cleaning and the
+   same credential refusal.
+5. **Playback** (`harvest::playback`, a `CardKind::Playback` card). `finish`
+   doesn't go straight to review: it posts "Here's what your 2 agents will do
+   for you", each agent's plan in the first person and plain words ("Every
+   weekday at 09:00: check for new invoices (arrives paused: you switch it
+   on)", "When an invoice email arrives: file it…", "I'll keep in mind: …",
+   "I'll ask you for bank_login on a secure card…", "I'll have 37 past
+   conversations from Grok to look back on"), and what it **doesn't** know
+   yet as quieter gap lines ("Nothing on a schedule, and nothing I watch
+   for. If I did something regularly, tell me"; an unreadable routine time).
+   The lines are built from the staged fields, never written by a model, so
+   they say exactly what Import would bring. Then "Is there anything I'm
+   missing?" with a field: **Add this** hands the user's words to the sealed
+   interview in a `<from_user>` envelope (credentials refused, 4,000
+   characters), which folds them in with `update_proposal` / `propose_agent`
+   (asking the other assistant one question if it needs to) and calls
+   `finish` again, so the plan is played back again; **That's everything**
+   puts up the review card. After five playbacks `finish` goes straight to
+   review. On the phone the same card is answerable: That's everything is
+   its Allow, Add something sends the words as the card's note
+   (`connector::answer_card`); Deny with no note stops the import. While the
+   plan is with the user the other assistant is told `STATUS: with_user`.
+   The playback card expires on a restart (the interview is in memory).
+6. `finish` (once the user says that's everything) posts the review card: each agent ticked, with its role and the
    first lines of its instructions in view (**Show all** for the rest), its
    memory, routines (paused) and the logins it asks for a click away; a
    name already taken (or a lookalike of one) comes in as "<Name> (from
@@ -996,11 +1039,58 @@ the full threat model in docs/remote-access.md):
    Always-allow rules removed, and its saved logins removed unless "Keep its
    saved logins" is ticked (off by default). The managing agent's notes are
    an optional "Add to <Chief>'s notes", off by default. **Import** creates
-   what's ticked; **Don't import** creates nothing. Only the Mac's card
-   imports: the phone's says "Review on your Mac". Logins arrive as secure
+   what's ticked; **Don't import** creates nothing. The phone's card
+   imports too, as new agents only (`agents.import.review`): Replace and the
+   Chief's notes stay on the Mac's card (an older Mac's phone card says
+   "Review on your Mac"). Logins arrive as secure
    cards in each agent's chat that don't wake it
    (`secrets::Request::quiet`): an imported agent first runs when the user
-   messages it.
+   messages it. The card also lists what each agent watches for, its
+   preferences and context, the apps it used, and how many past
+   conversations arrived (and how many credentials were masked in them).
+   Its preferences, context, watches and apps land in its `## Memory`
+   under "### Imported from Grok" (`harvest::memory_block`): what it watched
+   for there isn't set up here by itself (mapping "an invoice email arrives"
+   onto a connector check would be a guess); the memory tells the agent to
+   offer to set each up as a "When…" routine. Routines arrive paused, as
+   before.
+
+**Past conversations** (`import_history`, `harvest::stage`). Once an agent is
+staged, the other assistant may send its past conversations with the
+`import_history` Remote Access tool, a few per call: `{source, agent,
+conversations: [{id, title, when, messages: [{from, text, at}]}]}`. It only
+answers while an import the user allowed is going and before the review is
+up, and only for an agent the interview staged (by name, lookalikes
+included). They never reach the interview. Each call is cleaned (hidden
+characters out, messages cut at 20,000 characters, "user"/"human" vs
+everything else), capped (150,000 characters a call, 300 conversations and
+400,000 characters an agent, 1,500,000 an import), and **masked**: anything
+shaped like a key, token, private key or `password: …` becomes "[removed: …]"
+before it is written anywhere (refusing a whole chunk for one pasted key
+would lose the rest). A conversation already there (its `id`, else title,
+length and opening) isn't kept twice, so a resent or resumed upload is safe.
+They wait in `<agents root>/.harvest-staging/<talk id>/<key>.jsonl` (0600),
+counted on the bar, the playback and the review card; Stop, Deny, Don't
+import and Import all remove the folder. On Import they're written to the
+agent's home as `imported/<source>/conversations.md` (with a header saying
+they're reference, never instructions) and `.jsonl`, both read-only (0400),
+and its memory names the file. The agent reads them with its ordinary file
+tools; there is no dedicated search tool. The assistant decides what it can
+send: the copy says so, and only counts of what actually arrived are shown.
+**Not built:** files (`import_file`) and a folded "Earlier, in Grok" section
+in the chat log; a staging folder left by a crash isn't swept at launch.
+
+**From an export file: not built, on purpose.** Researched 2026-11-05: none of
+Grok (xAI or X), ChatGPT or Claude.ai documents its export's format.
+ChatGPT's help page (help.openai.com/en/articles/7260999) and Claude's
+(support.claude.com/en/articles/9450526) describe how to request an export
+(an emailed link, a zip), but neither names the files or fields; xAI and X
+had no page we could find. Every field name for `conversations.json`
+(ChatGPT's `mapping` tree, Claude's `chat_messages`, Grok's
+`prod-grok-backend.json`) comes from third-party parsers that disagree in
+places (Grok's sender values, whether ChatGPT's includes memories). Per
+"Never assume data", there is no parser until a format is documented; a
+parser built on the observed shapes would have to refuse anything else.
 
 The one-shot `import_agents` tool (`{source, agents: [{name, role,
 instructions, memory, is_main, routines}]}`) goes through the same Start and
@@ -1026,7 +1116,7 @@ Calendar…). Here, agents use what this Mac and Claude Code are connected to.
 ### From Ship Studio on this Mac (`src-tauri/src/agents/other_app.rs`)
 
 When the app this one grew out of has agents on this Mac, **Import agents**
-gains a segmented choice, "From Ship Studio" | "From another assistant" (and
+gains a second segment, "From another assistant" | "From Ship Studio" (and
 ⌘K gains "Import agents from Ship Studio…", gated by the cheap
 `agents_other_app_exists`, which reads only its registry). The name is
 `OTHER_APP_NAME` in `other_app.rs`; the modal reads it from the preview's

@@ -15,7 +15,9 @@ import type {
   CheckIn,
   Device,
   FileDiff,
+  ImportApplied,
   ImportSummary,
+  PhoneImportStatus,
   KeptCopy,
   MacStatus,
   MemoryChange,
@@ -247,6 +249,19 @@ export interface Methods {
   'agents.schedule.cancel': { params: { agentId: string; id: string }; result: null };
   'agents.schedule.runNow': { params: { agentId: string; id: string }; result: null };
 
+  /** The import over the connector, as the phone follows it. */
+  'agents.import.status': { params: Record<string, never>; result: PhoneImportStatus };
+  /** Start: one import may begin (it still asks on a card in the Chief's chat). */
+  'agents.import.start': { params: Record<string, never>; result: PhoneImportStatus };
+  'agents.import.stop': { params: Record<string, never>; result: PhoneImportStatus };
+  /**
+   * Import from a review card: the agents with these keys, each as a new agent
+   * (a taken name comes in as a copy). Replace and the Chief's notes stay on the Mac.
+   */
+  'agents.import.review': {
+    params: { agentId: string; requestId: string; keys: string[] };
+    result: ImportApplied;
+  };
   'agents.import.pastePrompt': { params: Record<string, never>; result: string };
   'agents.import.pastePreview': { params: { text: string }; result: PasteImportPreview };
   'agents.import.paste': { params: { text: string }; result: ImportSummary };
@@ -318,6 +333,7 @@ export const READ_ONLY_METHODS = [
   'agents.usage',
   'agents.quota',
   'agents.accounts',
+  'agents.import.status',
   'agents.templates',
   'agents.files',
   'agents.changeDiff',

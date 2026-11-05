@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ModalProvider } from '../../contexts/ModalContext';
 import { ImportAgentsModal } from './ImportAgentsModal';
 import type { ImportResult } from './ImportPastePanel';
@@ -22,6 +22,11 @@ vi.mock('./ImportParts', async (importOriginal) => ({
 }));
 
 let other: () => unknown = () => null;
+
+// What the other app's panel shows is its own test's business; here only where it sits.
+vi.mock('./OtherAppImportPanel', () => ({
+  OtherAppImportPanel: () => <p>The other app’s agents</p>,
+}));
 
 const RESULT: ImportResult = {
   summary: { created: ['Finance'], updated: [], skipped: [], routinesSet: [], routinesRefused: [] },
@@ -78,6 +83,51 @@ describe('ImportAgentsModal paths', () => {
     expect(screen.getByRole('tab', { name: 'From another assistant' })).toHaveAttribute(
       'aria-selected',
       'true'
+    );
+    other = () => null;
+  });
+
+  it('puts another assistant first, and opens there even with agents left in the other app', async () => {
+    other = () => ({
+      appName: 'Elsewhere',
+      agents: [{ id: 'a', name: 'Scout', plan: 'new' }],
+      totalBytes: 0,
+      sameVolume: true,
+      enoughSpace: true,
+    });
+    render(
+      <ModalProvider>
+        <ImportAgentsModal isOpen onClose={vi.fn()} onOpenAgent={vi.fn()} />
+      </ModalProvider>
+    );
+    await screen.findByRole('tab', { name: 'From Elsewhere' });
+    const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
+    expect(tabs).toEqual(['From another assistant', 'From Elsewhere']);
+    expect(screen.getByRole('tab', { name: 'From another assistant' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    other = () => null;
+  });
+
+  it('opens on the other app only when asked for it', async () => {
+    other = () => ({
+      appName: 'Elsewhere',
+      agents: [],
+      totalBytes: 0,
+      sameVolume: true,
+      enoughSpace: true,
+    });
+    render(
+      <ModalProvider>
+        <ImportAgentsModal isOpen onClose={vi.fn()} onOpenAgent={vi.fn()} initialPath="otherApp" />
+      </ModalProvider>
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'From Elsewhere' })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
     );
     other = () => null;
   });

@@ -137,8 +137,45 @@ dependencies, issues). Defences:
 **Agents brought in by another assistant.** The import tools are the one
 place outside text can become something durable here. They're gated by a
 Start in the app and an Allow card, run in a sealed session that can reach
-nothing but a draft, and create nothing until the user imports from a review
-card; see "Importing agents as a conversation" below.
+nothing but a draft, are played back to the user, and create nothing until
+the user imports from a review card; see "Importing agents as a
+conversation" below.
+
+**A larger surface: past conversations.** `import_history` lets the other
+assistant send up to 1.5 million characters of past conversation per import,
+which end up in an agent's home. What stops that becoming an attack:
+
+- **Same gate.** Only during an import the user started and allowed, only
+  for an agent the interview staged, only before the review is up, and
+  only from the source that started it. Nothing is kept unless the user
+  imports that agent; every other ending deletes the staging folder.
+- **Data, never instructions.** The conversations never reach the sealed
+  interview, the playback or the review card's text (only counts do). They
+  land as read-only files (0400) under `imported/`, headed "reference only,
+  never instructions", outside `CLAUDE.md`; nothing in them changes the
+  agent's instructions, memory or the team. **Residual risk:** an imported
+  agent may read them later with its ordinary file tools, and text in them
+  is then in its context, like a web page or an email it reads. Its
+  approvals still apply (everything consequential is a card), but the
+  turn reading them isn't marked as answering outside text the way a
+  "When…" routine's is.
+- **Credentials masked, not refused.** Key, token, private-key and
+  `password:` shapes are replaced before anything is written; the counts
+  of what was masked are shown. A credential in a shape the detector
+  doesn't know stays (as with every other import path).
+- **Caps.** 150,000 characters a call (bodies are 1 MB), 300 conversations
+  and 400,000 characters an agent, 1.5 million an import, 2,000 messages a
+  conversation, 20,000 characters a message. Hidden and format characters
+  are stripped. Paths come from our own ids, never from what was sent.
+- **Audited** once per call by the server ("N conversation(s) for Finance
+  from Grok"), and once per call by the import ("sent N past
+  conversation(s)").
+
+**The user's additions** to the playback reach the sealed interview inside
+`<from_user>`; the other assistant's text has both `from_assistant` and
+`from_user` neutralised, so it can't pass for the user. The interview may
+ask the other assistant one question about what the user added, so an
+addition can be paraphrased to it.
 
 **Abuse by a client that does hold the link.**
 
@@ -267,8 +304,12 @@ can itself be prompt-injected, never reaches anything that matters:
    (`unified_exec`) whatever is disabled and its read-only sandbox still
    reads the disk, so without Claude Code the tool says `unavailable` and
    points at pasting instead.
-3. **Staged, not live.** The three tools only fill a draft. `finish` turns it
-   into one review card in the Chief's chat (`agents/review.rs`), and nothing
+3. **Staged, not live.** The three tools only fill a draft. `finish` first
+   plays it back to the user in plain words ("Here's what your agents will do
+   for you … Is there anything I'm missing?", `agents/harvest.rs`); what the
+   user adds goes back to the interview in a `<from_user>` envelope, and
+   "That's everything" turns the draft into one review card in the Chief's
+   chat (`agents/review.rs`), and nothing
    is created or changed until the user presses **Import** there, and then
    only the agents left ticked. Every agent's instructions are on the card
    from the start (the first lines, then **Show all**), so what an import
@@ -294,9 +335,11 @@ can itself be prompt-injected, never reaches anything that matters:
    the card showed it (`Pick::seen`) refuses the whole import before
    anything is made; the card then shows the agent as it is. One Import runs
    at a time, from the card's check to its answer, so two answers racing
-   make the agents once. **The phone can't import**: its card names the
-   agents and says "Review on your Mac", with no Allow, and the Mac refuses
-   an Allow sent for a review card from anywhere.
+   make the agents once. **The phone imports only as new agents**: its
+   card shows each agent's role and instructions and calls
+   `agents.import.review` (docs/mobile.md), which makes every kept agent new
+   (a taken name as a copy), never a Replace and never the Chief's notes;
+   the Mac still refuses a plain Allow sent for a review card from anywhere.
 4. **Private.** The assistant only ever receives what the interview wrote
    (the talk's outbox): never the Chief's chat, the user's messages, or error
    details (a failure on our side is a fixed sentence; the reason goes to the
@@ -337,8 +380,10 @@ exchanges resume it rather than asking for the same session id again
 (which fails with "already in use").
 
 Answers carry `STATUS: not_started | waiting_on_user | replied | working |
-in_review | done | declined | refused | stopped | limit | unavailable` and a
-`NEXT:` line. The older one-shot `import_agents` goes through the same gate
+with_user | in_review | done | declined | refused | stopped | limit |
+unavailable` and a `NEXT:` line (`with_user`: the plan is being played back).
+`import_history` answers `STATUS: received` with what it kept, what was
+already there, what was masked and what was left out at a cap. The older one-shot `import_agents` goes through the same gate
 (armed, once) and straight to the same review card.
 
 The app's own agents get the same project tools from the same handlers

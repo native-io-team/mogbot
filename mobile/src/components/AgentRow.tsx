@@ -258,7 +258,13 @@ function RowBody({
   // At the largest sizes the time moves under the subtitle so the name keeps its room.
   const stacked = fontScale >= 1.6;
   // Waiting only on the Mac (an import to review): said plainly, not in amber.
-  const onMac = useApp((s) => waitingOnMac(agent, s.chats[agent.id]?.messages));
+  const onMac = useApp((s) =>
+    waitingOnMac(
+      agent,
+      s.chats[agent.id]?.messages,
+      !!s.welcome?.methods.includes('agents.import.review')
+    )
+  );
   const state = onMac ? undefined : lineState(agent);
   // Waiting on you: say what for, when the saved chat knows.
   const line = useApp((s) =>

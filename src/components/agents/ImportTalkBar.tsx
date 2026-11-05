@@ -17,7 +17,7 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { stopImportTalk, talkIsLive, type ImportTalk } from '../../lib/agents';
 import { ConversationBar } from './AgentCard';
-import { listOf } from './ImportParts';
+import { listOf, plural } from './ImportParts';
 import { useImportGate } from './ImportConnectorPanel';
 
 /** The bar's two lines for each live state. */
@@ -28,6 +28,11 @@ export function barLines(talk: ImportTalk, chief: string): { title: string; deta
         title: `Import from ${talk.source} · Needs your OK`,
         detail: 'Nothing has been shared yet.',
       };
+    case 'playback':
+      return {
+        title: `Import from ${talk.source} · check the plan`,
+        detail: 'Is anything missing? Nothing is created until you import.',
+      };
     case 'review':
       return {
         title: `Import from ${talk.source} · ready to review`,
@@ -37,7 +42,7 @@ export function barLines(talk: ImportTalk, chief: string): { title: string; deta
       return {
         title: `Importing from ${talk.source}${
           talk.staged.length ? ` · ${listOf(talk.staged)} staged for review` : ''
-        }`,
+        }${talk.conversations ? ` · ${plural(talk.conversations, 'past conversation')}` : ''}`,
         detail: `${talk.source} talks to a separate conversation that can’t see your chats: what you type here stays between you and ${chief}.`,
       };
   }
@@ -48,7 +53,8 @@ export function ImportTalkBar({ chief }: { chief: string }) {
   const { showToast } = useOptionalToast();
   if (!talkIsLive(talk)) return null;
   const { title, detail } = barLines(talk, chief);
-  const waiting = talk.state === 'awaiting_consent' || talk.state === 'review';
+  const waiting =
+    talk.state === 'awaiting_consent' || talk.state === 'playback' || talk.state === 'review';
   return (
     <ConversationBar
       state={waiting ? 'waiting' : 'active'}

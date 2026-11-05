@@ -103,6 +103,7 @@ export default function Agents() {
   const overview = useApp((s) => s.overview);
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const live = useApp((s) => s.link.kind === 'connected');
+  const canImport = useApp((s) => canCall('agents.import.status', s.welcome));
   const removed = useApp(
     (s) =>
       s.link.kind === 'refused' && (s.link.reason === 'revoked' || s.link.reason === 'unauthorized')
@@ -346,6 +347,14 @@ export default function Agents() {
                   label="New agent"
                   fallback="+"
                   onPress={() => router.push('/new-agent')}
+                />
+              )}
+              {overview && !removed && canImport && (
+                <IconButton
+                  name="square.and.arrow.down"
+                  label="Import agents"
+                  fallback="↓"
+                  onPress={() => router.push('/import')}
                 />
               )}
               <IconButton

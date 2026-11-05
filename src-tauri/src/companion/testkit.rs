@@ -590,6 +590,17 @@ impl Stub {
     }
 }
 
+/// `agents.import.status` as the Mac answers it, with `talk` as given.
+pub fn import_status_fixture(armed: bool, talk: Option<Value>) -> Value {
+    serde_json::json!({
+        "remoteAccess": { "enabled": true, "funnelOn": true, "everConnected": true },
+        "armed": armed,
+        "talk": talk,
+        "prompt": crate::agents::import::import_prompt("Chief of Staff"),
+        "chiefId": "chief",
+    })
+}
+
 fn status(state: &'static str) -> Value {
     serde_json::to_value(crate::agents::runner::Status {
         state,
@@ -982,6 +993,31 @@ impl Backend for Stub {
         }
         self.defaults.lock().unwrap().push(change);
         Ok(serde_json::to_value(defaults()).unwrap())
+    }
+
+    async fn import_status(&self) -> Result<Value, CommandError> {
+        Ok(import_status_fixture(false, None))
+    }
+
+    async fn import_start(&self) -> Result<Value, CommandError> {
+        Ok(import_status_fixture(true, None))
+    }
+
+    async fn import_stop(&self) -> Result<Value, CommandError> {
+        Ok(import_status_fixture(false, None))
+    }
+
+    async fn import_review(
+        &self,
+        _agent_id: &str,
+        _request_id: &str,
+        keys: Vec<String>,
+    ) -> Result<Value, CommandError> {
+        let applied = crate::agents::review::Applied {
+            agents: keys.iter().map(|k| format!("Agent {k}")).collect(),
+            ..Default::default()
+        };
+        Ok(serde_json::to_value(applied).unwrap())
     }
 
     async fn quota(&self) -> Result<Value, CommandError> {

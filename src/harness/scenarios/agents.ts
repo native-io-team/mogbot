@@ -443,7 +443,7 @@ const consentCard = (status: 'pending' | 'allowed') =>
       requestId: 'consent1',
       title: 'Grok wants to bring its agents over',
       detail:
-        'It will talk to a separate conversation that can only stage agents for you to review. It can’t see your chats, files or other agents, and nothing is created until you import.\n\nIts first message: “Hi, I’m Grok. I run three agents for Sam: Main (manages the others), Finance (spending and invoices) and Travel (trips and bookings).”',
+        'It will tell a separate conversation everything each agent does, and may send past conversations, for you to check. That conversation can’t see your chats, files or other agents here, and nothing is created until you import.\n\nIts first message: “Hi, I’m Grok. I run three agents for Sam: Main (manages the others), Finance (spending and invoices) and Travel (trips and bookings).”',
       status,
       connector: { kind: 'consent', talkId: 'talk1', source: 'Grok' },
     },
@@ -510,6 +510,14 @@ export const REVIEW = {
         { name: 'stripe_key', purpose: 'Reads invoices and payouts', kind: 'api_key' },
         { name: 'bank_login', purpose: 'Reads statements', kind: 'password' },
       ],
+      watches: [{ when: 'an invoice email arrives', what: 'File it in the books sheet' }],
+      apps: [
+        { name: 'Gmail', purpose: 'Reads invoices' },
+        { name: 'Google Sheets', purpose: 'The books sheet' },
+      ],
+      preferences: '- Short summaries, never tables\n- Ask before paying anything over €500',
+      context: '- The books sheet is “Acme books 2026”',
+      history: { conversations: 37, messages: 412, masked: 2 },
       clash: {
         agentId: 'finance',
         name: 'Finance',
@@ -542,6 +550,69 @@ export const REVIEW = {
   chiefNotes: '- Sam prefers short replies\n- Mornings are for focus work',
   summary: 'Two agents: Finance and Travel. Main manages them; its notes are offered to you.',
 };
+
+/** The plan played back (`connector::post_playback`, lines from `harvest::playback`). */
+export const PLAYBACK = [
+  {
+    key: 'p1',
+    name: 'Finance',
+    lines: [
+      { kind: 'job', text: 'My job: tracks spending and chases invoices' },
+      {
+        kind: 'routine',
+        text: 'Every weekday at 09:00: Check for new invoices (arrives paused: you switch it on)',
+      },
+      {
+        kind: 'watch',
+        text: 'When an invoice email arrives: File it in the books sheet (ask me to set this up here once I’m in)',
+      },
+      {
+        kind: 'app',
+        text: 'With Grok I used Gmail and Google Sheets. Here I use what this Mac is connected to, and ask before connecting anything',
+      },
+      { kind: 'keep', text: 'I’ll keep in mind: Short summaries, never tables' },
+      { kind: 'keep', text: 'I’ll keep in mind: Ask before paying anything over €500' },
+      { kind: 'keep', text: 'I’ll keep in mind: Accountant is Lena' },
+      {
+        kind: 'login',
+        text: 'I’ll ask you for stripe_key and bank_login on a secure card, never in the chat',
+      },
+      { kind: 'history', text: 'I’ll have 37 past conversations from Grok to look back on' },
+    ],
+  },
+  {
+    key: 'p2',
+    name: 'Travel',
+    lines: [
+      { kind: 'job', text: 'My job: trips and bookings' },
+      {
+        kind: 'routine',
+        text: 'Every Friday at 17:00: Check next week’s flights (arrives paused: you switch it on)',
+      },
+      { kind: 'keep', text: 'I’ll keep in mind: Passport renewal due March' },
+      { kind: 'keep', text: 'I’ll keep in mind: Loyalty with TAP' },
+    ],
+  },
+];
+
+export const PLAYBACK_CARD = (status = 'pending', choice?: string) =>
+  msg('approval', '', 0, {
+    approval: {
+      requestId: 'playback1',
+      title: 'Here’s what your 2 agents will do for you',
+      detail:
+        'Finance\n· My job: tracks spending and chases invoices\n\nIs there anything I’m missing? Answer on your Mac.',
+      status,
+      choice,
+      connector: {
+        kind: 'playback',
+        talkId: 'talk1',
+        source: 'Grok',
+        review: REVIEW,
+        playback: PLAYBACK,
+      },
+    },
+  });
 
 export const REVIEW_CARD = (status = 'pending', choice?: string) =>
   msg('approval', '', 0, {
@@ -2585,10 +2656,15 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-other-app',
     title: 'Agents — import, the other app’s team is on this Mac',
     looksRightWhen:
-      'A segmented pair under the title, “From Ship Studio” chosen beside “From another assistant”. The lede says each agent comes with its instructions, memory, files and chat history and picks up from its most recent messages, and that Chief of Staff gets a recap of Ship Studio’s Chief’s conversation. “5 agents in Ship Studio · 2 new, 1 merges into Chief of Staff”, then one row each: Chief of Staff with “Merges into Chief of Staff”, Finance and Travel “New”, Research muted “Already here”, Inbox muted with an amber “Stays behind” and why. Under the list one neutral recessed note with an info mark: secrets stay behind and who will ask again; 4 routines arrive paused while their copies in Ship Studio keep running; Finance works in the same project folder as Ship Studio’s copy. Then a checkbox, off: “Keep their “Always allow” rules (3)” with a muted line on what each choice means. Footer: “Nothing in Ship Studio changes…”, Cancel, primary “Import 2 agents and merge”.',
-    command: 'agents.import',
+      'A segmented pair under the title, “From another assistant” first and “From Ship Studio” second, chosen. The lede says each agent comes with its instructions, memory, files and chat history and picks up from its most recent messages, and that Chief of Staff gets a recap of Ship Studio’s Chief’s conversation. “5 agents in Ship Studio · 2 new, 1 merges into Chief of Staff”, then one row each: Chief of Staff with “Merges into Chief of Staff”, Finance and Travel “New”, Research muted “Already here”, Inbox muted with an amber “Stays behind” and why. Under the list one neutral recessed note with an info mark: secrets stay behind and who will ask again; 4 routines arrive paused while their copies in Ship Studio keep running; Finance works in the same project folder as Ship Studio’s copy. Then a checkbox, off: “Keep their “Always allow” rules (3)” with a muted line on what each choice means. Footer: “Nothing in Ship Studio changes…”, Cancel, primary “Import 2 agents and merge”.',
+    // The modal opens on another assistant; the other app is the second segment.
+    openSelector: AGENTS_TAB,
     requires: '.agents-import-behind',
     clipSelector: '.agents-import',
+    steps: [
+      { click: IMPORT_STARTER },
+      { click: '.agents-import__tabs [role="tab"]:nth-of-type(2)' },
+    ],
     commands: { agents_other_app_preview: OTHER_APP_PREVIEW },
   },
   {
@@ -2602,6 +2678,7 @@ export const agentsScenarios: Scenario[] = [
     clipSelector: '.agents-import',
     steps: [
       { click: IMPORT_STARTER },
+      { click: '.agents-import__tabs [role="tab"]:nth-of-type(2)' },
       { click: '.agents-import-agent:nth-child(2) .agents-import-agent__row' },
     ],
     commands: { agents_other_app_preview: OTHER_APP_PREVIEW },
@@ -2614,7 +2691,11 @@ export const agentsScenarios: Scenario[] = [
     openSelector: AGENTS_TAB,
     requires: '.agents-import-done .agents-import-behind',
     clipSelector: '.agents-import',
-    steps: [{ click: IMPORT_STARTER }, { click: IMPORT_BUTTON }],
+    steps: [
+      { click: IMPORT_STARTER },
+      { click: '.agents-import__tabs [role="tab"]:nth-of-type(2)' },
+      { click: IMPORT_BUTTON },
+    ],
     commands: {
       agents_other_app_preview: OTHER_APP_PREVIEW,
       agents_other_app_import: {
@@ -2714,6 +2795,40 @@ export const agentsScenarios: Scenario[] = [
       agents_messages: (args: Record<string, unknown>) =>
         args.agentId === 'chief' ? IMPORT_TALK_CHAT : messagesFor(args),
       agents_import_talk: gateWith({ staged: ['Finance'], busy: true }),
+    },
+  },
+  {
+    id: 'agents-import-receiving',
+    title: 'Agents — import, past conversations arriving',
+    looksRightWhen:
+      'As agents-import-talk, but the bar above the composer reads “Importing from Grok · Finance and Travel staged for review · 37 past conversations”, with the same muted line and a secondary Stop. Nothing about the counts is in accent colour.',
+    command: 'agents.open',
+    requires: '[data-testid="agent-import-talk"][data-state="interviewing"]',
+    commands: {
+      agents_overview: overview([
+        { ...TEAM[0], status: status('working', 'Talking to Grok') },
+        TEAM.find((a) => a.id === 'finance') ?? TEAM[1],
+      ]),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? IMPORT_TALK_CHAT : messagesFor(args),
+      agents_import_talk: gateWith({ conversations: 37, busy: true }),
+    },
+  },
+  {
+    id: 'agents-import-playback',
+    title: 'Agents — import, the plan played back: anything missing?',
+    looksRightWhen:
+      'The Chief’s chat ends on one card: download icon, “Here’s what your 2 agents will do for you”, a muted lede that this is what was understood from Grok and nothing is created yet. Then “Finance” in label weight over a bullet list in secondary text: its job, the weekday 09:00 routine (arrives paused), what it watches for, the apps it used with Grok, three “I’ll keep in mind” lines, the logins on secure cards, 37 past conversations. Then “Travel” with its own list. Then “Is there anything I’m missing?” over a two-line field with an example placeholder. Right-aligned: a secondary Add this (disabled while the field is empty), then a neutral That’s everything. The bar above the composer: amber dot, “Import from Grok · check the plan” / “Is anything missing? Nothing is created until you import.”',
+    command: 'agents.open',
+    requires: '[data-testid="agent-import-playback"]',
+    commands: {
+      agents_overview: overview([
+        { ...TEAM[0], pendingApprovals: 1 },
+        TEAM.find((a) => a.id === 'finance') ?? TEAM[1],
+      ]),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? [...REVIEW_CHAT, PLAYBACK_CARD()] : messagesFor(args),
+      agents_import_talk: gateWith({ state: 'playback', conversations: 37, playbacks: 1 }),
     },
   },
   {

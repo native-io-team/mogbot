@@ -28,7 +28,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { cardOutcome, describeScope } from '../lib/agents';
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
-import { answerApproval, describeError } from '../lib/session';
+import { answerApproval, call, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
 import { fonts, iconSize, radius, space, type, PRESSED } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
@@ -352,6 +352,270 @@ export function ApprovalCard({
           />
         </Animated.View>
       )}
+    </Card>
+  );
+}
+
+/**
+ * An import's playback (desktop `agents/harvest.rs`): what each agent will do,
+ * in plain words, and "Is there anything I'm missing?". Answerable here:
+ * "That's everything" brings up the review (which only the Mac imports), and
+ * what you add goes to the desk as the card's note, back into the interview.
+ */
+export function PlaybackCard({
+  message,
+  approval,
+  onError,
+}: {
+  message: AgentMessage;
+  approval: Approval;
+  onError: (text: string) => void;
+}) {
+  const colors = useColors();
+  const appearance = useAppearance();
+  const cardStyles = useCardStyles();
+  const [busy, setBusy] = useState<null | 'done' | 'add'>(null);
+  const [adding, setAdding] = useState(false);
+  const [addition, setAddition] = useState('');
+  const connected = useApp((s) => s.link.kind === 'connected');
+  const pending = approval.status === 'pending';
+  const armed = useArmed(pending, adding);
+  const once = useInFlight();
+  const plan = approval.connector?.playback ?? [];
+  const source = approval.connector?.source;
+
+  const answer = (done: boolean) =>
+    once(async () => {
+      if (!armed) return;
+      setBusy(done ? 'done' : 'add');
+      try {
+        await answerApproval(
+          message.agentId,
+          approval.requestId,
+          done,
+          false,
+          done ? undefined : addition
+        );
+        haptic.success();
+        setAdding(false);
+        setAddition('');
+      } catch (error) {
+        haptic.error();
+        onError(describeError(error));
+      } finally {
+        setBusy(null);
+      }
+    });
+
+  const lines = plan.map((a) => (
+    <View key={a.key} style={{ gap: space['2xs'] }}>
+      <T variant="small" color={colors.textPrimary}>
+        {a.name}
+      </T>
+      {a.lines.map((l, i) => (
+        <T
+          key={i}
+          variant="small"
+          color={l.kind === 'gap' ? colors.textMuted : colors.textSecondary}
+        >
+          {`· ${l.text}`}
+        </T>
+      ))}
+    </View>
+  ));
+
+  if (!pending) {
+    return (
+      <Receipt status={approval.status} title={approval.title} outcome={cardOutcome(approval)}>
+        {lines}
+      </Receipt>
+    );
+  }
+  const off = !!busy || !connected;
+  return (
+    <Card
+      icon="square.and.arrow.down"
+      title={approval.title}
+      source={source ? `From ${source} · nothing is created yet` : undefined}
+      note={!connected ? OFFLINE_NOTE : 'Is there anything I’m missing?'}
+      actions={
+        <Animated.View
+          entering={FadeIn.duration(ARM_MS)}
+          pointerEvents={armed ? 'auto' : 'none'}
+          style={cardStyles.answers}
+        >
+          {adding ? (
+            <>
+              <Button
+                title="Cancel"
+                variant="outline"
+                onPress={() => setAdding(false)}
+                style={ACTION}
+              />
+              <Button
+                title="Add this"
+                variant="answer"
+                busy={busy === 'add'}
+                disabled={off || !addition.trim()}
+                onPress={() => void answer(false)}
+                style={ACTION}
+              />
+            </>
+          ) : (
+            <>
+              <Button
+                title="Add something"
+                variant="outline"
+                disabled={off}
+                onPress={() => setAdding(true)}
+                style={ACTION}
+              />
+              <Button
+                title="That’s all"
+                variant="answer"
+                busy={busy === 'done'}
+                disabled={off}
+                onPress={() => void answer(true)}
+                style={ACTION}
+              />
+            </>
+          )}
+        </Animated.View>
+      }
+    >
+      <View style={{ gap: space.sm }}>{lines}</View>
+      {adding && (
+        <Animated.View entering={FadeIn.duration(150)}>
+          <TextInput
+            autoFocus
+            value={addition}
+            onChangeText={setAddition}
+            maxLength={500}
+            placeholder="Something it does that isn’t here"
+            placeholderTextColor={colors.textMuted}
+            style={cardStyles.input}
+            returnKeyType="send"
+            keyboardAppearance={appearance}
+            onSubmitEditing={() => addition.trim() && void answer(false)}
+          />
+        </Animated.View>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * An import's review card on a Mac that serves `agents.import.review`: each
+ * agent with its role and its instructions in view, then Import. From the
+ * phone every kept agent comes in new (a name already here arrives as
+ * "<Name> (from Grok)"); replacing one of yours, where the diff and every
+ * consequence have to be read first, stays on the Mac's card.
+ */
+export function PhoneReviewCard({
+  message,
+  approval,
+  onError,
+}: {
+  message: AgentMessage;
+  approval: Approval;
+  onError: (text: string) => void;
+}) {
+  const colors = useColors();
+  const cardStyles = useCardStyles();
+  const [busy, setBusy] = useState<null | 'import' | 'no'>(null);
+  const connected = useApp((s) => s.link.kind === 'connected');
+  const pending = approval.status === 'pending';
+  const armed = useArmed(pending);
+  const once = useInFlight();
+  const proposals = approval.connector?.review?.proposals ?? [];
+  const source = approval.connector?.source;
+
+  const run = (importing: boolean) =>
+    once(async () => {
+      if (!armed) return;
+      setBusy(importing ? 'import' : 'no');
+      try {
+        if (importing) {
+          await call('agents.import.review', {
+            agentId: message.agentId,
+            requestId: approval.requestId,
+            keys: proposals.map((p) => p.key),
+          });
+        } else {
+          await answerApproval(message.agentId, approval.requestId, false, false);
+        }
+        haptic.success();
+      } catch (error) {
+        haptic.error();
+        onError(describeError(error));
+      } finally {
+        setBusy(null);
+      }
+    });
+
+  const agents = proposals.map((p) => (
+    <View key={p.key} style={{ gap: space['2xs'] }}>
+      <T variant="small" color={colors.textPrimary}>
+        {p.role ? `${p.name} · ${p.role}` : p.name}
+        {p.clash ? ` · comes in as a copy (${p.name} is taken)` : ''}
+      </T>
+      {!!p.instructions && (
+        <T variant="small" color={colors.textSecondary} numberOfLines={8}>
+          {p.instructions}
+        </T>
+      )}
+    </View>
+  ));
+
+  if (!pending) {
+    return (
+      <Receipt status={approval.status} title={approval.title} outcome={cardOutcome(approval)}>
+        {/* Not reviewLines: from here a taken name came in as a copy, never a replacement. */}
+        {proposals.map((p) => (
+          <T key={p.key} variant="small" color={colors.textSecondary}>
+            {p.role ? `${p.name} · ${p.role}` : p.name}
+          </T>
+        ))}
+      </Receipt>
+    );
+  }
+  const off = !!busy || !connected;
+  return (
+    <Card
+      icon="square.and.arrow.down"
+      title={approval.title}
+      source={source ? `From ${source} · nothing is created until you import` : undefined}
+      note={
+        !connected
+          ? OFFLINE_NOTE
+          : 'Routines arrive paused and logins are asked for securely. Replacing one of your agents is done on your Mac.'
+      }
+      actions={
+        <Animated.View
+          entering={FadeIn.duration(ARM_MS)}
+          pointerEvents={armed ? 'auto' : 'none'}
+          style={cardStyles.answers}
+        >
+          <Button
+            title="Don’t import"
+            variant="outline"
+            busy={busy === 'no'}
+            disabled={off}
+            onPress={() => void run(false)}
+            style={ACTION}
+          />
+          <Button
+            title={proposals.length === 1 ? 'Import 1 agent' : `Import ${proposals.length} agents`}
+            variant="answer"
+            busy={busy === 'import'}
+            disabled={off || proposals.length === 0}
+            onPress={() => void run(true)}
+            style={ACTION}
+          />
+        </Animated.View>
+      }
+    >
+      <View style={{ gap: space.sm }}>{agents}</View>
     </Card>
   );
 }

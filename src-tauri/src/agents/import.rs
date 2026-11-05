@@ -314,7 +314,7 @@ pub fn import_and_notify(
 /// assistant knows the connector it was just given.
 pub fn import_prompt(chief: &str) -> String {
     format!(
-        "Move my agents to the app I just connected you to. Use its import_conversation tool to talk to my {chief} there, and answer its questions about each agent you run for me until it says the import is ready for me to review. Don't send passwords, API keys or card numbers: the app asks me for those itself."
+        "Move my agents to the app I just connected you to, so each one picks up exactly where it left off. Use its import_conversation tool to talk to my {chief} there and tell it everything about each agent you run for me: its role and full instructions, every routine and schedule, everything it watches for, the apps it uses, my preferences and anything it knows that it still needs. Leave nothing out. If you can, also send each agent's past conversations with import_history once it's staged. Don't send passwords, API keys or card numbers: the app asks me for those itself."
     )
 }
 

@@ -46,6 +46,7 @@ import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { AgentCard } from './AgentCard';
 import { ImportReviewCard } from './ImportReviewCard';
+import { ImportPlaybackCard } from './ImportPlaybackCard';
 import { useLiveWork, WorkTimeline } from './AgentWork';
 import { RevisesBar } from './AgentResult';
 import { WorkMenu } from './AgentTakeover';
@@ -1024,6 +1025,9 @@ export const ApprovalCard = memo(function ApprovalCard({
     return (
       <SecretCard message={message} agentName={agentName} onAnswer={onAnswer} arrived={arrived} />
     );
+  }
+  if (approval.connector?.kind === 'playback') {
+    return <ImportPlaybackCard message={message} card={approval.connector} arrived={arrived} />;
   }
   if (approval.connector?.kind === 'review') {
     return (
