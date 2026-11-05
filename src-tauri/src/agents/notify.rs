@@ -16,7 +16,8 @@
 //!   short window the rest stay silent; the badge still counts them.
 //! - Clicking a notification focuses a window and emits [`EVENT_OPEN`]; the
 //!   frontend switches to Agents mode and opens that agent.
-//! - The Dock badge is unread plus pending approvals across the sidebar's agents.
+//! - The Dock badge is how many agents need you: the one count every surface
+//!   shows, desk and phone ([`needs_you`]).
 //!
 //! Full design: docs/agents.md, "Notifications".
 
@@ -314,9 +315,9 @@ pub fn window_focused(app: &AppHandle, window: &str) {
     }
 }
 
-/// The Dock badge: unread plus pending approvals across the agents the
-/// sidebar lists (hidden ones don't count there either). macOS badges the app, not a window, so any
-/// window will do.
+/// The Dock badge: how many agents need you, the one number every surface
+/// shows (the sidebar's "Needs your OK · N", the review bar, the phone's Home
+/// bar and tab badge). macOS badges the app, not a window, so any window will do.
 pub fn refresh_badge(app: &AppHandle) {
     let total = store::list().map(|agents| badge_now(&agents)).unwrap_or(0);
     if let Some(window) = app.webview_windows().values().next() {
@@ -324,25 +325,55 @@ pub fn refresh_badge(app: &AppHandle) {
     }
 }
 
-/// The badge now: logins held by "Setting up your team" aren't counted.
+/// The badge now, with each agent's live state and what "Setting up your
+/// team" holds (its logins, and the agents not met yet).
 pub fn badge_now(agents: &[Agent]) -> i64 {
-    badge_count_holding(agents, &super::team_setup::held_logins())
+    let hold = super::team_setup::hold();
+    needs_you_count(agents, |id| super::runner::status_of(id).state, &hold)
 }
 
-pub fn badge_count(agents: &[Agent]) -> i64 {
-    badge_count_holding(agents, &std::collections::HashMap::new())
+/// What the checklist holds while it's open: logins per agent, agents not met.
+#[derive(Debug, Default)]
+pub struct SetupHold {
+    pub held: HashMap<String, u32>,
+    pub quiet: std::collections::HashSet<String>,
 }
 
-/// Unread and requests in the sidebar, less what the checklist holds.
-pub fn badge_count_holding(agents: &[Agent], held: &std::collections::HashMap<String, u32>) -> i64 {
-    agents
+/// Whether an agent needs you. Mirrors `agentNeedsYou` in
+/// packages/companion-protocol/src/attention.ts, and both are held to
+/// attention-cases.json, so the Dock never disagrees with the sidebar or the
+/// phone: not hidden or quiet; a failed turn other than a usage limit while
+/// idle; a request the checklist doesn't hold; or waiting on a card not yet
+/// counted. The Chief counts like anyone; unread replies don't.
+pub fn needs_you(agent: &Agent, state: &str, hold: &SetupHold) -> bool {
+    if agent.hidden || hold.quiet.contains(&agent.id) {
+        return false;
+    }
+    let failed = state == "idle"
+        && agent
+            .failure
+            .as_ref()
+            .is_some_and(|f| f.kind != super::failure::FailureKind::UsageLimit);
+    if failed {
+        return true;
+    }
+    let held = hold.held.get(&agent.id).copied().unwrap_or(0);
+    if agent.pending_approvals > held {
+        return true;
+    }
+    state == "waiting" && agent.pending_approvals == 0
+}
+
+pub fn needs_you_count(
+    agents: &[Agent],
+    state_of: impl Fn(&str) -> &'static str,
+    hold: &SetupHold,
+) -> i64 {
+    let n = agents
         .iter()
-        .filter(|a| !a.hidden)
-        .map(|a| {
-            let held = held.get(&a.id).copied().unwrap_or(0);
-            i64::from(a.unread) + i64::from(a.pending_approvals.saturating_sub(held))
-        })
-        .sum()
+        .filter(|a| needs_you(a, state_of(&a.id), hold))
+        .count();
+    i64::try_from(n).unwrap_or(i64::MAX)
 }
 
 #[cfg(test)]
@@ -406,6 +437,10 @@ mod tests {
             connector: None,
             login: None,
             set_aside: None,
+            expiry: None,
+            from_outside: None,
+            front: None,
+            settings: None,
         });
         message
     }
@@ -520,20 +555,73 @@ mod tests {
         assert!(c.turn_ended("fin").is_none());
     }
 
+    /// The cases the desk and the phone are held to as well
+    /// (packages/companion-protocol/src/attention.test.ts).
     #[test]
-    fn the_badge_counts_unread_and_approvals_in_the_sidebar_only() {
-        let mut a = agent(false);
-        a.unread = 2;
-        a.pending_approvals = 1;
-        let mut b = agent(true);
-        b.unread = 1;
-        let mut hidden = agent(false);
-        hidden.unread = 5;
-        hidden.hidden = true;
-        assert_eq!(badge_count(&[a.clone(), b, hidden]), 4);
-        // Logins the team checklist holds aren't counted.
-        let held = std::collections::HashMap::from([("fin".to_string(), 1)]);
-        assert_eq!(badge_count_holding(&[a], &held), 2);
+    fn the_badge_counts_who_needs_you_as_every_other_surface_does() {
+        use crate::agents::failure::{Failure, FailureKind};
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../packages/companion-protocol/src/attention-cases.json"
+        ))
+        .unwrap();
+        for case in cases["cases"].as_array().unwrap() {
+            let name = case["name"].as_str().unwrap();
+            let mut states = HashMap::new();
+            let agents: Vec<Agent> = case["agents"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|c| {
+                    let mut a = agent(false);
+                    a.id = c["id"].as_str().unwrap().into();
+                    a.hidden = c["hidden"].as_bool().unwrap_or(false);
+                    a.pending_approvals = c["pendingApprovals"].as_u64().unwrap() as u32;
+                    // Unread replies never count.
+                    a.unread = 3;
+                    a.failure = c["failure"].as_str().map(|k| Failure {
+                        kind: match k {
+                            "usage_limit" => FailureKind::UsageLimit,
+                            "signed_out" => FailureKind::SignedOut,
+                            _ => FailureKind::Other,
+                        },
+                        resets_at: None,
+                    });
+                    let state: &'static str = match c["state"].as_str().unwrap() {
+                        "waiting" => "waiting",
+                        "working" => "working",
+                        _ => "idle",
+                    };
+                    states.insert(a.id.clone(), state);
+                    a
+                })
+                .collect();
+            let hold = SetupHold {
+                held: case["held"]
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.as_u64().unwrap() as u32))
+                    .collect(),
+                quiet: case["quiet"]
+                    .as_array()
+                    .map(|q| q.iter().map(|v| v.as_str().unwrap().to_string()).collect())
+                    .unwrap_or_default(),
+            };
+            let got: Vec<&str> = agents
+                .iter()
+                .filter(|a| needs_you(a, states[&a.id], &hold))
+                .map(|a| a.id.as_str())
+                .collect();
+            let want: Vec<&str> = case["needYou"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap())
+                .collect();
+            assert_eq!(got, want, "{name}");
+            let count = needs_you_count(&agents, |id| states[id], &hold);
+            assert_eq!(count, want.len() as i64, "{name}");
+        }
     }
 
     #[test]

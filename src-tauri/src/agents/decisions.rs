@@ -296,6 +296,10 @@ pub(crate) fn card(
         connector: None,
         login: None,
         set_aside: None,
+        expiry: None,
+        from_outside: None,
+        front: None,
+        settings: None,
     }
 }
 

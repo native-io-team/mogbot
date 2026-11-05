@@ -9,6 +9,7 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
 import type { Watch, WatchSource } from '../../packages/companion-protocol/src/model';
+import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
 
 export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
 
@@ -73,6 +74,36 @@ export interface WorkStep {
   outcome?: WorkStepOutcome;
   /** A screenshot this step produced. */
   image?: Attachment;
+  /** When what it ran came back. Absent while it runs, and in older timelines. */
+  endedAt?: number;
+  /** What a test run printed it came to ("42 passed, 3 failed"). */
+  summary?: string;
+  /** The last lines a long or failed command printed (finished timelines only). */
+  output?: string[];
+}
+
+/** A tool known to take a while (`agents::describe::Slow`); a newer Mac may send another. */
+export type WorkSlow = 'tests' | 'build' | 'install' | 'deploy' | 'other';
+
+/**
+ * The call running right now (`agents::work::LiveCall`): its plain words,
+ * when it started, and what it printed so far where the engine streams it.
+ */
+export interface LiveCall {
+  kind: WorkStepKind;
+  /** Its working-line words ("Running the Cypress tests"). */
+  label: string;
+  startedAt: number;
+  /** Known to take a while: "This usually takes a few minutes". */
+  slow?: WorkSlow;
+  /** Its newest lines of output so far. */
+  output?: string[];
+  /** The engine streams this call's output; when false it appears only once it finishes. */
+  streams: boolean;
+  /** Its process was using the CPU at the last look; absent when not found. */
+  busy?: boolean;
+  /** "Stop this step" can find its process. */
+  canStop: boolean;
 }
 
 /** `agents::work::StepOutcome`. */
@@ -100,6 +131,12 @@ export interface TurnWork {
    * working line *is* that step.
    */
   doing?: string;
+  /** While it runs: the call running now, in full. */
+  current?: LiveCall;
+  /** While it runs: its last sign of life (any engine output, its command's output or CPU). */
+  lastSignAt?: number;
+  /** While it runs, once it has made no progress for too long: when it last did. */
+  quietSince?: number;
 }
 
 export interface Agent {
@@ -110,6 +147,8 @@ export interface Agent {
   /** One of AGENT_COLORS; typed loosely because the registry is a file. */
   color: string;
   isMain: boolean;
+  /** "Admin — can manage and approve for other agents". Absent: on for the Chief only (`isAdmin`). */
+  admin?: boolean;
   pinned: boolean;
   hidden: boolean;
   sessionId: string | null;
@@ -429,6 +468,35 @@ export interface Approval {
    * Nothing it asked for ran.
    */
   setAside?: string;
+  /** "Change this agent's settings?" (`propose_settings_change`): who, and what changes in plain words. Allow applies it. */
+  settings?: SettingsProposal;
+  /**
+   * "Bring your work Chrome window to the front so I can use it": answered
+   * with Check again (allow) or Not now, never a login.
+   */
+  front?: { site: string; account?: string };
+  /**
+   * Closed by the app because nobody answered (status `expired`): the agent
+   * moved on, the wait ran out, or a sign-in became "Maybe later". Drawn as
+   * a one-line receipt; never counted as waiting.
+   */
+  expiry?: CardExpiry;
+}
+
+export type CardExpiry = 'moved_on' | 'no_answer' | 'maybe_later';
+
+/** The one-line receipt an expired card collapses to (desk and phone say the same). */
+export function expiryLine(approval: Pick<Approval, 'title' | 'expiry'>): string | null {
+  switch (approval.expiry) {
+    case 'moved_on':
+      return `Expired — the agent moved on · ${approval.title}`;
+    case 'no_answer':
+      return `No answer — ask again later if it still matters · ${approval.title}`;
+    case 'maybe_later':
+      return `Maybe later · ${approval.title}`;
+    default:
+      return null;
+  }
 }
 
 /**
@@ -514,6 +582,15 @@ export interface AgentMessage {
    * line only the room has (yours, a room note) has an empty `agentId`.
    */
   room?: string;
+  /** On an admin's message: other agents' requests only you can decide, answered in place. */
+  decide?: DecideItem[];
+}
+
+/** Mirrors `admin::DecideItem`: another agent's card, brought to you by an admin. */
+export interface DecideItem {
+  agentId: string;
+  agentName: string;
+  approval: Approval;
 }
 
 /** Mirrors `project::ChangedFile`: line counts are absent for a binary file. */
@@ -1118,6 +1195,10 @@ export const answerApproval = (
   });
 /** Stop the turn in progress so what's queued sends now. */
 export const interruptAgent = (agentId: string) => invoke<boolean>('agents_interrupt', { agentId });
+/** "Stop this step": end the command the agent is running; its turn carries on. Says what it did. */
+export const stopAgentStep = (agentId: string) => invoke<string>('agents_stop_step', { agentId });
+/** "Check on it": what the app can see of the turn now, in one line. Never interrupts it. */
+export const checkOnAgent = (agentId: string) => invoke<string>('agents_check_on', { agentId });
 export const revokePermission = (agentId: string, ruleId: string) =>
   invoke<void>('agents_revoke_permission', { agentId, ruleId });
 export const focusAgent = (agentId: string | null) => invoke<void>('agents_focus', { agentId });
@@ -1934,6 +2015,9 @@ export function plainActivity(activity: string | null | undefined): string | nul
     case 'Searching for':
       return 'Looking through the files';
     case 'Fetching': {
+      // An older build's "Fetching https://…"; the Mac's own plain words
+      // ("Fetching localhost:3268") are already what to say.
+      if (!/^https?:\/\//.test(rest)) return text;
       const host = /^https?:\/\/([^/\s]+)/.exec(rest)?.[1];
       return host ? `Reading ${host.replace(/^www\./, '')}` : 'Reading a web page';
     }

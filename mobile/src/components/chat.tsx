@@ -40,13 +40,21 @@ import { Card, Line, TextAction } from './surfaces';
 import { Button, Icon, T } from './ui';
 import { AgentAvatar } from './agent';
 import { TypingDots } from './TypingDots';
-import { ApprovalCard, PhoneReviewCard, PlaybackCard, ReviewOnMacCard } from './ApprovalCard';
+import {
+  ApprovalCard,
+  DecideCards,
+  PhoneReviewCard,
+  PlaybackCard,
+  ReviewOnMacCard,
+} from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
 import { LoginCard } from './LoginCard';
 import { servesLogins } from '../lib/logins';
 import { useTaskName } from './session';
-import { LiveWork, WorkLine } from './work';
+import { LiveStep, LiveWork, WorkLine } from './work';
+import { liveCallShown } from '../lib/work';
+import { useClock } from '../lib/useClock';
 import { CopyCard } from './copy';
 import { ResultCardView, useCanRevise } from './result';
 import { setComposer } from '../lib/drafts';
@@ -174,6 +182,7 @@ export const MessageRow = memo(function MessageRow({
           style={({ pressed }) => [styles.agentRow, pressed && styles.heldProse]}
         >
           <Prose id={message.id} text={message.text} />
+          {!!message.decide?.length && <DecideCards message={message} onError={onError} />}
           {!!message.attachments?.length && (
             <Attachments
               agentId={message.agentId}
@@ -747,17 +756,26 @@ export function WorkingRow({
 }) {
   const colors = useColors();
   const styles = useStyles();
+  const work = agent?.status.work;
+  // Mid-import (no words) the bar says it: no step, no timer, just the dots.
+  const live = label ? liveCallShown(work, agent?.status.activity) : undefined;
+  const ticking = !!label && (live != null || work?.quietSince != null);
+  const now = useClock(ticking);
   return (
     <Animated.View entering={FadeIn.duration(250)} style={styles.working}>
-      <View style={styles.workingRow}>
-        {/* No words (mid-import, when the bar says it): the dots speak. */}
-        <TypingDots label={label ? undefined : 'Working'} />
-        {!!label && (
-          <T variant="small" color={colors.textSecondary} numberOfLines={1}>
-            {label}
-          </T>
-        )}
-      </View>
+      {agent && ticking ? (
+        <LiveStep agentId={agent.id} work={work} call={live} label={label} now={now} />
+      ) : (
+        <View style={styles.workingRow}>
+          {/* No words (mid-import, when the bar says it): the dots speak. */}
+          <TypingDots label={label ? undefined : 'Working'} />
+          {!!label && (
+            <T variant="small" color={colors.textSecondary} numberOfLines={1}>
+              {label}
+            </T>
+          )}
+        </View>
+      )}
       {agent && (
         <LiveWork
           agentId={agent.id}
@@ -772,16 +790,17 @@ export function WorkingRow({
 
 const useStyles = makeStyles((colors) => ({
   userRow: { alignItems: 'flex-end', gap: space.xs },
-  // iMessage's proportions: 16 on a 20 line, 12×8 inside, an 18 corner that
-  // stays 18 however many lines, and never wider than 78% of the column.
+  // The reading size (17) on a 24 line, a little tighter than a reply's so a
+  // short bubble stays a pill; 14×10 inside, the composer's 18 corner that
+  // stays 18 however many lines, and never wider than 80% of the column.
   userBubble: {
-    maxWidth: '78%',
+    maxWidth: '80%',
     backgroundColor: colors.surfaceBubble,
     borderRadius: composer.corner,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
+    paddingHorizontal: space.md + space['2xs'],
+    paddingVertical: space.sm + space['2xs'],
   },
-  bubbleText: { fontSize: type.body, lineHeight: composer.line },
+  bubbleText: { fontSize: type.read, lineHeight: lineHeight(type.read, 1.4) },
   held: { backgroundColor: colors.surfaceControlHover },
   heldProse: { opacity: 0.7 },
   bubbleQuote: {

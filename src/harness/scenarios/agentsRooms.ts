@@ -517,7 +517,7 @@ export const agentsRoomsScenarios: Scenario[] = [
     id: 'agents-team-room-approval',
     title: 'Rooms — What’s in flight answers a room’s card in place',
     looksRightWhen:
-      'What’s in flight, Needs your OK: Acme Site’s row says “in Pricing launch” after its name and “Needs your OK”, with its Allow / Deny card for “Push to GitHub” under it (compact, answerable here). Recent replies credit room replies “in Pricing launch”; clicking one opens the room, not Acme’s own chat.',
+      'What’s in flight, Needs you: Acme Site’s one-line row says “in Pricing launch” after its name and “· Push to GitHub”, open with its Allow / Deny card for “Push to GitHub” under it (compact, answerable here). Done recently credits room replies “in Pricing launch”; clicking one opens the room, not Acme’s own chat.',
     requires: '.agents-team .agent-approval',
     openSelector: AGENTS_TAB,
     steps: [{ click: '.agents-list__needs-you' }],

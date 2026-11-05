@@ -253,12 +253,21 @@ export const HTTP = {
   uploadBlob: '/v1/blobs',
   /** GET: a blob the Mac produced (screenshot, fetched path). Supports `Range`. */
   blob: (blobId: string) => `/v1/blobs/${encodeURIComponent(blobId)}`,
-  /** GET: a chat attachment, by its path relative to the agent's home. `?w=` for an image thumbnail. */
-  attachment: (agentId: string, path: string) =>
-    `/v1/agents/${encodeURIComponent(agentId)}/attachments/${path
-      .split('/')
+  /**
+   * GET: a chat attachment, by its path relative to the agent's home
+   * (`attachments/<message id>/<name>`, as `Attachment.path` carries it).
+   * `?w=` for an image thumbnail. The route is that path under the agent:
+   * `/v1/agents/<id>/attachments/<message id>/<name>`, never the
+   * `attachments/` segment twice (which the Mac answered with a 404, and
+   * every image on the phone was an empty box).
+   */
+  attachment: (agentId: string, path: string) => {
+    const segments = path.split('/').filter((s) => s !== '');
+    if (segments[0] === 'attachments') segments.shift();
+    return `/v1/agents/${encodeURIComponent(agentId)}/attachments/${segments
       .map(encodeURIComponent)
-      .join('/')}`,
+      .join('/')}`;
+  },
 } as const;
 
 // ---- base64url without Buffer (the phone has no Node) -----------------------

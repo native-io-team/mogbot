@@ -21,7 +21,16 @@ import { useApp, useServed, type AppearancePref } from '../lib/store';
 import { useAccent, useSwitchColors } from '../lib/accent';
 import { brand } from '../lib/brand';
 import { useColors } from '../lib/appearance';
-import { iconSize, space } from '../lib/theme';
+import {
+  baseType,
+  iconSize,
+  lineHeight,
+  scaledSize,
+  space,
+  TEXT_SIZE_KEYS,
+  TEXT_SIZES,
+  type TextSize,
+} from '../lib/theme';
 
 /** The phone's own appearance, or the system's. Named as people say it, not "System". */
 const APPEARANCE: { value: AppearancePref; label: string }[] = [
@@ -29,6 +38,14 @@ const APPEARANCE: { value: AppearancePref; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
 ];
+
+/** Settings → Text size: on top of the phone's own Dynamic Type, never instead of it. */
+const TEXT_SIZE_LABELS: Record<TextSize, string> = {
+  smaller: 'Smaller',
+  default: 'Default',
+  larger: 'Larger',
+  largest: 'Largest',
+};
 
 /** Accounts are added and signed in on the Mac; here they are only shown. */
 const USAGE_FOOTER =
@@ -56,6 +73,7 @@ export default function Settings() {
   const protocol = useApp((s) => s.welcome?.protocol ?? null);
   const haptics = useApp((s) => s.prefs.haptics);
   const appearance = useApp((s) => s.prefs.appearance);
+  const textSize = useApp((s) => s.prefs.textSize);
   const hapticsSwitch = useSwitchColors(haptics);
   const push = useApp((s) => s.push);
   const pushInfo = pushLine(push, isOfficialBuild());
@@ -179,7 +197,10 @@ export default function Settings() {
       <IndependenceSetting />
       <NewAgentDefaults />
       {servesTeam && (
-        <Section title="Logins" footer="The apps your agents asked for, one row each. Signing in happens on your Mac.">
+        <Section
+          title="Logins"
+          footer="The apps your agents asked for, one row each. Signing in happens on your Mac."
+        >
           <Row label="What your team needs" onPress={() => router.push('/logins')} last />
         </Section>
       )}
@@ -247,6 +268,50 @@ export default function Settings() {
                 )
               }
               last={i === APPEARANCE.length - 1}
+            />
+          );
+        })}
+      </Section>
+
+      <Section
+        title="Text size"
+        footer="Replies, cards and lists, on top of the Text Size you set for this phone in iOS Settings."
+      >
+        {TEXT_SIZE_KEYS.map((key, i) => {
+          const on = key === textSize;
+          return (
+            <Row
+              key={key}
+              label={TEXT_SIZE_LABELS[key]}
+              selected={on}
+              onPress={() => {
+                if (on) return;
+                tap();
+                setPref('textSize', key);
+              }}
+              trailing={
+                <View style={styles.sizeTrail}>
+                  {/* Each step drawn at its own size: the choice reads before it's made. */}
+                  <T
+                    variant="body"
+                    color={colors.textSecondary}
+                    style={{
+                      fontSize: scaledSize(baseType.body, TEXT_SIZES[key]),
+                      lineHeight: lineHeight(scaledSize(baseType.body, TEXT_SIZES[key])),
+                    }}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  >
+                    Aa
+                  </T>
+                  {on ? (
+                    <Icon name="checkmark" size={iconSize.body} color={accent.accent} />
+                  ) : (
+                    <View style={styles.check} />
+                  )}
+                </View>
+              }
+              last={i === TEXT_SIZE_KEYS.length - 1}
             />
           );
         })}
@@ -329,5 +394,6 @@ export default function Settings() {
 const styles = StyleSheet.create({
   page: { padding: space.lg },
   check: { width: 16 },
+  sizeTrail: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   error: { marginHorizontal: space.lg, marginTop: -space.md, marginBottom: space.lg },
 });

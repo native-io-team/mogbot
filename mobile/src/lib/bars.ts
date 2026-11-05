@@ -17,7 +17,7 @@ import {
  * know before reading the rest. Then the Mac being driven, an import, the
  * message being written, and what the engine can't do.
  */
-export const BAR_ORDER = ['connection', 'driven', 'import', 'revising', 'engine'] as const;
+export const BAR_ORDER = ['connection', 'driven', 'import', 'setup', 'revising', 'engine'] as const;
 export type BarId = (typeof BAR_ORDER)[number];
 
 /** How many bars show before the rest fold into "N more". */

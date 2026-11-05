@@ -43,16 +43,8 @@ export const addSecret = (agentId: string, name: string, kind: SecretKind, value
 export const revokeSecret = (agentId: string, secretId: string) =>
   invoke<void>('agents_revoke_secret', { agentId, secretId });
 
-/**
- * A secret's name as a person says it: `stripe_key` → "Stripe key",
- * `bank-login` → "Bank login". The name is the agent's own identifier.
- */
-export function secretTitle(name: string): string {
-  const words = name.split(/[_\-\s]+/).filter(Boolean);
-  if (words.length === 0) return name;
-  const [first, ...rest] = words;
-  return [first.charAt(0).toUpperCase() + first.slice(1), ...rest].join(' ');
-}
+/** A secret's name as a person says it ("CRM API key"): one rule, shared with the phone. */
+export { secretTitle } from '../../packages/companion-protocol/src/secretName';
 
 /** `$STRIPE_KEY`, or `$BANK_USERNAME, $BANK_PASSWORD`. */
 export const secretVars = (s: { fields: SecretField[] }) =>

@@ -13,6 +13,7 @@
 import { remoteBrief, remoteStatus } from './remote';
 import { phoneStatus } from './phone';
 import type { CommandMap } from '../types';
+import { BALANCED_TEAM, BALANCED_VIEW } from '../fixtures/policy';
 
 export const HARNESS_ROOT = '/Users/harness/ShipStudio';
 
@@ -240,6 +241,14 @@ export const baseCommands: CommandMap = {
     line: 'Not connecting LinkedIn. No agent will ask for it again.',
     closed: 1,
   },
+  // Edit agent's "What it can do", and Settings → Agents → What agents can
+  // do (`agents/policy.rs`): a Balanced team, as `fixtures.gen.ts` has it.
+  agents_policy: (args: Record<string, unknown>) => ({
+    ...BALANCED_VIEW,
+    agentId: typeof args.agentId === 'string' ? args.agentId : '',
+  }),
+  agents_policy_team: BALANCED_TEAM,
+  agents_policy_set: null,
   agents_usage: {
     week: {
       turns: 0,
@@ -336,9 +345,16 @@ export const baseCommands: CommandMap = {
   // How much agents do on their own (`agents::independence`): never chosen.
   agents_independence: 'judgement',
   agents_set_independence: (args: Record<string, unknown>) => args.level,
+  // Admins (`agents::admin`): nothing done yet, nobody deleted.
+  agents_set_admin: (args: Record<string, unknown>) => ({ id: args.agentId, admin: args.admin }),
+  agents_admin_activity: [],
+  agents_recently_deleted: [],
+  agents_restore: null,
   agents_spare_add: { id: 'h1', text: 'x', addedBy: 'you', addedAt: 0, state: 'waiting' },
   agents_spare_remove: null,
   agents_focus: null,
+  agents_phone_signin_status: null,
+  agents_phone_signin_stop: null,
   // Rooms: none until someone makes one (`./agentsRooms`).
   agents_rooms: [],
   agents_room_focus: null,

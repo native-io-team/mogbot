@@ -34,6 +34,7 @@ pub mod router;
 pub mod server;
 #[cfg(test)]
 pub(crate) mod testkit;
+pub mod watch;
 pub mod wire;
 
 use serde::{Deserialize, Serialize};
@@ -73,7 +74,7 @@ pub const MAX_DEVICE_NAME_CHARS: usize = 40;
 /// visible themselves: bidi overrides and isolates, zero-width joiners and
 /// spaces, the BOM, soft hyphens, variation selectors, Hangul fillers and
 /// the rest of Unicode's format (Cf) class. A name made with them can read
-/// as "Julian's iPhone" while being something else, or flip the words after it.
+/// as "Sam's iPhone" while being something else, or flip the words after it.
 fn is_invisible_format(c: char) -> bool {
     matches!(c as u32,
         0x00AD | 0x034F | 0x061C | 0x115F | 0x1160 | 0x17B4 | 0x17B5 | 0x180B..=0x180F
@@ -627,6 +628,8 @@ pub struct Companion {
     pub refusals: limits::RefusalLog,
     /// Thumbnails decoding now, and the ones already made.
     pub thumbs: files::Thumbs,
+    /// "Watch live" links and sessions (`watch`).
+    pub watch: watch::Watch,
 }
 
 impl Companion {
@@ -665,6 +668,7 @@ impl Companion {
             suggests: limits::Counter::default(),
             refusals: limits::RefusalLog::default(),
             thumbs: files::Thumbs::default(),
+            watch: watch::Watch::default(),
         }
     }
 
@@ -795,6 +799,7 @@ impl Companion {
         let gone = self.registry.revoke(device_id)?;
         if let Some(d) = &gone {
             self.blobs.forget_device(&d.id);
+            self.watch.forget_device(&d.id);
             self.forget_push_later(d);
             self.hub.signal(hub::HubItem::Revoked {
                 device_id: d.id.clone(),

@@ -39,7 +39,7 @@ import {
   usableRoutes,
   type Credentials,
 } from './pairing';
-import { flushCache, forgetCache, loadCache, watchCache } from './cache';
+import { flushCache, forgetCache, saveOutbox, loadCache, watchCache } from './cache';
 import { flushDrafts, forgetDrafts, loadDrafts, refusedToDraft, setComposer } from './drafts';
 import { outboxPlan, unreached } from './outbox';
 import { loadPrefs } from './prefs';
@@ -332,6 +332,11 @@ export const teamSetup = {
   hello: (agentId: string) => teamSetupThen(call('agents.teamSetup.hello', { agentId })),
   missing: () => teamSetupThen(call('agents.teamSetup.missing', {})),
   dismiss: () => teamSetupThen(call('agents.teamSetup.dismiss', {})),
+  /** A row nothing reached: one sign-in card started on the Mac, or put away. */
+  later: (key: string, action: 'connect' | 'not_needed', onPhone = true) =>
+    teamSetupThen(call('agents.teamSetup.later', { key, action, onPhone })),
+  /** Check again what the team can already reach. */
+  check: () => teamSetupThen(call('agents.teamSetup.check', {})),
 };
 
 /** The newest page. Concurrent calls for one chat share the request. */
@@ -409,6 +414,9 @@ export async function send(
         ...(revises ? { revises } : {}),
       })
     );
+  // The outbox on disk first, then the composer's emptied draft: a crash in
+  // between finds the words in one file or the other, never in neither.
+  void saveOutbox().then(() => flushDrafts());
   if (offline) return;
   let message: AgentMessage;
   try {
@@ -668,6 +676,9 @@ export const keepCopy = (agentId: string, copyId: string, into?: string) =>
   call('agents.keepCopy', into ? { agentId, copyId, into } : { agentId, copyId });
 export const discardCopy = (agentId: string, copyId: string) =>
   call('agents.discardCopy', { agentId, copyId });
+/** "Watch live": a one-time link to the card's running site, on this Mac's tailnet only. */
+export const watchLive = (agentId: string, messageId: string) =>
+  call('agents.watchLive', { agentId, messageId });
 
 /** A path written in an agent's reply, fetched from the Mac and saved here. */
 export async function fetchPath(agentId: string, path: string) {

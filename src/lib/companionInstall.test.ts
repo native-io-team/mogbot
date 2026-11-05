@@ -37,9 +37,9 @@ const thisMac: IosInstallStatus = {
   node: 'v24.17.0',
   devices: [],
   signing: {
-    teamId: 'H8NN6DM6G6',
+    teamId: 'TEAM000001',
     identity: 'Apple Development: me',
-    bundleId: 'io.native.dashbot.companion.a4c8c6',
+    bundleId: 'io.native.dashbot.companion.87be70',
   },
   source,
 };
@@ -47,7 +47,7 @@ const thisMac: IosInstallStatus = {
 const iphone = {
   udid: '00008140-001',
   hardwareUdid: '00008140-001' as string | null,
-  name: 'Julian’s iPhone',
+  name: 'Sam’s iPhone',
   model: 'iPhone 16 Pro',
   osVersion: '26.1',
   connected: true,
@@ -148,11 +148,11 @@ describe('the build', () => {
   it('builds Release with xcodebuild for the phone’s hardware UDID, then installs', () => {
     const cmd = iosBuildCommand(thisMac, iphone)!;
     expect(cmd).toContain("cd '/Users/me/ShipStudio/.companion-build/mobile'");
-    expect(cmd).toContain('COMPANION_BUNDLE_ID=io.native.dashbot.companion.a4c8c6');
-    expect(cmd).toContain('APPLE_TEAM_ID=H8NN6DM6G6');
+    expect(cmd).toContain('COMPANION_BUNDLE_ID=io.native.dashbot.companion.87be70');
+    expect(cmd).toContain('APPLE_TEAM_ID=TEAM000001');
     const name = iosProjectName();
     expect(cmd).toContain(
-      `npx expo prebuild -p ios --clean && cd ios && COMPANION_BUNDLE_ID=io.native.dashbot.companion.a4c8c6 APPLE_TEAM_ID=H8NN6DM6G6 xcodebuild -workspace ${name}.xcworkspace -scheme ${name} -configuration Release -destination id=00008140-001 -allowProvisioningUpdates -derivedDataPath build DEVELOPMENT_TEAM=H8NN6DM6G6 CODE_SIGN_STYLE=Automatic build`
+      `npx expo prebuild -p ios --clean && cd ios && COMPANION_BUNDLE_ID=io.native.dashbot.companion.87be70 APPLE_TEAM_ID=TEAM000001 xcodebuild -workspace ${name}.xcworkspace -scheme ${name} -configuration Release -destination id=00008140-001 -allowProvisioningUpdates -derivedDataPath build DEVELOPMENT_TEAM=TEAM000001 CODE_SIGN_STYLE=Automatic build`
     );
     expect(cmd).toMatch(
       new RegExp(
@@ -167,14 +167,14 @@ describe('the build', () => {
   it('never builds for devicectl’s CoreDevice identifier', () => {
     const coreDeviceOnly = {
       ...iphone,
-      udid: 'D9365757-35EA-5C91-8B97-D01B61F65328',
+      udid: 'A1B2C3D4-0000-4000-8000-00000000AB12',
       hardwareUdid: null,
     };
     expect(iosBuildCommand(thisMac, coreDeviceOnly)).toBeNull();
     const prompt = buildIosInstallPrompt({ ...thisMac, devices: [coreDeviceOnly] });
     expect(prompt).toContain('xcrun xctrace list devices');
     expect(prompt).toContain('-destination id=<UDID>');
-    expect(prompt).not.toContain('D9365757');
+    expect(prompt).not.toContain('A1B2C3D4');
   });
 
   it('names the workspace the way expo prebuild does', () => {
@@ -212,7 +212,7 @@ describe('expiry', () => {
   const installedAt = Date.UTC(2026, 10, 4, 12); // noon, so any timezone reads the same day
   const record = {
     platform: 'ios' as const,
-    deviceName: 'Julian’s iPhone',
+    deviceName: 'Sam’s iPhone',
     deviceId: 'u',
     installedAt,
     expiresAt: installedAt + 7 * DAY,

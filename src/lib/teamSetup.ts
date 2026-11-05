@@ -13,7 +13,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { AGENT_EVENTS, failedTurn, type Agent, type AgentMessage } from './agents';
+import { AGENT_EVENTS, failedTurn, type Agent, type AgentMessage, type ChatItem } from './agents';
 
 export type SetupStepId = 'logins' | 'routines' | 'missing' | 'hello';
 export type SetupStepState = 'open' | 'done' | 'skipped';
@@ -76,10 +76,42 @@ export interface SetupHello {
   state: HelloState;
 }
 
+/** A row of the Logins step: one service the imported agents mentioned (`agents/access_check.rs`). */
+export type SetupLaterState =
+  | { state: 'open' }
+  | { state: 'reachable'; via: string }
+  | { state: 'not_needed' }
+  | { state: 'asked'; agentId: string; requestId: string };
+
+export type SetupLater = {
+  key: string;
+  /** The catalogue's id, or `other`. */
+  service: string;
+  title: string;
+  agents: string[];
+  agentIds: string[];
+  /** The one button: "Connect Figma", "Use my browser", "Get your key". */
+  action?: string;
+  /** A key is the only way in. */
+  keyOnly: boolean;
+} & SetupLaterState;
+
+/** "Checking what your team can already reach", live. */
+export interface SetupCheck {
+  running: boolean;
+  total: number;
+  checked: { title: string; reached: boolean }[];
+  /** The browser was part of it. */
+  browser: boolean;
+  finishedAt?: number;
+}
+
 export interface SetupStep {
   id: SetupStepId;
   state: SetupStepState;
   logins?: SetupLogin[];
+  later?: SetupLater[];
+  check?: SetupCheck;
   routines?: SetupRoutine[];
   gaps?: SetupGapGroup[];
   agents?: SetupHello[];
@@ -88,6 +120,11 @@ export interface SetupStep {
 export interface TeamSetupView {
   id: string;
   source: string;
+  /**
+   * When it was posted (the import's end): its place in the Chief's
+   * conversation, like a message's. Older Macs don't say.
+   */
+  postedAt?: number;
   steps: SetupStep[];
   done: number;
   total: number;
@@ -112,6 +149,11 @@ export const sayHiFromSetup = (agentId: string) =>
 export const askChiefAboutMissing = () => invoke<AgentMessage>('agents_team_setup_missing');
 export const dismissTeamSetup = () => invoke<void>('agents_team_setup_dismiss');
 export const reopenTeamSetup = () => invoke<void>('agents_team_setup_reopen');
+/** A row nothing reached: one sign-in card, started on this Mac, or put away. */
+export const setupLater = (key: string, action: 'connect' | 'not_needed') =>
+  invoke<{ agentId: string; requestId: string } | null>('agents_team_setup_later', { key, action });
+/** Check again what the team can already reach (progress arrives on the checklist). */
+export const checkTeamReach = () => invoke<number>('agents_access_check');
 
 /* ------------------------------------------------------------- the store */
 
@@ -204,6 +246,7 @@ export function useResumableTeamSetup(): TeamSetupView | null {
 export async function resumeTeamSetup(): Promise<void> {
   await reopenTeamSetup();
   await refreshTeamSetup();
+  showTeamSetup();
 }
 
 /** Tests: forget what was read. */
@@ -211,6 +254,7 @@ export function resetTeamSetupForTests() {
   stop?.();
   current = null;
   loaded = false;
+  revealAsk = 0;
 }
 
 /**
@@ -245,11 +289,94 @@ export const SETUP_TITLE = 'Setting up your team';
 /** The bar above the Chief's composer while there's some left. */
 export const SETUP_BAR_TITLE = 'Your team is almost ready';
 
-/** Bring the card into view (the bar's Continue). */
+/*
+ * Bringing the card into view (the bar's Continue, ⌘K, What's in flight).
+ * The card sits where it was posted, so it may be scrolled far up, or above
+ * the lines loaded so far: the Chief's chat does the finding
+ * (`useTeamSetupReveal`). Asked before that chat is open, the ask waits for it.
+ */
+let revealCount = 0;
+/** The ask waiting to be shown (0: none). */
+let revealAsk = 0;
+const revealers = new Set<() => void>();
+
+/** Bring the card into view and flash it. */
 export function showTeamSetup() {
-  document
-    .querySelector('[data-testid="team-setup"]')
-    ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  revealCount += 1;
+  revealAsk = revealCount;
+  if (revealers.size > 0) revealers.forEach((f) => f());
+  else
+    document
+      .querySelector('[data-testid="team-setup"]')
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function subscribeReveal(f: () => void) {
+  revealers.add(f);
+  return () => {
+    revealers.delete(f);
+  };
+}
+
+/**
+ * For the Chief's chat: a number that changes each time the card is asked
+ * for (0 while nothing is waiting), and `done` once it's been shown.
+ */
+export function useTeamSetupReveal(enabled: boolean): { ask: number; done: () => void } {
+  const ask = useSyncExternalStore(subscribeReveal, () => (enabled ? revealAsk : 0));
+  return { ask, done: revealDone };
+}
+
+function revealDone() {
+  if (revealAsk === 0) return;
+  revealAsk = 0;
+  revealers.forEach((f) => f());
+}
+
+/**
+ * Where the card was posted, as a time: what the Mac says, else (an older
+ * Mac) the import's end — its review card and the line after it. `null`
+ * when neither is known.
+ */
+export function setupAnchorTs(
+  view: Pick<TeamSetupView, 'postedAt'>,
+  messages: readonly AgentMessage[]
+): number | null {
+  if (view.postedAt) return view.postedAt;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].approval?.connector?.kind !== 'review') continue;
+    let ts = messages[i].ts;
+    for (let j = i + 1; j < messages.length && messages[j].kind === 'note'; j++)
+      ts = messages[j].ts;
+    return ts;
+  }
+  return null;
+}
+
+const itemTs = (item: ChatItem): number | null =>
+  item.type === 'day' ? null : item.type === 'message' ? item.message.ts : item.messages[0].ts;
+
+/**
+ * The card's place among a chat's items (oldest first): after everything
+ * said up to when it was posted, before what came after — and before the
+ * time divider that opens what came after. `-1` when that place is above the
+ * lines loaded so far (`hasOlder`). With no time known, it goes last.
+ */
+export function setupItemIndex(
+  items: readonly ChatItem[],
+  anchor: number | null,
+  hasOlder = false
+): number {
+  if (anchor === null) return items.length;
+  let at = items.findIndex((item) => {
+    const ts = itemTs(item);
+    return ts !== null && ts > anchor;
+  });
+  if (at < 0) return items.length;
+  const firstLoaded = items.findIndex((item) => itemTs(item) !== null);
+  if (at === firstLoaded && hasOlder) return -1;
+  while (at > 0 && items[at - 1].type === 'day') at--;
+  return at;
 }
 
 /**
@@ -276,9 +403,10 @@ export function stepWords(
   switch (id) {
     case 'logins':
       return {
-        title: 'Add logins',
-        detail: 'Each one goes into this Mac’s Keychain, never the chat.',
-        done: 'Logins added',
+        title: 'Logins',
+        detail:
+          'Checked against this Mac first: connected apps, its own sign-ins and your browser. Only what’s left is asked.',
+        done: 'Logins sorted',
       };
     case 'routines':
       return {
@@ -307,6 +435,33 @@ export function stepStatus(step: SetupStep, chief: string): string {
   if (step.state === 'skipped') return 'Skipped';
   if (step.state === 'done') return stepWords(step.id, chief).done;
   return '';
+}
+
+/** The progress line while the check runs: "Checking 14 services… Figma ✓ GitHub ✓". */
+export function checkLine(check: SetupCheck): string {
+  const n = check.total;
+  const head = check.running
+    ? `Checking ${n} service${n === 1 ? '' : 's'}…`
+    : `Checked ${n} service${n === 1 ? '' : 's'}.`;
+  const marks = check.checked.map((c) => `${c.title} ${c.reached ? '✓' : '–'}`);
+  return marks.length ? `${head} ${marks.join(' ')}` : head;
+}
+
+/** Rows nothing reached and nobody decided: the residue. */
+export function openLater(later: SetupLater[]): SetupLater[] {
+  return later.filter((l) => l.state === 'open');
+}
+
+/** The Logins step's head once the check is done. */
+export function residueLine(later: SetupLater[]): string {
+  const n = openLater(later).length;
+  if (n === 0) return 'Your team is ready. Everything it mentioned is reachable on this Mac.';
+  return `Your team is ready. ${n} thing${n === 1 ? '' : 's'} I couldn’t reach on this Mac:`;
+}
+
+/** "Figma: your browser, signed in on www.figma.com". */
+export function receiptLine(l: SetupLater): string | null {
+  return l.state === 'reachable' ? `${l.title}: ${l.via}` : null;
 }
 
 /**

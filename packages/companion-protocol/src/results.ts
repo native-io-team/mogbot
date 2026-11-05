@@ -32,6 +32,46 @@ export interface ResultCard {
    * project list by the app): the desk's card offers Preview.
    */
   project?: string;
+  /**
+   * "Test it": what the agent found clicking through the site in the preview
+   * beside the chat (`agents/preview_test.rs`). Steps and console errors are
+   * the app's observations; outcome, summary and `broken` are the agent's.
+   */
+  test?: TestReport;
+}
+
+export type TestStepKind =
+  | 'open'
+  | 'click'
+  | 'type'
+  | 'scroll'
+  | 'viewport'
+  | 'look'
+  | 'console'
+  | 'network'
+  | 'shot'
+  | 'note';
+
+/** One thing the agent did in the preview, in the app's words (a note is the agent's). */
+export interface TestStep {
+  kind: TestStepKind;
+  label: string;
+  /** False when the action didn't do what was asked, or a note flags a problem. */
+  ok: boolean;
+  shot?: Attachment;
+  ts: number;
+}
+
+export type TestOutcome = 'passed' | 'broken';
+
+export interface TestReport {
+  outcome: TestOutcome;
+  summary: string;
+  broken?: string[];
+  consoleErrors?: string[];
+  steps?: TestStep[];
+  /** It ran against the agent's copy of the project. */
+  onCopy?: boolean;
 }
 
 /** On a user message: "Ask for changes" on this result, as it stood then. */
@@ -123,4 +163,25 @@ export function supersededLine(card: ResultCard): string {
 /** The chip above the composer, and the quote bar on the message it sends. */
 export function revisingLabel(ref: ResultRef): string {
   return `Changes to ${ref.title} · v${ref.version}`;
+}
+
+/** The steps that kept a screenshot, in order: the strip of pictures a test leaves. */
+export function testShots(report: TestReport | undefined): { shot: Attachment; label: string }[] {
+  return (report?.steps ?? []).flatMap((s) => (s.shot ? [{ shot: s.shot, label: s.label }] : []));
+}
+
+/** The test's headline: the outcome in a few words, never more than the agent said. */
+export function testHeadline(report: TestReport): string {
+  if (report.outcome === 'passed') return 'Tested in the preview: it works';
+  const n = report.broken?.length ?? 0;
+  return n === 1
+    ? 'Tested in the preview: 1 thing is broken'
+    : `Tested in the preview: ${n} things are broken`;
+}
+
+/** "2 console errors", or null when the console was clean. */
+export function consoleLine(report: TestReport): string | null {
+  const n = report.consoleErrors?.length ?? 0;
+  if (n === 0) return null;
+  return n === 1 ? '1 console error' : `${n} console errors`;
 }

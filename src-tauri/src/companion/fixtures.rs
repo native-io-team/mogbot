@@ -31,7 +31,7 @@ const PATH: &str = concat!(
 fn device(full: bool) -> DeviceRecord {
     DeviceRecord {
         id: "dev_0123456789abcdef".into(),
-        name: "Julian’s iPhone".into(),
+        name: "Sam’s iPhone".into(),
         platform: if full {
             DevicePlatform::Ios
         } else {
@@ -133,6 +133,13 @@ fn frames() -> Vec<ServerFrame> {
             // A login card with every way in, a sign-in under way and a key.
             Event::Message {
                 message: serde_json::to_value(testkit::login_card()).unwrap(),
+            },
+        ),
+        (
+            Some(1),
+            // "Change Hiring's settings?" (`propose_settings_change`).
+            Event::Message {
+                message: serde_json::to_value(testkit::settings_card()).unwrap(),
             },
         ),
         (
@@ -366,7 +373,7 @@ async fn generate() -> String {
     let (c, stub) = Stub::companion();
     let caller = Caller {
         device_id: "dev_0123456789abcdef".into(),
-        device_name: "Julian’s iPhone".into(),
+        device_name: "Sam’s iPhone".into(),
         label: "companion:dev_0123456789abcdef:1".into(),
         route: super::wire::RouteKind::Tailscale,
         shows: super::wire::Shows {
@@ -448,6 +455,15 @@ async fn generate() -> String {
         "agentsSetIndependence",
         "Result<'agents.setIndependence'>",
         call("agents.setIndependence", json!({ "level": "go_hard" })).await,
+    );
+    out += &entry(
+        "agentsSetAdmin",
+        "Result<'agents.setAdmin'>",
+        call(
+            "agents.setAdmin",
+            json!({ "agentId": AGENT, "admin": true }),
+        )
+        .await,
     );
     out += &entry(
         "agentsImportStatus",
@@ -554,6 +570,11 @@ async fn generate() -> String {
         call("agents.reach", json!({ "agentId": AGENT })).await,
     );
     out += &entry(
+        "agentsPolicy",
+        "Result<'agents.policy'>",
+        call("agents.policy", json!({ "agentId": AGENT })).await,
+    );
+    out += &entry(
         "agentsLoginsTeam",
         "Result<'agents.loginsTeam'>",
         call(
@@ -579,6 +600,30 @@ async fn generate() -> String {
             json!({ "agentId": AGENT, "requestId": "q12", "optionId": "oauth" }),
         )
         .await,
+    );
+    out += &entry(
+        "agentsSigninBegin",
+        "Result<'agents.signinBegin'>",
+        call(
+            "agents.signinBegin",
+            json!({ "agentId": AGENT, "requestId": "q12" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsSigninFrame",
+        "Result<'agents.signinFrame'>",
+        call("agents.signinFrame", json!({ "sessionId": "signin_0123" })).await,
+    );
+    out += &entry(
+        "agentsSigninFrameOutside",
+        "Result<'agents.signinFrame'>",
+        call("agents.signinFrame", json!({ "sessionId": "outside" })).await,
+    );
+    out += &entry(
+        "agentsSigninDone",
+        "Result<'agents.signinDone'>",
+        call("agents.signinDone", json!({ "sessionId": "signin_0123" })).await,
     );
     out += &entry(
         "agentsLoginSaveKey",

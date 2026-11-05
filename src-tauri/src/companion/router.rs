@@ -28,6 +28,8 @@ pub const METHODS: &[&str] = &[
     "agents.send",
     "agents.stop",
     "agents.interrupt",
+    "agents.stopStep",
+    "agents.checkOn",
     "agents.answerApproval",
     "agents.saveSecret",
     "agents.loginStart",
@@ -35,6 +37,7 @@ pub const METHODS: &[&str] = &[
     "agents.loginDecline",
     "agents.loginSaveKey",
     "agents.reach",
+    "agents.policy",
     "agents.loginsTeam",
     "agents.loginsConnect",
     "agents.loginDismiss",
@@ -44,6 +47,11 @@ pub const METHODS: &[&str] = &[
     "agents.loginsRecheck",
     "agents.loginPhoneBegin",
     "agents.loginPhoneFinish",
+    "agents.signinBegin",
+    "agents.signinFrame",
+    "agents.signinInput",
+    "agents.signinDone",
+    "agents.signinStop",
     "agents.focus",
     "agents.markUnread",
     "agents.startFresh",
@@ -52,6 +60,7 @@ pub const METHODS: &[&str] = &[
     "agents.update",
     "agents.setDefaults",
     "agents.setIndependence",
+    "agents.setAdmin",
     "agents.revokePermission",
     "agents.instructions",
     "agents.memory",
@@ -64,6 +73,7 @@ pub const METHODS: &[&str] = &[
     "agents.changeDiff",
     "agents.keepCopy",
     "agents.discardCopy",
+    "agents.watchLive",
     "agents.files",
     "agents.fetchPath",
     "agents.search",
@@ -93,6 +103,8 @@ pub const METHODS: &[&str] = &[
     "agents.teamSetup.hello",
     "agents.teamSetup.missing",
     "agents.teamSetup.dismiss",
+    "agents.teamSetup.later",
+    "agents.teamSetup.check",
 ];
 
 /// `READ_ONLY_METHODS` in methods.ts (the served subset): not audited.
@@ -104,6 +116,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.instructions",
     "agents.memory",
     "agents.reach",
+    "agents.policy",
     "agents.loginsTeam",
     "agents.usage",
     "agents.quota",
@@ -120,6 +133,18 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "rooms.messages",
     "projects.list",
     "sessions.read",
+];
+
+/// Signing in on the Mac from the phone (`agents/phone_signin.rs`): never
+/// audited by the router. Frames and inputs aren't audited at all (what's
+/// typed is a password); the session writes its own line, the domain and
+/// how it ended.
+pub const SELF_AUDITED_METHODS: &[&str] = &[
+    "agents.signinBegin",
+    "agents.signinFrame",
+    "agents.signinInput",
+    "agents.signinDone",
+    "agents.signinStop",
 ];
 
 /// How long a `clientId` is remembered.
@@ -349,6 +374,15 @@ pub enum TeamSetupAction {
     /// Everything they said they're missing, to the Chief in one message.
     Missing,
     Dismiss,
+    /// A row nothing reached: `connect` (one sign-in card, its way in
+    /// started on the Mac) or `not_needed`.
+    Later {
+        key: String,
+        connect: bool,
+        on_phone: bool,
+    },
+    /// Check again what the team can already reach.
+    Check,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -397,6 +431,10 @@ pub trait Backend: Send + Sync + 'static {
     ) -> Result<Value, CommandError>;
     async fn stop(&self, agent_id: &str) -> Result<bool, CommandError>;
     async fn interrupt(&self, agent_id: &str) -> Result<bool, CommandError>;
+    /// "Stop this step" (`agents_stop_step`): what it did, in words.
+    async fn stop_step(&self, agent_id: &str) -> Result<String, CommandError>;
+    /// "Check on it" (`agents_check_on`): what the Mac sees, in one line.
+    async fn check_on(&self, agent_id: &str) -> Result<String, CommandError>;
     async fn answer_approval(&self, answer: ApprovalAnswer) -> Result<(), CommandError>;
     /// `agents_focus` for a socket instead of a window.
     async fn focus(&self, label: &str, agent_id: Option<String>) -> Result<(), CommandError>;
@@ -444,6 +482,9 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         level: crate::agents::independence::Level,
     ) -> Result<Value, CommandError>;
+    /// `agents_set_admin`: the user's own switch, "Admin — can manage and
+    /// approve for other agents". Answers `{ agentId, admin }`.
+    async fn set_admin(&self, agent_id: &str, admin: bool) -> Result<Value, CommandError>;
     /// `agents_quota`: each engine's plan, as it last reported it.
     async fn quota(&self) -> Result<Value, CommandError>;
     /// `agents_accounts`: each engine's usage accounts, read-only.
@@ -502,6 +543,14 @@ pub trait Backend: Send + Sync + 'static {
         flow_id: &str,
         callback: &str,
     ) -> Result<(), CommandError>;
+    /// Signing in on this Mac's Chrome from the phone
+    /// (`agents/phone_signin.rs`), for the paired device calling.
+    async fn phone_signin(
+        &self,
+        device_id: &str,
+        device_name: &str,
+        op: crate::agents::phone_signin::Op,
+    ) -> Result<Value, CommandError>;
     /// `agents_login_cancel`: stop a sign-in under way.
     async fn login_cancel(&self, agent_id: &str, request_id: &str) -> Result<(), CommandError>;
     /// `agents_login_decline`.
@@ -520,6 +569,8 @@ pub trait Backend: Send + Sync + 'static {
     ) -> Result<Value, CommandError>;
     /// `agents_reach`: what an agent can reach. Read-only on the phone.
     async fn reach(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_policy`: "What it can do". Read-only on the phone; changed in chat.
+    async fn policy(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_logins_team`: "What your team needs", one row per service.
     async fn logins_team(&self, since: Option<i64>) -> Result<Value, CommandError>;
     /// `agents_logins_connect`: one row's way in, for every agent on it but `skip`.
@@ -616,6 +667,15 @@ pub trait Backend: Send + Sync + 'static {
     /// The project's live preview as a JPEG, captured for the phone alone.
     async fn preview_screenshot(&self, project: &str, phone: bool)
         -> Result<Vec<u8>, CommandError>;
+    /// "Watch live": the port of the running dev server a card previews
+    /// (`preview_test::resolve`), refused when nothing is serving it.
+    async fn watch_port(
+        &self,
+        agent_id: &str,
+        message_id: &str,
+    ) -> Result<(String, u16), CommandError>;
+    /// Publish the watch proxy on the tailnet (lazily, once): its base URL.
+    async fn watch_publish(&self) -> Result<String, CommandError>;
     /// An attachment's file: `attachments::resolve` under the agent's home.
     fn attachment_file(
         &self,
@@ -748,6 +808,15 @@ struct TeamSetupStepParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct TeamSetupLaterParams {
+    key: String,
+    action: String,
+    #[serde(default)]
+    on_phone: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct TeamSetupRoutineParams {
     agent_id: String,
     check_in_id: String,
@@ -869,6 +938,29 @@ struct PhoneBeginParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SigninBeginParams {
+    agent_id: String,
+    request_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SigninParams {
+    session_id: String,
+    #[serde(default)]
+    anyway: bool,
+}
+
+/// `Debug` is `Input`'s: never what was typed.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SigninInputParams {
+    session_id: String,
+    input: crate::agents::phone_signin::Input,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PhoneFinishParams {
     flow_id: String,
     /// The redirect the sign-in sheet came back with. Never logged.
@@ -921,6 +1013,13 @@ struct DiffParams {
     agent_id: String,
     message_id: String,
     path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WatchParams {
+    agent_id: String,
+    message_id: String,
 }
 
 #[derive(Deserialize)]
@@ -1150,6 +1249,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             }
         ),
         "agents.loginPhoneFinish" => "finished signing in on the phone".into(),
+        // Never read: what's typed there is a password.
+        m if SELF_AUDITED_METHODS.contains(&m) => "phone sign-in".into(),
         // Never the value.
         "agents.loginSaveKey" => format!("saved a key for {}", field("agentId")),
         "agents.memoryChange" => {
@@ -1176,6 +1277,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         "agents.fetchPath" => preview(field("path")),
         "agents.revokePermission" => format!("revoke {} {}", field("ruleId"), field("agentId")),
         "agents.teamSetup.step" => format!("setup: {} {}", field("step"), field("state")),
+        "agents.teamSetup.later" => format!("setup: {} {}", field("action"), field("key")),
+        "agents.teamSetup.check" => "setup: check what the team can reach".into(),
         "agents.teamSetup.routine" => {
             let on = params.get("on").and_then(Value::as_bool) == Some(true);
             format!(
@@ -1218,8 +1321,65 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             format!("new agents: {}", said.join(", "))
         }
         "agents.setIndependence" => format!("independence: {}", preview(field("level"))),
+        "agents.setAdmin" => format!(
+            "{} admin {}",
+            field("agentId"),
+            if params.get("admin").and_then(Value::as_bool) == Some(true) {
+                "on"
+            } else {
+                "off"
+            }
+        ),
         _ => field("agentId").to_string(),
     }
+}
+
+/// A phone sign-in request, parsed. A refusal says what's wrong with it,
+/// never what was typed.
+fn signin_op(method: &str, params: Value) -> Result<crate::agents::phone_signin::Op, WireError> {
+    use crate::agents::phone_signin::Op;
+    let id = |s: &str| -> Result<(), WireError> {
+        if s.is_empty() || s.len() > 100 {
+            return Err(bad_params("Which sign-in?"));
+        }
+        Ok(())
+    };
+    Ok(match method {
+        "agents.signinBegin" => {
+            let p: SigninBeginParams = parse(params)?;
+            id(&p.agent_id)?;
+            id(&p.request_id)?;
+            Op::Begin {
+                agent_id: p.agent_id,
+                request_id: p.request_id,
+            }
+        }
+        "agents.signinInput" => {
+            let p: SigninInputParams =
+                parse(params).map_err(|_| bad_params("That isn't something the page can take."))?;
+            id(&p.session_id)?;
+            Op::Input {
+                session_id: p.session_id,
+                input: p.input,
+            }
+        }
+        _ => {
+            let p: SigninParams = parse(params)?;
+            id(&p.session_id)?;
+            match method {
+                "agents.signinFrame" => Op::Frame {
+                    session_id: p.session_id,
+                },
+                "agents.signinDone" => Op::Done {
+                    session_id: p.session_id,
+                    anyway: p.anyway,
+                },
+                _ => Op::Stop {
+                    session_id: p.session_id,
+                },
+            }
+        }
+    })
 }
 
 /// Run one request, with the rate limit and the audit line around it.
@@ -1243,7 +1403,7 @@ pub async fn dispatch(
     }
     let detail = audit_detail(method, &params);
     let result = run(c, caller, method, params).await;
-    if !READ_ONLY_METHODS.contains(&method) {
+    if !READ_ONLY_METHODS.contains(&method) && !SELF_AUDITED_METHODS.contains(&method) {
         let (detail, ok) = match &result {
             Ok(_) => (detail, true),
             Err(e) => (
@@ -1376,6 +1536,14 @@ async fn run(
         "agents.interrupt" => {
             let p: AgentParam = parse(params)?;
             Ok(Value::Bool(b.interrupt(&p.agent_id).await?))
+        }
+        "agents.stopStep" => {
+            let p: AgentParam = parse(params)?;
+            Ok(Value::String(b.stop_step(&p.agent_id).await?))
+        }
+        "agents.checkOn" => {
+            let p: AgentParam = parse(params)?;
+            Ok(Value::String(b.check_on(&p.agent_id).await?))
         }
         "agents.answerApproval" => {
             let p: ApprovalParams = parse(params)?;
@@ -1571,6 +1739,16 @@ async fn run(
                 })?;
             Ok(b.set_independence(level).await?)
         }
+        "agents.setAdmin" => {
+            let agent_id = params.get("agentId").and_then(Value::as_str).unwrap_or("");
+            let admin = params.get("admin").and_then(Value::as_bool);
+            let Some(admin) = admin.filter(|_| !agent_id.is_empty()) else {
+                return Err(bad_params(
+                    "Admin takes an agentId and admin: true or false.",
+                ));
+            };
+            Ok(b.set_admin(agent_id, admin).await?)
+        }
         "agents.accounts" => Ok(b.accounts().await?),
         "agents.usagePlan" => Ok(b.usage_plan().await?),
         "agents.import.status" => Ok(b.import_status().await?),
@@ -1619,6 +1797,21 @@ async fn run(
         }
         "agents.teamSetup.missing" => Ok(b.team_setup(TeamSetupAction::Missing).await?),
         "agents.teamSetup.dismiss" => Ok(b.team_setup(TeamSetupAction::Dismiss).await?),
+        "agents.teamSetup.later" => {
+            let p: TeamSetupLaterParams = parse(params)?;
+            let connect = match p.action.as_str() {
+                "connect" => true,
+                "not_needed" => false,
+                _ => return Err(bad_params("action is connect or not_needed.")),
+            };
+            Ok(b.team_setup(TeamSetupAction::Later {
+                key: p.key,
+                connect,
+                on_phone: p.on_phone,
+            })
+            .await?)
+        }
+        "agents.teamSetup.check" => Ok(b.team_setup(TeamSetupAction::Check).await?),
         // The ready-made agents, without their briefings: the phone shows
         // the choice, the Mac fills the instructions in on create.
         "agents.templates" => Ok(templates_for_phone()),
@@ -1667,6 +1860,11 @@ async fn run(
                 .await?;
             Ok(Value::Null)
         }
+        m if SELF_AUDITED_METHODS.contains(&m) => {
+            let op = signin_op(m, params)?;
+            Ok(b.phone_signin(&caller.device_id, &caller.device_name, op)
+                .await?)
+        }
         "agents.loginCancel" => {
             let p: LoginParams = parse(params)?;
             b.login_cancel(&p.agent_id, &p.request_id).await?;
@@ -1693,6 +1891,10 @@ async fn run(
         "agents.reach" => {
             let p: AgentParam = parse(params)?;
             Ok(b.reach(&p.agent_id).await?)
+        }
+        "agents.policy" => {
+            let p: AgentParam = parse(params)?;
+            Ok(b.policy(&p.agent_id).await?)
         }
         "agents.loginsTeam" => {
             let p: TeamParams = parse(params)?;
@@ -1756,6 +1958,20 @@ async fn run(
             let p: CopyParams = parse(params)?;
             b.discard_copy(&p.agent_id, &p.copy_id).await?;
             Ok(Value::Null)
+        }
+        "agents.watchLive" => {
+            let p: WatchParams = parse(params)?;
+            let (path, port) = b.watch_port(&p.agent_id, &p.message_id).await?;
+            let base = b.watch_publish().await?;
+            let (ticket, expires_at) = c.watch.mint(&caller.device_id, &path, port, now_ms());
+            Ok(json!({
+                "url": format!(
+                    "{}{}{ticket}",
+                    base.trim_end_matches('/'),
+                    super::watch::ticket_prefix()
+                ),
+                "expiresAt": expires_at,
+            }))
         }
         "agents.fetchPath" => {
             let p: PathParams = parse(params)?;
@@ -2140,6 +2356,84 @@ mod tests {
             .contains("token\""));
     }
 
+    /// Signing in on the Mac's Chrome from the phone: every call carries the
+    /// caller's own device id, what's typed never reaches the audit or the
+    /// backend's record, and nothing past the parse is echoed back.
+    #[tokio::test]
+    async fn a_phone_sign_in_in_the_macs_chrome_never_audits_or_echoes_what_is_typed() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let secret = "correct-horse-battery-staple";
+        let begun = dispatch(
+            &c,
+            &me,
+            "agents.signinBegin",
+            json!({ "agentId": AGENT, "requestId": "q12" }),
+        )
+        .await
+        .unwrap();
+        let id = begun["sessionId"].as_str().unwrap().to_string();
+        dispatch(&c, &me, "agents.signinFrame", json!({ "sessionId": id }))
+            .await
+            .unwrap();
+        for input in [
+            json!({ "kind": "tap", "x": 10, "y": 20 }),
+            json!({ "kind": "type", "text": secret, "secure": true }),
+            json!({ "kind": "key", "key": "enter" }),
+            json!({ "kind": "back" }),
+        ] {
+            dispatch(
+                &c,
+                &me,
+                "agents.signinInput",
+                json!({ "sessionId": id, "input": input }),
+            )
+            .await
+            .unwrap();
+        }
+        // Refused at the parse, without saying what it was.
+        for bad in [
+            json!({ "sessionId": id, "input": { "kind": "key", "key": "cmd+l", "text": secret } }),
+            json!({ "sessionId": id, "input": { "kind": "navigate", "url": secret } }),
+            json!({ "sessionId": "", "input": { "kind": "type", "text": secret } }),
+        ] {
+            let e = dispatch(&c, &me, "agents.signinInput", bad)
+                .await
+                .unwrap_err();
+            assert!(!format!("{e:?}").contains(secret));
+        }
+        dispatch(&c, &me, "agents.signinDone", json!({ "sessionId": id }))
+            .await
+            .unwrap();
+        dispatch(&c, &me, "agents.signinStop", json!({ "sessionId": id }))
+            .await
+            .unwrap();
+        let record = stub.logins.lock().unwrap().join("\n");
+        assert!(!record.contains(secret), "{record}");
+        assert!(record.lines().all(|l| l.ends_with("by dev_a")), "{record}");
+        assert!(
+            record.contains("Type { chars: 28, secure: true }"),
+            "{record}"
+        );
+        // The router writes no line for any of it: the session writes its own.
+        let audited = stub.audited();
+        assert!(
+            audited
+                .iter()
+                .all(|(_, m, d, _)| !m.starts_with("agents.signin") && !d.contains(secret)),
+            "{audited:?}"
+        );
+        assert_eq!(
+            audit_detail("agents.signinInput", &json!({ "text": secret })),
+            "phone sign-in"
+        );
+        for m in SELF_AUDITED_METHODS {
+            assert!(METHODS.contains(m));
+            assert!(!READ_ONLY_METHODS.contains(m));
+        }
+    }
+
     /// Signing in on the phone itself: the sheet is begun for the caller's
     /// own device, its answer is relayed with the caller's device id, and
     /// neither the URL nor the code ever reaches the audit.
@@ -2449,6 +2743,29 @@ mod tests {
             .any(|(_, m, detail, ok)| m == "agents.setIndependence"
                 && *ok
                 && detail == "independence: often"));
+    }
+
+    #[tokio::test]
+    async fn a_phone_switches_admin_on_and_off_audited() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let set = |params: Value| dispatch(&c, &me, "agents.setAdmin", params);
+        assert!(set(json!({})).await.is_err());
+        assert!(set(json!({ "agentId": "a1" })).await.is_err());
+        assert!(set(json!({ "agentId": "a1", "admin": "yes" }))
+            .await
+            .is_err());
+        let answer = set(json!({ "agentId": "a1", "admin": true }))
+            .await
+            .unwrap();
+        assert_eq!(answer["admin"], true);
+        assert_eq!(*stub.admins.lock().unwrap(), vec![("a1".to_string(), true)]);
+        assert!(!READ_ONLY_METHODS.contains(&"agents.setAdmin"));
+        assert!(stub
+            .audited()
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.setAdmin" && *ok && detail == "a1 admin on"));
     }
 
     #[tokio::test]
@@ -2828,6 +3145,42 @@ mod tests {
         let audit = stub.audited();
         assert!(audit.iter().any(|a| a.1 == "agents.keepCopy"));
         assert!(audit.iter().any(|a| a.1 == "agents.discardCopy"));
+    }
+
+    #[tokio::test]
+    async fn watch_live_hands_a_one_time_tailnet_link_and_is_audited() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        assert!(METHODS.contains(&"agents.watchLive"));
+        assert!(!READ_ONLY_METHODS.contains(&"agents.watchLive"));
+        let link = dispatch(
+            &c,
+            &me,
+            "agents.watchLive",
+            json!({ "agentId": AGENT, "messageId": "m-result" }),
+        )
+        .await
+        .unwrap();
+        let url = link["url"].as_str().unwrap();
+        let prefix = format!(
+            "https://mac.example.ts.net:{}{}",
+            super::super::watch::WATCH_TAILNET_PORT,
+            super::super::watch::ticket_prefix()
+        );
+        assert!(url.starts_with(&prefix), "{url}");
+        assert!(link["expiresAt"].as_u64().unwrap() > 0);
+        // Nothing running for that card: an honest refusal, no link.
+        let refused = dispatch(
+            &c,
+            &me,
+            "agents.watchLive",
+            json!({ "agentId": AGENT, "messageId": "m-not-running" }),
+        )
+        .await
+        .unwrap_err();
+        assert!(format!("{refused:?}").contains("Open Preview on the Mac first"));
+        assert!(stub.audited().iter().any(|a| a.1 == "agents.watchLive"));
     }
 
     #[tokio::test]

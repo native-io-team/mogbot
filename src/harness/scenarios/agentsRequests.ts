@@ -318,6 +318,49 @@ const SMALL_CHATS: Record<string, ReturnType<typeof msg>[]> = {
 
 const REVIEW_BUTTON = '[data-bar="requests"] .agent-requests__review';
 
+/**
+ * The Chief is an admin: it answered Lead Gen's local work and brought the
+ * one request only the user can decide here, as `admin::bring_to_user`
+ * writes it. Lead Gen's own card carries the plain line (`summary`).
+ */
+const PUSH = {
+  requestId: 'lg-push',
+  title: 'Run a command',
+  detail: 'git push origin main',
+  summary: 'Push code to the project’s online copy — so the new pricing page goes live',
+  status: 'pending',
+  tool: 'Bash',
+  input: { command: 'git push origin main', description: 'So the new pricing page goes live' },
+};
+
+const ADMIN_CHATS: Record<string, ReturnType<typeof msg>[]> = {
+  chief: [
+    msg('user', 'The agents keep asking me things. Deal with them.', 6),
+    msg('note', 'Allowed for Lead Gen: look inside your Northwind folder', 5, {
+      peer: { id: 'leadgen', name: 'Lead Gen' },
+    }),
+    msg('note', 'Marked not needed for Finance: stripe_key', 5, {
+      peer: { id: 'finance', name: 'Finance' },
+    }),
+    msg(
+      'agent',
+      'I answered Lead Gen’s local work and put away a login nobody needs.\n\n1 thing only you can decide:',
+      4,
+      {
+        decide: [{ agentId: 'leadgen', agentName: 'Lead Gen', approval: PUSH }],
+      }
+    ),
+  ],
+  leadgen: [
+    msg('note', 'Chief of Staff allowed: look inside your Northwind folder', 5, {
+      agentId: 'leadgen',
+      peer: { id: 'chief', name: 'Chief of Staff' },
+    }),
+    msg('approval', '', 4, { agentId: 'leadgen', approval: PUSH }),
+  ],
+  finance: [],
+};
+
 export const agentsRequestsScenarios: Scenario[] = [
   {
     id: 'agents-requests-import',
@@ -362,6 +405,30 @@ export const agentsRequestsScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-team-many',
+    title: 'Agents — What’s in flight with sixteen agents waiting',
+    looksRightWhen:
+      'Headed Needs you, one line per agent, never a wall of cards: its badge, the name, “· 4 logins: Slack bot token, Slack user token…” in quiet grey (not amber), the time at the right (“2h ago”) and a chevron, with a muted “Open chat” beside it. Every row folded; then Working and Done recently, one line each too.',
+    command: 'agents.team',
+    requires: '.agents-team__row[aria-expanded="false"]',
+    commands: {
+      agents_overview: importedTeam(true),
+      agents_messages: importedMessages,
+    },
+  },
+  {
+    id: 'agents-team-two',
+    title: 'Agents — What’s in flight with two agents waiting',
+    looksRightWhen:
+      'Needs you holds two one-line rows (Finance, Lead Gen), each open (chevron turned) with its card under it, answerable in place: the action is right there. Open chat beside each.',
+    command: 'agents.team',
+    requires: '.agents-team .agent-approval',
+    commands: {
+      agents_overview: smallTeam(),
+      agents_messages: (args: Record<string, unknown>) => SMALL_CHATS[String(args.agentId)] ?? [],
+    },
+  },
+  {
     id: 'agents-requests-two',
     title: 'Agents — two agents waiting, from the Chief’s chat',
     looksRightWhen:
@@ -384,6 +451,20 @@ export const agentsRequestsScenarios: Scenario[] = [
     commands: {
       agents_overview: smallTeam(),
       agents_messages: (args: Record<string, unknown>) => SMALL_CHATS[String(args.agentId)] ?? [],
+    },
+  },
+  {
+    id: 'agents-admin-batch',
+    title: 'Agents — the Chief handled the team’s requests and brought you one',
+    looksRightWhen:
+      'The Chief’s chat: two quiet lines naming what it did (“Allowed for Lead Gen: look inside your Northwind folder”, “Marked not needed for Finance: stripe_key”), then its reply ending “1 thing only you can decide:” and under it one card headed by “Lead Gen”: “Run a command”, the plain line “Push code to the project’s online copy — so the new pricing page goes live”, a Details link (the raw `git push origin main` hidden until opened), and Deny / a neutral Allow. Both themes legible.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-decide .agent-approval',
+    commands: {
+      agents_overview: overview(
+        TEAM.map((a) => (a.id === 'leadgen' ? { ...a, pendingApprovals: 1 } : a))
+      ),
+      agents_messages: (args: Record<string, unknown>) => ADMIN_CHATS[String(args.agentId)] ?? [],
     },
   },
 ];

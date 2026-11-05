@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Agent, AgentMessage } from '../../lib/agents';
-import { AgentRequestsBar } from './AgentRequests';
 import { ModalProvider } from '../../contexts/ModalContext';
+import { AgentRequestsBar } from './AgentRequests';
 
 const agent = (id: string, name: string, pendingApprovals = 0, isMain = false): Agent =>
   ({
@@ -33,6 +33,24 @@ const books = agent('books', 'Bookkeeper', 1);
 const state = vi.hoisted(() => ({
   agents: [] as Agent[],
   messages: {} as Record<string, AgentMessage[]>,
+  setup: null as unknown,
+}));
+vi.mock('../../lib/teamSetup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/teamSetup')>()),
+  useTeamSetup: () => state.setup,
+}));
+/** The checklist, open, with these imported agents not met yet. */
+const quietSetup = (ids: string[]) => ({
+  complete: false,
+  dismissed: false,
+  steps: [
+    { id: 'hello', state: 'open', agents: ids.map((agentId) => ({ agentId, state: 'quiet' })) },
+  ],
+});
+const answerApproval = vi.hoisted(() => vi.fn((..._args: unknown[]) => Promise.resolve()));
+vi.mock('../../lib/agents', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/agents')>()),
+  answerApproval,
 }));
 vi.mock('../../lib/agentsStore', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/agentsStore')>()),
@@ -40,7 +58,8 @@ vi.mock('../../lib/agentsStore', async (importOriginal) => ({
   loadMessages: () => Promise.resolve(),
 }));
 
-function setTeam(agents: Agent[]) {
+function setTeam(agents: Agent[], setup: unknown = null) {
+  state.setup = setup;
   state.agents = [chief, ...agents];
   state.messages = Object.fromEntries(agents.map((a) => [a.id, [card(a.id, `${a.id}-r`)]]));
 }
@@ -68,7 +87,7 @@ describe('AgentRequestsBar with "Setting up your team"', () => {
   });
 
   it('counts only the other agents, and points at the checklist for the rest', () => {
-    setTeam([potter, florist, books]);
+    setTeam([potter, florist, books], quietSetup(['potter', 'florist']));
     const onOpen = vi.fn();
     renderBar({ agentIds: new Set(['potter', 'florist']), onOpen });
     const bar = screen.getByTestId('agent-requests-bar');
@@ -82,11 +101,95 @@ describe('AgentRequestsBar with "Setting up your team"', () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
+  it('in the Chief’s chat, says the same count as the sidebar: the Chief’s own card too', () => {
+    setTeam([potter, books]);
+    state.agents = [{ ...chief, pendingApprovals: 1 }, potter, books];
+    renderBar();
+    expect(screen.getByTestId('agent-requests-bar').textContent).toContain('3 agents need your OK');
+  });
+
   it('is unchanged without a checklist', () => {
     setTeam([potter, books]);
     renderBar();
     const bar = screen.getByTestId('agent-requests-bar');
     expect(bar.textContent).toContain('Glazes');
     expect(bar.textContent).toContain('Bookkeeper');
+  });
+});
+
+describe('Allow all', () => {
+  it('confirms with counts by kind, then answers every Allow card but the login', async () => {
+    const potterTwo = agent('potter', 'Glazes', 3);
+    state.agents = [chief, potterTwo, books];
+    const bash = (id: string, cmd: string) =>
+      ({
+        ...card('potter', id),
+        approval: {
+          requestId: id,
+          title: 'Run a command',
+          detail: cmd,
+          status: 'pending',
+          tool: 'Bash',
+        },
+      }) as AgentMessage;
+    const login = {
+      ...card('potter', 'p-login'),
+      approval: {
+        requestId: 'p-login',
+        title: 'Glazes needs your Gmail',
+        detail: '',
+        status: 'pending',
+        login: { service: 'gmail', title: 'Gmail', why: 'x', abilities: [], options: [] },
+      },
+    } as unknown as AgentMessage;
+    state.messages = {
+      potter: [bash('p1', 'ls -la ~/Kiln'), bash('p2', 'mkdir ~/Kiln/new'), login],
+      books: [card('books', 'b1')],
+    };
+    answerApproval.mockClear();
+    renderBar();
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    fireEvent.click(screen.getByTestId('agent-requests-allow-all'));
+    const confirm = screen.getByTestId('agent-requests-allow-all-confirm');
+    expect(confirm.textContent).toContain('Allow 3 requests? 2 commands, Run a command');
+    expect(answerApproval).not.toHaveBeenCalled();
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Allow all' }));
+    await waitFor(() => expect(answerApproval).toHaveBeenCalledTimes(3));
+    const answered = answerApproval.mock.calls.map((c) => [c[0], c[1], c[2]]);
+    expect(answered).toEqual([
+      ['books', 'b1', true],
+      ['potter', 'p1', true],
+      ['potter', 'p2', true],
+    ]);
+    await waitFor(() =>
+      expect(screen.queryByTestId('agent-requests-allow-all-confirm')).toBeNull()
+    );
+  });
+
+  it('per agent: only that agent’s cards, and Cancel answers nothing', () => {
+    const bash = (id: string) =>
+      ({
+        ...card('potter', id),
+        approval: {
+          requestId: id,
+          title: 'Run a command',
+          detail: 'ls',
+          status: 'pending',
+          tool: 'Bash',
+        },
+      }) as AgentMessage;
+    state.agents = [chief, agent('potter', 'Glazes', 2), books];
+    state.messages = { potter: [bash('p1'), bash('p2')], books: [card('books', 'b1')] };
+    answerApproval.mockClear();
+    renderBar();
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    const rows = screen.getAllByTestId('agent-requests-group-allow-all');
+    expect(rows).toHaveLength(1);
+    fireEvent.click(rows[0]);
+    const confirm = screen.getByTestId('agent-requests-allow-all-confirm');
+    expect(confirm.textContent).toContain('Glazes: Allow 2 requests? 2 commands');
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByTestId('agent-requests-allow-all-confirm')).toBeNull();
+    expect(answerApproval).not.toHaveBeenCalled();
   });
 });

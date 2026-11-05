@@ -1,9 +1,10 @@
 /**
  * Dictation into the composer. Tap the mic and the field listens: the words
  * stream into it as you speak (the last few, still being decided, lighter),
- * a waveform follows your voice, and ✓ (or a few seconds of silence) keeps
- * them in the draft to read and edit. × puts the draft back as it was. What
- * you say is never sent on its own; that's the desk's rule too.
+ * a waveform follows your voice, and Stop (or a few seconds of silence) keeps
+ * them in the draft to read and edit. Send stops and sends what's on screen
+ * at once. × puts the draft back as it was. What you say is never sent
+ * unless you press Send; that's the desk's rule too.
  *
  * Where the words are recognised: on the phone whenever it can (iOS and
  * Android 13+ with an on-device model), and otherwise by the platform's
@@ -274,8 +275,10 @@ export type DictationEvent =
   /** The recognizer is listening. */
   | { type: 'began' }
   | { type: 'result'; transcript: string; isFinal: boolean }
-  /** ✓, or the silence after speech: keep what was heard. */
+  /** Stop, or the silence after speech: keep what was heard, to edit. */
   | { type: 'stop' }
+  /** Send while listening: keep what's on screen now, and stop at once. */
+  | { type: 'send' }
   /** ×: put the draft back. */
   | { type: 'cancel' }
   /** The draft was sent: drop what's still on its way, leave the draft alone. */
@@ -338,6 +341,17 @@ export function dictationReducer(s: DictationState, e: DictationEvent): Dictatio
         stable: 0,
         outcome: 'cancelled',
       };
+    case 'send':
+      if (!active(s)) return s;
+      // The words on screen are what's sent: the partial too, as shown.
+      return {
+        ...s,
+        phase: 'idle',
+        committed: draftText(s),
+        interim: '',
+        stable: 0,
+        outcome: 'sent',
+      };
     case 'drop':
       if (!active(s)) return s;
       return { ...s, phase: 'idle', interim: '', stable: 0, outcome: 'sent' };
@@ -399,8 +413,10 @@ export function silenceStops({
 
 /**
  * The mic, for one draft. `start` asks for the microphone and speech
- * permission the first time; words appear in the draft as you speak, `done`
- * keeps them, `cancel` puts the draft back, `drop` (after a send) leaves it.
+ * permission the first time; words appear in the draft as you speak, `stop`
+ * keeps them to edit, `send` keeps exactly what's on screen and stops at once
+ * (the caller sends the draft), `cancel` puts the draft back, `drop` (after
+ * a send) leaves it.
  * `vocabulary` (the team's names) helps the recognizer spell what you'll say
  * most. `onLevel` gets the voice's level, 0..1, about 20 times a second;
  * it's for a shared value, so nothing re-renders for it.
@@ -501,7 +517,7 @@ export function useDictation({
           setStartedAt(t);
         }
         const next = apply({ type: 'began' });
-        // ✓ before it had started: stop now that it has.
+        // Stop before it had started: stop now that it has.
         if (next.phase === 'stopping') r.stop();
       }),
       r.addListener('result', (e) => {
@@ -586,19 +602,31 @@ export function useDictation({
       return false;
     }
     if (stateRef.current.phase === 'stopping') {
-      // ✓ before the recognizer started: nothing to keep.
+      // Stop before the recognizer started: nothing to keep.
       apply({ type: 'end' });
       return false;
     }
     return listen.current(can === 'on-device' ? 'on-device' : 'server');
   }, [r, getDraft, apply]);
 
-  /** ✓: keep what it heard; the last words are still on their way, then it ends. */
-  const done = useCallback(() => {
+  /** Stop: keep what it heard; the last words are still on their way, then it ends. */
+  const stop = useCallback(() => {
     if (!r || !active(stateRef.current)) return;
     const before = stateRef.current.phase;
     apply({ type: 'stop' });
     if (before === 'listening') r.stop();
+  }, [r, apply]);
+
+  /**
+   * Send: what's on screen is the draft, now, and nothing more comes into it.
+   * The recognizer is aborted rather than stopped: a final result arriving
+   * after the send would land in the emptied field.
+   */
+  const send = useCallback(() => {
+    if (!r || !active(stateRef.current)) return;
+    const started = stateRef.current.phase !== 'starting';
+    apply({ type: 'send' });
+    if (started) r.abort();
   }, [r, apply]);
 
   /** ×: put the draft back as it was before the mic was tapped. */
@@ -635,7 +663,8 @@ export function useDictation({
     /** Where this session's words go: the phone's own recognizer, or the platform's. */
     via,
     start,
-    done,
+    stop,
+    send,
     cancel,
     drop,
     clearProblem,

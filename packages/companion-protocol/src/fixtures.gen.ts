@@ -39,7 +39,7 @@ export const systemStatus = {
 } satisfies Result<'system.status'>;
 export const devicesSelf = {
   "id": "dev_0123456789abcdef",
-  "name": "Julian’s iPhone",
+  "name": "Sam’s iPhone",
   "platform": "ios",
   "model": "iPhone 16 Pro",
   "appVersion": "1.0.0",
@@ -52,7 +52,7 @@ export const devicesSelf = {
 } satisfies Result<'devices.self'>;
 export const deviceMinimal = {
   "id": "dev_0123456789abcdef",
-  "name": "Julian’s iPhone",
+  "name": "Sam’s iPhone",
   "platform": "android",
   "appVersion": "1.0.0",
   "build": "official",
@@ -427,6 +427,10 @@ export const agentsSetDefaults = {
 export const agentsSetIndependence = {
   "level": "go_hard"
 } satisfies Result<'agents.setIndependence'>;
+export const agentsSetAdmin = {
+  "admin": true,
+  "agentId": "a1"
+} satisfies Result<'agents.setAdmin'>;
 export const agentsImportStatus = {
   "armed": false,
   "chiefId": "chief",
@@ -465,11 +469,113 @@ export const agentsTeamSetup = {
   "dismissed": false,
   "done": 2,
   "id": "setup1",
+  "postedAt": 1700000000000,
   "setAside": 2,
   "source": "Grok",
   "steps": [
     {
+      "check": {
+        "browser": true,
+        "checked": [
+          {
+            "reached": true,
+            "title": "Figma"
+          },
+          {
+            "reached": false,
+            "title": "LinkedIn"
+          }
+        ],
+        "finishedAt": 1762290000000,
+        "running": false,
+        "total": 5
+      },
       "id": "logins",
+      "later": [
+        {
+          "action": "Connect Figma",
+          "agentIds": [
+            "a1",
+            "a2"
+          ],
+          "agents": [
+            "Finance",
+            "Ops"
+          ],
+          "key": "figma",
+          "keyOnly": false,
+          "service": "figma",
+          "state": "reachable",
+          "title": "Figma",
+          "via": "your browser, signed in on www.figma.com"
+        },
+        {
+          "action": "Use my browser",
+          "agentIds": [
+            "a1",
+            "a2"
+          ],
+          "agents": [
+            "Finance",
+            "Ops"
+          ],
+          "key": "linkedin",
+          "keyOnly": false,
+          "service": "linkedin",
+          "state": "open",
+          "title": "LinkedIn"
+        },
+        {
+          "action": "Add a key for Bankline",
+          "agentIds": [
+            "a1",
+            "a2"
+          ],
+          "agents": [
+            "Finance",
+            "Ops"
+          ],
+          "key": "other:bankline",
+          "keyOnly": true,
+          "service": "other",
+          "state": "open",
+          "title": "Bankline"
+        },
+        {
+          "action": "Connect Notion",
+          "agentIds": [
+            "a1",
+            "a2"
+          ],
+          "agents": [
+            "Finance",
+            "Ops"
+          ],
+          "key": "notion",
+          "keyOnly": false,
+          "service": "notion",
+          "state": "not_needed",
+          "title": "Notion"
+        },
+        {
+          "action": "Connect Gmail",
+          "agentId": "a1",
+          "agentIds": [
+            "a1",
+            "a2"
+          ],
+          "agents": [
+            "Finance",
+            "Ops"
+          ],
+          "key": "gmail",
+          "keyOnly": false,
+          "requestId": "q9",
+          "service": "gmail",
+          "state": "asked",
+          "title": "Gmail"
+        }
+      ],
       "logins": [
         {
           "agentId": "a1",
@@ -1593,9 +1699,11 @@ export const agentsReach = {
   "browser": {
     "helperInstalled": true,
     "on": true,
+    "ownOff": false,
     "sites": [
       "www.linkedin.com"
-    ]
+    ],
+    "teamOn": true
   },
   "connections": [
     {
@@ -1620,6 +1728,91 @@ export const agentsReach = {
     }
   ]
 } satisfies Result<'agents.reach'>;
+export const agentsPolicy = {
+  "agentId": "a1",
+  "effective": {
+    "admin": false,
+    "apps": {
+      "mode": "all"
+    },
+    "browser": false,
+    "folders": [
+      {
+        "path": "/u/me/Invoices",
+        "write": false
+      }
+    ],
+    "independence": "judgement",
+    "own": [
+      "folders",
+      "browser",
+      "rules"
+    ],
+    "ownRules": [
+      "Only touch the marketing site"
+    ],
+    "projects": {
+      "elsewhere": "change",
+      "how": "copy",
+      "scope": "all"
+    },
+    "teamRules": [
+      "Never email clients"
+    ]
+  },
+  "lines": [
+    {
+      "enforced": "app",
+      "key": "projects",
+      "label": "Projects",
+      "team": true,
+      "value": "Every project · its own copy in client-site; changes the others directly"
+    },
+    {
+      "enforced": "app",
+      "key": "folders",
+      "label": "Folders on this Mac",
+      "team": false,
+      "value": "/u/me/Invoices (read)"
+    },
+    {
+      "enforced": "app",
+      "key": "apps",
+      "label": "Apps",
+      "team": true,
+      "value": "Every app you've connected"
+    },
+    {
+      "enforced": "app",
+      "key": "browser",
+      "label": "Your browser",
+      "team": false,
+      "value": "No"
+    },
+    {
+      "enforced": "prompt",
+      "key": "independence",
+      "label": "Independence",
+      "team": true,
+      "value": "Use good judgement"
+    },
+    {
+      "enforced": "app",
+      "key": "admin",
+      "label": "Admin",
+      "team": true,
+      "value": "No"
+    },
+    {
+      "enforced": "prompt",
+      "key": "rules",
+      "label": "Rules",
+      "team": false,
+      "value": "“Never email clients” · “Only touch the marketing site”"
+    }
+  ],
+  "sameAsTeam": false
+} satisfies Result<'agents.policy'>;
 export const agentsLoginsTeam = {
   "done": 1,
   "needs": [
@@ -1747,6 +1940,28 @@ export const agentsLoginPhoneBegin = {
   "requestId": "q12",
   "url": "https://auth.linear.app/authorize?client_id=c&code_challenge=x&state=s"
 } satisfies Result<'agents.loginPhoneBegin'>;
+export const agentsSigninBegin = {
+  "domain": "figma.com",
+  "idleSeconds": 300,
+  "sessionId": "signin_0123",
+  "title": "Figma"
+} satisfies Result<'agents.signinBegin'>;
+export const agentsSigninFrame = {
+  "height": 640,
+  "host": "www.figma.com",
+  "image": "/9j/2w==",
+  "state": "live",
+  "width": 1000
+} satisfies Result<'agents.signinFrame'>;
+export const agentsSigninFrameOutside = {
+  "height": 0,
+  "host": "example.com",
+  "state": "outside",
+  "width": 0
+} satisfies Result<'agents.signinFrame'>;
+export const agentsSigninDone = {
+  "outcome": "signed_out"
+} satisfies Result<'agents.signinDone'>;
 export const agentsLoginSaveKey = {
   "createdAt": 0,
   "fields": [
@@ -2567,6 +2782,8 @@ export const frames = [
       "agents.send",
       "agents.stop",
       "agents.interrupt",
+      "agents.stopStep",
+      "agents.checkOn",
       "agents.answerApproval",
       "agents.saveSecret",
       "agents.loginStart",
@@ -2574,6 +2791,7 @@ export const frames = [
       "agents.loginDecline",
       "agents.loginSaveKey",
       "agents.reach",
+      "agents.policy",
       "agents.loginsTeam",
       "agents.loginsConnect",
       "agents.loginDismiss",
@@ -2583,6 +2801,11 @@ export const frames = [
       "agents.loginsRecheck",
       "agents.loginPhoneBegin",
       "agents.loginPhoneFinish",
+      "agents.signinBegin",
+      "agents.signinFrame",
+      "agents.signinInput",
+      "agents.signinDone",
+      "agents.signinStop",
       "agents.focus",
       "agents.markUnread",
       "agents.startFresh",
@@ -2591,6 +2814,7 @@ export const frames = [
       "agents.update",
       "agents.setDefaults",
       "agents.setIndependence",
+      "agents.setAdmin",
       "agents.revokePermission",
       "agents.instructions",
       "agents.memory",
@@ -2603,6 +2827,7 @@ export const frames = [
       "agents.changeDiff",
       "agents.keepCopy",
       "agents.discardCopy",
+      "agents.watchLive",
       "agents.files",
       "agents.fetchPath",
       "agents.search",
@@ -2631,7 +2856,9 @@ export const frames = [
       "agents.teamSetup.routine",
       "agents.teamSetup.hello",
       "agents.teamSetup.missing",
-      "agents.teamSetup.dismiss"
+      "agents.teamSetup.dismiss",
+      "agents.teamSetup.later",
+      "agents.teamSetup.check"
     ],
     "timeZone": "America/New_York",
     "features": [
@@ -2639,7 +2866,8 @@ export const frames = [
       "routines.when",
       "rooms",
       "logins",
-      "logins.phone"
+      "logins.phone",
+      "signin.phone"
     ]
   },
   {
@@ -2866,6 +3094,9 @@ export const frames = [
               }
             ],
             "accountHint": "work",
+            "alsoFor": [
+              "Ops"
+            ],
             "askedAs": "gmail work",
             "flow": {
               "fromPhone": true,
@@ -2948,6 +3179,56 @@ export const frames = [
   },
   {
     "t": "evt",
+    "seq": 1,
+    "event": {
+      "type": "agents.message",
+      "message": {
+        "agentId": "a1",
+        "approval": {
+          "detail": "Hiring: Can now work in client-site (its own copy). Can no longer use your browser.",
+          "requestId": "q13",
+          "settings": {
+            "change": {
+              "addProjects": [
+                "/u/Projects/client-site"
+              ],
+              "browser": false
+            },
+            "groups": [
+              {
+                "agentIds": [
+                  "hiring"
+                ],
+                "changes": [
+                  "Can now work in client-site (its own copy)",
+                  "Can no longer use your browser"
+                ],
+                "who": "Hiring"
+              }
+            ],
+            "hasRules": true,
+            "targets": [
+              {
+                "agentId": "hiring",
+                "kind": "agent"
+              }
+            ],
+            "version": 3,
+            "why": "You asked for Hiring to help on the client's site"
+          },
+          "status": "pending",
+          "summary": "Hiring: Can now work in client-site (its own copy). Can no longer use your browser.",
+          "title": "Change Hiring's settings?"
+        },
+        "id": "m41",
+        "kind": "approval",
+        "text": "",
+        "ts": 1762290100000
+      }
+    }
+  },
+  {
+    "t": "evt",
     "seq": 2,
     "event": {
       "type": "agents.status",
@@ -2957,13 +3238,28 @@ export const frames = [
         "since": 1762290000000,
         "state": "working",
         "work": {
-          "doing": "Running npm test",
+          "current": {
+            "busy": true,
+            "canStop": true,
+            "kind": "command",
+            "label": "Running the Cypress tests",
+            "output": [
+              "  ✓ renders the pricing page (812ms)"
+            ],
+            "slow": "tests",
+            "startedAt": 1762290410000,
+            "streams": true
+          },
+          "doing": "Running the Cypress tests",
           "fileCount": 0,
+          "lastSignAt": 1762290500000,
+          "quietSince": 1762290420000,
           "startedAt": 1762290000000,
           "stepCount": 3,
           "steps": [
             {
               "at": 1762290010000,
+              "endedAt": 1762290011000,
               "kind": "read",
               "label": "Read App.tsx"
             },
@@ -2975,8 +3271,13 @@ export const frames = [
             },
             {
               "at": 1762290030000,
+              "endedAt": 1762290402000,
               "kind": "command",
-              "label": "Ran npm test"
+              "label": "Ran the tests",
+              "output": [
+                "Tests: 3 failed, 42 passed, 45 total"
+              ],
+              "summary": "42 passed, 3 failed"
             }
           ]
         }

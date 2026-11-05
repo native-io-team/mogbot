@@ -3,8 +3,10 @@
  * (`agents/team_setup.rs`, `lib/teamSetup.ts`). Everything the new agents
  * need from the user, in a fixed order — logins, routines to switch on,
  * what they said they're missing, then saying hi to each — instead of a
- * request in every chat. It updates in place: a login saved in an agent's
- * own chat ticks it off here.
+ * request in every chat. It sits in the conversation where it was posted,
+ * like a message (`setupItemIndex`), and scrolls up with the history; it
+ * updates in place there: a login saved in an agent's own chat ticks it off
+ * here. The bar above the composer brings it back into view.
  *
  * Every step can be skipped and opened again; the first open one is
  * expanded. Progress counts steps ("2 steps left"), never requests. The
@@ -48,6 +50,7 @@ import {
 import { AgentCard, AgentLine } from './AgentCard';
 import { AgentAvatar } from './AgentAvatar';
 import { ApprovalCard } from './AgentChatItems';
+import { SetupReach } from './TeamSetupReach';
 import { TeamLogins } from './TeamLogins';
 
 interface TeamSetupCardProps {
@@ -76,7 +79,7 @@ export function TeamSetupCard({ view, chief, onOpenAgent }: TeamSetupCardProps) 
   if (view.complete) {
     return (
       <AgentLine className="team-setup__done" data-testid="team-setup-done">
-        Your team is set up.{' '}
+        <CheckIcon size={12} aria-hidden="true" /> Done · Your team is set up.{' '}
         <TextButton tabIndex={0} onClick={() => void run('dismiss', dismissTeamSetup)}>
           Hide
         </TextButton>
@@ -86,7 +89,7 @@ export function TeamSetupCard({ view, chief, onOpenAgent }: TeamSetupCardProps) 
 
   const expanded = picked === 'none' ? null : (picked ?? view.current ?? null);
   return (
-    <div className="agent-chat__row agent-chat__row--agent agent-chat__row--card">
+    <div className="agent-chat__row agent-chat__row--agent agent-chat__row--card" data-team-setup>
       <AgentCard
         as="section"
         className="team-setup"
@@ -210,8 +213,14 @@ function StepBody({
     case 'logins':
       return (
         <>
-          <p className="team-setup__detail">{words.detail}</p>
-          <SetupLogins logins={step.logins ?? []} onOpenAgent={onOpenAgent} />
+          {(step.later ?? []).length > 0 ? (
+            <SetupReach step={step} onOpenAgent={onOpenAgent} />
+          ) : (
+            <p className="team-setup__detail">{words.detail}</p>
+          )}
+          {((step.later ?? []).length === 0 || (step.logins ?? []).length > 0) && (
+            <SetupLogins logins={step.logins ?? []} onOpenAgent={onOpenAgent} />
+          )}
           {footer()}
         </>
       );

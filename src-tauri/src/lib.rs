@@ -13,6 +13,9 @@
 
 pub mod agent;
 pub mod agent_bridge;
+// Prototype only: docs/internal/agent-browser.md.
+#[cfg(all(feature = "agent-browser", unix))]
+pub mod agent_browser;
 pub mod agents;
 pub mod brand;
 pub mod cache;
@@ -200,8 +203,18 @@ pub fn run() {
                 // older build or an agent's own CLI left.
                 let _ =
                     tauri::async_runtime::spawn_blocking(agents::store::harden_permissions).await;
-                let _ = tauri::async_runtime::spawn_blocking(agents::store::expire_stale_approvals)
-                    .await;
+                // Nothing that asked before the restart is still waiting:
+                // every such card closes ("the agent moved on", sign-ins and
+                // old secure inputs "Maybe later"), and the counts, badge and
+                // bars drop with them.
+                let sweep_app = badge_app.clone();
+                let _ = tauri::async_runtime::spawn_blocking(move || {
+                    agents::expiry::sweep_all(&sweep_app, agents::expiry::Moment::Launch)
+                })
+                .await;
+                // Then every card nobody can answer usefully any more closes,
+                // and stays closed (`agents/expiry.rs`).
+                agents::expiry::start(badge_app.clone());
                 // Agents imported before they were told where they are now
                 // (no Grok sandbox here): add the app's section, once.
                 let _ = tauri::async_runtime::spawn_blocking(agents::arrival::upgrade_all).await;
@@ -237,8 +250,28 @@ pub fn run() {
                     })
                     .await;
                 }
+                // Login cards an import raised before the checklist checked
+                // first become its "Maybe later" rows (`agents/team_setup.rs`).
+                match tauri::async_runtime::spawn_blocking(agents::team_setup::fold_cards).await {
+                    Ok(Ok(n)) if n > 0 => {
+                        tracing::info!("[Agents] Moved {n} import login cards onto setting up the team");
+                        agents::team_setup::emit(&badge_app);
+                        let _ = tauri::Emitter::emit(&badge_app, agents::runner::EVENT_REGISTRY, ());
+                    }
+                    Ok(Err(e)) => tracing::warn!("[Agents] Couldn't move import login cards: {e}"),
+                    _ => {}
+                }
                 // A turn the last run quit in the middle of: stop its process, say so.
                 agents::runner::recover_after_restart(&badge_app).await;
+                // Cards raised before the independence level answered local
+                // work: the ones it answers now are allowed, with a receipt.
+                {
+                    let app = badge_app.clone();
+                    let _ = tauri::async_runtime::spawn_blocking(move || {
+                        agents::mcp::sweep_auto_allowed(&app)
+                    })
+                    .await;
+                }
                 agents::notify::refresh_badge(&badge_app);
             });
             // Agents' check-ins and routines: one tick a minute, only while open.
@@ -690,6 +723,11 @@ pub fn run() {
             commands::agents::agents_change_diff,
             commands::agents::agents_copy_keep,
             commands::agents::agents_copy_discard,
+            commands::agents_preview::agents_preview_target,
+            commands::agents_preview::agents_preview_attach,
+            commands::agents_preview::agents_preview_test_start,
+            commands::agents_preview::agents_preview_test_state,
+            commands::agents_preview::agents_preview_test_stop,
             commands::agents::agents_send,
             commands::agents::agents_team_setup,
             commands::agents::agents_team_setup_step,
@@ -697,6 +735,14 @@ pub fn run() {
             commands::agents::agents_team_setup_hello,
             commands::agents::agents_team_setup_missing,
             commands::agents::agents_team_setup_dismiss,
+            commands::agents::agents_browser_status,
+            commands::agents::agents_browser_enable,
+            commands::agents::agents_browser_disable,
+            commands::agents::agents_phone_signin_status,
+            commands::agents::agents_phone_signin_stop,
+            commands::agents::agents_browser_open_install,
+            commands::agents::agents_access_check,
+            commands::agents::agents_team_setup_later,
             commands::agents::agents_team_setup_reopen,
             commands::agent_rooms::agents_rooms,
             commands::agent_rooms::agents_room_create,
@@ -724,6 +770,10 @@ pub fn run() {
             commands::agents::agents_set_defaults,
             commands::agents::agents_independence,
             commands::agents::agents_set_independence,
+            commands::agents::agents_set_admin,
+            commands::agents::agents_admin_activity,
+            commands::agents::agents_recently_deleted,
+            commands::agents::agents_restore,
             commands::agents::agents_desktop_settings,
             commands::agents::agents_set_desktop_settings,
             commands::agents::quick_entry_hide,
@@ -733,6 +783,8 @@ pub fn run() {
             commands::agents::quick_entry_resize,
             commands::agents::agents_answer_approval,
             commands::agents::agents_interrupt,
+            commands::agents::agents_stop_step,
+            commands::agents::agents_check_on,
             commands::agents::agents_revoke_permission,
             commands::agents::agents_save_secret,
             commands::agents::agents_login_start,
@@ -750,6 +802,9 @@ pub fn run() {
             commands::agents::agents_logins_connect,
             commands::agents::agents_reach,
             commands::agents::agents_reach_remove,
+            commands::agents::agents_policy,
+            commands::agents::agents_policy_team,
+            commands::agents::agents_policy_set,
             commands::agents::agents_connections,
             commands::agents::agents_connection_rename,
             commands::agents::agents_connection_delete,

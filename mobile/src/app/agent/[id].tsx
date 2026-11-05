@@ -12,6 +12,7 @@ import {
   describeCheckInTime,
   describeWatchStatus,
   describeWatchTitle,
+  isAdmin,
   MAC_FEATURES,
   onClaudePlan,
   routineWeekLine,
@@ -33,6 +34,7 @@ import { useNow } from '../../components/ConnectionPill';
 import { choose } from '../../components/menu';
 import { TextAction } from '../../components/surfaces';
 import { WhatItCanReach } from '../../components/reach';
+import { WhatItCanDo } from '../../components/policy';
 import { Button, Icon, InsetDivider, Row, SectionTitle, SheetPage, T } from '../../components/ui';
 import { SheetTitle } from '../../components/SheetTitle';
 import {
@@ -50,6 +52,7 @@ import {
 } from '../../lib/agents';
 import { haptic } from '../../lib/haptics';
 import {
+  call,
   canCall,
   describeError,
   readUsage,
@@ -198,6 +201,12 @@ function AgentSheet() {
           )}
         </View>
 
+        {canCall('agents.setAdmin', welcome) && (
+          <View style={styles.list}>
+            <AdminToggle agent={agent} enabled={live} onError={setError} />
+          </View>
+        )}
+
         <Conversation
           agent={agent}
           canFresh={canCall('agents.startFresh', welcome)}
@@ -242,6 +251,8 @@ function AgentSheet() {
             </View>
           </>
         )}
+
+        <WhatItCanDo agentId={agent.id} name={agent.name} />
 
         <WhatItCanReach agentId={agent.id} />
 
@@ -479,6 +490,45 @@ function Toggle({
             haptic.select();
             onError(null);
             setAgentToggles(agent.id, { [field]: on }).catch((e: unknown) =>
+              onError(describeError(e))
+            );
+          }}
+        />
+      }
+    />
+  );
+}
+
+/**
+ * "Admin — can manage and approve for other agents": the user's own switch
+ * (`agents.setAdmin`, audited on the Mac). On for the Chief by default.
+ */
+function AdminToggle({
+  agent,
+  enabled,
+  onError,
+}: {
+  agent: Agent;
+  enabled: boolean;
+  onError: (text: string | null) => void;
+}) {
+  const on = isAdmin(agent);
+  const switchProps = useSwitchColors(on);
+  return (
+    <Row
+      label="Admin"
+      detail="Can manage and approve for other agents. Spending, sending, publishing, pushing and keys still come to you."
+      last
+      trailing={
+        <Switch
+          value={on}
+          {...switchProps}
+          disabled={!enabled}
+          accessibilityLabel="Admin — can manage and approve for other agents"
+          onValueChange={(next) => {
+            haptic.select();
+            onError(null);
+            call('agents.setAdmin', { agentId: agent.id, admin: next }).catch((e: unknown) =>
               onError(describeError(e))
             );
           }}

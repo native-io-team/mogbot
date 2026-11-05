@@ -11,6 +11,7 @@
 import type { Agent, RoomView } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { takeExitNotice } from '../../../lib/crash';
 import {
   Platform,
   RefreshControl,
@@ -30,17 +31,11 @@ import { QuotaLines } from '../../../components/QuotaLines';
 import { useQuotaLines } from '../../../lib/quota';
 import { AgentAccent } from '../../../lib/accent';
 import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
-import { TextAction } from '../../../components/surfaces';
 import { Button, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
-import {
-  formatAgo,
-  needsAttention,
-  needsYou,
-  nextNeedsYou,
-  pendingApproval,
-  sortAgents,
-} from '../../../lib/agents';
+import { formatAgo, needsYou, pendingApproval } from '../../../lib/agents';
+import { barWords, buildHome, type HomeBar } from '../../../lib/home';
+import { progress } from '../../../lib/teamSetup';
 import { haptic } from '../../../lib/haptics';
 import {
   call,
@@ -60,7 +55,8 @@ import { makeStyles, useColors } from '../../../lib/appearance';
 
 type Row =
   | { kind: 'header'; key: string; title: string }
-  | { kind: 'agent'; key: string; agent: Agent }
+  | { kind: 'agent'; key: string; agent: Agent; quiet?: boolean }
+  | { kind: 'bar'; key: string; bar: HomeBar }
   | { kind: 'room'; key: string; room: RoomView }
   | { kind: 'hidden'; key: string; count: number };
 
@@ -163,26 +159,37 @@ export default function Agents() {
   const [selected, setSelected] = useState<string | null>(null);
   const [undo, setUndo] = useState<{ text: string; run: () => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The last run ended in a crash: said once, where the app opens.
+  useEffect(() => {
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    void takeExitNotice().then((notice) => {
+      if (!live || !notice) return;
+      setError(notice);
+      timer = setTimeout(() => setError((e) => (e === notice ? null : e)), 8000);
+    });
+    return () => {
+      live = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
+  const teamSetup = useApp((s) => s.teamSetup);
   const rows = useMemo<Row[]>(() => {
     // A Mac that removed this phone shows nothing of its agents: only the way back.
     if (!overview || removed) return [];
-    const sorted = sortAgents(overview.agents);
-    const visible = sorted.filter((a) => !a.hidden);
-    const hidden = sorted.filter((a) => a.hidden);
-    const urgent = visible.filter(needsAttention);
-    const rest = visible.filter((a) => !needsAttention(a));
+    // The Chief first, always; one bar for what waits on you; pinned; the rest (lib/home).
+    const home = buildHome(overview.agents, live ? teamSetup : null);
     const out: Row[] = [];
-    const add = (a: Agent) => out.push({ kind: 'agent', key: a.id, agent: a });
-    if (urgent.length) {
-      out.push({ kind: 'header', key: 'h-urgent', title: 'Needs you' });
-      urgent.forEach(add);
-      if (rest.length) out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
-    } else if ((!live || rooms?.length) && rest.length) {
-      // Offline (to say "as of"), or with Rooms below: the agents get their own label.
-      out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
-    }
-    rest.forEach(add);
+    const add = (a: Agent) =>
+      out.push({ kind: 'agent', key: a.id, agent: a, quiet: home.quiet.has(a.id) });
+    // Offline (to say "as of"), or with Rooms below: the agents get their own label.
+    if (!live || rooms?.length) out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
+    if (home.chief) add(home.chief);
+    if (home.bar) out.push({ kind: 'bar', key: 'bar', bar: home.bar });
+    home.pinned.forEach(add);
+    home.rest.forEach(add);
+    const hidden = home.hidden;
     if (rooms?.length) {
       out.push({ kind: 'header', key: 'h-rooms', title: 'Rooms' });
       for (const room of sortRooms(rooms)) out.push({ kind: 'room', key: `room:${room.id}`, room });
@@ -192,7 +199,7 @@ export default function Agents() {
       if (showHidden) hidden.forEach(add);
     }
     return out;
-  }, [overview, showHidden, removed, live, rooms]);
+  }, [overview, showHidden, removed, live, rooms, teamSetup]);
 
   const flash = useCallback((text: string, run?: () => void) => {
     const entry = { text, run: run ?? (() => {}) };
@@ -319,14 +326,12 @@ export default function Agents() {
       }
       renderItem={({ item, index }) =>
         item.kind === 'header' ? (
-          <SectionHeader
-            title={item.title}
-            live={live}
-            first={index === 0}
-            action={
-              item.key === 'h-urgent' ? (
-                <OpenNext onOpen={split ? (agentId) => setSelected(agentId) : undefined} />
-              ) : undefined
+          <SectionHeader title={item.title} live={live} first={index === 0} />
+        ) : item.kind === 'bar' ? (
+          <AttentionBar
+            bar={item.bar}
+            onOpenChief={(id) =>
+              split ? setSelected(id) : router.push({ pathname: '/chat/[id]', params: { id } })
             }
           />
         ) : item.kind === 'hidden' ? (
@@ -354,6 +359,7 @@ export default function Agents() {
         ) : (
           <AgentRow
             agent={item.agent}
+            quiet={item.quiet}
             caps={caps}
             live={live}
             selected={item.agent.id === shown}
@@ -453,33 +459,45 @@ function SectionHeader({
 }
 
 /**
- * Needs you's "Open next": straight to the first thing waiting on you, at
- * the card itself. Home says "needs you" once, as this section; there's no
- * summary card over it, and its rows carry no dot beside their words. Only
- * while the Mac answers, and only when something can be answered here (an
- * import to review waits on the Mac).
+ * One calm row for everything waiting on you, under the Chief: "A few things
+ * to finish setting up your team" (opens the Chief's chat, where the
+ * checklist is) or "N agents need you" (opens them grouped in a sheet).
+ * Never a section listing every agent.
  */
-function OpenNext({ onOpen }: { onOpen?: (agentId: string) => void }) {
+function AttentionBar({ bar, onOpenChief }: { bar: HomeBar; onOpenChief: (id: string) => void }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
   const router = useRouter();
-  const next = useApp(
-    useShallow((s) =>
-      s.link.kind === 'connected' ? nextNeedsYou(s.overview?.agents ?? [], s.chats) : null
-    )
+  const chief = useApp((s) => s.overview?.agents.find((a) => a.isMain) ?? null);
+  const setup = useApp((s) => s.teamSetup);
+  const [title, line] = barWords(
+    bar,
+    chief?.name ?? 'Chief of Staff',
+    setup ? progress(setup) : undefined
   );
-  if (!next) return null;
   return (
-    <TextAction
-      label="Open next"
-      hint="Opens the first thing waiting on you"
+    <Pressable
       onPress={() => {
         haptic.select();
-        if (onOpen) return onOpen(next.agentId);
-        router.push({
-          pathname: '/chat/[id]',
-          params: { id: next.agentId, ...(next.messageId ? { at: next.messageId } : {}) },
-        });
+        if (bar.kind === 'needs') router.push('/needs-you');
+        else if (chief) onOpenChief(chief.id);
       }}
-    />
+      android_ripple={ripple}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${line}`}
+      style={({ pressed }) => [styles.bar, pressed && PRESSED]}
+    >
+      <View style={styles.barText}>
+        <T variant="headline" color={colors.textStrong} numberOfLines={2}>
+          {title}
+        </T>
+        <T variant="small" color={colors.textSecondary} numberOfLines={1}>
+          {line}
+        </T>
+      </View>
+      <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
+    </Pressable>
   );
 }
 
@@ -587,6 +605,22 @@ const useStyles = makeStyles((colors) => ({
   sectionNext: { paddingTop: space.xl },
   quota: { paddingHorizontal: space.lg, paddingTop: space.md },
   headerButtons: { flexDirection: 'row', alignItems: 'center' },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginHorizontal: space.lg,
+    marginVertical: space.sm,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    minHeight: 56,
+    borderRadius: radius.card,
+    backgroundColor: colors.surfacePanel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.cardBorder,
+    overflow: 'hidden',
+  },
+  barText: { flex: 1, gap: space.xs },
   hiddenToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -603,6 +637,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,
+    overflow: 'hidden',
   },
   emptyCentered: {
     flex: 1,

@@ -21,3 +21,8 @@ export * from './accounts';
 export * from './usage';
 export * from './independence';
 export * from './links';
+export * from './policy';
+export * from './work';
+export * from './secretName';
+export * from './attention';
+export * from './tables';

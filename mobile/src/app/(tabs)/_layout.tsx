@@ -15,9 +15,9 @@ export default function TabsLayout() {
   // is live news, so it shows only while the Mac is answering: offline the
   // rows say "as of …", and a red number would claim more than is known.
   const live = useApp((s) => s.link.kind === 'connected');
-  // The same number as Home's "N need you": what you can answer from here.
+  // The same number as Home's "N agents need you" and every count on the desk.
   const waiting = useApp((s) =>
-    s.overview ? attentionCounts(s.overview.agents, s.chats).needYou : 0
+    s.overview ? attentionCounts(s.overview.agents, s.teamSetup).needYou : 0
   );
   const asking = useApp(
     (s) =>

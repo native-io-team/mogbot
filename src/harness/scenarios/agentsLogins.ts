@@ -258,7 +258,7 @@ export const agentsLoginsScenarios: Scenario[] = [
   recruiterScenario(
     'agents-login-card',
     'Agents — a login card (Gmail: Connect, or use my browser)',
-    'Recruiter’s chat: a lock card “Recruiter needs your Gmail (work)”, a muted “Asked for as “gmail work””, the reason, then two bullet lines: “Read and search your email” and “Draft and send email — it asks you on a card each time”. A muted line saying Recruiter works in your own Chrome where you’re signed in, asking before every click, post, send or payment. Under a hairline, “Connect in Claude instead” as a quiet text action with “Connect Gmail in Claude: it opens Claude’s connectors page; turn on Gmail, then come back.” Right-aligned: secondary “Not now”, secondary “Not needed”, neutral (not accent) “Use my browser”. No password field anywhere.',
+    'Recruiter’s chat: a lock card “Recruiter needs your Gmail (work)”, a muted “Asked for “Gmail work””, the reason, then two bullet lines: “Read and search your email” and “Draft and send email — it asks you on a card each time”. A muted line saying Recruiter works in your own Chrome where you’re signed in, asking before every click, post, send or payment. Under a hairline, “Connect in Claude instead” as a quiet text action with “Connect Gmail in Claude: it opens Claude’s connectors page; turn on Gmail, then come back.” Right-aligned: secondary “Not now”, secondary “Not needed”, neutral (not accent) “Use my browser”. No password field anywhere.',
     loginCard('hiring', 'Recruiter needs your Gmail (work)', GMAIL_LOGIN)
   ),
   recruiterScenario(
@@ -354,7 +354,7 @@ export const agentsLoginsScenarios: Scenario[] = [
         state: 'failed',
         option: 'claude_ai',
         message:
-          'Gmail didn’t show up as connected within ten minutes. Try again once it’s added on claude.ai.',
+          'Gmail didn’t show up as connected within ten minutes. Try again once it’s added on claude.ai. Choose Use my browser instead: it works where you’re already signed in.',
         startedAt: now - MIN,
       },
     })

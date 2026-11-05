@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  allowAllCards,
+  allowAllLine,
   groupLine,
   groupRequests,
   requestsCounts,
@@ -116,6 +118,26 @@ describe('groupRequests', () => {
   });
 });
 
+describe('plain-language requests', () => {
+  it('one request reads as what it does and why, when the Mac says', () => {
+    const said = groupRequests(
+      [agent('a', 'Lead Gen', 1)],
+      {
+        a: [
+          card('a', {
+            detail: 'ls -la ~/Downloads/KiteExport',
+            summary: 'Look inside your KiteExport folder — to see if the download finished',
+          }),
+        ],
+      },
+      new Set()
+    );
+    expect(groupLine(said.groups[0])).toBe(
+      'Look inside your KiteExport folder — to see if the download finished'
+    );
+  });
+});
+
 describe('the words', () => {
   it('names one or two agents, counts past that', () => {
     const one = groupRequests([agent('a', 'Lead Gen', 1)], { a: [card('a')] }, new Set());
@@ -132,6 +154,19 @@ describe('the words', () => {
     expect(requestsTitle(two)).toBe('Finance and Lead Gen need your OK');
     expect(requestsDetail(two)).toBe('2 requests, 1 of them a login');
     expect(groupLine(two.groups[0])).toBe('1 login: Stripe key');
+  });
+
+  it('in the Chief’s chat, says the team’s count, the one the sidebar and the phone say', () => {
+    const two = groupRequests(
+      [agent('l', 'Lead Gen', 1), agent('f', 'Finance', 1)],
+      { l: [card('l')], f: [card('f')] },
+      new Set()
+    );
+    // The Chief's own card is in the chat above: still one of the three.
+    expect(requestsTitle(two, 3)).toBe('3 agents need your OK');
+    expect(requestsCounts(two, 3)).toBe('3 agents · 2 requests');
+    // The same count as the bar lists: the names, as before.
+    expect(requestsTitle(two, 2)).toBe('Finance and Lead Gen need your OK');
   });
 
   it('lists two login names, then an ellipsis', () => {
@@ -175,5 +210,44 @@ describe('login cards in the requests bar', () => {
     expect(s.logins).toBe(2);
     expect(requestsDetail(s)).toBe('2 logins to add');
     expect(groupLine(s.groups[0])).toBe('2 logins: Gmail, Linear');
+  });
+});
+
+describe('Allow all', () => {
+  it('answers pending Allow cards only, never logins, secrets, questions or imports', () => {
+    const cards = [
+      card('a', { tool: 'Bash', detail: 'ls -la ~/Notes' }),
+      card('a', { tool: 'Bash', detail: 'mkdir ~/Notes/new' }),
+      card('a', { tool: 'Edit', title: 'Edit a file', detail: '~/Notes/a.md' }),
+      card('a', { tool: 'mcp__gmail__send_email', title: 'Send an email · Gmail' }),
+      card('a', { status: 'allowed' }),
+      login('a', 'fictional_token'),
+      card('a', {
+        title: 'Fictional needs your Gmail',
+        login: { service: 'gmail', title: 'Gmail', why: 'x', abilities: [], options: [] } as never,
+      }),
+      card('a', { prompt: { kind: 'trust', question: 'Trust demo-site?' } as never }),
+      card('a', { connector: { kind: 'consent' } as never }),
+    ];
+    const allowed = allowAllCards(cards);
+    expect(allowed.map((m) => m.approval!.detail)).toEqual([
+      'ls -la ~/Notes',
+      'mkdir ~/Notes/new',
+      '~/Notes/a.md',
+      'npm test',
+    ]);
+    expect(allowAllLine(allowed)).toBe(
+      'Allow 4 requests? 2 commands, 1 file change, Send an email · Gmail'
+    );
+  });
+
+  it('counts a repeated connector tool or confirmation in its own words', () => {
+    const sends = [1, 2].map(() =>
+      card('a', { tool: 'mcp__gmail__send_email', title: 'Send an email · Gmail' })
+    );
+    expect(allowAllLine(sends)).toBe('Allow 2 requests? Send an email · Gmail ×2');
+    expect(allowAllLine([card('a', { title: 'Delete Florist' })])).toBe(
+      'Allow 1 request? Delete Florist'
+    );
   });
 });

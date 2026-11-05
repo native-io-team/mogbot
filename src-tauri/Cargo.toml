@@ -1,6 +1,6 @@
 [package]
 name = "dashbot"
-version = "1.7.0"
+version = "0.1.0"
 description = "A desktop app for running your own team of AI agents."
 authors = ["Julian Galluzzo", "Ship Studio contributors"]
 license = "MIT"
@@ -97,6 +97,15 @@ ring = "0.17"
 # Agents' quick entry: a system-wide hotkey (default ⌥Space) that opens the
 # floating composer over any app (src/agents/quick_entry.rs).
 tauri-plugin-global-shortcut = "2"
+
+[features]
+# Prototype of the agent browser (docs/internal/agent-browser.md): off in
+# every build; nothing in the app uses it yet.
+agent-browser = []
+
+[[example]]
+name = "agent_browser_demo"
+required-features = ["agent-browser"]
 
 [dev-dependencies]
 

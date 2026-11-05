@@ -6,16 +6,26 @@
 Your own team of AI agents, on your own computer, on the accounts you already
 pay for.
 
+**The goal: extremely complex tasks, made extremely easy.** You say what you
+want; your agents do whatever it takes. They find access wherever it exists (a
+connected app or Claude connector, the tools and files on your Mac, a built-in
+browser, your own Chrome) and only ask you when there's truly no other way —
+or before spending money, sending as you, publishing, or deleting your things.
+See [docs/MISSION.md](docs/MISSION.md#north-star-extremely-complex-tasks-made-extremely-easy).
+
 ## Try it
+
+**Invited to test it? Start with [docs/WELCOME.md](docs/WELCOME.md).**
 
 There's no download yet: you build it on your Mac. Easiest: open this folder in
 Claude Code or Codex and say *"Set this up on my Mac and phone. Follow
 docs/INSTALL.md."* It installs the tools, builds the app, and tells you the few
-things only you can do (sign in, install Tailscale and Expo Go on your phone,
-scan a code).
+things only you can do (sign in, install Tailscale on your phone, scan a code).
 
-You need a Mac, a paid Claude (Pro/Max) or ChatGPT plan, and for the phone a
-free Tailscale account. Step by step, with checks and troubleshooting:
+You need a Mac with 15 GB free (about 25 GB to build the phone app with Xcode),
+a paid Claude (Pro/Max) or ChatGPT plan, and for the phone a free Tailscale
+account, on the Mac **and** the phone, same account, before you scan the
+pairing code. Step by step, with checks and troubleshooting:
 **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 **The phone app, two ways** (until it's on the App Store). Pick whichever is
@@ -28,7 +38,7 @@ easiest for you:
 | Setup time | Minutes | 30–60 min the first time |
 | Dictation, "Send to agent" share sheet, Home Screen actions | No (the keyboard's mic still works) | Yes |
 | Works when the Mac's dev server is off | No | Yes |
-| Push notifications | No | Not yet (needs the App Store build) |
+| Push notifications | No | Not yet (needs a paid Apple Developer account and TestFlight) |
 | Catch | — | With a free Apple ID it must be re-installed every 7 days |
 
 Either way the phone talks only to your Mac, over your own Tailscale.
@@ -133,6 +143,8 @@ and make sure no credentials ever landed in it.
 
 ## Docs
 
+- [docs/WELCOME.md](docs/WELCOME.md): for invited testers, what to expect and how to set it up
+- [docs/INSTALL.md](docs/INSTALL.md): the setup runbook your agent follows
 - [docs/MISSION.md](docs/MISSION.md): why, for whom, and the rules that follow
 - [docs/ROADMAP.md](docs/ROADMAP.md): what's done and what's next, ranked
 - [docs/agents.md](docs/agents.md): agents, approvals, routines, memory and engines

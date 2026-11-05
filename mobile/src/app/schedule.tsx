@@ -450,6 +450,7 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.card,
     backgroundColor: colors.surfaceGroup,
     minHeight: 64,
+    overflow: 'hidden',
   },
   actions: { flexDirection: 'row', gap: space.sm },
   heading: { marginLeft: space.lg, letterSpacing: 0.4 },

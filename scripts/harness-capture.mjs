@@ -616,7 +616,9 @@ async function main() {
       // capture depend on the network's mood, and two runs disagree for
       // reasons that have nothing to do with the app. Everything but the
       // harness origin fails to resolve, fast and identically every time.
-      '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1',
+      // `localhost` is still this machine: a preview frame loads its dev
+      // server as http://localhost:<port> (the Agents preview pane's shots).
+      '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost',
       'about:blank',
     ],
   });

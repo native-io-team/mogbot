@@ -25,11 +25,13 @@ import {
   CommentIcon,
   CopyIcon,
   DownloadIcon,
+  GlobeIcon,
   ErrorIcon,
   FolderIcon,
   HistoryIcon,
   MoreHorizontalIcon,
   PinIcon,
+  SettingsSlidersIcon,
   ShieldCheckIcon,
   WarningIcon,
 } from '@/components/icons';
@@ -46,12 +48,14 @@ import { MentionText } from './AgentMentions';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
+import { AgentSettingsChange } from './AgentSettingsChange';
 import { AgentCard } from './AgentCard';
 import { ImportReviewCard } from './ImportReviewCard';
 import { ImportPlaybackCard } from './ImportPlaybackCard';
 import { useLiveWork, WorkTimeline } from './AgentWork';
 import { RevisesBar } from './AgentResult';
 import { WorkMenu } from './AgentTakeover';
+import { useLiveStep } from './AgentLiveStep';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
@@ -64,6 +68,7 @@ import {
   describeScope,
   ENGINE_LABEL,
   errorRemedy,
+  expiryLine,
   folderName,
   formatClock,
   retryPhrase,
@@ -968,11 +973,17 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
       </>
     );
   }
+  if (approval.front && (approval.status === 'allowed' || approval.status === 'denied')) {
+    return approval.status === 'allowed' ? 'Checked again' : 'Not now';
+  }
   if (approval.status === 'denied' && approval.note) {
     return <>Declined · “{approval.note}”</>;
   }
   if (approval.status === 'expired' && approval.setAside) {
-    return SET_ASIDE_OUTCOME;
+    return approval.settings ? `Not changed · ${approval.setAside}` : SET_ASIDE_OUTCOME;
+  }
+  if (approval.settings && approval.status === 'allowed') {
+    return 'Changed · from each agent’s next turn';
   }
   if (approval.choice && approval.status !== 'expired') {
     return `${STATUS_LABEL[approval.status as 'allowed' | 'denied']} · ${approval.choice}`;
@@ -1016,6 +1027,19 @@ export const ApprovalCard = memo(function ApprovalCard({
   const [openedPending] = useState(approval?.status === 'pending');
   const { guard, keyProps } = useCardGuard(approval?.status === 'pending');
   if (!approval) return null;
+  // Nobody answered: a quiet one-line receipt, not a card still asking.
+  const expired = approval.status === 'expired' ? expiryLine(approval) : null;
+  if (expired) {
+    return (
+      <div
+        className="agent-note agent-note--expired"
+        data-arrived={arrived || undefined}
+        data-message-ids={message.id}
+      >
+        {expired}
+      </div>
+    );
+  }
   if (approval.prompt) {
     return (
       <SessionPromptCard
@@ -1053,7 +1077,9 @@ export const ApprovalCard = memo(function ApprovalCard({
   }
   // Another assistant asking to start an import: a plain yes or no, so Deny
   // doesn't open the "what instead" line.
-  const plainDeny = approval.connector?.kind === 'consent';
+  // "Bring your Chrome window to the front": Check again / Not now, nothing else.
+  const front = !!approval.front;
+  const plainDeny = approval.connector?.kind === 'consent' || front;
   const pending = approval.status === 'pending';
   const fields = approvalFields(approval.tool, approval.input);
   const answer = async (allow: boolean, always = false, why?: string) => {
@@ -1074,7 +1100,17 @@ export const ApprovalCard = memo(function ApprovalCard({
       <AgentCard
         className="agent-approval"
         data={{ status: approval.status, clamped: (long && !showAll) || undefined }}
-        icon={plainDeny ? <DownloadIcon size={14} /> : <ShieldCheckIcon size={14} />}
+        icon={
+          front ? (
+            <GlobeIcon size={14} />
+          ) : plainDeny ? (
+            <DownloadIcon size={14} />
+          ) : approval.settings ? (
+            <SettingsSlidersIcon size={14} />
+          ) : (
+            <ShieldCheckIcon size={14} />
+          )
+        }
         title={approval.title}
         meta={
           series && series.total > 1
@@ -1082,7 +1118,7 @@ export const ApprovalCard = memo(function ApprovalCard({
             : undefined
         }
         note={
-          pending && paused && !plainDeny
+          pending && paused && !plainDeny && !approval.settings
             ? 'It paused here for you. Allow it and it picks up where it left off.'
             : approval.status === 'expired'
               ? approval.setAside
@@ -1141,7 +1177,7 @@ export const ApprovalCard = memo(function ApprovalCard({
                 disabled={busy}
                 onClick={() => void answer(false)}
               >
-                Deny
+                {front ? 'Not now' : 'Deny'}
               </Button>
               <Button
                 tabIndex={0}
@@ -1151,7 +1187,7 @@ export const ApprovalCard = memo(function ApprovalCard({
                 {...keyProps}
                 onClick={guard(() => void answer(true))}
               >
-                Allow
+                {front ? 'Check again' : 'Allow'}
               </Button>
             </>
           ) : undefined
@@ -1160,7 +1196,9 @@ export const ApprovalCard = memo(function ApprovalCard({
         outcomeTone={approval.status === 'allowed' ? 'done' : undefined}
         resolved={openedPending && !pending}
       >
-        {fields ? (
+        {approval.settings ? (
+          <AgentSettingsChange proposal={approval.settings} />
+        ) : fields ? (
           <dl className="agent-approval__fields">
             {fields.map(([label, value]) => (
               <div key={label} className="agent-approval__field">
@@ -1399,10 +1437,11 @@ export function WorkingIndicator({
   // Only a change of activity crossfades; the first one is just there.
   const [first] = useState(activity);
   const live = useLiveWork({ work, agent, activity, leaving });
+  const step = useLiveStep({ agent, work, activity, leaving });
   return (
     <div
       className="agent-chat__row agent-chat__row--agent agent-chat__row--working"
-      data-work={live.toggle ? true : undefined}
+      data-work={live.toggle || step.details ? true : undefined}
       data-open={live.open || undefined}
       data-entering={entering || undefined}
       data-leaving={leaving || undefined}
@@ -1417,20 +1456,22 @@ export function WorkingIndicator({
           <TypingDots />
 
           {place && <span className="agent-working__place">{place}</span>}
-          {shown && (
-            <span
-              key={shown}
-              className="agent-working__activity"
-              data-changed={shown !== first || undefined}
-            >
-              {shown}
-            </span>
-          )}
+          {step.line ??
+            (shown && (
+              <span
+                key={shown}
+                className="agent-working__activity"
+                data-changed={shown !== first || undefined}
+              >
+                {shown}
+              </span>
+            ))}
         </div>
         {live.toggle}
         {/* Its project and its session, one ⋯ away: not a row under every turn. */}
         {!leaving && agent && <WorkMenu agent={agent} />}
       </div>
+      {step.details}
     </div>
   );
 }

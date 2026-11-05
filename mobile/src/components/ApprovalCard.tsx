@@ -33,7 +33,8 @@ import { useApp } from '../lib/store';
 import { fonts, iconSize, radius, space, type, PRESSED } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
-import { ACTION, Card, Line, OFFLINE_NOTE } from './surfaces';
+import { SettingsChange } from './settingsChange';
+import { Card, Line, OFFLINE_NOTE, useActionShare } from './surfaces';
 import { Button, Icon, T } from './ui';
 
 /**
@@ -178,11 +179,14 @@ export function ApprovalCard({
   approval,
   agent,
   onError,
+  onAnswered,
 }: {
   message: AgentMessage;
   approval: Approval;
   agent: Agent;
   onError: (text: string) => void;
+  /** The Mac took the answer (a card shown outside its own chat resolves here). */
+  onAnswered?: (allow: boolean) => void;
 }) {
   const cardStyles = useCardStyles();
   const colors = useColors();
@@ -208,6 +212,7 @@ export function ApprovalCard({
       setBusy(always ? 'always' : allow ? 'allow' : 'deny');
       try {
         await answerApproval(message.agentId, approval.requestId, allow, always, why);
+        onAnswered?.(allow);
         if (allow) haptic.success();
         else haptic.warning();
         setNoting(false);
@@ -231,6 +236,13 @@ export function ApprovalCard({
     { label: 'Deny with note…', run: () => setNoting(true) },
   ];
 
+  const consentCard = approval.connector?.kind === 'consent' || !!approval.front;
+  // Deny and Allow share the row beside ⋯ while both say their word whole.
+  const share = useActionShare(
+    approval.front ? ['Not now', 'Check again'] : ['Deny', 'Allow'],
+    consentCard ? 0 : 44
+  );
+
   if (!pending) {
     return (
       <Receipt status={approval.status} title={approval.title} outcome={outcome}>
@@ -240,23 +252,23 @@ export function ApprovalCard({
               {approval.detail}
             </T>
           ) : (
-            <Detail approval={approval} lines={12} />
+            <Summarized approval={approval} lines={12} />
           ))}
       </Receipt>
     );
   }
 
-  const consent = approval.connector?.kind === 'consent';
+  const consent = approval.connector?.kind === 'consent' || !!approval.front;
   const actions = noting ? (
     <>
-      <Button title="Cancel" variant="outline" onPress={() => setNoting(false)} style={ACTION} />
+      <Button title="Cancel" variant="outline" onPress={() => setNoting(false)} style={share} />
       <Button
         title="Deny"
         variant="answer"
         busy={busy === 'deny'}
         disabled={!connected}
         onPress={() => void answer(false, false, note)}
-        style={ACTION}
+        style={share}
       />
     </>
   ) : (
@@ -281,30 +293,36 @@ export function ApprovalCard({
         />
       )}
       <Button
-        title="Deny"
+        title={approval.front ? 'Not now' : 'Deny'}
         variant="outline"
         busy={busy === 'deny'}
         disabled={off}
         focusable={armed}
         onPress={() => void answer(false)}
-        style={ACTION}
+        style={share}
       />
       <Button
-        title="Allow"
+        title={approval.front ? 'Check again' : 'Allow'}
         variant="answer"
         busy={busy === 'allow'}
         disabled={off}
         focusable={armed}
         onPress={() => void answer(true)}
         accessibilityHint={approval.detail || undefined}
-        style={ACTION}
+        style={share}
       />
     </Animated.View>
   );
 
   return (
     <Card
-      icon={consent ? 'square.and.arrow.down' : 'checkmark.shield'}
+      icon={
+        consent
+          ? 'square.and.arrow.down'
+          : approval.settings
+            ? 'slider.horizontal.3'
+            : 'checkmark.shield'
+      }
       title={approval.title}
       // Whose and where, as its sibling import card says it.
       source={
@@ -319,7 +337,7 @@ export function ApprovalCard({
       note={
         !connected
           ? OFFLINE_NOTE
-          : paused && !fit.pinned && !consent
+          : paused && !fit.pinned && !consent && !approval.settings
             ? 'It paused here for you. Allow it and it picks up where it left off.'
             : undefined
       }
@@ -331,7 +349,7 @@ export function ApprovalCard({
             // Consent asks in sentences, not a command: prose that wraps.
             <T color={colors.textBody}>{approval.detail}</T>
           ) : (
-            <Detail approval={approval} lines={large ? 6 : 12} />
+            <Summarized approval={approval} lines={large ? 6 : 12} />
           )}
         </FittedDetail>
       )}
@@ -353,6 +371,71 @@ export function ApprovalCard({
         </Animated.View>
       )}
     </Card>
+  );
+}
+
+/**
+ * An admin's batch (desktop `agents/admin.rs`, `bring_to_user`): other
+ * agents' requests only you can decide, each answered here for the agent
+ * that asked. The card is read live from that agent's chat when the phone
+ * has it, else as the Mac sent it, resolving once the Mac takes the answer.
+ */
+export function DecideCards({
+  message,
+  onError,
+}: {
+  message: AgentMessage;
+  onError: (text: string) => void;
+}) {
+  const colors = useColors();
+  const chats = useApp((s) => s.chats);
+  const agents = useApp((s) => s.overview?.agents);
+  const [answered, setAnswered] = useState<Record<string, Approval['status']>>({});
+  const items = message.decide ?? [];
+  if (items.length === 0) return null;
+  return (
+    <View style={{ gap: space.sm }}>
+      {items.map((item) => {
+        const id = item.approval.requestId;
+        const live = chats[item.agentId]?.messages.find((m) => m.approval?.requestId === id);
+        const base = live?.approval ?? item.approval;
+        const approval =
+          answered[id] && base.status === 'pending' ? { ...base, status: answered[id] } : base;
+        const owner = agents?.find((a) => a.id === item.agentId);
+        if (!owner) {
+          return (
+            <T key={id} variant="small" color={colors.textSecondary}>
+              {item.agentName}: {approval.summary ?? approval.title}
+            </T>
+          );
+        }
+        const card: AgentMessage = live ?? {
+          ...message,
+          id: `${message.id}:${id}`,
+          agentId: item.agentId,
+          kind: 'approval',
+          text: '',
+          approval,
+          decide: undefined,
+        };
+        return (
+          <View key={id} style={{ gap: space['2xs'] }}>
+            <T variant="caption" color={colors.textMuted}>
+              {item.agentName}
+            </T>
+            <ApprovalCard
+              message={card}
+              approval={approval}
+              agent={owner}
+              onError={onError}
+              onAnswered={(allow) =>
+                setAnswered((a) => ({ ...a, [id]: allow ? 'allowed' : 'denied' }))
+              }
+            />
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -424,6 +507,7 @@ export function PlaybackCard({
     </View>
   ));
 
+  const share = useActionShare(['Add something', 'That’s all']);
   if (!pending) {
     return (
       <Receipt status={approval.status} title={approval.title} outcome={cardOutcome(approval)}>
@@ -450,7 +534,7 @@ export function PlaybackCard({
                 title="Cancel"
                 variant="outline"
                 onPress={() => setAdding(false)}
-                style={ACTION}
+                style={share}
               />
               <Button
                 title="Add this"
@@ -458,7 +542,7 @@ export function PlaybackCard({
                 busy={busy === 'add'}
                 disabled={off || !addition.trim()}
                 onPress={() => void answer(false)}
-                style={ACTION}
+                style={share}
               />
             </>
           ) : (
@@ -468,7 +552,7 @@ export function PlaybackCard({
                 variant="outline"
                 disabled={off}
                 onPress={() => setAdding(true)}
-                style={ACTION}
+                style={share}
               />
               <Button
                 title="That’s all"
@@ -476,7 +560,7 @@ export function PlaybackCard({
                 busy={busy === 'done'}
                 disabled={off}
                 onPress={() => void answer(true)}
-                style={ACTION}
+                style={share}
               />
             </>
           )}
@@ -567,6 +651,10 @@ export function PhoneReviewCard({
     </View>
   ));
 
+  const share = useActionShare([
+    'Don’t import',
+    proposals.length === 1 ? 'Import 1 agent' : `Import ${proposals.length} agents`,
+  ]);
   if (!pending) {
     return (
       <Receipt status={approval.status} title={approval.title} outcome={cardOutcome(approval)}>
@@ -602,7 +690,7 @@ export function PhoneReviewCard({
             busy={busy === 'no'}
             disabled={off}
             onPress={() => void run(false)}
-            style={ACTION}
+            style={share}
           />
           <Button
             title={proposals.length === 1 ? 'Import 1 agent' : `Import ${proposals.length} agents`}
@@ -610,7 +698,7 @@ export function PhoneReviewCard({
             busy={busy === 'import'}
             disabled={off || proposals.length === 0}
             onPress={() => void run(true)}
-            style={ACTION}
+            style={share}
           />
         </Animated.View>
       }
@@ -759,9 +847,43 @@ export function MoreAnswers({ disabled, onPress }: { disabled: boolean; onPress:
  * labelled fields that wrap, as the desk shows it; anything else is the
  * exact command.
  */
+/**
+ * The card's plain line first, what and why (the Mac's `summary`), with the
+ * exact command folded under Details; a card without one shows its detail.
+ */
+function Summarized({ approval, lines }: { approval: Approval; lines: number }) {
+  const colors = useColors();
+  const cardStyles = useCardStyles();
+  const [open, setOpen] = useState(false);
+  const summary = approval.summary?.trim();
+  if (!summary || approvalFields(approval.tool, approval.input)) {
+    return <Detail approval={approval} lines={lines} />;
+  }
+  return (
+    <View style={{ gap: space.xs }}>
+      <T color={colors.textBody}>{summary}</T>
+      {!!approval.detail && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+          onPress={() => setOpen((v) => !v)}
+          hitSlop={{ top: 12, bottom: 12 }}
+          style={({ pressed }) => [cardStyles.showAll, pressed && PRESSED]}
+        >
+          <T variant="caption" color={colors.textSecondary} style={{ fontFamily: fonts.medium }}>
+            {open ? 'Hide details' : 'Details'}
+          </T>
+        </Pressable>
+      )}
+      {open && <Detail approval={approval} lines={lines} />}
+    </View>
+  );
+}
+
 function Detail({ approval, lines }: { approval: Approval; lines: number }) {
   const cardStyles = useCardStyles();
   const colors = useColors();
+  if (approval.settings) return <SettingsChange proposal={approval.settings} />;
   const fields = approvalFields(approval.tool, approval.input);
   if (!fields) return <Command text={approval.detail} lines={lines} />;
   return (
@@ -833,7 +955,7 @@ export const useCardStyles = makeStyles((colors) => ({
   field: { gap: space.xs },
   showAll: { paddingHorizontal: space.md, paddingBottom: space.sm },
   /** ⋯ · Deny · Allow: one row, the affirmative last. */
-  answers: { flexDirection: 'row', flexGrow: 1, gap: space.sm },
+  answers: { flexDirection: 'row', flexWrap: 'wrap', flexGrow: 1, gap: space.sm },
   /** A task's own menu: each option a full row, then the pair. */
   choices: { flexGrow: 1, flexBasis: '100%', gap: space.sm },
   more: {

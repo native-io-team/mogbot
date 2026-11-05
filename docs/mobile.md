@@ -149,7 +149,10 @@ inside it.
   `agents.loginSaveKey` (as `saveSecret`), `agents.loginsTeam|loginsConnect` ("What your team needs"),
   `agents.reach` (read-only); Mac feature `logins.phone`: `agents.loginPhoneBegin|loginPhoneFinish`
   (the sign-in sheet; the finish goes only to an identity-verified Mac) and `onPhone` on
-  `agents.loginStart|loginsConnect`; "Not needed" for the team (docs/agents.md, "Not needed"):
+  `agents.loginStart|loginsConnect`; Mac feature `signin.phone`:
+  `agents.signinBegin|signinFrame|signinInput|signinDone|signinStop` (signing in to a site in
+  the Mac's own Chrome from the phone; never audited by the router, see docs/agents.md,
+  "Signing in on your Mac from the phone"); "Not needed" for the team (docs/agents.md, "Not needed"):
   `agents.loginNotNeeded|loginsNotNeeded|loginsUndecline` (shown only when the Mac lists them),
   `agents.reach`'s `declined` (each with "Turn back on"), and `agents.loginsRecheck` when the app
   comes back while claude.ai is being connected here
@@ -261,8 +264,8 @@ CA and no trust-on-first-use.
    about to lose.
 2. **Phone:** scan in the app or with the Camera, or paste the link. A link
    is untrusted input (any page or message can open one), so the phone
-   **always asks first**: "Pair with *Julian's MacBook Pro*? at
-   *julians-mbp.tail1234.ts.net:47443*", the code's last four characters,
+   **always asks first**: "Pair with *Sam's MacBook Pro*? at
+   *sams-mbp.tail1234.ts.net:47443*", the code's last four characters,
    and, when a Mac is already paired, "This replaces *that Mac*". A
    Tailscale route must be `https://<name>.ts.net[:port]`
    (`parsePairingLink`); a link with more than one route is refused, so the
@@ -305,7 +308,7 @@ CA and no trust-on-first-use.
    (`PairingView.reachedAt`, once per code). It is unauthenticated, so it
    says "a device", never "your phone"; its absence while the phone spins
    is the tell that the phone isn't on the tailnet.
-3. **Mac:** "Allow **Julian's iPhone** to use your agents?" with the model,
+3. **Mac:** "Allow **Sam's iPhone** to use your agents?" with the model,
    when it asked, the code's last four characters and the tailnet user
    `tailscale serve` named (`Tailscale-User-Login`), open for 120 s. The
    name and model are cleaned of control, bidi and zero-width characters and
@@ -443,10 +446,26 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   Chief of Staff".
 - **Chat.** An inverted list: newest on the composer, older pages loaded on
   scroll. Replies stream one display frame at a time (`lib/reveal.ts`) and the
-  finished message carries on from where its draft got to. What you're
-  reading holds still while you're scrolled up or a long reply grows, and the
-  jump button says "New reply" when one finished below. Hold a message to
-  copy, quote or select text; paths in a reply open through `agents.fetchPath`.
+  finished message carries on from where its draft got to. **Following**
+  (`lib/follow.ts`): at the newest line the chat is pinned, so your message
+  glides in on the composer and a reply grows up from it, its newest words
+  always in view, however long it gets. Only your own finger lets go: scroll
+  back and the rows on screen hold still (`maintainVisibleContentPosition`)
+  while the reply carries on below, and a "↓ New" pill rides the keyboard
+  ("Needs your OK" first, a bare arrow when far back with nothing new). The
+  keyboard, a card unfolding or a page of older messages never unpin it.
+  Distances count from the keyboard-lifted end (`-inset`), so Send and the
+  pill land on the newest line with the keyboard up; scrolling to offset 0
+  left it behind the keyboard. Checked natively on the iOS 26.1 simulator
+  (send, a streamed reply, scrolling back mid-stream, the keyboard). Where the
+  list meets the composer and the header the words fade into the background
+  over 28pt (`chatFade`, bands of the surface colour, no native module), and
+  the list keeps that room at both ends so nothing rests under a fade. With
+  the keyboard up the composer sits `composer.keyboardGap` (10pt) above the
+  keys: the sticky view, the list's lift and the pill share one offset
+  (`lift`), so they move with the keyboard frame for frame. Hold a
+  message to copy, quote or select text; paths in a reply open through
+  `agents.fetchPath`.
 - **Lines, cards and bars** (`components/surfaces.tsx`, the desk's
   `AgentCard.tsx`; docs/agents.md "Lines, cards and bars"). Everything in a
   chat that isn't something someone said is one of three. A **Line** is one
@@ -545,6 +564,26 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   ("new agents: engine codex"), and answers with an `agents.registry` event.
   On a Mac without the method the choice shows but isn't tappable. Existing
   agents keep theirs ([agents.md](agents.md), "Defaults for new agents").
+- **What it's doing right now** (`LiveStep` in `components/work.tsx`): while
+  a call runs, the working row says it in plain words with a live timer
+  ("Running the Cypress tests 5:32", the call's `status.work.current`); after
+  a minute on a known slow tool a quiet "Test runs usually take a few
+  minutes"; "Show output" opens the last lines the command printed (Codex
+  streams them; under Claude Code it says "Output appears when it
+  finishes"); after ten minutes "Stop this step" (`agents.stopStep`, the
+  turn carries on). Tapping the line says when it last showed life ("Last
+  activity 4s ago · using the CPU"). Once the Mac reports no progress
+  (`quietSince`) the line reads "No progress for 5 min" with a still clock,
+  "Check on it" (`agents.checkOn`: what the Mac can see, one line, never
+  interrupting) and Stop. Finished steps read "Ran the Cypress tests · 6m 12s
+  · 42 passed, 3 failed", and a long or failed command keeps "Show output".
+  On the list a working agent's avatar gets a ring in its colour that
+  breathes slowly (still under Reduce Motion) in place of the spinner, and
+  its line says the step and how long ("Running the Cypress tests · 5m");
+  the overview carries no steps, so until a live status arrives it is the
+  status's words and the turn's time. The words come from
+  `@shipstudio/companion-protocol`'s `work.ts`, shared with the desk; the
+  methods show only on a Mac that lists them.
 
 ### Rooms
 
@@ -677,14 +716,20 @@ The phone can start work as well as answer it. Each piece is gated by
   back afterwards if it was up), and the field listens. The words stream into
   it as you speak, the last few lighter while the recognizer is still
   deciding them (`stablePrefix`: what a partial shares with the one before,
-  never its last word), with the recognizer's own punctuation. The mic's
-  place holds a waveform and the elapsed time, × takes the +'s place and ✓
-  takes Send's. **✓ keeps the words in the draft** to read and edit, as
-  ChatGPT's and Grok's dictation do; nothing is sent on its own (the desk's
-  rule too, and Send drops words still on their way). × puts the draft back
-  as it was. Tapping the words is ✓ and edit. After about 3 s of quiet
-  following speech it stops by itself (`AUTO_STOP_SILENCE_MS`), and gives up
-  after 8 s if it heard nothing (`NOTHING_HEARD_MS`), saying so.
+  never its last word), with the recognizer's own punctuation, at the
+  field's full width, wrapping exactly as typing does. A waveform and the
+  elapsed time ride in a slim row over the field (inside it, beside the
+  words, they squeezed a long dictation to three words a line), × takes the
+  +'s place, and
+  the field holds **Stop** and **Send**, as Grok's dictation does. **Stop
+  keeps the words in the draft** to read and edit; **Send** sends exactly
+  what's on screen at once (the reducer's `send`: the partial too, then the
+  recognizer is aborted so no late word lands in the emptied field).
+  Nothing is sent unless you press Send (the desk's rule too). × puts the
+  draft back as it was. Tapping the words is Stop and edit. After about 3 s
+  of quiet following speech it stops by itself, as Stop does
+  (`AUTO_STOP_SILENCE_MS`), and gives up after 8 s if it heard nothing
+  (`NOTHING_HEARD_MS`), saying so.
   **The waveform** is driven by the recognizer's own input level
   (`volumechange`, every 50 ms) through a shared value: on the UI thread a
   frame callback eases it (quick rise, slower fall), pushes a bar every
@@ -718,8 +763,32 @@ The phone can start work as well as answer it. Each piece is gated by
   initialize recognizer", on-device and server alike), so the flow there was
   checked by feeding the native module's events (levels and partials) from
   outside; the web QA build uses a scripted stand-in
-  (`dev/web/expo-speech-recognition.ts`). Real recognition, real levels and
-  the fallback need a phone.
+  (`dev/web/expo-speech-recognition.ts`), and `QA_SCRIPTED_DICTATION=1 npx
+  expo start --dev-client` gives a simulator build the same one (silent: no
+  microphone, no sound). Real recognition, real levels and the fallback need
+  a phone.
+- **The composer** is the system's glass where the phone has it
+  (`components/Glass.tsx`, expo-glass-effect: iOS 26 Liquid Glass, the tab
+  bar's material): a 48pt capsule with 17pt text, a 48pt glass + beside it,
+  and 40pt circles inside (mic, Stop, and Send as accent-tinted glass). On iOS
+  before 26, Android and the web build it's `composerFill` with its
+  hairline. The chat header's ⓘ is a native bar button (`Stack.Toolbar`) on
+  iOS, so the system draws it as a true circle.
+- **Crash-safe drafts** (`lib/drafts.ts`, `lib/crash.ts`). The draft (typed
+  and dictated words, quotes, @mentions, uploaded files) is on disk within
+  `DRAFT_SAVE_MS` (300 ms) of every change and at once when the app leaves
+  the foreground; a send puts its message in the outbox file before the
+  emptied draft is written, so the words are always in one or the other. A
+  draft brought back at launch says "Restored your draft" once. A send in
+  flight when the app died comes back waiting with the same `clientId`, so it
+  goes once (the Mac returns the original for an id it has seen), or after
+  `OUTBOX_WAIT_MS` shows "Not sent · Send". An uncaught JS error writes the
+  drafts and the outbox (for up to 1.5 s) and logs to `crash-log.json` on the
+  phone (nowhere else) before the app ends; a run that ended while on screen
+  (a native crash) is caught by a foreground marker (release builds only).
+  The next launch says "The app closed unexpectedly. Your draft is safe."
+  on Agents. A screen that fails to draw shows the root `ErrorBoundary`
+  with Try again.
 - **"Send to agent…"** (`app/share.tsx`, `lib/share.ts`). Something shared
   into the app (a page, text, photos, files) lists your agents, with the
   shared text in full; picking one puts the link and text in that agent's
@@ -805,21 +874,71 @@ that waits. A refusal is final. Forgetting a Mac wipes its files.
 
 ### Feel and access
 
-Body 16, secondary 14; `textMuted` meets 4.5:1 on panels and Increase
-Contrast brightens each grey a step. Chrome is clamped at 1.3× Dynamic Type,
-message bodies aren't, and at accessibility sizes the approval card folds its
-explanation so the answers stay on screen. VoiceOver and TalkBack hear
+A conversation reads at 17 on a 26 line (`type.read`, `READ_LINE`), with a
+paragraph's air between blocks and list items, 14×10 inside your bubble and
+28 between speakers; chrome is body 16, secondary 14, and times and meta stay
+quiet captions. `textMuted` meets 4.5:1 on panels and Increase
+Contrast brightens each grey a step. Every Text scales with Dynamic Type:
+chrome clamped at 1.3×, card titles at 1.5×, words at 2× (`READ_MAX_SCALE`,
+so a reply still sets a sentence a line at AX3), and at accessibility sizes
+the approval card folds its explanation so the answers stay on screen.
+**Settings → Text size** (Smaller 0.88×, Default, Larger 1.12×, Largest
+1.25×) multiplies the whole type scale on top of Dynamic Type, saved in
+`prefs.json`: `type` reads the size in force and `makeStyles` rebuilds each
+sheet per appearance and size, so anything sized from `type` follows it. VoiceOver and TalkBack hear
 replies, approvals, failures and toasts (`lib/a11y.ts`, not during replay).
 Haptics only for send, stop, approvals (after the Mac confirms), failures and
 toggles, and can be turned off. Android gets Material symbols, ripples and
 predictive back.
+
+### A tested card, and Watch live
+
+When the desk's **Test it** has run (docs/agents.md), the result card's new
+version carries `test`. The phone shows it in the card: the outcome in one
+line (a warning icon only when something is broken), the agent's summary and
+its list of what's broken, "N console errors" (the preview's own capture), and
+the screenshots as a sideways-paging strip, each captioned "2 of 3 · <step>"
+with the app's own step label. Tapping a picture opens the usual viewer. The
+"Changes since v1" line is left off a tested card: the test section says it.
+
+**Watch live** (a text action, like Ask for changes; shown when the Mac serves
+`agents.watchLive` and the card names a project or is a copy's card) opens the
+card's running site in the in-app browser, read-only:
+
+- The phone asks over its paired socket; the Mac resolves the folder from the
+  card exactly as the desk's Preview does (`preview_test::resolve`) and needs a
+  dev server already up for it (`proxy::dev_server_port_for`). None: "Open
+  Preview on the Mac first — the site isn't running there." The phone can't
+  start one.
+- The answer is a one-time link: `https://<mac>.ts.net:<companion port + 1>/__<slug>-watch/<ticket>`.
+  The ticket is 256 bits, kept only as a hash, bound to that phone and that
+  port, and good for a minute. Opening it trades it for an HttpOnly, Secure,
+  SameSite=Strict cookie good for 30 minutes (`companion/watch.rs`).
+- **Tailnet only**: the proxy binds loopback and is published with `tailscale
+  serve` on its own port, never Funnel (the port is never 443/8443/10000, and
+  a request Tailscale marks `Tailscale-Funnel-Request` is refused). Started on
+  the first Watch live, stopped with the phone server.
+- **Read-only**: GET and HEAD only; forms that post and WebSockets are
+  refused, so there's no live reload (reload the page). Every request re-checks
+  the phone is still paired: removing it on the Mac ends its sessions.
+- Passed through untouched: no script injection; our cookie and Tailscale's
+  identity headers are stripped, Host is the dev server's own.
+
+Verified: `cargo test --lib companion` (the decision function: one-use and
+expired tickets, revoked phones, cookie per port, Funnel and non-loopback
+refused, every write method refused, upgrades refused, cookie stripping;
+`agents.watchLive` served and audited), `mobile/__tests__/resultTest.test.tsx`,
+and the `result-tested` qa:web shot in both themes. **Not verified**:
+`tailscale serve` on the second port against a real tailnet, and a real dev
+server (Next, Vite) rendering through the proxy on a phone; with HMR refused,
+some dev clients may log reconnect attempts.
 
 ## Notifications
 
 `lib/notify.ts` keeps them honest: one per alert, grouped per agent
 (`threadIdentifier`, the same thread id the relay sets), taken back once
 handled anywhere (an approval answered or a chat read, here or at the desk),
-the icon badge equal to the desk's `badge_count`, and all cleared on Forget
+the icon badge equal to the desk's Dock badge (`notify::badge_now`, who needs you), and all cleared on Forget
 this Mac. Android has "Needs you" (high) and "Replies" channels. A tap waits
 for fonts and credentials, opens at the message, and replaces a chat already
 on top instead of stacking.
@@ -916,7 +1035,7 @@ on a fork's binary. For self-builders, Reinstall is the update.
   phrases (against the mock's parser and `routine-phrases.json`), the Mac's
   clock, and share payloads; `share.test.tsx` the share sheet (a crafted
   `files=` link uploads nothing); `dictation.test.tsx` the state machine on its own and the mic against a
-  fake recognizer (streaming, ✓, ×, send, silence, errors, the fallback,
+  fake recognizer (streaming, Stop, Send, ×, silence, errors, the fallback,
   Android 12); `waveform.node.test.ts` the level→bar mapping and easing.
 - **Rooms:** `rooms.test.ts` (routing, gating, store keys, folding, the
   room's list), `roomParity.test.ts` (open copies, the foot line, @mentions,
@@ -945,7 +1064,10 @@ Chief mid-import with its live bar, the Designer working, the Import screen's
 counts, and an 8-frame close-up of the typing dots 150 ms apart with each dot's
 opacity per frame in the report), and an account in daily use
 (`--heavy`: 17 agents, ~40 cards waiting with logins and keys among them,
-paused routines, long chats, an import an hour in), live and offline. Out: `mobile/qa-shots/` (PNGs and
+paused routines, long chats, an import an hour in), live and offline, and
+what agents are doing (`--live-work`: QA 2 five minutes into a Cypress run
+with its output open, Finance gone quiet with "Check on it" answered, a
+finished Cypress step with its time, counts and output). Out: `mobile/qa-shots/` (PNGs and
 `report.md`, which lists each shot's route, what to check, console errors and
 any text cut off with an ellipsis). It exits non-zero when a screen failed or threw.
 

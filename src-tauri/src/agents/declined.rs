@@ -68,6 +68,33 @@ pub struct Receipt {
 struct Saved {
     #[serde(default)]
     services: Vec<Declined>,
+    /// Turned back on, and when (the latest per key): a no on a card from
+    /// before then no longer stops an agent asking (`access_chain`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    turned_on: Vec<TurnedOn>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct TurnedOn {
+    key: String,
+    at: i64,
+}
+
+impl Saved {
+    fn mark_on(&mut self, key: &str, at: i64) {
+        self.turned_on.retain(|t| t.key != key);
+        self.turned_on.push(TurnedOn {
+            key: key.to_string(),
+            at,
+        });
+    }
+}
+
+/// Services turned back on, and when.
+pub fn turned_on() -> Vec<(String, i64)> {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    read().turned_on.into_iter().map(|t| (t.key, t.at)).collect()
 }
 
 static LOCK: Mutex<()> = Mutex::new(());
@@ -163,7 +190,7 @@ pub fn decline_all(
             let Some(k) = matched.filter(|k| keys.contains(&k.as_str())) else {
                 continue;
             };
-            logins::forget_flow(&a.request_id);
+            logins::clear_flow(&a.request_id);
             if let Some(m) = store::deny_with_note(&agent.id, &a.request_id, logins::NOT_NEEDED)? {
                 messages.push(m);
             }
@@ -237,6 +264,7 @@ pub fn turn_back_on(
             return Ok(Vec::new());
         };
         let d = saved.services.remove(at);
+        saved.mark_on(key, now);
         write(&saved)?;
         d
     };
@@ -271,6 +299,7 @@ pub fn forget(key: &str) -> Result<(), CommandError> {
     let before = saved.services.len();
     saved.services.retain(|d| d.key != key);
     if saved.services.len() != before {
+        saved.mark_on(key, store::now_ms());
         write(&saved)?;
         tracing::info!(key, "turned a declined service back on");
     }

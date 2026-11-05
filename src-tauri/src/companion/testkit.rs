@@ -343,7 +343,7 @@ pub fn routes() -> Vec<Route> {
 /// A turn's timeline as it rides on a working status: the newest steps,
 /// counts, and what the running call is doing.
 pub fn live_work() -> crate::agents::work::TurnWork {
-    use crate::agents::work::{StepKind, StepOutcome, TurnWork, WorkStep};
+    use crate::agents::work::{LiveCall, Slow, StepKind, StepOutcome, TurnWork, WorkStep};
     TurnWork {
         started_at: 1_762_290_000_000,
         ended_at: None,
@@ -355,6 +355,8 @@ pub fn live_work() -> crate::agents::work::TurnWork {
                 label: "Read App.tsx".into(),
                 outcome: None,
                 image: None,
+                ended_at: Some(1_762_290_011_000),
+                ..WorkStep::blank()
             },
             WorkStep {
                 at: 1_762_290_020_000,
@@ -362,18 +364,34 @@ pub fn live_work() -> crate::agents::work::TurnWork {
                 label: "Tried to edit App.tsx".into(),
                 outcome: Some(StepOutcome::Failed),
                 image: None,
+                ..WorkStep::blank()
             },
             WorkStep {
                 at: 1_762_290_030_000,
                 kind: StepKind::Command,
-                label: "Ran npm test".into(),
+                label: "Ran the tests".into(),
                 outcome: None,
                 image: None,
+                ended_at: Some(1_762_290_402_000),
+                summary: Some("42 passed, 3 failed".into()),
+                output: vec!["Tests: 3 failed, 42 passed, 45 total".into()],
             },
         ],
         files: Vec::new(),
         file_count: 0,
-        doing: Some("Running npm test".into()),
+        doing: Some("Running the Cypress tests".into()),
+        current: Some(LiveCall {
+            kind: StepKind::Command,
+            label: "Running the Cypress tests".into(),
+            started_at: 1_762_290_410_000,
+            slow: Some(Slow::Tests),
+            output: vec!["  ✓ renders the pricing page (812ms)".into()],
+            streams: true,
+            busy: Some(true),
+            can_stop: true,
+        }),
+        last_sign_at: Some(1_762_290_500_000),
+        quiet_since: Some(1_762_290_420_000),
     }
 }
 
@@ -534,6 +552,7 @@ pub struct Stub {
     /// Changes to new agents' defaults, as the router handed them over.
     pub defaults: Mutex<Vec<crate::agents::defaults::Change>>,
     pub independence: Mutex<Vec<crate::agents::independence::Level>>,
+    pub admins: Mutex<Vec<(String, bool)>>,
     /// Agents started fresh, by id.
     pub fresh: Mutex<Vec<String>>,
     /// What reached a session: `(session id, text or "key:<key>")`.
@@ -575,6 +594,7 @@ impl Stub {
             created: Mutex::new(Vec::new()),
             defaults: Mutex::new(Vec::new()),
             independence: Mutex::new(Vec::new()),
+            admins: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
@@ -616,6 +636,8 @@ pub fn team_setup_fixture() -> crate::agents::team_setup::SetupView {
         id,
         state,
         logins: Vec::new(),
+        later: Vec::new(),
+        check: None,
         routines: Vec::new(),
         gaps: Vec::new(),
         agents: Vec::new(),
@@ -633,6 +655,83 @@ pub fn team_setup_fixture() -> crate::agents::team_setup::SetupView {
         kind: crate::agents::team_setup::LoginKind::Secret,
         account: None,
     }];
+    {
+        use crate::agents::access_check::{CheckView, Checked, LaterGroup, LaterState};
+        let row = |key: &str, title: &str, state: LaterState, action: Option<&str>, key_only| {
+            LaterGroup {
+                key: key.into(),
+                service: if key.starts_with("other:") {
+                    "other".into()
+                } else {
+                    key.into()
+                },
+                title: title.into(),
+                agents: vec!["Finance".into(), "Ops".into()],
+                agent_ids: vec![AGENT.into(), "a2".into()],
+                state,
+                action: action.map(str::to_string),
+                key_only,
+            }
+        };
+        logins.later = vec![
+            row(
+                "figma",
+                "Figma",
+                LaterState::Reachable {
+                    via: "your browser, signed in on www.figma.com".into(),
+                },
+                Some("Connect Figma"),
+                false,
+            ),
+            row(
+                "linkedin",
+                "LinkedIn",
+                LaterState::Open,
+                Some("Use my browser"),
+                false,
+            ),
+            row(
+                "other:bankline",
+                "Bankline",
+                LaterState::Open,
+                Some("Add a key for Bankline"),
+                true,
+            ),
+            row(
+                "notion",
+                "Notion",
+                LaterState::NotNeeded,
+                Some("Connect Notion"),
+                false,
+            ),
+            row(
+                "gmail",
+                "Gmail",
+                LaterState::Asked {
+                    agent_id: AGENT.into(),
+                    request_id: "q9".into(),
+                },
+                Some("Connect Gmail"),
+                false,
+            ),
+        ];
+        logins.check = Some(CheckView {
+            running: false,
+            total: 5,
+            checked: vec![
+                Checked {
+                    title: "Figma".into(),
+                    reached: true,
+                },
+                Checked {
+                    title: "LinkedIn".into(),
+                    reached: false,
+                },
+            ],
+            browser: true,
+            finished_at: Some(1_762_290_000_000),
+        });
+    }
     let mut routines = step(StepId::Routines, StepState::Skipped);
     routines.routines = vec![RoutineItem {
         agent_id: "a2".into(),
@@ -660,6 +759,7 @@ pub fn team_setup_fixture() -> crate::agents::team_setup::SetupView {
     SetupView {
         id: "setup1".into(),
         source: "Grok".into(),
+        posted_at: 1_700_000_000_000,
         steps: vec![logins, routines, missing, hi],
         done: 2,
         total: 4,
@@ -778,6 +878,14 @@ impl Backend for Stub {
 
     async fn interrupt(&self, _agent_id: &str) -> Result<bool, CommandError> {
         Ok(false)
+    }
+
+    async fn stop_step(&self, _agent_id: &str) -> Result<String, CommandError> {
+        Ok("Stopped that step. It carries on from there.".into())
+    }
+
+    async fn check_on(&self, _agent_id: &str) -> Result<String, CommandError> {
+        Ok("Still going: running the Cypress tests is using the CPU right now.".into())
     }
 
     async fn answer_approval(&self, answer: ApprovalAnswer) -> Result<(), CommandError> {
@@ -1084,6 +1192,14 @@ impl Backend for Stub {
         Ok(json!({ "level": level }))
     }
 
+    async fn set_admin(&self, agent_id: &str, admin: bool) -> Result<Value, CommandError> {
+        self.admins
+            .lock()
+            .unwrap()
+            .push((agent_id.to_string(), admin));
+        Ok(json!({ "agentId": agent_id, "admin": admin }))
+    }
+
     async fn import_status(&self) -> Result<Value, CommandError> {
         Ok(import_status_fixture(false, None))
     }
@@ -1215,6 +1331,50 @@ impl Backend for Stub {
         Ok(())
     }
 
+    async fn phone_signin(
+        &self,
+        device_id: &str,
+        _device_name: &str,
+        op: crate::agents::phone_signin::Op,
+    ) -> Result<Value, CommandError> {
+        use crate::agents::phone_signin::Op;
+        // As the router handed it over, through `Op`'s own `Debug`.
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("signin {op:?} by {device_id}"));
+        use crate::agents::phone_signin::{Begun, Frame, FrameState, Outcome};
+        Ok(match op {
+            Op::Begin { .. } => serde_json::to_value(Begun {
+                session_id: "signin_0123".into(),
+                domain: "figma.com".into(),
+                title: "Figma".into(),
+                idle_seconds: 300,
+            })
+            .unwrap(),
+            Op::Frame { session_id } if session_id == "outside" => serde_json::to_value(Frame {
+                state: FrameState::Outside,
+                host: Some("example.com".into()),
+                image: None,
+                width: 0,
+                height: 0,
+            })
+            .unwrap(),
+            Op::Frame { .. } => serde_json::to_value(Frame {
+                state: FrameState::Live,
+                host: Some("www.figma.com".into()),
+                image: Some("/9j/2w==".into()),
+                width: 1000,
+                height: 640,
+            })
+            .unwrap(),
+            Op::Done { anyway, .. } => serde_json::json!({
+                "outcome": if anyway { Outcome::SignedIn } else { Outcome::SignedOut }
+            }),
+            Op::Input { .. } | Op::Stop { .. } => Value::Null,
+        })
+    }
+
     async fn login_cancel(&self, _agent_id: &str, request_id: &str) -> Result<(), CommandError> {
         self.logins
             .lock()
@@ -1255,6 +1415,10 @@ impl Backend for Stub {
 
     async fn reach(&self, _agent_id: &str) -> Result<Value, CommandError> {
         Ok(reach_fixture())
+    }
+
+    async fn policy(&self, _agent_id: &str) -> Result<Value, CommandError> {
+        Ok(policy_fixture())
     }
 
     async fn logins_team(&self, _since: Option<i64>) -> Result<Value, CommandError> {
@@ -1446,6 +1610,8 @@ impl Backend for Stub {
         Ok(match action {
             A::Get { .. } => serde_json::to_value(team_setup_fixture()).unwrap(),
             A::Hello { .. } | A::Missing => serde_json::to_value(&messages()[0]).unwrap(),
+            A::Later { connect: true, .. } => json!({ "agentId": AGENT, "requestId": "q9" }),
+            A::Check => json!(2),
             _ => Value::Null,
         })
     }
@@ -1485,6 +1651,27 @@ impl Backend for Stub {
         };
         self.copies.lock().unwrap().push(line);
         Ok(json!({ "outcome": "kept", "files": 2, "branch": into.unwrap_or("main") }))
+    }
+
+    async fn watch_port(
+        &self,
+        agent_id: &str,
+        message_id: &str,
+    ) -> Result<(String, u16), CommandError> {
+        if agent_id == AGENT && message_id == "m-result" {
+            Ok(("/Users/test/ShipStudio/site".into(), 4123))
+        } else {
+            Err(CommandError::expected(
+                "Open Preview on the Mac first — the site isn't running there.",
+            ))
+        }
+    }
+
+    async fn watch_publish(&self) -> Result<String, CommandError> {
+        Ok(format!(
+            "https://mac.example.ts.net:{}",
+            super::watch::WATCH_TAILNET_PORT
+        ))
     }
 
     async fn discard_copy(&self, agent_id: &str, copy_id: &str) -> Result<(), CommandError> {
@@ -1707,10 +1894,104 @@ pub fn reach_fixture() -> Value {
             "access": "full", "kept": "Connected on claude.ai; the sign-in is held there",
             "needsSignIn": false, "lastUsedAt": 1_760_000_000_000_i64
         }],
-        "browser": { "on": true, "sites": ["www.linkedin.com"], "helperInstalled": true },
+        "browser": { "on": true, "teamOn": true, "ownOff": false, "sites": ["www.linkedin.com"], "helperInstalled": true },
         "secrets": [{ "secretId": "s1", "name": "x_key", "purpose": "Post to X", "variables": ["$X_KEY"] }],
         "blockedApps": []
     })
+}
+
+/// "What it can do", as `agents_policy` serializes it: an agent with its own
+/// browser setting and rule on a Balanced team. Built from the real types.
+pub fn policy_fixture() -> Value {
+    use crate::agents::policy::{self, Overrides, Preset, Saved};
+    let mut agent: crate::agents::store::Agent = serde_json::from_value(json!({
+        "id": AGENT, "name": "Finance", "shape": 0, "color": "red", "createdAt": 0
+    }))
+    .unwrap();
+    agent.project = Some("/u/Projects/client-site".into());
+    let mut saved = Saved {
+        version: 3,
+        team: Preset::Balanced.team(),
+        agents: Default::default(),
+    };
+    saved.team.rules.push("Never email clients".into());
+    saved.agents.insert(
+        AGENT.into(),
+        Overrides {
+            browser: Some(false),
+            folders: Some(vec![policy::Folder {
+                path: "/u/me/Invoices".into(),
+                write: false,
+            }]),
+            rules: vec!["Only touch the marketing site".into()],
+            ..Default::default()
+        },
+    );
+    serde_json::to_value(policy::agent_view(
+        &saved,
+        &agent,
+        crate::agents::independence::Level::Judgement,
+    ))
+    .unwrap()
+}
+
+/// A settings card as `propose_settings_change` raises it.
+pub fn settings_card() -> crate::agents::store::AgentMessage {
+    use crate::agents::policy::{Change, Target};
+    use crate::agents::policy_card::{Group, Proposal};
+    use crate::agents::store::{Approval, ApprovalStatus, MessageKind};
+    let mut m = crate::agents::runner::new_message(AGENT, MessageKind::Approval, "");
+    m.id = "m41".into();
+    m.ts = 1_762_290_100_000;
+    let proposal = Proposal {
+        targets: vec![Target::Agent {
+            agent_id: "hiring".into(),
+        }],
+        change: Change {
+            add_projects: vec!["/u/Projects/client-site".into()],
+            browser: Some(false),
+            ..Default::default()
+        },
+        version: 3,
+        groups: vec![Group {
+            who: "Hiring".into(),
+            agent_ids: vec!["hiring".into()],
+            changes: vec![
+                "Can now work in client-site (its own copy)".into(),
+                "Can no longer use your browser".into(),
+            ],
+        }],
+        why: Some("You asked for Hiring to help on the client's site".into()),
+        has_rules: true,
+    };
+    m.approval = Some(Approval {
+        request_id: "q13".into(),
+        title: "Change Hiring's settings?".into(),
+        detail:
+            "Hiring: Can now work in client-site (its own copy). Can no longer use your browser."
+                .into(),
+        summary: Some(
+            "Hiring: Can now work in client-site (its own copy). Can no longer use your browser."
+                .into(),
+        ),
+        status: ApprovalStatus::Pending,
+        tool: None,
+        input: None,
+        always: None,
+        always_allowed: false,
+        note: None,
+        prompt: None,
+        choice: None,
+        secret: None,
+        connector: None,
+        login: None,
+        set_aside: None,
+        expiry: None,
+        from_outside: None,
+        front: None,
+        settings: Some(proposal),
+    });
+    m
 }
 
 /// A login card as `request_login` raises it, with every way in, a sign-in
@@ -1731,6 +2012,8 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
     m.ts = 1_762_290_000_000;
     m.approval = Some(Approval {
         request_id: "q12".into(),
+        expiry: None,
+        front: None,
         title: "Finance needs your Gmail (work)".into(),
         detail: "Read invoices that arrive by email".into(),
         summary: None,
@@ -1745,6 +2028,8 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
         secret: None,
         connector: None,
         set_aside: None,
+        settings: None,
+        from_outside: None,
         login: Some(LoginRequest {
             service: "gmail".into(),
             title: "Gmail".into(),
@@ -1797,6 +2082,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
                 url: None,
                 opened_at: None,
             }),
+            also_for: vec!["Ops".into()],
         }),
     });
     m

@@ -22,6 +22,7 @@ import { AgentProjectField } from './AgentProject';
 import { AgentMemory } from './AgentMemory';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentReach } from './AgentReach';
+import { AgentPolicy } from './AgentPolicy';
 import { AgentEngineField, AgentEngineMore } from './AgentEngine';
 import { useQuotaLines } from './AgentsQuota';
 import { ChevronRightIcon } from '@/components/icons';
@@ -57,6 +58,7 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { AccentScope } from '../../contexts/AccentScopeContext';
+import { AdminSwitch } from './AgentAdmin';
 import {
   findTemplate,
   needsLine,
@@ -201,6 +203,8 @@ interface AgentEditorModalProps {
   onSetUpEngine?: (engine: AgentEngine, step: 'install' | 'sign-in') => void;
   /** Creating: close and draft the request in the Chief of Staff's chat instead. */
   onAskChief?: () => void;
+  /** "Change in chat": close and draft a settings request in the Chief of Staff's chat. */
+  onAskInChat?: (text: string) => void;
   /** Creating: open on this ready-made agent (an id from `ROLE_TEMPLATES`). */
   initialTemplate?: string | null;
 }
@@ -228,6 +232,7 @@ export function AgentEditorModal({
   initialTab = 'agent',
   onSetUpEngine,
   onAskChief,
+  onAskInChat,
   initialTemplate,
 }: AgentEditorModalProps) {
   const editing = Boolean(agent);
@@ -581,7 +586,9 @@ export function AgentEditorModal({
         <div className="agent-editor__briefing">
           <UsageLines usage={usage} agent={agent} />
           <CanDo agent={agent} />
+          <AdminSwitch agent={agent} />
           <Permissions agent={agent} />
+          <AgentPolicy agent={agent} onAskInChat={onAskInChat} />
           <AgentReach agent={agent} />
         </div>
       )}

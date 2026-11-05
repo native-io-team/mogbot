@@ -76,7 +76,8 @@ pub(super) enum Answer {
     Allowed,
     /// With what the user said, if they said why.
     Denied(Option<String>),
-    /// The user hasn't answered within the wait. The card stays live.
+    /// The user hasn't answered within the wait: the card expired
+    /// (`agents/expiry.rs`), or the same ask already had in this task.
     NotYet,
 }
 
@@ -91,6 +92,14 @@ pub(super) fn register_waiter(request_id: &str) -> oneshot::Receiver<bool> {
         .unwrap_or_else(|e| e.into_inner())
         .insert(request_id.to_string(), tx);
     rx
+}
+
+/// Whether a call is still parked on this card (`agents/expiry.rs`).
+pub(super) fn is_waited_on(request_id: &str) -> bool {
+    PENDING_APPROVALS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains_key(request_id)
 }
 
 pub(super) fn drop_waiter(request_id: &str) {
@@ -196,7 +205,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "delete_agent",
-        description: "Delete an agent, its memory and its conversation. The user is asked to confirm in the chat first.",
+        description: "Admin: delete another agent. It leaves the team at once and waits in Recently deleted for 30 days with its memory and conversation, where the user can restore it.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -321,7 +330,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "request_login",
-        description: "Ask the user to connect an app or account you need (Gmail, Google Calendar, Slack, LinkedIn, X, GitHub, Linear, Notion…). One card appears in this chat, on their phone too: it says which account and what you'll be able to do, and connects it the safest way there is: the app's own sign-in in their Mac's browser (you never see a password; the token stays in the Mac's Keychain), or their own signed-in browser for a site with no connector, where every post, send or payment asks them first. Never ask for a password or a login in chat. It returns at once: stop and tell the user in one line what it's for; you're woken when they connect it, with the tools to use, or decline.",
+        description: "Get access to an app or account you're blocked on for the user's task (Gmail, Google Calendar, Slack, LinkedIn, X, GitHub, Linear, Notion, Figma…). Try first: your own tools for it, then the user's signed-in browser (mcp__claude-in-chrome__*) if you have it. This checks the same on the Mac before asking: it may answer that you can reach it already (and how), that the user already answered, or that someone else's card for it is waiting and you're on it. Only otherwise does one card appear in this chat, on their phone too, with a sign-in button (the app's own sign-in in their Mac's browser; you never see a password). Never ask for a password or a login in chat, never up front, one at a time. When a card was raised, stop and tell the user in one line what it's for; you're woken when they answer.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -329,9 +338,44 @@ const TOOLS: &[Tool] = &[
                 "service": { "type": "string", "description": "The app or site, e.g. gmail, google_calendar, slack, linkedin, x, github, linear, notion, figma, stripe, vercel; or its name if it's something else." },
                 "account_hint": { "type": "string", "description": "Optional: which account, when it matters (\"work Gmail\", \"sam@acme.com\")." },
                 "scopes": { "type": "array", "items": { "type": "string" }, "description": "What you need: [\"read\"], or also [\"send\"], [\"post\"], [\"write\"]. Ask for the least that does the job." },
-                "why": { "type": "string", "description": "What you'll use it for, in one line. Shown on the card." }
+                "why": { "type": "string", "description": "What you'll use it for, in one line. Shown on the card." },
+                "signed_out": { "type": "boolean", "description": "true when you opened it in the user's browser and the page asked you to sign in." }
             },
             "required": ["service", "why"]
+        }),
+    },
+    Tool {
+        name: super::policy_card::TOOL,
+        description: super::policy_card::DESCRIPTION,
+        main_only: false,
+        schema: super::policy_card::schema,
+    },
+    Tool {
+        name: "remember_browser_account",
+        description: "After you checked, on the page itself, which account one of your sites is signed in as in the user's Chrome: remember which Chrome profile (browser) that was, so next time starts there. Only for your own sites; never a guess.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "site": { "type": "string", "description": "The site, as you were given it (e.g. www.figma.com)." },
+                "browser": { "type": "string", "description": "The browser's name from list_connected_browsers (e.g. \"Browser 1\")." },
+                "account": { "type": "string", "description": "The account the page showed (an email or a username)." }
+            },
+            "required": ["site", "browser"]
+        }),
+    },
+    Tool {
+        name: "ask_bring_browser_to_front",
+        description: "The account a task needs isn't in any connected Chrome profile you've looked in, and no other profile is connected: ask the user, once, to bring the right Chrome window to the front. One plain card (Check again / Not now), never a login. If another profile is connected that you haven't looked in, it says so instead. When a card was raised, stop; you're woken when they answer.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "site": { "type": "string", "description": "The site, as you were given it." },
+                "account": { "type": "string", "description": "The account you need (\"sam@work.example\"), when you know it." },
+                "looked_in": { "type": "array", "items": { "type": "string" }, "description": "The browsers you already opened it in and found the wrong account." }
+            },
+            "required": ["site"]
         }),
     },
     Tool {
@@ -373,10 +417,21 @@ pub(super) fn tool_names(caller: &store::Agent) -> Vec<String> {
         .collect()
 }
 
+/// Whether `caller` is served `tool`. Admin tools (reading another agent,
+/// deleting one) follow the user's Admin switch, and are off in a turn
+/// answering outside text (`admin::admin_now`); the rest are the Chief's.
+fn serves(tool: &Tool, caller: &store::Agent) -> bool {
+    match tool.name {
+        "delete_agent" => super::admin::admin_now(caller),
+        "read_agent" => caller.is_main || super::admin::admin_now(caller),
+        _ => !tool.main_only || caller.is_main,
+    }
+}
+
 fn tools_list(caller: &store::Agent) -> Value {
     let mut tools: Vec<Value> = TOOLS
         .iter()
-        .filter(|t| !t.main_only || caller.is_main)
+        .filter(|t| serves(t, caller))
         .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() }))
         .collect();
     tools.extend(
@@ -393,8 +448,17 @@ fn tools_list(caller: &store::Agent) -> Value {
                 .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() })),
         );
     }
+    if super::admin::admin_now(caller) {
+        tools.extend(
+            super::admin::TOOLS
+                .iter()
+                .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() })),
+        );
+    }
     // Every agent works on projects the same way.
     tools.extend(super::sessions::definitions());
+    // "Test it": only while the user's run is open (`preview_test`).
+    tools.extend(super::preview_test::definitions(&caller.id));
     json!({ "tools": tools })
 }
 
@@ -433,6 +497,11 @@ pub async fn handle_rpc(
             if let Some(tool) = super::sessions::find(name) {
                 return ok(super::sessions::call(app, &caller, tool, &args).await);
             }
+            // The user's own local preview, after they pressed Test it: no
+            // card (local work), and nothing but that page.
+            if let Some(tool) = super::preview_test::find(name) {
+                return ok(super::preview_test::call(app, &caller, turn, tool, &args).await);
+            }
             if let Some(tool) = super::usage_tools::find(name) {
                 return ok(usage_tool(app, &caller, turn, tool, &args).await);
             }
@@ -441,13 +510,28 @@ pub async fn handle_rpc(
             if let Some(tool) = super::room_tools::find(name) {
                 return ok(super::room_tools::call(app, &caller, turn, tool, &args).await);
             }
+            // Admin only, checked again on every call (`admin::call`).
+            if let Some(tool) = super::admin::find(name) {
+                return ok(super::admin::call(app, &caller, tool, &args).await);
+            }
             let Some(tool) = TOOLS.iter().find(|t| t.name == name) else {
                 return fail(-32602, &format!("Unknown tool: {name}"));
             };
-            if tool.main_only && !caller.is_main {
+            if (name == "delete_agent" || name == "read_agent") && !serves(tool, &caller) {
+                return ok(error(
+                    super::admin::refusal(&caller).unwrap_or("Only an admin can do that."),
+                ));
+            }
+            if tool.main_only && !caller.is_main && name != "read_agent" && name != "delete_agent" {
                 return ok(error(
                     "Only the Chief of Staff can do that. Ask it with message_agent.",
                 ));
+            }
+            // Only the user makes an agent an admin.
+            if (name == "create_agent" || name == "update_agent")
+                && super::admin::tries_to_grant(&args)
+            {
+                return ok(error(super::admin::ONLY_THE_USER_GRANTS));
             }
             if name == "approve" {
                 return ok(approve(app, &caller, turn, &args).await);
@@ -547,7 +631,22 @@ async fn call(
             check_ins(app, caller, turn, name, args).await
         }
         "request_secret" => request_secret(app, caller, args),
-        "request_login" => request_login(app, caller, args),
+        "request_login" => request_login(app, caller, args).await,
+        "remember_browser_account" => {
+            match super::browser_profiles::remember(caller, args, runner::from_outside(&caller.id))
+            {
+                Ok(t) => text(t),
+                Err(e) => error(e),
+            }
+        }
+        "ask_bring_browser_to_front" => {
+            let outside = runner::from_outside(&caller.id);
+            match super::browser_profiles::bring_to_front(app, caller, args, outside).await {
+                Ok(t) => text(t),
+                Err(e) => error(e),
+            }
+        }
+        super::policy_card::TOOL => super::policy_card::propose(app, caller, turn, args).await,
         _ => error("Unknown tool"),
     }
 }
@@ -742,16 +841,17 @@ async fn check_ins(
     name: &str,
     args: &Value,
 ) -> Value {
-    let target = match arg(args, "agent") {
-        None => caller.clone(),
-        Some(t) => match store::find(t) {
-            Ok(Some(a)) if a.id == caller.id || caller.is_main => a,
-            Ok(Some(_)) => {
-                return error("You can only schedule your own routines. Ask the Chief of Staff.")
-            }
-            _ => return error(format!("There's no agent called {t}.")),
-        },
-    };
+    let target =
+        match arg(args, "agent") {
+            None => caller.clone(),
+            Some(t) => match store::find(t) {
+                Ok(Some(a)) if a.id == caller.id || super::admin::admin_now(caller) => a,
+                Ok(Some(_)) => return error(
+                    "You can only change your own routines. Ask an admin, like the Chief of Staff.",
+                ),
+                _ => return error(format!("There's no agent called {t}.")),
+            },
+        };
     let whose = |summary: String| {
         if target.id == caller.id {
             summary
@@ -837,7 +937,7 @@ pub fn created_routine_line(app: &AppHandle, agent_id: &str, c: &schedule::Check
 pub fn routine_line_text(c: &schedule::CheckIn) -> String {
     match &c.watch {
         Some(w) => format!(
-            "Set up a “When…” routine: when {}, {} · {}",
+            "Set up a “When…” routine for when {}: {} · {}",
             super::watch::describe(&w.source),
             short_line(&c.note),
             super::watch::cost_words(w)
@@ -1430,6 +1530,8 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     text(format!("Updated {}.", updated.name))
 }
 
+/// An admin's delete is a soft one: the agent leaves the team and waits in
+/// Recently deleted for 30 days, restorable by the user (`admin::soft_delete`).
 async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
     let Some(target) = arg(args, "agent") else {
         return error("`agent` is required.");
@@ -1441,51 +1543,25 @@ async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if agent.is_main {
         return error("The Chief of Staff can't be deleted.");
     }
-    let answer = ask_user(
-        app,
-        caller,
-        format!("Delete {}", agent.name),
-        "Its memory and conversation are deleted too. This can't be undone.".to_string(),
-        None,
-    )
-    .await;
-    if let Some(refused) = refused_reply(&answer, "delete it") {
-        return error(refused);
-    }
-    match super::takeover::delete_agent(app, &agent.id).await {
-        Ok(removed) => {
-            // Its copy's folder goes (pending work committed first); a
-            // branch with work on it stays. The copy as it was at delete,
-            // not before the question.
-            if let Some(copy) = removed.copy {
-                tauri::async_runtime::spawn(super::task::abandon(copy));
-            }
-            let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
-            // No link: there's nothing left to open.
-            let line = audit_note(&caller.id, format!("Deleted {}", agent.name), None);
-            let _ = runner::record(app, line);
-            text(format!("Deleted {}.", agent.name))
-        }
+    match super::admin::soft_delete(app, caller, &agent).await {
+        Ok(()) => text(format!(
+            "Deleted {}. It's in Recently deleted for {} days: the user can restore it from Settings → Agents.",
+            agent.name,
+            store::TRASH_DAYS
+        )),
         Err(e) => error(e.to_string()),
     }
 }
 
 /// A login card (`agents/logins.rs`). Nothing waits on it: connecting or
 /// declining wakes the agent.
-fn request_login(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+/// The access chain first (`access_chain`): a card only when nothing on
+/// this Mac reaches it and nobody asked already.
+async fn request_login(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
     let ask = super::logins::Ask::from_args(args);
-    match super::logins::raise(app, caller, &ask) {
-        Ok(reply) => text(reply),
-        Err(e) => error(e.to_string()),
-    }
-}
-
-/// A login card for an agent the import brought in: answering it doesn't
-/// wake the agent.
-pub(crate) fn request_login_quiet(app: &AppHandle, agent: &store::Agent, args: &Value) -> Value {
-    let mut ask = super::logins::Ask::from_args(args);
-    ask.quiet = true;
-    match super::logins::raise(app, agent, &ask) {
+    let tried = super::access_chain::Tried::from_args(args);
+    let outside = runner::from_outside(&caller.id);
+    match super::access_chain::request(app, caller, &ask, &tried, outside).await {
         Ok(reply) => text(reply),
         Err(e) => error(e.to_string()),
     }
@@ -1496,12 +1572,6 @@ pub(crate) fn request_login_quiet(app: &AppHandle, agent: &store::Agent, args: &
 /// tomorrow works as well as one answered now.
 fn request_secret(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
     request_secret_as(app, caller, args, false)
-}
-
-/// A secure input card for an agent the import connector brought in: saving
-/// or declining it doesn't wake the agent (`secrets::Request::quiet`).
-pub(crate) fn request_secret_quiet(app: &AppHandle, agent: &store::Agent, args: &Value) -> Value {
-    request_secret_as(app, agent, args, true)
 }
 
 fn request_secret_as(app: &AppHandle, caller: &store::Agent, args: &Value, quiet: bool) -> Value {
@@ -1526,6 +1596,10 @@ fn request_secret_as(app: &AppHandle, caller: &store::Agent, args: &Value, quiet
         Err(e) => return error(e.to_string()),
     };
     request.quiet = quiet;
+    // Asked already in this task and nobody answered: not again.
+    if super::expiry::already_expired(&caller.id, &super::expiry::secret_key(&request.name)) {
+        return text(super::expiry::told_maybe_later(&request.name));
+    }
     // An app the user chose not to connect isn't asked for by another door.
     if let Some(refused) =
         super::declined::refusal_for_text(&format!("{} {}", request.name, request.purpose))
@@ -1595,6 +1669,14 @@ async fn ask(
     detail: String,
     call: Option<(&str, &Value)>,
 ) -> Answer {
+    // The same ask expired unanswered earlier in this task: not raised again.
+    let key = match call {
+        Some((tool, input)) => super::expiry::tool_key(tool, input),
+        None => super::expiry::ask_key(&title, &detail),
+    };
+    if super::expiry::already_expired(&caller.id, &key) {
+        return Answer::NotYet;
+    }
     let request_id = store::new_id();
     let (tx, rx) = oneshot::channel();
     PENDING_APPROVALS
@@ -1604,7 +1686,13 @@ async fn ask(
 
     let mut card = runner::new_message(&caller.id, MessageKind::Approval, "");
     let mut approval = new_card(request_id.clone(), title, detail, call);
-    approval.summary = summary;
+    // `new_card` gave a tool call its plain line; a caller's own wins.
+    if summary.is_some() {
+        approval.summary = summary;
+    }
+    if call.is_some() {
+        approval.from_outside = Some(runner::from_outside(&caller.id));
+    }
     card.approval = Some(approval);
     let _ = runner::record(app, card);
     store::refresh_pending(&caller.id);
@@ -1623,20 +1711,23 @@ async fn ask(
             .flatten()
             .and_then(|a| a.note)
     });
+    // An answered card was already written by the command. An unanswered
+    // one expires now, into a one-line receipt, and isn't asked again in
+    // this task (`agents/expiry.rs`). Closed before the waiter goes, so the
+    // sweep never reads it as abandoned.
+    if answer == Answer::NotYet {
+        super::expiry::remember(&caller.id, key);
+        if let Ok(Some(updated)) =
+            store::expire_card(&caller.id, &request_id, super::expiry::Expiry::NoAnswer)
+        {
+            let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &updated);
+        }
+        store::refresh_pending(&caller.id);
+    }
     PENDING_APPROVALS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .remove(&request_id);
-
-    // An answered card was already written by the command. An unanswered one
-    // stays pending if a late answer can still act on it, else it expires.
-    if answer == Answer::NotYet && call.is_none() {
-        if let Ok(Some(updated)) =
-            store::set_approval_status(&caller.id, &request_id, ApprovalStatus::Expired)
-        {
-            let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &updated);
-        }
-    }
     let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
     super::notify::refresh_badge(app);
     // Back to work, unless another card is still open, or the turn already
@@ -1667,9 +1758,7 @@ pub(super) fn refused_reply(answer: &Answer, what: &str) -> Option<String> {
         Answer::Denied(Some(note)) => Some(format!(
             "The user said no, and told you: \"{note}\". Don't {what}."
         )),
-        Answer::NotYet => Some(format!(
-            "The user didn't answer in time, so the request expired; nothing was done. Don't {what} now. Tell them in one line, and ask again when they're back."
-        )),
+        Answer::NotYet => Some(format!("Don't {what} now. {}", super::expiry::TOLD)),
     }
 }
 
@@ -1690,7 +1779,8 @@ pub(super) fn new_card(
         input: call.map(|(_, input)| input.clone()),
         always: call.and_then(|(tool, input)| permissions::suggest(tool, input)),
         always_allowed: false,
-        summary: None,
+        // What it does and why, in words; the raw call goes behind Details.
+        summary: call.and_then(|(tool, input)| super::admin::summary_for(tool, input, None)),
         note: None,
         prompt: None,
         choice: None,
@@ -1698,6 +1788,10 @@ pub(super) fn new_card(
         connector: None,
         login: None,
         set_aside: None,
+        expiry: None,
+        from_outside: None,
+        front: None,
+        settings: None,
     }
 }
 
@@ -1812,14 +1906,27 @@ pub fn describe_request(tool: &str, input: &Value) -> (String, String) {
 /// `mcp__gmail__send_email` → "Send an email · Gmail": a verb phrase from the
 /// tool's name, with the server it belongs to as context. Anything that isn't
 /// an MCP tool name keeps its own name after "Use".
-fn mcp_title(tool: &str) -> String {
+pub(super) fn mcp_title(tool: &str) -> String {
     let Some((server, name)) = tool.strip_prefix("mcp__").and_then(|t| t.split_once("__")) else {
         return format!("Use {tool}");
     };
-    let words = split_words(name);
+    if let Some(title) = browser_tool_title(server, name) {
+        return format!("{title} · {}", service_name(server));
+    }
+    // "tabs_context_mcp", "javascript_tool": the server's own suffix and the
+    // word "tool" aren't words anyone says.
+    let words: Vec<String> = split_words(name)
+        .into_iter()
+        .filter(|w| w != "mcp" && w != "tool")
+        .collect();
     let Some((verb, object)) = words.split_first() else {
         return format!("Use {tool}");
     };
+    // Not every tool's name starts with a verb ("tabs_context"): those read
+    // "Use tabs context", never "Tabs a context".
+    if !object.is_empty() && !TOOL_VERBS.contains(&verb.as_str()) {
+        return format!("Use {} · {}", words.join(" "), service_name(server));
+    }
     let mut phrase = capitalize(verb);
     if !object.is_empty() {
         let last = object.last().map(String::as_str).unwrap_or("");
@@ -1844,6 +1951,44 @@ fn mcp_title(tool: &str) -> String {
         phrase.push_str(&object.join(" "));
     }
     format!("{phrase} · {}", service_name(server))
+}
+
+/// Verbs an MCP tool's name usually starts with. A name that starts with
+/// anything else is a noun phrase, said as "Use …".
+const TOOL_VERBS: [&str; 44] = [
+    "add", "append", "archive", "ask", "cancel", "check", "click", "close", "comment", "create",
+    "delete", "download", "draft", "edit", "fetch", "fill", "find", "get", "invite", "label",
+    "list", "load", "mark", "merge", "move", "open", "post", "publish", "query", "read", "remove",
+    "reply", "run", "save", "schedule", "search", "send", "set", "share", "start", "stop",
+    "submit", "update", "upload",
+];
+
+/// The browser extension's tools, in what they do to the page. Its names are
+/// nouns ("computer", "javascript_tool", "tabs_context_mcp"), which the verb
+/// rule turned into "Javascript a tool" and "Tabs a context".
+fn browser_tool_title(server: &str, name: &str) -> Option<&'static str> {
+    if !matches!(
+        server.to_ascii_lowercase().as_str(),
+        "claude-in-chrome" | "claude_in_chrome" | "chrome"
+    ) {
+        return None;
+    }
+    Some(match name {
+        "computer" => "Click and type in the browser",
+        "navigate" => "Open a page",
+        "javascript_tool" => "Run a script on the page",
+        "tabs_context_mcp" | "tabs_context" => "See its browser tabs",
+        "tabs_create_mcp" | "tabs_create" => "Open a tab",
+        "read_page" | "get_page_text" => "Read the page",
+        "find" => "Find something on the page",
+        "form_input" => "Fill in a form",
+        "read_console_messages" => "Read the page's console",
+        "read_network_requests" => "Read the page's network requests",
+        "upload_image" => "Upload an image",
+        "resize_window" => "Resize the browser window",
+        "gif_creator" => "Record the screen",
+        _ => return None,
+    })
 }
 
 /// An MCP server's name as a person would say it: `claude_ai_Gmail` →
@@ -1919,6 +2064,10 @@ pub(super) async fn decide(
     why: Option<&str>,
 ) -> Decision {
     let decision = decide_inner(app, caller, tool, input, why).await;
+    // Where its browser is now, for the next card's "on <site>, as …".
+    if decision == Decision::Allow {
+        super::browser::note_opened(&caller.id, tool, input);
+    }
     // The connection relay lets an allowed call through once, so it doesn't
     // ask again (`conn_relay`).
     if decision == Decision::Allow && super::connections::is_connection_tool(tool) {
@@ -1952,6 +2101,15 @@ async fn decide_inner(
     if take_grant(&caller.id, tool, input) {
         return Decision::Allow;
     }
+    // What the agent's settings allow (`policy`): a project or folder it
+    // may not use, an app or the browser it was kept from, is refused
+    // without a card; reading where it may read needs none.
+    let eff = super::policy::effective(caller);
+    match super::policy::verdict(&eff, caller, &super::policy::Places::current(), tool, input) {
+        Some(super::policy::Verdict::Allow) => return Decision::Allow,
+        Some(super::policy::Verdict::Deny(why)) => return Decision::Deny(why),
+        None => {}
+    }
     // A connection the user granted on a login card: reads go through
     // (except in a turn answering outside text), a read-only grant refuses
     // the rest (`connections::gate`).
@@ -1960,6 +2118,13 @@ async fn decide_inner(
         super::connections::Gate::Allow => return Decision::Allow,
         super::connections::Gate::Refuse(why) => return Decision::Deny(why),
         super::connections::Gate::Ask => {}
+    }
+    // The user's browser: reads on the sites it was given go through; any
+    // other site, and every click, keystroke or form, asks (`browser::gate`).
+    match super::browser::gate(caller, tool, input, outside) {
+        super::browser::Gate::Allow => return Decision::Allow,
+        super::browser::Gate::Refuse(why) => return Decision::Deny(why),
+        super::browser::Gate::Ask | super::browser::Gate::NotBrowser => {}
     }
     if always_allowed(caller, tool, input) {
         // Nothing happens invisibly: each one leaves a quiet line in the chat.
@@ -1970,15 +2135,173 @@ async fn decide_inner(
         );
         return Decision::Allow;
     }
+    // Local work the user's independence level answers for them
+    // (`autoallow`): a quiet line in the timeline, never invisible.
+    if let Some(level) = auto_allowed(caller, tool, input, outside) {
+        super::work::on_step(
+            &caller.id,
+            super::work::StepKind::Approval,
+            &auto_line(level, tool, input),
+            store::now_ms(),
+        );
+        return Decision::Allow;
+    }
     let (title, mut detail) = describe_request(tool, input);
-    if let Some(why) = why.map(str::trim).filter(|w| !w.is_empty()) {
+    let why = why.map(str::trim).filter(|w| !w.is_empty());
+    if let Some(why) = why {
         detail = format!("{detail}\n\n{why}");
     }
-    match ask_user(app, caller, title, detail, Some((tool, input))).await {
+    // A browser card says what it would do in plain words ("Click “Send” on
+    // mail.google.com"), where and as whom; the raw call stays behind Details.
+    // Everything else leads with a plain what-and-why line.
+    let (title, summary) = if tool.starts_with(super::browser_gate::SERVER) {
+        let page = super::browser_gate::page_of(&caller.id);
+        let (title, said) = super::browser_gate::describe(tool, input, &page);
+        let mut summary = said;
+        if let Some((_, where_)) = super::browser::card(&caller.id, tool, input) {
+            summary = [summary, where_]
+                .into_iter()
+                .filter(|s| !s.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+        }
+        (title, Some(summary).filter(|s| !s.is_empty()))
+    } else {
+        (title, super::admin::summary_for(tool, input, why))
+    };
+    match ask(app, caller, title, summary, detail, Some((tool, input))).await {
         Answer::Allowed => Decision::Allow,
         Answer::Denied(note) => Decision::Deny(denied(note)),
         Answer::NotYet => Decision::Deny(NOT_YET.to_string()),
     }
+}
+
+/// The level that answers this call without a card, if the user's does.
+fn auto_allowed(
+    caller: &store::Agent,
+    tool: &str,
+    input: &Value,
+    outside: bool,
+) -> Option<super::independence::Level> {
+    // Its own level when its settings give it one (`policy`).
+    let chosen = super::policy::chosen_level(caller);
+    let ctx = super::autoallow::Ctx::for_agent(caller)?;
+    super::autoallow::auto(chosen, outside, tool, input, &ctx).map(|_| receipt_level(chosen, outside))
+}
+
+/// The level a receipt names: "Go hard" answers at its own level even for a
+/// turn answering outside text (`go_hard`); the others as the turn runs.
+fn receipt_level(
+    chosen: super::independence::Level,
+    outside: bool,
+) -> super::independence::Level {
+    if chosen == super::independence::Level::GoHard {
+        chosen
+    } else {
+        super::independence::for_turn(chosen, outside)
+    }
+}
+
+/// "Allowed automatically — Go hard · ls -la ~/Notes".
+fn auto_line(level: super::independence::Level, tool: &str, input: &Value) -> String {
+    format!(
+        "Allowed automatically — {} · {}",
+        level.short(),
+        one_line(tool, input)
+    )
+}
+
+/// When the user changes the level: first every card nothing waits on any
+/// more closes (its turn ended: "Expired — the agent moved on", and an
+/// overdue sign-in or secure input "Maybe later"; `expiry`), then each open
+/// permission card the new level answers is allowed with a receipt line in
+/// its chat and its waiting call goes through. Returns how many it allowed.
+pub fn sweep_auto_allowed(app: &AppHandle) -> usize {
+    super::expiry::sweep_all(app, super::expiry::Moment::Tick);
+    let Ok(agents) = store::list() else {
+        return 0;
+    };
+    let mut answered = 0;
+    for agent in agents {
+        // Each agent at its own level (`policy`): the team's unless it has one.
+        let chosen = super::policy::chosen_level(&agent);
+        if chosen == super::independence::Level::Often {
+            continue;
+        }
+        let Ok(open) = store::pending_approvals(&agent.id) else {
+            continue;
+        };
+        let Some(ctx) = super::autoallow::Ctx::for_agent(&agent) else {
+            continue;
+        };
+        let browser_ok = |tool: &str, input: &Value, outside: bool| {
+            super::browser::gate(&agent, tool, input, outside) == super::browser::Gate::Allow
+        };
+        let mut here = 0;
+        for card in open {
+            // Its turn ended between the expiry pass and here: the next
+            // sweep closes it.
+            if !is_waited_on(&card.request_id) {
+                continue;
+            }
+            let Some(inside) = sweepable(chosen, &card, &ctx, &browser_ok) else {
+                continue;
+            };
+            let (Some(tool), Some(input)) = (&card.tool, &card.input) else {
+                continue;
+            };
+            let level = receipt_level(chosen, !inside);
+            let Ok(Some(updated)) =
+                store::set_approval_status(&agent.id, &card.request_id, ApprovalStatus::Allowed)
+            else {
+                continue;
+            };
+            answer_approval(&card.request_id, true);
+            let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &updated);
+            let _ = runner::record(
+                app,
+                runner::new_message(&agent.id, MessageKind::Note, auto_line(level, tool, input)),
+            );
+            here += 1;
+        }
+        if here > 0 {
+            store::refresh_pending(&agent.id);
+        }
+        answered += here;
+    }
+    let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
+    super::notify::refresh_badge(app);
+    answered
+}
+
+/// Whether an open card is one the sweep answers: `Some(inside)` (whether
+/// its turn was known not to answer outside text) when the level allows it:
+/// local work and reads (`autoallow`), or a browser step the browser gate
+/// lets through (`browser_ok(tool, input, outside)`). Login, secret,
+/// session-question and import cards are never answered.
+fn sweepable(
+    chosen: super::independence::Level,
+    card: &Approval,
+    ctx: &super::autoallow::Ctx,
+    browser_ok: &dyn Fn(&str, &Value, bool) -> bool,
+) -> Option<bool> {
+    let (Some(tool), Some(input)) = (&card.tool, &card.input) else {
+        return None;
+    };
+    if chosen == super::independence::Level::Often
+        || card.status != ApprovalStatus::Pending
+        || card.login.is_some()
+        || card.secret.is_some()
+        || card.prompt.is_some()
+        || card.connector.is_some()
+    {
+        return None;
+    }
+    let inside = card.from_outside == Some(false);
+    if tool.starts_with(super::browser_gate::SERVER) {
+        return browser_ok(tool, input, !inside).then_some(inside);
+    }
+    super::autoallow::auto(chosen, !inside, tool, input, ctx).map(|_| inside)
 }
 
 /// What the agent is told when the user said no.
@@ -1990,7 +2313,7 @@ pub(super) fn denied(note: Option<String>) -> String {
 }
 
 /// What the agent is told when the card is still waiting.
-pub(super) const NOT_YET: &str = "The user hasn't answered yet; they may be away. Don't retry and don't work around it. Stop here and tell them in one short line what you need approved and why. The request stays in their chat: if they allow it later, you'll be woken up to finish, and that exact call will go through.";
+pub(super) const NOT_YET: &str = super::expiry::TOLD;
 
 async fn approve(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &Value) -> Value {
     let tool = args
@@ -2165,10 +2488,7 @@ mod tests {
             ),
             ("Bash", json!({ "command": "git push origin main" })),
             ("Bash", json!({ "command": "rm -rf ~/Documents/old" })),
-            (
-                "WebFetch",
-                json!({ "url": "https://example.test/checkout" }),
-            ),
+            ("Bash", json!({ "command": "gh pr review 248 --approve" })),
         ];
         for (tool, input) in &calls {
             assert!(!take_grant(&agent.id, tool, input), "{tool}");
@@ -2176,19 +2496,177 @@ mod tests {
                 !always_allowed(&agent, tool, input),
                 "{tool} goes to a card"
             );
+            for outside in [false, true] {
+                assert_eq!(
+                    auto_allowed(&agent, tool, input, outside),
+                    None,
+                    "{tool} goes to a card at Go hard"
+                );
+            }
         }
+        // Local work goes through at Go hard, with its receipt words.
+        let ls = json!({ "command": "ls -la ~/FictionalFolder" });
+        assert_eq!(
+            auto_allowed(&agent, "Bash", &ls, false),
+            Some(Level::GoHard)
+        );
+        // Outside text keeps Go hard for reading and local work (`go_hard`);
+        // only network writes and fetched packages ask there.
+        assert_eq!(
+            auto_allowed(&agent, "Bash", &ls, true),
+            Some(Level::GoHard)
+        );
+        let mkdir = json!({ "command": "mkdir -p ~/FictionalProjects/new-site" });
+        assert_eq!(
+            auto_allowed(&agent, "Bash", &mkdir, false),
+            Some(Level::GoHard)
+        );
+        assert_eq!(
+            auto_allowed(&agent, "Bash", &mkdir, true),
+            Some(Level::GoHard)
+        );
+        let fetched = json!({ "command": "npx some-fictional-package" });
+        assert_eq!(auto_allowed(&agent, "Bash", &fetched, true), None);
+        assert!(auto_line(Level::GoHard, "Bash", &mkdir)
+            .starts_with("Allowed automatically — Go hard · mkdir -p"));
+        independence::set_level(Level::Often, 2).unwrap();
+        assert_eq!(auto_allowed(&agent, "Bash", &ls, false), None);
         store::set_root_for_tests(None);
+    }
 
-        // Nothing on the approval path reads the level.
-        for source in [
-            include_str!("mcp.rs"),
-            include_str!("broker.rs"),
-            include_str!("permissions.rs"),
-            include_str!("codex_app.rs"),
-        ] {
-            let code = source.split("#[cfg(test)]").next().unwrap();
-            assert!(!code.contains("independence::"));
-        }
+    #[test]
+    fn the_sweep_answers_only_what_the_level_would_and_never_logins() {
+        use super::super::autoallow::Ctx;
+        use super::super::independence::Level;
+        let own = "/Users/fictional/Library/Application Support/App/agents/a1";
+        let ctx = Ctx {
+            home: "/Users/fictional".into(),
+            own_home: own.into(),
+            cwd: own.into(),
+            scratch: vec![own.into()],
+            app_data: vec!["/Users/fictional/Library/Application Support/App".into()],
+        };
+        let card = |cmd: &str, outside: Option<bool>| {
+            let mut c = new_card(
+                "r".into(),
+                "Run a command".into(),
+                cmd.into(),
+                Some(("Bash", &json!({ "command": cmd }))),
+            );
+            c.from_outside = outside;
+            c
+        };
+        let read = card("ls -la ~/Desk", Some(false));
+        let write = card("mkdir ~/Desk/new", Some(false));
+        assert_eq!(
+            sweepable(Level::GoHard, &read, &ctx, &no_browser),
+            Some(true)
+        );
+        assert_eq!(
+            sweepable(Level::GoHard, &write, &ctx, &no_browser),
+            Some(true)
+        );
+        // A card from before the marker, or from outside text: Go hard still
+        // answers local work; a network write from there waits.
+        assert_eq!(
+            sweepable(
+                Level::GoHard,
+                &card("mkdir ~/Desk/new", None),
+                &ctx,
+                &no_browser
+            ),
+            Some(false)
+        );
+        assert_eq!(
+            sweepable(
+                Level::GoHard,
+                &card("curl -X POST localhost:3000/api -d x", Some(true)),
+                &ctx,
+                &no_browser
+            ),
+            None
+        );
+        assert_eq!(
+            sweepable(
+                Level::Judgement,
+                &card("mkdir ~/Desk/new", None),
+                &ctx,
+                &no_browser
+            ),
+            None
+        );
+        assert_eq!(
+            sweepable(Level::GoHard, &card("ls ~/Desk", None), &ctx, &no_browser),
+            Some(false)
+        );
+        let send = card(
+            "curl -X POST -d @notes.txt https://example.test",
+            Some(false),
+        );
+        assert_eq!(sweepable(Level::GoHard, &send, &ctx, &no_browser), None);
+        assert_eq!(sweepable(Level::Judgement, &write, &ctx, &no_browser), None);
+        assert_eq!(
+            sweepable(Level::Judgement, &read, &ctx, &no_browser),
+            Some(true)
+        );
+        assert_eq!(sweepable(Level::Often, &read, &ctx, &no_browser), None);
+        // Not a tool call, already answered, or a login: left alone.
+        let confirm = new_card("c".into(), "Delete Finance".into(), "d".into(), None);
+        assert_eq!(sweepable(Level::GoHard, &confirm, &ctx, &no_browser), None);
+        let mut done = read.clone();
+        done.status = ApprovalStatus::Denied;
+        assert_eq!(sweepable(Level::GoHard, &done, &ctx, &no_browser), None);
+        let mut login = read.clone();
+        login.login = Some(
+            serde_json::from_value(json!({
+                "service": "fictional-mail", "title": "Fictional Mail", "why": "x",
+                "abilities": [], "options": []
+            }))
+            .unwrap(),
+        );
+        assert_eq!(sweepable(Level::GoHard, &login, &ctx, &no_browser), None);
+
+        // The shapes left open in a real team (names fictional): a web
+        // search, a Grok-era listing, a PR check loop, and browser looks.
+        let tool_card = |tool: &str, input: Value| {
+            let mut c = new_card("w".into(), "t".into(), "d".into(), Some((tool, &input)));
+            c.from_outside = None;
+            c
+        };
+        let search = tool_card(
+            "WebSearch",
+            json!({ "mode": "standard", "query": "fictional rates 2026" }),
+        );
+        assert_eq!(
+            sweepable(Level::Judgement, &search, &ctx, &no_browser),
+            Some(false)
+        );
+        assert_eq!(
+            sweepable(Level::GoHard, &search, &ctx, &no_browser),
+            Some(false)
+        );
+        let prs = card(
+            "for n in 266 248; do gh pr view $n --repo FictionalOrg/site --json reviews,comments; done",
+            Some(false),
+        );
+        assert_eq!(
+            sweepable(Level::GoHard, &prs, &ctx, &no_browser),
+            Some(true)
+        );
+        let approve = card("gh pr review 248 --approve", Some(false));
+        assert_eq!(sweepable(Level::GoHard, &approve, &ctx, &no_browser), None);
+        let look = tool_card(
+            "mcp__claude-in-chrome__computer",
+            json!({ "action": "screenshot", "tabId": 1 }),
+        );
+        let looks = |_: &str, i: &Value, _: bool| i["action"] == "screenshot";
+        assert_eq!(sweepable(Level::GoHard, &look, &ctx, &looks), Some(false));
+        assert_eq!(sweepable(Level::GoHard, &look, &ctx, &no_browser), None);
+        assert_eq!(sweepable(Level::Often, &look, &ctx, &looks), None);
+    }
+
+    fn no_browser(_: &str, _: &Value, _: bool) -> bool {
+        false
     }
 
     #[test]
@@ -2240,6 +2718,26 @@ mod tests {
         );
         assert_eq!(title("mcp__linear__search"), "Search · Linear");
         assert_eq!(title("SomethingElse"), "Use SomethingElse");
+        // Real cards read "Javascript a tool · Chrome" and "Tabs a context
+        // mcp · Chrome".
+        assert_eq!(
+            title("mcp__claude-in-chrome__javascript_tool"),
+            "Run a script on the page · Chrome"
+        );
+        assert_eq!(
+            title("mcp__claude-in-chrome__tabs_context_mcp"),
+            "See its browser tabs · Chrome"
+        );
+        assert_eq!(
+            title("mcp__claude-in-chrome__navigate"),
+            "Open a page · Chrome"
+        );
+        // A noun-first name elsewhere is "Use …", never a made-up verb.
+        assert_eq!(
+            title("mcp__acme__ticket_history"),
+            "Use ticket history · Acme"
+        );
+        assert_eq!(title("mcp__acme__render_tool"), "Render · Acme");
     }
 
     #[test]

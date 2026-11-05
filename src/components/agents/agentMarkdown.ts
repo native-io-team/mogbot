@@ -17,6 +17,7 @@
 import { Marked, type Token, type Tokens, type TokensList } from 'marked';
 import { imageLinkLabel, sanitizeMessageHtml } from '../../lib/safeHtml';
 import { isCodePath, PROSE_PATH } from '../../lib/agents';
+import { columnAlign } from '../../../packages/companion-protocol/src/tables';
 
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -58,6 +59,28 @@ const markdown = new Marked({
   ],
 });
 
+/**
+ * A table's figures right-aligned: a column whose body is all figures gets
+ * `align="right"` (and tabular figures, in CSS), unless the author aligned
+ * it. The phone's Markdown uses the same rule (`columnAlign`).
+ */
+function alignFigures(tokens: Token[]): void {
+  for (const token of tokens) {
+    if (token.type !== 'table') continue;
+    const table = token as Tokens.Table;
+    const align = columnAlign(
+      table.align,
+      table.rows.map((row) => row.map((cell) => cell.text))
+    );
+    table.align = align;
+    for (const row of [table.header, ...table.rows]) {
+      row.forEach((cell, c) => {
+        cell.align = align[c] ?? null;
+      });
+    }
+  }
+}
+
 export type Segment =
   | { type: 'html'; html: string }
   | { type: 'code'; text: string; lang?: string };
@@ -65,6 +88,7 @@ export type Segment =
 /** Prose renders as sanitized HTML; code blocks render as components, so they can carry Copy. */
 export function toSegments(text: string): Segment[] {
   const tokens = markdown.lexer(text);
+  alignFigures(tokens);
   const segments: Segment[] = [];
   let run: Token[] = [];
   const flush = () => {
@@ -169,6 +193,7 @@ export function createStreamingSegments(): (text: string) => Segment[] {
     if (whole) return toSegments(text);
     const tail = text.slice(src.length);
     const tokens = markdown.lexer(tail);
+    alignFigures(tokens);
     if (Object.keys(tokens.links).length > 0 || tokens.some((t) => t.type === 'html')) {
       whole = true;
       return toSegments(text);

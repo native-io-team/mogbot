@@ -17,7 +17,16 @@ import ReanimatedSwipeable, {
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, { interpolate, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { agentActions, type Action, type AgentAction, type AgentCaps } from '../lib/actions';
-import { formatAgo, lineState, needsLine, needsYou, subtitle, waitingOnMac } from '../lib/agents';
+import {
+  formatAgo,
+  lineState,
+  needsLine,
+  needsYou,
+  subtitle,
+  waitingForSlot,
+  waitingOnMac,
+} from '../lib/agents';
+import { useClock } from '../lib/useClock';
 import { useApp } from '../lib/store';
 import { haptic } from '../lib/haptics';
 import {
@@ -30,7 +39,7 @@ import {
   type Palette,
 } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
-import { AgentAvatar, StatusMark } from './agent';
+import { AgentAvatar, StatusMark, WorkingRing } from './agent';
 import { showActions } from './menu';
 import { Icon, useRipple, T } from './ui';
 
@@ -49,8 +58,12 @@ const NAME_SCALE = 2;
 const NATIVE_MENU = Platform.OS === 'ios';
 const ACTION_W = 76;
 
+/** A quiet row's line: an agent still being set up after an import. */
+export const SETTING_UP_LINE = 'Being set up · in your Chief of Staff’s chat';
+
 export const AgentRow = memo(function AgentRow({
   agent,
+  quiet,
   caps,
   live,
   selected,
@@ -58,6 +71,8 @@ export const AgentRow = memo(function AgentRow({
   onAction,
 }: {
   agent: Agent;
+  /** Still being set up after an import: no "Needs your OK", no amber (lib/home). */
+  quiet?: boolean;
   caps: AgentCaps;
   /** Connected: what the row shows is current. */
   live: boolean;
@@ -77,6 +92,7 @@ export const AgentRow = memo(function AgentRow({
   const body = (
     <RowBody
       agent={agent}
+      quiet={quiet}
       live={live}
       selected={selected}
       onPress={onPress}
@@ -235,6 +251,7 @@ function SwipeAction({
 
 function RowBody({
   agent,
+  quiet,
   live,
   selected,
   onPress,
@@ -244,6 +261,7 @@ function RowBody({
   ...trigger
 }: {
   agent: Agent;
+  quiet?: boolean;
   live: boolean;
   selected?: boolean;
   onPress?: () => void;
@@ -265,10 +283,18 @@ function RowBody({
       !!s.welcome?.methods.includes('agents.import.review')
     )
   );
-  const state = onMac ? undefined : lineState(agent);
+  const state = onMac || quiet ? undefined : lineState(agent);
+  // Running (not queued for a slot): the avatar's ring says so, and the line
+  // says what and how long, on a clock that ticks only while it works.
+  const running = live && !quiet && agent.status.state === 'working' && !waitingForSlot(agent);
+  const now = useClock(running);
   // Waiting on you: say what for, when the saved chat knows.
   const line = useApp((s) =>
-    needsYou(agent) ? needsLine(agent, s.chats[agent.id]?.messages) : subtitle(agent)
+    quiet
+      ? SETTING_UP_LINE
+      : needsYou(agent)
+        ? needsLine(agent, s.chats[agent.id]?.messages)
+        : subtitle(agent, now)
   );
   const tinted = !!state && live && (state === 'waiting' || state === 'failed');
   const cut = line.indexOf(' · ');
@@ -311,7 +337,11 @@ function RowBody({
         if (id) onAction(id);
       }}
     >
-      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.list} />
+      {/* Working: a ring in its colour breathes around the tile, in place of the list's spinner. */}
+      <View style={styles.avatar}>
+        <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.list} />
+        {running && <WorkingRing color={agent.color} size={avatarSize.list} />}
+      </View>
       <View style={styles.text}>
         <View style={styles.nameLine}>
           <T
@@ -363,7 +393,7 @@ function RowBody({
             beside them as well. Every other state keeps its mark.
           */}
           <View style={styles.mark}>
-            {!needsYou(agent) && <StatusMark agent={agent} live={live} onMac={onMac} />}
+            {!needsYou(agent) && !running && <StatusMark agent={agent} live={live} onMac={onMac} />}
           </View>
         </View>
         {stacked && time}
@@ -383,6 +413,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfaceApp,
   },
   selected: { backgroundColor: colors.surfaceControl },
+  avatar: { width: avatarSize.list, height: avatarSize.list },
   text: { flex: 1, gap: space['2xs'] },
   nameLine: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   // The name wins the line: it shrinks last, and the time never takes more than it needs.

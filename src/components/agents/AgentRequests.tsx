@@ -55,6 +55,8 @@ import {
   type AgentMessage,
 } from '../../lib/agents';
 import {
+  allowAllCards,
+  allowAllLine,
   groupLine,
   groupRequests,
   requestsCounts,
@@ -63,6 +65,8 @@ import {
   type RequestGroup,
 } from '../../lib/agentRequests';
 import { loadMessages, useAgentsSelector } from '../../lib/agentsStore';
+import { useTeamSetup } from '../../lib/teamSetup';
+import { needsYouCount as countNeedsYou } from '../../../packages/companion-protocol/src/attention';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -112,6 +116,12 @@ export function AgentRequestsBar({
   // Answered here, before the store's line catches up.
   const [answered, setAnswered] = useState<Map<string, AgentMessage>>(() => new Map());
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  // "Allow all" asked, waiting on its confirm line: whose cards, and which.
+  const [confirming, setConfirming] = useState<{
+    agentId?: string;
+    targets: { asker: Agent; message: AgentMessage }[];
+  } | null>(null);
+  const [allowingAll, setAllowingAll] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const reviewRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
@@ -130,6 +140,12 @@ export function AgentRequestsBar({
     sameAgents
   );
   const messages = useAgentsSelector((s) => s.messages);
+  // In the Chief's chat the number is the team's, the one every other surface
+  // shows (the Chief included); elsewhere the bar counts only this chat's peers.
+  const setupView = useTeamSetup();
+  const team = useAgentsSelector((s) =>
+    agent.isMain ? countNeedsYou(s.agents, setupView) : undefined
+  );
   // Their cards are in their own chats: read each once.
   const unloaded = asking
     .filter((a) => !messages[a.id])
@@ -161,6 +177,7 @@ export function AgentRequestsBar({
 
   const close = useCallback((restoreFocus: boolean) => {
     setOpen(false);
+    setConfirming(null);
     setKeep(new Set());
     setKeepAgents(new Set());
     setAnswered(new Map());
@@ -254,6 +271,18 @@ export function AgentRequestsBar({
       showToast(formatCommandError(asCommandError(error)), 'error');
       return;
     }
+    markAnswered(m, allow, always, note, choice);
+    requestAnimationFrame(() => focusNext(card ?? null));
+  };
+
+  const markAnswered = (
+    m: AgentMessage,
+    allow: boolean,
+    always?: boolean,
+    note?: string,
+    choice?: number
+  ) => {
+    const approval = m.approval!;
     setAnswered((current) =>
       new Map(current).set(m.id, {
         ...m,
@@ -266,8 +295,42 @@ export function AgentRequestsBar({
         },
       })
     );
-    requestAnimationFrame(() => focusNext(card ?? null));
   };
+
+  /** "Allow all" (every agent's, or one agent's): its confirm line first. */
+  const askAllowAll = (groups: RequestGroup[], agentId?: string) => {
+    const targets = groups.flatMap((g) =>
+      allowAllCards(g.cards).map((message) => ({ asker: g.agent, message }))
+    );
+    if (targets.length > 0) setConfirming({ agentId, targets });
+  };
+
+  /** Answer each card on the confirm line with Allow, one after another. */
+  const allowAll = async () => {
+    if (!confirming) return;
+    setAllowingAll(true);
+    let failed = 0;
+    for (const { asker, message } of confirming.targets) {
+      try {
+        await answerApproval(asker.id, message.approval!.requestId, true);
+        markAnswered(message, true);
+      } catch {
+        failed += 1;
+      }
+    }
+    setAllowingAll(false);
+    setConfirming(null);
+    if (failed > 0) {
+      showToast(
+        failed === 1
+          ? "One request couldn't be allowed. It's still waiting."
+          : `${failed} requests couldn't be allowed. They're still waiting.`,
+        'error'
+      );
+    }
+    requestAnimationFrame(() => reviewRef.current?.focus());
+  };
+  const allowable = allowAllCards(summary.groups.flatMap((g) => g.cards)).length;
 
   if (!open && summary.requests === 0) return null;
   return (
@@ -285,9 +348,20 @@ export function AgentRequestsBar({
             <div className="agent-requests-panel__heading">
               <h3 className="agent-requests-panel__title">Needs your OK</h3>
               {summary.requests > 0 && (
-                <p className="agent-requests-panel__counts">{requestsCounts(summary)}</p>
+                <p className="agent-requests-panel__counts">{requestsCounts(summary, team)}</p>
               )}
             </div>
+            {allowable > 1 && !confirming && (
+              <Button
+                tabIndex={0}
+                size="compact"
+                variant="secondary"
+                data-testid="agent-requests-allow-all"
+                onClick={() => askAllowAll(summary.groups)}
+              >
+                Allow all
+              </Button>
+            )}
             <IconButton
               tabIndex={0}
               variant="ghost"
@@ -298,6 +372,38 @@ export function AgentRequestsBar({
               onClick={() => close(true)}
             />
           </header>
+          {confirming && (
+            <div
+              className="agent-requests-panel__confirm"
+              role="group"
+              aria-label="Allow all"
+              data-testid="agent-requests-allow-all-confirm"
+            >
+              <p className="agent-requests-panel__confirm-line">
+                {confirming.agentId
+                  ? `${confirming.targets[0].asker.name}: ${allowAllLine(confirming.targets.map((t) => t.message))}`
+                  : allowAllLine(confirming.targets.map((t) => t.message))}
+              </p>
+              <Button
+                tabIndex={0}
+                size="compact"
+                variant="ghost"
+                disabled={allowingAll}
+                onClick={() => setConfirming(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                tabIndex={0}
+                size="compact"
+                variant="strong"
+                disabled={allowingAll}
+                onClick={() => void allowAll()}
+              >
+                Allow all
+              </Button>
+            </div>
+          )}
           <div className="agent-requests-panel__list">
             {summary.groups.map((group) => (
               <Group
@@ -316,6 +422,11 @@ export function AgentRequestsBar({
                   close(false);
                   onOpenAgent(group.agent.id);
                 }}
+                onAllowAll={
+                  !confirming && allowAllCards(group.cards).length > 1
+                    ? () => askAllowAll([group], group.agent.id)
+                    : undefined
+                }
                 onAnswer={(m, allow, always, note, choice) =>
                   answer(group.agent, m, allow, always, note, choice)
                 }
@@ -343,7 +454,7 @@ export function AgentRequestsBar({
       <ConversationBar
         state={summary.requests > 0 ? 'waiting' : 'info'}
         data-testid="agent-requests-bar"
-        title={requestsTitle(summary)}
+        title={requestsTitle(summary, team)}
         detail={requestsDetail(summary)}
         actions={
           <>
@@ -386,12 +497,15 @@ function Group({
   expanded,
   onToggle,
   onOpenChat,
+  onAllowAll,
   onAnswer,
 }: {
   group: RequestGroup;
   expanded: boolean;
   onToggle: () => void;
   onOpenChat: () => void;
+  /** "Allow all" for this agent's cards, when it has more than one. */
+  onAllowAll?: () => void;
   onAnswer: (
     m: AgentMessage,
     allow: boolean,
@@ -423,6 +537,16 @@ function Group({
           </span>
           <ChevronRightIcon size={12} className="agent-requests-panel__chevron" />
         </button>
+        {onAllowAll && (
+          <TextButton
+            tabIndex={0}
+            className="agent-requests-panel__open"
+            data-testid="agent-requests-group-allow-all"
+            onClick={onAllowAll}
+          >
+            Allow all
+          </TextButton>
+        )}
         <TextButton tabIndex={0} className="agent-requests-panel__open" onClick={onOpenChat}>
           Open chat
         </TextButton>

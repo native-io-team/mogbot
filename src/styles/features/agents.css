@@ -10,6 +10,8 @@
  */
 
 :root {
+  /* A working agent's badge breathes: slow enough to read as calm. */
+  --agents-avatar-breathe: calc(var(--duration-loader-isolated) * 1.5);
   /* The agent palette. Feature-local: these are agents' identities, not
      product semantics, and the registry stores the key, never the colour. */
   --agents-tint-white: #e6e6e6;
@@ -33,8 +35,10 @@
   );
   --agents-chat-width: 720px;
   --agents-bubble-max: 80%;
-  /* Agent prose sits on the canvas at a reading measure, not in a bubble. */
-  --agents-prose-measure: 38em; /* ≈70 characters of body text */
+  /* Agent prose sits on the canvas, not in a bubble, across the same column
+     as the composer under it: one edge on both sides at every window size.
+     (A 38em measure left the replies narrower than the composer at 1100px.) */
+  --agents-prose-measure: var(--agents-chat-width);
   /* A card (approval, result, copy): one step forward of the canvas. Dark
      gets that from the control fill; light from a white panel ringed by a
      hairline shadow, or the Allow card reads as a faint smudge. */
@@ -275,6 +279,11 @@
   color: var(--accent-warning);
 }
 
+/* …and what it's asking, after the label, in the row's ordinary ink. */
+.agents-list__row .agents-list__asking {
+  color: var(--text-secondary);
+}
+
 /* A turn that didn't finish shows where it happened. A usage limit heals on
    its own, so it stays quiet: no colour and no dot, only its words (when it
    resets). Amber is kept for what needs you. */
@@ -496,4 +505,43 @@
   display: flex;
   gap: var(--spacing-sm);
   margin-top: var(--spacing-xs);
+}
+
+/* A working agent's badge: a ring in its own colour that breathes, slowly.
+   Never a flash; with Reduce Motion it simply stays. */
+.agent-avatar--working {
+  position: relative;
+}
+
+.agent-avatar--working::after {
+  position: absolute;
+  inset: calc(var(--focus-ring-offset) * -1);
+  pointer-events: none;
+  content: '';
+  border: var(--focus-ring-width) solid var(--agents-tint, var(--text-muted));
+  border-radius: inherit;
+  opacity: 0.6;
+  animation: agents-avatar-breathe var(--agents-avatar-breathe) ease-in-out infinite;
+}
+
+@keyframes agents-avatar-breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-avatar--working::after {
+    animation: none;
+  }
+}
+
+/* "· 5m" stays with itself when a working row's line wraps. */
+.agents-list__elapsed {
+  white-space: nowrap;
 }

@@ -8,11 +8,16 @@
  */
 
 import type { Cursor } from './frames';
+import type { AgentPolicyView } from './policy';
 import type {
   AgentMessage,
   AgentReach,
   LoginPhoneBegin,
   DeclineReceipt,
+  SigninBegun,
+  SigninFrame,
+  SigninInput,
+  SigninOutcome,
   TeamLogins,
   AgentSecret,
   AgentsOverview,
@@ -116,6 +121,10 @@ export interface Methods {
   };
   'agents.stop': { params: { agentId: string }; result: boolean };
   'agents.interrupt': { params: { agentId: string }; result: boolean };
+  /** "Stop this step": ends the command the agent is running; its turn carries on. Says what it did. */
+  'agents.stopStep': { params: { agentId: string }; result: string };
+  /** "Check on it": what the Mac can see of the turn now, in one line. Never interrupts it. */
+  'agents.checkOn': { params: { agentId: string }; result: string };
   /** `choice`: on a session's question (`approval.prompt`), the option picked, by index. */
   'agents.answerApproval': {
     params: {
@@ -171,6 +180,27 @@ export interface Methods {
     params: { flowId: string; callbackUrl: string };
     result: null;
   };
+  /**
+   * Mac feature `signin.phone`: open a login card's site in a tab of the
+   * Mac's own in its Chrome, for this phone to sign in on (the card must
+   * have a `browser` way in). One at a time on a Mac; five idle minutes
+   * end it. Never audited beyond the domain and how it ended.
+   */
+  'agents.signinBegin': { params: { agentId: string; requestId: string }; result: SigninBegun };
+  /** One picture of the tab. Polling it doesn't keep the session alive. */
+  'agents.signinFrame': { params: { sessionId: string }; result: SigninFrame };
+  /** A tap, typing, a key, a scroll, Back or Reload. Only from the phone that began it. */
+  'agents.signinInput': { params: { sessionId: string; input: SigninInput }; result: null };
+  /**
+   * Checked on the Mac: signed in, the card answers itself and the agent
+   * carries on. `anyway`: hand it over without the check.
+   */
+  'agents.signinDone': {
+    params: { sessionId: string; anyway?: boolean };
+    result: { outcome: SigninOutcome };
+  };
+  /** The tab closes; nothing is kept. */
+  'agents.signinStop': { params: { sessionId: string }; result: null };
   'agents.loginCancel': { params: { agentId: string; requestId: string }; result: null };
   'agents.loginDecline': {
     params: { agentId: string; requestId: string; note?: string };
@@ -183,6 +213,8 @@ export interface Methods {
   };
   /** What an agent can reach: connections, browser, secrets. Read-only. */
   'agents.reach': { params: { agentId: string }; result: AgentReach };
+  /** "What it can do" (`agents/policy.rs`): its settings in plain words. Read-only; changed in chat. */
+  'agents.policy': { params: { agentId: string }; result: AgentPolicyView };
   /**
    * "What your team needs": every login card waiting, one row per service
    * (Gmail + Calendar as one Google row), with each agent on it; `since`
@@ -285,6 +317,15 @@ export interface Methods {
     result: { level: AgentIndependence };
   };
   /**
+   * `agents_set_admin`: the user's own "Admin — can manage and approve for
+   * other agents" switch, per agent. No agent can set it. Audited. Newer
+   * Macs only.
+   */
+  'agents.setAdmin': {
+    params: { agentId: string; admin: boolean };
+    result: { agentId: string; admin: boolean };
+  };
+  /**
    * Each engine's usage accounts, in the order turns try them when one
    * reaches its usage limit (`agents::wallet`). Read-only: they are added
    * and signed in on the Mac. Newer Macs only.
@@ -320,6 +361,16 @@ export interface Methods {
   };
   /** "Discard" on a change card: the copy and everything in it, gone. */
   'agents.discardCopy': { params: { agentId: string; copyId: string }; result: null };
+  /**
+   * "Watch live" on a card with a project: a one-time link (valid a minute)
+   * to that card's running dev server, read-only, served on this Mac's own
+   * tailnet only (`companion/watch.rs`). Refused when the site isn't running
+   * on the Mac (its Preview starts it).
+   */
+  'agents.watchLive': {
+    params: { agentId: string; messageId: string };
+    result: { url: string; expiresAt: number };
+  };
   /**
    * The phone's stand-in for `agents_open_path` (which opens Finder on the
    * Mac): a path written in an agent's reply, made downloadable. Only paths
@@ -387,6 +438,16 @@ export interface Methods {
   'agents.teamSetup.missing': { params: Record<string, never>; result: AgentMessage };
   /** Put it away; `agents.teamSetup` with `any` brings it back. */
   'agents.teamSetup.dismiss': { params: Record<string, never>; result: null };
+  /**
+   * A row nothing on the Mac reached: `connect` raises one sign-in card and
+   * starts its best way in on the Mac; `not_needed` puts it away.
+   */
+  'agents.teamSetup.later': {
+    params: { key: string; action: 'connect' | 'not_needed'; onPhone?: boolean };
+    result: { agentId: string; requestId: string } | null;
+  };
+  /** Check again what the team can already reach (progress arrives on the checklist). */
+  'agents.teamSetup.check': { params: Record<string, never>; result: number };
   'agents.import.pastePrompt': { params: Record<string, never>; result: string };
   'agents.import.pastePreview': { params: { text: string }; result: PasteImportPreview };
   'agents.import.paste': { params: { text: string }; result: ImportSummary };
@@ -456,6 +517,7 @@ export const READ_ONLY_METHODS = [
   'agents.instructions',
   'agents.memory',
   'agents.reach',
+  'agents.policy',
   'agents.loginsTeam',
   'agents.usage',
   'agents.quota',

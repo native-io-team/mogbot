@@ -15,6 +15,7 @@
 // ============================================================================
 
 import type { ResultCard, ResultRef } from './results';
+import type { SettingsProposal } from './policy';
 
 export interface AgentStatus {
   state: 'idle' | 'working' | 'waiting';
@@ -58,6 +59,36 @@ export interface WorkStep {
   outcome?: WorkStepOutcome;
   /** A screenshot this step produced. */
   image?: Attachment;
+  /** When what it ran came back. Absent while it runs, and in older timelines. */
+  endedAt?: number;
+  /** What a test run printed it came to ("42 passed, 3 failed"). */
+  summary?: string;
+  /** The last lines a long or failed command printed (finished timelines only). */
+  output?: string[];
+}
+
+/** A tool known to take a while (`agents::describe::Slow`); a newer Mac may send another. */
+export type WorkSlow = 'tests' | 'build' | 'install' | 'deploy' | 'other';
+
+/**
+ * The call running right now (`agents::work::LiveCall`): its plain words,
+ * when it started, and what it printed so far where the engine streams it.
+ */
+export interface LiveCall {
+  kind: WorkStepKind;
+  /** Its working-line words ("Running the Cypress tests"). */
+  label: string;
+  startedAt: number;
+  /** Known to take a while: "This usually takes a few minutes". */
+  slow?: WorkSlow;
+  /** Its newest lines of output so far. */
+  output?: string[];
+  /** The engine streams this call's output; when false it appears only once it finishes. */
+  streams: boolean;
+  /** Its process was using the CPU at the last look; absent when not found. */
+  busy?: boolean;
+  /** "Stop this step" can find its process. */
+  canStop: boolean;
 }
 
 /** `agents::work::StepOutcome`. */
@@ -85,6 +116,12 @@ export interface TurnWork {
    * working line *is* that step.
    */
   doing?: string;
+  /** While it runs: the call running now, in full. */
+  current?: LiveCall;
+  /** While it runs: its last sign of life (any engine output, its command's output or CPU). */
+  lastSignAt?: number;
+  /** While it runs, once it has made no progress for too long: when it last did. */
+  quietSince?: number;
 }
 
 export interface Agent {
@@ -94,6 +131,12 @@ export interface Agent {
   shape: number;
   color: string;
   isMain: boolean;
+  /**
+   * The user's "Admin — can manage and approve for other agents" switch
+   * (`agents::admin`). Absent: the default, which is on for the Chief of
+   * Staff only (`isAdmin`). Older Macs never send it.
+   */
+  admin?: boolean;
   pinned: boolean;
   hidden: boolean;
   sessionId: string | null;
@@ -404,12 +447,25 @@ export interface Approval {
    * after an import. Nothing it asked for ran.
    */
   setAside?: string;
+  /** "Change this agent's settings?" (`propose_settings_change`): who, and what changes in plain words. Allow applies it. A Mac without it never sends it. */
+  settings?: SettingsProposal;
+  /**
+   * "Bring your work Chrome window to the front so I can use it": Allow means
+   * Check again, Deny means Not now. Never a login.
+   */
+  front?: { site: string; account?: string };
   /**
    * A login card (`request_login`): which app, what the agent may do, and the
    * ways in, best first. Every way in runs on the Mac (`agents.loginStart`);
    * `flow` is its live state. A Mac without the `logins` feature never sends it.
    */
   login?: LoginRequest;
+  /**
+   * Closed by the Mac because nobody answered (status `expired`): the agent
+   * moved on, the wait ran out, or a sign-in became "Maybe later". A
+   * one-line receipt; never counted as waiting. Older Macs never send it.
+   */
+  expiry?: 'moved_on' | 'no_answer' | 'maybe_later';
 }
 
 // Logins: identical to src/lib/agentLogins.ts (desktop `agents/logins.rs`).
@@ -472,7 +528,71 @@ export interface LoginRequest {
   /** The secret card an older Mac build raised, which this replaced. */
   replaces?: string;
   flow?: LoginFlow;
+  /** Other agents that asked for the same and joined this card: answering it answers them. */
+  alsoFor?: string[];
 }
+
+/**
+ * `agents.signinBegin`: a tab of the Mac's own in its Chrome, open on the
+ * card's site, for this phone alone (`agents/phone_signin.rs`).
+ */
+export interface SigninBegun {
+  sessionId: string;
+  /** "figma.com": what the phone and the Mac's bar name. */
+  domain: string;
+  title: string;
+  /** No input for this long and the Mac closes it. */
+  idleSeconds: number;
+}
+
+/**
+ * `agents.signinFrame`: one picture of that tab. `outside`: it went
+ * somewhere that isn't the sign-in, which isn't shown; only Back works.
+ */
+export interface SigninFrame {
+  state: 'live' | 'outside';
+  /** Where the tab is, host only. */
+  host?: string;
+  /** A JPEG, base64. Only when `live`. */
+  image?: string;
+  /** The picture's size: taps are sent in these pixels. */
+  width: number;
+  height: number;
+}
+
+export type SigninKey =
+  | 'enter'
+  | 'tab'
+  | 'backspace'
+  | 'delete'
+  | 'escape'
+  | 'space'
+  | 'arrow_up'
+  | 'arrow_down'
+  | 'arrow_left'
+  | 'arrow_right';
+
+/**
+ * What the phone does on the tab, in the frame's pixels. `type` with
+ * `secure`: hidden as it was typed (a password). Never kept or logged by
+ * either side; the Mac sends it only to Chrome.
+ */
+export type SigninInput =
+  | { kind: 'tap'; x: number; y: number }
+  | { kind: 'type'; text: string; secure?: boolean }
+  | { kind: 'key'; key: SigninKey }
+  | {
+      kind: 'scroll';
+      x: number;
+      y: number;
+      direction: 'up' | 'down' | 'left' | 'right';
+      amount?: number;
+    }
+  | { kind: 'back' }
+  | { kind: 'reload' };
+
+/** `agents.signinDone`: signed in (the card answered itself), not yet, or can't tell. */
+export type SigninOutcome = 'signed_in' | 'signed_out' | 'unknown';
 
 /** `agents.loginPhoneBegin`: what the phone opens. No secret: the PKCE verifier stays on the Mac. */
 export interface LoginPhoneBegin {
@@ -535,7 +655,20 @@ export interface AgentReach {
     lastUsedAt?: number;
   }[];
   /** Absent for an agent on Codex, which has no browser. */
-  browser?: { on: boolean; sites: string[]; helperInstalled: boolean };
+  /**
+   * `on`: its turns get the user's Chrome (the team's browser is set up and on,
+   * and this agent's wasn't taken away; never for outside text). `teamOn`: the
+   * team's switch. `ownOff`: taken away from this agent.
+   */
+  browser?: {
+    on: boolean;
+    teamOn: boolean;
+    ownOff: boolean;
+    sites: string[];
+    /** The Chrome profile (and account) each site was last found signed in to. */
+    accounts?: { site: string; browser: string; account?: string }[];
+    helperInstalled: boolean;
+  };
   secrets: {
     secretId: string;
     name: string;
@@ -693,10 +826,47 @@ export interface TeamSetupHello {
   state: TeamSetupHelloState;
 }
 
+/**
+ * A login the imported agents mentioned, one row per service (desktop
+ * `agents/access_check.rs`): reached on this Mac, or the residue.
+ */
+export type TeamSetupLaterState =
+  | { state: 'open' }
+  | { state: 'reachable'; via: string }
+  | { state: 'not_needed' }
+  | { state: 'asked'; agentId: string; requestId: string };
+
+export type TeamSetupLater = {
+  key: string;
+  /** The catalogue's id, or `other`. */
+  service: string;
+  title: string;
+  agents: string[];
+  agentIds: string[];
+  /** The one button: "Connect Figma", "Use my browser", "Get your key". */
+  action?: string;
+  /** A key is the only way in. */
+  keyOnly: boolean;
+} & TeamSetupLaterState;
+
+/** "Checking what your team can already reach", live. */
+export interface TeamSetupCheck {
+  running: boolean;
+  total: number;
+  checked: { title: string; reached: boolean }[];
+  /** The browser was part of it. */
+  browser: boolean;
+  finishedAt?: number;
+}
+
 export interface TeamSetupStep {
   id: TeamSetupStepId;
   state: TeamSetupStepState;
   logins?: TeamSetupLogin[];
+  /** Logins step: one row per service the imported agents mentioned. */
+  later?: TeamSetupLater[];
+  /** Logins step: the check, while it runs and once it's done. */
+  check?: TeamSetupCheck;
   routines?: TeamSetupRoutine[];
   gaps?: TeamSetupGap[];
   agents?: TeamSetupHello[];
@@ -705,6 +875,11 @@ export interface TeamSetupStep {
 export interface TeamSetupView {
   id: string;
   source: string;
+  /**
+   * When it was posted (the import's end): its place in the Chief's
+   * conversation, like a message's. Older Macs don't say.
+   */
+  postedAt?: number;
   steps: TeamSetupStep[];
   /** Steps done or skipped. */
   done: number;
@@ -857,6 +1032,23 @@ export interface AgentMessage {
    * room has (the user's message, a room note) has an empty `agentId`.
    */
   room?: string;
+  /**
+   * On an admin's `agent` message: other agents' requests only the user can
+   * decide, each answered in place (the answer goes to that agent's card).
+   */
+  decide?: DecideItem[];
+}
+
+/** One of another agent's cards, brought to the user by an admin. */
+export interface DecideItem {
+  agentId: string;
+  agentName: string;
+  approval: Approval;
+}
+
+/** Whether an agent is an admin: its switch, else on for the Chief only. */
+export function isAdmin(agent: Pick<Agent, 'admin' | 'isMain'>): boolean {
+  return agent.admin ?? agent.isMain;
 }
 
 /**

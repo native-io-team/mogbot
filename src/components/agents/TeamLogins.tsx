@@ -237,7 +237,7 @@ function NeedRow({ need, onChanged }: { need: TeamNeed; onChanged: () => void })
                       className="team-logins__dismiss"
                       disabled={busy}
                       aria-label={`Skip ${c.agentName}`}
-                      title={`Puts away ${c.agentName}’s card only. “Not needed” below is for every agent.`}
+                      title={`Puts away ${c.agentName}’s card. “Not needed” below is for every agent, with Undo.`}
                       onClick={() => void run(() => dismissLogin(c.agentId, c.requestId))}
                     >
                       Skip

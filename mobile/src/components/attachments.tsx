@@ -31,6 +31,9 @@ import { Icon, T } from './ui';
 export type Shown = Attachment & { localUri?: string };
 
 const ONE_WIDE = 232;
+
+/** What a tile says when its image can't be shown, above the file's name. */
+export const IMAGE_UNAVAILABLE = 'Image not available';
 const TILE = 112;
 
 export function Attachments({
@@ -82,11 +85,36 @@ function Thumb({
 }) {
   const styles = useStyles();
   const router = useRouter();
+  const colors = useColors();
   // Until it loads its shape is unknown; then it keeps its own, within reason.
   const [ratio, setRatio] = useState(square ? 1 : 4 / 3);
+  // A file the Mac couldn't send (gone, or not reachable) says so with its
+  // name, never an empty box.
+  const [failed, setFailed] = useState(false);
   const source = file.localUri
     ? { uri: file.localUri }
     : attachmentSource(agentId, file.path, width);
+  if (failed || !source) {
+    return (
+      <View
+        accessibilityLabel={`${file.name}, ${IMAGE_UNAVAILABLE.toLowerCase()}`}
+        style={[styles.thumb, styles.missing, { width, aspectRatio: square ? 1 : 4 / 3 }]}
+      >
+        <Icon
+          name="photo"
+          size={iconSize.body}
+          color={colors.textMuted}
+          fallback={<T color={colors.textMuted}>▢</T>}
+        />
+        <T variant="caption" color={colors.textSecondary}>
+          {IMAGE_UNAVAILABLE}
+        </T>
+        <T variant="caption" color={colors.textMuted} numberOfLines={2} style={styles.missingName}>
+          {file.name}
+        </T>
+      </View>
+    );
+  }
   return (
     <Pressable
       accessibilityRole="imagebutton"
@@ -110,6 +138,7 @@ function Thumb({
         contentFit="cover"
         transition={180}
         recyclingKey={file.path || file.localUri}
+        onError={() => setFailed(true)}
         onLoad={(e) => {
           if (square) return;
           const { width: w, height: h } = e.source;
@@ -279,6 +308,15 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfaceControl,
   },
   pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
+  missing: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space['2xs'],
+    padding: space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.cardBorder,
+  },
+  missingName: { textAlign: 'center' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',

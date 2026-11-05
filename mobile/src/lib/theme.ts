@@ -327,35 +327,58 @@ export const iconSize = { micro: 10, inline: 12, body: 16, button: 20, hero: 28 
 export const typingDot = { size: 5, gap: space.xs, lift: 1.5 } as const;
 
 /**
- * The message field, iMessage's geometry: one line is a 36pt pill, and the
- * corner stays 18 as it grows, so several lines read as a rounded rectangle
- * rather than a blob. The + is a 36pt circle (as tall as one line); send is
- * a 28pt circle inside the field, 4pt in from its edge. Both sit on the last
- * line as the field grows. User bubbles share the corner and the line.
+ * The message field: a chunky capsule of the system's glass (components/Glass.tsx),
+ * like the tab bar's. One line is a 48pt pill and the corner stays 24 as it
+ * grows, so several lines read as a rounded rectangle rather than a blob.
+ * The + is a 48pt glass circle (as tall as one line); send, the mic and Stop
+ * are 40pt circles inside the field, 4pt in from its edge. All sit on the
+ * last line as the field grows. Every one of them is a 44pt target or more.
+ *
+ * `line` and `corner` are the user bubble's (components/chat.tsx), which
+ * keeps iMessage's 20pt line and 18pt corner; the field has its own.
  */
 export const composer = {
-  /** 16pt text on a 20pt line. */
+  /** The bubble's 16pt text on a 20pt line. */
   line: 20,
-  /** Above and below the text, so one line is 36. */
-  padV: 8,
-  padLeft: 12,
-  padRight: 8,
-  height: 36,
+  /** The bubble's corner. */
   corner: 18,
+  /** The field's 17pt text (`type.field`) on a 22pt line. */
+  fieldLine: 22,
+  /** Above and below the text, so one line is 48. */
+  padV: 13,
+  padLeft: 18,
+  padRight: 8,
+  height: 48,
+  fieldCorner: 24,
   /** Lines before it scrolls inside. */
   maxLines: 6,
-  attach: 36,
-  send: 28,
+  attach: 48,
+  send: 40,
   /** Send's inset from the field's edge. */
   inset: 4,
+  /**
+   * Between the field and the keyboard when it's up. With it down the field
+   * sits on the home indicator's inset; up, the sticky view gives that inset
+   * back down to this, so the field never touches the keys.
+   */
+  keyboardGap: 10,
 } as const;
 
 /**
- * The dictation waveform (`components/Waveform.tsx`), inside the field where
- * the mic was: 2pt bars 2pt apart, a dot at silence and 18pt at full voice,
- * centred on a send-tall slot so the field never changes height. Under Reduce
- * Motion a 2pt-thick meter of the same width stands in. Twelve bars (48pt,
- * about 0.85 s of voice) leave the words most of the field's width.
+ * Where a conversation meets the composer (and the header): the words fade
+ * out over this height instead of stopping on a hard edge, in `fadeBands`
+ * steps of the chat's own background. The list keeps this much room at its
+ * newest end, so at the bottom the fade sits on empty space, never on the
+ * last message.
+ */
+export const chatFade = { height: 28, bands: 14 } as const;
+
+/**
+ * The dictation waveform (`components/Waveform.tsx`), in the slim row over the
+ * field with the time (never inside it: beside the words it squeezed them to
+ * a few per line): 2pt bars 2pt apart, a dot at silence and 18pt at full
+ * voice, the row's height. Under Reduce Motion a 2pt-thick meter of the same
+ * width stands in. Twelve bars, about 0.85 s of voice.
  */
 export const waveform = {
   bars: 12,
@@ -373,25 +396,101 @@ export const avatarSize = { group: 24, header: 28, list: 48, sheet: 56 } as cons
 /**
  * The desktop's type scale (`--font-size-*`), one step up where the desk
  * reads at arm's length and a phone at hand's: body 16 (T3 and most chat
- * apps sit at 16-17), subtitles 14, captions 12 for metadata only.
+ * apps sit at 16-17), subtitles 14, captions 12 for metadata only. `read` is
+ * what a conversation is written in (a reply, your bubble): 17, Grok's and
+ * iMessage's size, on the roomier `READ_LINE`.
+ *
+ * These are the sizes at the Default text size. Settings → Text size scales
+ * every one of them (`TEXT_SIZES`), on top of Dynamic Type, which iOS applies
+ * to whatever size a Text asks for. `type` reads the size in force each time
+ * it's read, so a stylesheet built through `makeStyles` (rebuilt when the
+ * size changes) picks it up.
  */
-export const type = {
+export const baseType = {
   caption: 12,
   small: 14,
   body: 16,
+  /** The message field's words: iOS's own body size, a step up from a message's. */
+  field: 17,
   subhead: 16,
+  read: 17,
+  /** A reply's top heading: a step over `title`, so a `#` reads over a `##`. */
+  heading: 20,
   title: 18,
   display: 28,
   /** Tile labels only (a file's extension on a 40pt badge): never a sentence. */
   micro: 10,
 } as const;
 
+export type TypeRole = keyof typeof baseType;
+
+/** Settings → Text size: the phone's own step, multiplied into every size. */
+export const TEXT_SIZES = {
+  smaller: 0.88,
+  default: 1,
+  larger: 1.12,
+  largest: 1.25,
+} as const;
+export type TextSize = keyof typeof TEXT_SIZES;
+export const TEXT_SIZE_KEYS = Object.keys(TEXT_SIZES) as TextSize[];
+
+let textScale: number = TEXT_SIZES.default;
+
+/** The phone's text size in force, as a multiplier. */
+export const currentTextScale = () => textScale;
+
+/** The multiplier for a saved choice; anything unknown is Default. */
+export const textScaleOf = (size: string | undefined): number =>
+  (size && TEXT_SIZES[size as TextSize]) || TEXT_SIZES.default;
+
+/** Sets the multiplier `type` reads (the AppearanceProvider does). True when it changed. */
+export function setTextScale(size: string | undefined): boolean {
+  const next = textScaleOf(size);
+  if (next === textScale) return false;
+  textScale = next;
+  return true;
+}
+
+/** Runs `build` with `type` read at `scale`: a stylesheet built for a theme, whatever is in force. */
+export function atTextScale<R>(scale: number, build: () => R): R {
+  const before = textScale;
+  textScale = scale;
+  try {
+    return build();
+  } finally {
+    textScale = before;
+  }
+}
+
+/** A size from the base scale at the text size in force, on whole points. */
+export const scaledSize = (base: number, scale = textScale) => Math.round(base * scale);
+
+/** The type scale at the text size in force. Read it when a style is built; don't keep it. */
+export const type = Object.defineProperties(
+  {},
+  Object.fromEntries(
+    (Object.keys(baseType) as TypeRole[]).map((role) => [
+      role,
+      { enumerable: true, get: () => scaledSize(baseType[role]) },
+    ])
+  )
+) as Readonly<Record<TypeRole, number>>;
+
+/** A conversation's line: 1.55× (17 on 26), the air Grok's replies have. */
+export const READ_LINE = 1.55;
+
 /**
  * How far chrome may grow with Dynamic Type before it would crowd out what
- * it frames: titles, pills, avatar initials and buttons. Message bodies have
- * no cap; they reflow.
+ * it frames: titles, pills, avatar initials and buttons.
  */
 export const chromeScale = 1.3;
+
+/**
+ * Message bodies reflow, so they grow much further than chrome, but not
+ * without end: at the largest accessibility sizes (×3 and more) a 17pt reply
+ * sets two words a line. Clamped at ×2 it still reads at AX3.
+ */
+export const READ_MAX_SCALE = 2;
 
 /**
  * A card's title and its asides: they may grow further than chrome, but not

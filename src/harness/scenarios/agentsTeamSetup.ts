@@ -297,13 +297,22 @@ const CHIEF_BEFORE = [
   ),
 ];
 
+/** When the upgrade posted the card, under its line. */
+const POSTED_MIN = 20;
+
 const CHIEF_AFTER = [
   ...CHIEF_BEFORE,
   msg(
     'note',
     'What your team needs to get going is in one place now, below. Nothing it asked for has run.',
-    1
+    POSTED_MIN
   ),
+];
+
+/** After the card: the conversation goes on under it, as under any message. */
+const LATER = [
+  msg('user', 'Thanks. I’ll do the logins tonight. What’s on for tomorrow?', 6),
+  msg('agent', 'Tomorrow is quiet: the kiln firing at 10 and the wholesale call at 3.', 5),
 ];
 
 const messages =
@@ -371,6 +380,7 @@ function setupView(
   return {
     id: 'setup1',
     source: SOURCE,
+    postedAt: now - POSTED_MIN * MIN,
     steps,
     done,
     total: steps.length,
@@ -399,7 +409,7 @@ export const agentsTeamSetupScenarios: Scenario[] = [
     id: 'agents-team-setup',
     title: 'Agents — Setting up your team (after the upgrade)',
     looksRightWhen:
-      'The same team after the update. The Chief’s chat ends in one quiet line (“What your team needs to get going is in one place now, below…”) and one card, “Setting up your team”, “0 of 4 done”, with a muted line about the agents from Grok Bot staying quiet until you say hi. Four steps in order, each a row with a ring: Add logins (open: one line about the Keychain, then one row per login, its name over the agents that need it (“bankline” over “Bookkeeper”), with Add), Switch on routines, Fill in what’s missing, Say hi to your team. Above the composer one bar, “A few things to finish setting up your team · 0 of 4 done” with Continue; no requests bar for the imported agents’ logins and no count of requests anywhere.',
+      'The same team after the update. The Chief’s chat ends in one quiet line (“What your team needs to get going is in one place now, below…”) and one card, “Setting up your team”, “0 of 4 done”, with a muted line about the agents from Grok Bot staying quiet until you say hi. Four steps in order, each a row with a ring: Logins (open: one line saying it’s checked against this Mac first, then one row per login, its name over the agents that need it (“bankline” over “Bookkeeper”), with Add), Switch on routines, Fill in what’s missing, Say hi to your team. Above the composer one bar, “A few things to finish setting up your team · 0 of 4 done” with Continue; no requests bar for the imported agents’ logins and no count of requests anywhere.',
     command: 'agents.open',
     requires: '[data-testid="team-setup"]',
     commands: {
@@ -409,10 +419,23 @@ export const agentsTeamSetupScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-team-setup-later',
+    title: 'Agents — Setting up your team, with the conversation going on under it',
+    looksRightWhen:
+      'The card sits where it was posted, right under “What your team needs to get going is in one place now, below…”, and the conversation after it comes under the card: your “Thanks. I’ll do the logins tonight…” and the Chief’s reply about tomorrow are the newest lines, at the foot, over the composer. The bar above the composer still says “A few things to finish setting up your team · 1 of 4 done” with Continue; Continue scrolls up to the card and rings it.',
+    command: 'agents.open',
+    requires: '[data-testid="team-setup"]',
+    commands: {
+      agents_overview: overview(agentsFor(true)),
+      agents_messages: messages(true, LATER),
+      agents_team_setup: setupView({ logins: 'done' }),
+    },
+  },
+  {
     id: 'agents-team-setup-routines',
     title: 'Agents — Setting up your team: routines',
     looksRightWhen:
-      'Logins is ticked (“Logins added”); “1 of 4 done”. Switch on routines is open: one line saying they came in paused, then each routine as “Inbox Watch · every day at 08:20” with what it does under it and a switch on the right (Inbox Watch’s on, the rest off). Skip for now and a neutral Done at the foot, right-aligned.',
+      'Logins is ticked (“Logins sorted”); “1 of 4 done”. Switch on routines is open: one line saying they came in paused, then each routine as “Inbox Watch · every day at 08:20” with what it does under it and a switch on the right (Inbox Watch’s on, the rest off). Skip for now and a neutral Done at the foot, right-aligned.',
     command: 'agents.open',
     requires: '[data-testid="team-setup"] [data-step="routines"][data-open]',
     commands: {
@@ -455,12 +478,12 @@ export const agentsTeamSetupScenarios: Scenario[] = [
     id: 'agents-team-setup-done',
     title: 'Agents — Setting up your team, finished',
     looksRightWhen:
-      'No card: one quiet centred line at the foot of the Chief’s chat, “Your team is set up.”, with Hide.',
+      'No card: one quiet centred line where the card was, under “What your team needs…”, “Done · Your team is set up.”, with Hide. The conversation after it stays under it, and there is no setup bar above the composer.',
     command: 'agents.open',
     requires: '[data-testid="team-setup-done"]',
     commands: {
       agents_overview: overview(agentsFor(true)),
-      agents_messages: messages(true),
+      agents_messages: messages(true, LATER),
       agents_team_setup: {
         ...setupView({ logins: 'done', routines: 'done', missing: 'done', hello: 'done' }),
         complete: true,
@@ -481,3 +504,202 @@ export const agentsTeamSetupScenarios: Scenario[] = [
     },
   },
 ];
+
+/* ------------------------------------------- what the team can reach */
+
+/** The fourteen services the forty imported logins came to (fictional team). */
+const REACH: {
+  key: string;
+  title: string;
+  agents: string[];
+  via?: string;
+  action?: string;
+  keyOnly?: boolean;
+}[] = [
+  {
+    key: 'github',
+    title: 'GitHub',
+    agents: ['Shop Site', 'Order QA'],
+    via: 'GitHub CLI on this Mac, signed in as robin-example',
+  },
+  {
+    key: 'vercel',
+    title: 'Vercel',
+    agents: ['Shop Site'],
+    via: 'Vercel CLI on this Mac, signed in as robin-example',
+  },
+  {
+    key: 'gmail',
+    title: 'Gmail',
+    agents: ['Inbox Watch', 'Events', 'Wholesale'],
+    via: 'Claude Code’s claude.ai gmail app',
+  },
+  {
+    key: 'google_calendar',
+    title: 'Google Calendar',
+    agents: ['Events', 'Kitchen Reno'],
+    via: 'Claude Code’s claude.ai google calendar app',
+  },
+  {
+    key: 'google_drive',
+    title: 'Google Drive',
+    agents: ['Bookkeeper', 'Wholesale'],
+    via: 'Claude Code’s claude.ai google drive app',
+  },
+  {
+    key: 'slack',
+    title: 'Slack',
+    agents: ['Order QA'],
+    via: 'your browser, signed in on app.slack.com',
+  },
+  {
+    key: 'linear',
+    title: 'Linear',
+    agents: ['Shop Site'],
+    via: 'connected already (robin@example.com)',
+  },
+  {
+    key: 'notion',
+    title: 'Notion',
+    agents: ['Newsletter', 'Garden Plan'],
+    via: 'your browser, signed in on www.notion.so',
+  },
+  {
+    key: 'figma',
+    title: 'Figma',
+    agents: ['Photo Posts', 'Shop Site'],
+    via: 'your browser, signed in on www.figma.com',
+  },
+  {
+    key: 'linkedin',
+    title: 'LinkedIn',
+    agents: ['Recruiting'],
+    via: 'your browser, signed in on www.linkedin.com',
+  },
+  {
+    key: 'x',
+    title: 'X',
+    agents: ['Photo Posts', 'Events'],
+    via: 'your browser, signed in on x.com',
+  },
+  { key: 'stripe', title: 'Stripe', agents: ['Bookkeeper', 'Wholesale'], action: 'Connect Stripe' },
+  {
+    key: 'other:bankline',
+    title: 'Bankline',
+    agents: ['Bookkeeper'],
+    action: 'Add a key for Bankline',
+    keyOnly: true,
+  },
+  {
+    key: 'other:hirehub',
+    title: 'Hirehub',
+    agents: ['Recruiting'],
+    action: 'Add a key for Hirehub',
+    keyOnly: true,
+  },
+];
+
+function reachRows(done: boolean) {
+  return REACH.map((r, i) => ({
+    key: r.key,
+    service: r.key.startsWith('other:') ? 'other' : r.key,
+    title: r.title,
+    agents: r.agents,
+    agentIds: r.agents.map((n) => IMPORTED.find((a) => a.name === n)?.id ?? n),
+    action: r.action ?? `Connect ${r.title}`,
+    keyOnly: !!r.keyOnly,
+    ...(r.via && (done || i < 6) ? { state: 'reachable', via: r.via } : { state: 'open' }),
+  }));
+}
+
+/** The Logins step after the check: `running` mid-way, else done with the residue. */
+function reachView(running: boolean) {
+  const v = setupView({});
+  const logins = v.steps[0] as Record<string, unknown>;
+  logins.logins = [];
+  logins.later = reachRows(!running);
+  logins.check = {
+    running,
+    total: REACH.length,
+    checked: REACH.slice(0, running ? 6 : REACH.length).map((r) => ({
+      title: r.title,
+      reached: !!r.via,
+    })),
+    browser: true,
+    ...(running ? {} : { finishedAt: now - MIN }),
+  };
+  return v;
+}
+
+const BROWSER_STATUS = {
+  enabled: false,
+  ready: false,
+  account: 'robin@example.com',
+  browsers: 0,
+  codexAgents: 0,
+  steps: [
+    {
+      id: 'claude_code',
+      done: true,
+      title: 'Claude Code, signed in with your Claude account',
+      detail: 'Signed in (robin@example.com).',
+    },
+    {
+      id: 'extension',
+      done: true,
+      title: 'Add Claude in Chrome to Chrome',
+      detail:
+        'Anthropic’s extension. It lets your agents use the sites you’re signed in to, as you; it never sees your passwords.',
+    },
+    {
+      id: 'connect',
+      done: false,
+      title: 'Sign the extension in',
+      detail:
+        'Open the extension in Chrome and sign in with the same Claude account as Claude Code (robin@example.com). If it was just installed, quit and reopen Chrome. Then check again.',
+    },
+  ],
+};
+
+agentsTeamSetupScenarios.push(
+  {
+    id: 'agents-team-setup-reach-checking',
+    title: 'Agents — Setting up your team: checking what the team can reach',
+    looksRightWhen:
+      'Logins is open and reads one calm line with a small spinner: “Checking 14 services… GitHub ✓ Vercel ✓ Gmail ✓ Google Calendar ✓ Google Drive ✓ Slack ✓”. No rows, no buttons, no count of requests anywhere: the app is doing it, not the user.',
+    command: 'agents.open',
+    requires: '[data-testid="team-setup-check"]',
+    commands: {
+      agents_overview: overview(agentsFor(true)),
+      agents_messages: messages(true),
+      agents_team_setup: reachView(true),
+    },
+  },
+  {
+    id: 'agents-team-setup-reach',
+    title: 'Agents — Setting up your team: 40 asks → 3 left',
+    looksRightWhen:
+      'The forty logins the import mentioned came to fourteen services; eleven were reached on this Mac. Logins reads “Your team is ready. 3 things I couldn’t reach on this Mac:” then three rows: Stripe (Bookkeeper, Wholesale) with Connect Stripe, Bankline (Bookkeeper) with “Add a key for Bankline”, Hirehub (Recruiting) with “Add a key for Hirehub”, each with a quiet Not needed before its button. Under them “11 reached on this Mac” and Check again, both text actions. Nothing asks for a password; no button is the accent.',
+    command: 'agents.open',
+    requires: '[data-testid="team-setup-reach"]',
+    commands: {
+      agents_overview: overview(agentsFor(true)),
+      agents_messages: messages(true),
+      agents_team_setup: reachView(false),
+    },
+  },
+  {
+    id: 'agents-browser-setup',
+    title: 'Agents — Let agents use your browser',
+    looksRightWhen:
+      'A dialog, “Let agents use your browser”, holding one card: a globe icon, the title, a muted line saying agents use the sites you’re already signed in to and nothing is sent or changed without your Allow. Three steps with rings: Claude Code signed in (ticked, “Signed in (robin@example.com).”), Add Claude in Chrome (ticked), Sign the extension in (open, naming robin@example.com and saying to reopen Chrome). Check again as text, and Turn on, neutral and disabled until Chrome answers.',
+    command: 'agents.browser',
+    requires: '[data-testid="browser-setup"]',
+    commands: {
+      agents_overview: overview(agentsFor(true)),
+      agents_messages: messages(true),
+      agents_team_setup: reachView(false),
+      agents_browser_status: BROWSER_STATUS,
+    },
+  }
+);

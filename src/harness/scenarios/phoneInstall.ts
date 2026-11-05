@@ -29,9 +29,9 @@ const THIS_MAC = {
   node: 'v24.17.0',
   devices: [],
   signing: {
-    teamId: 'H8NN6DM6G6',
-    identity: 'Apple Development: julian@example.com (5VD2FLB8HU)',
-    bundleId: 'io.native.dashbot.companion.a4c8c6',
+    teamId: 'TEAM000001',
+    identity: 'Apple Development: julian@example.com (CERT000001)',
+    bundleId: 'io.native.dashbot.companion.87be70',
   },
   source,
 };
@@ -41,7 +41,7 @@ const XCODE_OK = { ...THIS_MAC, xcode: { state: 'ok', version: '26.4' } };
 const IPHONE = {
   udid: '00008140-001A2B3C0E91801C',
   hardwareUdid: '00008140-001A2B3C0E91801C',
-  name: 'Julian’s iPhone',
+  name: 'Sam’s iPhone',
   model: 'iPhone 16 Pro',
   osVersion: '26.1',
   connected: true,
@@ -74,7 +74,7 @@ const AGENT_SCREEN = [
   ' \x1b[38;5;114m⏺\x1b[0m \x1b[1mBash\x1b[0m(xcodebuild -version && pod --version && node --version)',
   '   ⎿  Xcode 26.4 · CocoaPods 1.16.2 · Node v24.17.0',
   '',
-  ' \x1b[38;5;173m⏺\x1b[0m Everything is in place, and Julian’s iPhone is plugged in with',
+  ' \x1b[38;5;173m⏺\x1b[0m Everything is in place, and Sam’s iPhone is plugged in with',
   `   Developer Mode on. Now I’ll fetch the app’s source for ${BRAND.name} 1.7.0.`,
   '',
   ' \x1b[38;5;114m⏺\x1b[0m \x1b[1mBash\x1b[0m(git clone --depth 1 --sparse --branch v1.7.0 … && pnpm install)',
@@ -202,7 +202,7 @@ export const phoneInstallScenarios: Scenario[] = [
   install(
     'phone-install-done',
     'Install — on the phone, with its expiry',
-    'Every row green. Right: a green tick, "The app is on Julian’s iPhone", "Works until ' +
+    'Every row green. Right: a green tick, "The app is on Sam’s iPhone", "Works until ' +
       '<a week from now>" and that Reinstall needs no agent, the Untrusted Developer fix in ' +
       'small grey text, “Before you pair: Install Tailscale on your phone and sign in with the ' +
       'same account as this Mac.” with a “Get Tailscale on the App Store ↗” link, and "Open on ' +
@@ -221,7 +221,7 @@ export const phoneInstallScenarios: Scenario[] = [
     'phone-install-pairing',
     'Install — "Pair it now" goes straight to the pairing code',
     'Back in the Phone panel (title "Phone") with the QR code on screen, and a "Built on this ' +
-      'Mac for Julian’s iPhone" row with when it stops working and Reinstall.',
+      'Mac for Sam’s iPhone" row with when it stops working and Reinstall.',
     {
       companion_status: phoneStatus({
         enabled: true,
@@ -258,7 +258,7 @@ export const phoneInstallScenarios: Scenario[] = [
   install(
     'phone-install-reinstall-entry',
     'Phone panel — a build from this Mac, with Reinstall',
-    'Under the intro, a row "Built on this Mac for Julian’s iPhone", "Works until <date>. Plug ' +
+    'Under the intro, a row "Built on this Mac for Sam’s iPhone", "Works until <date>. Plug ' +
       'it in to reinstall.", a quiet "Other phone" and a primary "Reinstall".',
     {},
     {
@@ -267,9 +267,9 @@ export const phoneInstallScenarios: Scenario[] = [
       storage: {
         'shipstudio.companionInstall': JSON.stringify({
           platform: 'ios',
-          deviceName: 'Julian’s iPhone',
+          deviceName: 'Sam’s iPhone',
           deviceId: IPHONE.udid,
-          teamId: 'H8NN6DM6G6',
+          teamId: 'TEAM000001',
           installedAt: Date.now() - 2 * DAY,
           expiresAt: Date.now() + 5 * DAY,
         }),

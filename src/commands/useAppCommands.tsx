@@ -371,6 +371,52 @@ export function useAppCommands({
         },
       },
       {
+        id: 'agents.policyDefaults',
+        title: 'What agents can do…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: [
+          'access',
+          'policy',
+          'permissions',
+          'presets',
+          'trust my agents',
+          'balanced',
+          'locked down',
+          'reset everyone',
+          'projects',
+          'folders',
+          'browser',
+          'rules',
+        ],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-policy');
+          openModal('settings');
+        },
+      },
+      {
+        id: 'agents.admins',
+        title: 'Admins: who manages and approves for your team…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: [
+          'admin',
+          'delegate',
+          'handle requests',
+          'approve for',
+          'team requests',
+          'recently deleted',
+          'restore agent',
+          'admin activity',
+        ],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-admins');
+          openModal('settings');
+        },
+      },
+      {
         id: 'agents.newAgentDefaults',
         title: 'Engine and model for new agents…',
         icon: <SettingsIcon size={14} />,

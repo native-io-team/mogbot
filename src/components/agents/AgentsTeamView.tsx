@@ -1,10 +1,13 @@
 /**
  * What's in flight across every agent, in one calm column. Reached from ⌘K
  * ("What's in flight") and, while anything waits on you, the "Needs you · N"
- * row at the top of the agent list. Who is
- * working (with what they're doing), who needs you (approval cards you can
- * answer here, and turns that didn't finish, with their one next step), what's scheduled next, and the latest replies. Every row
- * opens that conversation; a reply opens it at that line.
+ * row at the top of the agent list. Grouped as Needs you, Working and Done
+ * recently (with Paused and Scheduled next between), one line per agent:
+ * "Hiring · Send an email · 2m ago". Under Needs you a row folds its cards
+ * (answerable here) or a failed turn's next step behind a chevron, in the
+ * review panel's words; with one or two agents waiting they start open, so
+ * the action is right there, and sixteen are sixteen lines, not a wall.
+ * "Open chat" opens the conversation; other rows open it (a reply, at that line).
  *
  * Everything comes from the store: statuses and check-ins from the registry,
  * cards and replies from each chat's recent lines. A chat that's open this
@@ -20,10 +23,12 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { CollaboratorsIcon } from '@/components/icons';
+import { ChevronRightIcon, CollaboratorsIcon } from '@/components/icons';
+import { TextButton } from '../primitives/TextButton';
 import { CompactModeToggle } from '../workspace/ModeToggle';
 import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
 import { AgentAvatar } from './AgentAvatar';
+import { AgentWorkingLine } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
 import { ApprovalCard, ErrorLine } from './AgentChatItems';
 import { AgentMark, AgentSwitcher } from './AgentSwitcher';
@@ -34,12 +39,10 @@ import {
   createCheckIn,
   failedTurn,
   failureLine,
-  formatHitTime,
   formatWhen,
   getAgentMessages,
   lastUserMessage,
   needsYou,
-  plainActivity,
   replyPreview,
   resendable,
   retryNote,
@@ -59,6 +62,8 @@ import { AgentsStayOnNote } from './AgentsStayOn';
 import { AgentsQuota } from './AgentsQuota';
 import { AgentsSpareNote } from './AgentsUsage';
 import { kbd } from '../../lib/shortcuts';
+import { cardsGroup, groupLine, newestCardAt } from '../../lib/agentRequests';
+import { formatAgo } from '../../lib/workflows';
 import {
   progressLine,
   resumeTeamSetup,
@@ -189,16 +194,31 @@ interface RowProps {
   agent: Agent;
   /** Said in a room: its name, after the agent's ("in Pricing launch"). */
   place?: string;
-  line: string;
+  line: ReactNode;
   meta?: ReactNode;
   state?: 'working' | 'waiting' | 'failed' | 'limited';
+  /** Mid-turn: its badge breathes. */
+  working?: boolean;
   onOpen: () => void;
+  /** A row that folds what's under it: its chevron, and whether it's open. */
+  fold?: { expanded: boolean; controls: string };
 }
 
-function Row({ agent, place, line, meta, state, onOpen }: RowProps) {
+/**
+ * One line per agent: "Hiring · Send an email · 2m ago". The name, then what
+ * it's about (it gives way first), then the time or a mark at the right.
+ */
+function Row({ agent, place, line, meta, state, working, onOpen, fold }: RowProps) {
   return (
-    <button type="button" tabIndex={0} className="agents-team__row" onClick={onOpen}>
-      <AgentAvatar name={agent.name} color={agent.color} />
+    <button
+      type="button"
+      tabIndex={0}
+      className="agents-team__row"
+      onClick={onOpen}
+      aria-expanded={fold?.expanded}
+      aria-controls={fold?.expanded ? fold.controls : undefined}
+    >
+      <AgentAvatar name={agent.name} color={agent.color} working={working} />
       <span className="agents-team__text">
         <span className="agents-team__name">
           <span className="agents-team__name-text">{agent.name}</span>
@@ -210,9 +230,13 @@ function Row({ agent, place, line, meta, state, onOpen }: RowProps) {
         </span>
       </span>
       {meta && <span className="agents-team__meta">{meta}</span>}
+      {fold && <ChevronRightIcon size={12} className="agents-team__chevron" />}
     </button>
   );
 }
+
+/** With this many agents needing you or fewer, each opens with its cards in view (as the review panel). */
+const OPEN_ALL_UP_TO = 2;
 
 /** Opens and closes its height with the chat's motion (see useHeightReveal). */
 function Fold({ open, children }: { open: boolean; children: ReactNode }) {
@@ -271,6 +295,8 @@ export function AgentsTeamView({
   const team = useMemo(() => summarizeTeam(agents, lines), [agents, lines]);
   const columnRef = useRef<HTMLDivElement>(null);
   const [held, setHeld] = useState<Record<string, Held>>({});
+  // Rows you opened or closed; the rest follow the count (see OPEN_ALL_UP_TO).
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
@@ -467,7 +493,7 @@ export function AgentsTeamView({
             </button>
           )}
           <Section
-            title="Needs your OK"
+            title="Needs you"
             hint={
               groups.length > 0
                 ? `${kbd('mod', 'J')} opens the next agent that needs your OK`
@@ -489,59 +515,89 @@ export function AgentsTeamView({
                 approvals.some((m) => held[m.id] && !held[m.id].folding) ||
                 // Waiting on a card whose line hasn't loaded yet: the row alone.
                 (needsYou(agent) && !approvals.some((m) => held[m.id]));
+              // One line: what it's about, in the review panel's words, and when.
+              const asked = cardsGroup(agent, approvals);
+              const open = asked.pending + asked.older;
+              const line =
+                pending || !kind
+                  ? open > 0
+                    ? groupLine(asked)
+                    : needsYou(agent)
+                      ? 'Needs your OK'
+                      : 'Answered'
+                  : failureLine(kind, agent.preview);
+              const at = newestCardAt(approvals) ?? (kind ? failure?.ts : undefined);
+              // Something to open under the row: its cards, or the failure's next step.
+              const foldable = approvals.length > 0 || Boolean(failure && kind && !pending);
+              const expanded = foldable && (opened[agent.id] ?? groups.length <= OPEN_ALL_UP_TO);
+              const cardsId = `agents-team-cards-${agent.id}`;
               return (
                 <Fold key={agent.id} open={stays}>
                   <div className="agents-team__group">
-                    <Row
-                      agent={agent}
-                      place={roomName(room)}
-                      line={
-                        pending || !kind
-                          ? needsYou(agent) || pending
-                            ? 'Needs your OK'
-                            : 'Answered'
-                          : failureLine(kind, agent.preview)
-                      }
-                      state={
-                        pending || needsYou(agent)
-                          ? 'waiting'
-                          : kind
-                            ? kind.kind === 'usage_limit'
-                              ? 'limited'
-                              : 'failed'
-                            : undefined
-                      }
-                      meta={<AgentMark agent={agent} />}
-                      onOpen={() => openWhere(agent, room)}
-                    />
-                    {approvals.map((m) => (
-                      <Fold key={m.id} open={!held[m.id]?.folding}>
-                        <ApprovalCard
-                          message={m}
-                          agentName={agent.name}
-                          paused={agent.status.state === 'idle'}
-                          compact
-                          onAnswer={(_requestId, allow, always, note, choice) =>
-                            answer(agent, m, allow, always, note, choice)
-                          }
-                          arrived={false}
-                        />
-                      </Fold>
-                    ))}
-                    {failure && kind && !pending && (
-                      <ErrorLine
-                        message={failure}
-                        engine={agent.engine}
-                        onSignIn={() => onSignIn(agent.engine)}
-                        onRetry={() => void retry(agent, failure)}
-                        onRetryAt={(at) => void retryAt(agent, failure, at)}
-                        retryScheduled={(agent.checkIns ?? []).some(
-                          (c) =>
-                            !c.repeat &&
-                            kind.resetsAt !== undefined &&
-                            Math.abs(c.nextAt - kind.resetsAt) < 120_000
-                        )}
+                    <div className="agents-team__head">
+                      <Row
+                        agent={agent}
+                        place={roomName(room)}
+                        line={line}
+                        state={
+                          pending || needsYou(agent)
+                            ? undefined
+                            : kind
+                              ? kind.kind === 'usage_limit'
+                                ? 'limited'
+                                : 'failed'
+                              : undefined
+                        }
+                        meta={at ? formatAgo(at) : <AgentMark agent={agent} />}
+                        fold={foldable ? { expanded, controls: cardsId } : undefined}
+                        onOpen={() =>
+                          foldable
+                            ? setOpened((o) => ({ ...o, [agent.id]: !expanded }))
+                            : openWhere(agent, room)
+                        }
                       />
+                      {foldable && (
+                        <TextButton
+                          tabIndex={0}
+                          className="agents-team__open"
+                          onClick={() => openWhere(agent, room)}
+                        >
+                          Open chat
+                        </TextButton>
+                      )}
+                    </div>
+                    {expanded && (
+                      <div id={cardsId}>
+                        {approvals.map((m) => (
+                          <Fold key={m.id} open={!held[m.id]?.folding}>
+                            <ApprovalCard
+                              message={m}
+                              agentName={agent.name}
+                              paused={agent.status.state === 'idle'}
+                              compact
+                              onAnswer={(_requestId, allow, always, note, choice) =>
+                                answer(agent, m, allow, always, note, choice)
+                              }
+                              arrived={false}
+                            />
+                          </Fold>
+                        ))}
+                        {failure && kind && !pending && (
+                          <ErrorLine
+                            message={failure}
+                            engine={agent.engine}
+                            onSignIn={() => onSignIn(agent.engine)}
+                            onRetry={() => void retry(agent, failure)}
+                            onRetryAt={(at) => void retryAt(agent, failure, at)}
+                            retryScheduled={(agent.checkIns ?? []).some(
+                              (c) =>
+                                !c.repeat &&
+                                kind.resetsAt !== undefined &&
+                                Math.abs(c.nextAt - kind.resetsAt) < 120_000
+                            )}
+                          />
+                        )}
+                      </div>
                     )}
                   </div>
                 </Fold>
@@ -583,14 +639,15 @@ export function AgentsTeamView({
             </Section>
           )}
 
-          <Section title="Working now" empty="No one is working right now.">
+          <Section title="Working" empty="No one is working right now.">
             {team.working.map((agent) => (
               <Row
                 key={agent.id}
                 agent={agent}
                 place={roomName(agent.status.room)}
-                line={plainActivity(agent.status.activity) ?? 'Working…'}
+                line={<AgentWorkingLine agent={agent} />}
                 state="working"
+                working
                 meta={<PixelLoaderRings size="sm" label={`${agent.name} is working`} />}
                 onOpen={() => openWhere(agent, agent.status.room)}
               />
@@ -609,14 +666,14 @@ export function AgentsTeamView({
             ))}
           </Section>
 
-          <Section title="Recent replies" empty="No replies yet.">
+          <Section title="Done recently" empty="Nothing finished yet.">
             {team.replies.map(({ agent, message }) => (
               <Row
                 key={message.id}
                 agent={agent}
                 place={roomName(message.room)}
                 line={replyPreview(message.text)}
-                meta={formatHitTime(message.ts)}
+                meta={formatAgo(message.ts)}
                 onOpen={() => openWhere(agent, message.room, message.id)}
               />
             ))}

@@ -14,6 +14,7 @@ import {
   workingLine,
   needsLine,
   nextNeedsYou,
+  pendingApproval,
   usageLine,
 } from '../src/lib/agents';
 import { diffLineKind, questionContext } from '../src/lib/diff';
@@ -85,6 +86,21 @@ describe('attention', () => {
     );
     expect(needsLine(a, [approval('m1', 'allowed')])).toBe('Needs your OK');
     expect(needsLine(a, undefined)).toBe('Needs your OK');
+  });
+
+  it('leads with the Mac’s plain line, what and why, when it sends one', () => {
+    expect(
+      askingLine({
+        title: 'Run a command',
+        detail: 'ls -la ~/Downloads/KiteExport',
+        tool: 'Bash',
+        summary: 'Look inside your KiteExport folder — to see if the download finished',
+      })
+    ).toBe('Look inside your KiteExport folder — to see if the download finished');
+    // An older Mac sends none: the command is read as before.
+    expect(askingLine({ title: 'Run a command', detail: 'npm test\n' })).toBe(
+      'Wants to run the tests'
+    );
   });
 
   it('never previews a diff: an edit says which file it wants to change', () => {
@@ -309,6 +325,29 @@ describe('engines, slots and decision cards', () => {
     expect(cardOutcome({ ...base, status: 'denied', note: 'use pnpm' })).toBe(
       'Declined · “use pnpm”'
     );
+  });
+
+  it('words an expired card as the desk does, and never as waiting', () => {
+    const base = { requestId: 'q', title: 'Run a command', detail: 'npm test' };
+    expect(cardOutcome({ ...base, status: 'expired', expiry: 'moved_on' })).toBe(
+      'Expired — the agent moved on'
+    );
+    expect(cardOutcome({ ...base, status: 'expired', expiry: 'no_answer' })).toBe(
+      'No answer — ask again later if it still matters'
+    );
+    expect(cardOutcome({ ...base, status: 'expired', expiry: 'maybe_later' })).toBe('Maybe later');
+    expect(
+      pendingApproval([
+        {
+          id: 'm1',
+          agentId: 'a',
+          ts: 1,
+          kind: 'approval',
+          text: '',
+          approval: { ...base, status: 'expired', expiry: 'moved_on' },
+        },
+      ])
+    ).toBeUndefined();
   });
 });
 

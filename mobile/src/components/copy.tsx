@@ -26,7 +26,7 @@ import { CARD_TITLE_SCALE, space } from '../lib/theme';
 import { useColors } from '../lib/appearance';
 import { folderName } from '../lib/agents';
 import { drivenLine } from '../lib/bars';
-import { ACTION, Card, OFFLINE_NOTE } from './surfaces';
+import { Card, OFFLINE_NOTE, useActionShare } from './surfaces';
 import { Button, T } from './ui';
 
 /**
@@ -124,6 +124,8 @@ export function useCopyParts(props: CopyProps | null): CopyParts | null {
   const [busy, setBusy] = useState<'keep' | 'discard' | null>(null);
   // One at a time: two taps in one frame both see the render before `busy`.
   const once = useInFlight();
+  // Sized for the longer Keep label, so the pair never cuts it at a large text size.
+  const share = useActionShare(['Discard', 'Keep there too']);
   if (!props || !served) return null;
   const { agent, copy, leftOut, warning, stats, onError } = props;
   const working = agent.status.state !== 'idle';
@@ -238,7 +240,7 @@ export function useCopyParts(props: CopyProps | null): CopyParts | null {
           busy={busy === 'discard'}
           disabled={off}
           onPress={discard}
-          style={ACTION}
+          style={share}
         />
         <Button
           title={into ? 'Keep there too' : 'Keep changes'}
@@ -246,7 +248,7 @@ export function useCopyParts(props: CopyProps | null): CopyParts | null {
           busy={busy === 'keep'}
           disabled={off}
           onPress={() => void keep(into)}
-          style={ACTION}
+          style={share}
         />
       </>
     ),

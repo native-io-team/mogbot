@@ -88,10 +88,19 @@ export function groupRequests(
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** "Lead Gen needs your OK", "Finance and Lead Gen need your OK", "16 agents need your OK". */
-export function requestsTitle(summary: RequestsSummary): string {
+/**
+ * "Lead Gen needs your OK", "Finance and Lead Gen need your OK", "16 agents
+ * need your OK". `team`: in the Chief's chat, the team-wide count every other
+ * surface shows (`needsYouCount`, packages/companion-protocol/src/attention.ts),
+ * so this bar never says 13 while the sidebar says 14. When it counts more
+ * than the bar lists (the Chief's own card is in the chat above; a failed
+ * turn has no card), the number is said rather than the names.
+ */
+export function requestsTitle(summary: RequestsSummary, team?: number): string {
   const names = summary.groups.filter((g) => g.pending + g.older > 0).map((g) => g.agent.name);
   if (names.length === 0) return 'Nothing else needs your OK';
+  const n = Math.max(team ?? 0, names.length);
+  if (n > names.length) return `${n} agents need your OK`;
   if (names.length === 1) return `${names[0]} needs your OK`;
   if (names.length === 2) return `${names[0]} and ${names[1]} need your OK`;
   return `${names.length} agents need your OK`;
@@ -110,13 +119,13 @@ export function requestsDetail(summary: RequestsSummary): string {
   return `${count(requests, 'request')}, ${logins} of them ${logins === 1 ? 'a login' : 'logins'}`;
 }
 
-/** The panel's subtitle: "16 agents · 41 logins", "2 agents · 3 requests". */
-export function requestsCounts(summary: RequestsSummary): string {
+/** The panel's subtitle: "16 agents · 41 logins", "2 agents · 3 requests". `team` as for the title. */
+export function requestsCounts(summary: RequestsSummary, team?: number): string {
   const what =
     summary.logins === summary.requests
       ? count(summary.logins, 'login')
       : count(summary.requests, 'request');
-  return `${count(summary.agents, 'agent')} · ${what}`;
+  return `${count(Math.max(team ?? 0, summary.agents), 'agent')} · ${what}`;
 }
 
 /** Up to `max` names, then "…": the line under an agent's name. */
@@ -140,8 +149,88 @@ export function groupLine(group: RequestGroup): string {
   }
   if (open === 1 && pendingCards.length === 1) {
     const a = pendingCards[0].approval!;
-    return a.prompt?.question ?? a.title;
+    // What it does and why, in words, when the card says (`admin::summary_for`).
+    return a.prompt?.question ?? a.summary ?? a.title;
   }
   if (group.logins === 0) return count(open, 'request');
   return `${count(open, 'request')}, ${group.logins} of them ${group.logins === 1 ? 'a login' : 'logins'}`;
+}
+
+/**
+ * One agent's cards as a group, for a list that already holds them (What's
+ * in flight): so its folded row says what the review panel's would.
+ */
+export function cardsGroup(agent: Agent, cards: AgentMessage[]): RequestGroup {
+  const pending = cards.filter(isPending);
+  return {
+    agent,
+    cards,
+    pending: pending.length,
+    older: Math.max(0, (agent.pendingApprovals ?? 0) - pending.length),
+    logins: pending.filter(isLogin).length,
+  };
+}
+
+/** When the newest of a group's open cards arrived; none open, undefined. */
+export function newestCardAt(cards: AgentMessage[]): number | undefined {
+  const open = cards.filter(isPending);
+  return open.length > 0 ? Math.max(...open.map((m) => m.ts)) : undefined;
+}
+
+/**
+ * The cards "Allow all" answers: pending Allow cards. Never a login or a
+ * secure input (they need you to sign in or type), a session's question
+ * (its answer is a choice), or an import's own cards.
+ */
+export function allowAllCards(cards: AgentMessage[]): AgentMessage[] {
+  return cards.filter((m) => {
+    const a = m.approval;
+    return isPending(m) && a !== undefined && !a.login && !a.secret && !a.prompt && !a.connector;
+  });
+}
+
+/** What a card is, for the "Allow all" line: [one, many]. */
+function kindOf(m: AgentMessage): [string, string] {
+  const a = m.approval!;
+  switch (a.tool) {
+    case 'Bash':
+      return ['command', 'commands'];
+    case 'Write':
+    case 'Edit':
+    case 'MultiEdit':
+    case 'NotebookEdit':
+      return ['file change', 'file changes'];
+    case 'Read':
+    case 'Glob':
+    case 'Grep':
+    case 'LS':
+      return ['file read', 'file reads'];
+    case 'WebFetch':
+      return ['web page', 'web pages'];
+    case 'WebSearch':
+      return ['web search', 'web searches'];
+    default:
+      // A connector's tool or the app's own confirmation: its own words.
+      return [a.title, a.title];
+  }
+}
+
+/**
+ * The confirm line before "Allow all": how many, by kind, most first.
+ * "Allow 5 requests? 3 commands, 1 file change, Send an email · Gmail".
+ */
+export function allowAllLine(cards: AgentMessage[]): string {
+  const counts = new Map<string, { n: number; one: string; many: string }>();
+  for (const m of cards) {
+    const [one, many] = kindOf(m);
+    const entry = counts.get(one) ?? { n: 0, one, many };
+    entry.n += 1;
+    counts.set(one, entry);
+  }
+  const parts = [...counts.values()]
+    .sort((a, b) => b.n - a.n)
+    .map(({ n, one, many }) =>
+      one === many ? (n === 1 ? one : `${one} ×${n}`) : `${n} ${n === 1 ? one : many}`
+    );
+  return `Allow ${count(cards.length, 'request')}? ${parts.join(', ')}`;
 }

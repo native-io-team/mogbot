@@ -55,6 +55,14 @@ pub const MAX_HOPS: u8 = 6;
 const TURN_TIMEOUT_SECS: u64 = 3 * 60 * 60;
 /// The chat's line for a turn stopped by [`TURN_TIMEOUT_SECS`].
 const TIMEOUT_NOTE: &str = "Stopped after 3 hours. Send a message to pick it back up.";
+/// What the line says between calls, once the one it named came back.
+const THINKING: &str = "Thinking";
+/// A command's process ended but the engine never moved on (`work::pulse`).
+const HUNG_NOTE: &str = "Stopped: the command it was running had ended, but it never moved on. Send a message to pick it back up.";
+/// How often a running turn is looked at for signs of life (`work::pulse`).
+const PULSE_EVERY: Duration = Duration::from_secs(15);
+/// How often what a running command printed is sent on, at most.
+const PEEK_EVERY: Duration = Duration::from_secs(1);
 /// With no tool call open, this long without a word from the CLI and the
 /// working line says it may be stuck (see [`quiet_line`]).
 const QUIET_MS: i64 = 10 * 60 * 1000;
@@ -860,6 +868,10 @@ fn tag_room(message: &mut AgentMessage, tag: Tag) {
 
 /// Persist a message, update the agent's sidebar row, and tell the UI.
 pub fn record(app: &AppHandle, message: AgentMessage) -> Result<AgentMessage, CommandError> {
+    // The user wrote: a new task, in which an ask that expired may be raised again.
+    if message.kind == MessageKind::User && !message.agent_id.is_empty() {
+        super::expiry::new_task(&message.agent_id);
+    }
     record_as(app, message, true, Tag::ByKind)
 }
 
@@ -1130,6 +1142,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         revises: None,
         takeover: false,
         room: None,
+        decide: Vec::new(),
     }
 }
 
@@ -2533,6 +2546,8 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             return;
         }
         clear_mark(&agent_id);
+        // Nothing waits on its cards now: they close, rather than ask on.
+        super::expiry::sweep_agent(&app, &agent_id, super::expiry::Moment::TurnEnded);
         // What the turn changed goes before its failure, so a failed turn still
         // ends on its error line (Retry and the sidebar's failure read the newest line).
         // Then its result card, if it shared one: on the change card when
@@ -2545,6 +2560,8 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             card.ts = store::now_ms();
             let _ = record(&app, card);
         }
+        // A "Test it" run closes with its turn (a line if it never reported).
+        super::preview_test::turn_ended(&app, &agent_id, since);
         // A copy made for a turn that changed nothing (a question) goes again.
         if let Some(copy) = &made {
             super::task::drop_if_unused(&app, &agent_id, copy).await;
@@ -2909,6 +2926,31 @@ fn is_missing_session(detail: &str) -> bool {
 }
 
 /// Folders an agent may work in without asking: every Ship Studio project.
+/// The folders a turn adds, by its settings: for a bound agent its home
+/// first (its memory), then what the policy lets it write, but never its
+/// working folder twice.
+fn policy_dirs(
+    layout: &super::project::Layout,
+    home: &std::path::Path,
+    allowed: Vec<String>,
+) -> Vec<String> {
+    let home = home.to_string_lossy().to_string();
+    let mut out = Vec::new();
+    if layout.project.is_some() {
+        out.push(home.clone());
+    }
+    let project = layout
+        .project
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string());
+    for d in allowed {
+        if Some(&d) != project.as_ref() && d != home && !out.contains(&d) {
+            out.push(d);
+        }
+    }
+    out
+}
+
 pub(super) fn work_dirs() -> Vec<String> {
     let mut dirs = Vec::new();
     if let Ok(root) = crate::utils::projects_root() {
@@ -2943,9 +2985,22 @@ pub(super) fn system_prompt_for(
     // How much to do on its own: the user's level, or the strictest for a
     // turn answering outside text. Fixed per level, so the cache holds.
     prompt.push_str("\n\n");
+    // Its own level when its settings give it one (`policy`).
     prompt.push_str(&super::independence::prompt_section(
-        super::independence::for_turn(super::independence::level(), from_outside(&agent.id)),
+        super::policy::independence_for(agent, from_outside(&agent.id)),
     ));
+    // What it may do, the user's rules for it, and how to change either.
+    prompt.push_str("\n\n");
+    prompt.push_str(&super::policy::prompt_section(
+        &super::policy::effective(agent),
+        agent,
+    ));
+    // An admin's powers, said only in a turn that has them: fixed text, so
+    // the prompt changes only when the user flips the switch.
+    if super::admin::admin_now(agent) {
+        prompt.push_str("\n\n");
+        prompt.push_str(super::admin::PROMPT_SECTION);
+    }
     // Apps the user chose not to connect: don't ask, work around them.
     if let Some(declined) = super::declined::prompt_section() {
         prompt.push_str("\n\n");
@@ -3235,6 +3290,8 @@ async fn run_turn(
     // How this turn runs it (Codex speaks app-server when it can).
     let driver = Driver::pick(engine, &binary).await;
     driver.ready_as(account).await?;
+    // Only the app server streams what a command prints as it runs.
+    super::work::set_streams(agent_id, driver == Driver::CodexApp);
     super::wallet::prepare(account);
     let (port, _) = crate::agent_bridge::start_global_agent_bridge(app.clone())
         .await
@@ -3247,7 +3304,10 @@ async fn run_turn(
     let url = super::reach::agent_url(port);
     // The apps it was granted on login cards (tokens refreshed), the
     // claude.ai connectors it's kept from, and its browser (`connections`).
-    let access = super::connections::for_turn(&agent, port).await;
+    // A "When…" routine's items came from outside: such a turn gets no
+    // browser, and can't write its own instructions or memory (below).
+    let outside = from_outside(agent_id);
+    let mut access = super::connections::for_turn(&agent, port, outside).await;
     let mcp_config = match engine {
         Engine::Claude => Some(super::reach::write_config(
             &super::reach::claude_config_with(
@@ -3276,7 +3336,24 @@ async fn run_turn(
     // A value pasted into a message reaches the agent as its reference.
     let prompt = super::secrets::redact(&prompt).into_owned();
 
-    let layout = super::project::layout(&agent, &home, work_dirs());
+    // What its settings let it work in (`policy`): the folders it may
+    // write, and what stays read-only inside them.
+    let policy = super::policy::effective(&agent);
+    if let Some(why) = super::policy::own_refusal(&policy, &agent) {
+        return Err(CommandError::expected(why));
+    }
+    let mut layout = super::project::layout(&agent, &home, work_dirs());
+    let dirs = super::policy::turn_dirs(
+        &policy,
+        &agent,
+        &super::policy::Places::current(),
+        work_dirs(),
+        layout.copy.is_some(),
+    );
+    layout.add_dirs = policy_dirs(&layout, &home, dirs.add_dirs);
+    if engine == Engine::Claude {
+        access.blocked.extend(dirs.claude_deny);
+    }
     if let Some(project) = &layout.project {
         if !project.is_dir() {
             return Err(CommandError::expected(format!(
@@ -3321,8 +3398,22 @@ async fn run_turn(
             .map(std::path::PathBuf::from)
             .collect();
         roots.push(layout.cwd.clone());
-        super::reach::protected_paths(&roots)
+        let mut paths = super::reach::protected_paths(&roots);
+        paths.extend(dirs.read_only.iter().cloned());
+        paths
     });
+    // A Codex without permission profiles can't keep a folder it works in
+    // read-only: say so rather than let it write there.
+    if driver.engine() == Engine::Codex && !profiles && !dirs.read_only.is_empty() {
+        return Err(CommandError::expected(format!(
+            "{}'s settings keep {} read-only, and this version of Codex can't hold a folder it works in read-only. Update Codex, or ask in chat to let it work in its own copy.",
+            agent.name,
+            dirs.read_only
+                .first()
+                .map(|p| super::project::folder_name(&p.to_string_lossy()).to_string())
+                .unwrap_or_default()
+        )));
+    }
     let mcp_config_arg = mcp_config
         .as_ref()
         .map(super::reach::ConfigFile::arg)
@@ -3342,7 +3433,6 @@ async fn run_turn(
     // A "When…" routine's items came from outside: this turn can't write its
     // own instructions or memory (Claude Code refuses the edit; for Codex,
     // and for anything that gets past that, it's put back when the turn ends).
-    let outside = from_outside(agent_id);
     if outside && engine == super::engine::Engine::Claude {
         cmd.args(outside_turn_args(&home));
     }
@@ -3516,6 +3606,12 @@ async fn run_turn(
     let mut last_word = store::now_ms();
     let mut quiet_tick = tokio::time::interval(Duration::from_secs(60));
     quiet_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // Signs of life, looked at quietly (`work::liveness`), and a running
+    // command's output, sent on at most once a second.
+    let mut pulse_tick = tokio::time::interval(PULSE_EVERY);
+    pulse_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut peek_tick = tokio::time::interval(PEEK_EVERY);
+    peek_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     loop {
         tokio::select! {
@@ -3524,6 +3620,9 @@ async fn run_turn(
                 last_word = store::now_ms();
                 let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
                 let kind = value.get("type").and_then(|t| t.as_str());
+                // Claude Code's `tool_progress` says only that a tool is still
+                // running: alive, but not progress.
+                super::work::on_sign(agent_id, last_word, kind != Some("tool_progress"));
                 // A `result` can answer something queued ahead of the user's
                 // message (resumed after a Stop, Claude Code first answers the
                 // killed background task's notification, then the message):
@@ -3549,6 +3648,10 @@ async fn run_turn(
                         continue;
                     }
                     Driver::ClaudePrint => {
+                        // What the browser showed: which control each ref is.
+                        if matches!(kind, Some("assistant" | "user")) {
+                            super::browser_gate::observe(agent_id, &value);
+                        }
                         let mut steps = stream::claude_steps(&value, store::now_ms());
                         steps.extend(claude_context.observe(&value, store::now_ms()).map(Step::Context));
                         steps
@@ -3620,12 +3723,22 @@ async fn run_turn(
                             }
                         }
                         Step::Result(result) => {
+                            let before = super::work::live(agent_id).and_then(|w| w.doing);
                             super::work::on_result(agent_id, result);
                             // The step's outcome changed: the open list says so.
-                            let now = status_of(agent_id);
+                            let mut now = status_of(agent_id);
                             if now.state == "working" {
+                                // The line said that call; it's back, so the
+                                // agent is on to deciding what's next.
+                                let after = super::work::live(agent_id).and_then(|w| w.doing);
+                                if before.is_some() && after.is_none() && now.activity == before {
+                                    now.activity = Some(THINKING.into());
+                                }
                                 set_status(app, agent_id, now);
                             }
+                        }
+                        Step::Output { id, text } => {
+                            super::work::on_output(agent_id, &id, &text, store::now_ms());
                         }
                         Step::Usage(mut turn) => {
                             timing.cli_ms = turn.duration_ms;
@@ -3702,6 +3815,33 @@ async fn run_turn(
             _ = &mut drain_rest, if exited.is_some() || saw_result => break,
             _ = cancel.notified() => { stopped = Some(None); break; }
             _ = &mut deadline => { stopped = Some(Some(TIMEOUT_NOTE)); break; }
+            _ = peek_tick.tick() => {
+                if super::work::take_dirty(agent_id) {
+                    let now = status_of(agent_id);
+                    if now.state == "working" {
+                        set_status(app, agent_id, now);
+                    }
+                }
+            }
+            _ = pulse_tick.tick() => {
+                // The running command's process, only when there is one to find.
+                let rows = match super::work::step_needle(agent_id) {
+                    Some(_) => tokio::task::spawn_blocking(procs::snapshot).await.ok().flatten(),
+                    None => None,
+                };
+                let pulse = super::work::pulse(agent_id, store::now_ms(), rows.as_deref(), pid);
+                if pulse.hung {
+                    tracing::warn!("[Agents] {agent_id}: its command ended but the engine never moved on; stopping the turn");
+                    stopped = Some(Some(HUNG_NOTE));
+                    break;
+                }
+                let now = status_of(agent_id);
+                // Sent again while a call runs, so "Last activity" stays fresh.
+                let running = super::work::live(agent_id).is_some_and(|w| w.current.is_some());
+                if now.state == "working" && (pulse.changed || running) {
+                    set_status(app, agent_id, now);
+                }
+            }
             _ = quiet_tick.tick() => {
                 let now = status_of(agent_id);
                 let tool_open = super::work::live(agent_id).is_some_and(|w| w.doing.is_some());
@@ -4170,11 +4310,16 @@ mod tests {
             let root = tempfile::tempdir().unwrap();
             store::set_root_for_tests(Some(root.path().to_path_buf()));
             let prompt = system_prompt_for(&agent, std::path::Path::new("/h"), &layout);
+            let policy = super::super::policy::prompt_section(
+                &super::super::policy::effective(&agent),
+                &agent,
+            );
             store::set_root_for_tests(None);
-            prompt
+            (prompt, policy)
         };
-        // The same prompt, plus the app-owned usage and independence
-        // sections every agent gets.
+        let (prompt, policy) = prompt;
+        // The same prompt, plus the app-owned usage, independence and
+        // "What you may do" sections every agent gets.
         let usage = prompts::usage_section(super::super::usage_plan::Mode::Normal, false);
         let independence = super::super::independence::prompt_section(
             super::super::independence::Level::Judgement,
@@ -4182,7 +4327,7 @@ mod tests {
         assert_eq!(
             prompt,
             format!(
-                "{}\n\n{usage}\n\n{independence}",
+                "{}\n\n{usage}\n\n{independence}\n\n{policy}",
                 prompts::system_prompt(&agent, None)
             )
         );
@@ -4503,6 +4648,10 @@ mod tests {
                 connector: None,
                 login: None,
                 set_aside: None,
+                expiry: None,
+                from_outside: None,
+                front: None,
+                settings: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

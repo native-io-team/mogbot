@@ -147,15 +147,10 @@ function scheduleRoomsRefresh() {
 }
 
 /** (Re)load a room's newest page. */
-export async function loadRoomMessages(roomId: string): Promise<void> {
-  const key = roomKey(roomId);
-  try {
-    const messages = await getRoomMessages(roomId, MESSAGE_PAGE);
-    setMessages(key, messages, messages.length >= MESSAGE_PAGE);
-  } catch (error) {
-    logger.error('[Agents] room messages failed', { roomId, error: String(error) });
-    setMessages(key, state.messages[key] ?? [], false);
-  }
+export function loadRoomMessages(roomId: string): Promise<void> {
+  return loadNewest(roomKey(roomId), () => getRoomMessages(roomId, MESSAGE_PAGE), {
+    roomId,
+  });
 }
 
 /** The page before the oldest room line loaded. */
@@ -232,15 +227,99 @@ function setMessages(agentId: string, messages: AgentMessage[], older: boolean) 
   });
 }
 
-/** (Re)load a chat's newest page. */
-export async function loadMessages(agentId: string): Promise<void> {
-  try {
-    const messages = await getAgentMessages(agentId, MESSAGE_PAGE);
-    setMessages(agentId, messages, messages.length >= MESSAGE_PAGE);
-  } catch (error) {
-    logger.error('[Agents] messages failed', { agentId, error: String(error) });
-    setMessages(agentId, state.messages[agentId] ?? [], false);
+/**
+ * Put a line in a chat: replaced where it is when it's already there (an
+ * approval answered, a reply edited), otherwise after the last line no newer
+ * than it. Events usually arrive in order, so that's the end; one that was
+ * overtaken (a slow emit, a page read while it was written) still lands in
+ * its place instead of below lines written after it.
+ */
+export function placeLine(list: AgentMessage[], message: AgentMessage): AgentMessage[] {
+  const index = list.findIndex((m) => m.id === message.id);
+  if (index !== -1) {
+    if (list[index] === message) return list;
+    return list.map((m, i) => (i === index ? message : m));
   }
+  let at = list.length;
+  while (at > 0 && list[at - 1].ts > message.ts) at--;
+  return at === list.length
+    ? [...list, message]
+    : [...list.slice(0, at), message, ...list.slice(at)];
+}
+
+/**
+ * A newest page, read while the chat may already hold lines: older pages
+ * scrolled in, and lines that arrived as events. Older lines above the page
+ * stay (a reload never throws away what you scrolled to); lines that arrived
+ * after the read stay too, and an event that came in during the read wins
+ * over the page's older copy of its line.
+ */
+export function mergeNewest(
+  current: AgentMessage[] | undefined,
+  page: AgentMessage[],
+  arrived: AgentMessage[]
+): { messages: AgentMessage[]; keptOlder: boolean } {
+  const inPage = new Set(page.map((m) => m.id));
+  let merged = page;
+  let keptOlder = false;
+  if (current?.length && page.length) {
+    const first = current.findIndex((m) => m.id === page[0].id);
+    // No overlap means a gap between what was held and this page: start from the page.
+    if (first > 0) {
+      merged = [...current.slice(0, first), ...page];
+      keptOlder = true;
+    }
+    if (first !== -1) {
+      for (const m of current.slice(first)) if (!inPage.has(m.id)) merged = placeLine(merged, m);
+    }
+  } else if (current?.length) {
+    merged = current;
+    keptOlder = true;
+  }
+  for (const m of arrived) merged = placeLine(merged, m);
+  return { messages: merged, keptOlder };
+}
+
+/** Lines that arrived as events while a chat's newest page was being read. */
+const arriving = new Map<string, AgentMessage[]>();
+/** One newest-page read per chat at a time. */
+const loadingNewest = new Map<string, Promise<void>>();
+
+function loadNewest(
+  key: string,
+  read: () => Promise<AgentMessage[]>,
+  context: Record<string, string>
+): Promise<void> {
+  const inFlight = loadingNewest.get(key);
+  if (inFlight) return inFlight;
+  arriving.set(key, []);
+  const request = read()
+    .then((page) => {
+      const { messages, keptOlder } = mergeNewest(
+        state.messages[key],
+        page,
+        arriving.get(key) ?? []
+      );
+      const older = keptOlder ? (state.older[key] ?? false) : page.length >= MESSAGE_PAGE;
+      setMessages(key, messages, older);
+    })
+    .catch((error: unknown) => {
+      logger.error('[Agents] messages failed', { ...context, error: String(error) });
+      // Whatever arrived while it failed is still worth showing.
+      const { messages } = mergeNewest(state.messages[key], [], arriving.get(key) ?? []);
+      setMessages(key, messages, state.older[key] ?? false);
+    })
+    .finally(() => {
+      arriving.delete(key);
+      loadingNewest.delete(key);
+    });
+  loadingNewest.set(key, request);
+  return request;
+}
+
+/** (Re)load a chat's newest page. */
+export function loadMessages(agentId: string): Promise<void> {
+  return loadNewest(agentId, () => getAgentMessages(agentId, MESSAGE_PAGE), { agentId });
 }
 
 /** One request per chat at a time: a scroll and a search jump can both ask. */
@@ -286,26 +365,52 @@ function withoutDraft(agentId: string, id?: string): AgentsState['drafts'] {
  * that completes a draft replaces it in the same render, so nothing flickers.
  */
 export function upsertMessage(message: AgentMessage) {
+  noteFinished(message.id);
   const drafts = message.agentId ? withoutDraft(message.agentId, message.id) : state.drafts;
   // A member's line said in a room is in both its own chat and the room's thread.
   const keys = [message.agentId, message.room ? roomKey(message.room) : ''].filter(Boolean);
   let messages = state.messages;
   for (const key of keys) {
+    // A page is being read: this line may be newer than what it returns.
+    arriving.get(key)?.push(message);
     const existing = messages[key];
     if (!existing) continue;
-    const index = existing.findIndex((m) => m.id === message.id);
-    const next =
-      index === -1 ? [...existing, message] : existing.map((m, i) => (i === index ? message : m));
-    messages = { ...messages, [key]: next };
+    // An update to a line older than everything loaded (an old card expiring)
+    // belongs on a page not read yet; it arrives with that page, not at the top.
+    if (
+      state.older[key] &&
+      existing.length &&
+      message.ts < existing[0].ts &&
+      !existing.some((m) => m.id === message.id)
+    )
+      continue;
+    const next = placeLine(existing, message);
+    if (next !== existing) messages = { ...messages, [key]: next };
   }
   if (messages === state.messages && drafts === state.drafts) return;
   emit({ ...state, drafts, messages });
 }
 
+/**
+ * Lines that exist as finished messages: a draft event for one that arrives
+ * after it (events on two channels, or a duplicate) must not bring back a
+ * second, streaming copy of a reply that is already there. Bounded; only the
+ * last few matter.
+ */
+const finished = new Set<string>();
+const FINISHED_KEPT = 500;
+function noteFinished(id: string) {
+  finished.delete(id);
+  finished.add(id);
+  if (finished.size > FINISHED_KEPT) finished.delete(finished.values().next().value as string);
+}
+
 /** A reply grew. Keeps the time it started, so it doesn't jump past a divider. */
 export function updateDraft(agentId: string, id: string, text: string) {
   const previous = state.drafts[agentId];
-  if (state.messages[agentId]?.some((m) => m.id === id)) return;
+  if (finished.has(id) || state.messages[agentId]?.some((m) => m.id === id)) return;
+  // A repeated event changes nothing; don't re-render the chat for it.
+  if (previous?.id === id && previous.text === text) return;
   const ts = previous?.id === id ? previous.ts : Date.now();
   emit({
     ...state,
@@ -465,4 +570,7 @@ export function __resetAgentsStore() {
     roomsLoaded: false,
   };
   loadingOlder.clear();
+  loadingNewest.clear();
+  arriving.clear();
+  finished.clear();
 }

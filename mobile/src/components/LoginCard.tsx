@@ -17,6 +17,7 @@
 
 import {
   MAC_FEATURES,
+  secretTitle,
   type Agent,
   type AgentMessage,
   type Approval,
@@ -24,9 +25,11 @@ import {
   type LoginRequest,
 } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
 import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, TextInput, View } from 'react-native';
 import { haptic } from '../lib/haptics';
+import { alsoForLine } from '../lib/teamSetup';
 import { useInFlight } from '../lib/once';
 import {
   CLAUDE_AI_CONNECTORS,
@@ -48,13 +51,14 @@ import {
   primaryOption,
   saveLoginKey,
 } from '../lib/logins';
+import { signinHereLine } from '../lib/signinView';
 import { currentTransport, describeError, secretRouteProblem } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
 import { CARD_TITLE_SCALE, fonts, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { Receipt, useArmed, useCardStyles } from './ApprovalCard';
 import { DeclineReceiptLine, useDeclineReceipt, useRecheckWhenBack } from './loginExtras';
-import { ACTION, Card, CardActions, OFFLINE_NOTE } from './surfaces';
+import { ACTION, Card, CardActions, OFFLINE_NOTE, useActionShare } from './surfaces';
 import { Button, T } from './ui';
 
 export function LoginCard({
@@ -93,6 +97,9 @@ export function LoginCard({
   useRecheckWhenBack(
     login.flow?.state === 'waiting' && login.flow.onPhone === true && login.flow.option === 'claude_ai'
   );
+  // The Mac's Chrome, driven from here, for a card whose way in is the browser.
+  const signinServed = useServed('agents.signinBegin', MAC_FEATURES.signinPhone);
+  const router = useRouter();
 
   const wipe = () => {
     value.current = '';
@@ -145,10 +152,14 @@ export function LoginCard({
     }
   };
   const decline = () =>
-    run('decline', () => loginDecline(message.agentId, approval.requestId), () => {
-      wipe();
-      haptic.warning();
-    });
+    run(
+      'decline',
+      () => loginDecline(message.agentId, approval.requestId),
+      () => {
+        wipe();
+        haptic.warning();
+      }
+    );
   const cancel = () => run('cancel', () => loginCancel(message.agentId, approval.requestId));
   const notNeeded = () =>
     run('notNeeded', async () => setReceipt(await loginNotNeeded(message.agentId, approval.requestId)), () => {
@@ -165,9 +176,37 @@ export function LoginCard({
       }
     );
 
+  // The labels each row will carry, so they share it without cutting one ("Copy co…").
+  const signingIn = login.flow;
+  const signingInOption = signingIn
+    ? login.options.find((o) => o.id === signingIn.option)
+    : undefined;
+  const onMacShare = useActionShare([
+    ...(signingIn?.userCode ? ['Copy code'] : []),
+    ...(signingIn?.onPhone && signingIn.verificationUri ? ['Open GitHub'] : []),
+    ...(signingIn?.onPhone && signingInOption?.method === 'claude_ai' ? ['Open Claude’s connectors'] : []),
+    'Cancel',
+  ]);
+  const firstOption = primaryOption(login);
+  const answerShare = useActionShare([
+    'Not now',
+    ...(canDecline ? ['Not needed'] : []),
+    ...(firstOption && firstOption.method !== 'key'
+      ? [
+          phase === 'failed' && login.flow?.option === firstOption.id
+            ? 'Try again'
+            : firstOption.label,
+        ]
+      : []),
+  ]);
+
   if (!pending) {
     return (
-      <Receipt status={approval.status} title={title} outcome={loginOutcome(approval, login, agent.name)}>
+      <Receipt
+        status={approval.status}
+        title={title}
+        outcome={loginOutcome(approval, login, agent.name)}
+      >
         <T variant="small" color={colors.textSecondary}>
           {login.why}
         </T>
@@ -178,7 +217,7 @@ export function LoginCard({
     );
   }
 
-  const source = login.askedAs ? `Asked for “${login.askedAs}”` : undefined;
+  const source = login.askedAs ? `Asked for “${secretTitle(login.askedAs)}”` : undefined;
   const why = (
     <T variant="small" color={colors.textBody} maxFontSizeMultiplier={2}>
       {login.why}
@@ -192,6 +231,12 @@ export function LoginCard({
           {a.label}
         </T>
       ))}
+      {/* Others who asked for the same joined this card: answering it answers them. */}
+      {!!alsoForLine(login.alsoFor) && (
+        <T variant="caption" color={colors.textMuted} testID="login-also-for">
+          {alsoForLine(login.alsoFor)}
+        </T>
+      )}
     </View>
   );
   const errorLine = error ? (
@@ -237,23 +282,27 @@ export function LoginCard({
                 void Clipboard.setStringAsync(flow.userCode ?? '');
                 haptic.select();
               }}
-              style={ACTION}
+              style={onMacShare}
             />
           )}
           {!!flow?.onPhone && !!flow.verificationUri && (
             <Button
               title="Open GitHub"
               variant="answer"
-              onPress={() => void openHere(flow.verificationUri!).catch((e) => setError(describeError(e)))}
-              style={ACTION}
+              onPress={() =>
+                void openHere(flow.verificationUri!).catch((e) => setError(describeError(e)))
+              }
+              style={onMacShare}
             />
           )}
           {!!flow?.onPhone && flowOption?.method === 'claude_ai' && (
             <Button
               title="Open Claude’s connectors"
               variant="answer"
-              onPress={() => void openHere(CLAUDE_AI_CONNECTORS).catch((e) => setError(describeError(e)))}
-              style={ACTION}
+              onPress={() =>
+                void openHere(CLAUDE_AI_CONNECTORS).catch((e) => setError(describeError(e)))
+              }
+              style={onMacShare}
             />
           )}
           <Button
@@ -262,7 +311,7 @@ export function LoginCard({
             busy={busy === 'cancel'}
             disabled={!connected || !!busy}
             onPress={() => void cancel()}
-            style={ACTION}
+            style={onMacShare}
           />
         </CardActions>
       </Card>
@@ -273,7 +322,9 @@ export function LoginCard({
   const others = otherOptions(login);
   const key = keyOption(login);
   const route = connected ? (currentTransport()?.route ?? null) : null;
-  const keyProblem = key ? secretRouteProblem(route, currentTransport()?.identityVerified ?? false) : null;
+  const keyProblem = key
+    ? secretRouteProblem(route, currentTransport()?.identityVerified ?? false)
+    : null;
   const failed = phase === 'failed';
   const connects = !!first && ['oauth', 'claude_ai', 'gh', 'existing'].includes(first.method);
   const off = !connected || !!busy || !armed;
@@ -312,7 +363,7 @@ export function LoginCard({
           busy={busy === 'decline'}
           disabled={off}
           onPress={() => void decline()}
-          style={ACTION}
+          style={answerShare}
         />
         {canDecline && (
           <Button
@@ -321,7 +372,7 @@ export function LoginCard({
             busy={busy === 'notNeeded'}
             disabled={off}
             onPress={() => void notNeeded()}
-            style={ACTION}
+            style={answerShare}
             testID="login-not-needed"
           />
         )}
@@ -333,7 +384,7 @@ export function LoginCard({
             busy={busy === first.id}
             disabled={off}
             onPress={() => void start(first)}
-            style={ACTION}
+            style={answerShare}
           />
         )}
       </CardActions>
@@ -351,6 +402,25 @@ export function LoginCard({
           </T>
         </View>
       ))}
+      {signinServed && login.options.some((o) => o.method === 'browser') && (
+        <View style={styles.other}>
+          <Button
+            title="Sign in from here"
+            variant="outline"
+            disabled={off}
+            onPress={() =>
+              router.push({
+                pathname: '/signin',
+                params: { agentId: message.agentId, requestId: approval.requestId },
+              })
+            }
+            testID="login-signin-here"
+          />
+          <T variant="caption" color={colors.textMuted}>
+            {signinHereLine(login.title)}
+          </T>
+        </View>
+      )}
       {key && login.key && (
         <View style={styles.other}>
           {!typing ? (

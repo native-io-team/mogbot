@@ -50,6 +50,15 @@ pub enum Access {
 }
 
 impl Access {
+    /// The lesser of the two: a grant never goes past what was answered.
+    pub fn min_with(self, other: Access) -> Access {
+        if self == Access::Full && other == Access::Full {
+            Access::Full
+        } else {
+            Access::Read
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Access::Read => "Can read",
@@ -107,8 +116,14 @@ pub struct Connection {
 }
 
 impl Connection {
+    /// Its grant to `agent_id`, if that agent's settings let it use this app
+    /// at all (`policy`): a grant the policy keeps it from counts as none, so
+    /// the relay refuses it and its turns don't load it.
     pub fn grant_for(&self, agent_id: &str) -> Option<&Grant> {
-        self.grants.iter().find(|g| g.agent_id == agent_id)
+        self.grants
+            .iter()
+            .find(|g| g.agent_id == agent_id)
+            .filter(|_| super::policy::connection_allowed(agent_id, &self.service, &self.title))
     }
 
     /// Where its sign-in is kept, in the UI's words.
@@ -619,10 +634,12 @@ fn toml(s: &str) -> String {
 /// Refreshes tokens that are about to expire, so the prompt is honest; a
 /// refresh the server refuses marks the connection as needing a new
 /// sign-in, and the turn goes without it (its prompt says so).
-pub async fn for_turn(agent: &store::Agent, port: u16) -> TurnAccess {
+pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAccess {
     let all = list().unwrap_or_default();
     let mut access = TurnAccess {
-        browser: !agent.reach.browser_off,
+        // The team's switch, this agent's, and never for outside text
+        // (`browser::for_turn`).
+        browser: super::browser::for_turn(agent, outside),
         ..Default::default()
     };
     let mut lines = Vec::new();
@@ -1079,7 +1096,7 @@ mod tests {
                 .enable_all()
                 .build()
                 .unwrap();
-            let h = rt.block_on(for_turn(&recruiter, 4321));
+            let h = rt.block_on(for_turn(&recruiter, 4321, false));
             assert_eq!(h.servers.len(), 1);
             assert_eq!(h.servers[0].url, "http://127.0.0.1:4321/mcp/conn/linear");
             assert!(
@@ -1110,7 +1127,7 @@ mod tests {
             assert!(rt.block_on(relay_target(&social.id, "linear")).is_err());
             assert!(rt.block_on(relay_target(&recruiter.id, "nope")).is_err());
 
-            let s = rt.block_on(for_turn(&social, 4321));
+            let s = rt.block_on(for_turn(&social, 4321, false));
             assert!(s.servers.is_empty());
             assert!(!s.blocked.contains(&"mcp__claude_ai_Gmail".to_string()));
             assert!(s.prompt.contains("mcp__claude_ai_Gmail__*"));

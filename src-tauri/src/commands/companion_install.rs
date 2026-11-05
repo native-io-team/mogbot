@@ -127,7 +127,7 @@ pub struct IosDevice {
 #[serde(rename_all = "camelCase")]
 pub struct Signing {
     pub team_id: String,
-    /// The certificate's name, e.g. "Apple Development: me@icloud.com (5VD2FLB8HU)".
+    /// The certificate's name, e.g. "Apple Development: me@icloud.com (CERT000001)".
     pub identity: String,
     /// The bundle id this team builds as.
     pub bundle_id: String,
@@ -746,7 +746,7 @@ mod tests {
             {
                 "identifier": "A1",
                 "connectionProperties": { "pairingState": "paired", "transportType": "wired", "tunnelState": "connected" },
-                "deviceProperties": { "name": "Julian’s iPhone", "developerModeStatus": "disabled", "osVersionNumber": "26.1" },
+                "deviceProperties": { "name": "Sam’s iPhone", "developerModeStatus": "disabled", "osVersionNumber": "26.1" },
                 "hardwareProperties": { "platform": "iOS", "udid": "00008140-001", "marketingName": "iPhone 16 Pro", "reality": "physical" }
             },
             {
@@ -769,7 +769,7 @@ mod tests {
                 "hardwareProperties": { "platform": "iOS", "udid": "F0ED6581-24FE-4761-9267-0993A5EB27FC", "reality": "simulated" }
             },
             {
-                "identifier": "D9365757-35EA-5C91-8B97-D01B61F65328",
+                "identifier": "A1B2C3D4-0000-4000-8000-00000000AB12",
                 "connectionProperties": { "pairingState": "paired", "transportType": "wired" },
                 "deviceProperties": { "name": "No hardware id" },
                 "hardwareProperties": { "platform": "iOS", "reality": "physical" }
@@ -780,7 +780,7 @@ mod tests {
         assert_eq!(devices[0].udid, "00008140-001");
         assert_eq!(devices[0].hardware_udid.as_deref(), Some("00008140-001"));
         // devicectl can still reach it by its CoreDevice id; xcodebuild can't.
-        assert_eq!(devices[2].udid, "D9365757-35EA-5C91-8B97-D01B61F65328");
+        assert_eq!(devices[2].udid, "A1B2C3D4-0000-4000-8000-00000000AB12");
         assert_eq!(devices[2].hardware_udid, None);
         assert!(devices[0].connected && devices[0].paired);
         assert_eq!(devices[0].developer_mode, "disabled");
@@ -793,22 +793,22 @@ mod tests {
 
     #[test]
     fn signing_identity_and_team() {
-        let out = "  1) C06 \"Apple Development: me@icloud.com (5VD2FLB8HU)\"\n  2) 24F \"Developer ID Application: Co (J335CB82MX)\"\n     2 valid identities found\n";
+        let out = "  1) C06 \"Apple Development: me@icloud.com (CERT000001)\"\n  2) 24F \"Developer ID Application: Co (DEVID00001)\"\n     2 valid identities found\n";
         assert_eq!(
             parse_dev_identity(out).as_deref(),
-            Some("Apple Development: me@icloud.com (5VD2FLB8HU)")
+            Some("Apple Development: me@icloud.com (CERT000001)")
         );
         assert!(parse_dev_identity("     0 valid identities found").is_none());
-        let subject = "subject= /UID=ZWCX9Q6MBA/CN=Apple Development: me (5VD2FLB8HU)/OU=H8NN6DM6G6/O=Me/C=US";
-        assert_eq!(parse_subject_ou(subject).as_deref(), Some("H8NN6DM6G6"));
+        let subject = "subject= /UID=USER000001/CN=Apple Development: me (CERT000001)/OU=TEAM000001/O=Me/C=US";
+        assert_eq!(parse_subject_ou(subject).as_deref(), Some("TEAM000001"));
         let openssl3 = "subject=UID=Z, CN=Apple Development: me, OU=ABCDE12345, O=Me, C=US";
         assert_eq!(parse_subject_ou(openssl3).as_deref(), Some("ABCDE12345"));
     }
 
     #[test]
     fn bundle_id_is_stable_and_never_official() {
-        let a = bundle_id_for_team("H8NN6DM6G6");
-        assert_eq!(a, bundle_id_for_team("H8NN6DM6G6"));
+        let a = bundle_id_for_team("TEAM000001");
+        assert_eq!(a, bundle_id_for_team("TEAM000001"));
         assert_ne!(a, bundle_id_for_team("ABCDE12345"));
         let prefix = format!("{}.", crate::brand::COMPANION_BUNDLE_ID);
         assert!(a.starts_with(&prefix));
@@ -818,7 +818,7 @@ mod tests {
     #[test]
     fn self_builds_never_take_ship_studios_ids() {
         // Same id on the phone means installing ours replaces Ship Studio's.
-        let ios = bundle_id_for_team("H8NN6DM6G6");
+        let ios = bundle_id_for_team("TEAM000001");
         assert!(!ios.starts_with("studio.ship."), "{ios}");
         assert_ne!(android_package(), "studio.ship.companion.self");
         assert_ne!(ios, crate::brand::COMPANION_BUNDLE_ID);

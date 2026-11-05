@@ -1,0 +1,59 @@
+{
+  "_": "Who needs you: the cases attention.ts and the Dock badge (src-tauri/src/agents/notify.rs) are both held to, so every count agrees. Agents are fictional.",
+  "cases": [
+    {
+      "name": "the Chief counts like anyone",
+      "agents": [
+        { "id": "chief", "state": "waiting", "pendingApprovals": 1 },
+        { "id": "hiring", "state": "idle", "pendingApprovals": 2 },
+        { "id": "design", "state": "working", "pendingApprovals": 0 }
+      ],
+      "held": {},
+      "needYou": ["chief", "hiring"]
+    },
+    {
+      "name": "hidden agents never count",
+      "agents": [{ "id": "old", "hidden": true, "state": "waiting", "pendingApprovals": 3 }],
+      "held": {},
+      "needYou": []
+    },
+    {
+      "name": "a failed turn needs you; a usage limit doesn't",
+      "agents": [
+        { "id": "ops", "state": "idle", "pendingApprovals": 0, "failure": "other" },
+        { "id": "notes", "state": "idle", "pendingApprovals": 0, "failure": "signed_out" },
+        { "id": "budget", "state": "idle", "pendingApprovals": 0, "failure": "usage_limit" },
+        { "id": "retrying", "state": "working", "pendingApprovals": 0, "failure": "other" }
+      ],
+      "held": {},
+      "needYou": ["ops", "notes"]
+    },
+    {
+      "name": "logins the checklist holds aren't counted again",
+      "agents": [
+        { "id": "leads", "state": "idle", "pendingApprovals": 2 },
+        { "id": "finance", "state": "waiting", "pendingApprovals": 1 },
+        { "id": "travel", "state": "idle", "pendingApprovals": 3 }
+      ],
+      "held": { "leads": 2, "finance": 1, "travel": 1 },
+      "needYou": ["travel"]
+    },
+    {
+      "name": "imported agents not met yet are the checklist's",
+      "agents": [
+        { "id": "imp1", "state": "idle", "pendingApprovals": 1 },
+        { "id": "imp2", "state": "idle", "pendingApprovals": 0, "failure": "other" },
+        { "id": "met", "state": "idle", "pendingApprovals": 1 }
+      ],
+      "held": {},
+      "quiet": ["imp1", "imp2"],
+      "needYou": ["met"]
+    },
+    {
+      "name": "waiting on a card not yet registered still counts",
+      "agents": [{ "id": "scout", "state": "waiting", "pendingApprovals": 0 }],
+      "held": {},
+      "needYou": ["scout"]
+    }
+  ]
+}

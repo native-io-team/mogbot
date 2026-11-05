@@ -34,6 +34,7 @@ import { ImportAgentsModal, type ImportPath } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
 import { ChiefIdeasModal } from './ChiefIdeasModal';
 import { TeamLoginsModal } from './TeamLogins';
+import { BrowserSetupModal } from './TeamSetupReach';
 import { ProjectActionConfirmModal } from '../dashboard/ProjectActionConfirmModal';
 import { AccentScope } from '../../contexts/AccentScopeContext';
 import { Spinner } from '../primitives/Spinner';
@@ -97,6 +98,13 @@ import { useAgentProjects } from './AgentProject';
 import { AgentsQuota } from './AgentsQuota';
 import { RoomChat } from './RoomChat';
 import { RoomEditorModal } from './RoomEditorModal';
+import { AgentPreviewPane } from './AgentPreviewPane';
+import {
+  AgentPreviewProvider,
+  useAgentPreview,
+  useAgentPreviewRequest,
+} from './AgentPreviewContext';
+import type { AgentPreviewServer } from '../../lib/agentPreview';
 import { useRoomRows, type RoomActions } from './AgentRoomParts';
 import {
   deleteRoom,
@@ -108,13 +116,8 @@ import {
   type Room,
 } from '../../lib/agentRooms';
 import { kbd } from '../../lib/shortcuts';
-import {
-  onlySetupRequests,
-  setupHeldCounts,
-  useResumableTeamSetup,
-  useTeamSetup,
-  withoutHeldLogins,
-} from '../../lib/teamSetup';
+import { needsYouCount as countNeedsYou } from '../../../packages/companion-protocol/src/attention';
+import { useResumableTeamSetup, useTeamSetup, withoutHeldLogins } from '../../lib/teamSetup';
 
 const SELECTED_KEY = 'shipstudio.agents.selected';
 
@@ -139,6 +142,8 @@ function writeSelected(id: string) {
 interface AgentsViewProps {
   isCompact: boolean;
   sidebarProps: Omit<ComponentProps<typeof HomeSidebar>, 'activeNav' | 'listContent'>;
+  /** The window's dev servers: the preview pane starts sites through them. */
+  previewServer?: AgentPreviewServer;
 }
 
 /** Leaving for a project (a chip, a change card) goes the way the sidebar's project rows do. */
@@ -146,7 +151,9 @@ export function AgentsView(props: AgentsViewProps) {
   return (
     <AgentProjectsProvider onOpenProject={props.sidebarProps.onSelectProject}>
       <TakeoverProvider>
-        <AgentsModeView {...props} />
+        <AgentPreviewProvider>
+          <AgentsModeView {...props} />
+        </AgentPreviewProvider>
       </TakeoverProvider>
     </AgentProjectsProvider>
   );
@@ -157,7 +164,7 @@ function focusComposer() {
   document.querySelector<HTMLElement>('.agent-composer__input')?.focus({ preventScroll: true });
 }
 
-function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
+function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewProps) {
   // Slices, not the whole store: a reply streaming anywhere must not re-render the view.
   const agents = useAgentsList();
   const loaded = useAgentsSelector((s) => s.loaded);
@@ -294,6 +301,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const openModal = useOpenModal();
   const openIdeas = useCallback(() => openModal('chiefIdeas'), [openModal]);
   const openLogins = useCallback(() => openModal('teamLogins'), [openModal]);
+  const openBrowser = useCallback(() => openModal('agentBrowser'), [openModal]);
   /** A picked idea: the Chief's chat, with its brief typed out. */
   const pickIdea = useCallback(
     (idea: ChiefIdea) => {
@@ -396,6 +404,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     onSearch: focusSearch,
     onIdeas: openIdeas,
     onLogins: openLogins,
+    onBrowser: openBrowser,
   });
 
   // The order you see in the sidebar, for previous / next.
@@ -455,14 +464,11 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const setup = useResumableTeamSetup();
   const listed = useMemo(() => withoutHeldLogins(agents, setup), [agents, setup]);
 
-  // What the "Needs you" row counts: the agents What's in flight lists under Needs you.
+  // What the "Needs you" row counts: the one number every surface shows
+  // (the review bar, the phone's Home bar and tab badge, the Dock badge).
+  // An agent whose only requests are the checklist's logins is counted once, there.
   const teamSetup = useTeamSetup();
-  const setupHeld = useMemo(() => setupHeldCounts(teamSetup), [teamSetup]);
-  // An agent being set up whose only requests are the checklist's logins is
-  // counted once, there, not again here.
-  const needsYouCount = listed.filter(
-    (a) => !a.hidden && needsAttention(a) && !onlySetupRequests(a, setupHeld)
-  ).length;
+  const needsYouCount = useMemo(() => countNeedsYou(agents, teamSetup), [agents, teamSetup]);
 
   // The oldest card waiting on you, on the first agent (sidebar order) with one.
   const waitingOn = sortAgents(listed).find((a) => !a.hidden && needsYou(a)) ?? null;
@@ -814,6 +820,21 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     if (shownEngine) signIn(shownEngine);
   }, [shownEngine, signIn]);
   const { onGoHome, onGoProjects } = sidebarProps;
+  // The preview pane beside the chat (Preview on a card), for its agent.
+  const previewCtx = useAgentPreview();
+  const previewRequest = useAgentPreviewRequest();
+  const previewAgent = previewRequest ? agentsById.get(previewRequest.agentId) : undefined;
+  const preview = previewRequest && previewAgent && previewCtx && (
+    <AgentPreviewPane
+      key={`${previewRequest.agentId}:${previewRequest.messageId}`}
+      agent={previewAgent}
+      request={previewRequest}
+      server={previewServer}
+      onClose={previewCtx.close}
+      onOpenInWorkspace={sidebarProps.onSelectProject}
+    />
+  );
+
   const chatCompact = useMemo(
     () => (isCompact ? { onGoHome, onGoProjects } : undefined),
     [isCompact, onGoHome, onGoProjects]
@@ -937,7 +958,9 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
               prefill={prefill?.agentId === shown.id ? prefill : null}
             />
           )}
+          {isCompact && preview}
         </main>
+        {!isCompact && preview}
       </div>
 
       <AgentEditorModal
@@ -969,6 +992,14 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
                 setSelectedId(chief.id);
               }
         }
+        onAskInChat={(text) => {
+          // Settings change in chat: the Chief proposes it on a card.
+          const chief = agents.find((a) => a.isMain);
+          if (!chief) return;
+          setEditor({ open: false, agent: null });
+          setPrefill({ agentId: chief.id, text, n: Date.now() });
+          setSelectedId(chief.id);
+        }}
         onSetUpEngine={(engine, step) => setEngineSetup({ engine, step })}
       />
       <ChiefIdeasModal onPick={pickIdea} onReadyMade={() => openNew(ROLE_TEMPLATES[0]?.id)} />
@@ -987,6 +1018,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
       />
       <AgentAppsModal isOpen={appsOpen} onClose={() => setAppsOpen(false)} />
       <TeamLoginsModal />
+      <BrowserSetupModal />
       {roomEditor.open && (
         <RoomEditorModal
           isOpen

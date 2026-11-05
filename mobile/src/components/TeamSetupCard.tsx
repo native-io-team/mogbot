@@ -1,7 +1,9 @@
 /**
- * "Setting up your team": one card at the foot of the Chief's chat after an
- * import, the phone's copy of the desk's (`TeamSetupCard` there, desktop
- * `agents/team_setup.rs`). Steps in a fixed order: logins, routines to switch
+ * "Setting up your team": one card in the Chief's chat after an import,
+ * a row in the conversation where it was posted (`withSetupCard`), never
+ * pinned under the newest message; the bar above the composer brings you
+ * back to it. The phone's copy of the desk's (`TeamSetupCard` there,
+ * desktop `agents/team_setup.rs`). Steps in a fixed order: logins, routines to switch
  * on, what the agents said they're missing, then saying hi to each. The
  * first open step is unfolded; done and skipped ones are a ticked row that
  * opens again on a tap. Finished, it's one quiet line.
@@ -13,17 +15,27 @@
 import type { TeamSetupStep, TeamSetupStepId, TeamSetupView } from '@shipstudio/companion-protocol';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, Switch, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, View } from 'react-native';
 import { useSwitchColors } from '../lib/accent';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { describeError, teamSetup } from '../lib/session';
 import { useApp } from '../lib/store';
 import {
+  ASKED_LINE,
+  CHECK_AGAIN,
   COMPLETE_LINE,
+  NOT_NEEDED,
   SET_ASIDE_NOTE,
   SETUP_TITLE,
   anyReplying,
+  checkLine,
+  openRows,
+  reachedRows,
+  reachedToggle,
+  receipt,
+  residueLine,
+  rowAgents,
   groupLogins,
   helloWord,
   openStep,
@@ -38,7 +50,9 @@ import { iconSize, space, PRESSED } from '../lib/theme';
 import { AgentAvatar, Spinner } from './agent';
 import { Card, CardActions, Line } from './surfaces';
 import { Button, Icon, T } from './ui';
-import { TeamLoginsList } from './teamLogins';
+import { NeedRow, TeamLoginsList } from './teamLogins';
+import { showActions } from './menu';
+import { agentList } from '../lib/loginState';
 
 export function TeamSetupCard({
   chief,
@@ -50,13 +64,8 @@ export function TeamSetupCard({
 }) {
   const view = useApp((s) => s.teamSetup);
   const connected = useApp((s) => s.link.kind === 'connected');
-  const styles = useStyles();
   if (!shows(view)) return null;
-  return (
-    <View style={styles.foot}>
-      <TeamSetup view={view} chief={chief} connected={connected} onError={onError} />
-    </View>
-  );
+  return <TeamSetup view={view} chief={chief} connected={connected} onError={onError} />;
 }
 
 /** The card for a view: split out so tests can draw any state. */
@@ -259,7 +268,14 @@ function StepItems({
     router.push({ pathname: '/chat/[id]', params: { id: agentId } });
   switch (step.id) {
     case 'logins':
-      return <SetupLogins logins={step.logins ?? []} onOpenChat={openChat} />;
+      return (
+        <View style={styles.items}>
+          {!!step.later?.length && (
+            <Reach step={step} connected={connected} busy={busy} run={run} openChat={openChat} />
+          )}
+          <SetupLogins logins={step.logins ?? []} onOpenChat={openChat} />
+        </View>
+      );
     case 'routines':
       return (
         <View style={styles.items}>
@@ -338,6 +354,147 @@ function StepItems({
   }
 }
 
+/**
+ * What the team can already reach (desktop `agents/access_check.rs`): one
+ * calm line while the Mac checks, then only the residue, each with one
+ * sign-in button and "Not needed"; what it reached folds into receipts.
+ */
+function Reach({
+  step,
+  connected,
+  busy,
+  run,
+  openChat,
+}: {
+  step: TeamSetupStep;
+  connected: boolean;
+  busy: string | null;
+  run: (key: string, work: () => Promise<unknown>) => void;
+  openChat: (agentId: string) => void;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const [showReached, setShowReached] = useState(false);
+  const rows = step.later ?? [];
+  const check = step.check;
+  const off = !connected || busy !== null;
+  if (check?.running) {
+    return (
+      <View style={styles.item} testID="team-setup-checking">
+        <Spinner />
+        <T variant="small" color={colors.textSecondary} style={{ flex: 1 }}>
+          {checkLine(check)}
+        </T>
+      </View>
+    );
+  }
+  const open = openRows(rows);
+  const reached = reachedRows(rows);
+  const waiting = rows.filter((r) => r.state === 'asked');
+  const notNeeded = rows.filter((r) => r.state === 'not_needed');
+  return (
+    <View style={styles.items} testID="team-setup-reach">
+      <T variant="small" color={colors.textStrong}>
+        {residueLine(open.length)}
+      </T>
+      {open.map((r) => (
+        <View key={r.key} style={styles.item} testID={`reach-open-${r.key}`}>
+          <View style={{ flex: 1 }}>
+            <T variant="small" color={colors.textStrong}>
+              {r.title}
+            </T>
+            <T variant="caption" color={colors.textMuted}>
+              {rowAgents(r)}
+            </T>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${r.title}: ${NOT_NEEDED}`}
+              disabled={off}
+              onPress={() => run(`later:${r.key}:no`, () => teamSetup.later(r.key, 'not_needed'))}
+              hitSlop={10}
+            >
+              <T variant="caption" color={colors.textSecondary}>
+                {NOT_NEEDED}
+              </T>
+            </Pressable>
+          </View>
+          {!!r.action && (
+            <Button
+              title={r.action}
+              variant="secondary"
+              size="compact"
+              disabled={off}
+              busy={busy === `later:${r.key}`}
+              onPress={() =>
+                run(`later:${r.key}`, async () => {
+                  const raised = await teamSetup.later(r.key, 'connect', true);
+                  if (raised) openChat(raised.agentId);
+                })
+              }
+            />
+          )}
+        </View>
+      ))}
+      {waiting.map((r) => (
+        <View key={r.key} style={styles.item} testID={`reach-asked-${r.key}`}>
+          <View style={{ flex: 1 }}>
+            <T variant="small" color={colors.textStrong}>
+              {r.title}
+            </T>
+            <T variant="caption" color={colors.textMuted}>
+              {ASKED_LINE}
+            </T>
+          </View>
+          {r.state === 'asked' && (
+            <Button
+              title="Open"
+              variant="ghost"
+              size="compact"
+              onPress={() => openChat(r.agentId)}
+              accessibilityHint="Opens the chat with its sign-in card"
+            />
+          )}
+        </View>
+      ))}
+      {notNeeded.map((r) => (
+        <T key={r.key} variant="caption" color={colors.textMuted}>
+          {r.title} · {NOT_NEEDED}
+        </T>
+      ))}
+      {reached.length > 0 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showReached }}
+          onPress={() => setShowReached((v) => !v)}
+          hitSlop={10}
+          testID="reach-reached-toggle"
+        >
+          <T variant="caption" color={colors.textSecondary}>
+            {reachedToggle(reached.length)}
+          </T>
+        </Pressable>
+      )}
+      {showReached &&
+        reached.map((r) => (
+          <T key={r.key} variant="caption" color={colors.textMuted}>
+            {receipt(r)}
+          </T>
+        ))}
+      <Pressable
+        accessibilityRole="button"
+        disabled={off}
+        onPress={() => run('check', teamSetup.check)}
+        hitSlop={10}
+        testID="reach-check-again"
+      >
+        <T variant="caption" color={colors.textSecondary}>
+          {CHECK_AGAIN}
+        </T>
+      </Pressable>
+    </View>
+  );
+}
+
 function RoutineRow({
   agentName,
   when,
@@ -379,7 +536,6 @@ function RoutineRow({
 
 const useStyles = makeStyles((colors) => ({
   // Under the newest message, apart from it like a new speaker.
-  foot: { paddingTop: space.lg },
   step: {
     gap: space.sm,
     paddingTop: space.sm,
@@ -391,6 +547,8 @@ const useStyles = makeStyles((colors) => ({
   items: { gap: space.md },
   item: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   group: { gap: space['2xs'] },
+  // Keys under the sign-ins: one hairline between the two lists, as between rows.
+  keysAfter: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
 }));
 
 /**
@@ -415,34 +573,51 @@ function SetupLogins({
   return (
     <View style={styles.items}>
       {signIns.length > 0 && <TeamLoginsList agentIds={agentIds} embedded />}
-      {groups.map((g) => (
-        <View key={g.key} testID={`setup-login-${g.key}`}>
-          <T variant="small" color={colors.textStrong}>
-            {g.name}
-          </T>
-          {g.items.map((l) => (
-            <View key={l.requestId} style={styles.item}>
-              <View style={{ flex: 1 }}>
-                <T variant="caption" color={colors.textSecondary}>
-                  {l.agentName}
-                </T>
-                {!!l.purpose && (
-                  <T variant="caption" color={colors.textMuted}>
-                    {l.purpose}
-                  </T>
-                )}
-              </View>
-              <Button
-                title="Add"
-                variant="secondary"
-                size="compact"
-                onPress={() => onOpenChat(l.agentId)}
-                accessibilityHint={`Opens ${l.agentName}’s chat, where the login goes in`}
+      {groups.length > 0 && (
+        <View style={signIns.length > 0 && styles.keysAfter}>
+          {groups.map((g, i) => {
+            const agents = [...new Map(g.items.map((l) => [l.agentId, l.agentName])).entries()];
+            const purposes = [...new Set(g.items.map((l) => l.purpose).filter(Boolean))];
+            // One answer per row. Several agents want the same key: Add asks
+            // whose card to open, since each goes in through its own chat.
+            const add = () =>
+              agents.length === 1
+                ? onOpenChat(agents[0][0])
+                : showActions(
+                    `Add ${g.name} for…`,
+                    agents.map(([id, name]) => ({ id, title: name, icon: 'bubble.left' as const })),
+                    onOpenChat
+                  );
+            return (
+              <NeedRow
+                key={g.key}
+                testID={`setup-login-${g.key}`}
+                last={i === groups.length - 1}
+                title={g.name}
+                subtitle={`Used by ${agentList(agents.map(([, name]) => name))}`}
+                detail={
+                  purposes.length > 0 && (
+                    <T variant="small" color={colors.textMuted}>
+                      {purposes.join(' · ')}
+                    </T>
+                  )
+                }
+                primary={{
+                  title: 'Add',
+                  onPress: add,
+                  hint:
+                    agents.length === 1
+                      ? `Opens ${agents[0][1]}’s chat, where the login goes in`
+                      : 'Choose whose chat to open; the login goes in there',
+                }}
+                // "Not needed" for a key waits on the Mac: `agents.loginDismiss`
+                // puts away sign-ins only. The row has the slot (`secondary`)
+                // for it once a key can be put away the same way.
               />
-            </View>
-          ))}
+            );
+          })}
         </View>
-      ))}
+      )}
     </View>
   );
 }

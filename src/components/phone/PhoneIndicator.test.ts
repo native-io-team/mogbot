@@ -6,7 +6,7 @@ import type { Device } from '../../../packages/companion-protocol/src/model';
 const now = 1_000_000_000;
 const device = (over: Partial<Device> = {}): Device => ({
   id: 'd1',
-  name: 'Julian’s iPhone',
+  name: 'Sam’s iPhone',
   platform: 'ios',
   appVersion: '1.0.0',
   build: 'official',
@@ -40,7 +40,7 @@ describe('phoneIndicatorState', () => {
     const s = status({ devices: [device({ connected: true })] });
     expect(phoneIndicatorState(s, now)).toMatchObject({
       tone: 'ok',
-      line: 'Julian’s iPhone connected',
+      line: 'Sam’s iPhone connected',
     });
   });
 

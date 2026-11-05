@@ -88,6 +88,8 @@ export interface LoginRequest {
   quiet?: boolean;
   replaces?: string;
   flow?: LoginFlow;
+  /** Other agents that asked for the same and joined this card: answering it answers them. */
+  alsoFor?: string[];
 }
 
 export type TeamCardState = 'waiting' | 'connected' | 'skipped' | 'covered';
@@ -138,7 +140,20 @@ export interface ReachConnection {
 export interface Reach {
   connections: ReachConnection[];
   /** Absent for an agent on Codex. */
-  browser?: { on: boolean; sites: string[]; helperInstalled: boolean };
+  /**
+   * `on`: its turns get the user's Chrome (the team's browser is set up and on,
+   * and this agent's wasn't taken away; never for outside text). `teamOn`: the
+   * team's switch. `ownOff`: taken away from this agent.
+   */
+  browser?: {
+    on: boolean;
+    teamOn: boolean;
+    ownOff: boolean;
+    sites: string[];
+    /** The Chrome profile (and account) each site was last found signed in to. */
+    accounts?: { site: string; browser: string; account?: string }[];
+    helperInstalled: boolean;
+  };
   secrets: {
     secretId: string;
     name: string;
@@ -164,7 +179,9 @@ export interface AgentReachSettings {
 export type Removal =
   | { kind: 'connection'; connectionId: string }
   | { kind: 'browser' }
+  | { kind: 'browser_on' }
   | { kind: 'browser_site'; site: string }
+  | { kind: 'browser_account'; site: string }
   | { kind: 'secret'; secretId: string }
   | { kind: 'block_app'; name: string }
   | { kind: 'unblock_app'; name: string }

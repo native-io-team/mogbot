@@ -214,7 +214,14 @@ export const turnsLine = (room: Pick<RoomView, 'turnsUsed' | 'turnCap'>) =>
 /** One row of a room's list: an `Item`, or who is replying right now. */
 export type RoomItem =
   | (Extract<Item, { kind: 'message' }> & { speaker: boolean })
-  | Exclude<Item, { kind: 'message' } | { kind: 'working' } | { kind: 'draft' } | { kind: 'room' }>
+  | Exclude<
+      Item,
+      | { kind: 'message' }
+      | { kind: 'working' }
+      | { kind: 'draft' }
+      | { kind: 'room' }
+      | { kind: 'setup' }
+    >
   | { kind: 'draft'; key: string; text: string; agentId: string }
   | { kind: 'working'; key: string; label: string; agentId: string };
 

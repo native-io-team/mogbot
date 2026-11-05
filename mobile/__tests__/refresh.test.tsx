@@ -1,5 +1,7 @@
 import { act, renderHook } from '@testing-library/react-native';
-import { MIN_REFRESH_MS, REFRESH_TIMEOUT_MS, useRefresh } from '../src/lib/refresh';
+import { REFRESH_TIMEOUT_MS, useRefresh } from '../src/lib/refresh';
+
+const MIN_REFRESH_MS = 0; // there is no minimum any more
 
 beforeEach(() => jest.useFakeTimers());
 afterEach(() => jest.useRealTimers());
@@ -12,17 +14,14 @@ async function advance(ms: number) {
 }
 
 describe('useRefresh: the spinner always lets go', () => {
-  it('a fast refresh holds the spinner for the pull animation, then ends', async () => {
+  it('a fast refresh ends as soon as it settles: no artificial minimum spin', async () => {
     const run = jest.fn().mockResolvedValue(undefined);
     const { result } = await renderHook(() => useRefresh(run));
     expect(result.current.refreshing).toBe(false);
     await act(() => {
       void result.current.onRefresh();
     });
-    expect(result.current.refreshing).toBe(true);
-    await advance(MIN_REFRESH_MS - 50);
-    expect(result.current.refreshing).toBe(true);
-    await advance(100);
+    await advance(0);
     expect(result.current.refreshing).toBe(false);
     expect(run).toHaveBeenCalledTimes(1);
   });
@@ -66,11 +65,9 @@ describe('useRefresh: the spinner always lets go', () => {
     const { result } = await renderHook(() => useRefresh(run));
     await act(() => {
       void result.current.onRefresh();
-    });
-    await act(() => {
       void result.current.onRefresh();
     });
-    await advance(MIN_REFRESH_MS);
+    await advance(0);
     expect(run).toHaveBeenCalledTimes(1);
     expect(result.current.refreshing).toBe(false);
   });
@@ -103,15 +100,12 @@ describe('useRefresh: the spinner always lets go', () => {
         if (seen[seen.length - 1] !== r.refreshing) seen.push(r.refreshing);
         return r;
       });
+      // A second pull while the first is in flight: joins, never flips it.
       await act(() => {
         void result.current.onRefresh();
-      });
-      // A second pull while the first is held: joins, never flips it.
-      await advance(100);
-      await act(() => {
         void result.current.onRefresh();
       });
-      await advance(MIN_REFRESH_MS);
+      await advance(0);
       expect(seen).toEqual([false, true, false]);
       expect(run).toHaveBeenCalledTimes(1);
     }

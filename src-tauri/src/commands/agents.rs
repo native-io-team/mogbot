@@ -152,6 +152,8 @@ pub async fn agents_messages(
         crate::agents::work::apply(&agent_id, &mut page);
         // A login card's sign-in under way, as it is now.
         crate::agents::logins::apply(&mut page);
+        // Every card in plain words; an admin's batch as it is now.
+        crate::agents::admin::apply(&mut page);
         Ok(page)
     })
     .await
@@ -547,6 +549,12 @@ pub async fn agents_update(
             a.work_directly = direct;
         }
     })?;
+    // "Work directly" is how it works in its project, in its settings now
+    // (`policy`); the field above is the mirror the copy code reads.
+    if let Some(direct) = input.work_directly {
+        let id = agent_id.clone();
+        blocking(move || agents::policy::set_direct(&id, direct)).await?;
+    }
     // The name and role are written into CLAUDE.md's heading, so any change
     // to them (or the instructions) rewrites it — memory is preserved.
     if input.instructions.is_some() || input.name.is_some() || input.role.is_some() {
@@ -738,6 +746,23 @@ pub async fn agents_start_fresh(
     Ok(agent)
 }
 
+/// "Stop this step": end the command the agent is running and let its turn
+/// carry on (the engine sees the command end). Says what it did.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_stop_step(agent_id: String) -> Result<String, CommandError> {
+    blocking(move || agents::work::stop_step(&agent_id).map_err(CommandError::expected)).await
+}
+
+/// "Check on it": what the app can see of the turn right now, in one line
+/// (the engine's process, its command's, the CPU, the last progress).
+/// Never interrupts the turn.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_check_on(agent_id: String) -> Result<String, CommandError> {
+    blocking(move || Ok(agents::work::check_on(&agent_id))).await
+}
+
 /// Stop the turn in progress so the messages queued behind it run now. The
 /// next turn is told what it was doing when it was cut off.
 #[tauri::command]
@@ -765,6 +790,14 @@ pub async fn agents_answer_approval(
         let (a, r) = (agent_id.clone(), request_id.clone());
         blocking(move || Ok(store::find_approval(&a, &r)?.filter(|c| c.login.is_some()))).await?
     };
+    // "Bring your Chrome window to the front": Check again or Not now.
+    let front = {
+        let (a, r) = (agent_id.clone(), request_id.clone());
+        blocking(move || Ok(store::find_approval(&a, &r)?.filter(|c| c.front.is_some()))).await?
+    };
+    if front.is_some() {
+        return agents::browser_profiles::answer(&app, &agent_id, &request_id, allow).await;
+    }
     if login.is_some() {
         return if allow {
             agents::logins::allow_from_old_client(&app, &agent_id, &request_id).await
@@ -976,6 +1009,77 @@ pub async fn agents_reach_remove(
     Ok(reach)
 }
 
+/* --------------------------------------------------------- what it can do */
+
+/// "What it can do": one agent's settings in plain words (`agents/policy.rs`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_policy(agent_id: String) -> Result<agents::policy::AgentView, CommandError> {
+    blocking(move || {
+        let agent = store::get(&agent_id)?;
+        Ok(agents::policy::agent_view(
+            &agents::policy::load(),
+            &agent,
+            agents::independence::level(),
+        ))
+    })
+    .await
+}
+
+/// The team's defaults, the presets, and who has settings of its own.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_policy_team() -> Result<agents::policy::TeamView, CommandError> {
+    blocking(move || {
+        Ok(agents::policy::team_view(
+            &agents::policy::load(),
+            &store::list()?,
+            agents::independence::level(),
+        ))
+    })
+    .await
+}
+
+/// The user changing settings themselves on the desk: applied at once, with
+/// a line in that agent's chat. Folders are checked here as on a card.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_policy_set(
+    app: AppHandle,
+    target: agents::policy::Target,
+    mut change: agents::policy::Change,
+) -> Result<(), CommandError> {
+    for f in &mut change.add_folders {
+        f.path = agents::policy::clean_folder(&f.path).map_err(CommandError::expected)?;
+    }
+    if change.is_empty() {
+        return Ok(());
+    }
+    let app2 = app.clone();
+    blocking(move || {
+        let agents = store::list()?;
+        let before = agents::policy::load();
+        let level = agents::independence::level();
+        agents::policy::set(&target, &change, &agents)?;
+        let after = agents::policy::load();
+        let new_level = agents::independence::level();
+        for g in agents::policy_card::groups(&before, &after, &agents, level, new_level) {
+            for id in &g.agent_ids {
+                let line = format!("Settings changed by you: {}", g.changes.join(" · "));
+                let _ = runner::record(
+                    &app2,
+                    runner::new_message(id, store::MessageKind::Note, line),
+                );
+            }
+        }
+        Ok(())
+    })
+    .await?;
+    emit_registry(&app);
+    let _ = app.emit(agents::policy_card::EVENT, ());
+    Ok(())
+}
+
 /// Every connection on this Mac, with who may use it. Never a token.
 #[tauri::command]
 #[tracing::instrument]
@@ -1007,7 +1111,7 @@ pub async fn agents_connection_delete(
     Ok(())
 }
 
-fn answer_card(
+pub(crate) fn answer_card(
     app: &AppHandle,
     agent_id: &str,
     request_id: &str,
@@ -1037,6 +1141,10 @@ fn answer_card(
     // card is answered with it.
     if approval.prompt.is_some() {
         return agents::decisions::answer(app, &approval, allow, choice);
+    }
+    // "Change this agent's settings?": Allow applies it, here and only here.
+    if approval.settings.is_some() {
+        return agents::policy_card::answer_card(app, agent_id, &approval, allow, note);
     }
     if let Some(request) = &approval.secret {
         if allow {
@@ -1654,6 +1762,79 @@ pub async fn agents_set_defaults(
     Ok(view)
 }
 
+/// The user's own switch (the agent editor, the phone): "Admin — can manage
+/// and approve for other agents". No agent tool reaches it. Takes effect from
+/// the agent's next call; its chat gets a line saying so.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_set_admin(
+    app: AppHandle,
+    agent_id: String,
+    admin: bool,
+) -> Result<store::Agent, CommandError> {
+    let agent = blocking(move || {
+        let agent = agents::admin::set_admin(&agent_id, admin)?;
+        let line = if admin {
+            "You made this agent an admin: it can manage the other agents and answer their local requests"
+        } else {
+            "Admin turned off: it no longer manages or answers for other agents"
+        };
+        let _ = store::append_message(&runner::new_message(
+            &agent.id,
+            store::MessageKind::Note,
+            line,
+        ));
+        Ok(agent)
+    })
+    .await?;
+    emit_registry(&app);
+    Ok(agent)
+}
+
+/// Settings → Agents → Admin activity: what admins did, newest first.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_admin_activity(
+    limit: Option<usize>,
+) -> Result<Vec<agents::admin::Activity>, CommandError> {
+    blocking(move || Ok(agents::admin::activity(limit.unwrap_or(100).min(500)))).await
+}
+
+/// Settings → Agents → Recently deleted: agents an admin deleted, restorable
+/// for 30 days. Ones past that are purged here.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_recently_deleted() -> Result<Vec<agents::admin::DeletedView>, CommandError> {
+    blocking(|| {
+        agents::admin::purge_expired();
+        Ok(agents::admin::recently_deleted())
+    })
+    .await
+}
+
+/// Bring a deleted agent back, as it was.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_restore(
+    app: AppHandle,
+    agent_id: String,
+) -> Result<store::Agent, CommandError> {
+    let agent = blocking(move || {
+        let agent = store::restore(&agent_id)?;
+        runner::undelete(&agent.id);
+        store::refresh_pending(&agent.id);
+        let _ = store::append_message(&runner::new_message(
+            &agent.id,
+            store::MessageKind::Note,
+            "Restored from Recently deleted",
+        ));
+        Ok(agent)
+    })
+    .await?;
+    emit_registry(&app);
+    Ok(agent)
+}
+
 /// How much agents do on their own.
 #[tauri::command]
 #[tracing::instrument]
@@ -1671,6 +1852,11 @@ pub async fn agents_set_independence(
 ) -> Result<agents::independence::Level, CommandError> {
     let level = agents::independence::Level::parse(&level)?;
     blocking(move || agents::independence::set_level(level, store::now_ms())).await?;
+    // Open cards the new level answers are answered now, with a receipt.
+    {
+        let app = app.clone();
+        let _ = blocking(move || Ok(agents::mcp::sweep_auto_allowed(&app))).await;
+    }
     // The overview carries it: Settings and the phone pick it up.
     emit_registry(&app);
     Ok(level)
@@ -2030,4 +2216,95 @@ pub async fn agents_team_setup_dismiss(app: AppHandle) -> Result<(), CommandErro
     blocking(agents::team_setup::dismiss).await?;
     agents::team_setup::emit(&app);
     Ok(())
+}
+
+/* ------------------------------------------- your browser, reach check */
+
+/// "Let agents use your browser": the guided card, checked now (Claude
+/// Code's sign-in, the extension, whether a browser answers). Opens nothing.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_browser_status() -> Result<agents::browser::BrowserStatus, CommandError> {
+    Ok(agents::browser::status().await)
+}
+
+/// Switch the team's browser on: only once a browser answers.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_browser_enable(
+    app: AppHandle,
+) -> Result<agents::browser::BrowserStatus, CommandError> {
+    let st = agents::browser::enable(&app).await?;
+    // Now that it's on, the checklist's rows can be checked in the browser too.
+    agents::access_check::spawn(&app);
+    Ok(st)
+}
+
+/// Switch the team's browser off (every agent's, at once).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_browser_disable(app: AppHandle) -> Result<(), CommandError> {
+    blocking(move || agents::browser::disable(&app)).await
+}
+
+/// The phone signing in through this Mac's Chrome right now, for the desk's
+/// bar (`agents/phone_signin.rs`). `None`: nothing is.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_phone_signin_status(
+) -> Result<Option<agents::phone_signin::Banner>, CommandError> {
+    Ok(agents::phone_signin::banner())
+}
+
+/// The desk's Stop: the phone's sign-in ends and its tab closes.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_phone_signin_stop(app: AppHandle) -> Result<(), CommandError> {
+    agents::phone_signin::stop_from_desk(&app).await;
+    Ok(())
+}
+
+/// Open the extension's install page in this Mac's browser. Only the
+/// setup's own URL: nothing from the webview is opened.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_browser_open_install() -> Result<(), CommandError> {
+    tauri_plugin_opener::open_url(agents::browser::INSTALL_URL, None::<&str>)
+        .map_err(|_| CommandError::expected("Couldn't open this Mac's browser."))
+}
+
+/// "Checking what your team can already reach": run it now. Returns how
+/// many services it reached; progress arrives on the checklist.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_access_check(app: AppHandle) -> Result<usize, CommandError> {
+    agents::access_check::run(&app).await
+}
+
+/// A row nothing reached: "connect" (one sign-in card, started now) or
+/// "not_needed". Returns the card raised, for showing it in place.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_team_setup_later(
+    app: AppHandle,
+    key: String,
+    action: String,
+    from_phone: Option<bool>,
+    on_phone: Option<bool>,
+) -> Result<Option<agents::access_check::Raised>, CommandError> {
+    match action.as_str() {
+        "connect" => {
+            let (agent_id, request_id) =
+                agents::access_check::connect(&app, &key, origin(from_phone, on_phone)).await?;
+            Ok(Some(agents::access_check::Raised {
+                agent_id,
+                request_id,
+            }))
+        }
+        "not_needed" => {
+            blocking(move || agents::access_check::not_needed(&app, &key)).await?;
+            Ok(None)
+        }
+        _ => Err(agents::err_invalid("action", "connect or not_needed")),
+    }
 }
