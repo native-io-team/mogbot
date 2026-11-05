@@ -27,7 +27,10 @@ import {
   FileTextIcon,
   GlobeIcon,
   HelpIcon,
+  PlayIcon,
 } from '@/components/icons';
+import { useAgentPreview } from './AgentPreviewContext';
+import { TestReportView } from './AgentTestReport';
 import { IconButton } from '../primitives/IconButton';
 import { AgentCard } from './AgentCard';
 import { WorkTimeline } from './AgentWork';
@@ -200,6 +203,7 @@ function ResultBody({ agent, card }: ResultBodyProps) {
           ))}
         </ul>
       )}
+      {card.test && <TestReportView agent={agent} report={card.test} />}
       {checked.length > 0 && (
         // The agent's claims, not the app's findings: attributed, and a plain
         // bullet rather than a tick that would read as verified.
@@ -241,6 +245,7 @@ interface ResultCardViewProps {
   /**
    * Opens the card's project (`card.project`) when the user chooses: a site
    * or app comes back as a card with Preview, never by moving the window.
+   * In Agents mode Preview opens the pane beside the chat instead.
    */
   onPreview?: (projectPath: string) => void;
 }
@@ -261,6 +266,8 @@ export const ResultCardView = memo(function ResultCardView({
 }: ResultCardViewProps) {
   const footer = given ?? (work && <WorkTimeline work={work} agent={agent} />);
   const [opened, setOpened] = useState(false);
+  // Agents mode's pane beside the chat; elsewhere Preview opens the project.
+  const preview = useAgentPreview();
   if (!newest && !opened) {
     return (
       <div
@@ -312,13 +319,24 @@ export const ResultCardView = memo(function ResultCardView({
           newest &&
           !actionsInside && (
             <>
-              {card.project && onPreview && !children && (
+              {card.project && (preview || onPreview) && !children && (
                 <TextButton
                   tabIndex={0}
                   leftIcon={<GlobeIcon size={12} />}
-                  onClick={() => onPreview(card.project!)}
+                  onClick={() =>
+                    preview ? preview.open(message.agentId, message.id) : onPreview?.(card.project!)
+                  }
                 >
                   Preview
+                </TextButton>
+              )}
+              {card.project && preview && !children && (
+                <TextButton
+                  tabIndex={0}
+                  leftIcon={<PlayIcon size={12} />}
+                  onClick={() => preview.open(message.agentId, message.id, { test: true })}
+                >
+                  Test it
                 </TextButton>
               )}
               {onAskForChanges && (
