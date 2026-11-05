@@ -19,7 +19,8 @@
  *     and updater config present exactly when brand.json names an update feed
  *     (the updater plugin is only registered when links.updates is set, and
  *     it fails app setup without its config)
- *   - src-tauri/Cargo.toml and package.json — package name = slug
+ *   - src-tauri/Cargo.toml and package.json — package name = slug, and one
+ *     version: tauri.conf.json reads package.json, Cargo.toml matches it
  *   - mobile/app.config.ts — reads ../brand.json rather than hardcoding, and
  *     takes a self-build's bundle id from the env var the desktop sets
  *   - companion.bundleId — never Ship Studio's, or the phones collide
@@ -171,8 +172,21 @@ else if (read(GEN_PATH) !== gen)
   )?.[1];
   if (cargoName !== brand.slug)
     fail(`src-tauri/Cargo.toml package name "${cargoName}" ≠ slug "${brand.slug}"`);
-  const pkgName = JSON.parse(read('package.json')).name;
-  if (pkgName !== brand.slug) fail(`package.json name "${pkgName}" ≠ slug "${brand.slug}"`);
+  const pkg = JSON.parse(read('package.json'));
+  if (pkg.name !== brand.slug) fail(`package.json name "${pkg.name}" ≠ slug "${brand.slug}"`);
+
+  // One version: package.json. tauri.conf.json reads it (and so Info.plist);
+  // Cargo.toml's copy is what logs, MCP clients and error reports name.
+  const confVersion = JSON.parse(read('src-tauri/tauri.conf.json')).version;
+  if (confVersion !== '../package.json') {
+    fail(`tauri.conf.json version must be "../package.json" (found "${confVersion}")`);
+  }
+  const cargoVersion = /^\[package\][^[]*?^version\s*=\s*"([^"]+)"/ms.exec(
+    read('src-tauri/Cargo.toml')
+  )?.[1];
+  if (cargoVersion !== pkg.version) {
+    fail(`src-tauri/Cargo.toml version "${cargoVersion}" ≠ package.json version "${pkg.version}"`);
+  }
 }
 
 // --- checked: mobile reads brand.json ------------------------------------------

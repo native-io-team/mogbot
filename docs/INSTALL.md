@@ -333,8 +333,9 @@ personal one, say).
 **HUMAN:** *"Do you have more than one Claude or ChatGPT plan you'd like the
 agents to use? If one runs out of usage, the app switches to the next one on
 its own. If yes: in the app open Settings → Agents → Accounts and click Add a
-Claude Code account (or Add a Codex account), then sign in to the other
-account in the browser page that opens. Tell me when it's listed."*
+Claude Code account (or Add a Codex account), give it a name (Work, say),
+click Add and sign in, and sign in to the other account in the browser page
+that opens. Tell me when it's listed."*
 
 **Check:** the human sees the account in Settings → Agents → Accounts, below
 **This Mac** (the login from Step 10, always first). Accounts are tried in that
@@ -649,7 +650,11 @@ can change it any time in Settings → Agents → Independence, or in Settings o
 the phone. Whatever you pick, anything that spends money, sends as you,
 publishes or deletes still asks you first. **Your team**: the Chief of Staff
 creates, changes and removes the other agents for you, and you can change an
-agent's instructions or routines just by asking in the chat."*
+agent's instructions or routines just by asking in the chat. The Chief is also
+the team's **admin**: it can OK other agents' everyday local work for you, and
+brings you the rest in one message ('3 things only you can decide'). Keys,
+logins and anything outward still come to you. You can change who's an admin
+in Settings → Agents → Admins."*
 
 There's nothing to check here. Don't change these settings for the human.
 
@@ -663,10 +668,17 @@ can add an MCP connector).
 access…**: follow its steps (it uses the same Tailscale; approve Funnel when
 Tailscale asks) and **Copy link**. In your other assistant, add that link as a
 custom connector. Then back in Import agents press **Start** and send your
-assistant the message it shows. Your assistant describes its agents; the Chief
-plays the plan back to you, and you pick what to keep on one review card.
-Afterwards it checks what your new agents can already reach on this Mac and
-asks you only for the rest."*
+assistant the message it shows. The Chief asks you first: click **Allow**.
+Your assistant describes its agents; the Chief plays the plan back to you,
+asks what's missing, and you pick what to keep on one review card.
+Afterwards the app checks what your new agents can already reach on this Mac
+(apps, sign-ins, your Chrome if it's on) and lists only the rest under
+'Setting up your team', one row per service, so you sign in to each service
+once for every agent that needs it."*
+
+From Ship Studio on this Mac it's simpler: **Import agents → From Ship
+Studio** (the tab shows only when Ship Studio is on this Mac) previews them,
+then copies them. Ship Studio is only read; its keys aren't copied.
 
 **Check:** the review card appears in the Chief's chat, and after Import the
 agents are in the sidebar. Imported routines arrive paused.
