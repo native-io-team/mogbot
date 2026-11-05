@@ -1,6 +1,6 @@
 # Mobile companion
 
-Ship Studio on your phone. The Mac does all the work; the phone is a thin
+The app on your phone. The Mac does all the work; the phone is a thin
 client paired by QR code. It shows the same agents, chats, approvals,
 check-ins, projects and sessions as the desk, in sync both ways, over your own
 Tailscale tailnet.
@@ -25,7 +25,7 @@ commit.
   never used; the only service of ours involved is the optional, content-free
   push relay.
 - **Say what's known.** The phone shows whether the Mac can be reached, is
-  awake, is running Ship Studio and has Claude Code signed in. What it can't
+  awake, is running the app and has an engine signed in. What it can't
   observe it calls unknown, never guesses.
 - **The phone is a remote surface.** It gets the agents' own refusals and a
   few stricter ones (below), and it can't push to git, manage other devices,
@@ -34,7 +34,7 @@ commit.
 ## Architecture
 
 ```
- iPhone / Android (Expo)                     Mac (Ship Studio, Tauri)
+ iPhone / Android (Expo)                     Mac (desktop app, Tauri)
 ┌──────────────────────────┐            ┌──────────────────────────────────────────┐
 │ screens (expo-router)    │            │ companion::server (hyper)                │
 │ store (zustand) + JSON   │  tailnet   │   127.0.0.1:P ◀── tailscale serve        │
@@ -165,7 +165,7 @@ whole draft every 40 ms, which over cellular is most of the traffic.)
 is one integer, bumped only for a breaking change; additions don't bump it,
 and both sides ignore unknown fields and events. The Mac keeps speaking the
 previous version for at least a release. A mismatch is refused with the side
-to update named: "Update Ship Studio on …" or "Update this app".
+to update named: "Update <name> on …" or "Update this app".
 
 ### Keeping the types honest
 
@@ -208,7 +208,7 @@ CA and no trust-on-first-use.
 
 1. **Mac:** Phone panel → **Pair a phone** (or Cmd+K). A one-time code
    (128-bit, 5 minutes, single use) is shown as a QR code of
-   `shipstudio-companion://pair?d=…` carrying the code, server id, Mac name
+   `<companion.scheme>://pair?d=…` (`dashbot-companion` today) carrying the code, server id, Mac name
    and routes, and no long-lived secret (`PairingLink`).
 2. **Phone:** scan in the app or with the Camera, or paste the link. It sends
    `POST /v1/pair` with its name, model and an X25519 public key.
@@ -414,7 +414,7 @@ The phone can start work as well as answer it. Each piece is gated by
 The Connection screen lists each layer in order, ok / problem / unknown with
 when it was last known: this phone online (NetInfo); Mac reachable (route,
 latency, last seen, likely causes from the last status); Mac awake
-(keep-awake, lid mode, battery); Ship Studio running (only ever yes when the
+(keep-awake, lid mode, battery); the app running (only ever yes when the
 server answered, since silence looks the same either way); Claude Code
 installed and signed in (a `signed_out` turn makes it a problem whatever the
 check says); each agent's capabilities; this device. Screens say nothing
@@ -496,13 +496,13 @@ uses its own checkout, and `SHIPSTUDIO_COMPANION_SOURCE` overrides both.
 | Build and install (Release, so no Metro) | Agent: `expo prebuild`, `expo run:ios --device … --configuration Release` | `devicectl device info apps` lists the bundle id |
 | Trust the developer, pair | User | The device appears in the registry |
 
-The bundle id is `studio.ship.companion.<6 hex of the team id's sha256>`: a
+The bundle id is `<companion.bundleId>.<6 hex of the team id's sha256>` (from `brand.json`): a
 free team can't take an id someone else holds, and it never collides with
-the official app. **A free Apple ID's build stops opening after 7 days**, and
+the official app or Ship Studio's. **A free Apple ID's build stops opening after 7 days**, and
 the panel says so before the build starts. Expiry is read from the newest
 provisioning profile for that id; the panel shows "Works until …" with a
 one-click **Reinstall**, and a reminder fires 24 h before. Android self-builds
-`studio.ship.companion.self` over adb, and doesn't expire.
+`<companion.bundleId>.self` over adb, and doesn't expire.
 
 **Updates and forks.** `expo-updates` with `runtimeVersion: { policy:
 'fingerprint' }` (a JS update reaches only binaries that can run it), applied

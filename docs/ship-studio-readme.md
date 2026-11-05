@@ -1,7 +1,7 @@
 # Ship Studio
 
 [![CI](https://github.com/ship-studio/ship-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/ship-studio/ship-studio/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../LICENSE)
 [![Download](https://img.shields.io/badge/Download-macOS%20%7C%20Windows-54E36E)](https://www.ship.studio/download)
 
 **The professional studio for modern development.**
@@ -76,15 +76,15 @@ Grab the latest release from
 
 Launch the app and the onboarding wizard takes it from there — it installs
 the system prerequisites (Node, Git, GitHub CLI, an AI agent CLI) for you.
-See [docs/INSTALLATION.md](docs/INSTALLATION.md) for the full guide.
+See [docs/INSTALLATION.md](INSTALLATION.md) for the full guide.
 
 Official builds auto-update: the app checks on launch and hourly, then
 applies updates with one click. Recent changes live in
-[RELEASE_NOTES.md](RELEASE_NOTES.md).
+[RELEASE_NOTES.md](../RELEASE_NOTES.md).
 
 ## Build from source
 
-Prerequisites: [Node 22](https://nodejs.org) (see [`.nvmrc`](.nvmrc)),
+Prerequisites: [Node 22](https://nodejs.org) (see [`.nvmrc`](../.nvmrc)),
 [pnpm](https://pnpm.io), [Rust stable](https://rustup.rs/), and on macOS the
 Xcode Command Line Tools (`xcode-select --install`).
 
@@ -124,9 +124,9 @@ ship-studio/
 ```
 
 The backend exposes its functionality as Tauri commands registered in
-[`src-tauri/src/lib.rs`](src-tauri/src/lib.rs); the frontend calls them
-through typed wrappers in [`src/lib/`](src/lib/). For the full architecture
-tour, read [CLAUDE.md](CLAUDE.md) — it's the same guide AI agents use to
+[`src-tauri/src/lib.rs`](../src-tauri/src/lib.rs); the frontend calls them
+through typed wrappers in [`src/lib/`](../src/lib/). For the full architecture
+tour, read [CLAUDE.md](../CLAUDE.md) — it's the same guide AI agents use to
 work on this codebase.
 
 ## Contributing
@@ -134,12 +134,12 @@ work on this codebase.
 We'd love your help — and we've tried to make it **absurdly easy** for both
 humans and AI agents to contribute:
 
-1. Read [CONTRIBUTING.md](CONTRIBUTING.md) — setup, CI gates, and the PR process.
-2. Skim [docs/CONTRIBUTING_PATTERNS.md](docs/CONTRIBUTING_PATTERNS.md) — the
+1. Read [CONTRIBUTING.md](../CONTRIBUTING.md) — setup, CI gates, and the PR process.
+2. Skim [docs/CONTRIBUTING_PATTERNS.md](CONTRIBUTING_PATTERNS.md) — the
    shared primitives (`<ModalFrame>`, `<Button>`, `useInvoke`, design
    tokens, `CommandError`) that keep the codebase consistent.
-3. Working with an AI agent? It will pick up [CLAUDE.md](CLAUDE.md) /
-   [AGENTS.md](AGENTS.md) automatically and follow the house patterns.
+3. Working with an AI agent? It will pick up [CLAUDE.md](../CLAUDE.md) /
+   [AGENTS.md](../AGENTS.md) automatically and follow the house patterns.
 
 Before pushing, run the same gates CI runs:
 
@@ -148,25 +148,25 @@ pnpm check:all && pnpm test:run && pnpm rust:test
 ```
 
 Want to fork and ship your own distribution instead? See
-[docs/FORKING.md](docs/FORKING.md).
+[docs/FORKING.md](FORKING.md).
 
 ## Privacy & telemetry
 
 Official builds send anonymous usage events to the maintainers'
 [PostHog](https://posthog.com/) project and crash reports to
 [Sentry](https://sentry.io/). Every event is documented in
-[docs/analytics.md](docs/analytics.md).
+[docs/analytics.md](analytics.md).
 
 Disable analytics any time from inside the app (**Settings → Usage
 analytics**) — the setting persists and the Rust backend short-circuits all
 sends, crash reports included. Building your own distribution? See
-[docs/FORKING.md → Telemetry](docs/FORKING.md#5--telemetry) to swap in your
+[docs/FORKING.md → Telemetry](FORKING.md#5--telemetry) to swap in your
 own keys or strip telemetry entirely.
 
 ## Security
 
 Found a vulnerability? **Do not file a public issue.** See
-[SECURITY.md](SECURITY.md) for private reporting.
+[SECURITY.md](../SECURITY.md) for private reporting.
 
 ## Sponsors
 
@@ -201,4 +201,4 @@ Want to support the project with contributions or financially?
 
 ## License
 
-[MIT](LICENSE) © Julian Galluzzo and Ship Studio contributors.
+[MIT](../LICENSE) © Julian Galluzzo and Ship Studio contributors.

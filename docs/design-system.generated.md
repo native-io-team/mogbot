@@ -44,8 +44,8 @@ one row, while the export list is checked exactly against the source file.
 
 | Layer | Definition files | Token count | Sample names |
 | --- | --- | ---: | --- |
-| core | `src/styles/global/fonts.css`<br>`src/styles/global/tokens-core.css` | 160 | `--color-white`, `--color-white-o15`, `--color-black`, `--color-black-o15`, `--color-black-o38`, `--color-black-o75` |
-| semantic | `src/styles/global/tokens-semantic.css` | 256 | `--font-size-micro`, `--font-size-caption`, `--tracking-micro`, `--surface-app`, `--surface-panel`, `--surface-control` |
+| core | `src/styles/global/fonts.css`<br>`src/styles/global/tokens-core.css` | 161 | `--color-white`, `--color-white-o15`, `--color-black`, `--color-black-o15`, `--color-black-o38`, `--color-black-o75` |
+| semantic | `src/styles/global/tokens-semantic.css` | 260 | `--font-size-micro`, `--font-size-caption`, `--tracking-micro`, `--surface-app`, `--surface-panel`, `--surface-control` |
 | components | `src/styles/global/tokens-components.css` | 321 | `--size-control-standard`, `--size-control-large`, `--size-control-medium`, `--size-control-compact`, `--workspace-layout-menu-width`, `--workspace-layout-menu-row-height` |
 | compatibility | `src/styles/global/tokens-compatibility.css` | 71 | `--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--bg-deep`, `--bg-hover`, `--text-bright` |
 
