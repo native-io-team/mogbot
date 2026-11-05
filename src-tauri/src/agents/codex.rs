@@ -413,9 +413,15 @@ pub(super) fn result(item: &Value) -> Option<super::work::CallResult> {
         }
         _ => return None,
     };
+    let output = item
+        .get("aggregatedOutput")
+        .or_else(|| item.get("aggregated_output"))
+        .and_then(Value::as_str)
+        .map(String::from);
     Some(super::work::CallResult {
         id: id.to_string(),
         outcome,
+        output,
     })
 }
 
@@ -579,7 +585,7 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(activities, ["Running echo", "Checking on the team"]);
+        assert_eq!(activities, ["Writing note.txt", "Checking on the team"]);
         let replies: Vec<&Step> = steps
             .iter()
             .filter(|s| matches!(s, Step::Reply(_)))

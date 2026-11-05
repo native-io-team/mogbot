@@ -34,7 +34,7 @@ import { fonts, iconSize, radius, space, type, PRESSED } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
 import { SettingsChange } from './settingsChange';
-import { ACTION, Card, Line, OFFLINE_NOTE } from './surfaces';
+import { Card, Line, OFFLINE_NOTE, useActionShare } from './surfaces';
 import { Button, Icon, T } from './ui';
 
 /**
@@ -236,6 +236,13 @@ export function ApprovalCard({
     { label: 'Deny with note…', run: () => setNoting(true) },
   ];
 
+  const consentCard = approval.connector?.kind === 'consent' || !!approval.front;
+  // Deny and Allow share the row beside ⋯ while both say their word whole.
+  const share = useActionShare(
+    approval.front ? ['Not now', 'Check again'] : ['Deny', 'Allow'],
+    consentCard ? 0 : 44
+  );
+
   if (!pending) {
     return (
       <Receipt status={approval.status} title={approval.title} outcome={outcome}>
@@ -254,14 +261,14 @@ export function ApprovalCard({
   const consent = approval.connector?.kind === 'consent' || !!approval.front;
   const actions = noting ? (
     <>
-      <Button title="Cancel" variant="outline" onPress={() => setNoting(false)} style={ACTION} />
+      <Button title="Cancel" variant="outline" onPress={() => setNoting(false)} style={share} />
       <Button
         title="Deny"
         variant="answer"
         busy={busy === 'deny'}
         disabled={!connected}
         onPress={() => void answer(false, false, note)}
-        style={ACTION}
+        style={share}
       />
     </>
   ) : (
@@ -292,7 +299,7 @@ export function ApprovalCard({
         disabled={off}
         focusable={armed}
         onPress={() => void answer(false)}
-        style={ACTION}
+        style={share}
       />
       <Button
         title={approval.front ? 'Check again' : 'Allow'}
@@ -302,7 +309,7 @@ export function ApprovalCard({
         focusable={armed}
         onPress={() => void answer(true)}
         accessibilityHint={approval.detail || undefined}
-        style={ACTION}
+        style={share}
       />
     </Animated.View>
   );
@@ -310,7 +317,11 @@ export function ApprovalCard({
   return (
     <Card
       icon={
-        consent ? 'square.and.arrow.down' : approval.settings ? 'slider.horizontal.3' : 'checkmark.shield'
+        consent
+          ? 'square.and.arrow.down'
+          : approval.settings
+            ? 'slider.horizontal.3'
+            : 'checkmark.shield'
       }
       title={approval.title}
       // Whose and where, as its sibling import card says it.
@@ -496,6 +507,7 @@ export function PlaybackCard({
     </View>
   ));
 
+  const share = useActionShare(['Add something', 'That’s all']);
   if (!pending) {
     return (
       <Receipt status={approval.status} title={approval.title} outcome={cardOutcome(approval)}>
@@ -522,7 +534,7 @@ export function PlaybackCard({
                 title="Cancel"
                 variant="outline"
                 onPress={() => setAdding(false)}
-                style={ACTION}
+                style={share}
               />
               <Button
                 title="Add this"
@@ -530,7 +542,7 @@ export function PlaybackCard({
                 busy={busy === 'add'}
                 disabled={off || !addition.trim()}
                 onPress={() => void answer(false)}
-                style={ACTION}
+                style={share}
               />
             </>
           ) : (
@@ -540,7 +552,7 @@ export function PlaybackCard({
                 variant="outline"
                 disabled={off}
                 onPress={() => setAdding(true)}
-                style={ACTION}
+                style={share}
               />
               <Button
                 title="That’s all"
@@ -548,7 +560,7 @@ export function PlaybackCard({
                 busy={busy === 'done'}
                 disabled={off}
                 onPress={() => void answer(true)}
-                style={ACTION}
+                style={share}
               />
             </>
           )}
@@ -639,6 +651,10 @@ export function PhoneReviewCard({
     </View>
   ));
 
+  const share = useActionShare([
+    'Don’t import',
+    proposals.length === 1 ? 'Import 1 agent' : `Import ${proposals.length} agents`,
+  ]);
   if (!pending) {
     return (
       <Receipt status={approval.status} title={approval.title} outcome={cardOutcome(approval)}>
@@ -674,7 +690,7 @@ export function PhoneReviewCard({
             busy={busy === 'no'}
             disabled={off}
             onPress={() => void run(false)}
-            style={ACTION}
+            style={share}
           />
           <Button
             title={proposals.length === 1 ? 'Import 1 agent' : `Import ${proposals.length} agents`}
@@ -682,7 +698,7 @@ export function PhoneReviewCard({
             busy={busy === 'import'}
             disabled={off || proposals.length === 0}
             onPress={() => void run(true)}
-            style={ACTION}
+            style={share}
           />
         </Animated.View>
       }
@@ -939,7 +955,7 @@ export const useCardStyles = makeStyles((colors) => ({
   field: { gap: space.xs },
   showAll: { paddingHorizontal: space.md, paddingBottom: space.sm },
   /** ⋯ · Deny · Allow: one row, the affirmative last. */
-  answers: { flexDirection: 'row', flexGrow: 1, gap: space.sm },
+  answers: { flexDirection: 'row', flexWrap: 'wrap', flexGrow: 1, gap: space.sm },
   /** A task's own menu: each option a full row, then the pair. */
   choices: { flexGrow: 1, flexBasis: '100%', gap: space.sm },
   more: {

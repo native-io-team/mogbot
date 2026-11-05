@@ -26,12 +26,13 @@ import {
   Pressable,
   StyleSheet,
   View,
+  useWindowDimensions,
   type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
-import { makeStyles, useColors } from '../lib/appearance';
+import { makeStyles, useColors, useTextScale } from '../lib/appearance';
 import { BAR_ORDER, MAX_BARS, type BarId, type BarTone } from '../lib/bars';
 import { TypingDots } from './TypingDots';
 import {
@@ -182,6 +183,54 @@ export function CardActions({
 export const ACTION = { flexGrow: 1, flexBasis: 96 } as const;
 /** An action that takes the row to itself, above the answers (Ask for changes beside a copy). */
 export const ACTION_ROW = { flexGrow: 1, flexBasis: '100%' } as const;
+/** Two to a row: a third answer wraps under them and takes the row (Copy code · Open GitHub / Cancel). */
+export const ACTION_PAIR = { flexGrow: 1, flexBasis: '40%' } as const;
+
+/**
+ * A card's inner width on this phone: the screen less the chat's gutter and
+ * the card's own padding, each side. Sheets are no narrower.
+ */
+const CARD_INSET = space.lg * 2 + space.lg * 2 + space.xs;
+/**
+ * A semibold label's average glyph, in ems: a little over the measured
+ * ("Connect Linear" is 122pt at 16), so a near miss wraps rather than cuts.
+ */
+const LABEL_EM = 0.55;
+
+/** How wide a button needs to be to say `title` whole, at a text size. */
+export function actionWidth(title: string, fontSize: number): number {
+  return Math.ceil(title.length * fontSize * LABEL_EM) + space.lg * 2 + 2;
+}
+
+/**
+ * How a card's answers share their row, from what they say and the text size
+ * in force: an even share each when every label fits whole; two to a row when
+ * three can't share one; one to a row when even two can't. Never a cut label
+ * ("Copy co…", "Open Gi…"), at any text size. `reserve` is room already taken
+ * in the row (the 44pt ⋯ beside Deny and Allow).
+ */
+export function actionShare(
+  titles: readonly string[],
+  rowWidth: number,
+  fontSize: number,
+  reserve = 0
+): ViewStyle {
+  const n = titles.length;
+  if (n === 0) return ACTION;
+  const need = Math.max(...titles.map((t) => actionWidth(t, fontSize)));
+  const fits = (k: number, room: number) => k * need + (k - 1) * space.sm <= room;
+  if (fits(n, rowWidth - (reserve ? reserve + space.sm : 0))) return ACTION;
+  if (n >= 3 && fits(2, rowWidth)) return ACTION_PAIR;
+  return ACTION_ROW;
+}
+
+/** `actionShare` for this phone's width and text size: the style each answer in the row takes. */
+export function useActionShare(titles: readonly string[], reserve = 0): ViewStyle {
+  const { width, fontScale } = useWindowDimensions();
+  useTextScale(); // re-render when Settings → Text size changes `type`
+  const fontSize = type.subhead * Math.min(fontScale || 1, chromeScale);
+  return actionShare(titles, width - CARD_INSET, fontSize, reserve);
+}
 
 /**
  * The one sentence every card offline carries in its note slot, with its

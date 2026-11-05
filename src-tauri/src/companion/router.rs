@@ -28,6 +28,8 @@ pub const METHODS: &[&str] = &[
     "agents.send",
     "agents.stop",
     "agents.interrupt",
+    "agents.stopStep",
+    "agents.checkOn",
     "agents.answerApproval",
     "agents.saveSecret",
     "agents.loginStart",
@@ -407,6 +409,10 @@ pub trait Backend: Send + Sync + 'static {
     ) -> Result<Value, CommandError>;
     async fn stop(&self, agent_id: &str) -> Result<bool, CommandError>;
     async fn interrupt(&self, agent_id: &str) -> Result<bool, CommandError>;
+    /// "Stop this step" (`agents_stop_step`): what it did, in words.
+    async fn stop_step(&self, agent_id: &str) -> Result<String, CommandError>;
+    /// "Check on it" (`agents_check_on`): what the Mac sees, in one line.
+    async fn check_on(&self, agent_id: &str) -> Result<String, CommandError>;
     async fn answer_approval(&self, answer: ApprovalAnswer) -> Result<(), CommandError>;
     /// `agents_focus` for a socket instead of a window.
     async fn focus(&self, label: &str, agent_id: Option<String>) -> Result<(), CommandError>;
@@ -1376,6 +1382,14 @@ async fn run(
         "agents.interrupt" => {
             let p: AgentParam = parse(params)?;
             Ok(Value::Bool(b.interrupt(&p.agent_id).await?))
+        }
+        "agents.stopStep" => {
+            let p: AgentParam = parse(params)?;
+            Ok(Value::String(b.stop_step(&p.agent_id).await?))
+        }
+        "agents.checkOn" => {
+            let p: AgentParam = parse(params)?;
+            Ok(Value::String(b.check_on(&p.agent_id).await?))
         }
         "agents.answerApproval" => {
             let p: ApprovalParams = parse(params)?;

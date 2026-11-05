@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { ModalProvider } from '../../contexts/ModalContext';
 import { AgentEditorModal } from './AgentEditorModal';
@@ -30,19 +30,28 @@ const CODEX: EngineInfo = {
   models: [{ value: 'gpt-5.5', label: 'GPT-5.5' }],
 };
 
-afterEach(() => clearMocks());
+// Unmount first: the policy section's unlisten needs the mocks still in place.
+afterEach(() => {
+  cleanup();
+  clearMocks();
+});
 
 function open(engines: EngineInfo[], onSetUpEngine = vi.fn()) {
   store.engines = engines;
   const created: unknown[] = [];
-  mockIPC((cmd, args) => {
-    if (cmd === 'agents_create') {
-      created.push((args as { input: unknown }).input);
-      return { id: 'new' };
-    }
-    if (cmd === 'list_projects') return [];
-    return null;
-  });
+  mockIPC(
+    (cmd, args) => {
+      if (cmd === 'agents_create') {
+        created.push((args as { input: unknown }).input);
+        return { id: 'new' };
+      }
+      if (cmd === 'list_projects') return [];
+      return null;
+      // The policy section listens for changes; without mocked events its
+      // unlisten throws on unmount (an unhandled error that failed the run).
+    },
+    { shouldMockEvents: true }
+  );
   render(
     <ModalProvider>
       <AgentEditorModal isOpen onClose={vi.fn()} onSaved={vi.fn()} onSetUpEngine={onSetUpEngine} />
@@ -138,14 +147,17 @@ describe('AgentEditorModal: moving an agent that has a copy open', () => {
   function edit(keep: unknown = { outcome: 'kept', files: 1, branch: 'main' }) {
     store.engines = [CLAUDE];
     const calls: { cmd: string; args: unknown }[] = [];
-    mockIPC((cmd, args) => {
-      calls.push({ cmd, args });
-      if (cmd === 'list_projects') return [{ name: 'acme-site', path: PROJECT }];
-      if (cmd === 'agents_instructions') return '';
-      if (cmd === 'agents_copy_keep') return keep;
-      if (cmd === 'agents_update') return { id: 'site' };
-      return null;
-    });
+    mockIPC(
+      (cmd, args) => {
+        calls.push({ cmd, args });
+        if (cmd === 'list_projects') return [{ name: 'acme-site', path: PROJECT }];
+        if (cmd === 'agents_instructions') return '';
+        if (cmd === 'agents_copy_keep') return keep;
+        if (cmd === 'agents_update') return { id: 'site' };
+        return null;
+      },
+      { shouldMockEvents: true }
+    );
     render(
       <ModalProvider>
         <AgentEditorModal isOpen agent={agent} onClose={vi.fn()} onSaved={vi.fn()} />

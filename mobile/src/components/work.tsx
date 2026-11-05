@@ -6,13 +6,24 @@
  * from an older Mac) shows nothing.
  */
 
-import type { AgentMessage, TurnWork, WorkStep } from '@shipstudio/companion-protocol';
+import type { AgentMessage, LiveCall, TurnWork, WorkStep } from '@shipstudio/companion-protocol';
+import {
+  formatElapsed,
+  lifeLine,
+  offersStopStep,
+  outputNote,
+  quietLine,
+  slowHint,
+  stepLine,
+} from '@shipstudio/companion-protocol';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
-import { iconSize, space, PRESSED } from '../lib/theme';
+import { call, describeError, stop } from '../lib/session';
+import { useServed } from '../lib/store';
+import { fonts, iconSize, radius, space, PRESSED } from '../lib/theme';
 import {
   earlierSteps,
   liveSteps,
@@ -23,10 +34,21 @@ import {
   workSummary,
 } from '../lib/work';
 import { Attachments } from './attachments';
-import { Icon, T } from './ui';
+import { TypingDots } from './TypingDots';
+import { Button, Icon, T } from './ui';
 
 /** The chevron and its words: the same control folded and open. */
-function Toggle({ open, label, onPress }: { open: boolean; label: string; onPress: () => void }) {
+function Toggle({
+  open,
+  label,
+  onPress,
+  hint = open ? 'Hides the steps' : 'Shows each step',
+}: {
+  open: boolean;
+  label: string;
+  onPress: () => void;
+  hint?: string;
+}) {
   const colors = useColors();
   const styles = useStyles();
   return (
@@ -39,7 +61,7 @@ function Toggle({ open, label, onPress }: { open: boolean; label: string; onPres
       hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityHint={open ? 'Hides the steps' : 'Shows each step'}
+      accessibilityHint={hint}
       accessibilityState={{ expanded: open }}
       style={({ pressed }) => [styles.head, pressed && PRESSED]}
     >
@@ -70,13 +92,16 @@ function StepRow({
   const styles = useStyles();
   // Declined or failed: the label says so in words, and it reads quieter.
   const quiet = step.outcome != null;
+  // "Ran the Cypress tests · 6m 12s · 42 passed, 3 failed": how long, and what it came to.
+  const line = stepLine(step);
+  const [showOutput, setShowOutput] = useState(false);
   return (
     <View style={styles.stepBlock} testID={`work-step-${step.kind}`}>
       {/* One stop for VoiceOver: what it did and when, not a glyph, a label and four digits. */}
       <View
         style={styles.step}
         accessible
-        accessibilityLabel={`${step.label}, ${stepOffsetSpoken(step, startedAt)}`}
+        accessibilityLabel={`${line}, ${stepOffsetSpoken(step, startedAt)}`}
       >
         <View style={styles.icon}>
           <Icon name={stepSymbol(step.kind)} size={iconSize.inline} color={colors.textMuted} />
@@ -84,15 +109,26 @@ function StepRow({
         <T
           variant="caption"
           color={quiet ? colors.textMuted : colors.textSecondary}
-          numberOfLines={1}
+          numberOfLines={2}
           style={styles.label}
         >
-          {step.label}
+          {line}
         </T>
         <T variant="caption" color={colors.textMuted} style={styles.count}>
           {stepOffset(step, startedAt)}
         </T>
       </View>
+      {!!step.output?.length && (
+        <View style={styles.indent}>
+          <Toggle
+            open={showOutput}
+            label={showOutput ? 'Hide output' : 'Show output'}
+            hint={showOutput ? 'Hides what it printed' : 'Shows the last lines it printed'}
+            onPress={() => setShowOutput((o) => !o)}
+          />
+          {showOutput && <Output lines={step.output} />}
+        </View>
+      )}
       {step.image && (
         <View style={styles.indent}>
           <Attachments agentId={agentId} attachments={[step.image]} onError={onError} />
@@ -210,7 +246,197 @@ export function LiveWork({
   );
 }
 
-const useStyles = makeStyles(() => ({
+/** What a command printed, last lines last, in the terminal's face. */
+function Output({ lines }: { lines: string[] }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View style={styles.output} testID="work-output">
+      {lines.map((l, i) => (
+        <T
+          key={i}
+          variant="caption"
+          color={colors.textSecondary}
+          numberOfLines={1}
+          style={styles.mono}
+          selectable
+        >
+          {l}
+        </T>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * The working row's line while a call runs: what it's doing in plain words
+ * and for how long ("Running the Cypress tests · 5:32"), then, only when
+ * there's something to say, a quiet hint for a known slow tool, "Show
+ * output", and after ten minutes "Stop this step". Tapping the line says
+ * when it last showed life. Once the Mac says it has made no progress for
+ * a while, the line says that instead, with "Check on it" and "Stop".
+ */
+export function LiveStep({
+  agentId,
+  work,
+  call: live,
+  label,
+  now,
+}: {
+  agentId: string;
+  work: TurnWork | undefined;
+  /** The call the line is saying (`liveCallShown`), if it is saying one. */
+  call: LiveCall | undefined;
+  /** The Mac's own words for the line, when it isn't a call. */
+  label: string;
+  now: number;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const [showLife, setShowLife] = useState(false);
+  const [outputOpenAt, setOutputOpenAt] = useState<number | null>(null);
+  const [answer, setAnswer] = useState<{ at: number; text: string } | null>(null);
+  const [busy, setBusy] = useState<'check' | 'step' | 'stop' | null>(null);
+  const canStopStep = useServed('agents.stopStep');
+  const canCheck = useServed('agents.checkOn');
+  const quiet = quietLine(work, now);
+  const text = quiet ?? live?.label ?? label;
+  const timer = !quiet && live ? formatElapsed(now - live.startedAt) : null;
+  const hint = quiet ? null : slowHint(live, now);
+  const life = showLife ? lifeLine(work, now) : null;
+  const command = live?.kind === 'command';
+  const outputOpen = !!live && outputOpenAt === live.startedAt;
+  const note = live ? outputNote(live) : null;
+  const stopStep = canStopStep && !quiet && offersStopStep(live, now);
+  // An answer belongs to the call (or the quiet turn) it was about.
+  const about = live?.startedAt ?? work?.startedAt ?? 0;
+  const shownAnswer = answer?.at === about ? answer.text : null;
+  const ask = async (kind: 'check' | 'step', method: 'agents.checkOn' | 'agents.stopStep') => {
+    setBusy(kind);
+    try {
+      setAnswer({ at: about, text: await call(method, { agentId }) });
+    } catch (error) {
+      setAnswer({ at: about, text: describeError(error) });
+    } finally {
+      setBusy(null);
+    }
+  };
+  const stopTurn = async () => {
+    setBusy('stop');
+    try {
+      await stop(agentId);
+    } catch (error) {
+      setAnswer({ at: about, text: describeError(error) });
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <View style={styles.live}>
+      <Pressable
+        onPress={() => {
+          haptic.select();
+          setShowLife((s) => !s);
+        }}
+        disabled={work?.lastSignAt == null}
+        accessibilityRole="button"
+        accessibilityLabel={timer ? `${text}, ${timer}` : text || 'Working'}
+        accessibilityHint="Shows when it last did something"
+        style={({ pressed }) => [styles.liveLine, pressed && PRESSED]}
+        testID="live-step"
+      >
+        {/* No progress: the dots stop claiming it's busy. */}
+        {quiet ? (
+          <Icon name="clock" size={iconSize.inline} color={colors.textMuted} />
+        ) : (
+          <TypingDots />
+        )}
+        {!!text && (
+          <T variant="small" color={colors.textSecondary} numberOfLines={1} style={styles.liveText}>
+            {text}
+          </T>
+        )}
+        {timer && (
+          <T variant="small" color={colors.textMuted} style={styles.count}>
+            {timer}
+          </T>
+        )}
+      </Pressable>
+      {(hint || life) && (
+        <View style={styles.liveIndent}>
+          {hint && (
+            <T variant="caption" color={colors.textMuted}>
+              {hint}
+            </T>
+          )}
+          {life && (
+            <T variant="caption" color={colors.textMuted} testID="life-line">
+              {life}
+            </T>
+          )}
+        </View>
+      )}
+      {command && !quiet && live && (
+        <View style={styles.liveIndent}>
+          <Toggle
+            open={outputOpen}
+            label={outputOpen ? 'Hide output' : 'Show output'}
+            hint={outputOpen ? 'Hides what it is printing' : 'Shows what it is printing'}
+            onPress={() => setOutputOpenAt(outputOpen ? null : live.startedAt)}
+          />
+          {outputOpen &&
+            (note ? (
+              <T variant="caption" color={colors.textMuted}>
+                {note}
+              </T>
+            ) : (
+              <Output lines={live.output ?? []} />
+            ))}
+        </View>
+      )}
+      {(quiet || stopStep) && (
+        <View style={[styles.liveIndent, styles.actions]}>
+          {quiet && canCheck && (
+            <Button
+              title="Check on it"
+              size="compact"
+              variant="secondary"
+              busy={busy === 'check'}
+              onPress={() => void ask('check', 'agents.checkOn')}
+            />
+          )}
+          {quiet && (
+            <Button
+              title="Stop"
+              size="compact"
+              variant="outline"
+              busy={busy === 'stop'}
+              onPress={() => void stopTurn()}
+            />
+          )}
+          {stopStep && (
+            <Button
+              title="Stop this step"
+              size="compact"
+              variant="outline"
+              busy={busy === 'step'}
+              onPress={() => void ask('step', 'agents.stopStep')}
+            />
+          )}
+        </View>
+      )}
+      {shownAnswer && (
+        <View style={styles.liveIndent}>
+          <T variant="caption" color={colors.textSecondary} testID="check-answer">
+            {shownAnswer}
+          </T>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const useStyles = makeStyles((colors) => ({
   wrap: { gap: space.sm },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.xs, alignSelf: 'flex-start' },
   steps: { gap: space.sm },
@@ -220,4 +446,18 @@ const useStyles = makeStyles(() => ({
   label: { flex: 1 },
   count: { fontVariant: ['tabular-nums'] },
   indent: { paddingLeft: iconSize.body + space.sm },
+  output: {
+    marginTop: space.xs,
+    padding: space.sm,
+    borderRadius: radius.inner,
+    backgroundColor: colors.surfaceControl,
+    gap: space['3xs'],
+  },
+  mono: { fontFamily: fonts.mono },
+  live: { gap: space.tight },
+  liveLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm, alignSelf: 'stretch' },
+  liveText: { flexShrink: 1 },
+  // Under the words, past the dots.
+  liveIndent: { paddingLeft: space.xl + space.xs, gap: space.xs },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
 }));
