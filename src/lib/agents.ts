@@ -1298,6 +1298,10 @@ export interface ImportProposal {
   history?: ImportHistoryCount;
   /** An agent here already has this name (or one that looks like it): what it is now. */
   clash?: ImportClash;
+  /** Paths from the other assistant's sandbox that aren't on this Mac, each marked in the text. */
+  foreignPaths?: string[];
+  /** The other assistant's tools its text names, and the nearest here (none: not available). */
+  foreignTools?: { name: string; here?: string }[];
 }
 
 /** The agent here a proposal's name is taken by, with everything Replace would change. */

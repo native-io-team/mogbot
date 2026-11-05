@@ -234,7 +234,13 @@ pub fn import_with(
         source.trim()
     };
     let mut summary = ImportSummary::default();
-    for incoming in agents.into_iter().take(50) {
+    for mut incoming in agents.into_iter().take(50) {
+        // Paths from its old sandbox, marked where they first appear (`arrival`).
+        incoming.instructions = super::arrival::annotate(&incoming.instructions, source).0;
+        incoming.memory = super::arrival::annotate(&incoming.memory, source).0;
+        for r in &mut incoming.routines {
+            r.what = super::arrival::annotate(&r.what, source).0;
+        }
         let name = match store::validate_name(&incoming.name) {
             Ok(n) => n,
             Err(e) => {
@@ -264,6 +270,7 @@ pub fn import_with(
                         is_main: false,
                     })?;
                     add_memory(&created.id, &incoming.memory, source)?;
+                    super::arrival::arrive(&created.id, source)?;
                     add_routines(&created, &incoming.routines, pause_routines, &mut summary);
                     summary.created.push(name);
                     continue;
@@ -291,6 +298,9 @@ pub fn import_with(
             store::write_instructions(&store::agent_home(&updated.id)?, &updated, &instructions)?;
         }
         add_memory(&updated.id, &incoming.memory, source)?;
+        if !updated.is_main {
+            super::arrival::arrive(&updated.id, source)?;
+        }
         add_routines(&updated, &incoming.routines, pause_routines, &mut summary);
         summary.updated.push(updated.name);
     }

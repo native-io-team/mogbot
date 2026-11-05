@@ -500,6 +500,8 @@ export interface ImportProposal {
   context?: string;
   history?: ImportHistoryCount;
   clash?: ImportClash;
+  foreignPaths?: string[];
+  foreignTools?: { name: string; here?: string }[];
 }
 
 export interface ImportClash {
