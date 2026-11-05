@@ -33,6 +33,9 @@ import type {
   SessionScreen,
   SharedFile,
   StoredAgent,
+  TeamSetupStepId,
+  TeamSetupStepState,
+  TeamSetupView,
   NewAgentInput,
   NewAgentDefaults,
   NewAgentDefaultsChange,
@@ -270,6 +273,32 @@ export interface Methods {
     params: { agentId: string; requestId: string; keys: string[] };
     result: ImportApplied;
   };
+  /**
+   * "Setting up your team" (a Mac whose welcome lists these methods): the
+   * checklist, or `null` when there's none to show. `any` brings back one
+   * the user put away. Re-read on `agents.registry`: the Mac fires one
+   * whenever the checklist may read differently.
+   */
+  'agents.teamSetup': { params: { any?: boolean }; result: TeamSetupView | null };
+  /** Mark a step done or skipped, or open it again. */
+  'agents.teamSetup.step': {
+    params: { step: TeamSetupStepId; state: TeamSetupStepState };
+    result: null;
+  };
+  /** Switch one of an imported agent's routines on or off. */
+  'agents.teamSetup.routine': {
+    params: { agentId: string; checkInId: string; on: boolean };
+    result: null;
+  };
+  /**
+   * "Say hi": the user's hello to one imported agent, which wakes it. Refused
+   * (`expected`) while another is still replying to its hello.
+   */
+  'agents.teamSetup.hello': { params: { agentId: string }; result: AgentMessage };
+  /** Everything the agents said they're missing, to the Chief in one message (the user's). */
+  'agents.teamSetup.missing': { params: Record<string, never>; result: AgentMessage };
+  /** Put it away; `agents.teamSetup` with `any` brings it back. */
+  'agents.teamSetup.dismiss': { params: Record<string, never>; result: null };
   'agents.import.pastePrompt': { params: Record<string, never>; result: string };
   'agents.import.pastePreview': { params: { text: string }; result: PasteImportPreview };
   'agents.import.paste': { params: { text: string }; result: ImportSummary };
@@ -343,6 +372,7 @@ export const READ_ONLY_METHODS = [
   'agents.accounts',
   'agents.usagePlan',
   'agents.import.status',
+  'agents.teamSetup',
   'agents.templates',
   'agents.files',
   'agents.changeDiff',

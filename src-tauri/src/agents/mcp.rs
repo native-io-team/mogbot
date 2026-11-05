@@ -147,6 +147,18 @@ const TOOLS: &[Tool] = &[
         }),
     },
     Tool {
+        name: "read_agent",
+        description: "Read another agent without waking it: its role, instructions and memory, routines, logins and the requests waiting on the user. Use it to find out what an agent does or needs instead of messaging it to ask.",
+        main_only: true,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "agent": { "type": "string", "description": "The agent's name (or id)." }
+            },
+            "required": ["agent"]
+        }),
+    },
+    Tool {
         name: "create_agent",
         description: "Create a new agent with a standing responsibility. It appears in the user's sidebar immediately. Optionally hand it a first task. With `template`, it starts from one of the ready-made agents: its role, briefing and colour, which `role` and `color` override and `instructions` adds to.",
         main_only: true,
@@ -510,6 +522,7 @@ async fn call(
     match name {
         "list_agents" => list_agents(caller),
         "message_agent" => message_agent(app, caller, args),
+        "read_agent" => read_agent(args),
         "share_file" => share_file(app, caller, args).await,
         "share_result" => share_result(app, caller, turn, args).await,
         "create_agent" => create_agent(app, caller, args).await,
@@ -875,6 +888,19 @@ fn list_agents(caller: &store::Agent) -> Value {
     text(lines.join("\n"))
 }
 
+/// `read_agent`: what an agent knows and waits on, without starting a turn.
+fn read_agent(args: &Value) -> Value {
+    let Some(name) = arg(args, "agent") else {
+        return error("`agent` is required.");
+    };
+    match store::find(name) {
+        Ok(Some(agent)) => text(super::team_setup::read_agent_text(&agent)),
+        _ => error(format!(
+            "There's no agent called {name}. list_agents shows who exists."
+        )),
+    }
+}
+
 fn peer(agent: &store::Agent) -> AgentRef {
     AgentRef {
         id: agent.id.clone(),
@@ -900,6 +926,20 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
     let Some(hop) = runner::next_hop(&caller.id) else {
         return error("Not sent: this chain of agent-to-agent messages is too long. Tell the user where things stand instead.");
     };
+    // Handing out work is capped per reply, and an agent that just came in
+    // with an import stays quiet until the user says hi. An answer to an
+    // agent that asked isn't new work.
+    if !runner::owes(&caller.id, &target.id) {
+        if let Err(why) = super::team_setup::admit(
+            &caller.id,
+            runner::turn_number(&caller.id),
+            &target.id,
+            &target.name,
+            super::team_setup::is_quiet(&target.id),
+        ) {
+            return error(why);
+        }
+    }
     // Answering a request the target sent: settles it (see runner::settle).
     let answer = runner::settle(&caller.id, &target.id);
     let mut sent = runner::new_message(&caller.id, MessageKind::SentToAgent, body);
@@ -1613,6 +1653,7 @@ pub(super) fn new_card(
         choice: None,
         secret: None,
         connector: None,
+        set_aside: None,
     }
 }
 

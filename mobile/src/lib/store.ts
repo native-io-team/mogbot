@@ -8,6 +8,7 @@ import type {
   LinkState,
   PushStatus,
   RefusedFrame,
+  TeamSetupView,
   WelcomeFrame,
 } from '@shipstudio/companion-protocol';
 import { create } from 'zustand';
@@ -39,6 +40,8 @@ export interface AppState extends SyncState {
   highContrast: boolean;
   /** Push, as the Mac last answered `devices.setPush`; null until it has. */
   push: PushStatus | null;
+  /** "Setting up your team", as the Mac last answered it; null when there's none. */
+  teamSetup: TeamSetupView | null;
 }
 
 export interface Served {
@@ -69,6 +72,7 @@ export const useApp = create<AppState>(() => ({
   prefs: defaultPrefs,
   highContrast: false,
   push: null,
+  teamSetup: null,
 }));
 
 export const setApp = useApp.setState;

@@ -457,6 +457,11 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "agentsTeamSetup",
+        "Result<'agents.teamSetup'>",
+        call("agents.teamSetup", json!({})).await,
+    );
+    out += &entry(
         "agentsAccounts",
         "Result<'agents.accounts'>",
         call("agents.accounts", json!({})).await,

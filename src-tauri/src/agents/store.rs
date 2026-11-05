@@ -287,6 +287,12 @@ pub struct Approval {
     /// staged for the user to review. Nothing is created until they answer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connector: Option<super::review::ConnectorCard>,
+    /// Closed by the app rather than answered (status `expired`), with the
+    /// line saying why: a request from work that was replaced, such as the
+    /// check-in after an import that "Setting up your team" took over
+    /// (`agents/team_setup.rs`). Nothing it asked for ran.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_aside: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1011,6 +1017,8 @@ struct Answer {
     note: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     choice: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    set_aside: Option<String>,
 }
 
 impl Answer {
@@ -1023,6 +1031,9 @@ impl Answer {
         approval.note = self.note.clone();
         if self.choice.is_some() {
             approval.choice = self.choice.clone();
+        }
+        if self.set_aside.is_some() {
+            approval.set_aside = self.set_aside.clone();
         }
     }
 }
@@ -1496,6 +1507,38 @@ fn resolve_approval(
     note: Option<&str>,
     choice: Option<&str>,
 ) -> Result<Option<AgentMessage>, CommandError> {
+    resolve_approval_as(agent_id, request_id, status, rule, note, choice, None)
+}
+
+/// Close a pending card without an answer from the user, saying why
+/// (`Approval::set_aside`). It reads as expired to anything that doesn't
+/// know the field, so nothing it asked for can run from it.
+pub fn set_aside(
+    agent_id: &str,
+    request_id: &str,
+    why: &str,
+) -> Result<Option<AgentMessage>, CommandError> {
+    resolve_approval_as(
+        agent_id,
+        request_id,
+        ApprovalStatus::Expired,
+        None,
+        None,
+        None,
+        Some(why),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_approval_as(
+    agent_id: &str,
+    request_id: &str,
+    status: ApprovalStatus,
+    rule: Option<&super::permissions::Scope>,
+    note: Option<&str>,
+    choice: Option<&str>,
+    set_aside: Option<&str>,
+) -> Result<Option<AgentMessage>, CommandError> {
     let lock = log_lock(agent_id);
     let guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     let mut all = pending_cards(agent_id)?;
@@ -1513,6 +1556,7 @@ fn resolve_approval(
             always_allowed: rule.is_some(),
             note: note.map(str::to_string),
             choice: choice.map(str::to_string),
+            set_aside: set_aside.map(str::to_string),
         };
         append_line(&answers_path(agent_id)?, &answer)?;
         if let Some(approval) = message.approval.as_mut() {
@@ -1828,6 +1872,7 @@ mod tests {
                         choice: None,
                         secret: None,
                         connector: None,
+                        set_aside: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2030,6 +2075,7 @@ mod tests {
                     choice: None,
                     secret: None,
                     connector: None,
+                    set_aside: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2137,6 +2183,7 @@ mod tests {
                 choice: None,
                 secret: None,
                 connector: None,
+                set_aside: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

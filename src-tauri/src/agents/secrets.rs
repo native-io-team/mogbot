@@ -659,6 +659,7 @@ mod tests {
             choice: None,
             secret: Some(request.clone()),
             connector: None,
+            set_aside: None,
         });
         store::append_message(&card).unwrap();
         (request_id, request)

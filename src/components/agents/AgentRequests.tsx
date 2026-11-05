@@ -20,6 +20,12 @@
  * It reads the cards already in each agent's chat, so requests that were
  * waiting before this existed show here as they are.
  *
+ * After an import, requests from the agents still waiting to be set up
+ * belong to "Setting up your team" (`setup`): they're left out of this bar,
+ * and when they are all there is, the bar gives way to the checklist's own
+ * (its Continue opens the checklist). Mixed with other agents' requests, the
+ * panel says how many more are in the checklist and opens it.
+ *
  * @module components/agents/AgentRequests
  */
 
@@ -72,6 +78,11 @@ interface AgentRequestsBarProps {
   shownRequestIds: Set<string>;
   /** Open another agent's chat. */
   onOpenAgent: (agentId: string) => void;
+  /**
+   * "Setting up your team" is live: these agents' requests are its own, and
+   * `onOpen` brings the checklist into view.
+   */
+  setup?: { agentIds: ReadonlySet<string>; onOpen: () => void };
 }
 
 /** With this many agents or fewer, the panel opens with every one expanded. */
@@ -88,6 +99,7 @@ export function AgentRequestsBar({
   askers,
   shownRequestIds,
   onOpenAgent,
+  setup,
 }: AgentRequestsBarProps) {
   const { showToast } = useOptionalToast();
   const [open, setOpen] = useState(false);
@@ -133,10 +145,17 @@ export function AgentRequestsBar({
     }
     return out;
   }, [messages, answered, asking]);
-  const summary = useMemo(
-    () => groupRequests(asking, lines, shownRequestIds, keep),
-    [asking, lines, shownRequestIds, keep]
-  );
+  // Agents still being set up after an import: their requests are the
+  // checklist's, counted here only to point at it.
+  const setupIds = setup?.agentIds;
+  const [summary, inSetup] = useMemo(() => {
+    const own = setupIds ? asking.filter((a) => !setupIds.has(a.id)) : asking;
+    const theirs = setupIds ? asking.filter((a) => setupIds.has(a.id)) : [];
+    return [
+      groupRequests(own, lines, shownRequestIds, keep),
+      theirs.length > 0 ? groupRequests(theirs, lines, shownRequestIds).requests : 0,
+    ] as const;
+  }, [asking, setupIds, lines, shownRequestIds, keep]);
 
   const close = useCallback((restoreFocus: boolean) => {
     setOpen(false);
@@ -300,6 +319,22 @@ export function AgentRequestsBar({
                 }
               />
             ))}
+            {setup && inSetup > 0 && (
+              <p className="agent-requests-panel__older" data-testid="agent-requests-in-setup">
+                {inSetup === 1
+                  ? 'One more is from the agents you imported.'
+                  : 'A few more are from the agents you imported.'}{' '}
+                <TextButton
+                  tabIndex={0}
+                  onClick={() => {
+                    close(false);
+                    setup.onOpen();
+                  }}
+                >
+                  Open setting up your team
+                </TextButton>
+              </p>
+            )}
           </div>
         </section>
       )}

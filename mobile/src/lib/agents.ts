@@ -581,6 +581,11 @@ const OUTCOME = {
 
 /** An answered card in a line, as the desk words it (with the option picked on a session's question). */
 export function cardOutcome(approval: Approval): string {
+  // Closed by the Mac, not answered: why, in its own words ("Nothing ran").
+  if (approval.setAside) {
+    const why = approval.setAside.replace(/^Set aside:\s*/i, '');
+    return `Set aside · ${why.charAt(0).toUpperCase()}${why.slice(1)}`;
+  }
   if (approval.alwaysAllowed && approval.always) return `Always allowed · ${approval.always.label}`;
   if (approval.status === 'denied' && approval.note) return `Declined · “${approval.note}”`;
   const label = OUTCOME[approval.status];

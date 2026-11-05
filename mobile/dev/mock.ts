@@ -7,6 +7,7 @@
  *   pnpm mock --codex-only         # Claude Code not installed; every agent on Codex
  *   pnpm mock --takeover           # Designer driven in a terminal on the Mac
  *   pnpm mock --bars               # three bars in the Chief's chat: reaches "1 more"
+ *   pnpm mock --team-setup         # 16 agents just imported: "Setting up your team" in the Chief's chat
  *   pnpm mock --importing          # the Chief mid-import, the Designer working: live bar + typing dots
  *   pnpm mock --heavy              # 17 agents, ~40 cards waiting, long chats
  *   pnpm mock --impostor           # signs with a stranger's key: "This isn't your Mac"
@@ -75,6 +76,7 @@ function selfSigned(dir: string) {
     takeover: args.includes('--takeover'),
     bars: args.includes('--bars'),
     importing: args.includes('--importing'),
+    teamSetup: args.includes('--team-setup'),
     cors: args.includes('--cors'),
     solo: args.includes('--solo'),
     heavy: args.includes('--heavy'),

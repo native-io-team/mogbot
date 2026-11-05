@@ -454,6 +454,83 @@ export const agentsImportReview = {
   "routinesRefused": [],
   "skipped": []
 } satisfies Result<'agents.import.review'>;
+export const agentsTeamSetup = {
+  "agents": 3,
+  "complete": false,
+  "current": "logins",
+  "dismissed": false,
+  "done": 2,
+  "id": "setup1",
+  "setAside": 2,
+  "source": "Grok",
+  "steps": [
+    {
+      "id": "logins",
+      "logins": [
+        {
+          "agentId": "a1",
+          "agentName": "Finance",
+          "name": "wise",
+          "purpose": "Read balances and pay invoices",
+          "requestId": "s1"
+        }
+      ],
+      "state": "open"
+    },
+    {
+      "id": "routines",
+      "routines": [
+        {
+          "agentId": "a2",
+          "agentName": "Ops",
+          "checkInId": "c1",
+          "on": false,
+          "what": "Check for new invoices",
+          "when": "Every weekday at 09:00"
+        }
+      ],
+      "state": "skipped"
+    },
+    {
+      "gaps": [
+        {
+          "agentId": "a1",
+          "agentName": "Finance",
+          "lines": [
+            "When an invoice email arrives: file it (ask me to set this up here once I'm in)"
+          ]
+        }
+      ],
+      "id": "missing",
+      "state": "done"
+    },
+    {
+      "agents": [
+        {
+          "agentId": "a1",
+          "agentName": "Finance",
+          "color": "green",
+          "state": "quiet"
+        },
+        {
+          "agentId": "a2",
+          "agentName": "Ops",
+          "color": "blue",
+          "state": "working"
+        },
+        {
+          "agentId": "a3",
+          "agentName": "Designer",
+          "color": "pink",
+          "state": "said_hi"
+        }
+      ],
+      "id": "hello",
+      "state": "open"
+    }
+  ],
+  "total": 4
+} satisfies Result<'agents.teamSetup'>;
 export const agentsAccounts = [
   {
     "engine": "claude",
@@ -742,6 +819,7 @@ export const agentsMessages = {
         },
         "detail": "to accounts@",
         "requestId": "q4",
+        "setAside": "Set aside: this came from Chief of Staff checking in with every agent after the import. Nothing ran.",
         "status": "expired",
         "title": "Send an email",
         "tool": "mcp__gmail__send"
@@ -2352,7 +2430,13 @@ export const frames = [
       "agents.import.status",
       "agents.import.start",
       "agents.import.stop",
-      "agents.import.review"
+      "agents.import.review",
+      "agents.teamSetup",
+      "agents.teamSetup.step",
+      "agents.teamSetup.routine",
+      "agents.teamSetup.hello",
+      "agents.teamSetup.missing",
+      "agents.teamSetup.dismiss"
     ],
     "timeZone": "America/New_York",
     "features": [
