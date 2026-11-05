@@ -1042,9 +1042,23 @@ the stub (no claude.ai connectors, no other servers), no built-in tools,
 `permissionMode: dontAsk`, no slash commands or skills; `list_items` ran
 (so the `list*` pattern is honoured), and the stub's log shows no call to
 `create_item`. The model declined to try it, though asked to, so a refused
-*attempt* (`permission_denials`) was not observed. **Not verified:** a real
-write attempt being denied; a real Linear or Gmail app, including whether an
-OAuth app's saved sign-in is found when its config is passed this way.
+*attempt* was not observed there.
+
+A refused attempt was then observed (two more Haiku calls, $0.0010 together,
+same stub). With the production flags and system prompt and a prompt saying
+"call create_item with name=x", Haiku again declined in text and only called
+`list_items`. With the same flags but a neutral system prompt ("Do exactly
+what the user asks") and `--output-format stream-json --verbose`, `init`
+listed `mcp__stub__create_item` and `mcp__stub__list_items` (the write tool
+is *visible*, just not allowed), Haiku emitted a `tool_use` for
+`mcp__stub__create_item {"name":"x"}`, the `tool_result` was "Permission to
+use mcp__stub__create_item has been denied because Claude Code is running in
+don't ask mode", the result's `permission_denials` recorded exactly that
+call, and the stub's log ends at `tools/list`, with no `tools/call` at all.
+So the refusal is Claude Code's, not the model's restraint, and no change to
+the flags was needed. **Not verified:** a real Linear or Gmail app,
+including whether an OAuth app's saved sign-in is found when its config is
+passed this way.
 
 **Cost.** A model check is counted as a *check*, not a turn
 (`UsageTotals::checks`/`priced_checks`), in the agent's usage and the

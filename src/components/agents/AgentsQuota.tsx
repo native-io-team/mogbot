@@ -32,18 +32,26 @@ export function useQuotaLines() {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let gone = false;
+    // Tauri's unlisten is typed `() => void` but is async and can reject
+    // (the event plugin gone, as under test mocks): catch it, or every
+    // unmount leaves an unhandled rejection.
+    const stop = (fn: () => void) => {
+      void Promise.resolve()
+        .then(fn)
+        .catch(() => {});
+    };
     void listen(AGENT_EVENTS.quota, () => {
       setNow(Date.now());
       void execute();
     })
       .then((fn) => {
-        if (gone) fn();
+        if (gone) stop(fn);
         else unlisten = fn;
       })
       .catch(() => {});
     return () => {
       gone = true;
-      unlisten?.();
+      if (unlisten) stop(unlisten);
     };
   }, [execute]);
   return quotas.data ? quotaLines(quotas.data, now) : [];

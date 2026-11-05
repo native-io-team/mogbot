@@ -22,7 +22,8 @@
 //!
 //! Verified on Claude Code 2.1.318 with a stub server offering `list_items`
 //! and `create_item` (docs/agents.md, "When… routines"): the read tool ran,
-//! the write tool was refused, and no other server loaded. Not verified with
+//! no other server loaded, and a forced `create_item` call was denied by
+//! Claude Code (`permission_denials`) without ever reaching the server. Not verified with
 //! a real Linear or Gmail connector, including whether an OAuth connector's
 //! saved sign-in is found when its config is passed this way.
 
