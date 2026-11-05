@@ -451,7 +451,13 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   Distances count from the keyboard-lifted end (`-inset`), so Send and the
   pill land on the newest line with the keyboard up; scrolling to offset 0
   left it behind the keyboard. Checked natively on the iOS 26.1 simulator
-  (send, a streamed reply, scrolling back mid-stream, the keyboard). Hold a
+  (send, a streamed reply, scrolling back mid-stream, the keyboard). Where the
+  list meets the composer and the header the words fade into the background
+  over 28pt (`chatFade`, bands of the surface colour, no native module), and
+  the list keeps that room at both ends so nothing rests under a fade. With
+  the keyboard up the composer sits `composer.keyboardGap` (10pt) above the
+  keys: the sticky view, the list's lift and the pill share one offset
+  (`lift`), so they move with the keyboard frame for frame. Hold a
   message to copy, quote or select text; paths in a reply open through
   `agents.fetchPath`.
 - **Lines, cards and bars** (`components/surfaces.tsx`, the desk's

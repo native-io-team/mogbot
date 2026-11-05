@@ -825,6 +825,34 @@ const LIVE = [
     check: 'Dates in the one short format ("Nov 5, 2026")',
   },
   {
+    name: 'settings-text-size',
+    route: '/settings',
+    ready: 'Largest',
+    act: scrollToText('Largest'),
+    check: 'Text size: Smaller / Default / Larger / Largest, each "Aa" drawn at its own size, Default ticked',
+  },
+  ...['smaller', 'larger', 'largest'].map((size) => ({
+    name: `text-${size}-chat`,
+    route: '/settings',
+    ready: 'Largest',
+    act: async (page) => {
+      await scrollToText('Largest')(page);
+      await page.clickText(size[0].toUpperCase() + size.slice(1));
+      await sleep(400);
+      await page.goto(`${WEB}/chat/design`);
+      await page.waitFor(`document.body.innerText.includes('Designer')`, 20_000, 'Designer');
+      await sleep(1800);
+    },
+    after: async (page) => {
+      await page.goto(`${WEB}/settings`);
+      await page.waitFor(`document.body.innerText.includes('Largest')`, 20_000, 'Largest');
+      await scrollToText('Largest')(page);
+      await page.clickText('Default');
+      await sleep(400);
+    },
+    check: `The Designer's chat at ${size}: replies reflow, nothing clipped, the fade above the composer`,
+  })),
+  {
     name: 'settings-usage',
     route: '/settings',
     ready: 'Use it all before reset',
