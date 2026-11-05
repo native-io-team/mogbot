@@ -26,12 +26,10 @@
 //!   message carrying that taint through `message_agent` or a room). Such a
 //!   turn runs `--no-chrome`: text from outside never drives the browser.
 //!
-//! **What still asks.** Reading is free on the sites the agent was given
-//! (its `browser_sites`); opening any other site, and every click, keystroke,
-//! form, upload, script or shortcut, asks on a card ([`gate`]). That keeps
-//! the Allow card as the wall for what a page's text might talk an agent
-//! into (prompt injection), and keeps a navigation from carrying data to a
-//! site nobody named. Threat model: docs/agents.md, "Your browser".
+//! **What still asks** (`browser_gate`): looking is free; clicks, typing and
+//! forms go through at "Use good judgement" and "Go hard" unless they would
+//! send, post, publish, pay, delete or share; scripts, uploads and shortcuts
+//! always ask. Threat model: docs/agents.md, "Your browser".
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -130,157 +128,18 @@ pub fn for_turn(agent: &Agent, outside: bool) -> bool {
 
 /* ------------------------------------------------------------- the gate */
 
-/// What [`gate`] does with a Claude in Chrome call.
-#[derive(Debug, PartialEq)]
-pub enum Gate {
-    /// Not a browser tool: the usual rules apply.
-    NotBrowser,
-    /// Reads, on a site it was given: no card.
-    Allow,
-    /// Asks on a card (clicks, typing, forms, a site it wasn't given).
-    Ask,
-    /// It may not use the browser this turn.
-    Refuse(String),
+pub use super::browser_gate::{gate, gate_with, Gate, Page};
+
+/// The host of a URL the agent asked to open, if it's a web URL.
+fn host_of(url: &str) -> Option<String> {
+    super::browser_gate::host_of(url)
 }
 
-const SERVER: &str = "mcp__claude-in-chrome__";
-
-/// Tools that only look: they change nothing on a page or a site.
-const LOOKS: &[&str] = &[
-    "tabs_context_mcp",
-    "tabs_close_mcp",
-    "get_page_text",
-    "read_page",
-    "find",
-    "read_console_messages",
-    "read_network_requests",
-    "list_connected_browsers",
-    "select_browser",
-    "switch_browser",
-    "resize_window",
-    "shortcuts_list",
-];
-
-/// `computer` actions that only look.
-const COMPUTER_LOOKS: &[&str] = &["screenshot", "scroll", "zoom", "hover", "wait", "scroll_to"];
-
-/// Whether `host` is `site` or under it ("www.figma.com" covers "figma.com"
-/// pages too, and the other way round).
+/// Whether `host` is `site` or under it.
 fn host_matches(host: &str, site: &str) -> bool {
     let h = host.trim_start_matches("www.").to_ascii_lowercase();
     let s = site.trim_start_matches("www.").to_ascii_lowercase();
     !s.is_empty() && (h == s || h.ends_with(&format!(".{s}")))
-}
-
-/// A free navigation: a web URL on one of `sites`, carrying no other URL in
-/// its query or fragment. An own site's redirect endpoint
-/// (`/redir/redirect?url=https://…`) would otherwise carry page data to a
-/// host nobody named, so a URL inside a URL asks.
-fn free_to_open(url: &str, sites: &[String]) -> bool {
-    let Ok(u) = url::Url::parse(url.trim()) else {
-        return false;
-    };
-    let Some(host) = matches!(u.scheme(), "https" | "http")
-        .then(|| u.host_str())
-        .flatten()
-    else {
-        return false;
-    };
-    if !sites.iter().any(|s| host_matches(host, s)) {
-        return false;
-    }
-    // `//` however it's spelled (plain, encoded, or encoded twice), in the
-    // path after its first character, the query or the fragment.
-    let rest = format!(
-        "{}?{}#{}",
-        u.path().get(1..).unwrap_or(""),
-        u.query().unwrap_or(""),
-        u.fragment().unwrap_or("")
-    )
-    .to_ascii_lowercase()
-    .replace("%25", "%")
-    .replace("%2f", "/")
-    .replace("%5c", "/")
-    .replace('\\', "/");
-    !rest.contains("//")
-}
-
-/// The host of a URL the agent asked to open, if it's a web URL.
-fn host_of(url: &str) -> Option<String> {
-    let u = url::Url::parse(url.trim()).ok()?;
-    matches!(u.scheme(), "https" | "http")
-        .then(|| u.host_str().map(str::to_string))
-        .flatten()
-}
-
-/// Decide a browser tool call from `agent` before any card. `enabled`: the
-/// team's switch.
-pub fn gate_with(enabled: bool, agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
-    let Some(name) = tool.strip_prefix(SERVER) else {
-        return Gate::NotBrowser;
-    };
-    if !allowed(enabled, agent, outside) {
-        return Gate::Refuse(if outside {
-            "Your browser isn't available while you answer text from outside (a routine's items, or a message that carried them). Do this from the user's own request.".into()
-        } else {
-            "The user's browser isn't on for you. If the task needs a signed-in site, ask with request_login for it.".into()
-        });
-    }
-    match name {
-        "navigate" => {
-            let url = input.get("url").and_then(Value::as_str).unwrap_or("");
-            // "back" / "forward" stay on whatever is open.
-            if matches!(url.trim(), "back" | "forward") {
-                return Gate::Allow;
-            }
-            if free_to_open(url, &agent.reach.browser_sites) {
-                Gate::Allow
-            } else {
-                Gate::Ask
-            }
-        }
-        // A new tab is a look, unless it opens a URL: then it's a navigation.
-        "tabs_create_mcp" => match input.get("url").and_then(Value::as_str) {
-            Some(url) if !url.trim().is_empty() => {
-                if free_to_open(url, &agent.reach.browser_sites) {
-                    Gate::Allow
-                } else {
-                    Gate::Ask
-                }
-            }
-            _ => Gate::Allow,
-        },
-        // Recording is a look; exporting can drop the file onto a page (an
-        // upload) or save it to disk, so it asks.
-        "gif_creator" => {
-            let action = input.get("action").and_then(Value::as_str).unwrap_or("");
-            if matches!(action, "start_recording" | "stop_recording" | "clear") {
-                Gate::Allow
-            } else {
-                Gate::Ask
-            }
-        }
-        "computer" => {
-            let action = input.get("action").and_then(Value::as_str).unwrap_or("");
-            if COMPUTER_LOOKS.contains(&action) {
-                Gate::Allow
-            } else {
-                Gate::Ask
-            }
-        }
-        n if LOOKS.contains(&n) => Gate::Allow,
-        // form_input, javascript_tool, file_upload, upload_image,
-        // shortcuts_execute, browser_batch, a GIF's export, and anything
-        // new: ask.
-        _ => Gate::Ask,
-    }
-}
-
-pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
-    if !tool.starts_with(SERVER) {
-        return Gate::NotBrowser;
-    }
-    gate_with(team_enabled(), agent, tool, input, outside)
 }
 
 /// Give `agent` the browser for `site` (shown in "What it can reach").

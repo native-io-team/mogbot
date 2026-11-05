@@ -17,7 +17,9 @@
 //! cache holds. Approvals don't read it: every card that asks before
 //! spending, sending, publishing, pushing, sharing or deleting appears at
 //! every level (`mcp::decide` only skips a card for a one-time grant or an
-//! "Always allow" rule the user chose).
+//! "Always allow" rule the user chose). The one exception is the browser
+//! (`browser_gate`): above "Check with me often", looking around and clicks
+//! that don't send go through without a card; sending still asks.
 //!
 //! **Outside text never goes hard.** A turn answering outside text (a
 //! "When…" routine's items, or anything that carried their taint through
