@@ -122,6 +122,12 @@ export interface TurnWork {
   lastSignAt?: number;
   /** While it runs, once it has made no progress for too long: when it last did. */
   quietSince?: number;
+  /**
+   * While it runs: the project folder it is working in (by its own commands,
+   * a session or its binding), so the Projects list shows it there. Older
+   * Macs omit it.
+   */
+  project?: string;
 }
 
 export interface Agent {
