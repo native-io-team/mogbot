@@ -23,13 +23,15 @@ use serde_json::Value;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
+use tokio::task::JoinSet;
 use tokio_tungstenite::tungstenite::protocol::{Role, WebSocketConfig};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
 use super::hub::{Drafts, HubItem, Resume};
-use super::pairing::{self, Claim};
+use super::limits;
+use super::pairing::{self, Claim, Decision};
 use super::router::{self, Caller};
 use super::wire::{
     self, ClientFrame, Event, Negotiation, PairRefusal, PairRequest, PairResponse, RefusedReason,
@@ -42,35 +44,56 @@ pub(crate) type Body = BoxBody<Bytes, hyper::Error>;
 /// The largest frame either way, and the largest pair request.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
 const MAX_PAIR_BODY: usize = 16 * 1024;
+/// The whole pair request body must arrive this quickly.
+pub const PAIR_BODY_TIMEOUT: Duration = Duration::from_secs(10);
 /// The phone must say hello this quickly after the upgrade.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
+/// Headers must arrive this quickly, on every request of a connection.
+const HEADER_TIMEOUT: Duration = Duration::from_secs(10);
 /// The Mac's heartbeat (`HEARTBEAT_MS` in frames.ts).
 pub const HEARTBEAT: Duration = Duration::from_secs(15);
 const DRAFT_TICK: Duration = Duration::from_millis(50);
 
-/// Serve until `shutdown` fires. Every connection gets a 10 s header timeout.
+/// Serve until `shutdown` fires. At most [`limits::MAX_CONNECTIONS`] are
+/// open at once (one more is closed as soon as it's accepted, rather than
+/// left to eat a file descriptor), each gets a 10 s header timeout, and the
+/// failed-connection counts are written once a minute.
 pub async fn serve(c: Arc<Companion>, listener: TcpListener, mut shutdown: oneshot::Receiver<()>) {
+    let open = Arc::new(Semaphore::new(limits::MAX_CONNECTIONS));
+    let mut flush = tokio::time::interval(Duration::from_secs(60));
+    flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
             accepted = listener.accept() => {
-                let Ok((stream, _)) = accepted else { continue };
+                let Ok((stream, peer)) = accepted else { continue };
+                let Ok(permit) = open.clone().try_acquire_owned() else {
+                    tracing::debug!("[Companion] at the connection cap; closing one from {}", peer);
+                    drop(stream);
+                    continue;
+                };
                 let c = c.clone();
+                // Shared with an upgraded socket, which outlives the HTTP
+                // connection future: the slot is free only when both are done.
+                let permit = Arc::new(permit);
                 tokio::spawn(async move {
+                    let held = permit.clone();
                     let service = service_fn(move |req| {
-                        let c = c.clone();
-                        async move { Ok::<_, hyper::Error>(handle(c, req).await) }
+                        let (c, held) = (c.clone(), held.clone());
+                        async move { Ok::<_, hyper::Error>(handle(c, req, Some(peer), Some(held)).await) }
                     });
                     if let Err(e) = http1::Builder::new()
                         .timer(hyper_util::rt::TokioTimer::new())
-                        .header_read_timeout(Duration::from_secs(10))
+                        .header_read_timeout(HEADER_TIMEOUT)
                         .serve_connection(TokioIo::new(stream), service)
                         .with_upgrades()
                         .await
                     {
                         tracing::debug!("[Companion] connection error: {}", e);
                     }
+                    drop(permit);
                 });
             }
+            _ = flush.tick() => c.flush_refusals(),
             _ = &mut shutdown => break,
         }
     }
@@ -102,11 +125,42 @@ pub(crate) fn json_response(value: &impl serde::Serialize) -> Response<Body> {
     res
 }
 
-async fn handle(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
+/// Where a request came from, as far as the server can tell.
+#[derive(Debug, Clone, Default)]
+pub struct Peer {
+    /// `limits::source_of`: the per-source key.
+    pub source: String,
+    /// `Tailscale-User-Login`, when `tailscale serve` set it.
+    pub login: Option<String>,
+    /// The connection's place under [`limits::MAX_CONNECTIONS`], held by an
+    /// upgraded socket for as long as it is open.
+    pub conn: Option<Arc<OwnedSemaphorePermit>>,
+}
+
+async fn handle(
+    c: Arc<Companion>,
+    req: Request<Incoming>,
+    addr: Option<std::net::SocketAddr>,
+    conn: Option<Arc<OwnedSemaphorePermit>>,
+) -> Response<Body> {
+    // A web page can reach a loopback port too: refuse anything a browser
+    // sent (an Origin that isn't this server) and any Host that isn't the
+    // tailnet name or loopback (DNS rebinding), before anything else.
+    if !limits::host_allowed(req.headers()) || !limits::origin_allowed(req.headers()) {
+        return status_only(StatusCode::FORBIDDEN);
+    }
+    let peer = Peer {
+        source: limits::source_of(addr, req.headers()),
+        login: limits::tailnet_login(req.headers()),
+        conn,
+    };
+    let Some(slot) = c.sources.try_take(&peer.source, limits::MAX_PER_SOURCE) else {
+        return status_only(StatusCode::TOO_MANY_REQUESTS);
+    };
     let path = req.uri().path().to_string();
     match (req.method(), path.as_str()) {
-        (&Method::POST, "/v1/pair") => pair(c, req).await,
-        (&Method::GET, "/v1/ws") => upgrade(c, req),
+        (&Method::POST, "/v1/pair") => pair(c, req, &peer).await,
+        (&Method::GET, "/v1/ws") => upgrade(c, req, peer, slot),
         (&Method::PUT, "/v1/blobs") => super::files::upload(c, req).await,
         (&Method::GET | &Method::HEAD, p)
             if p.starts_with("/v1/blobs/") || p.starts_with("/v1/agents/") =>
@@ -122,9 +176,23 @@ async fn handle(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
 // Pairing
 // ============================================================================
 
-async fn pair(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
-    let Ok(collected) = Limited::new(req.into_body(), MAX_PAIR_BODY).collect().await else {
-        return status_only(StatusCode::PAYLOAD_TOO_LARGE);
+async fn pair(c: Arc<Companion>, req: Request<Incoming>, peer: &Peer) -> Response<Body> {
+    // JSON only: a browser can POST `text/plain` anywhere without asking,
+    // but not `application/json`.
+    let json = req
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(';').next())
+        .is_some_and(|v| v.trim().eq_ignore_ascii_case("application/json"));
+    if !json {
+        return status_only(StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    }
+    let read = Limited::new(req.into_body(), MAX_PAIR_BODY).collect();
+    let collected = match tokio::time::timeout(PAIR_BODY_TIMEOUT, read).await {
+        Err(_) => return status_only(StatusCode::REQUEST_TIMEOUT),
+        Ok(Err(_)) => return status_only(StatusCode::PAYLOAD_TOO_LARGE),
+        Ok(Ok(collected)) => collected,
     };
     let Ok(request) = serde_json::from_slice::<PairRequest>(&collected.to_bytes()) else {
         return status_only(StatusCode::BAD_REQUEST);
@@ -150,12 +218,14 @@ async fn pair(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
             ))
         }
     }
-    let device = request.device.clone();
+    let device = super::clean_pair_device(&request.device);
     let actor = actor_for(&device.name);
     let rx = match c.pairing.claim(
         &request.code,
         device.clone(),
         request.public_key.clone(),
+        &peer.source,
+        peer.login.clone(),
         now_ms(),
     ) {
         Claim::NoMatch => {
@@ -182,18 +252,31 @@ async fn pair(c: Arc<Companion>, req: Request<Incoming>) -> Response<Body> {
 
     let decision = tokio::time::timeout(pairing::DECISION_TIMEOUT, rx).await;
     let response = match decision {
-        Ok(Ok(true)) => match c.registry.add(&device, request.public_key, now_ms() as i64) {
+        Ok(Ok(Decision::Allow { replace })) => match c.registry.add(
+            &device,
+            request.public_key,
+            now_ms() as i64,
+            &replace,
+            peer.login.clone(),
+        ) {
             Ok((record, token, replaced)) => {
                 for id in replaced {
+                    // Revoked as the desk asked: its files and push go too.
+                    c.blobs.forget_device(&id);
                     c.hub.signal(HubItem::Revoked { device_id: id });
                 }
                 c.backend
                     .audit(&actor, "paired", device_line(&device), true);
+                let server_id = c.registry.server_id();
                 PairResponse::Allowed {
                     ok: true,
                     device_id: record.id,
                     token,
-                    server_id: c.registry.server_id(),
+                    identity: c
+                        .registry
+                        .identity()
+                        .prove_pair(request.challenge.as_deref(), &server_id),
+                    server_id,
                     server_public_key: String::new(),
                 }
             }
@@ -234,7 +317,12 @@ fn device_line(d: &wire::PairDevice) -> String {
 // The WebSocket
 // ============================================================================
 
-fn upgrade(c: Arc<Companion>, mut req: Request<Incoming>) -> Response<Body> {
+fn upgrade(
+    c: Arc<Companion>,
+    mut req: Request<Incoming>,
+    peer: Peer,
+    slot: limits::Slot,
+) -> Response<Body> {
     let headers = req.headers();
     let is_ws = headers
         .get(header::UPGRADE)
@@ -262,7 +350,9 @@ fn upgrade(c: Arc<Companion>, mut req: Request<Incoming>) -> Response<Body> {
                     Some(config),
                 )
                 .await;
-                run_socket(c, ws).await;
+                serve_socket_as(c, ws, peer).await;
+                // The socket counted against its source while it was open.
+                drop(slot);
             }
             Err(e) => tracing::debug!("[Companion] upgrade failed: {}", e),
         }
@@ -282,8 +372,6 @@ fn upgrade(c: Arc<Companion>, mut req: Request<Incoming>) -> Response<Body> {
     }
     res
 }
-
-type Socket = WebSocketStream<TokioIo<hyper::upgrade::Upgraded>>;
 
 async fn send<S>(ws: &mut S, frame: &ServerFrame) -> bool
 where
@@ -332,13 +420,19 @@ where
     }
 }
 
-async fn run_socket(c: Arc<Companion>, ws: Socket) {
-    serve_socket(c, ws).await
-}
-
 /// One phone connection, from hello to close. Generic over the stream so the
 /// tests can drive it without TLS or a proxy in between.
-pub async fn serve_socket<S>(c: Arc<Companion>, mut ws: S)
+pub async fn serve_socket<S>(c: Arc<Companion>, ws: S)
+where
+    S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+        + SinkExt<Message>
+        + Unpin,
+{
+    serve_socket_as(c, ws, Peer::default()).await
+}
+
+/// [`serve_socket`], knowing who connected.
+pub async fn serve_socket_as<S>(c: Arc<Companion>, mut ws: S, peer: Peer)
 where
     S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
         + SinkExt<Message>
@@ -348,15 +442,27 @@ where
         let _ = ws.send(Message::Close(None)).await;
         return;
     };
+    let source = if peer.source.is_empty() {
+        "unknown"
+    } else {
+        peer.source.as_str()
+    };
     let record = match c.registry.authenticate(&hello.token) {
-        Auth::Device(d) => d,
-        Auth::Revoked => {
-            c.backend.audit(
-                "Phone",
-                "refused",
-                "a removed phone tried to connect".into(),
-                false,
+        Auth::Device(d) if d.login_matches(peer.login.as_deref()) => d,
+        Auth::Device(d) => {
+            c.note_refused(
+                source,
+                &format!("{}'s token was used by another tailnet user", d.name),
             );
+            return refuse(
+                &mut ws,
+                RefusedReason::Unauthorized,
+                "This phone isn't paired with this Mac.",
+            )
+            .await;
+        }
+        Auth::Revoked => {
+            c.note_refused(source, "a removed phone tried to connect");
             return refuse(
                 &mut ws,
                 RefusedReason::Revoked,
@@ -365,12 +471,7 @@ where
             .await;
         }
         Auth::Unknown => {
-            c.backend.audit(
-                "Phone",
-                "refused",
-                "an unknown device tried to connect".into(),
-                false,
-            );
+            c.note_refused(source, "an unknown device tried to connect");
             return refuse(
                 &mut ws,
                 RefusedReason::Unauthorized,
@@ -428,15 +529,7 @@ where
     c.backend.changed();
 
     let live_work = hello.features.iter().any(|f| f == wire::FEATURE_LIVE_WORK);
-    let ended = connected(
-        &c,
-        &mut ws,
-        &caller,
-        protocol,
-        hello.resume.as_ref(),
-        live_work,
-    )
-    .await;
+    let ended = connected(&c, &mut ws, &caller, protocol, &hello, live_work).await;
     tracing::debug!(device = %record.id, ?ended, "[Companion] socket closed");
 
     c.close_conn(conn);
@@ -476,7 +569,7 @@ async fn connected<S>(
     ws: &mut S,
     caller: &Caller,
     protocol: u32,
-    resume: Option<&wire::Cursor>,
+    hello: &wire::HelloFrame,
     live_work: bool,
 ) -> Ended
 where
@@ -484,11 +577,17 @@ where
         + SinkExt<Message>
         + Unpin,
 {
-    let (mut rx, plan) = c.hub.resume(resume);
+    let (mut rx, plan) = c.hub.resume(hello.resume.as_ref());
+    let server_id = c.registry.server_id();
     let welcome = ServerFrame::Welcome {
         protocol,
+        identity: c.registry.identity().prove_welcome(
+            hello.challenge.as_deref(),
+            &server_id,
+            &caller.device_id,
+        ),
         server: ServerInfo {
-            id: c.registry.server_id(),
+            id: server_id,
             name: c.backend.server_name(),
             app_version: c.backend.app_version(),
         },
@@ -564,6 +663,46 @@ where
 
     let mut drafts = Drafts::default();
     let (done_tx, mut done_rx) = mpsc::unbounded_channel::<(u64, Result<Value, wire::WireError>)>();
+    // This socket's requests still running. A revoke (or unpair) aborts them
+    // with the socket; any other close lets them finish, since a send the
+    // phone will retry by clientId is better done once than cut in half.
+    let mut work = JoinSet::new();
+    let ended = serve_frames(
+        c,
+        ws,
+        caller,
+        live_work,
+        &mut rx,
+        &mut drafts,
+        &done_tx,
+        &mut done_rx,
+        &mut work,
+    )
+    .await;
+    match ended {
+        Ended::Revoked | Ended::Unpaired => work.abort_all(),
+        _ => work.detach_all(),
+    }
+    ended
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn serve_frames<S>(
+    c: &Arc<Companion>,
+    ws: &mut S,
+    caller: &Caller,
+    live_work: bool,
+    rx: &mut broadcast::Receiver<HubItem>,
+    drafts: &mut Drafts,
+    done_tx: &mpsc::UnboundedSender<(u64, Result<Value, wire::WireError>)>,
+    done_rx: &mut mpsc::UnboundedReceiver<(u64, Result<Value, wire::WireError>)>,
+    work: &mut JoinSet<()>,
+) -> Ended
+where
+    S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+        + SinkExt<Message>
+        + Unpin,
+{
     let mut heartbeat =
         tokio::time::interval_at(tokio::time::Instant::now() + HEARTBEAT, HEARTBEAT);
     let mut draft_tick = tokio::time::interval(DRAFT_TICK);
@@ -608,7 +747,7 @@ where
                     }
                     ClientFrame::Req { id, method, params } => {
                         let (c, caller, done) = (c.clone(), caller.clone(), done_tx.clone());
-                        tokio::spawn(async move {
+                        work.spawn(async move {
                             let result = router::dispatch(&c, &caller, &method, params).await;
                             let _ = done.send((id, result));
                         });
@@ -627,7 +766,7 @@ where
             item = rx.recv() => {
                 match item {
                     Ok(item) => {
-                        if let Some(ended) = forward(ws, &mut drafts, caller, item, live_work).await {
+                        if let Some(ended) = forward(ws, drafts, caller, item, live_work).await {
                             return ended;
                         }
                     }
@@ -637,10 +776,12 @@ where
                     Err(broadcast::error::RecvError::Closed) => return Ended::Shutdown,
                 }
             }
+            // Reap finished tasks so the set doesn't grow over a long session.
+            Some(_) = work.join_next(), if !work.is_empty() => {}
             Some((id, result)) = done_rx.recv() => {
                 // Events the request caused go out before its response.
                 while let Ok(item) = rx.try_recv() {
-                    if let Some(ended) = forward(ws, &mut drafts, caller, item, live_work).await {
+                    if let Some(ended) = forward(ws, drafts, caller, item, live_work).await {
                         return ended;
                     }
                 }

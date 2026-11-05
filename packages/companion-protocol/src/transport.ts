@@ -19,7 +19,10 @@ export type LinkState =
   /** Was connected; retrying with backoff. `lastSeenAt` is the last frame from the Mac. */
   | { kind: 'reconnecting'; lastSeenAt: number; nextTryAt: number }
   /** The Mac said no for good: re-pair (revoked) or update a side. */
-  | { kind: 'refused'; reason: 'revoked' | 'unauthorized' | 'update_app' | 'update_mac' };
+  | {
+      kind: 'refused';
+      reason: 'revoked' | 'unauthorized' | 'update_app' | 'update_mac' | 'not_your_mac';
+    };
 
 export interface Transport {
   request<M extends MethodName>(method: M, params: Params<M>): Promise<Result<M>>;

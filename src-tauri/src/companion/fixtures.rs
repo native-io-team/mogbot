@@ -50,6 +50,7 @@ fn device(full: bool) -> DeviceRecord {
         token_hash: "never sent".into(),
         public_key: "never sent".into(),
         push: None,
+        tailnet_login: None,
     }
 }
 
@@ -212,6 +213,10 @@ fn frames() -> Vec<ServerFrame> {
         resume: ResumeMode::Replay,
         methods: router::METHODS.to_vec(),
         time_zone: Some("America/New_York".into()),
+        identity: Some(super::identity::IdentityProof {
+            public_key: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo".into(),
+            signature: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345".into(),
+        }),
     }];
     for (reason, message) in [
         (
@@ -261,6 +266,10 @@ fn pair_responses() -> Vec<PairResponse> {
         token: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
         server_id: "srv_0123456789abcdef".into(),
         server_public_key: String::new(),
+        identity: Some(super::identity::IdentityProof {
+            public_key: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo".into(),
+            signature: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345".into(),
+        }),
     }];
     for reason in [
         PairRefusal::Expired,
@@ -285,6 +294,7 @@ fn pairing_link() -> PairingLink {
         server_id: "srv_0123456789abcdef".into(),
         name: "Julian’s MacBook Pro".into(),
         routes: testkit::routes(),
+        fingerprint: "Zmh6rfhivXdsj8GLjp-OIA".into(),
     }
 }
 

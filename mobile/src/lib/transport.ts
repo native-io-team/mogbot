@@ -29,6 +29,7 @@ import {
   type WelcomeFrame,
   type WireError,
 } from '@shipstudio/companion-protocol';
+import { NOT_YOUR_MAC } from './identity';
 
 /** A request that failed, carrying the Mac's (or our) structured error. */
 export class WireFailure extends Error {
@@ -73,6 +74,16 @@ export interface DirectTransportOptions {
   requestTimeoutMs?: number;
   /** File bytes over HTTP (`files.ts` on the phone; `fetch` and `fs` in tests). */
   http?: HttpAdapter;
+  /** A fresh challenge for each connection's `hello`, for the Mac to sign. */
+  challenge?: () => string;
+  /**
+   * Whether this `welcome` came from the Mac this phone pinned: `'ok'`
+   * (signed by the pinned key), `'unproven'` (an older Mac that signs
+   * nothing, while no key is pinned yet) or `'mismatch'`, which ends the
+   * link for good ("This isn't your Mac"). Without it, every welcome is
+   * `'unproven'`.
+   */
+  checkWelcome?: (welcome: WelcomeFrame, challenge: string) => 'ok' | 'unproven' | 'mismatch';
 }
 
 /**
@@ -139,6 +150,12 @@ export class DirectTransport implements Transport {
   latencyMs: number | null = null;
   welcome: WelcomeFrame | null = null;
   refusal: RefusedFrame | null = null;
+  /**
+   * This socket's `welcome` was signed by the key pinned at pairing. Secrets
+   * go only while this is true (`secrets.ts`).
+   */
+  identityVerified = false;
+  private challenge = '';
 
   constructor(private readonly opts: DirectTransportOptions) {
     this.foreground = opts.foreground;
@@ -278,6 +295,7 @@ export class DirectTransport implements Transport {
     ws.onopen = () => {
       this.armDeadTimer();
       const resume = this.opts.getResume();
+      this.challenge = this.opts.challenge?.() ?? '';
       this.send({
         t: 'hello',
         protocol: SUPPORTED,
@@ -286,6 +304,7 @@ export class DirectTransport implements Transport {
         ...(resume ? { resume } : {}),
         foreground: this.foreground,
         features: [FEATURES.liveWork],
+        ...(this.challenge ? { challenge: this.challenge } : {}),
       });
     };
     ws.onmessage = (ev) => {
@@ -309,6 +328,23 @@ export class DirectTransport implements Transport {
   private handle(frame: ServerFrame) {
     switch (frame.t) {
       case 'welcome': {
+        const identity = this.opts.checkWelcome?.(frame, this.challenge) ?? 'unproven';
+        if (identity === 'mismatch') {
+          // Not the Mac this phone paired with: say nothing more to it, and
+          // don't try again on our own.
+          const refusal: RefusedFrame = {
+            t: 'refused',
+            reason: 'not_your_mac',
+            message: NOT_YOUR_MAC,
+          };
+          this.refusal = refusal;
+          this.refused = true;
+          this.teardown();
+          this.setState({ kind: 'refused', reason: 'not_your_mac' });
+          this.refusedListeners.forEach((l) => l(refusal));
+          return;
+        }
+        this.identityVerified = identity === 'ok';
         this.ready = true;
         this.everConnected = true;
         this.attempt = 0;
@@ -375,6 +411,7 @@ export class DirectTransport implements Transport {
 
   private teardown() {
     this.ready = false;
+    this.identityVerified = false;
     if (this.pingTimer) clearInterval(this.pingTimer);
     if (this.deadTimer) clearTimeout(this.deadTimer);
     if (this.retryTimer) clearTimeout(this.retryTimer);

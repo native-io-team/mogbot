@@ -9,6 +9,7 @@
 
 import type { CompanionEvent } from './events';
 import type { MethodName, Params, Result } from './methods';
+import type { IdentityProof } from './pairing';
 import type { ProtocolRange } from './version';
 
 /**
@@ -72,6 +73,11 @@ export interface HelloFrame {
    * only what it will use. An older app sends none. See `FEATURES`.
    */
   features?: Feature[];
+  /**
+   * 32 random bytes, base64url, fresh for this connection: the Mac signs it
+   * in `welcome.identity`, so the phone knows it reached the Mac it pinned.
+   */
+  challenge?: string;
 }
 
 /** Optional things an app can say it shows (`hello.features`). */
@@ -124,6 +130,12 @@ export interface WelcomeFrame {
    * `agents.schedule.update` has an empty `when` (a note-only edit).
    */
   timeZone?: string;
+  /**
+   * The Mac's signature over `hello.challenge` (`welcomeProofMessage`). The
+   * phone checks it against the key it pinned at pairing before it trusts
+   * anything on this socket, and sends secrets only on one that passed.
+   */
+  identity?: IdentityProof;
 }
 
 export interface RefusedFrame {
@@ -135,7 +147,12 @@ export interface RefusedFrame {
     | 'update_app'
     /** The Mac is older than the phone supports: update Ship Studio. */
     | 'update_mac'
-    | 'too_many_connections';
+    | 'too_many_connections'
+    /**
+     * Never sent by a Mac: the phone's own, when the server's `welcome`
+     * isn't signed by the identity it pinned at pairing.
+     */
+    | 'not_your_mac';
   message: string;
 }
 

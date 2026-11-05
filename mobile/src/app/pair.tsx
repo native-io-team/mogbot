@@ -1,11 +1,13 @@
 /**
  * Welcome and pairing: one Scan button first (with the steps folded under
- * it), wait for someone at the desk to allow it, then a moment that says
- * which Mac it's paired with, and asks about alerts once if they're undecided.
- * Deep links (`…://pair?d=…`) land here too.
+ * it), then a confirm screen that says which Mac and where, wait for someone
+ * at the desk to allow it, then a moment that says which Mac it's paired
+ * with, and asks about alerts once if they're undecided. Deep links
+ * (`…://pair?d=…`) land here too, and never pair without the confirm: any
+ * web page or message can open one.
  */
 
-import { parsePairingLink, type PairingLink } from '@shipstudio/companion-protocol';
+import { type PairingLink } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import * as Notifications from 'expo-notifications';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -16,8 +18,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from '../components/agent';
 import { Button, Icon, T } from '../components/ui';
 import { ALERTS_WHILE_OPEN } from '../lib/push';
-import { openTailscale, pair, PairError, type PairFailure } from '../lib/pairing';
+import {
+  cleanName,
+  linkHost,
+  openTailscale,
+  pair,
+  PairError,
+  pairPlan,
+  parseLink,
+  type PairFailure,
+  type PairPlan,
+} from '../lib/pairing';
 import { adopt, enableAlerts } from '../lib/session';
+import { useApp } from '../lib/store';
 import { PAIRING_SCHEME } from '@shipstudio/companion-protocol';
 import { haptic } from '../lib/haptics';
 import { iconSize, radius, space, squircle } from '../lib/theme';
@@ -27,6 +40,8 @@ import icon from '../../assets/splash-icon.png';
 
 type Phase =
   | { kind: 'start'; error?: string }
+  /** Say which Mac, where, and what it replaces; nothing is sent until Pair. */
+  | { kind: 'confirm'; link: PairingLink; plan: PairPlan }
   | { kind: 'waiting'; link: PairingLink }
   | { kind: 'failed'; link: PairingLink; failure: PairFailure }
   | { kind: 'paired'; mac: string; askAlerts: boolean };
@@ -42,6 +57,7 @@ export default function Pair() {
   const params = useLocalSearchParams<{ d?: string; link?: string }>();
   const [phase, setPhase] = useState<Phase>({ kind: 'start' });
   const abort = useRef<AbortController | null>(null);
+  const current = useApp((s) => s.credentials);
 
   const begin = useCallback(async (link: PairingLink) => {
     abort.current?.abort();
@@ -75,21 +91,30 @@ export default function Pair() {
     }
   }, []);
 
+  /** Every link stops here first: the scanner's, a paste, or one another app opened. */
+  const review = useCallback(
+    (link: PairingLink) => {
+      abort.current?.abort();
+      setPhase({ kind: 'confirm', link, plan: pairPlan(link, current ?? null) });
+    },
+    [current]
+  );
+
   // Arrived with a link (deep link, or the scanner).
   const incoming = params.link ?? (params.d ? `${PAIRING_SCHEME}://pair?d=${params.d}` : null);
-  const incomingLink = incoming ? parsePairingLink(incoming) : null;
+  const incomingLink = incoming ? parseLink(incoming) : null;
   useEffect(() => {
-    if (incomingLink) void begin(incomingLink);
+    if (incomingLink) review(incomingLink);
     // Keyed on the text: a parsed link is a new object every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incoming, begin]);
+  }, [incoming]);
 
   useEffect(() => () => abort.current?.abort(), []);
 
   const paste = async () => {
     const text = (await Clipboard.getStringAsync()).trim();
-    const link = parsePairingLink(text);
-    if (link) void begin(link);
+    const link = parseLink(text);
+    if (link) review(link);
     else setPhase({ kind: 'start', error: notALink });
   };
 
@@ -155,6 +180,18 @@ export default function Pair() {
         </Animated.View>
       )}
 
+      {phase.kind === 'confirm' && (
+        <Confirm
+          link={phase.link}
+          plan={phase.plan}
+          onPair={() => void begin(phase.link)}
+          onCancel={() => {
+            if (incoming) router.setParams({ link: undefined, d: undefined });
+            setPhase({ kind: 'start' });
+          }}
+        />
+      )}
+
       {phase.kind === 'waiting' && (
         <Animated.View
           entering={FadeInDown.duration(250)}
@@ -168,8 +205,9 @@ export default function Pair() {
             </T>
           </View>
           <T color={colors.textSecondary}>
-            {phase.link.name} is asking whether to let this phone use your agents. Click Allow
-            there. This waits up to two minutes.
+            {cleanName(phase.link.name)} is asking whether to let this phone use your agents. Check
+            the code there ends in {codeEnd(phase.link)}, then click Allow. This waits up to two
+            minutes.
           </T>
           <Button
             title="Cancel"
@@ -184,11 +222,13 @@ export default function Pair() {
 
       {phase.kind === 'failed' && (
         <Animated.View entering={FadeInDown.duration(250)} style={[styles.card, styles.block]}>
-          <FailureCopy failure={phase.failure} mac={phase.link.name} />
+          <FailureCopy failure={phase.failure} mac={cleanName(phase.link.name)} />
           {(phase.failure.kind === 'tailscale_off' || phase.failure.kind === 'mac_unreachable') && (
             <Button title="Open Tailscale" icon="network" onPress={() => void openTailscale()} />
           )}
-          {phase.failure.kind === 'expired' || phase.failure.kind === 'refused' ? (
+          {phase.failure.kind === 'expired' ||
+          phase.failure.kind === 'refused' ||
+          phase.failure.kind === 'not_your_mac' ? (
             <Button
               title="Scan a new code"
               variant="primary"
@@ -245,6 +285,77 @@ export default function Pair() {
 const notALink =
   'That isn’t a pairing link. Make one on your Mac: Settings → Phone → Pair a phone.';
 
+const codeEnd = (link: PairingLink) => link.code.slice(-4);
+
+/**
+ * "Pair with Julian's MacBook Pro at julians-mbp.tail1234.ts.net?" Nothing
+ * has been sent yet. A link that claims the paired Mac with a different key
+ * stops here for good.
+ */
+function Confirm({
+  link,
+  plan,
+  onPair,
+  onCancel,
+}: {
+  link: PairingLink;
+  plan: PairPlan;
+  onPair: () => void;
+  onCancel: () => void;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const name = cleanName(link.name);
+  if (plan.kind === 'impostor') {
+    return (
+      <Animated.View entering={FadeInDown.duration(250)} style={[styles.card, styles.block]}>
+        <T variant="title" color={colors.accentErrorLight} accessibilityRole="header">
+          This isn’t your Mac
+        </T>
+        <T color={colors.textSecondary}>
+          This link says it’s {cleanName(plan.current)}, but it carries a different identity than
+          the Mac this phone is paired with. Nothing was sent. If you set that Mac up again, forget
+          it in Settings first, then pair from it.
+        </T>
+        <Button title="Back" variant="primary" onPress={onCancel} />
+      </Animated.View>
+    );
+  }
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(250)}
+      style={[styles.card, styles.block]}
+      testID="pair-confirm"
+    >
+      <T variant="title" color={colors.textStrong} accessibilityRole="header">
+        Pair with {name}?
+      </T>
+      <T color={colors.textSecondary}>
+        at <T color={colors.textPrimary}>{linkHost(link)}</T>
+      </T>
+      <T color={colors.textSecondary}>
+        The code ends in{' '}
+        <T color={colors.textPrimary} style={styles.mono}>
+          {codeEnd(link)}
+        </T>
+        . Only go on if you just made this code on your own Mac.
+      </T>
+      {plan.kind === 'replace' && (
+        <T variant="small" color={colors.accentErrorLight}>
+          This replaces {cleanName(plan.current)}: this phone stops showing its agents.
+        </T>
+      )}
+      {plan.kind === 'again' && (
+        <T variant="small" color={colors.textMuted}>
+          This phone is already paired with {name}. Pairing again replaces that pairing.
+        </T>
+      )}
+      <Button title="Pair" variant="primary" onPress={onPair} />
+      <Button title="Cancel" variant="ghost" onPress={onCancel} />
+    </Animated.View>
+  );
+}
+
 function Step({ n, text }: { n: number; text: string }) {
   const colors = useColors();
   const styles = useStyles();
@@ -275,6 +386,11 @@ function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
         return [
           `Can’t reach ${mac} on your tailnet`,
           'The Mac didn’t answer. Check that it’s awake, that Tailscale is on there and here, and that the app is open on it.',
+        ];
+      case 'not_your_mac':
+        return [
+          'This isn’t your Mac',
+          `The server that answered couldn’t prove it’s ${mac}, so this phone didn’t keep what it sent. Make a new code on your Mac and scan it there.`,
         ];
       case 'lan_only':
         return [
@@ -338,6 +454,7 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.cardBorder,
   },
   waitingTitle: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  mono: { fontVariant: ['tabular-nums'], letterSpacing: 1 },
   check: {
     width: 44,
     height: 44,

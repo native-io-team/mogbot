@@ -14,7 +14,16 @@ import { PAIRING_SCHEME } from './brand.gen';
 export { PAIRING_SCHEME };
 export const PAIRING_CODE_TTL_MS = 5 * 60 * 1000;
 
-/** What a pairing QR code (or a pasted link) carries. */
+/**
+ * What a pairing QR code (or a pasted link) carries.
+ *
+ * A link is untrusted input: anyone can make one that says "Julian's MacBook
+ * Pro" and points at their own server, and a Tailscale Funnel host has a
+ * valid `*.ts.net` certificate too. So the phone asks before pairing from
+ * any link, and pins `fingerprint`: the pairing answer and every `welcome`
+ * after it must be signed by the key it names (`IdentityProof`), or the
+ * phone stops ("This isn't your Mac").
+ */
 export interface PairingLink {
   /** Link format version, independent of the protocol version. */
   v: 1;
@@ -25,6 +34,44 @@ export interface PairingLink {
   /** The Mac's name, for "Pair with Julian's MacBook Pro?". */
   name: string;
   routes: Route[];
+  /**
+   * The Mac's identity key: the first 16 bytes of SHA-256 over its Ed25519
+   * public key, base64url (22 characters).
+   */
+  fingerprint: string;
+}
+
+/** A signature by the Mac's identity key over a challenge the phone chose. */
+export interface IdentityProof {
+  /** Ed25519 public key, base64url (32 bytes). Its fingerprint must be the pinned one. */
+  publicKey: string;
+  /** Ed25519 signature, base64url (64 bytes), over `pairProofMessage` or `welcomeProofMessage`. */
+  signature: string;
+}
+
+/** What `PairResponse.identity` signs. The Mac's `identity::pair_message`, byte for byte. */
+export const pairProofMessage = (challenge: string, serverId: string) =>
+  `${PAIRING_SCHEME}:pair:v1\n${challenge}\n${serverId}`;
+
+/** What `welcome.identity` signs. The Mac's `identity::welcome_message`, byte for byte. */
+export const welcomeProofMessage = (challenge: string, serverId: string, deviceId: string) =>
+  `${PAIRING_SCHEME}:welcome:v1\n${challenge}\n${serverId}\n${deviceId}`;
+
+/**
+ * A Tailscale route's URL as only `tailscale serve` makes it:
+ * `https://<machine>.<tailnet>.ts.net[:port][/]`, nothing else (no path,
+ * no user info, no other domain).
+ */
+export function isTailnetUrl(url: string): boolean {
+  return /^https:\/\/([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+ts\.net(?::\d{1,5})?\/?$/i.test(url);
+}
+
+export interface ParseOptions {
+  /**
+   * Also accept a Tailscale route on this other host (the mock Mac in
+   * development and tests). Never set in a release build.
+   */
+  allowHost?: (url: string) => boolean;
 }
 
 /** `<PAIRING_SCHEME>://pair?d=<base64url(JSON)>`. A custom scheme, so the camera opens the app. */
@@ -32,8 +79,11 @@ export function formatPairingLink(link: PairingLink): string {
   return `${PAIRING_SCHEME}://pair?d=${toBase64Url(JSON.stringify(link))}`;
 }
 
-/** The link's contents, or null for anything that isn't a well-formed v1 pairing link. */
-export function parsePairingLink(text: string): PairingLink | null {
+/**
+ * The link's contents, or null for anything that isn't a well-formed v1
+ * pairing link: a fingerprint, and Tailscale routes only on a `*.ts.net` host.
+ */
+export function parsePairingLink(text: string, options: ParseOptions = {}): PairingLink | null {
   const match = new RegExp(`^${PAIRING_SCHEME}://pair\\?d=([A-Za-z0-9_-]+)$`).exec(text.trim());
   if (!match) return null;
   try {
@@ -44,13 +94,17 @@ export function parsePairingLink(text: string): PairingLink | null {
     if (typeof link.name !== 'string' || !Array.isArray(link.routes) || !link.routes.length) {
       return null;
     }
+    if (typeof link.fingerprint !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(link.fingerprint)) {
+      return null;
+    }
     const routesOk = link.routes.every(
       (r) =>
         (r.kind === 'tailscale' || r.kind === 'lan') &&
         typeof r.url === 'string' &&
-        r.url.startsWith('https://') &&
-        // A LAN route is only usable with its certificate pin.
-        (r.kind !== 'lan' || typeof r.pin === 'string')
+        (r.kind === 'tailscale'
+          ? isTailnetUrl(r.url) || options.allowHost?.(r.url) === true
+          : // A LAN route is only usable with its certificate pin.
+            r.url.startsWith('https://') && typeof r.pin === 'string')
     );
     return routesOk ? (link as PairingLink) : null;
   } catch {
@@ -74,6 +128,8 @@ export interface PairRequest {
    * relay can encrypt end to end without pairing again.
    */
   publicKey: string;
+  /** 32 random bytes, base64url, for the Mac to sign (`PairResponse.identity`). */
+  challenge?: string;
 }
 
 export type PairResponse =
@@ -85,6 +141,8 @@ export type PairResponse =
       serverId: string;
       /** For the future relay. Empty until a Mac issues one (P1 doesn't). */
       serverPublicKey: string;
+      /** The Mac's signature over `PairRequest.challenge`. Absent from a Mac before identity keys. */
+      identity?: IdentityProof;
     }
   | {
       ok: false;

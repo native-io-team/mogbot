@@ -13,19 +13,27 @@ import type { AgentSecret, LinkState, Route } from '@shipstudio/companion-protoc
 import type { DirectTransport } from './transport';
 
 /**
- * Why a secret can't go over this route, or null when it can. The token
- * rides every route, but a secret outlives the pairing, so anything but
- * HTTPS over Tailscale is refused outright.
+ * Why a secret can't go over this connection, or null when it can. The token
+ * rides every route, but a secret outlives the pairing, so it goes only over
+ * HTTPS on Tailscale, and only on a connection whose `welcome` was signed by
+ * the identity key pinned at pairing (`identityVerified`). A link that named
+ * your Mac and pointed somewhere else never gets one.
  */
-export function secretRouteProblem(route: Pick<Route, 'kind' | 'url'> | null): string | null {
+export function secretRouteProblem(
+  route: Pick<Route, 'kind' | 'url'> | null,
+  identityVerified: boolean
+): string | null {
   if (!route) return 'Saving a secret needs your Mac. It stays here until then.';
   if (route.kind !== 'tailscale' || !/^https:\/\//i.test(route.url)) {
     return 'Secrets only go over Tailscale, which encrypts them all the way to your Mac. Connect over Tailscale, or save it at your desk.';
   }
+  if (!identityVerified) {
+    return 'This connection hasn’t proved it’s the Mac you paired with, so secrets stay here. Update the app on your Mac, or save it at your desk.';
+  }
   return null;
 }
 
-type Link = Pick<DirectTransport, 'request' | 'route'> & { state: LinkState };
+type Link = Pick<DirectTransport, 'request' | 'route' | 'identityVerified'> & { state: LinkState };
 
 export async function sendSecret(
   t: Link,
@@ -33,7 +41,10 @@ export async function sendSecret(
   requestId: string,
   values: string[]
 ): Promise<AgentSecret> {
-  const problem = secretRouteProblem(t.state.kind === 'connected' ? t.route : null);
+  const problem = secretRouteProblem(
+    t.state.kind === 'connected' ? t.route : null,
+    t.identityVerified
+  );
   if (problem) throw new Error(problem);
   return t.request('agents.saveSecret', { agentId, requestId, values: [...values] });
 }

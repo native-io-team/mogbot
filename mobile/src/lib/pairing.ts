@@ -8,12 +8,15 @@ import { x25519 } from '@noble/curves/ed25519.js';
 import {
   HTTP,
   SUPPORTED,
+  pairProofMessage,
+  parsePairingLink,
   toBase64Url,
   type PairRequest,
   type PairResponse,
   type PairingLink,
   type Route,
 } from '@shipstudio/companion-protocol';
+import { newChallenge, proves } from './identity';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
@@ -31,6 +34,79 @@ export interface Credentials {
   /** X25519, base64url: unused by direct routes, kept for the future relay. */
   secretKey: string;
   pairedAt: number;
+  /**
+   * The Mac's identity key, fingerprinted (from the pairing link, proven in
+   * the pairing answer). Every `welcome` must be signed by it. Absent only
+   * for a pairing made before identity keys: the first signed welcome pins it.
+   */
+  fingerprint?: string;
+}
+
+/**
+ * A pairing link from a scan, a paste or another app, or null. Tailscale
+ * routes only on a `*.ts.net` host; a development build also takes the mock
+ * Mac on this machine (`pnpm mock`).
+ */
+export function parseLink(text: string): PairingLink | null {
+  return parsePairingLink(text, {
+    allowHost: __DEV__
+      ? (url) => /^https?:\/\/(localhost|127\.0\.0\.1):\d+\/?$/.test(url)
+      : undefined,
+  });
+}
+
+/**
+ * A name from a link, fit to show: no control characters, no invisible
+ * format characters (bidi overrides, zero-width spaces) that could make it
+ * read as something it isn't, one line, at most 60 characters.
+ */
+export function cleanName(raw: string): string {
+  const clean = raw
+    .replace(/\s+/g, ' ')
+    // Cc, and the Cf characters that reorder or hide text.
+    .replace(
+      // eslint-disable-next-line no-control-regex -- removing control characters is the point
+      /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]/g,
+      ''
+    )
+    .trim()
+    .slice(0, 60)
+    .trim();
+  return clean || 'your Mac';
+}
+
+/** What pairing from `link` would do to the Mac this phone has now. */
+export type PairPlan =
+  /** No Mac yet. */
+  | { kind: 'new' }
+  /** The same Mac (same id, same key): pairing again replaces this phone's old pairing. */
+  | { kind: 'again' }
+  /** A different Mac: it replaces the one paired now. */
+  | { kind: 'replace'; current: string }
+  /** Says it's the paired Mac but carries a different key: never paired. */
+  | { kind: 'impostor'; current: string };
+
+export function pairPlan(
+  link: PairingLink,
+  current: Pick<Credentials, 'serverId' | 'name' | 'fingerprint'> | null
+): PairPlan {
+  if (!current) return { kind: 'new' };
+  if (current.serverId === link.serverId) {
+    return current.fingerprint && current.fingerprint !== link.fingerprint
+      ? { kind: 'impostor', current: current.name }
+      : { kind: 'again' };
+  }
+  return { kind: 'replace', current: current.name };
+}
+
+/** The host a link would pair with, as the confirm screen shows it. */
+export function linkHost(link: PairingLink): string {
+  const route = usableRoutes(link.routes)[0] ?? link.routes[0];
+  try {
+    return new URL(route.url).host;
+  } catch {
+    return route.url;
+  }
 }
 
 const KEY = 'shipstudio.mac';
@@ -55,6 +131,8 @@ export const usableRoutes = (routes: Route[]) => routes.filter((r) => r.kind ===
 
 export type PairFailure =
   | { kind: 'lan_only' }
+  /** The answer wasn't signed by the key the link named. */
+  | { kind: 'not_your_mac' }
   | { kind: 'tailscale_off' }
   | { kind: 'mac_unreachable' }
   | { kind: 'refused'; reason: Extract<PairResponse, { ok: false }>['reason']; message: string }
@@ -80,6 +158,7 @@ export async function pair(link: PairingLink, signal?: AbortSignal): Promise<Cre
   const routes = usableRoutes(link.routes);
   if (!routes.length) throw new PairError({ kind: 'lan_only' });
   const secret = Crypto.getRandomBytes(32);
+  const challenge = newChallenge((n) => Crypto.getRandomBytes(n));
   const body: PairRequest = {
     code: link.code,
     device: {
@@ -91,6 +170,7 @@ export async function pair(link: PairingLink, signal?: AbortSignal): Promise<Cre
     },
     protocol: SUPPORTED,
     publicKey: toBase64Url(x25519.getPublicKey(secret)),
+    challenge,
   };
 
   let lastNetworkFailure: PairFailure = { kind: 'mac_unreachable' };
@@ -115,9 +195,18 @@ export async function pair(link: PairingLink, signal?: AbortSignal): Promise<Cre
     if (!answer.ok) {
       throw new PairError({ kind: 'refused', reason: answer.reason, message: answer.message });
     }
+    // The answer must come from the key the link named, for the Mac it named:
+    // a token from anyone else is thrown away, not kept.
+    if (
+      answer.serverId !== link.serverId ||
+      !proves(answer.identity, pairProofMessage(challenge, link.serverId), link.fingerprint)
+    ) {
+      throw new PairError({ kind: 'not_your_mac' });
+    }
     return {
+      fingerprint: link.fingerprint,
       serverId: answer.serverId,
-      name: link.name,
+      name: cleanName(link.name),
       routes,
       deviceId: answer.deviceId,
       token: answer.token,

@@ -24,6 +24,8 @@ pub mod files;
 #[cfg(test)]
 mod fixtures;
 pub mod hub;
+pub mod identity;
+pub mod limits;
 pub mod pairing;
 pub mod projects;
 pub mod push;
@@ -62,6 +64,53 @@ pub const MAX_AGENTS_CREATED_PER_MINUTE: usize = 10;
 /// Revoked token hashes remembered, so a removed phone hears "removed"
 /// rather than "unknown".
 const REVOKED_KEPT: usize = 64;
+/// A phone's name and model as the desk shows them and the audit log names
+/// them: one line, this many characters at most.
+pub const MAX_DEVICE_NAME_CHARS: usize = 40;
+
+/// Characters that change how text around them is shown without being
+/// visible themselves: bidi overrides and isolates, zero-width joiners and
+/// spaces, the BOM, soft hyphens, variation selectors, Hangul fillers and
+/// the rest of Unicode's format (Cf) class. A name made with them can read
+/// as "Julian's iPhone" while being something else, or flip the words after it.
+fn is_invisible_format(c: char) -> bool {
+    matches!(c as u32,
+        0x00AD | 0x034F | 0x061C | 0x115F | 0x1160 | 0x17B4 | 0x17B5 | 0x180B..=0x180F
+        | 0x200B..=0x200F | 0x202A..=0x202E | 0x2060..=0x206F | 0x3164 | 0xFE00..=0xFE0F
+        | 0xFEFF | 0xFFA0 | 0xFFF0..=0xFFFB | 0x0600..=0x0605 | 0x06DD | 0x070F
+        | 0x0890..=0x0891 | 0x08E2 | 0x110BD | 0x110CD | 0x13430..=0x1343F
+        | 0x1BCA0..=0x1BCA3 | 0x1D173..=0x1D17A | 0xE0000..=0xE0FFF)
+}
+
+/// A device's own words (its name, its model), fit to show: control and
+/// invisible format characters removed, runs of whitespace made one space,
+/// trimmed and cut to `max` characters. `None` when nothing visible is left.
+pub fn clean_device_text(raw: &str, max: usize) -> Option<String> {
+    let kept: String = raw
+        .chars()
+        .map(|c| if c.is_whitespace() { ' ' } else { c })
+        .filter(|c| !c.is_control() && !is_invisible_format(*c))
+        .collect();
+    let flat = kept.split_whitespace().collect::<Vec<_>>().join(" ");
+    let cut: String = flat.chars().take(max).collect();
+    let cut = cut.trim().to_string();
+    (!cut.is_empty()).then_some(cut)
+}
+
+/// [`clean_device_text`] over everything the desk shows of a pairing phone.
+pub fn clean_pair_device(d: &PairDevice) -> PairDevice {
+    PairDevice {
+        name: clean_device_text(&d.name, MAX_DEVICE_NAME_CHARS)
+            .unwrap_or_else(|| "Unnamed phone".into()),
+        platform: d.platform,
+        model: d
+            .model
+            .as_deref()
+            .and_then(|m| clean_device_text(m, MAX_DEVICE_NAME_CHARS)),
+        app_version: clean_device_text(&d.app_version, 40).unwrap_or_else(|| "?".into()),
+        build: d.build,
+    }
+}
 
 /// A rolling one-minute window per device: counts `now` and says yes while
 /// under `max`.
@@ -124,6 +173,11 @@ pub struct DeviceRecord {
     /// Its push token, once it sent one (`devices.setPush`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub push: Option<push::PushToken>,
+    /// The tailnet user `tailscale serve` said was pairing
+    /// (`Tailscale-User-Login`), when it said. A later request with this
+    /// token from another tailnet user is refused (docs/mobile.md).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tailnet_login: Option<String>,
 }
 
 impl DeviceRecord {
@@ -143,9 +197,22 @@ impl DeviceRecord {
         }
     }
 
-    /// The same phone pairing again: replaces rather than stacks up.
+    /// Looks like the same phone pairing again. Everything compared is the
+    /// phone's own say-so, so this only ever picks what the desk *offers*
+    /// to replace; nothing is removed unless the person there says so.
     fn same_phone(&self, d: &PairDevice) -> bool {
         self.name == d.name && self.platform == d.platform && self.model == d.model
+    }
+
+    /// Whether a request that came with `login` may use this record. Only a
+    /// different user is refused: a request that names nobody (the header is
+    /// absent for tagged nodes and for loopback callers) is let through, and
+    /// the token still has to match.
+    pub fn login_matches(&self, login: Option<&str>) -> bool {
+        match (&self.tailnet_login, login) {
+            (Some(paired), Some(now)) => paired.eq_ignore_ascii_case(now),
+            _ => true,
+        }
     }
 }
 
@@ -162,6 +229,9 @@ pub struct Stored {
     pub revoked: Vec<String>,
     /// Phone notifications through the push relay (`push.rs`).
     pub push: push::PushConfig,
+    /// This Mac's Ed25519 identity key, PKCS#8 in base64url
+    /// (`identity.rs`). Never leaves this file.
+    pub identity_key: String,
 }
 
 // Short-lived (one per connection); boxing the record would buy nothing.
@@ -176,6 +246,7 @@ pub struct Registry {
     /// `None` keeps it in memory (tests).
     path: Option<PathBuf>,
     stored: Mutex<Stored>,
+    identity: std::sync::OnceLock<Arc<identity::Identity>>,
 }
 
 impl Registry {
@@ -187,6 +258,7 @@ impl Registry {
         let r = Registry {
             path: Some(path),
             stored: Mutex::new(stored),
+            identity: std::sync::OnceLock::new(),
         };
         r.ensure_server_id();
         r
@@ -196,9 +268,32 @@ impl Registry {
         let r = Registry {
             path: None,
             stored: Mutex::new(Stored::default()),
+            identity: std::sync::OnceLock::new(),
         };
         r.ensure_server_id();
         r
+    }
+
+    /// This Mac's identity key, made (and saved) the first time it's needed.
+    /// A stored key that no longer parses is replaced: phones that pinned the
+    /// old one refuse this Mac until they pair again, which is the point.
+    pub fn identity(&self) -> Arc<identity::Identity> {
+        self.identity
+            .get_or_init(|| {
+                let stored = self.read(|s| s.identity_key.clone());
+                if let Some(id) = identity::Identity::from_stored(&stored) {
+                    return Arc::new(id);
+                }
+                // As for pairing codes: no RNG, no safe key.
+                #[allow(clippy::expect_used)]
+                let (id, doc) = identity::Identity::generate()
+                    .expect("the OS random number generator is unavailable");
+                if let Err(e) = self.write(|s| s.identity_key = doc) {
+                    tracing::error!("[Companion] Could not save the Mac's identity key: {}", e);
+                }
+                Arc::new(id)
+            })
+            .clone()
     }
 
     fn ensure_server_id(&self) {
@@ -269,35 +364,52 @@ impl Registry {
         })
     }
 
-    /// Record an allowed phone and mint its token. The same phone paired
-    /// before is replaced (its old token revoked); returns the ids replaced so
-    /// their sockets can be closed.
+    /// Paired phones that look like `device` pairing again: what the desk
+    /// offers to replace.
+    pub fn same_phones(&self, device: &PairDevice) -> Vec<DeviceRecord> {
+        let device = clean_pair_device(device);
+        self.read(|s| {
+            s.devices
+                .iter()
+                .filter(|d| d.same_phone(&device))
+                .cloned()
+                .collect()
+        })
+    }
+
+    /// Record an allowed phone and mint its token. Only the phones named in
+    /// `replace` (ids the desk showed, and the person there chose to
+    /// replace) are revoked; returns their ids so their sockets can close.
     pub fn add(
         &self,
         device: &PairDevice,
         public_key: String,
         now: i64,
+        replace: &[String],
+        tailnet_login: Option<String>,
     ) -> Result<(DeviceRecord, String, Vec<String>), CommandError> {
         let token = pairing::new_token();
+        let device = clean_pair_device(device);
         let record = DeviceRecord {
             id: format!("dev_{}", &uuid::Uuid::new_v4().simple().to_string()[..16]),
-            name: device.name.chars().take(80).collect(),
+            name: device.name.clone(),
             platform: device.platform,
-            model: device.model.as_ref().map(|m| m.chars().take(80).collect()),
-            app_version: device.app_version.chars().take(40).collect(),
+            model: device.model.clone(),
+            app_version: device.app_version.clone(),
             build: device.build,
             paired_at: now,
             last_seen_at: None,
             last_route: None,
             expires_at: None,
             token_hash: pairing::hash_token(&token),
-            public_key,
+            public_key: public_key.chars().take(128).collect(),
             push: None,
+            tailnet_login,
         };
         let replaced = self.write(|s| {
             let (old, keep): (Vec<_>, Vec<_>) = std::mem::take(&mut s.devices)
                 .into_iter()
-                .partition(|d| d.same_phone(device));
+                .partition(|d| replace.contains(&d.id));
             s.devices = keep;
             for d in &old {
                 remember_revoked(s, d.token_hash.clone());
@@ -368,6 +480,16 @@ pub struct Companion {
     requests: Mutex<HashMap<String, VecDeque<u64>>>,
     creates: Mutex<HashMap<String, VecDeque<u64>>>,
     last_status: Mutex<Option<wire::MacStatus>>,
+    /// Requests in flight per source (`limits::source_of`).
+    pub sources: limits::Counter,
+    /// Uploads in flight per device.
+    pub uploads: limits::Counter,
+    /// `agents.memorySuggest` runs in flight (one key: all phones).
+    pub suggests: limits::Counter,
+    /// Failed connections, folded to a line a minute per source.
+    pub refusals: limits::RefusalLog,
+    /// Thumbnails decoding now, and the ones already made.
+    pub thumbs: files::Thumbs,
 }
 
 impl Companion {
@@ -400,6 +522,27 @@ impl Companion {
             requests: Mutex::new(HashMap::new()),
             creates: Mutex::new(HashMap::new()),
             last_status: Mutex::new(None),
+            sources: limits::Counter::default(),
+            uploads: limits::Counter::default(),
+            suggests: limits::Counter::default(),
+            refusals: limits::RefusalLog::default(),
+            thumbs: files::Thumbs::default(),
+        }
+    }
+
+    /// A connection that failed to authenticate, for the audit log: the
+    /// first from a source in a minute is written now, the rest as a count
+    /// once the minute is over ([`Companion::flush_refusals`]).
+    pub fn note_refused(&self, source: &str, what: &str) {
+        for line in self.refusals.note(source, what, now_ms()) {
+            self.backend.audit("Phone", "refused", line, false);
+        }
+    }
+
+    /// Write the counts for minutes of failures that have ended.
+    pub fn flush_refusals(&self) {
+        for line in self.refusals.flush(now_ms()) {
+            self.backend.audit("Phone", "refused", line, false);
         }
     }
 
@@ -557,7 +700,7 @@ mod tests {
     #[test]
     fn tokens_authenticate_and_only_their_hash_is_stored() {
         let r = Registry::in_memory();
-        let (record, token, replaced) = r.add(&phone("A"), "pk".into(), 1).unwrap();
+        let (record, token, replaced) = r.add(&phone("A"), "pk".into(), 1, &[], None).unwrap();
         assert!(replaced.is_empty());
         assert_ne!(record.token_hash, token);
         let stored = serde_json::to_string(&r.read(|s| s.clone())).unwrap();
@@ -572,22 +715,90 @@ mod tests {
     #[test]
     fn revoking_turns_the_token_into_revoked() {
         let r = Registry::in_memory();
-        let (record, token, _) = r.add(&phone("A"), String::new(), 1).unwrap();
+        let (record, token, _) = r.add(&phone("A"), String::new(), 1, &[], None).unwrap();
         assert!(r.revoke(&record.id).unwrap().is_some());
         assert!(matches!(r.authenticate(&token), Auth::Revoked));
         assert!(r.revoke(&record.id).unwrap().is_none(), "already gone");
     }
 
     #[test]
-    fn pairing_the_same_phone_again_replaces_it() {
+    fn a_look_alike_phone_replaces_another_only_when_the_desk_says_so() {
         let r = Registry::in_memory();
-        let (first, old_token, _) = r.add(&phone("A"), String::new(), 1).unwrap();
-        r.add(&phone("B"), String::new(), 2).unwrap();
-        let (second, new_token, replaced) = r.add(&phone("A"), String::new(), 3).unwrap();
+        let (first, old_token, _) = r.add(&phone("A"), String::new(), 1, &[], None).unwrap();
+        r.add(&phone("B"), String::new(), 2, &[], None).unwrap();
+        // Same name, platform and model: offered for replacing, nothing more.
+        let offered = r.same_phones(&phone("A"));
+        assert_eq!(offered.len(), 1);
+        assert_eq!(offered[0].id, first.id);
+        let (kept_both, both_token, replaced) =
+            r.add(&phone("A"), String::new(), 3, &[], None).unwrap();
+        assert!(replaced.is_empty(), "never silently");
+        assert_eq!(r.devices().len(), 3);
+        assert!(matches!(r.authenticate(&old_token), Auth::Device(_)));
+        // The desk chose to replace the first one.
+        let (second, new_token, replaced) = r
+            .add(&phone("A"), String::new(), 4, &[first.id.clone()], None)
+            .unwrap();
         assert_eq!(replaced, vec![first.id.clone()]);
-        assert_eq!(r.devices().len(), 2);
+        assert_eq!(r.devices().len(), 3);
         assert!(matches!(r.authenticate(&old_token), Auth::Revoked));
         assert!(matches!(r.authenticate(&new_token), Auth::Device(d) if d.id == second.id));
+        assert!(matches!(r.authenticate(&both_token), Auth::Device(d) if d.id == kept_both.id));
+    }
+
+    #[test]
+    fn device_names_lose_invisible_and_control_characters() {
+        // U+202E flips what follows; U+200B and U+FEFF are invisible.
+        let spoof = "Julian\u{2019}s iP\u{200B}hone\u{202E}enohp\u{FEFF}\n\tX";
+        assert_eq!(
+            clean_device_text(spoof, MAX_DEVICE_NAME_CHARS).unwrap(),
+            "Julian\u{2019}s iPhoneenohp X"
+        );
+        assert_eq!(clean_device_text("\u{202E}\u{200D} ", 40), None);
+        assert_eq!(clean_device_text(&"a".repeat(500), 40).unwrap().len(), 40);
+        let stored = r_with(&PairDevice {
+            name: "\u{202E}Evil\u{2066}".into(),
+            model: Some("iPhone\u{0007} 16".into()),
+            ..phone("x")
+        });
+        assert_eq!(stored.name, "Evil");
+        assert_eq!(stored.model.as_deref(), Some("iPhone 16"));
+        let blank = r_with(&PairDevice {
+            name: "\u{200B}".into(),
+            ..phone("x")
+        });
+        assert_eq!(blank.name, "Unnamed phone");
+    }
+
+    fn r_with(d: &PairDevice) -> DeviceRecord {
+        Registry::in_memory()
+            .add(d, String::new(), 1, &[], None)
+            .unwrap()
+            .0
+    }
+
+    #[test]
+    fn a_token_paired_by_one_tailnet_user_refuses_another() {
+        let r = Registry::in_memory();
+        let (rec, _, _) = r
+            .add(&phone("A"), String::new(), 1, &[], Some("j@x.com".into()))
+            .unwrap();
+        assert!(rec.login_matches(Some("J@x.com")));
+        assert!(rec.login_matches(None), "no header: the token decides");
+        assert!(!rec.login_matches(Some("someone@else.com")));
+        let (anon, _, _) = r.add(&phone("B"), String::new(), 1, &[], None).unwrap();
+        assert!(anon.login_matches(Some("anyone@x.com")));
+    }
+
+    #[test]
+    fn the_identity_key_is_made_once_and_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("companion.json");
+        let first = Registry::load(path.clone()).identity().fingerprint();
+        let again = Registry::load(path.clone()).identity().fingerprint();
+        assert_eq!(first, again);
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(raw.contains("identityKey"));
     }
 
     #[test]
@@ -596,7 +807,7 @@ mod tests {
         let path = dir.path().join("companion.json");
         let r = Registry::load(path.clone());
         let server_id = r.server_id();
-        let (record, token, _) = r.add(&phone("A"), String::new(), 1).unwrap();
+        let (record, token, _) = r.add(&phone("A"), String::new(), 1, &[], None).unwrap();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

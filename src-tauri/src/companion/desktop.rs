@@ -584,7 +584,7 @@ impl Backend for DesktopBackend {
     }
 
     fn audit(&self, actor: &str, tool: &str, detail: String, ok: bool) {
-        crate::remote_access::audit_as(Some(actor), tool, None, detail, ok);
+        crate::remote_access::companion_audit(actor, tool, detail, ok);
     }
 
     fn changed(&self) {

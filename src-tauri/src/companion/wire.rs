@@ -170,6 +170,9 @@ pub struct PairingLink {
     pub server_id: String,
     pub name: String,
     pub routes: Vec<Route>,
+    /// The Mac's identity key, fingerprinted (`identity::fingerprint_of`):
+    /// the phone pins it and refuses any server that can't sign for it.
+    pub fingerprint: String,
 }
 
 impl PairingLink {
@@ -203,6 +206,9 @@ pub struct PairRequest {
     pub protocol: ProtocolRange,
     #[serde(default)]
     pub public_key: String,
+    /// Random bytes, base64url, for the Mac to sign (`PairResponse.identity`).
+    #[serde(default)]
+    pub challenge: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -229,6 +235,10 @@ pub enum PairResponse {
         /// use it and P1 issues no server key, so it is empty rather than a
         /// key nothing holds the private half of.
         server_public_key: String,
+        /// The Mac's signature over the request's challenge, by the key
+        /// the pairing link's fingerprint names.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        identity: Option<super::identity::IdentityProof>,
     },
     Refused {
         ok: bool,
@@ -273,6 +283,9 @@ pub struct HelloFrame {
     /// frames.ts). An older app sends none.
     #[serde(default)]
     pub features: Vec<String>,
+    /// Random bytes, base64url, for the Mac to sign in `welcome.identity`.
+    #[serde(default)]
+    pub challenge: Option<String>,
 }
 
 /// `hello.features`: the app shows a running turn's steps (`status.work`).
@@ -398,6 +411,10 @@ pub enum ServerFrame {
         /// is empty.
         #[serde(skip_serializing_if = "Option::is_none")]
         time_zone: Option<String>,
+        /// The Mac's signature over `hello.challenge`: the phone checks it
+        /// against the key it pinned at pairing before trusting anything.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        identity: Option<super::identity::IdentityProof>,
     },
     Refused {
         reason: RefusedReason,
@@ -546,6 +563,7 @@ mod tests {
                 url: "https://mac.ts.net:47443".into(),
                 pin: None,
             }],
+            fingerprint: "Zmh6rfhivXdsj8GLjp-OIA".into(),
         };
         let text = link.format();
         let d = text

@@ -56,6 +56,8 @@ import { registerPush } from './push';
 import { sendSecret } from './secrets';
 export { secretRouteProblem } from './secrets';
 import { DirectTransport, WireFailure } from './transport';
+import { checkWelcome } from './pin';
+import { newChallenge } from './identity';
 
 const PAGE = 50;
 let transport: DirectTransport | null = null;
@@ -105,6 +107,18 @@ const transportFor = (c: Credentials, getResume?: () => ReturnType<typeof getApp
     getResume: () => getResume?.() ?? undefined,
     foreground: AppState.currentState === 'active',
     http,
+    challenge: () => newChallenge((n) => Crypto.getRandomBytes(n)),
+    checkWelcome: (welcome, challenge) => {
+      const result = checkWelcome(c, welcome, challenge);
+      // Paired before identity keys: the first signed welcome pins the key,
+      // and every one after must match it.
+      if (result.pin && getApp().credentials?.serverId === c.serverId) {
+        c.fingerprint = result.pin;
+        void saveCredentials(c);
+        setApp({ credentials: { ...c } });
+      }
+      return result.verdict;
+    },
   });
 
 /** Replayed events are history, not news: nothing is announced until caught up. */

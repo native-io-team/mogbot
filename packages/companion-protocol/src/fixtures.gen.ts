@@ -1572,7 +1572,11 @@ export const frames = [
       "sessions.start",
       "preview.screenshot"
     ],
-    "timeZone": "America/New_York"
+    "timeZone": "America/New_York",
+    "identity": {
+      "publicKey": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "signature": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
+    }
   },
   {
     "t": "refused",
@@ -2478,7 +2482,11 @@ export const pairResponses = [
     "deviceId": "dev_0123456789abcdef",
     "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "serverId": "srv_0123456789abcdef",
-    "serverPublicKey": ""
+    "serverPublicKey": "",
+    "identity": {
+      "publicKey": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "signature": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
+    }
   },
   {
     "ok": false,
@@ -2526,5 +2534,6 @@ export const pairingLink = {
       "url": "https://192.168.1.20:47444",
       "pin": "q2v0bQyR3m8b0f4Jc1lT8wq9s1nC3kq8H1cX0p9yQ2A"
     }
-  ]
+  ],
+  "fingerprint": "Zmh6rfhivXdsj8GLjp-OIA"
 } satisfies PairingLink;
