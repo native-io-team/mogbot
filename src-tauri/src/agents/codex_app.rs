@@ -115,7 +115,8 @@ pub async fn available(binary: &Path) -> bool {
 /// What the binary's own schema says, or None when it couldn't be read.
 async fn schema_lists_everything(binary: &Path) -> Option<bool> {
     let out = std::env::temp_dir().join(format!(
-        "shipstudio-codex-schema-{}-{}",
+        "{}-codex-schema-{}-{}",
+        crate::brand::SLUG,
         std::process::id(),
         super::store::new_id()
     ));
@@ -241,7 +242,7 @@ impl Conversation {
             INITIALIZE,
             "initialize",
             json!({
-                "clientInfo": { "name": "shipstudio", "title": "Ship Studio", "version": env!("CARGO_PKG_VERSION") },
+                "clientInfo": { "name": crate::brand::SLUG, "title": crate::brand::NAME, "version": env!("CARGO_PKG_VERSION") },
                 "capabilities": null,
             }),
         );

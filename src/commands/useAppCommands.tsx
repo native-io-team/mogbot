@@ -6,14 +6,15 @@ import type { PaletteCtx } from './types';
 import { useOpenModal } from '../contexts/ModalContext';
 import { getDashboardProjects, type DashboardProject, type Project } from '../lib/project';
 import { sessionRegistry } from '../lib/sessionRegistry';
-import { checkForUpdate } from '../lib/updater';
+import { checkForUpdate, UPDATES_ENABLED } from '../lib/updater';
+import { HAS_CHANGELOG } from '../components/dashboard/Changelog';
 import { requestQuit } from '../lib/agentsDesktop';
 import { checkIdeAvailability, openInIde, openInFinder } from '../lib/ide';
 import { logger } from '../lib/logger';
 import { kbd } from '../lib/shortcuts';
 import { basename } from '../lib/paths';
 import { requestPairOnOpen } from '../lib/companion';
-import { requestInstallOnOpen } from '../lib/companionInstall';
+import { COMPANION_INSTALL_ENABLED, requestInstallOnOpen } from '../lib/companionInstall';
 import { fileManagerName } from '../lib/setup';
 import {
   CodeIcon,
@@ -297,6 +298,7 @@ export function useAppCommands({
         icon: <SettingsIcon size={14} />,
         category: 'settings',
         keywords: ['changelog', 'release'],
+        when: () => HAS_CHANGELOG,
         run: () => openModal('changelog'),
       },
       {
@@ -304,6 +306,7 @@ export function useAppCommands({
         title: 'Check for updates',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
+        when: () => UPDATES_ENABLED,
         keywords: ['version', 'upgrade'],
         run: () => void runCheckUpdates(),
       },
@@ -373,6 +376,7 @@ export function useAppCommands({
         title: 'Install Ship Studio on my iPhone or Android…',
         icon: <MobileIcon size={14} />,
         category: 'settings',
+        when: () => COMPANION_INSTALL_ENABLED,
         keywords: [
           'phone',
           'mobile',

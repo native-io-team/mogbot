@@ -656,11 +656,11 @@ export function SettingsModal({
                     own rule that one-shot deep settings stay out of Cmd+K. */}
                 <div className="settings-row">
                   <div className="settings-row-info">
-                    <span className="settings-row-label">Credit Ship Studio in commits</span>
+                    <span className="settings-row-label">Credit the agent in commits</span>
                     <span className="settings-row-description">
-                      Add a <code>Made-With</code> line to the bottom of commits Ship Studio makes,
-                      naming the agent that wrote the message. It is a git trailer, so it never
-                      appears in the subject line or in <code>git log --oneline</code>.
+                      Add a <code>Made-With</code> line to the bottom of commits an agent writes
+                      here, naming that agent. It is a git trailer, so it never appears in the
+                      subject line or in <code>git log --oneline</code>.
                     </span>
                   </div>
                   <button
@@ -668,7 +668,7 @@ export function SettingsModal({
                     onClick={handleCommitAttributionToggle}
                     disabled={loading}
                     role="switch"
-                    aria-label="Credit Ship Studio in commits"
+                    aria-label="Credit the agent in commits"
                     aria-checked={commitAttributionEnabled}
                   >
                     <span className="settings-toggle-track">

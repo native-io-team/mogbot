@@ -13,6 +13,12 @@ vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn() }));
 
 import { openUrl } from '@tauri-apps/plugin-opener';
 
+// Features brand.json can switch off are tested switched on.
+vi.mock('../../lib/brand', async (importOriginal) => {
+  const { withAllLinks } = await import('../../test/brandFixture');
+  return withAllLinks(await importOriginal<typeof import('../../lib/brand')>());
+});
+
 const acceptedReceipt = {
   timestamp: new Date(Date.now() - 120_000).toISOString(),
   kind: 'error',
@@ -363,9 +369,9 @@ describe('IssueReportModals', () => {
       },
       {
         type: 'slack',
-        guidance: /Join the Ship Studio community on Slack/i,
+        guidance: /Join the community for help and discussion/i,
         action: 'Open community Slack',
-        url: 'https://join.slack.com/t/shipstudiocommunity/shared_invite/zt-41vbyaoo0-_pZWNPyMdvMoF6neuDYw7g',
+        url: 'https://ship.studio/slack',
       },
     ] as const;
 

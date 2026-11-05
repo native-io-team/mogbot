@@ -18,7 +18,11 @@ pub static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .connect_timeout(CONNECT_TIMEOUT)
-        .user_agent(concat!("ShipStudio/", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!(
+            "{}/{}",
+            crate::brand::NAME,
+            env!("CARGO_PKG_VERSION")
+        ))
         .build()
         .unwrap_or_else(|_| reqwest::Client::new())
 });

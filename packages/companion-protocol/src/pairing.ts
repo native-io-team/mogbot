@@ -8,8 +8,10 @@
 
 import type { DevicePlatform, Route } from './model';
 import type { ProtocolRange } from './version';
+import { PAIRING_SCHEME } from './brand.gen';
 
-export const PAIRING_SCHEME = 'shipstudio-companion';
+// From brand.json, through the generated file both apps build against.
+export { PAIRING_SCHEME };
 export const PAIRING_CODE_TTL_MS = 5 * 60 * 1000;
 
 /** What a pairing QR code (or a pasted link) carries. */
@@ -25,7 +27,7 @@ export interface PairingLink {
   routes: Route[];
 }
 
-/** `shipstudio-companion://pair?d=<base64url(JSON)>`. A custom scheme, so the camera opens the app. */
+/** `<PAIRING_SCHEME>://pair?d=<base64url(JSON)>`. A custom scheme, so the camera opens the app. */
 export function formatPairingLink(link: PairingLink): string {
   return `${PAIRING_SCHEME}://pair?d=${toBase64Url(JSON.stringify(link))}`;
 }

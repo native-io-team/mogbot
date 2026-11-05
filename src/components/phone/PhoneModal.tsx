@@ -48,7 +48,11 @@ import { PairCode, PairConfirm, PairOffer } from './PhonePairing';
 import { PhoneDevices } from './PhoneDevices';
 import { PhoneInstall } from './PhoneInstall';
 import { PhoneInstallEntry } from './PhoneInstallEntry';
-import { takeInstallOnOpen, type InstallPlatform } from '../../lib/companionInstall';
+import {
+  COMPANION_INSTALL_ENABLED,
+  takeInstallOnOpen,
+  type InstallPlatform,
+} from '../../lib/companionInstall';
 
 const errMsg = (err: unknown) => formatCommandError(asCommandError(err));
 
@@ -106,7 +110,7 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
       setInstall(null);
       return;
     }
-    if (takeInstallOnOpen()) setInstall({});
+    if (takeInstallOnOpen() && COMPANION_INSTALL_ENABLED) setInstall({});
     let unlisten: (() => void) | undefined;
     let closed = false;
     void listen(COMPANION_CHANGED_EVENT, () => void load()).then((fn) => {
@@ -221,11 +225,13 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
               </section>
             )}
 
-            <PhoneInstallEntry
-              now={now}
-              onInstall={() => setInstall({})}
-              onReinstall={(platform) => setInstall({ reinstall: platform })}
-            />
+            {COMPANION_INSTALL_ENABLED && (
+              <PhoneInstallEntry
+                now={now}
+                onInstall={() => setInstall({})}
+                onReinstall={(platform) => setInstall({ reinstall: platform })}
+              />
+            )}
 
             {(s.enabled || s.devices.length > 0) && (
               <section className="phone-section">

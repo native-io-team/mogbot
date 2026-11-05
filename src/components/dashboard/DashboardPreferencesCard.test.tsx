@@ -3,6 +3,12 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DashboardPreferencesCard } from './DashboardPreferencesCard';
 
+// Features brand.json can switch off are tested switched on.
+vi.mock('../../lib/brand', async (importOriginal) => {
+  const { withAllLinks } = await import('../../test/brandFixture');
+  return withAllLinks(await importOriginal<typeof import('../../lib/brand')>());
+});
+
 describe('DashboardPreferencesCard settings menu', () => {
   afterEach(() => {
     localStorage.clear();

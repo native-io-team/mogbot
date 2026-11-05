@@ -15,6 +15,17 @@ import { check, Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { logger } from './logger';
 import { asCommandError, formatCommandError } from './errors';
+import { BRAND_LINKS } from './brand';
+
+/**
+ * Whether this build has an update channel at all (`links.updates` in
+ * brand.json). Without one the updater plugin isn't registered, a check
+ * quietly reports "no update", and the UI hides "Check for updates".
+ */
+export const UPDATES_ENABLED = BRAND_LINKS.updates !== null;
+
+/** Whether installing a specific older version ("rewind") is possible. */
+export const VERSION_INSTALL_ENABLED = BRAND_LINKS.releases !== null;
 
 /** Injected by Vite/Vitest from package.json; absent in bare test runners. */
 declare const __APP_VERSION__: string | undefined;
@@ -197,6 +208,8 @@ export async function checkForUpdate(): Promise<{ update: UpdateHandle; info: Up
     };
   }
 
+  if (!UPDATES_ENABLED) return null;
+
   try {
     const update = await check();
     if (update) {
@@ -301,6 +314,9 @@ export async function downloadAndInstall(
  * @param version - Version string to install (e.g., "0.3.50")
  */
 export async function installVersion(version: string): Promise<void> {
+  if (!VERSION_INSTALL_ENABLED) {
+    throw new Error("Installing a specific version isn't available in this build.");
+  }
   return invoke<void>('install_version', { version });
 }
 

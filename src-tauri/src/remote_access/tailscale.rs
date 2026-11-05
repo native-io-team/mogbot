@@ -20,7 +20,9 @@ use serde_json::Value;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 
-pub const MOUNT_PATH: &str = "/shipstudio";
+/// Ours, from brand.json — Ship Studio mounts `/shipstudio` on the same
+/// `tailscale serve` config, and each must leave the other's alone.
+pub const MOUNT_PATH: &str = crate::brand::FUNNEL_MOUNT_PATH;
 
 /// Where the CLI lives. The Mac App Store / standalone app ships it inside
 /// the bundle; Homebrew and the open-source build put it on PATH.
@@ -143,7 +145,7 @@ pub async fn status() -> TailscaleState {
 /// status --json`? The serve config shape is:
 ///
 /// ```json
-/// { "Web": { "host.ts.net:443": { "Handlers": { "/shipstudio": { "Proxy": "http://127.0.0.1:4321" } } } },
+/// { "Web": { "host.ts.net:443": { "Handlers": { "/<slug>": { "Proxy": "http://127.0.0.1:4321" } } } },
 ///   "AllowFunnel": { "host.ts.net:443": true } }
 /// ```
 pub fn funnel_routes_to(config: &Value, dns_name: &str, port: u16) -> bool {
@@ -581,14 +583,14 @@ mod tests {
     fn funnel_is_on_only_when_our_mount_routes_to_our_port() {
         let host = "m.t.ts.net";
         let config = json!({
-            "Web": { "m.t.ts.net:443": { "Handlers": { "/shipstudio": { "Proxy": "http://127.0.0.1:4321" } } } },
+            "Web": { "m.t.ts.net:443": { "Handlers": { MOUNT_PATH: { "Proxy": "http://127.0.0.1:4321" } } } },
             "AllowFunnel": { "m.t.ts.net:443": true }
         });
         assert!(funnel_routes_to(&config, host, 4321));
         assert!(!funnel_routes_to(&config, host, 9999), "wrong port");
 
         let served_not_funnelled = json!({
-            "Web": { "m.t.ts.net:443": { "Handlers": { "/shipstudio": { "Proxy": "http://127.0.0.1:4321" } } } }
+            "Web": { "m.t.ts.net:443": { "Handlers": { MOUNT_PATH: { "Proxy": "http://127.0.0.1:4321" } } } }
         });
         assert!(!funnel_routes_to(&served_not_funnelled, host, 4321));
 
@@ -607,7 +609,7 @@ mod tests {
             "TCP": { "47443": { "HTTPS": true }, "443": { "HTTPS": true } },
             "Web": {
                 "mac.tail1.ts.net:47443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:5000" } } },
-                "mac.tail1.ts.net:443": { "Handlers": { "/shipstudio": { "Proxy": "http://127.0.0.1:6000" } } }
+                "mac.tail1.ts.net:443": { "Handlers": { MOUNT_PATH: { "Proxy": "http://127.0.0.1:6000" } } }
             },
             "AllowFunnel": { "mac.tail1.ts.net:443": true }
         });
@@ -649,7 +651,9 @@ mod tests {
             Some("https://login.tailscale.com/f/funnel?node=abc123")
         );
         assert_eq!(
-            approval_url("Available on the internet: https://m.t.ts.net/shipstudio"),
+            approval_url(&format!(
+                "Available on the internet: https://m.t.ts.net{MOUNT_PATH}"
+            )),
             None
         );
     }

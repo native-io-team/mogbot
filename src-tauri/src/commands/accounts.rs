@@ -10,7 +10,7 @@
 //! macOS Keychain via the `security` CLI — values never leave the Rust layer.
 //! Claude Code and GitHub CLI logins are isolated via `CLAUDE_CONFIG_DIR` /
 //! `GH_CONFIG_DIR`, each pointed at a per-account directory under
-//! `~/.ship-studio/accounts/<id>/`.
+//! `~/.<slug>/accounts/<id>/`.
 //!
 //! ## Env var injection
 //!
@@ -37,8 +37,6 @@ use tauri::{AppHandle, Emitter};
 
 /// The ID of the built-in default account. Always exists; cannot be deleted.
 pub const DEFAULT_ACCOUNT_ID: &str = "default";
-
-const KEYCHAIN_PREFIX: &str = "ship-studio-account-";
 
 /// Credential key -> injected environment variable name.
 const CRED_ENV_VARS: &[(&str, &str)] = &[
@@ -90,7 +88,7 @@ const CLAUDE_EXPIRES_KEY: &str = "claude_token_expires_at";
 const CLAUDE_TOKEN_TTL_SECS: u64 = 365 * 24 * 60 * 60;
 
 /// Validates a frontend-supplied account id before it's joined into filesystem
-/// paths (`~/.ship-studio/accounts/<id>/`), keychain service names, or env vars.
+/// paths (`~/.<slug>/accounts/<id>/`), keychain service names, or env vars.
 ///
 /// Account ids are always either the literal `"default"` or a generated UUID, so
 /// we hold a strict allowlist: non-empty, at most 64 chars, ASCII alphanumeric
@@ -147,7 +145,7 @@ fn keychain_unsupported() -> CommandError {
 }
 
 fn keychain_service(account_id: &str) -> String {
-    format!("{KEYCHAIN_PREFIX}{account_id}")
+    format!("{}{account_id}", crate::brand::keychain_prefix("account"))
 }
 
 fn write_to_keychain(account_id: &str, key: &str, value: &str) -> Result<(), CommandError> {
@@ -465,11 +463,11 @@ fn parse_claude_auth_status(stdout: &str) -> Option<(bool, Option<String>)> {
 
 // ============ Config dir isolation ============
 
-/// Root directory for an account's isolated config: `~/.ship-studio/accounts/<id>/`
+/// Root directory for an account's isolated config: `~/.<slug>/accounts/<id>/`
+/// (this app's own, never Ship Studio's `~/.ship-studio`).
 fn account_config_root(account_id: &str) -> PathBuf {
-    dirs::home_dir()
+    crate::brand::dot_dir()
         .unwrap_or_default()
-        .join(".ship-studio")
         .join("accounts")
         .join(account_id)
 }
@@ -479,7 +477,7 @@ fn account_config_root(account_id: &str) -> PathBuf {
 /// Isolated workspace dirs hold real auth tokens (gh `hosts.yml`, Claude creds,
 /// codex auth). A bare `create_dir_all` leaves them at the default `0755`
 /// (world-readable/traversable); on a shared machine another local user could
-/// walk in. We also tighten the `~/.ship-studio/accounts/<id>` parent so the
+/// walk in. We also tighten the `~/.<slug>/accounts/<id>` parent so the
 /// whole per-account subtree is private, not just the leaf.
 fn create_private_dir(dir: &std::path::Path) {
     let _ = std::fs::create_dir_all(dir);
@@ -508,7 +506,7 @@ fn private_account_subdir(account_id: &str, leaf: &str) -> PathBuf {
 /// (honoring `CLAUDE_CONFIG_DIR` if already set in the environment, else
 /// `~/.claude`) so existing users' logins are unaffected by Workspace
 /// isolation. Other accounts get an isolated directory under
-/// `~/.ship-studio/accounts/<id>/`.
+/// `~/.<slug>/accounts/<id>/`.
 pub fn claude_config_dir(account_id: &str) -> PathBuf {
     if account_id == DEFAULT_ACCOUNT_ID {
         return std::env::var("CLAUDE_CONFIG_DIR")
@@ -524,7 +522,7 @@ pub fn claude_config_dir(account_id: &str) -> PathBuf {
 /// (honoring `GH_CONFIG_DIR`/`XDG_CONFIG_HOME` if already set, else
 /// `~/.config/gh`) so existing users' `gh` logins are unaffected by Workspace
 /// isolation. Other accounts get an isolated directory under
-/// `~/.ship-studio/accounts/<id>/`.
+/// `~/.<slug>/accounts/<id>/`.
 pub fn gh_config_dir(account_id: &str) -> PathBuf {
     if account_id == DEFAULT_ACCOUNT_ID {
         if let Ok(dir) = std::env::var("GH_CONFIG_DIR") {
@@ -542,7 +540,7 @@ pub fn gh_config_dir(account_id: &str) -> PathBuf {
 ///
 /// The Default account resolves to the real, global Codex directory
 /// (honoring `CODEX_HOME` if already set, else `~/.codex`). Other accounts
-/// get an isolated directory under `~/.ship-studio/accounts/<id>/`.
+/// get an isolated directory under `~/.<slug>/accounts/<id>/`.
 pub fn codex_home_dir(account_id: &str) -> PathBuf {
     if account_id == DEFAULT_ACCOUNT_ID {
         return std::env::var("CODEX_HOME")
@@ -557,7 +555,7 @@ pub fn codex_home_dir(account_id: &str) -> PathBuf {
 /// The Default account resolves to the real, global data directory (honoring
 /// `XDG_DATA_HOME` if already set, else `~/.local/share`) so Opencode's
 /// existing `~/.local/share/opencode` login is unaffected. Other accounts get
-/// an isolated directory under `~/.ship-studio/accounts/<id>/`.
+/// an isolated directory under `~/.<slug>/accounts/<id>/`.
 pub fn opencode_data_home_dir(account_id: &str) -> PathBuf {
     if account_id == DEFAULT_ACCOUNT_ID {
         return std::env::var("XDG_DATA_HOME")
@@ -575,7 +573,7 @@ pub fn opencode_data_home_dir(account_id: &str) -> PathBuf {
 /// Resolves the directory that holds `agent`'s auth/config state for the
 /// given account — the per-account equivalent of `$HOME/<agent.auth_config_dir>`.
 /// The Default account maps to the real global directory; other accounts get
-/// an isolated directory under `~/.ship-studio/accounts/<id>/`.
+/// an isolated directory under `~/.<slug>/accounts/<id>/`.
 pub fn agent_auth_dir(account_id: &str, agent: &AgentConfig) -> PathBuf {
     match agent.id {
         "claude-code" => claude_config_dir(account_id),
@@ -1933,8 +1931,15 @@ mod tests {
 
     #[test]
     fn keychain_service_uses_prefix() {
-        assert_eq!(keychain_service("default"), "ship-studio-account-default");
-        assert_eq!(keychain_service("abc-123"), "ship-studio-account-abc-123");
+        let slug = crate::brand::SLUG;
+        assert_eq!(
+            keychain_service("default"),
+            format!("{slug}-account-default")
+        );
+        assert_eq!(
+            keychain_service("abc-123"),
+            format!("{slug}-account-abc-123")
+        );
     }
 
     #[test]

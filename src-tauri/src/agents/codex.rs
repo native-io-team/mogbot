@@ -130,8 +130,8 @@ pub(super) fn scripted() -> bool {
 /// commands may write, no network for them (set here, so a
 /// `network_access = true` in the user's own config.toml can't widen it;
 /// checked against Codex 0.166 with `codex sandbox`), our MCP server (its tools pre-approved: they put up
-/// their own cards), and CLAUDE.md as the project doc. Then the e2e suite's
-/// own, in debug builds.
+/// their own cards), CLAUDE.md as the project doc, and Ship Studio's preview server disabled
+/// when it's registered. Then the e2e suite's own, in debug builds.
 pub(super) fn shared_config(url: &str, writable: &[String]) -> Vec<String> {
     let server = format!(
         "mcp_servers.{}={{url={},tool_timeout_sec={},default_tools_approval_mode=\"approve\"}}",
@@ -146,6 +146,9 @@ pub(super) fn shared_config(url: &str, writable: &[String]) -> Vec<String> {
         "project_doc_fallback_filenames=[\"CLAUDE.md\"]".to_string(),
     ]
     .into_iter()
+    // Ship Studio's preview server, off for this turn when it's registered:
+    // an agent here drives our preview, never theirs.
+    .chain(crate::preview_isolation::codex_override(None, None))
     .chain(extra_config())
     .collect()
 }

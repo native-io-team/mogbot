@@ -1,9 +1,10 @@
 //! Persistence for Agents: the registry of agents and each agent's chat log.
 //!
-//! Layout, under the projects root (`~/ShipStudio` by default):
+//! Layout, under this app's own support folder ([`crate::brand::app_support_dir`]),
+//! never the shared `~/ShipStudio` that Ship Studio keeps its agents in:
 //!
 //! ```text
-//! .shipstudio/agents/
+//! agents/
 //!   agents.json              the registry (every agent's identity and state)
 //!   <agent-id>/              the agent's home: its working directory
 //!     CLAUDE.md              instructions + memory; Claude Code loads it every turn
@@ -360,8 +361,10 @@ pub fn agents_root() -> Result<PathBuf, CommandError> {
     {
         return Ok(root);
     }
-    let root = crate::utils::projects_root().map_err(super::err_other)?;
-    Ok(root.join(".shipstudio").join("agents"))
+    // Our own app-support folder, never the shared `~/ShipStudio/.shipstudio`:
+    // Ship Studio keeps its agents there, and the two apps' agents are not
+    // the same team.
+    Ok(crate::brand::app_support_dir().join("agents"))
 }
 
 pub fn agent_home(id: &str) -> Result<PathBuf, CommandError> {

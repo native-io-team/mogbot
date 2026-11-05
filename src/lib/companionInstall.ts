@@ -1,5 +1,5 @@
 /**
- * "Install on my phone": getting the Ship Studio companion app onto the
+ * "Install on my phone": getting the companion app onto the
  * user's iPhone or Android phone.
  *
  * Two routes. The official build (TestFlight, or an APK) is a link, once the
@@ -16,6 +16,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { agentPromptArgs } from './agent';
 import type { TerminalCommand } from './setup';
+import { BRAND, BRAND_LINKS } from './brand';
 
 export type InstallPlatform = 'ios' | 'android';
 
@@ -323,7 +324,16 @@ export function androidSteps(s: AndroidInstallStatus, app: InstalledApp | null):
 
 const sh = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
-const REPO = 'https://github.com/ship-studio/ship-studio.git';
+/**
+ * The git repo the phone app is built from (`links.companionSource` in
+ * brand.json) — this app's own, never Ship Studio's, or the phone would get
+ * Ship Studio's companion. Null: release builds can't fetch the source, so
+ * the install flow is hidden. Dev builds build from this checkout's mobile/.
+ */
+const REPO = BRAND_LINKS.companionSource;
+
+/** Whether "Install on my phone" is offered in this build. */
+export const COMPANION_INSTALL_ENABLED: boolean = REPO !== null || import.meta.env.DEV;
 
 /** Get the source to `path` (its parent is the checkout) if it isn't there. */
 function sourceInstruction(src: SourceCheck): string {
@@ -333,8 +343,11 @@ function sourceInstruction(src: SourceCheck): string {
       : `The app's source is at ${src.path}; install its dependencies there with \`pnpm install\` (if pnpm is missing, \`npm install -g pnpm\` first).`;
   }
   const root = src.path.replace(/\/mobile\/?$/, '');
+  if (!REPO) {
+    return `The app's source isn't at ${src.path}, and this build names no repository to fetch it from. Stop and tell the user the phone app can't be built from this build.`;
+  }
   return (
-    `First fetch the app's source, matching this Ship Studio version: ` +
+    `First fetch the app's source, matching this desktop app's version: ` +
     `\`git clone --depth 1 --filter=blob:none --sparse --branch v${src.desktopVersion} ${REPO} ${sh(root)} && cd ${sh(root)} && git sparse-checkout set mobile packages/companion-protocol\`, ` +
     `then in ${src.path} run \`pnpm install\` (if pnpm is missing, \`npm install -g pnpm\` first).`
   );
@@ -343,7 +356,7 @@ function sourceInstruction(src: SourceCheck): string {
 /** The one command that builds and installs: also what Reinstall runs. */
 export function iosBuildCommand(s: IosInstallStatus, device: IosDevice): string | null {
   if (!s.signing) return null;
-  const env = `SHIPSTUDIO_BUNDLE_ID=${s.signing.bundleId} APPLE_TEAM_ID=${s.signing.teamId}`;
+  const env = `COMPANION_BUNDLE_ID=${s.signing.bundleId} APPLE_TEAM_ID=${s.signing.teamId}`;
   return (
     `cd ${sh(s.source.path)} && ${env} npx expo prebuild -p ios --clean && ` +
     `${env} npx expo run:ios --device ${device.udid} --configuration Release`
@@ -351,7 +364,7 @@ export function iosBuildCommand(s: IosInstallStatus, device: IosDevice): string 
 }
 
 export function androidBuildCommand(s: AndroidInstallStatus, phone: AndroidPhone): string {
-  const env = `SHIPSTUDIO_BUNDLE_ID=${s.package}`;
+  const env = `COMPANION_BUNDLE_ID=${s.package}`;
   return (
     `cd ${sh(s.source.path)} && ${env} npx expo prebuild -p android --clean && ` +
     `${env} npx expo run:android --variant release --device ${phone.serial}`
@@ -367,20 +380,20 @@ export function androidBuildCommand(s: AndroidInstallStatus, phone: AndroidPhone
 export function buildIosInstallPrompt(s: IosInstallStatus): string {
   const device = pickIosDevice(s);
   const env = s.signing
-    ? `SHIPSTUDIO_BUNDLE_ID=${s.signing.bundleId} APPLE_TEAM_ID=${s.signing.teamId}`
-    : 'SHIPSTUDIO_BUNDLE_ID=studio.ship.companion.<first 6 hex characters of the sha256 of the team id> APPLE_TEAM_ID=<team id>';
+    ? `COMPANION_BUNDLE_ID=${s.signing.bundleId} APPLE_TEAM_ID=${s.signing.teamId}`
+    : `COMPANION_BUNDLE_ID=${BRAND.companion.bundleId}.<first 6 hex characters of the sha256 of the team id> APPLE_TEAM_ID=<team id>`;
   const target = device ? device.udid : '<the phone’s UDID from `xcrun devicectl list devices`>';
   return (
-    'You are installing the Ship Studio companion app on the user’s iPhone, built from source on this Mac. ' +
+    `You are installing the ${BRAND.name} companion app on the user’s iPhone, built from source on this Mac. ` +
     'Be brief and plain: before each step, say in one sentence what you are about to do. ' +
-    'Ship Studio shows a checklist beside this terminal and verifies every item with its own checks, so do not claim success; tell the user to look at the checklist. ' +
+    `${BRAND.name} shows a checklist beside this terminal and verifies every item with its own checks, so do not claim success; tell the user to look at the checklist. ` +
     `Check first: \`xcodebuild -version\` (needs ${s.xcodeMinimum} or later; if it is older, stop and tell the user to update Xcode in the App Store, which you cannot do), \`xcodebuild -checkFirstLaunchStatus\` (if it fails, run \`sudo xcodebuild -runFirstLaunch\` and warn that macOS asks for their password and shows nothing while they type), \`pod --version\` (if missing, \`brew install cocoapods\`), \`node --version\`. ` +
     'Things only the user can do, so ask them and wait: plug the iPhone in with a cable, unlock it and tap Trust; turn on Developer Mode (Settings → Privacy & Security → Developer Mode, the phone restarts, then tap Turn On); add their Apple ID in Xcode → Settings → Accounts if `security find-identity -v -p codesigning` lists no "Apple Development" identity (a free Apple ID works). ' +
     sourceInstruction(s.source) +
     ' ' +
-    `Then build and install a Release build (it bundles the JavaScript, so it runs without a bundler): in ${s.source.path} run \`${env} npx expo prebuild -p ios --clean\`, then \`${env} npx expo run:ios --device ${target} --configuration Release\`. Use exactly that bundle id: Ship Studio checks the phone for it. ` +
+    `Then build and install a Release build (it bundles the JavaScript, so it runs without a bundler): in ${s.source.path} run \`${env} npx expo prebuild -p ios --clean\`, then \`${env} npx expo run:ios --device ${target} --configuration Release\`. Use exactly that bundle id: ${BRAND.name} checks the phone for it. ` +
     'If signing fails, read the error and explain it plainly; with a free Apple ID, Xcode may need to be opened once with the generated ios/*.xcworkspace to pick the team under Signing & Capabilities. ' +
-    'When it is installed, tell the user: with a free Apple ID the app stops opening after 7 days and Ship Studio has a one-click Reinstall; the first launch may say "Untrusted Developer", fixed on the phone in Settings → General → VPN & Device Management → their Apple ID → Trust. ' +
+    `When it is installed, tell the user: with a free Apple ID the app stops opening after 7 days and ${BRAND.name} has a one-click Reinstall; the first launch may say "Untrusted Developer", fixed on the phone in Settings → General → VPN & Device Management → their Apple ID → Trust. ` +
     'Do not change any of the app’s source code and do not set up anything unrelated.'
   );
 }
@@ -389,14 +402,14 @@ export function buildAndroidInstallPrompt(s: AndroidInstallStatus): string {
   const phone = pickAndroidPhone(s);
   const target = phone ? phone.serial : '<the serial from `adb devices`>';
   return (
-    'You are installing the Ship Studio companion app on the user’s Android phone, built from source on this Mac. ' +
+    `You are installing the ${BRAND.name} companion app on the user’s Android phone, built from source on this Mac. ` +
     'Be brief and plain: before each step, say in one sentence what you are about to do. ' +
-    'Ship Studio shows a checklist beside this terminal and verifies every item with its own checks, so do not claim success; tell the user to look at the checklist. ' +
+    `${BRAND.name} shows a checklist beside this terminal and verifies every item with its own checks, so do not claim success; tell the user to look at the checklist. ` +
     'Check first: `adb version` (if missing, `brew install --cask android-platform-tools`), Java 17 (`/usr/libexec/java_home -v 17`; if missing, `brew install --cask zulu@17`), and the Android SDK at $ANDROID_HOME or ~/Library/Android/sdk (if missing, `brew install --cask android-commandlinetools`, then `sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"`). Export JAVA_HOME and ANDROID_HOME for the build. ' +
     'Things only the user can do, so ask them and wait: on the phone, Settings → About phone → tap Build number 7 times, then Settings → Developer options → USB debugging on; plug it in and tap Allow on "Allow USB debugging?". `adb devices` must show it as `device`, not `unauthorized`. ' +
     sourceInstruction(s.source) +
     ' ' +
-    `Then build and install a release APK: in ${s.source.path} run \`SHIPSTUDIO_BUNDLE_ID=${s.package} npx expo prebuild -p android --clean\`, then \`SHIPSTUDIO_BUNDLE_ID=${s.package} npx expo run:android --variant release --device ${target}\`. If that build can’t install, \`adb -s ${target} install -r\` the APK it produced under android/app/build/outputs/apk/release/. Use exactly that package name: Ship Studio checks the phone for it. ` +
+    `Then build and install a release APK: in ${s.source.path} run \`COMPANION_BUNDLE_ID=${s.package} npx expo prebuild -p android --clean\`, then \`COMPANION_BUNDLE_ID=${s.package} npx expo run:android --variant release --device ${target}\`. If that build can’t install, \`adb -s ${target} install -r\` the APK it produced under android/app/build/outputs/apk/release/. Use exactly that package name: ${BRAND.name} checks the phone for it. ` +
     'When it is installed, tell the user it does not expire. ' +
     'Do not change any of the app’s source code and do not set up anything unrelated.'
   );
@@ -459,8 +472,8 @@ export async function remindIfDue(now = Date.now()) {
   const r = readInstallRecord();
   if (!r || !reminderDue(r, now)) return;
   await remind(
-    'Ship Studio stops opening on your phone tomorrow',
-    `The build on ${r.deviceName} was signed with a free Apple ID. Plug it in and click Reinstall in Ship Studio → Phone.`
+    `${BRAND.name} stops opening on your phone tomorrow`,
+    `The build on ${r.deviceName} was signed with a free Apple ID. Plug it in and click Reinstall in ${BRAND.name} → Phone.`
   );
   saveInstallRecord({ ...r, remindedFor: r.expiresAt });
 }
@@ -487,7 +500,7 @@ export function isFreeTeamExpiry(r: Pick<InstallRecord, 'installedAt' | 'expires
 }
 
 /**
- * Cmd+K "Install Ship Studio on my phone" opens the Phone panel straight
+ * Cmd+K "Install on my phone" opens the Phone panel straight
  * onto the install flow. The panel takes the request once, when it opens.
  */
 let installOnOpen = false;

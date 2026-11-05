@@ -7,6 +7,7 @@ import {
   trackError,
 } from './analytics';
 import { invoke } from '@tauri-apps/api/core';
+import { BRAND } from './brand';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -93,7 +94,7 @@ describe('analytics', () => {
       // trackPageview internally awaits invoke; small tick to settle.
       await Promise.resolve();
       const props = lastEventProps();
-      expect(props.$current_url).toBe('app://ship-studio/workspace-code');
+      expect(props.$current_url).toBe(`app://${BRAND.slug}/workspace-code`);
       expect(props.$pathname).toBe('/workspace-code');
       expect(props.$screen_name).toBe('Workspace - Code');
     });

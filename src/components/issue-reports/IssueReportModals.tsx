@@ -46,11 +46,13 @@ import { ModalFrame } from '../primitives/ModalFrame';
 import { Spinner } from '../primitives/Spinner';
 import { TextButton } from '../primitives/TextButton';
 import '../../styles/features/issue-reports.css';
+import { BRAND_LINKS } from '../../lib/brand';
+import { ISSUE_REPO } from '../../lib/issueReports';
 
-const SECURITY_URL = 'https://github.com/ship-studio/ship-studio/security/advisories/new';
-const DISCUSSIONS_URL = 'https://github.com/ship-studio/ship-studio/discussions';
-const SLACK_URL =
-  'https://join.slack.com/t/shipstudiocommunity/shared_invite/zt-41vbyaoo0-_pZWNPyMdvMoF6neuDYw7g';
+// Each is nullable in brand.json; a null route isn't offered.
+const SECURITY_URL = BRAND_LINKS.securityAdvisories;
+const DISCUSSIONS_URL = BRAND_LINKS.discussions;
+const SLACK_URL = BRAND_LINKS.community;
 
 type IssueModalStep = 'form' | 'evidence' | 'review' | 'success' | 'uncertain';
 type IssueReportSelection = IssueKind | 'security' | 'discussion' | 'slack';
@@ -72,11 +74,17 @@ const contactRoutes = {
   },
   slack: {
     title: 'Community Slack',
-    description: 'Join the Ship Studio community on Slack for help and discussion.',
+    description: 'Join the community for help and discussion.',
     action: 'Open community Slack',
     url: SLACK_URL,
   },
 } as const;
+
+type ContactSelection = keyof typeof contactRoutes;
+
+function contactUrl(selection: ContactSelection): string {
+  return contactRoutes[selection].url ?? '';
+}
 
 const emptyBugDraft: BugReportDraft = {
   title: '[Bug] ',
@@ -495,7 +503,7 @@ function PublicIssueModal({
       </TextButton>
     ) : contactSelection === 'security' ? (
       <TextButton
-        onClick={() => void handoff.execute(contactRoutes.security.url)}
+        onClick={() => void handoff.execute(contactUrl('security'))}
         disabled={handoff.isLoading}
         data-issue-action="contact-security-header"
         rightIcon={<ExternalLinkIcon size={14} />}
@@ -711,11 +719,13 @@ function PublicIssueModal({
                   <option value="bug">Bug report</option>
                   <option value="feature">Feature request</option>
                 </optgroup>
-                <optgroup label="Other ways to get help">
-                  <option value="security">Security vulnerability</option>
-                  <option value="discussion">Question or discussion</option>
-                  <option value="slack">Community Slack</option>
-                </optgroup>
+                {(SECURITY_URL || DISCUSSIONS_URL || SLACK_URL) && (
+                  <optgroup label="Other ways to get help">
+                    {SECURITY_URL && <option value="security">Security vulnerability</option>}
+                    {DISCUSSIONS_URL && <option value="discussion">Question or discussion</option>}
+                    {SLACK_URL && <option value="slack">Community Slack</option>}
+                  </optgroup>
+                )}
               </select>
             </label>
           )}
@@ -838,7 +848,7 @@ function PublicIssueModal({
           {!issueKind && contactSelection ? (
             <ContactRoute
               selection={contactSelection}
-              onOpen={() => void handoff.execute(contactRoutes[contactSelection].url)}
+              onOpen={() => void handoff.execute(contactUrl(contactSelection))}
               isLoading={handoff.isLoading}
             />
           ) : null}
@@ -941,8 +951,8 @@ function PublicIssueModal({
       {step === 'review' && (
         <div className="issue-report__body" data-issue-surface="review">
           <p className="issue-report__intro">
-            This will create a public issue in <strong>ship-studio/ship-studio</strong>. Check the
-            complete title and body before sending.
+            This will create a public issue in <strong>{ISSUE_REPO}</strong>. Check the complete
+            title and body before sending.
           </p>
           <div className="issue-report__identity" aria-live="polite">
             <span className="issue-report__identity-label">In-app GitHub account</span>
@@ -1108,7 +1118,7 @@ function PublicIssueModal({
           </div>
           <h3>Issue #{submission.number} was created</h3>
           <p>
-            Posted publicly as <strong>@{submission.login}</strong> in ship-studio/ship-studio.
+            Posted publicly as <strong>@{submission.login}</strong> in {ISSUE_REPO}.
           </p>
           {clearDraftError && (
             <p className="issue-report__storage-error" role="alert">

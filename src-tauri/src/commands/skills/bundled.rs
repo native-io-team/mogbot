@@ -31,8 +31,9 @@ use tracing::{debug, warn};
 
 /// One skill this app ships.
 pub struct BundledSkill {
-    /// Directory name under the agent's `skills/`.
-    pub dir_name: &'static str,
+    /// The skill's name without the app prefix (`workflows`). The directory
+    /// under the agent's `skills/` is [`BundledSkill::dir_name`].
+    pub name: &'static str,
     /// Bump when `body` changes so installed copies refresh.
     pub version: &'static str,
     /// Produces the full SKILL.md, front matter included.
@@ -42,26 +43,57 @@ pub struct BundledSkill {
 /// Every skill Ship Studio installs.
 pub const BUNDLED_SKILLS: &[BundledSkill] = &[
     BundledSkill {
-        dir_name: "shipstudio-workflows",
+        name: "workflows",
         version: "1",
         body: super::super::workflows::skill::skill_markdown,
     },
     BundledSkill {
-        dir_name: "shipstudio-team",
+        name: "team",
         version: "4",
         body: super::super::team::skill::skill_markdown,
     },
     BundledSkill {
-        dir_name: "shipstudio-brand-guidelines",
+        name: "brand-guidelines",
         version: "1",
         body: brand_guidelines_skill,
     },
     BundledSkill {
-        dir_name: "shipstudio-site-to-code",
+        name: "site-to-code",
         version: "2",
         body: site_to_code_skill,
     },
 ];
+
+impl BundledSkill {
+    /// `<slug>-<name>` (`dashbot-workflows`): ours, from brand.json. Ship
+    /// Studio installs its own `shipstudio-*` copies into the same shared
+    /// skills directories; this app never writes or removes those.
+    pub fn dir_name(&self) -> String {
+        crate::brand::scoped(self.name)
+    }
+}
+
+/// A skill body as this app installs it: the bodies are written with Ship
+/// Studio's `shipstudio-<name>` names, and every bundled skill's name — in
+/// the front matter, and in backticked cross-references between skills — is
+/// swapped for ours. Backticks only, so the shared team format's
+/// `.shipstudio-team/` paths are never touched. Prose that names the app
+/// ("in Ship Studio's sidebar") names this one; the front-matter descriptions
+/// name no app at all, so the routing text doesn't depend on the brand.
+pub(crate) fn branded_body(body: &str) -> String {
+    let mut out = body.replace("Ship Studio", crate::brand::NAME);
+    for skill in BUNDLED_SKILLS {
+        let theirs = format!("shipstudio-{}", skill.name);
+        let ours = skill.dir_name();
+        out = out.replacen(
+            &format!("\nname: {theirs}\n"),
+            &format!("\nname: {ours}\n"),
+            1,
+        );
+        out = out.replace(&format!("`{theirs}`"), &format!("`{ours}`"));
+    }
+    out
+}
 
 /// Extracting a design system from a site someone already built.
 ///
@@ -512,25 +544,55 @@ pub struct BundledSkillStatus {
     pub path: String,
 }
 
+/// Ship Studio's copy of a bundled skill, beside where ours would go
+/// (`<skills>/shipstudio-<name>`), when one is installed.
+fn ship_studio_copy(ours: &std::path::Path, name: &str) -> Option<PathBuf> {
+    let theirs = ours.parent()?.join(format!("shipstudio-{name}"));
+    theirs.join("SKILL.md").is_file().then_some(theirs)
+}
+
 /// Write every bundled skill for every agent that supports one.
+///
+/// Except where Ship Studio's own copy of the same skill is already
+/// installed: the two describe the same shared formats, and a near-identical
+/// pair in one skills directory makes the agent choose between them on every
+/// routing decision and spends its context twice. Theirs is used, and a copy
+/// of ours left from before Ship Studio's arrived is removed (the directory is
+/// ours; theirs is never touched).
 pub fn install_bundled_skills() -> Vec<BundledSkillStatus> {
     let mut statuses = Vec::new();
 
     for skill in BUNDLED_SKILLS {
-        let body = (skill.body)();
-        for (agent_id, dir) in skill_dirs(skill.dir_name) {
+        let body = branded_body(&(skill.body)());
+        let dir_name = skill.dir_name();
+        for (agent_id, dir) in skill_dirs(&dir_name) {
+            if let Some(theirs) = ship_studio_copy(&dir, skill.name) {
+                if dir != theirs && dir.join("SKILL.md").is_file() {
+                    if let Err(err) = std::fs::remove_dir_all(&dir) {
+                        warn!(skill = %dir_name, error = %err, "could not remove our duplicate of Ship Studio's skill");
+                    }
+                }
+                debug!(skill = %dir_name, agent = agent_id, "Ship Studio's copy is installed; not installing ours");
+                statuses.push(BundledSkillStatus {
+                    skill: dir_name.clone(),
+                    agent_id: agent_id.to_string(),
+                    installed: true,
+                    path: theirs.join("SKILL.md").to_string_lossy().to_string(),
+                });
+                continue;
+            }
             let installed = write_skill_if_agent_present(&dir, &body, skill.version)
                 .unwrap_or_else(|err| {
                     warn!(
                         agent = agent_id,
-                        skill = skill.dir_name,
+                        skill = %dir_name,
                         error = %err,
                         "could not install a bundled skill"
                     );
                     false
                 });
             statuses.push(BundledSkillStatus {
-                skill: skill.dir_name.to_string(),
+                skill: dir_name.clone(),
                 agent_id: agent_id.to_string(),
                 installed,
                 path: dir.join("SKILL.md").to_string_lossy().to_string(),
@@ -682,21 +744,26 @@ mod tests {
         // Without a name and a description the agent has no basis to decide
         // when to load it, and a skill that never loads is not a feature.
         for skill in BUNDLED_SKILLS {
-            let body = (skill.body)();
+            let body = branded_body(&(skill.body)());
+            assert!(
+                body.contains(&format!("\nname: {}\n", skill.dir_name())),
+                "{} is installed under a name that isn't its directory",
+                skill.dir_name()
+            );
             assert!(
                 body.starts_with("---\n"),
                 "{} has no front matter",
-                skill.dir_name
+                skill.dir_name()
             );
             assert!(
                 body.contains("\nname:"),
                 "{} declares no name",
-                skill.dir_name
+                skill.dir_name()
             );
             assert!(
                 body.contains("\ndescription:"),
                 "{} declares no description",
-                skill.dir_name
+                skill.dir_name()
             );
         }
     }
@@ -724,12 +791,12 @@ mod tests {
             assert!(
                 description.contains("use when") || description.contains("use this"),
                 "{} never says when to load",
-                skill.dir_name
+                skill.dir_name()
             );
             assert!(
                 description.len() > 120,
                 "{}'s description is too thin to route on",
-                skill.dir_name
+                skill.dir_name()
             );
         }
     }
@@ -740,9 +807,11 @@ mod tests {
         // themselves; a generic name would collide with one of theirs.
         for skill in BUNDLED_SKILLS {
             assert!(
-                skill.dir_name.starts_with("shipstudio-"),
+                skill
+                    .dir_name()
+                    .starts_with(&format!("{}-", crate::brand::SLUG)),
                 "{} would collide in a shared skills directory",
-                skill.dir_name
+                skill.dir_name()
             );
         }
     }
@@ -752,10 +821,59 @@ mod tests {
         let mut seen = std::collections::HashSet::new();
         for skill in BUNDLED_SKILLS {
             assert!(
-                seen.insert(skill.dir_name),
+                seen.insert(skill.dir_name()),
                 "{} is declared twice and would overwrite itself",
-                skill.dir_name
+                skill.dir_name()
             );
+        }
+    }
+
+    #[test]
+    fn ship_studios_copy_is_found_beside_ours() {
+        let skills = tempfile::tempdir().unwrap();
+        let ours = skills.path().join(crate::brand::scoped("team"));
+        assert!(ship_studio_copy(&ours, "team").is_none());
+        let theirs = skills.path().join("shipstudio-team");
+        std::fs::create_dir_all(&theirs).unwrap();
+        // An empty folder isn't an installed skill.
+        assert!(ship_studio_copy(&ours, "team").is_none());
+        std::fs::write(theirs.join("SKILL.md"), "---\nname: shipstudio-team\n---\n").unwrap();
+        assert_eq!(ship_studio_copy(&ours, "team"), Some(theirs));
+    }
+
+    #[test]
+    fn descriptions_name_no_app() {
+        for skill in BUNDLED_SKILLS {
+            let body = branded_body(&(skill.body)());
+            let description = body
+                .split("description:")
+                .nth(1)
+                .and_then(|d| d.split("\n---").next())
+                .unwrap_or_default();
+            for name in ["Ship Studio", crate::brand::NAME] {
+                assert!(
+                    !description.contains(name),
+                    "{}'s description names {name}",
+                    skill.dir_name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn installed_bodies_never_carry_ship_studios_skill_names() {
+        // Ship Studio installs its own copies beside ours; a cross-reference
+        // to `shipstudio-…` would send our agent to the other app's skill.
+        for skill in BUNDLED_SKILLS {
+            let body = branded_body(&(skill.body)());
+            for other in BUNDLED_SKILLS {
+                let theirs = format!("`shipstudio-{}`", other.name);
+                assert!(
+                    !body.contains(&theirs),
+                    "{} mentions {theirs}",
+                    skill.dir_name()
+                );
+            }
         }
     }
 }

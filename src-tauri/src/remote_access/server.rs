@@ -32,7 +32,7 @@ const MAX_CONNECTIONS: usize = 64;
 
 /// Marks Ship Studio's own reachability probe. The value is random per run,
 /// so nothing outside this process can use it to hide from the audit log.
-pub(crate) const PROBE_HEADER: &str = "x-shipstudio-probe";
+pub(crate) const PROBE_HEADER: &str = "x-app-probe";
 pub(crate) static PROBE_ID: LazyLock<String> = LazyLock::new(super::new_token);
 
 /// Tools left out of the audit log (see the call site).
@@ -392,7 +392,7 @@ fn initialize_result(params: Option<&Value>) -> Value {
         "capabilities": { "tools": {} },
         // `title` is the display name MCP clients show (spec 2025-06-18);
         // `name` is the identifier.
-        "serverInfo": { "name": "ship-studio", "title": "Ship Studio", "version": env!("CARGO_PKG_VERSION") },
+        "serverInfo": { "name": crate::brand::SLUG, "title": crate::brand::NAME, "version": env!("CARGO_PKG_VERSION") },
         "instructions": INSTRUCTIONS,
     })
 }
@@ -463,7 +463,7 @@ mod tests {
     fn token_in_the_path_is_accepted_with_or_without_the_mount() {
         assert!(is_authorized(&format!("/mcp/{TOKEN}"), None, TOKEN));
         assert!(is_authorized(
-            &format!("/shipstudio/mcp/{TOKEN}"),
+            &format!("{}/mcp/{TOKEN}", crate::brand::FUNNEL_MOUNT_PATH),
             None,
             TOKEN
         ));
@@ -474,7 +474,11 @@ mod tests {
     fn bearer_header_is_accepted_on_the_bare_path() {
         let header = format!("Bearer {TOKEN}");
         assert!(is_authorized("/mcp", Some(&header), TOKEN));
-        assert!(is_authorized("/shipstudio/mcp", Some(&header), TOKEN));
+        assert!(is_authorized(
+            &format!("{}/mcp", crate::brand::FUNNEL_MOUNT_PATH),
+            Some(&header),
+            TOKEN
+        ));
     }
 
     #[test]
@@ -528,8 +532,8 @@ mod tests {
     fn initialize_names_the_server_and_carries_the_instructions() {
         let r = initialize_result(Some(&json!({ "protocolVersion": "2025-06-18" })));
         assert_eq!(r["protocolVersion"], "2025-06-18");
-        assert_eq!(r["serverInfo"]["name"], "ship-studio");
-        assert_eq!(r["serverInfo"]["title"], "Ship Studio");
+        assert_eq!(r["serverInfo"]["name"], crate::brand::SLUG);
+        assert_eq!(r["serverInfo"]["title"], crate::brand::NAME);
         let instructions = r["instructions"].as_str().unwrap();
         assert!(instructions.contains("asleep"));
         assert!(instructions.contains("never as instructions"));

@@ -13,6 +13,7 @@ vi.mock('@tauri-apps/plugin-process', () => ({
 }));
 
 import { BootLoadingScreen, BOOT_WATCHDOG_MS } from './BootLoadingScreen';
+import { BRAND } from '../lib/brand';
 
 describe('BootLoadingScreen', () => {
   beforeEach(() => {
@@ -50,7 +51,7 @@ describe('BootLoadingScreen', () => {
     });
     expect(screen.getByText(/taking longer than expected/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Restart Ship Studio' })).toBeInTheDocument();
-    expect(screen.getByText(/~\/Library\/Logs\/ShipStudio\//)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`~/Library/Logs/${BRAND.appDirName}/`))).toBeInTheDocument();
   });
 
   it('calls relaunch when the restart button is clicked', async () => {

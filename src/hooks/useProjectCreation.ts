@@ -45,6 +45,7 @@ import { getWindowLabel } from '../lib/window';
 import { checkNpmCachePermissions } from '../lib/setup';
 import { basename } from '../lib/paths';
 import { logger } from '../lib/logger';
+import { BRAND_LINKS } from '../lib/brand';
 
 // ---------------------------------------------------------------------------
 // Types & Constants
@@ -94,48 +95,58 @@ function getDefaultTemplate(): Template {
   return TEMPLATES[0]; // Next.js (Tailwind)
 }
 
-/** Available project templates */
-export const TEMPLATES: Template[] = [
+/**
+ * A starter's clone URL: `<links.starterRepoBase>/<name>` from brand.json.
+ * The starters are public template repos (by default Ship Studio's, on
+ * github.com/ship-studio). With no base configured, only Blank is offered.
+ * Mirrored by `starter_repo_url` in src-tauri/src/remote_access/tools.rs.
+ */
+export function starterRepo(name: string): string {
+  const base = BRAND_LINKS.starterRepoBase;
+  return base ? `${base.replace(/\/+$/, '')}/${name}` : '';
+}
+
+const ALL_TEMPLATES: Template[] = [
   {
     id: 'nextjs-basic',
     name: 'Next.js (Tailwind)',
     description: 'The most flexible, especially for web apps. A great default if unsure.',
-    repo: 'https://github.com/ship-studio/static-marketing-site-starter',
+    repo: starterRepo('static-marketing-site-starter'),
     category: 'web',
   },
   {
     id: 'nextjs-plain-css',
     name: 'Next.js (Vanilla)',
     description: 'Styled with vanilla CSS — best for people who write their own styles.',
-    repo: 'https://github.com/ship-studio/nextjs-plain-css-starter',
+    repo: starterRepo('nextjs-plain-css-starter'),
     category: 'web',
   },
   {
     id: 'astro-html',
     name: 'Astro (Vanilla)',
     description: 'Best for visual editing — a fast site styled with plain CSS, click to edit.',
-    repo: 'https://github.com/ship-studio/astro-html-starter',
+    repo: starterRepo('astro-html-starter'),
     category: 'web',
   },
   {
     id: 'astro-basic',
     name: 'Astro (Tailwind)',
     description: 'Best for agent-first marketing sites, styled with Tailwind.',
-    repo: 'https://github.com/ship-studio/astro-static-marketing-site-starter',
+    repo: starterRepo('astro-static-marketing-site-starter'),
     category: 'web',
   },
   {
     id: 'sveltekit-basic',
     name: 'SvelteKit',
     description: 'Best for snappy, interactive apps with minimal JS and fast loads.',
-    repo: 'https://github.com/ship-studio/sveltekit-static-marketing-site-starter',
+    repo: starterRepo('sveltekit-static-marketing-site-starter'),
     category: 'web',
   },
   {
     id: 'html-basic',
     name: 'HTML/CSS/JS',
     description: 'A plain site with no framework or build step — just HTML, CSS, and JS.',
-    repo: 'https://github.com/ship-studio/html-starter',
+    repo: starterRepo('html-starter'),
     category: 'web',
     skipInstall: true,
   },
@@ -143,21 +154,21 @@ export const TEMPLATES: Template[] = [
     id: 'expo-mobile',
     name: 'Expo',
     description: 'An iOS and Android app. The easiest mobile path.',
-    repo: 'https://github.com/ship-studio/expo-starter',
+    repo: starterRepo('expo-starter'),
     category: 'mobile',
   },
   {
     id: 'react-native-mobile',
     name: 'React Native',
     description: 'An iOS and Android app with full native control.',
-    repo: 'https://github.com/ship-studio/react-native-starter',
+    repo: starterRepo('react-native-starter'),
     category: 'mobile',
   },
   {
     id: 'flutter-mobile',
     name: 'Flutter',
     description: 'An iOS and Android app built with Flutter.',
-    repo: 'https://github.com/ship-studio/flutter-starter',
+    repo: starterRepo('flutter-starter'),
     category: 'mobile',
     skipInstall: true,
   },
@@ -165,7 +176,7 @@ export const TEMPLATES: Template[] = [
     id: 'shopify-theme',
     name: 'Shopify Theme',
     description: 'An online store theme that previews against your real store.',
-    repo: 'https://github.com/ship-studio/shopify-theme-starter',
+    repo: starterRepo('shopify-theme-starter'),
     category: 'other',
     skipInstall: true,
   },
@@ -173,7 +184,7 @@ export const TEMPLATES: Template[] = [
     id: 'eve-agent',
     name: 'Eve Agent',
     description: "An AI agent built on Vercel's Eve framework, with a web chat UI.",
-    repo: 'https://github.com/ship-studio/eve-agent-starter',
+    repo: starterRepo('eve-agent-starter'),
     category: 'other',
   },
   {
@@ -184,6 +195,9 @@ export const TEMPLATES: Template[] = [
     category: 'other',
   },
 ];
+
+/** Available project templates (starters only when this build has a starter base). */
+export const TEMPLATES: Template[] = ALL_TEMPLATES.filter((t) => t.id === 'blank' || t.repo !== '');
 
 /** Picker sections, in display order. */
 export const TEMPLATE_GROUPS: { id: TemplateCategory; label: string }[] = [
