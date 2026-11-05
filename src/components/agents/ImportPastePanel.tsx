@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { ErrorIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { TextArea } from '../primitives/TextField';
@@ -158,6 +159,7 @@ export function ImportPastePanel({ onCancel, onDone }: ImportPastePanelProps) {
             {preview && <ImportPreview preview={preview} />}
             {importer.error && (
               <p className="agents-import__error" role="alert">
+                <ErrorIcon size={12} className="inline-error-icon" />
                 {importer.error.message}
               </p>
             )}

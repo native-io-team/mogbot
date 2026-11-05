@@ -420,8 +420,9 @@ export function AccountSettingsModal({
                     variant="danger"
                     onClick={() => void handleDelete()}
                     disabled={isDeleting}
+                    leftIcon={isDeleting ? <Spinner size="sm" /> : undefined}
                   >
-                    {isDeleting ? <Spinner size="sm" /> : 'Delete'}
+                    {isDeleting ? 'Deleting…' : 'Delete'}
                   </Button>
                 </div>
               </div>

@@ -11,7 +11,7 @@
 import { memo, useState } from 'react';
 import { Button } from '../primitives/Button';
 import { TextField } from '../primitives/TextField';
-import { LockedIcon } from '@/components/icons';
+import { ErrorIcon, LockedIcon } from '@/components/icons';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { saveSecret, secretVars } from '../../lib/agentSecrets';
 import type { AgentMessage } from '../../lib/agents';
@@ -109,6 +109,7 @@ export const SecretCard = memo(function SecretCard({
             </p>
             {error && (
               <p className="agent-editor__error" role="alert">
+                <ErrorIcon size={12} className="inline-error-icon" />
                 {error}
               </p>
             )}
@@ -116,7 +117,13 @@ export const SecretCard = memo(function SecretCard({
               <Button tabIndex={0} variant="secondary" disabled={busy} onClick={() => void deny()}>
                 Deny
               </Button>
-              <Button tabIndex={0} type="submit" variant="strong" data-allow disabled={!filled || busy}>
+              <Button
+                tabIndex={0}
+                type="submit"
+                variant="strong"
+                data-allow
+                disabled={!filled || busy}
+              >
                 Save
               </Button>
             </div>

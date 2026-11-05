@@ -1,4 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { WarningIcon } from '@/components/icons';
 
 export type ButtonVariant =
   | 'default'
@@ -61,7 +62,10 @@ export function buttonClassNames({
  * - `width` — `hug` (default) sizes to content; `fill` stretches to the
  *   container. `block` remains as a backwards-compatible alias for `fill`.
  * - `leftIcon` / `rightIcon` — icon nodes rendered beside the label with the
- *   standard gap (size 14 is the house convention).
+ *   standard gap (size 14 is the house convention). A `danger` button with
+ *   neither gets a warning icon automatically: the accent is user-chosen and
+ *   may itself be red, so a destructive action must not be told apart from a
+ *   primary one by hue alone. Pass your own icon (a trash can, say) to replace it.
  */
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -87,18 +91,24 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   },
   ref
 ) {
+  const startIcon =
+    variant === 'danger' && !leftIcon && !rightIcon ? (
+      <WarningIcon size={size === 'compact' ? 12 : 14} />
+    ) : (
+      leftIcon
+    );
   const classes = buttonClassNames({
     variant,
     size,
     width: block ? 'fill' : width,
     className,
-    leftIcon,
+    leftIcon: startIcon,
     rightIcon,
   });
 
   return (
     <button ref={ref} type={type} className={classes} {...rest}>
-      {leftIcon && <span className="button__icon">{leftIcon}</span>}
+      {startIcon && <span className="button__icon">{startIcon}</span>}
       {children}
       {rightIcon && <span className="button__icon">{rightIcon}</span>}
     </button>
