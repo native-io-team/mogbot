@@ -8,7 +8,7 @@
  */
 
 import type { Agent, AgentMessage } from '@shipstudio/companion-protocol';
-import { formatClock, workingLine } from './agents';
+import { formatClock, formatDate, workingLine } from './agents';
 import type { PendingSend } from './sync';
 
 export type Item =
@@ -68,7 +68,7 @@ export function timeLabel(ts: number, prevTs: number | undefined, now = Date.now
   return null;
 }
 
-/** "Today", "Yesterday", "Tuesday", "Mon 3 Nov": a day separator. */
+/** "Today", "Yesterday", "Tuesday", "Nov 3" (`formatDate`): a day separator. */
 export function dayLabel(ts: number, now = Date.now()): string {
   const day = (t: number) => {
     const d = new Date(t);
@@ -79,12 +79,7 @@ export function dayLabel(ts: number, now = Date.now()): string {
   if (days === 1) return 'Yesterday';
   const d = new Date(ts);
   if (days < 7) return d.toLocaleDateString([], { weekday: 'long' });
-  return d.toLocaleDateString([], {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    ...(d.getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}),
-  });
+  return formatDate(ts, now);
 }
 
 /** When a message was sent, in full, for its long-press menu: "Today 2:40 PM". */

@@ -6,11 +6,19 @@
  *   pnpm mock --public-url https://mac.tailnet.ts.net:47443
  *   pnpm mock --codex-only         # Claude Code not installed; every agent on Codex
  *   pnpm mock --takeover           # Designer driven in a terminal on the Mac
+ *   pnpm mock --bars               # three bars in the Chief's chat: reaches "1 more"
+ *   pnpm mock --impostor           # signs with a stranger's key: "This isn't your Mac"
+ *   pnpm mock --http --cors        # for the web build (`pnpm qa:web` passes both)
+ *
+ * The identity key and paired phones live in dev/.certs (gitignored), so a
+ * restart is the same Mac and a paired phone stays paired (`--state <dir>` to
+ * keep them elsewhere).
  */
 
 /* eslint-disable no-console -- a CLI prints to stdout */
 
 import { execFileSync } from 'node:child_process';
+import { generateKeyPairSync } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createMockServer } from './mock-server';
@@ -53,14 +61,24 @@ function selfSigned(dir: string) {
     return i === -1 ? undefined : args[i + 1];
   };
   const plain = args.includes('--http');
+  // Paired phones and the identity key; `--state` keeps a run's apart (qa:web).
+  const state = path.resolve(arg('--state') ?? path.join(__dirname, '.certs'));
   const tls = plain ? undefined : selfSigned(path.resolve(__dirname, '.certs'));
   const mock = createMockServer({
     port: Number(arg('--port') ?? (plain ? 47450 : 47443)),
     publicUrl: arg('--public-url'),
-    devicesFile: path.resolve(__dirname, '.certs', 'devices.json'),
+    devicesFile: path.join(state, 'devices.json'),
     ...(tls ? { tls: { key: tls.key, cert: tls.cert } } : {}),
     codexOnly: args.includes('--codex-only'),
     takeover: args.includes('--takeover'),
+    bars: args.includes('--bars'),
+    cors: args.includes('--cors'),
+    identityFile: path.join(state, 'identity.pem'),
+    // The same server id and paired phones, a different key: what a phone
+    // sees when something else answers at its Mac's address.
+    ...(args.includes('--impostor')
+      ? { impostorKey: generateKeyPairSync('ed25519').privateKey }
+      : {}),
   });
   void mock.listen().then((url) => {
     const link = mock.pairingLink();

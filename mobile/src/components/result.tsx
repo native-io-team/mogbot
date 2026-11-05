@@ -30,19 +30,14 @@ import { Linking, Pressable, View } from 'react-native';
 import { haptic } from '../lib/haptics';
 import { makeStyles, useColors } from '../lib/appearance';
 import { alpha, iconSize, radius, space } from '../lib/theme';
-import { useApp } from '../lib/store';
+import { useApp, useServed } from '../lib/store';
 import { Attachments } from './attachments';
 import { useCopyParts, type CopyProps } from './copy';
-import { ACTION_ROW, Card } from './surfaces';
+import { ACTION_ROW, Card, Line, OFFLINE_NOTE } from './surfaces';
 import { Button, Icon, T } from './ui';
 
 /** The Mac takes `revises` on a send: only then is "Ask for changes" offered. */
-export const useCanRevise = () =>
-  useApp(
-    (s) =>
-      !!s.welcome?.methods.includes('agents.send') &&
-      !!s.welcome?.features?.includes(MAC_FEATURES.reviseResults)
-  );
+export const useCanRevise = () => useServed('agents.send', MAC_FEATURES.reviseResults);
 
 export const refOf = (card: ResultCard): ResultRef => ({
   id: card.id,
@@ -192,23 +187,17 @@ export function ResultCardView({
   copy?: CopyProps;
   onError: (t: string) => void;
 }) {
-  const colors = useColors();
-  const styles = useStyles();
   const [opened, setOpened] = useState(false);
   const parts = useCopyParts(copy ?? null);
+  const connected = useApp((s) => s.link.kind === 'connected');
   if (!newest && !opened) {
     return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityHint="Shows this earlier version"
+      <Line
+        icon="doc.text"
+        text={supersededLine(card)}
         onPress={() => setOpened(true)}
-        style={styles.past}
-      >
-        <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
-        <T variant="small" color={colors.textMuted} numberOfLines={1} style={{ flexShrink: 1 }}>
-          {supersededLine(card)}
-        </T>
-      </Pressable>
+        pressHint="Shows this earlier version"
+      />
     );
   }
   const ask = newest && onAskForChanges && (
@@ -216,6 +205,7 @@ export function ResultCardView({
       title="Ask for changes"
       variant="ghost"
       icon="bubble.left"
+      disabled={!connected}
       // Beside a copy's answers it takes a row of its own, so Keep stays last.
       style={parts ? [ACTION_ROW, { justifyContent: 'flex-end' }] : undefined}
       onPress={() => {
@@ -230,7 +220,9 @@ export function ResultCardView({
       title={card.title}
       meta={card.version > 1 ? `v${card.version}` : undefined}
       source={changesLine(card) ?? undefined}
-      note={parts?.note}
+      // Offline the answers stay, disabled, with the one note every card uses
+      // (a copy's own note already says it).
+      note={parts?.note ?? (ask && !connected ? OFFLINE_NOTE : undefined)}
       actions={
         ask || parts ? (
           <>
@@ -268,5 +260,4 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.inner,
     backgroundColor: colors.surfaceControl,
   },
-  past: { flexDirection: 'row', alignItems: 'center', gap: space.tight, paddingVertical: space.xs },
 }));

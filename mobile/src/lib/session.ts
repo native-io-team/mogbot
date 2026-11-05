@@ -65,6 +65,9 @@ let transport: DirectTransport | null = null;
 
 export const currentTransport = () => transport;
 
+/** Try the Mac again now, instead of waiting out the backoff. */
+export const retryNow = () => transport?.retryNow();
+
 /**
  * Read the keychain and, if a Mac is paired, its offline copy and drafts,
  * then connect: the cached chats show at once, and the Mac replays from the
@@ -103,7 +106,15 @@ function refuseUnpinned() {
 
 export async function adopt(credentials: Credentials) {
   await saveCredentials(credentials);
-  setApp({ ...emptySync(), credentials, refusal: null, welcome: null, composer: {}, push: null });
+  setApp({
+    ...emptySync(),
+    credentials,
+    refusal: null,
+    welcome: null,
+    served: null,
+    composer: {},
+    push: null,
+  });
   await loadDrafts(credentials.serverId).catch(() => {});
   connect(credentials);
 }
@@ -148,7 +159,11 @@ function connect(c: Credentials) {
   t.onRefused((refusal) => setApp({ refusal }));
   t.onWelcome((welcome) => {
     caughtUp = false;
-    setApp({ welcome, refusal: null });
+    setApp({
+      welcome,
+      served: { methods: [...welcome.methods], features: [...(welcome.features ?? [])] },
+      refusal: null,
+    });
     // Focus is per connection: the Mac forgot it when the last one dropped.
     const open = getApp().openChat;
     if (open) void call('agents.focus', { agentId: open });
@@ -627,6 +642,7 @@ export async function unpair(): Promise<'removed' | 'queued'> {
     ...emptySync(),
     credentials: null,
     welcome: null,
+    served: null,
     refusal: null,
     openChat: null,
     push: null,

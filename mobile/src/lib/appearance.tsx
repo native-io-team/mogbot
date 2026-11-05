@@ -61,7 +61,8 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   // Before the first paint of a change, so native chrome and our surfaces
   // turn together. 'unspecified' hands it back to the system.
   useLayoutEffect(() => {
-    RNAppearance.setColorScheme(pref === 'light' || pref === 'dark' ? pref : 'unspecified');
+    // Optional: react-native-web has no setColorScheme (the web QA build).
+    RNAppearance.setColorScheme?.(pref === 'light' || pref === 'dark' ? pref : 'unspecified');
   }, [pref]);
 
   const theme = themes[resolveAppearance(pref, system)];

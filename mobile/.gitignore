@@ -42,3 +42,6 @@ yarn-error.*
 
 # Mock server certificate
 dev/.certs/
+
+# Web QA captures (pnpm qa:web)
+qa-shots/

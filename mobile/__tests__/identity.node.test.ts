@@ -225,7 +225,7 @@ describe('against a server', () => {
     t.onState((s) => states.push(s));
     await until(() => t.state.kind === 'refused');
     expect(t.state).toEqual({ kind: 'refused', reason: 'not_your_mac' });
-    expect(t.refusal?.message).toMatch(/This isn’t your Mac/);
+    expect(t.refusal?.message).toMatch(/couldn’t prove it’s the Mac you paired with/);
     expect(t.identityVerified).toBe(false);
     expect(states.some((s) => s.kind === 'connected')).toBe(false);
     // What it sent: one challenge. No hello, no token.

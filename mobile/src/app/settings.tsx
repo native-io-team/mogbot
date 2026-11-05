@@ -6,6 +6,7 @@ import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Icon, Row, Section, T, tap } from '../components/ui';
+import { formatDate } from '../lib/agents';
 import { useQuotaLines } from '../lib/quota';
 import { appInfo } from '../lib/pairing';
 import { setPref } from '../lib/prefs';
@@ -130,9 +131,7 @@ export default function Settings() {
                 : undefined
           }
         />
-        {credentials && (
-          <Row label="Paired" value={new Date(credentials.pairedAt).toLocaleDateString()} />
-        )}
+        {credentials && <Row label="Paired" value={formatDate(credentials.pairedAt)} />}
         <Row label="Connection details" onPress={() => router.push('/connection')} />
         <Row label="Forget this Mac" destructive onPress={confirmUnpair} last />
       </Section>

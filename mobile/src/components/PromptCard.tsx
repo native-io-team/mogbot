@@ -32,7 +32,7 @@ import {
 } from './ApprovalCard';
 import { DiffLines } from './diff';
 import { choose as actionSheet } from './menu';
-import { ACTION, ACTION_ROW, Card } from './surfaces';
+import { ACTION, ACTION_ROW, Card, OFFLINE_NOTE } from './surfaces';
 import { Button, T } from './ui';
 import { moreMessage, promptAnswers } from '../lib/answers';
 
@@ -135,7 +135,7 @@ export function PromptCard({
       hideHead={fit.pinned}
       onLayout={fit.onCardLayout}
       onHeadLayout={fit.onHeadLayout}
-      note={!connected ? 'Answer it once your Mac is back. It stays open until then.' : undefined}
+      note={!connected ? OFFLINE_NOTE : undefined}
       actions={
         <Animated.View
           entering={FadeIn.duration(ARM_MS)}

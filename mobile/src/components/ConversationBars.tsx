@@ -62,7 +62,15 @@ export function ConversationBars({
   const bars: BarSpec[] = [];
   if (connection) bars.push(connection);
   const driven = drivenBar(agent);
-  if (driven) bars.push({ id: 'driven', ...driven, icon: 'terminal' });
+  // Only known live: while the Mac is away it's what was last seen, said so.
+  if (driven) {
+    bars.push({
+      id: 'driven',
+      ...driven,
+      ...(connection ? { detail: 'Last known' } : {}),
+      icon: 'terminal',
+    });
+  }
   const importing = importBar(agent, messages);
   if (importing) bars.push({ id: 'import', ...importing, icon: 'square.and.arrow.down' });
   const changes = revisingBar(revising);
