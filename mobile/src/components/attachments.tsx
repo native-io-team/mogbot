@@ -21,7 +21,7 @@ import {
 } from '../lib/files';
 import { attachmentSource, describeError, download } from '../lib/session';
 import type { PendingAttachment } from '../lib/sync';
-import { alpha, iconSize, radius, space, type } from '../lib/theme';
+import { alpha, iconSize, radius, space, type, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { choose } from './menu';
@@ -252,7 +252,7 @@ export function StagedTile({
         accessibilityLabel={`Remove ${file.name}`}
         hitSlop={12}
         onPress={onRemove}
-        style={styles.remove}
+        style={({ pressed }) => [styles.remove, pressed && PRESSED]}
       >
         <Icon
           name="xmark"

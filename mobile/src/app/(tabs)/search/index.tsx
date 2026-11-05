@@ -153,7 +153,7 @@ export default function Search() {
             }}
             style={({ pressed }) => [
               styles.hit,
-              pressed && { backgroundColor: colors.surfacePanel },
+              pressed && { backgroundColor: colors.surfaceControl },
             ]}
           >
             <View style={styles.hitTop}>

@@ -420,3 +420,6 @@ function parseHex(hex: string): number[] {
 
 /** `--duration-*`. */
 export const duration = { fast: 100, standard: 150, slow: 300 } as const;
+
+/** What a pressed text control, pill or icon looks like: the same everywhere, from the first frame of the press. */
+export const PRESSED = { opacity: 0.6 } as const;

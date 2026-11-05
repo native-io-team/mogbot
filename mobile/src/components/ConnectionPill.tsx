@@ -12,7 +12,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { pill, problemBody } from '../lib/connection';
 import { retryNow } from '../lib/session';
 import { useApp } from '../lib/store';
-import { chromeScale, radius, space } from '../lib/theme';
+import { chromeScale, radius, space, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { Button, Dot, T, useToneColor } from './ui';
@@ -54,6 +54,7 @@ function ConnectionPill() {
       accessibilityLabel={`${p.label}. Connection details`}
       hitSlop={8}
       onPress={() => router.push('/connection')}
+      style={({ pressed }) => pressed && PRESSED}
     >
       <Animated.View layout={LinearTransition.duration(200)} style={styles.pill}>
         <Dot color={toneColor[p.tone]} glow={p.tone === 'ok'} />
