@@ -699,12 +699,21 @@ with the window hidden.
 
 Each agent has `engine: "claude" | "codex"` (default `claude`), so it can run
 on a ChatGPT plan with the same chat, tools, memory and Chief around it. The
-editor's **Runs on** (`AgentEngine.tsx`) lists every engine; one that isn't
-installed or signed in (Codex: `codex login status`; Claude Code counts once
-installed) is disabled, with "Codex isn't signed in." and a Sign in / Set up
-button that opens the same terminal as the chat's. Under it, one line says
-what protects an agent on the chosen engine, from `EngineInfo.asks` (Claude
-Code always; Codex only over app-server), never more than is enforced. An
+editor's **Runs on** (`AgentEngine.tsx`) appears only once two engines are
+installed; with one there is nothing to choose, and the dialog's foot has a
+quiet "Also use Codex" that opens the same set-up terminal as the chat's. An
+installed engine that isn't signed in (Codex: `codex login status`; Claude
+Code counts once installed) is disabled, with "Codex isn't signed in." and
+Sign in. A new agent starts on the first engine that is ready
+(`defaultEngine`), and `agents_create` refuses one that isn't, whether it was
+chosen or defaulted. One line says what protects an agent on that engine
+(`engineProtections`), never more than is enforced: for Claude Code, the
+app's own tools and the user's own allow rules don't ask; for Codex, apps
+connected to Codex itself run outside its limits. When `EngineInfo.asks` is
+false (a Codex without a usable app-server), the chat says so above the
+composer and the phone's agent sheet says so under "Runs on"
+(`engineCantAsk`). A schema check that timed out or didn't start is not
+cached, so a slow moment doesn't stick as "can't ask". An
 agent on an engine other than Claude Code wears a small badge in the sidebar
 and the team view. Model offers
 that engine's own list: Claude Code's aliases, or Codex's own
@@ -729,10 +738,12 @@ over JSON-RPC on stdin/stdout:
 ```
 codex app-server
   -c sandbox_workspace_write.writable_roots=[<home or project dirs>]
+  -c sandbox_workspace_write.network_access=false
   -c mcp_servers.shipstudio_agents={url=…,tool_timeout_sec=300,default_tools_approval_mode="approve"}
   -c project_doc_fallback_filenames=["CLAUDE.md"]
 → initialize, initialized
 → thread/start {cwd, approvalPolicy:"on-request", sandbox:"workspace-write",
+                config:{"sandbox_workspace_write.network_access":false},
                 model, developerInstructions}    (or thread/resume {threadId, …})
 → turn/start {threadId, input:[prompt]}
 ```
@@ -767,6 +778,12 @@ result (sent after, it can miss the turn). Questions (`requestUserInput`)
 and other elicitations are declined with a steer to ask in the chat;
 requests we don't handle get a JSON-RPC error rather than hanging.
 
+No network is set on the command line and again on the thread, so a
+`network_access = true` in the user's own `~/.codex/config.toml` can't widen
+it (checked on 0.166: `codex sandbox` with `network_access=true` reaches the
+internet and with `false` doesn't; `thread/start` echoes `networkAccess:
+false` even when the command line said `true`).
+
 **Stop and ⌘Enter** send `turn/interrupt` and wait up to 3s for the turn to
 end (`interrupted`) before the process tree is stopped. Codex sends no
 completed message for a reply cut off, so the draft is kept as stopped,
@@ -774,7 +791,8 @@ exactly as for Claude Code.
 
 **Fallback.** `codex_app::available` asks the installed Codex for its own
 protocol schema (`app-server generate-json-schema`, ~0.1s, once per binary
-until it changes) and needs every method above. Without them a turn is
+until it changes; a check that timed out, didn't start or was killed is asked
+again next time) and needs every method above. Without them a turn is
 `codex exec [resume <thread id>] --json --skip-git-repo-check` with the same
 `-c` overrides plus `sandbox_mode="workspace-write"`, `approval_policy="never"`
 and `developer_instructions`: replies arrive whole, nothing can ask (exec
@@ -1080,4 +1098,4 @@ prunes them the diff says it can't be shown.
   result). `AGENTS_E2E_RUNS`, `AGENTS_E2E_JOBS`, `AGENTS_E2E_ONLY`,
   `AGENTS_E2E_OUT=<file.json>`.
 - `node scripts/harness-capture.mjs agents-`: memory (`agents-memory`, `agents-memory-edit`, `agents-remember`), a routine's past runs and a pending retry (`agents-schedule-history`), project binding (`agents-project-*`), Chief audit (`agents-chief-audit`), brief in progress, team, What's in flight (`agents-team-overview`, via ⌘K), @mention menu, approval, secure input (`agents-secret-*`, `agents-secrets-editor`), first run (keep-awake off and on), new
-  agent, import, Claude Code missing, the engine picker (`agents-engine-picker`), Codex not set up (`agents-engine-unavailable`) and a Codex agent's chat (`agents-codex-chat`).
+  agent, import, Claude Code missing, the engine picker (`agents-engine-picker`), Codex not signed in (`agents-engine-unavailable`), one engine installed (`agents-engine-one`), a Codex that can't ask (`agents-codex-cant-ask`) and a Codex agent's chat (`agents-codex-chat`).

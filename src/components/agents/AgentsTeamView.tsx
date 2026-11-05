@@ -125,7 +125,7 @@ function Row({ agent, line, meta, state, onOpen }: RowProps) {
       <AgentAvatar name={agent.name} color={agent.color} />
       <span className="agents-team__text">
         <span className="agents-team__name">
-          {agent.name}
+          <span className="agents-team__name-text">{agent.name}</span>
           <AgentEngineBadge engine={agent.engine} />
         </span>
         <span className="agents-team__line" data-state={state}>

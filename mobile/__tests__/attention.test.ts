@@ -4,6 +4,7 @@ import {
   attentionCounts,
   cardOutcome,
   describeScope,
+  engineCantAsk,
   engineLine,
   subtitle,
   workingLine,
@@ -214,6 +215,17 @@ describe('engines, slots and decision cards', () => {
       'Claude · claude-x'
     );
     expect(engineLine(agent({ engine: undefined as never }), engines)).toBeNull();
+  });
+
+  it('says plainly when an agent’s engine can’t stop to ask, and only then', () => {
+    const codex = agent({ engine: 'codex' });
+    const old = engines.map((e) => (e.id === 'codex' ? { ...e, asks: false } : e));
+    expect(engineCantAsk(codex, old)).toMatch(/needs your OK is refused/);
+    expect(engineCantAsk(codex, engines)).toBeNull();
+    // A Mac from before `asks` says nothing, so nothing is claimed.
+    const older = engines.map(({ asks: _, ...e }) => e);
+    expect(engineCantAsk(codex, older)).toBeNull();
+    expect(engineCantAsk(agent({ engine: 'claude' }), old)).toBeNull();
   });
 
   it('says a queued turn is waiting for a slot and doesn’t count it as working', () => {

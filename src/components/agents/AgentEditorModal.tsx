@@ -1,8 +1,8 @@
 /**
  * Create a new agent, or edit one. Creating asks only what Grok Bot asks —
- * a name and a face — plus what it runs on (Claude Code or Codex; one that
- * isn't set up shows why) and its model, with the role and briefing
- * one disclosure away, because
+ * a name and a face — plus what it runs on (a choice only once two engines
+ * are installed; otherwise a quiet "Also use …" at the foot) and its model,
+ * with the role and briefing one disclosure away, because
  * most agents are created by the Chief of Staff and briefed in conversation.
  *
  * @module components/agents/AgentEditorModal
@@ -19,12 +19,13 @@ import { AgentProjectField } from './AgentProject';
 import { AgentMemory } from './AgentMemory';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentSecrets } from './AgentSecrets';
-import { AgentEngineField } from './AgentEngine';
+import { AgentEngineField, AgentEngineMore } from './AgentEngine';
 import {
   AGENT_COLORS,
   type AgentColor,
   type AgentEngine,
   createAgent,
+  defaultEngine,
   ENGINE_LABEL,
   formatUsage,
   getAgentInstructions,
@@ -177,7 +178,10 @@ export function AgentEditorModal({
   const [role, setRole] = useState(agent?.role ?? '');
   const [instructions, setInstructions] = useState('');
   const engines = useAgentsSelector((s) => s.engines);
-  const [engine, setEngine] = useState<AgentEngine>(agent?.engine ?? 'claude');
+  // Until someone picks, a new agent goes on the first engine that can take
+  // it, worked out from the overview as it arrives rather than once.
+  const [picked, setEngine] = useState<AgentEngine | null>(agent?.engine ?? null);
+  const engine = picked ?? defaultEngine(engines);
   const [model, setModel] = useState(agent?.model ?? '');
   const switching = Boolean(agent && agent.engine !== engine);
   const [project, setProject] = useState(agent?.project ?? '');
@@ -372,6 +376,9 @@ export function AgentEditorModal({
           Add a role and instructions
         </TextButton>
       )}
+
+      {/* With one engine there's no "Runs on": what protects it, and the way to add another, live down here. */}
+      <AgentEngineMore engines={engines} value={engine} onSetUp={onSetUpEngine} />
 
       {error && (
         <p className="agent-editor__error" role="alert">

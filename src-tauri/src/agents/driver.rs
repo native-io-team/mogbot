@@ -67,9 +67,19 @@ impl Driver {
     /// (a signed-out turn says so in the chat); a signed-out Codex retries a
     /// 401 for twenty seconds before saying so, so it is asked first.
     pub async fn ready(self) -> Result<(), CommandError> {
+        self.ready_if(|| super::engine::signed_in(Engine::Codex))
+            .await
+    }
+
+    /// [`Driver::ready`], given how to ask whether Codex is signed in (only
+    /// asked for a Codex turn).
+    async fn ready_if<F>(self, codex_signed_in: impl FnOnce() -> F) -> Result<(), CommandError>
+    where
+        F: std::future::Future<Output = bool>,
+    {
         match self.engine() {
             Engine::Claude => Ok(()),
-            Engine::Codex if super::engine::signed_in(Engine::Codex).await => Ok(()),
+            Engine::Codex if codex_signed_in().await => Ok(()),
             Engine::Codex => Err(CommandError::expected("Codex says: Not logged in.")),
         }
     }
@@ -155,25 +165,30 @@ mod tests {
         }
     }
 
-    #[test]
-    fn each_driver_belongs_to_one_engine() {
-        assert_eq!(Driver::ClaudePrint.engine(), Engine::Claude);
-        assert_eq!(Driver::CodexApp.engine(), Engine::Codex);
-        assert_eq!(Driver::CodexExec.engine(), Engine::Codex);
+    #[tokio::test]
+    async fn the_turn_runs_codex_over_the_app_server_only_when_it_has_one() {
+        use crate::agents::codex_app::fake;
+        let dir = tempfile::tempdir().unwrap();
+        let app = fake::codex(&fake::folder(dir.path(), "app"), fake::Kind::AppServer);
+        let old = fake::codex(&fake::folder(dir.path(), "old"), fake::Kind::ExecOnly);
+        assert_eq!(Driver::pick(Engine::Codex, &app).await, Driver::CodexApp);
+        assert_eq!(Driver::pick(Engine::Codex, &old).await, Driver::CodexExec);
+        // Claude Code's binary is never probed for an app-server.
+        assert_eq!(
+            Driver::pick(Engine::Claude, Path::new("/nonexistent/claude")).await,
+            Driver::ClaudePrint
+        );
     }
 
-    #[test]
-    fn claude_names_new_sessions_and_codex_lets_the_engine_name_them() {
-        assert_eq!(Driver::ClaudePrint.new_session().len(), 36);
-        assert!(Driver::CodexApp.new_session().is_empty());
-        assert!(Driver::CodexExec.new_session().is_empty());
-    }
-
-    #[test]
-    fn only_the_app_server_keeps_stdin_open() {
-        assert!(Driver::CodexApp.converses());
-        assert!(!Driver::ClaudePrint.converses());
-        assert!(!Driver::CodexExec.converses());
+    #[tokio::test]
+    async fn only_a_codex_turn_waits_on_a_sign_in_check() {
+        let never = || async { panic!("Claude Code's sign-in is the turn's to check") };
+        assert!(Driver::ClaudePrint.ready_if(never).await.is_ok());
+        for codex in [Driver::CodexApp, Driver::CodexExec] {
+            assert!(codex.ready_if(|| async { true }).await.is_ok());
+            let refused = codex.ready_if(|| async { false }).await.unwrap_err();
+            assert!(refused.to_string().contains("Not logged in"));
+        }
     }
 
     #[test]

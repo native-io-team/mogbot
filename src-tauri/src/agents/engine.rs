@@ -159,12 +159,7 @@ pub async fn signed_in(engine: Engine) -> bool {
 pub async fn info(engine: Engine) -> EngineInfo {
     let found = binary(engine).await;
     let installed = found.is_some();
-    let asks = match (&found, engine) {
-        (_, Engine::Claude) => true,
-        (Some(binary), Engine::Codex) => super::codex_app::available(binary).await,
-        // Not installed: unknown, so not claimed.
-        (None, Engine::Codex) => false,
-    };
+    let asks = asks(engine, found.as_deref()).await;
     EngineInfo {
         id: engine,
         label: engine.label(),
@@ -172,6 +167,16 @@ pub async fn info(engine: Engine) -> EngineInfo {
         signed_in: installed && signed_in(engine).await,
         asks,
         models: models(engine),
+    }
+}
+
+/// Whether its turns can ask (`EngineInfo::asks`), given its binary.
+async fn asks(engine: Engine, binary: Option<&std::path::Path>) -> bool {
+    match (binary, engine) {
+        (_, Engine::Claude) => true,
+        (Some(binary), Engine::Codex) => super::codex_app::available(binary).await,
+        // Not installed: unknown, so not claimed.
+        (None, Engine::Codex) => false,
     }
 }
 
@@ -261,5 +266,19 @@ mod tests {
         );
         assert!(normalize_model(Engine::Claude, "--dangerously-skip-permissions").is_err());
         assert!(normalize_model(Engine::Codex, "opus").is_err());
+    }
+
+    #[tokio::test]
+    async fn only_a_codex_with_an_app_server_is_said_to_ask() {
+        use crate::agents::codex_app::fake;
+        let dir = tempfile::tempdir().unwrap();
+        let app = fake::codex(&fake::folder(dir.path(), "app"), fake::Kind::AppServer);
+        let old = fake::codex(&fake::folder(dir.path(), "old"), fake::Kind::ExecOnly);
+        assert!(asks(Engine::Claude, None).await);
+        assert!(asks(Engine::Codex, Some(&app)).await);
+        // `codex exec` forces approvals to "never": nothing can ask.
+        assert!(!asks(Engine::Codex, Some(&old)).await);
+        // Not installed: nothing is claimed.
+        assert!(!asks(Engine::Codex, None).await);
     }
 }
