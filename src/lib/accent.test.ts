@@ -149,7 +149,7 @@ describe('boot cache', () => {
     // An entry from an older build, without the shades, is not half-applied.
     localStorage.setItem(
       ACCENT_CACHE_KEY,
-      JSON.stringify({ '--accent-user': good['--accent-user'], '--accent-on-user': ON_ACCENT_DARK }),
+      JSON.stringify({ '--accent-user': good['--accent-user'], '--accent-on-user': ON_ACCENT_DARK })
     );
     expect(readCachedAccent()).toBeNull();
   });
@@ -160,7 +160,12 @@ describe('boot cache', () => {
     const run = (cached: unknown) => {
       const el = document.createElement('html');
       localStorage.setItem(ACCENT_CACHE_KEY, JSON.stringify(cached));
-      new Function('document', script)({ documentElement: el });
+      // Runs index.html's own boot script: testing that exact code is the point.
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      const boot = new Function('document', script) as (doc: {
+        documentElement: HTMLElement;
+      }) => void;
+      boot({ documentElement: el });
       return el.style;
     };
     const good = accentVars('red');

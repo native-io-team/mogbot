@@ -239,7 +239,7 @@ export function inkSafeShade(
   ink: string,
   toward: 'black' | 'white',
   amount: number,
-  minShare = 0.5,
+  minShare = 0.5
 ): string {
   const inkRgb = parseHex(ink)!;
   const passes = (t: number) =>

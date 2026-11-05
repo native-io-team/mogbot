@@ -111,11 +111,11 @@ echo
 # Anything that freezes it fails: the old green RGB triplet token
 # (`--accent-active-rgb`, which could never follow a runtime colour — use
 # `color-mix(in srgb, var(--accent-active) N%, transparent)`), the literal
-# 70,231,111 triplet, and raw `--color-green-*` primitives outside the token
+# 70 231 111 triplet (comma- or space-separated, so `rgb(70 231 111)` too), and raw `--color-green-*` primitives outside the token
 # layers (status green is `--accent-success`). Injected preview scripts are in
 # scope too: they draw on the user's page and must use the fixed overlay blue.
 echo "Checking for a frozen accent (old brand green)…"
-FROZEN_ACCENT=$(grep -rnE -- '--accent-active-rgb|70,[[:space:]]*231,[[:space:]]*111|--color-green-' \
+FROZEN_ACCENT=$(grep -rnE -- '--accent-active-rgb|70(,[[:space:]]*|[[:space:]]+)231(,[[:space:]]*|[[:space:]]+)111|--color-green-' \
   src src-tauri/src/proxy \
   --include='*.css' --include='*.ts' --include='*.tsx' --include='*.html' 2>/dev/null |
   grep -vE '^src/styles/global/(tokens-[a-z]+\.css|token-inventory\.json):' || true)

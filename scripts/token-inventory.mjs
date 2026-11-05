@@ -195,6 +195,37 @@ function validateLayerDirection(definitions, layersByFile, definitionsByName, ro
   return diagnostics;
 }
 
+/**
+ * Whether a definition sits inside an `@supports` block. A token redeclared
+ * there is a progressive enhancement of the plain value above it (the accent's
+ * color-mix tints), not a second owner, as long as both are in the same file.
+ */
+function insideSupports(definition) {
+  let source;
+  try {
+    source = fs.readFileSync(definition.filePath, 'utf8');
+  } catch {
+    return false;
+  }
+  const upTo = source.split('\n').slice(0, definition.line).join('\n');
+  const stack = [];
+  let pending = '';
+  for (const char of upTo.replace(/\/\*[\s\S]*?\*\//g, '')) {
+    if (char === '{') {
+      stack.push(pending.trim().startsWith('@supports'));
+      pending = '';
+    } else if (char === '}') {
+      stack.pop();
+      pending = '';
+    } else if (char === ';') {
+      pending = '';
+    } else {
+      pending += char;
+    }
+  }
+  return stack.includes(true);
+}
+
 function validateTokenTaxonomy({
   manifest,
   indexSource,
@@ -223,6 +254,11 @@ function validateTokenTaxonomy({
 
   for (const [name, entries] of duplicateNames) {
     if (entries.length < 2) continue;
+    const enhancementOnly =
+      entries.every((entry) => entry.filePath === entries[0].filePath) &&
+      !insideSupports(entries[0]) &&
+      entries.slice(1).every(insideSupports);
+    if (enhancementOnly) continue;
     diagnostics.push({
       code: 'duplicate-token',
       filePath: entries[1].filePath,

@@ -190,24 +190,53 @@ There is no separate accent preference — Settings → Appearance → *Accent c
 cannot disagree. Inside another agent's conversation the accent is that
 agent's colour instead.
 
-- **One runtime input.** `src/lib/accent.ts` writes `--accent-user`, plus two
-  values it computes in JS: `--accent-on-user` (black or white ink, whichever
-  has the higher WCAG contrast) and `--accent-user-rgb` (only so the
-  plugin-stable `--action-rgb` follows the accent). Every other accent role is
-  derived in CSS with `color-mix()`.
+- **What it is for.** Primary actions, selection and "this is on". Never
+  status: in progress is `--status-running`, done/healthy is
+  `--accent-success`, informational is `--status-info`, and the current
+  branch or row is neutral (`--text-primary` on `--surface-selected`). A
+  red, amber or green accent must never be readable as error, warning or
+  success, and the Chief's colour may be any of them.
+- **Answers are neutral.** Allow on an approval or prompt card is
+  `variant="strong"` (near-white fill, dark ink), never `primary` — a red
+  accent would make Allow look like the destructive choice.
+  `approvalNeutral.test.tsx` holds this.
+- **Danger is not told apart by hue.** `<Button variant="danger">` gets a
+  warning icon automatically when it has no icon of its own; pass a more
+  specific one (a trash can) to replace it. Inline error text carries an
+  `ErrorIcon` (`.inline-error-icon`) as well as its colour.
+- **Computed in JS, written as hex.** `src/lib/accent.ts` writes the colour
+  and every shade of it as finished inline values: `--accent-user`, its ink
+  `--accent-on-user` (black or white), `--accent-user-rgb` (only so the
+  plugin-stable `--action-rgb` follows), and `--accent-user-hover`,
+  `-strong`, `-start`, `-end`. Each shade is checked against the ink for
+  WCAG AA and pulled the other way when the usual direction would fail. The
+  primary button uses no `color-mix()`, so a WebView without it (Safari 15)
+  keeps the fill. Only theme-relative tints (accent mixed with a surface or
+  text token) stay in CSS, behind `@supports` with a plain fallback.
 - **Scoped accents.** The derived roles are declared on `:root,
-  [data-accent-scope]`. A role derived only at `:root` is inherited as a
-  finished colour and would not follow a child's `--accent-user`. To give a
-  subtree its own accent, spread `useAccentScope(colorKey)` onto its root; any
-  new accent-derived token must go in one of the scoped blocks
-  (`accent.test.ts` fails otherwise).
+  [data-accent-scope]`, because a role derived only at `:root` is inherited
+  as a finished colour and would not follow a child's `--accent-user`. To
+  give a subtree its own accent, spread `useAccentScope(colorKey)` onto its
+  root; any new accent-derived token must go in one of the scoped blocks
+  (`accent.test.ts` fails otherwise). Portals leave that DOM subtree, so
+  wrap the subtree in `AccentScopeProvider` (or a portalled modal in
+  `<AccentScope color>`, from `src/contexts/AccentScopeContext.tsx`):
+  `ModalFrame`, `Dropdown` (portalled) and `ContextMenu` put the scope on
+  their own root. Tooltips do not carry it — they have no accent surface.
+- **Focus is not the accent.** `--focus-ring` is a fixed blue so it shows
+  whatever colour the user picked, white included.
 - **No flash.** The last app accent is cached in `localStorage` and applied by
-  an inline script in `index.html` before the bundle runs.
+  an inline script in `index.html` before the bundle runs; both the script and
+  `readCachedAccent` validate every cached value.
 - **Selected needs a second cue.** With a white accent, hue says nothing next
   to white text — pair accent with a fill, ring, weight or check glyph.
-- **Theme-ready.** Nothing in the accent block assumes dark: hover/pressed mix
-  toward black, soft fills mix with surface tokens, accent text mixes with
-  `--text-primary`. A light theme redefines surfaces and text only.
+- **The picker previews, then saves.** Arrow keys in the accent picker move
+  the selection and repaint at once; the registry write happens on Space or
+  Enter, on click, or after the arrows stop.
+- **Theme-ready.** Nothing in the accent block assumes dark: shades are
+  computed from the colour itself, soft fills mix with surface tokens and
+  accent text with `--text-primary`. A light theme redefines surfaces and text
+  only.
 
 Need a value that doesn't exist? Add it to the smallest appropriate layer, update the inventory, and
 run `pnpm check:token-layers`. Do not add a new alias to the compatibility file unless it is a
@@ -328,7 +357,7 @@ attributes, `invalid`, and an optional `suffix`. The primitive owns the followin
 | Code | Add `ss-text-field--code` for commands, paths, and other code-like values. |
 | Invalid | `invalid` adds the stable invalid class and `aria-invalid="true"`; feature validation owns the message text. |
 | Disabled | Native `disabled` behavior remains intact and receives the disabled surface, text, and cursor treatment. |
-| Placeholder / focus | Placeholder uses the secondary text role; focus uses the active accent ring and primary text. |
+| Placeholder / focus | Placeholder uses the secondary text role; focus uses the fixed blue `--focus-ring` (never the accent) and primary text. |
 | Labels / help / messages | Render these in the owning form recipe so TextField does not become a form god component. |
 | Suffix | `suffix` enables the optional shell; suffix content is decorative/supporting UI, not the input label. |
 

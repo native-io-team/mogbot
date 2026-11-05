@@ -9,7 +9,12 @@ import type { AgentMessage, Approval } from '../../lib/agents';
  * is in the palette — and a red Allow reads as the destructive choice.
  */
 
-const base: Approval = { requestId: 'r1', title: 'Run a command', detail: 'npm test', status: 'pending' };
+const base: Approval = {
+  requestId: 'r1',
+  title: 'Run a command',
+  detail: 'npm test',
+  status: 'pending',
+};
 
 const message = (approval: Approval): AgentMessage => ({
   id: 'm1',
@@ -66,7 +71,12 @@ describe('approval and prompt answers are neutral', () => {
   for (const [name, approval] of cards) {
     it(`${name}: no answer button takes the accent`, () => {
       const { container } = render(
-        <ApprovalCard message={message(approval)} agentName="Acme" paused={false} onAnswer={vi.fn()} />
+        <ApprovalCard
+          message={message(approval)}
+          agentName="Acme"
+          paused={false}
+          onAnswer={vi.fn()}
+        />
       );
       const buttons = [...container.querySelectorAll('button')];
       expect(buttons.length).toBeGreaterThan(0);
