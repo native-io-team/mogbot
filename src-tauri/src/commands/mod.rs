@@ -192,6 +192,47 @@ mod log_hygiene_tests {
         }
     }
 
+    /// Arguments whose names say nothing, but whose values can: a link opened
+    /// in the browser can carry an OAuth code or a signed query string.
+    const MUST_SKIP: &[(&str, &str)] = &[("open_url_in_browser", "url")];
+
+    #[test]
+    fn arguments_named_harmlessly_but_carrying_secrets_are_skipped() {
+        let re = instrumented_fn();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut seen = Vec::new();
+        for entry in walkdir::WalkDir::new(&root).into_iter().flatten() {
+            if entry.path().extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let src = std::fs::read_to_string(entry.path()).unwrap();
+            for cap in re.captures_iter(&src) {
+                let attr = cap.get(1).map_or("", |m| m.as_str());
+                for (func, param) in MUST_SKIP {
+                    if &cap[2] != *func {
+                        continue;
+                    }
+                    seen.push(*func);
+                    let skipped = attr.contains("skip_all")
+                        || regex::Regex::new(r"skip\(([^)]*)\)")
+                            .unwrap()
+                            .captures(attr)
+                            .is_some_and(|c| c[1].split(',').any(|n| n.trim() == *param));
+                    assert!(
+                        skipped,
+                        "{func} must skip `{param}` in #[tracing::instrument]"
+                    );
+                }
+            }
+        }
+        for (func, _) in MUST_SKIP {
+            assert!(
+                seen.contains(func),
+                "{func} is no longer instrumented; update MUST_SKIP"
+            );
+        }
+    }
+
     #[test]
     fn commands_never_log_credentials_instructions_or_notes() {
         let re = instrumented_fn();
