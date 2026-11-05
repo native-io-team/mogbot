@@ -45,6 +45,7 @@
 //!
 //! Full design: docs/agents.md.
 
+pub mod admin;
 pub mod apps;
 pub mod arrival;
 pub mod attachments;
@@ -156,6 +157,7 @@ fn greet(agent_id: &str) {
         revises: None,
         takeover: false,
         room: None,
+        decide: Vec::new(),
     };
     if let Err(e) = store::append_message(&message) {
         tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");
@@ -165,6 +167,7 @@ fn greet(agent_id: &str) {
 /// The Chief of Staff exists from the first time anyone looks.
 pub fn ensure_main() -> Result<store::Agent, CommandError> {
     if let Some(main) = store::list()?.into_iter().find(|a| a.is_main) {
+        admin::note_upgrade(&main);
         if let Err(e) = upgrade_chief(&main) {
             tracing::warn!("[Agents] Couldn't bring the Chief's instructions up to date: {e}");
         }
@@ -181,6 +184,7 @@ pub fn ensure_main() -> Result<store::Agent, CommandError> {
     match created {
         Ok(agent) => {
             greet(&agent.id);
+            admin::mark_noted(&agent.id);
             Ok(agent)
         }
         // Two callers raced; the other one made it.

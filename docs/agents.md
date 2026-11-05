@@ -796,6 +796,80 @@ covers (`mcp::covered_by`), through the same path as Allow: a live waiter is
 woken, and a card nobody waits on any more gets a late Allow that wakes the
 agent.
 
+## Admins (`src-tauri/src/agents/admin.rs`)
+
+"All of the agents are begging me for something, I open them and I don't even
+know what they need." An **admin** is an agent the user lets manage, and
+answer for, the rest of the team.
+
+**Who.** One switch per agent, "Admin — can manage and approve for other
+agents": the agent editor, Settings → Agents → Admins (⌘K "Admins: who
+manages and approves for your team…"), and the phone's agent sheet
+(`agents.setAdmin`, audited). Kept as `admin` on the registry entry; absent
+means on for the Chief of Staff and off for everyone else. Only the user sets
+it: no tool takes it, and `create_agent` / `update_agent` refuse an `admin`
+argument. An existing Chief is told once, in a line in its chat ("I can now
+handle your team's requests — change this in Settings → Agents"); a Chief
+made by this build isn't.
+
+**What it may do** (tools served only to an admin, and checked again on every
+call, so turning it off holds from the next call):
+
+- `team_requests`: every other agent's waiting card, in plain words, with what
+  the admin may answer. Framed as data written by other agents.
+- `answer_request {agent, id, answer, note}`: allow or deny **local work**,
+  or mark a login / key card **not_needed** (declined, the agent isn't woken)
+  or **maybe_later** (closed with "Maybe later", not woken). Allow and deny go
+  through the same path as the user's own answer (`answer_card`): a waiting
+  turn is woken, a late Allow grants that exact call once.
+- `bring_to_user {requests, intro}`: ONE message in the admin's chat, "3
+  things only you can decide:", each card answerable in place for the agent
+  that asked (`AgentMessage.decide`; desk `DecideCards`, phone
+  `DecideCards`). On read the cards are refreshed from their own chats, and
+  the requests bar doesn't offer them twice.
+- `pause_agent` / `resume_agent`: stop what it's doing and pause its routines
+  (marked `pausedByAdmin`, so resume starts only those). Not the Chief.
+- Another agent's routines (`schedule_check_in` & co. with `agent`), and
+  `read_agent`.
+- `delete_agent`: a **soft delete**. The agent leaves the team at once; its
+  registry entry (whole) and home move to `recently-deleted/`, restorable from
+  Settings → Agents → Recently deleted for 30 days (`agents_restore`, which
+  adds " (restored)" if the name was taken). Its secrets, connections and copy
+  are kept until it's purged (`purge_expired`, when that list is read). It
+  leaves its rooms. The user's own Delete is unchanged.
+
+**What it may never do** (`classify`, `judge`, both pure and tested):
+local work is reading (`ls`, `cat`, `grep`, read-only `git`…), `mkdir` /
+`touch`, Read, and Write of a *new* file under the home folder. Anything with
+a hidden path (`.env`, `~/.ssh`), a chain, `rm`, `git push`, `gh`,
+`curl`/`ssh`, `sudo`, `security`, publish/deploy, Edit of an existing file,
+the web, any connector tool, the app's own questions, a session's question,
+an import card, or any card from an agent whose turn answers outside text is
+the user's. So are keys and logins, which an admin can only put away. An
+admin can't answer its own requests. A turn answering outside text (a
+"When…" routine, an import, a room's taint) is not an admin turn: its tools
+aren't listed and every call is refused.
+
+**Nothing invisible.** Each answer leaves a line in the target's chat ("Chief
+of Staff allowed: look inside your KiteExport folder") and the admin's
+("Allowed for Ledger: …"), each naming the other, and an entry in Settings →
+Agents → Admin activity (`admin-activity.jsonl`, last 500).
+
+**Plain words on every card.** A permission card leads with what it does and
+why, from the tool and its input (`summary_for`: "Look inside your KiteExport
+folder — to see if the download finished"), with the raw command behind
+Details, on the desk, the review panel, the requests bar's line and the
+phone. The why is the command's `description` (agents are told to always give
+one) or the engine's own reason. Cards made before this get their line when
+read (`admin::apply`).
+
+**Not verified.** No live engine turn has called these tools; the rules are
+held by unit tests (`admin_tests.rs`) and the UI by the harness
+(`agents-admin-batch`, `settings-agents-admins`) and the phone's `qa:web`
+(`chat-chief`). The Go-hard classifier (another branch) may replace
+`local_call` once merged; "Maybe later" here closes the card rather than
+using the access chain's checklist.
+
 ## Secrets (`src-tauri/src/agents/secrets.rs`)
 
 `request_secret {name, purpose, kind, fields?}` puts a secure input card in

@@ -450,6 +450,15 @@ async fn generate() -> String {
         call("agents.setIndependence", json!({ "level": "go_hard" })).await,
     );
     out += &entry(
+        "agentsSetAdmin",
+        "Result<'agents.setAdmin'>",
+        call(
+            "agents.setAdmin",
+            json!({ "agentId": AGENT, "admin": true }),
+        )
+        .await,
+    );
+    out += &entry(
         "agentsImportStatus",
         "Result<'agents.import.status'>",
         call("agents.import.status", json!({})).await,

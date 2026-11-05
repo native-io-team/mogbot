@@ -152,6 +152,8 @@ pub async fn agents_messages(
         crate::agents::work::apply(&agent_id, &mut page);
         // A login card's sign-in under way, as it is now.
         crate::agents::logins::apply(&mut page);
+        // Every card in plain words; an admin's batch as it is now.
+        crate::agents::admin::apply(&mut page);
         Ok(page)
     })
     .await
@@ -942,7 +944,7 @@ pub async fn agents_connection_delete(
     Ok(())
 }
 
-fn answer_card(
+pub(crate) fn answer_card(
     app: &AppHandle,
     agent_id: &str,
     request_id: &str,
@@ -1587,6 +1589,79 @@ pub async fn agents_set_defaults(
     // The overview carries it: the desk's editor and the phone pick it up.
     emit_registry(&app);
     Ok(view)
+}
+
+/// The user's own switch (the agent editor, the phone): "Admin — can manage
+/// and approve for other agents". No agent tool reaches it. Takes effect from
+/// the agent's next call; its chat gets a line saying so.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_set_admin(
+    app: AppHandle,
+    agent_id: String,
+    admin: bool,
+) -> Result<store::Agent, CommandError> {
+    let agent = blocking(move || {
+        let agent = agents::admin::set_admin(&agent_id, admin)?;
+        let line = if admin {
+            "You made this agent an admin: it can manage the other agents and answer their local requests"
+        } else {
+            "Admin turned off: it no longer manages or answers for other agents"
+        };
+        let _ = store::append_message(&runner::new_message(
+            &agent.id,
+            store::MessageKind::Note,
+            line,
+        ));
+        Ok(agent)
+    })
+    .await?;
+    emit_registry(&app);
+    Ok(agent)
+}
+
+/// Settings → Agents → Admin activity: what admins did, newest first.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_admin_activity(
+    limit: Option<usize>,
+) -> Result<Vec<agents::admin::Activity>, CommandError> {
+    blocking(move || Ok(agents::admin::activity(limit.unwrap_or(100).min(500)))).await
+}
+
+/// Settings → Agents → Recently deleted: agents an admin deleted, restorable
+/// for 30 days. Ones past that are purged here.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_recently_deleted() -> Result<Vec<agents::admin::DeletedView>, CommandError> {
+    blocking(|| {
+        agents::admin::purge_expired();
+        Ok(agents::admin::recently_deleted())
+    })
+    .await
+}
+
+/// Bring a deleted agent back, as it was.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_restore(
+    app: AppHandle,
+    agent_id: String,
+) -> Result<store::Agent, CommandError> {
+    let agent = blocking(move || {
+        let agent = store::restore(&agent_id)?;
+        runner::undelete(&agent.id);
+        store::refresh_pending(&agent.id);
+        let _ = store::append_message(&runner::new_message(
+            &agent.id,
+            store::MessageKind::Note,
+            "Restored from Recently deleted",
+        ));
+        Ok(agent)
+    })
+    .await?;
+    emit_registry(&app);
+    Ok(agent)
 }
 
 /// How much agents do on their own.

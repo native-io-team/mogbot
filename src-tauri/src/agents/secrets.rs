@@ -660,6 +660,7 @@ mod tests {
             revises: None,
             takeover: false,
             room: None,
+            decide: Vec::new(),
         };
         let request_id = store::new_id();
         card.approval = Some(Approval {

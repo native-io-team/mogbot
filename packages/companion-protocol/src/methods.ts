@@ -269,6 +269,15 @@ export interface Methods {
     result: { level: AgentIndependence };
   };
   /**
+   * `agents_set_admin`: the user's own "Admin — can manage and approve for
+   * other agents" switch, per agent. No agent can set it. Audited. Newer
+   * Macs only.
+   */
+  'agents.setAdmin': {
+    params: { agentId: string; admin: boolean };
+    result: { agentId: string; admin: boolean };
+  };
+  /**
    * Each engine's usage accounts, in the order turns try them when one
    * reaches its usage limit (`agents::wallet`). Read-only: they are added
    * and signed in on the Mac. Newer Macs only.

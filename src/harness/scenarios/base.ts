@@ -322,6 +322,11 @@ export const baseCommands: CommandMap = {
   // How much agents do on their own (`agents::independence`): never chosen.
   agents_independence: 'judgement',
   agents_set_independence: (args: Record<string, unknown>) => args.level,
+  // Admins (`agents::admin`): nothing done yet, nobody deleted.
+  agents_set_admin: (args: Record<string, unknown>) => ({ id: args.agentId, admin: args.admin }),
+  agents_admin_activity: [],
+  agents_recently_deleted: [],
+  agents_restore: null,
   agents_spare_add: { id: 'h1', text: 'x', addedBy: 'you', addedAt: 0, state: 'waiting' },
   agents_spare_remove: null,
   agents_focus: null,

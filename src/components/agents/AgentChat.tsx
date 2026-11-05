@@ -86,6 +86,7 @@ import {
   UserBubble,
   WorkingIndicator,
 } from './AgentChatItems';
+import { DecideCards } from './AgentAdmin';
 import { AgentProjectChip, ChangeCard, useAgentProjects } from './AgentProject';
 import { ComposerRevising, ResultCardView } from './AgentResult';
 import { SessionCard } from './AgentSession';
@@ -763,6 +764,8 @@ export const AgentChat = memo(function AgentChat({
   const setupHere = agent.isMain ? teamSetup : null;
   const shownRequestIds = useMemo(() => {
     const ids = new Set(listed.flatMap((m) => (m.approval ? [m.approval.requestId] : [])));
+    // Cards an admin brought here are already answerable in the chat.
+    for (const m of listed) for (const d of m.decide ?? []) ids.add(d.approval.requestId);
     if (setupHere && !setupHere.complete) {
       for (const step of setupHere.steps) {
         for (const l of step.logins ?? []) ids.add(l.requestId);
@@ -1334,6 +1337,20 @@ export const AgentChat = memo(function AgentChat({
                   arrived={arrived}
                   work={m.work}
                 />
+              );
+            }
+            if (m.decide?.length) {
+              return (
+                <div key={m.id} className="agent-decide-message">
+                  <AgentBubble
+                    message={m}
+                    arrived={arrived}
+                    agent={rowAgent}
+                    streaming={m === streaming}
+                    onRemember={setRemembering}
+                  />
+                  <DecideCards message={m} />
+                </div>
               );
             }
             return (

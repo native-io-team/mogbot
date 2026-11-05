@@ -116,6 +116,26 @@ describe('groupRequests', () => {
   });
 });
 
+describe('plain-language requests', () => {
+  it('one request reads as what it does and why, when the Mac says', () => {
+    const said = groupRequests(
+      [agent('a', 'Lead Gen', 1)],
+      {
+        a: [
+          card('a', {
+            detail: 'ls -la ~/Downloads/KiteExport',
+            summary: 'Look inside your KiteExport folder — to see if the download finished',
+          }),
+        ],
+      },
+      new Set()
+    );
+    expect(groupLine(said.groups[0])).toBe(
+      'Look inside your KiteExport folder — to see if the download finished'
+    );
+  });
+});
+
 describe('the words', () => {
   it('names one or two agents, counts past that', () => {
     const one = groupRequests([agent('a', 'Lead Gen', 1)], { a: [card('a')] }, new Set());

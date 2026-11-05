@@ -110,6 +110,8 @@ export interface Agent {
   /** One of AGENT_COLORS; typed loosely because the registry is a file. */
   color: string;
   isMain: boolean;
+  /** "Admin — can manage and approve for other agents". Absent: on for the Chief only (`isAdmin`). */
+  admin?: boolean;
   pinned: boolean;
   hidden: boolean;
   sessionId: string | null;
@@ -514,6 +516,15 @@ export interface AgentMessage {
    * line only the room has (yours, a room note) has an empty `agentId`.
    */
   room?: string;
+  /** On an admin's message: other agents' requests only you can decide, answered in place. */
+  decide?: DecideItem[];
+}
+
+/** Mirrors `admin::DecideItem`: another agent's card, brought to you by an admin. */
+export interface DecideItem {
+  agentId: string;
+  agentName: string;
+  approval: Approval;
 }
 
 /** Mirrors `project::ChangedFile`: line counts are absent for a binary file. */

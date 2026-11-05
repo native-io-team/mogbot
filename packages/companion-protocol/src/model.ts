@@ -94,6 +94,12 @@ export interface Agent {
   shape: number;
   color: string;
   isMain: boolean;
+  /**
+   * The user's "Admin — can manage and approve for other agents" switch
+   * (`agents::admin`). Absent: the default, which is on for the Chief of
+   * Staff only (`isAdmin`). Older Macs never send it.
+   */
+  admin?: boolean;
   pinned: boolean;
   hidden: boolean;
   sessionId: string | null;
@@ -840,6 +846,23 @@ export interface AgentMessage {
    * room has (the user's message, a room note) has an empty `agentId`.
    */
   room?: string;
+  /**
+   * On an admin's `agent` message: other agents' requests only the user can
+   * decide, each answered in place (the answer goes to that agent's card).
+   */
+  decide?: DecideItem[];
+}
+
+/** One of another agent's cards, brought to the user by an admin. */
+export interface DecideItem {
+  agentId: string;
+  agentName: string;
+  approval: Approval;
+}
+
+/** Whether an agent is an admin: its switch, else on for the Chief only. */
+export function isAdmin(agent: Pick<Agent, 'admin' | 'isMain'>): boolean {
+  return agent.admin ?? agent.isMain;
 }
 
 /**

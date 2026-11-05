@@ -140,7 +140,8 @@ export function groupLine(group: RequestGroup): string {
   }
   if (open === 1 && pendingCards.length === 1) {
     const a = pendingCards[0].approval!;
-    return a.prompt?.question ?? a.title;
+    // What it does and why, in words, when the card says (`admin::summary_for`).
+    return a.prompt?.question ?? a.summary ?? a.title;
   }
   if (group.logins === 0) return count(open, 'request');
   return `${count(open, 'request')}, ${group.logins} of them ${group.logins === 1 ? 'a login' : 'logins'}`;

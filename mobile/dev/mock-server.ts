@@ -186,7 +186,8 @@ const LOGIN_OPTIONS: Record<string, LoginOption> = {
     id: 'gh',
     method: 'gh',
     label: 'Use GitHub on this Mac',
-    detail: 'Uses the GitHub CLI’s sign-in on this Mac. Anything that changes GitHub asks you first.',
+    detail:
+      'Uses the GitHub CLI’s sign-in on this Mac. Anything that changes GitHub asks you first.',
   },
   calendar: {
     id: 'claude_ai',
@@ -1018,6 +1019,7 @@ export function createMockServer(opts: MockOptions = {}) {
           requestId,
           title: 'Run a command',
           detail: 'pnpm run deploy --prod',
+          summary: 'Run the project’s “deploy” script — to ship the fix to production',
           status: 'pending',
           tool: 'Bash',
           always: { kind: 'command_prefix', value: 'pnpm run deploy', label: 'pnpm run deploy' },
@@ -1321,7 +1323,9 @@ export function createMockServer(opts: MockOptions = {}) {
   const loginTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const phoneFlows = new Map<string, { agentId: string; requestId: string; state: string }>();
   const loginCardOf = (agentId: string, requestId: string) =>
-    (messages.get(agentId) ?? []).find((m) => m.approval?.requestId === requestId && m.approval.login);
+    (messages.get(agentId) ?? []).find(
+      (m) => m.approval?.requestId === requestId && m.approval.login
+    );
 
   function completeLogin(agentId: string, requestId: string, option: LoginOption) {
     const card = loginCardOf(agentId, requestId);
@@ -1331,7 +1335,15 @@ export function createMockServer(opts: MockOptions = {}) {
       option.method === 'browser'
         ? `Using your browser · ${login.service === 'linkedin' ? 'www.linkedin.com' : 'mail.google.com'}`
         : `Connected · ${login.title} (work@acme.com)`;
-    putMessage({ ...card, approval: { ...card.approval, status: 'allowed', choice, login: { ...login, flow: undefined } } });
+    putMessage({
+      ...card,
+      approval: {
+        ...card.approval,
+        status: 'allowed',
+        choice,
+        login: { ...login, flow: undefined },
+      },
+    });
     settle(agentId);
   }
 
@@ -1343,7 +1355,12 @@ export function createMockServer(opts: MockOptions = {}) {
     clearTimeout(loginTimers.get(requestId));
     putMessage({
       ...card,
-      approval: { ...card.approval, status, ...(note ? { note } : {}), login: { ...card.approval.login, flow: undefined } },
+      approval: {
+        ...card.approval,
+        status,
+        ...(note ? { note } : {}),
+        login: { ...card.approval.login, flow: undefined },
+      },
     });
     settle(agentId);
     return null;
@@ -1362,7 +1379,9 @@ export function createMockServer(opts: MockOptions = {}) {
         service: m.approval!.login!.service,
         title: m.approval!.login!.title,
         account: 'work@acme.com',
-        access: m.approval!.login!.abilities.some((x) => x.id === 'write') ? ('full' as const) : ('read' as const),
+        access: m.approval!.login!.abilities.some((x) => x.id === 'write')
+          ? ('full' as const)
+          : ('read' as const),
         kept: 'Connected on claude.ai; the sign-in is held there',
         needsSignIn: false,
         lastUsedAt: Date.now() - 3_600_000,
@@ -1394,18 +1413,33 @@ export function createMockServer(opts: MockOptions = {}) {
         const l = ap?.login;
         if (!ap || !l) continue;
         const state: TeamCard['state'] =
-          ap.status === 'pending' ? 'waiting' : ap.status === 'allowed' ? 'connected' : ap.status === 'denied' ? 'skipped' : 'covered';
+          ap.status === 'pending'
+            ? 'waiting'
+            : ap.status === 'allowed'
+              ? 'connected'
+              : ap.status === 'denied'
+                ? 'skipped'
+                : 'covered';
         if (state !== 'waiting' && (since === undefined || m.ts < since)) continue;
         const google = ['gmail', 'google_calendar', 'google_drive'].includes(l.service);
         const key = google ? 'google' : l.service;
         let need = needs.find((n) => n.key === key);
         if (!need) {
-          need = { key, title: google ? 'Google' : l.title, services: [], options: [], cards: [], done: false };
+          need = {
+            key,
+            title: google ? 'Google' : l.title,
+            services: [],
+            options: [],
+            cards: [],
+            done: false,
+          };
           needs.push(need);
         }
         if (!need.services.includes(l.service)) need.services.push(l.service);
         if (state === 'waiting') {
-          for (const o of l.options) if (o.method !== 'existing' && !need.options.some((x) => x.id === o.id)) need.options.push(o);
+          for (const o of l.options)
+            if (o.method !== 'existing' && !need.options.some((x) => x.id === o.id))
+              need.options.push(o);
           need.noConnector ??= l.noConnector;
         }
         need.cards.push({
@@ -1670,14 +1704,19 @@ export function createMockServer(opts: MockOptions = {}) {
         return fail({ type: 'Other', message: 'That card was already answered.' });
       }
       const option = login.options.find((o) => o.id === p.optionId);
-      if (!option) return fail({ type: 'Validation', field: 'option', reason: 'Not one of its choices.' });
-      if (option.method === 'key') return fail({ type: 'Other', message: 'Type the key into the card’s field.' });
+      if (!option)
+        return fail({ type: 'Validation', field: 'option', reason: 'Not one of its choices.' });
+      if (option.method === 'key')
+        return fail({ type: 'Other', message: 'Type the key into the card’s field.' });
       if (option.method === 'existing' || option.method === 'browser') {
         completeLogin(agentId, card.approval.requestId, option);
         return null;
       }
       if (option.method === 'oauth' && p.onPhone) {
-        return fail({ type: 'Other', message: 'Signing in on the phone goes through its sign-in sheet.' });
+        return fail({
+          type: 'Other',
+          message: 'Signing in on the phone goes through its sign-in sheet.',
+        });
       }
       const onPhone = p.onPhone === true;
       putMessage({
@@ -1704,7 +1743,10 @@ export function createMockServer(opts: MockOptions = {}) {
           },
         },
       });
-      const timer = setTimeout(() => completeLogin(agentId, card.approval!.requestId, option), opts.loginAfterMs ?? 4000);
+      const timer = setTimeout(
+        () => completeLogin(agentId, card.approval!.requestId, option),
+        opts.loginAfterMs ?? 4000
+      );
       loginTimers.set(card.approval.requestId, timer);
       return null;
     },
@@ -1723,7 +1765,12 @@ export function createMockServer(opts: MockOptions = {}) {
       const card = loginCardOf(agentId, requestId);
       const login = card?.approval?.login;
       const option = login?.options.find((o) => o.id === p.optionId);
-      if (!card?.approval || !login || card.approval.status !== 'pending' || option?.method !== 'oauth') {
+      if (
+        !card?.approval ||
+        !login ||
+        card.approval.status !== 'pending' ||
+        option?.method !== 'oauth'
+      ) {
         return fail({ type: 'Other', message: 'That way in doesn’t use a sign-in sheet.' });
       }
       const flowId = `flow_${randomUUID().slice(0, 8)}`;
@@ -1756,10 +1803,17 @@ export function createMockServer(opts: MockOptions = {}) {
     'agents.loginPhoneFinish': (p) => {
       const flow = phoneFlows.get(String(p.flowId));
       phoneFlows.delete(String(p.flowId));
-      if (!flow) return fail({ type: 'Other', message: 'That sign-in has finished or expired. Start again from the card.' });
+      if (!flow)
+        return fail({
+          type: 'Other',
+          message: 'That sign-in has finished or expired. Start again from the card.',
+        });
       const url = typeof p.callbackUrl === 'string' ? p.callbackUrl : '';
       if (!url.startsWith('dashbot-companion://oauth?') || !url.includes(`state=${flow.state}`)) {
-        return fail({ type: 'Other', message: 'That isn’t this sign-in’s answer, so it was stopped. Try again.' });
+        return fail({
+          type: 'Other',
+          message: 'That isn’t this sign-in’s answer, so it was stopped. Try again.',
+        });
       }
       const card = loginCardOf(flow.agentId, flow.requestId);
       const option = card?.approval?.login?.options.find((o) => o.method === 'oauth');
@@ -1777,14 +1831,25 @@ export function createMockServer(opts: MockOptions = {}) {
           ...card.approval,
           login: {
             ...card.approval.login,
-            flow: { state: 'cancelled', option: card.approval.login.flow?.option ?? '', startedAt: Date.now() },
+            flow: {
+              state: 'cancelled',
+              option: card.approval.login.flow?.option ?? '',
+              startedAt: Date.now(),
+            },
           },
         },
       });
       return null;
     },
-    'agents.loginDecline': (p) => answerLogin(String(p.agentId), String(p.requestId), 'denied', typeof p.note === 'string' && p.note ? p.note : undefined),
-    'agents.loginDismiss': (p) => answerLogin(String(p.agentId), String(p.requestId), 'denied', 'Not needed'),
+    'agents.loginDecline': (p) =>
+      answerLogin(
+        String(p.agentId),
+        String(p.requestId),
+        'denied',
+        typeof p.note === 'string' && p.note ? p.note : undefined
+      ),
+    'agents.loginDismiss': (p) =>
+      answerLogin(String(p.agentId), String(p.requestId), 'denied', 'Not needed'),
     // The value goes nowhere, as with saveSecret.
     'agents.loginSaveKey': (p) => {
       const agentId = String(p.agentId);
@@ -1796,10 +1861,22 @@ export function createMockServer(opts: MockOptions = {}) {
       if (typeof p.value !== 'string' || !p.value.trim()) {
         return fail({ type: 'Validation', field: 'value', reason: 'Type the key.' });
       }
-      const secret: AgentSecret = { ...key, id: `sec_${randomUUID().slice(0, 6)}`, createdAt: Date.now() };
+      const secret: AgentSecret = {
+        ...key,
+        id: `sec_${randomUUID().slice(0, 6)}`,
+        createdAt: Date.now(),
+      };
       const a = agent(agentId)!;
       a.secrets = [...(a.secrets ?? []), secret];
-      putMessage({ ...card, approval: { ...card.approval, status: 'allowed', choice: `Saved a key · ${key.name}`, login: { ...card.approval.login!, flow: undefined } } });
+      putMessage({
+        ...card,
+        approval: {
+          ...card.approval,
+          status: 'allowed',
+          choice: `Saved a key · ${key.name}`,
+          login: { ...card.approval.login!, flow: undefined },
+        },
+      });
       settle(agentId);
       return secret;
     },
@@ -1813,7 +1890,10 @@ export function createMockServer(opts: MockOptions = {}) {
         if (c.state !== 'waiting' || skip.includes(c.agentId)) continue;
         const card = loginCardOf(c.agentId, c.requestId);
         if (!card?.approval?.login?.options.some((o) => o.id === p.optionId)) continue;
-        methods['agents.loginStart']!({ agentId: c.agentId, requestId: c.requestId, optionId: p.optionId, onPhone: p.onPhone }, null as never);
+        methods['agents.loginStart']!(
+          { agentId: c.agentId, requestId: c.requestId, optionId: p.optionId, onPhone: p.onPhone },
+          null as never
+        );
       }
       return null;
     },
@@ -2016,6 +2096,20 @@ export function createMockServer(opts: MockOptions = {}) {
       independence = p.level;
       emit({ type: 'agents.registry', overview: overview() });
       return { level: independence };
+    },
+    // The user's own Admin switch (`agents_set_admin`): kept on the agent.
+    'agents.setAdmin': (p) => {
+      const a = agents.find((x) => x.id === p.agentId);
+      if (!a || typeof p.admin !== 'boolean') {
+        return fail({
+          type: 'Protocol',
+          code: 'bad_params',
+          message: 'Admin takes an agentId and admin: true or false.',
+        });
+      }
+      a.admin = p.admin;
+      emit({ type: 'agents.registry', overview: overview() });
+      return { agentId: a.id, admin: p.admin };
     },
     // "Setting up your team" (null without --team-setup, as a Mac with none answers).
     'agents.teamSetup': (p) => {
@@ -2943,6 +3037,31 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
     }
     add({ ts: now - 6 * 60_000, kind: 'user', text: 'Where are we on the launch?' });
     add({ ts: now - 4 * 60_000, kind: 'agent', text: RICH });
+    // The Chief is an admin: it answered the team's local work and brought
+    // the rest here, as `admin::bring_to_user` writes it.
+    add({
+      ts: now - 3.5 * 60_000,
+      kind: 'agent',
+      text: 'I listed QA 2’s test folder and cleared two logins nobody needs.\n\n1 thing only you can decide:',
+      decide: [
+        {
+          agentId: 'ops',
+          agentName: 'Ops',
+          approval: {
+            requestId: 'req_ops_push',
+            title: 'Run a command',
+            detail: 'git push origin release',
+            summary: 'Push code to the project’s online copy — so tonight’s release can deploy',
+            status: 'pending' as const,
+            tool: 'Bash',
+            input: {
+              command: 'git push origin release',
+              description: 'So tonight’s release can deploy',
+            },
+          },
+        },
+      ],
+    });
     // An import over the connector, as the Mac's connector.rs writes its two cards.
     add({
       ts: now - 3 * 60_000,
@@ -3086,7 +3205,8 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
           flow: {
             state: 'waiting',
             option: 'claude_ai',
-            message: 'claude.ai’s connectors are open in your Mac’s browser. Add Gmail there; this card notices when it’s connected.',
+            message:
+              'claude.ai’s connectors are open in your Mac’s browser. Add Gmail there; this card notices when it’s connected.',
             startedAt: a.lastActivityAt + 2000,
             fromPhone: true,
           },
@@ -3208,6 +3328,25 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
   } else {
     add({ ts: a.lastActivityAt - 60_000, kind: 'user', text: 'Status?' });
     add({ ts: a.lastActivityAt, kind: 'agent', text: a.preview ?? 'Done.' });
+  }
+  if (a.id === 'ops') {
+    add({
+      ts: now - 90_000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_ops_push',
+        title: 'Run a command',
+        detail: 'git push origin release',
+        summary: 'Push code to the project’s online copy — so tonight’s release can deploy',
+        status: 'pending' as const,
+        tool: 'Bash',
+        input: {
+          command: 'git push origin release',
+          description: 'So tonight’s release can deploy',
+        },
+      },
+    });
   }
   return out;
 }

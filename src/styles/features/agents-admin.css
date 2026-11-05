@@ -1,0 +1,72 @@
+/* Admins: AgentAdmin.tsx (Settings → Agents → Admins, the editor's switch,
+   and an admin's "only you can decide" batch in the chat). Semantic tokens
+   only: both themes. */
+
+.agent-admin-switch__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.agent-admin-settings__heading {
+  margin: var(--spacing-md) 0 var(--spacing-xs);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+}
+
+.agent-admin-settings__note,
+.agent-admin-settings__empty {
+  margin: var(--spacing-xs) 0 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
+.agent-admin-activity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-admin-activity__line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.agent-admin-activity__who {
+  color: var(--text-primary);
+}
+
+.agent-admin-activity__when {
+  color: var(--text-muted);
+}
+
+.agent-decide-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.agent-decide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.agent-decide__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.agent-decide__who {
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
