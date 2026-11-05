@@ -1025,6 +1025,20 @@ impl Backend for Stub {
         serde_json::to_value(quotas).map_err(|e| CommandError::expected(e.to_string()))
     }
 
+    async fn accounts(&self) -> Result<Value, CommandError> {
+        // Every field set: this Mac's own, and an added one that is out.
+        Ok(json!([
+            { "id": "default", "engine": "claude", "name": "This Mac", "thisMac": true,
+              "signedIn": true, "out": false },
+            { "id": "a1work", "engine": "claude", "name": "Work", "thisMac": false,
+              "signedIn": true, "email": "me@work.example",
+              "limit": { "at": 1_762_290_000_000_i64, "resetsAt": 1_762_300_000_000_i64 },
+              "out": true },
+            { "id": "default", "engine": "codex", "name": "This Mac", "thisMac": true,
+              "signedIn": false, "out": false }
+        ]))
+    }
+
     async fn revoke_permission(&self, _agent_id: &str, rule_id: &str) -> Result<(), CommandError> {
         self.revoked.lock().unwrap().push(rule_id.to_string());
         Ok(())

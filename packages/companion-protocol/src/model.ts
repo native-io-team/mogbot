@@ -746,6 +746,31 @@ export interface Quota {
   windows: QuotaWindow[];
 }
 
+/** The last usage limit a turn on an account hit (`agents::wallet::LimitHit`). */
+export interface UsageLimitHit {
+  /** When, epoch ms. */
+  at: number;
+  /** When the engine said it resets, epoch ms; absent when it didn't say. */
+  resetsAt?: number;
+}
+
+/**
+ * One usage account of an engine (`agents::wallet::AccountView`). An
+ * engine's accounts come in the order turns try them; the first is this
+ * Mac's own sign-in unless the user moved it.
+ */
+export interface UsageAccount {
+  id: string;
+  engine: AgentEngine;
+  name: string;
+  thisMac: boolean;
+  signedIn: boolean;
+  email?: string;
+  limit?: UsageLimitHit;
+  /** Out of usage right now. */
+  out: boolean;
+}
+
 export interface PasteImportAgent {
   name: string;
   role: string;

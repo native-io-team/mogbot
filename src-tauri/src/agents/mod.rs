@@ -85,6 +85,7 @@ pub mod task;
 pub mod templates;
 pub mod tray;
 pub mod usage;
+pub mod wallet;
 pub mod watch;
 pub mod watch_seal;
 pub mod work;

@@ -8,6 +8,8 @@
  * - **Engines and models**: the engine and model new agents start on, a
  *   real setting (`AgentDefaultsSettings`), and what routines run on.
  *   Existing agents keep theirs; nothing shown that wasn't read.
+ * - **Accounts**: each engine's accounts, in the order turns try them when
+ *   one runs out of usage (`AgentAccounts`, `agents/wallet.rs`).
  * - **Notifications**: what notifies, and where to mute one agent.
  * - **Phone and other assistants**: the way into each.
  *
@@ -20,6 +22,7 @@ import type { ReactNode } from 'react';
 import { Button } from '../primitives/Button';
 import { AgentsDesktopSettings } from './AgentsDesktopSettings';
 import { AgentDefaultsSettings } from './AgentDefaultsSettings';
+import { AgentAccounts } from './AgentAccounts';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
@@ -135,6 +138,8 @@ export function AgentsSettings({
           </div>
         </section>
       )}
+
+      {engines.some((e) => e.installed) && <AgentAccounts engines={engines} />}
 
       <section className="settings-group" aria-labelledby="agents-settings-notify">
         <h3 className="settings-group__title" id="agents-settings-notify">

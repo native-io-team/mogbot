@@ -2467,7 +2467,7 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             super::work::on_step(&agent_id, super::work::StepKind::Project, &label, since);
         }
         let result = match prepared {
-            Ok(_) => run_turn(&app, &agent_id, &prompt, routine, true).await,
+            Ok(_) => run_on_accounts(&app, &agent_id, &prompt, routine).await,
             Err(e) => Err(e),
         };
         if QUITTING.load(Ordering::SeqCst) {
@@ -2518,7 +2518,17 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             Ok(Ended::Finished) => return_results(&app, &agent_id, since, None),
             Err(err) => {
                 let engine = store::get(&agent_id).map(|a| a.engine).unwrap_or_default();
-                let (text, failure) = super::failure::describe_now(engine, &err.to_string());
+                // Every account of its engine out: the wallet's own line.
+                let (text, failure) = match super::wallet::take_all_out(&agent_id) {
+                    Some((line, resets_at)) => (
+                        line,
+                        super::failure::Failure {
+                            kind: super::failure::FailureKind::UsageLimit,
+                            resets_at,
+                        },
+                    ),
+                    None => super::failure::describe_now(engine, &err.to_string()),
+                };
                 // Signed out: the plan reading kept belonged to a login that isn't here.
                 if failure.kind == super::failure::FailureKind::SignedOut
                     && super::quota::clear(engine, store::now_ms())
@@ -3016,13 +3026,122 @@ enum Ended {
     Stopped(Option<&'static str>),
 }
 
-/// Run one turn. `retry_fresh` lets a vanished session be replaced once.
+/// Run one turn on the engine's accounts (`agents::wallet`): on the first
+/// one that can, and when it ends on the usage limit, again on the next, with
+/// a quiet line saying so. With one account this is exactly [`run_turn`].
+async fn run_on_accounts(
+    app: &AppHandle,
+    agent_id: &str,
+    prompt: &str,
+    routine: bool,
+) -> Result<Ended, CommandError> {
+    use super::wallet::{self, Choice};
+    let engine = store::get(agent_id)?.engine;
+    let mut tried: Vec<String> = Vec::new();
+    let mut prompt = prompt.to_string();
+    // Any try of this turn, on any account, that ran a tool.
+    clear_acted(agent_id);
+    loop {
+        let now = store::now_ms();
+        let candidates = wallet::candidates(engine).await;
+        let account = match wallet::choose(&candidates, &tried, now) {
+            Choice::Run(account) => account,
+            Choice::AllOut { earliest, count } => {
+                let line = wallet::all_out_line(engine, count, earliest, &chrono::Local, now);
+                wallet::set_all_out(agent_id, line.clone(), earliest);
+                return Err(CommandError::expected(line));
+            }
+        };
+        // Another account than its last turn's: the chat says so, quietly.
+        if let Some(prev) = wallet::ran_on(agent_id, &account) {
+            let from = candidates
+                .iter()
+                .find(|c| c.account.id == prev)
+                .map(|c| &c.account);
+            let line = wallet::switch_line(&account, from, &chrono::Local, now);
+            let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
+        }
+        // A switched try whose last attempt already acted resumes that
+        // attempt's conversation or doesn't run: a fresh start there would
+        // see only the chat, not what its tools did, and do it all again.
+        let switched_after_acting = !tried.is_empty() && took_action(agent_id);
+        let result = run_turn(
+            app,
+            agent_id,
+            &prompt,
+            routine,
+            !switched_after_acting,
+            &account,
+        )
+        .await;
+        let Err(err) = &result else { return result };
+        if switched_after_acting && is_missing_session(&err.to_string()) {
+            return Err(CommandError::expected(not_carried_line(&account.name)));
+        }
+        let (_, failure) = super::failure::describe_now(engine, &err.to_string());
+        if failure.kind != super::failure::FailureKind::UsageLimit {
+            return result;
+        }
+        let now = store::now_ms();
+        wallet::mark_out(engine, &account.id, failure.resets_at, now);
+        tried.push(account.id.clone());
+        let candidates = wallet::candidates(engine).await;
+        let signed_in = candidates.iter().filter(|c| c.signed_in).count();
+        if !wallet::can_switch(&candidates, &tried, now) {
+            if signed_in >= 2 {
+                if let Choice::AllOut { earliest, count } = wallet::choose(&candidates, &tried, now)
+                {
+                    let line = wallet::all_out_line(engine, count, earliest, &chrono::Local, now);
+                    wallet::set_all_out(agent_id, line.clone(), earliest);
+                    return Err(CommandError::expected(line));
+                }
+            }
+            return result;
+        }
+        tracing::info!("[Agents] {agent_id}'s account is out of usage; trying the next");
+        prompt = wallet::continue_prompt(&prompt);
+    }
+}
+
+/// Agents whose turn ran a tool in any of its tries (`run_on_accounts`).
+static ACTED: LazyLock<Mutex<std::collections::HashSet<String>>> = LazyLock::new(Default::default);
+
+fn note_acted(agent_id: &str) {
+    ACTED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(agent_id.to_string());
+}
+
+fn took_action(agent_id: &str) -> bool {
+    ACTED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(agent_id)
+}
+
+fn clear_acted(agent_id: &str) {
+    ACTED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(agent_id);
+}
+
+/// A switch whose conversation couldn't be brought to the next account,
+/// after the last one had already done part of the work. Not said with the
+/// usage-limit words: it isn't one, and mustn't mark this account out.
+fn not_carried_line(to: &str) -> String {
+    format!("Stopped instead of switching to {to}: this conversation couldn't be brought over to it, and part of the work had already run, so starting again could do it twice. Check what was done, then send what's left.")
+}
+
+/// Run one turn on `account`. `retry_fresh` lets a vanished session be replaced once.
 async fn run_turn(
     app: &AppHandle,
     agent_id: &str,
     prompt: &str,
     routine: bool,
     retry_fresh: bool,
+    account: &super::wallet::Account,
 ) -> Result<Ended, CommandError> {
     let began = std::time::Instant::now();
     let mut agent = store::get(agent_id)?;
@@ -3034,7 +3153,8 @@ async fn run_turn(
     })?;
     // How this turn runs it (Codex speaks app-server when it can).
     let driver = Driver::pick(engine, &binary).await;
-    driver.ready().await?;
+    driver.ready_as(account).await?;
+    super::wallet::prepare(account);
     let (port, _) = crate::agent_bridge::start_global_agent_bridge(app.clone())
         .await
         .map_err(super::err_other)?;
@@ -3056,6 +3176,10 @@ async fn run_turn(
         Some(id) => (id.clone(), true),
         None => (driver.new_session(), false),
     };
+    // Its conversation may have been on another account: brought here first.
+    if resuming && super::wallet::carry_session(account, &session_id) {
+        tracing::info!("[Agents] carried {agent_id}'s session to the account it runs on now");
+    }
     // First turn on a new engine: it starts blank, so it gets the conversation.
     let prompt = if agent.new_engine && !resuming {
         with_recap(agent_id, prompt)
@@ -3149,6 +3273,8 @@ async fn run_turn(
             ((super::mcp::APPROVAL_WAIT_SECS + 60) * 1000).to_string(),
         )
         .envs(secret_env)
+        // The account it runs on (nothing for this Mac's own sign-in).
+        .envs(super::wallet::env_for(account))
         .current_dir(&layout.cwd);
 
     let mut cmd = tokio::process::Command::from(cmd);
@@ -3395,6 +3521,7 @@ async fn run_turn(
                             }
                         }
                         Step::Action(action) => {
+                            note_acted(agent_id);
                             let doing = super::work::on_action(agent_id, action, store::now_ms());
                             if status_of(agent_id).state != "waiting" {
                                 set_status(app, agent_id, Status { state: "working", activity: Some(doing), since: Some(started), work: None, room: None });
@@ -3420,6 +3547,15 @@ async fn run_turn(
                             let _ = tokio::task::spawn_blocking(move || store::update(&id, |a| a.usage.record(&turn, today))).await;
                         }
                         Step::Quota(reading) => {
+                            let now_ms = store::now_ms();
+                            // Its plan, used up: the account is out until the reset it names.
+                            if let Some(at) = super::quota::limited_until(std::slice::from_ref(&reading), reading.engine, now_ms) {
+                                super::wallet::reported_out(reading.engine, &account.id, at, now_ms);
+                            }
+                            // A reading is one account's: another's is cleared first.
+                            if super::wallet::reading_moves_to(reading.engine, &account.id) {
+                                super::quota::clear(reading.engine, now_ms);
+                            }
                             let changed = tokio::task::spawn_blocking(move || super::quota::record(reading, store::now_ms()))
                                 .await
                                 .unwrap_or(false);
@@ -3588,7 +3724,7 @@ async fn run_turn(
         // The new session starts blank. Hand it the conversation the user
         // can see, so the agent doesn't greet them like a stranger.
         let prompt = with_recap(agent_id, &prompt);
-        return Box::pin(run_turn(app, agent_id, &prompt, routine, false)).await;
+        return Box::pin(run_turn(app, agent_id, &prompt, routine, false, account)).await;
     }
 
     if let Some(err) = result_error {

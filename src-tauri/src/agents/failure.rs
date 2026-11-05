@@ -267,15 +267,29 @@ pub fn is_temporary(detail: &str, failure: &Failure) -> bool {
 fn is_usage_limit(lower: &str) -> bool {
     // Not "usage credits": that one resets when the user tops up, not on a
     // clock. "Quota exceeded" is `commands::ai`'s usage-limit wording too.
-    [
+    let is = [
         "usage limit",
         "session limit",
         "weekly limit",
         "hour limit",
         "quota exceeded",
+        // Claude Code 2.1's per-model plan limits ("You've hit your Opus
+        // limit · resets …"), and the typed codes when they're quoted.
+        "opus limit",
+        "sonnet limit",
+        "fable limit",
+        "usage_limit_reached",
+        "usagelimitexceeded",
     ]
     .iter()
     .any(|w| lower.contains(w))
+        // Both engines open with it; Codex's apostrophe is U+2019.
+        || ((lower.contains("you've hit your") || lower.contains("you\u{2019}ve hit your"))
+            && lower.contains("limit")
+            && !lower.contains("spend cap"))
+    // Claude Code's server throttling says, in so many words, it isn't.
+    ;
+    is && !lower.contains("not your usage limit")
 }
 
 /// Claude Code's and Codex's own wordings, and `commands::ai`'s classified
@@ -697,6 +711,34 @@ mod tests {
         assert_eq!(text, "Codex is signed out.");
         let (_, failure) = describe(Engine::Codex, "Not logged in", &Utc, None, NOW);
         assert_eq!(failure.kind, FailureKind::SignedOut);
+    }
+
+    /// Wordings captured from Claude Code 2.1.304–2.1.318 (its binary and
+    /// anthropics/claude-code#103820) and Codex 0.166 (`protocol/src/error.rs`).
+    #[test]
+    fn every_real_usage_limit_wording_is_the_usage_limit() {
+        for raw in [
+            "You've hit your weekly limit · resets 11am (UTC)",
+            "You've hit your 5-hour limit · resets 3pm",
+            "You've hit your Opus limit · resets Nov 7 at 10am",
+            "You've hit your Sonnet limit",
+            "You\u{2019}ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at 3:15 PM.",
+            "You\u{2019}ve hit your usage limit. To get more access now, send a request to your admin or try again at Nov 7th, 2026 3:15 PM.",
+            "You\u{2019}ve hit your usage limit for GPT-5.5-Codex. Switch to another model now, or try again at 3:15 PM.",
+            "You\u{2019}ve hit your usage limit. Try again later.",
+        ] {
+            let (_, f) = describe(Engine::Claude, raw, &Utc, None, NOW);
+            assert_eq!(f.kind, FailureKind::UsageLimit, "{raw}");
+        }
+        // Throttling and overload are not the plan's limit: no account switch.
+        for raw in [
+            "API Error: 429 {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\"}}",
+            "Server is temporarily limiting requests (not your usage limit)",
+            "API Error: 529 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\"}}",
+        ] {
+            let (_, f) = describe(Engine::Claude, raw, &Utc, None, NOW);
+            assert_ne!(f.kind, FailureKind::UsageLimit, "{raw}");
+        }
     }
 
     #[test]

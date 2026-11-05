@@ -241,6 +241,18 @@ export const baseCommands: CommandMap = {
   },
   // No engine has reported its plan: no usage line anywhere (agents::quota).
   agents_quota: [],
+  // Usage wallets (agents::wallet::AccountView): only this Mac's own sign-ins.
+  agents_accounts: [
+    {
+      id: 'default',
+      engine: 'claude',
+      name: 'This Mac',
+      thisMac: true,
+      signedIn: true,
+      out: false,
+    },
+    { id: 'default', engine: 'codex', name: 'This Mac', thisMac: true, signedIn: true, out: false },
+  ],
   agents_focus: null,
   // Rooms: none until someone makes one (`./agentsRooms`).
   agents_rooms: [],

@@ -124,9 +124,16 @@ pub fn forget_binary(engine: Engine) {
         .remove(&engine);
 }
 
-/// Whether the engine is signed in. A yes is kept for a minute; a no only
-/// for a few seconds, so signing in shows up as soon as the editor looks again.
+/// Whether the engine can run a turn on some account: this Mac's own
+/// sign-in, or one added to its usage wallet (`agents::wallet`).
 pub async fn signed_in(engine: Engine) -> bool {
+    signed_in_here(engine).await || super::wallet::any_added_signed_in(engine).await
+}
+
+/// Whether this Mac's own sign-in of the engine is signed in. A yes is kept
+/// for a minute; a no only for a few seconds, so signing in shows up as soon
+/// as the editor looks again.
+pub async fn signed_in_here(engine: Engine) -> bool {
     static CACHE: Probe<bool> = LazyLock::new(Default::default);
     let Some(binary) = binary(engine).await else {
         return false;

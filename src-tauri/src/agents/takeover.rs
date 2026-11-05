@@ -411,6 +411,11 @@ async fn open(
         system_prompt.push_str("\n\n");
         system_prompt.push_str(&have);
     }
+    // The terminal drives the session on the account its turns last ran on.
+    let account = super::wallet::last_account(agent.engine, &agent.id);
+    super::wallet::prepare(&account);
+    super::wallet::carry_session(&account, session);
+    let account_env = super::wallet::env_for(&account);
     let spawn = spawn_for(&Context {
         engine: agent.engine,
         model: agent.model.as_deref(),
@@ -422,7 +427,9 @@ async fn open(
         system_prompt: &system_prompt,
         layout: &layout,
         path: crate::utils::get_extended_path(),
-        secrets,
+        // The agent's secrets, and the account it last ran on (never named
+        // in the prompt: it isn't the agent's to use).
+        secrets: secrets.into_iter().chain(account_env).collect(),
         inherited: std::env::vars_os()
             .map(|(k, _)| k.to_string_lossy().into_owned())
             .collect(),
@@ -430,7 +437,7 @@ async fn open(
     // Read-only: Claude Code's own answer to its trust question. Never
     // written here; the person at the keyboard answers it.
     let trust_prompt = agent.engine == Engine::Claude
-        && !super::decisions::claude_config()
+        && !super::wallet::claude_config_for(&account)
             .is_some_and(|config| super::decisions::trusted(&config, &layout.cwd));
     let transcript = transcript_len(agent.engine, session);
     let pty = format!("{PTY_PREFIX}{}", uuid::Uuid::new_v4());
@@ -590,6 +597,7 @@ pub async fn delete_agent(app: &AppHandle, agent_id: &str) -> Result<store::Agen
     };
     abandon(app, agent_id).await;
     runner::forget(agent_id);
+    super::wallet::forget_agent(agent_id);
     Ok(removed)
 }
 
@@ -719,23 +727,15 @@ pub fn grew(before: Option<u64>, after: Option<u64>) -> bool {
 
 /// The size of the session's transcript on disk, as its engine writes it.
 fn transcript_len(engine: Engine, session: &str) -> Option<u64> {
-    let home = || dirs::home_dir();
-    match engine {
-        Engine::Claude => {
-            let root = std::env::var_os("CLAUDE_CONFIG_DIR")
-                .filter(|v| !v.is_empty())
-                .map(PathBuf::from)
-                .or_else(|| home().map(|h| h.join(".claude")))?;
-            claude_transcript_len(&root, session)
-        }
-        Engine::Codex => {
-            let root = std::env::var_os("CODEX_HOME")
-                .filter(|v| !v.is_empty())
-                .map(PathBuf::from)
-                .or_else(|| home().map(|h| h.join(".codex")))?;
-            codex_transcript_len(&root, session)
-        }
-    }
+    // In every account's folder of the engine (`agents::wallet`), summed:
+    // the session is on whichever one it ran on.
+    super::wallet::engine_folders(engine)
+        .iter()
+        .filter_map(|root| match engine {
+            Engine::Claude => claude_transcript_len(root, session),
+            Engine::Codex => codex_transcript_len(root, session),
+        })
+        .reduce(|a, b| a + b)
 }
 
 /// `<config>/projects/<folder>/<session>.jsonl`, in whichever folder

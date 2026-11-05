@@ -19,6 +19,7 @@ import { COMPANION_INSTALL_ENABLED, requestInstallOnOpen } from '../lib/companio
 import { fileManagerName } from '../lib/setup';
 import { BRAND } from '../lib/brand';
 import { requestSettingsSectionOnOpen, requestSettingsTabOnOpen } from '../lib/settings';
+import { requestAccountsOnOpen } from '../lib/agentAccounts';
 import {
   CodeIcon,
   CloseIcon,
@@ -367,6 +368,50 @@ export function useAppCommands({
         run: () => {
           requestSettingsTabOnOpen('agents');
           requestSettingsSectionOnOpen('agent-defaults');
+          openModal('settings');
+        },
+      },
+      {
+        id: 'agents.accounts',
+        title: 'Usage accounts…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: [
+          'accounts',
+          'usage limit',
+          'subscription',
+          'switch account',
+          'claude',
+          'codex',
+          'chatgpt',
+        ],
+        run: () => {
+          requestAccountsOnOpen('show');
+          requestSettingsTabOnOpen('agents');
+          openModal('settings');
+        },
+      },
+      {
+        id: 'agents.addClaudeAccount',
+        title: 'Add a Claude Code account…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: ['account', 'usage limit', 'subscription', 'second', 'sign in'],
+        run: () => {
+          requestAccountsOnOpen('claude');
+          requestSettingsTabOnOpen('agents');
+          openModal('settings');
+        },
+      },
+      {
+        id: 'agents.addCodexAccount',
+        title: 'Add a Codex account…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: ['account', 'chatgpt', 'usage limit', 'subscription', 'second', 'sign in'],
+        run: () => {
+          requestAccountsOnOpen('codex');
+          requestSettingsTabOnOpen('agents');
           openModal('settings');
         },
       },
