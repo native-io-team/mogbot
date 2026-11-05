@@ -241,7 +241,7 @@
 .account-pick-card-status {
   margin-top: var(--spacing-2xs);
   font-size: var(--font-size-badge);
-  color: var(--accent-active);
+  color: var(--accent-success);
 }
 
 /* Settings gear: a sibling of the tile button, shown on hover or focus so the

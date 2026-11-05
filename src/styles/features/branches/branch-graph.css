@@ -162,7 +162,7 @@
 }
 
 .branch-graph-row-here {
-  color: var(--accent-active);
+  color: var(--text-primary);
 }
 
 .branch-graph-row-meta {
@@ -195,7 +195,7 @@
 }
 
 .branch-graph-rail.is-current {
-  stroke: var(--accent-active);
+  stroke: var(--text-primary);
   stroke-width: 2.5;
   opacity: 1;
 }
@@ -215,7 +215,7 @@
 }
 
 .branch-graph-node.is-current {
-  fill: var(--accent-active);
+  fill: var(--text-primary);
 }
 
 /* PR marker — the one deliberately loud element besides the current branch */

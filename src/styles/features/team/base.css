@@ -399,7 +399,7 @@
 }
 
 .team-how-writer[data-tone='likely'] {
-  border-left-color: var(--accent-active);
+  border-left-color: var(--status-info);
 }
 
 .team-how-writer[data-tone='best-effort'] {

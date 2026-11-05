@@ -142,7 +142,7 @@
   width: 8px;
   height: 8px;
   border-radius: var(--radius-pill);
-  background: var(--accent-active);
+  background: var(--status-info);
 }
 
 /* Ship Studio saw a push and no agent left a summary, so the row has nothing

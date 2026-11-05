@@ -147,7 +147,7 @@
 }
 
 .setup-item-icon-check {
-  color: var(--setup-wizard-accent);
+  color: var(--accent-success);
 }
 
 .setup-item-icon-check path,
@@ -168,7 +168,7 @@
 }
 
 .setup-item-spinner {
-  color: var(--accent-active);
+  color: var(--status-running);
 }
 
 .setup-item-name {
@@ -284,11 +284,11 @@
 }
 
 .wizard-indicator-dot.completed {
-  background: var(--setup-wizard-accent);
-  border-color: var(--setup-wizard-accent);
-  /* Dark glyph on the green dot — matches the current step's number,
+  background: var(--accent-success);
+  border-color: var(--accent-success);
+  /* Dark glyph on the success dot — matches the current step's number,
      instead of a white check that reads as a different style. */
-  color: var(--text-on-accent);
+  color: var(--text-on-success);
 }
 
 .wizard-indicator-dot.past {
@@ -307,7 +307,7 @@
 }
 
 .wizard-indicator-line.active {
-  background: var(--setup-wizard-accent);
+  background: var(--accent-success);
 }
 
 .wizard-indicator-label {

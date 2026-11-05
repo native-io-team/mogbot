@@ -192,7 +192,7 @@
 
 .rewind-progress-bar {
   height: 100%;
-  background: var(--accent-active);
+  background: var(--status-running);
   border-radius: 2px;
 }
 

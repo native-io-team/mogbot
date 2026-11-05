@@ -1908,14 +1908,14 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
               {/* Branch switching overlay */}
               {isBranchSwitching && (
                 <div className="preview-branch-switching-overlay">
-                  <Spinner size="lg" style={{ color: 'var(--accent-active)' }} />
+                  <Spinner size="lg" style={{ color: 'var(--text-secondary)' }} />
                   <span>Switching branch...</span>
                 </div>
               )}
               {/* Dev server restarting overlay */}
               {isDevServerRestarting && (
                 <div className="preview-branch-switching-overlay">
-                  <Spinner size="lg" style={{ color: 'var(--accent-active)' }} />
+                  <Spinner size="lg" style={{ color: 'var(--text-secondary)' }} />
                   <span>Restarting dev server...</span>
                 </div>
               )}

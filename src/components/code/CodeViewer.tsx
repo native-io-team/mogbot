@@ -249,7 +249,7 @@ export function CodeViewer({
           <span className="code-viewer-path">{filePath}</span>
         </div>
         <div className="code-viewer-placeholder">
-          <Spinner size="sm" style={{ color: 'var(--accent-active)' }} />
+          <Spinner size="sm" style={{ color: 'var(--text-secondary)' }} />
         </div>
       </div>
     );

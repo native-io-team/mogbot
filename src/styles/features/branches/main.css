@@ -140,8 +140,8 @@
 .branch-live-badge {
   padding: var(--space-04);
   border-radius: var(--radius-2);
-  background: color-mix(in srgb, var(--accent-active) 15%, transparent);
-  color: var(--accent-active);
+  background: color-mix(in srgb, var(--accent-success) 15%, transparent);
+  color: var(--accent-success);
   font-size: var(--font-size-10);
   font-weight: var(--font-weight-medium);
   white-space: nowrap;
@@ -523,8 +523,8 @@
 }
 
 .branches-menu-row.is-current {
-  background: color-mix(in srgb, var(--accent-active) 15%, transparent);
-  color: var(--accent-active);
+  background: var(--surface-selected);
+  color: var(--text-primary);
 }
 
 .branches-menu-pr-row {

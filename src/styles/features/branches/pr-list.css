@@ -236,8 +236,8 @@
 }
 
 .branch-card-badge.ahead {
-  background: color-mix(in srgb, var(--accent-active) 10%, transparent);
-  color: var(--accent-active);
+  background: color-mix(in srgb, var(--status-info) 10%, transparent);
+  color: var(--status-info);
 }
 
 .branch-card-badge.behind {

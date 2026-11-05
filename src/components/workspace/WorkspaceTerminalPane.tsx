@@ -403,7 +403,7 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
                   data-education-id="screenshot-button"
                 >
                   {isCapturing ? (
-                    <Spinner size="sm" style={{ color: 'var(--accent-active)' }} />
+                    <Spinner size="sm" style={{ color: 'var(--text-secondary)' }} />
                   ) : (
                     <CameraIcon size={14} />
                   )}
@@ -427,7 +427,7 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
                   data-education-id="crop-button"
                 >
                   {isCropCapturing ? (
-                    <Spinner size="sm" style={{ color: 'var(--accent-active)' }} />
+                    <Spinner size="sm" style={{ color: 'var(--text-secondary)' }} />
                   ) : (
                     <CropIcon size={14} />
                   )}

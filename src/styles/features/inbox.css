@@ -276,8 +276,8 @@
 }
 
 .inbox-detail-severity[data-severity='info'] {
-  background: color-mix(in srgb, var(--accent-active) 10%, transparent);
-  color: var(--accent-active);
+  background: color-mix(in srgb, var(--status-info) 10%, transparent);
+  color: var(--status-info);
 }
 
 .inbox-detail-title {
