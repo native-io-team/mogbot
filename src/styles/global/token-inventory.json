@@ -5174,7 +5174,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 510
+      "consumerCount": 511
     },
     {
       "name": "--text-muted",
@@ -5642,7 +5642,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 419
+      "consumerCount": 420
     },
     {
       "name": "--font-size-control",
@@ -5966,7 +5966,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 740
+      "consumerCount": 741
     },
     {
       "name": "--spacing-md",
@@ -6524,7 +6524,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 510
+      "consumerCount": 511
     },
     {
       "name": "--text-quiet",

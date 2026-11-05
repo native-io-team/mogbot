@@ -138,15 +138,9 @@ export function ImportProject({ onComplete, onCancel }: ImportProjectProps) {
       );
     }
 
-    // A just-cloned repo isn't approved yet, so its lifecycle scripts (and
-    // its dependencies') don't run here: the backend plans the install with
-    // `--ignore-scripts` and runs them once the user approves the project.
+    // Not approved yet, so no lifecycle scripts: they run once it is (dev_consent.rs).
     const plan = await planPackageInstall(projectPath, packageManager);
-    logger.info('[ImportProject] phase: install', {
-      projectPath,
-      packageManager,
-      runsScripts: plan.runsScripts,
-    });
+    logger.info('[ImportProject] phase: install', { projectPath, packageManager, plan });
     await runPtyToExit({
       cwd: projectPath,
       command: packageManager,

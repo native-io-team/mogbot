@@ -170,6 +170,9 @@ fn canonical(path: &Path) -> String {
 }
 
 /// The verdict on `bundle` (bytes already read, or `None` if missing).
+/// Each argument is one thing the verdict turns on; bundling them into a
+/// struct would only rename the list.
+#[allow(clippy::too_many_arguments)]
 fn judge(
     file: &TrustFile,
     developer_mode: bool,
