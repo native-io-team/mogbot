@@ -17,7 +17,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Marked, type Token, type Tokens, type TokensList } from 'marked';
-import DOMPurify from 'dompurify';
+import { imageLinkLabel, sanitizeMessageHtml } from '../../lib/safeHtml';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   CheckIcon,
@@ -120,17 +120,17 @@ const pathLink = (path: string, inner: string) =>
   `<a href="${escapeHtml(encodeURI(path))}" class="agent-path" title="${escapeHtml(path)}">${inner}</a>`;
 
 /**
- * Agent prose. Images become links: a remote image would load inside the app
- * webview, unsized, from wherever the agent pointed it. A local path, written
- * out or in `code`, becomes a link that opens it.
+ * Agent prose. Images become link chips (see lib/safeHtml): a remote image
+ * would load inside the app webview from wherever the agent pointed it. A local
+ * path, written out or in `code`, becomes a link that opens it.
  */
 const markdown = new Marked({
   gfm: true,
   breaks: true,
   renderer: {
     image({ href, text }) {
-      const label = DOMPurify.sanitize(text || href);
-      return `<a href="${encodeURI(href)}">${label}</a>`;
+      const link = `<a class="md-image-link" href="${escapeHtml(encodeURI(href))}">`;
+      return `${link}${escapeHtml(imageLinkLabel(href, text))}</a>`;
     },
     codespan({ text }) {
       return isCodePath(text) ? pathLink(text.trim(), `<code>${escapeHtml(text)}</code>`) : false;
@@ -164,7 +164,7 @@ function toSegments(text: string): Segment[] {
   const flush = () => {
     if (run.length === 0) return;
     const list = Object.assign(run, { links: tokens.links }) as TokensList;
-    segments.push({ type: 'html', html: DOMPurify.sanitize(markdown.parser(list)) });
+    segments.push({ type: 'html', html: sanitizeMessageHtml(markdown.parser(list)) });
     run = [];
   };
   for (const token of tokens) {

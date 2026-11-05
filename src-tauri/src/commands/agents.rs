@@ -217,21 +217,26 @@ pub async fn agents_inspect_files(
 }
 
 /// Open an attachment in its default app (a PDF in Preview, a CSV in Numbers),
-/// or with `reveal`, show it in Finder.
+/// or with `reveal`, show it in Finder. The same allowlist as a path in prose
+/// decides: an agent can share a `.command` file, and clicking its card must
+/// not run it — anything off the list is only shown in Finder.
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_open_attachment(
     agent_id: String,
     path: String,
     reveal: Option<bool>,
-) -> Result<(), CommandError> {
-    let full = attachments::resolve(&store::agent_home(&agent_id)?, &path)?;
-    let action = if reveal.unwrap_or(false) {
-        files::PathAction::Reveal
-    } else {
-        files::PathAction::Open
-    };
-    files::perform(&full, action)
+) -> Result<files::PathAction, CommandError> {
+    let home = store::agent_home(&agent_id)?;
+    let full = attachments::resolve(&home, &path)?;
+    let (full, action) = files::local_path(
+        &full.display().to_string(),
+        &home,
+        std::slice::from_ref(&home),
+        reveal.unwrap_or(false),
+    )?;
+    files::perform(&full, action)?;
+    Ok(action)
 }
 
 /// Everything shared in one conversation, both ways, newest first.
@@ -243,8 +248,9 @@ pub async fn agents_files(agent_id: String) -> Result<Vec<files::SharedFile>, Co
         .map_err(agents::err_other)?
 }
 
-/// A path an agent wrote in its reply, clicked: a document opens in its
-/// default app; folders, apps and scripts are only shown in Finder. Returns
+/// A path an agent wrote in its reply, clicked: a document, image or text file
+/// opens in its default app; anything else is only shown in Finder; a path
+/// outside the agent's folder, the user's projects and its copy is refused. Returns
 /// what was done, so the UI can say "Shown in Finder".
 #[tauri::command]
 #[tracing::instrument]
@@ -254,7 +260,19 @@ pub async fn agents_open_path(
     reveal: Option<bool>,
 ) -> Result<files::PathAction, CommandError> {
     let home = store::agent_home(&agent_id)?;
-    let (full, action) = files::local_path(&path, &home, reveal.unwrap_or(false))?;
+    // Its home, the user's projects, and its own copy of its project.
+    let mut roots = vec![home.clone()];
+    if let Ok(projects) = crate::commands::projects::list_projects().await {
+        roots.extend(
+            projects
+                .into_iter()
+                .map(|p| std::path::PathBuf::from(p.path)),
+        );
+    }
+    if let Some(copy) = store::get(&agent_id).ok().and_then(|a| a.copy) {
+        roots.push(std::path::PathBuf::from(copy.path));
+    }
+    let (full, action) = files::local_path(&path, &home, &roots, reveal.unwrap_or(false))?;
     files::perform(&full, action)?;
     Ok(action)
 }

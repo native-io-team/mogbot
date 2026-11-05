@@ -15,6 +15,7 @@ import { layoutScenarios } from './layout';
 import { migrationScenarios } from './migration';
 import { phoneScenarios } from './phone';
 import { phoneInstallScenarios } from './phoneInstall';
+import { previewErrorScenarios } from './previewError';
 import { remoteScenarios } from './remote';
 import { teamScenarios } from './team';
 
@@ -33,6 +34,7 @@ export const scenarios: Scenario[] = [
   ...migrationScenarios,
   ...phoneScenarios,
   ...phoneInstallScenarios,
+  ...previewErrorScenarios,
   ...remoteScenarios,
   ...teamScenarios,
 ];

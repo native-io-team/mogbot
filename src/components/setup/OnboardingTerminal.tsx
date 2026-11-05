@@ -27,6 +27,7 @@ import {
 import { logger } from '../../lib/logger';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { createTerminalOptions, followAppTheme } from '../terminal/terminalTheme';
+import { stripTerminalControls } from '../../lib/terminalPrompt';
 import '@xterm/xterm/css/xterm.css';
 
 /**
@@ -529,7 +530,7 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
             const text = await readClipboardText();
             if (text) {
               term.focus();
-              term.paste(text);
+              term.paste(stripTerminalControls(text));
             }
           } catch (err) {
             logger.warn('[OnboardingTerminal] Native clipboard paste failed', {
@@ -540,7 +541,7 @@ export function OnboardingTerminal({ command, args, cwd, onExit }: OnboardingTer
               const fallback = await navigator.clipboard.readText();
               if (fallback) {
                 term.focus();
-                term.paste(fallback);
+                term.paste(stripTerminalControls(fallback));
               }
             } catch {
               // Never throw from a key handler.

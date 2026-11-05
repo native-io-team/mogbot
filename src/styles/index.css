@@ -142,6 +142,7 @@
 @import './features/agents-takeover.css';
 @import './features/agents-import.css';
 @import './features/agents-quick-entry.css';
+@import './features/safe-html.css';
 @import './features/team/base.css';
 @import './features/team/updates.css';
 @import './features/team/people.css';

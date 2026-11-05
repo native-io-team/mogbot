@@ -880,8 +880,9 @@ export interface SharedFile extends Attachment {
 export const getAgentFiles = (agentId: string) => invoke<SharedFile[]>('agents_files', { agentId });
 
 /**
- * A path from an agent's reply. Documents open in their default app; folders,
- * apps and scripts are only shown in Finder. Resolves to what was done.
+ * A path from an agent's reply. Documents, images and text open in their default app;
+ * anything else is only shown in Finder; paths outside the agent's folder, the
+ * user's projects and its copy are refused. Resolves to what was done.
  */
 export const openLocalPath = (agentId: string, path: string, reveal = false) =>
   invoke<'open' | 'reveal'>('agents_open_path', { agentId, path, reveal });
