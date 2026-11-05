@@ -2,7 +2,7 @@ import type { AgentMessage, ResultCard, WelcomeFrame } from '@shipstudio/compani
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Text } from 'react-native';
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
-import { ResultCardView, RevisingChip, useCanRevise } from '../src/components/result';
+import { ResultCardView, useCanRevise } from '../src/components/result';
 import { EMPTY_DRAFT, putDraft } from '../src/lib/drafts';
 import { useApp } from '../src/lib/store';
 import { agent } from './helpers';
@@ -131,15 +131,5 @@ describe('asking for changes', () => {
     const drafts = putDraft({}, 'a', { revising: ref });
     expect(drafts.a).toEqual({ ...EMPTY_DRAFT, revising: ref });
     expect(putDraft(drafts, 'a', { revising: undefined })).toEqual({});
-  });
-
-  it('shows above the composer and can be dropped', async () => {
-    const drop = jest.fn();
-    await render(
-      <RevisingChip revising={{ id: 'r', version: 2, title: 'Brief' }} onRemove={drop} />
-    );
-    expect(screen.getByText('Changes to Brief · v2')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Don't ask for changes"));
-    expect(drop).toHaveBeenCalled();
   });
 });

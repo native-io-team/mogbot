@@ -1,7 +1,8 @@
 /**
- * An approval in the chat: the exact command, then Deny | Allow, with Always
- * allow (when the desktop offers a scope) one tap away behind ⋯, inert for a
- * beat after it lands. Once answered, the outcome in a line.
+ * A request in the chat, on the shared card (`surfaces.tsx`): what it asks,
+ * the exact command, then ⋯ · Deny · Allow with the neutral Allow last, and
+ * Always allow (when the desktop offers a scope) one tap away behind ⋯,
+ * inert for a beat after it lands. Once answered, the outcome in a line.
  */
 
 import type { Agent, AgentMessage, Approval, ImportProposal } from '@shipstudio/companion-protocol';
@@ -29,9 +30,10 @@ import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import { answerApproval, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
-import { CARD_TITLE_SCALE, chromeScale, fonts, iconSize, radius, space, type } from '../lib/theme';
+import { fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
+import { ACTION, Card } from './surfaces';
 import { Button, Icon, T, tap } from './ui';
 
 /**
@@ -237,43 +239,86 @@ export function ApprovalCard({
     );
   }
 
-  return (
+  const consent = approval.connector?.kind === 'consent';
+  const actions = noting ? (
+    <>
+      <Button title="Cancel" variant="outline" onPress={() => setNoting(false)} style={ACTION} />
+      <Button
+        title="Deny"
+        variant="answer"
+        busy={busy === 'deny'}
+        disabled={!connected}
+        onPress={() => void answer(false, false, note)}
+        style={ACTION}
+      />
+    </>
+  ) : (
     <Animated.View
-      layout={LinearTransition.duration(220)}
-      onLayout={fit.onCardLayout}
-      style={cardStyles.card}
+      // Inert, and fading in, until armed: a tap meant for something else lands on nothing.
+      entering={FadeIn.duration(ARM_MS)}
+      exiting={FadeOut.duration(120)}
+      pointerEvents={armed ? 'auto' : 'none'}
+      accessibilityElementsHidden={!armed}
+      importantForAccessibility={armed ? 'auto' : 'no-hide-descendants'}
+      style={cardStyles.answers}
     >
-      {!fit.pinned && (
-        // The pin above the chat shows the question while this can't fit whole.
-        <View onLayout={fit.onHeadLayout} style={cardStyles.head}>
-          <Eyebrow />
-          <T variant="headline" color={colors.textStrong} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-            {approval.title}
-          </T>
-        </View>
+      {/*
+        Never a second Allow under the thumb: anything broader is a
+        deliberate second step, with what it covers spelled out. A consent
+        request has nothing to say instead: just Deny.
+      */}
+      {!consent && (
+        <MoreAnswers
+          disabled={off || !armed}
+          onPress={() => choose(approval.title, more, scope ?? undefined)}
+        />
       )}
+      <Button
+        title="Deny"
+        variant="outline"
+        busy={busy === 'deny'}
+        disabled={off}
+        focusable={armed}
+        onPress={() => void answer(false)}
+        style={ACTION}
+      />
+      <Button
+        title="Allow"
+        variant="answer"
+        busy={busy === 'allow'}
+        disabled={off}
+        focusable={armed}
+        onPress={() => void answer(true)}
+        accessibilityHint={approval.detail || undefined}
+        style={ACTION}
+      />
+    </Animated.View>
+  );
+
+  return (
+    <Card
+      icon={consent ? 'square.and.arrow.down' : 'checkmark.shield'}
+      title={approval.title}
+      // The pin above the chat shows the question while this can't fit whole.
+      hideHead={fit.pinned}
+      onLayout={fit.onCardLayout}
+      onHeadLayout={fit.onHeadLayout}
+      note={
+        !connected
+          ? 'Answer it once your Mac is back. It stays open until then.'
+          : paused && !fit.pinned && !consent
+            ? 'It paused here for you. Allow it and it picks up where it left off.'
+            : undefined
+      }
+      actions={actions}
+    >
       {!!approval.detail && (
         <FittedDetail fit={fit}>
           <Command text={approval.detail} lines={large ? 6 : 12} />
         </FittedDetail>
       )}
-      {paused && !fit.pinned && (
-        <T
-          variant="small"
-          color={colors.textMuted}
-          maxFontSizeMultiplier={CARD_TITLE_SCALE}
-          onLayout={fit.onAsideLayout}
-        >
-          It paused here for you. Allow it and it picks up where it left off.
-        </T>
-      )}
-      {!connected && (
-        <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          Answer it once your Mac is back. It stays open until then.
-        </T>
-      )}
-      {noting ? (
-        <Animated.View entering={FadeIn.duration(150)} style={{ gap: space.sm }}>
+      {noting && (
+        <Animated.View entering={FadeIn.duration(150)}>
           <TextInput
             autoFocus
             value={note}
@@ -287,63 +332,9 @@ export function ApprovalCard({
             // Return denies with the note, and only once there is one.
             onSubmitEditing={() => note.trim() && void answer(false, false, note)}
           />
-          <View style={cardStyles.actions}>
-            <Button
-              title="Cancel"
-              variant="ghost"
-              onPress={() => setNoting(false)}
-              style={{ flex: 1 }}
-            />
-            <Button
-              title="Deny"
-              busy={busy === 'deny'}
-              disabled={!connected}
-              onPress={() => void answer(false, false, note)}
-              style={{ flex: 1 }}
-            />
-          </View>
-        </Animated.View>
-      ) : (
-        <Animated.View
-          // Inert, and fading in, until armed: a tap meant for something else lands on nothing.
-          entering={FadeIn.duration(ARM_MS)}
-          exiting={FadeOut.duration(120)}
-          pointerEvents={armed ? 'auto' : 'none'}
-          accessibilityElementsHidden={!armed}
-          importantForAccessibility={armed ? 'auto' : 'no-hide-descendants'}
-          style={{ gap: space.sm }}
-        >
-          <View style={cardStyles.actions}>
-            <Button
-              title="Deny"
-              busy={busy === 'deny'}
-              disabled={off}
-              focusable={armed}
-              onPress={() => void answer(false)}
-              style={{ flex: 1 }}
-            />
-            <Button
-              title="Allow"
-              variant="answer"
-              busy={busy === 'allow'}
-              disabled={off}
-              focusable={armed}
-              onPress={() => void answer(true)}
-              accessibilityHint={approval.detail || undefined}
-              style={{ flex: 1 }}
-            />
-            {/*
-              Never a second Allow under the thumb: anything broader is a
-              deliberate second step, with what it covers spelled out.
-            */}
-            <MoreAnswers
-              disabled={off || !armed}
-              onPress={() => choose(approval.title, more, scope ?? undefined)}
-            />
-          </View>
         </Animated.View>
       )}
-    </Animated.View>
+    </Card>
   );
 }
 
@@ -354,7 +345,6 @@ export function ApprovalCard({
  * one only says who they are and to go there. No Allow: the Mac refuses one.
  */
 export function ReviewOnMacCard({ approval }: { approval: Approval }) {
-  const cardStyles = useCardStyles();
   const colors = useColors();
   const proposals = approval.connector?.review?.proposals ?? [];
   const agents = reviewLines(proposals);
@@ -369,15 +359,15 @@ export function ReviewOnMacCard({ approval }: { approval: Approval }) {
       </Receipt>
     );
   }
+  const source = approval.connector?.source;
   return (
-    <Animated.View layout={LinearTransition.duration(220)} style={cardStyles.card}>
-      <View style={cardStyles.head}>
-        {/* Not the amber "act here" mark: there's nothing to do on this phone. */}
-        <Eyebrow text="ON YOUR MAC" icon="info.circle" tone="neutral" />
-        <T variant="headline" color={colors.textStrong} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          {approval.title}
-        </T>
-      </View>
+    <Card
+      icon="square.and.arrow.down"
+      title={approval.title}
+      // Not "Needs your OK" here: there's nothing to do on this phone.
+      source={source ? `From ${source} · on your Mac` : 'On your Mac'}
+      note="Each agent’s instructions are shown on your Mac before anything is created."
+    >
       {agents.length > 0 && (
         <View style={{ gap: space['2xs'] }}>
           {agents.map((line, i) => (
@@ -387,10 +377,7 @@ export function ReviewOnMacCard({ approval }: { approval: Approval }) {
           ))}
         </View>
       )}
-      <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-        Each agent’s instructions are shown there before anything is created.
-      </T>
-    </Animated.View>
+    </Card>
   );
 }
 
@@ -532,37 +519,6 @@ export function MoreAnswers({ disabled, onPress }: { disabled: boolean; onPress:
 }
 
 /**
- * The pending card's label: amber "NEEDS YOUR OK" for an answer wanted here,
- * or neutral for one that only says where it's answered.
- */
-export function Eyebrow({
-  text = 'NEEDS YOUR OK',
-  icon = 'exclamationmark.triangle.fill',
-  tone = 'warning',
-}: {
-  text?: string;
-  icon?: IconName;
-  tone?: 'warning' | 'neutral';
-}) {
-  const cardStyles = useCardStyles();
-  const colors = useColors();
-  const tint = tone === 'warning' ? colors.accentWarning : colors.textSecondary;
-  return (
-    <View style={cardStyles.eyebrow}>
-      <Icon name={icon} size={iconSize.inline} color={tint} />
-      <T
-        variant="caption"
-        color={tint}
-        style={cardStyles.eyebrowText}
-        maxFontSizeMultiplier={chromeScale}
-      >
-        {text}
-      </T>
-    </View>
-  );
-}
-
-/**
  * The exact command, never re-wrapped: a line break inside `acme-site`
  * reads as a different path. Long lines scroll sideways instead, and what
  * is selected and copied is the command itself, character for character.
@@ -603,23 +559,8 @@ export function Command({ text, lines }: { text: string; lines: number }) {
   );
 }
 
-/**
- * The card recipe every card shares: 16 in, 12 between its blocks (head,
- * detail, aside, answers), and inside the head the lines sit tight (eyebrow
- * → 6 → title → 2 → meta), so it reads as one block, not five stripes.
- */
+/** The parts of a request card the shared card doesn't draw: wells, fields, receipts, ⋯. */
 export const useCardStyles = makeStyles((colors) => ({
-  card: {
-    gap: space.md,
-    padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: colors.surfacePanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.cardBorder,
-  },
-  head: { gap: space.tight },
-  eyebrow: { flexDirection: 'row', gap: space.tight, alignItems: 'center' },
-  eyebrowText: { fontFamily: fonts.semibold, letterSpacing: 0.6 },
   cardDetail: {
     backgroundColor: colors.surfaceApp,
     borderRadius: radius.inner,
@@ -627,14 +568,18 @@ export const useCardStyles = makeStyles((colors) => ({
   },
   cardDetailInner: { padding: space.md },
   showAll: { paddingHorizontal: space.md, paddingBottom: space.sm },
-  actions: { flexDirection: 'row', gap: space.sm },
+  /** ⋯ · Deny · Allow: one row, the affirmative last. */
+  answers: { flexDirection: 'row', flexGrow: 1, gap: space.sm },
+  /** A task's own menu: each option a full row, then the pair. */
+  choices: { flexGrow: 1, flexBasis: '100%', gap: space.sm },
   more: {
     width: 44,
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.control,
-    backgroundColor: colors.surfaceControl,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: colors.borderStrong,
   },
   /** Every text field in a card or a sheet: clearly a field, on a panel, in either appearance. */
   input: {
