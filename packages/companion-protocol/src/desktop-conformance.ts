@@ -30,6 +30,7 @@ export type Conformance = [
   Assert<Same<Omit<Wire.AgentsOverview, 'agents'>, Omit<Desktop.AgentsOverview, 'agents'>>>,
   Assert<Same<Wire.AgentsOverview['agents'], Wire.Agent[]>>,
   Assert<Same<Wire.AgentStatus, Desktop.AgentStatus>>,
+  Assert<Same<Wire.LiveCall, Desktop.LiveCall>>,
   Assert<Same<Wire.ContextFill, Desktop.ContextFill>>,
   Assert<Same<Wire.AgentTakeover, PhoneTakeover>>,
   Assert<Same<Wire.Approval, Desktop.Approval>>,

@@ -41,6 +41,8 @@ import {
   workSummary,
 } from '../../lib/agentWork';
 import { MessageAttachments } from './AgentAttachments';
+import { StepOutput } from './AgentLiveStep';
+import { stepLine } from '../../../packages/companion-protocol/src/work';
 
 type IconComponent = ComponentType<{ size?: number }>;
 
@@ -70,11 +72,19 @@ function StepIcon({ kind }: { kind: string }) {
 }
 
 function StepRow({ step, startedAt, agent }: { step: WorkStep; startedAt: number; agent: Agent }) {
+  // "Ran the Cypress tests · 6m 12s · 42 passed, 3 failed": its time and
+  // counts only where the Mac recorded them.
+  const line = stepLine(step);
   return (
-    <li className="agent-work__step" data-kind={step.kind} data-outcome={step.outcome}>
+    <li
+      className="agent-work__step"
+      data-kind={step.kind}
+      data-outcome={step.outcome}
+      data-detail={line !== step.label || undefined}
+    >
       <StepIcon kind={step.kind} />
-      <span className="agent-work__label" title={step.label}>
-        {step.label}
+      <span className="agent-work__label" title={line}>
+        {line}
       </span>
       <time className="agent-work__time" dateTime={new Date(step.at).toISOString()}>
         {stepOffset(step, startedAt)}
@@ -82,6 +92,11 @@ function StepRow({ step, startedAt, agent }: { step: WorkStep; startedAt: number
       {step.image && (
         <div className="agent-work__shot">
           <MessageAttachments agent={agent} attachments={[step.image]} side="agent" />
+        </div>
+      )}
+      {step.output && step.output.length > 0 && (
+        <div className="agent-work__output">
+          <StepOutput step={step} />
         </div>
       )}
     </li>

@@ -22,6 +22,7 @@ import {
   useRef,
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
   type RefObject,
 } from 'react';
 import {
@@ -35,6 +36,7 @@ import {
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../primitives/ContextMenu';
 import { Button } from '../primitives/Button';
 import { AgentAvatar } from './AgentAvatar';
+import { AgentWorkingLine } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { AgentsSearchResults } from './AgentsSearchResults';
@@ -52,7 +54,6 @@ import {
   failedTurn,
   failureLine,
   needsYou,
-  plainActivity,
   type Agent,
   type AgentMessage,
   type SearchHit,
@@ -91,7 +92,7 @@ interface AgentsSidebarProps {
   onNewRoom: () => void;
 }
 
-function subtitle(agent: Agent): string {
+function subtitle(agent: Agent): ReactNode {
   // A request outranks driving: the row's words and its amber dot agree.
   // With a dozen agents waiting the label alone repeats down the list; what
   // it's asking (`askingLine`, beside this) or how many it holds is what
@@ -101,7 +102,8 @@ function subtitle(agent: Agent): string {
     return n > 1 ? `Needs your OK · ${n}` : 'Needs your OK';
   }
   if (agent.takeover) return `You’re driving ${agent.name}`;
-  if (agent.status.state === 'working') return plainActivity(agent.status.activity) ?? 'Working…';
+  // The step it's on and how long it's been at it, not "Working…".
+  if (agent.status.state === 'working') return <AgentWorkingLine agent={agent} />;
   const failure = failedTurn(agent);
   if (failure) return failureLine(failure, agent.preview);
   return agent.preview ?? agent.role ?? '';
@@ -394,7 +396,12 @@ const AgentRow = memo(function AgentRow({
           onPointerEnter={tooltipIfTruncated}
           onClick={() => onSelect(agent.id)}
         >
-          <AgentAvatar name={agent.name} color={agent.color} selected={current} />
+          <AgentAvatar
+            name={agent.name}
+            color={agent.color}
+            selected={current}
+            working={agent.status.state === 'working' && !agent.takeover}
+          />
           <span className="agents-list__text">
             <span className="agents-list__name">
               <span className="agents-list__name-text">{agent.name}</span>

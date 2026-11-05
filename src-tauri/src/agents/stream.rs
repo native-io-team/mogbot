@@ -35,6 +35,12 @@ pub enum Step {
     Action(super::work::Action),
     /// What became of a tool call, matched to its step by id.
     Result(super::work::CallResult),
+    /// More of what a running command printed (Codex's app server streams
+    /// it; Claude Code doesn't), for the live step's "Show output".
+    Output {
+        id: String,
+        text: String,
+    },
     Usage(UsageTotals),
     /// How much of the plan is left, as the engine reported it (`super::quota`).
     Quota(super::quota::Quota),
@@ -289,7 +295,7 @@ mod tests {
         assert_eq!(replies, 2);
         assert!(steps
             .iter()
-            .any(|s| matches!(s, Step::Action(a) if a.label == "Ran echo")));
+            .any(|s| matches!(s, Step::Action(a) if a.label == "Printed a message")));
         assert!(steps.iter().any(|s| matches!(s, Step::Session(_))));
         assert_eq!(steps.last(), Some(&Step::Done));
     }
