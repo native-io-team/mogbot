@@ -304,9 +304,13 @@ impl Registry {
             identity: Mutex::new(None),
         };
         r.ensure_server_id();
-        // Settled now, before any phone is added or shown: a key that was
-        // lost resets the paired phones here, not halfway through a pairing.
-        r.kept();
+        // With phones paired (or a key to move), settle the key now, before
+        // any is shown: a key that was lost resets them here, not halfway
+        // through a connection. Otherwise it waits until it's needed, so a
+        // Mac that never pairs a phone never touches the Keychain.
+        if r.read(|s| !s.devices.is_empty() || !s.identity_key.is_empty()) {
+            r.kept();
+        }
         r
     }
 
@@ -513,6 +517,8 @@ impl Registry {
         replace: &[String],
         tailnet_login: Option<String>,
     ) -> Result<(DeviceRecord, String, Vec<String>), CommandError> {
+        // No phone without a key: one made after it would reset it.
+        self.kept();
         let token = pairing::new_token();
         let device = clean_pair_device(device);
         let record = DeviceRecord {
@@ -942,6 +948,10 @@ mod tests {
         let path = dir.path().join("companion.json");
         let keys = Arc::new(Memory::default());
         let r = with_keys(&path, &keys);
+        assert!(
+            keys.key.lock().unwrap().is_none(),
+            "not made until it's needed"
+        );
         let first = fingerprint(&r);
         assert!(r.identity_is_durable());
         assert_eq!(fingerprint(&with_keys(&path, &keys)), first);
