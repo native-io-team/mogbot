@@ -5339,7 +5339,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 238
+      "consumerCount": 237
     },
     {
       "name": "--spacing-xs",
@@ -5366,7 +5366,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 493
+      "consumerCount": 494
     },
     {
       "name": "--spacing-lg",

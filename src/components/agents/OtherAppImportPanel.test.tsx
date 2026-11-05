@@ -86,7 +86,7 @@ describe('OtherAppImportPanel', () => {
     expect(screen.getByText(/credentials aren’t copied between apps/)).toBeInTheDocument();
     expect(screen.getByText(/copies in Other keep running/)).toBeInTheDocument();
     expect(screen.getByText(/same project folder as Other’s copy/)).toBeInTheDocument();
-    expect(screen.getByText(/Ada gets a recap/)).toBeInTheDocument();
+    expect(screen.getByText(/Ada from a recap/)).toBeInTheDocument();
     expect(screen.getByText('Already here')).toBeInTheDocument();
   });
 

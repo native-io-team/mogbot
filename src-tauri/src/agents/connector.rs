@@ -392,26 +392,26 @@ pub(crate) fn admit(
             None => Err("There's no import conversation going. Call import_conversation with a message to start one.".into()),
         };
     }
-    if carrying_on && chief_busy_with_us {
-        let t = live.cloned().expect("live");
-        return Ok((t, None, false));
+    if let (true, Some(t)) = (carrying_on && chief_busy_with_us, live) {
+        return Ok((t.clone(), None, false));
     }
     let started = !carrying_on;
-    if started {
-        *guard = Some(Talk {
-            id: store::new_id(),
-            source: source.to_string(),
-            chief_id: chief.id.clone(),
-            state: TalkState::Active,
-            started_at: now,
-            last_at: now,
-            exchanges: 0,
-            agents: Vec::new(),
-            summary: None,
-            returned_until: now - 1,
-        });
-    }
-    let t = guard.as_mut().expect("talk");
+    let fresh = || Talk {
+        id: store::new_id(),
+        source: source.to_string(),
+        chief_id: chief.id.clone(),
+        state: TalkState::Active,
+        started_at: now,
+        last_at: now,
+        exchanges: 0,
+        agents: Vec::new(),
+        summary: None,
+        returned_until: now - 1,
+    };
+    let t = match guard.as_mut() {
+        Some(t) if !started => t,
+        _ => guard.insert(fresh()),
+    };
     if t.exchanges >= MAX_EXCHANGES {
         return Err(format!(
             "This import conversation has reached its limit of {MAX_EXCHANGES} messages.\n\nNEXT: Tell the user which agents came across so far ({}) and that they can finish the rest in {brand} by asking their {} directly.",

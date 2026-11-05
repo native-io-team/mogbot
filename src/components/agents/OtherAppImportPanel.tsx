@@ -367,11 +367,10 @@ export function OtherAppImportPanel({ preview, onCancel, onDone }: OtherAppImpor
     <>
       <div className="agents-import__body">
         <p className="agents-import__lede">
-          Your {appName} team is on this Mac. Each agent comes with its instructions, memory, files
-          and chat history, and picks up from its most recent messages
-          {merging
-            ? `; ${mainName} gets a recap of ${appName}’s Chief of Staff conversation`
-            : ''}. {appName} keeps its own copy, untouched.
+          Your {appName} team is on this Mac. Each agent brings its instructions, memory, files and
+          chat history, and picks up from its latest messages
+          {merging ? ` (${mainName} from a recap of the other Chief’s)` : ''}. {appName} keeps its
+          own copy, untouched.
         </p>
         <div className="agents-import-preview" aria-live="polite">
           <p className="agents-import-preview__found">

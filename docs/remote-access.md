@@ -202,7 +202,43 @@ Grok Bot ──HTTPS──▶ Tailscale ──▶ tailscaled Funnel (/shipstudio
 `computer_status`, `list_projects`, `create_project`, `open_project`,
 `message_agent`, `wait_for_agent`, `read_agent`, `press_key`, `start_agent`,
 `close_agent`, `show_progress`, `preview_screenshot`, `git_status`,
-`prepare_push`, `confirm_push`, `deploy_status`.
+`prepare_push`, `confirm_push`, `deploy_status`, and for moving agents in,
+`import_conversation` (and the older one-shot `import_agents`).
+
+### Importing agents as a conversation (`import_conversation`)
+
+MCP only goes from the assistant to us, so when the user asks their other
+assistant (Grok, ChatGPT, Claude…) to move its agents here, *it* drives a
+conversation with the Chief of Staff (`agents/connector.rs`):
+
+- `import_conversation {source, message?, wait_seconds?}` puts `message` in
+  the Chief's chat as a line from `connector:<source>` ("From Grok · via
+  connector"), queues it as a Chief turn (`runner::enqueue_connector`), waits
+  for that turn like the agent tools wait for a tab (default 40s, max 50),
+  and answers `STATUS: replied | working | waiting_on_user | done | stopped`,
+  what the Chief said, the agents brought over so far, and `NEXT:`. No
+  `message` only waits. A message while the Chief is still answering the
+  last one isn't queued again.
+- The first message of a conversation is wrapped in the interview brief:
+  list your agents, then per agent its instructions, memory, routines and the
+  logins it needs (names only); the Chief brings each over with
+  `import_agent` and ends with `finish_import` (both Chief-only, listed only
+  while a conversation is going).
+- **Safety.** Text only: control characters are dropped, 20,000 characters
+  max, and a message that looks like it carries a credential (key and token
+  shapes, private keys, `password: …`) is refused before it reaches the chat.
+  Logins become secure cards in the new agent's own chat. A turn reading a
+  connector message may call only `import_agent`, `finish_import`,
+  `list_agents`, `list_check_ins` and `approve` (enforced in
+  `mcp::handle_rpc`), so the other assistant can't drive the Chief into
+  projects, deletions or messages; Claude Code's own tools still go through
+  the usual approval cards. 60 messages per conversation; 30 minutes of quiet
+  ends one. The user can stop it from the bar above the Chief's composer;
+  the next 10 minutes of messages are refused with `STATUS: stopped`. Every
+  call is audited (source and a preview of the message); refusals are
+  audited as failures.
+- Kept in memory: after a restart the next message starts a new conversation
+  (the Chief's chat and session still hold the old one).
 
 Ship Studio's own agents get the same project tools from the same handlers
 (`agents/sessions.rs`, see docs/agents.md), with a chat card instead of the

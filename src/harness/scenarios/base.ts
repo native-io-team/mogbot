@@ -239,8 +239,12 @@ export const baseCommands: CommandMap = {
   },
   agents_focus: null,
   agents_mark_unread: null,
+  // From import::import_prompt in src-tauri/src/agents/import.rs, for a Chief called Chief of Staff.
   agents_import_prompt:
-    'Import my setup into Ship Studio. Use Ship Studio\'s import_agents tool: send every agent I have with you, each with its name, a one-line role, its full instructions, and everything you remember that it needs (one fact per line). Mark the agent that manages the others as the main one. Include each agent\'s routines and automations, with when each runs in plain words ("every weekday at 9am", "every 2 hours") and what it does then. Leave out passwords, API keys and card numbers.',
+    "Move my agents to Dashbot. Use the Dashbot connector's import_conversation tool to talk to my Chief of Staff there, and answer its questions about each agent you run for me until it says the import is done. Don't send passwords, API keys or card numbers: Dashbot asks me for those itself.",
+  // No import conversation going over the connector.
+  agents_import_talk: null,
+  agents_import_talk_stop: false,
 
   // Copied from PASTE_PROMPT in src-tauri/src/agents/paste.rs.
   agents_import_paste_prompt:
@@ -248,6 +252,7 @@ export const baseCommands: CommandMap = {
   agents_import_paste_preview: { source: '', blocks: 0, agents: [], problems: [] },
   // The other app isn't on this machine: its tab and palette command stay hidden.
   agents_other_app_preview: null,
+  agents_other_app_exists: false,
   agents_other_app_import: {
     created: [],
     updated: [],
@@ -259,6 +264,8 @@ export const baseCommands: CommandMap = {
     routinesPaused: 0,
     messages: 0,
     secretsLeft: [],
+    rulesKept: [],
+    rulesLeft: [],
     filesSkipped: [],
   },
   agents_import_paste: {

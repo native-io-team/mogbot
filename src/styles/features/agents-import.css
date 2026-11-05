@@ -45,7 +45,7 @@
    title, inset like the body, so the two read as one choice of source. */
 .agents-import__tabs {
   display: flex;
-  margin: var(--spacing-2xs) var(--spacing-xl) 0;
+  margin: var(--spacing-md) var(--spacing-xl) 0;
 }
 
 .agents-import__tabs > * {
@@ -843,14 +843,14 @@
 }
 
 .agents-import-watch__live {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
   color: var(--text-primary);
 }
 
+/* Inline, so it sits on the first line however the sentence wraps. */
 .agents-import-watch__dot {
-  flex: none;
+  display: inline-block;
+  margin-right: var(--spacing-xs);
+  vertical-align: middle;
   width: var(--spacing-xs);
   height: var(--spacing-xs);
   border-radius: var(--radius-pill);
