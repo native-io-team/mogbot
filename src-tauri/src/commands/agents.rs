@@ -340,6 +340,9 @@ pub struct UpdateAgentInput {
     pub routine_model: Option<String>,
     /// A project path from `list_projects`; an empty string unbinds it.
     pub project: Option<String>,
+    /// "Work directly in the project" instead of in a copy of it.
+    #[serde(default)]
+    pub work_directly: Option<bool>,
 }
 
 #[tauri::command]
@@ -423,6 +426,9 @@ pub async fn agents_update(
         if let Some(p) = project {
             a.project = p;
         }
+        if let Some(direct) = input.work_directly {
+            a.work_directly = direct;
+        }
     })?;
     // The name and role are written into CLAUDE.md's heading, so any change
     // to them (or the instructions) rewrites it — memory is preserved.
@@ -472,6 +478,31 @@ pub async fn agents_change_diff(
     project::file_diff(&dir, &summary.from, &summary.to, &path).await
 }
 
+/// "Keep changes": the agent's copy of its project merged into the project's
+/// current branch. An overlap stops in the copy (`conflict`), never in the
+/// user's folder. `copy_id` names the card's copy, so a stale card can't keep
+/// a newer one.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_copy_keep(
+    app: AppHandle,
+    agent_id: String,
+    copy_id: Option<String>,
+) -> Result<agents::task::Kept, CommandError> {
+    agents::task::keep(&app, &agent_id, copy_id.as_deref()).await
+}
+
+/// "Discard": the agent's copy of its project and everything in it.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_copy_discard(
+    app: AppHandle,
+    agent_id: String,
+    copy_id: Option<String>,
+) -> Result<(), CommandError> {
+    agents::task::discard(&app, &agent_id, copy_id.as_deref()).await
+}
+
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_instructions(agent_id: String) -> Result<String, CommandError> {
@@ -506,7 +537,12 @@ pub async fn agents_memory_suggest(text: String) -> Result<String, CommandError>
 #[tracing::instrument(skip(app))]
 pub async fn agents_delete(app: AppHandle, agent_id: String) -> Result<(), CommandError> {
     runner::stop(&agent_id);
+    let copy = store::get(&agent_id).ok().and_then(|a| a.copy);
     store::delete(&agent_id)?;
+    // Its copy's folder goes; a branch with work on it stays.
+    if let Some(copy) = copy {
+        tauri::async_runtime::spawn(agents::task::abandon(copy));
+    }
     emit_registry(&app);
     notify::refresh_badge(&app);
     Ok(())

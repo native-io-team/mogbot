@@ -213,6 +213,16 @@ export function ChatView({
   // In a pane too short for a whole card, the question it's asking stays
   // pinned at the top, so the answers at the bottom never stand alone.
   const card = useMemo(() => pendingApproval(messages), [messages]);
+  // Only the newest change card of the agent's open copy offers Keep / Discard.
+  const liveCopyCard = useMemo(() => {
+    const id = agent?.copy?.id;
+    if (!id) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].kind === 'changes' && messages[i].changes?.copy?.id === id)
+        return messages[i].id;
+    }
+    return null;
+  }, [messages, agent?.copy?.id]);
   const pinQuestion = !!card?.approval && pinFor === card.id;
   const reportPin = useCallback(
     (cardId: string, needsPin: boolean) =>
@@ -411,6 +421,7 @@ export function ChatView({
                 <ItemView
                   item={item}
                   agent={agent}
+                  liveCopyCard={liveCopyCard}
                   onError={showError}
                   onLongPress={onMessageAction}
                   onDraftHeight={setDraftHeight}
@@ -562,6 +573,7 @@ export function ChatView({
 function ItemView({
   item,
   agent,
+  liveCopyCard,
   onError,
   onLongPress,
   onDraftHeight,
@@ -569,6 +581,7 @@ function ItemView({
 }: {
   item: Item;
   agent: Agent;
+  liveCopyCard?: string | null;
   onError: (t: string) => void;
   onLongPress: (m: AgentMessage) => void;
   onDraftHeight: (height: number) => void;
@@ -581,6 +594,7 @@ function ItemView({
         message={item.message}
         agent={agent}
         queued={isQueued(item.message, agent)}
+        liveCopy={item.message.id === liveCopyCard}
         onError={onError}
         onLongPress={onLongPress}
       />

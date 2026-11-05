@@ -24,6 +24,7 @@ import { ApprovalCard } from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
 import { LiveWork, WorkLine } from './work';
+import { CopyActions } from './copy';
 import { useApp } from '../lib/store';
 
 const enter = FadeInDown.duration(220).springify().damping(18);
@@ -32,12 +33,15 @@ export const MessageRow = memo(function MessageRow({
   message,
   agent,
   queued,
+  liveCopy,
   onError,
   onLongPress,
 }: {
   message: AgentMessage;
   agent: Agent;
   queued: boolean;
+  /** The newest change card of the agent's open copy: it offers Keep / Discard. */
+  liveCopy?: boolean;
   onError: (text: string) => void;
   /** Copy, Quote, Select Text: words only, so only user and agent messages. */
   onLongPress?: (message: AgentMessage) => void;
@@ -160,6 +164,20 @@ export const MessageRow = memo(function MessageRow({
         <SystemLine message={message} />
       );
     default:
+      if (liveCopy && message.changes?.copy) {
+        return (
+          <View style={styles.agentRow}>
+            <SystemLine message={message} />
+            <CopyActions
+              agent={agent}
+              copy={message.changes.copy}
+              project={message.changes.project.split('/').pop() ?? message.changes.project}
+              onError={onError}
+            />
+            {message.work && <WorkLine message={message} work={message.work} onError={onError} />}
+          </View>
+        );
+      }
       if (message.work) {
         return (
           <View style={styles.agentRow}>
@@ -331,9 +349,9 @@ function SystemLine({ message }: { message: AgentMessage }) {
   const canDiff = useApp((s) => !!s.welcome?.methods.includes('agents.changeDiff'));
   const changes = message.kind === 'changes' ? message.changes : undefined;
   const text = changes
-    ? `Changed ${changes.fileCount} file${changes.fileCount === 1 ? '' : 's'} in ${changes.project
-        .split('/')
-        .pop()}`
+    ? `Changed ${changes.fileCount} file${changes.fileCount === 1 ? '' : 's'} in ${
+        changes.copy ? 'a copy of ' : ''
+      }${changes.project.split('/').pop()}`
     : message.kind === 'sent_to_agent' && message.peer
       ? `To ${message.peer.name}: ${message.text}`
       : message.kind === 'from_agent' && message.peer

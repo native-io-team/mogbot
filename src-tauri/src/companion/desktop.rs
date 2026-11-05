@@ -322,6 +322,7 @@ impl Backend for DesktopBackend {
             model: None,
             routine_model: None,
             project: None,
+            work_directly: None,
         };
         json(cmd::agents_update(self.app.clone(), agent_id.to_string(), input).await?)
     }
@@ -357,6 +358,26 @@ impl Backend for DesktopBackend {
             )
             .await?,
         )
+    }
+
+    async fn keep_copy(&self, agent_id: &str, copy_id: &str) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_copy_keep(
+                self.app.clone(),
+                agent_id.to_string(),
+                Some(copy_id.to_string()),
+            )
+            .await?,
+        )
+    }
+
+    async fn discard_copy(&self, agent_id: &str, copy_id: &str) -> Result<(), CommandError> {
+        cmd::agents_copy_discard(
+            self.app.clone(),
+            agent_id.to_string(),
+            Some(copy_id.to_string()),
+        )
+        .await
     }
 
     async fn shareable_path(

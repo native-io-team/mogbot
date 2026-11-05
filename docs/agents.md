@@ -1115,6 +1115,69 @@ Limits: another agent or the user editing the same project during the turn is
 counted too; the snapshots are unreferenced git objects, so after `git gc`
 prunes them the diff says it can't be shown.
 
+### A copy of the project per task (`src-tauri/src/agents/task.rs`)
+
+A bound agent works in its own copy of the project (a git worktree on its own
+branch), never in the user's folder, so two agents, or an agent and the user,
+can't trample each other. The UI says "a copy of acme-site", "Keep changes",
+"Discard"; git stays underneath.
+
+- **When**: a turn of a bound agent with no open copy makes one before it
+  starts (the working directory is fixed at spawn, so it can't wait for the
+  first edit). The copy (`Agent.copy`) stays open across turns until the user
+  keeps or discards it, so follow-ups land in it. A turn that made a copy and
+  left it exactly as it started removes it again: questions cost nothing.
+  The timeline gets a "Started a copy of acme-site" step.
+- **Where**: `<projects root>/.worktrees/<project>/<agent>-<task>-<id>`, the
+  folder Ship Studio's own worktrees use (openable by the workspace, listed by
+  no dashboard, never inside the project). Branch `<agent>/<task>-<id>` from
+  the agent's name and the request's first words. Locked with reason
+  `agent-copy:<agent id>`, so `git worktree prune` and a plain remove leave it.
+  Ship Studio sees it as an ordinary locked worktree.
+- **What comes along**: `.shipstudio/project.json` seeded on its own dev port
+  (the seeding `add_worktree` uses), and git-ignored root `.env*`,
+  `.claude/settings.local.json` and `node_modules` (up to 3 levels deep).
+  Only ignored files are brought in, so none becomes a change Keep would
+  commit. `node_modules` is cloned copy-on-write (`cp -c`): measured on a
+  317 MB / 31k-entry pnpm tree, 4.7s and no measurable change in free space.
+  Where cloning fails nothing is copied and the prompt says dependencies
+  aren't installed.
+- **Limits**: 4 open copies per project, and none made with under 2 GB free.
+  Both fail the turn with a sentence saying what to do; nothing falls back to
+  the user's folder.
+- **Commits**: what a turn leaves uncommitted is committed on the copy's
+  branch at the end of the turn (`--no-verify`; bookkeeping, not the user's
+  commits). Never while conflicts are unresolved.
+- **The card**: a turn that changed the copy leaves a `changes` card listing
+  *everything in the copy so far* (from the base commit's tree), with
+  `changes.copy`. Only the newest card of the open copy is live: "Changes are
+  ready" (or "Changes so far" while the agent works), Keep changes · Review ·
+  Preview · Discard, and ⋯ → Open a pull request. Older cards are records.
+- **Keep** (`agents_copy_keep`): the project's current branch is merged into
+  the copy first, so an overlap stops *in the copy* (`conflict`, the user's
+  folder untouched); the card offers "Open the copy" (the workspace's conflict
+  UI) or "Ask <agent>". Then the project fast-forwards. Unsaved edits in the
+  user's folder to the same files refuse with their names; nothing is
+  overwritten. A detached project is refused. The copy and (merged) branch go.
+- **Discard** (`agents_copy_discard`): asks first; the copy and its branch go.
+  Both refuse while the agent is working, and both name the copy, so a stale
+  card can't act on a newer one.
+- **Preview** opens the copy as a workspace project; **Open a pull request**
+  opens it and queues the workspace's own Submit for review modal
+  (`lib/reviewHandoff.ts`), which only creates the PR when the user submits.
+- **Cleanup**: deleting the agent removes its copy's folder and keeps a branch
+  with unmerged work; at launch, copies whose folder is gone are forgotten and
+  locked copies no agent holds are removed the same way.
+- **Opt out**: "Work directly in the project" in the editor (`workDirectly`).
+  Unbound agents, non-git folders and repos without a commit run as before.
+- **Phone**: `agents.keepCopy` / `agents.discardCopy` (gated by
+  `welcome.methods`), shown under the newest copy card. Preview and pull
+  requests stay on the Mac.
+- Not built: a `start_task` tool to begin a fresh copy mid-conversation (new
+  work piles into the open copy until it's kept or discarded); Codex sandbox
+  writable roots untested with a worktree cwd; the agent's project `session_*`
+  tools still drive the user's own folder.
+
 ## The Chief's audit trail and live hand-offs
 
 - `create_agent`, `update_agent` and `delete_agent` leave a quiet note in the

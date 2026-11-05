@@ -423,6 +423,18 @@ export function AgentChat({
   }, [colorKey]);
 
   const items = useMemo(() => buildChatItems(shown), [shown]);
+  // The agent's open copy of its project: only its newest card offers Keep /
+  // Discard, and that card reads the live status (it waits while working).
+  const copyId = agent.copy?.id;
+  const liveCopyCard = useMemo(() => {
+    if (!copyId) return null;
+    for (let i = shown.length - 1; i >= 0; i--) {
+      const m = shown[i];
+      if (m.kind === 'changes' && m.changes?.copy?.id === copyId) return m.id;
+    }
+    return null;
+  }, [shown, copyId]);
+  const copyAgent = liveCopyCard ? agent : undefined;
   /** Nothing yet but what the Chief said first: the user hasn't spoken. */
   const greetingOnly =
     agent.isMain &&
@@ -858,7 +870,15 @@ export function AgentChat({
                 />
               );
             case 'changes':
-              return <ChangeCard key={m.id} message={m} arrived={arrived} />;
+              return (
+                <ChangeCard
+                  key={m.id}
+                  message={m}
+                  arrived={arrived}
+                  agent={m.id === liveCopyCard ? copyAgent : undefined}
+                  live={m.id === liveCopyCard}
+                />
+              );
             case 'session':
               return <SessionCard key={m.id} message={m} agent={rowAgent} arrived={arrived} />;
             default:
@@ -909,6 +929,8 @@ export function AgentChat({
       indicator.onExited,
       activity,
       work,
+      liveCopyCard,
+      copyAgent,
     ]
   );
 

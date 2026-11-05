@@ -260,7 +260,7 @@ pub fn git_has_any_changes(path: &std::path::Path) -> Result<bool, crate::errors
 /// but repo-local and never committed — so the staging path can enforce it
 /// without creating a working-tree change (issue #431). Best-effort: any
 /// failure just leaves behavior as it was.
-fn ensure_shipstudio_excluded(path: &std::path::Path) {
+pub(crate) fn ensure_shipstudio_excluded(path: &std::path::Path) {
     // Resolve the common git dir so worktrees are handled too (their `.git`
     // is a file pointing elsewhere, and exclude lives in the common dir).
     let Ok(mut cmd) = crate::utils::git_command_in(path) else {

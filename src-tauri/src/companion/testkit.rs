@@ -79,6 +79,11 @@ pub fn stored_agent() -> Agent {
             ],
             "failure": { "kind": "usage_limit", "resetsAt": 1_762_310_000_000_i64 },
             "project": "/Users/julian/ShipStudio/site",
+            "copy": { "id": "copy-1", "project": "/Users/julian/ShipStudio/site",
+                      "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12",
+                      "branch": "finance/invoice-totals-ab12", "base": "abc123", "baseBranch": "main",
+                      "createdAt": 1_762_280_000_000_i64, "deps": true },
+            "workDirectly": true,
             "capabilities": { "seenAt": 1_762_290_000_000_i64, "lines": [{ "what": "Tools", "detail": "Bash, Read, Edit" }] },
             "routineModel": "same",
             "secrets": [
@@ -127,7 +132,9 @@ pub fn messages() -> Vec<AgentMessage> {
                                  { "path": "src/b.ts", "status": "modified", "added": 2, "removed": 1 },
                                  { "path": "src/c.ts", "status": "deleted", "removed": 7 }
                              ],
-                             "fileCount": 3, "added": 12, "removed": 8 } }),
+                             "fileCount": 3, "added": 12, "removed": 8,
+                             "copy": { "id": "copy-1", "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12",
+                                       "branch": "finance/invoice-totals-ab12" } } }),
         json!({ "id": "m14", "agentId": AGENT, "ts": at(14), "kind": "session", "text": "",
                 "session": { "project": "/Users/julian/ShipStudio/site", "event": "started", "sessionId": "pty-1", "tab": 1, "cli": "claude" } }),
         json!({ "id": "m15", "agentId": AGENT, "ts": at(15), "kind": "session", "text": "Fix the header", "session": { "project": "/Users/julian/ShipStudio/site", "event": "sent" } }),
@@ -406,6 +413,8 @@ pub struct Stub {
     pub typed: Mutex<Vec<(String, String)>>,
     /// Permission rules revoked, by id.
     pub revoked: Mutex<Vec<String>>,
+    /// "keep <copy>" / "discard <copy>", in order.
+    pub copies: Mutex<Vec<String>>,
     /// Secure input cards saved (the values are not kept).
     pub secrets_saved: AtomicUsize,
 }
@@ -428,6 +437,7 @@ impl Stub {
             fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
+            copies: Mutex::new(Vec::new()),
             secrets_saved: AtomicUsize::new(0),
         });
         let c = Arc::new(Companion::with_epoch(registry, stub.clone(), epoch.into()));
@@ -720,6 +730,29 @@ impl Backend for Stub {
             "content": "@@ -1,2 +1,2 @@\n-const a = 1;\n+const a = 2;\n export { a };\n",
             "additions": 1, "deletions": 1
         }))
+    }
+
+    async fn keep_copy(&self, agent_id: &str, copy_id: &str) -> Result<Value, CommandError> {
+        if agent_id != AGENT || copy_id != "copy-1" {
+            return Err(CommandError::expected(
+                "Those changes were already kept or discarded.",
+            ));
+        }
+        self.copies.lock().unwrap().push(format!("keep {copy_id}"));
+        Ok(json!({ "outcome": "kept", "files": 2 }))
+    }
+
+    async fn discard_copy(&self, agent_id: &str, copy_id: &str) -> Result<(), CommandError> {
+        if agent_id != AGENT || copy_id != "copy-1" {
+            return Err(CommandError::expected(
+                "Those changes were already kept or discarded.",
+            ));
+        }
+        self.copies
+            .lock()
+            .unwrap()
+            .push(format!("discard {copy_id}"));
+        Ok(())
     }
 
     async fn shareable_path(

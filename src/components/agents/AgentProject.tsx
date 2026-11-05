@@ -24,7 +24,9 @@ import { MenuButton } from '../primitives/MenuButton';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { Tooltip } from '../primitives/Tooltip';
+import { Checkbox } from '../primitives/Checkbox';
 import { DiffModal } from '../branches/DiffModal';
+import { CopyActions, copyLine } from './AgentCopy';
 import { listProjects } from '../../lib/project';
 import {
   folderName,
@@ -87,8 +89,14 @@ export function AgentProjectChip({ agent }: { agent: Agent }) {
   const name = nameOf(ctx.projects, path);
   // Only said once the list is in: a project that left it can't be opened.
   const missing = ctx.projects !== null && !ctx.projects.some((p) => p.path === path);
+  const onCopy = Boolean(agent.copy && agent.copy.project === path && !agent.workDirectly);
+  const tip = missing
+    ? `${path} isn't one of your projects any more`
+    : onCopy
+      ? `${agent.name} is working on a copy of ${name}. Open ${name}`
+      : `Open ${name}`;
   return (
-    <Tooltip content={missing ? `${path} isn't one of your projects any more` : `Open ${name}`}>
+    <Tooltip content={tip}>
       <Button
         tabIndex={0}
         variant="ghost"
@@ -99,18 +107,26 @@ export function AgentProjectChip({ agent }: { agent: Agent }) {
         disabled={missing}
       >
         {name}
+        {onCopy && <span className="agent-chat__project-copy">copy</span>}
       </Button>
     </Tooltip>
   );
 }
 
-/** "Works in" in the agent editor: none, or one of the user's projects. */
+/**
+ * "Works in" in the agent editor: none, or one of the user's projects, and
+ * whether it works on its own copy of it (the default) or directly in it.
+ */
 export function AgentProjectField({
   value,
   onChange,
+  direct = false,
+  onDirectChange,
 }: {
   value: string;
   onChange: (path: string) => void;
+  direct?: boolean;
+  onDirectChange?: (direct: boolean) => void;
 }) {
   const ctx = useAgentProjects();
   const [loaded, setLoaded] = useState<ProjectEntry[] | null>(null);
@@ -164,10 +180,22 @@ export function AgentProjectField({
         ))}
       </Dropdown>
       <p className="agent-editor__hint">
-        {value
-          ? "It works inside this project, so the project's CLAUDE.md and settings apply. After each turn that changes files, the chat lists them."
-          : 'It works in its own folder and can still reach every project.'}
+        {!value
+          ? 'It works in its own folder and can still reach every project.'
+          : direct
+            ? "It works inside this project, so the project's CLAUDE.md and settings apply. After each turn that changes files, the chat lists them."
+            : "It works on its own copy of this project, so the project's CLAUDE.md and settings apply and your folder stays as you left it. When it changes something, the chat asks whether to keep it."}
       </p>
+      {value && onDirectChange && (
+        <label className="agent-editor__direct">
+          <Checkbox
+            checked={direct}
+            onChange={onDirectChange}
+            label="Work directly in the project"
+          />
+          <span>Work directly in the project</span>
+        </label>
+      )}
     </div>
   );
 }
@@ -181,13 +209,23 @@ function LineCounts({ added = 0, removed = 0 }: { added?: number; removed?: numb
   );
 }
 
-/** What a bound agent's turn changed in its project, from git. */
+/**
+ * What a bound agent's turn changed in its project, from git. A turn in a
+ * copy of the project lists everything in the copy; the newest such card of
+ * the agent's open copy (`live`) offers Keep / Review / Preview / Discard.
+ */
 export const ChangeCard = memo(function ChangeCard({
   message,
   arrived,
+  agent,
+  live,
 }: {
   message: AgentMessage;
   arrived?: boolean;
+  /** The agent whose card this is; needed for a copy's actions. */
+  agent?: Agent;
+  /** The newest card of the agent's open copy. */
+  live?: boolean;
 }) {
   const ctx = useAgentProjects();
   const changes = message.changes;
@@ -204,20 +242,41 @@ export const ChangeCard = memo(function ChangeCard({
   const count = changes.fileCount === 1 ? '1 file' : `${changes.fileCount} files`;
   const several = changes.files.length > 1;
   const unlisted = changes.fileCount - changes.files.length;
+  const copy = changes.copy;
+  const offering = Boolean(copy && live && agent);
+  const working = agent?.status.state !== 'idle';
+  const headline = offering
+    ? working
+      ? 'Changes so far'
+      : 'Changes are ready'
+    : copy
+      ? `Changed ${count} in a copy of ${project}`
+      : `Changed ${count} in ${project}`;
   return (
     <div
       className="agent-changes"
       data-arrived={arrived || undefined}
       data-message-ids={message.id}
+      data-copy={copy ? (offering ? 'live' : 'past') : undefined}
     >
       <div className="agent-changes__head">
         <span className="agent-changes__summary">
-          Changed {count} in {project}
+          {headline}
           <span className="agent-changes__counts">
             <LineCounts added={changes.added} removed={changes.removed} />
           </span>
         </span>
-        {changes.branch && (
+        {offering && several && (
+          <TextButton
+            tabIndex={0}
+            className="agent-changes__toggle-files"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? 'Hide files' : count}
+          </TextButton>
+        )}
+        {!copy && changes.branch && (
           <Tooltip content="Branch when the turn ended">
             <span className="agent-changes__branch">
               <BranchIcon size={12} />
@@ -253,32 +312,46 @@ export const ChangeCard = memo(function ChangeCard({
           {unlisted > 0 && <li className="agent-changes__more">and {unlisted} more</li>}
         </ul>
       )}
-      <div className="agent-changes__actions">
-        {changes.files.length > 0 && (
-          <TextButton tabIndex={0} onClick={() => setViewing(changes.files[0])}>
-            View diff
-          </TextButton>
-        )}
-        {several && (
-          <TextButton
-            tabIndex={0}
-            className="agent-changes__toggle-files"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? 'Hide files' : 'Show files'}
-          </TextButton>
-        )}
-        {ctx && (
-          <TextButton
-            tabIndex={0}
-            leftIcon={<GlobeIcon size={12} />}
-            onClick={() => ctx.openProject(changes.project)}
-          >
-            Open preview
-          </TextButton>
-        )}
-      </div>
+      {offering && copy && agent && (
+        <>
+          <p className="agent-copy__line">{copyLine(agent.name, project, working)}</p>
+          <CopyActions
+            agent={agent}
+            copy={copy}
+            project={project}
+            onReview={changes.files.length > 0 ? () => setViewing(changes.files[0]) : undefined}
+            onPreview={ctx?.openProject}
+          />
+        </>
+      )}
+      {!offering && (
+        <div className="agent-changes__actions">
+          {changes.files.length > 0 && (
+            <TextButton tabIndex={0} onClick={() => setViewing(changes.files[0])}>
+              View diff
+            </TextButton>
+          )}
+          {several && (
+            <TextButton
+              tabIndex={0}
+              className="agent-changes__toggle-files"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? 'Hide files' : 'Show files'}
+            </TextButton>
+          )}
+          {ctx && !copy && (
+            <TextButton
+              tabIndex={0}
+              leftIcon={<GlobeIcon size={12} />}
+              onClick={() => ctx.openProject(changes.project)}
+            >
+              Open preview
+            </TextButton>
+          )}
+        </div>
+      )}
       {viewing && (
         <DiffModal
           projectPath={changes.project}

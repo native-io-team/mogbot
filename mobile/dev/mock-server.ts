@@ -261,6 +261,11 @@ export function createMockServer(opts: MockOptions = {}) {
           fileCount: 2,
           added: 15,
           removed: 2,
+          copy: {
+            id: 'copy_hero',
+            path: '/Users/you/ShipStudio/.worktrees/acme-site/acme-site-hero-copy-9f2c',
+            branch: 'acme-site/hero-copy-9f2c',
+          },
         },
       },
       {
@@ -965,6 +970,46 @@ export function createMockServer(opts: MockOptions = {}) {
       emit({ type: 'agents.registry', overview: overview() });
       return null;
     },
+    'agents.keepCopy': (p) => {
+      const a = agent(String(p.agentId));
+      if (!a?.copy || a.copy.id !== p.copyId)
+        return fail({
+          type: 'Other',
+          message: 'Those changes were already kept or discarded.',
+          expected: true,
+        });
+      const name = a.copy.project.split('/').pop() ?? a.copy.project;
+      delete a.copy;
+      putMessage({
+        id: `m_kept_${Date.now()}`,
+        agentId: a.id,
+        ts: Date.now(),
+        kind: 'note',
+        text: `Kept the changes in ${name} · 2 files`,
+      });
+      emit({ type: 'agents.registry', overview: overview() });
+      return { outcome: 'kept', files: 2 };
+    },
+    'agents.discardCopy': (p) => {
+      const a = agent(String(p.agentId));
+      if (!a?.copy || a.copy.id !== p.copyId)
+        return fail({
+          type: 'Other',
+          message: 'Those changes were already kept or discarded.',
+          expected: true,
+        });
+      const name = a.copy.project.split('/').pop() ?? a.copy.project;
+      delete a.copy;
+      putMessage({
+        id: `m_discarded_${Date.now()}`,
+        agentId: a.id,
+        ts: Date.now(),
+        kind: 'note',
+        text: `Discarded the copy of ${name}`,
+      });
+      emit({ type: 'agents.registry', overview: overview() });
+      return null;
+    },
     'agents.changeDiff': (p) => {
       const card = (messages.get(String(p.agentId)) ?? []).find((m) => m.id === p.messageId);
       const file = card?.changes?.files.find((f) => f.path === p.path);
@@ -1410,6 +1455,17 @@ function seedAgents(now: number): Agent[] {
     }),
     base('site', 'Acme Site', 'Marketing site', 'blue', {
       lastActivityAt: now - 2 * 60_000,
+      project: '/Users/you/ShipStudio/acme-site',
+      copy: {
+        id: 'copy_hero',
+        project: '/Users/you/ShipStudio/acme-site',
+        path: '/Users/you/ShipStudio/.worktrees/acme-site/acme-site-hero-copy-9f2c',
+        branch: 'acme-site/hero-copy-9f2c',
+        base: 'a1b2c3d',
+        baseBranch: 'main',
+        createdAt: now - 10 * 60_000,
+        deps: true,
+      },
       permissions: [
         {
           id: 'rule_build',

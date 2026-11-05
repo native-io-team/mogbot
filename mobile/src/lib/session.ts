@@ -466,6 +466,11 @@ export const revokePermission = (agentId: string, ruleId: string) =>
   call('agents.revokePermission', { agentId, ruleId });
 export const changeDiff = (agentId: string, messageId: string, path: string) =>
   call('agents.changeDiff', { agentId, messageId, path });
+/** "Keep changes" on the newest card of an agent's copy of its project. */
+export const keepCopy = (agentId: string, copyId: string) =>
+  call('agents.keepCopy', { agentId, copyId });
+export const discardCopy = (agentId: string, copyId: string) =>
+  call('agents.discardCopy', { agentId, copyId });
 
 /** A path written in an agent's reply, fetched from the Mac and saved here. */
 export async function fetchPath(agentId: string, path: string) {

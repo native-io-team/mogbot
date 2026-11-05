@@ -638,6 +638,8 @@ pub fn run() {
             commands::agents::agents_with_projects,
             commands::agents::agents_messages,
             commands::agents::agents_change_diff,
+            commands::agents::agents_copy_keep,
+            commands::agents::agents_copy_discard,
             commands::agents::agents_send,
             commands::agents::agents_inspect_files,
             commands::agents::agents_open_attachment,

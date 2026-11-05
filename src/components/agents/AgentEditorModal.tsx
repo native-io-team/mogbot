@@ -204,6 +204,7 @@ export function AgentEditorModal({
   const [model, setModel] = useState(agent?.model ?? '');
   const switching = Boolean(agent && agent.engine !== engine);
   const [project, setProject] = useState(agent?.project ?? '');
+  const [workDirectly, setWorkDirectly] = useState(agent?.workDirectly ?? false);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -230,7 +231,16 @@ export function AgentEditorModal({
     setError(null);
     try {
       if (agent) {
-        await updateAgent(agent.id, { name, color, role, instructions, engine, model, project });
+        await updateAgent(agent.id, {
+          name,
+          color,
+          role,
+          instructions,
+          engine,
+          model,
+          project,
+          workDirectly,
+        });
         onSaved(agent.id);
       } else {
         const created = await createAgent({
@@ -242,6 +252,7 @@ export function AgentEditorModal({
           model,
           project,
         });
+        if (project && workDirectly) await updateAgent(created.id, { workDirectly });
         onSaved(created.id);
       }
       onClose();
@@ -389,7 +400,12 @@ export function AgentEditorModal({
               />
             </div>
 
-            <AgentProjectField value={project} onChange={setProject} />
+            <AgentProjectField
+              value={project}
+              onChange={setProject}
+              direct={workDirectly}
+              onDirectChange={setWorkDirectly}
+            />
 
             {onOpenApps && (
               <div className="agent-editor__label" role="group" aria-label="Apps">

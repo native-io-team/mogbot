@@ -1506,6 +1506,8 @@ mod tests {
             permissions: Vec::new(),
             failure: None,
             project: None,
+            copy: None,
+            work_directly: false,
             capabilities: None,
             secrets: Vec::new(),
             extra: Default::default(),

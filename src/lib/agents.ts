@@ -132,6 +132,13 @@ export interface Agent {
   failure?: Failure;
   /** The project it works in (a path from `project_list`); omitted when unbound. */
   project?: string;
+  /**
+   * Its open copy of that project (`agents/task.rs`): where its turns run
+   * until the user keeps or discards the changes. Omitted when none is open.
+   */
+  copy?: TaskCopy;
+  /** "Work directly in the project": no copy, its turns edit the project itself. */
+  workDirectly?: boolean;
   /** What its last turn could use; omitted before its first turn. */
   capabilities?: Capabilities;
   /** Secrets it has in the Keychain (names only); omitted when none. */
@@ -446,7 +453,40 @@ export interface ChangeSummary {
   fileCount: number;
   added: number;
   removed: number;
+  /**
+   * The turn worked in a copy of the project: the files are everything in
+   * the copy so far (what Keep would bring over), not only this turn's.
+   */
+  copy?: CopyRef;
 }
+
+/** Mirrors `task::CopyRef`: the copy a change card describes. */
+export interface CopyRef {
+  id: string;
+  /** The copy's folder: a git worktree outside the project. */
+  path: string;
+  branch: string;
+}
+
+/** Mirrors `task::TaskCopy`: an agent's open copy of its project. */
+export interface TaskCopy extends CopyRef {
+  /** The user's own project folder. */
+  project: string;
+  /** The commit it started from. */
+  base: string;
+  /** The branch the project was on when the copy was made. */
+  baseBranch?: string;
+  createdAt: number;
+  /** The project's dependencies were cloned in. */
+  deps: boolean;
+}
+
+/** Mirrors `task::Kept`: what "Keep changes" did. */
+export type KeptCopy =
+  | { outcome: 'kept'; files: number }
+  | { outcome: 'nothing' }
+  /** Some changes overlap with edits made in the project since; resolved in the copy. */
+  | { outcome: 'conflict'; files: string[] };
 
 /** A file sent with a message, as kept in the agent's home. */
 export interface Attachment {
@@ -532,6 +572,8 @@ export interface UpdateAgentInput {
   routineModel?: string;
   /** A project path from `list_projects`, or '' to unbind it. */
   project?: string;
+  /** Work directly in the project instead of in a copy of it. */
+  workDirectly?: boolean;
 }
 
 /**
@@ -800,6 +842,12 @@ export const getAgentInstructions = (agentId: string) =>
 /** One file of a change card, as this turn changed it. */
 export const getChangeDiff = (agentId: string, messageId: string, path: string) =>
   invoke<FileDiff>('agents_change_diff', { agentId, messageId, path });
+/** "Keep changes": the agent's copy of its project, merged into the project's current branch. */
+export const keepCopy = (agentId: string, copyId: string) =>
+  invoke<KeptCopy>('agents_copy_keep', { agentId, copyId });
+/** "Discard": the agent's copy of its project and everything in it. */
+export const discardCopy = (agentId: string, copyId: string) =>
+  invoke<void>('agents_copy_discard', { agentId, copyId });
 export const deleteAgent = (agentId: string) => invoke<void>('agents_delete', { agentId });
 export const stopAgent = (agentId: string) => invoke<boolean>('agents_stop', { agentId });
 /** How many agents are mid-turn (running or waiting for a slot). */

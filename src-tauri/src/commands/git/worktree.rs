@@ -51,18 +51,18 @@ pub struct AddWorktreeResult {
 
 /// Intermediate parse result, before path comparison decorates it.
 #[derive(Debug, PartialEq)]
-struct ParsedWorktree {
-    path: String,
-    head: String,
-    branch: Option<String>,
-    locked: Option<String>,
-    prunable: Option<String>,
+pub(crate) struct ParsedWorktree {
+    pub(crate) path: String,
+    pub(crate) head: String,
+    pub(crate) branch: Option<String>,
+    pub(crate) locked: Option<String>,
+    pub(crate) prunable: Option<String>,
 }
 
 /// Parses `git worktree list --porcelain` output: blank-line-separated blocks
 /// of `worktree <path>` / `HEAD <sha>` / `branch <ref>` | `detached` /
 /// `locked[ <reason>]` / `prunable[ <reason>]`. Bare-repo entries are skipped.
-fn parse_worktree_porcelain(output: &str) -> Vec<ParsedWorktree> {
+pub(crate) fn parse_worktree_porcelain(output: &str) -> Vec<ParsedWorktree> {
     let mut result = Vec::new();
     let mut current: Option<ParsedWorktree> = None;
     let mut is_bare = false;
@@ -125,7 +125,7 @@ fn parse_worktree_porcelain(output: &str) -> Vec<ParsedWorktree> {
 /// Turns a branch name into a filesystem-safe folder name: path separators
 /// become `-`, Windows-illegal characters are dropped, and leading `-`/`.` are
 /// stripped so the result can't be parsed as a flag or hide the folder.
-fn sanitize_worktree_folder(branch: &str) -> String {
+pub(crate) fn sanitize_worktree_folder(branch: &str) -> String {
     let mut out: String = branch
         .chars()
         .map(|c| if c == '/' || c == '\\' { '-' } else { c })
@@ -216,7 +216,7 @@ fn canon(path: &str) -> PathBuf {
 /// The repository's main worktree path as seen from any checkout — the first
 /// entry of `git worktree list --porcelain`. None when `cwd` isn't a git
 /// repository or git fails.
-fn main_worktree_path(cwd: &Path) -> Option<PathBuf> {
+pub(crate) fn main_worktree_path(cwd: &Path) -> Option<PathBuf> {
     let output = run_worktree_git(cwd, &["worktree", "list", "--porcelain"]).ok()?;
     if !output.status.success() {
         return None;
@@ -365,11 +365,26 @@ pub async fn add_worktree(
         return Err(process_error(&args, &output));
     }
 
-    // Seed the worktree's own .shipstudio/project.json from the main worktree
-    // so the dev server behaves identically (command, monorepo subpath,
-    // workspace) — but on its own port, since every project otherwise
-    // defaults to 3000.
-    let parent_meta = load_project_metadata(&anchor);
+    let port = seed_worktree(&anchor, &dest, copy_env);
+
+    // Plugins need no copying: all worktrees of one repository resolve to the
+    // main worktree's plugin store (see `plugins_owner_root` in commands::plugins).
+
+    GIT_CACHE.invalidate(&project_path);
+
+    Ok(AddWorktreeResult {
+        path: dest_str,
+        port,
+    })
+}
+
+/// Seeds a new worktree's own `.shipstudio/project.json` from the main
+/// worktree so the dev server behaves identically (command, monorepo subpath,
+/// workspace) — but on its own port, since every project otherwise defaults
+/// to 3000 — and optionally copies the parent's untracked root `.env*` files.
+/// Returns the port it picked, if one was free.
+pub(crate) fn seed_worktree(anchor: &Path, dest: &Path, copy_env: bool) -> Option<u16> {
+    let parent_meta = load_project_metadata(anchor);
     let mut meta = crate::types::ProjectMetadata {
         custom_dev_command: parent_meta.custom_dev_command.clone(),
         workspace_subpath: parent_meta.workspace_subpath.clone(),
@@ -384,23 +399,13 @@ pub async fn add_worktree(
     if port.is_none() {
         warn!("No free dev-server port found for new worktree; leaving unset");
     }
-    if let Err(e) = save_project_metadata(&dest, &meta) {
+    if let Err(e) = save_project_metadata(dest, &meta) {
         warn!("Failed to seed worktree metadata: {e}");
     }
-
     if copy_env {
-        copy_env_files(&anchor, &dest);
+        copy_env_files(anchor, dest);
     }
-
-    // Plugins need no copying: all worktrees of one repository resolve to the
-    // main worktree's plugin store (see `plugins_owner_root` in commands::plugins).
-
-    GIT_CACHE.invalidate(&project_path);
-
-    Ok(AddWorktreeResult {
-        path: dest_str,
-        port,
-    })
+    port
 }
 
 /// Copies root-level `.env*` files git didn't check out (they're normally

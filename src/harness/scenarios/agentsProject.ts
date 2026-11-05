@@ -62,6 +62,85 @@ const ACME_BOUND_CHAT = [
   changes(5, [{ path: 'src/components/Footer.tsx', status: 'modified', added: 1, removed: 1 }]),
 ];
 
+/* ------------------------------------------- a copy of the project per task */
+
+const COPY = {
+  id: 'copy_pricing',
+  path: `${HARNESS_ROOT}/.worktrees/acme-marketing/acme-site-pricing-cards-9f2c`,
+  branch: 'acme-site/pricing-cards-9f2c',
+};
+
+/** Acme Site with its own open copy of acme-marketing. */
+const copyTeam = (state: 'idle' | 'working' = 'idle') =>
+  boundTeam({
+    acme: {
+      copy: {
+        ...COPY,
+        project: ACME_PATH,
+        base: 'a1b2c3',
+        baseBranch: 'main',
+        createdAt: now - 30 * MIN,
+        deps: true,
+      },
+      status:
+        state === 'working'
+          ? { state: 'working', activity: 'Editing Footer.tsx', since: now - 0.5 * MIN }
+          : status('idle'),
+    },
+  });
+
+const copyCard = (minutesAgo: number, files: Record<string, unknown>[]) =>
+  msg('changes', `Changed ${files.length} files in a copy of acme-marketing`, minutesAgo, {
+    agentId: 'acme',
+    changes: {
+      project: ACME_PATH,
+      from: 'base-tree',
+      to: 'copy-tree',
+      files,
+      fileCount: files.length,
+      added: files.reduce((n, f) => n + Number(f.added ?? 0), 0),
+      removed: files.reduce((n, f) => n + Number(f.removed ?? 0), 0),
+      copy: COPY,
+    },
+  });
+
+const PRICING_FILES = [
+  { path: 'src/components/PricingTable.tsx', status: 'modified', added: 38, removed: 12 },
+  { path: 'src/styles/pricing.css', status: 'modified', added: 21, removed: 4 },
+  { path: 'src/components/PricingCard.tsx', status: 'added', added: 64 },
+];
+
+const ACME_COPY_CHAT = [
+  msg('user', 'The pricing cards overlap on mobile. Can you fix it?', 30, { agentId: 'acme' }),
+  msg(
+    'agent',
+    'Fixed. The cards now stack below 640px and the “Most popular” badge no longer covers the price.',
+    24,
+    {
+      agentId: 'acme',
+      work: {
+        startedAt: now - 29 * MIN,
+        endedAt: now - 24 * MIN,
+        stepCount: 4,
+        fileCount: 3,
+        files: ['PricingTable.tsx', 'pricing.css', 'PricingCard.tsx'],
+        steps: [
+          { at: now - 29 * MIN, kind: 'project', label: 'Started a copy of acme-marketing' },
+          { at: now - 28 * MIN, kind: 'read', label: 'Read PricingTable.tsx' },
+          { at: now - 26 * MIN, kind: 'edit', label: 'Edited PricingTable.tsx' },
+          { at: now - 25 * MIN, kind: 'command', label: 'Ran pnpm build' },
+        ],
+      },
+    }
+  ),
+  copyCard(24, PRICING_FILES.slice(0, 2)),
+  msg('user', 'Make the badge a pill too.', 8, { agentId: 'acme' }),
+  msg('agent', 'Done: the badge is a pill, and the card gained its own component.', 6, {
+    agentId: 'acme',
+  }),
+  copyCard(6, PRICING_FILES),
+];
+
 const CHANGE_DIFF = {
   filePath: 'src/components/Footer.tsx',
   isNewFile: false,
@@ -407,6 +486,81 @@ export const agentsProjectScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-copy-ready',
+    title: 'Agents — work done on a copy of the project, ready to keep',
+    looksRightWhen:
+      'Acme Site’s header chip reads “acme-marketing copy” (“copy” muted). The first reply’s folded line opens to nothing yet; the earlier card reads “Changed 2 files in a copy of acme-marketing +59 −16” with only “View diff” and “Show files” (a record). The newest card reads “Changes are ready +123 −16” with “3 files” on the right, the quiet line “On a copy of acme-marketing · acme-marketing itself is unchanged”, then a primary “Keep changes” button, “Review”, “Preview” (globe), “Discard”, and a ⋯ menu (Open a pull request). No branch names, no “merge”, no “worktree” anywhere.',
+    requires: '.agent-changes[data-copy="live"]',
+    ...openAcme,
+    commands: {
+      agents_overview: overview(copyTeam()),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? ACME_COPY_CHAT : messagesFor(args),
+    },
+  },
+  {
+    id: 'agents-copy-timeline',
+    title: 'Agents — the timeline says it started a copy',
+    looksRightWhen:
+      'The first reply’s “Worked 5 min · 4 steps · edited 3 files” line is open: the first step is “Started a copy of acme-marketing” at 0:00, then Read PricingTable.tsx, Edited PricingTable.tsx, Ran pnpm build.',
+    requires: '.agent-work__steps',
+    openSelector: AGENTS_TAB,
+    steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-work__toggle' }],
+    commands: {
+      agents_overview: overview(copyTeam()),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? ACME_COPY_CHAT : messagesFor(args),
+    },
+  },
+  {
+    id: 'agents-copy-working',
+    title: 'Agents — Keep waits while the agent is still working on its copy',
+    looksRightWhen:
+      'Acme Site is working (“Editing Footer.tsx”). The newest card reads “Changes so far”, its quiet line “Acme Site is working on a copy of acme-marketing”; Keep changes and Discard are disabled; Review and Preview still work.',
+    requires: '.agent-changes[data-copy="live"] button[disabled]',
+    ...openAcme,
+    commands: {
+      agents_overview: overview(copyTeam('working')),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? ACME_COPY_CHAT : messagesFor(args),
+    },
+  },
+  {
+    id: 'agents-copy-discard',
+    title: 'Agents — Discard asks first',
+    looksRightWhen:
+      'The newest card’s actions are replaced by “Discard these changes? The copy and everything in it go; acme-marketing stays as it is.” and a red Discard button beside Cancel.',
+    requires: '.agent-copy[data-state="confirm"]',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-copy__actions button:nth-of-type(4)' },
+    ],
+    commands: {
+      agents_overview: overview(copyTeam()),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? ACME_COPY_CHAT : messagesFor(args),
+    },
+  },
+  {
+    id: 'agents-copy-conflict',
+    title: 'Agents — Keep found an overlap with the project',
+    looksRightWhen:
+      'After Keep changes, the newest card says “Some of these changes overlap with edits made in acme-marketing since: src/styles/pricing.css (mono). Choose which to keep in the copy, or ask Acme Site to sort it out.”, then a primary “Open the copy”, “Ask Acme Site” and “Not now”. The project itself is untouched (nothing else changes).',
+    requires: '.agent-copy[data-state="conflict"]',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-copy__actions button:first-of-type' },
+    ],
+    commands: {
+      agents_overview: overview(copyTeam()),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'acme' ? ACME_COPY_CHAT : messagesFor(args),
+      agents_copy_keep: { outcome: 'conflict', files: ['src/styles/pricing.css'] },
+    },
+  },
+  {
     id: 'agents-project-files',
     title: 'Agents — a change card’s files listed',
     looksRightWhen:
@@ -466,7 +620,7 @@ export const agentsProjectScenarios: Scenario[] = [
     id: 'agents-project-editor',
     title: 'Agents — choosing the project an agent works in',
     looksRightWhen:
-      'Editing Acme Site: under Model, “Works in” with a menu button reading acme-marketing; the menu is open listing No project, a divider, then acme-marketing (checked), portfolio-site and docs-astro. The hint under it says the project’s CLAUDE.md and settings apply.',
+      'Editing Acme Site: under Model, “Works in” with a menu button reading acme-marketing; the menu is open listing No project, a divider, then acme-marketing (checked), portfolio-site and docs-astro. The hint under it says it works on its own copy of the project, the project’s CLAUDE.md and settings apply, and the user’s folder stays as they left it; below it an unchecked “Work directly in the project”.',
     requires: '.agent-project-menu',
     openSelector: AGENTS_TAB,
     steps: [

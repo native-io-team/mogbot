@@ -112,6 +112,10 @@ export interface Agent {
   home: string;
   failure?: Failure;
   project?: string;
+  /** Its open copy of that project, where its turns run until kept or discarded. */
+  copy?: TaskCopy;
+  /** Set to work directly in the project instead of in a copy. */
+  workDirectly?: boolean;
   capabilities?: Capabilities;
   /** Secrets it has in the Keychain (names only); omitted when none. */
   secrets?: AgentSecret[];
@@ -367,7 +371,39 @@ export interface ChangeSummary {
   fileCount: number;
   added: number;
   removed: number;
+  /**
+   * The turn worked in a copy of the project: the card lists everything in
+   * the copy so far, and offers Keep / Discard while `Agent.copy.id` matches.
+   */
+  copy?: CopyRef;
 }
+
+/** The copy a change card describes. */
+export interface CopyRef {
+  id: string;
+  /** The copy's folder (a linked git worktree), outside the project. */
+  path: string;
+  branch: string;
+}
+
+/** A project-bound agent's open copy of its project. */
+export interface TaskCopy extends CopyRef {
+  /** The user's own project folder. */
+  project: string;
+  /** The commit it started from. */
+  base: string;
+  baseBranch?: string;
+  createdAt: number;
+  /** The project's dependencies were cloned in. */
+  deps: boolean;
+}
+
+/** What `agents.keepCopy` did. */
+export type KeptCopy =
+  | { outcome: 'kept'; files: number }
+  | { outcome: 'nothing' }
+  /** Overlaps with edits made in the project since: the copy is mid-merge. */
+  | { outcome: 'conflict'; files: string[] };
 
 export interface Attachment {
   name: string;
@@ -407,6 +443,7 @@ export interface UpdateAgentInput {
   model?: string;
   routineModel?: string;
   project?: string;
+  workDirectly?: boolean;
 }
 
 /** What `agents.create` / `agents.update` return: the stored agent, no live state. */
