@@ -3356,7 +3356,7 @@
       "owner": "GlobalOverlay",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 19
+      "consumerCount": 20
     },
     {
       "name": "--z-modal",
@@ -5066,7 +5066,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 259
+      "consumerCount": 260
     },
     {
       "name": "--surface-control",
@@ -5165,7 +5165,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 551
+      "consumerCount": 552
     },
     {
       "name": "--text-secondary",
@@ -5183,7 +5183,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 825
+      "consumerCount": 828
     },
     {
       "name": "--text-faint",
@@ -5273,7 +5273,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 454
+      "consumerCount": 455
     },
     {
       "name": "--border-subtle",
@@ -5408,7 +5408,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 81
+      "consumerCount": 82
     },
     {
       "name": "--accent-error-light",
@@ -5633,7 +5633,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 332
+      "consumerCount": 333
     },
     {
       "name": "--font-size-body-sm",
@@ -5642,7 +5642,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 412
+      "consumerCount": 416
     },
     {
       "name": "--font-size-control",
@@ -5750,7 +5750,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 34
+      "consumerCount": 35
     },
     {
       "name": "--font-weight-title",
@@ -5957,7 +5957,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 595
+      "consumerCount": 596
     },
     {
       "name": "--spacing-sm",
@@ -5966,7 +5966,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 742
+      "consumerCount": 745
     },
     {
       "name": "--spacing-md",
@@ -5975,7 +5975,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 521
+      "consumerCount": 522
     },
     {
       "name": "--spacing-lg",
@@ -5984,7 +5984,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 202
+      "consumerCount": 203
     },
     {
       "name": "--spacing-xl",
@@ -6029,7 +6029,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 195
+      "consumerCount": 196
     },
     {
       "name": "--radius-sm",
@@ -6380,7 +6380,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 28
+      "consumerCount": 29
     },
     {
       "name": "--shadow-lg",
@@ -6416,7 +6416,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 259
+      "consumerCount": 260
     },
     {
       "name": "--surface-control",
@@ -6515,7 +6515,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 551
+      "consumerCount": 552
     },
     {
       "name": "--text-secondary",
@@ -6542,7 +6542,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 825
+      "consumerCount": 828
     },
     {
       "name": "--text-faint",
@@ -6623,7 +6623,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 454
+      "consumerCount": 455
     },
     {
       "name": "--border-subtle",
@@ -6686,7 +6686,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 81
+      "consumerCount": 82
     },
     {
       "name": "--accent-error-light",
@@ -6920,7 +6920,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 28
+      "consumerCount": 29
     },
     {
       "name": "--shadow-lg",

@@ -49,12 +49,7 @@ export function PluginTrustPrompt({ projectPath, pending, onDecided }: Props) {
   };
 
   return (
-    <div
-      className="plugin-trust-prompt"
-      role="dialog"
-      aria-modal="false"
-      aria-labelledby="plugin-trust-title"
-    >
+    <div className="plugin-trust-prompt" role="region" aria-labelledby="plugin-trust-title">
       <p id="plugin-trust-title" className="plugin-trust-title">
         {changed
           ? `Plugin ${plugin.manifest.name} changed since you allowed it`
