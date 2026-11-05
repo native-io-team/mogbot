@@ -166,10 +166,19 @@ function RoomChat({ id }: { id: string }) {
   const ownLoaded = useApp(
     useShallow((s) => carded.map((m) => !!s.chats[m.id]?.loaded))
   );
+  // Once per member per connection: a read that fails leaves that member's
+  // cards as the room has them, and isn't retried on every status update
+  // (`carded` is rebuilt whenever a member's status or a message changes).
+  const asked = useRef(new Set<string>());
   useEffect(() => {
-    if (!connected) return;
+    if (!connected) {
+      asked.current.clear();
+      return;
+    }
     carded.forEach((m, i) => {
-      if (!ownLoaded[i]) loadLatest(m.id).catch(() => {});
+      if (ownLoaded[i] || asked.current.has(m.id)) return;
+      asked.current.add(m.id);
+      loadLatest(m.id).catch(() => {});
     });
   }, [connected, carded, ownLoaded]);
   const liveCopies = useMemo(
@@ -231,7 +240,7 @@ function RoomChat({ id }: { id: string }) {
       <Stack.Screen
         options={{
           headerTintColor: colors.textPrimary,
-          headerTitle: () => <RoomHeader room={room} members={members} working={working.length} />,
+          headerTitle: () => <RoomHeader room={room} members={members} working={working} />,
         }}
       />
       <MentionContext.Provider value={mentionColors}>
@@ -318,16 +327,17 @@ function RoomHeader({
 }: {
   room: RoomView;
   members: Agent[];
-  working: number;
+  /** Members replying here now (`workingHere`): never one waiting on your OK. */
+  working: Agent[];
 }) {
   const colors = useColors();
   const styles = useStyles();
   const connected = useApp((s) => s.link.kind === 'connected');
   const line =
-    working > 0 && connected
-      ? working === 1
-        ? `${members.find((m) => m.status.room === room.id)?.name ?? 'One'} is replying`
-        : `${working} are replying`
+    working.length > 0 && connected
+      ? working.length === 1
+        ? `${working[0].name} is replying`
+        : `${working.length} are replying`
       : memberNames(members);
   return (
     <View style={styles.header}>

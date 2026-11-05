@@ -1469,10 +1469,14 @@ pub(crate) async fn deliver(
         }
     }
     let was_busy = super::now_ms().saturating_sub(tab.last_output_ms) < QUIET_MS;
-    begin_run(&tab.session_id, message, tree_now(project).await);
+    // The tree from before the message; the run is remembered only once the
+    // text is in, so `sessions.read`'s `sent` never names a message that
+    // wasn't typed.
+    let tree_before = tree_now(project).await;
     type_into(&tab, n, message)
         .await
         .map_err(Undelivered::Other)?;
+    begin_run(&tab.session_id, message, tree_before);
     Ok((n, tab, was_busy))
 }
 
