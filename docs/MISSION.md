@@ -112,8 +112,15 @@ Act like it.
   projects made by the other: the in-project `.shipstudio/` format and the
   projects folder are shared. App state (settings, agents, Remote Access,
   logs, keychain) is Dashbot's own, so both apps run side by side.
-- **Black and white, plus one accent the user chooses.** No brand green.
-  Semantic colours (success, warning, error) keep their meaning. Dark only,
-  for now.
+- **Monochrome, coloured by your agents.** Black and white, no brand green.
+  Your Chief of Staff's colour is the app's accent; open another agent and
+  everything there takes that agent's colour, like Grok Bot. Semantic
+  colours (success, warning, error) keep their meaning. Dark now; light
+  mode is coming, so nothing should assume dark beyond the surface tokens.
+- **The companion app is everything.** The phone is where people's work
+  will be driven; it is the product, held to the highest bar, and the
+  desktop matches it. "Put this on your phone" always means the companion
+  app. Remote Access is the secondary answer to a different question: "want
+  to drive this from another assistant? Here's how."
 - **Big infrastructure changes are welcome now**, as long as everything
   still works.
