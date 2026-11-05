@@ -283,6 +283,24 @@ pub fn set_spotify_widget_enabled(enabled: bool) -> Result<(), CommandError> {
     write_app_state(&state).map_err(CommandError::from)
 }
 
+/// Get whether plugin developer mode is on: dev-linked plugins (a local
+/// folder a project's registry points at) only load while it is. Off by
+/// default — a project can name any folder on disk as a dev plugin.
+#[tauri::command]
+#[tracing::instrument]
+pub fn get_plugin_dev_mode() -> Result<bool, CommandError> {
+    Ok(read_app_state().plugin_dev_mode.unwrap_or(false))
+}
+
+/// Set plugin developer mode (persisted to app state).
+#[tauri::command]
+#[tracing::instrument]
+pub fn set_plugin_dev_mode(enabled: bool) -> Result<(), CommandError> {
+    let mut state = read_app_state();
+    state.plugin_dev_mode = Some(enabled);
+    write_app_state(&state)
+}
+
 /// Get whether dev servers stay alive when their project or Preview is in the
 /// background. Defaults to `true` for installs that have not chosen a value,
 /// which is how dev servers behaved before the setting existed.

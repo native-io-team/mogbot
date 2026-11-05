@@ -84,7 +84,74 @@ const finding = (id: string, severity: string, title: string, summary: string) =
   runId: 'run_1',
 });
 
+/**
+ * A plugin this project's registry lists that nobody allowed in this app — a
+ * clone, or Ship Studio installed it. Shape copied from `PluginInfo` in
+ * src/lib/plugins.ts (snake_case, as `list_plugins` returns it).
+ */
+const unapprovedPlugin = (trust: 'unknown' | 'changed') => ({
+  manifest: {
+    id: 'seo-checker',
+    name: 'SEO Checker',
+    version: '1.4.0',
+    description: 'Checks every page for missing meta tags',
+    slots: ['toolbar'],
+    author: 'someone',
+    repository: 'https://github.com/someone/shipstudio-seo-checker',
+    setup: [],
+    min_app_version: '',
+    icon: '',
+    required_commands: ['npm'],
+    api_version: 1,
+  },
+  enabled: true,
+  installed_at: 0,
+  source_url: 'https://github.com/someone/shipstudio-seo-checker',
+  is_dev: false,
+  local_path: '',
+  trust,
+  sha256: 'f3b1c2d4e5a6978812345678abcdef0123456789abcdef0123456789abcdef01',
+  source_path: `${WORKSPACE_PROJECT}/.shipstudio/plugins/seo-checker`,
+});
+
 export const featureScenarios: Scenario[] = [
+  {
+    id: 'plugin-trust-menu',
+    requires: '.plugin-dropdown-row--waiting',
+    title: 'Plugins menu — a plugin waiting for your OK',
+    looksRightWhen:
+      'The plugin isn\'t loaded: it sits in the menu as "Not allowed yet — review", and the ' +
+      'Plugins button carries a small dot. A toast offered Review once; no dialog opened on its own.',
+    project: WORKSPACE_PROJECT,
+    openSelector: '[data-workspace-panel="plugins"]',
+    clipSelector: '.plugins-dropdown-menu',
+    commands: { ...workspaceCommands, list_plugins: [unapprovedPlugin('unknown')] },
+  },
+  {
+    id: 'plugin-trust-prompt',
+    requires: '[data-testid="plugin-trust-prompt"]',
+    title: 'Load this plugin? — a project wants to run a plugin',
+    looksRightWhen:
+      'Names the plugin, says its code would run with the project, and shows the folder it ' +
+      "loads from and where it was installed from. Two choices: Don't load, Allow.",
+    project: WORKSPACE_PROJECT,
+    openSelector: '[data-workspace-panel="plugins"]',
+    steps: [{ click: '.plugin-dropdown-row--waiting' }],
+    clipSelector: '.modal-frame-content',
+    commands: { ...workspaceCommands, list_plugins: [unapprovedPlugin('unknown')] },
+  },
+  {
+    id: 'plugin-trust-prompt-changed',
+    requires: '[data-testid="plugin-trust-prompt"]',
+    title: 'Load this plugin? — its files changed since you allowed it',
+    looksRightWhen:
+      'Says the plugin has changed since you allowed it, rather than asking as if new.',
+    project: WORKSPACE_PROJECT,
+    openSelector: '[data-workspace-panel="plugins"]',
+    steps: [{ click: '.plugin-dropdown-row--waiting' }],
+    clipSelector: '.modal-frame-content',
+    commands: { ...workspaceCommands, list_plugins: [unapprovedPlugin('changed')] },
+  },
   {
     id: 'workspace',
     requires: '.workspace-header',

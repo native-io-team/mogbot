@@ -384,14 +384,7 @@ pub fn list_plugins(project_path: String) -> Result<Vec<PluginInfo>, CommandErro
         };
         match read_manifest(&plugin_dir) {
             Ok(manifest) => {
-                results.push(PluginInfo {
-                    manifest,
-                    enabled: entry.enabled,
-                    installed_at: entry.installed_at,
-                    source_url: entry.source_url.clone(),
-                    is_dev: entry.is_dev,
-                    local_path: entry.local_path.clone(),
-                });
+                results.push(PluginInfo::from_entry(manifest, entry, &plugin_dir));
             }
             Err(e) => {
                 tracing::warn!("Skipping plugin {}: {}", entry.plugin_id, e);
@@ -562,17 +555,21 @@ pub async fn install_plugin(
         local_path: String::new(),
     };
 
-    registry.plugins.push(entry);
+    registry.plugins.push(entry.clone());
     write_registry(&project_path, &registry)?;
 
-    Ok(PluginInfo {
-        manifest,
-        enabled: true,
-        installed_at: now_ms(),
-        source_url: repo_url,
-        is_dev: false,
-        local_path: String::new(),
-    })
+    // The user installed it themselves: these files are allowed to run.
+    allow_as_installed(&entry.plugin_id, &plugin_dir);
+
+    Ok(PluginInfo::from_entry(manifest, &entry, &plugin_dir))
+}
+
+/// Record a user-initiated install / update / link in the trust store. A
+/// failure to record only means the app asks again before loading it.
+pub(super) fn allow_as_installed(plugin_id: &str, plugin_dir: &Path) {
+    if let Err(e) = super::plugin_trust::record_current(plugin_id, plugin_dir) {
+        tracing::warn!(plugin = %plugin_id, "Couldn't record the plugin as allowed: {e}");
+    }
 }
 
 /// Uninstall a plugin by its ID from a project
@@ -596,6 +593,7 @@ pub fn uninstall_plugin(project_path: String, plugin_id: String) -> Result<(), C
 
     let plugins_dir = get_plugins_dir(&project_path)?;
     let plugin_dir = plugins_dir.join(&plugin_id);
+    super::plugin_trust::forget(&plugin_id, &plugin_dir);
 
     // Remove plugin directory
     if plugin_dir.exists() {
@@ -611,13 +609,18 @@ pub fn uninstall_plugin(project_path: String, plugin_id: String) -> Result<(), C
     Ok(())
 }
 
-/// Update a plugin by pulling latest from its source repository
+/// Update a plugin by pulling latest from its source repository.
+///
+/// `approve` is true when the user pressed Update: the new files are allowed
+/// as they arrive. The automatic self-heal passes nothing, so whatever it
+/// fetched still has to be allowed before it runs (`plugin_trust`).
 #[tauri::command]
 #[tracing::instrument(skip(app), fields(project = %project_path))]
 pub async fn update_plugin(
     app: AppHandle,
     project_path: String,
     plugin_id: String,
+    approve: Option<bool>,
 ) -> Result<PluginInfo, CommandError> {
     validate_plugin_id(&plugin_id)?;
     let registry = read_registry(&project_path)?;
@@ -691,18 +694,24 @@ pub async fn update_plugin(
         .find(|e| e.plugin_id == plugin_id)
     {
         entry.enabled = was_enabled;
-        entry.installed_commit = commit_hash;
+        entry.installed_commit = commit_hash.clone();
     }
     write_registry(&project_path, &registry)?;
 
-    Ok(PluginInfo {
-        manifest,
+    if approve == Some(true) {
+        allow_as_installed(&plugin_id, &plugin_dir);
+    }
+
+    let entry = RegistryEntry {
+        plugin_id: plugin_id.clone(),
         enabled: was_enabled,
         installed_at: now_ms(),
         source_url,
+        installed_commit: commit_hash,
         is_dev: false,
         local_path: String::new(),
-    })
+    };
+    Ok(PluginInfo::from_entry(manifest, &entry, &plugin_dir))
 }
 
 /// Check if a plugin has an update available by comparing commit hashes

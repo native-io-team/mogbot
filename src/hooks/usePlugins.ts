@@ -12,14 +12,17 @@
  * @module hooks/usePlugins
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   listPlugins,
   updatePlugin,
+  approvePlugin,
+  needsApproval,
   isExpectedPluginFailure,
   supersededReason,
   PluginInfo,
 } from '../lib/plugins';
+import { PLUGIN_DEV_MODE_CHANGED_EVENT } from '../lib/settings';
 import { loadPluginModule, unloadPluginModule, PluginModule } from '../lib/plugin-loader';
 import { asCommandError, formatCommandError } from '../lib/errors';
 import { logger } from '../lib/logger';
@@ -33,6 +36,22 @@ const SUPPORTED_API_VERSIONS = [0, 1];
  * every reload.
  */
 const attemptedSelfHeals = new Set<string>();
+
+/**
+ * Plugins the user chose "Don't load" for this app session, keyed
+ * `projectPath:pluginId:sha256` — asked again next launch, or as soon as the
+ * files change, never again before.
+ */
+const declinedThisSession = new Set<string>();
+
+function declineKey(path: string, info: PluginInfo): string {
+  return `${path}:${info.manifest.id}:${info.sha256 ?? ''}`;
+}
+
+/** The backend refused a bundle the user hasn't allowed (`plugin_trust.rs`). */
+function isNotAllowedError(message: string): boolean {
+  return message.includes('Plugin not allowed');
+}
 
 /** The load failure produced by a registry entry whose built bundle is gone. */
 function isMissingBundleError(message: string): boolean {
@@ -105,8 +124,26 @@ export interface UsePluginsOptions {
   onError?: (pluginName: string, message: string) => void;
 }
 
+/** The approval side of plugins, as one object for prop groups. */
+export interface PluginTrustApi {
+  pending: PluginInfo[];
+  approve: (info: PluginInfo) => Promise<void>;
+  decline: (info: PluginInfo) => void;
+}
+
 /** Return type for usePlugins hook */
 export interface UsePluginsReturn {
+  /** `pendingApprovals` / `approvePending` / `declinePending`, grouped. */
+  trust: PluginTrustApi;
+  /**
+   * Plugins this project lists that the user hasn't allowed (or whose files
+   * changed since). They are not loaded; the UI asks, quietly.
+   */
+  pendingApprovals: PluginInfo[];
+  /** Allow a pending plugin's files as shown, then load it. */
+  approvePending: (info: PluginInfo) => Promise<void>;
+  /** "Don't load": not asked again this session unless its files change. */
+  declinePending: (info: PluginInfo) => void;
   /** All loaded plugins */
   plugins: LoadedPlugin[];
   /** Plugins that failed to load (unsupported API version, bad bundle, list error) */
@@ -125,6 +162,7 @@ export function usePlugins(
 ): UsePluginsReturn {
   const [plugins, setPlugins] = useState<LoadedPlugin[]>([]);
   const [failures, setFailures] = useState<PluginFailure[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<PluginInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const mountedRef = useRef(true);
   const currentPathRef = useRef(projectPath);
@@ -145,6 +183,7 @@ export function usePlugins(
       if (!path) {
         setPlugins([]);
         setFailures([]);
+        setPendingApprovals([]);
         return;
       }
 
@@ -155,8 +194,32 @@ export function usePlugins(
         // merely not rendering one still runs its activation hook and its
         // background timers, which was most of what made the old hosting
         // integration expensive. The Plugin Manager explains the skip.
-        const enabled = installed.filter((p) => p.enabled && !supersededReason(p.manifest.id));
+        const wanted = installed.filter((p) => p.enabled && !supersededReason(p.manifest.id));
         const failed: PluginFailure[] = [];
+        // A project's registry only says what it wants: nothing loads that
+        // the user hasn't allowed in this app (the backend refuses the bundle
+        // too). Missing files still go through, for the self-heal below.
+        const pendingFrom = (list: PluginInfo[]) =>
+          list.filter(
+            (p) =>
+              p.enabled &&
+              !supersededReason(p.manifest.id) &&
+              needsApproval(p) &&
+              !declinedThisSession.has(declineKey(path, p))
+          );
+        let pending = pendingFrom(wanted);
+        const enabled = wanted.filter((p) => {
+          if (p.trust === 'dev_mode_off') {
+            failed.push({
+              id: p.manifest.id,
+              name: p.manifest.name,
+              reason:
+                'A dev plugin. Turn on plugin developer mode in Settings → Experimental to load it.',
+            });
+            return false;
+          }
+          return p.trust === 'trusted' || p.trust === 'missing';
+        });
 
         // Skip plugins with unsupported API versions
         const compatible = enabled.filter((info) => {
@@ -184,12 +247,19 @@ export function usePlugins(
           )
         );
         const loaded: LoadedPlugin[] = [];
+        let refusedAfterRepair = false;
         results.forEach((result, i) => {
           if (result.status === 'fulfilled') {
             loaded.push(result.value);
           } else {
             const info = compatible[i];
             const message = formatCommandError(asCommandError(result.reason));
+            if (isNotAllowedError(message)) {
+              // Re-fetched by the self-heal: new files, so they're asked
+              // about like any other (picked up from the re-list below).
+              refusedAfterRepair = true;
+              return;
+            }
             if (isMissingBundleError(message)) {
               // A missing bundle that survived the self-heal is a broken
               // install the user has to redo — an expected machine state,
@@ -222,9 +292,14 @@ export function usePlugins(
           }
         });
 
+        if (refusedAfterRepair) {
+          pending = pendingFrom(await listPlugins(path).catch(() => []));
+        }
+
         if (mountedRef.current && currentPathRef.current === path) {
           setPlugins(loaded);
           setFailures(failed);
+          setPendingApprovals(pending);
         }
       } catch (e) {
         // Full Disk Access / read-only volume / a project folder that's gone
@@ -236,6 +311,7 @@ export function usePlugins(
         });
         if (mountedRef.current && currentPathRef.current === path) {
           setPlugins([]);
+          setPendingApprovals([]);
           setFailures([
             {
               id: null,
@@ -283,6 +359,34 @@ export function usePlugins(
     await loadAllPlugins(projectPath);
   }, [plugins, loadAllPlugins, projectPath, handleLifecycleError]);
 
+  // Turning plugin developer mode on or off changes what may load.
+  useEffect(() => {
+    const onDevModeChanged = () => void reloadPlugins();
+    window.addEventListener(PLUGIN_DEV_MODE_CHANGED_EVENT, onDevModeChanged);
+    return () => window.removeEventListener(PLUGIN_DEV_MODE_CHANGED_EVENT, onDevModeChanged);
+  }, [reloadPlugins]);
+
+  const approvePending = useCallback(
+    async (info: PluginInfo) => {
+      if (!projectPath || !info.sha256) return;
+      // Throws to the caller (the prompt toasts it); nothing loads on failure.
+      await approvePlugin(projectPath, info.manifest.id, info.sha256);
+      await reloadPlugins();
+    },
+    [projectPath, reloadPlugins]
+  );
+
+  const declinePending = useCallback(
+    (info: PluginInfo) => {
+      if (!projectPath) return;
+      declinedThisSession.add(declineKey(projectPath, info));
+      setPendingApprovals((current) =>
+        current.filter((p) => declineKey(projectPath, p) !== declineKey(projectPath, info))
+      );
+    },
+    [projectPath]
+  );
+
   const getSlotPlugins = useCallback(
     (slotName: string): LoadedPlugin[] => {
       return plugins.filter(
@@ -292,5 +396,20 @@ export function usePlugins(
     [plugins]
   );
 
-  return { plugins, failures, getSlotPlugins, reloadPlugins, isLoading };
+  const trust = useMemo<PluginTrustApi>(
+    () => ({ pending: pendingApprovals, approve: approvePending, decline: declinePending }),
+    [pendingApprovals, approvePending, declinePending]
+  );
+
+  return {
+    plugins,
+    failures,
+    trust,
+    pendingApprovals,
+    approvePending,
+    declinePending,
+    getSlotPlugins,
+    reloadPlugins,
+    isLoading,
+  };
 }

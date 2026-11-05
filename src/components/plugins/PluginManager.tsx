@@ -295,7 +295,7 @@ export function PluginManager({
     if (!projectPath) return;
     setUpdateStates((prev) => ({ ...prev, [pluginId]: 'updating' }));
     try {
-      await updatePlugin(projectPath, pluginId);
+      await updatePlugin(projectPath, pluginId, { approve: true });
       void trackEvent('plugin_updated', { plugin_id: pluginId, $screen_name: 'Plugin Manager' });
       await fetchPlugins();
       onPluginsChanged();

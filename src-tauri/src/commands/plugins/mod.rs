@@ -16,9 +16,14 @@
  * - Registry: {project}/.shipstudio/plugins/registry.json
  * - Plugin files: {project}/.shipstudio/plugins/{plugin-id}/ (plugin.json, dist/, icon.svg)
  * - Plugin data: {project}/.shipstudio/plugins/{plugin-id}/storage.json
+ * - What the user allowed to run: the app's own `plugin_trust.json`, never
+ *   the project (see `plugin_trust`)
  */
 mod plugin_lifecycle;
 mod plugin_storage;
+mod plugin_trust;
+
+pub use plugin_trust::PluginTrust;
 
 pub use plugin_lifecycle::*;
 pub use plugin_storage::*;
@@ -221,6 +226,35 @@ pub struct PluginInfo {
     /// Local filesystem path for dev plugins
     #[serde(default)]
     pub local_path: String,
+    /// Whether this app will run it (`plugin_trust`). Not part of the
+    /// registry: decided by the user's approvals, never by the project.
+    #[serde(default)]
+    pub trust: PluginTrust,
+    /// SHA-256 of its files right now, which an approval must name.
+    #[serde(default)]
+    pub sha256: Option<String>,
+    /// The folder its code loads from, shown when asking to allow it.
+    #[serde(default)]
+    pub source_path: String,
+}
+
+impl PluginInfo {
+    /// A plugin as this app sees it: the registry's entry plus whether it
+    /// may run (`plugin_trust::status`).
+    pub(crate) fn from_entry(manifest: PluginManifest, entry: &RegistryEntry, dir: &Path) -> Self {
+        let (trust, sha256) = plugin_trust::status(&entry.plugin_id, dir, entry.is_dev);
+        PluginInfo {
+            manifest,
+            enabled: entry.enabled,
+            installed_at: entry.installed_at,
+            source_url: entry.source_url.clone(),
+            is_dev: entry.is_dev,
+            local_path: entry.local_path.clone(),
+            trust,
+            sha256,
+            source_path: dir.to_string_lossy().into_owned(),
+        }
+    }
 }
 
 /// Registry entry stored in registry.json
@@ -441,48 +475,46 @@ pub(crate) fn get_storage_path(
     Ok(plugins_dir.join(plugin_id).join("storage.json"))
 }
 
-/// Read the JavaScript bundle for a plugin (dist/index.js)
+/// Read the JavaScript bundle for a plugin (dist/index.js) — only when the
+/// user allowed exactly this code in this app (`plugin_trust`). A project
+/// listing a plugin in its registry is not enough.
 #[tauri::command]
 #[tracing::instrument(fields(project = %project_path))]
 pub fn read_plugin_bundle(project_path: String, plugin_id: String) -> Result<String, CommandError> {
     validate_plugin_id(&plugin_id)?;
     let registry = read_registry(&project_path)?;
-    let entry = registry.plugins.iter().find(|e| e.plugin_id == plugin_id);
+    // A plugin folder the registry doesn't list is never run: there is no
+    // entry to say where it came from or whether it's a dev link.
+    let entry = registry
+        .plugins
+        .iter()
+        .find(|e| e.plugin_id == plugin_id)
+        .ok_or_else(|| CommandError::expected(format!("Plugin '{plugin_id}' not found")))?;
+    let dir = plugin_trust::entry_dir(&project_path, entry)?;
+    // A missing bundle stays `Expected` with byte-identical text: usePlugins'
+    // `isMissingBundleError` matches on it to self-heal (issues #624, #770).
+    plugin_trust::trusted_bundle(&plugin_id, &dir, entry.is_dev)
+}
 
-    let bundle_path = if let Some(entry) = entry {
-        if entry.is_dev {
-            PathBuf::from(&entry.local_path)
-                .join("dist")
-                .join("index.js")
-        } else {
-            get_plugins_dir(&project_path)?
-                .join(&plugin_id)
-                .join("dist")
-                .join("index.js")
-        }
-    } else {
-        get_plugins_dir(&project_path)?
-            .join(&plugin_id)
-            .join("dist")
-            .join("index.js")
-    };
-
-    // Expected, not Other: a missing bundle is a broken-install machine state
-    // the frontend already handles (usePlugins' self-heal re-installs from
-    // source, then warns). `Other` auto-reported it at the IPC boundary before
-    // any of that ran, so every session re-filed the same bug (issue #770).
-    // The message text is load-bearing — usePlugins' `isMissingBundleError`
-    // matches on it — so it stays byte-identical.
-    if !bundle_path.exists() {
-        return Err(CommandError::expected(format!(
-            "Plugin bundle not found: {}",
-            bundle_path.display()
-        )));
-    }
-
-    fs::read_to_string(&bundle_path).map_err(|e| CommandError::Io {
-        message: format!("Failed to read plugin bundle: {e}"),
-    })
+/// Allow a plugin this project lists to run in this app. Records its id, its
+/// folder and the digest the user was shown; refused if the files changed
+/// since they were shown, so an approval never covers unseen code.
+#[tauri::command]
+#[tracing::instrument(fields(project = %project_path))]
+pub fn approve_plugin(
+    project_path: String,
+    plugin_id: String,
+    sha256: String,
+) -> Result<(), CommandError> {
+    validate_plugin_id(&plugin_id)?;
+    let registry = read_registry(&project_path)?;
+    let entry = registry
+        .plugins
+        .iter()
+        .find(|e| e.plugin_id == plugin_id)
+        .ok_or_else(|| CommandError::expected(format!("Plugin '{plugin_id}' not found")))?;
+    let dir = plugin_trust::entry_dir(&project_path, entry)?;
+    plugin_trust::approve(&plugin_id, &dir, &sha256)
 }
 
 /// Read a plugin's manifest

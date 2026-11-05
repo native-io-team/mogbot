@@ -889,6 +889,11 @@ pub struct AppState {
     /// (and every existing install) reads as disabled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spotify_widget_enabled: Option<bool>,
+    /// Plugin developer mode: dev-linked plugins (`is_dev` in a project's
+    /// registry.json, a local folder outside the project) only load when this
+    /// is on. Opt-in; `None` reads as off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_dev_mode: Option<bool>,
     /// Whether dev servers stay running in background projects and while the
     /// Preview is hidden. Opt-in so existing installs keep the beginner-safe
     /// automatic stop behavior.

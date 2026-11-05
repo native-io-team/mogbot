@@ -110,24 +110,28 @@ fn plugin_shell_timeout_error(plugin_id: &str, command: &str, timeout: u64) -> C
 /// `.shipstudio/plugins/{id}`. Shared by every plugin-context capability
 /// (`shell.exec`, and the `fs.*` primitives below) so an uninstalled or
 /// unlinked plugin is rejected consistently everywhere, not just for shell.
+/// It must also be allowed to run in this app (`plugin_trust`): these are
+/// the capabilities that make a plugin dangerous, so a project listing one is
+/// not enough to get them.
 fn check_plugin_exists(plugin_id: &str, project_path: &str) -> Result<(), CommandError> {
     let registry = read_registry(project_path)?;
     let entry = registry.plugins.iter().find(|e| e.plugin_id == plugin_id);
-    let plugin_exists = if let Some(entry) = entry {
-        if entry.is_dev {
-            PathBuf::from(&entry.local_path).exists()
-        } else {
-            get_plugins_dir(project_path)?.join(plugin_id).exists()
-        }
-    } else {
-        false
+    let Some(entry) = entry else {
+        return Err(CommandError::expected(format!(
+            "Plugin '{plugin_id}' not found"
+        )));
     };
-    if !plugin_exists {
+    let dir = if entry.is_dev {
+        PathBuf::from(&entry.local_path)
+    } else {
+        get_plugins_dir(project_path)?.join(plugin_id)
+    };
+    if !dir.exists() {
         return Err(CommandError::expected(format!(
             "Plugin '{plugin_id}' not found"
         )));
     }
-    Ok(())
+    super::plugin_trust::require_trusted(plugin_id, &dir, entry.is_dev)
 }
 
 /// Join a plugin-supplied, project-relative path onto an already-validated
@@ -453,17 +457,14 @@ pub async fn link_dev_plugin(
         local_path: local_path.clone(),
     };
 
-    registry.plugins.push(entry);
+    registry.plugins.push(entry.clone());
     write_registry(&project_path, &registry)?;
 
-    Ok(Some(PluginInfo {
-        manifest,
-        enabled: true,
-        installed_at: now_ms(),
-        source_url: String::new(),
-        is_dev: true,
-        local_path,
-    }))
+    // The user picked this folder themselves: allowed as it is now. It still
+    // runs only while plugin developer mode is on.
+    super::plugin_lifecycle::allow_as_installed(&entry.plugin_id, &folder_path);
+
+    Ok(Some(PluginInfo::from_entry(manifest, &entry, &folder_path)))
 }
 
 /// Unlink a dev plugin from a project.
@@ -485,6 +486,11 @@ pub fn unlink_dev_plugin(project_path: String, plugin_id: String) -> Result<(), 
             )));
         }
         _ => {}
+    }
+
+    // Its approval goes with the link.
+    if let Some(entry) = registry.plugins.iter().find(|e| e.plugin_id == plugin_id) {
+        super::plugin_trust::forget(&plugin_id, std::path::Path::new(&entry.local_path));
     }
 
     // Remove from registry (does not touch local files)

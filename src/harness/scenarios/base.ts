@@ -434,6 +434,7 @@ export const baseCommands: CommandMap = {
   // ---- dashboard chrome toggles -------------------------------------------
   get_slack_cta_hidden: false,
   get_spotify_widget_enabled: false,
+  get_plugin_dev_mode: false,
   get_filed_project_paths: [],
   get_github_username: 'harness-user',
 

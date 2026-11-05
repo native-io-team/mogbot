@@ -21,6 +21,7 @@ export type ModalId =
   | 'skills'
   | 'mcp'
   | 'pluginManager'
+  | 'pluginTrust'
   | 'devCommand'
   | 'projectSettings'
   | 'sidebarProjectSettings'

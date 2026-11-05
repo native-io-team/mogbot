@@ -38,6 +38,7 @@ import { ChevronIcon, PuzzleIcon } from '@/components/icons';
 import { PluginSlot, PluginErrorChip } from './PluginSlot';
 import { MenuButton } from '../primitives/MenuButton';
 import type { LoadedPlugin, PluginFailure } from '../../hooks/usePlugins';
+import type { PluginInfo } from '../../lib/plugins';
 import type {
   PluginProjectData,
   PluginAppActions,
@@ -48,6 +49,10 @@ interface PluginsDropdownProps {
   plugins: LoadedPlugin[];
   /** Plugins that failed to load — rendered as greyed, non-actionable rows */
   failures?: PluginFailure[];
+  /** Plugins the project lists that the user hasn't allowed — not loaded */
+  waiting?: PluginInfo[];
+  /** Opens the "Load this plugin?" prompt */
+  onReviewWaiting?: () => void;
   /** Installed hosting plugins (vercel/…) render in the header toolbar, not here */
   hostingPluginCount?: number;
   pluginProject: PluginProjectData | null;
@@ -60,6 +65,8 @@ interface PluginsDropdownProps {
 export function PluginsDropdown({
   plugins,
   failures = [],
+  waiting = [],
+  onReviewWaiting,
   hostingPluginCount = 0,
   pluginProject,
   pluginActions,
@@ -92,8 +99,9 @@ export function PluginsDropdown({
         data-workspace-panel="plugins"
         data-workspace-panel-shortcut-action="open-plugin-manager"
         leftIcon={<PuzzleIcon size={16} />}
-        aria-label="Plugins"
+        aria-label={waiting.length > 0 ? 'Plugins, waiting for your OK' : 'Plugins'}
       >
+        {waiting.length > 0 && <span className="plugins-waiting-dot" aria-hidden="true" />}
         <ChevronIcon size={10} className={isOpen ? 'chevron-flipped' : undefined} />
       </MenuButton>
 
@@ -108,7 +116,26 @@ export function PluginsDropdown({
           <PuzzleIcon size={14} />
           <span>Plugin Manager</span>
         </button>
-        {(plugins.length > 0 || failures.length > 0) && <div className="ss-dropdown__divider" />}
+        {(plugins.length > 0 || failures.length > 0 || waiting.length > 0) && (
+          <div className="ss-dropdown__divider" />
+        )}
+        {waiting.map((info) => (
+          <button
+            key={`waiting-${info.manifest.id}`}
+            className="toolbar-dropdown-item plugin-dropdown-row--waiting"
+            role="menuitem"
+            onClick={() => {
+              setIsOpen(false);
+              onReviewWaiting?.();
+            }}
+          >
+            <PuzzleIcon size={14} />
+            <span className="plugin-dropdown-row-label">{info.manifest.name}</span>
+            <span className="plugin-dropdown-row-note">
+              {info.trust === 'changed' ? 'Changed — review' : 'Not allowed yet — review'}
+            </span>
+          </button>
+        ))}
         {plugins.map((plugin) => (
           <PluginDropdownRow
             key={plugin.info.manifest.id}
@@ -137,9 +164,12 @@ export function PluginsDropdown({
             <span className="plugin-dropdown-row-label">{failure.name}</span>
           </div>
         ))}
-        {plugins.length === 0 && failures.length === 0 && hostingPluginCount === 0 && (
-          <div className="toolbar-dropdown-empty-hint">No plugins installed yet.</div>
-        )}
+        {plugins.length === 0 &&
+          failures.length === 0 &&
+          waiting.length === 0 &&
+          hostingPluginCount === 0 && (
+            <div className="toolbar-dropdown-empty-hint">No plugins installed yet.</div>
+          )}
         {hostingPluginCount > 0 && (
           <div className="plugins-dropdown-footer">
             {hostingPluginCount === 1

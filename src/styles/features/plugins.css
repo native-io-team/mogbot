@@ -399,3 +399,45 @@
   font-weight: var(--font-weight-medium);
   text-transform: none;
 }
+
+/* A plugin the project lists that the user hasn't allowed in this app: not
+   loaded. The row opens the "Load this plugin?" prompt. */
+.plugin-dropdown-row--waiting .plugin-dropdown-row-label {
+  flex: 1;
+  text-align: left;
+}
+
+.plugin-dropdown-row-note {
+  font-size: var(--font-size-badge);
+  color: var(--text-muted);
+}
+
+/* Something in the Plugins menu is waiting for the user's OK. */
+.plugins-waiting-dot {
+  width: var(--spacing-xs);
+  height: var(--spacing-xs);
+  border-radius: var(--radius-pill);
+  background: var(--accent-active);
+}
+
+.plugin-trust-source {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--spacing-xs) var(--spacing-md);
+  align-items: baseline;
+}
+
+.plugin-trust-source-label {
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
+.plugin-trust-source-path {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  word-break: break-all;
+}
+
+.plugin-trust-body {
+  padding: var(--spacing-xl);
+}

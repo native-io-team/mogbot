@@ -304,6 +304,9 @@ describe('legacy plugin context global (#389/#465/#695)', () => {
         source_url: '',
         is_dev: false,
         local_path: '',
+        trust: 'trusted',
+        sha256: 'abc123',
+        source_path: '/p/.shipstudio/plugins/x',
       },
       module: { name, slots: { toolbar: LegacySlotComponent } },
     };

@@ -13,7 +13,7 @@ import type { ProjectType } from '../../lib/static-server';
 import type { TerminalTab } from '../../hooks/useTerminalManagement';
 import type { AgentStatus, TerminalHandle } from '../terminal/Terminal';
 import type { Toast, ToastType } from '../../hooks/useToasts';
-import type { LoadedPlugin, PluginFailure } from '../../hooks/usePlugins';
+import type { LoadedPlugin, PluginFailure, PluginTrustApi } from '../../hooks/usePlugins';
 import type { PreviewHandle } from '../preview/Preview';
 import type { ToggleProjectPinHandler } from './WorkspaceSidebar';
 
@@ -219,6 +219,8 @@ interface BranchProps {
 interface PluginProps {
   loadedPlugins: LoadedPlugin[];
   pluginFailures: PluginFailure[];
+  /** Plugins the project lists that the user hasn't allowed yet. */
+  pluginTrust: PluginTrustApi;
   getSlotPlugins: (slotName: string) => LoadedPlugin[];
   reloadPlugins: () => Promise<void>;
 }

@@ -45,6 +45,29 @@ export interface PluginInfo {
   source_url: string;
   is_dev: boolean;
   local_path: string;
+  /**
+   * Whether this app will run it. Decided by the user's own approvals (kept
+   * in the app, never in the project), not by the project's registry.json.
+   */
+  trust: PluginTrust;
+  /** SHA-256 of its files now; an approval must name it. */
+  sha256: string | null;
+  /** The folder its code loads from, shown when asking to allow it. */
+  source_path: string;
+}
+
+/**
+ * - `trusted`: allowed, files unchanged since
+ * - `unknown`: never allowed in this app (cloned, or added by Ship Studio)
+ * - `changed`: allowed once, files changed since
+ * - `dev_mode_off`: a dev-linked plugin while plugin developer mode is off
+ * - `missing`: its files can't be read
+ */
+export type PluginTrust = 'trusted' | 'unknown' | 'changed' | 'dev_mode_off' | 'missing';
+
+/** A plugin the user is asked about before it loads. */
+export function needsApproval(info: PluginInfo): boolean {
+  return (info.trust === 'unknown' || info.trust === 'changed') && info.sha256 !== null;
 }
 
 /** Result of checking for a plugin update */
@@ -322,8 +345,18 @@ export async function uninstallPlugin(projectPath: string, pluginId: string): Pr
 /**
  * Update a plugin to the latest version from its source.
  */
-export async function updatePlugin(projectPath: string, pluginId: string): Promise<PluginInfo> {
-  return invoke<PluginInfo>('update_plugin', { projectPath, pluginId });
+export async function updatePlugin(
+  projectPath: string,
+  pluginId: string,
+  options?: { approve?: boolean }
+): Promise<PluginInfo> {
+  // `approve`: the user pressed Update, so the new files are allowed as they
+  // arrive. The automatic self-heal leaves it off and they're asked first.
+  return invoke<PluginInfo>('update_plugin', {
+    projectPath,
+    pluginId,
+    approve: options?.approve ?? null,
+  });
 }
 
 /**
@@ -339,6 +372,15 @@ export async function checkPluginUpdate(
 /**
  * Read the JavaScript bundle source for a plugin.
  */
+/** Allow a plugin's files exactly as shown (`sha256` from `listPlugins`). */
+export async function approvePlugin(
+  projectPath: string,
+  pluginId: string,
+  sha256: string
+): Promise<void> {
+  return invoke('approve_plugin', { projectPath, pluginId, sha256 });
+}
+
 export async function readPluginBundle(projectPath: string, pluginId: string): Promise<string> {
   return invoke<string>('read_plugin_bundle', { projectPath, pluginId });
 }

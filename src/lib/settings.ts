@@ -351,3 +351,23 @@ export function peekSettingsTabOnOpen(): SettingsTabRequest | null {
 export function clearSettingsTabOnOpen() {
   settingsTabOnOpen = null;
 }
+
+/** Fired on `window` when plugin developer mode changes (detail: boolean). */
+export const PLUGIN_DEV_MODE_CHANGED_EVENT = 'plugin-dev-mode-changed';
+
+/** Whether dev-linked plugins may load. Off unless the user turned it on. */
+export async function getPluginDevMode(): Promise<boolean> {
+  try {
+    return await invoke<boolean>('get_plugin_dev_mode');
+  } catch {
+    return false;
+  }
+}
+
+/** Turn plugin developer mode on or off. */
+export async function setPluginDevMode(enabled: boolean): Promise<void> {
+  await invoke('set_plugin_dev_mode', { enabled });
+  window.dispatchEvent(
+    new CustomEvent<boolean>(PLUGIN_DEV_MODE_CHANGED_EVENT, { detail: enabled })
+  );
+}

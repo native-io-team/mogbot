@@ -25,6 +25,9 @@ function makePlugin(overrides: Partial<PluginInfo['manifest']> = {}): PluginInfo
     source_url: 'https://github.com/ship-studio/plugin-ccusage',
     is_dev: false,
     local_path: '',
+    trust: 'trusted',
+    sha256: 'abc123',
+    source_path: '/p/.shipstudio/plugins/x',
   };
 }
 

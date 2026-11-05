@@ -22,6 +22,9 @@ vi.mock('../lib/plugins', () => ({
   // override this to verify the filtering itself (issues #386/#804).
   supersededReason: vi.fn(() => null),
   isExpectedPluginFailure: () => false,
+  approvePlugin: vi.fn(),
+  needsApproval: (p: PluginInfo) =>
+    (p.trust === 'unknown' || p.trust === 'changed') && p.sha256 !== null,
 }));
 
 vi.mock('../lib/plugin-loader', () => ({
@@ -29,7 +32,7 @@ vi.mock('../lib/plugin-loader', () => ({
   unloadPluginModule: vi.fn(),
 }));
 
-import { listPlugins, updatePlugin, supersededReason } from '../lib/plugins';
+import { listPlugins, updatePlugin, supersededReason, approvePlugin } from '../lib/plugins';
 import { loadPluginModule } from '../lib/plugin-loader';
 
 const mockListPlugins = vi.mocked(listPlugins);
@@ -58,6 +61,9 @@ function makeInfo(overrides: Partial<PluginInfo> = {}): PluginInfo {
     source_url: 'https://github.com/ship-studio/plugin-dependency-checker',
     is_dev: false,
     local_path: '',
+    trust: 'trusted',
+    sha256: 'abc123',
+    source_path: '/p/.shipstudio/plugins/x',
     ...overrides,
   };
 }
@@ -179,6 +185,66 @@ describe('usePlugins skips superseded plugins entirely (issues #386, #804)', () 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.plugins).toHaveLength(0);
     expect(result.current.failures).toHaveLength(0);
+    expect(mockLoadPluginModule).not.toHaveBeenCalled();
+  });
+});
+
+describe('usePlugins plugin approvals', () => {
+  it('never loads a plugin the user has not allowed, and asks about it instead', async () => {
+    const unknown = makeInfo({ trust: 'unknown', sha256: 'feed' });
+    mockListPlugins.mockResolvedValue([unknown]);
+    const { result } = renderHook(() => usePlugins('/p/a'));
+    await waitFor(() => expect(result.current.pendingApprovals).toHaveLength(1));
+    expect(mockLoadPluginModule).not.toHaveBeenCalled();
+    expect(result.current.plugins).toEqual([]);
+    expect(result.current.failures).toEqual([]);
+  });
+
+  it('asks again about a plugin whose files changed since it was allowed', async () => {
+    mockListPlugins.mockResolvedValue([makeInfo({ trust: 'changed', sha256: 'new' })]);
+    const { result } = renderHook(() => usePlugins('/p/b'));
+    await waitFor(() => expect(result.current.pendingApprovals).toHaveLength(1));
+    expect(mockLoadPluginModule).not.toHaveBeenCalled();
+  });
+
+  it('allowing records exactly the digest shown, then loads the plugin', async () => {
+    const unknown = makeInfo({ trust: 'unknown', sha256: 'feed' });
+    mockListPlugins.mockResolvedValueOnce([unknown]);
+    const { result } = renderHook(() => usePlugins('/p/c'));
+    await waitFor(() => expect(result.current.pendingApprovals).toHaveLength(1));
+
+    mockListPlugins.mockResolvedValue([{ ...unknown, trust: 'trusted' }]);
+    mockLoadPluginModule.mockResolvedValue(workingModule);
+    await act(async () => {
+      await result.current.approvePending(unknown);
+    });
+    expect(vi.mocked(approvePlugin)).toHaveBeenCalledWith('/p/c', 'dependency-checker', 'feed');
+    await waitFor(() => expect(result.current.plugins).toHaveLength(1));
+    expect(result.current.pendingApprovals).toEqual([]);
+  });
+
+  it('"Don\'t load" stops asking for the rest of the session', async () => {
+    const unknown = makeInfo({ trust: 'unknown', sha256: 'cafe' });
+    mockListPlugins.mockResolvedValue([unknown]);
+    const { result } = renderHook(() => usePlugins('/p/d'));
+    await waitFor(() => expect(result.current.pendingApprovals).toHaveLength(1));
+    act(() => result.current.declinePending(unknown));
+    expect(result.current.pendingApprovals).toEqual([]);
+    await act(async () => {
+      await result.current.reloadPlugins();
+    });
+    expect(result.current.pendingApprovals).toEqual([]);
+    expect(mockLoadPluginModule).not.toHaveBeenCalled();
+  });
+
+  it('a dev plugin with developer mode off is explained, not loaded or asked about', async () => {
+    mockListPlugins.mockResolvedValue([
+      makeInfo({ is_dev: true, local_path: '/dev/x', trust: 'dev_mode_off' }),
+    ]);
+    const { result } = renderHook(() => usePlugins('/p/e'));
+    await waitFor(() => expect(result.current.failures).toHaveLength(1));
+    expect(result.current.failures[0].reason).toMatch(/plugin developer mode/);
+    expect(result.current.pendingApprovals).toEqual([]);
     expect(mockLoadPluginModule).not.toHaveBeenCalled();
   });
 });

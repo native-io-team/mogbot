@@ -43,6 +43,8 @@ import {
   setThumbnailsEnabled,
   getSpotifyWidgetEnabled,
   setSpotifyWidgetEnabled,
+  getPluginDevMode,
+  setPluginDevMode,
   setKeepDevServersRunning,
   SPOTIFY_WIDGET_ENABLED_CHANGED_EVENT,
   getProjectsRoot,
@@ -106,6 +108,7 @@ export function SettingsModal({
   const [teamSharingEnabled, setLocalTeamSharingEnabled] = useState(true);
   const [thumbnailsOn, setLocalThumbnailsOn] = useState(true);
   const [spotifyWidgetEnabled, setLocalSpotifyWidgetEnabled] = useState(false);
+  const [pluginDevMode, setLocalPluginDevMode] = useState(false);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('general');
   const [loading, setLoading] = useState(true);
 
@@ -129,6 +132,7 @@ export function SettingsModal({
         sharingEnabled,
         thumbnails,
         spotifyEnabled,
+        devMode,
         root,
         custom,
       ] = await Promise.all([
@@ -141,6 +145,7 @@ export function SettingsModal({
         getTeamSharingEnabled(),
         getThumbnailsEnabled(),
         isMac() ? getSpotifyWidgetEnabled() : Promise.resolve(false),
+        getPluginDevMode(),
         getProjectsRoot().catch(() => ''),
         isCustomProjectsRoot(),
       ]);
@@ -156,6 +161,7 @@ export function SettingsModal({
         // (the first auto-capture will show the in-app explainer).
         setLocalThumbnailsOn(thumbnails !== false);
         setLocalSpotifyWidgetEnabled(spotifyEnabled);
+        setLocalPluginDevMode(devMode);
         setLocalProjectsRoot(root);
         setCustomRoot(custom);
         setLoading(false);
@@ -323,6 +329,12 @@ export function SettingsModal({
       $screen_name: 'Settings',
     });
   }, [spotifyWidgetEnabled]);
+
+  const handlePluginDevModeToggle = useCallback(() => {
+    const next = !pluginDevMode;
+    setLocalPluginDevMode(next);
+    setPluginDevMode(next).catch(() => setLocalPluginDevMode(!next));
+  }, [pluginDevMode]);
 
   const handleKeepDevServersRunningToggle = useCallback(() => {
     const enabled = !keepDevServersRunning;
@@ -765,6 +777,27 @@ export function SettingsModal({
                       role="switch"
                       aria-label="Keep dev servers running"
                       aria-checked={keepDevServersRunning}
+                    >
+                      <span className="settings-toggle-track">
+                        <span className="settings-toggle-thumb" />
+                      </span>
+                    </button>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-info">
+                      <span className="settings-row-label">Plugin developer mode</span>
+                      <span className="settings-row-description">
+                        Load dev plugins linked from a folder on this Mac. Leave off unless you
+                        build plugins: a project can point a dev plugin at any folder.
+                      </span>
+                    </div>
+                    <button
+                      className={`settings-toggle ${pluginDevMode ? 'on' : 'off'}`}
+                      onClick={handlePluginDevModeToggle}
+                      disabled={loading}
+                      role="switch"
+                      aria-label="Plugin developer mode"
+                      aria-checked={pluginDevMode}
                     >
                       <span className="settings-toggle-track">
                         <span className="settings-toggle-thumb" />
