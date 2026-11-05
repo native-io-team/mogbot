@@ -14,6 +14,7 @@ import {
   workingLine,
   needsLine,
   nextNeedsYou,
+  pendingApproval,
   usageLine,
 } from '../src/lib/agents';
 import { diffLineKind, questionContext } from '../src/lib/diff';
@@ -309,6 +310,29 @@ describe('engines, slots and decision cards', () => {
     expect(cardOutcome({ ...base, status: 'denied', note: 'use pnpm' })).toBe(
       'Declined · “use pnpm”'
     );
+  });
+
+  it('words an expired card as the desk does, and never as waiting', () => {
+    const base = { requestId: 'q', title: 'Run a command', detail: 'npm test' };
+    expect(cardOutcome({ ...base, status: 'expired', expiry: 'moved_on' })).toBe(
+      'Expired — the agent moved on'
+    );
+    expect(cardOutcome({ ...base, status: 'expired', expiry: 'no_answer' })).toBe(
+      'No answer — ask again later if it still matters'
+    );
+    expect(cardOutcome({ ...base, status: 'expired', expiry: 'maybe_later' })).toBe('Maybe later');
+    expect(
+      pendingApproval([
+        {
+          id: 'm1',
+          agentId: 'a',
+          ts: 1,
+          kind: 'approval',
+          text: '',
+          approval: { ...base, status: 'expired', expiry: 'moved_on' },
+        },
+      ])
+    ).toBeUndefined();
   });
 });
 

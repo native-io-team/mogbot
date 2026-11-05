@@ -755,11 +755,8 @@ pub async fn answer(app: &AppHandle, agent_id: &str, turn: u64, ask: Ask) -> Vec
     match mcp::ask_user(app, &agent, title, detail.trim().to_string(), None).await {
         mcp::Answer::Allowed => vec![reply(&ask.allow)],
         mcp::Answer::Denied(note) => refused(mcp::denied(note)),
-        // A card that isn't a tool call can't be allowed later: it has expired.
-        mcp::Answer::NotYet => refused(
-            "The user didn't answer in time. Don't retry and don't work around it: stop here and tell them in one short line what you need and why, so they can ask you again."
-                .to_string(),
-        ),
+        // Unanswered: the card expired (`agents/expiry.rs`).
+        mcp::Answer::NotYet => refused(super::expiry::TOLD.to_string()),
     }
 }
 

@@ -76,7 +76,8 @@ pub(super) enum Answer {
     Allowed,
     /// With what the user said, if they said why.
     Denied(Option<String>),
-    /// The user hasn't answered within the wait. The card stays live.
+    /// The user hasn't answered within the wait: the card expired
+    /// (`agents/expiry.rs`), or the same ask already had in this task.
     NotYet,
 }
 
@@ -91,6 +92,14 @@ pub(super) fn register_waiter(request_id: &str) -> oneshot::Receiver<bool> {
         .unwrap_or_else(|e| e.into_inner())
         .insert(request_id.to_string(), tx);
     rx
+}
+
+/// Whether a call is still parked on this card (`agents/expiry.rs`).
+pub(super) fn is_waited_on(request_id: &str) -> bool {
+    PENDING_APPROVALS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains_key(request_id)
 }
 
 pub(super) fn drop_waiter(request_id: &str) {
@@ -1556,6 +1565,10 @@ fn request_secret_as(app: &AppHandle, caller: &store::Agent, args: &Value, quiet
         Err(e) => return error(e.to_string()),
     };
     request.quiet = quiet;
+    // Asked already in this task and nobody answered: not again.
+    if super::expiry::already_expired(&caller.id, &super::expiry::secret_key(&request.name)) {
+        return text(super::expiry::told_maybe_later(&request.name));
+    }
     let open = store::pending_approvals(&caller.id).unwrap_or_default();
     if open
         .iter()
@@ -1619,6 +1632,14 @@ async fn ask(
     detail: String,
     call: Option<(&str, &Value)>,
 ) -> Answer {
+    // The same ask expired unanswered earlier in this task: not raised again.
+    let key = match call {
+        Some((tool, input)) => super::expiry::tool_key(tool, input),
+        None => super::expiry::ask_key(&title, &detail),
+    };
+    if super::expiry::already_expired(&caller.id, &key) {
+        return Answer::NotYet;
+    }
     let request_id = store::new_id();
     let (tx, rx) = oneshot::channel();
     PENDING_APPROVALS
@@ -1647,20 +1668,23 @@ async fn ask(
             .flatten()
             .and_then(|a| a.note)
     });
+    // An answered card was already written by the command. An unanswered
+    // one expires now, into a one-line receipt, and isn't asked again in
+    // this task (`agents/expiry.rs`). Closed before the waiter goes, so the
+    // sweep never reads it as abandoned.
+    if answer == Answer::NotYet {
+        super::expiry::remember(&caller.id, key);
+        if let Ok(Some(updated)) =
+            store::expire_card(&caller.id, &request_id, super::expiry::Expiry::NoAnswer)
+        {
+            let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &updated);
+        }
+        store::refresh_pending(&caller.id);
+    }
     PENDING_APPROVALS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .remove(&request_id);
-
-    // An answered card was already written by the command. An unanswered one
-    // stays pending if a late answer can still act on it, else it expires.
-    if answer == Answer::NotYet && call.is_none() {
-        if let Ok(Some(updated)) =
-            store::set_approval_status(&caller.id, &request_id, ApprovalStatus::Expired)
-        {
-            let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &updated);
-        }
-    }
     let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
     super::notify::refresh_badge(app);
     // Back to work, unless another card is still open, or the turn already
@@ -1691,9 +1715,7 @@ pub(super) fn refused_reply(answer: &Answer, what: &str) -> Option<String> {
         Answer::Denied(Some(note)) => Some(format!(
             "The user said no, and told you: \"{note}\". Don't {what}."
         )),
-        Answer::NotYet => Some(format!(
-            "The user didn't answer in time, so the request expired; nothing was done. Don't {what} now. Tell them in one line, and ask again when they're back."
-        )),
+        Answer::NotYet => Some(format!("Don't {what} now. {}", super::expiry::TOLD)),
     }
 }
 
@@ -1722,6 +1744,7 @@ pub(super) fn new_card(
         connector: None,
         login: None,
         set_aside: None,
+        expiry: None,
         front: None,
     }
 }
@@ -2028,7 +2051,7 @@ pub(super) fn denied(note: Option<String>) -> String {
 }
 
 /// What the agent is told when the card is still waiting.
-pub(super) const NOT_YET: &str = "The user hasn't answered yet; they may be away. Don't retry and don't work around it. Stop here and tell them in one short line what you need approved and why. The request stays in their chat: if they allow it later, you'll be woken up to finish, and that exact call will go through.";
+pub(super) const NOT_YET: &str = super::expiry::TOLD;
 
 async fn approve(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args: &Value) -> Value {
     let tool = args

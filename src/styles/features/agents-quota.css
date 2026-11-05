@@ -9,11 +9,20 @@
   gap: var(--spacing-2xs);
 }
 
+/* The first line of the sidebar's footer group (usage, Phone, Remote,
+   Settings): a full-width hairline separates the group from the list, and a
+   solid fill keeps a scrolled list from showing through. Its text starts
+   where the rows' icons below it do (footer inset + button padding + the
+   icon's own inset). */
 .agents-quota--sidebar {
   /* Above the sidebar footer's fade, like the phone row beside it. */
   position: relative;
   z-index: var(--z-workspace-header);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  margin: 0 calc(-1 * var(--spacing-sm)) var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-xs)
+    calc(var(--spacing-sm) + var(--spacing-md));
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
 }
 
 .agents-team__column > .agents-quota--team {

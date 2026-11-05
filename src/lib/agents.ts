@@ -434,6 +434,28 @@ export interface Approval {
    * with Check again (allow) or Not now, never a login.
    */
   front?: { site: string; account?: string };
+  /**
+   * Closed by the app because nobody answered (status `expired`): the agent
+   * moved on, the wait ran out, or a sign-in became "Maybe later". Drawn as
+   * a one-line receipt; never counted as waiting.
+   */
+  expiry?: CardExpiry;
+}
+
+export type CardExpiry = 'moved_on' | 'no_answer' | 'maybe_later';
+
+/** The one-line receipt an expired card collapses to (desk and phone say the same). */
+export function expiryLine(approval: Pick<Approval, 'title' | 'expiry'>): string | null {
+  switch (approval.expiry) {
+    case 'moved_on':
+      return `Expired — the agent moved on · ${approval.title}`;
+    case 'no_answer':
+      return `No answer — ask again later if it still matters · ${approval.title}`;
+    case 'maybe_later':
+      return `Maybe later · ${approval.title}`;
+    default:
+      return null;
+  }
 }
 
 /**

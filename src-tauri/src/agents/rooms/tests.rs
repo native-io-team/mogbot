@@ -196,6 +196,7 @@ fn the_thread_reads_back_with_each_members_card_answers() {
             connector: None,
             login: None,
             set_aside: None,
+            expiry: None,
             front: None,
             summary: None,
         });

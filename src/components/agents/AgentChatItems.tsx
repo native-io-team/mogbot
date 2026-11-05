@@ -65,6 +65,7 @@ import {
   describeScope,
   ENGINE_LABEL,
   errorRemedy,
+  expiryLine,
   folderName,
   formatClock,
   retryPhrase,
@@ -1020,6 +1021,19 @@ export const ApprovalCard = memo(function ApprovalCard({
   const [openedPending] = useState(approval?.status === 'pending');
   const { guard, keyProps } = useCardGuard(approval?.status === 'pending');
   if (!approval) return null;
+  // Nobody answered: a quiet one-line receipt, not a card still asking.
+  const expired = approval.status === 'expired' ? expiryLine(approval) : null;
+  if (expired) {
+    return (
+      <div
+        className="agent-note agent-note--expired"
+        data-arrived={arrived || undefined}
+        data-message-ids={message.id}
+      >
+        {expired}
+      </div>
+    );
+  }
   if (approval.prompt) {
     return (
       <SessionPromptCard

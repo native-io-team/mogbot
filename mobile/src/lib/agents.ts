@@ -584,8 +584,17 @@ const OUTCOME = {
   pending: '',
 } as const;
 
+/** An expired card's receipt, as the desk words it (`expiryLine` in src/lib/agents.ts). */
+const EXPIRY_OUTCOME = {
+  moved_on: 'Expired — the agent moved on',
+  no_answer: 'No answer — ask again later if it still matters',
+  maybe_later: 'Maybe later',
+} as const;
+
 /** An answered card in a line, as the desk words it (with the option picked on a session's question). */
 export function cardOutcome(approval: Approval): string {
+  // Nobody answered: what the desk's receipt says.
+  if (approval.status === 'expired' && approval.expiry) return EXPIRY_OUTCOME[approval.expiry];
   // Closed by the Mac, not answered: why, in its own words ("Nothing ran").
   if (approval.setAside) {
     const why = approval.setAside.replace(/^Set aside:\s*/i, '');

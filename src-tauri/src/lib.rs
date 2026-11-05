@@ -202,6 +202,9 @@ pub fn run() {
                     tauri::async_runtime::spawn_blocking(agents::store::harden_permissions).await;
                 let _ = tauri::async_runtime::spawn_blocking(agents::store::expire_stale_approvals)
                     .await;
+                // Then every card nobody can answer usefully any more closes,
+                // and stays closed (`agents/expiry.rs`).
+                agents::expiry::start(badge_app.clone());
                 // Agents imported before they were told where they are now
                 // (no Grok sandbox here): add the app's section, once.
                 let _ = tauri::async_runtime::spawn_blocking(agents::arrival::upgrade_all).await;

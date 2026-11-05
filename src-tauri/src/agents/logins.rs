@@ -1397,6 +1397,10 @@ pub async fn allow_from_old_client(
 /// A login card in `agent`'s chat. One per service at a time.
 pub fn raise(app: &AppHandle, agent: &Agent, ask: &Ask) -> Result<String, CommandError> {
     let r = build(agent, ask)?;
+    // Asked already in this task and nobody answered: "Maybe later" stands.
+    if super::expiry::already_expired(&agent.id, &super::expiry::login_key(&r.service, &r.title)) {
+        return Ok(super::expiry::told_maybe_later(&r.title));
+    }
     if let Some(open) = store::pending_approvals(&agent.id)
         .unwrap_or_default()
         .into_iter()
@@ -1469,6 +1473,7 @@ fn record_card(app: &AppHandle, agent: &Agent, r: LoginRequest) -> Result<String
         connector: None,
         login: Some(r),
         set_aside: None,
+        expiry: None,
         front: None,
     });
     runner::record_own(app, card)?;
@@ -1583,6 +1588,7 @@ pub fn migrate_pending(app: Option<&AppHandle>) -> usize {
                 connector: None,
                 login: Some(login),
                 set_aside: None,
+                expiry: None,
                 front: None,
             });
             let new = match app {
@@ -1690,6 +1696,8 @@ fn card_state(a: &Approval) -> CardState {
         ApprovalStatus::Pending => CardState::Waiting,
         ApprovalStatus::Allowed => CardState::Connected,
         ApprovalStatus::Denied => CardState::Skipped,
+        // "Maybe later": nobody answered it, nothing else covered it.
+        ApprovalStatus::Expired if a.expiry.is_some() => CardState::Skipped,
         ApprovalStatus::Expired => CardState::Covered,
     }
 }
@@ -2345,6 +2353,7 @@ mod tests {
             connector: None,
             login: None,
             set_aside: None,
+            expiry: None,
             front: None,
         });
         // Written the way an older build wrote it: no `login` key at all.
@@ -2586,6 +2595,7 @@ mod tests {
             connector: None,
             login: Some(r),
             set_aside: None,
+            expiry: None,
             front: None,
         });
         store::append_message(&card).unwrap();
