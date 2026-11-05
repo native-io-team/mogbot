@@ -196,7 +196,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "delete_agent",
-        description: "Delete an agent, its memory and its conversation. The user is asked to confirm in the chat first.",
+        description: "Admin: delete another agent. It leaves the team at once and waits in Recently deleted for 30 days with its memory and conversation, where the user can restore it.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -402,10 +402,21 @@ pub(super) fn tool_names(caller: &store::Agent) -> Vec<String> {
         .collect()
 }
 
+/// Whether `caller` is served `tool`. Admin tools (reading another agent,
+/// deleting one) follow the user's Admin switch, and are off in a turn
+/// answering outside text (`admin::admin_now`); the rest are the Chief's.
+fn serves(tool: &Tool, caller: &store::Agent) -> bool {
+    match tool.name {
+        "delete_agent" => super::admin::admin_now(caller),
+        "read_agent" => caller.is_main || super::admin::admin_now(caller),
+        _ => !tool.main_only || caller.is_main,
+    }
+}
+
 fn tools_list(caller: &store::Agent) -> Value {
     let mut tools: Vec<Value> = TOOLS
         .iter()
-        .filter(|t| !t.main_only || caller.is_main)
+        .filter(|t| serves(t, caller))
         .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() }))
         .collect();
     tools.extend(
@@ -418,6 +429,13 @@ fn tools_list(caller: &store::Agent) -> Value {
     if caller.is_main {
         tools.extend(
             super::room_tools::TOOLS
+                .iter()
+                .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() })),
+        );
+    }
+    if super::admin::admin_now(caller) {
+        tools.extend(
+            super::admin::TOOLS
                 .iter()
                 .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() })),
         );
@@ -470,13 +488,28 @@ pub async fn handle_rpc(
             if let Some(tool) = super::room_tools::find(name) {
                 return ok(super::room_tools::call(app, &caller, turn, tool, &args).await);
             }
+            // Admin only, checked again on every call (`admin::call`).
+            if let Some(tool) = super::admin::find(name) {
+                return ok(super::admin::call(app, &caller, tool, &args).await);
+            }
             let Some(tool) = TOOLS.iter().find(|t| t.name == name) else {
                 return fail(-32602, &format!("Unknown tool: {name}"));
             };
-            if tool.main_only && !caller.is_main {
+            if (name == "delete_agent" || name == "read_agent") && !serves(tool, &caller) {
+                return ok(error(
+                    super::admin::refusal(&caller).unwrap_or("Only an admin can do that."),
+                ));
+            }
+            if tool.main_only && !caller.is_main && name != "read_agent" && name != "delete_agent" {
                 return ok(error(
                     "Only the Chief of Staff can do that. Ask it with message_agent.",
                 ));
+            }
+            // Only the user makes an agent an admin.
+            if (name == "create_agent" || name == "update_agent")
+                && super::admin::tries_to_grant(&args)
+            {
+                return ok(error(super::admin::ONLY_THE_USER_GRANTS));
             }
             if name == "approve" {
                 return ok(approve(app, &caller, turn, &args).await);
@@ -785,16 +818,17 @@ async fn check_ins(
     name: &str,
     args: &Value,
 ) -> Value {
-    let target = match arg(args, "agent") {
-        None => caller.clone(),
-        Some(t) => match store::find(t) {
-            Ok(Some(a)) if a.id == caller.id || caller.is_main => a,
-            Ok(Some(_)) => {
-                return error("You can only schedule your own routines. Ask the Chief of Staff.")
-            }
-            _ => return error(format!("There's no agent called {t}.")),
-        },
-    };
+    let target =
+        match arg(args, "agent") {
+            None => caller.clone(),
+            Some(t) => match store::find(t) {
+                Ok(Some(a)) if a.id == caller.id || super::admin::admin_now(caller) => a,
+                Ok(Some(_)) => return error(
+                    "You can only change your own routines. Ask an admin, like the Chief of Staff.",
+                ),
+                _ => return error(format!("There's no agent called {t}.")),
+            },
+        };
     let whose = |summary: String| {
         if target.id == caller.id {
             summary
@@ -1473,6 +1507,8 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     text(format!("Updated {}.", updated.name))
 }
 
+/// An admin's delete is a soft one: the agent leaves the team and waits in
+/// Recently deleted for 30 days, restorable by the user (`admin::soft_delete`).
 async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
     let Some(target) = arg(args, "agent") else {
         return error("`agent` is required.");
@@ -1484,31 +1520,12 @@ async fn delete_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if agent.is_main {
         return error("The Chief of Staff can't be deleted.");
     }
-    let answer = ask_user(
-        app,
-        caller,
-        format!("Delete {}", agent.name),
-        "Its memory and conversation are deleted too. This can't be undone.".to_string(),
-        None,
-    )
-    .await;
-    if let Some(refused) = refused_reply(&answer, "delete it") {
-        return error(refused);
-    }
-    match super::takeover::delete_agent(app, &agent.id).await {
-        Ok(removed) => {
-            // Its copy's folder goes (pending work committed first); a
-            // branch with work on it stays. The copy as it was at delete,
-            // not before the question.
-            if let Some(copy) = removed.copy {
-                tauri::async_runtime::spawn(super::task::abandon(copy));
-            }
-            let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
-            // No link: there's nothing left to open.
-            let line = audit_note(&caller.id, format!("Deleted {}", agent.name), None);
-            let _ = runner::record(app, line);
-            text(format!("Deleted {}.", agent.name))
-        }
+    match super::admin::soft_delete(app, caller, &agent).await {
+        Ok(()) => text(format!(
+            "Deleted {}. It's in Recently deleted for {} days: the user can restore it from Settings → Agents.",
+            agent.name,
+            store::TRASH_DAYS
+        )),
         Err(e) => error(e.to_string()),
     }
 }
@@ -1628,7 +1645,10 @@ async fn ask(
 
     let mut card = runner::new_message(&caller.id, MessageKind::Approval, "");
     let mut approval = new_card(request_id.clone(), title, detail, call);
-    approval.summary = summary;
+    // `new_card` gave a tool call its plain line; a caller's own wins.
+    if summary.is_some() {
+        approval.summary = summary;
+    }
     if call.is_some() {
         approval.from_outside = Some(runner::from_outside(&caller.id));
     }
@@ -1717,7 +1737,8 @@ pub(super) fn new_card(
         input: call.map(|(_, input)| input.clone()),
         always: call.and_then(|(tool, input)| permissions::suggest(tool, input)),
         always_allowed: false,
-        summary: None,
+        // What it does and why, in words; the raw call goes behind Details.
+        summary: call.and_then(|(tool, input)| super::admin::summary_for(tool, input, None)),
         note: None,
         prompt: None,
         choice: None,
@@ -1895,7 +1916,7 @@ pub fn describe_request(tool: &str, input: &Value) -> (String, String) {
 /// `mcp__gmail__send_email` → "Send an email · Gmail": a verb phrase from the
 /// tool's name, with the server it belongs to as context. Anything that isn't
 /// an MCP tool name keeps its own name after "Use".
-fn mcp_title(tool: &str) -> String {
+pub(super) fn mcp_title(tool: &str) -> String {
     let Some((server, name)) = tool.strip_prefix("mcp__").and_then(|t| t.split_once("__")) else {
         return format!("Use {tool}");
     };
@@ -2080,11 +2101,13 @@ async fn decide_inner(
         return Decision::Allow;
     }
     let (title, mut detail) = describe_request(tool, input);
-    if let Some(why) = why.map(str::trim).filter(|w| !w.is_empty()) {
+    let why = why.map(str::trim).filter(|w| !w.is_empty());
+    if let Some(why) = why {
         detail = format!("{detail}\n\n{why}");
     }
     // A browser card says what it would do in plain words ("Click “Send” on
     // mail.google.com"), where and as whom; the raw call stays behind Details.
+    // Everything else leads with a plain what-and-why line.
     let (title, summary) = if tool.starts_with(super::browser_gate::SERVER) {
         let page = super::browser_gate::page_of(&caller.id);
         let (title, said) = super::browser_gate::describe(tool, input, &page);
@@ -2098,7 +2121,7 @@ async fn decide_inner(
         }
         (title, Some(summary).filter(|s| !s.is_empty()))
     } else {
-        (title, None)
+        (title, super::admin::summary_for(tool, input, why))
     };
     match ask(app, caller, title, summary, detail, Some((tool, input))).await {
         Answer::Allowed => Decision::Allow,

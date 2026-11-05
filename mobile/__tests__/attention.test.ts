@@ -87,6 +87,21 @@ describe('attention', () => {
     expect(needsLine(a, undefined)).toBe('Needs your OK');
   });
 
+  it('leads with the Mac’s plain line, what and why, when it sends one', () => {
+    expect(
+      askingLine({
+        title: 'Run a command',
+        detail: 'ls -la ~/Downloads/KiteExport',
+        tool: 'Bash',
+        summary: 'Look inside your KiteExport folder — to see if the download finished',
+      })
+    ).toBe('Look inside your KiteExport folder — to see if the download finished');
+    // An older Mac sends none: the command is read as before.
+    expect(askingLine({ title: 'Run a command', detail: 'npm test\n' })).toBe(
+      'Wants to run the tests'
+    );
+  });
+
   it('never previews a diff: an edit says which file it wants to change', () => {
     expect(
       askingLine({

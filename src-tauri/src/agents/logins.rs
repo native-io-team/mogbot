@@ -804,7 +804,7 @@ fn set_flow(
     emit_card(app, agent_id, request_id);
 }
 
-fn clear_flow(request_id: &str) {
+pub(crate) fn clear_flow(request_id: &str) {
     super::login_relay::forget_request(request_id);
     if let Some(live) = FLOWS
         .lock()

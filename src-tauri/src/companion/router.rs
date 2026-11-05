@@ -48,6 +48,7 @@ pub const METHODS: &[&str] = &[
     "agents.update",
     "agents.setDefaults",
     "agents.setIndependence",
+    "agents.setAdmin",
     "agents.revokePermission",
     "agents.instructions",
     "agents.memory",
@@ -451,6 +452,9 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         level: crate::agents::independence::Level,
     ) -> Result<Value, CommandError>;
+    /// `agents_set_admin`: the user's own switch, "Admin — can manage and
+    /// approve for other agents". Answers `{ agentId, admin }`.
+    async fn set_admin(&self, agent_id: &str, admin: bool) -> Result<Value, CommandError>;
     /// `agents_quota`: each engine's plan, as it last reported it.
     async fn quota(&self) -> Result<Value, CommandError>;
     /// `agents_accounts`: each engine's usage accounts, read-only.
@@ -1201,6 +1205,15 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             format!("new agents: {}", said.join(", "))
         }
         "agents.setIndependence" => format!("independence: {}", preview(field("level"))),
+        "agents.setAdmin" => format!(
+            "{} admin {}",
+            field("agentId"),
+            if params.get("admin").and_then(Value::as_bool) == Some(true) {
+                "on"
+            } else {
+                "off"
+            }
+        ),
         _ => field("agentId").to_string(),
     }
 }
@@ -1553,6 +1566,16 @@ async fn run(
                     )
                 })?;
             Ok(b.set_independence(level).await?)
+        }
+        "agents.setAdmin" => {
+            let agent_id = params.get("agentId").and_then(Value::as_str).unwrap_or("");
+            let admin = params.get("admin").and_then(Value::as_bool);
+            let Some(admin) = admin.filter(|_| !agent_id.is_empty()) else {
+                return Err(bad_params(
+                    "Admin takes an agentId and admin: true or false.",
+                ));
+            };
+            Ok(b.set_admin(agent_id, admin).await?)
         }
         "agents.accounts" => Ok(b.accounts().await?),
         "agents.usagePlan" => Ok(b.usage_plan().await?),
@@ -2376,6 +2399,29 @@ mod tests {
             .any(|(_, m, detail, ok)| m == "agents.setIndependence"
                 && *ok
                 && detail == "independence: often"));
+    }
+
+    #[tokio::test]
+    async fn a_phone_switches_admin_on_and_off_audited() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let set = |params: Value| dispatch(&c, &me, "agents.setAdmin", params);
+        assert!(set(json!({})).await.is_err());
+        assert!(set(json!({ "agentId": "a1" })).await.is_err());
+        assert!(set(json!({ "agentId": "a1", "admin": "yes" }))
+            .await
+            .is_err());
+        let answer = set(json!({ "agentId": "a1", "admin": true }))
+            .await
+            .unwrap();
+        assert_eq!(answer["admin"], true);
+        assert_eq!(*stub.admins.lock().unwrap(), vec![("a1".to_string(), true)]);
+        assert!(!READ_ONLY_METHODS.contains(&"agents.setAdmin"));
+        assert!(stub
+            .audited()
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.setAdmin" && *ok && detail == "a1 admin on"));
     }
 
     #[tokio::test]

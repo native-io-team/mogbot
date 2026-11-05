@@ -398,6 +398,12 @@ pub struct AgentMessage {
     /// is empty. Older builds show it in the agent's chat as ordinary lines.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub room: Option<String>,
+    /// On an admin's `agent` message (`bring_to_user`, `agents/admin.rs`):
+    /// other agents' requests only the user can decide, each answerable in
+    /// place with Allow / Deny (the answer goes to that agent's card). Older
+    /// builds show the text alone; the cards are still in each agent's chat.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub decide: Vec<super::admin::DecideItem>,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -1015,6 +1021,163 @@ pub fn delete(id: &str) -> Result<Agent, CommandError> {
         let _ = crate::utils::remove_dir_all_robust(&home);
     }
     Ok(removed)
+}
+
+/* ------------------------------------------------------ recently deleted */
+
+/// Where a soft-deleted agent waits to be restored or purged: its home is
+/// moved under here and its registry entry is kept, whole, in [`TRASH_FILE`].
+pub const TRASH_DIR: &str = "recently-deleted";
+pub const TRASH_FILE: &str = "recently-deleted.json";
+
+/// One agent in "Recently deleted": its registry entry exactly as it was
+/// (unknown fields and all), when, and who deleted it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Deleted {
+    pub agent: serde_json::Value,
+    pub deleted_at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deleted_by: Option<AgentRef>,
+}
+
+impl Deleted {
+    pub fn id(&self) -> &str {
+        self.agent.get("id").and_then(|v| v.as_str()).unwrap_or("")
+    }
+    pub fn name(&self) -> &str {
+        self.agent
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+    }
+}
+
+pub fn trashed() -> Vec<Deleted> {
+    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    read_trash()
+}
+
+fn read_trash() -> Vec<Deleted> {
+    agents_root()
+        .ok()
+        .and_then(|r| std::fs::read(r.join(TRASH_FILE)).ok())
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
+}
+
+fn write_trash(items: &[Deleted]) -> Result<(), CommandError> {
+    let json = serde_json::to_vec_pretty(items).map_err(super::err_other)?;
+    write_atomic(&agents_root()?.join(TRASH_FILE), &json)
+}
+
+/// Take an agent out of the team without destroying anything: its entry and
+/// its home (memory, chat, timelines) are kept for [`restore`]. Its secrets,
+/// connections and copy stay where they are until it's purged. The Chief of
+/// Staff can't be deleted.
+pub fn soft_delete(id: &str, by: Option<AgentRef>) -> Result<Agent, CommandError> {
+    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut registry = read_registry()?;
+    let index = registry
+        .agents
+        .iter()
+        .position(|a| a.id == id)
+        .ok_or_else(|| CommandError::expected("That agent no longer exists."))?;
+    if registry.agents[index].is_main {
+        return Err(CommandError::expected(
+            "The Chief of Staff can't be deleted.",
+        ));
+    }
+    let root = agents_root()?;
+    let trash = root.join(TRASH_DIR);
+    std::fs::create_dir_all(&trash).map_err(|e| super::err_io(e.to_string()))?;
+    let home = root.join(id);
+    let kept = trash.join(id);
+    if kept.exists() {
+        let _ = crate::utils::remove_dir_all_robust(&kept);
+    }
+    if home.exists() {
+        std::fs::rename(&home, &kept).map_err(|e| super::err_io(e.to_string()))?;
+    }
+    let removed = registry.agents.remove(index);
+    let entry = serde_json::to_value(&removed).map_err(super::err_other)?;
+    let mut items = read_trash();
+    items.retain(|d| d.id() != id);
+    items.push(Deleted {
+        agent: entry,
+        deleted_at: now_ms(),
+        deleted_by: by,
+    });
+    if let Err(e) = write_trash(&items) {
+        // Never lose it: put the home back and leave the registry alone.
+        let _ = std::fs::rename(&kept, &home);
+        return Err(e);
+    }
+    write_registry(&registry)?;
+    if let Ok(log) = log_path(id) {
+        forget_pending(&log);
+    }
+    Ok(removed)
+}
+
+/// Bring a soft-deleted agent back as it was. Its name is kept unless another
+/// agent took it meanwhile, in which case " (restored)" is added.
+pub fn restore(id: &str) -> Result<Agent, CommandError> {
+    validate_id(id)?;
+    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut items = read_trash();
+    let index = items
+        .iter()
+        .position(|d| d.id() == id)
+        .ok_or_else(|| CommandError::expected("That agent isn't in Recently deleted any more."))?;
+    let mut agent: Agent = serde_json::from_value(items[index].agent.clone())
+        .map_err(|e| super::err_other(e.to_string()))?;
+    let mut registry = read_registry()?;
+    if registry.agents.iter().any(|a| a.id == id) {
+        return Err(CommandError::expected("That agent is already on the team."));
+    }
+    if registry
+        .agents
+        .iter()
+        .any(|a| a.name.eq_ignore_ascii_case(&agent.name))
+    {
+        agent.name = format!("{} (restored)", agent.name);
+    }
+    let root = agents_root()?;
+    let kept = root.join(TRASH_DIR).join(id);
+    let home = root.join(id);
+    if kept.exists() && !home.exists() {
+        std::fs::rename(&kept, &home).map_err(|e| super::err_io(e.to_string()))?;
+    }
+    registry.agents.push(agent.clone());
+    write_registry(&registry)?;
+    items.remove(index);
+    write_trash(&items)?;
+    Ok(agent)
+}
+
+/// How long a soft-deleted agent can be restored.
+pub const TRASH_DAYS: i64 = 30;
+
+/// The trash entries older than [`TRASH_DAYS`], taken out of the list (their
+/// folders are removed); the caller forgets what else they held.
+pub fn take_expired(now: i64) -> Vec<Agent> {
+    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let items = read_trash();
+    let cutoff = now - TRASH_DAYS * 24 * 60 * 60 * 1000;
+    let (old, keep): (Vec<_>, Vec<_>) = items.into_iter().partition(|d| d.deleted_at < cutoff);
+    if old.is_empty() || write_trash(&keep).is_err() {
+        return Vec::new();
+    }
+    let root = agents_root().ok();
+    old.into_iter()
+        .filter_map(|d| {
+            if let (Some(root), Ok(())) = (&root, validate_id(d.id())) {
+                let _ = crate::utils::remove_dir_all_robust(&root.join(TRASH_DIR).join(d.id()));
+            }
+            serde_json::from_value(d.agent).ok()
+        })
+        .collect()
 }
 
 /* ------------------------------------------------------------- chat log */
@@ -1896,6 +2059,7 @@ mod tests {
                     revises: None,
                     takeover: false,
                     room: None,
+                    decide: Vec::new(),
                 })
                 .unwrap();
             }
@@ -2180,6 +2344,7 @@ mod tests {
                 revises: None,
                 takeover: false,
                 room: None,
+                decide: Vec::new(),
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -2226,6 +2391,7 @@ mod tests {
             revises: None,
             takeover: false,
             room: None,
+            decide: Vec::new(),
         }
     }
 

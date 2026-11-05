@@ -1130,6 +1130,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         revises: None,
         takeover: false,
         room: None,
+        decide: Vec::new(),
     }
 }
 
@@ -2946,6 +2947,12 @@ pub(super) fn system_prompt_for(
     prompt.push_str(&super::independence::prompt_section(
         super::independence::for_turn(super::independence::level(), from_outside(&agent.id)),
     ));
+    // An admin's powers, said only in a turn that has them: fixed text, so
+    // the prompt changes only when the user flips the switch.
+    if super::admin::admin_now(agent) {
+        prompt.push_str("\n\n");
+        prompt.push_str(super::admin::PROMPT_SECTION);
+    }
     if agent.is_main {
         if let Some(team) = store::list()
             .ok()

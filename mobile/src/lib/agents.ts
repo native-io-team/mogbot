@@ -513,8 +513,10 @@ export function approvalFields(
 }
 
 export function askingLine(
-  approval: Pick<Approval, 'title' | 'detail' | 'tool' | 'secret' | 'connector'>
+  approval: Pick<Approval, 'title' | 'detail' | 'tool' | 'secret' | 'connector' | 'summary'>
 ): string {
+  // The Mac's plain line, what and why (`admin::summary_for`), when it sent one.
+  if (approval.summary?.trim() && !approval.connector && !approval.secret) return approval.summary;
   // These cards' titles are the request; their detail is the reassurance or
   // the purpose under it, which cut short only says half.
   // An import's review: the row says what to do, short; the card keeps its title.

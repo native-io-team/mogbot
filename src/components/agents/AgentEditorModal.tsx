@@ -57,6 +57,7 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { AccentScope } from '../../contexts/AccentScopeContext';
+import { AdminSwitch } from './AgentAdmin';
 import {
   findTemplate,
   needsLine,
@@ -581,6 +582,7 @@ export function AgentEditorModal({
         <div className="agent-editor__briefing">
           <UsageLines usage={usage} agent={agent} />
           <CanDo agent={agent} />
+          <AdminSwitch agent={agent} />
           <Permissions agent={agent} />
           <AgentReach agent={agent} />
         </div>

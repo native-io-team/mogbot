@@ -427,6 +427,10 @@ export const agentsSetDefaults = {
 export const agentsSetIndependence = {
   "level": "go_hard"
 } satisfies Result<'agents.setIndependence'>;
+export const agentsSetAdmin = {
+  "admin": true,
+  "agentId": "a1"
+} satisfies Result<'agents.setAdmin'>;
 export const agentsImportStatus = {
   "armed": false,
   "chiefId": "chief",
@@ -2691,6 +2695,7 @@ export const frames = [
       "agents.update",
       "agents.setDefaults",
       "agents.setIndependence",
+      "agents.setAdmin",
       "agents.revokePermission",
       "agents.instructions",
       "agents.memory",

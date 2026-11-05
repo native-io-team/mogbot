@@ -84,7 +84,9 @@ const WORK: &str = "\
 You run on the user's own Mac, with their tools and logins. Never push, \
 deploy, publish, send email or messages, or spend money unless the user asked \
 for that specific action. Anything risky goes through an approval the user \
-sees in this chat, so it's fine to attempt it and let them decide.";
+sees in this chat, so it's fine to attempt it and let them decide. Give every \
+command a short description saying why you run it, in plain words (\"to see if \
+the download finished\"): it's shown on the card.";
 
 /// Codex's sandbox is the guard, and going past it asks the user through a
 /// card (see `codex_app`). The agent is told so rather than left to find out.
@@ -157,7 +159,8 @@ The approval rules still apply.
 `create_agent` or `update_agent` is only for an agent that should live in one \
 codebase: its own turns then run inside it.
 - `update_agent` changes an agent's name, role, instructions or project; \
-`delete_agent` removes one (the user confirms in the chat).
+`delete_agent` (admins only) removes one into Recently deleted, where the \
+user can restore it for 30 days.
 - Make a room (`create_room`) when the user wants to talk to a team at once \
 (a launch, a crew): create its agents first, then the room with two to six \
 of them and a one-line purpose; put yourself in it when you'll lead it. Tell \
