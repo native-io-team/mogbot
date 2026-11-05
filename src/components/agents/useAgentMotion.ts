@@ -96,7 +96,10 @@ export function useFollowBottom(
 ) {
   const glideUntil = useRef(0);
   /** When the reader last touched the scroll: wheel, touch, a key, the scrollbar. */
-  const lastInput = useRef(0);
+  // Never, to begin with: 0 would read as "just now" for the first second
+  // after the page loads (performance.now() starts at 0), and a chat opened
+  // then (the Chief, on launch) stopped following as its lines settled.
+  const lastInput = useRef(-Infinity);
 
   const follow = useCallback(
     (smooth: boolean) => {
@@ -127,14 +130,18 @@ export function useFollowBottom(
     const el = scrollRef.current;
     const content = contentRef.current;
     if (!el || !content) return;
+    // The reader took the scroll: any glide is over, and what scrolls next is theirs.
     const stop = () => {
       glideUntil.current = 0;
       lastInput.current = performance.now();
     };
     // A glide that has landed is over: growth after it (a reply streaming)
-    // snaps in the same frame instead of riding a stale smooth scroll.
+    // snaps in the same frame instead of riding a stale smooth scroll. Not
+    // the reader's doing, so it isn't counted as input: it was, and every
+    // follow that landed made the next second's layout shifts (lines drawn
+    // at their real height) read as the reader leaving the bottom.
     const landed = () => {
-      if (el.scrollHeight - el.clientHeight - el.scrollTop < 1) stop();
+      if (el.scrollHeight - el.clientHeight - el.scrollTop < 1) glideUntil.current = 0;
     };
     const observer = new ResizeObserver(() => {
       if (atBottomRef.current) follow(false);
