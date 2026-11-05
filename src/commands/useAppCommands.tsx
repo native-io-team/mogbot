@@ -18,7 +18,7 @@ import { requestPairOnOpen } from '../lib/companion';
 import { COMPANION_INSTALL_ENABLED, requestInstallOnOpen } from '../lib/companionInstall';
 import { fileManagerName } from '../lib/setup';
 import { BRAND } from '../lib/brand';
-import { requestSettingsTabOnOpen } from '../lib/settings';
+import { requestSettingsSectionOnOpen, requestSettingsTabOnOpen } from '../lib/settings';
 import {
   CodeIcon,
   CloseIcon,
@@ -341,6 +341,29 @@ export function useAppCommands({
         ],
         run: () => {
           requestSettingsTabOnOpen('agents');
+          openModal('settings');
+        },
+      },
+      {
+        id: 'agents.newAgentDefaults',
+        title: 'Engine and model for new agents…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: [
+          'agents',
+          'default',
+          'engine',
+          'model',
+          'claude code',
+          'codex',
+          'new agent',
+          'opus',
+          'sonnet',
+          'haiku',
+        ],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-defaults');
           openModal('settings');
         },
       },

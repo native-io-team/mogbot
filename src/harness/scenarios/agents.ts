@@ -924,10 +924,22 @@ export const ENGINES = [
   },
 ];
 
-export const overview = (agents = TEAM, engineReady = true) => ({
+/**
+ * What new agents start on (`defaults::View`): never chosen, so the rule
+ * decides (Claude Code, on its own default model).
+ */
+export const DEFAULTS = {
+  engine: null as 'claude' | 'codex' | null,
+  models: { claude: null as string | null, codex: null as string | null },
+  startsOn: 'claude' as 'claude' | 'codex',
+  model: null as string | null,
+};
+
+export const overview = (agents = TEAM, engineReady = true, defaults = DEFAULTS) => ({
   agents,
   engineReady,
   engines: ENGINES,
+  defaults,
 });
 
 /** Research runs on Codex: same chat, its own model in the header. */

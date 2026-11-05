@@ -15,7 +15,7 @@
 
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import type { RoleTemplateSummary } from '@shipstudio/companion-protocol';
+import type { NewAgentDefaults, RoleTemplateSummary } from '@shipstudio/companion-protocol';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { AgentAvatar } from '../components/agent';
@@ -26,6 +26,7 @@ import { AccentProvider, useAccent } from '../lib/accent';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { setComposer } from '../lib/drafts';
 import { haptic } from '../lib/haptics';
+import { notChosenBecause } from '../lib/newAgentDefaults';
 import {
   chiefOf,
   chiefRequest,
@@ -47,6 +48,7 @@ export default function NewAgent() {
   const router = useRouter();
   const agents = useApp((s) => s.overview?.agents);
   const engines = useApp((s) => s.overview?.engines);
+  const defaults = useApp((s) => s.overview?.defaults ?? null);
   const connected = useApp((s) => s.link.kind === 'connected');
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const canCreate = useApp((s) => canCall('agents.create', s.welcome));
@@ -87,7 +89,9 @@ export default function NewAgent() {
 
   const suggested = suggestAgentName(role, taken);
   const finalName = name.trim() || suggested || '';
-  const engine = defaultEngineLabel(engines);
+  const engine = defaultEngineLabel(engines, defaults);
+  // On a fallback, why it isn't the engine chosen in Settings.
+  const why = defaults && notChosenBecause(defaults);
   const ready = canCreate && connected && !!role.trim() && !!finalName && !busy;
 
   const create = () => {
@@ -204,8 +208,9 @@ export default function NewAgent() {
             <ColorSwatches value={color} onChange={setColor} />
             {engine && (
               <T variant="caption" color={colors.textMuted}>
-                Runs on {engine} on {macName}, like one made there. You can edit its instructions
-                from its agent sheet here; its model and project are set on the Mac.
+                Runs on {engine} on {macName}
+                {why ? ` (${why})` : ''}, like one made there. You can edit its instructions from
+                its agent sheet here; its model and project are set on the Mac.
               </T>
             )}
           </>
@@ -250,14 +255,17 @@ export default function NewAgent() {
 }
 
 /**
- * The engine a new agent goes on, as the Mac picks it (`engine::default_for`):
+ * The engine a new agent goes on, as the Mac picks it: its defaults for new
+ * agents (`startsOn`) when it says, else the rule (`engine::default_for`),
  * Claude Code when ready, else the first that is. Null while unknown, so
  * nothing is claimed about a Mac that hasn't said.
  */
 function defaultEngineLabel(
-  engines: { id: string; label: string; installed: boolean; signedIn: boolean }[] | undefined
+  engines: { id: string; label: string; installed: boolean; signedIn: boolean }[] | undefined,
+  defaults: NewAgentDefaults | null
 ): string | null {
   if (!engines?.length) return null;
+  if (defaults) return engines.find((e) => e.id === defaults.startsOn)?.label ?? null;
   const ready = engines.filter((e) => e.installed && e.signedIn);
   return (ready.find((e) => e.id === 'claude') ?? ready[0])?.label ?? null;
 }

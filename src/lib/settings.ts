@@ -351,3 +351,22 @@ export function peekSettingsTabOnOpen(): SettingsTabRequest | null {
 export function clearSettingsTabOnOpen() {
   settingsTabOnOpen = null;
 }
+
+/**
+ * A part of a Settings tab a command asked to show, scrolled into view once
+ * it renders (⌘K → "Engine and model for new agents…" lands below the fold).
+ * Taken once by the section itself.
+ */
+export type SettingsSectionRequest = 'agent-defaults';
+let settingsSectionOnOpen: SettingsSectionRequest | null = null;
+
+export function requestSettingsSectionOnOpen(section: SettingsSectionRequest) {
+  settingsSectionOnOpen = section;
+}
+
+/** Whether `section` was asked for; asking again is needed to see it twice. */
+export function takeSettingsSectionRequest(section: SettingsSectionRequest): boolean {
+  if (settingsSectionOnOpen !== section) return false;
+  settingsSectionOnOpen = null;
+  return true;
+}

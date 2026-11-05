@@ -1438,9 +1438,9 @@ installed; with one there is nothing to choose, and the dialog's foot has a
 quiet "Also use Codex" that opens the same set-up terminal as the chat's. An
 installed engine that isn't signed in (Codex: `codex login status`; Claude
 Code counts once installed) is disabled, with "Codex isn't signed in." and
-Sign in. A new agent starts on the first engine that is ready
-(`defaultEngine`), and `agents_create` refuses one that isn't, whether it was
-chosen or defaulted. One line says what protects an agent on that engine
+Sign in. A new agent starts where **Settings → Agents** says new agents start
+(see "Defaults for new agents" below), and `agents_create` refuses an engine
+that isn't ready, whether it was chosen or defaulted. One line says what protects an agent on that engine
 (`engineProtections`), never more than is enforced: for Claude Code, the
 app's own tools and the user's own allow rules don't ask; for Codex, apps
 connected to Codex itself run outside its limits. When `EngineInfo.asks` is
@@ -1456,6 +1456,40 @@ that engine's own list: Claude Code's aliases, or Codex's own
 Switching clears the session and the model, leaves a note ("Runs on Codex
 from its next message"), and the next turn gets the recent conversation
 (`Agent.newEngine` → `with_recap`).
+
+### Defaults for new agents (`agents/defaults.rs`)
+
+Settings → Agents → Engines and models (`AgentDefaultsSettings.tsx`) sets what
+a new agent starts on when nobody picked, saved in the app's settings
+(`AppState::agent_defaults`: `engine`, `claudeModel`, `codexModel`):
+
+- **New agents start on** — Claude Code | Codex, only the engines
+  `agents::engine` runs. One that isn't installed and signed in is greyed out,
+  and `agents_set_defaults` refuses it. Never chosen, the rule decides:
+  Claude Code when ready, else the first engine that is
+  (`engine::default_for`).
+- **Model on Claude Code / Model on Codex** — one row per installed engine:
+  "Engine's default" (no `--model`) and only the models that engine itself
+  reports or accepts: Claude Code's aliases (said by what they're for, the
+  alias beside it), Codex's `models_cache.json`. An engine that lists none
+  has no menu, just "Codex hasn't listed its models, so new agents use its
+  default."
+
+Nothing is trusted on the way out (`defaults::view_of`, carried in the
+overview as `defaults`): a chosen engine that stops being ready (signed out)
+stays chosen, but `startsOn` falls back to the rule and the row says
+"Codex isn't ready, so new agents start on Claude Code for now"; a saved model
+the engine no longer lists is its default.
+
+Who reads it: the New agent dialog opens on `startsOn` and that engine's
+model, and switching engine there takes the other engine's default model;
+`agents_create` fills in whichever of engine and model wasn't given (an empty
+model is a choice, the engine's own); the Chief's `create_agent` (which takes
+no model) and the phone's `agents.create` use both. **Existing agents never
+change** with it, and an existing agent moved to another engine goes to that
+engine's own default, as before. ⌘K "Engine and model for new agents…" opens
+Settings on it. The phone reads it from the overview and sets it with
+`agents.setDefaults` (docs/mobile.md, "Settings").
 
 **The boundary.** `engine::Engine` is what an agent is on; `driver::Driver`
 is how one turn runs it (`ClaudePrint`, `CodexApp`, `CodexExec`), picked once
@@ -1619,7 +1653,8 @@ time. The e2e Codex scenarios run on the account when one is signed in.
 - **Model.** Said by what it's for — Default / Most capable / Balanced /
   Fastest — with Claude Code's own name (Opus / Sonnet / Haiku) in small
   text beside it; passed as `--model` from the next turn. Set it when creating
-  the agent, in the editor, or at the foot of the chat header's … menu, which
+  the agent (it starts on the default for its engine, Settings → Agents),
+  in the editor, or at the foot of the chat header's … menu, which
   also names the engine. The header itself shows the agent's role (idle) or
   what it's doing, never the engine. Only Claude Code's own aliases are accepted, and the backend
   enforces that too. Default means no `--model`, so whatever Claude Code
@@ -2124,6 +2159,7 @@ can't trample each other. The UI says "a copy of acme-site", "Keep changes",
   approval wait in debug builds only. `AGENTS_E2E_KEEP=1` keeps the HOME.
 - `cargo test --lib agents::tray agents::quick_entry`: the menu model (sections, order, labels, caps, hidden agents), the quit check, both icons decode, shortcut parsing, labels and conflicts.
 - `pnpm vitest run src/lib/agentsDesktop.test.ts src/components/QuitConfirmModal.test.tsx`: the quit dialog's wording and defaults, shortcut recording, quick entry's recipient.
+- `node scripts/harness-capture.mjs settings-agents` / `agents-new-with-defaults`: Settings → Agents with the defaults for new agents (chosen, a model menu open, the chosen engine signed out, an engine with no models listed), and the New agent dialog opening on them.
 - `node scripts/harness-capture.mjs agents-quit` / `agents-quick-entry` / `agents-desktop`: the quit guard, quick entry's composer (`root: 'quick-entry'`), and its settings.
 - Codex: `scripts/agents-e2e.sh codex-memory codex-stop codex-delegation
   codex-approvals` runs those scenarios on Codex. With Codex signed in they
