@@ -11,6 +11,7 @@ export type SFName = Extract<SymbolViewProps['name'], string>;
 
 export const MATERIAL: Partial<Record<SFName, string>> = {
   'arrow.up': 'arrow_upward',
+  'arrow.up.right': 'open_in_new',
   'bubble.left': 'chat_bubble',
   'checkmark.shield': 'verified_user',
   globe: 'public',
@@ -36,6 +37,7 @@ export const MATERIAL: Partial<Record<SFName, string>> = {
   'doc.text': 'description',
   ellipsis: 'more_horiz',
   'exclamationmark.circle': 'error',
+  'exclamationmark.triangle': 'warning',
   'exclamationmark.triangle.fill': 'warning',
   eye: 'visibility',
   'eye.slash': 'visibility_off',

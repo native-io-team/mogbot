@@ -337,8 +337,9 @@ fn tools_list(caller: &store::Agent) -> Value {
     json!({ "tools": tools })
 }
 
-/// `turn` is the id on the caller's URL (`broker::open_turn`); only the
-/// approval broker needs it.
+/// `turn` is the id on the caller's URL (`broker::open_turn`): the approval
+/// broker needs it, and `share_result` uses it to tell a headless turn (stage
+/// for the turn's end) from a take-over's terminal (record now).
 pub async fn handle_rpc(
     app: &AppHandle,
     agent_id: &str,
@@ -382,7 +383,7 @@ pub async fn handle_rpc(
             if name == "approve" {
                 return ok(approve(app, &caller, turn, &args).await);
             }
-            ok(call(app, &caller, name, &args).await)
+            ok(call(app, &caller, turn, name, &args).await)
         }
         _ => fail(-32601, &format!("Method not found: {method}")),
     }
@@ -395,12 +396,18 @@ fn arg<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
         .filter(|s| !s.is_empty())
 }
 
-async fn call(app: &AppHandle, caller: &store::Agent, name: &str, args: &Value) -> Value {
+async fn call(
+    app: &AppHandle,
+    caller: &store::Agent,
+    turn: Option<u64>,
+    name: &str,
+    args: &Value,
+) -> Value {
     match name {
         "list_agents" => list_agents(caller),
         "message_agent" => message_agent(app, caller, args),
         "share_file" => share_file(app, caller, args).await,
-        "share_result" => share_result(caller, args).await,
+        "share_result" => share_result(app, caller, turn, args).await,
         "create_agent" => create_agent(app, caller, args).await,
         "update_agent" => update_agent(app, caller, args).await,
         "delete_agent" => delete_agent(app, caller, args).await,
@@ -589,10 +596,18 @@ async fn share_file(app: &AppHandle, caller: &store::Agent, args: &Value) -> Val
     }
 }
 
-/// Stage the turn's result card (`agents/results.rs`). Everything is checked
-/// and every file copied before anything is staged; the card itself is
-/// recorded when the turn ends, so the reply ends on it.
-async fn share_result(caller: &store::Agent, args: &Value) -> Value {
+/// The result card (`agents/results.rs`). Everything is checked and every
+/// file copied before anything is kept. Inside a live headless turn the card
+/// is staged and recorded when the turn ends, so the reply ends on it. With
+/// no such turn (a take-over's terminal: its URL has no `?turn=`, and nothing
+/// will ever `take` a staged card) it goes into the chat now, and the agent
+/// is told so: staging there would lose it.
+async fn share_result(
+    app: &AppHandle,
+    caller: &store::Agent,
+    turn: Option<u64>,
+    args: &Value,
+) -> Value {
     let draft = match results::parse(args) {
         Ok(draft) => draft,
         Err(e) => return error(e),
@@ -605,16 +620,31 @@ async fn share_result(caller: &store::Agent, args: &Value) -> Value {
     let built =
         tokio::task::spawn_blocking(move || results::prepare(&agent_id, &home, &roots, draft))
             .await;
-    match built {
-        Ok(Ok(message)) => {
-            let Some(card) = message.result.clone() else {
-                return error("Nothing was shared.");
-            };
+    let message = match built {
+        Ok(Ok(message)) => message,
+        Ok(Err(e)) => return error(e),
+        Err(e) => return error(e.to_string()),
+    };
+    let Some(card) = message.result.clone() else {
+        return error("Nothing was shared.");
+    };
+    match results::delivery(super::broker::is_live(&caller.id, turn)) {
+        results::Delivery::AtTurnEnd => {
             let replaced = results::stage(message);
             text(results::staged_reply(&card, replaced))
         }
-        Ok(Err(e)) => error(e),
-        Err(e) => error(e.to_string()),
+        results::Delivery::Now => {
+            let copies = message.clone();
+            match super::runner::record(app, message) {
+                Ok(_) => text(results::recorded_reply(&card)),
+                Err(e) => {
+                    results::remove_files(&copies);
+                    error(format!(
+                        "Couldn't save the result to the chat ({e}). Nothing was shared."
+                    ))
+                }
+            }
+        }
     }
 }
 

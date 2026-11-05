@@ -75,7 +75,10 @@ describe('the result card on the phone', () => {
     expect(screen.getByText(/today's rate/)).toBeTruthy();
     expect(screen.getByText('october-invoices.pdf')).toBeTruthy();
     expect(screen.getByLabelText('Open Source sheet')).toBeTruthy();
-    expect(screen.getByText('Totals match the bank export')).toBeTruthy();
+    // The agent's claim, attributed, with a neutral bullet rather than a tick.
+    expect(screen.getByText('It says it checked')).toBeTruthy();
+    expect(screen.queryByText('Checked')).toBeNull();
+    expect(screen.getByText('• Totals match the bank export')).toBeTruthy();
     await fireEvent.press(screen.getByText('Ask for changes'));
     expect(ask).toHaveBeenCalledWith({
       id: 'res-oct',

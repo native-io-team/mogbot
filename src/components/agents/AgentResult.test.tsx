@@ -4,12 +4,21 @@ import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { ComposerRevising, ResultCardView, RevisesBar } from './AgentResult';
 import { AgentProjectsProvider, ChangeCard } from './AgentProject';
+const toast = vi.hoisted(() => vi.fn());
+vi.mock('../../contexts/ToastContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../contexts/ToastContext')>()),
+  useOptionalToast: () => ({ showToast: toast }),
+}));
+
 import {
   beforeAfter,
+  CHECKED_HEADING,
   changesLine,
   itemName,
   listedItems,
   newestResults,
+  retryExtras,
+  REVEALED_INSTEAD,
   sendAgentMessage,
   type Agent,
   type AgentMessage,
@@ -55,7 +64,10 @@ const message = (card: ResultCard, id = 'r1'): AgentMessage => ({
   result: card,
 });
 
-afterEach(() => clearMocks());
+afterEach(() => {
+  clearMocks();
+  toast.mockReset();
+});
 
 describe('the result card', () => {
   it('shows what the agent gave, with Not verified up front', () => {
@@ -70,9 +82,13 @@ describe('the result card', () => {
     // Before the files: it's what the eye should land on.
     const order = [...card.querySelectorAll('.agent-result__unverified, .agent-result__items')];
     expect(order[0].className).toContain('unverified');
-    expect(within(card).getByRole('region', { name: 'Checked' }).textContent).toContain(
-      'Totals match the bank'
-    );
+    // The agent's claim, attributed, with a plain bullet: never a tick that
+    // reads as the app having verified it.
+    const checked = within(card).getByRole('region', { name: 'It says it checked' });
+    expect(checked.textContent).toContain('Totals match the bank');
+    expect(within(checked).getByRole('heading').textContent).toBe('It says it checked');
+    expect(checked.querySelector('svg')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Checked' })).toBeNull();
     expect(screen.queryByText(/v1/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Ask for changes/ }));
     expect(ask).toHaveBeenCalledWith({ id: 'res-1', version: 1, title: 'October summary' });
@@ -82,7 +98,7 @@ describe('the result card', () => {
     const bare: ResultCard = { id: 'r', version: 1, title: 'Brief', summary: 'S' };
     render(<ResultCardView message={message(bare)} card={bare} agent={agent} newest />);
     expect(screen.queryByRole('region', { name: 'Not verified' })).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Checked' })).toBeNull();
+    expect(screen.queryByRole('region', { name: CHECKED_HEADING })).toBeNull();
     expect(screen.queryByRole('list', { name: 'What it made' })).toBeNull();
     // No handler, no Ask for changes.
     expect(screen.queryByRole('button', { name: /Ask for changes/ })).toBeNull();
@@ -103,6 +119,43 @@ describe('the result card', () => {
       { agentId: 'fin', path: 'attachments/r1/oct.pdf', reveal: false },
     ]);
     await vi.waitFor(() => expect(openUrl).toHaveBeenCalledWith('https://docs.example.com/sheet'));
+  });
+
+  it('says so when Open could only show the file in Finder', async () => {
+    mockIPC((cmd) => (cmd === 'agents_open_attachment' ? 'reveal' : null));
+    render(<ResultCardView message={message(V1)} card={V1} agent={agent} newest />);
+    fireEvent.click(screen.getByTitle('Open oct.pdf'));
+    await vi.waitFor(() => expect(toast).toHaveBeenCalledWith(REVEALED_INSTEAD, 'info'));
+    expect(REVEALED_INSTEAD).toBe('Shown in Finder — this kind of file isn’t opened directly');
+  });
+
+  it('opens quietly when it did open', async () => {
+    mockIPC((cmd) => (cmd === 'agents_open_attachment' ? 'open' : null));
+    render(<ResultCardView message={message(V1)} card={V1} agent={agent} newest />);
+    fireEvent.click(screen.getByTitle('Open oct.pdf'));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('keeps every line and link, repeats included', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const card: ResultCard = {
+      ...V1,
+      items: [
+        { kind: 'link', url: 'https://a.com/x', label: 'One' },
+        { kind: 'link', url: 'https://a.com/x', label: 'Two' },
+      ],
+      checked: ['Built', 'Built'],
+      notVerified: ['Rate', 'Rate'],
+    };
+    render(<ResultCardView message={message(card)} card={card} agent={agent} newest />);
+    expect(screen.getAllByText('Built')).toHaveLength(2);
+    expect(screen.getAllByText('Rate')).toHaveLength(2);
+    expect(screen.getByText('One')).toBeTruthy();
+    expect(screen.getByText('Two')).toBeTruthy();
+    const keyWarnings = errors.mock.calls.filter((c) => String(c[0]).includes('same key'));
+    expect(keyWarnings).toEqual([]);
+    errors.mockRestore();
   });
 
   it('shows a before and after side by side', () => {
@@ -188,7 +241,58 @@ describe('a project copy’s card carrying the result', () => {
   });
 });
 
+describe('an older version on a change card', () => {
+  it('opens with its change receipt, not just the result', () => {
+    const changes: AgentMessage = {
+      ...message(V1),
+      kind: 'changes',
+      changes: {
+        project: '/p/site',
+        from: 'a',
+        to: 'b',
+        files: [{ path: 'a.ts', status: 'modified', added: 1, removed: 0 }],
+        fileCount: 1,
+        added: 1,
+        removed: 0,
+      },
+    };
+    render(
+      <AgentProjectsProvider onOpenProject={vi.fn()}>
+        <ChangeCard message={changes} owner={agent} newestResult={false} />
+      </AgentProjectsProvider>
+    );
+    // Folded: one line, nothing else.
+    expect(screen.queryByRole('article')).toBeNull();
+    expect(screen.queryByText(/Changed 1 file/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /a newer version/ }));
+    const card = screen.getByRole('article');
+    expect(within(card).getByText(/Changed 1 file/)).toBeTruthy();
+    // Still no Ask for changes on an old version.
+    expect(screen.queryByRole('button', { name: /Ask for changes/ })).toBeNull();
+  });
+});
+
 describe('asking for changes', () => {
+  it('a Retry of a failed ask still revises the same result', () => {
+    const ref = { id: 'res-1', version: 1, title: 'October summary' };
+    const asked: AgentMessage = {
+      id: 'u1',
+      agentId: 'fin',
+      ts: 1,
+      kind: 'user',
+      text: 'Use the invoice date',
+      revises: ref,
+      attachments: [PDF],
+    };
+    expect(retryExtras(agent, asked)).toEqual({
+      mentions: [],
+      resend: [{ name: 'oct.pdf', path: '/h/fin/attachments/r1/oct.pdf' }],
+      revises: ref,
+    });
+    const plain = retryExtras(agent, { ...asked, revises: undefined, attachments: [] });
+    expect('revises' in plain).toBe(false);
+  });
+
   it('waits above the composer and can be dropped', () => {
     const drop = vi.fn();
     render(

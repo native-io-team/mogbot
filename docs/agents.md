@@ -1321,7 +1321,10 @@ prompt (`prompts::FILES`) tells it to for deliverables, never for chat.
   must resolve inside the agent's home or a registered project
   (`files::shareable`, so `..` and symlinks are judged by where they lead)
   and is copied into `attachments/<message id>/`; one bad file shares
-  nothing. Links are http/https with no sign-in details in them. `checked`
+  nothing. `.env*` files (examples aside) and private keys (SSH key names,
+  `.key`/`.p12`/`.pfx`, any file with a PEM private key block) are refused
+  with an honest error (`files::is_secret_file`), here and for `share_file`.
+  Links are http/https with no sign-in details in them. `checked`
   and `not_verified` are the agent's own words; the app never fills either,
   and shows each only when given.
 - **Refused, never trimmed.** Title 120, summary 2,000, each line 300, 12
@@ -1335,17 +1338,31 @@ prompt (`prompts::FILES`) tells it to for deliverables, never for chat.
   a project puts the card **on its change card** (`results::ride_on`: same
   message, the staged id), so a project copy's card is the result card with
   Keep · Review · Preview · Ask for changes · Discard inside it. A turn cut
-  off by quitting loses a staged card (it was never shown).
+  off by quitting loses a staged card (it was never shown); its copied files
+  are swept on the next launch (`attachments::sweep_unreferenced`: any
+  `attachments/<id>/` the raw log never mentions, older than two minutes).
+- **No headless turn, no staging.** A take-over's terminal has the same MCP
+  URL minus `?turn=`, and nothing would ever take a staged card there. So when
+  the caller has no live turn (`broker::is_live`) the card is recorded into
+  the chat at once and the agent is told it is there now
+  (`results::recorded_reply`); a second call adds a second card.
 - **Ask for changes** opens the composer with a "Changes to <title> · v1"
   chip; the send carries `revises` (the result id). `agents_send` pins the
   message to the result as the log has it (`revises: {id, version, title}`)
   and adds `results::revising_prompt` ahead of the text. The next
   `share_result` revises that result: explicitly (`revises`) or because the
-  latest ask has no result after it. A revision keeps the id, becomes version
+  user's latest message is that ask and no result came after it. Anything
+  the user says after an ask is a new request, so it can't capture an
+  unrelated result. Retry on a failed ask keeps its `revises`. A revision keeps the id, becomes version
   n+1, and must say what changed (`changes`), shown as "Changes since v1: …".
   The log stays append-only: the older version is still there, folded to
   "<title> · v1 · a newer version is below" (`newestResults`), and opens on
-  click, for reading only.
+  click, for reading only, with its change receipt (See changes, the diff)
+  when it rode on a change card.
+- **Checks are the agent's.** The list is headed "It says it checked"
+  (`CHECKED_HEADING`) with plain bullets, never ticks, on desk and phone.
+- **Open** that could only show a file in Finder (off the open allowlist)
+  says so in a toast.
 - **Wire**: `message.result` (`ResultCard`) on an `agent` or `changes`
   message; the files are also on `attachments`, so the Files list, search
   previews and older clients still see them. Types and the pure rules

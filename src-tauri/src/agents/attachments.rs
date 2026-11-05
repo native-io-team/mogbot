@@ -299,9 +299,77 @@ pub fn grant_asset_scope(app: &tauri::AppHandle) {
     *granted = Some(root);
 }
 
+/// Remove `attachments/<id>/` folders the chat log never mentions: the
+/// copies of a result card staged when the app quit or crashed (staging is in
+/// memory, so the card is gone and nothing else would delete its files).
+///
+/// `log` is the raw `messages.jsonl` text, deliberately not the parsed
+/// messages: a line this build can't parse must never make its files look
+/// unreferenced. A folder whose name appears anywhere in it is kept (message
+/// ids and attachment paths both contain it). An empty log removes nothing.
+/// Anything modified after `older_than` is left alone, so a send racing the
+/// startup sweep (files copied, message not yet written) is safe. Returns
+/// how many folders went.
+pub fn sweep_unreferenced(home: &Path, log: &str, older_than: std::time::SystemTime) -> usize {
+    if log.trim().is_empty() {
+        return 0;
+    }
+    let Ok(entries) = std::fs::read_dir(home.join("attachments")) else {
+        return 0;
+    };
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_dir() || name.len() < 4 || log.contains(name.as_str()) {
+            continue;
+        }
+        if meta.modified().map_or(true, |t| t > older_than) {
+            continue;
+        }
+        if std::fs::remove_dir_all(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_sweep_removes_only_folders_the_log_never_mentions() {
+        let home = tempfile::tempdir().unwrap();
+        for dir in ["m-kept", "m-named", "m-lost"] {
+            let at = home.path().join("attachments").join(dir);
+            std::fs::create_dir_all(&at).unwrap();
+            std::fs::write(at.join("a.pdf"), b"x").unwrap();
+        }
+        // One message by id, one naming a file under another id (a card
+        // riding on a change card), one line this build can't parse.
+        let log = concat!(
+            r#"{"id":"m-kept","kind":"user","text":"hi"}"#,
+            "\n",
+            r#"{"id":"x","attachments":[{"path":"attachments/m-named/a.pdf"}]}"#,
+            "\n",
+        );
+        // Everything just made counts as too new: nothing goes.
+        assert_eq!(
+            sweep_unreferenced(home.path(), log, std::time::SystemTime::UNIX_EPOCH),
+            0
+        );
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
+        // An empty or missing log removes nothing.
+        assert_eq!(sweep_unreferenced(home.path(), "", later), 0);
+        assert_eq!(sweep_unreferenced(home.path(), log, later), 1);
+        assert!(home.path().join("attachments/m-kept/a.pdf").is_file());
+        assert!(home.path().join("attachments/m-named/a.pdf").is_file());
+        assert!(!home.path().join("attachments/m-lost").exists());
+        // No attachments folder at all is fine.
+        let empty = tempfile::tempdir().unwrap();
+        assert_eq!(sweep_unreferenced(empty.path(), log, later), 0);
+    }
 
     #[test]
     fn logs_written_before_attachments_still_load() {

@@ -105,7 +105,8 @@
   list-style: none;
 }
 
-.agent-result__unverified ul {
+.agent-result__unverified ul,
+.agent-result__checked ul {
   padding-left: var(--spacing-xl);
   list-style: disc;
 }
@@ -120,18 +121,13 @@
 }
 
 .agent-result__checked li {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-xs);
   font-size: var(--font-size-body-sm);
   color: var(--text-secondary);
   user-select: text;
 }
 
-.agent-result__checked li svg {
-  flex: 0 0 auto;
+.agent-result__checked li::marker {
   color: var(--text-muted);
-  transform: translateY(var(--spacing-3xs));
 }
 
 /* Before and after, side by side. */

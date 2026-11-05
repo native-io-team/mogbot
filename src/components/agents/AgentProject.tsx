@@ -408,7 +408,9 @@ export const ChangeCard = memo(function ChangeCard({
       arrived={arrived}
       footer={message.work && <WorkTimeline work={message.work} agent={owner} />}
     >
-      {(newestResult || offering) && body}
+      {/* Always passed: a superseded version folds as a whole (ResultCardView),
+          and opening it shows its change receipt too. */}
+      {body}
     </ResultCardView>
   );
 });

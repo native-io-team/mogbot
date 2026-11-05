@@ -876,8 +876,12 @@ export const sendAgentMessage = (
 export const inspectFiles = (paths: string[]) =>
   invoke<FileInfo[]>('agents_inspect_files', { paths });
 /** Open an attachment in its default app, or with `reveal`, show it in Finder. */
+/** What was done: off the open allowlist, a file is only shown in Finder. */
 export const openAttachment = (agentId: string, path: string, reveal = false) =>
-  invoke<void>('agents_open_attachment', { agentId, path, reveal });
+  invoke<'open' | 'reveal'>('agents_open_attachment', { agentId, path, reveal });
+
+/** The toast when Open could only show the file in Finder. */
+export const REVEALED_INSTEAD = 'Shown in Finder — this kind of file isn’t opened directly';
 
 /** One row of a conversation's Files list; mirrors `files::SharedFile`. */
 export interface SharedFile extends Attachment {
@@ -1827,6 +1831,7 @@ export type {
 } from '../../packages/companion-protocol/src/results';
 export {
   beforeAfter,
+  CHECKED_HEADING,
   changesLine,
   itemName,
   listedItems,
@@ -1880,6 +1885,22 @@ export function retrySourceFor(messages: AgentMessage[]): AgentMessage | null {
   const last = messages[messages.length - 1];
   if (last?.kind !== 'error' || last.takeover) return null;
   return lastUserMessage(messages, messages.length - 1);
+}
+
+/**
+ * What Retry sends again with the failed ask's words: its mentions, its files
+ * (by path, already in the agent's home) and, for an "Ask for changes", the
+ * result it revises, so the retried ask still updates the same card.
+ */
+export function retryExtras(
+  agent: Agent,
+  source: AgentMessage
+): { mentions: AgentRef[]; resend: OutgoingAttachment[]; revises?: ResultRef } {
+  return {
+    mentions: source.mentions ?? [],
+    resend: resendable(agent, source),
+    ...(source.revises ? { revises: source.revises } : {}),
+  };
 }
 
 /** A message's files as `agents_send` takes them: copied again from the agent's home. */

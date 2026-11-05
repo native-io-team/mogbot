@@ -87,6 +87,7 @@ import {
   newestPeerGroups,
   interruptAgent,
   isQueued,
+  retryExtras,
   retrySourceFor,
   resendable,
   retryNote,
@@ -741,10 +742,7 @@ export function AgentChat({
 
   const retryFailed = () => {
     if (!retrySource) return;
-    sendText(retrySource.text, false, {
-      mentions: retrySource.mentions ?? [],
-      resend: resendable(agent, retrySource),
-    });
+    sendText(retrySource.text, false, retryExtras(agent, retrySource));
   };
 
   /** "Retry at 3:00 PM": a one-time check-in at the reset, carrying what was asked and its files. */

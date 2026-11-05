@@ -18,7 +18,6 @@
 import { memo, useState, type ReactNode } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
-  CheckIcon,
   ChevronRightIcon,
   CloseIcon,
   CommentIcon,
@@ -34,6 +33,7 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
   attachmentUrl,
   beforeAfter,
+  CHECKED_HEADING,
   changesLine,
   formatBytes,
   isImageMime,
@@ -170,8 +170,8 @@ function ResultBody({ agent, card }: ResultBodyProps) {
             Not verified
           </h4>
           <ul>
-            {notVerified.map((line) => (
-              <li key={line}>{line}</li>
+            {notVerified.map((line, i) => (
+              <li key={`${i}:${line}`}>{line}</li>
             ))}
           </ul>
         </section>
@@ -184,9 +184,9 @@ function ResultBody({ agent, card }: ResultBodyProps) {
       )}
       {items.length > 0 && (
         <ul className="agent-result__items" aria-label="What it made">
-          {items.map((item) => (
+          {items.map((item, i) => (
             <ItemRow
-              key={item.kind === 'file' ? item.file.path : item.url}
+              key={`${i}:${item.kind === 'file' ? item.file.path : item.url}`}
               agent={agent}
               item={item}
               onView={setViewing}
@@ -195,14 +195,13 @@ function ResultBody({ agent, card }: ResultBodyProps) {
         </ul>
       )}
       {checked.length > 0 && (
-        <section className="agent-result__checked" aria-label="Checked">
-          <h4 className="agent-result__checked-title">Checked</h4>
+        // The agent's claims, not the app's findings: attributed, and a plain
+        // bullet rather than a tick that would read as verified.
+        <section className="agent-result__checked" aria-label={CHECKED_HEADING}>
+          <h4 className="agent-result__checked-title">{CHECKED_HEADING}</h4>
           <ul>
-            {checked.map((line) => (
-              <li key={line}>
-                <CheckIcon size={12} />
-                {line}
-              </li>
+            {checked.map((line, i) => (
+              <li key={`${i}:${line}`}>{line}</li>
             ))}
           </ul>
         </section>

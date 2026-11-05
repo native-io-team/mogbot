@@ -447,6 +447,24 @@ pub async fn recover_after_restart(app: &AppHandle) {
     // Copies whose folder went, or that no agent holds any more.
     super::task::sweep().await;
     let Ok(agents) = store::list() else { return };
+    // Folders copied for a result card that was staged when the app went
+    // (staging is in memory). Two minutes' grace: a send racing this sweep
+    // has its files copied before its message is written.
+    let older_than = std::time::SystemTime::now() - std::time::Duration::from_secs(120);
+    for agent in &agents {
+        let Ok(home) = store::agent_home(&agent.id) else {
+            continue;
+        };
+        if let Ok(log) = std::fs::read_to_string(home.join("messages.jsonl")) {
+            let removed = super::attachments::sweep_unreferenced(&home, &log, older_than);
+            if removed > 0 {
+                tracing::info!(
+                    "[Agents] removed {removed} unreferenced attachment folder(s) for {}",
+                    agent.id
+                );
+            }
+        }
+    }
     for agent in agents {
         // A take-over's terminal the last run left behind, first: it is in
         // the session the queue below resumes.

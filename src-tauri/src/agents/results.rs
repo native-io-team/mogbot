@@ -15,6 +15,8 @@
 //!   "what it did" line hangs under it. A second call in the same turn
 //!   replaces the first. When the turn also changed a project, the card rides
 //!   on that turn's change card instead of standing beside it: one card.
+//!   Outside a headless turn (a take-over's terminal) nothing would ever
+//!   record a staged card, so it goes into the chat at once instead.
 //! - **Revisions, not copies.** "Ask for changes" sends a message carrying
 //!   `revises` (`ResultRef`); the next result in reply keeps the card's id as
 //!   version n+1 and must say what changed. The earlier version stays in the
@@ -297,9 +299,10 @@ pub fn latest(log: &[AgentMessage], id: &str) -> Option<ResultCard> {
 /// Which result a new one revises, as (id, its newest version).
 ///
 /// `explicit` (the agent named it) must be a result in this conversation.
-/// Without it, the user's most recent "Ask for changes" counts only if no
-/// result has been shared since, so an old request can't capture a later,
-/// unrelated result.
+/// Without it, only the user's latest message counts: if that is an "Ask for
+/// changes" and no result has been shared since, this revises it. Anything
+/// the user said after an ask is a new request, so an old ask can never
+/// capture a later, unrelated result.
 pub fn revision_target(
     log: &[AgentMessage],
     explicit: Option<&str>,
@@ -314,9 +317,10 @@ pub fn revision_target(
             return Ok(None);
         }
         if message.kind == MessageKind::User {
-            if let Some(asked) = &message.revises {
-                return Ok(latest(log, &asked.id));
-            }
+            return Ok(message
+                .revises
+                .as_ref()
+                .and_then(|asked| latest(log, &asked.id)));
         }
     }
     Ok(None)
@@ -434,12 +438,31 @@ pub fn prepare(
 static STAGED: LazyLock<Mutex<HashMap<String, AgentMessage>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn remove_files(message: &AgentMessage) {
+/// Delete a card's copied files (`attachments/<message id>/`).
+pub fn remove_files(message: &AgentMessage) {
     if message.attachments.is_empty() {
         return;
     }
     if let Ok(home) = super::store::agent_home(&message.agent_id) {
         let _ = std::fs::remove_dir_all(home.join("attachments").join(&message.id));
+    }
+}
+
+/// Where a card goes when `share_result` is called.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Delivery {
+    /// A live headless turn: staged, recorded when the turn ends.
+    AtTurnEnd,
+    /// No live turn (a take-over's terminal): recorded at once, since
+    /// nothing would ever take a staged card and the next turn discards it.
+    Now,
+}
+
+pub fn delivery(in_live_turn: bool) -> Delivery {
+    if in_live_turn {
+        Delivery::AtTurnEnd
+    } else {
+        Delivery::Now
     }
 }
 
@@ -495,6 +518,19 @@ pub fn staged_reply(card: &ResultCard, replaced: bool) -> String {
     };
     format!(
         "Saved \"{}\"{version}. It appears as one card at the end of your reply, with Open and Ask for changes; don't repeat its contents, just say a line about it.{replaced}",
+        card.title
+    )
+}
+
+/// What the agent is told when the card went into the chat at once.
+pub fn recorded_reply(card: &ResultCard) -> String {
+    let version = if card.version > 1 {
+        format!(" as version {} of the same card", card.version)
+    } else {
+        String::new()
+    };
+    format!(
+        "Shared \"{}\"{version}. It is in the chat now, as its own card with Open and Ask for changes; don't repeat its contents. Calling this again adds another card rather than replacing this one.",
         card.title
     )
 }

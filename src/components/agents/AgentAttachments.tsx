@@ -21,6 +21,7 @@ import {
   formatBytes,
   isImageMime,
   openAttachment,
+  REVEALED_INSTEAD,
   type Agent,
   type Attachment,
 } from '../../lib/agents';
@@ -127,7 +128,8 @@ export function useAttachmentOpener(agentId: string) {
   return useCallback(
     async (attachment: Attachment, reveal = false) => {
       try {
-        await openAttachment(agentId, attachment.path, reveal);
+        const done = await openAttachment(agentId, attachment.path, reveal);
+        if (done === 'reveal' && !reveal) showToast(REVEALED_INSTEAD, 'info');
       } catch (error) {
         showToast(formatCommandError(asCommandError(error)), 'error');
       }

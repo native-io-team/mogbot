@@ -85,6 +85,12 @@ export function listedItems(items: readonly ResultItem[] = []): ResultItem[] {
   );
 }
 
+/**
+ * The heading over the agent's "checked" lines. Attributed, never a bare
+ * "Checked": the app didn't run these checks, the agent says it did.
+ */
+export const CHECKED_HEADING = 'It says it checked';
+
 /** "Changes since v1": only ever the agent's own line, never made up. */
 export function changesLine(card: ResultCard): string | null {
   if (card.version < 2 || !card.changes?.trim()) return null;

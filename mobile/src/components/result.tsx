@@ -11,6 +11,7 @@
 
 import {
   beforeAfter,
+  CHECKED_HEADING,
   changesLine,
   itemName,
   listedItems,
@@ -128,8 +129,8 @@ function Body({
               Not verified
             </T>
           </View>
-          {notVerified.map((line) => (
-            <T key={line} variant="small" color={colors.textBody}>
+          {notVerified.map((line, i) => (
+            <T key={`${i}:${line}`} variant="small" color={colors.textBody}>
               • {line}
             </T>
           ))}
@@ -153,21 +154,19 @@ function Body({
         </View>
       )}
       {files.length > 0 && <Attachments agentId={agentId} attachments={files} onError={onError} />}
-      {links.map((l) => (
-        <LinkRow key={l.url} item={l} />
+      {links.map((l, i) => (
+        <LinkRow key={`${i}:${l.url}`} item={l} />
       ))}
       {checked.length > 0 && (
         <View style={{ gap: space['2xs'] }}>
+          {/* The agent's claims: attributed, with a neutral bullet, not a tick. */}
           <T variant="caption" color={colors.textMuted}>
-            Checked
+            {CHECKED_HEADING}
           </T>
-          {checked.map((line) => (
-            <View key={line} style={styles.row}>
-              <Icon name="checkmark" size={iconSize.inline} color={colors.textMuted} />
-              <T variant="small" color={colors.textSecondary} style={{ flex: 1 }}>
-                {line}
-              </T>
-            </View>
+          {checked.map((line, i) => (
+            <T key={`${i}:${line}`} variant="small" color={colors.textSecondary}>
+              • {line}
+            </T>
           ))}
         </View>
       )}

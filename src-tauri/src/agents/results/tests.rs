@@ -181,6 +181,24 @@ fn ask_for_changes_points_the_next_result_at_the_same_card() {
 }
 
 #[test]
+fn a_later_message_from_the_user_is_a_new_request() {
+    // Ask for changes on r1, the agent answers without a card, then the user
+    // moves on: the next result is new, not version 2 of r1.
+    let log = vec![
+        result_message("m1", "r1", 1),
+        ask("r1", 1),
+        say(MessageKind::Agent),
+        say(MessageKind::User),
+    ];
+    assert!(revision_target(&log, None).unwrap().is_none());
+    // The explicit id still works when the agent means it.
+    assert_eq!(
+        revision_target(&log, Some("r1")).unwrap().unwrap().version,
+        1
+    );
+}
+
+#[test]
 fn without_an_ask_a_result_is_new() {
     let log = vec![result_message("m1", "r1", 1), say(MessageKind::User)];
     assert!(revision_target(&log, None).unwrap().is_none());
@@ -328,6 +346,17 @@ fn one_bad_file_shares_nothing() {
             "{bad} left files behind"
         );
     }
+    // Secrets are refused, with nothing copied.
+    std::fs::write(project.join(".env.local"), b"STRIPE_KEY=sk_live_abc").unwrap();
+    let env = project.join(".env.local").display().to_string();
+    let draft = parse(&args(
+        json!({ "items": [{ "path": "report.pdf" }, { "path": env }] }),
+    ))
+    .unwrap();
+    assert!(save_files(&draft, &home, &roots, "m10")
+        .unwrap_err()
+        .contains("holds secrets"));
+    assert!(!home.join("attachments/m10").exists());
     // A before/after must be a picture.
     let draft = parse(&args(
         json!({ "items": [{ "path": "report.pdf", "role": "before" }] }),
@@ -450,6 +479,19 @@ fn a_second_result_in_a_turn_replaces_the_first() {
         discard(id);
         assert!(take(id).is_none() && !third_dir.exists());
     });
+}
+
+#[test]
+fn without_a_live_turn_the_card_goes_in_now() {
+    assert_eq!(delivery(true), Delivery::AtTurnEnd);
+    assert_eq!(delivery(false), Delivery::Now);
+    let card = build(parse(&args(json!({}))).unwrap(), None, Vec::new(), || {
+        "r".into()
+    });
+    let reply = recorded_reply(&card);
+    // Truthful about where it is: never "at the end of your reply".
+    assert!(reply.contains("in the chat now") && !reply.contains("end of your reply"));
+    assert!(reply.contains("adds another card"));
 }
 
 #[test]

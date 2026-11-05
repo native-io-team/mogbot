@@ -56,7 +56,49 @@ pub fn shareable(raw: &str, home: &Path, roots: &[PathBuf]) -> Result<PathBuf, S
                 .into(),
         );
     }
+    if is_secret_file(&real) {
+        let name = real
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        return Err(format!(
+            "{name} looks like it holds secrets (an .env file or a private key), so it isn't copied into the chat, where it would also reach the user's phone. Nothing was shared. Tell the user where it is, or share what they need from it without the secret values."
+        ));
+    }
     Ok(real)
+}
+
+/// Key files by name (SSH's defaults) and by extension (keys and keystores).
+const KEY_NAMES: [&str; 4] = ["id_rsa", "id_dsa", "id_ecdsa", "id_ed25519"];
+const KEY_EXTENSIONS: [&str; 5] = ["key", "p12", "pfx", "jks", "keystore"];
+
+/// An `.env*` file (examples aside, `task::is_env_file`), a well-known key
+/// file, or any file whose first few KB hold a PEM private key block
+/// (`task::looks_like_secret`'s marker). A `.pem` holding only a certificate
+/// is shareable; one with a key in it is not.
+pub fn is_secret_file(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if super::task::is_env_file(&name) || KEY_NAMES.contains(&name.as_str()) {
+        return true;
+    }
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if KEY_EXTENSIONS.contains(&ext.as_str()) {
+        return true;
+    }
+    use std::io::Read;
+    let mut head = Vec::new();
+    if let Ok(file) = std::fs::File::open(path) {
+        let _ = file.take(8 * 1024).read_to_end(&mut head);
+    }
+    let head = String::from_utf8_lossy(&head);
+    head.lines()
+        .any(|l| l.contains("-----BEGIN") && l.contains("PRIVATE KEY-----"))
 }
 
 /// Copy a shareable file into the agent's attachments for `message_id`.
@@ -249,6 +291,39 @@ mod tests {
             .contains("folder"));
         assert!(shareable("gone.pdf", &home, &roots).is_err());
         assert!(shareable("  ", &home, &roots).is_err());
+    }
+
+    #[test]
+    fn refuses_env_files_and_private_keys_honestly() {
+        let (_dir, home, project) = setup();
+        let roots = [home.clone(), project.clone()];
+        for (name, body) in [
+            (".env", "STRIPE_KEY=sk_live_x"),
+            (".env.production", "A=1"),
+            ("id_ed25519", "x"),
+            ("server.key", "x"),
+            ("cert.p12", "x"),
+            ("deploy.pem", "-----BEGIN RSA PRIVATE KEY-----\nabc"),
+            ("notes.txt", "-----BEGIN OPENSSH PRIVATE KEY-----"),
+        ] {
+            std::fs::write(project.join(name), body).unwrap();
+            let path = project.join(name).display().to_string();
+            let err = shareable(&path, &home, &roots).unwrap_err();
+            assert!(
+                err.contains("holds secrets") && err.contains("Nothing was shared"),
+                "{name}: {err}"
+            );
+        }
+        // Examples, public keys and certificates are fine.
+        for (name, body) in [
+            (".env.example", "STRIPE_KEY="),
+            ("id_ed25519.pub", "ssh-ed25519 AAAA"),
+            ("cert.pem", "-----BEGIN CERTIFICATE-----"),
+        ] {
+            std::fs::write(project.join(name), body).unwrap();
+            let path = project.join(name).display().to_string();
+            assert!(shareable(&path, &home, &roots).is_ok(), "{name}");
+        }
     }
 
     #[cfg(unix)]
