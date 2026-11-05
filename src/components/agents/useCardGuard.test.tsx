@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { ApprovalCard } from './AgentChatItems';
 import { ARM_MS } from './useCardGuard';
+import { __resetFirstClick } from '../../lib/firstClick';
 import type { AgentMessage } from '../../lib/agents';
 
 const card: AgentMessage = {
@@ -68,5 +69,22 @@ describe('approval cards resist accidental answers', () => {
     const { onAnswer } = renderCard();
     fireEvent.click(screen.getByRole('button', { name: 'Deny' }), { detail: 0 });
     expect(onAnswer).toHaveBeenCalledWith('r1', false, false, undefined);
+  });
+
+  it('the click that only brought the window forward does not Allow', async () => {
+    const { onAnswer, allow } = renderCard();
+    act(() => {
+      vi.advanceTimersByTime(ARM_MS);
+    });
+    window.dispatchEvent(new Event('focus'));
+    window.dispatchEvent(new Event('pointerdown'));
+    pointerClick(allow);
+    expect(onAnswer).not.toHaveBeenCalled();
+    __resetFirstClick();
+    await act(() => {
+      pointerClick(allow);
+      return Promise.resolve();
+    });
+    expect(onAnswer).toHaveBeenCalledWith('r1', true, false, undefined);
   });
 });

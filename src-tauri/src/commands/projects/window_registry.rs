@@ -74,7 +74,9 @@ pub async fn open_project_in_new_window(
             .decorations(true)
             .title_bar_style(tauri::TitleBarStyle::Overlay)
             .traffic_light_position(tauri::LogicalPosition::new(16.0, 32.0))
-            .hidden_title(true);
+            .hidden_title(true)
+            // First click focuses and acts, as in the main window (lib.rs).
+            .accept_first_mouse(true);
     }
 
     let window = builder
@@ -185,7 +187,9 @@ pub fn spawn_blank_window(app: &AppHandle) -> Result<String, String> {
             .decorations(true)
             .title_bar_style(tauri::TitleBarStyle::Overlay)
             .traffic_light_position(tauri::LogicalPosition::new(16.0, 32.0))
-            .hidden_title(true);
+            .hidden_title(true)
+            // First click focuses and acts, as in the main window (lib.rs).
+            .accept_first_mouse(true);
     }
 
     let window = builder

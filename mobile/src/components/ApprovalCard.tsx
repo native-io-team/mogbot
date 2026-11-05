@@ -25,7 +25,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
-import { cardOutcome, describeScope } from '../lib/agents';
+import { approvalFields, cardOutcome, describeScope } from '../lib/agents';
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import { answerApproval, call, describeError } from '../lib/session';
@@ -240,7 +240,7 @@ export function ApprovalCard({
               {approval.detail}
             </T>
           ) : (
-            <Command text={approval.detail} lines={12} />
+            <Detail approval={approval} lines={12} />
           ))}
       </Receipt>
     );
@@ -331,7 +331,7 @@ export function ApprovalCard({
             // Consent asks in sentences, not a command: prose that wraps.
             <T color={colors.textBody}>{approval.detail}</T>
           ) : (
-            <Command text={approval.detail} lines={large ? 6 : 12} />
+            <Detail approval={approval} lines={large ? 6 : 12} />
           )}
         </FittedDetail>
       )}
@@ -755,6 +755,32 @@ export function MoreAnswers({ disabled, onPress }: { disabled: boolean; onPress:
 }
 
 /**
+ * What's being approved. A connector tool's input (an email, a record) as
+ * labelled fields that wrap, as the desk shows it; anything else is the
+ * exact command.
+ */
+function Detail({ approval, lines }: { approval: Approval; lines: number }) {
+  const cardStyles = useCardStyles();
+  const colors = useColors();
+  const fields = approvalFields(approval.tool, approval.input);
+  if (!fields) return <Command text={approval.detail} lines={lines} />;
+  return (
+    <View style={[cardStyles.cardDetail, cardStyles.cardDetailInner, cardStyles.fields]}>
+      {fields.map(([label, value], i) => (
+        <View key={i} style={cardStyles.field}>
+          <T variant="caption" color={colors.textSecondary} style={{ fontFamily: fonts.medium }}>
+            {label}
+          </T>
+          <T color={colors.textPrimary} selectable>
+            {value}
+          </T>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
  * The exact command, never re-wrapped: a line break inside `acme-site`
  * reads as a different path. Long lines scroll sideways instead, and what
  * is selected and copied is the command itself, character for character.
@@ -803,6 +829,8 @@ export const useCardStyles = makeStyles((colors) => ({
     overflow: 'hidden',
   },
   cardDetailInner: { padding: space.md },
+  fields: { gap: space.sm },
+  field: { gap: space.xs },
   showAll: { paddingHorizontal: space.md, paddingBottom: space.sm },
   /** ⋯ · Deny · Allow: one row, the affirmative last. */
   answers: { flexDirection: 'row', flexGrow: 1, gap: space.sm },

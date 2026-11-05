@@ -893,13 +893,16 @@ offline from the saved copy, "This isn't your Mac"
 (`--impostor`), the bar fold (`--bars`), and things going on (`--importing`: the
 Chief mid-import with its live bar, the Designer working, the Import screen's
 counts, and an 8-frame close-up of the typing dots 150 ms apart with each dot's
-opacity per frame in the report). Out: `mobile/qa-shots/` (PNGs and
+opacity per frame in the report), and an account in daily use
+(`--heavy`: 17 agents, ~40 cards waiting with logins and keys among them,
+paused routines, long chats, an import an hour in), live and offline. Out: `mobile/qa-shots/` (PNGs and
 `report.md`, which lists each shot's route, what to check, console errors and
 any text cut off with an ellipsis). It exits non-zero when a screen failed or threw.
 
 ```bash
 cd mobile && pnpm qa:web
 pnpm qa:web --only chat-fixtures --themes dark --out /tmp/shots
+pnpm qa:web --phases heavy          # fresh,live,cached,impostor,bars,heavy,importing
 pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681   # the defaults
 ```
 

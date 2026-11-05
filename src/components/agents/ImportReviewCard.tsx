@@ -19,6 +19,7 @@
  * @module components/agents/ImportReviewCard
  */
 
+import { isFocusClick } from '../../lib/firstClick';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { CheckIcon, DownloadIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
@@ -490,7 +491,9 @@ export const ImportReviewCard = memo(function ImportReviewCard({
               <Button
                 variant="strong"
                 disabled={busy || (count === 0 && !notes)}
-                onClick={() =>
+                onClick={(event) =>
+                  // Not the click that only brought the window forward.
+                  !isFocusClick(event) &&
                   void submit({
                     agents: proposals
                       .filter((p) => kept[p.key])

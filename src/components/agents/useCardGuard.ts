@@ -9,12 +9,17 @@
  *   answers a card, even if focus moves onto one mid-keystroke (Space
  *   activates a button on key-up, wherever the key-down was).
  *
+ * - **Not the click that brought the window forward.** Windows accept the
+ *   first mouse, so a click on an unfocused window acts; on a yes it's
+ *   ignored instead ([`isFocusClick`]), and the next click answers.
+ *
  * Deny stays immediate: saying no by accident costs nothing.
  *
  * @module components/agents/useCardGuard
  */
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
+import { isFocusClick } from '../../lib/firstClick';
 
 export const ARM_MS = 400;
 
@@ -33,7 +38,7 @@ export function useCardGuard(pending: boolean) {
       const fromKeyboard = event.detail === 0;
       const keyed = keyDownHere.current;
       keyDownHere.current = false;
-      if (!armed || (fromKeyboard && !keyed)) {
+      if (!armed || (fromKeyboard && !keyed) || isFocusClick(event)) {
         event.preventDefault();
         return;
       }
