@@ -7,6 +7,7 @@
 
 import * as QuickActions from 'expo-quick-actions';
 import { attentionCounts, nextNeedsYou } from './agents';
+import { quietAgentIds } from './home';
 import type { Target } from './notify';
 import { getApp, useApp } from './store';
 
@@ -18,7 +19,7 @@ function items(): QuickActions.Action[] {
   const s = getApp();
   if (!s.credentials || !s.overview) return [];
   const chief = s.overview.agents.find((a) => a.isMain);
-  const { needYou } = attentionCounts(s.overview.agents, s.chats);
+  const { needYou } = attentionCounts(s.overview.agents, s.chats, quietAgentIds(s.teamSetup));
   return [
     ...(needYou
       ? [
@@ -59,7 +60,8 @@ export function quickTarget(action: QuickActions.Action): QuickTarget | null {
     const chief = agents.find((a) => a.isMain);
     return chief ? { agentId: chief.id, compose: true } : 'home';
   }
-  if (action.id === 'next') return nextNeedsYou(agents, s.chats) ?? 'home';
+  if (action.id === 'next')
+    return nextNeedsYou(agents, s.chats, quietAgentIds(s.teamSetup)) ?? 'home';
   return null;
 }
 

@@ -546,10 +546,14 @@ type Chats = Record<string, { messages: AgentMessage[] } | undefined>;
  * only what can be answered here, as far as the saved chats (`chats`) show;
  * the Agents tab's badge is this same number.
  */
-export function attentionCounts(agents: Agent[], chats: Chats = {}) {
+export function attentionCounts(
+  agents: Agent[],
+  chats: Chats = {},
+  quiet: ReadonlySet<string> = new Set()
+) {
   const shown = agents.filter((a) => !a.hidden);
   return {
-    needYou: shown.filter((a) => needsYouHere(a, chats[a.id]?.messages)).length,
+    needYou: shown.filter((a) => !quiet.has(a.id) && needsYouHere(a, chats[a.id]?.messages)).length,
     // As the desk's tray counts: one waiting for a slot is listed, not working.
     working: shown.filter((a) => !needsYou(a) && a.status.state === 'working' && !waitingForSlot(a))
       .length,
@@ -562,9 +566,10 @@ export function attentionCounts(agents: Agent[], chats: Chats = {}) {
  */
 export function nextNeedsYou(
   agents: Agent[],
-  chats: Chats
+  chats: Chats,
+  quiet: ReadonlySet<string> = new Set()
 ): { agentId: string; messageId?: string } | null {
-  const next = sortAgents(agents.filter((a) => !a.hidden)).find((a) =>
+  const next = sortAgents(agents.filter((a) => !a.hidden && !quiet.has(a.id))).find((a) =>
     needsYouHere(a, chats[a.id]?.messages)
   );
   if (!next) return null;
