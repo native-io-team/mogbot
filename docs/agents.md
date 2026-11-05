@@ -717,10 +717,15 @@ The level is one short app-owned section of every agent's system prompt,
 built from code each turn (so existing and imported agents get it on their
 next turn, nothing in their CLAUDE.md is touched) and fixed per level (the
 prompt cache only breaks when the user changes it). Go hard tells an agent to
-finish what it was asked and, before asking the user to do anything, check
-whether they already asked for it and whether it has tried every way it has;
-it stops only for money, identity, sending or publishing as them, or deleting
-their data.
+do what it was asked without asking at each step, stopping only for money,
+identity, sending or publishing as them, pushing, deleting their data or
+credentials. Go hard and Use good judgement both carry the "whatever it
+takes" block (`independence::RELENTLESS`): be relentless and resourceful;
+when blocked, try every route (its tools, the user's files and CLIs,
+connected apps, their signed-in Chrome, search, a small script, another
+agent) before asking; never stop at the first error or hand back work it can
+do; never end a turn silently unfinished, but finish or say exactly what's
+left and the one thing it needs.
 
 **Which cards it answers** (`agents/autoallow.rs`). `acceptEdits` still asks
 for a plain `ls -la ~/SomeFolder` outside the agent's folders, so a card per
@@ -734,7 +739,59 @@ calls):
 |---|---|
 | Check with me often | nothing (as before) |
 | Use good judgement | reads |
-| Go hard | reads and local work |
+| Go hard | everything except its short ask list (`agents/go_hard.rs`) |
+
+**Go hard is allow-by-default** (after the owner's report that it still asked
+for nearly every step: worktrees, `npm ci`, dev servers in the background,
+`pkill`, copying `.env.local` between his projects, scripts on a page). It
+behaves like Claude Code's "do anything" mode and does not use the classifier
+below; it asks only for:
+
+- `git push` of any kind (force, deleting a remote branch), `git send-email`
+- `gh` acting as the user: `pr create|merge|review|comment|close|edit|ready`,
+  `issue create|comment|close|edit`, `release create|edit|delete`, `repo
+  create|delete|edit|rename|archive`, gist/workflow/secret/label writes, `gh
+  api` with a write method or fields
+- `npm`/`pnpm`/`yarn`/`bun` publish (and unpublish, deprecate, dist-tag)
+- deploys: `vercel` (bare, `deploy`, `--prod`, promote, alias, env add/rm),
+  `netlify deploy --prod`, `fly deploy`, `firebase deploy`, `wrangler
+  deploy|publish`, heroku/railway/surge releases
+- sending: `mail`, `sendmail`, `osascript` naming Mail / Messages / send,
+  Slack / Discord / Telegram / Signal / Twilio CLIs
+- Stripe with `--live` (except list/retrieve/logs)
+- `curl` / `wget` / `http` that write (a non-GET method, `-d`, `--data*`,
+  `-F`, `-T`, `--json`, httpie fields) to a host other than this Mac
+- `sudo`, `su`, `doas`; `rm -r` outside the user's projects (`~/ShipStudio`,
+  `~/Projects`, `~/Desktop/Projects`, `~/Developer`…, the projects root, any
+  git working copy below the home), the agents' homes and temporary folders,
+  and always for the home itself, `~/Library` and `/`
+- writes to `~/.ssh`, Keychains, shell profiles, `~/Library/LaunchAgents`,
+  the app's own data (another agent's home, this agent's log and
+  instructions), or outside the home and temporary folders; reading a
+  credential store (`~/.ssh`, Keychains, `~/.gnupg`); `crontab` (except `-l`),
+  `security`, `launchctl`, `diskutil`, `dd`, `csrutil`, `pmset`, `nvram` and
+  other system tools; `defaults write` to `-g` or a `/Library` domain
+- connector tools whose name writes (send, create, update, delete, pay…);
+  uploads in the browser
+
+Everything else runs: local git (commit, checkout, branch, worktree, merge,
+rebase, stash), builds, installs, dev servers, backgrounding, `pkill` /
+`kill`, copying `.env` files between projects, network reads, localhost
+requests (writes included), file work in the home. Command lines are split
+into every command they run, including quoted ones (`bash -c "git push"`) and
+those after `do`/`then`; `cd` is followed through the line. Relative paths
+are only judged for `rm -r` (against the turn's folder), because the engine's
+shell keeps its folder between calls. What it can't parse runs: the list is
+what has to be right, and `go_hard_tests.rs` holds every item on it and the
+owner's real commands (fictional paths).
+
+A turn answering outside text at Go hard keeps Go hard for local work and
+reading (reading a page is the job), and additionally asks for any network
+write (localhost included) and for running a package fetched by name (`npx
+pkg`, `npm i pkg`, `pnpm add`, `pip`/`brew`/`cargo`/`go install`, `curl … |
+sh`).
+
+The two lower levels use the allow-list classifier (`agents/autoallow.rs`):
 
 - **Reads**: read-only commands and file reads anywhere the user's account
   can read (`ls`, `cat`, `grep -r`, `rg`, `find` without `-delete`/`-exec`,
@@ -745,7 +802,8 @@ calls):
   the app's own data (every agent's home but this one's) and `~/.<slug>`, and
   any `.env`, key, `*credential*`, `*secret*`, `*token*` or `*password*` file.
   A recursive read of a folder that holds one of those (`grep -r x ~`) asks.
-- **Local work** (Go hard only): creating, editing, moving, copying, linking,
+- **Local work** (no level answers this class any more since Go hard became
+  allow-by-default; the admin agent's "local" answers still use it): creating, editing, moving, copying, linking,
   `chmod` (no setuid) and unpacking inside the home, never into a shell
   profile, `~/Library/LaunchAgents`, `~/Library/Preferences`, a PATH folder,
   a protected place above, the agent's own log files, or any `.git` /
@@ -794,10 +852,9 @@ calls):
 Each one answered this way leaves a step in the turn's "What it did"
 ("Allowed automatically — Go hard · ls -la ~/SomeFolder"). A turn answering
 outside text (a "When…" routine's items, or anything carrying their taint
-through `message_agent` or a room) never runs at Go hard: it is capped at Use
-good judgement, so its reads go through and nothing it would write does
-without a card; unattended routines still finish, and the approval wall and
-the taint gate anything consequential.
+through `message_agent` or a room) at Use good judgement stays there; at Go
+hard it keeps Go hard with the extra outside-text asks above (network
+writes, packages fetched by name).
 
 **Cards already open.** On launch and whenever the level changes,
 `mcp::sweep_auto_allowed` answers open permission cards the level now covers,
@@ -1176,9 +1233,17 @@ place the independence level changes an approval, and only for the browser:
   through except on those pages: **an accepted gap**, as is a navigation
   carrying data in its own URL to a site the agent chose. At "Check with me
   often" every interaction asks.
-- **Always a card**, at every level: `javascript_tool`, `file_upload`,
+- **Always a card** below Go hard: `javascript_tool`, `file_upload`,
   `upload_image`, `shortcuts_execute`, a GIF export and any tool this build
   doesn't know.
+- **At Go hard everything runs**, `javascript_tool`, shortcuts and unknown
+  tools included, except send-like clicks and keys (above), `file_upload` /
+  `upload_image`, a GIF export, and a script that submits or sends
+  (`go_hard::script_sends`): `.submit(` / `requestSubmit`, `sendBeacon`, a
+  form's `action` changed, `fetch` / XHR with a write method or a body, jQuery
+  / axios writes, or a click / Enter where a string in the script names a
+  send-like control (`Send`, `…submit-button`, `type=submit`). A script that
+  reads the page or clicks "See more" runs.
 
 A browser card says what it would do in plain words ("Click “Send” on
 mail.google.com", "This would send it as you"), then what it types or fills and where and as whom (`browser::card_for`: the site last opened and the account found there, `browser_profiles`), with the raw call behind
