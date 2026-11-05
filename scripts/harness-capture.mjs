@@ -60,6 +60,10 @@ const SKIP_COMMANDS = [
   'spotify.', // controls a third-party widget, nothing of ours to look at
   'settings.checkUpdates', // hits the updater, which is stubbed inert
   'nav.home', // just returns to the dashboard scenario
+  // Covered by the agents-apps scenarios, which mock agents_apps_list. TODO:
+  // add that fixture to scenarios/base.ts once the branches editing it have
+  // merged, then drop this skip.
+  'agents.apps',
 ];
 
 const args = process.argv.slice(2);
