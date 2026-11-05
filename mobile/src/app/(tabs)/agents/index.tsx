@@ -11,6 +11,7 @@
 import type { Agent, RoomView } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { takeExitNotice } from '../../../lib/crash';
 import {
   Platform,
   RefreshControl,
@@ -158,6 +159,20 @@ export default function Agents() {
   const [selected, setSelected] = useState<string | null>(null);
   const [undo, setUndo] = useState<{ text: string; run: () => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The last run ended in a crash: said once, where the app opens.
+  useEffect(() => {
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    void takeExitNotice().then((notice) => {
+      if (!live || !notice) return;
+      setError(notice);
+      timer = setTimeout(() => setError((e) => (e === notice ? null : e)), 8000);
+    });
+    return () => {
+      live = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   const teamSetup = useApp((s) => s.teamSetup);
   const rows = useMemo<Row[]>(() => {

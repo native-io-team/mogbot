@@ -66,10 +66,32 @@ export function liveMentions(text: string, mentions: AgentRef[]): AgentRef[] {
 }
 
 const fileFor = (serverId: string) => `drafts-${serverId}.json`;
+/**
+ * How soon a change reaches the disk: every keystroke and every word
+ * dictated is there within this, so a crash mid-sentence loses at most the
+ * last moment. Leaving the foreground writes it at once (session.ts), and a
+ * crash does too (crash.ts).
+ */
+export const DRAFT_SAVE_MS = 300;
 const saver = debounced(async () => {
   const id = getApp().credentials?.serverId;
   if (id) await writeJson(fileFor(id), getApp().composer);
-}, 400);
+}, DRAFT_SAVE_MS);
+
+/** Chats whose draft came back from disk this launch, until the chat has said so. */
+const restored = new Set<string>();
+const announced = new Set<string>();
+
+/**
+ * Whether this chat's draft was brought back from disk at launch, and hasn't
+ * said so yet: the composer says "Restored your draft" once.
+ */
+export function takeRestored(agentId: string): boolean {
+  if (!restored.has(agentId) || announced.has(agentId)) return false;
+  announced.add(agentId);
+  const d = getApp().composer[agentId];
+  return !!d && !isEmpty(d);
+}
 
 export const useComposerDraft = (agentId: string) =>
   useApp((s) => s.composer[agentId] ?? EMPTY_DRAFT);
@@ -127,7 +149,9 @@ export function addQuote(agentId: string, passage: string) {
 
 export async function loadDrafts(serverId: string) {
   const saved = await readJson<Record<string, ComposerDraft>>(fileFor(serverId));
-  if (saved) setApp({ composer: saved });
+  if (!saved) return;
+  for (const [id, d] of Object.entries(saved)) if (!isEmpty(d)) restored.add(id);
+  setApp({ composer: saved });
 }
 
 export const flushDrafts = () => saver.flush();
