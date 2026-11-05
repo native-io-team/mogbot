@@ -54,7 +54,18 @@ user answers, on the desk or the phone. Three starters and **More ideas…**,
 from one catalogue (`lib/chiefIdeas.ts`). Each types a whole, specific brief
 with one blank at its end; none sends by itself.
 
-- **Ship fixes while I sleep…**: every night a fixer bound to the repo's
+The chips are **Brief me every morning…**, **Run an inbox triage crew…** and
+**Run my launch as a team…**: one per group, recognisable to someone who
+isn't a developer, and two of them need nothing set up, so the first result
+can land in the first minutes (the morning brief asks for its first one
+now). Ship fixes and client briefs were chips until a first-ten-minutes
+walk-through found them making the first screen read as a coding tool that
+asks for GitHub before showing anything; they are in the gallery.
+
+- **Brief me every morning…**: a researcher reads what's new on the topics
+  the user names and a writer boils it down to one short brief, every
+  weekday at 8am, the first one right away. Needs nothing set up.
+- **Ship fixes while I sleep…** (gallery): every night a fixer bound to the repo's
   project takes the top open GitHub issue and fixes it in its own copy, a
   reviewer checks it (`message_agent`), and the morning brings one change
   card with Keep / Review / Discard. Pushing waits for the user.
@@ -62,7 +73,7 @@ with one blank at its end; none sends by itself.
   Chief keeping the plan in a file, and a 9am weekday standup it collects
   and summarises. The Chief puts the three and itself in a room
   (`create_room`, see "Rooms"), so the user talks to the whole team at once.
-- **Turn client briefs into sites…**: `watch_for` `new_file` on a folder;
+- **Turn client briefs into sites…** (gallery): `watch_for` `new_file` on a folder;
   each brief becomes a project (`blank` needs nothing installed) whose
   session drafts the site, handed back with `share_result` naming the
   project.
@@ -1529,8 +1540,10 @@ chats.
   prompt says the same, and while a setup is open each user message to the
   Chief carries one line on where it stands.
 - **One checklist, one card** in the Chief's chat (`TeamSetupCard`, and on
-  the phone), updating in place, with a bar above the composer ("A few things
-  to finish setting up your team · 2 of 4 done", **Continue**). Steps, in
+  the phone), updating in place, under "Your 16 agents from Grok Bot are
+  here, quiet until you say hi. These get them going.", with a bar above the
+  composer ("Your team is almost ready · 2 steps left", **Continue**). It
+  counts what's left, never "0 of 4 done", which reads as homework. Steps, in
   order, each skippable and reopenable ("Open again"): **Add logins** (one
   row per service with the agents that need it; Add opens their secure
   cards in place), **Switch on routines** (each with when and what, a
@@ -1545,8 +1558,12 @@ chats.
 - **Only choices are kept** (`<agents root>/team-setup.json`: agents, who was
   greeted, gaps, steps done/skipped). Everything else is read from the store
   each time, so a login saved in an agent's own chat ticks it off here. Its
-  logins are left out of the requests bar's counts and What's in flight's
-  Needs your OK (the checklist holds them). A second import before the first
+  logins are left out of the requests bar's counts, What's in flight's
+  Needs your OK, the sidebar's rows and its "Needs your OK · N" row
+  (`withoutHeldLogins`), and the dock and phone push badges
+  (`team_setup::held_logins`): the checklist holds them, so an import of
+  sixteen agents isn't sixteen amber rows. The import's line in the Chief's
+  chat names four agents "and 12 more", not all sixteen. A second import before the first
   is finished joins the same checklist.
 - **Upgrade** (`team_setup::upgrade`, at launch, once): a team imported by
   an older build (its chats open on "Imported from X. It starts when you

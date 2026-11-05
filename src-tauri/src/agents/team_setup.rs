@@ -1091,6 +1091,25 @@ fn gaps_for(gaps: &[(String, Vec<String>)], name: &str, source: &str) -> Vec<Str
         .unwrap_or_default()
 }
 
+/// Logins the checklist holds, per agent, while it isn't finished (put away
+/// or not): the dock and phone badges leave them out, as the sidebar and
+/// What's in flight do, so an import of sixteen agents doesn't land as a
+/// badge of thirty. They are still one tap away in the checklist.
+pub fn held_logins() -> HashMap<String, u32> {
+    let Some(view) = view_any().filter(|v| !v.complete) else {
+        return HashMap::new();
+    };
+    held_in(&view)
+}
+
+fn held_in(view: &SetupView) -> HashMap<String, u32> {
+    let mut held: HashMap<String, u32> = HashMap::new();
+    for login in view.steps.iter().flat_map(|s| &s.logins) {
+        *held.entry(login.agent_id.clone()).or_default() += 1;
+    }
+    held
+}
+
 /// The agents a live setup covers (their requests fold into its card).
 pub fn agent_ids() -> HashSet<String> {
     load()

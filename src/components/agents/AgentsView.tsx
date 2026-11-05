@@ -108,7 +108,13 @@ import {
   type Room,
 } from '../../lib/agentRooms';
 import { kbd } from '../../lib/shortcuts';
-import { onlySetupRequests, setupHeldCounts, useTeamSetup } from '../../lib/teamSetup';
+import {
+  onlySetupRequests,
+  setupHeldCounts,
+  useResumableTeamSetup,
+  useTeamSetup,
+  withoutHeldLogins,
+} from '../../lib/teamSetup';
 
 const SELECTED_KEY = 'shipstudio.agents.selected';
 
@@ -444,17 +450,22 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [openAgent]);
 
+  // Logins "Setting up your team" holds live in its one card, not as an
+  // amber row per imported agent (What's in flight leaves them out too).
+  const setup = useResumableTeamSetup();
+  const listed = useMemo(() => withoutHeldLogins(agents, setup), [agents, setup]);
+
   // What the "Needs you" row counts: the agents What's in flight lists under Needs you.
   const teamSetup = useTeamSetup();
   const setupHeld = useMemo(() => setupHeldCounts(teamSetup), [teamSetup]);
   // An agent being set up whose only requests are the checklist's logins is
   // counted once, there, not again here.
-  const needsYouCount = agents.filter(
+  const needsYouCount = listed.filter(
     (a) => !a.hidden && needsAttention(a) && !onlySetupRequests(a, setupHeld)
   ).length;
 
   // The oldest card waiting on you, on the first agent (sidebar order) with one.
-  const waitingOn = sortAgents(agents).find((a) => !a.hidden && needsYou(a)) ?? null;
+  const waitingOn = sortAgents(listed).find((a) => !a.hidden && needsYou(a)) ?? null;
   const topCard = useAgentsSelector((s) =>
     waitingOn
       ? (s.messages[waitingOn.id] ?? []).find((m) => m.approval?.status === 'pending')
@@ -831,7 +842,7 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
             }
             listContent={
               <AgentsSidebar
-                agents={agents}
+                agents={listed}
                 selectedId={room ? roomKey(room.id) : (selected?.id ?? null)}
                 showHidden={showHidden}
                 onToggleShowHidden={toggleShowHidden}

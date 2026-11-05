@@ -7,7 +7,7 @@
  * own chat ticks it off here.
  *
  * Every step can be skipped and opened again; the first open one is
- * expanded. Progress counts steps ("2 of 4 done"), never requests. The
+ * expanded. Progress counts steps ("2 steps left"), never requests. The
  * agents stay quiet until the user says hi, one at a time.
  *
  * Seams: the Logins step lists each login and opens its secure card in

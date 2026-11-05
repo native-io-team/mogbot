@@ -213,11 +213,37 @@ export function resetTeamSetupForTests() {
   loaded = false;
 }
 
+/**
+ * Logins the checklist holds, per agent. While a setup isn't finished they
+ * live in its one card, so the sidebar, its "Needs your OK · N" row and the
+ * dock badge leave them out: an import of sixteen agents should read as one
+ * thing to finish, not sixteen amber rows.
+ */
+export function heldLogins(view: TeamSetupView | null): Map<string, number> {
+  const held = new Map<string, number>();
+  if (!view || view.complete) return held;
+  for (const l of view.steps.flatMap((s) => s.logins ?? [])) {
+    held.set(l.agentId, (held.get(l.agentId) ?? 0) + 1);
+  }
+  return held;
+}
+
+/** The agents as the sidebar counts them: without the logins the checklist holds. */
+export function withoutHeldLogins(agents: Agent[], view: TeamSetupView | null): Agent[] {
+  const held = heldLogins(view);
+  if (held.size === 0) return agents;
+  return agents.map((a) => {
+    const n = held.get(a.id);
+    if (!n || !a.pendingApprovals) return a;
+    return { ...a, pendingApprovals: Math.max(0, a.pendingApprovals - n) };
+  });
+}
+
 /* ------------------------------------------------------------- the words */
 
 export const SETUP_TITLE = 'Setting up your team';
 /** The bar above the Chief's composer while there's some left. */
-export const SETUP_BAR_TITLE = 'A few things to finish setting up your team';
+export const SETUP_BAR_TITLE = 'Your team is almost ready';
 
 /** Bring the card into view (the bar's Continue). */
 export function showTeamSetup() {
@@ -226,14 +252,20 @@ export function showTeamSetup() {
     ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
-/** "2 of 4 done": steps, never requests. */
-export function progressLine(view: TeamSetupView): string {
-  return `${view.done} of ${view.total} done`;
+/**
+ * "2 steps left": steps, never requests, and what's left rather than "0 of 4
+ * done", which reads as homework not yet started.
+ */
+export function progressLine(view: Pick<TeamSetupView, 'done' | 'total'>): string {
+  const left = Math.max(0, view.total - view.done);
+  if (left === 0) return 'All done';
+  return `${left} ${left === 1 ? 'step' : 'steps'} left`;
 }
 
 /** The muted line under the title. */
 export function sourceLine(view: TeamSetupView): string {
-  return `A few things to finish for your agents from ${view.source}. They stay quiet until you say hi.`;
+  const who = view.agents > 1 ? `Your ${view.agents} agents` : 'Your agent';
+  return `${who} from ${view.source} ${view.agents > 1 ? 'are' : 'is'} here, quiet until you say hi. These get them going.`;
 }
 
 /** Each step's title, its line while open, and what it reads once done. */

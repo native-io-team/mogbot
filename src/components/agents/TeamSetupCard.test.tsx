@@ -102,9 +102,9 @@ describe('TeamSetupCard', () => {
       />
     );
     expect(screen.getByText('Setting up your team')).toBeInTheDocument();
-    expect(screen.getByText('1 of 4 done')).toBeInTheDocument();
+    expect(screen.getByText('3 steps left')).toBeInTheDocument();
     expect(
-      screen.getByText(/A few things to finish for your agents from Grok Bot/)
+      screen.getByText(/agents from Grok Bot are here, quiet until you say hi/)
     ).toBeInTheDocument();
     // Done reads as its outcome; routines (the first open step) is expanded.
     expect(screen.getByText('Logins added')).toBeInTheDocument();

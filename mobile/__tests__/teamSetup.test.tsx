@@ -62,7 +62,7 @@ describe('Setting up your team', () => {
     await show(view());
     expect(screen.getByText('Setting up your team')).toBeTruthy();
     expect(screen.getByText(progress(fixture))).toBeTruthy();
-    expect(progress(fixture)).toBe('2 of 4 done');
+    expect(progress(fixture)).toBe('2 steps left');
     expect(screen.getByText(sourceLine(fixture))).toBeTruthy();
     expect(screen.getByText(SET_ASIDE_NOTE)).toBeTruthy();
     expect(SET_ASIDE_NOTE).not.toMatch(/\d/);

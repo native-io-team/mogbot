@@ -354,9 +354,13 @@ pub const PAST_CHIEF_INSTRUCTIONS: &[&str] = &[
 /// chat. Written, not generated: no turn runs, and nothing is spent on the
 /// user's plan, until they reply. `CHIEF_INSTRUCTIONS` tells the Chief it
 /// said this. No product name: the name isn't settled.
+///
+/// It says the one thing a chat assistant can't: the team keeps working on
+/// its own (a schedule, something happening) and comes back with results.
 pub const CHIEF_GREETING: &str = "Hi, I'm your Chief of Staff. \
-Tell me what's on your plate this week and I'll put a team of agents together for it. \
-When something needs your OK, I'll ask first, and you Allow or Deny it.";
+Tell me what's on your plate this week and I'll put a team of agents on it. \
+They keep working on a schedule or when something happens, and bring the results back to you. \
+Anything that sends, spends or changes what others see waits for your OK.";
 
 /// The line a message with @mentions carries for its recipient. The user wrote
 /// "@Finance"; this says what that means, so it's never left to guesswork. For
