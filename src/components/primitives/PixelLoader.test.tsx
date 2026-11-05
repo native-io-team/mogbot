@@ -15,6 +15,28 @@ describe('PixelLoader', () => {
     expect(container.querySelectorAll('[data-ring="2"]')).toHaveLength(16);
   });
 
+  it('groups the rings variant into one animated layer per ring, pixels kept in place', () => {
+    const { container } = render(<PixelLoader variant="rings" />);
+    const layers = [...container.querySelectorAll<HTMLElement>('.ss-pixel-loader__ring')];
+    expect(layers.map((l) => l.style.getPropertyValue('--pixel-loader-ring'))).toEqual([
+      '2',
+      '1',
+      '0',
+    ]);
+    for (const layer of layers) {
+      const ring = layer.style.getPropertyValue('--pixel-loader-ring');
+      const pixels = [...layer.querySelectorAll<HTMLElement>('.ss-pixel-loader__pixel')];
+      expect(pixels.every((p) => p.dataset.ring === ring)).toBe(true);
+    }
+    // The centre pixel sits in the middle cell of the 5×5 grid.
+    const centre = container.querySelector<HTMLElement>('[data-ring="0"]');
+    expect(centre?.style.gridRow).toBe('3');
+    expect(centre?.style.gridColumn).toBe('3');
+    // Other variants keep one flat grid of pixels.
+    const flat = render(<PixelLoader variant="ripple" />);
+    expect(flat.container.querySelectorAll('.ss-pixel-loader__ring')).toHaveLength(0);
+  });
+
   it('renders accessible single- and quad-core pixel grids with the selected variants', () => {
     const { container } = render(
       <PixelLoader size="lg" variant="scan" label="Building preview" data-testid="loader" />

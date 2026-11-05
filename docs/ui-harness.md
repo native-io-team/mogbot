@@ -272,6 +272,52 @@ Use `clipSelector` for popovers and modals: the harness has no dev server and no
 PTY, so the surrounding workspace shows a permanent "Starting dev server…"
 spinner and an idle agent pane. Clipping keeps those artifacts out of frame.
 
+## Measuring performance
+
+Screenshots say what the Agents view looks like; `scripts/perf-agents.mjs` says
+what it costs. It drives the `agents-stress` scenario — 40 agents, a 2,000-line
+Chief of Staff chat served in 150-line pages exactly as `agents_messages`
+serves them (markdown, code, result cards with 60-step timelines, approvals,
+copy cards, images) — against a **production** React build, because the dev
+server's development React measures React rather than the app.
+
+```bash
+node scripts/perf-agents.mjs --build                 # build, serve on 1805, measure everything
+node scripts/perf-agents.mjs --build open,stream     # some phases only
+node scripts/perf-agents.mjs --build --trace         # plus a main-thread breakdown per phase
+node scripts/perf-agents.mjs --build --profile       # plus .cpuprofile files
+node scripts/perf-agents.mjs --build --css "<rules>" # try a CSS change without rebuilding
+```
+
+`--build` runs `vite build --config vite.harness.config.ts` (unminified, into
+the ignored `harness/perf-build/`) and serves it with `vite preview`; without
+it the script measures whatever is already on `--port`. Chrome gets its own
+profile and `--cdp` port (default 9711). Results land in `--out` (default
+`$TMPDIR/perf-agents`) as JSON, and the run ends with the targets:
+
+| Phase | What it does | Target |
+| --- | --- | --- |
+| `open` | All 2,000 lines loaded, switch to another agent and back | open < 100 ms, no long task > 50 ms |
+| `background` | 10 status events/s for six other agents, chat open | `AgentChat` never re-renders |
+| `openEvents` | The same plus the open agent's own, a new line every 5 s | < 10% main thread |
+| `stream` | A 3.5 KB reply as 235 drafts, one per 40 ms | < 15% main thread |
+| `reopened` | `openEvents` and `stream` again after reopening the chat | as above |
+| `idle` | Six agents left "working", nothing else happening | < 3% main thread |
+
+`openEvents` and `stream` scroll through all 2,000 lines first, so every one
+of them is mounted: the worst case. A reopened chat mounts only its newest
+lines (more come in as you scroll up), which is what `reopened` measures.
+
+Render counts come from a stand-in React DevTools hook the script installs
+before the page loads; CPU is measured with counting off. Main-thread share is
+`Performance.getMetrics` task time over wall time. The page-side driver is
+`window.__stress` (`start({ rate, open })`, `stop()`, `stream()`, `counts`),
+present only on the `agents-stress` page.
+
+Chrome is not WKWebView, so read the numbers as relative. Two known gaps:
+Chrome composites `filter` animations and WebKit does not, and Chrome needs
+no help to anchor scrolling while WebKit does.
+
 ## Reproducibility
 
 A screenshot you cannot diff is not much use, so the harness works at being
@@ -333,4 +379,5 @@ documentation.
 | `src/harness/scenarios/` | The fixture layers above |
 | `src/harness/stubs/` | Inert `tauri-pty`, screenshots, updater |
 | `scripts/harness-capture.mjs` | Headless capture, identity guard, `report.md`, `report.json` |
+| `scripts/perf-agents.mjs`, `src/harness/scenarios/agentsStress.ts` | The Agents perf fixture, its event driver and the measurements (above) |
 | `.claude/skills/ui-harness/SKILL.md` | So an agent discovers this without being told |

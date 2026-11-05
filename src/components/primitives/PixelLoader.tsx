@@ -83,25 +83,55 @@ export function PixelLoader({
     .filter(Boolean)
     .join(' ');
 
+  const pixelStyle = (pixel: (typeof pixels)[number], placed: boolean) =>
+    ({
+      '--pixel-loader-column': pixel.column,
+      '--pixel-loader-phase': pixel.phase,
+      '--pixel-loader-ring': pixel.ring,
+      ...(placed
+        ? {
+            gridRow: Math.floor(pixel.index / resolvedGridSize) + 1,
+            gridColumn: pixel.column + 1,
+          }
+        : {}),
+    }) as PixelStyle;
+  const pixel = (p: (typeof pixels)[number], placed = false) => (
+    <span
+      className="ss-pixel-loader__pixel"
+      data-column={p.column}
+      data-phase={p.phase}
+      data-ring={p.ring}
+      style={pixelStyle(p, placed)}
+      key={p.index}
+      aria-hidden="true"
+    />
+  );
+
+  // Rings light a ring at a time, every pixel of a ring in step, so a ring is
+  // one animated layer rather than up to 16 animated pixels. Rings is on every
+  // working agent's row: per-pixel, six loaders were 150 running animations,
+  // each restyled whenever anything else on the page changed.
+  if (variant === 'rings') {
+    const rings = [...new Set(pixels.map((p) => p.ring))];
+    return (
+      <div className={classes} role="status" aria-label={label} style={gridStyle} {...rest}>
+        {rings.map((ring) => (
+          <span
+            key={ring}
+            className="ss-pixel-loader__ring"
+            style={{ '--pixel-loader-ring': ring } as PixelStyle}
+            aria-hidden="true"
+          >
+            {pixels.filter((p) => p.ring === ring).map((p) => pixel(p, true))}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className={classes} role="status" aria-label={label} style={gridStyle} {...rest}>
-      {pixels.map((pixel) => (
-        <span
-          className="ss-pixel-loader__pixel"
-          data-column={pixel.column}
-          data-phase={pixel.phase}
-          data-ring={pixel.ring}
-          style={
-            {
-              '--pixel-loader-column': pixel.column,
-              '--pixel-loader-phase': pixel.phase,
-              '--pixel-loader-ring': pixel.ring,
-            } as PixelStyle
-          }
-          key={pixel.index}
-          aria-hidden="true"
-        />
-      ))}
+      {pixels.map((p) => pixel(p))}
     </div>
   );
 }

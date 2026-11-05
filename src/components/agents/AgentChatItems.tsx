@@ -16,8 +16,8 @@ import {
   type MouseEvent,
   type ReactNode,
 } from 'react';
-import { Marked, type Token, type Tokens, type TokensList } from 'marked';
-import { imageLinkLabel, sanitizeMessageHtml } from '../../lib/safeHtml';
+import { createStreamingSegments, toSegments, type Segment } from './agentMarkdown';
+import { agentIn, getAgentsSnapshot, useAgentsSelector } from '../../lib/agentsStore';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   CheckIcon,
@@ -67,11 +67,9 @@ import {
   formatDivider,
   formatExactTime,
   formatWhenInline,
-  isCodePath,
   localPathFromHref,
   openLocalPath,
   peerGroupLabel,
-  PROSE_PATH,
   splitQuotes,
   type Agent,
   type AgentEngine,
@@ -122,73 +120,7 @@ function useProseLinks(agentId: string) {
   );
 }
 
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-
-const pathLink = (path: string, inner: string) =>
-  `<a href="${escapeHtml(encodeURI(path))}" class="agent-path" title="${escapeHtml(path)}">${inner}</a>`;
-
-/**
- * Agent prose. Images become link chips (see lib/safeHtml): a remote image
- * would load inside the app webview from wherever the agent pointed it. A local
- * path, written out or in `code`, becomes a link that opens it.
- */
-const markdown = new Marked({
-  gfm: true,
-  breaks: true,
-  renderer: {
-    image({ href, text }) {
-      const link = `<a class="md-image-link" href="${escapeHtml(encodeURI(href))}">`;
-      return `${link}${escapeHtml(imageLinkLabel(href, text))}</a>`;
-    },
-    codespan({ text }) {
-      return isCodePath(text) ? pathLink(text.trim(), `<code>${escapeHtml(text)}</code>`) : false;
-    },
-  },
-  extensions: [
-    {
-      name: 'localPath',
-      level: 'inline',
-      start: (src) => {
-        const at = src.search(PROSE_PATH);
-        return at < 0 ? undefined : at;
-      },
-      tokenizer(src) {
-        if (this.lexer.state.inLink) return undefined;
-        const match = new RegExp(`^${PROSE_PATH.source}`).exec(src);
-        return match ? { type: 'localPath', raw: match[0], path: match[0] } : undefined;
-      },
-      renderer: (token) => pathLink(String(token.path), escapeHtml(String(token.path))),
-    },
-  ],
-});
-
-type Segment = { type: 'html'; html: string } | { type: 'code'; text: string; lang?: string };
-
-/** Prose renders as sanitized HTML; code blocks render as components, so they can carry Copy. */
-function toSegments(text: string): Segment[] {
-  const tokens = markdown.lexer(text);
-  const segments: Segment[] = [];
-  let run: Token[] = [];
-  const flush = () => {
-    if (run.length === 0) return;
-    const list = Object.assign(run, { links: tokens.links }) as TokensList;
-    segments.push({ type: 'html', html: sanitizeMessageHtml(markdown.parser(list)) });
-    run = [];
-  };
-  for (const token of tokens) {
-    if (token.type === 'code') {
-      flush();
-      const code = token as Tokens.Code;
-      segments.push({ type: 'code', text: code.text, lang: code.lang || undefined });
-    } else {
-      run.push(token);
-    }
-  }
-  flush();
-  return segments;
-}
-
-function CodeBlock({ text }: { text: string }) {
+const CodeBlock = memo(function CodeBlock({ text }: { text: string }) {
   const { copy, isCopied } = useCopyToClipboard();
   return (
     <div className="agent-code">
@@ -207,7 +139,7 @@ function CodeBlock({ text }: { text: string }) {
       />
     </div>
   );
-}
+});
 
 /**
  * Copy and the time, on hover or keyboard focus. They keep their space, so
@@ -265,10 +197,12 @@ function MessageActions({
  * ⌘C on a focused message with nothing selected copies the whole message, as
  * its Copy button would.
  */
-function useCopyOnKey(text: string) {
+function useCopyOnKey(textOf: string | (() => string)) {
   const { copy } = useCopyToClipboard();
   return (event: React.KeyboardEvent<HTMLElement>) => {
-    if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'c' || !text) return;
+    if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'c') return;
+    const text = typeof textOf === 'function' ? textOf() : textOf;
+    if (!text) return;
     if (event.target !== event.currentTarget) return;
     if (window.getSelection()?.toString()) return;
     event.preventDefault();
@@ -289,6 +223,26 @@ interface AgentBubbleProps extends Arrival {
 /** Markdown prose with code blocks, shared by replies and agent-to-agent threads. */
 function Prose({ text }: { text: string }) {
   const segments = useMemo(() => toSegments(text), [text]);
+  return <ProseSegments segments={segments} />;
+}
+
+/** The reply an agent is writing, as it is now: read from the store, not passed down. */
+const draftTextOf = (agentId: string) =>
+  getAgentsSnapshot().drafts[agentId]?.text.trimStart() ?? '';
+
+/**
+ * A reply still being written. It reads its own text from the store, so a
+ * delta re-renders only this, and it parses only what changed since the last
+ * one (`createStreamingSegments`): finished paragraphs keep their DOM.
+ */
+function DraftProse({ agentId }: { agentId: string }) {
+  const text = useAgentsSelector((s) => s.drafts[agentId]?.text.trimStart() ?? '');
+  const [segmentsFor] = useState(createStreamingSegments);
+  const segments = useMemo(() => segmentsFor(text), [segmentsFor, text]);
+  return <ProseSegments segments={segments} />;
+}
+
+function ProseSegments({ segments }: { segments: Segment[] }) {
   return (
     <>
       {segments.map((segment, i) =>
@@ -323,7 +277,8 @@ export const AgentBubble = memo(function AgentBubble({
       onRemember={onRemember && (() => onRemember(message))}
     />
   );
-  const onKeyDown = useCopyOnKey(message.text);
+  // Still being written: its words live in the store, not in this message.
+  const onKeyDown = useCopyOnKey(streaming ? () => draftTextOf(message.agentId) : message.text);
   return (
     <div
       tabIndex={-1}
@@ -335,14 +290,14 @@ export const AgentBubble = memo(function AgentBubble({
       data-work={message.work ? true : undefined}
       data-message-ids={message.id}
     >
-      {message.text && (
+      {(streaming || message.text) && (
         <div
           className="agent-bubble agent-bubble--agent agent-markdown"
           data-streaming={streaming || undefined}
           aria-busy={streaming || undefined}
           onClick={onClick}
         >
-          <Prose text={message.text} />
+          {streaming ? <DraftProse agentId={message.agentId} /> : <Prose text={message.text} />}
         </div>
       )}
       {message.stopped && <span className="agent-bubble__stopped">Stopped</span>}
@@ -828,8 +783,6 @@ export const DayDivider = memo(function DayDivider({ ts, arrived }: { ts: number
 interface PeerGroupProps extends Arrival {
   peer: AgentRef;
   messages: AgentMessage[];
-  /** The peer as it exists now, for its colour; absent if it was deleted. */
-  peerAgent?: Agent;
   onOpenPeer: (agentId: string) => void;
   /** A search jumped to a line inside: open the thread to show it. */
   reveal?: boolean;
@@ -847,13 +800,19 @@ interface PeerGroupProps extends Arrival {
 export const PeerGroup = memo(function PeerGroup({
   peer,
   messages,
-  peerAgent,
   onOpenPeer,
   arrived,
   reveal,
   live,
   driving,
 }: PeerGroupProps) {
+  // The peer as it exists now; absent if it was deleted. Read here, not passed
+  // down, so the history isn't rebuilt whenever any agent changes. Only the
+  // newest line shows the peer's live state; the others need only to know it's there.
+  const peerAgent = useAgentsSelector(
+    (s) => agentIn(s.agents, peer.id),
+    live ? Object.is : (a, b) => Boolean(a) === Boolean(b)
+  );
   // Links in the thread open like a reply's, never inside the app webview.
   const onProseClick = useProseLinks(peer.id);
   // Until the user toggles it, it follows whether it's the brief in progress.

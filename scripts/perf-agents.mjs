@@ -13,10 +13,12 @@
  *   node scripts/perf-agents.mjs --port 1805             # measure an already-served perf build
  *   node scripts/perf-agents.mjs --build open,stream     # some phases only
  *   node scripts/perf-agents.mjs --build --profile       # also write .cpuprofile files
+ *   node scripts/perf-agents.mjs --build --trace         # and a main-thread breakdown per phase
  *
- * Phases: open, background, openEvents, stream, idle (default: all).
+ * Phases: open, background, openEvents, stream, reopened, idle (default: all).
  * Options: --port (served harness, default 1805), --cdp (debugging port,
- * default 9711), --out (results directory, default $TMPDIR/perf-agents).
+ * default 9711), --out (results directory, default $TMPDIR/perf-agents),
+ * --css (rules added to the page, to try a change without rebuilding).
  *
  * Method and targets: docs/ui-harness.md, "Measuring performance".
  * Chrome is not WKWebView: Chrome composites `filter` animations and WebKit
@@ -39,11 +41,12 @@ const opt = (name, fallback) => {
 const PORT = Number(opt('port', 1805));
 const CDP_PORT = Number(opt('cdp', 9711));
 const OUT = opt('out', path.join(os.tmpdir(), 'perf-agents'));
-const VALUE_FLAGS = new Set(['--port', '--cdp', '--out']);
+const VALUE_FLAGS = new Set(['--port', '--cdp', '--out', '--css']);
 const positional = argv.filter((a, i) => !a.startsWith('--') && !VALUE_FLAGS.has(argv[i - 1]));
 const PHASES = (positional[0] ?? 'all').split(',');
 const want = (p) => PHASES.includes('all') || PHASES.includes(p);
 const PROFILE = flag('profile');
+const TRACE = flag('trace');
 fs.mkdirSync(OUT, { recursive: true });
 
 const portFree = (port) =>
@@ -125,6 +128,8 @@ for (let i = 0; i < 100 && !targets; i++) {
 const ws = new WebSocket(targets.find((t) => t.type === 'page').webSocketDebuggerUrl);
 await new Promise((r) => ws.addEventListener('open', r));
 let seq = 0;
+let traceEvents = [];
+let traceDone = null;
 const pending = new Map();
 ws.addEventListener('message', (ev) => {
   const msg = JSON.parse(ev.data);
@@ -133,6 +138,10 @@ ws.addEventListener('message', (ev) => {
     pending.delete(msg.id);
     if (msg.error) reject(new Error(JSON.stringify(msg.error)));
     else resolve(msg.result);
+  } else if (msg.method === 'Tracing.dataCollected') {
+    traceEvents.push(...msg.params.value);
+  } else if (msg.method === 'Tracing.tracingComplete') {
+    traceDone?.();
   } else if (msg.method === 'Runtime.exceptionThrown') {
     console.log('page exception:', JSON.stringify(msg.params.exceptionDetails).slice(0, 300));
   }
@@ -194,6 +203,13 @@ await send('Page.enable');
 await send('Runtime.enable');
 await send('Performance.enable', { timeDomain: 'timeTicks' });
 await send('Page.addScriptToEvaluateOnNewDocument', { source: PRELUDE });
+// `--css "<rules>"`: added to every page, for trying a change without a rebuild.
+const EXTRA_CSS = opt('css', '');
+if (EXTRA_CSS) {
+  await send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `document.addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = ${JSON.stringify(EXTRA_CSS)}; document.head.append(s); });`,
+  });
+}
 
 const URL = `http://127.0.0.1:${PORT}/harness.html?scenario=agents-stress&chrome=off&freeze=off`;
 const metrics = async () =>
@@ -253,16 +269,53 @@ async function loadAllRows() {
   return rows();
 }
 async function startProfile(interval = 200) {
+  if (TRACE) {
+    traceEvents = [];
+    await send('Tracing.start', {
+      categories: 'devtools.timeline,disabled-by-default-devtools.timeline',
+      transferMode: 'ReportEvents',
+    });
+  }
   if (!PROFILE) return;
   await send('Profiler.enable');
   await send('Profiler.setSamplingInterval', { interval });
   await send('Profiler.start');
 }
+/** Where the renderer's main thread spent the traced time, by trace event (nested ones overlap). */
+async function stopTrace() {
+  const done = new Promise((r) => (traceDone = r));
+  await send('Tracing.end');
+  await done;
+  const main = traceEvents.find(
+    (e) => e.name === 'thread_name' && e.args?.name === 'CrRendererMain'
+  );
+  const by = {};
+  const styled = [];
+  for (const e of traceEvents) {
+    if (!main || e.tid !== main.tid || e.ph !== 'X' || !e.dur) continue;
+    by[e.name] = (by[e.name] ?? 0) + e.dur / 1000;
+    if (e.name === 'UpdateLayoutTree' && e.args?.elementCount) styled.push(e.args.elementCount);
+  }
+  styled.sort((a, b) => a - b);
+  return {
+    ...Object.fromEntries(
+      Object.entries(by)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 14)
+        .map(([k, v]) => [k, Math.round(v)])
+    ),
+    styleRecalcs: styled.length,
+    elementsStyledP50: styled[Math.floor(styled.length / 2)] ?? 0,
+    elementsStyledMax: styled[styled.length - 1] ?? 0,
+  };
+}
 async function stopProfile(name) {
+  if (TRACE) traceSummary = await stopTrace();
   if (!PROFILE) return;
   const { profile } = await send('Profiler.stop');
   fs.writeFileSync(path.join(OUT, `${name}.cpuprofile`), JSON.stringify(profile));
 }
+let traceSummary = null;
 /** Main-thread share of wall time while `fn` runs plus `secs` of settling. */
 async function cpu(label, fn, secs) {
   const a = await metrics();
@@ -280,6 +333,7 @@ async function cpu(label, fn, secs) {
     stylePct: pct(a, z, 'RecalcStyleDuration', wall),
     layoutPct: pct(a, z, 'LayoutDuration', wall),
     longTasks: await longTasksSince(t0),
+    ...(traceSummary ? { traceMs: traceSummary } : {}),
   };
 }
 
@@ -312,14 +366,17 @@ if (want('open')) {
     await clickAndWait(OTHER, otherOpen);
     await sleep(400);
     if (i === 1) await startProfile(100);
+    // Open = the Chief's conversation is on screen with a screenful and more
+    // of its newest lines. All 2,000 stay loaded in the store either way; a
+    // build that mounts only the newest lines is timed to the same moment.
     const t = await clickAndWait(
       CHIEF,
-      `document.querySelectorAll('.agent-chat [data-message-ids]').length >= ${n - 10}`
+      `document.querySelector('.agent-chat')?.getAttribute('aria-label')?.includes('Chief') && document.querySelectorAll('.agent-chat [data-message-ids]').length >= 100`
     );
     if (i === 1) await stopProfile('open-2000');
     if (t.error) throw new Error(t.error);
     await sleep(600);
-    runs.push({ ms: t.ms, maxLongTask: (await longTasksSince(t.t0)).max });
+    runs.push({ ms: t.ms, maxLongTask: (await longTasksSince(t.t0)).max, mounted: await rows() });
   }
   const warm = runs.slice(1);
   report('open_2000', {
@@ -392,6 +449,38 @@ if (want('stream')) {
   report('stream_2000', { rows: n, chars, ...c, renders: pick(rc, WATCH) });
 }
 
+// ---------- 3b. the same two, with the chat reopened: 2,000 lines loaded in
+// the store, but only what a reopened chat mounts in the DOM. Scrolling up
+// through all 2,000 first (above) is the worst case; this is the usual one.
+if (want('reopened')) {
+  await load();
+  const n = await loadAllRows();
+  await clickAndWait(OTHER, otherOpen);
+  await sleep(400);
+  await clickAndWait(
+    CHIEF,
+    `document.querySelector('.agent-chat')?.getAttribute('aria-label')?.includes('Chief')`
+  );
+  await sleep(1000);
+  const mounted = await rows();
+  const c = await cpu(
+    'open-events-reopened',
+    () => ev(`window.__stress.start({ rate: 10, open: true })`),
+    STATUS_SECS
+  );
+  await ev('window.__stress.stop()');
+  report('open_chat_events_reopened', { rows: n, mounted, ...c });
+  await sleep(1500);
+  const s2 = await cpu(
+    'stream-reopened',
+    async () => {
+      await ev(`window.__stress.stream({ blocks: 12, every: 40 })`);
+    },
+    0.1
+  );
+  report('stream_reopened', { rows: n, mounted: await rows(), ...s2 });
+}
+
 // ---------- 4. nothing happening, six agents shown as working
 if (want('idle')) {
   for (const all of [false, true]) {
@@ -433,6 +522,22 @@ if (results.open_chat_events_2000) {
 if (results.stream_2000) {
   const r = results.stream_2000;
   check('streaming at 2,000 lines < 15%', `${r.mainThreadPct}%`, r.mainThreadPct < 15);
+}
+if (results.open_chat_events_reopened) {
+  const r = results.open_chat_events_reopened;
+  check(
+    'open-chat events, chat reopened (2,000 loaded) < 10%',
+    `${r.mainThreadPct}%`,
+    r.mainThreadPct < 10
+  );
+}
+if (results.stream_reopened) {
+  const r = results.stream_reopened;
+  check(
+    'streaming, chat reopened (2,000 loaded) < 15%',
+    `${r.mainThreadPct}%`,
+    r.mainThreadPct < 15
+  );
 }
 for (const k of ['idle_six_working_150', 'idle_six_working_2000']) {
   if (results[k])

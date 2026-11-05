@@ -30,6 +30,7 @@ import {
 } from '@/components/icons';
 import { IconButton } from '../primitives/IconButton';
 import { AgentCard } from './AgentCard';
+import { WorkTimeline } from './AgentWork';
 import { TextButton } from '../primitives/TextButton';
 import { AttachmentLightbox, FileGlyph, kindLabel, useAttachmentOpener } from './AgentAttachments';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -46,6 +47,7 @@ import {
   revisingLabel,
   supersededLine,
   type Agent,
+  type TurnWork,
   type AgentMessage,
   type Attachment,
   type ResultCard,
@@ -229,6 +231,12 @@ interface ResultCardViewProps {
   actionsInside?: boolean;
   /** The folded "what it did" line, under the card. */
   footer?: ReactNode;
+  /**
+   * What the turn did, drawn as that line when there's no `footer`. Passed as
+   * data rather than an element so the card's memo holds: a new element on
+   * every chat render re-rendered every result card in the history.
+   */
+  work?: TurnWork;
   arrived?: boolean;
 }
 
@@ -241,9 +249,11 @@ export const ResultCardView = memo(function ResultCardView({
   onAskForChanges,
   children,
   actionsInside,
-  footer,
+  footer: given,
+  work,
   arrived,
 }: ResultCardViewProps) {
+  const footer = given ?? (work && <WorkTimeline work={work} agent={agent} />);
   const [opened, setOpened] = useState(false);
   if (!newest && !opened) {
     return (

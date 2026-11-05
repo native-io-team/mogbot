@@ -632,6 +632,25 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     []
   );
 
+  // Stable, so the memoised chat re-renders only for its own agent.
+  const shownEngine = shown?.engine;
+  const setUpShownEngine = useCallback(() => {
+    if (!shownEngine) return;
+    setEngineSetup({
+      engine: shownEngine,
+      // Codex can be installed and only need signing in.
+      step: engines.find((e) => e.id === shownEngine)?.installed ? 'sign-in' : 'install',
+    });
+  }, [shownEngine, engines]);
+  const signInShown = useCallback(() => {
+    if (shownEngine) signIn(shownEngine);
+  }, [shownEngine, signIn]);
+  const { onGoHome, onGoProjects } = sidebarProps;
+  const chatCompact = useMemo(
+    () => (isCompact ? { onGoHome, onGoProjects } : undefined),
+    [isCompact, onGoHome, onGoProjects]
+  );
+
   return (
     <div className="app workspace workspace-home agents-mode">
       <div className={`projects-with-rail${isCompact ? ' is-compact' : ''}`} key="view-agents">
@@ -714,29 +733,12 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
             <AgentChat
               key={shown.id}
               agent={shown}
-              agentsById={agentsById}
               onOpenAgent={setSelectedId}
-              onSetUpEngine={() =>
-                setEngineSetup({
-                  engine: shown.engine,
-                  // Codex can be installed and only need signing in.
-                  step: engines.find((e) => e.id === shown.engine)?.installed
-                    ? 'sign-in'
-                    : 'install',
-                })
-              }
-              onSignIn={() => signIn(shown.engine)}
+              onSetUpEngine={setUpShownEngine}
+              onSignIn={signInShown}
               onImport={openImport}
               onEscape={escapeSearch}
-              compact={
-                isCompact
-                  ? {
-                      agents,
-                      onGoHome: sidebarProps.onGoHome,
-                      onGoProjects: sidebarProps.onGoProjects,
-                    }
-                  : undefined
-              }
+              compact={chatCompact}
               {...actions}
               jumpTo={jump?.agentId === shown.id ? jump.messageId : null}
               onJumped={clearJump}

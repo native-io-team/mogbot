@@ -135,6 +135,7 @@
 @import './features/inbox.css';
 @import './features/agents.css';
 @import './features/agents-motion.css';
+@import './features/agents-chat-history.css';
 @import './features/agents-attachments.css';
 @import './features/agents-control.css';
 @import './features/agents-when.css';
