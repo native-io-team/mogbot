@@ -169,8 +169,39 @@ leftover process (if its command line still names the session), removes the
 mark, records the turn's change card if it changed the project, and ends on
 an error line (tagged `failure: other`) saying the turn didn't finish. The
 messages queued behind it (`inbox.json`) are then sent once, after a note
-naming them; the interrupted turn itself is not re-run. An update's restart
-waits for working agents ("After agents finish"; click again to restart now).
+naming them; the interrupted turn itself is not re-run. What the last run
+left is noted synchronously at launch (`runner::prepare_recovery`, before
+anything can start a turn): those messages go back on the queue (and stay on
+disk), and those agents' turns wait until recovery has dealt with them, so a
+turn started in this run is never mistaken for a leftover and nothing is
+sent twice. The mark is written *before* a batch leaves the queue, so there
+is no moment a quit leaves neither. An update's restart waits for working
+agents ("After agents finish"; click again to restart now).
+
+**Nothing goes silent.** A worker that panics mid-turn resets the agent
+(idle, slot freed, an error line saying the turn didn't finish) instead of
+leaving it "working" forever. The panic is caught (`catch_unwind`) and
+handled as a failed turn; a guard that fires while unwinding only resets
+in-memory state, so a second panic in that handling ends one task, never the
+app. Word to delegators keeps the dead turn's hop (and the 6-hop cap), and a
+worker that died before taking anything tells the agents whose requests it
+dropped. Recovery at launch can't hold turns forever either: each agent is
+bounded (45 s), the whole pass too (150 s), a panic in one is caught, and the
+gate opens however recovery ends; the worktree sweep runs after the agents.
+A turn the app closed on before it took its messages (its mark names them,
+and they were still in the inbox) is reported as sent again, never also as
+"didn't finish · Retry"; and the "sent again" note names only what is still
+queued, not messages a Stop dropped meanwhile. Stop, and the 3-hour limit, tell any agent
+that delegated the turn "{name} couldn't finish: …", and a Stop tells each
+agent whose request was still queued that it was stopped before it started.
+A scheduled run is settled by its ticket id (it rides on the queued wake and
+carries over an interrupt); stopped, or dropped by a Stop, it is recorded as
+failed ("Stopped"), never as a success or left "Running". The status says
+"Needs your OK" until every open card of the turn is answered (a count per
+agent, per turn). Deleting an agent stops it, closes its queue (anything sent to it
+meanwhile is refused and its sender told), and waits up to 3 s for its
+turn to end; a write for an agent no longer registered is refused, so its
+folder never comes back.
 
 **Damaged files and newer builds.** `agents.json` is written atomically and
 again as `agents.json.bak`. It is read and written losslessly: fields this
@@ -928,20 +959,27 @@ check-in tick is a loop inside the app. So:
   process is stopped on the way out (`cleanup_agent_processes`), and any that
   outlived a crash are cleaned up at the next launch. What the agent already
   did (files written, commands run) stands. Messages queued behind that turn
-  live in memory (`runner::Runtime`), so they are not sent; say it again.
-  Nothing fires while the app is closed.
+  are on disk (`inbox.json`) and are sent once when the app reopens, after a
+  note naming them (see "Quitting mid-turn"). Nothing fires while the app is
+  closed.
 - **It reopens.** Every conversation is on disk and the next message resumes
-  the same Claude Code session, so the agent still has its context. There is
-  no automatic restart of an interrupted turn on this branch: you pick it up
-  by sending the next message. The app's own confirmation cards left
+  the same Claude Code session, so the agent still has its context. The
+  interrupted turn itself is not re-run (it may have done half its work):
+  its chat ends on "The app closed while this agent was working…", with
+  Retry. The app's own confirmation cards left
   pending are marked expired (`store::expire_stale_approvals`); permission
   cards stay answerable, and a late Allow wakes the agent again. Missed
   check-ins follow the rules above: a one-time one fires once, late; a routine
   doesn't backfill.
 - **The Mac sleeps.** Everything, the agent's process included, is frozen
   with it, and carries on when it wakes. If its connection dropped meanwhile
-  the turn can end in an error, shown with Retry like any other. A check-in due during sleep is
-  late, under the same rules.
+  the turn can end in an error, shown with Retry like any other. A turn that
+  instead just goes quiet (a half-open connection, a stalled MCP server) is
+  not left looking busy: after 10 minutes of wall-clock time with no output
+  from the CLI and no tool call open, the working line says "No word from
+  Claude Code for N min. It may be stuck; Stop it if it doesn't move on."
+  (`runner::quiet_line`). It is not stopped for you; the 3-hour limit still
+  applies. A check-in due during sleep is late, under the same rules.
 
 Three things help, offered together (`get_stay_on` / `set_stay_on`), each read
 back from the thing itself:

@@ -629,7 +629,7 @@ pub async fn agents_busy() -> Result<usize, CommandError> {
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_stop(app: AppHandle, agent_id: String) -> Result<bool, CommandError> {
-    let stopped = runner::stop(&agent_id);
+    let stopped = runner::stop(&app, &agent_id);
     // The Chief's Stop (here and on the phone) also stops an import it's
     // running; only the import's own messages go, never the user's.
     let import = store::get(&agent_id).is_ok_and(|a| a.is_main) && agents::connector::stop(&app);
@@ -650,7 +650,7 @@ pub async fn agents_take_over(
     stop_first: Option<bool>,
 ) -> Result<takeover::View, CommandError> {
     if stop_first.unwrap_or(false) && takeover::view(&agent_id).is_none() {
-        runner::stop(&agent_id);
+        runner::stop(&app, &agent_id);
         // The turn's process tree gets ~1.5s to go, then its exit is waited
         // on for at most 10s (`runner::finish`); wait that out.
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);

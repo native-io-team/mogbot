@@ -529,10 +529,28 @@ pub async fn abandon(app: &AppHandle, agent_id: &str) {
 /// so nothing can start a turn for it on the way out; a take-over that
 /// finished opening meanwhile is ended after (see [`begin`]).
 pub async fn delete_agent(app: &AppHandle, agent_id: &str) -> Result<store::Agent, CommandError> {
-    runner::stop(agent_id);
+    // Refused before anything is stopped.
+    if store::get(agent_id).is_ok_and(|a| a.is_main) {
+        return Err(CommandError::expected(
+            "The Chief of Staff can't be deleted.",
+        ));
+    }
+    // Closes its queue too: nothing sent to it while the delete waits below
+    // starts a turn (whoever sent it is told it won't be done).
+    runner::stop_for_delete(app, agent_id);
     abandon(app, agent_id).await;
-    let removed = store::delete(agent_id)?;
+    // What its dying turn records lands before its folder goes (and a line
+    // recorded after that is refused: `store::append_message`).
+    runner::wait_until_idle(agent_id, Duration::from_secs(3)).await;
+    let removed = match store::delete(agent_id) {
+        Ok(removed) => removed,
+        Err(e) => {
+            runner::undelete(agent_id);
+            return Err(e);
+        }
+    };
     abandon(app, agent_id).await;
+    runner::forget(agent_id);
     Ok(removed)
 }
 
@@ -761,6 +779,11 @@ pub fn closed_line(name: &str) -> String {
 /// At launch: a take-over the last run never handed back. Its CLI can
 /// outlive the app and would write the same session as the next turn, so it
 /// is stopped (only while it is still that CLI: `runner::stop_orphan`).
+/// Whether the last run left a take-over's mark for this agent.
+pub fn left_over(agent_id: &str) -> bool {
+    mark_path(agent_id).is_some_and(|p| p.exists())
+}
+
 pub async fn recover_after_restart(app: &AppHandle, agent: &store::Agent) {
     let Some(path) = mark_path(&agent.id).filter(|p| p.exists()) else {
         return;

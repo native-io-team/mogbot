@@ -3,7 +3,10 @@
 //! A plain scan of each `messages.jsonl`: at the scale one person's agents
 //! reach (tens of agents, thousands of lines) reading them is faster than
 //! keeping an index honest. Matching is case-insensitive and every word of the
-//! query must appear in the message; hits are newest first.
+//! query must appear in the message; hits are newest first. Each log is read
+//! newest line first, without its lock (it is append-only), raw lines that
+//! can't hold every word are skipped before parsing, and an agent stops once
+//! it has [`MAX_HITS`]. 100 agents × 10k messages: well under 500 ms.
 
 use serde::Serialize;
 
@@ -149,21 +152,110 @@ fn match_message(message: &AgentMessage, terms: &[Vec<char>]) -> Option<String> 
     Some(snippet(&text, first))
 }
 
-/// Search the given agents' conversations. Separate from [`search`] so tests
-/// can run it over a fixed set.
-pub fn search_in(
-    agents: &[store::Agent],
-    query: &str,
+/// Whether a raw log line (lowered, ASCII only, so offsets stay put) may hold
+/// every term, before it is parsed. Exact as a filter for what
+/// [`match_message`] matches, which is in the line's own text lowered the
+/// same way, except where markdown it drops (`**`, a backtick) joins words
+/// (those lines are checked with it dropped), a char is JSON-escaped (a term
+/// with a quote, backslash or control char isn't used to filter; a line with
+/// a `\u` escape, or JSON's optional `\/`, is let through), a non-ASCII char
+/// lowers to an ASCII one (the Kelvin sign is `k`: such a line is let
+/// through), or a term isn't ASCII (left to the parse).
+/// U+212A KELVIN SIGN, the one char outside ASCII that lowercases into it
+/// (to `k`). (U+0130's lowercase starts with `i` but carries a combining dot,
+/// so it never matches an ASCII term in the parse either.)
+const KELVIN: char = '\u{212A}';
+
+struct Prefilter {
+    terms: Vec<String>,
+}
+
+impl Prefilter {
+    fn new(terms: &[Vec<char>]) -> Self {
+        let usable = |t: &&Vec<char>| {
+            t.iter()
+                .all(|c| c.is_ascii() && !matches!(c, '"' | '\\') && !c.is_control())
+        };
+        Prefilter {
+            terms: terms
+                .iter()
+                .filter(usable)
+                .map(|t| t.iter().collect())
+                .collect(),
+        }
+    }
+
+    fn may_match(&self, lowered: &str) -> bool {
+        let all = |line: &str| self.terms.iter().all(|t| line.contains(t.as_str()));
+        if self.terms.is_empty()
+            || all(lowered)
+            || lowered.contains("\\u")
+            || lowered.contains("\\/")
+            || lowered.contains(KELVIN)
+        {
+            return true;
+        }
+        (lowered.contains("**") || lowered.contains('`'))
+            && all(&lowered.replace("**", "").replace('`', ""))
+    }
+}
+
+/// One agent's hits, newest first, at most `limit`. The log is read from its
+/// end in growing chunks, only as far back as it takes, and without its lock:
+/// it is only ever appended to, and a line torn by an append in progress just
+/// doesn't parse.
+fn search_agent(
+    agent: &store::Agent,
+    terms: &[Vec<char>],
     limit: usize,
 ) -> Result<Vec<SearchHit>, CommandError> {
-    let terms = terms(query);
-    if terms.is_empty() {
-        return Ok(Vec::new());
-    }
+    use std::io::{Read, Seek, SeekFrom};
+    let path = store::agent_home(&agent.id)?.join("messages.jsonl");
+    let mut file = match std::fs::File::open(&path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(super::err_io(e.to_string())),
+    };
+    let mut end = file.metadata().map_err(super::err_io)?.len();
+    let filter = Prefilter::new(terms);
     let mut hits = Vec::new();
-    for agent in agents {
-        for message in store::messages(&agent.id, usize::MAX)? {
-            if let Some(snippet) = match_message(&message, &terms) {
+    let mut chunk: u64 = 256 * 1024;
+    // The start of a later chunk's first line, cut by the chunk edge.
+    let mut carry: Vec<u8> = Vec::new();
+    while end > 0 && hits.len() < limit {
+        let from = end.saturating_sub(chunk);
+        let mut buf = vec![0u8; (end - from) as usize];
+        file.seek(SeekFrom::Start(from))
+            .and_then(|_| file.read_exact(&mut buf))
+            .map_err(super::err_io)?;
+        buf.extend_from_slice(&carry);
+        end = from;
+        let whole_from = if from == 0 {
+            0
+        } else {
+            match buf.iter().position(|b| *b == b'\n') {
+                Some(at) => at + 1,
+                None => {
+                    carry = buf;
+                    chunk = chunk.saturating_mul(2);
+                    continue;
+                }
+            }
+        };
+        carry = buf[..whole_from].to_vec();
+        let text = String::from_utf8_lossy(&buf[whole_from..]);
+        let lowered = text.to_ascii_lowercase();
+        for (low, line) in lowered.split('\n').rev().zip(text.split('\n').rev()) {
+            if hits.len() >= limit {
+                break;
+            }
+            if line.trim().is_empty() || !filter.may_match(low) {
+                continue;
+            }
+            let Ok(message) = serde_json::from_str::<AgentMessage>(line) else {
+                continue;
+            };
+            if let Some(snippet) = match_message(&message, terms) {
                 hits.push(SearchHit {
                     agent_id: agent.id.clone(),
                     agent_name: agent.name.clone(),
@@ -176,8 +268,54 @@ pub fn search_in(
                 });
             }
         }
+        chunk = chunk.saturating_mul(2).min(8 * 1024 * 1024);
     }
-    // Newest first (a stable sort, so same-millisecond lines keep log order).
+    Ok(hits)
+}
+
+/// Search the given agents' conversations. Separate from [`search`] so tests
+/// can run it over a fixed set. An agent whose log can't be read is left
+/// out, not the whole search.
+pub fn search_in(
+    agents: &[store::Agent],
+    query: &str,
+    limit: usize,
+) -> Result<Vec<SearchHit>, CommandError> {
+    let terms = terms(query);
+    if terms.is_empty() {
+        return Ok(Vec::new());
+    }
+    // Each agent's newest `limit` are all that could make the cut; agents are
+    // read a few at a time, in order, so the merge below is deterministic.
+    let threads = std::thread::available_parallelism()
+        .map_or(4, |n| n.get())
+        .clamp(1, 8);
+    let per = agents.len().div_ceil(threads).max(1);
+    let terms = &terms;
+    let found: Vec<Vec<SearchHit>> = std::thread::scope(|scope| {
+        let workers: Vec<_> = agents
+            .chunks(per)
+            .map(|group| {
+                scope.spawn(move || {
+                    let mut hits = Vec::new();
+                    for agent in group {
+                        match search_agent(agent, terms, limit) {
+                            Ok(mut found) => hits.append(&mut found),
+                            Err(e) => tracing::warn!("[Agents] search skipped {}: {e}", agent.id),
+                        }
+                    }
+                    hits
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .map(|w| w.join().unwrap_or_default())
+            .collect()
+    });
+    let mut hits: Vec<SearchHit> = found.into_iter().flatten().collect();
+    // Newest first. Each agent's hits came newest first already, so a
+    // stable sort keeps same-millisecond lines newest-in-log first.
     hits.sort_by(|a, b| b.ts.cmp(&a.ts));
     hits.truncate(limit);
     Ok(hits)
@@ -321,6 +459,54 @@ mod tests {
     }
 
     #[test]
+    fn the_raw_prefilter_never_hides_a_match() {
+        with_root(|| {
+            let a = agent("Finance");
+            // Joined by dropped markdown, quoted, non-ASCII case, multi-line.
+            say(&a, MessageKind::Agent, 1, "Pay **north**wind now");
+            say(&a, MessageKind::Agent, 2, "He said \"MÜLLER\" owes us");
+            say(&a, MessageKind::Agent, 3, "line one\nInvoice two");
+            let all = store::list().unwrap();
+            assert_eq!(search_in(&all, "northwind", 50).unwrap().len(), 1);
+            assert_eq!(search_in(&all, "\"müller\"", 50).unwrap().len(), 1);
+            assert_eq!(search_in(&all, "müller", 50).unwrap().len(), 1);
+            assert_eq!(search_in(&all, "invoice", 50).unwrap().len(), 1);
+            assert!(search_in(&all, "globex", 50).unwrap().is_empty());
+        });
+    }
+
+    #[test]
+    fn an_unreadable_log_leaves_out_one_agent_not_the_search() {
+        with_root(|| {
+            let a = agent("Finance");
+            let b = agent("Broken");
+            say(&a, MessageKind::Agent, 1, "deploy done");
+            say(&b, MessageKind::Agent, 2, "deploy done");
+            let log = store::agent_home(&b.id).unwrap().join("messages.jsonl");
+            std::fs::remove_file(&log).unwrap();
+            std::fs::create_dir(&log).unwrap(); // can't be read as a file
+            let found = search_in(&store::list().unwrap(), "deploy", 50).unwrap();
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].agent_id, a.id);
+        });
+    }
+
+    #[test]
+    fn each_agent_stops_at_the_cap_keeping_its_newest() {
+        with_root(|| {
+            let a = agent("Finance");
+            for ts in 0..30 {
+                say(&a, MessageKind::Agent, ts, "invoice");
+            }
+            let found = search_in(&store::list().unwrap(), "invoice", 5).unwrap();
+            assert_eq!(
+                found.iter().map(|h| h.ts).collect::<Vec<_>>(),
+                vec![29, 28, 27, 26, 25]
+            );
+        });
+    }
+
+    #[test]
     fn short_messages_are_the_whole_snippet_without_markdown() {
         let text = plain("## Done\n\nThe **pricing** table uses `grid`.\n");
         assert_eq!(
@@ -387,3 +573,7 @@ mod tests {
         assert!(match_message(&message, &terms("müller schmidt")).is_none());
     }
 }
+
+#[cfg(test)]
+#[path = "review_search_tests.rs"]
+mod review_search_tests;

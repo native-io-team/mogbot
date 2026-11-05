@@ -18,7 +18,7 @@ use super::engine::Engine;
 use super::files;
 use super::permissions;
 use super::results;
-use super::runner::{self, From, Status};
+use super::runner::{self, From};
 use super::schedule;
 use super::store::{self, AgentRef, Approval, ApprovalStatus, MessageKind};
 use crate::errors::CommandError;
@@ -1024,17 +1024,8 @@ pub(super) async fn ask_user(
     let _ = runner::record(app, card);
     store::refresh_pending(&caller.id);
     super::notify::refresh_badge(app);
-    let before = runner::status_of(&caller.id);
-    runner::set_status(
-        app,
-        &caller.id,
-        Status {
-            state: "waiting",
-            activity: Some("Waiting for your OK".into()),
-            since: before.since,
-            work: None,
-        },
-    );
+    // "Waiting for your OK" until this card and any other open one are answered.
+    let wait = runner::begin_wait(app, &caller.id);
 
     let waited = tokio::time::timeout(approval_wait(), rx)
         .await
@@ -1063,20 +1054,9 @@ pub(super) async fn ask_user(
     }
     let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
     super::notify::refresh_badge(app);
-    // Back to work, unless the turn already ended under the card (Stop, or
-    // the user interrupted it): then it isn't ours to change.
-    if runner::status_of(&caller.id).state == "waiting" {
-        runner::set_status(
-            app,
-            &caller.id,
-            Status {
-                state: "working",
-                activity: None,
-                since: before.since,
-                work: None,
-            },
-        );
-    }
+    // Back to work, unless another card is still open, or the turn already
+    // ended under this one (Stop, or the user interrupted it).
+    drop(wait);
     answer
 }
 

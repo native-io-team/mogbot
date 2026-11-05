@@ -382,6 +382,7 @@ fn credentials_never_reach_a_label_a_turn_file_or_a_status() {
         });
         let taken = LIVE.lock().unwrap().remove(&agent).unwrap();
         let (anchor, work) = settle(taken, 2).unwrap();
+        std::fs::create_dir_all(store::agent_home(&agent).unwrap()).unwrap();
         save(&agent, &anchor.id, &work).unwrap();
         let file = std::fs::read_to_string(path_for(&agent, &anchor.id).unwrap()).unwrap();
         assert_eq!(work.step_count, 7);
@@ -678,6 +679,7 @@ fn kept_on_disk_beside_the_log_never_in_it() {
     let dir = tempfile::tempdir().unwrap();
     store::set_root_for_tests(Some(dir.path().to_path_buf()));
     let agent_id = "a1";
+    std::fs::create_dir_all(store::agent_home(agent_id).unwrap()).unwrap();
     let work = TurnWork {
         started_at: 1,
         ended_at: Some(2),
@@ -716,6 +718,7 @@ fn old_timelines_are_pruned_but_the_first_pages_keep_theirs() {
     let dir = tempfile::tempdir().unwrap();
     store::set_root_for_tests(Some(dir.path().to_path_buf()));
     let agent_id = "busy";
+    std::fs::create_dir_all(store::agent_home(agent_id).unwrap()).unwrap();
     let work = TurnWork {
         step_count: 1,
         ..TurnWork::default()
@@ -745,6 +748,7 @@ fn old_timelines_are_pruned_but_the_first_pages_keep_theirs() {
 
     // A quiet agent: old, but few, so all of them stay.
     let quiet = "quiet";
+    std::fs::create_dir_all(store::agent_home(quiet).unwrap()).unwrap();
     for i in 0..10 {
         let id = format!("q{i}");
         save(quiet, &id, &work).unwrap();

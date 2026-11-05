@@ -30,7 +30,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 use super::mcp;
-use super::runner::{self, Status};
+use super::runner;
 use super::store::{self, AgentRef, Approval, ApprovalStatus, MessageKind};
 use crate::errors::CommandError;
 use crate::remote_access::agent_state::HIGHLIGHTED;
@@ -324,17 +324,8 @@ pub(crate) async fn ask(
     };
     let request_id = approval.request_id;
 
-    let before = runner::status_of(&caller.id);
-    runner::set_status(
-        app,
-        &caller.id,
-        Status {
-            state: "waiting",
-            activity: Some("Waiting for your OK".into()),
-            since: before.since,
-            work: None,
-        },
-    );
+    // "Waiting for your OK" until this card and any other open one are answered.
+    let wait = runner::begin_wait(app, &caller.id);
     let mut rx = mcp::register_waiter(&request_id);
     let deadline = tokio::time::Instant::now() + mcp::approval_wait();
     let settled = loop {
@@ -365,18 +356,7 @@ pub(crate) async fn ask(
         }
     };
     mcp::drop_waiter(&request_id);
-    if runner::status_of(&caller.id).state == "waiting" {
-        runner::set_status(
-            app,
-            &caller.id,
-            Status {
-                state: "working",
-                activity: None,
-                since: before.since,
-                work: None,
-            },
-        );
-    }
+    drop(wait);
     settled
 }
 

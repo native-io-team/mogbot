@@ -1461,6 +1461,10 @@ fn path_for(agent_id: &str, message_id: &str) -> Option<std::path::PathBuf> {
 }
 
 fn save(agent_id: &str, message_id: &str, work: &TurnWork) -> Result<(), String> {
+    // Never brings a deleted agent's folder back (see `store::append_message`).
+    if store::is_gone(agent_id) {
+        return Err("the agent no longer exists".into());
+    }
     let path = path_for(agent_id, message_id).ok_or("not a message id")?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;

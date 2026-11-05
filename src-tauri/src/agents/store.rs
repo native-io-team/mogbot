@@ -811,6 +811,9 @@ pub fn delete(id: &str) -> Result<Agent, CommandError> {
     write_registry(&registry)?;
     super::secrets::forget_all(&removed);
     super::work::forget_agent(&removed.id);
+    if let Ok(log) = log_path(&removed.id) {
+        forget_pending(&log);
+    }
     // The home goes with it: its memory and chat are the agent (and the
     // timelines kept under its replies, in `turns/`).
     let home = agents_root()?.join(&removed.id);
@@ -905,7 +908,117 @@ fn append_line<T: Serialize>(path: &Path, value: &T) -> Result<(), CommandError>
 pub fn append_message(message: &AgentMessage) -> Result<(), CommandError> {
     let lock = log_lock(&message.agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
-    append_line(&log_path(&message.agent_id)?, message)
+    ensure_home(&message.agent_id)?;
+    let log = log_path(&message.agent_id)?;
+    let before = pending_stamp(&message.agent_id)?;
+    append_line(&log, message)?;
+    if message.approval.is_some() {
+        // A new card: read back from the log (redacted, answers applied) next time.
+        forget_pending(&log);
+    } else {
+        // Nothing for the cache, but the log grew by this line: still current.
+        restamp_pending(&message.agent_id, before);
+    }
+    Ok(())
+}
+
+/// The agent's folder, which a write to its log never brings back: an agent
+/// deleted while its turn was still finishing stays deleted (its chat was
+/// the user's to delete). A registered agent whose folder went missing gets
+/// it back.
+fn ensure_home(agent_id: &str) -> Result<(), CommandError> {
+    let home = agent_home(agent_id)?;
+    if home.is_dir() {
+        return Ok(());
+    }
+    if get(agent_id).is_err() {
+        return Err(CommandError::expected("That agent no longer exists."));
+    }
+    std::fs::create_dir_all(&home).map_err(|e| super::err_io(e.to_string()))
+}
+
+/// Whether the agent is gone: not in the registry, and no folder.
+pub fn is_gone(agent_id: &str) -> bool {
+    agent_home(agent_id).is_ok_and(|h| !h.is_dir()) && get(agent_id).is_err()
+}
+
+/* ------------------------------------------------- pending approvals cache */
+
+/// Each agent's pending cards, as last read from its log, with the sizes of
+/// the log and `approvals.jsonl` they were read at. Cards are only added by
+/// appends and answered by answer lines, both written here under the log
+/// lock, so the cache follows them; anything else that changes either file
+/// changes its size, and the next read starts over. Keyed by the log's path.
+struct PendingCache {
+    stamp: (u64, u64),
+    cards: Vec<AgentMessage>,
+}
+
+static PENDING: LazyLock<Mutex<HashMap<PathBuf, PendingCache>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn file_len(path: &Path) -> u64 {
+    std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+}
+
+/// The sizes of the agent's log and answers, as they are now.
+fn pending_stamp(agent_id: &str) -> Result<(u64, u64), CommandError> {
+    Ok((
+        file_len(&log_path(agent_id)?),
+        file_len(&answers_path(agent_id)?),
+    ))
+}
+
+fn forget_pending(log: &Path) {
+    PENDING
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(log);
+}
+
+/// After a write of our own that changed no card: the cache, if it was
+/// current at `before`, is current now.
+fn restamp_pending(agent_id: &str, before: (u64, u64)) {
+    let (Ok(log), Ok(now)) = (log_path(agent_id), pending_stamp(agent_id)) else {
+        return;
+    };
+    let mut cache = PENDING.lock().unwrap_or_else(|e| e.into_inner());
+    match cache.get_mut(&log) {
+        Some(entry) if entry.stamp == before => entry.stamp = now,
+        Some(_) => {
+            cache.remove(&log);
+        }
+        None => {}
+    }
+}
+
+/// The agent's pending cards, answers applied; from the cache while the
+/// files are as it read them. Call with the log lock held.
+fn pending_cards(agent_id: &str) -> Result<Vec<AgentMessage>, CommandError> {
+    let log = log_path(agent_id)?;
+    // Sized before reading: a write in between makes the next read start over.
+    let stamp = pending_stamp(agent_id)?;
+    if let Some(entry) = PENDING.lock().unwrap_or_else(|e| e.into_inner()).get(&log) {
+        if entry.stamp == stamp {
+            return Ok(entry.cards.clone());
+        }
+    }
+    let cards: Vec<AgentMessage> = cards(agent_id, None)?
+        .into_iter()
+        .filter(|m| {
+            m.approval
+                .as_ref()
+                .is_some_and(|a| a.status == ApprovalStatus::Pending)
+        })
+        .collect();
+    PENDING.lock().unwrap_or_else(|e| e.into_inner()).insert(
+        log,
+        PendingCache {
+            stamp,
+            cards: cards.clone(),
+        },
+    );
+    Ok(cards)
 }
 
 /// Put another conversation's lines (already JSON, one message each) in
@@ -929,6 +1042,7 @@ pub fn prepend_log_block(
     let lock = log_lock(agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     let path = log_path(agent_id)?;
+    forget_pending(&path);
     let existing = match std::fs::read_to_string(&path) {
         Ok(raw) => raw,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
@@ -1233,7 +1347,8 @@ fn resolve_approval(
 ) -> Result<Option<AgentMessage>, CommandError> {
     let lock = log_lock(agent_id);
     let guard = lock.lock().unwrap_or_else(|e| e.into_inner());
-    let mut all = cards(agent_id, None)?;
+    let mut all = pending_cards(agent_id)?;
+    let before = pending_stamp(agent_id)?;
     let mut changed = None;
     if let Some(message) = all.iter_mut().find(|m| {
         m.approval
@@ -1255,6 +1370,29 @@ fn resolve_approval(
         changed = Some(message.clone());
     }
     let pending = count_pending(&all);
+    if changed.is_some() {
+        // The cache follows the answer it just wrote.
+        let log = log_path(agent_id)?;
+        let now = pending_stamp(agent_id)?;
+        let mut cache = PENDING.lock().unwrap_or_else(|e| e.into_inner());
+        match cache.get_mut(&log) {
+            Some(entry) if entry.stamp == before => {
+                entry.stamp = now;
+                entry.cards = all
+                    .iter()
+                    .filter(|m| {
+                        m.approval
+                            .as_ref()
+                            .is_some_and(|a| a.status == ApprovalStatus::Pending)
+                    })
+                    .cloned()
+                    .collect();
+            }
+            _ => {
+                cache.remove(&log);
+            }
+        }
+    }
     drop(guard);
     let _ = update(agent_id, |a| a.pending_approvals = pending);
     if changed.is_some() {
@@ -1279,7 +1417,7 @@ pub fn refresh_pending(agent_id: &str) {
     let pending = {
         let lock = log_lock(agent_id);
         let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
-        cards(agent_id, None)
+        pending_cards(agent_id)
             .map(|log| count_pending(&log))
             .unwrap_or(0)
     };
@@ -1289,6 +1427,13 @@ pub fn refresh_pending(agent_id: &str) {
 pub fn find_approval(agent_id: &str, request_id: &str) -> Result<Option<Approval>, CommandError> {
     let lock = log_lock(agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(open) = pending_cards(agent_id)?
+        .into_iter()
+        .filter_map(|m| m.approval)
+        .find(|a| a.request_id == request_id)
+    {
+        return Ok(Some(open));
+    }
     Ok(cards(agent_id, Some(request_id))?
         .into_iter()
         .find_map(|m| m.approval))
@@ -1298,10 +1443,9 @@ pub fn find_approval(agent_id: &str, request_id: &str) -> Result<Option<Approval
 pub fn pending_approvals(agent_id: &str) -> Result<Vec<Approval>, CommandError> {
     let lock = log_lock(agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
-    Ok(cards(agent_id, None)?
+    Ok(pending_cards(agent_id)?
         .into_iter()
         .filter_map(|m| m.approval)
-        .filter(|a| a.status == ApprovalStatus::Pending)
         .collect())
 }
 

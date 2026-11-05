@@ -180,3 +180,6 @@ mod tests {
         assert_eq!(log[0].text, prompts::CHIEF_GREETING);
     }
 }
+
+#[cfg(test)]
+mod audit_tests;
