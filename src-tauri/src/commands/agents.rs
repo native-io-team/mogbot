@@ -36,6 +36,8 @@ pub struct AgentsOverview {
     pub engines: Vec<engine::EngineInfo>,
     /// What a new agent starts on when nobody picked (Settings → Agents).
     pub defaults: agents::defaults::View,
+    /// How much agents do on their own (Settings → Agents, onboarding).
+    pub independence: agents::independence::Level,
 }
 
 /// Store work (file reads and writes) on a blocking thread, off the async
@@ -81,6 +83,7 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
         engine_ready,
         engines,
         defaults,
+        independence: agents::independence::level(),
     })
 }
 
@@ -1584,6 +1587,28 @@ pub async fn agents_set_defaults(
     // The overview carries it: the desk's editor and the phone pick it up.
     emit_registry(&app);
     Ok(view)
+}
+
+/// How much agents do on their own.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_independence() -> Result<agents::independence::Level, CommandError> {
+    blocking(|| Ok(agents::independence::level())).await
+}
+
+/// The user's own choice (onboarding, Settings, ⌘K, the phone): no card.
+/// It changes what agents are told on their next turn, never what asks.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_set_independence(
+    app: AppHandle,
+    level: String,
+) -> Result<agents::independence::Level, CommandError> {
+    let level = agents::independence::Level::parse(&level)?;
+    blocking(move || agents::independence::set_level(level, store::now_ms())).await?;
+    // The overview carries it: Settings and the phone pick it up.
+    emit_registry(&app);
+    Ok(level)
 }
 
 #[tauri::command]

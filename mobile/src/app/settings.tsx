@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Icon, Row, Section, T, tap } from '../components/ui';
 import { NewAgentDefaults } from '../components/NewAgentDefaults';
+import { IndependenceSetting } from '../components/IndependenceSetting';
 import { formatDate } from '../lib/agents';
 import { useQuotaLines } from '../lib/quota';
 import { useAccountLines } from '../lib/accounts';
@@ -175,6 +176,7 @@ export default function Settings() {
         </Section>
       )}
 
+      <IndependenceSetting />
       <NewAgentDefaults />
       {servesTeam && (
         <Section title="Logins" footer="The apps your agents asked for, one row each. Signing in happens on your Mac.">

@@ -283,10 +283,19 @@ export const appScenarios: Scenario[] = [
     },
   },
   {
+    id: 'onboarding-independence',
+    title: 'Onboarding — how much agents do on their own',
+    looksRightWhen:
+      'Claude Code was already set up, so the one question before the hand-off: “How much should your agents do on their own?”, a line that it applies to every agent and can be changed in Settings → Agents, then three bordered choices with one line each — Check with me often, Use good judgement (selected, a stronger neutral border, not the accent), Go hard — get it done — and under them “You’ll always be asked before anything that spends money, sends as you, or deletes.” Skip and Continue below.',
+    requires: '.agent-onboarding-independence .independence-choice__option[aria-checked="true"]',
+    commands: ONBOARDING_ENGINE_ONLY,
+  },
+  {
     id: 'onboarding-handoff',
     title: 'Onboarding — the end: hand-off to the Chief of Staff',
     looksRightWhen:
-      'Claude Code was already set up on this machine, and nothing else was (no Node, no Git): onboarding goes straight to the hand-off. The Chief’s badge, “You’re all set”, “Claude Code is connected. Your Chief of Staff is waiting for you.” and one button, “Meet your Chief of Staff”. No rocket, no “dev environment”.',
+      'Claude Code was already set up on this machine, and nothing else was (no Node, no Git): after the independence question (skipped here), the hand-off. The Chief’s badge, “You’re all set”, “Claude Code is connected. Your Chief of Staff is waiting for you.” and one button, “Meet your Chief of Staff”. No rocket, no “dev environment”.',
+    steps: [{ click: '.agent-onboarding-independence__actions .button:first-child' }],
     requires: '.celebration-screen',
     commands: ONBOARDING_ENGINE_ONLY,
   },
@@ -295,7 +304,10 @@ export const appScenarios: Scenario[] = [
     title: 'Onboarding — after the hand-off, Agents with the Chief',
     looksRightWhen:
       'Agents mode, not the projects dashboard: the Chief of Staff selected in the sidebar, its chat open on the greeting, with the three starters and More ideas… under it and the composer ready.',
-    steps: [{ click: '.celebration-btn' }],
+    steps: [
+      { click: '.agent-onboarding-independence__actions .button:first-child' },
+      { click: '.celebration-btn' },
+    ],
     requires: '.agents-mode .agent-chat__messages > .agent-chat__starters',
     commands: ONBOARDING_ENGINE_ONLY,
   },

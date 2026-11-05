@@ -5,6 +5,9 @@
  *   (`AgentsDesktopSettings`), and what keeps agents going (keep awake, keep
  *   running when closed, open at login — `useStayOn`, read back from the
  *   thing itself).
+ * - **Independence**: how much agents do on their own (Check with me often,
+ *   Use good judgement, Go hard), and what always asks at every level
+ *   (`AgentIndependenceSettings`, `agents/independence.rs`).
  * - **Engines and models**: the engine and model new agents start on, a
  *   real setting (`AgentDefaultsSettings`), and what routines run on.
  *   Existing agents keep theirs; nothing shown that wasn't read.
@@ -28,6 +31,7 @@ import { AgentsDesktopSettings } from './AgentsDesktopSettings';
 import { AgentDefaultsSettings } from './AgentDefaultsSettings';
 import { AgentAccounts } from './AgentAccounts';
 import { AgentUsageSettings } from './AgentsUsage';
+import { AgentIndependenceSettings } from './AgentIndependenceSettings';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
@@ -128,6 +132,8 @@ export function AgentsSettings({
           </div>
         )}
       </section>
+
+      <AgentIndependenceSettings />
 
       {engines.length > 0 && hasDefaults && (
         <section className="settings-group" aria-labelledby="agents-settings-engines">

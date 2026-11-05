@@ -67,6 +67,7 @@ pub mod files;
 pub mod forecast;
 pub mod harvest;
 pub mod import;
+pub mod independence;
 pub mod interview;
 pub mod inventory;
 pub mod login_relay;

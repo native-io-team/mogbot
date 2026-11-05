@@ -399,6 +399,7 @@ pub fn overview() -> Value {
             engine_ready: true,
             engines: engines(),
             defaults: defaults(),
+            independence: crate::agents::independence::Level::GoHard,
         })
         .unwrap(),
     )
@@ -532,6 +533,7 @@ pub struct Stub {
     pub created: Mutex<Vec<PhoneNewAgent>>,
     /// Changes to new agents' defaults, as the router handed them over.
     pub defaults: Mutex<Vec<crate::agents::defaults::Change>>,
+    pub independence: Mutex<Vec<crate::agents::independence::Level>>,
     /// Agents started fresh, by id.
     pub fresh: Mutex<Vec<String>>,
     /// What reached a session: `(session id, text or "key:<key>")`.
@@ -572,6 +574,7 @@ impl Stub {
             toggles: Mutex::new(Vec::new()),
             created: Mutex::new(Vec::new()),
             defaults: Mutex::new(Vec::new()),
+            independence: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
@@ -1071,6 +1074,14 @@ impl Backend for Stub {
         }
         self.defaults.lock().unwrap().push(change);
         Ok(serde_json::to_value(defaults()).unwrap())
+    }
+
+    async fn set_independence(
+        &self,
+        level: crate::agents::independence::Level,
+    ) -> Result<Value, CommandError> {
+        self.independence.lock().unwrap().push(level);
+        Ok(json!({ "level": level }))
     }
 
     async fn import_status(&self) -> Result<Value, CommandError> {

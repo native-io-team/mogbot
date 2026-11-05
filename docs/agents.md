@@ -646,6 +646,33 @@ never "session", in what people read; **Take over / Hand back** (no noun
 where the copy means this computer. No branch names, exit codes, tab
 numbers, "via connector" or "(import)" in anything a person reads.
 
+## How much agents do on their own
+
+One choice for the whole team (`agents/independence.rs`): **Check with me
+often**, **Use good judgement** (the default) or **Go hard — get it done**.
+Asked once in onboarding, after the engine is ready and before the hand-off
+(Skip keeps the default); kept in Settings → Agents → Independence, ⌘K "How
+independent your agents are…", and the phone's Settings
+(`agents.setIndependence`, audited; read from the overview's `independence`).
+Saved in `agents/independence.json`.
+
+It changes words, never the wall. The level is one short app-owned section of
+every agent's system prompt, built from code each turn (so existing and
+imported agents get it on their next turn, nothing in their CLAUDE.md is
+touched) and fixed per level (the prompt cache only breaks when the user
+changes it). Go hard tells an agent to finish what it was asked and, before
+asking the user to do anything, check whether they already asked for it and
+whether it has tried every way it has; it stops only for money, identity,
+sending or publishing as them, or deleting their data. No approval reads the
+level: every card appears at every level, and the only ways past one are
+still a one-time grant from a late Allow or an Always-allow rule the user
+chose (`mcp::decide`; a test holds it). Read-only commands already don't ask
+under `acceptEdits`, so no relaxation was added. A turn answering outside
+text (a "When…" routine's items, or anything carrying their taint through
+`message_agent` or a room) never runs at Go hard: it is capped at Use good
+judgement, so unattended routines still finish; the approval wall and the
+taint gate anything consequential.
+
 ## Approvals
 
 `acceptEdits` lets an agent edit files inside its home and every project

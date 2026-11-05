@@ -343,7 +343,8 @@ export const agentsOverview = {
       ],
       "signedIn": false
     }
-  ]
+  ],
+  "independence": "go_hard"
 } satisfies Result<'agents.overview'>;
 export const agentsUsage = {
   "allTime": {
@@ -423,6 +424,9 @@ export const agentsSetDefaults = {
   },
   "startsOn": "claude"
 } satisfies Result<'agents.setDefaults'>;
+export const agentsSetIndependence = {
+  "level": "go_hard"
+} satisfies Result<'agents.setIndependence'>;
 export const agentsImportStatus = {
   "armed": false,
   "chiefId": "chief",
@@ -2582,6 +2586,7 @@ export const frames = [
       "agents.templates",
       "agents.update",
       "agents.setDefaults",
+      "agents.setIndependence",
       "agents.revokePermission",
       "agents.instructions",
       "agents.memory",
@@ -3279,7 +3284,8 @@ export const frames = [
             ],
             "signedIn": false
           }
-        ]
+        ],
+        "independence": "go_hard"
       }
     }
   },
@@ -3694,7 +3700,8 @@ export const frames = [
             ],
             "signedIn": false
           }
-        ]
+        ],
+        "independence": "go_hard"
       },
       "status": {
         "name": "Julian’s MacBook Pro",
