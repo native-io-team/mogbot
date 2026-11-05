@@ -127,7 +127,7 @@ export function ScreenshotPreviewModal({ filePath, onClose }: ScreenshotPreviewM
     <ModalFrame
       isOpen
       onClose={onClose}
-      title="Screenshot Preview"
+      title="Screenshot preview"
       className="screenshot-preview-modal"
     >
       <div className="screenshot-preview-content">

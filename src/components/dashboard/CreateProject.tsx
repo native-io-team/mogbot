@@ -47,15 +47,24 @@ import { availableOutcomes, outcomeFor, templateForOutcome } from '../../lib/pro
 
 const OUTCOMES = availableOutcomes(TEMPLATES);
 
+/** The three ways in: start from scratch, a template, or a live site's URL. */
+export type CreateProjectTab = 'scratch' | 'template' | 'url';
+
 /** Props for the CreateProject component */
 interface CreateProjectProps {
   /** Callback when project creation completes successfully */
   onComplete: (projectPath: string) => void;
   /** Callback when user cancels the wizard */
   onCancel: () => void;
+  /** The tab it opens on. Defaults to From scratch. */
+  initialTab?: CreateProjectTab;
 }
 
-export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
+export function CreateProject({
+  onComplete,
+  onCancel,
+  initialTab = 'scratch',
+}: CreateProjectProps) {
   const {
     formStep,
     selectedTemplate,
@@ -100,7 +109,7 @@ export function CreateProject({ onComplete, onCancel }: CreateProjectProps) {
   const selectedOutcome = hasZipTemplate ? null : outcomeFor(selectedTemplate?.id);
 
   // Tab state: "scratch" = start from scratch, "template" = community templates
-  const [activeTab, setActiveTab] = useState<'scratch' | 'template' | 'url'>('scratch');
+  const [activeTab, setActiveTab] = useState<CreateProjectTab>(initialTab);
   // The address being rebuilt, as typed. Normalised only when it is used,
   // so the field never rewrites what someone is halfway through typing.
   const [siteUrl, setSiteUrl] = useState('');

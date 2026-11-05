@@ -35,7 +35,7 @@ export function DevCommandModal({ currentCommand, onSave }: DevCommandModalProps
     <ModalFrame
       isOpen
       onClose={onClose}
-      title="Dev Server Command"
+      title="Dev server command"
       className="dev-command-content settings-form-content"
     >
       <p className="dev-command-intro settings-form-intro">

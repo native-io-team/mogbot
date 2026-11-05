@@ -2,14 +2,12 @@
 
 /* Create-project-local colors + sizing — intentional one-offs, off the global scale. */
 :root {
-  --create-default-green: #34c759;
-  --create-default-green-rgb: 52, 199, 89;
   --create-group-gap: 18px;
   --create-grid-gap: 10px;
   --create-card-pad-y: 14px;
   --create-card-radius: 10px;
   /* "Recommended" star — a neutral grey so it reads as a quiet marker and
-     stays distinct from the green selected-state ring/check. */
+     stays distinct from the accent selected-state ring/check. */
   --create-recommended-star: var(--text-muted);
 }
 
@@ -205,9 +203,9 @@
   color: var(--text-primary);
 }
 
-/* "Recommended" star — a quiet grey marker, deliberately NOT the accent green
+/* "Recommended" star — a quiet grey marker, deliberately NOT the accent
    used for selection, so on the pre-selected default tile it stays a separate
-   signal from the green selected border/check. */
+   signal from the accent selected border/check. */
 .stack-card-star {
   flex-shrink: 0;
   color: var(--create-recommended-star);
@@ -389,9 +387,10 @@
 }
 
 .template-default-toggle.active {
-  border-color: var(--create-default-green);
-  color: var(--create-default-green);
-  background: rgba(var(--create-default-green-rgb), 0.08);
+  /* "This is on" is the accent (docs/design-system.md, The accent). */
+  border-color: var(--accent-active);
+  color: var(--accent-text);
+  background: var(--accent-active-soft);
 }
 
 .template-context {

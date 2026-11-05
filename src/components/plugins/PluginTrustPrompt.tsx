@@ -86,7 +86,13 @@ export function PluginTrustPrompt({ projectPath, pending, onDecided }: Props) {
         >
           Don’t load
         </Button>
-        <Button size="compact" variant="primary" disabled={busy} onClick={() => void answer(true)}>
+        <Button
+          size="compact"
+          variant="strong"
+          data-allow
+          disabled={busy}
+          onClick={() => void answer(true)}
+        >
           Allow
         </Button>
       </div>

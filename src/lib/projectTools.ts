@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import type { CreateProjectTab } from '../components/dashboard/CreateProject';
 import { listen } from '@tauri-apps/api/event';
 import { getFullSetupStatus, type SetupItem } from './setup';
 import { getMissingOptionalTools, getMissingRequiredTools } from './agentOnboarding';
@@ -110,14 +111,24 @@ export function canStartProject(items: SetupItem[], declinedGitHub = gitHubDecli
 
 /** The three ways a project starts (new, import, local folder), each gated. */
 export function useGatedProjectStarts(starts: {
-  createProject: () => void;
+  createProject: (tab?: CreateProjectTab) => void;
   importProject: () => void;
   importLocalFolder: () => Promise<void>;
 }) {
   const gate = useProjectToolsGate();
   const { createProject, importProject, importLocalFolder } = starts;
   return {
-    handleCreateProject: useCallback(() => gate(createProject, 'create'), [gate, createProject]),
+    // Never handed an argument: it is wired straight to onClick, and a click
+    // event is not a tab.
+    handleCreateProject: useCallback(
+      () => gate(() => createProject(), 'create'),
+      [gate, createProject]
+    ),
+    /** New Project, opened on From a URL. */
+    handleCreateProjectFromUrl: useCallback(
+      () => gate(() => createProject('url'), 'create'),
+      [gate, createProject]
+    ),
     handleImportProject: useCallback(() => gate(importProject, 'import'), [gate, importProject]),
     handleImportLocalFolder: useCallback(
       () => Promise.resolve(gate(() => void importLocalFolder(), 'local')),

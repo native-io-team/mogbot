@@ -354,25 +354,10 @@
 }
 
 /* Project Card Menu Dropdown — menu itself is the Dropdown primitive
-   (ss-dropdown in base.css); only the wrapper and the ON/OFF toggle
-   badge are styled here. */
+   (ss-dropdown in components/dropdown.css, which also styles the ON/OFF
+   toggle badge); only the wrapper is styled here. */
 .project-card-menu-container {
   flex-shrink: 0;
-}
-
-.project-card-menu-container .toggle-indicator {
-  margin-left: auto;
-  font-size: var(--font-size-badge);
-  font-weight: 600;
-  padding: 4px 6px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-control);
-  color: var(--text-muted);
-}
-
-.project-card-menu-container .toggle-indicator.on {
-  background: rgba(var(--accent-success-rgb), 0.2);
-  color: var(--accent-success);
 }
 
 /* Auto-accept mode badge on project card */

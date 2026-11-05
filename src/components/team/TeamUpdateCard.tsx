@@ -243,7 +243,7 @@ export function TeamUpdateCard({
           {githubUrl && (
             <Button
               className="team-update-ask-action"
-              variant="success"
+              variant="secondary"
               size="compact"
               leftIcon={<GitHubIcon size={12} />}
               onClick={() => void openUrl(githubUrl)}

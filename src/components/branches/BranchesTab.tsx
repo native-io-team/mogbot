@@ -516,7 +516,9 @@ export function BranchesTab({
                 <span className="branch-card-name-text" title={currentBranchInfo.name}>
                   {currentBranchInfo.name}
                 </span>
-                {currentBranchInfo.isDefault && <span className="branch-live-badge">Live</span>}
+                {currentBranchInfo.isDefault && (
+                  <span className="branch-default-badge">Default</span>
+                )}
                 <span
                   className={`branch-sync-badge ${currentBranchInfo.pushed ? 'synced' : 'local'}`}
                   title={
@@ -1160,7 +1162,7 @@ function BranchCard({
           <span className="branch-card-name-text" title={branch.name}>
             {branch.name}
           </span>
-          {branch.isDefault && <span className="branch-live-badge">Live</span>}
+          {branch.isDefault && <span className="branch-default-badge">Default</span>}
           {/* Stupid-simple sync state: is this branch on GitHub yet, or not? */}
           <span
             className={`branch-sync-badge ${branch.pushed ? 'synced' : 'local'}`}

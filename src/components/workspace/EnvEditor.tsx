@@ -82,7 +82,7 @@ export function EnvEditor({ projectPath }: EnvEditorProps) {
     <ModalFrame
       isOpen={isOpen}
       onClose={onClose}
-      title="Environment Variables"
+      title="Environment variables"
       className="env-editor-modal"
       // While the nested paste mini-modal is open, ESC / overlay-click must not
       // tear down the whole editor (and the pasted content with it).

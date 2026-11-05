@@ -94,7 +94,7 @@ export function TeamPeoplePanel({
                 <span className="team-person-name">
                   <TeamActorName actor={member.actor} />
                   {member.isSelf && (
-                    <span className="team-person-you team-status team-status--merged">you</span>
+                    <span className="team-person-you team-status team-status--label">you</span>
                   )}
                 </span>
                 <span className="team-person-when">

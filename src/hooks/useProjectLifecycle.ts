@@ -35,6 +35,7 @@
  */
 
 import { useState, useRef, useCallback, type RefObject } from 'react';
+import type { CreateProjectTab } from '../components/dashboard/CreateProject';
 import type { Project, WorkspaceInfo } from '../lib/project';
 import type { ProjectType } from '../lib/static-server';
 import type { ProjectGitHubStatus } from '../lib/github';
@@ -180,8 +181,10 @@ export function useProjectLifecycle({
   // Auto-accept mode for the terminal agent
   const [autoAcceptMode, setAutoAcceptMode] = useState(false);
 
-  // Create project modal
+  // Create project modal, and the tab it opens on (the palette's "Rebuild a
+  // site from its URL…" opens it on From a URL).
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createInitialTab, setCreateInitialTab] = useState<CreateProjectTab>('scratch');
 
   // Import project view: 'none' | 'picker' | 'github'
   const [importView, setImportView] = useState<'none' | 'picker' | 'github'>('none');
@@ -968,7 +971,8 @@ export function useProjectLifecycle({
     }
   };
 
-  const handleCreateProject = () => {
+  const handleCreateProject = (tab: CreateProjectTab = 'scratch') => {
+    setCreateInitialTab(tab);
     setShowCreateModal(true);
   };
 
@@ -1187,6 +1191,7 @@ export function useProjectLifecycle({
     setAutoAcceptMode,
     showCreateModal,
     setShowCreateModal,
+    createInitialTab,
     importView,
     setImportView,
     pendingMonorepoPick,

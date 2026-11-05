@@ -623,20 +623,3 @@
   pointer-events: none;
   white-space: nowrap;
 }
-
-/* ON/OFF + SWAP badges inside primitive DropdownItems (Auto-accept in the
-   Agent Settings menu; tab assignment in the split-pane picker). */
-.toolbar-dropdown-menu .toggle-indicator {
-  margin-left: auto;
-  font-size: var(--font-size-badge);
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-control);
-  color: var(--text-muted);
-}
-
-.toolbar-dropdown-menu .toggle-indicator.on {
-  background: rgba(var(--accent-warning-rgb), 0.2);
-  color: var(--accent-warning);
-}

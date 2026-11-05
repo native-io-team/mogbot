@@ -82,7 +82,7 @@ export function DevServerConsentPrompt({ projectPath, pending }: Props) {
           {error}
         </p>
       )}
-      <Button variant="primary" onClick={() => void start()} disabled={busy}>
+      <Button variant="strong" data-allow onClick={() => void start()} disabled={busy}>
         Start dev server
       </Button>
     </div>

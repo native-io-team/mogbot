@@ -11,7 +11,7 @@ import { GlobeIcon, LayersIcon } from '@/components/icons';
 import { useCommands } from './useCommands';
 import { useOpenModal } from '../contexts/ModalContext';
 
-export function useMigrationCommands() {
+export function useMigrationCommands({ openCreateFromUrl }: { openCreateFromUrl: () => void }) {
   const openModal = useOpenModal();
 
   useCommands(
@@ -35,7 +35,9 @@ export function useMigrationCommands() {
           'clone',
           'rebuild',
         ],
-        run: () => openModal('newProject'),
+        // New Project is App state, not a ModalContext modal: opening a
+        // 'newProject' id here showed nothing at all.
+        run: openCreateFromUrl,
       },
       {
         id: 'migration.fidelity',
@@ -55,6 +57,6 @@ export function useMigrationCommands() {
         run: () => openModal('migrationFidelity'),
       },
     ],
-    [openModal]
+    [openModal, openCreateFromUrl]
   );
 }

@@ -244,7 +244,7 @@ export function TeamThreadsPanel({
                         stopPropagation
                       />
                     )}
-                    <span className="team-thread-pin team-status team-status--merged">
+                    <span className="team-thread-pin team-status team-status--label">
                       #{thread.pin}
                     </span>
                     <span
@@ -295,7 +295,7 @@ export function TeamThreadsPanel({
                     />
                   </div>
                   <div className="team-thread-header-title">
-                    <span className="team-thread-pin team-status team-status--merged">
+                    <span className="team-thread-pin team-status team-status--label">
                       #{selected.pin}
                     </span>
                     <h3
