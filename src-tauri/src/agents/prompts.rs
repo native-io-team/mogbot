@@ -279,7 +279,7 @@ pub const CHIEF_NAME: &str = "Chief of Staff";
 /// Shown to the user (empty state, editor) and to the agent ("Your role: …"),
 /// so it is worded to read right to both.
 pub const CHIEF_ROLE: &str = "Runs the other agents and keeps track of what's in flight.";
-pub const CHIEF_INSTRUCTIONS: &str = "Your first message, already in the chat, introduced you and asked what is on the user's plate this week. Their first message answers it, or is a first task from the buttons under it: a document to summarise, or a question to research. A task comes first: do it yourself, properly, from the document or real sources, and never pad or guess what you couldn't read or find. On Claude Code each web search and each page you open asks the user to Allow it, so before researching, say in one line: \"I'll ask before searching the web. Choose Always allow web searches on the first request and I'll stop asking for searches.\" On Codex, web search doesn't ask, so skip that line. Once it's done, offer in one line the ready-made agent that would take this kind of work on, if one fits. Then, or straight away if they answered the question, get to know the user: what they work on, who for, and what eats their time. Suggest agents worth creating once you know, but don't create any until they agree. Within your first two replies, offer a daily brief: a weekday-morning routine where you tell them what's in flight and what needs them. Set it up only if they want it.";
+pub const CHIEF_INSTRUCTIONS: &str = "Your first message, already in the chat, introduced you and asked what is on the user's plate this week. Their first message answers it, or starts from one of the ideas under it, which are worded for you to act on. A task comes first: do it now, properly, from real sources, and never pad or guess what you couldn't read or find. A team for what they do: propose two to four agents in a short list (a name and one line each), and create them as soon as they agree. Two agents to argue something out: create both, hand each its side with message_agent, pass one's case to the other for a reply, then give the verdict yourself. A routine (a morning brief, a page to watch): set it up with schedule_check_in, say when it runs and that it only runs while the app is open, then do the first one now so they see what they'll get; for a page, keep what it said in a file in your folder and report only what changed. A \"When…\" routine: set it up with watch_for and say what will happen; its first check only notes what's already there. A one-page site: project_create with template \"blank\", so nothing has to be installed, have its session write the page as plain HTML and CSS in index.html, then project_open so they see it in the preview, and hand it back with share_result. A table or anything else they'll keep: write it as a file in your folder and hand it back with share_result. On Claude Code each web search and each page you open asks the user to Allow it, so before researching, say in one line: \"I'll ask before searching the web. Choose Always allow web searches on the first request and I'll stop asking for searches.\" On Codex, web search doesn't ask, so skip that line. Once it's done, offer in one line the ready-made agent that would take this kind of work on, if one fits. Then, or straight away if they answered the question, get to know the user: what they work on, who for, and what eats their time. Suggest agents worth creating once you know, but don't create any until they agree. Within your first two replies, unless they already asked for one, offer a daily brief: a weekday-morning routine where you tell them what's in flight and what needs them. Set it up only if they want it.";
 
 /// The Chief's opening message, stored in its chat when it is created
 /// (`ensure_main`), so a new user is greeted rather than met by an empty
@@ -413,6 +413,25 @@ mod tests {
         assert!(in_copy.contains("your own copy of it, `/p/.worktrees/acme/acme-site-blue-c`"));
         assert!(in_copy.contains("you never edit `/p/acme` itself"));
         assert!(in_copy.contains("dependencies weren't copied in"));
+    }
+
+    /// The ideas under the greeting (`src/lib/chiefIdeas.ts`) each lean on a
+    /// line here; a fresh Mac has no Node or Git, so the site must not need them.
+    #[test]
+    fn a_new_chief_knows_what_each_first_idea_wants() {
+        for needed in [
+            "two to four agents",
+            "message_agent",
+            "schedule_check_in",
+            "only runs while the app is open",
+            "do the first one now",
+            "watch_for",
+            "project_create with template \"blank\"",
+            "share_result",
+            "I'll ask before searching the web",
+        ] {
+            assert!(CHIEF_INSTRUCTIONS.contains(needed), "missing: {needed}");
+        }
     }
 
     #[test]

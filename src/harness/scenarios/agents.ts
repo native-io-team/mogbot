@@ -2368,7 +2368,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-first-run',
     title: 'Agents — first open: the Chief of Staff says hello',
     looksRightWhen:
-      'The Chief’s chat opens on its greeting, centred on the page as an empty state: the greeting text block, its timestamp and the starters share one centre line. Under it, centred, three starters (Summarise a document…, Research a question…, Ready-made agents…), all neutral outline buttons. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
+      'The Chief’s chat opens on its greeting, centred on the page as an empty state: the greeting text block, its timestamp and the starters share one centre line. Under it, centred, three starters (Build me a team…, Brief me every morning…, Make me a one-page site…), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
     command: 'agents.open',
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
@@ -2377,7 +2377,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-first-run-empty',
     title: 'Agents — a Chief with no greeting (an older chat, emptied)',
     looksRightWhen:
-      'Avatar and name centred, then one line in the Chief’s voice (“Tell me what you’re working on and I’ll put a team together…”) and the three starters under it. Nothing else.',
+      'Avatar and name centred, then one line in the Chief’s voice (“Tell me what you’re working on and I’ll put a team together…”) and the three starters and More ideas… under it. Nothing else.',
     command: 'agents.open',
     requires: '.agent-chat__empty .agent-chat__starters',
     commands: { agents_messages: [] },

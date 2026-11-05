@@ -265,7 +265,7 @@ export const appScenarios: Scenario[] = [
     id: 'onboarding-end-to-agents',
     title: 'Onboarding — after the hand-off, Agents with the Chief',
     looksRightWhen:
-      'Agents mode, not the projects dashboard: the Chief of Staff selected in the sidebar, its chat open on the greeting, with the three starters under it and the composer ready.',
+      'Agents mode, not the projects dashboard: the Chief of Staff selected in the sidebar, its chat open on the greeting, with the three starters and More ideas… under it and the composer ready.',
     steps: [{ click: '.celebration-btn' }],
     requires: '.agents-mode .agent-chat__messages > .agent-chat__starters',
     commands: ONBOARDING_ENGINE_ONLY,

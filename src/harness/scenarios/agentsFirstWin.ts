@@ -1,9 +1,10 @@
 /**
- * The first few minutes: the Chief's three starters (a document, a
- * question, ready-made agents), what each one leaves in the composer, the
- * New agent dialog on a ready-made agent (and the one that needs an email
- * app), a ready-made agent's own first open, and a first result landing.
- * Built on the base layer's fresh Chief (`./base`).
+ * The first few minutes: the Chief's three starters (a team, a morning
+ * brief, a one-page site) and "More ideas…", what each leaves in the
+ * composer, the gallery and what picking from it does, the New agent dialog
+ * on a ready-made agent (and the one that needs an email app), a ready-made
+ * agent's own first open, and first results landing (a team built, a
+ * document summarised). Built on the base layer's fresh Chief (`./base`).
  */
 
 import type { Scenario } from '../types';
@@ -93,14 +94,138 @@ const FIRST_WIN = [
   },
 ];
 
+/** The first win from "Build me a team…": three agents, proposed then made. */
+const TEAM = [
+  agent('studio-ops', 'Studio Ops', {
+    role: 'Keeps projects, deadlines and invoices from slipping.',
+    color: 'teal',
+    shape: 2,
+    sessionId: null,
+    minutesAgo: 1,
+  }),
+  agent('new-business', 'New Business', {
+    role: 'Finds leads and drafts proposals for you to send.',
+    color: 'orange',
+    shape: 4,
+    sessionId: null,
+    minutesAgo: 1,
+  }),
+  agent('scout', 'Scout', {
+    role: 'Watches what other studios ship and what clients ask for.',
+    color: 'blue',
+    shape: 1,
+    sessionId: null,
+    minutesAgo: 1,
+  }),
+];
+const WITH_TEAM = { ...BASE_OVERVIEW, agents: [CHIEF, ...TEAM] };
+const TEAM_BUILT = [
+  chiefGreeting('chief', now - 8 * MIN),
+  {
+    id: 'u1',
+    agentId: 'chief',
+    ts: now - 7 * MIN,
+    kind: 'user',
+    text: 'Build me a team of agents for this: I run a two-person design studio and I’m bad at follow-ups.',
+  },
+  {
+    id: 'a1',
+    agentId: 'chief',
+    ts: now - 6 * MIN,
+    kind: 'agent',
+    text: [
+      'Here’s a team I’d start with:',
+      '',
+      '- **Studio Ops**: deadlines, invoices and the follow-ups you mean to send.',
+      '- **New Business**: finds leads and drafts proposals for you to send.',
+      '- **Scout**: a weekly look at what other studios ship and what clients ask for.',
+      '',
+      'Each keeps its own memory, and nothing goes out without your OK. Shall I make them?',
+    ].join('\n'),
+  },
+  { id: 'u2', agentId: 'chief', ts: now - 2 * MIN, kind: 'user', text: 'Yes, go ahead.' },
+  {
+    id: 'a2',
+    agentId: 'chief',
+    ts: now - MIN,
+    kind: 'agent',
+    text: 'Done: they’re in your sidebar. Studio Ops is asking you for this week’s deadlines, and Scout will have its first look ready on Monday morning.',
+  },
+];
+
 export const agentsFirstWinScenarios: Scenario[] = [
   {
-    id: 'agents-first-win-document',
-    title: 'Agents — first run: “Summarise a document…” picked a file',
+    id: 'agents-first-win-team',
+    title: 'Agents — first run: “Build me a team…”',
     looksRightWhen:
-      'The greeting with its three starters still under it, and the composer holding the picked PDF as a chip with the request typed out (“Summarise this for me: the main points, any dates or decisions, and anything I need to do.”). Nothing has been sent: no user bubble, no working line.',
+      'The greeting with its starters still under it (Build me a team…, Brief me every morning…, Make me a one-page site…, then a quieter More ideas…), and the composer holding “Build me a team of agents for this: ” with the caret after it. Nothing has been sent.',
     command: 'agents.open',
-    steps: [{ click: '.agent-chat__starters > button', text: 'Summarise a document' }],
+    steps: [{ click: '.agent-chat__starters > [data-idea="team"]' }],
+    requires: '.agent-chat__messages > .agent-chat__starters',
+    commands: {},
+  },
+  {
+    id: 'agents-first-win-brief',
+    title: 'Agents — first run: “Brief me every morning…”',
+    looksRightWhen:
+      'The composer holds “Every weekday at 8am, brief me on ” with the caret after it, ready for the topics. Nothing has been sent.',
+    command: 'agents.open',
+    steps: [{ click: '.agent-chat__starters > [data-idea="brief"]' }],
+    requires: '.agent-chat__messages > .agent-chat__starters',
+    commands: {},
+  },
+  {
+    id: 'agents-first-win-site',
+    title: 'Agents — first run: “Make me a one-page site…”',
+    looksRightWhen:
+      'The composer holds “Make me a one-page website for ” with the caret after it. Nothing has been sent, and nothing about Node, Git or project tools appears.',
+    command: 'agents.open',
+    steps: [{ click: '.agent-chat__starters > [data-idea="site"]' }],
+    requires: '.agent-chat__messages > .agent-chat__starters',
+    commands: {},
+  },
+  {
+    id: 'agents-ideas',
+    title: 'Agents — first run: “More ideas…” opens the gallery',
+    looksRightWhen:
+      'A dialog “Ideas to start with”: one line saying a pick is typed out and nothing is sent, then four groups (A team, Something that keeps going, Something real, Right now), each row a title and one muted line on what happens. Nothing is in the accent. At the foot, two quiet links: Ready-made agents… and Talk to your team from your phone….',
+    command: 'agents.open',
+    steps: [{ click: '.agent-chat__starters > [data-idea="more"]' }],
+    requires: '.agents-ideas__idea',
+    commands: {},
+  },
+  {
+    id: 'agents-ideas-palette',
+    title: 'Agents — ⌘K “Ideas for your team…” from the projects side',
+    looksRightWhen:
+      'Agents mode, with the same “Ideas to start with” dialog open over the Chief’s chat.',
+    command: 'agents.ideas',
+    requires: '.agents-ideas__idea',
+    commands: {},
+  },
+  {
+    id: 'agents-ideas-when',
+    title: 'Agents — gallery: picking “When a PDF lands in Downloads…”',
+    looksRightWhen:
+      'The dialog has closed, and the Chief’s composer holds the whole request (“When a new PDF lands in my Downloads folder, read it and tell me what it is and whether I need to do anything.”). Nothing has been sent.',
+    command: 'agents.open',
+    steps: [
+      { click: '.agent-chat__starters > [data-idea="more"]' },
+      { click: '.agents-ideas__idea[data-idea="when-pdf"]' },
+    ],
+    requires: '.agent-chat__messages > .agent-chat__starters',
+    commands: {},
+  },
+  {
+    id: 'agents-first-win-document',
+    title: 'Agents — gallery: “Summarise a document…” picked a file',
+    looksRightWhen:
+      'The greeting with its starters still under it, and the composer holding the picked PDF as a chip with the request typed out (“Summarise this for me: the main points, any dates or decisions, and anything I need to do.”). Nothing has been sent: no user bubble, no working line.',
+    command: 'agents.open',
+    steps: [
+      { click: '.agent-chat__starters > [data-idea="more"]' },
+      { click: '.agents-ideas__idea[data-idea="document"]' },
+    ],
     requires: '.agent-composer__attachments',
     commands: {
       'plugin:dialog|open': [DOCUMENT],
@@ -108,24 +233,30 @@ export const agentsFirstWinScenarios: Scenario[] = [
     },
   },
   {
-    id: 'agents-first-win-research',
-    title: 'Agents — first run: “Research a question…”',
-    looksRightWhen:
-      'The composer holds “Research this for me: ” with the caret after it, ready for the question. Nothing has been sent.',
-    command: 'agents.open',
-    steps: [{ click: '.agent-chat__starters > button', text: 'Research a question' }],
-    requires: '.agent-chat__messages > .agent-chat__starters',
-    commands: {},
-  },
-  {
     id: 'agents-first-win-ready-made',
-    title: 'Agents — first run: “Ready-made agents…” opens New agent on one',
+    title: 'Agents — gallery: “Ready-made agents…” opens New agent on one',
     looksRightWhen:
       'New agent, opened on “Start from”: Blank / Research / Inbox / Weekly Review with Research pressed. Below it the name “Research” on a blue badge, what it does, and its full briefing in “What should it know?”, editable. Create is the only filled button.',
     command: 'agents.open',
-    steps: [{ click: '.agent-chat__starters > button', text: 'Ready-made agents' }],
+    steps: [
+      { click: '.agent-chat__starters > [data-idea="more"]' },
+      { click: '.agents-ideas__foot button', text: 'Ready-made agents' },
+    ],
     requires: '.agent-editor__templates',
     commands: {},
+  },
+  {
+    id: 'agents-first-win-team-built',
+    title: 'Agents — the first win: a team built',
+    looksRightWhen:
+      'The greeting, the user’s “Build me a team…” request, the Chief’s short list of three agents (a name and one line each), the user’s “Yes, go ahead”, and the Chief saying they’re made and what each is starting on. Three new agents in the sidebar, each its own colour. The starters are gone.',
+    command: 'agents.open',
+    requires: '[data-agent-id="studio-ops"]',
+    commands: {
+      agents_overview: WITH_TEAM,
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? TEAM_BUILT : [],
+    },
   },
   {
     id: 'agents-template-inbox',

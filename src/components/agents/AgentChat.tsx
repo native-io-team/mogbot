@@ -47,13 +47,11 @@ import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
 import { AgentLine, ConversationBar, ConversationBars } from './AgentCard';
 import {
   needsLine,
-  RESEARCH_PROMPT,
-  ROLE_TEMPLATES,
-  SUMMARY_PROMPT,
   templateOf,
   type RoleTemplate,
   type TemplateStarter,
 } from '../../lib/agentTemplates';
+import { CHIEF_CHIPS, type ChiefIdea } from '../../lib/chiefIdeas';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
@@ -136,36 +134,39 @@ import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 
 /**
- * The Chief's first open: three ways to a first real result, each working on
- * this Mac with no other account. A document is picked and staged with the
- * request typed out; a question is typed by the user after the words put in
- * the composer; ready-made agents open the New agent dialog on them. Nothing
- * is sent until the user presses Send. Importing isn't the Chief's job (the
- * other assistant does it), so that one opens the import steps instead.
+ * The Chief's first open: three things worth asking first (a team, a
+ * routine, something real; `lib/chiefIdeas.ts`), each working on this Mac
+ * with no other account, and "More ideas…" for the rest. Each types its words
+ * into the composer for the user to finish; nothing is sent until they press
+ * Send. Importing isn't the Chief's job (the other assistant does it), so
+ * that one opens the import steps instead.
  */
 function ChiefStarters({
-  onDocument,
-  onResearch,
-  onReadyMade,
+  onIdea,
+  onMore,
   onImport,
 }: {
-  onDocument: () => void;
-  onResearch: () => void;
-  onReadyMade?: () => void;
+  onIdea: (idea: ChiefIdea) => void;
+  onMore?: () => void;
   /** With no sidebar to hold the import note, the starters offer it. */
   onImport?: () => void;
 }) {
   return (
     <div className="agent-chat__starters">
-      <Button tabIndex={0} variant="secondary" onClick={onDocument}>
-        Summarise a document…
-      </Button>
-      <Button tabIndex={0} variant="secondary" onClick={onResearch}>
-        Research a question…
-      </Button>
-      {onReadyMade && (
-        <Button tabIndex={0} variant="secondary" onClick={onReadyMade}>
-          Ready-made agents…
+      {CHIEF_CHIPS.map((idea) => (
+        <Button
+          key={idea.id}
+          tabIndex={0}
+          variant="secondary"
+          data-idea={idea.id}
+          onClick={() => onIdea(idea)}
+        >
+          {idea.label}
+        </Button>
+      ))}
+      {onMore && (
+        <Button tabIndex={0} variant="ghost" data-idea="more" onClick={onMore}>
+          More ideas…
         </Button>
       )}
       {onImport && (
@@ -290,11 +291,11 @@ interface AgentChatProps extends AgentActions {
   jumpTo?: string | null;
   onJumped?: () => void;
   /** Words put in the composer for you to finish ("Set up an agent that "); `n` asks again. */
-  prefill?: { text: string; n: number } | null;
-  /** The New agent dialog, on a ready-made agent or none (the Chief's starter). */
-  onNewAgent?: (template?: string) => void;
+  prefill?: { text: string; n: number; pickFile?: boolean } | null;
   /** "Apps your agents can use", for a ready-made agent that needs one. */
   onOpenApps?: () => void;
+  /** The Chief's "More ideas…": the gallery of things to ask it. */
+  onMoreIdeas?: () => void;
 }
 
 /** Unsent composer text per agent, for the life of the window. */
@@ -312,8 +313,8 @@ export function AgentChat({
   jumpTo,
   onJumped,
   prefill,
-  onNewAgent,
   onOpenApps,
+  onMoreIdeas,
   ...actions
 }: AgentChatProps) {
   // Everything in this conversation takes on the agent's colour.
@@ -361,6 +362,11 @@ export function AgentChat({
   // the composer, caret at its end, for you to finish and send.
   useEffect(() => {
     if (!prefill) return;
+    // An idea from the gallery that starts with a file: pick it, then type.
+    if (prefill.pickFile) {
+      startIdea(prefill);
+      return;
+    }
     setDraft(prefill.text);
     const frame = requestAnimationFrame(() => {
       const el = inputRef.current;
@@ -890,19 +896,25 @@ export function AgentChat({
     });
   };
 
-  /** "Summarise a document…": the picked file staged, the request typed out, nothing sent. */
-  const startWithDocument = () => {
+  /**
+   * An idea for the Chief: its words typed out, nothing sent. The document
+   * one picks the file first and stages it with the request.
+   */
+  const startIdea = (idea: Pick<ChiefIdea, 'text' | 'pickFile'>) => {
+    if (!idea.pickFile) {
+      typeStarter(idea.text);
+      return;
+    }
     pick({ title: 'Choose a document' })
       .then((picked) => {
-        if (picked && !draftRef.current.trim()) typeStarter(SUMMARY_PROMPT);
+        if (picked && !draftRef.current.trim()) typeStarter(idea.text);
       })
       .catch((error: unknown) => toastError(String(error)));
   };
   const chiefStarters = (
     <ChiefStarters
-      onDocument={startWithDocument}
-      onResearch={() => typeStarter(RESEARCH_PROMPT)}
-      onReadyMade={onNewAgent && (() => onNewAgent(ROLE_TEMPLATES[0]?.id))}
+      onIdea={startIdea}
+      onMore={onMoreIdeas}
       onImport={compact ? onImport : undefined}
     />
   );
