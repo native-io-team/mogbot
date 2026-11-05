@@ -39,6 +39,7 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 
 use super::attachments::Attachment;
+pub use super::describe::Slow;
 use super::store::{self, AgentMessage, ApprovalStatus, MessageKind};
 
 /// Steps kept per turn (the newest); the count still says how many there were.
@@ -49,6 +50,8 @@ pub const LIVE_STEPS: usize = 12;
 pub const LABEL_CHARS: usize = 100;
 /// File names kept per turn.
 pub const MAX_FILES: usize = 30;
+/// A finished command keeps what it printed last when it ran this long (or failed).
+pub const KEEP_OUTPUT_AFTER_MS: i64 = 20_000;
 /// Timelines kept per agent, newest first.
 pub const KEEP_TURNS: usize = 500;
 /// Timelines always kept, however old: the chat's first pages never lose theirs.
@@ -100,6 +103,61 @@ pub struct WorkStep {
     /// A screenshot this step produced (an attachment of a `session` line).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<Attachment>,
+    /// When what it ran came back, ms since the epoch. Absent while it runs,
+    /// for a step with nothing to come back, and in older timelines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<i64>,
+    /// What a test run printed it came to ("42 passed, 3 failed"), only as
+    /// counts the runner printed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// The last lines a long or failed command printed, cleaned
+    /// ([`output::tail`]). Kept on the stored timeline only, never live.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub output: Vec<String>,
+}
+
+impl WorkStep {
+    /// The parts every step has filled in by its caller; the rest empty.
+    pub(crate) fn blank() -> Self {
+        WorkStep {
+            at: 0,
+            kind: StepKind::Tool,
+            label: String::new(),
+            outcome: None,
+            image: None,
+            ended_at: None,
+            summary: None,
+            output: Vec::new(),
+        }
+    }
+}
+
+/// The call running right now, as the working line and the open timeline
+/// show it: in plain words, with when it started (for its live timer), and
+/// what it printed so far where the engine streams that. Live only.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveCall {
+    pub kind: StepKind,
+    /// Its working-line words ("Running the Cypress tests").
+    pub label: String,
+    pub started_at: i64,
+    /// A tool known to take a while: "This usually takes a few minutes".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slow: Option<Slow>,
+    /// Its newest lines of output so far, cleaned ([`output`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub output: Vec<String>,
+    /// The engine streams this call's output as it runs. When false, the
+    /// output appears only once it finishes.
+    pub streams: bool,
+    /// Its process was seen using the CPU at the last look (`None`: not
+    /// looked at, or not found).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub busy: Option<bool>,
+    /// "Stop this step" can find its process.
+    pub can_stop: bool,
 }
 
 /// A turn's timeline. Live (on the status) while it runs, `endedAt` once over.
@@ -124,6 +182,17 @@ pub struct TurnWork {
     /// step (and show it once, not twice). Absent once it came back.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub doing: Option<String>,
+    /// Live only: the call running now, in full (see [`LiveCall`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current: Option<LiveCall>,
+    /// Live only: the last sign of life the turn gave (any engine output,
+    /// a line its command printed, its command using the CPU).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_sign_at: Option<i64>,
+    /// Live only, and only once it has gone quiet for too long ([`stalled`]):
+    /// when the last sign of progress was. "No progress for 5 min".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quiet_since: Option<i64>,
 }
 
 /// A tool call, as the parsers describe it.
@@ -144,6 +213,11 @@ pub struct Action {
     pub files: Vec<String>,
     /// The project a project-scoped call names, so its screenshot finds it.
     pub project: Option<String>,
+    /// A tool known to take a while ([`super::describe`]).
+    pub slow: Option<Slow>,
+    /// The command line itself, for finding its process ("Stop this step",
+    /// the CPU check). Held in memory while it runs; never shown or kept.
+    pub command: Option<String>,
 }
 
 /// What became of a call, as the engine reported it.
@@ -159,6 +233,24 @@ pub enum Outcome {
 pub struct CallResult {
     pub id: String,
     pub outcome: Outcome,
+    /// What it printed, where the engine says (a command's output).
+    pub output: Option<String>,
+}
+
+/// A `tool_result` block's text: a string, or text blocks.
+fn result_text(block: &Value) -> Option<String> {
+    match block.get("content")? {
+        Value::String(s) => Some(s.clone()),
+        Value::Array(parts) => {
+            let text: Vec<&str> = parts
+                .iter()
+                .filter(|p| p.get("type").and_then(Value::as_str) == Some("text"))
+                .filter_map(|p| p.get("text").and_then(Value::as_str))
+                .collect();
+            (!text.is_empty()).then(|| text.join("\n"))
+        }
+        _ => None,
+    }
 }
 
 // ============================================================================
@@ -225,6 +317,7 @@ pub fn claude_results(value: &Value) -> Vec<CallResult> {
             Some(CallResult {
                 id: id.to_string(),
                 outcome,
+                output: result_text(b),
             })
         })
         .collect()
@@ -327,20 +420,27 @@ pub fn describe_tool(name: &str, input: Option<&Value>) -> Option<Action> {
             a.files.extend(path);
             a
         }
-        "Bash" => match field("command").as_deref().and_then(command_words) {
-            Some(words) => act(
-                StepKind::Command,
-                format!("Ran {words}"),
-                format!("Running {words}"),
-                format!("run {words}"),
-            ),
-            None => act(
-                StepKind::Command,
-                "Ran a command",
-                "Running a command",
-                "run a command",
-            ),
-        },
+        "Bash" => {
+            let command = field("command");
+            let described = command
+                .as_deref()
+                .and_then(|c| super::describe::describe(c, 0));
+            let mut a = match described {
+                Some(phrase) => {
+                    let mut a = act(StepKind::Command, phrase.done, phrase.doing, phrase.ask);
+                    a.slow = phrase.slow;
+                    a
+                }
+                None => act(
+                    StepKind::Command,
+                    "Ran a command",
+                    "Running a command",
+                    "run a command",
+                ),
+            };
+            a.command = command;
+            a
+        }
         "Grep" => match field("pattern") {
             Some(p) => {
                 let q = quoted(&p);
@@ -429,6 +529,8 @@ fn act(
         ask: ask.into(),
         files: Vec::new(),
         project: None,
+        slow: None,
+        command: None,
     }
 }
 
@@ -998,7 +1100,7 @@ fn secretish_name(name: &str) -> bool {
 }
 
 /// Long, mixed letters and digits, not a path or a file name: a token.
-fn looks_like_token(word: &str) -> bool {
+pub(super) fn looks_like_token(word: &str) -> bool {
     let w = word.trim_matches(|c: char| WRAPPING.contains(c));
     if SECRET_PREFIXES.iter().any(|p| w.starts_with(p)) && w.len() >= 12 {
         return true;
@@ -1176,8 +1278,27 @@ struct Call {
     /// Paths it edits, counted when it comes back successful.
     files: Vec<String>,
     project: Option<String>,
+    slow: Option<Slow>,
     /// Its outcome is known.
     settled: bool,
+}
+
+/// The call running now, while it runs.
+#[derive(Debug, Default)]
+struct Running {
+    id: String,
+    kind: Option<StepKind>,
+    doing: String,
+    started_at: i64,
+    slow: Option<Slow>,
+    /// What finds its process in the process table ([`needle`]).
+    needle: Option<String>,
+    output: output::Buffer,
+    /// Its process was found at least once: if it then goes, it has ended.
+    seen_proc: bool,
+    /// When its process was first found gone while the call hadn't come back.
+    gone_since: Option<i64>,
+    busy: Option<bool>,
 }
 
 #[derive(Default)]
@@ -1196,6 +1317,19 @@ struct Live {
     /// refused call they explain. A call refused with none (the card went
     /// unanswered, or a rule said no) never says "you declined".
     declined_by_you: u32,
+    /// That call in full, for the working line ([`LiveCall`]).
+    current: Option<Running>,
+    /// The engine streams command output as it runs (Codex's app server).
+    streams: bool,
+    /// The last sign of life: any engine output, including heartbeats.
+    last_sign: i64,
+    /// The last sign of progress: engine output other than a heartbeat, a
+    /// line the command printed, the command using the CPU.
+    last_progress: i64,
+    /// Set once it has made no progress for too long ([`stalled`]).
+    quiet_since: Option<i64>,
+    /// Something shown live changed since the status was last sent.
+    dirty: bool,
 }
 
 impl Live {
@@ -1240,9 +1374,11 @@ impl Live {
                 label,
                 outcome: None,
                 image: None,
+                ..WorkStep::blank()
             });
             self.running = None;
             self.doing = None;
+            self.current = None;
             return;
         };
         // The same call reported again (Codex says so as it starts and as it
@@ -1267,6 +1403,7 @@ impl Live {
             label,
             outcome: None,
             image: None,
+            ..WorkStep::blank()
         });
         self.calls.insert(
             id.clone(),
@@ -1276,9 +1413,19 @@ impl Live {
                 ask: action.ask,
                 files: action.files,
                 project: action.project,
+                slow: action.slow,
                 settled: false,
             },
         );
+        self.current = Some(Running {
+            id: id.clone(),
+            kind: Some(action.kind),
+            doing: doing.clone(),
+            started_at: now,
+            slow: action.slow,
+            needle: action.command.as_deref().and_then(needle),
+            ..Running::default()
+        });
         self.running = Some(id);
         self.doing = Some(doing);
     }
@@ -1286,9 +1433,15 @@ impl Live {
     /// A call's result is in. Only the first word on a call counts: a call
     /// the user declined stays declined when its error comes back.
     fn result(&mut self, result: CallResult) {
+        self.result_at(result, store::now_ms());
+    }
+
+    fn result_at(&mut self, result: CallResult, now: i64) {
+        let mut running = None;
         if self.running.as_deref() == Some(result.id.as_str()) {
             self.running = None;
             self.doing = None;
+            running = self.current.take();
         }
         let Some(call) = self.calls.get_mut(&result.id) else {
             return;
@@ -1297,8 +1450,27 @@ impl Live {
             return;
         }
         call.settled = true;
-        let (n, ask) = (call.step, call.ask.clone());
+        let (n, ask, kind, slow) = (call.step, call.ask.clone(), call.kind, call.slow);
         let files = std::mem::take(&mut call.files);
+        // When it came back, what a test run came to, and what a long or
+        // failed command printed last.
+        let text = result
+            .output
+            .clone()
+            .or_else(|| running.as_ref().map(|r| r.output.text().to_string()))
+            .unwrap_or_default();
+        if let Some(step) = self.step_mut(n) {
+            step.ended_at = Some(now.max(step.at));
+            if kind == Some(StepKind::Command) {
+                if slow == Some(Slow::Tests) {
+                    step.summary = output::test_summary(&text).map(|s| clean(&s));
+                }
+                let long = now - step.at >= KEEP_OUTPUT_AFTER_MS;
+                if long || result.outcome == Outcome::Failed {
+                    step.output = output::tail(&text, output::TAIL_LINES);
+                }
+            }
+        }
         let (outcome, label) = match result.outcome {
             Outcome::Done => {
                 self.count_files(files);
@@ -1372,10 +1544,12 @@ impl Live {
                         label: clean(&format!("Asked for your OK: {title}")),
                         outcome: None,
                         image: None,
+                        ..WorkStep::blank()
                     });
                     self.cards.insert(approval.request_id.clone(), (n, title));
                     self.running = None;
                     self.doing = None;
+                    self.current = None;
                 }
             }
             MessageKind::Session => self.screenshot(message),
@@ -1429,6 +1603,7 @@ impl Live {
             label: clean(&format!("Took a screenshot of {project}")),
             outcome: None,
             image: Some(image.clone()),
+            ..WorkStep::blank()
         });
     }
 }
@@ -1449,6 +1624,8 @@ pub fn begin(agent_id: &str, now: i64) {
             started_at: now,
             ..TurnWork::default()
         },
+        last_sign: now,
+        last_progress: now,
         ..Live::default()
     };
     LIVE.lock()
@@ -1473,6 +1650,7 @@ pub fn on_step(agent_id: &str, kind: StepKind, label: &str, now: i64) {
             label,
             outcome: None,
             image: None,
+            ..WorkStep::blank()
         });
     });
 }
@@ -1489,6 +1667,7 @@ pub fn on_declined(agent_id: &str, call_id: &str) {
         CallResult {
             id: call_id.to_string(),
             outcome: Outcome::Declined,
+            output: None,
         },
     );
 }
@@ -1517,17 +1696,45 @@ pub fn live(agent_id: &str) -> Option<TurnWork> {
     with_live(agent_id, |live| {
         let kept = &live.work.steps;
         let from = kept.len().saturating_sub(LIVE_STEPS);
+        let streams = live.streams;
         TurnWork {
             started_at: live.work.started_at,
             ended_at: None,
             step_count: live.work.step_count,
-            steps: kept[from..].to_vec(),
+            // What a step printed rides on the finished timeline, not on
+            // every status.
+            steps: kept[from..]
+                .iter()
+                .map(|s| WorkStep {
+                    output: Vec::new(),
+                    ..s.clone()
+                })
+                .collect(),
             files: Vec::new(),
             file_count: live.work.file_count,
             doing: live.running.as_ref().and(live.doing.clone()),
+            current: live.current.as_ref().map(|r| {
+                let command = r.kind == Some(StepKind::Command);
+                LiveCall {
+                    kind: r.kind.unwrap_or(StepKind::Tool),
+                    label: r.doing.clone(),
+                    started_at: r.started_at,
+                    slow: r.slow,
+                    output: if command {
+                        r.output.lines()
+                    } else {
+                        Vec::new()
+                    },
+                    streams: streams && command,
+                    busy: r.busy,
+                    can_stop: command && r.needle.is_some(),
+                }
+            }),
+            last_sign_at: Some(live.last_sign),
+            quiet_since: live.quiet_since,
         }
     })
-    .filter(|w| w.step_count > 0)
+    .filter(|w| w.step_count > 0 || w.current.is_some() || w.quiet_since.is_some())
 }
 
 /// The agent is gone: so is any timeline it was keeping.
@@ -1567,6 +1774,9 @@ fn settle(live: Live, now: i64) -> Option<(AgentMessage, TurnWork)> {
     let mut work = live.work;
     work.ended_at = Some(now.max(work.started_at));
     work.doing = None;
+    work.current = None;
+    work.last_sign_at = None;
+    work.quiet_since = None;
     Some((live.anchor?, work))
 }
 
@@ -1680,6 +1890,10 @@ pub fn apply(agent_id: &str, page: &mut [AgentMessage]) {
         }
     }
 }
+
+mod liveness;
+pub mod output;
+pub use liveness::*;
 
 #[cfg(test)]
 mod tests;

@@ -156,6 +156,13 @@ export interface MockOptions {
    * waiting across the team, paused routines, long chats, an import going on.
    */
   heavy?: boolean;
+  /**
+   * What agents are doing, live: QA 2 running the site's Cypress tests for
+   * five and a half minutes (its output streaming, using the CPU), Finance
+   * gone quiet for five minutes, and QA 2's last turn ending on a Cypress
+   * step that took 6m 12s (42 passed, 3 failed).
+   */
+  liveWork?: boolean;
 }
 
 // ---- Login cards (desktop `agents/logins.rs`) ----------------------------------------
@@ -388,6 +395,7 @@ export function createMockServer(opts: MockOptions = {}) {
     }
   }
   if (opts.heavy) addHeavyAccount(agents, messages, agentBase(now), now);
+  if (opts.liveWork) addLiveWork(agents, messages, now);
   // "Setting up your team": what the Mac's team_setup.rs answers after an import.
   let teamSetup: TeamSetupView | null = null;
   if (opts.teamSetup) {
@@ -1424,7 +1432,9 @@ export function createMockServer(opts: MockOptions = {}) {
       .map((c) => c.slice('Using your browser · '.length));
     return {
       connections,
-      ...(a?.engine === 'codex' ? {} : { browser: { on: true, teamOn: true, ownOff: false, sites, helperInstalled: true } }),
+      ...(a?.engine === 'codex'
+        ? {}
+        : { browser: { on: true, teamOn: true, ownOff: false, sites, helperInstalled: true } }),
       secrets: (a?.secrets ?? []).map((x) => ({
         secretId: x.id,
         name: x.name,
@@ -1665,6 +1675,12 @@ export function createMockServer(opts: MockOptions = {}) {
       return true;
     },
     'agents.interrupt': (p) => methods['agents.stop']!(p, null as never),
+    // What the Mac's `work::stop_step` and `work::check_on` answer.
+    'agents.stopStep': () => 'Stopped that step. It carries on from there.',
+    'agents.checkOn': (p) =>
+      p.agentId === 'fin'
+        ? 'Its command is still running but isn’t using the CPU, and its last progress was 5 min ago. It may be waiting on something, like a server or the network.'
+        : 'Still going: running the Cypress tests is using the CPU right now.',
     'agents.answerApproval': (p) => {
       const list = messages.get(String(p.agentId)) ?? [];
       const card = list.find((m) => m.approval?.requestId === p.requestId);
@@ -2975,6 +2991,154 @@ const agentBase =
     home: `/Users/you/ShipStudio/.agents/${id}`,
     ...extra,
   });
+
+/** `liveWork`: a long test run, a quiet turn and a finished timeline (fictional). */
+function addLiveWork(agents: Agent[], messages: Map<string, AgentMessage[]>, now: number) {
+  const qa = agents.find((a) => a.id === 'qa');
+  if (qa) {
+    const started = now - 15 * 60_000;
+    const call = now - 5.5 * 60_000;
+    qa.pendingApprovals = 0;
+    qa.lastActivityAt = now - 4_000;
+    qa.status = {
+      state: 'working',
+      activity: 'Running the Cypress tests',
+      since: started,
+      work: {
+        startedAt: started,
+        stepCount: 6,
+        fileCount: 1,
+        steps: [
+          {
+            at: started + 4_000,
+            kind: 'command',
+            label: 'Got the latest changes',
+            endedAt: started + 6_000,
+          },
+          {
+            at: started + 9_000,
+            kind: 'read',
+            label: 'Read pricing.cy.ts',
+            endedAt: started + 9_200,
+          },
+          {
+            at: started + 20_000,
+            kind: 'command',
+            label: 'Installed packages',
+            endedAt: started + 74_000,
+          },
+          {
+            at: started + 80_000,
+            kind: 'edit',
+            label: 'Edited PricingTable.tsx',
+            endedAt: started + 81_000,
+          },
+          {
+            at: started + 90_000,
+            kind: 'command',
+            label: 'Looked up PR #248 on GitHub',
+            endedAt: started + 92_000,
+          },
+          { at: call, kind: 'command', label: 'Ran the Cypress tests' },
+        ],
+        doing: 'Running the Cypress tests',
+        current: {
+          kind: 'command',
+          label: 'Running the Cypress tests',
+          startedAt: call,
+          slow: 'tests',
+          streams: true,
+          busy: true,
+          canStop: true,
+          output: [
+            '  Running:  pages/pricing.cy.ts                                   (4 of 12)',
+            '',
+            '  Pricing page',
+            '    ✓ shows three plans (812ms)',
+            '    ✓ switches to yearly billing (1204ms)',
+            '    ✓ keeps the selected plan after reload (2310ms)',
+            '    1) links each plan to checkout',
+            '',
+            '  Running:  pages/signup.cy.ts                                    (5 of 12)',
+            '    ✓ validates the email field (640ms)',
+          ].filter(Boolean),
+        },
+        lastSignAt: now - 4_000,
+      },
+    };
+    const list = messages.get('qa') ?? [];
+    const last = [...list].reverse().find((m) => m.kind === 'agent');
+    if (last) {
+      const t = last.ts - 8 * 60_000;
+      last.work = {
+        startedAt: t,
+        endedAt: last.ts,
+        stepCount: 3,
+        fileCount: 0,
+        steps: [
+          { at: t + 3_000, kind: 'command', label: 'Got the latest changes', endedAt: t + 5_000 },
+          {
+            at: t + 20_000,
+            kind: 'command',
+            label: 'Tried to run the Cypress tests',
+            outcome: 'failed',
+            endedAt: t + 20_000 + 372_000,
+            summary: '42 passed, 3 failed',
+            output: [
+              '  (Run Finished)',
+              '       Spec                    Tests  Passing  Failing',
+              '  ✖  pages/pricing.cy.ts        6        5        1',
+              '  ✖  pages/signup.cy.ts         9        7        2',
+              '  ✖  3 of 12 failed (25%)   06:12   45   42   3   -   -',
+            ],
+          },
+          {
+            at: t + 400_000,
+            kind: 'read',
+            label: 'Read the failing screenshots',
+            endedAt: t + 401_000,
+          },
+        ],
+      };
+    }
+  }
+  const fin = agents.find((a) => a.id === 'fin');
+  if (fin) {
+    const started = now - 9 * 60_000;
+    fin.failure = undefined;
+    fin.pendingApprovals = 0;
+    fin.status = {
+      state: 'working',
+      activity: 'Getting the latest changes',
+      since: started,
+      work: {
+        startedAt: started,
+        stepCount: 2,
+        fileCount: 0,
+        steps: [
+          {
+            at: started + 5_000,
+            kind: 'read',
+            label: 'Read invoices.csv',
+            endedAt: started + 6_000,
+          },
+          { at: started + 3 * 60_000, kind: 'command', label: 'Got the latest changes' },
+        ],
+        doing: 'Getting the latest changes',
+        current: {
+          kind: 'command',
+          label: 'Getting the latest changes',
+          startedAt: started + 3 * 60_000,
+          streams: false,
+          busy: false,
+          canStop: true,
+        },
+        lastSignAt: now - 20_000,
+        quietSince: now - 5 * 60_000,
+      },
+    };
+  }
+}
 
 function seedAgents(now: number): Agent[] {
   const base = agentBase(now);

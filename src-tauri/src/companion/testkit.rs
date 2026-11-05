@@ -343,7 +343,7 @@ pub fn routes() -> Vec<Route> {
 /// A turn's timeline as it rides on a working status: the newest steps,
 /// counts, and what the running call is doing.
 pub fn live_work() -> crate::agents::work::TurnWork {
-    use crate::agents::work::{StepKind, StepOutcome, TurnWork, WorkStep};
+    use crate::agents::work::{LiveCall, Slow, StepKind, StepOutcome, TurnWork, WorkStep};
     TurnWork {
         started_at: 1_762_290_000_000,
         ended_at: None,
@@ -355,6 +355,8 @@ pub fn live_work() -> crate::agents::work::TurnWork {
                 label: "Read App.tsx".into(),
                 outcome: None,
                 image: None,
+                ended_at: Some(1_762_290_011_000),
+                ..WorkStep::blank()
             },
             WorkStep {
                 at: 1_762_290_020_000,
@@ -362,18 +364,34 @@ pub fn live_work() -> crate::agents::work::TurnWork {
                 label: "Tried to edit App.tsx".into(),
                 outcome: Some(StepOutcome::Failed),
                 image: None,
+                ..WorkStep::blank()
             },
             WorkStep {
                 at: 1_762_290_030_000,
                 kind: StepKind::Command,
-                label: "Ran npm test".into(),
+                label: "Ran the tests".into(),
                 outcome: None,
                 image: None,
+                ended_at: Some(1_762_290_402_000),
+                summary: Some("42 passed, 3 failed".into()),
+                output: vec!["Tests: 3 failed, 42 passed, 45 total".into()],
             },
         ],
         files: Vec::new(),
         file_count: 0,
-        doing: Some("Running npm test".into()),
+        doing: Some("Running the Cypress tests".into()),
+        current: Some(LiveCall {
+            kind: StepKind::Command,
+            label: "Running the Cypress tests".into(),
+            started_at: 1_762_290_410_000,
+            slow: Some(Slow::Tests),
+            output: vec!["  ✓ renders the pricing page (812ms)".into()],
+            streams: true,
+            busy: Some(true),
+            can_stop: true,
+        }),
+        last_sign_at: Some(1_762_290_500_000),
+        quiet_since: Some(1_762_290_420_000),
     }
 }
 
@@ -860,6 +878,14 @@ impl Backend for Stub {
 
     async fn interrupt(&self, _agent_id: &str) -> Result<bool, CommandError> {
         Ok(false)
+    }
+
+    async fn stop_step(&self, _agent_id: &str) -> Result<String, CommandError> {
+        Ok("Stopped that step. It carries on from there.".into())
+    }
+
+    async fn check_on(&self, _agent_id: &str) -> Result<String, CommandError> {
+        Ok("Still going: running the Cypress tests is using the CPU right now.".into())
     }
 
     async fn answer_approval(&self, answer: ApprovalAnswer) -> Result<(), CommandError> {

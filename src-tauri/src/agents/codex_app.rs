@@ -428,6 +428,19 @@ impl Conversation {
                     None => Vec::new(),
                 }
             }
+            // What a running command printed, as it prints it: the live
+            // step's "Show output".
+            "item/commandExecution/outputDelta" => {
+                match (str_at(params, "/itemId"), str_at(params, "/delta")) {
+                    (Some(id), Some(delta)) if !delta.is_empty() => {
+                        vec![Out::Step(Step::Output {
+                            id: id.to_string(),
+                            text: delta.to_string(),
+                        })]
+                    }
+                    _ => Vec::new(),
+                }
+            }
             "item/agentMessage/delta" => match str_at(params, "/delta") {
                 Some(delta) if str_at(params, "/itemId") == self.reply.as_deref() => {
                     vec![Out::DraftDelta(delta.to_string())]
@@ -963,9 +976,9 @@ mod tests {
         assert_eq!(deltas, "Ran it.");
         assert!(out.contains(&Out::DraftOpen));
         assert!(out.contains(&Out::Step(Step::Reply("Ran it.".into()))));
-        assert!(out
-            .iter()
-            .any(|o| matches!(o, Out::Step(Step::Action(a)) if a.label == "Ran echo")));
+        assert!(out.iter().any(
+            |o| matches!(o, Out::Step(Step::Action(a)) if a.label == "Wrote ss-probe-esc.txt")
+        ));
         let asks: Vec<&Ask> = out
             .iter()
             .filter_map(|o| match o {
