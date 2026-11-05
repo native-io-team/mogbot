@@ -415,13 +415,21 @@ function buildStatusReport(ctx: BridgeToolContext): string {
   return lines.join('\n');
 }
 
-/** Validate a preview_navigate path: in-app absolute path, not a full URL. */
+/**
+ * Validate a preview_navigate path: in-app absolute path, not a full URL.
+ * Nothing a browser could resolve off the site: `//host`, `/\host` (a
+ * backslash reads as `/`), a scheme, or control characters (stripped by URL
+ * parsers, so `/\t/host` would become `//host`).
+ */
 export function isValidPreviewPath(path: unknown): path is string {
   return (
     typeof path === 'string' &&
     path.startsWith('/') &&
     !path.startsWith('//') &&
-    !path.includes('://')
+    !path.includes('\\') &&
+    !path.includes('://') &&
+    // eslint-disable-next-line no-control-regex
+    !/[\u0000-\u001f\u007f]/.test(path)
   );
 }
 

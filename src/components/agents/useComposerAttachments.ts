@@ -23,7 +23,6 @@ import {
   formatBytes,
   inspectFiles,
   isImageMime,
-  localFileUrl,
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS,
   type OutgoingAttachment,
@@ -128,10 +127,10 @@ export function useComposerAttachments(onError: (message: string) => void) {
       try {
         const infos = await inspectFiles(paths);
         add(
-          infos.map((info) => ({
+          infos.map(({ preview, ...info }) => ({
             id: draftId(),
             ...info,
-            previewUrl: isImageMime(info.mime) ? localFileUrl(info.path) : undefined,
+            previewUrl: isImageMime(info.mime) ? preview : undefined,
           }))
         );
       } catch (error) {

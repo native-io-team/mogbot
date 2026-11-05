@@ -50,6 +50,11 @@ pub struct FileInfo {
     pub name: String,
     pub mime: String,
     pub size: u64,
+    /// A small `data:` image for the composer's chip. Picked files are
+    /// anywhere on disk, so they are never put in the asset-protocol scope
+    /// (which can't be narrowed again once widened); the chip shows this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
 }
 
 fn mb(bytes: u64) -> String {
@@ -137,14 +142,48 @@ pub fn inspect(paths: &[String]) -> Result<Vec<FileInfo>, CommandError> {
             if meta.len() > MAX_FILE_BYTES {
                 return Err(too_big(&name, meta.len()));
             }
+            let mime = mime_for(&name).to_string();
+            let preview = mime
+                .starts_with("image/")
+                .then(|| preview(&path, &mime))
+                .flatten();
             Ok(FileInfo {
                 path: p.clone(),
-                mime: mime_for(&name).to_string(),
+                mime,
                 name,
                 size: meta.len(),
+                preview,
             })
         })
         .collect()
+}
+
+/// The longest side of a composer preview, in pixels.
+const PREVIEW_SIDE: u32 = 480;
+/// A format the decoder can't read is shown as it is up to this size.
+const RAW_PREVIEW_BYTES: u64 = 2 * 1024 * 1024;
+
+/// A picked image as a small PNG `data:` URL, or the file itself for a small
+/// one in a format we don't decode (SVG, HEIC, …); `None` otherwise.
+pub fn preview(path: &Path, mime: &str) -> Option<String> {
+    let encode = |bytes: &[u8], mime: &str| {
+        format!(
+            "data:{mime};base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        )
+    };
+    if let Ok(image) = image::open(path) {
+        let thumb = image.thumbnail(PREVIEW_SIDE, PREVIEW_SIDE);
+        let mut out = std::io::Cursor::new(Vec::new());
+        if thumb.write_to(&mut out, image::ImageFormat::Png).is_ok() {
+            return Some(encode(out.get_ref(), "image/png"));
+        }
+    }
+    let size = std::fs::metadata(path).ok()?.len();
+    if size > RAW_PREVIEW_BYTES {
+        return None;
+    }
+    std::fs::read(path).ok().map(|bytes| encode(&bytes, mime))
 }
 
 /// A name not already taken in `dir` ("photo.png", "photo 2.png", …).
@@ -281,27 +320,98 @@ pub fn resolve(home: &Path, rel: &str) -> Result<PathBuf, CommandError> {
     Ok(full)
 }
 
+/// The folders under the agents folder the chat may show images from: each
+/// agent's `attachments/` and the quick-entry captures. Never the folder
+/// itself, which holds the registry, every CLAUDE.md and every conversation.
+pub fn asset_dirs(root: &Path, agent_ids: &[String]) -> Vec<PathBuf> {
+    std::iter::once(root.join(".quick-entry"))
+        .chain(agent_ids.iter().map(|id| root.join(id).join("attachments")))
+        .collect()
+}
+
 /// The chat shows attachments through the asset protocol. The static scope
-/// can't cover the agents folder (it's dot-prefixed, and the projects root is
-/// configurable), so grant it at runtime, once per root.
+/// can't cover the agents folder (it's outside the projects root), so each
+/// agent's attachments folder is granted at runtime, once. Called whenever
+/// the registry is read for the UI, so a new or imported agent is covered;
+/// the scope grows by one folder per agent, never per file.
 pub fn grant_asset_scope(app: &tauri::AppHandle) {
+    use std::collections::HashSet;
     use std::sync::Mutex;
-    static GRANTED: Mutex<Option<PathBuf>> = Mutex::new(None);
+    use tauri::Manager;
+    static GRANTED: Mutex<Option<HashSet<PathBuf>>> = Mutex::new(None);
     let Ok(root) = super::store::agents_root() else {
         return;
     };
+    let ids: Vec<String> = super::store::list()
+        .map(|agents| agents.into_iter().map(|a| a.id).collect())
+        .unwrap_or_default();
     let mut granted = GRANTED.lock().unwrap_or_else(|e| e.into_inner());
-    if granted.as_ref() == Some(&root) {
-        return;
+    let granted = granted.get_or_insert_with(HashSet::new);
+    for dir in asset_dirs(&root, &ids) {
+        if granted.contains(&dir) {
+            continue;
+        }
+        match app.asset_protocol_scope().allow_directory(&dir, true) {
+            Ok(()) => {
+                granted.insert(dir);
+            }
+            Err(e) => {
+                tracing::warn!(dir = %dir.display(), error = %e, "[Agents] couldn't allow images")
+            }
+        }
     }
-    let _ = std::fs::create_dir_all(&root);
-    crate::commands::external_projects::grant_asset_scope(app, &root);
-    *granted = Some(root);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_attachment_folders_are_shown_through_the_asset_protocol() {
+        let root = Path::new("/u/agents");
+        let dirs = asset_dirs(root, &["a1".into(), "b2".into()]);
+        assert_eq!(
+            dirs,
+            vec![
+                PathBuf::from("/u/agents/.quick-entry"),
+                PathBuf::from("/u/agents/a1/attachments"),
+                PathBuf::from("/u/agents/b2/attachments"),
+            ]
+        );
+        assert!(!dirs.iter().any(|d| d == root));
+    }
+
+    #[test]
+    fn a_picked_image_comes_back_as_a_small_preview_not_a_scope_grant() {
+        let dir = tempfile::tempdir().unwrap();
+        let png = dir.path().join("big.png");
+        image::RgbImage::from_pixel(2000, 1000, image::Rgb([10, 20, 30]))
+            .save(&png)
+            .unwrap();
+        let svg = dir.path().join("logo.svg");
+        std::fs::write(&svg, "<svg xmlns='http://www.w3.org/2000/svg'/>").unwrap();
+        let txt = dir.path().join("notes.txt");
+        std::fs::write(&txt, "hi").unwrap();
+        let infos = inspect(&[
+            png.to_string_lossy().into_owned(),
+            svg.to_string_lossy().into_owned(),
+            txt.to_string_lossy().into_owned(),
+        ])
+        .unwrap();
+        let shown = infos[0].preview.as_deref().unwrap();
+        assert!(shown.starts_with("data:image/png;base64,"));
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&shown["data:image/png;base64,".len()..])
+            .unwrap();
+        let thumb = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((thumb.width(), thumb.height()), (480, 240));
+        assert!(infos[1]
+            .preview
+            .as_deref()
+            .unwrap()
+            .starts_with("data:image/svg+xml;base64,"));
+        assert_eq!(infos[2].preview, None);
+    }
 
     #[test]
     fn logs_written_before_attachments_still_load() {

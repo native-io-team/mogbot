@@ -267,10 +267,29 @@ pub async fn check_browser_availability() -> Vec<BrowserInfo> {
     }
 }
 
+/// What `open_url_in_browser` hands a browser: a web or mail address only.
+/// Anything else (`file:`, `javascript:`, an app's custom scheme, a path, a
+/// string starting with `-` that `open` would read as a flag) is refused.
+fn browser_url(raw: &str) -> Result<String, CommandError> {
+    let raw = raw.trim();
+    if raw.chars().any(char::is_control) {
+        return Err(CommandError::expected(
+            "That link can't be opened in a browser.",
+        ));
+    }
+    match url::Url::parse(raw) {
+        Ok(u) if matches!(u.scheme(), "http" | "https" | "mailto") => Ok(u.to_string()),
+        _ => Err(CommandError::expected(
+            "Only web (http, https) and mailto links open in a browser.",
+        )),
+    }
+}
+
 /// Open a URL in a specific browser
 #[tauri::command]
-#[tracing::instrument]
+#[tracing::instrument(skip(url))]
 pub async fn open_url_in_browser(url: String, browser_id: String) -> Result<(), CommandError> {
+    let url = browser_url(&url)?;
     #[cfg(target_os = "macos")]
     {
         let app_name = MACOS_BROWSERS
@@ -284,7 +303,8 @@ pub async fn open_url_in_browser(url: String, browser_id: String) -> Result<(), 
         // Resource temporarily unavailable (os error 35)" was reaching
         // telemetry as an app malfunction (issue #585).
         let mut cmd = create_command("open");
-        cmd.args(["-a", app_name, &url]);
+        // `--`: whatever follows is the document, never an option.
+        cmd.args(["-a", app_name, "--", &url]);
         crate::external_command::spawn_with_pressure_retry(&format!("open {browser_id}"), || {
             cmd.spawn()
         })?;
@@ -316,5 +336,37 @@ pub async fn open_url_in_browser(url: String, browser_id: String) -> Result<(), 
     {
         let _ = (url, browser_id);
         Err(("Browser selection not supported on this platform".to_string()).into())
+    }
+}
+
+#[cfg(test)]
+mod browser_url_tests {
+    use super::browser_url;
+
+    #[test]
+    fn only_web_and_mail_links_reach_a_browser() {
+        assert_eq!(
+            browser_url("https://example.com/a?b=1").unwrap(),
+            "https://example.com/a?b=1"
+        );
+        assert_eq!(
+            browser_url(" http://localhost:3000 ").unwrap(),
+            "http://localhost:3000/"
+        );
+        assert!(browser_url("mailto:me@example.com").is_ok());
+        for bad in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "vscode://x",
+            "/Applications/Calculator.app",
+            "-a Terminal",
+            "--args",
+            "ssh://host",
+            "https://example.com/\nx",
+            "",
+        ] {
+            assert!(browser_url(bad).is_err(), "{bad:?} was allowed");
+        }
+        assert!(browser_url("https://example.com/\u{7}").is_err());
     }
 }

@@ -81,6 +81,10 @@ describe('isValidPreviewPath', () => {
     expect(isValidPreviewPath('//evil.com')).toBe(false);
     expect(isValidPreviewPath('about')).toBe(false);
     expect(isValidPreviewPath('/foo/https://x')).toBe(false);
+    expect(isValidPreviewPath('/\\evil.com')).toBe(false);
+    expect(isValidPreviewPath('/a\\b')).toBe(false);
+    expect(isValidPreviewPath('/\t/evil.com')).toBe(false);
+    expect(isValidPreviewPath('/a\nb')).toBe(false);
     expect(isValidPreviewPath(42)).toBe(false);
     expect(isValidPreviewPath(undefined)).toBe(false);
   });

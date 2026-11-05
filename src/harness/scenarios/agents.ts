@@ -872,6 +872,8 @@ const inspectFiles = (args: Record<string, unknown>) =>
       name,
       mime: image ? 'image/jpeg' : 'text/markdown',
       size: image ? 40_266 : 6_220,
+      // The backend's data: preview; the harness serves fixtures by path.
+      ...(image ? { preview: path } : {}),
     };
   });
 const schedulePreview = (args: Record<string, unknown>) => {

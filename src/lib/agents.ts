@@ -590,6 +590,11 @@ export interface FileInfo {
   name: string;
   mime: string;
   size: number;
+  /**
+   * A small `data:` image for an image's chip. A picked file is never added
+   * to the asset-protocol scope, so this is the only way it can be shown.
+   */
+  preview?: string;
 }
 
 /** Must match `MAX_FILES` / `MAX_FILE_BYTES` in agents/attachments.rs. */

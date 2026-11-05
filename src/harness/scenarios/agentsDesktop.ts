@@ -27,6 +27,7 @@ const quickEntryCommands = {
       name: 'Screenshot 2026-11-04 at 10.42.18.png',
       mime: 'image/jpeg',
       size: 40_266,
+      preview: path,
     })),
   agents_send: (args: Record<string, unknown>) => ({
     ...msg('user', String(args.text), 0, { agentId: String(args.agentId) }),

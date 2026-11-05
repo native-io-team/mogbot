@@ -306,16 +306,9 @@ pub fn run() {
             // Agents live in this app's own support folder (not the shared
             // ~/ShipStudio), outside the static scope; their chats show the
             // images attached in their homes.
-            {
-                use tauri::Manager;
-                if let Ok(root) = agents::store::agents_root() {
-                    if let Err(e) = _app.asset_protocol_scope().allow_directory(&root, true) {
-                        tracing::warn!(
-                            "[Agents] could not allow the agents folder for images: {e}"
-                        );
-                    }
-                }
-            }
+            // Only their attachments folders: the agents folder itself holds
+            // the registry, every CLAUDE.md and every conversation.
+            agents::attachments::grant_asset_scope(_app.handle());
 
             // Build a custom menu on macOS that replaces Cmd+W (Close Window)
             // with a custom "Close Tab" action that emits an event to the frontend

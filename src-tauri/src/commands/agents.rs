@@ -208,12 +208,12 @@ pub async fn agents_inspect_files(
     app: AppHandle,
     paths: Vec<String>,
 ) -> Result<Vec<attachments::FileInfo>, CommandError> {
-    use tauri::Manager;
-    let files = attachments::inspect(&paths)?;
-    for file in files.iter().filter(|f| f.mime.starts_with("image/")) {
-        let _ = app.asset_protocol_scope().allow_file(&file.path);
-    }
-    Ok(files)
+    let _ = app;
+    // Images come back with a preview of their own: a picked file is never
+    // added to the asset-protocol scope (a grant can't be taken back).
+    tokio::task::spawn_blocking(move || attachments::inspect(&paths))
+        .await
+        .map_err(agents::err_other)?
 }
 
 /// Open an attachment in its default app (a PDF in Preview, a CSV in Numbers),
@@ -281,7 +281,7 @@ pub struct CreateAgentInput {
 }
 
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, input))]
 pub async fn agents_create(
     app: AppHandle,
     input: CreateAgentInput,
@@ -351,7 +351,7 @@ pub struct UpdateAgentInput {
 }
 
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, input))]
 pub async fn agents_update(
     app: AppHandle,
     agent_id: String,
@@ -657,7 +657,7 @@ pub async fn agents_interrupt(agent_id: String) -> Result<bool, CommandError> {
 /// `always`: allow, and keep allowing what the card offered to (its stored
 /// scope, never one the caller supplies).
 #[tauri::command]
-#[tracing::instrument(skip(app))]
+#[tracing::instrument(skip(app, note))]
 pub async fn agents_answer_approval(
     app: AppHandle,
     agent_id: String,
