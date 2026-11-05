@@ -40,7 +40,9 @@ export default (): ExpoConfig => ({
   version: '0.1.0',
   // Landscape and iPad: the Agents list and a chat sit side by side when there's room.
   orientation: 'default',
+  // Placeholder: a black tile with a white ring, until real branding lands.
   icon: './assets/icon.png',
+  web: { favicon: './assets/favicon.png' },
   userInterfaceStyle: 'automatic',
   backgroundColor: SURFACE_APP,
   runtimeVersion: { policy: 'fingerprint' },
@@ -59,7 +61,7 @@ export default (): ExpoConfig => ({
   },
   android: {
     package: bundleId,
-    adaptiveIcon: { foregroundImage: './assets/icon.png', backgroundColor: SURFACE_APP },
+    adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: SURFACE_APP },
     predictiveBackGestureEnabled: true,
   },
   plugins: [
@@ -84,7 +86,8 @@ export default (): ExpoConfig => ({
         recordAudioAndroid: false,
       },
     ],
-    ['expo-notifications', { color: '#46e76f' }],
+    // Placeholder art (assets/*.png are generated, neutral, unbranded) until real branding lands.
+    ['expo-notifications', { icon: './assets/notification-icon.png', color: '#0a0a0a' }],
     [
       'expo-image-picker',
       {
