@@ -42,6 +42,7 @@ import { AgentModelMenu } from './AgentModelMenu';
 import { TextArea } from '../primitives/TextField';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
+import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
@@ -212,6 +213,7 @@ interface AgentChatProps extends AgentActions {
 const unsentText = new Map<string, string>();
 
 function statusLabel(agent: Agent): string | null {
+  if (agent.takeover) return 'You’re driving';
   if (needsYou(agent)) return 'Needs your OK';
   // Queued behind the cap on concurrent turns: working, but not started (no `since`).
   if (agent.status.state === 'working') {
@@ -294,6 +296,16 @@ export function AgentChat({
 
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
+  // While you drive an agent with no project to open, its session is shown
+  // here in place of the conversation, until you ask for the chat.
+  const takeover = agent.takeover;
+  const driven = Boolean(takeover);
+  const [chatFor, setChatFor] = useState<string | null>(null);
+  const terminalShown = Boolean(takeover && !takeover.project && chatFor !== takeover.ptySession);
+  const toggleTerminal = useCallback(() => {
+    const pty = agent.takeover?.ptySession ?? null;
+    setChatFor((shown) => (shown === pty ? null : pty));
+  }, [agent.takeover?.ptySession]);
   const [remembering, setRemembering] = useState<AgentMessage | null>(null);
 
   // Who you can @mention here: everyone else on the team, in sidebar order.
@@ -803,6 +815,7 @@ export function AgentChat({
                   onRetry={retry}
                   queued={m.id === queuedId}
                   onInterrupt={interruptNow}
+                  driven={driven}
                   colorOf={colorOf}
                   onRemember={setRemembering}
                 />
@@ -894,6 +907,7 @@ export function AgentChat({
       retry,
       queuedId,
       interruptNow,
+      driven,
       colorOf,
       streaming,
       rowsPaused,
@@ -919,6 +933,7 @@ export function AgentChat({
         className="agent-chat"
         data-color={agent.color}
         data-dropping={dropping || undefined}
+        data-takeover-terminal={terminalShown || undefined}
         aria-label={`Conversation with ${agent.name}`}
         {...accentScope}
         {...dropHandlers}
@@ -991,6 +1006,19 @@ export function AgentChat({
             />
           </div>
         </header>
+
+        <TakeoverBanner
+          agent={agent}
+          terminalShown={terminalShown}
+          onToggleTerminal={toggleTerminal}
+        />
+        {/* Unmounted while the chat shows (a hidden xterm would fit itself to
+            nothing); showing it again replays the session's scrollback. */}
+        {takeover && terminalShown && (
+          <div className="agent-chat__takeover">
+            <TakeoverTerminal takeover={takeover} />
+          </div>
+        )}
 
         <div className="agent-chat__scroll" ref={scrollRef} onScroll={onScroll}>
           <div className="agent-chat__messages" ref={messagesRef}>

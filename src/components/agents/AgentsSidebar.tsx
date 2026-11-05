@@ -64,6 +64,7 @@ interface AgentsSidebarProps {
 }
 
 function subtitle(agent: Agent): string {
+  if (agent.takeover) return 'You’re driving';
   if (needsYou(agent)) return 'Needs your OK';
   if (agent.status.state === 'working') return agent.status.activity ?? 'Working…';
   const failure = failedTurn(agent);
@@ -73,6 +74,7 @@ function subtitle(agent: Agent): string {
 
 /** The row's second line takes the colour of its state. */
 function lineState(agent: Agent): string | undefined {
+  if (agent.takeover) return 'working';
   if (needsYou(agent)) return 'waiting';
   if (agent.status.state === 'working') return 'working';
   const failure = failedTurn(agent);

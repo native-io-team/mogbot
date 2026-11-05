@@ -24,6 +24,7 @@ export type Conformance = [
   Assert<Same<Wire.AgentsOverview, Desktop.AgentsOverview>>,
   Assert<Same<Wire.AgentStatus, Desktop.AgentStatus>>,
   Assert<Same<Wire.ContextFill, Desktop.ContextFill>>,
+  Assert<Same<Wire.AgentTakeover, Desktop.AgentTakeover>>,
   Assert<Same<Wire.Approval, Desktop.Approval>>,
   Assert<Same<Wire.Attachment, Desktop.Attachment>>,
   Assert<Same<Wire.SharedFile, Desktop.SharedFile>>,

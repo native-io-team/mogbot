@@ -38,6 +38,7 @@ import { MentionText } from './AgentMentions';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { useLiveWork, WorkTimeline } from './AgentWork';
+import { TakeOverButton } from './AgentTakeover';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
@@ -362,6 +363,8 @@ interface UserBubbleProps extends Arrival {
    */
   queued?: boolean;
   onInterrupt?: () => void;
+  /** You're driving the agent's session: it waits for the hand-back, and nothing interrupts. */
+  driven?: boolean;
   /** Still copying its files in: the files as staged, shown while it sends. */
   sending?: DraftAttachment[];
   /** "Remember this", with this message. */
@@ -378,6 +381,7 @@ export const UserBubble = memo(function UserBubble({
   colorOf,
   queued,
   onInterrupt,
+  driven,
   sending,
   onRemember,
 }: UserBubbleProps) {
@@ -436,7 +440,12 @@ export const UserBubble = memo(function UserBubble({
           Sending…
         </div>
       )}
-      {queued && !failed && (
+      {queued && !failed && driven && (
+        <div className="agent-chat__queued" role="status">
+          Waiting, sends when you hand {agent.name} back
+        </div>
+      )}
+      {queued && !failed && !driven && (
         <div className="agent-chat__queued" role="status">
           Queued, sends when {agent.name} finishes
           <span aria-hidden>·</span>
@@ -1212,6 +1221,7 @@ export function WorkingIndicator({
           )}
         </div>
         {live.toggle}
+        {!leaving && agent && <TakeOverButton agent={agent} className="agent-working__takeover" />}
       </div>
     </div>
   );

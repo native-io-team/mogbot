@@ -31,6 +31,7 @@ import { logger } from '../lib/logger';
 import { basename } from '../lib/paths';
 import type { Project } from '../lib/project';
 import {
+  adoptInBackground,
   closeInBackground,
   startInBackground,
   type BackgroundResult,
@@ -52,6 +53,24 @@ const focusListeners = new Set<(request: RemoteRequest) => void>();
 export function openAgentSession(projectPath: string, sessionId: string): void {
   const request: RemoteRequest = { kind: 'focus', projectPath, sessionId, receivedAt: Date.now() };
   focusListeners.forEach((listener) => listener(request));
+}
+
+/**
+ * "Take over" on a bound agent: the backend has spawned the agent's own
+ * session in a PTY; it becomes a tab in the project's workspace, which opens
+ * with that tab selected. The user asked to drive it, so the window moves.
+ */
+const takeoverListeners = new Set<(tab: TakeoverTab) => void>();
+export interface TakeoverTab {
+  projectPath: string;
+  sessionId: string;
+  /** The workspace's id for the CLI (`claude-code`, `codex`). */
+  agentId: string;
+}
+/** False when no workspace in this window can show it. */
+export function openTakenOverSession(tab: TakeoverTab): boolean {
+  takeoverListeners.forEach((listener) => listener(tab));
+  return takeoverListeners.size > 0;
 }
 
 interface TabRef {
@@ -170,8 +189,18 @@ export function useRemoteAgentControl(
       enqueue({ kind: 'show', projectPath, receivedAt: Date.now() });
     });
     focusListeners.add(enqueue);
+    const adopt = ({ projectPath, sessionId, agentId }: TakeoverTab) => {
+      logger.info('[Remote] Showing a taken-over agent session', { projectPath });
+      const run = adoptInBackground(live, projectPath, sessionId, agentId);
+      report('start', projectPath, run);
+      void run.then((result) => {
+        if (result.ok) enqueue({ kind: 'focus', projectPath, sessionId, receivedAt: Date.now() });
+      });
+    };
+    takeoverListeners.add(adopt);
     return () => {
       focusListeners.delete(enqueue);
+      takeoverListeners.delete(adopt);
       void unlistenStart.then((fn) => fn());
       void unlistenClose.then((fn) => fn());
       void unlistenShow.then((fn) => fn());

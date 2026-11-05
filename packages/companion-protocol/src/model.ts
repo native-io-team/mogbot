@@ -119,6 +119,20 @@ export interface Agent {
   newEngine?: boolean;
   /** How full its conversation is, as its engine reported it; omitted when it doesn't say. */
   context?: ContextFill;
+  /** You're driving its session in a terminal on the Mac; omitted otherwise. */
+  takeover?: AgentTakeover;
+}
+
+/** Mirrors `takeover::View`. The phone shows the state; it can't take over. */
+export interface AgentTakeover {
+  /** When it began (epoch ms). */
+  since: number;
+  /** The Mac's PTY session the terminal shows. */
+  ptySession: string;
+  /** A bound agent's project: the terminal is a tab in its workspace. */
+  project?: string;
+  /** The workspace's id for the CLI, for that tab. */
+  cli: 'claude-code' | 'codex';
 }
 
 /** Mirrors `context::ContextFill`: two numbers the engine reported, never estimated. */
@@ -157,7 +171,7 @@ export interface CheckIn {
 /** One scheduled run and what came of it; mirrors `runs::Run`. */
 export interface CheckInRun {
   at: number;
-  outcome: 'running' | 'ran' | 'retrying' | 'failed' | 'unknown';
+  outcome: 'running' | 'ran' | 'retrying' | 'failed' | 'skipped' | 'unknown';
   /** 1 for the run itself, 2 for its first retry. */
   attempt: number;
   /** Why it failed, as the chat said it. */

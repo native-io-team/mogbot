@@ -1,0 +1,78 @@
+/* Take over: you're driving an agent's session in a terminal
+   (components/agents/AgentTakeover.tsx). One calm line under the header,
+   and, for an agent with no project to open, the session in place of the
+   conversation. */
+
+.agent-takeover {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: var(--agents-header-height);
+  padding: var(--spacing-xs) var(--spacing-lg);
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+  background: var(--surface-panel);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+/* The agent's colour marks whose session it is; nothing else is tinted. */
+.agent-takeover__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--accent-active);
+}
+
+.agent-takeover__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-takeover__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+/* The session fills the conversation's place; the composer goes with it. */
+.agent-chat__takeover {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agent-chat[data-takeover-terminal] .agent-chat__scroll,
+.agent-chat[data-takeover-terminal] .agent-chat__footer {
+  display: none;
+}
+
+.agent-takeover-terminal {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--surface-app);
+}
+
+.agent-takeover-terminal__xterm {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* "Take over" beside the working line's step count. */
+.text-button.button.agent-working__takeover {
+  margin-left: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.text-button.button.agent-working__takeover:hover:not(:disabled) {
+  color: var(--text-secondary);
+}

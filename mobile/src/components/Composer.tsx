@@ -51,7 +51,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccent } from '../lib/accent';
-import { needsYou } from '../lib/agents';
+import { drivenHint, needsYou } from '../lib/agents';
 import { mentionQuery, sendMode } from '../lib/composer';
 import {
   addFile,
@@ -180,7 +180,9 @@ export function Composer({
   const waitingOnYou = needsYou(agent);
   // Offline, Send still works: it waits for the Mac in the outbox.
   const canSend = hasContent && !blocked;
-  const offerNow = mode === 'queue' && connected && !waitingOnYou;
+  // Driven on the Mac: it waits for the hand-back there, and nothing here interrupts it.
+  const driven = Boolean(agent.takeover);
+  const offerNow = mode === 'queue' && connected && !waitingOnYou && !driven;
 
   const query = mentionQuery(draft.text);
   const suggestions = useMemo(() => {
@@ -281,7 +283,9 @@ export function Composer({
     ? 'Listening on this phone · tap the mic when you’re done'
     : micHint
       ? micHint
-      : !connected
+      : driven
+        ? drivenHint(agent.name)
+        : !connected
         ? hasContent
           ? `Not connected · Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
           : 'Not connected · what you type stays here'

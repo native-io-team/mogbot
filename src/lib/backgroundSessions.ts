@@ -113,12 +113,32 @@ export async function startInBackground(
     agentId,
   });
 
+  return adoptInBackground(terminals, projectPath, sessionId, agentId);
+}
+
+/**
+ * Make a PTY that is already running (spawned by the backend: an agent's
+ * take-over) one of `projectPath`'s tabs, the same way a background start
+ * does. Its Terminal attaches to the live PTY when it mounts (open is
+ * idempotent) rather than spawning one.
+ */
+export async function adoptInBackground(
+  terminals: BackgroundTabs,
+  projectPath: string,
+  sessionId: string,
+  agentId: string
+): Promise<BackgroundResult> {
   if (terminals.adoptTerminalTab(projectPath, { agentId, sessionId })) return { ok: true };
   // Not tracked in this window (or it filled up meanwhile): the saved list,
   // read fresh, is what the project's tabs are restored from when it opens.
-  const latest = await getTerminalState(projectPath).catch(() => saved);
-  const next = savedWithTab(latest, { agent_id: agentId, session_id: sessionId }, max);
-  if (next) await setTerminalState(projectPath, next);
+  const latest = await getTerminalState(projectPath).catch(() => null);
+  const next = savedWithTab(
+    latest,
+    { agent_id: agentId, session_id: sessionId },
+    terminals.maxTerminalTabs
+  );
+  if (!next) return { ok: false, reason: 'no_room' };
+  if (next !== latest) await setTerminalState(projectPath, next);
   return { ok: true };
 }
 
