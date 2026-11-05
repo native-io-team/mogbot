@@ -11,6 +11,8 @@ import type {
   Params,
   Result,
   ResultRef,
+  TeamSetupStepId,
+  TeamSetupStepState,
 } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
@@ -170,6 +172,7 @@ function connect(c: Credentials) {
     if (open) void focusChat(open).catch(() => {});
     // An older Mac (or one without rooms) shows none: forget any kept from before.
     if (!roomsOffered(welcome)) setApp({ rooms: null });
+    if (!canCall('agents.teamSetup', welcome)) setApp({ teamSetup: null });
     if (canCall('devices.setPush', welcome)) void syncPush();
   });
   t.onEvent((event, cursor) => {
@@ -177,6 +180,8 @@ function connect(c: Credentials) {
     update((s) => applyEvent(s, event, cursor));
     if (event.type === 'alert') void notify(event.alert);
     if (event.type === 'system.status') learnRoutes(event.status.routes);
+    // The Mac fires a registry event whenever setting up the team may read differently.
+    if (event.type === 'agents.registry') refreshTeamSetupSoon();
     if (event.type === 'sync.snapshot') learnRoutes(event.status.routes);
     // After a snapshot every chat is stale; re-fetch the one on screen now,
     // the others when they're opened. Then send what waited for the Mac.
@@ -185,6 +190,7 @@ function connect(c: Credentials) {
       const open = getApp().openChat;
       if (open && !getApp().chats[open]?.loaded) void loadLatest(open);
       if (roomsOffered(getApp().welcome)) void refreshRooms().catch(() => {});
+      void refreshTeamSetup().catch(() => {});
       void flushOutbox();
     }
   });
@@ -294,6 +300,39 @@ function focusChat(key: string | null) {
 export async function refreshRooms() {
   setApp({ rooms: await call('rooms.list', {}) });
 }
+
+/** "Setting up your team", read again (null on a Mac without it). */
+export async function refreshTeamSetup() {
+  if (!canCall('agents.teamSetup')) return;
+  setApp({ teamSetup: await call('agents.teamSetup', {}) });
+}
+
+let teamSetupTimer: ReturnType<typeof setTimeout> | null = null;
+/** A burst of registry events reads the checklist once. */
+function refreshTeamSetupSoon() {
+  if (!canCall('agents.teamSetup') || teamSetupTimer) return;
+  teamSetupTimer = setTimeout(() => {
+    teamSetupTimer = null;
+    void refreshTeamSetup().catch(() => {});
+  }, 300);
+}
+
+/** One of the card's answers, then the checklist as it now reads. */
+async function teamSetupThen<T>(work: Promise<T>): Promise<T> {
+  const out = await work;
+  await refreshTeamSetup().catch(() => {});
+  return out;
+}
+
+export const teamSetup = {
+  step: (step: TeamSetupStepId, state: TeamSetupStepState) =>
+    teamSetupThen(call('agents.teamSetup.step', { step, state })),
+  routine: (agentId: string, checkInId: string, on: boolean) =>
+    teamSetupThen(call('agents.teamSetup.routine', { agentId, checkInId, on })),
+  hello: (agentId: string) => teamSetupThen(call('agents.teamSetup.hello', { agentId })),
+  missing: () => teamSetupThen(call('agents.teamSetup.missing', {})),
+  dismiss: () => teamSetupThen(call('agents.teamSetup.dismiss', {})),
+};
 
 /** The newest page. Concurrent calls for one chat share the request. */
 export function loadLatest(agentId: string): Promise<void> {

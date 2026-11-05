@@ -46,7 +46,7 @@ const OUT = path.resolve(opt('--out', 'QA_OUT', path.join(ROOT, 'qa-shots')));
 const ONLY = opt('--only', 'QA_ONLY', '');
 const THEMES = opt('--themes', 'QA_THEMES', 'light,dark').split(',').filter(Boolean);
 const VERBOSE = args.includes('--verbose');
-const PHASES = opt('--phases', 'QA_PHASES', 'fresh,live,cached,impostor,bars,heavy,importing').split(',');
+const PHASES = opt('--phases', 'QA_PHASES', 'fresh,live,cached,impostor,bars,heavy,importing,team-setup').split(',');
 const phase = (name) => PHASES.includes(name);
 // Ports other tools in this repo own: the desktop app, its harness, the phone's Metro.
 for (const p of [WEB_PORT, MOCK_PORT, CDP_PORT]) {
@@ -992,6 +992,70 @@ const HEAVY_OFFLINE = [
   },
 ];
 
+/** `--team-setup`: sixteen agents just imported, and the checklist in the Chief's chat. */
+const TEAM_SETUP = [
+  {
+    name: 'setup-logins',
+    route: '/chat/chief',
+    ready: 'Setting up your team',
+    settle: 2500,
+    check:
+      'One card at the foot of the Chief’s chat: “Setting up your team”, quiet “0 of 4 done”, the source line “A few things to finish… from Grok Bot”, a quiet set-aside note (no count). Add logins open with five rows and Add; the other steps folded rows with chevrons. Skip is quiet; no accent fill anywhere',
+  },
+  {
+    name: 'setup-routines',
+    route: '/chat/chief',
+    ready: 'Setting up your team',
+    settle: 2500,
+    act: async (page) => {
+      await page.clickText('Switch on routines');
+      await sleep(800);
+    },
+    check:
+      'Routines unfolded: who · when, what it does, a switch each (one on); Skip, then a neutral Done',
+  },
+  {
+    name: 'setup-hello',
+    route: '/chat/chief',
+    ready: 'Setting up your team',
+    settle: 2500,
+    act: async (page) => {
+      await page.clickText('Say hi to your team');
+      await sleep(800);
+      await scrollToText('Say hi to your team')(page);
+    },
+    check:
+      'Say hi: one row per agent with its badge; two “Said hi”, Order QA “Replying…” with a spinner, the rest a Say hi button, disabled while Order QA replies',
+  },
+  {
+    name: 'setup-done-step',
+    route: '/chat/chief',
+    ready: 'Setting up your team',
+    settle: 2500,
+    act: async (page) => {
+      await page.clickText('What they’re missing');
+      await sleep(600);
+      // A second theme finds it skipped already: open it again first.
+      await page
+        .clickText('Open again')
+        .then(() => sleep(1200))
+        .catch(() => {});
+      await page.clickText('Skip');
+      await sleep(1500);
+    },
+    check:
+      'What they’re missing skipped: its row reads “Skipped” with a dash, the meta “1 of 4 done”, the step folded',
+  },
+  {
+    name: 'setup-set-aside',
+    route: '/chat/imp0',
+    ready: 'Newsletter',
+    settle: 2500,
+    check:
+      'Newsletter: the import line, its login card, and the set-aside request as a receipt: clock, “Set aside · Run a command”; a tap shows why and that nothing ran',
+  },
+];
+
 // ---- Report -------------------------------------------------------------------------
 
 function report(meta) {
@@ -1131,6 +1195,13 @@ async function main() {
     await page.goto(`${WEB}/agents`);
     await sleep(4000);
     await each(IMPORTING);
+  }
+
+  if (phase('team-setup')) {
+    await startMock('--team-setup');
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await each(TEAM_SETUP);
   }
 
   page.close();
