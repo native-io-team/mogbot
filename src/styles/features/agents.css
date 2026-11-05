@@ -35,6 +35,12 @@
   --agents-prose-measure: 38em; /* ≈70 characters of body text */
 }
 
+/* White is the strongest neutral of the theme: near-black on light, as the
+   accent itself is (LIGHT_THEME_WHITE in accent.ts). */
+:root[data-theme='light'] {
+  --agents-tint-white: #1c1c1c;
+}
+
 [data-color='white'] {
   --agents-tint: var(--agents-tint-white);
 }

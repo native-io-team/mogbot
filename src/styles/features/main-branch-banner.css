@@ -3,6 +3,12 @@
   --banner-amber-bright: #fcd34d;
 }
 
+/* On light, "bright" amber is the deep one: it is emphasis text on a pale
+   amber wash. */
+:root[data-theme='light'] {
+  --banner-amber-bright: #7d4e00;
+}
+
 /* Main Branch Warning Banner */
 .main-branch-banner {
   display: flex;
@@ -112,6 +118,11 @@
     background-color var(--transition),
     color var(--transition),
     border-color var(--transition);
+}
+
+/* The 40% warning edge disappears into the amber banner on light. */
+:root[data-theme='light'] .main-branch-banner-checkbox input[type='checkbox'] {
+  border-color: var(--accent-warning);
 }
 
 .main-branch-banner-checkbox input[type='checkbox']:hover {

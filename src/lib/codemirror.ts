@@ -22,10 +22,10 @@ import { markdown } from '@codemirror/lang-markdown';
 
 /* Shared syntax palette, with semantic colors matching the visual editor. */
 export const ghDarkHighlight = HighlightStyle.define([
-  { tag: [t.keyword, t.modifier, t.operatorKeyword], color: '#ff7b72' },
+  { tag: [t.keyword, t.modifier, t.operatorKeyword], color: 'var(--syntax-keyword)' },
   { tag: [t.propertyName], color: 'var(--property-text)' },
   { tag: [t.variableName], color: 'var(--variable-text)' },
-  { tag: [t.function(t.variableName), t.labelName], color: '#d2a8ff' },
+  { tag: [t.function(t.variableName), t.labelName], color: 'var(--syntax-function-name)' },
   {
     tag: [t.number, t.bool, t.atom, t.color, t.constant(t.name), t.standard(t.name)],
     color: 'var(--property-text)',
@@ -36,12 +36,12 @@ export const ghDarkHighlight = HighlightStyle.define([
   },
   { tag: [t.className], color: 'var(--class-text)' },
   // Quoted attribute values (Tailwind class lists) render as Class-orange;
-  // unquoted element text inherits the editor's base --text-inverse.
+  // unquoted element text inherits the editor's base --text-white.
   { tag: [t.string, t.special(t.string)], color: 'var(--class-text)' },
-  { tag: [t.comment, t.meta], color: '#8b949e', fontStyle: 'italic' },
+  { tag: [t.comment, t.meta], color: 'var(--syntax-comment)', fontStyle: 'italic' },
   { tag: [t.tagName], color: 'var(--tag-text)' },
   { tag: [t.attributeName], color: 'var(--property-text)' },
-  { tag: [t.invalid], color: '#f85149' },
+  { tag: [t.invalid], color: 'var(--syntax-invalid)' },
 ]);
 
 /* Editor chrome, themed with our tokens so it matches the panel surface. */
@@ -82,11 +82,11 @@ export const ssEditorTheme = EditorView.theme(
     // editor is promoted to its own backing layer — see `.cm-scroller` above.
     '.cm-content': {
       padding: 'var(--spacing-sm) 0',
-      caretColor: 'var(--text-inverse, #fff)',
+      caretColor: 'var(--text-white)',
     },
     '.cm-line': { padding: '0 var(--spacing-sm)' },
     '.cm-cursor, .cm-cursor-primary': {
-      borderLeftColor: 'var(--text-inverse, #fff)',
+      borderLeftColor: 'var(--text-white)',
       borderLeftWidth: '2px',
     },
     '.cm-selectionBackground, ::selection': { backgroundColor: 'var(--tint)' },
@@ -163,11 +163,11 @@ export const neutralizeInvalidHighlight: Extension = Prec.high(
 export const codeTabEditorTheme = EditorView.theme({
   // Larger, readable code text on a transparent surface so the code area shows
   // the panel background. Element text content (headings, paragraphs) has no
-  // syntax token, so this base color IS its color — white, per --text-inverse.
+  // syntax token, so this base color IS its color — the emphasis text role.
   '&': {
     fontSize: 'var(--font-size-h4)',
     backgroundColor: 'transparent',
-    color: 'var(--text-inverse)',
+    color: 'var(--text-white)',
   },
   '.cm-scroller': {
     fontFamily: 'var(--font-code)',

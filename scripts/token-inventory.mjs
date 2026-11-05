@@ -200,19 +200,19 @@ function validateLayerDirection(definitions, layersByFile, definitionsByName, ro
  * there is a progressive enhancement of the plain value above it (the accent's
  * color-mix tints), not a second owner, as long as both are in the same file.
  */
-function insideSupports(definition) {
+function enclosingPreludes(definition) {
   let source;
   try {
     source = fs.readFileSync(definition.filePath, 'utf8');
   } catch {
-    return false;
+    return [];
   }
   const upTo = source.split('\n').slice(0, definition.line).join('\n');
   const stack = [];
   let pending = '';
   for (const char of upTo.replace(/\/\*[\s\S]*?\*\//g, '')) {
     if (char === '{') {
-      stack.push(pending.trim().startsWith('@supports'));
+      stack.push(pending.trim());
       pending = '';
     } else if (char === '}') {
       stack.pop();
@@ -223,8 +223,23 @@ function insideSupports(definition) {
       pending += char;
     }
   }
-  return stack.includes(true);
+  return stack;
 }
+
+function insideSupports(definition) {
+  return enclosingPreludes(definition).some((prelude) => prelude.startsWith('@supports'));
+}
+
+/**
+ * Whether a definition sits in a theme block (`:root[data-theme='light']`).
+ * A theme's value for a role is that role's other half, not a second owner —
+ * again only when it lives in the same file as the default.
+ */
+function insideTheme(definition) {
+  return enclosingPreludes(definition).some((prelude) => /\[data-theme=/.test(prelude));
+}
+
+const isOverride = (definition) => insideSupports(definition) || insideTheme(definition);
 
 function validateTokenTaxonomy({
   manifest,
@@ -256,8 +271,7 @@ function validateTokenTaxonomy({
     if (entries.length < 2) continue;
     const enhancementOnly =
       entries.every((entry) => entry.filePath === entries[0].filePath) &&
-      !insideSupports(entries[0]) &&
-      entries.slice(1).every(insideSupports);
+      entries.filter((entry) => !isOverride(entry)).length === 1;
     if (enhancementOnly) continue;
     diagnostics.push({
       code: 'duplicate-token',

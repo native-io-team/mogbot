@@ -189,6 +189,49 @@ test('the shipped manifest declares the documented plugin-stable API', async () 
   }
 });
 
+test('a same-file theme block is the role\'s other half, not a duplicate', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'token-theme-'));
+  const file = path.join(tmpRoot, 'src/styles/global/tokens-semantic.css');
+  const other = path.join(tmpRoot, 'src/styles/global/tokens-components.css');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(
+    file,
+    [':root {', '  --ink: black;', '}', ":root[data-theme='light'] {", '  --ink: white;', '}'].join(
+      '\n'
+    )
+  );
+  fs.writeFileSync(other, [":root[data-theme='light'] {", '  --ink: grey;', '}'].join('\n'));
+  try {
+    const diagnostics = validateTokenTaxonomy({
+      manifest,
+      indexSource,
+      definitions: [
+        { name: '--ink', filePath: file, line: 2, value: ': black;' },
+        { name: '--ink', filePath: file, line: 5, value: ': white;' },
+      ],
+      references: [],
+      root: tmpRoot,
+    });
+    assert.equal(diagnostics.filter((d) => d.code === 'duplicate-token').length, 0);
+    const crossFile = validateTokenTaxonomy({
+      manifest,
+      indexSource,
+      definitions: [
+        { name: '--ink', filePath: file, line: 2, value: ': black;' },
+        { name: '--ink', filePath: other, line: 2, value: ': grey;' },
+      ],
+      references: [],
+      root: tmpRoot,
+    });
+    assert.equal(crossFile.filter((d) => d.code === 'duplicate-token').length, 1);
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
 test('a same-file redeclaration inside @supports is an enhancement, not a duplicate', async () => {
   const fs = await import('node:fs');
   const os = await import('node:os');

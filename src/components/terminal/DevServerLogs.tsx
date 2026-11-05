@@ -26,7 +26,7 @@ import { CopyIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { trackEvent } from '../../lib/analytics';
 import { stripAnsi } from '../../lib/ansi';
-import { createTerminalOptions } from './terminalTheme';
+import { createTerminalOptions, followAppTheme } from './terminalTheme';
 import '@xterm/xterm/css/xterm.css';
 
 /* Tail-limit the full-buffer send so we don't fire 3k+ lines of HMR
@@ -153,6 +153,7 @@ export function DevServerLogs({
       // y/n confirms) can be answered here; keys flow to the PTY via onInput.
       disableStdin: false,
     });
+    followAppTheme(term, 'logs');
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);

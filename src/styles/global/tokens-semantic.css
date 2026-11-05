@@ -14,12 +14,19 @@
   --surface-terminal-input: var(--color-gray-750);
   --surface-canvas: var(--color-white);
   --surface-warning: rgba(232, 154, 28, 0.15);
+  /* One step past selected (a hovered selected cell), and the flat fill of a
+     control that is mid-action. */
+  --surface-selected-strong: var(--color-gray-700);
+  --surface-busy: var(--color-gray-900);
 
   --text-white: var(--color-white);
   --text-primary: var(--color-gray-200);
   --text-secondary: var(--color-gray-400);
   --text-muted: var(--color-gray-600);
   --text-faint: var(--color-gray-700);
+  /* Between secondary and muted: dense labels that must stay quieter than
+     their values (the visual editor's spacing box). */
+  --text-quiet: var(--color-gray-500);
   --text-terminal: var(--color-gray-500);
   --text-terminal-strong: var(--color-gray-300);
   --text-inverse: var(--color-white);
@@ -34,20 +41,31 @@
   --border-default: var(--color-gray-850);
   --border-subtle: var(--color-gray-800);
   --border-strong: var(--color-gray-750);
+  /* The edge of an unchecked checkbox or similar control: its only visible
+     boundary, so on light it must clear 3:1 (WCAG 1.4.11), unlike a divider. */
+  --border-control: var(--border-strong);
   --border-accent: var(--color-gray-200);
 
   --border-width-default: var(--stroke-1);
   --border-width-emphasis: var(--stroke-2);
 
   --accent-selected: var(--text-primary);
-  /* Focus is deliberately NOT the accent: the accent is whatever colour the
-     user picked (possibly white, possibly navy), and a focus ring has to be
-     visible on every surface regardless. */
-  --accent-focus: var(--color-blue-500);
+  /* Focus is neutral, never a hue: the app is monochrome plus the user's
+     accent, and the accent can't be the ring (a white accent on white, a red
+     one reading as an error). The primary text colour at
+     --focus-ring-strength — white-ish on dark, near-black on light — 1.5px
+     with a 2px offset: the lightest strength that still clears 3:1 on the
+     hardest surface of each theme (selected rows on dark, the app background
+     on light; theme.test.ts), so it reads as focus, not a border or a
+     selection. Shown only on :focus-visible; dialogs focus their first body
+     control, or themselves when they open on tabs, never the close button.
+     Plain fallback here; the mix is in the @supports block below. */
+  --accent-focus: var(--text-primary);
+  --focus-ring-strength: 58%;
   --focus-ring: var(--accent-focus);
 
-  --focus-ring-width: var(--stroke-2);
-  --focus-ring-offset: calc(-1 * var(--stroke-1));
+  --focus-ring-width: var(--stroke-1-5);
+  --focus-ring-offset: var(--stroke-2);
 
   --accent-success: var(--color-green-600);
   --accent-warning: var(--color-orange-600);
@@ -69,6 +87,10 @@
      a white accent on a white page would vanish. */
   --accent-overlay: var(--color-blue-500);
   --accent-overlay-ink: var(--color-white);
+  /* Dimming the user's page (the screenshot crop). Same in both themes: the
+     page under it is the user's, not ours. */
+  --page-scrim: rgba(0, 0, 0, 0.5);
+  --page-scrim-strong: rgba(0, 0, 0, 0.8);
 
   --color-red-traffic: var(--color-red-500);
   --color-amber-traffic: var(--color-orange-500);
@@ -177,6 +199,20 @@
   --ansi-blue-rgb: 59, 142, 234;
   --ansi-blue-dark-rgb: 36, 114, 200;
 
+  /* Syntax roles: the visual editor's property / variable / class / tag
+     colours and the code editor's palette. Text colours, so the light theme
+     deepens every one of them to read on white. */
+  --syntax-property: var(--color-blue-400);
+  --syntax-variable: var(--color-purple-400);
+  --syntax-variable-hover: var(--color-purple-300);
+  --syntax-class: var(--color-orange-400);
+  --syntax-tag: var(--color-green-400);
+  --syntax-function: var(--color-red-400);
+  --syntax-keyword: var(--color-coral-400);
+  --syntax-function-name: var(--color-lavender-300);
+  --syntax-comment: var(--color-slate-400);
+  --syntax-invalid: var(--color-red-450);
+
   --code-keyword: #569cd6;
   --code-string: #ce9178;
   --code-property: #9cdcfe;
@@ -185,6 +221,136 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * ============================================================================
+ * THE LIGHT THEME
+ * ============================================================================
+ * `data-theme` on <html> is set before the first paint by index.html and kept
+ * by src/lib/theme.ts (Settings → Appearance: System / Light / Dark). The
+ * light theme is not an inversion of the dark one: it keeps the same
+ * structure — a quiet app background, panels one step forward, controls one
+ * step into the panel, hairline borders — with elevation reading as *whiter*
+ * instead of lighter-grey, and shadows doing the work the dark theme's
+ * highlights do.
+ *
+ * Only semantic roles are overridden here. Components never branch on the
+ * theme; a component that looks wrong in light is reading a primitive it
+ * should not (fix the token it reads, not the component). theme.test.ts holds
+ * this block complete: every colour-bearing role defined at :root above has a
+ * light value, and the text/surface pairs clear WCAG AA.
+ * ============================================================================
+ */
+:root[data-theme='light'] {
+  --focus-ring-strength: 50%;
+  --surface-app: var(--color-paper-100);
+  --surface-panel: var(--color-paper-0);
+  --surface-control: var(--color-paper-150);
+  --surface-control-hover: var(--color-paper-200);
+  --surface-selected: var(--color-paper-250);
+  --surface-selected-strong: var(--color-paper-300);
+  --surface-busy: var(--color-paper-200);
+  --surface-recessed: var(--color-paper-100);
+  --surface-terminal-input: var(--color-paper-200);
+  --surface-canvas: var(--color-white);
+  --surface-warning: rgba(184, 110, 0, 0.1);
+
+  /* "--text-white" is the emphasis role (brightest text on dark); on light it
+     is the darkest. The name predates the theme. */
+  --text-white: var(--color-ink-950);
+  --text-primary: var(--color-ink-900);
+  --text-secondary: var(--color-ink-600);
+  --text-quiet: var(--color-ink-500);
+  --text-muted: var(--color-ink-450);
+  --text-faint: var(--color-ink-300);
+  --text-terminal: var(--color-ink-500);
+  --text-terminal-strong: var(--color-ink-700);
+  /* Ink on a coloured fill stays white. */
+  --text-inverse: var(--color-white);
+  /* The neutral "strong" fill (Allow): near-black with white ink. */
+  --surface-inverse: var(--color-ink-900);
+  --surface-inverse-hover: var(--color-ink-800);
+  --text-on-inverse: var(--color-white);
+  --text-on-success: var(--color-white);
+
+  --border-default: var(--color-paper-250);
+  --border-subtle: var(--color-paper-200);
+  --border-strong: var(--color-paper-300);
+  --border-control: var(--color-ink-500);
+  --border-accent: var(--color-ink-500);
+
+  --accent-success: var(--color-green-900);
+  --accent-warning: var(--color-orange-800);
+  --accent-error: var(--color-red-700);
+  --accent-error-light: var(--color-red-700);
+  --accent-error-deep: var(--color-red-800);
+  --accent-warning-light-rgb: 154, 98, 0;
+  --accent-scope-project: var(--color-purple-800);
+  --accent-success-rgb: 21, 117, 50;
+  --accent-warning-rgb: 154, 98, 0;
+  --accent-error-rgb: 207, 34, 46;
+  --accent-error-light-rgb: 207, 34, 46;
+  --accent-error-deep-rgb: 164, 14, 38;
+
+  --status-info: var(--color-blue-800);
+  --status-running: var(--color-blue-800);
+
+  --syntax-property: var(--color-blue-800);
+  --syntax-variable: var(--color-purple-800);
+  --syntax-variable-hover: var(--color-purple-700);
+  --syntax-class: var(--color-orange-900);
+  --syntax-tag: var(--color-green-900);
+  --syntax-function: var(--color-red-700);
+  --syntax-keyword: var(--color-red-700);
+  --syntax-function-name: var(--color-purple-800);
+  --syntax-comment: var(--color-ink-450);
+  --syntax-invalid: var(--color-red-700);
+
+  /* The primary button's depth: a hairline ring and a short drop instead of
+     the dark theme's black shadow, with the same lit top edge. */
+  --shadow-button:
+    0 0 0 var(--stroke-hairline) var(--color-black-o12),
+    0 var(--stroke-1) var(--space-02) var(--color-black-o10),
+    inset 0 var(--stroke-1) 0 var(--color-white-o22);
+  --shadow-window:
+    0 0 0 var(--stroke-hairline) var(--color-black-o10), 0 12px 32px var(--color-black-o12);
+  --shadow-input-inset: inset 0 var(--stroke-1) var(--space-02) var(--color-black-o06);
+  --shadow-sm:
+    0 0 0 var(--stroke-hairline) var(--color-black-o06), 0 2px 6px var(--color-black-o07);
+  --shadow-md:
+    0 0 0 var(--stroke-hairline) var(--color-black-o08), 0 8px 24px var(--color-black-o10);
+  --shadow-lg:
+    0 0 0 var(--stroke-hairline) var(--color-black-o08), 0 16px 48px var(--color-black-o14);
+
+  --tint-subtle: rgba(0, 0, 0, 0.035);
+  --tint-strong: rgba(0, 0, 0, 0.07);
+
+  /* Scrims dim, they don't black out: a light window under a 70% black
+     overlay reads as a power cut. Modals already lift on --shadow-lg. */
+  --overlay-30: rgba(0, 0, 0, 0.06);
+  --overlay-40: rgba(0, 0, 0, 0.08);
+  --overlay-50: rgba(0, 0, 0, 0.1);
+  --overlay-60: rgba(0, 0, 0, 0.12);
+  --overlay-70: rgba(0, 0, 0, 0.15);
+  --overlay-80: rgba(0, 0, 0, 0.18);
+
+  --ansi-green: #1a7f37;
+  --ansi-bright-green: #1f883d;
+  --ansi-red: #cf222e;
+  --ansi-yellow: #9a6200;
+  --ansi-blue: #0a63c9;
+  --ansi-blue-dark: #0550ae;
+  --ansi-green-rgb: 26, 127, 55;
+  --ansi-red-rgb: 207, 34, 46;
+  --ansi-yellow-rgb: 154, 98, 0;
+  --ansi-blue-rgb: 10, 99, 201;
+  --ansi-blue-dark-rgb: 5, 80, 174;
+
+  --code-keyword: #0a63c9;
+  --code-string: #a3451a;
+  --code-property: #0451a5;
+  --code-comment: #2e7d32;
 }
 
 /*
@@ -228,6 +394,23 @@
   --accent-user-strong: var(--color-accent-default-strong);
   --accent-user-start: var(--color-accent-default-start);
   --accent-user-end: var(--color-accent-default-end);
+  /* How much of the accent survives in accent-coloured text (the rest is the
+     primary text colour). Less on light, where a bright accent is weaker. */
+  --accent-text-share: 65%;
+}
+
+/* The light theme's accent defaults: white is near-black there (see
+   LIGHT_THEME_WHITE in accent.ts). Inline values from accent.ts and the boot
+   script win over these; they only cover the frames before either runs. */
+:root[data-theme='light'] {
+  --accent-user: var(--color-accent-light-default);
+  --accent-on-user: var(--color-white);
+  --accent-user-rgb: 28, 28, 28;
+  --accent-user-hover: var(--color-accent-light-default-hover);
+  --accent-user-strong: var(--color-accent-light-default-strong);
+  --accent-user-start: var(--color-accent-light-default-start);
+  --accent-user-end: var(--color-accent-light-default-end);
+  --accent-text-share: 55%;
 }
 
 :root,
@@ -243,11 +426,19 @@
 }
 
 @supports (color: color-mix(in oklch, red, blue)) {
+  :root {
+    --accent-focus: color-mix(in srgb, var(--text-primary) var(--focus-ring-strength), transparent);
+  }
+
   :root,
   [data-accent-scope] {
     /* Opaque on the control surface, so it reads the same on any parent. */
     --accent-active-soft: color-mix(in srgb, var(--accent-user) 14%, var(--surface-control));
     /* The accent pulled toward the primary text colour, so it always reads. */
-    --accent-text: color-mix(in oklch, var(--accent-user) 65%, var(--text-primary));
+    --accent-text: color-mix(
+      in oklch,
+      var(--accent-user) var(--accent-text-share),
+      var(--text-primary)
+    );
   }
 }

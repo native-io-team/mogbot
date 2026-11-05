@@ -100,3 +100,24 @@
   --transition: 0.15s ease;
   --transition-slow: 0.3s ease;
 }
+
+/* The light theme's values for the raw compatibility literals above (the
+   aliases onto semantic roles follow the theme on their own). */
+:root[data-theme='light'] {
+  --border-rgb: 229, 229, 229;
+  --border-default-rgb: 229, 229, 229;
+  --tint: rgba(0, 0, 0, 0.05);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --info: #0a63c9;
+  --info-hover: #0550ae;
+  --info-light: #0a63c9;
+  --info-dark: #0550ae;
+  --info-rgb: 10, 99, 201;
+  --info-light-rgb: 10, 99, 201;
+  --purple: #8250df;
+  --purple-light: #8250df;
+  --purple-rgb: 130, 80, 223;
+  --purple-light-rgb: 130, 80, 223;
+  --modified-yellow: #9a6200;
+  --modified-yellow-rgb: 154, 98, 0;
+}
