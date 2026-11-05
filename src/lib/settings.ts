@@ -26,22 +26,21 @@ export const KEEP_DEV_SERVERS_RUNNING_CHANGED_EVENT = 'keep-dev-servers-running-
 export const KEEP_DEV_SERVERS_RUNNING_LOCAL_CHANGED_EVENT =
   'shipstudio:keep-dev-servers-running-changed';
 
-/** The app icons available for the macOS Dock. */
+/**
+ * The app icons available for the macOS Dock. Both are PLACEHOLDERS
+ * (scripts/generate-placeholder-icons.sh) until there is a real mark. The ids
+ * are persisted, so "brand" stays the id of the default.
+ */
 export const APP_ICON_OPTIONS = [
   {
     id: 'brand',
-    label: 'Brand',
-    src: '/ShipStudio_IconBrand.png',
-  },
-  {
-    id: 'dark',
     label: 'Dark',
-    src: '/ShipStudio_IconDark.png',
+    src: '/app-icon-dark.png',
   },
   {
     id: 'light',
     label: 'Light',
-    src: '/ShipStudio_IconLight.png',
+    src: '/app-icon-light.png',
   },
 ] as const;
 
