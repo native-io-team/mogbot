@@ -273,6 +273,23 @@ const TOOLS: &[Tool] = &[
         }),
     },
     Tool {
+        name: "watch_for",
+        description: "Start work when something happens, instead of at a time: a \"When…\" routine. The app checks every few minutes from this Mac (no webhooks) and wakes you with what's new, once per item; its first check only notes what's already there. Sources: github_mentions (someone @mentions the user on GitHub; uses the gh CLI, free), github_assigned (an issue or pull request is assigned to them; gh, free), new_file (a file appears in `folder`; free), linear_assigned (a Linear issue is assigned to them; through their Linear connector), custom (anything else, in `check`, like \"a new email from dana@acme.com in Gmail\"; through their connectors). linear_assigned and custom cost a short Claude Code call per check, which counts toward the user's usage: say so. It only runs while the app is open. Cancel with cancel_check_in; list_check_ins shows it.",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "enum": ["github_mentions", "github_assigned", "new_file", "linear_assigned", "custom"] },
+                "folder": { "type": "string", "description": "new_file: the folder's full path (~/ is fine)." },
+                "check": { "type": "string", "description": "custom: what to look out for, in plain words." },
+                "every_minutes": { "type": "integer", "description": "How often to check. Default 10. At least 1 for new_file, 5 for GitHub, 10 for connector checks." },
+                "note": { "type": "string", "description": "What to do when it happens, written to your future self: specific enough to act on with no other context." },
+                "agent": { "type": "string", "description": "Chief of Staff only: set it for another agent (name or id)." }
+            },
+            "required": ["source", "note"]
+        }),
+    },
+    Tool {
         name: "request_secret",
         description: "Ask the user for a password, API key, token or login through a secure card in this chat. They type it into a masked field; it goes into the macOS Keychain for you alone, and you get an environment variable and a reference, never the value. Always use this for credentials: never ask the user to paste one in chat. It returns at once: stop and tell the user in one line what it's for; you'll be woken when they save or decline it.",
         main_only: false,
@@ -411,7 +428,7 @@ async fn call(
         "create_agent" => create_agent(app, caller, args).await,
         "update_agent" => update_agent(app, caller, args).await,
         "delete_agent" => delete_agent(app, caller, args).await,
-        "schedule_check_in" | "list_check_ins" | "cancel_check_in" => {
+        "schedule_check_in" | "list_check_ins" | "cancel_check_in" | "watch_for" => {
             check_ins(app, caller, name, args)
         }
         "request_secret" => request_secret(app, caller, args),
@@ -446,6 +463,16 @@ fn check_ins(app: &AppHandle, caller: &store::Agent, name: &str, args: &Value) -
             arg(args, "note").unwrap_or(""),
         )
         .map(|c| whose(c.summary)),
+        "watch_for" => watch_source(args).and_then(|source| {
+            let every = args
+                .get("every_minutes")
+                .and_then(Value::as_u64)
+                .map_or(super::watch::DEFAULT_EVERY_MINUTES, |m| {
+                    m.min(u64::from(u32::MAX)) as u32
+                });
+            super::watch::create(&target.id, source, every, arg(args, "note").unwrap_or(""))
+                .map(|c| whose(c.summary))
+        }),
         "cancel_check_in" => schedule::cancel(&target.id, arg(args, "id").unwrap_or(""))
             .map(|c| whose(format!("Cancelled: {}", c.note))),
         _ => return text(whose(schedule::list_text(&target))),
@@ -456,6 +483,26 @@ fn check_ins(app: &AppHandle, caller: &store::Agent, name: &str, args: &Value) -
             text(summary)
         }
         Err(e) => error(e.to_string()),
+    }
+}
+
+/// `watch_for`'s source, from its flat arguments.
+fn watch_source(args: &Value) -> Result<super::watch::Source, crate::errors::CommandError> {
+    use super::watch::Source;
+    match arg(args, "source").unwrap_or("") {
+        "github_mentions" => Ok(Source::GithubMentions),
+        "github_assigned" => Ok(Source::GithubAssigned),
+        "linear_assigned" => Ok(Source::LinearAssigned),
+        "new_file" => Ok(Source::NewFile {
+            folder: arg(args, "folder").unwrap_or("").to_string(),
+        }),
+        "custom" => Ok(Source::Custom {
+            check: arg(args, "check").unwrap_or("").to_string(),
+        }),
+        other => Err(super::err_invalid(
+            "source",
+            format!("There's no source called {other:?}. Use github_mentions, github_assigned, new_file, linear_assigned or custom."),
+        )),
     }
 }
 

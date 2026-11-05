@@ -24,9 +24,12 @@ infrastructure where a good one exists.
 4. **"Take over" a browser tab.** Driving the agent's own session in a
    terminal is built ([agents.md](agents.md), "Take over"); stepping into the
    Chrome tab it drives is not. Codex take-over is unverified on a real thread.
-5. **"When…" routines.** Event-started work (a Linear issue assigned, a
-   GitHub mention) via polling routines through the user's own connectors —
-   no hosted webhooks.
+5. **"When…" routines.** Event-started work via polling checks through the
+   user's own `gh`, folders and connectors — no hosted webhooks. *In
+   progress*: GitHub mentions/assignments, new files, Linear and free-form
+   connector checks are built ([agents.md](agents.md), "When… routines");
+   connector checks are not yet verified on a live account, and the phone
+   shows them read-only.
 6. **Usage before the wall.** Measured cost per agent and routine; quota
    only if the CLI reports it — never estimated.
 7. **A first run that lands one real win.** Role templates, inline connect,

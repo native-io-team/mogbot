@@ -108,6 +108,12 @@ export interface Agent {
   routineModel?: string;
   muted: boolean;
   checkIns?: CheckIn[];
+  /**
+   * Its "When…" routines (each a `CheckIn` with `watch`), apart from the
+   * timed ones so an older app doesn't take one for a one-time check-in.
+   * Sent by a Mac whose `welcome.features` has `routines.when`.
+   */
+  watches?: CheckIn[];
   permissions?: PermissionRule[];
   status: AgentStatus;
   /** The agent's home on the Mac. Only meaningful as a base for `Attachment.path`. */
@@ -176,6 +182,48 @@ export interface CheckIn {
   runs?: CheckInRun[];
   /** A failed run waiting to be tried again. */
   retry?: CheckInRetry;
+  /** A "When…" routine: it runs when something happens; `nextAt` is its next check. */
+  watch?: Watch;
+}
+
+/** What a "When…" routine waits for; mirrors `watch::Source`. */
+export type WatchSource =
+  | { kind: 'github_mentions' }
+  | { kind: 'github_assigned' }
+  | { kind: 'linear_assigned' }
+  | { kind: 'new_file'; folder: string }
+  | { kind: 'custom'; check: string }
+  /** Written by a newer Mac. */
+  | { kind: 'unknown' };
+
+/** One thing a check found; mirrors `watch::Event`. */
+export interface WatchEvent {
+  id: string;
+  title: string;
+  detail?: string;
+  url?: string;
+}
+
+/** A "When…" routine's state; mirrors `watch::Watch`. */
+export interface Watch {
+  source: WatchSource;
+  everyMinutes: number;
+  /** Ids already handled. Desk only: it stays on the Mac for the phone. */
+  seen?: string[];
+  /** When the first check noted what was already there; absent until then. */
+  baselineAt?: number;
+  lastCheckedAt?: number;
+  lastFoundAt?: number;
+  lastFound: number;
+  /** Failed checks in a row. */
+  failures: number;
+  lastError?: string;
+  /** The last firing's items, kept for its retry. Desk only. */
+  pending?: WatchEvent[];
+  /** Why it paused itself. */
+  pausedNote?: string;
+  /** What its checks cost, as Claude Code reported it (connector checks only). */
+  cost?: { checks: number; priced: number; costUsd: number; since: number };
 }
 
 /** One scheduled run and what came of it; mirrors `runs::Run`. */
@@ -206,6 +254,8 @@ export interface CheckInMark {
   late: boolean;
   repeats: boolean;
   manual?: boolean;
+  /** A "When…" routine fired: what it found ("2 new GitHub mentions"). */
+  found?: string;
 }
 
 export interface SchedulePreview {

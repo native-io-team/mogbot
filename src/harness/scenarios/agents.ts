@@ -1407,6 +1407,71 @@ const CONNECTED_APPS = [
   { name: 'playwright', target: 'npx @playwright/mcp@latest', status: 'error', source: 'other' },
 ];
 
+/** Ops, with one of each kind of "When…" routine, as `watch.rs` stores them. */
+const WHEN_TEAM = TEAM.map((a) =>
+  a.id !== 'leadgen'
+    ? a
+    : {
+        ...a,
+        checkIns: [
+          {
+            id: 'w1',
+            note: 'Triage it: label it, and tell me if it needs me today.',
+            nextAt: now + 6 * MIN,
+            createdAt: now - 3 * 24 * 60 * MIN,
+            paused: false,
+            runs: [{ at: now - 50 * MIN, outcome: 'ran' as const, attempt: 1 }],
+            watch: {
+              source: { kind: 'github_mentions' as const },
+              everyMinutes: 10,
+              baselineAt: now - 3 * 24 * 60 * MIN,
+              lastCheckedAt: now - 4 * MIN,
+              lastFoundAt: now - 50 * MIN,
+              lastFound: 2,
+              failures: 0,
+            },
+          },
+          {
+            id: 'w2',
+            note: 'Draft a reply I can send, and put the invoice in Finance’s folder.',
+            nextAt: now + 12 * MIN,
+            createdAt: now - 24 * 60 * MIN,
+            paused: false,
+            watch: {
+              source: {
+                kind: 'custom' as const,
+                check: 'a new email from billing@northwind.com in Gmail',
+              },
+              everyMinutes: 30,
+              baselineAt: now - 24 * 60 * MIN,
+              lastCheckedAt: now - 18 * MIN,
+              lastFound: 0,
+              failures: 0,
+              cost: { checks: 46, priced: 46, costUsd: 0.19, since: now - 24 * 60 * MIN },
+            },
+          },
+          {
+            id: 'w3',
+            note: 'File each one under this month and tell me the total.',
+            nextAt: now,
+            createdAt: now - 7 * 24 * 60 * MIN,
+            paused: true,
+            watch: {
+              source: { kind: 'new_file' as const, folder: '/Users/julian/Downloads/invoices' },
+              everyMinutes: 5,
+              baselineAt: now - 7 * 24 * 60 * MIN,
+              lastCheckedAt: now - 2 * 60 * MIN,
+              lastFound: 0,
+              failures: 5,
+              lastError: 'The folder ~/Downloads/invoices isn’t there any more.',
+              pausedNote:
+                'Paused after 5 checks in a row failed: The folder ~/Downloads/invoices isn’t there any more.',
+            },
+          },
+        ],
+      }
+);
+
 /** A chat with a long message of yours, to check the bubble wraps at ~70%. */
 const LONG_USER_CHAT = [
   msg('user', 'Morning. What’s on fire?', 30),
@@ -1735,6 +1800,55 @@ export const agentsScenarios: Scenario[] = [
     looksRightWhen: 'Connected says “Nothing yet. Add one below.”; all six suggestions offer Add.',
     command: 'agents.apps',
     requires: '.agent-apps__list',
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      agents_apps_list: agentApps([]),
+    },
+  },
+  {
+    id: 'agents-when-routines',
+    title: 'Agents — “When…” routines in the schedule popover',
+    looksRightWhen:
+      'Lead Gen’s “3 scheduled” opens a popover listing three “When…” rows: “When someone mentions you on GitHub” with what it does under it and “Checks every 10 min · checked 4 min ago · last found 2 …”; “When a new email from billing@northwind.com in Gmail” with “46 checks so far cost $0.19”; and the paused folder one, muted and last, saying it paused itself after 5 failed checks and why. Below, “At a time / When…” with When… pressed and the composer: five plain sources (Linear among them, since a Linear connector is there), each with how it’s checked and its cost; a “Then what?” field; Check every 5/10/30 min/every hour; and the cost sentence. Readable in light and dark.',
+    requires: '.agent-when__sources',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="leadgen"]' },
+      { click: '.agent-chat__scheduled' },
+      { click: '.agent-schedule__mode [aria-pressed="false"]' },
+      {
+        fill: '.agent-when input[aria-label="What to do when it happens"]',
+        value: 'Triage it and tell me what’s urgent',
+      },
+    ],
+    commands: {
+      agents_overview: overview(WHEN_TEAM),
+      agents_messages: messagesFor,
+      agents_apps_list: agentApps(CONNECTED_APPS),
+    },
+  },
+  {
+    id: 'agents-when-custom',
+    title: 'Agents — adding a “When…” routine that checks through a connector',
+    looksRightWhen:
+      'With no Linear connector, four sources are offered; “Something else…” is chosen, with “a new email from dana@acme.com in Gmail” and what to do typed. The interval choices start at every 10 min (a model check costs a call), and the line under says each check is a short Claude Code call on Haiku, counted in Lead Gen’s usage, and that the first check only notes what’s already there. Add is enabled.',
+    requires: '.agent-when__sources',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="leadgen"]' },
+      { click: '.agent-chat__header [aria-label^="Schedule a check-in"]' },
+      { click: '.agent-schedule__mode [aria-pressed="false"]' },
+      { click: '.agent-when__source:last-child' },
+      {
+        fill: '.agent-when input[aria-label="What to look out for"]',
+        value: 'a new email from dana@acme.com in Gmail',
+      },
+      {
+        fill: '.agent-when input[aria-label="What to do when it happens"]',
+        value: 'Draft a reply and tell me',
+      },
+    ],
     commands: {
       agents_overview: overview(),
       agents_messages: messagesFor,

@@ -198,6 +198,8 @@ pub fn run() {
             });
             // Agents' check-ins and routines: one tick a minute, only while open.
             agents::schedule::spawn(_app.handle().clone());
+            // "When…" routines: their checks, on their own minute tick.
+            agents::watch::spawn(_app.handle().clone());
 
             // Start the agent preview bridge (global loopback MCP server) at
             // launch so it's listening before any agent session spawns —
@@ -697,6 +699,9 @@ pub fn run() {
             commands::agents::agents_schedule_pause,
             commands::agents::agents_schedule_update,
             commands::agents::agents_schedule_run_now,
+            commands::agents::agents_watch_create,
+            commands::agents::agents_watch_update,
+            commands::agents::agents_watch_check_now,
             commands::agents::agents_apps_list,
             commands::agents::agents_apps_add,
             commands::agents::agents_apps_remove,

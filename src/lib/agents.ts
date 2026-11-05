@@ -7,6 +7,9 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
+import type { Watch, WatchSource } from '../../packages/companion-protocol/src/model';
+
+export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
 
 /** Avatar colour keys. The CSS maps each to a feature token. */
 export const AGENT_COLORS = [
@@ -201,6 +204,8 @@ export interface CheckIn {
   runs?: CheckInRun[];
   /** A failed run waiting to be tried again. */
   retry?: CheckInRetry;
+  /** A "When…" routine: it runs when something happens; `nextAt` is its next check. */
+  watch?: Watch;
 }
 
 /** One scheduled run and what came of it; mirrors `runs::Run`. */
@@ -233,6 +238,8 @@ export interface CheckInMark {
   repeats: boolean;
   /** Run now, by the user; its schedule didn't move. */
   manual?: boolean;
+  /** A "When…" routine fired: what it found ("2 new GitHub mentions"). */
+  found?: string;
 }
 
 export interface SchedulePreview {
@@ -1407,6 +1414,12 @@ const EXACT = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle:
 // The schedule's wording is shared with the phone, which shows the same list.
 export {
   describeCheckInTime,
+  describeEvery,
+  describeWatchCost,
+  describeWatchSource,
+  describeWatchStatus,
+  describeWatchTitle,
+  watchUsesModel,
   describeRepeat,
   describeRun,
   describeRunDetail,
@@ -1415,6 +1428,30 @@ export {
   sortCheckIns,
   splitScheduleInput,
 } from '../../packages/companion-protocol/src/schedule';
+
+/** What Check now came to; mirrors `watch::CheckOutcome`. */
+export interface WatchCheckOutcome {
+  found: number;
+  baseline: boolean;
+  error?: string;
+  paused?: string;
+}
+
+export const createWatch = (
+  agentId: string,
+  source: WatchSource,
+  everyMinutes: number,
+  note: string
+) => invoke<CheckIn>('agents_watch_create', { agentId, source, everyMinutes, note });
+export const updateWatch = (
+  agentId: string,
+  id: string,
+  source: WatchSource,
+  everyMinutes: number,
+  note: string
+) => invoke<CheckIn>('agents_watch_update', { agentId, id, source, everyMinutes, note });
+export const checkWatchNow = (agentId: string, id: string) =>
+  invoke<WatchCheckOutcome>('agents_watch_check_now', { agentId, id });
 
 export const searchAgents = (query: string) => invoke<SearchHit[]>('agents_search', { query });
 export const getAgentUsage = (agentId: string) => invoke<UsageSummary>('agents_usage', { agentId });

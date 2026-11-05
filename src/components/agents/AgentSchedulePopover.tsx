@@ -9,6 +9,10 @@
  * leaving its next time alone. Changes apply at once and the list follows
  * the agent registry.
  *
+ * "At a time / When…" switches the composer: a "When…" routine starts when
+ * something happens (`AgentWhenRoutine`). Its row says what it waits for,
+ * what it does, and what its last check found; Run now is Check now.
+ *
  * @module components/agents/AgentSchedulePopover
  */
 
@@ -19,6 +23,7 @@ import {
   HistoryIcon,
   PauseIcon,
   PlayIcon,
+  SearchIcon,
   SkipNextIcon,
 } from '@/components/icons';
 import { Dropdown } from '../primitives/Dropdown';
@@ -26,13 +31,19 @@ import { IconButton } from '../primitives/IconButton';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
+import { SegmentedControl } from '../primitives/SegmentedControl';
+import { WhenComposer } from './AgentWhenRoutine';
 import {
   cancelCheckIn,
+  checkWatchNow,
   createCheckIn,
   describeCheckInTime,
   describeRepeat,
   describeRun,
   describeRunDetail,
+  describeWatchCost,
+  describeWatchStatus,
+  describeWatchTitle,
   formatWhen,
   pauseCheckIn,
   previewSchedule,
@@ -45,6 +56,7 @@ import {
   type CheckIn,
   type CheckInRun,
   type SchedulePreview,
+  type WatchCheckOutcome,
 } from '../../lib/agents';
 import { KeepAwakeLink } from './AgentsStayOn';
 import { refreshAgents } from '../../lib/agentsStore';
@@ -69,9 +81,16 @@ interface AgentSchedulePopoverProps {
   agent: Agent;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Open on the "When…" composer (⌘K → "Start work when something happens…"). */
+  startWhen?: boolean;
 }
 
-export function AgentSchedulePopover({ agent, open, onOpenChange }: AgentSchedulePopoverProps) {
+export function AgentSchedulePopover({
+  agent,
+  open,
+  onOpenChange,
+  startWhen = false,
+}: AgentSchedulePopoverProps) {
   const count = agent.checkIns?.length ?? 0;
   return (
     <Dropdown
@@ -104,14 +123,25 @@ export function AgentSchedulePopover({ agent, open, onOpenChange }: AgentSchedul
         )
       }
     >
-      <ScheduleBody agent={agent} onRan={() => onOpenChange(false)} />
+      <ScheduleBody agent={agent} startWhen={startWhen} onRan={() => onOpenChange(false)} />
     </Dropdown>
   );
 }
 
 /** Mounted each time the popover opens, so it starts fresh with focus in the composer. */
-function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
+function ScheduleBody({
+  agent,
+  startWhen,
+  onRan,
+}: {
+  agent: Agent;
+  startWhen: boolean;
+  onRan: () => void;
+}) {
   const items = sortCheckIns(agent.checkIns ?? []);
+  const [mode, setMode] = useState<'time' | 'when'>(startWhen ? 'when' : 'time');
+  /** The "When…" routine in the composer, if it's an edit. */
+  const [editingWhen, setEditingWhen] = useState<CheckIn | null>(null);
   const [text, setText] = useState('');
   /** The row whose words are in the composer, if it's an edit. */
   const [editing, setEditing] = useState<CheckIn | null>(null);
@@ -121,7 +151,7 @@ function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
   const { when, note } = splitScheduleInput(text);
 
   // After the Dropdown's own focus handling, which would park it on the menu.
-  useEffect(() => inputRef.current?.focus(), []);
+  useEffect(() => inputRef.current?.focus(), [mode]);
 
   // Read the time back as it's typed, after a short pause.
   useEffect(() => {
@@ -159,6 +189,14 @@ function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
   };
 
   const startEdit = (c: CheckIn) => {
+    if (c.watch) {
+      reset();
+      setMode('when');
+      setEditingWhen(c);
+      return;
+    }
+    setMode('time');
+    setEditingWhen(null);
     setEditing(c);
     setError(null);
     setText(`${scheduleWhenPhrase(c)}: ${c.note}`);
@@ -201,13 +239,18 @@ function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
               key={c.id}
               item={c}
               busy={busy}
-              editing={editing?.id === c.id}
+              editing={editing?.id === c.id || editingWhen?.id === c.id}
               onRunNow={() =>
                 void run(async () => {
                   await runCheckInNow(agent.id, c.id);
                   onRan();
                 })
               }
+              onCheckNow={async () => {
+                const outcome = await checkWatchNow(agent.id, c.id);
+                await refreshAgents();
+                return outcome;
+              }}
               onEdit={() => startEdit(c)}
               onTogglePause={() => void run(() => pauseCheckIn(agent.id, c.id, !c.paused))}
               onCancel={() => void run(() => cancelCheckIn(agent.id, c.id))}
@@ -218,33 +261,66 @@ function ScheduleBody({ agent, onRan }: { agent: Agent; onRan: () => void }) {
         <p className="agent-schedule__empty">Nothing scheduled for {agent.name} yet.</p>
       )}
 
-      <div className="agent-schedule__composer">
-        <TextField
-          ref={inputRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder="e.g. every weekday 9am: brief me on Acme"
-          aria-label={
-            editing
-              ? `Edit “${editing.note}”: when, a colon, then what to do`
-              : 'New check-in: when, a colon, then what to do'
-          }
-          invalid={invalid}
-          maxLength={640}
+      <div className="agent-schedule__mode">
+        <SegmentedControl
+          aria-label="Kind of routine"
+          value={mode}
+          onValueChange={(m) => {
+            reset();
+            setEditingWhen(null);
+            setMode(m);
+          }}
+          options={[
+            { value: 'time', label: 'At a time' },
+            { value: 'when', label: 'When…' },
+          ]}
         />
-        <p
-          className="agent-schedule__readback"
-          data-invalid={invalid || undefined}
-          aria-live="polite"
-        >
-          {readback}
-        </p>
       </div>
+
+      {mode === 'when' ? (
+        <div className="agent-schedule__composer">
+          <WhenComposer
+            key={editingWhen?.id ?? 'new'}
+            agent={agent}
+            editing={editingWhen}
+            onDone={() => setEditingWhen(null)}
+          />
+        </div>
+      ) : (
+        <div className="agent-schedule__composer">
+          <TextField
+            ref={inputRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="e.g. every weekday 9am: brief me on Acme"
+            aria-label={
+              editing
+                ? `Edit “${editing.note}”: when, a colon, then what to do`
+                : 'New check-in: when, a colon, then what to do'
+            }
+            invalid={invalid}
+            maxLength={640}
+          />
+          <p
+            className="agent-schedule__readback"
+            data-invalid={invalid || undefined}
+            aria-live="polite"
+          >
+            {readback}
+          </p>
+        </div>
+      )}
 
       <p className="agent-schedule__foot">
         {editing ? (
           'Return saves the change; Esc leaves it as it was.'
+        ) : mode === 'when' ? (
+          <>
+            Checks run only while the app is open and this Mac is awake; what arrives meanwhile is
+            found by the next check.
+            <KeepAwakeLink />
+          </>
         ) : (
           <>
             Runs only while the app is open and this Mac is awake; a missed check-in runs once when
@@ -262,6 +338,7 @@ function ScheduleRow({
   busy,
   editing,
   onRunNow,
+  onCheckNow,
   onEdit,
   onTogglePause,
   onCancel,
@@ -270,12 +347,25 @@ function ScheduleRow({
   busy: boolean;
   editing: boolean;
   onRunNow: () => void;
+  onCheckNow: () => Promise<WatchCheckOutcome>;
   onEdit: () => void;
   onTogglePause: () => void;
   onCancel: () => void;
 }) {
   const runs = item.runs ?? [];
   const [showRuns, setShowRuns] = useState(false);
+  const watch = item.watch;
+  // What Check now came to, said under the row until the popover closes.
+  const [checked, setChecked] = useState<string | null>(null);
+  const { execute: checkNow, isLoading: checking } = useAsyncState(async () => {
+    setChecked(null);
+    try {
+      setChecked(describeCheck(await onCheckNow()));
+    } catch (err) {
+      setChecked(reasonOf(err));
+    }
+  });
+  const cost = watch ? describeWatchCost(watch) : null;
   return (
     <li
       className="agent-schedule__item"
@@ -284,10 +374,31 @@ function ScheduleRow({
       data-history={showRuns || undefined}
     >
       <div className="agent-schedule__text">
-        <span className="agent-schedule__note">{item.note}</span>
-        <span className="agent-schedule__when" data-retrying={item.retry ? '' : undefined}>
-          {describeCheckInTime(item)}
-        </span>
+        {watch ? (
+          <>
+            <span className="agent-schedule__note">{describeWatchTitle(watch.source)}</span>
+            <span className="agent-when__then">{item.note}</span>
+            <span
+              className="agent-schedule__when"
+              data-retrying={item.retry || (watch.failures > 0 && !item.paused) ? '' : undefined}
+            >
+              {describeWatchStatus(item)}
+            </span>
+            {cost && <span className="agent-when__spent">{cost}</span>}
+            {checked && (
+              <span className="agent-when__checked" aria-live="polite">
+                {checked}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="agent-schedule__note">{item.note}</span>
+            <span className="agent-schedule__when" data-retrying={item.retry ? '' : undefined}>
+              {describeCheckInTime(item)}
+            </span>
+          </>
+        )}
         {runs.length > 0 && (
           <TextButton
             tabIndex={0}
@@ -300,16 +411,29 @@ function ScheduleRow({
         )}
       </div>
       <div className="agent-schedule__actions">
-        <IconButton
-          tabIndex={0}
-          variant="ghost"
-          size="compact"
-          icon={<SkipNextIcon size={12} />}
-          onClick={onRunNow}
-          disabled={busy}
-          title="Run now"
-          aria-label={`Run “${item.note}” now`}
-        />
+        {watch ? (
+          <IconButton
+            tabIndex={0}
+            variant="ghost"
+            size="compact"
+            icon={<SearchIcon size={12} />}
+            onClick={() => void checkNow()}
+            disabled={busy || checking}
+            title="Check now"
+            aria-label={`Check now for “${item.note}”`}
+          />
+        ) : (
+          <IconButton
+            tabIndex={0}
+            variant="ghost"
+            size="compact"
+            icon={<SkipNextIcon size={12} />}
+            onClick={onRunNow}
+            disabled={busy}
+            title="Run now"
+            aria-label={`Run “${item.note}” now`}
+          />
+        )}
         <IconButton
           tabIndex={0}
           variant="ghost"
@@ -320,7 +444,7 @@ function ScheduleRow({
           title="Edit"
           aria-label={`Edit “${item.note}”`}
         />
-        {item.repeat && (
+        {(item.repeat || watch) && (
           <IconButton
             tabIndex={0}
             variant="ghost"
@@ -346,6 +470,15 @@ function ScheduleRow({
       {showRuns && <RunHistory runs={runs} />}
     </li>
   );
+}
+
+/** What Check now came to, in a line. */
+function describeCheck(o: WatchCheckOutcome): string {
+  if (o.paused) return o.paused;
+  if (o.error) return `Check failed: ${o.error}`;
+  if (o.baseline) return 'Noted what’s there now; anything new from here starts work.';
+  if (o.found > 0) return `Found ${o.found} new; it’s on it.`;
+  return 'Nothing new.';
 }
 
 /** The last runs, newest first: when, and what came of it. */

@@ -241,6 +241,58 @@ export const agentsOverview = {
         "state": "waiting"
       },
       "unread": 2,
+      "watches": [
+        {
+          "createdAt": 1762200000000,
+          "id": "c4",
+          "nextAt": 1762300600000,
+          "note": "File it under this month",
+          "paused": true,
+          "runs": [
+            {
+              "at": 1762250000000,
+              "attempt": 1,
+              "outcome": "ran"
+            }
+          ],
+          "watch": {
+            "baselineAt": 1762200000000,
+            "cost": {
+              "checks": 40,
+              "costUsd": 0.168,
+              "priced": 40,
+              "since": 1762200000000
+            },
+            "everyMinutes": 15,
+            "failures": 5,
+            "lastCheckedAt": 1762290000000,
+            "lastError": "Gmail needs signing in again.",
+            "lastFound": 1,
+            "lastFoundAt": 1762250000000,
+            "pausedNote": "Paused after 5 checks in a row failed: Gmail needs signing in again.",
+            "source": {
+              "check": "a new invoice email from Northwind in Gmail",
+              "kind": "custom"
+            }
+          }
+        },
+        {
+          "createdAt": 1762200000000,
+          "id": "c5",
+          "nextAt": 1762300600000,
+          "note": "Triage it",
+          "paused": false,
+          "watch": {
+            "everyMinutes": 1,
+            "failures": 0,
+            "lastFound": 0,
+            "source": {
+              "folder": "/Users/julian/Downloads/invoices",
+              "kind": "new_file"
+            }
+          }
+        }
+      ],
       "workDirectly": true
     }
   ],
@@ -437,6 +489,7 @@ export const agentsMessages = {
       "agentId": "a1",
       "checkIn": {
         "dueAt": 1762290000000,
+        "found": "2 new GitHub mentions",
         "late": true,
         "manual": true,
         "repeats": true
@@ -1377,6 +1430,68 @@ export const agentsUpdate = {
       "nextAt": 1762400000000,
       "note": "Remind me about the VAT return",
       "paused": false
+    },
+    {
+      "createdAt": 1762200000000,
+      "id": "c4",
+      "nextAt": 1762300600000,
+      "note": "File it under this month",
+      "paused": true,
+      "runs": [
+        {
+          "at": 1762250000000,
+          "attempt": 1,
+          "outcome": "ran"
+        }
+      ],
+      "watch": {
+        "baselineAt": 1762200000000,
+        "cost": {
+          "checks": 40,
+          "costUsd": 0.168,
+          "priced": 40,
+          "since": 1762200000000
+        },
+        "everyMinutes": 15,
+        "failures": 5,
+        "lastCheckedAt": 1762290000000,
+        "lastError": "Gmail needs signing in again.",
+        "lastFound": 1,
+        "lastFoundAt": 1762250000000,
+        "pausedNote": "Paused after 5 checks in a row failed: Gmail needs signing in again.",
+        "pending": [
+          {
+            "detail": "From billing@northwind.example",
+            "id": "msg-2",
+            "title": "Invoice #1182",
+            "url": "https://mail.google.com/mail/u/0/#inbox/msg-2"
+          }
+        ],
+        "seen": [
+          "msg-1",
+          "msg-2"
+        ],
+        "source": {
+          "check": "a new invoice email from Northwind in Gmail",
+          "kind": "custom"
+        }
+      }
+    },
+    {
+      "createdAt": 1762200000000,
+      "id": "c5",
+      "nextAt": 1762300600000,
+      "note": "Triage it",
+      "paused": false,
+      "watch": {
+        "everyMinutes": 1,
+        "failures": 0,
+        "lastFound": 0,
+        "source": {
+          "folder": "/Users/julian/Downloads/invoices",
+          "kind": "new_file"
+        }
+      }
     }
   ],
   "color": "green",
@@ -1550,6 +1665,68 @@ export const agentsStartFresh = {
       "nextAt": 1762400000000,
       "note": "Remind me about the VAT return",
       "paused": false
+    },
+    {
+      "createdAt": 1762200000000,
+      "id": "c4",
+      "nextAt": 1762300600000,
+      "note": "File it under this month",
+      "paused": true,
+      "runs": [
+        {
+          "at": 1762250000000,
+          "attempt": 1,
+          "outcome": "ran"
+        }
+      ],
+      "watch": {
+        "baselineAt": 1762200000000,
+        "cost": {
+          "checks": 40,
+          "costUsd": 0.168,
+          "priced": 40,
+          "since": 1762200000000
+        },
+        "everyMinutes": 15,
+        "failures": 5,
+        "lastCheckedAt": 1762290000000,
+        "lastError": "Gmail needs signing in again.",
+        "lastFound": 1,
+        "lastFoundAt": 1762250000000,
+        "pausedNote": "Paused after 5 checks in a row failed: Gmail needs signing in again.",
+        "pending": [
+          {
+            "detail": "From billing@northwind.example",
+            "id": "msg-2",
+            "title": "Invoice #1182",
+            "url": "https://mail.google.com/mail/u/0/#inbox/msg-2"
+          }
+        ],
+        "seen": [
+          "msg-1",
+          "msg-2"
+        ],
+        "source": {
+          "check": "a new invoice email from Northwind in Gmail",
+          "kind": "custom"
+        }
+      }
+    },
+    {
+      "createdAt": 1762200000000,
+      "id": "c5",
+      "nextAt": 1762300600000,
+      "note": "Triage it",
+      "paused": false,
+      "watch": {
+        "everyMinutes": 1,
+        "failures": 0,
+        "lastFound": 0,
+        "source": {
+          "folder": "/Users/julian/Downloads/invoices",
+          "kind": "new_file"
+        }
+      }
     }
   ],
   "color": "green",
@@ -1722,7 +1899,8 @@ export const frames = [
     ],
     "timeZone": "America/New_York",
     "features": [
-      "results.revise"
+      "results.revise",
+      "routines.when"
     ]
   },
   {
@@ -2170,6 +2348,58 @@ export const frames = [
               "state": "waiting"
             },
             "unread": 2,
+            "watches": [
+              {
+                "createdAt": 1762200000000,
+                "id": "c4",
+                "nextAt": 1762300600000,
+                "note": "File it under this month",
+                "paused": true,
+                "runs": [
+                  {
+                    "at": 1762250000000,
+                    "attempt": 1,
+                    "outcome": "ran"
+                  }
+                ],
+                "watch": {
+                  "baselineAt": 1762200000000,
+                  "cost": {
+                    "checks": 40,
+                    "costUsd": 0.168,
+                    "priced": 40,
+                    "since": 1762200000000
+                  },
+                  "everyMinutes": 15,
+                  "failures": 5,
+                  "lastCheckedAt": 1762290000000,
+                  "lastError": "Gmail needs signing in again.",
+                  "lastFound": 1,
+                  "lastFoundAt": 1762250000000,
+                  "pausedNote": "Paused after 5 checks in a row failed: Gmail needs signing in again.",
+                  "source": {
+                    "check": "a new invoice email from Northwind in Gmail",
+                    "kind": "custom"
+                  }
+                }
+              },
+              {
+                "createdAt": 1762200000000,
+                "id": "c5",
+                "nextAt": 1762300600000,
+                "note": "Triage it",
+                "paused": false,
+                "watch": {
+                  "everyMinutes": 1,
+                  "failures": 0,
+                  "lastFound": 0,
+                  "source": {
+                    "folder": "/Users/julian/Downloads/invoices",
+                    "kind": "new_file"
+                  }
+                }
+              }
+            ],
             "workDirectly": true
           }
         ],
@@ -2498,6 +2728,58 @@ export const frames = [
               "state": "waiting"
             },
             "unread": 2,
+            "watches": [
+              {
+                "createdAt": 1762200000000,
+                "id": "c4",
+                "nextAt": 1762300600000,
+                "note": "File it under this month",
+                "paused": true,
+                "runs": [
+                  {
+                    "at": 1762250000000,
+                    "attempt": 1,
+                    "outcome": "ran"
+                  }
+                ],
+                "watch": {
+                  "baselineAt": 1762200000000,
+                  "cost": {
+                    "checks": 40,
+                    "costUsd": 0.168,
+                    "priced": 40,
+                    "since": 1762200000000
+                  },
+                  "everyMinutes": 15,
+                  "failures": 5,
+                  "lastCheckedAt": 1762290000000,
+                  "lastError": "Gmail needs signing in again.",
+                  "lastFound": 1,
+                  "lastFoundAt": 1762250000000,
+                  "pausedNote": "Paused after 5 checks in a row failed: Gmail needs signing in again.",
+                  "source": {
+                    "check": "a new invoice email from Northwind in Gmail",
+                    "kind": "custom"
+                  }
+                }
+              },
+              {
+                "createdAt": 1762200000000,
+                "id": "c5",
+                "nextAt": 1762300600000,
+                "note": "Triage it",
+                "paused": false,
+                "watch": {
+                  "everyMinutes": 1,
+                  "failures": 0,
+                  "lastFound": 0,
+                  "source": {
+                    "folder": "/Users/julian/Downloads/invoices",
+                    "kind": "new_file"
+                  }
+                }
+              }
+            ],
             "workDirectly": true
           }
         ],

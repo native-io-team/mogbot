@@ -1,0 +1,35 @@
+{
+  "total_count": 2,
+  "incomplete_results": false,
+  "items": [
+    {
+      "url": "https://api.github.com/repos/acme/site/issues/42",
+      "repository_url": "https://api.github.com/repos/acme/site",
+      "html_url": "https://github.com/acme/site/issues/42",
+      "id": 2700000042,
+      "node_id": "I_kwDOAAAAAA",
+      "number": 42,
+      "title": "Pricing page breaks at 768px",
+      "user": { "login": "dana" },
+      "state": "open",
+      "assignee": { "login": "julian" },
+      "updated_at": "2026-11-05T14:02:11Z"
+    },
+    {
+      "url": "https://api.github.com/repos/acme/app/issues/7",
+      "repository_url": "https://api.github.com/repos/acme/app",
+      "html_url": "https://github.com/acme/app/pull/7",
+      "id": 2700000007,
+      "node_id": "PR_kwDOAAAAAB",
+      "number": 7,
+      "title": "Design review: new onboarding",
+      "user": { "login": "sam" },
+      "state": "open",
+      "pull_request": {
+        "url": "https://api.github.com/repos/acme/app/pulls/7",
+        "html_url": "https://github.com/acme/app/pull/7"
+      },
+      "updated_at": "2026-11-05T12:00:00Z"
+    }
+  ]
+}

@@ -25,6 +25,7 @@ export const MATERIAL: Partial<Record<SFName, string>> = {
   'arrow.trianglehead.2.clockwise': 'sync',
   'arrow.uturn.left': 'undo',
   bell: 'notifications',
+  bolt: 'bolt',
   brain: 'psychology',
   checkmark: 'check',
   'bell.slash': 'notifications_off',

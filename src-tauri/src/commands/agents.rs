@@ -1237,6 +1237,48 @@ pub async fn agents_schedule_run_now(
     schedule::run_now(&app, &agent_id, &id)
 }
 
+/// Add a "When…" routine: `source` is `watch::Source` (`{ kind, folder?, check? }`).
+#[tauri::command]
+#[tracing::instrument(skip(app, note))]
+pub async fn agents_watch_create(
+    app: AppHandle,
+    agent_id: String,
+    source: agents::watch::Source,
+    every_minutes: u32,
+    note: String,
+) -> Result<schedule::CheckIn, CommandError> {
+    let created = agents::watch::create(&agent_id, source, every_minutes, &note)?;
+    emit_registry(&app);
+    Ok(created.check_in)
+}
+
+/// Change what a "When…" routine waits for, how often it checks, and what it does.
+#[tauri::command]
+#[tracing::instrument(skip(app, note))]
+pub async fn agents_watch_update(
+    app: AppHandle,
+    agent_id: String,
+    id: String,
+    source: agents::watch::Source,
+    every_minutes: u32,
+    note: String,
+) -> Result<schedule::CheckIn, CommandError> {
+    let edited = agents::watch::edit(&agent_id, &id, source, every_minutes, &note)?;
+    emit_registry(&app);
+    Ok(edited)
+}
+
+/// Check a "When…" routine now; the agent is woken only if something's new.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_watch_check_now(
+    app: AppHandle,
+    agent_id: String,
+    id: String,
+) -> Result<agents::watch::CheckOutcome, CommandError> {
+    agents::watch::check_now(&app, &agent_id, &id).await
+}
+
 /// The apps agents can use: Claude Code's MCP servers, and a short list to add.
 #[tauri::command]
 #[tracing::instrument]

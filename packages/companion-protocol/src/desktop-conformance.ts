@@ -22,7 +22,8 @@ type Assert<T extends true> = T;
 type PhoneTakeover = Omit<Desktop.AgentTakeover, 'ptySession'>;
 
 export type Conformance = [
-  Assert<Same<Omit<Wire.Agent, 'takeover'>, Omit<Desktop.Agent, 'takeover'>>>,
+  // `watches`: the phone gets "When…" routines apart (`phone_overview`); the desk keeps them in `checkIns`.
+  Assert<Same<Omit<Wire.Agent, 'takeover' | 'watches'>, Omit<Desktop.Agent, 'takeover'>>>,
   Assert<Same<Wire.Agent['takeover'], PhoneTakeover | undefined>>,
   Assert<Same<Wire.AgentMessage, Desktop.AgentMessage>>,
   Assert<Same<Omit<Wire.AgentsOverview, 'agents'>, Omit<Desktop.AgentsOverview, 'agents'>>>,

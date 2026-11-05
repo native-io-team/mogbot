@@ -388,7 +388,7 @@ pub fn after_restart(check_ins: &mut [CheckIn], now: i64) -> bool {
             run.detail = Some("The app closed before it finished.".to_string());
             changed = true;
         }
-        let stale = c.repeat.is_some()
+        let stale = (c.repeat.is_some() || c.watch.is_some())
             && c.retry
                 .as_ref()
                 .is_some_and(|r| now - r.at > ROUTINE_GRACE_MS);

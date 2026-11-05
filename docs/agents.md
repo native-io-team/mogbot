@@ -912,6 +912,60 @@ the same predicate as replies, and is recorded after the wake starts, so it
 falls inside the turn. Notifications use the same predicate, so a check-in
 and its answer post one notification per turn.
 
+### "When…" routines (`src-tauri/src/agents/watch.rs`)
+
+A routine can start when something happens instead of at a time: "When
+someone mentions me on GitHub, triage it." There are no webhooks (nothing of
+ours is reachable from the internet); each one is a cheap check from this Mac
+every few minutes (default 10):
+
+| Source | How it's checked | Cost |
+|---|---|---|
+| Someone mentions me on GitHub | `gh api notifications` (all, participating), reason `mention`/`team_mention`; once per thread | free |
+| An issue or PR is assigned to me | `gh api search/issues -f q="assignee:@me is:open"` | free |
+| A new file appears in a folder | the folder's listing (not hidden, not `.crdownload`/`.part`/…, not modified in the last 5 s) | free |
+| A Linear issue is assigned to me | one headless `claude --print --model haiku --permission-mode plan` call through the user's connectors, answering JSON | a model call |
+| Something else… (in the user's words, e.g. "a new email from dana@acme.com in Gmail") | the same headless call | a model call |
+
+Linear is offered only when `claude mcp list` has a Linear server. A model
+check's `total_cost_usd` is added to the agent's usage (it counts as a turn
+there) and to the routine's own `cost`, shown on its row only when every
+check reported one. Nothing is estimated. Model checks always run on Claude
+Code, even for a Codex agent. At most one model check runs per tick.
+
+The rules: **the first check is a baseline** (it notes what's there and fires
+nothing); **nothing fires twice** (ids seen are kept per routine, at most
+300; a folder's listing replaces them, so a file deleted and dropped in
+again is new); the merge happens inside the registry update, so two checks
+racing can't both fire. A check that finds something new wakes the agent
+once with all of it (the first 20 listed), marked as information, never
+instructions; the chat line says "Routine · 2 new GitHub mentions". The run
+is ticketed and settled by `runs.rs` like a scheduled run, so it appears in
+Past runs and a temporary failure is retried with the same items
+(`Watch::pending`); checks wait while a retry is pending. A failed check
+backs off (interval doubled per failure, capped at an hour) and says why on
+the row; after 5 failed checks in a row, or 3 runs in a row that failed for
+good, the routine pauses itself with a note in the chat and on the row.
+Resume clears it and checks at the next tick. While the agent is driven in a
+terminal its checks wait. Nothing is checked while the app is closed; what
+arrived meanwhile is found by the next check.
+
+They're `CheckIn`s with a `watch` (no `repeat`; `next_at` is the next check),
+so cancel, pause, list and the 12-per-agent cap are shared. The time tick
+ignores them. In the schedule popover, "At a time / When…" switches the
+composer; a When… row shows what it waits for, what it does, how its last
+check went, Check now (`agents_watch_check_now`, which says what it found),
+Edit, Pause and Cancel. ⌘K: "Start work for <agent> when something happens…".
+Agents set them with the `watch_for` tool. The phone gets them apart from
+timed routines as `agent.watches` (an older phone would take one for a
+one-time check-in), without `seen`/`pending`, and shows them read-only when
+`welcome.features` has `routines.when`.
+
+Not verified against live accounts: a model check through a real Linear or
+Gmail connector (whether plan mode lets every connector's read tools run
+headless is unverified), and the GitHub search source. The notifications
+call's shape was checked with one read-only `gh api notifications` call.
+
 ## Apps agents can use (`src-tauri/src/agents/apps.rs`)
 
 Every turn is a `claude` process, and Claude Code loads the user's MCP servers

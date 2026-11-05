@@ -1,4 +1,15 @@
-import type { AgentMessage, AgentsOverview, MacStatus } from '@shipstudio/companion-protocol';
+import type {
+  Agent,
+  AgentMessage,
+  AgentsOverview,
+  MacStatus,
+} from '@shipstudio/companion-protocol';
+import {
+  describeWatchCost,
+  describeWatchStatus,
+  describeWatchTitle,
+  MAC_FEATURES,
+} from '@shipstudio/companion-protocol';
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
 import {
   addPending,
@@ -166,5 +177,37 @@ describe('the Mac’s real output (fixtures.gen.ts)', () => {
     s = mergePage(s, 'a1', { ...page, asOf: { ...page.asOf, epoch: 'e' } }, false);
     const ids = new Set(page.messages.map((m) => m.id));
     expect(s.chats.a1.messages.filter((m) => ids.has(m.id))).toHaveLength(ids.size);
+  });
+});
+
+describe('“When…” routines from the Mac (fixtures.gen.ts)', () => {
+  it('arrive apart from timed routines, without what the Mac remembers', () => {
+    const agent: Agent = real.agentsOverview.agents[0];
+    expect(agent.checkIns?.some((c) => c.watch)).toBe(false);
+    expect(agent.watches?.length).toBeGreaterThan(0);
+    for (const w of agent.watches ?? []) {
+      expect(w.watch).toBeDefined();
+      expect(w.watch?.seen).toBeUndefined();
+      expect(w.watch?.pending).toBeUndefined();
+    }
+    const welcome = real.frames.find((f) => f.t === 'welcome');
+    expect(welcome && 'features' in welcome ? welcome.features : []).toContain(
+      MAC_FEATURES.whenRoutines
+    );
+  });
+
+  it('words each one as the desk does', () => {
+    const agent: Agent = real.agentsOverview.agents[0];
+    const [paused, folder] = agent.watches ?? [];
+    expect(describeWatchTitle(paused.watch!.source)).toBe(
+      'When a new invoice email from Northwind in Gmail'
+    );
+    expect(describeWatchStatus(paused)).toBe(
+      'Paused after 5 checks in a row failed: Gmail needs signing in again.'
+    );
+    expect(describeWatchCost(paused.watch!)).toBe('40 checks so far cost $0.17');
+    expect(describeWatchTitle(folder.watch!.source)).toBe(
+      'When a new file appears in /Users/julian/Downloads/invoices'
+    );
   });
 });
