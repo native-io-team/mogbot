@@ -42,6 +42,13 @@ describe('secretTitle', () => {
     expect(secretTitle('bank-login')).toBe('Bank login');
     expect(secretTitle('GitHub')).toBe('GitHub');
   });
+
+  it('keeps initialisms and brand capitals, never a raw identifier', () => {
+    expect(secretTitle('crm_api_key')).toBe('CRM API key');
+    expect(secretTitle('GITHUB_TOKEN')).toBe('GitHub token');
+    expect(secretTitle('chat_bot_token')).toBe('Chat bot token');
+    expect(secretTitle('QuickBooks-login')).toBe('QuickBooks login');
+  });
 });
 
 describe('secretVars', () => {

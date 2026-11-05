@@ -207,13 +207,19 @@
   min-width: 0;
 }
 
+/* Two lines before it folds: a routine's instruction is what tells two
+   apart, and its second half ("if not, draft a firmer reminder") is often
+   the point. One line cut most of them mid-clause. */
 .agent-schedule__note {
+  display: -webkit-box;
   overflow: hidden;
   font-size: var(--font-size-body-md);
   line-height: var(--line-height-help);
   color: var(--text-primary);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 /* Two lines before it clips: "Didn't run · retrying tomorrow 9:07 AM" is the

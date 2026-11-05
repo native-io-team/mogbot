@@ -13,7 +13,18 @@ import { MessageRow } from '../src/components/chat';
 import { ConversationBars } from '../src/components/ConversationBars';
 import { CopyCard } from '../src/components/copy';
 import { SecretCard } from '../src/components/SecretCard';
-import { BarStack, barTint, Card, stackBars, type BarSpec } from '../src/components/surfaces';
+import {
+  ACTION,
+  ACTION_PAIR,
+  ACTION_ROW,
+  actionShare,
+  actionWidth,
+  BarStack,
+  barTint,
+  Card,
+  stackBars,
+  type BarSpec,
+} from '../src/components/surfaces';
 import { Button, T } from '../src/components/ui';
 import { answerAccent } from '../src/lib/accent';
 import { BAR_ORDER, importBar, isImportInterview, MAX_BARS } from '../src/lib/bars';
@@ -404,5 +415,42 @@ describe('bars above the composer', () => {
     expect(isImportInterview('Bringing in agents from Grok')).toBe(true);
     expect(isImportInterview('Checking the button tokens')).toBe(false);
     expect(importBar(agent(), [])).toBeNull();
+  });
+});
+
+describe('a card’s answers share their row without cutting a label', () => {
+  // A 402pt phone's card row, and the button label size at Default and at Largest.
+  const ROW = 334;
+  const DEFAULT = 16;
+  const LARGEST = 20;
+
+  it('gives each answer an even share while every label fits whole', () => {
+    expect(actionShare(['Deny', 'Allow'], ROW, DEFAULT, 44)).toEqual(ACTION);
+    expect(actionShare(['Not now', 'Connect Linear'], ROW, DEFAULT)).toEqual(ACTION);
+  });
+
+  it('puts three answers two to a row when they can’t share one (Copy code · Open GitHub / Cancel)', () => {
+    expect(actionShare(['Copy code', 'Open GitHub', 'Cancel'], ROW, DEFAULT)).toEqual(ACTION_PAIR);
+    expect(actionShare(['Copy code', 'Open GitHub', 'Cancel'], ROW, LARGEST)).toEqual(ACTION_PAIR);
+  });
+
+  it('stacks them when even two can’t share a row at Largest', () => {
+    expect(actionShare(['Not now', 'Connect Linear'], ROW, LARGEST)).toEqual(ACTION_ROW);
+  });
+
+  it('never gives a label less room than it needs', () => {
+    for (const size of [DEFAULT, LARGEST]) {
+      for (const titles of [
+        ['Copy code', 'Open GitHub', 'Cancel'],
+        ['Copy code', 'Open claude.ai', 'Cancel'],
+        ['Don’t import', 'Import 12 agents'],
+        ['Discard', 'Keep there too'],
+      ]) {
+        const share = actionShare(titles, ROW, size);
+        const perRow = share === ACTION ? titles.length : share === ACTION_PAIR ? 2 : 1;
+        const room = (ROW - (perRow - 1) * 8) / perRow;
+        for (const t of titles) expect(actionWidth(t, size)).toBeLessThanOrEqual(room);
+      }
+    }
   });
 });

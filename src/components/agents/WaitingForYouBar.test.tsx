@@ -49,6 +49,15 @@ describe('WaitingForYouBar', () => {
     );
   });
 
+  it('never points "below" (it sits under the card) and offers to bring the card into view', () => {
+    render(
+      <WaitingForYouBar agent={waiting as never} messages={[msg({ title: 'Push to GitHub' })]} />
+    );
+    const bar = screen.getByTestId('agent-waiting-bar');
+    expect(bar.textContent).not.toMatch(/below|above/);
+    expect(screen.getByRole('button', { name: 'Show' })).toBeTruthy();
+  });
+
   it('shows nothing while the agent works', () => {
     const { container } = render(<WaitingForYouBar agent={idle as never} messages={[msg({})]} />);
     expect(container.textContent).toBe('');
