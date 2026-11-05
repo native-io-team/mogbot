@@ -169,6 +169,9 @@ pub async fn relay(
                     }
                 }
             }
+            // Mail, chat, other people's documents: the rest of the turn
+            // asks (`exposure`).
+            super::exposure::mark_read(agent_id, &format!("mcp__{key}__{name}"));
         }
     }
     let mut req = client()

@@ -132,11 +132,22 @@ these without updating that doc.
   that reports `bypassPermissions` ([docs/agents.md](docs/agents.md), "Approvals"). The only
   cards answered for the user are local ones their independence level covers
   (`agents/autoallow.rs`, an allow-list in `mcp::decide` for Claude Code and Codex alike): reads
-  at "Use good judgement", reads plus local work in the home at "Go hard", and no more than reads
-  for a turn answering outside text. Sending, pushing, publishing, network transfers, installs,
-  `sudo`, deleting the user's files and anything touching credentials always get a card, and each
-  auto-answer leaves a line in "What it did" ("How much agents do on their own"). Secrets go
-  into the Keychain through a masked card, never the chat ("Secrets")
+  at "Use good judgement", reads plus local work, network reads and installs at "Go
+  hard", and no more than reads for a turn answering outside text. Sending, pushing, publishing,
+  uploads, `sudo`, deleting the user's files and anything touching credentials always get a card,
+  and each auto-answer leaves a line in "What it did" ("How much agents do on their own"). Secrets
+  go into the Keychain through a masked card, never the chat ("Secrets")
+- **"Go hard" is for the user's own work, not outside text's.** After a turn reads outside content
+  (web pages and search results, issue/PR comments, mail and chat through connections, other sites
+  in the browser), sending to the network beyond a read and running a package new to the project
+  ask for the rest of that turn, with one quiet line in its timeline (`agents/exposure.rs`;
+  browsing, local work, builds and project installs carry on). No request goes through on its own
+  with a secret in its address, query or headers (`agents/egress.rs`). A new package is remembered
+  once allowed for its project (`agents/installs.rs`). Shell profiles, `~/.ssh`, launch agents,
+  crontab, `.git`, the app's data and other agents' homes, Keychain reads (`security`),
+  `osascript` and `defaults write` always ask; wrappers (`bash -c`, `eval`, `env`, `find -exec`,
+  `python -c`, `node -e`) are judged by what they run, or ask ([docs/agents.md](docs/agents.md),
+  "How much agents do on their own")
 - **Agents never hold an app's token.** A connection made on a login card is reached through the
   bridge's relay (`agents/conn_relay.rs`), which adds the Keychain token and enforces the grant
   for every engine ([docs/agents.md](docs/agents.md), "Grants, read vs send, and turns")

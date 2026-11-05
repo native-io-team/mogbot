@@ -2521,6 +2521,7 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         }
         let since = store::now_ms();
         super::work::begin(&agent_id, since);
+        super::exposure::begin(&agent_id);
         super::results::discard(&agent_id);
         if let Some(copy) = &made {
             let label = format!(
@@ -3626,11 +3627,16 @@ async fn run_turn(
                         if matches!(kind, Some("assistant" | "user")) {
                             super::browser_gate::observe(agent_id, &value);
                         }
+                        // Outside content it reads: the rest of the turn asks.
+                        super::exposure::observe_claude(agent_id, &value);
                         let mut steps = stream::claude_steps(&value, store::now_ms());
                         steps.extend(claude_context.observe(&value, store::now_ms()).map(Step::Context));
                         steps
                     }
-                    Driver::CodexExec => super::codex::steps(&value),
+                    Driver::CodexExec => {
+                        super::exposure::observe_codex(agent_id, &value);
+                        super::codex::steps(&value)
+                    }
                     Driver::CodexApp => match conversation.as_mut() {
                         Some(conversation) => {
                             let mut steps = Vec::new();
@@ -3656,6 +3662,9 @@ async fn run_turn(
                         None => super::codex::steps(&value),
                     },
                 };
+                if driver == Driver::CodexApp {
+                    super::exposure::observe_codex(agent_id, &value);
+                }
                 for step in steps {
                     match step {
                         Step::Session(sid) if !session_confirmed => {

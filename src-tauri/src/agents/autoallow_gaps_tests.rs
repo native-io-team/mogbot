@@ -17,6 +17,7 @@ fn ctx() -> Ctx {
         cwd: own.clone().into(),
         scratch: vec![own.into()],
         app_data: vec![app.into()],
+        ..Default::default()
     }
 }
 
@@ -143,8 +144,10 @@ fn network_writes_still_ask_at_go_hard() {
     }
 }
 
-/// Installing named packages for the work is local work at "Go hard";
-/// raw addresses, global installs and `sudo` still ask.
+/// Installing named packages for the work is local work at "Go hard" (a
+/// package new to the project asks only in a turn that read outside
+/// content: `autoallow_hardening_tests`); raw addresses, global installs and
+/// `sudo` still ask.
 #[test]
 fn package_installs_run_at_go_hard() {
     for command in [

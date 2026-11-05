@@ -179,6 +179,17 @@ pub fn remember_external(value: &str, label: &str) {
     remember(value, label);
 }
 
+/// Every value redaction knows (agents' secrets, connections' tokens), for
+/// the check that none leaves in an address (`egress`).
+pub fn known_values() -> Vec<String> {
+    KNOWN
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .map(|(v, _)| v.clone())
+        .collect()
+}
+
 /// At launch: every saved value, so redaction holds before any turn runs.
 pub fn load_known() {
     let Ok(agents) = store::list() else { return };
