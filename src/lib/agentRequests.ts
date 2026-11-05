@@ -88,10 +88,19 @@ export function groupRequests(
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** "Lead Gen needs your OK", "Finance and Lead Gen need your OK", "16 agents need your OK". */
-export function requestsTitle(summary: RequestsSummary): string {
+/**
+ * "Lead Gen needs your OK", "Finance and Lead Gen need your OK", "16 agents
+ * need your OK". `team`: in the Chief's chat, the team-wide count every other
+ * surface shows (`needsYouCount`, packages/companion-protocol/src/attention.ts),
+ * so this bar never says 13 while the sidebar says 14. When it counts more
+ * than the bar lists (the Chief's own card is in the chat above; a failed
+ * turn has no card), the number is said rather than the names.
+ */
+export function requestsTitle(summary: RequestsSummary, team?: number): string {
   const names = summary.groups.filter((g) => g.pending + g.older > 0).map((g) => g.agent.name);
   if (names.length === 0) return 'Nothing else needs your OK';
+  const n = Math.max(team ?? 0, names.length);
+  if (n > names.length) return `${n} agents need your OK`;
   if (names.length === 1) return `${names[0]} needs your OK`;
   if (names.length === 2) return `${names[0]} and ${names[1]} need your OK`;
   return `${names.length} agents need your OK`;
@@ -110,13 +119,13 @@ export function requestsDetail(summary: RequestsSummary): string {
   return `${count(requests, 'request')}, ${logins} of them ${logins === 1 ? 'a login' : 'logins'}`;
 }
 
-/** The panel's subtitle: "16 agents · 41 logins", "2 agents · 3 requests". */
-export function requestsCounts(summary: RequestsSummary): string {
+/** The panel's subtitle: "16 agents · 41 logins", "2 agents · 3 requests". `team` as for the title. */
+export function requestsCounts(summary: RequestsSummary, team?: number): string {
   const what =
     summary.logins === summary.requests
       ? count(summary.logins, 'login')
       : count(summary.requests, 'request');
-  return `${count(summary.agents, 'agent')} · ${what}`;
+  return `${count(Math.max(team ?? 0, summary.agents), 'agent')} · ${what}`;
 }
 
 /** Up to `max` names, then "…": the line under an agent's name. */

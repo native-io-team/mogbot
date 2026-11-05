@@ -6,8 +6,8 @@
  * and hellos are the setup checklist's, in the Chief's chat, as on the desk.
  */
 
+import { agentNeedsYou, setupHold } from '@shipstudio/companion-protocol';
 import type { Agent, TeamSetupView } from '@shipstudio/companion-protocol';
-import { needsAttention } from './agents';
 import { shows } from './teamSetup';
 
 export type HomeBar =
@@ -48,8 +48,11 @@ export function buildHome(agents: Agent[], setup: TeamSetupView | null | undefin
   const hidden = agents.filter((a) => a.hidden).sort(recent);
   const chief = visible.find((a) => a.isMain) ?? null;
   const others = visible.filter((a) => a !== chief);
-  const loud = (a: Agent) => needsAttention(a) && !quiet.has(a.id);
-  const waiting = others.filter(loud).sort(recent);
+  // The one rule every count uses (desk sidebar, review bar, tab badge, Dock):
+  // the bar counts the Chief too, so it never says 13 while the badge says 14.
+  const hold = setupHold(setup);
+  const loud = (a: Agent) => agentNeedsYou(a, hold);
+  const waiting = visible.filter(loud).sort(recent);
   const pinned = others.filter((a) => a.pinned).sort(recent);
   const rest = others
     .filter((a) => !a.pinned)

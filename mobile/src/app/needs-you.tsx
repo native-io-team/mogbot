@@ -31,11 +31,12 @@ export default function NeedsYou() {
     [overview, setup]
   );
   const waiting = home?.bar?.kind === 'needs' ? home.bar.agents : [];
-  // The Chief waits on you too, sometimes: it heads Home, and it's listed here first.
+  // The Chief waits on you too, sometimes: it heads Home, and it's listed here
+  // first. The bar counts it (one rule for every count), so this lists it.
   const chief = home?.chief;
   const listed: Agent[] = [
-    ...(chief && !home?.quiet.has(chief.id) && needsAnything(chief) ? [chief] : []),
-    ...waiting,
+    ...waiting.filter((a) => a === chief),
+    ...waiting.filter((a) => a !== chief),
   ];
   const setupOpen = !!home?.bar && (home.bar.kind === 'setup' || home.bar.setup);
 
@@ -75,9 +76,6 @@ export default function NeedsYou() {
     </SheetPage>
   );
 }
-
-const needsAnything = (a: Agent) =>
-  a.status.state === 'waiting' || (a.pendingApprovals ?? 0) > 0 || failedTurn(a) !== null;
 
 function WaitingRow({ agent, onPress }: { agent: Agent; onPress: () => void }) {
   const line = useApp((s) => {

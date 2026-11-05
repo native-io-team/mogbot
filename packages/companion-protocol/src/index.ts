@@ -22,3 +22,4 @@ export * from './usage';
 export * from './independence';
 export * from './policy';
 export * from './secretName';
+export * from './attention';

@@ -33,7 +33,20 @@ const books = agent('books', 'Bookkeeper', 1);
 const state = vi.hoisted(() => ({
   agents: [] as Agent[],
   messages: {} as Record<string, AgentMessage[]>,
+  setup: null as unknown,
 }));
+vi.mock('../../lib/teamSetup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/teamSetup')>()),
+  useTeamSetup: () => state.setup,
+}));
+/** The checklist, open, with these imported agents not met yet. */
+const quietSetup = (ids: string[]) => ({
+  complete: false,
+  dismissed: false,
+  steps: [
+    { id: 'hello', state: 'open', agents: ids.map((agentId) => ({ agentId, state: 'quiet' })) },
+  ],
+});
 const answerApproval = vi.hoisted(() => vi.fn((..._args: unknown[]) => Promise.resolve()));
 vi.mock('../../lib/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/agents')>()),
@@ -45,7 +58,8 @@ vi.mock('../../lib/agentsStore', async (importOriginal) => ({
   loadMessages: () => Promise.resolve(),
 }));
 
-function setTeam(agents: Agent[]) {
+function setTeam(agents: Agent[], setup: unknown = null) {
+  state.setup = setup;
   state.agents = [chief, ...agents];
   state.messages = Object.fromEntries(agents.map((a) => [a.id, [card(a.id, `${a.id}-r`)]]));
 }
@@ -73,7 +87,7 @@ describe('AgentRequestsBar with "Setting up your team"', () => {
   });
 
   it('counts only the other agents, and points at the checklist for the rest', () => {
-    setTeam([potter, florist, books]);
+    setTeam([potter, florist, books], quietSetup(['potter', 'florist']));
     const onOpen = vi.fn();
     renderBar({ agentIds: new Set(['potter', 'florist']), onOpen });
     const bar = screen.getByTestId('agent-requests-bar');
@@ -85,6 +99,13 @@ describe('AgentRequestsBar with "Setting up your team"', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open setting up your team' }));
     expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('in the Chief’s chat, says the same count as the sidebar: the Chief’s own card too', () => {
+    setTeam([potter, books]);
+    state.agents = [{ ...chief, pendingApprovals: 1 }, potter, books];
+    renderBar();
+    expect(screen.getByTestId('agent-requests-bar').textContent).toContain('3 agents need your OK');
   });
 
   it('is unchanged without a checklist', () => {
