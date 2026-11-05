@@ -2,6 +2,7 @@ import type { AgentMessage, ResultCard, WelcomeFrame } from '@shipstudio/compani
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Text } from 'react-native';
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
+import { OFFLINE_NOTE } from '../src/components/surfaces';
 import { ResultCardView, useCanRevise } from '../src/components/result';
 import { EMPTY_DRAFT, putDraft } from '../src/lib/drafts';
 import { useApp } from '../src/lib/store';
@@ -47,6 +48,7 @@ const v2 = byId('m28');
 
 const welcome = (features?: string[]) =>
   useApp.setState({
+    link: { kind: 'connected', route: 'tailscale' } as never,
     welcome: {
       methods: ['agents.send'],
       ...(features ? { features } : {}),
@@ -67,8 +69,18 @@ function show(message: AgentMessage, over: Partial<Parameters<typeof ResultCardV
 }
 
 describe('the result card on the phone', () => {
+  it('offline keeps Ask for changes, disabled, with the note every card uses', async () => {
+    useApp.setState({ link: { kind: 'reconnecting', attempt: 1, lastSeenAt: 0 } as never });
+    const ask = jest.fn();
+    await show(v1, { onAskForChanges: ask });
+    await fireEvent.press(screen.getByText('Ask for changes'));
+    expect(ask).not.toHaveBeenCalled();
+    expect(screen.getByText(OFFLINE_NOTE)).toBeTruthy();
+  });
+
   it('reads the Mac’s card: not verified up front, files, links, checks', async () => {
     const ask = jest.fn();
+    useApp.setState({ link: { kind: 'connected', route: 'tailscale' } as never });
     await show(v1, { onAskForChanges: ask });
     expect(screen.getByText('October invoice summary')).toBeTruthy();
     expect(screen.getByText('Not verified')).toBeTruthy();
@@ -102,11 +114,9 @@ describe('the result card on the phone', () => {
 
   it('folds an older version to a line', async () => {
     await show(v1, { newest: false, onAskForChanges: jest.fn() });
-    expect(
-      screen.getByText('October invoice summary · v1 · a newer version is below')
-    ).toBeTruthy();
+    expect(screen.getByText('October invoice summary · v1 · earlier version')).toBeTruthy();
     expect(screen.queryByText('Not verified')).toBeNull();
-    await fireEvent.press(screen.getByText(/a newer version is below/));
+    await fireEvent.press(screen.getByText(/earlier version/));
     expect(screen.getByText('Not verified')).toBeTruthy();
     // An earlier version is for reading: it can't be revised.
     expect(screen.queryByText('Ask for changes')).toBeNull();

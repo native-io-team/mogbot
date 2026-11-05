@@ -8,7 +8,8 @@
  */
 
 import type { Agent, AgentMessage } from '@shipstudio/companion-protocol';
-import { formatClock, workingLine } from './agents';
+import { formatClock, formatDate, workingLine } from './agents';
+import { foldRoomLines, type RoomFold } from './rooms';
 import type { PendingSend } from './sync';
 
 export type Item =
@@ -16,7 +17,9 @@ export type Item =
   | { kind: 'day'; key: string; label: string }
   | { kind: 'pending'; key: string; pending: PendingSend }
   | { kind: 'draft'; key: string; text: string }
-  | { kind: 'working'; key: string; label: string };
+  | { kind: 'working'; key: string; label: string }
+  /** What the agent said in a room, folded into one line that opens the room. */
+  | { kind: 'room'; key: string; fold: RoomFold };
 
 /** Messages closer than this, from the same side, are one run: drawn close together. */
 const RUN_MS = 5 * 60_000;
@@ -37,15 +40,28 @@ export function chatItems(
   now = Date.now()
 ): Item[] {
   const out: Item[] = [];
+  // A reply being written in a room streams there, not here: this chat
+  // only says it's working, and folds the reply once it lands.
+  if (agent.status.room) draft = undefined;
   if (draft) out.push({ kind: 'draft', key: draft.id, text: draft.text });
   else if (agent.status.state === 'working')
     out.push({ kind: 'working', key: 'working', label: workingLine(agent) });
   for (let i = pending.length - 1; i >= 0; i--) {
     out.push({ kind: 'pending', key: `pending:${pending[i].clientId}`, pending: pending[i] });
   }
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i];
-    const prev = messages[i - 1];
+  const rows = messages.some((m) => m.room) ? foldRoomLines(messages) : messages;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const row = rows[i];
+    const before = rows[i - 1];
+    if ('count' in row) {
+      const prevTs = before ? ('count' in before ? before.last.ts : before.ts) : undefined;
+      const label = timeLabel(row.last.ts, prevTs, now);
+      out.push({ kind: 'room', key: `room:${row.last.id}`, fold: row });
+      if (label) out.push({ kind: 'day', key: `day:${row.last.id}`, label });
+      continue;
+    }
+    const m = row;
+    const prev = before && 'count' in before ? before.last : before;
     const label = timeLabel(m.ts, prev?.ts, now);
     // A draft that became its message keeps its key, so the row never remounts.
     if (!(draft && m.id === draft.id)) {
@@ -68,7 +84,7 @@ export function timeLabel(ts: number, prevTs: number | undefined, now = Date.now
   return null;
 }
 
-/** "Today", "Yesterday", "Tuesday", "Mon 3 Nov": a day separator. */
+/** "Today", "Yesterday", "Tuesday", "Nov 3" (`formatDate`): a day separator. */
 export function dayLabel(ts: number, now = Date.now()): string {
   const day = (t: number) => {
     const d = new Date(t);
@@ -79,12 +95,7 @@ export function dayLabel(ts: number, now = Date.now()): string {
   if (days === 1) return 'Yesterday';
   const d = new Date(ts);
   if (days < 7) return d.toLocaleDateString([], { weekday: 'long' });
-  return d.toLocaleDateString([], {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    ...(d.getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}),
-  });
+  return formatDate(ts, now);
 }
 
 /** When a message was sent, in full, for its long-press menu: "Today 2:40 PM". */

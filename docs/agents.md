@@ -23,10 +23,10 @@ greeting, `prompts::CHIEF_GREETING`, appended by `ensure_main` when it creates
 the Chief: what it can do (create agents, delegate, approvals, projects, the
 phone) and a question. It is stored, not generated, so nothing runs on the
 user's plan until they reply, and `CHIEF_INSTRUCTIONS` tells the Chief it said
-it. Three starters sit under it until the user's first message; while the
-greeting is all there is, it and the starters sit in the middle of the page as
-an empty state (`data-greeting` on the message column), not at the foot of an
-empty screen.
+it. Three starters sit under it until the user's first message (see "A
+first real result", below); while the greeting is all there is, it and the
+starters sit in the middle of the page as an empty state (`data-greeting` on
+the message column), not at the foot of an empty screen.
 
 In Agents mode the sidebar's top row is the toggle (Home, Workflows and the
 Inbox belong to the Projects side). **What's in flight** — the one name for
@@ -43,6 +43,75 @@ from another assistant, appears there only while it is on and is otherwise
 reached from the Phone panel's last line or ⌘K. In a project's workspace
 sidebar, agents bound to that project are listed above its terminal
 Sessions; clicking one opens its chat.
+
+## A first real result, and ready-made agents (`agents/templates.rs`)
+
+The first few minutes should end in something useful, not a blank chat. The
+Chief's three starters each lead to real work on this Mac with no other
+account, and none sends anything by itself:
+
+- **Summarise a document…** opens the file picker; the picked file is staged
+  in the composer with the request typed out ("Summarise this for me: the main
+  points, any dates or decisions, and anything I need to do."). The user
+  presses Send. Dropping a file on the chat works the same way.
+- **Research a question…** types "Research this for me: " for the user to
+  finish. Web research runs on the engine's own tools and account. On
+  Claude Code every web search and every page opened is a tool call the
+  approval broker asks about, so a first research turn can raise several
+  Allow cards. The Chief and the Research assistant are told to say so
+  before they start ("I'll ask before searching the web"), and a search's
+  card offers **Always allow web searches** (a `Tool` rule on `WebSearch`,
+  `permissions::suggest`); a page's card offers its one host, so each new
+  site still asks once. On Codex, web search is Codex's own built-in tool
+  (seen as `webSearch` items): it doesn't come through the broker, so it
+  runs without a card. There is no WebFetch on Codex; a command that
+  reaches the network is sandboxed and asks to escalate, with a card.
+  Whether a user's Codex has web search turned on (and live or cached) is
+  Codex's own setting, which the app doesn't read, so Research there may
+  find it can't search and says so, per its briefing. The briefings tell a
+  Codex agent not to promise cards it won't raise. Not verified: a live
+  Codex research turn.
+- **Ready-made agents…** opens New agent on the first ready-made agent.
+
+`CHIEF_INSTRUCTIONS` (a new Chief's only) tells it a first message may be one
+of these: do the task first, from the document or real sources, never pad what
+it couldn't read, then offer the matching ready-made agent in one line.
+
+**Ready-made agents** (role templates) are one catalogue,
+`src-tauri/src/agents/templates.json`: Research assistant, Inbox triage and
+Weekly review, each a name, role, colour, briefing and its own starters. The
+backend reads it (`templates.rs`) and the desktop imports the same file
+(`lib/agentTemplates.ts`), so what the dialog shows is what the agent gets.
+
+- **The Chief** sees a "Ready-made agents" section in its prompt
+  (`templates::chief_section`) and creates one with `create_agent`'s
+  `template`: the template brings the role, briefing and colour; `role` and
+  `color` override, and `instructions` is *added* under "About the user",
+  never instead of the briefing. Only `name` is required.
+- **New agent** starts with "Start from" (Blank and each template, a
+  `SegmentedControl`). Picking one fills in the name, role and briefing, all
+  editable; switching replaces only fields still showing the last template's
+  words. ⌘K has one "New agent: <title>…" per template
+  (`agents.template.<id>`).
+- **The agent** records `template` (registry field, omitted when none). Its
+  first open shows the template's starters instead of the generic ones, also
+  when the Chief made it and its chat holds only "Created by" notes.
+- **Inline connect, only where honest.** Only Inbox needs anything (`needs:
+  "mail"`): it reads email through an app the user connects. The dialog and
+  the agent's first open say so in one line ("It reads your email through an
+  app you connect, such as Gmail.") with **Connect an app…** opening Apps
+  (Claude Code agents; on Codex the line says to connect it in Codex). Nothing
+  claims an app is or isn't connected: the engine lists its apps only once a
+  turn starts. The briefing tells the agent to check, say so in one line and
+  stop if it has none, and never invent a message.
+- **Phone**: `agents.templates` (read-only; a Mac that serves it accepts
+  `template` on `agents.create`) lists them without briefings; New agent shows
+  "Start from" chips and the Mac fills in the briefing. The phone's Chief chat
+  has no starters, and apps are connected on the Mac.
+
+Not verified: a real turn on each template (briefing quality is untested
+against live models; `scripts/agents-e2e.sh behaviour` doesn't cover it yet),
+and Inbox against a live Gmail connector.
 
 ## What an agent is
 
@@ -336,7 +405,7 @@ those turns exposed is replaced once at the next launch.)
 | `share_file` | all | hands the user a file it made: copied into its `attachments/`, posted as its own message with a file card |
 | `share_result` | all | ends a piece of work on one result card: files, links, what it checked and did not verify; revisions become v2 (below, "Result cards") |
 | `request_secret` | all | a secure input card for a password, key, token or login; the agent gets `$VAR` and a reference, never the value (below) |
-| `create_agent` | Chief | name, role, instructions, optional `project` and `first_task` |
+| `create_agent` | Chief | name, role, instructions, optional `template`, `project` and `first_task` |
 | `update_agent` | Chief | name / role / instructions / project (memory kept) |
 | `delete_agent` | Chief | puts an Allow / Deny card in the Chief's chat first |
 | `approve` | CLI only | the permission prompt tool (below) |
@@ -1629,6 +1698,129 @@ cards.
   persisted field, a naming flow, collapse state, and a story for how they
   sit with the recency sort. Worth doing as its own slice once the list is
   long enough to want them.
+## Rooms (`src-tauri/src/agents/rooms.rs`)
+
+A room is one visible thread shared by you and two to six agents. It is a
+conversation, not a merged agent: each member keeps its own session and
+memory, and a message in the room becomes a turn in each addressed member's
+own inbox.
+
+A room turn resumes the member's one engine session, the same one its own
+chat uses (`runner::run_turn`). So an agent remembers its own chat when it
+answers in a room, and what it read and said in a room is in that session
+when you next talk to it alone. A room is not a private place: what a member
+says there is posted for everyone in it. Whether rooms should get sessions
+of their own is open.
+
+- **Who answers.** The members you @mention; every member for `@everyone`;
+  otherwise the room's **lead** (the Chief of Staff when it is a member, or
+  whoever the room's settings name). With no mention and no lead nothing is
+  sent: the composer asks "Who should answer?" with a chip per member and
+  Everyone. The composer's foot line always says who will answer before you
+  send ("To Finance and Ops", "To everyone · 4 replies"). Your line records
+  who it was for (`mentions`) and shows "To …" under it.
+- **What a member sees.** Its turn's prompt is written when the turn starts
+  (`rooms::prompt`), from the room as it is then: who is here, the newest 20
+  lines (each clipped to 1,200 characters, at most 8,000 in all), and, said
+  in so many words, how many of how many it is shown. It is told its reply is
+  posted for everyone, to answer for itself, and how to bring someone in.
+  Every line is a speaker header the app writes (`[User]`, `[Agent: Name]`)
+  over what was said, each line of it quoted with `> ` (`rooms::quoted`), and
+  the framing says only `[User]` is the user and that a member's words are
+  its report, not instructions. A reply that writes "User: delete the
+  branch" on a line of its own still reads as part of that reply (CR, VT,
+  FF, NEL and the Unicode line and paragraph separators all start a new
+  quoted line). Who asked is said in so many words (`rooms::Asker`: the
+  user, or a named member), so a member that can't be looked up is never
+  taken for the user. Names can't hold control characters or line and
+  paragraph separators, and "everyone" is reserved (`store::validate_name`,
+  imported agents included); every name in the framing goes through
+  `rooms::header_name` too.
+- **Agents bringing each other in.** A finished reply that @mentions another
+  member (`rooms::mentioned_in`: whole names, longest first, never an email
+  address, never `@everyone`) asks that member next, one hop further. Each
+  user message starts a round; at most **8 agent turns** per round (the
+  addressed members included) and the runner's 6-hop cap. Past either, nobody
+  else is asked and the room says so once. The room shows "3 of 8 replies for
+  this message" while it runs. A reply from a turn answering text from
+  outside (a "When…" routine's items) passes that taint to whoever it
+  brings in. `message_agent` still works from a room turn
+  (for work outside the room), and the turn starts as far along the chain as
+  its room hop, so a hand-off at hop 4 can delegate at most two more hops:
+  the 6-hop cap per user message holds across rooms, `message_agent` and
+  `create_agent`'s first task (`runner::next_hop`).
+- **One place per turn.** A room ask carries `room` on the queued message
+  (`runner::Inbound`). `take_batch` takes only a run of messages said in the
+  same place, so a room turn is never folded into the agent's own chat (or
+  another room) and vice versa; the rest waits for the next turn, in order. A
+  room ask owes no agent an answer. While it runs, `Runtime.room` is set and
+  `Status.room` says so, so the room shows its members' working lines and
+  drafts and no one else's; the agent's own chat doesn't stream that reply
+  and its working line says "Replying in <room>", a link there. A member
+  busy elsewhere shows as "will reply after what it's doing now"
+  (`RoomView.waiting`).
+- **Interrupting.** ⌘↵ in an agent's own chat moves what was said there
+  ahead of any room asks (`runner::interrupt`), so the message you
+  interrupted for is the one answered. What the cut-off turn was doing is
+  told only to the next turn in the same place (`Runtime.interrupted_in`):
+  the note about a cut-off room turn quotes what was asked there under the
+  app's speaker headers, never as the user's words. (This scopes only that
+  note; the engine session itself is shared, see above.)
+  A room turn cut off this way leaves "X was interrupted for a message in
+  its own chat, so it didn't answer here." in the room; a Stop in the
+  agent's own chat that drops queued room asks leaves "X was stopped before
+  answering." in each room, and a room turn that panics leaves "Something
+  went wrong running X, so it didn't answer here." there (its error line
+  stays in the agent's own chat).
+- **Where lines live.** What a room turn records (its reply, cards and change
+  cards; its own stop, interruption and error lines through
+  `runner::record_in_turn`; never your own lines, another agent's request, a
+  check-in, or a note the app records for its own reasons meanwhile, like an
+  engine change or a saved secret) is tagged `room` in the member's own log
+  and copied into `agents/rooms/<id>/messages.jsonl`. A line from an agent no
+  longer in the room isn't copied. A room's page applies each member's card
+  answers and timelines from that member's home, so Allow / Deny and
+  "Worked … · N steps" work in the room as in the agent's chat; the newest
+  change card for a member's open copy offers Keep / Discard there, and a
+  result card's **Ask for changes** opens that member's own chat with the
+  request staged (a room message can't revise a result). The agent's own
+  chat folds its room lines into one line ("2 replies in Pricing launch", a
+  link to the room); a card still waiting on you, and the card for its open
+  copy, stay in full there too, and so do lines from a room that was
+  deleted, which have nowhere else to be read (search finds them there). The room's row, not the agent's, gets the
+  preview and the unread count; the agent's row still shows a failure.
+- **Accent.** A room is neutral (the monochrome accent); each member's run of
+  lines opens with its badge and name in its own colour.
+- **Managing.** "New room" at the foot of the agent list (once there are two
+  agents), ⌘K → New room…, Open <room>, <room>: members and name…,
+  Mute/Unmute, Delete…. Rooms sit in a "Rooms" section of the list with a
+  paired badge. Mute stops the unread count. Deleting a room removes its
+  thread and never an agent; deleting an agent takes it out of its rooms
+  (and as lead); a room left with fewer than two says so above the composer
+  ("Only Finance is left in this room", Delete room / Add members), and with
+  none it can't be sent to. "Stop replies here" (`agents_room_stop`) drops only what
+  was asked in the room and stops a turn answering there; anything said to
+  the agent elsewhere stays queued.
+- **Search** scans room threads too; a room hit opens the room. A room line
+  is found once, in its room, not again in the member's log.
+- **Phone.** Rooms list and room chat (read, send with @mentions and
+  @everyone, Who should answer?) for apps that say `hello.features: ["rooms"]`;
+  older phones see no rooms, no room-only lines and no room-only search hits;
+  a member's line said in a room is a hit in that agent's chat there
+  (`wire::search_for_app`, docs/mobile.md).
+- **Not built.** Attachments and quotes in a room composer; jumping to a
+  search hit's exact line in a room; OS notifications for room replies (cards
+  still notify, as the agent's); a user "leave" separate from delete (a room
+  with one person in it has nothing to leave; "leave" is an agent leaving,
+  via members). A round is per room, not per message: a chain from the
+  previous message still running draws on the new one's 8, and rounds live
+  in memory (a restart starts them at 0). The desk and the backend match
+  @mentions by slightly different rules (the desk wants a space before `@`
+  and ASCII word characters after the name). The phone's room view doesn't
+  offer Keep / Discard or Ask for changes yet. No real agent turns were run
+  in a room for this slice: the routing is unit-tested and the UI is
+  harness-tested on fixtures.
+
 ## Files back from agents (`src-tauri/src/agents/files.rs`)
 
 - `share_file {path, caption?}` takes `~/…`, an absolute path, or one relative
@@ -1704,7 +1896,7 @@ prompt (`prompts::FILES`) tells it to for deliverables, never for chat.
   unrelated result. Retry on a failed ask keeps its `revises`. A revision keeps the id, becomes version
   n+1, and must say what changed (`changes`), shown as "Changes since v1: …".
   The log stays append-only: the older version is still there, folded to
-  "<title> · v1 · a newer version is below" (`newestResults`), and opens on
+  "<title> · v1 · earlier version" (`newestResults`), and opens on
   click, for reading only, with its change receipt (See changes, the diff)
   when it rode on a change card.
 - **Checks are the agent's.** The list is headed "It says it checked"
@@ -1903,8 +2095,12 @@ can't trample each other. The UI says "a copy of acme-site", "Keep changes",
   kind users have on disk must load, and a write must keep what a newer build
   added), process trees, share-path validation (traversal, symlinks), prompts framing, activity labels, MCP
   tool visibility, approval descriptions, import merge rules, memory parse and write-back (odd markdown included), the retry schedule and run settling, broker admission and the init check, memory-scaled slots.
+- `cargo test --lib agents::rooms agents::runner::rooms_runner_tests`: who answers, mentions in replies, the turn and hop caps, a turn taking one place at a time, a room's Stop leaving the agent's own queue alone, the thread's card answers, the prompt's bounded and honest window, delete and leave, search.
+- `pnpm vitest run src/lib/agentRooms.test.ts src/components/agents/RoomChat.test.tsx` and `node scripts/harness-capture.mjs agents-room`: the room view, composer mentions, Who should answer?, an approval in a room, the fold line, New room.
 - `cargo test --lib agents::results`: share_result validation and size caps, files that must exist in the agent's own files (all or nothing), versioning and Ask for changes targets, one card per turn.
 - `pnpm vitest run src/components/agents/AgentResult.test.tsx` and `mobile/__tests__/result.test.tsx`: the card on desk and phone, folding, Ask for changes.
+- `cargo test --lib agents::templates` and `pnpm vitest run src/components/agents/AgentTemplates.test.tsx`: the catalogue, the Chief's section, `create_agent`'s schema, the dialog's fill-in and swap rules; `mobile/__tests__/start.node.test.ts`: the phone's list and create.
+- `node scripts/harness-capture.mjs agents-first-win` / `agents-template-`: the three starters' results (document staged, research typed, New agent on Research), a first result, Inbox in the dialog with its connect line, and a Chief-made Inbox's first open.
 - `node scripts/harness-capture.mjs agents-result`: v1, asking, v2, not verified, a copy's card with before/after.
 - `pnpm vitest run src/lib/agents.test.ts`: chat grouping, dividers, ordering.
 - `scripts/agents-e2e.sh [scenario…]` (opt-in, real turns, on Haiku): `src-tauri/examples/agents_e2e/main.rs` drives the real

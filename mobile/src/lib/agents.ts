@@ -12,7 +12,6 @@ import type {
   EngineInfo,
   Failure,
   PermissionScope,
-  SessionMark,
   UsageTotals,
 } from '@shipstudio/companion-protocol';
 import { apiPrice, resetPhrase, tokenCount } from '@shipstudio/companion-protocol';
@@ -66,7 +65,10 @@ export const waitingForSlot = (agent: Agent) =>
  */
 export function workingLine(agent: Agent, brief = false): string {
   if (waitingForSlot(agent)) {
-    return brief || !agent.status.activity ? 'Waiting for a free slot' : agent.status.activity;
+    // The same words as the row's (`rowLine`): one state, one wording.
+    return brief || !agent.status.activity
+      ? 'Waiting for a free slot'
+      : rowLine(agent.status.activity);
   }
   return agent.status.activity ?? 'Working…';
 }
@@ -121,10 +123,23 @@ export function subtitle(agent: Agent): string {
   // A request outranks driving, as on the desk: the row's words and its amber dot agree.
   if (needsYou(agent)) return 'Needs your OK';
   if (agent.takeover) return drivenLine(agent.name);
-  if (agent.status.state === 'working') return workingLine(agent);
+  if (agent.status.state === 'working') return rowLine(workingLine(agent));
   const failure = failedTurn(agent);
   if (failure) return failureLine(failure, agent.preview, engineName(agent));
   return agent.preview ?? agent.role ?? '';
+}
+
+/**
+ * A list row's one line, cut where it can be read: the Mac's "Waiting for a
+ * free slot (4 agents already working)" would be clipped inside its
+ * parenthesis, so it says "Waiting for a free slot · 4 others working", in
+ * the row and in the chat alike.
+ */
+export function rowLine(line: string): string {
+  const slot = /^(.*?)\s*\((\d+) agents? already working\)\s*$/.exec(line);
+  if (!slot) return line;
+  const n = Number(slot[2]);
+  return `${slot[1]} · ${n} other${n === 1 ? '' : 's'} working`;
 }
 
 export type LineState = 'waiting' | 'working' | 'failed' | 'limited' | undefined;
@@ -241,12 +256,42 @@ export function formatClock(ts: number): string {
 }
 
 /**
- * "Task 1": a project's agent tab, in the app's words. Never the engine and
- * a number ("Claude Code 1"): which engine runs it is for settings and
- * errors, and "session" stays an internal name.
+ * A project's task, named by what it was asked: the first line of its
+ * opening prompt (the `started` mark's text, or the first message sent to
+ * it), trimmed; "Task started 6:28 AM" when only the start is known; "Task"
+ * when nothing is. Never a tab number ("Task 1") or the engine ("Claude Code
+ * 1"): neither says what it is, and "session" stays an internal name.
  */
-export function sessionLabel(mark: Pick<SessionMark, 'cli' | 'tab'>): string {
-  return mark.tab ? `Task ${mark.tab}` : 'Task';
+export function taskName(
+  sessionId: string | undefined,
+  chats: Record<string, { messages: AgentMessage[] }>
+): string {
+  if (!sessionId) return 'Task';
+  let started: AgentMessage | undefined;
+  let firstSent: AgentMessage | undefined;
+  for (const chat of Object.values(chats)) {
+    for (const m of chat.messages) {
+      const mark = m.session;
+      if (mark?.sessionId !== sessionId) continue;
+      if (mark.event === 'started' && (!started || m.ts < started.ts)) started = m;
+      if (mark.event === 'sent' && m.text.trim() && (!firstSent || m.ts < firstSent.ts))
+        firstSent = m;
+    }
+  }
+  const asked = firstLine(started?.text) || firstLine(firstSent?.text);
+  if (asked) return asked;
+  return started ? `Task started ${formatClock(started.ts)}` : 'Task';
+}
+
+const TASK_NAME_MAX = 60;
+
+/** A prompt's first line, cut at a word under 60 characters. */
+function firstLine(text: string | undefined): string {
+  const line = (text ?? '').trim().split('\n')[0].trim();
+  if (line.length <= TASK_NAME_MAX) return line;
+  const cut = line.slice(0, TASK_NAME_MAX);
+  const gap = cut.lastIndexOf(' ');
+  return `${(gap > 20 ? cut.slice(0, gap) : cut).replace(/[\s,.;:–—-]+$/, '')}…`;
 }
 
 /** A project path's last folder: what the desktop calls a project with no name. */
@@ -260,7 +305,20 @@ export function formatAgo(ts: number, now = Date.now()): string {
   if (m < 60) return `${m} min ago`;
   const h = Math.round(m / 60);
   if (h < 24) return `${h} h ago`;
-  return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return formatDate(ts, now);
+}
+
+/**
+ * The app's one way to write a date: "Nov 4", and "Nov 4, 2025" when it's
+ * not this year. Everywhere a date is shown (paired, last seen, a chat's day).
+ */
+export function formatDate(ts: number, now = Date.now()): string {
+  const d = new Date(ts);
+  return d.toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    ...(d.getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}),
+  });
 }
 
 /**
@@ -420,7 +478,13 @@ export function commandLine(command: string): string {
  * (`commandLine`), never a diff's `@@ -18,3 +18,3 @@` or a file header. An
  * edit says which file ("Wants to edit Header.tsx").
  */
-export function askingLine(approval: Pick<Approval, 'title' | 'detail' | 'tool'>): string {
+export function askingLine(
+  approval: Pick<Approval, 'title' | 'detail' | 'tool' | 'secret' | 'connector'>
+): string {
+  // These cards' titles are the request; their detail is the reassurance or
+  // the purpose under it, which cut short only says half.
+  if (approval.connector) return approval.title;
+  if (approval.secret) return `Asks for “${approval.secret.name}”`;
   if (approval.title === 'Run a command' && approval.detail?.trim())
     return commandLine(approval.detail);
   // A command whose title already says it in words: the title, never the command.

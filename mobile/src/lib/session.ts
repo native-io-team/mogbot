@@ -53,6 +53,7 @@ import {
   setPendingFailed,
 } from './sync';
 import { clearCache, http, type PickedFile } from './files';
+import { roomIdOf, roomKey, roomsOffered } from './rooms';
 import { registerPush } from './push';
 import { sendSecret } from './secrets';
 export { secretRouteProblem } from './secrets';
@@ -64,6 +65,9 @@ const PAGE = 50;
 let transport: DirectTransport | null = null;
 
 export const currentTransport = () => transport;
+
+/** Try the Mac again now, instead of waiting out the backoff. */
+export const retryNow = () => transport?.retryNow();
 
 /**
  * Read the keychain and, if a Mac is paired, its offline copy and drafts,
@@ -103,7 +107,15 @@ function refuseUnpinned() {
 
 export async function adopt(credentials: Credentials) {
   await saveCredentials(credentials);
-  setApp({ ...emptySync(), credentials, refusal: null, welcome: null, composer: {}, push: null });
+  setApp({
+    ...emptySync(),
+    credentials,
+    refusal: null,
+    welcome: null,
+    served: null,
+    composer: {},
+    push: null,
+  });
   await loadDrafts(credentials.serverId).catch(() => {});
   connect(credentials);
 }
@@ -148,10 +160,16 @@ function connect(c: Credentials) {
   t.onRefused((refusal) => setApp({ refusal }));
   t.onWelcome((welcome) => {
     caughtUp = false;
-    setApp({ welcome, refusal: null });
+    setApp({
+      welcome,
+      served: { methods: [...welcome.methods], features: [...(welcome.features ?? [])] },
+      refusal: null,
+    });
     // Focus is per connection: the Mac forgot it when the last one dropped.
     const open = getApp().openChat;
-    if (open) void call('agents.focus', { agentId: open });
+    if (open) void focusChat(open).catch(() => {});
+    // An older Mac (or one without rooms) shows none: forget any kept from before.
+    if (!roomsOffered(welcome)) setApp({ rooms: null });
     if (canCall('devices.setPush', welcome)) void syncPush();
   });
   t.onEvent((event, cursor) => {
@@ -166,6 +184,7 @@ function connect(c: Credentials) {
       caughtUp = true;
       const open = getApp().openChat;
       if (open && !getApp().chats[open]?.loaded) void loadLatest(open);
+      if (roomsOffered(getApp().welcome)) void refreshRooms().catch(() => {});
       void flushOutbox();
     }
   });
@@ -254,11 +273,33 @@ export function watchLifecycle(): () => void {
 
 const loading = new Map<string, Promise<void>>();
 
+/** A page of an agent's chat, or (for a `room:<id>` key) a room's thread. */
+function readPage(key: string, before?: string) {
+  const roomId = roomIdOf(key);
+  const at = before ? { before } : {};
+  return roomId
+    ? call('rooms.messages', { roomId, limit: PAGE, ...at })
+    : call('agents.messages', { agentId: key, limit: PAGE, ...at });
+}
+
+/** `agents.focus`, or `rooms.focus` for a room's key. */
+function focusChat(key: string | null) {
+  const roomId = key ? roomIdOf(key) : null;
+  if (roomId) return call('rooms.focus', { roomId });
+  // Leaving a room also clears it on the Mac (one focus per socket).
+  return call('agents.focus', { agentId: key });
+}
+
+/** Every room, read again (after catching up, and on pull to refresh). */
+export async function refreshRooms() {
+  setApp({ rooms: await call('rooms.list', {}) });
+}
+
 /** The newest page. Concurrent calls for one chat share the request. */
 export function loadLatest(agentId: string): Promise<void> {
   const running = loading.get(agentId);
   if (running) return running;
-  const run = call('agents.messages', { agentId, limit: PAGE })
+  const run = readPage(agentId)
     .then((page) => update((s) => mergePage(s, agentId, page, false)))
     .finally(() => loading.delete(agentId));
   loading.set(agentId, run);
@@ -268,23 +309,27 @@ export function loadLatest(agentId: string): Promise<void> {
 export async function loadOlder(agentId: string) {
   const oldest = getApp().chats[agentId]?.messages[0];
   if (!oldest) return loadLatest(agentId);
-  const page = await call('agents.messages', { agentId, limit: PAGE, before: oldest.id });
+  const page = await readPage(agentId, oldest.id);
   update((s) => mergePage(s, agentId, page, true));
 }
 
 /** On screen (or `null` on leaving): the Mac clears its unread and holds alerts for it. */
 export function setOpenChat(agentId: string | null) {
+  const roomId = agentId ? roomIdOf(agentId) : null;
   setApp((s) => ({
     openChat: agentId,
     overview:
-      agentId && s.overview
+      agentId && s.overview && !roomId
         ? {
             ...s.overview,
             agents: s.overview.agents.map((a) => (a.id === agentId ? { ...a, unread: 0 } : a)),
           }
         : s.overview,
+    rooms:
+      roomId && s.rooms ? s.rooms.map((r) => (r.id === roomId ? { ...r, unread: 0 } : r)) : s.rooms,
   }));
-  if (transport?.state.kind === 'connected') void call('agents.focus', { agentId }).catch(() => {});
+  if (transport?.state.kind === 'connected') void focusChat(agentId).catch(() => {});
+  if (roomId) return;
   if (agentId) {
     const agent = getApp().overview?.agents.find((a) => a.id === agentId);
     void dismissRead(agentId, agent ? needsYou(agent) : true);
@@ -350,6 +395,64 @@ export async function send(
   if (now) await call('agents.interrupt', { agentId });
 }
 
+/**
+ * Say something in a room, with an optimistic bubble, like `send`: the
+ * `clientId` makes a retry safe, and offline it waits in the outbox. The
+ * caller has already settled who answers (`answerers`): the Mac refuses a
+ * message that names nobody in a room without a lead.
+ */
+export async function sendToRoom(
+  roomId: string,
+  text: string,
+  mentions: string[],
+  everyone: boolean,
+  clientId?: string
+) {
+  const key = roomKey(roomId);
+  const id = clientId ?? Crypto.randomUUID();
+  const offline = getApp().link.kind !== 'connected';
+  if (clientId) update((s) => setPendingFailed(s, key, id, false, offline));
+  else
+    update((s) =>
+      addPending(s, {
+        clientId: id,
+        agentId: key,
+        roomId,
+        text,
+        ts: Date.now(),
+        failed: false,
+        ...(offline ? { waiting: true } : {}),
+        ...(mentions.length ? { mentions } : {}),
+        ...(everyone ? { everyone } : {}),
+      })
+    );
+  if (offline) return;
+  let sent: Result<'rooms.send'>;
+  try {
+    sent = await call('rooms.send', {
+      roomId,
+      text,
+      clientId: id,
+      ...(mentions.length ? { mentions } : {}),
+      ...(everyone ? { everyone } : {}),
+    });
+  } catch (error) {
+    const retry = unreached(error);
+    update((s) =>
+      setPendingFailed(s, key, id, !retry, retry, retry ? undefined : describeError(error))
+    );
+    if (retry) return;
+    throw error;
+  }
+  update((s) => confirmSend(s, id, sent.message));
+}
+
+/** A pending send, tried again by its `clientId`: to its room, or its agent. */
+export const resend = (p: PendingSend) =>
+  p.roomId
+    ? sendToRoom(p.roomId, p.text, p.mentions ?? [], !!p.everyone, p.clientId)
+    : send(p.agentId, p.text, false, p.clientId, p.attachments, p.mentions, p.revises);
+
 let flushing = false;
 
 /** Send what waited for the Mac, oldest first; give up on what waited too long. */
@@ -361,9 +464,7 @@ async function flushOutbox() {
     for (const p of expire) update((s) => setPendingFailed(s, p.agentId, p.clientId, true));
     for (const p of flush) {
       if (getApp().link.kind !== 'connected') break;
-      await send(p.agentId, p.text, false, p.clientId, p.attachments, p.mentions, p.revises).catch(
-        () => {}
-      );
+      await resend(p).catch(() => {});
     }
   } finally {
     flushing = false;
@@ -455,7 +556,7 @@ export async function setAgentToggles(
  * the first tap made instead of a second one.
  */
 export async function createAgent(
-  input: { name: string; role: string; color?: string },
+  input: { name: string; role: string; color?: string; template?: string },
   clientId: string = Crypto.randomUUID()
 ) {
   const stored = await call('agents.create', { input, clientId });
@@ -627,6 +728,7 @@ export async function unpair(): Promise<'removed' | 'queued'> {
     ...emptySync(),
     credentials: null,
     welcome: null,
+    served: null,
     refusal: null,
     openChat: null,
     push: null,

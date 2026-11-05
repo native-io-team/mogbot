@@ -159,7 +159,8 @@ export const appInfo = () => ({
 export async function pair(link: PairingLink, signal?: AbortSignal): Promise<Credentials> {
   const secret = Crypto.getRandomBytes(32);
   const paired = await pairWith(link, {
-    fetch,
+    // Bound: called as `deps.fetch`, a bare browser fetch throws "Illegal invocation".
+    fetch: (input, init) => fetch(input, init),
     random: (n) => Crypto.getRandomBytes(n),
     device: {
       name: Device.deviceName ?? Device.modelName ?? 'Phone',

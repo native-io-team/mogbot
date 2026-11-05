@@ -59,9 +59,12 @@ import {
 import {
   getAgentsSnapshot,
   loadMessages,
+  loadRoomMessages,
   refreshAgents,
+  refreshRooms,
   useAgentsList,
   useAgentsSelector,
+  useRoomsList,
 } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -73,6 +76,7 @@ import {
   BellOffIcon,
   CheckIcon,
   CloseIcon,
+  CollaboratorsIcon,
   CommentIcon,
   EditFieldIcon,
   EditIcon,
@@ -86,6 +90,18 @@ import {
 } from '@/components/icons';
 import { useAgentProjects } from './AgentProject';
 import { AgentsQuota } from './AgentsQuota';
+import { RoomChat } from './RoomChat';
+import { RoomEditorModal } from './RoomEditorModal';
+import { useRoomRows, type RoomActions } from './AgentRoomParts';
+import {
+  deleteRoom,
+  focusRoom,
+  roomIdOf,
+  roomKey,
+  sortRooms,
+  updateRoom,
+  type Room,
+} from '../../lib/agentRooms';
 import { kbd } from '../../lib/shortcuts';
 
 const SELECTED_KEY = 'shipstudio.agents.selected';
@@ -138,7 +154,13 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const { showToast } = useOptionalToast();
   const takeover = useTakeover();
   const [selectedId, setSelectedId] = useState<string | null>(readSelected);
-  const [editor, setEditor] = useState<{ open: boolean; agent: Agent | null; tab?: EditorTab }>({
+  const [editor, setEditor] = useState<{
+    open: boolean;
+    agent: Agent | null;
+    tab?: EditorTab;
+    /** Creating: the ready-made agent it opens on. */
+    template?: string;
+  }>({
     open: false,
     agent: null,
   });
@@ -154,14 +176,27 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const [jump, setJump] = useState<{ agentId: string; messageId: string } | null>(null);
 
   const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
+  const rooms = useRoomsList();
+  const roomRows = useRoomRows(agentsById);
+  const roomsLoaded = useAgentsSelector((s) => s.roomsLoaded);
+  // A room (`room:<id>`), if that's what's open and it still exists.
+  const openRoomId = roomIdOf(selectedId);
+  const room = openRoomId ? (rooms.find((r) => r.id === openRoomId) ?? null) : null;
+  const [roomEditor, setRoomEditor] = useState<{ open: boolean; room: Room | null }>({
+    open: false,
+    room: null,
+  });
+  const [deletingRoom, setDeletingRoom] = useState<Room | null>(null);
   // "What's in flight" (the Needs you row or ⌘K), else the last agent you had open, else the Chief of Staff.
   const teamOpen = selectedId === TEAM_ID;
-  const selected = teamOpen
-    ? null
-    : (selectedId && agentsById.get(selectedId)) ||
-      agents.find((a) => a.isMain) ||
-      sortAgents(agents)[0] ||
-      null;
+  const roomOpen = room !== null;
+  const selected =
+    teamOpen || roomOpen
+      ? null
+      : (selectedId && agentsById.get(selectedId)) ||
+        agents.find((a) => a.isMain) ||
+        sortAgents(agents)[0] ||
+        null;
 
   // The conversation on screen: the selected one once its messages are in,
   // until then whichever was there before.
@@ -189,6 +224,16 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     return () => cancelAnimationFrame(frame);
   }, [focusAsk, shown?.id]);
 
+  // A room open: its lines don't count as unread while it's in front.
+  useEffect(() => {
+    if (!room) return;
+    writeSelected(roomKey(room.id));
+    void focusRoom(room.id);
+    if (!getAgentsSnapshot().messages[roomKey(room.id)]) void loadRoomMessages(room.id);
+  }, [room?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A room that's gone (deleted here or elsewhere): back to the Chief.
+  if (openRoomId && roomsLoaded && !room) setSelectedId(null);
+
   useEffect(() => {
     if (!selected) {
       // On "What's in flight" no conversation is on screen, so replies still count as unread.
@@ -215,7 +260,10 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
     [showToast]
   );
 
-  const openNew = useCallback(() => setEditor({ open: true, agent: null }), []);
+  const openNew = useCallback(
+    (template?: string) => setEditor({ open: true, agent: null, template }),
+    []
+  );
   const openImport = useCallback(() => {
     setImportPath(null);
     setImportOpen(true);
@@ -295,6 +343,10 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   const openHit = useCallback(
     (hit: SearchHit) => {
       setCurrentHit(hit.messageId);
+      if (hit.roomId) {
+        setSelectedId(roomKey(hit.roomId));
+        return;
+      }
       openMessage(hit.agentId, hit.messageId);
     },
     [openMessage]
@@ -409,8 +461,70 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
   );
   const agentProjects = useAgentProjects();
 
+  const roomActions = useMemo<RoomActions>(
+    () => ({
+      onEditRoom: (r: Room) => setRoomEditor({ open: true, room: r }),
+      onToggleRoomMuted: (r: Room) =>
+        void run(async () => {
+          await updateRoom(r.id, { muted: !r.muted });
+          await refreshRooms();
+        }),
+      onDeleteRoom: setDeletingRoom,
+    }),
+    [run]
+  );
+  const openNewRoom = useCallback(() => setRoomEditor({ open: true, room: null }), []);
+
   useCommands(
     () => [
+      ...(agents.length >= 2
+        ? [
+            {
+              id: 'rooms.new',
+              title: 'New room…',
+              icon: <CollaboratorsIcon size={14} />,
+              category: 'action' as const,
+              keywords: ['agents', 'group', 'chat', 'room', 'team', 'together', 'everyone'],
+              run: openNewRoom,
+            },
+          ]
+        : []),
+      ...sortRooms(rooms).map((r) => ({
+        id: `rooms.open.${r.id}`,
+        title: `Open ${r.name}`,
+        icon: <CollaboratorsIcon size={14} />,
+        category: 'navigation' as const,
+        keywords: ['room', 'group', 'agents', 'chat'],
+        run: () => openAgent(roomKey(r.id)),
+      })),
+      ...(room
+        ? [
+            {
+              id: 'rooms.edit',
+              title: `${room.name}: members and name…`,
+              icon: <EditIcon size={14} />,
+              category: 'action' as const,
+              keywords: ['room', 'members', 'add', 'remove', 'rename', 'lead', 'leave'],
+              run: () => roomActions.onEditRoom(room),
+            },
+            {
+              id: 'rooms.mute',
+              title: `${room.muted ? 'Unmute' : 'Mute'} ${room.name}`,
+              icon: room.muted ? <BellIcon size={14} /> : <BellOffIcon size={14} />,
+              category: 'action' as const,
+              keywords: ['room', 'notifications', 'quiet', 'unread'],
+              run: () => roomActions.onToggleRoomMuted(room),
+            },
+            {
+              id: 'rooms.delete',
+              title: `Delete ${room.name}…`,
+              icon: <TrashIcon size={14} />,
+              category: 'action' as const,
+              keywords: ['room', 'remove', 'delete', 'leave'],
+              run: () => roomActions.onDeleteRoom(room),
+            },
+          ]
+        : []),
       {
         id: 'agents.nextNeedingYou',
         title: 'Next agent that needs you',
@@ -596,6 +710,10 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
       actions,
       agentProjects,
       takeover,
+      rooms,
+      room,
+      roomActions,
+      openNewRoom,
     ]
   );
 
@@ -657,15 +775,18 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
             listContent={
               <AgentsSidebar
                 agents={agents}
-                selectedId={selected?.id ?? null}
+                selectedId={room ? roomKey(room.id) : (selected?.id ?? null)}
                 showHidden={showHidden}
                 onToggleShowHidden={toggleShowHidden}
                 onSelect={setSelectedId}
-                onNew={openNew}
+                onNew={() => openNew()}
                 onImport={openImport}
                 needsYouCount={needsYouCount}
                 inFlightOpen={teamOpen}
                 onOpenInFlight={openInFlight}
+                rooms={roomRows}
+                roomActions={roomActions}
+                onNewRoom={openNewRoom}
                 actions={actions}
                 query={popoverSearch ? '' : query}
                 searchRef={searchRef}
@@ -691,6 +812,23 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
             <NoEngine
               onSetUp={(engine) => setEngineSetup({ engine, step: 'install' })}
               onGoProjects={sidebarProps.onGoProjects}
+            />
+          ) : room ? (
+            <RoomChat
+              key={room.id}
+              room={room}
+              agentsById={agentsById}
+              onOpenAgent={openAgent}
+              compact={
+                isCompact
+                  ? {
+                      agents,
+                      onGoHome: sidebarProps.onGoHome,
+                      onGoProjects: sidebarProps.onGoProjects,
+                    }
+                  : undefined
+              }
+              {...roomActions}
             />
           ) : teamOpen ? (
             <AgentsTeamView
@@ -728,6 +866,8 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
               }
               onSignIn={() => signIn(shown.engine)}
               onImport={openImport}
+              onNewAgent={openNew}
+              onOpenApps={openApps}
               onEscape={escapeSearch}
               compact={
                 isCompact
@@ -748,10 +888,15 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
       </div>
 
       <AgentEditorModal
-        key={editor.open ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}` : 'closed'}
+        key={
+          editor.open
+            ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}-${editor.template ?? ''}`
+            : 'closed'
+        }
         isOpen={editor.open}
         agent={editor.agent}
         initialTab={editor.tab}
+        initialTemplate={editor.template}
         takenColors={agents.map((a) => a.color)}
         onClose={() => setEditor({ open: false, agent: null })}
         onSaved={(id) => {
@@ -787,6 +932,44 @@ function AgentsModeView({ isCompact, sidebarProps }: AgentsViewProps) {
         }}
       />
       <AgentAppsModal isOpen={appsOpen} onClose={() => setAppsOpen(false)} />
+      {roomEditor.open && (
+        <RoomEditorModal
+          isOpen
+          room={roomEditor.room}
+          agents={agents}
+          onClose={() => setRoomEditor({ open: false, room: null })}
+          onSaved={(saved) => {
+            setRoomEditor({ open: false, room: null });
+            void refreshRooms().then(() => openAgent(roomKey(saved.id)));
+          }}
+        />
+      )}
+      {deletingRoom && (
+        <ProjectActionConfirmModal
+          title={`Delete ${deletingRoom.name}?`}
+          body={
+            <p>
+              The room and its conversation are deleted. Its agents stay, with their memory and
+              their own chats.
+            </p>
+          }
+          hint="This can't be undone."
+          loading={false}
+          confirmLabel="Delete room"
+          loadingLabel="Deleting…"
+          confirmVariant="danger"
+          onCancel={() => setDeletingRoom(null)}
+          onConfirm={() => {
+            const gone = deletingRoom;
+            setDeletingRoom(null);
+            void run(async () => {
+              await deleteRoom(gone.id);
+              if (selectedId === roomKey(gone.id)) setSelectedId(null);
+              await refreshRooms();
+            });
+          }}
+        />
+      )}
       {engineSetup && <EngineSignInModal {...engineSetup} onClose={() => setEngineSetup(null)} />}
       {stopping && (
         // In the agent's own colour: a confirm about Acme is Acme's.

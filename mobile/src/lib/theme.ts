@@ -72,6 +72,8 @@ export interface Palette {
   inputBorder: string;
   /** Outcomes only ("Allowed", a diff's additions, "Finished"). Never an action. */
   accentSuccess: string;
+  /** Something under way (you driving an agent on the Mac, an import): --status-running, never the accent. */
+  statusRunning: string;
   accentWarning: string;
   /** Words on a warning fill (the "Needs your OK" pill): dark on dark's bright amber, white on light's deep one. */
   onWarning: string;
@@ -141,6 +143,7 @@ const dark: Palette = {
   inputFill: '#141414',
   inputBorder: '#393939',
   accentSuccess: '#35d35d', // --accent-success (green-600)
+  statusRunning: '#6bb5ff', // --status-running (blue-400)
   accentWarning: '#e89a1c', // --accent-warning (orange-600)
   onWarning: '#141414',
   accentError: '#f44747', // --accent-error
@@ -195,6 +198,7 @@ const light: Palette = {
   inputFill: '#ffffff',
   inputBorder: '#cfcfcf',
   accentSuccess: '#15803d', // green-700
+  statusRunning: '#0a63c9', // --status-running (blue-800)
   accentWarning: '#b45309', // amber-700
   onWarning: '#ffffff',
   accentError: '#d42a20',

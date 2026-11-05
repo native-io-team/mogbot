@@ -30,19 +30,14 @@ import { Linking, Pressable, View } from 'react-native';
 import { haptic } from '../lib/haptics';
 import { makeStyles, useColors } from '../lib/appearance';
 import { alpha, iconSize, radius, space } from '../lib/theme';
-import { useApp } from '../lib/store';
+import { useApp, useServed } from '../lib/store';
 import { Attachments } from './attachments';
 import { useCopyParts, type CopyProps } from './copy';
-import { ACTION_ROW, Card } from './surfaces';
-import { Button, Icon, T } from './ui';
+import { Card, Line, OFFLINE_NOTE, TextAction } from './surfaces';
+import { Icon, T } from './ui';
 
 /** The Mac takes `revises` on a send: only then is "Ask for changes" offered. */
-export const useCanRevise = () =>
-  useApp(
-    (s) =>
-      !!s.welcome?.methods.includes('agents.send') &&
-      !!s.welcome?.features?.includes(MAC_FEATURES.reviseResults)
-  );
+export const useCanRevise = () => useServed('agents.send', MAC_FEATURES.reviseResults);
 
 export const refOf = (card: ResultCard): ResultRef => ({
   id: card.id,
@@ -192,37 +187,33 @@ export function ResultCardView({
   copy?: CopyProps;
   onError: (t: string) => void;
 }) {
-  const colors = useColors();
-  const styles = useStyles();
   const [opened, setOpened] = useState(false);
   const parts = useCopyParts(copy ?? null);
+  const connected = useApp((s) => s.link.kind === 'connected');
   if (!newest && !opened) {
     return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityHint="Shows this earlier version"
+      <Line
+        icon="doc.text"
+        text={supersededLine(card)}
         onPress={() => setOpened(true)}
-        style={styles.past}
-      >
-        <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
-        <T variant="small" color={colors.textMuted} numberOfLines={1} style={{ flexShrink: 1 }}>
-          {supersededLine(card)}
-        </T>
-      </Pressable>
+        pressHint="Shows this earlier version"
+      />
     );
   }
+  // A text action, as Review changes is: not an answer, so it never sits
+  // among them as a button. Beside a copy's answers it takes the line above
+  // them, at the start, so Discard / Keep changes keep their full width.
   const ask = newest && onAskForChanges && (
-    <Button
-      title="Ask for changes"
-      variant="ghost"
-      icon="bubble.left"
-      // Beside a copy's answers it takes a row of its own, so Keep stays last.
-      style={parts ? [ACTION_ROW, { justifyContent: 'flex-end' }] : undefined}
-      onPress={() => {
-        haptic.light();
-        onAskForChanges(refOf(card));
-      }}
-    />
+    <View style={parts ? { flexBasis: '100%' } : undefined}>
+      <TextAction
+        label="Ask for changes"
+        disabled={!connected}
+        onPress={() => {
+          haptic.light();
+          onAskForChanges(refOf(card));
+        }}
+      />
+    </View>
   );
   return (
     <Card
@@ -230,7 +221,9 @@ export function ResultCardView({
       title={card.title}
       meta={card.version > 1 ? `v${card.version}` : undefined}
       source={changesLine(card) ?? undefined}
-      note={parts?.note}
+      // Offline the answers stay, disabled, with the one note every card uses
+      // (a copy's own note already says it).
+      note={parts?.note ?? (ask && !connected ? OFFLINE_NOTE : undefined)}
       actions={
         ask || parts ? (
           <>
@@ -268,5 +261,4 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.inner,
     backgroundColor: colors.surfaceControl,
   },
-  past: { flexDirection: 'row', alignItems: 'center', gap: space.tight, paddingVertical: space.xs },
 }));

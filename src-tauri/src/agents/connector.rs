@@ -251,6 +251,7 @@ pub fn interview_status(agent_id: &str) -> Option<runner::Status> {
         activity: Some(format!("Bringing in agents from {}", t.source)),
         since: Some(t.started_at),
         work: None,
+        room: None,
     })
 }
 
@@ -815,7 +816,7 @@ fn ask_consent(app: &AppHandle, chief: &store::Agent, talk_id: &str, first: &str
     let request_id = approval.request_id.clone();
     let mut card = runner::new_message(&chief.id, MessageKind::Approval, "");
     card.approval = Some(approval);
-    if runner::record(app, card).is_ok() {
+    if runner::record_own(app, card).is_ok() {
         if let Some(t) = lock().talk.as_mut().filter(|t| t.id == talk_id) {
             t.consent_card = Some(request_id);
         }
@@ -1389,7 +1390,7 @@ fn post_review(app: &AppHandle, talk_id: &str) {
     let request_id = approval.request_id.clone();
     let mut card = runner::new_message(&t.chief_id, MessageKind::Approval, "");
     card.approval = Some(approval);
-    if runner::record(app, card).is_ok() {
+    if runner::record_own(app, card).is_ok() {
         if let Some(t) = lock().talk.as_mut().filter(|t| t.id == talk_id) {
             t.review_card = Some(request_id);
         }

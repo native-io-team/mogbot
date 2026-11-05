@@ -151,6 +151,8 @@ inside it.
 - `agents.create` (`name`, `role`, `color` only; idempotent by an optional
   `clientId`; see "Starting things")
 - `projects.list`, `sessions.read|send|key|start`, `preview.screenshot`
+- `rooms.list|messages|send|focus` (a Mac whose `welcome.features` has
+  `rooms`; see "Rooms")
 
 Declared in the package but not served: `agents.delete`, the import
 methods. Pure reads (`READ_ONLY_METHODS`, mirrored in Rust) are not audited.
@@ -405,16 +407,24 @@ sheet, files, a session, the diff and the photo viewer push over them. At
 - **Lines, cards and bars** (`components/surfaces.tsx`, the desk's
   `AgentCard.tsx`; docs/agents.md "Lines, cards and bars"). Everything in a
   chat that isn't something someone said is one of three. A **Line** is one
-  quiet centred sentence that wraps: a note ("Started fresh · memory kept", a
-  take-over that closed), a routine's run, a time between messages, a usage
-  limit. A **Card** is the one anatomy every request and result shares —
-  icon and title (a quiet meta such as "v2" at the right), a muted source
+  quiet centred sentence that wraps, never cut: a note ("Started fresh · memory
+  kept", a take-over that closed), a routine's run, a time between messages
+  (consecutive Lines sit at the Line gap), "Start of your conversation", a
+  usage limit, an answered card's outcome ("✓ Allowed · …", a tap unfolds what
+  it was about), "Started a task in …" and what changed (a tap opens them), an
+  older version of a result. One agent writing to another ("To Ops" / "From
+  Ops") is neither: the other agent's face and the words under a rule, so it
+  never reads as part of a reply. A **Card** is the one anatomy every request and result shares —
+  icon and title (a quiet meta such as "v2" or the time at the right, plain
+  text, never a chip), a muted source
   line ("Acme Site · in acme-site"), the body, a muted note, then the answers
   right-aligned with the single affirmative last, in the neutral `answer`
   style (never the agent's colour); the rest are `outline`. Approvals, a
   task's question, secrets, results, a copy's Keep / Discard, an import to
-  review on the Mac and a real failure all use it; answered, a card becomes
-  its outcome line. A **Bar** is this conversation's state, directly above
+  review on the Mac and a real failure (what it ran on, what to do) all use it;
+  answered, a card becomes its outcome line. Offline every card keeps its
+  answers, disabled, with one note (`OFFLINE_NOTE`), drawn from what the Mac
+  last said it serves (`served`, kept in the offline copy). A **Bar** is this conversation's state, directly above
   the composer in a fixed order (`lib/bars.ts`): the Mac out of reach, you
   driving the agent on your Mac, an import, "Changes to …" for the message
   being written, what the engine can't do. At most two show; the rest fold
@@ -462,6 +472,49 @@ sheet, files, a session, the diff and the photo viewer push over them. At
 - **Connection screen.** Every layer of the link (below).
 - **Settings.** The paired Mac, alerts (with their limits), haptics, updates,
   about.
+
+### Rooms
+
+Group conversations of 2–6 agents ([agents.md](agents.md), "Rooms"), on a
+Mac whose `welcome.features` has `rooms` (`roomsOffered`, `lib/rooms.ts`).
+An older Mac, or one without rooms, shows none, and nothing kept from
+before is drawn.
+
+- **Gating, both ways.** The phone says `hello.features: ["rooms"]`. Only
+  then does the Mac send `rooms.changed` (every room, after any change;
+  journaled, latest only) and the lines only a room has: the user's message
+  there and room notes, which carry `room` and an empty `agentId`
+  (`wire::for_app`). A member's own line said in a room carries its
+  `agentId` and `room`, so an older app still gets it, in that agent's chat
+  (as older builds show it).
+- **Store.** A room's thread is a chat under `room:<id>` beside the agents'
+  chats, so paging (`rooms.messages`, same `asOf` merge), upserts and the
+  outbox are the chats' own. A member's line goes in both its room and its
+  own chat (`chatKeysOf`), where runs of it fold into one quiet line, "In
+  Month end · 2 messages · 4:12 PM", that opens the room; a card still
+  waiting on you stays whole there too. A reply being written in a room
+  streams in the room, not in the agent's chat.
+- **List.** A **Rooms** section under the agents (most recent first; the
+  agents get their own label once it's there): stacked member badges, the
+  name, "Needs your OK" while a member's card waits, "Ops is replying",
+  else the Mac's preview ("Ops: Filed."), unread as a dot.
+- **Room.** Neutral accent (`AccentProvider color={null}`): no single
+  agent's. The header is the room and its members ("Finance, Ops", or who is
+  replying). Each member's name and badge sit over its first line in a run,
+  in its own colour; the rows are the chat's own `MessageRow`, so approval,
+  secret and session cards answer for the agent that asked (by the line's
+  `agentId`). Your lines are bubbles with "to Finance · Ops" (or "to
+  everyone") under them, from the `mentions` the Mac recorded. Members
+  whose `status.room` is this room show their draft or working line.
+- **Composer.** `@` offers the room's members and `@everyone`, nobody else.
+  Sending settles who answers the way the Mac does (`answerers`: named,
+  everyone, else the lead); with nobody, it asks **Who should answer?** with
+  each member and Everyone, and sends nothing until one is picked. The hint
+  says the lead ("Finance answers unless you @mention someone") or what to
+  do, and while members reply, the turn cap ("3 of 8 replies for this
+  message"). Text only: no attachments or quotes in a room yet. Offline, a
+  room send waits in the outbox like any other (`PendingSend.roomId`).
+- **Search.** A hit with `roomId` groups under its room and opens it.
 
 ### Starting things
 
@@ -706,8 +759,62 @@ on a fork's binary. For self-builders, Reinstall is the update.
   clock, and share payloads; `share.test.tsx` the share sheet (a crafted
   `files=` link uploads nothing); `dictation.test.tsx` the mic against a
   fake recognizer, including Android 12 and typing while it listens.
+- **Rooms:** `rooms.test.ts` (routing, gating, store keys, folding, the
+  room's list), `roomView.test.tsx` (the thread, the @ menu, "Who should
+  answer?"), `roomsList.test.tsx` (the section only from a Mac with rooms);
+  server: `companion::server::tests::rooms_reach_only_phones_that_show_them`
+  and `wire::tests::an_app_without_rooms_gets_no_room_events_or_room_only_lines`.
+  The mock Mac has two rooms (Launch, led by the Chief; Month end, no lead)
+  whose members reply in turn.
 - **Server:** `cargo test --lib companion::` (including the fixture drift
   check); **relay:** `pnpm test` in `services/push-relay`.
+
+### Phone screens without a simulator
+
+`pnpm qa:web` (in `mobile/`) renders the app with react-native-web against the
+mock Mac and screenshots a fixed list of screens, light and dark, at 402×874
+@3x, with headless Chrome over the DevTools Protocol (no Playwright; the same
+approach as the desktop's `scripts/harness-capture.mjs`). It starts the mock
+(`--http --cors`) and `expo start --web`, pairs through the real `/pair?d=`
+confirm screen, then walks the states only a Mac can cause by restarting or
+stopping the mock: a deep-linked chat offline with nothing saved, every screen
+live, the same chats offline from the saved copy, "This isn't your Mac"
+(`--impostor`), and the bar fold (`--bars`). Out: `mobile/qa-shots/` (PNGs and
+`report.md`, which lists each shot's route, what to check, console errors and
+any text cut off with an ellipsis). It exits non-zero when a screen failed or threw.
+
+```bash
+cd mobile && pnpm qa:web
+pnpm qa:web --only chat-fixtures --themes dark --out /tmp/shots
+pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681   # the defaults
+```
+
+The ports also read `QA_WEB_PORT`, `QA_MOCK_PORT` and `QA_CDP_PORT`; `--verbose`
+streams the mock's and Expo's output. With a `TMPDIR` longer than 60 characters
+(a sandbox's), it works under `/tmp/qa-web-*` and gives its children a `TMPDIR`
+there, since tsx's IPC pipe and Chrome's singleton socket would pass macOS's
+104-byte socket-path limit; Metro bundles cold in that case. The native-only modules (notifications,
+secure store, SF Symbols, the date picker, keyboard controller, file system) are
+swapped for stand-ins in `mobile/dev/web/` by `metro.config.js`, **only on the
+web platform**, so native builds, Expo Go and jest never see them.
+
+What the web build can't show, so don't file it:
+
+- The tab bar is a dark pill over the large title (NativeTabs draws the system
+  bar at the bottom on iOS).
+- No safe areas or status bar; headers are JS headers, so no iOS large titles,
+  no back buttons on deep-linked routes, and a small Settings title.
+- Images behind auth (screenshots, Before/After, the Phone and Preview cards)
+  are grey placeholders.
+- Icons are Material Symbols (the Android set), not SF Symbols.
+- Chrome's focus ring on a focused field; rn-web's Switch look and colour; the
+  "0.0.0 (0)" version, the device name "Macintosh" and a grey block for the
+  time picker.
+- The composer field is two lines tall, and the task header's title can sit off
+  centre: rn-web layout, check on a device.
+
+It says nothing about native-only surfaces (action sheets, Alerts, sheet detents,
+the share extension, the camera, real keyboard behaviour).
 
 ## Not built
 
@@ -724,3 +831,7 @@ on a fork's binary. For self-builders, Reinstall is the update.
   tried on a device, and dictation's recognizer has only been exercised
   against a fake in tests, not on a phone.
 - Verification on Android hardware.
+- Rooms on the phone: creating, renaming, muting or deleting one, changing
+  its members or lead, Stop for a room, attachments in a room, and opening a
+  room's search hit at the line. All are done on the Mac. Room screens have
+  not been looked at on a simulator or device yet (only rendered in tests).

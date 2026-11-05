@@ -269,7 +269,8 @@ describe('engines, slots and decision cards', () => {
     });
     const running = agent({ id: 'b', status: { state: 'working', activity: 'Editing', since: 1 } });
     expect(workingLine(queued, true)).toBe('Waiting for a free slot');
-    expect(subtitle(queued)).toBe('Waiting for a free slot (4 agents already working)');
+    // A row cuts it where it reads, not inside the parenthesis.
+    expect(subtitle(queued)).toBe('Waiting for a free slot · 4 others working');
     expect(workingLine(agent({ status: { state: 'working', activity: null, since: null } }))).toBe(
       'Waiting for a free slot'
     );

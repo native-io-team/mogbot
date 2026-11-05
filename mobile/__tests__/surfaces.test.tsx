@@ -13,12 +13,12 @@ import { MessageRow } from '../src/components/chat';
 import { ConversationBars } from '../src/components/ConversationBars';
 import { CopyCard } from '../src/components/copy';
 import { SecretCard } from '../src/components/SecretCard';
-import { BarStack, Card, stackBars, type BarSpec } from '../src/components/surfaces';
+import { BarStack, barTint, Card, stackBars, type BarSpec } from '../src/components/surfaces';
 import { Button, T } from '../src/components/ui';
 import { answerAccent } from '../src/lib/accent';
 import { BAR_ORDER, importBar, MAX_BARS } from '../src/lib/bars';
 import { useApp } from '../src/lib/store';
-import { APPEARANCES } from '../src/lib/theme';
+import { agentTints, APPEARANCES, palettes } from '../src/lib/theme';
 import { agent, msg } from './helpers';
 
 jest.mock('react-native-reanimated', () => {
@@ -262,6 +262,43 @@ describe('errors in the chat', () => {
     expect(screen.getByText('Didn’t finish: The tool crashed')).toBeTruthy();
   });
 
+  it('a real failure says where it ran and, if it ended the last turn, what to do', async () => {
+    const m = {
+      ...msg('e3', 1),
+      kind: 'error',
+      text: '',
+      failure: { kind: 'signed_out' },
+    } as AgentMessage;
+    await render(
+      <MessageRow message={m} agent={agent()} queued={false} latestFailure onError={() => {}} />
+    );
+    // Not the engine: the message doesn't record it, and the agent may have switched.
+    expect(screen.getByTestId('card-source').props.children).toBe('In site');
+    expect(screen.getByTestId('card-note')).toBeTruthy();
+    expect(screen.getByLabelText('Connection details')).toBeTruthy();
+  });
+
+  it("an older failure doesn't tell you to try again", async () => {
+    const m = { ...msg('e4', 1), kind: 'error', text: 'Crashed', failure: { kind: 'other' } };
+    await render(
+      <MessageRow message={m as AgentMessage} agent={agent()} queued={false} onError={() => {}} />
+    );
+    expect(screen.queryByTestId('card-note')).toBeNull();
+  });
+
+  it('one agent writing to another is set off from the reply, not a line of prose', async () => {
+    const m = {
+      ...msg('p1', 1),
+      kind: 'sent_to_agent',
+      text: 'File these',
+      peer: { id: 'ops', name: 'Ops' },
+    } as AgentMessage;
+    await render(<MessageRow message={m} agent={agent()} queued={false} onError={() => {}} />);
+    expect(screen.getByTestId('peer-row')).toBeTruthy();
+    expect(screen.getByText('To Ops')).toBeTruthy();
+    expect(screen.getByText('File these')).toBeTruthy();
+  });
+
   it('a note (started fresh, a take-over that closed) is a line', async () => {
     const m = {
       ...msg('n1', 1),
@@ -311,6 +348,32 @@ describe('bars above the composer', () => {
     expect(screen.getByText('Changes to Brief · v2')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Don't ask for changes"));
     expect(drop).toHaveBeenCalled();
+  });
+
+  it('take their colour from status roles, never an agent’s accent', () => {
+    for (const a of APPEARANCES) {
+      const accents = new Set([...Object.values(agentTints[a]), palettes[a].accentNeutral]);
+      for (const [tone, hex] of Object.entries(barTint(palettes[a]))) {
+        expect([a, tone, accents.has(hex)]).toEqual([a, tone, false]);
+      }
+    }
+  });
+
+  it('an import ready to review says the state in one line, not the card’s sentence again', () => {
+    const review = {
+      ...msg('v', 1),
+      kind: 'approval',
+      approval: {
+        requestId: 'r',
+        title: 'Review the import from Grok',
+        detail: '',
+        status: 'pending',
+        connector: { kind: 'review', talkId: 't', source: 'Grok' },
+      },
+    } as AgentMessage;
+    const bar = importBar(agent(), [review])!;
+    expect(bar.title).toBe('Import from Grok · waiting on your Mac');
+    expect(bar.detail).toBeUndefined();
   });
 
   it('an import says its state, never the request’s question or "the card"', () => {

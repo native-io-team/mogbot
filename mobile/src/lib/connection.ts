@@ -74,13 +74,49 @@ export function engineHealth(s: Pick<Inputs, 'mac' | 'overview'>): EngineHealth[
 const signedOut = (e: EngineHealth) =>
   e.failedSignedOut || (e.installed && e.used > 0 && e.signedIn === 'no');
 
+type RefusedReason = Extract<AppState['link'], { kind: 'refused' }>['reason'];
+
+/**
+ * A refusal in two words, by what actually happened. Only `revoked` and
+ * `unauthorized` mean the Mac let this phone go; an identity that didn't
+ * check out is not a removal, and neither is a Mac that's too old.
+ */
+const REFUSED_LABEL: Record<RefusedReason, string> = {
+  revoked: 'Not paired any more',
+  unauthorized: 'Not paired any more',
+  not_your_mac: 'Not your Mac',
+  mac_reset: 'Pair again',
+  pair_again: 'Pair again',
+  update_app: 'Update needed',
+  update_mac: 'Update needed',
+};
+
+/**
+ * What a screen with nothing to show says under the pill's words, by the
+ * reason: "once it answers" only where it might (a refusal is final until
+ * someone does something). `what` is what's missing ("Your agents").
+ */
+export function problemBody(link: AppState['link'], macName: string, what: string): string {
+  if (link.kind !== 'refused')
+    return `${what} are on ${macName}. Once it answers, they’ll be here.`;
+  switch (link.reason) {
+    case 'not_your_mac':
+      return `${what} are still on ${macName}. The server at this address couldn’t prove it’s that Mac, so nothing private was sent to it.`;
+    case 'mac_reset':
+    case 'pair_again':
+    case 'revoked':
+    case 'unauthorized':
+      return `${what} are still on ${macName}. Pair again to see them here.`;
+    case 'update_app':
+      return `${what} are on ${macName}. Update this app to see them here.`;
+    case 'update_mac':
+      return `${what} are on ${macName}. Update the app there to see them here.`;
+  }
+}
+
 export function pill(s: Inputs, now = Date.now()): Pill {
   const { link } = s;
-  if (link.kind === 'refused') {
-    return link.reason === 'update_app' || link.reason === 'update_mac'
-      ? { tone: 'problem', label: 'Update needed' }
-      : { tone: 'problem', label: 'Removed from Mac' };
-  }
+  if (link.kind === 'refused') return { tone: 'problem', label: REFUSED_LABEL[link.reason] };
   if (link.kind === 'connected') {
     const out = engineHealth(s).find(signedOut);
     return out
@@ -117,6 +153,9 @@ export function layers(
   const name = s.credentials?.name ?? 'your Mac';
   const mac = s.mac;
   const out: Layer[] = [];
+  // The link remembers only this run; after a cold start the saved copy's
+  // sync time is the last the phone heard, and the agents list says so too.
+  const seenAt = extra.lastSeenAt || s.syncedAt || 0;
 
   out.push({
     title: 'This phone is online',
@@ -132,9 +171,7 @@ export function layers(
       detail: `Over ${via}${extra.latencyMs != null ? ` · ${extra.latencyMs} ms` : ''}`,
     });
   } else {
-    const seen = extra.lastSeenAt
-      ? `Last seen ${formatAgo(extra.lastSeenAt, now)}`
-      : 'Not seen yet';
+    const seen = seenAt ? `Last seen ${formatAgo(seenAt, now)}` : 'Not seen yet';
     // We can't know why from here; list the likely causes from the last status we had.
     const causes = ['Tailscale may be off on this phone or on the Mac'];
     if (mac && !mac.power.keepAwake && mac.power.onBattery === 'yes') {
@@ -176,7 +213,7 @@ export function layers(
       : `Unknown: ${name} isn’t answering, which looks the same whether it’s asleep or closed`,
   });
 
-  out.push(...engineLayers(s));
+  out.push(...engineLayers(s, connected ? undefined : { seenAt, now }));
 
   out.push({
     title: 'Last sync',
@@ -184,8 +221,8 @@ export function layers(
     detail:
       connected && s.syncedAt
         ? 'Live: changes arrive as they happen'
-        : extra.lastSeenAt
-          ? `Last synced ${formatAgo(extra.lastSeenAt, now)}`
+        : seenAt
+          ? `Last synced ${formatAgo(seenAt, now)}`
           : 'Not yet',
   });
   return out;
@@ -197,8 +234,32 @@ const plural = (n: number) => (n === 1 ? 'Its agent' : `Its ${n} agents`);
  * A layer per engine: one that's installed, or one that agents are set to
  * run on. An engine nobody uses and that isn't installed (Claude Code on a
  * Codex-only Mac) isn't a problem, so it isn't listed.
+ *
+ * With the Mac away (`stale`), what it last said is only what it last said:
+ * every layer is unknown, worded "when last seen", never a green "Signed in".
  */
-export function engineLayers(s: Pick<Inputs, 'mac' | 'overview'>): Layer[] {
+export function engineLayers(
+  s: Pick<Inputs, 'mac' | 'overview'>,
+  stale?: { seenAt: number; now: number }
+): Layer[] {
+  const live = engineLayersLive(s);
+  if (!stale) return live;
+  const ago = stale.seenAt ? ` · ${formatAgo(stale.seenAt, stale.now)}` : '';
+  return live.map((l) => {
+    const [first, ...rest] = l.detail.split(' · ');
+    const lead = first.split('. ')[0];
+    return {
+      title: l.title,
+      tone: 'unknown',
+      detail:
+        lead === 'Unknown'
+          ? 'Unknown until it answers'
+          : `${lead} when last seen${rest.length ? ` · ${rest.join(' · ')}` : ''}${ago}`,
+    };
+  });
+}
+
+function engineLayersLive(s: Pick<Inputs, 'mac' | 'overview'>): Layer[] {
   const engines = engineHealth(s);
   if (!engines.length) return [{ title: 'Agent engines', tone: 'unknown', detail: 'Unknown' }];
   const shown = engines.filter((e) => e.installed || e.used > 0);

@@ -44,7 +44,16 @@ import { TextArea } from '../primitives/TextField';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
-import { ConversationBar, ConversationBars } from './AgentCard';
+import { AgentLine, ConversationBar, ConversationBars } from './AgentCard';
+import {
+  needsLine,
+  RESEARCH_PROMPT,
+  ROLE_TEMPLATES,
+  SUMMARY_PROMPT,
+  templateOf,
+  type RoleTemplate,
+  type TemplateStarter,
+} from '../../lib/agentTemplates';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
@@ -80,6 +89,8 @@ import { AgentProjectChip, ChangeCard } from './AgentProject';
 import { ComposerRevising, ResultCardView } from './AgentResult';
 import { WorkTimeline } from './AgentWork';
 import { SessionCard } from './AgentSession';
+import { RoomFoldLine, RoomWorkingPlace } from './AgentRoomParts';
+import { takeHandedRevision } from '../../lib/agentRooms';
 import {
   answerApproval,
   buildChatItems,
@@ -125,27 +136,38 @@ import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 
 /**
- * The Chief's first open: one-click answers to its greeting. Importing isn't
- * the Chief's job (the other assistant does it), so that one opens the import
- * steps instead.
+ * The Chief's first open: three ways to a first real result, each working on
+ * this Mac with no other account. A document is picked and staged with the
+ * request typed out; a question is typed by the user after the words put in
+ * the composer; ready-made agents open the New agent dialog on them. Nothing
+ * is sent until the user presses Send. Importing isn't the Chief's job (the
+ * other assistant does it), so that one opens the import steps instead.
  */
-const STARTERS = ['Help me plan my week', 'Set up a daily brief', 'What can you do?'];
-
 function ChiefStarters({
-  onStart,
+  onDocument,
+  onResearch,
+  onReadyMade,
   onImport,
 }: {
-  onStart: (text: string) => void;
+  onDocument: () => void;
+  onResearch: () => void;
+  onReadyMade?: () => void;
   /** With no sidebar to hold the import note, the starters offer it. */
   onImport?: () => void;
 }) {
   return (
     <div className="agent-chat__starters">
-      {STARTERS.map((text) => (
-        <Button key={text} tabIndex={0} variant="secondary" onClick={() => onStart(text)}>
-          {text}
+      <Button tabIndex={0} variant="secondary" onClick={onDocument}>
+        Summarise a document…
+      </Button>
+      <Button tabIndex={0} variant="secondary" onClick={onResearch}>
+        Research a question…
+      </Button>
+      {onReadyMade && (
+        <Button tabIndex={0} variant="secondary" onClick={onReadyMade}>
+          Ready-made agents…
         </Button>
-      ))}
+      )}
       {onImport && (
         <Button tabIndex={0} variant="secondary" onClick={onImport}>
           Import agents…
@@ -156,6 +178,53 @@ function ChiefStarters({
 }
 /** Any other agent's first open: what to ask a new teammate. */
 const AGENT_STARTERS = ['What’s on your plate?', 'Check in with me tomorrow at 9'];
+
+/**
+ * A ready-made agent's first open: its own starters, and, for one that can't
+ * work alone, the one line saying what it needs with the way to connect it.
+ */
+function TemplateStarters({
+  template,
+  engine,
+  onStarter,
+  onOpenApps,
+}: {
+  template: RoleTemplate;
+  engine: Agent['engine'];
+  onStarter: (starter: TemplateStarter) => void;
+  onOpenApps?: () => void;
+}) {
+  const needs = needsLine(template, engine);
+  return (
+    <>
+      {needs && (
+        <AgentLine className="agent-chat__needs">
+          {needs}
+          {engine === 'claude' && onOpenApps && (
+            <>
+              {' '}
+              <TextButton tabIndex={0} onClick={onOpenApps}>
+                Connect an app…
+              </TextButton>
+            </>
+          )}
+        </AgentLine>
+      )}
+      <div className="agent-chat__starters agent-chat__starters--centred">
+        {template.starters.map((starter) => (
+          <Button
+            key={starter.label}
+            tabIndex={0}
+            variant="secondary"
+            onClick={() => onStarter(starter)}
+          >
+            {starter.label}
+          </Button>
+        ))}
+      </div>
+    </>
+  );
+}
 
 /** A second Esc within this long stops a working agent; the first only says so. */
 const ESC_CONFIRM_MS = 1500;
@@ -222,6 +291,10 @@ interface AgentChatProps extends AgentActions {
   onJumped?: () => void;
   /** Words put in the composer for you to finish ("Set up an agent that "); `n` asks again. */
   prefill?: { text: string; n: number } | null;
+  /** The New agent dialog, on a ready-made agent or none (the Chief's starter). */
+  onNewAgent?: (template?: string) => void;
+  /** "Apps your agents can use", for a ready-made agent that needs one. */
+  onOpenApps?: () => void;
 }
 
 /** Unsent composer text per agent, for the life of the window. */
@@ -239,6 +312,8 @@ export function AgentChat({
   jumpTo,
   onJumped,
   prefill,
+  onNewAgent,
+  onOpenApps,
   ...actions
 }: AgentChatProps) {
   // Everything in this conversation takes on the agent's colour.
@@ -258,9 +333,12 @@ export function AgentChat({
   const hasOlder = useAgentsSelector((s) => s.older[agent.id] ?? false);
   // Whitespace that hasn't become words yet isn't worth a bubble.
   const draftText = rawDraft?.text.trimStart() ?? '';
+  // A reply streaming in a room is the room's: shown there, not here as if
+  // it were for you (the working line says where it is answering).
+  const inRoom = agent.status.state !== 'idle' ? agent.status.room : undefined;
   const streaming = useMemo(
-    () => (rawDraft && draftText.trim() ? { ...rawDraft, text: draftText } : null),
-    [rawDraft, draftText]
+    () => (!inRoom && rawDraft && draftText.trim() ? { ...rawDraft, text: draftText } : null),
+    [rawDraft, draftText, inRoom]
   );
   const { showToast } = useOptionalToast();
   // Kept outside the component: an agent opening a project switches this
@@ -414,7 +492,8 @@ export function AgentChat({
   const quoting = useQuoteSelection(scrollRef, sectionRef, insertQuote);
   // "Ask for changes" on a result card: the next message revises it. It
   // waits above the text like a quote, and goes with the send.
-  const [revising, setRevising] = useState<ResultRef | null>(null);
+  // "Ask for changes" in a room opens this chat with the request staged.
+  const [revising, setRevising] = useState<ResultRef | null>(() => takeHandedRevision(agent.id));
 
   useCommands(
     () => [
@@ -511,7 +590,6 @@ export function AgentChat({
         : shown.filter((m) => !foreignOwners.has(m.approval?.prompt?.owner.id ?? '')),
     [shown, foreignOwners]
   );
-  const items = useMemo(() => buildChatItems(listed), [listed]);
   // The agent's open copy of its project: only its newest card offers Keep /
   // Discard, and that card reads the live status (it waits while working).
   const copyId = agent.copy?.id;
@@ -523,6 +601,18 @@ export function AgentChat({
     }
     return null;
   }, [shown, copyId]);
+  // Said in a room, a line folds to "Replied in <room>", except the card for
+  // its open copy (Keep / Discard stays here too) and lines from a room that
+  // is gone, which have nowhere else to be read.
+  const roomsLoaded = useAgentsSelector((s) => s.roomsLoaded);
+  const roomIds = useAgentsSelector((s) => s.rooms.map((r) => r.id).join(' '));
+  const items = useMemo(() => {
+    const rooms = new Set(roomIds ? roomIds.split(' ') : []);
+    return buildChatItems(listed, {
+      unfolded: liveCopyCard,
+      folds: (roomId) => !roomsLoaded || rooms.has(roomId),
+    });
+  }, [listed, liveCopyCard, roomsLoaded, roomIds]);
   const copyAgent = liveCopyCard ? agent : undefined;
   // Each result's newest version is drawn in full; older ones fold.
   const newestResult = useMemo(() => new Set(newestResults(shown).values()), [shown]);
@@ -531,6 +621,12 @@ export function AgentChat({
     agent.isMain &&
     shown.length > 0 &&
     shown.every((m) => m.kind === 'agent') &&
+    agent.status.state === 'idle';
+  const templateFirstOpen =
+    !agent.isMain &&
+    agent.template !== undefined &&
+    shown.length > 0 &&
+    shown.every((m) => m.kind === 'note') &&
     agent.status.state === 'idle';
   const livePeerLines = useMemo(() => newestPeerGroups(items), [items]);
   const similar = useMemo(() => approvalSeries(items), [items]);
@@ -573,7 +669,7 @@ export function AgentChat({
     for (let i = items.length - 1; i >= 0; i--) {
       const item = items[i];
       if (item.type === 'day') continue;
-      if (item.type === 'peer-group' || !isQueued(item.message, agent)) break;
+      if (item.type !== 'message' || !isQueued(item.message, agent)) break;
       from = i;
     }
     // Leave a day divider that opens the run above the indicator, with its day.
@@ -589,7 +685,7 @@ export function AgentChat({
       const item = items[index];
       if (!item) return false;
       if (item.type === 'day') return arrivedAt(index + 1);
-      return isArrived(item.type === 'peer-group' ? item.messages[0].id : item.message.id);
+      return isArrived(item.type === 'message' ? item.message.id : item.messages[0].id);
     },
     [items, isArrived]
   );
@@ -606,9 +702,9 @@ export function AgentChat({
     ? ''
     : lastItem.type === 'day'
       ? `day-${lastItem.ts}`
-      : lastItem.type === 'peer-group'
-        ? lastItem.messages[0].id
-        : lastItem.message.id;
+      : lastItem.type === 'message'
+        ? lastItem.message.id
+        : lastItem.messages[0].id;
   const lastKeyRef = useRef(lastKey);
   useLayoutEffect(() => {
     const isNew = lastKeyRef.current !== lastKey;
@@ -783,6 +879,43 @@ export function AgentChat({
     inputRef.current?.focus();
   };
 
+  /** Words in the composer, caret at the end, for the user to finish and send. */
+  const typeStarter = (text: string) => {
+    setDraft(text);
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.setSelectionRange(text.length, text.length);
+    });
+  };
+
+  /** "Summarise a document…": the picked file staged, the request typed out, nothing sent. */
+  const startWithDocument = () => {
+    pick({ title: 'Choose a document' })
+      .then((picked) => {
+        if (picked && !draftRef.current.trim()) typeStarter(SUMMARY_PROMPT);
+      })
+      .catch((error: unknown) => toastError(String(error)));
+  };
+  const chiefStarters = (
+    <ChiefStarters
+      onDocument={startWithDocument}
+      onResearch={() => typeStarter(RESEARCH_PROMPT)}
+      onReadyMade={onNewAgent && (() => onNewAgent(ROLE_TEMPLATES[0]?.id))}
+      onImport={compact ? onImport : undefined}
+    />
+  );
+  const template = agent.isMain ? null : templateOf(agent);
+  const templateStarters = template && (
+    <TemplateStarters
+      template={template}
+      engine={agent.engine}
+      onStarter={(s) => (s.send ? sendStarter(s.text) : typeStarter(s.text))}
+      onOpenApps={onOpenApps}
+    />
+  );
+
   const retryFailed = () => {
     if (!retrySource) return;
     sendText(retrySource.text, false, retryExtras(agent, retrySource));
@@ -905,6 +1038,17 @@ export function AgentChat({
           if (item.type === 'day')
             return <DayDivider key={`day-${item.ts}`} ts={item.ts} arrived={arrivedAt(index)} />;
           const arrived = arrivedAt(index);
+          if (item.type === 'room') {
+            return (
+              <RoomFoldLine
+                key={item.messages[0].id}
+                roomId={item.roomId}
+                messages={item.messages}
+                arrived={arrived}
+                onOpenRoom={onOpenAgent}
+              />
+            );
+          }
           if (item.type === 'peer-group') {
             return (
               <PeerGroup
@@ -1033,6 +1177,7 @@ export function AgentChat({
             activity={activity}
             work={work}
             agent={rowAgent}
+            place={inRoom && <RoomWorkingPlace roomId={inRoom} onOpenRoom={onOpenAgent} />}
             entering={indicator.entering}
             leaving={indicator.leaving}
             onExited={indicator.onExited}
@@ -1077,6 +1222,7 @@ export function AgentChat({
       copyAgent,
       newestResult,
       askForChanges,
+      inRoom,
     ]
   );
 
@@ -1188,12 +1334,7 @@ export function AgentChat({
                       Tell me what you’re working on and I’ll put a team together. I create agents,
                       hand them the work, and bring you what comes back.
                     </p>
-                    {engineReady && (
-                      <ChiefStarters
-                        onStart={sendStarter}
-                        onImport={compact ? onImport : undefined}
-                      />
-                    )}
+                    {engineReady && chiefStarters}
                   </>
                 ) : (
                   <>
@@ -1205,7 +1346,8 @@ export function AgentChat({
                     <TextButton tabIndex={0} onClick={() => actions.onEdit(agent)}>
                       View instructions
                     </TextButton>
-                    {engineReady && (
+                    {engineReady && templateStarters}
+                    {engineReady && !template && (
                       <div className="agent-chat__starters">
                         {AGENT_STARTERS.map((text) => (
                           <Button
@@ -1227,9 +1369,10 @@ export function AgentChat({
             )}
             {/* The Chief spoke first (its stored greeting); the ways in sit
               under it until the user says something. */}
-            {greetingOnly && engineReady && (
-              <ChiefStarters onStart={sendStarter} onImport={compact ? onImport : undefined} />
-            )}
+            {greetingOnly && engineReady && chiefStarters}
+            {/* A ready-made agent the Chief just made: only "Created by" so
+              far, so its own starters sit under it until the user speaks. */}
+            {templateFirstOpen && engineReady && templateStarters}
             {engineReady && (
               <AgentInlineRequests
                 agent={agent}

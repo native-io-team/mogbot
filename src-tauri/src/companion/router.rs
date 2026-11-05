@@ -34,6 +34,7 @@ pub const METHODS: &[&str] = &[
     "agents.markUnread",
     "agents.startFresh",
     "agents.create",
+    "agents.templates",
     "agents.update",
     "agents.revokePermission",
     "agents.instructions",
@@ -54,6 +55,10 @@ pub const METHODS: &[&str] = &[
     "agents.schedule.pause",
     "agents.schedule.cancel",
     "agents.schedule.runNow",
+    "rooms.list",
+    "rooms.messages",
+    "rooms.send",
+    "rooms.focus",
     "projects.list",
     "sessions.read",
     "sessions.send",
@@ -72,10 +77,13 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.memory",
     "agents.usage",
     "agents.quota",
+    "agents.templates",
     "agents.changeDiff",
     "agents.files",
     "agents.search",
     "agents.schedule.preview",
+    "rooms.list",
+    "rooms.messages",
     "projects.list",
     "sessions.read",
 ];
@@ -102,6 +110,16 @@ pub struct SendExtras {
     pub client_id: Option<String>,
     /// "Ask for changes": the result this message asks to revise.
     pub revises: Option<String>,
+}
+
+/// What `rooms.send` carries besides the room and the text.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RoomSend {
+    /// Agent ids the user @mentioned.
+    pub mentions: Vec<String>,
+    /// `@everyone`: every member answers.
+    pub everyone: bool,
+    pub client_id: Option<String>,
 }
 
 /// The schedule commands, one variant each.
@@ -165,9 +183,11 @@ pub struct AgentToggles {
 const MAX_INSTRUCTIONS: usize = 20_000;
 
 /// What the phone may set on a new agent: what it should do, its name and
-/// its colour. Everything else is the desk's create path's own default: the
-/// engine the desk would pick, the engine's own model, no project, and no
-/// instructions beyond the role (the agent sheet edits those afterwards).
+/// its colour, and optionally the ready-made agent it starts from (whose
+/// briefing then becomes its instructions). Everything else is the desk's
+/// create path's own default: the engine the desk would pick, the engine's
+/// own model, no project, and no instructions beyond the role or template
+/// (the agent sheet edits those afterwards).
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PhoneNewAgent {
@@ -176,6 +196,9 @@ pub struct PhoneNewAgent {
     pub role: String,
     #[serde(default)]
     pub color: Option<String>,
+    /// An id from `agents.templates`.
+    #[serde(default)]
+    pub template: Option<String>,
 }
 
 /// "What should it do?" is one line, as the desk's field is.
@@ -192,6 +215,26 @@ pub fn free_color(taken: &[String]) -> &'static str {
         .copied()
         .find(|c| *c != "white" && *c != "gray" && !taken.iter().any(|t| t == c))
         .unwrap_or("purple")
+}
+
+/// `agents.templates`: each ready-made agent as the phone's New agent sheet
+/// offers it.
+fn templates_for_phone() -> Value {
+    Value::Array(
+        crate::agents::templates::all()
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "id": t.id,
+                    "title": t.title,
+                    "name": t.name,
+                    "role": t.role,
+                    "color": t.color,
+                    "needs": t.needs,
+                })
+            })
+            .collect(),
+    )
 }
 
 /// A name and a role, checked and tidied: one line each, no control
@@ -229,7 +272,23 @@ fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
         Some(c) if crate::agents::store::COLORS.contains(&c) => Some(c.to_string()),
         Some(c) => return Err(bad_params(format!("{c} isn't one of the agent colours."))),
     };
-    Ok(PhoneNewAgent { name, role, color })
+    let template = match input.template.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(id) => match crate::agents::templates::find(id) {
+            Some(t) => Some(t.id.clone()),
+            None => {
+                return Err(bad_params(format!(
+                    "{id} isn't one of the ready-made agents."
+                )))
+            }
+        },
+    };
+    Ok(PhoneNewAgent {
+        name,
+        role,
+        color,
+        template,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -347,6 +406,25 @@ pub trait Backend: Send + Sync + 'static {
     ) -> Result<std::path::PathBuf, CommandError>;
     async fn search(&self, query: String) -> Result<Value, CommandError>;
     async fn schedule(&self, op: ScheduleOp) -> Result<Value, CommandError>;
+    /// `agents_rooms`: every room, with what is happening in it now.
+    async fn rooms(&self) -> Result<Value, CommandError>;
+    /// A page of a room's thread, oldest first, ending just before `before`.
+    /// The flag: older lines exist.
+    async fn room_messages(
+        &self,
+        room_id: &str,
+        limit: usize,
+        before: Option<&str>,
+    ) -> Result<(Vec<Value>, bool), CommandError>;
+    /// `agents_room_send`: returns `{message, asked}`.
+    async fn room_send(
+        &self,
+        room_id: &str,
+        text: String,
+        send: RoomSend,
+    ) -> Result<Value, CommandError>;
+    /// `agents_room_focus` for a socket instead of a window.
+    async fn room_focus(&self, label: &str, room_id: Option<String>) -> Result<(), CommandError>;
     /// Every project as `ProjectSummary[]`.
     async fn projects(&self) -> Result<Value, CommandError>;
     /// One agent tab's screen as a `SessionScreen`.
@@ -433,6 +511,8 @@ pub struct Caller {
     /// wrong server is the phone's: it sends one only on a socket whose
     /// `welcome` was signed by the identity key it pinned at pairing.
     pub route: super::wire::RouteKind,
+    /// What its app said it shows (`hello.features`).
+    pub shows: super::wire::Shows,
 }
 
 /// Remote Access's refusals for text that becomes an agent's words later
@@ -626,6 +706,32 @@ struct SendParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct RoomMessagesParams {
+    room_id: String,
+    limit: Option<usize>,
+    before: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RoomSendParams {
+    room_id: String,
+    text: String,
+    client_id: String,
+    #[serde(default)]
+    mentions: Vec<String>,
+    #[serde(default)]
+    everyone: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RoomFocusParams {
+    room_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ApprovalParams {
     agent_id: String,
     request_id: String,
@@ -669,6 +775,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
     let preview = crate::remote_access::preview;
     match method {
         "agents.send" | "sessions.send" => preview(field("text")),
+        "rooms.send" => preview(&format!("in a room: {}", field("text"))),
+        "rooms.focus" => field("roomId").to_string(),
         "sessions.key" => format!("pressed {}", field("key")),
         "agents.memorySuggest" => format!(
             "suggest a memory from {} chars",
@@ -885,6 +993,42 @@ async fn run(
                 })
                 .await
         }
+        "rooms.list" => Ok(b.rooms().await?),
+        "rooms.messages" => {
+            let p: RoomMessagesParams = parse(params)?;
+            let as_of = c.hub.cursor();
+            let limit = p.limit.unwrap_or(MESSAGES_DEFAULT).clamp(1, MESSAGES_MAX);
+            let (messages, more) = b
+                .room_messages(&p.room_id, limit, p.before.as_deref())
+                .await?;
+            Ok(json!({ "messages": messages, "asOf": as_of, "more": more }))
+        }
+        "rooms.send" => {
+            let p: RoomSendParams = parse(params)?;
+            let client_id = p.client_id.trim().to_string();
+            if client_id.is_empty() || client_id.len() > 128 {
+                return Err(bad_params("clientId is required (at most 128 characters)."));
+            }
+            let key = format!("{}:room:{client_id}", caller.device_id);
+            c.sends
+                .once(key, now_ms(), || async move {
+                    // The same refusals as a message to one agent.
+                    let text = crate::remote_access::tools::clean_agent_text(&p.text, "message")
+                        .map_err(|reason| WireError::protocol(ProtocolCode::Refused, reason))?;
+                    let send = RoomSend {
+                        mentions: p.mentions,
+                        everyone: p.everyone,
+                        client_id: Some(client_id),
+                    };
+                    Ok(b.room_send(&p.room_id, text, send).await?)
+                })
+                .await
+        }
+        "rooms.focus" => {
+            let p: RoomFocusParams = parse(params)?;
+            b.room_focus(&caller.label, p.room_id).await?;
+            Ok(Value::Null)
+        }
         "agents.stop" => {
             let p: AgentParam = parse(params)?;
             Ok(Value::Bool(b.stop(&p.agent_id).await?))
@@ -982,7 +1126,7 @@ async fn run(
         "agents.create" => {
             let p: CreateParams = parse(params).map_err(|_| {
                 bad_params(
-                    "From the phone, a new agent takes a name, what it should do and a colour.",
+                    "From the phone, a new agent takes a name, what it should do, a colour and a ready-made agent to start from.",
                 )
             })?;
             let input = check_new_agent(p.input)?;
@@ -1064,6 +1208,9 @@ async fn run(
             Ok(b.usage(&p.agent_id).await?)
         }
         "agents.quota" => Ok(b.quota().await?),
+        // The ready-made agents, without their briefings: the phone shows
+        // the choice, the Mac fills the instructions in on create.
+        "agents.templates" => Ok(templates_for_phone()),
         "agents.revokePermission" => {
             let p: RuleParams = parse(params)?;
             b.revoke_permission(&p.agent_id, &p.rule_id).await?;
@@ -1091,7 +1238,10 @@ async fn run(
         }
         "agents.search" => {
             let p: QueryParams = parse(params)?;
-            Ok(b.search(p.query).await?)
+            Ok(super::wire::search_for_app(
+                b.search(p.query).await?,
+                caller.shows,
+            ))
         }
         "agents.schedule.preview" => {
             let p: WhenParams = parse(params)?;
@@ -1287,6 +1437,7 @@ mod tests {
             device_name: "Test Phone".into(),
             label: format!("companion:{device}:1"),
             route: crate::companion::wire::RouteKind::Tailscale,
+            shows: Default::default(),
         }
     }
 
@@ -1496,6 +1647,49 @@ mod tests {
             .audited()
             .iter()
             .any(|(_, m, _, ok)| m == "agents.create" && !ok));
+    }
+
+    #[tokio::test]
+    async fn a_phone_can_start_from_a_ready_made_agent() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        // What the sheet offers: every template, without its briefing.
+        let list = dispatch(&c, &me, "agents.templates", json!({}))
+            .await
+            .unwrap();
+        let list = list.as_array().unwrap();
+        assert_eq!(list.len(), crate::agents::templates::all().len());
+        assert!(list.iter().all(|t| t.get("instructions").is_none()));
+        assert!(list
+            .iter()
+            .any(|t| t["id"] == "inbox" && t["needs"] == "mail"));
+        assert!(READ_ONLY_METHODS.contains(&"agents.templates"));
+        // An unknown one is refused before the desk sees it.
+        let refused = dispatch(
+            &c,
+            &me,
+            "agents.create",
+            json!({ "input": { "name": "Ops", "template": "astrologer" } }),
+        )
+        .await
+        .unwrap_err();
+        assert!(refused
+            .summary()
+            .contains("isn't one of the ready-made agents"));
+        assert!(stub.created.lock().unwrap().is_empty());
+        dispatch(
+            &c,
+            &me,
+            "agents.create",
+            json!({ "input": { "name": "Research", "role": "Looks things up", "template": " research " } }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            stub.created.lock().unwrap()[0].template.as_deref(),
+            Some("research")
+        );
     }
 
     #[tokio::test]

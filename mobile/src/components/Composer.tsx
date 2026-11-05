@@ -63,8 +63,8 @@ import {
 import { admit, pickDocuments, pickPhotos, takePhoto, type PickedFile } from '../lib/files';
 import { haptic } from '../lib/haptics';
 import { OUTBOX_WAIT_MS } from '../lib/outbox';
-import { canCall, describeError, send, stop, upload } from '../lib/session';
-import { getApp, useApp } from '../lib/store';
+import { describeError, send, stop, upload } from '../lib/session';
+import { getApp, useApp, useServed } from '../lib/store';
 import {
   avatarSize,
   chromeScale,
@@ -79,7 +79,7 @@ import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AgentAvatar } from './agent';
 import { StagedTile, type Staged } from './attachments';
 import { choose } from './menu';
-import { Icon, useRipple, T } from './ui';
+import { DISABLED_OPACITY, Icon, useRipple, T } from './ui';
 
 const NONE: Agent[] = [];
 
@@ -113,7 +113,8 @@ export function Composer({
   const { fontScale } = useWindowDimensions();
   const draft = useComposerDraft(agent.id);
   const [staged, setStaged] = useState<Staged[]>([]);
-  const canAttach = useApp((s) => canCall('agents.files', s.welcome));
+  // The Mac's last answer while it's away: "+" stays, disabled, so the field doesn't jump.
+  const canAttach = useServed('agents.files');
   const team = useApp((s) => s.overview?.agents ?? NONE);
   const seq = useRef(0);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
@@ -347,7 +348,7 @@ export function Composer({
           entering={FadeIn.duration(150)}
           exiting={FadeOut.duration(100)}
           layout={LinearTransition.duration(150)}
-          style={styles.hintRow}
+          style={[styles.hintRow, !canAttach && { marginLeft: composer.padLeft }]}
         >
           <T variant="caption" color={colors.textSecondary} style={styles.hint}>
             {hint}
@@ -633,7 +634,8 @@ export function RoundButton({
                       ? colors.surfaceSelected
                       : 'transparent',
               },
-              disabled && tone !== 'off' && field.off,
+              // Disabled reads one way everywhere: as the + beside it does.
+              disabled && field.off,
               pressed && { transform: [{ scale: 0.92 }] },
             ]}
           >
@@ -708,7 +710,7 @@ const useFieldStyles = makeStyles((colors) => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.composerBorder,
   },
-  off: { opacity: 0.4 },
+  off: { opacity: DISABLED_OPACITY },
 }));
 
 const useStyles = makeStyles((colors) => ({
@@ -722,7 +724,8 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    marginLeft: space.md,
+    // Under the field's text, as the quote is: past the + and the gap, then the field's inset.
+    marginLeft: composer.attach + space.sm + composer.padLeft,
     marginRight: space.xs,
   },
   hint: { flex: 1 },

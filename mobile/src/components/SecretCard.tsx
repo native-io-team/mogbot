@@ -21,11 +21,12 @@ import {
   saveSecret,
   secretRouteProblem,
 } from '../lib/session';
+import { folderName } from '../lib/agents';
 import { useApp } from '../lib/store';
 import { CARD_TITLE_SCALE, fonts, space } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { ARM_MS, Receipt, useCardStyles, useArmed } from './ApprovalCard';
-import { ACTION, Card, CardActions } from './surfaces';
+import { ACTION, Card, CardActions, OFFLINE_NOTE } from './surfaces';
 import { Button, T } from './ui';
 
 /** `$STRIPE_KEY`, or `$BANK_USERNAME, $BANK_PASSWORD`: what the agent gets. */
@@ -141,114 +142,128 @@ export function SecretCard({
     );
   }
 
+  const connected = link.kind === 'connected';
+  const project = agent.project ? folderName(agent.project) : null;
+  const purpose = (
+    <T variant="small" color={colors.textBody} maxFontSizeMultiplier={2}>
+      {request.purpose}
+    </T>
+  );
+
+  if (problem) {
+    // Nothing can be typed here: say why in the note, and leave Deny where an
+    // answer goes (right, its own width). Offline it stays, disabled.
+    return (
+      <Card
+        icon="lock.fill"
+        title={`${agent.name} asks for “${request.name}”`}
+        source={project ? `In ${project}` : undefined}
+        note={connected ? problem : OFFLINE_NOTE}
+        actions={
+          <Button
+            title="Deny"
+            variant="outline"
+            busy={busy === 'deny'}
+            disabled={!connected || !!busy}
+            onPress={() => void deny()}
+          />
+        }
+      >
+        {purpose}
+      </Card>
+    );
+  }
+
   return (
     <Card
       icon="lock.fill"
       title={`${agent.name} asks for “${request.name}”`}
-      source={request.purpose}
+      source={project ? `In ${project}` : undefined}
     >
-      {problem ? (
-        <View style={{ gap: space.md }}>
-          <T variant="small" color={colors.textSecondary} maxFontSizeMultiplier={2}>
-            {problem}
-          </T>
-          {link.kind === 'connected' && (
-            <CardActions>
-              <Button
-                title="Deny"
-                variant="outline"
-                busy={busy === 'deny'}
-                onPress={() => void deny()}
-                style={ACTION}
-              />
-            </CardActions>
-          )}
-        </View>
-      ) : (
-        <Animated.View
-          entering={FadeIn.duration(ARM_MS)}
-          exiting={FadeOut.duration(120)}
-          pointerEvents={armed ? 'auto' : 'none'}
-          accessibilityElementsHidden={!armed}
-          importantForAccessibility={armed ? 'auto' : 'no-hide-descendants'}
-          style={{ gap: space.md }}
-        >
-          {request.fields.map((field, i) => (
-            <View key={field.env} style={{ gap: space.tight }}>
-              <T
-                variant="small"
-                color={colors.textSecondary}
-                style={{ fontFamily: fonts.medium }}
-                maxFontSizeMultiplier={CARD_TITLE_SCALE}
-              >
-                {field.label}
-              </T>
-              <TextInput
-                ref={(r) => {
-                  inputs.current[i] = r;
-                }}
-                secureTextEntry
-                // Not offered to the system's password manager: it would keep a copy.
-                textContentType="none"
-                autoComplete="off"
-                importantForAutofill="no"
-                autoCorrect={false}
-                autoCapitalize="none"
-                spellCheck={false}
-                editable={!busy}
-                keyboardAppearance={appearance}
-                accessibilityLabel={field.label}
-                onChangeText={(v) => {
-                  values.current[i] = v;
-                  const has = v.trim().length > 0;
-                  setFilled((f) => (f[i] === has ? f : f.map((x, j) => (j === i ? has : x))));
-                }}
-                returnKeyType={i === request.fields.length - 1 ? 'done' : 'next'}
-                onSubmitEditing={() =>
-                  i < request.fields.length - 1 ? inputs.current[i + 1]?.focus() : void save()
-                }
-                placeholderTextColor={colors.textMuted}
-                style={[cardStyles.input, styles.secret]}
-              />
-            </View>
-          ))}
-          {/* The card's note: what happens to it, before the answers. */}
-          <T
-            variant="small"
-            color={colors.textMuted}
-            maxFontSizeMultiplier={CARD_TITLE_SCALE}
-            testID="card-note"
-          >
-            Kept in your Mac’s Keychain for {agent.name} only. It gets {secretVars(request)}, never
-            the value, and this phone keeps nothing.
-          </T>
-          {error && (
-            <T variant="small" color={colors.accentErrorLight}>
-              {error}
+      {purpose}
+      <Animated.View
+        entering={FadeIn.duration(ARM_MS)}
+        exiting={FadeOut.duration(120)}
+        pointerEvents={armed ? 'auto' : 'none'}
+        accessibilityElementsHidden={!armed}
+        importantForAccessibility={armed ? 'auto' : 'no-hide-descendants'}
+        style={{ gap: space.md }}
+      >
+        {request.fields.map((field, i) => (
+          <View key={field.env} style={{ gap: space.tight }}>
+            <T
+              variant="small"
+              color={colors.textSecondary}
+              style={{ fontFamily: fonts.medium }}
+              maxFontSizeMultiplier={CARD_TITLE_SCALE}
+            >
+              {field.label}
             </T>
-          )}
-          <CardActions>
-            <Button
-              title="Deny"
-              variant="outline"
-              busy={busy === 'deny'}
-              disabled={!!busy || link.kind !== 'connected'}
-              onPress={() => void deny()}
-              style={ACTION}
+            <TextInput
+              ref={(r) => {
+                inputs.current[i] = r;
+              }}
+              secureTextEntry
+              // Not offered to the system's password manager: it would keep a copy.
+              textContentType="none"
+              autoComplete="off"
+              importantForAutofill="no"
+              autoCorrect={false}
+              autoCapitalize="none"
+              spellCheck={false}
+              editable={!busy}
+              keyboardAppearance={appearance}
+              accessibilityLabel={field.label}
+              onChangeText={(v) => {
+                values.current[i] = v;
+                const has = v.trim().length > 0;
+                setFilled((f) => (f[i] === has ? f : f.map((x, j) => (j === i ? has : x))));
+              }}
+              returnKeyType={i === request.fields.length - 1 ? 'done' : 'next'}
+              onSubmitEditing={() =>
+                i < request.fields.length - 1 ? inputs.current[i + 1]?.focus() : void save()
+              }
+              placeholderTextColor={colors.textMuted}
+              style={[cardStyles.input, styles.secret]}
             />
-            <Button
-              title="Save"
-              // The filled answer is the neutral one on every card, like Allow.
-              variant="answer"
-              busy={busy === 'save'}
-              disabled={!!busy || !filled.every(Boolean)}
-              focusable={armed}
-              onPress={() => void save()}
-              style={ACTION}
-            />
-          </CardActions>
-        </Animated.View>
-      )}
+          </View>
+        ))}
+        {/* The card's note: what happens to it, before the answers. */}
+        <T
+          variant="small"
+          color={colors.textMuted}
+          maxFontSizeMultiplier={CARD_TITLE_SCALE}
+          testID="card-note"
+        >
+          Kept in your Mac’s Keychain for {agent.name} only. It gets {secretVars(request)}, never
+          the value, and this phone keeps nothing.
+        </T>
+        {error && (
+          <T variant="small" color={colors.accentErrorLight}>
+            {error}
+          </T>
+        )}
+        <CardActions>
+          <Button
+            title="Deny"
+            variant="outline"
+            busy={busy === 'deny'}
+            disabled={!!busy || link.kind !== 'connected'}
+            onPress={() => void deny()}
+            style={ACTION}
+          />
+          <Button
+            title="Save"
+            // The filled answer is the neutral one on every card, like Allow.
+            variant="answer"
+            busy={busy === 'save'}
+            disabled={!!busy || !filled.every(Boolean)}
+            focusable={armed}
+            onPress={() => void save()}
+            style={ACTION}
+          />
+        </CardActions>
+      </Animated.View>
     </Card>
   );
 }

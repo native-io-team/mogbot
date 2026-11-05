@@ -34,6 +34,12 @@ pub struct SearchHit {
     pub peer_name: Option<String>,
     /// The text around the first match, whitespace collapsed, with `…` where cut.
     pub snippet: String,
+    /// Said in a room: the hit opens the room, not the agent's chat. The
+    /// agent fields are then who said it (empty for the user's own line).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub room_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub room_name: Option<String>,
 }
 
 /// The words of a query, lowercased. Empty when there's nothing to search for.
@@ -206,12 +212,67 @@ impl Prefilter {
 /// doesn't parse.
 fn search_agent(
     agent: &store::Agent,
+    rooms: &[String],
     terms: &[Vec<char>],
     limit: usize,
 ) -> Result<Vec<SearchHit>, CommandError> {
-    use std::io::{Read, Seek, SeekFrom};
     let path = store::agent_home(&agent.id)?.join("messages.jsonl");
-    let mut file = match std::fs::File::open(&path) {
+    // A line said in a room is found in the room (its copy there), once;
+    // here only when that room is gone, with nowhere else to find it.
+    scan_log(&path, terms, limit, |message, snippet| {
+        let elsewhere = message.room.as_ref().is_some_and(|r| rooms.contains(r));
+        (!elsewhere).then(|| SearchHit {
+            agent_id: agent.id.clone(),
+            agent_name: agent.name.clone(),
+            agent_color: agent.color.clone(),
+            peer_name: message.peer.as_ref().map(|p| p.name.clone()),
+            message_id: message.id.clone(),
+            ts: message.ts,
+            kind: message.kind,
+            snippet,
+            room_id: None,
+            room_name: None,
+        })
+    })
+}
+
+/// One room's hits, newest first, at most `limit`: the user's lines and
+/// what its members said there.
+fn search_room(
+    room: &super::rooms::Room,
+    agents: &[store::Agent],
+    terms: &[Vec<char>],
+    limit: usize,
+) -> Result<Vec<SearchHit>, CommandError> {
+    let path = super::rooms::rooms_root()?
+        .join(&room.id)
+        .join("messages.jsonl");
+    scan_log(&path, terms, limit, |message, snippet| {
+        let speaker = agents.iter().find(|a| a.id == message.agent_id);
+        Some(SearchHit {
+            agent_id: message.agent_id.clone(),
+            agent_name: speaker.map(|a| a.name.clone()).unwrap_or_default(),
+            agent_color: speaker.map(|a| a.color.clone()).unwrap_or_default(),
+            peer_name: message.peer.as_ref().map(|p| p.name.clone()),
+            message_id: message.id.clone(),
+            ts: message.ts,
+            kind: message.kind,
+            snippet,
+            room_id: Some(room.id.clone()),
+            room_name: Some(room.name.clone()),
+        })
+    })
+}
+
+/// Hits in one log, newest first, read from its end in growing chunks.
+fn scan_log(
+    path: &std::path::Path,
+    terms: &[Vec<char>],
+    limit: usize,
+    hit: impl Fn(&AgentMessage, String) -> Option<SearchHit>,
+) -> Result<Vec<SearchHit>, CommandError> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = match std::fs::File::open(path) {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(super::err_io(e.to_string())),
@@ -255,17 +316,10 @@ fn search_agent(
             let Ok(message) = serde_json::from_str::<AgentMessage>(line) else {
                 continue;
             };
-            if let Some(snippet) = match_message(&message, terms) {
-                hits.push(SearchHit {
-                    agent_id: agent.id.clone(),
-                    agent_name: agent.name.clone(),
-                    agent_color: agent.color.clone(),
-                    peer_name: message.peer.as_ref().map(|p| p.name.clone()),
-                    message_id: message.id,
-                    ts: message.ts,
-                    kind: message.kind,
-                    snippet,
-                });
+            if let Some(found) =
+                match_message(&message, terms).and_then(|snippet| hit(&message, snippet))
+            {
+                hits.push(found);
             }
         }
         chunk = chunk.saturating_mul(2).min(8 * 1024 * 1024);
@@ -285,6 +339,12 @@ pub fn search_in(
     if terms.is_empty() {
         return Ok(Vec::new());
     }
+    let rooms: Vec<String> = super::rooms::list()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|r| r.id)
+        .collect();
+    let rooms = &rooms;
     // Each agent's newest `limit` are all that could make the cut; agents are
     // read a few at a time, in order, so the merge below is deterministic.
     let threads = std::thread::available_parallelism()
@@ -299,7 +359,7 @@ pub fn search_in(
                 scope.spawn(move || {
                     let mut hits = Vec::new();
                     for agent in group {
-                        match search_agent(agent, terms, limit) {
+                        match search_agent(agent, rooms, terms, limit) {
                             Ok(mut found) => hits.append(&mut found),
                             Err(e) => tracing::warn!("[Agents] search skipped {}: {e}", agent.id),
                         }
@@ -322,7 +382,37 @@ pub fn search_in(
 }
 
 pub fn search(query: &str) -> Result<Vec<SearchHit>, CommandError> {
-    search_in(&store::list()?, query, MAX_HITS)
+    let agents = store::list()?;
+    let mut hits = search_in(&agents, query, MAX_HITS)?;
+    let rooms = super::rooms::list().unwrap_or_default();
+    hits.extend(search_rooms_in(&rooms, &agents, query, MAX_HITS)?);
+    hits.sort_by(|a, b| b.ts.cmp(&a.ts));
+    hits.truncate(MAX_HITS);
+    Ok(hits)
+}
+
+/// Search the given rooms' threads, newest first. A room whose thread can't
+/// be read is left out.
+pub fn search_rooms_in(
+    rooms: &[super::rooms::Room],
+    agents: &[store::Agent],
+    query: &str,
+    limit: usize,
+) -> Result<Vec<SearchHit>, CommandError> {
+    let terms = terms(query);
+    if terms.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut hits = Vec::new();
+    for room in rooms {
+        match search_room(room, agents, &terms, limit) {
+            Ok(mut found) => hits.append(&mut found),
+            Err(e) => tracing::warn!("[Agents] search skipped room {}: {e}", room.id),
+        }
+    }
+    hits.sort_by(|a, b| b.ts.cmp(&a.ts));
+    hits.truncate(limit);
+    Ok(hits)
 }
 
 #[cfg(test)]
@@ -375,6 +465,7 @@ mod tests {
             result: None,
             revises: None,
             takeover: false,
+            room: None,
         })
         .unwrap();
         id
@@ -450,6 +541,7 @@ mod tests {
                 result: None,
                 revises: None,
                 takeover: false,
+                room: None,
             })
             .unwrap();
             let found = search_in(&store::list().unwrap(), "deploy", 50).unwrap();
@@ -568,6 +660,7 @@ mod tests {
             result: None,
             revises: None,
             takeover: false,
+            room: None,
         };
         assert!(match_message(&message, &terms("müller")).is_some());
         assert!(match_message(&message, &terms("müller schmidt")).is_none());

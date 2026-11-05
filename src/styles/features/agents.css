@@ -711,6 +711,18 @@
   margin-top: var(--spacing-sm);
 }
 
+/* A ready-made agent's own starters, under its centred "Created by" line or
+   its empty state: centred with them, not hung off a bubble. */
+.agent-chat__messages > .agent-chat__starters--centred {
+  justify-content: center;
+  max-width: none;
+}
+
+/* What a ready-made agent can't work without, with the way to connect it. */
+.agent-chat__needs {
+  margin-top: var(--spacing-md);
+}
+
 /* Only the Chief's greeting so far: it and its starters sit in the middle of
    the page, as an empty state, rather than at the foot of an empty screen. */
 .agent-chat__messages[data-greeting] {
@@ -1291,6 +1303,13 @@
   height: 5px; /* css-ok: typing-dot geometry */
   background: var(--text-muted);
   border-radius: var(--radius-pill);
+}
+
+.agent-working__place {
+  flex-shrink: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .agent-working__activity {
@@ -1907,6 +1926,11 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-md);
+}
+
+/* "Start from": a ready-made agent that needs an app says so under the choice. */
+.agent-editor__needs {
+  margin-top: var(--spacing-2xs);
 }
 
 .modal-frame-content.agent-apps {

@@ -10,7 +10,9 @@ use serde_json::{json, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
-use super::router::{AgentToggles, ApprovalAnswer, Backend, PhoneNewAgent, ScheduleOp, SendExtras};
+use super::router::{
+    AgentToggles, ApprovalAnswer, Backend, PhoneNewAgent, RoomSend, ScheduleOp, SendExtras,
+};
 use super::wire::{ClaudeInfo, Event, Known, MacStatus, PowerInfo, Route, RouteKind};
 use super::{Companion, Registry};
 use crate::agents::store::{Agent, AgentMessage};
@@ -109,6 +111,52 @@ pub fn stored_agent() -> Agent {
         }),
         &["usage"],
     )
+}
+
+/// The stub's one room: Finance (the stub agent) and Ops, no lead, so a
+/// message that names nobody is refused ("Who should answer?").
+pub const ROOM: &str = "r1";
+
+pub fn room() -> crate::agents::rooms::RoomView {
+    crate::agents::rooms::RoomView {
+        room: crate::agents::rooms::Room {
+            id: ROOM.into(),
+            name: "Month end".into(),
+            members: vec![AGENT.into(), "a2".into()],
+            lead: None,
+            muted: false,
+            created_at: 1_762_280_000_000,
+            last_activity_at: 1_762_290_004_000,
+            preview: Some("Ops: Filed.".into()),
+            unread: 1,
+            extra: Default::default(),
+        },
+        turns_used: 2,
+        turn_cap: crate::agents::rooms::TURN_CAP,
+        waiting: vec!["a2".into()],
+    }
+}
+
+/// The room's thread: the user's message (no agent), each member's reply,
+/// a member's card, and a room note.
+pub fn room_messages() -> Vec<AgentMessage> {
+    let at = |n: i64| 1_762_290_000_000_i64 + n * 1_000;
+    let finance = json!({ "id": AGENT, "name": "Finance" });
+    let ops = json!({ "id": "a2", "name": "Ops" });
+    [
+        json!({ "id": "rm1", "agentId": "", "room": ROOM, "ts": at(1), "kind": "user",
+                "text": "@everyone where are we on month end?", "mentions": [finance, ops] }),
+        json!({ "id": "rm2", "agentId": AGENT, "room": ROOM, "ts": at(2), "kind": "agent",
+                "text": "Invoices are reconciled. @Ops can you file them?" }),
+        json!({ "id": "rm3", "agentId": "a2", "room": ROOM, "ts": at(3), "kind": "approval", "text": "",
+                "approval": { "requestId": "rq1", "title": "Run a command", "detail": "npm run file", "status": "pending" } }),
+        json!({ "id": "rm4", "agentId": "a2", "room": ROOM, "ts": at(4), "kind": "agent", "text": "Filed." }),
+        json!({ "id": "rm5", "agentId": "", "room": ROOM, "ts": at(5), "kind": "note",
+                "text": "8 replies for one message, so nobody else was asked. Mention someone to carry on." }),
+    ]
+    .into_iter()
+    .map(|m| serde_json::from_value(m).expect("a room line"))
+    .collect()
 }
 
 /// One message of every kind, covering every optional field and enum variant.
@@ -334,6 +382,7 @@ pub fn overview() -> Value {
         since: Some(1_762_290_000_000),
         // The overview never carries a timeline to the phone (`phone_overview`).
         work: Some(live_work()),
+        room: None,
     };
     let view = crate::commands::agents::AgentView {
         agent: stored_agent(),
@@ -523,6 +572,7 @@ fn status(state: &'static str) -> Value {
         activity: (state == "working").then(|| "Thinking".to_string()),
         since: None,
         work: None,
+        room: None,
     })
     .unwrap()
 }
@@ -699,6 +749,84 @@ impl Backend for Stub {
 
     async fn focus(&self, label: &str, agent_id: Option<String>) -> Result<(), CommandError> {
         self.focus.lock().unwrap().push((label.into(), agent_id));
+        Ok(())
+    }
+
+    async fn rooms(&self) -> Result<Value, CommandError> {
+        Ok(serde_json::to_value(vec![room()]).unwrap())
+    }
+
+    async fn room_messages(
+        &self,
+        room_id: &str,
+        limit: usize,
+        before: Option<&str>,
+    ) -> Result<(Vec<Value>, bool), CommandError> {
+        if room_id != ROOM {
+            return Err(CommandError::expected("That room no longer exists."));
+        }
+        let all = room_messages();
+        let end = before
+            .and_then(|id| all.iter().position(|m| m.id == id))
+            .unwrap_or(all.len());
+        let start = end.saturating_sub(limit);
+        let page = all[start..end]
+            .iter()
+            .map(|m| serde_json::to_value(m).unwrap())
+            .collect();
+        Ok((page, start > 0))
+    }
+
+    async fn room_send(
+        &self,
+        room_id: &str,
+        text: String,
+        send: RoomSend,
+    ) -> Result<Value, CommandError> {
+        use crate::agents::store::{AgentRef, MessageKind};
+        if room_id != ROOM {
+            return Err(CommandError::expected("That room no longer exists."));
+        }
+        // The desk's own routing: named members, everyone, else the lead (none here).
+        let r = room();
+        let asked = crate::agents::rooms::resolve(&r.room, &send.mentions, send.everyone).map_err(
+            |_| {
+                crate::agents::err_invalid(
+                    "mentions",
+                    "Who should answer? Mention someone, or @everyone.",
+                )
+            },
+        )?;
+        let n = self.sends.fetch_add(1, Ordering::SeqCst) + 1;
+        let mut mine = crate::agents::runner::new_message("", MessageKind::User, text);
+        mine.id = format!("ru{n}");
+        // A fixed time, so the fixture it becomes never changes.
+        mine.ts = 1_762_290_006_000;
+        mine.room = Some(ROOM.into());
+        mine.client_id = send.client_id;
+        mine.mentions = asked
+            .iter()
+            .map(|id| AgentRef {
+                id: id.clone(),
+                name: if id == AGENT {
+                    "Finance".into()
+                } else {
+                    "Ops".into()
+                },
+            })
+            .collect();
+        let message = serde_json::to_value(&mine).unwrap();
+        self.hub().hub.publish(Event::Message {
+            message: message.clone(),
+        });
+        Ok(serde_json::json!({ "message": message, "asked": mine.mentions }))
+    }
+
+    async fn room_focus(&self, label: &str, room_id: Option<String>) -> Result<(), CommandError> {
+        self.focus
+            .lock()
+            .unwrap()
+            .push((label.into(), room_id.map(|id| format!("room:{id}"))));
         Ok(())
     }
 
@@ -937,6 +1065,8 @@ impl Backend for Stub {
                 kind: m.kind,
                 peer_name: m.peer.as_ref().map(|p| p.name.clone()),
                 snippet: m.text.clone(),
+                room_id: None,
+                room_name: None,
             })
             .collect();
         Ok(serde_json::to_value(hits).unwrap())

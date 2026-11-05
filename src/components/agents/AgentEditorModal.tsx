@@ -1,5 +1,7 @@
 /**
- * Create a new agent, or edit one. Up front: a name, what it should do and
+ * Create a new agent, or edit one. Creating starts with "Start from": blank,
+ * or a ready-made agent (`lib/agentTemplates`) that fills in the fields below
+ * with its briefing, which stays editable. Up front: a name, what it should do and
  * what it should know. Colour, what it runs on (a choice only once two
  * engines are installed; otherwise a quiet "Also use …" at the foot), model,
  * project and apps sit under Advanced, because most agents are created by
@@ -54,6 +56,13 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { AccentScope } from '../../contexts/AccentScopeContext';
+import {
+  findTemplate,
+  needsLine,
+  ROLE_TEMPLATES,
+  templateInstructions,
+  type RoleTemplate,
+} from '../../lib/agentTemplates';
 
 /**
  * This week and all time, as its engine reported them; nothing before any
@@ -191,9 +200,16 @@ interface AgentEditorModalProps {
   onSetUpEngine?: (engine: AgentEngine, step: 'install' | 'sign-in') => void;
   /** Creating: close and draft the request in the Chief of Staff's chat instead. */
   onAskChief?: () => void;
+  /** Creating: open on this ready-made agent (an id from `ROLE_TEMPLATES`). */
+  initialTemplate?: string | null;
 }
 
 export type EditorTab = 'agent' | 'memory';
+
+/** A template's own colour, unless another agent already wears it. */
+function templateColor(template: RoleTemplate | null, taken: string[] = []): string | null {
+  return template && !taken.includes(template.color) ? template.color : null;
+}
 
 /** The first colour nobody has yet; white and gray are left for the user to pick. */
 function freeColor(taken: string[] = []): string {
@@ -211,14 +227,36 @@ export function AgentEditorModal({
   initialTab = 'agent',
   onSetUpEngine,
   onAskChief,
+  initialTemplate,
 }: AgentEditorModalProps) {
   const editing = Boolean(agent);
   const [tab, setTab] = useState<EditorTab>(initialTab);
   // Keyed by the caller per open, so these start fresh each time.
-  const [name, setName] = useState(agent?.name ?? '');
-  const [color, setColor] = useState<string>(() => agent?.color ?? freeColor(takenColors));
-  const [role, setRole] = useState(agent?.role ?? '');
-  const [instructions, setInstructions] = useState('');
+  const first = agent ? null : findTemplate(initialTemplate);
+  const [template, setTemplate] = useState<RoleTemplate | null>(first);
+  const [name, setName] = useState(agent?.name ?? first?.name ?? '');
+  const [color, setColor] = useState<string>(
+    () => agent?.color ?? templateColor(first, takenColors) ?? freeColor(takenColors)
+  );
+  const [role, setRole] = useState(agent?.role ?? first?.role ?? '');
+  const [instructions, setInstructions] = useState(first ? templateInstructions(first) : '');
+
+  /**
+   * Another starting point. A field still showing what the last one put
+   * there (or nothing) takes the new one's; anything typed stays.
+   */
+  const startFrom = (id: string) => {
+    const next = findTemplate(id);
+    const untouched = (field: string, from: (t: RoleTemplate) => string) =>
+      field.trim() === '' || (template !== null && field === from(template));
+    if (untouched(name, (t) => t.name)) setName(next?.name ?? '');
+    if (untouched(role, (t) => t.role)) setRole(next?.role ?? '');
+    if (untouched(instructions, templateInstructions)) {
+      setInstructions(next ? templateInstructions(next) : '');
+    }
+    if (next) setColor(templateColor(next, takenColors) ?? color);
+    setTemplate(next);
+  };
   const engines = useAgentsSelector((s) => s.engines);
   // Until someone picks, a new agent goes on the first engine that can take
   // it, worked out from the overview as it arrives rather than once.
@@ -286,6 +324,7 @@ export function AgentEditorModal({
           engine,
           model,
           project,
+          ...(template ? { template: template.id } : {}),
         });
         if (project && workDirectly) await updateAgent(created.id, { workDirectly });
         onSaved(created.id);
@@ -338,6 +377,32 @@ export function AgentEditorModal({
         e.currentTarget.requestSubmit();
       }}
     >
+      {!editing && (
+        <div className="agent-editor__label" role="group" aria-label="Start from">
+          Start from
+          <SegmentedControl
+            value={template?.id ?? ''}
+            options={[
+              { value: '', label: 'Blank' },
+              ...ROLE_TEMPLATES.map((t) => ({ value: t.id, label: t.name, title: t.title })),
+            ]}
+            onValueChange={startFrom}
+            aria-label="Start from"
+            className="agent-editor__templates"
+          />
+          {template && needsLine(template, engine) && (
+            <div className="agent-editor__apps agent-editor__needs">
+              <p className="agent-editor__hint">{needsLine(template, engine)}</p>
+              {engine === 'claude' && onOpenApps && (
+                <Button variant="secondary" size="compact" onClick={onOpenApps}>
+                  Connect an app…
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="agent-editor__identity">
         <AgentAvatar name={name} color={color} size="field" selected />
         <TextField

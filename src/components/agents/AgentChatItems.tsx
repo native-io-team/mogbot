@@ -1403,6 +1403,8 @@ interface WorkingIndicatorProps {
   /** The turn ended: collapse, then `onExited` unmounts it. */
   leaving?: boolean;
   onExited?: () => void;
+  /** Where the turn answers, when it isn't this chat (a room). */
+  place?: ReactNode;
 }
 
 /** Three dots and what it's doing, under the last message while it works. */
@@ -1413,6 +1415,7 @@ export function WorkingIndicator({
   entering,
   leaving,
   onExited,
+  place,
 }: WorkingIndicatorProps) {
   // Keep the last thing it said while it collapses, rather than blanking it.
   const [shown, setShown] = useState(activity);
@@ -1440,6 +1443,7 @@ export function WorkingIndicator({
             <span />
             <span />
           </span>
+          {place && <span className="agent-working__place">{place}</span>}
           {shown && (
             <span
               key={shown}

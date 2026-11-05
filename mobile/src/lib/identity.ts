@@ -130,7 +130,7 @@ export function checkPairAnswer(
 }
 
 export const NOT_YOUR_MAC =
-  'This isn’t your Mac. The server at this address couldn’t prove it’s the Mac you paired with, so this phone sent it nothing private: not its pairing, not your messages. If you set this Mac up again, pair again from it.';
+  'The server at this address couldn’t prove it’s the Mac you paired with, so this phone sent it nothing private: not its pairing, not your messages. If you set this Mac up again, pair again from it.';
 
 export const MAC_RESET =
   'The Mac at this address has a different identity from the one this phone paired with, so this phone sent it nothing private. That happens when the app on your Mac lost its key and started over, which removes every paired phone. Pair again from your Mac.';

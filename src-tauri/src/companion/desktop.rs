@@ -13,7 +13,9 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
 use super::hub::HubItem;
-use super::router::{AgentToggles, ApprovalAnswer, Backend, PhoneNewAgent, ScheduleOp, SendExtras};
+use super::router::{
+    AgentToggles, ApprovalAnswer, Backend, PhoneNewAgent, RoomSend, ScheduleOp, SendExtras,
+};
 use super::wire::{ClaudeInfo, Event, Known, MacStatus, PowerInfo, Route, RouteKind};
 use super::{Companion, Registry, TAILNET_HTTPS_PORT};
 use crate::agents::{runner, store};
@@ -96,6 +98,26 @@ fn subscribe(app: &AppHandle, c: &Arc<Companion>) {
         if let Ok(p) = serde_json::from_str::<Payload>(event.payload()) {
             hub.hub.draft(p.agent_id, p.id, p.text);
         }
+    });
+    // Rooms: the whole list, debounced like the overview (every line said
+    // in a room bumps its row).
+    let hub = c.clone();
+    let pending_rooms = Arc::new(AtomicBool::new(false));
+    app.listen_any(crate::agents::rooms::EVENT_ROOMS, move |_| {
+        if pending_rooms.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let (hub, pending) = (hub.clone(), pending_rooms.clone());
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(REGISTRY_DEBOUNCE).await;
+            pending.store(false, Ordering::SeqCst);
+            match hub.backend.rooms().await {
+                Ok(rooms) => {
+                    hub.hub.publish(Event::Rooms { rooms });
+                }
+                Err(e) => tracing::warn!("[Companion] Could not read the rooms: {}", e),
+            }
+        });
     });
     let hub = c.clone();
     let pending = Arc::new(AtomicBool::new(false));
@@ -297,6 +319,58 @@ impl Backend for DesktopBackend {
         cmd::focus_as(&self.app, label, agent_id)
     }
 
+    async fn rooms(&self) -> Result<Value, CommandError> {
+        json(crate::commands::agent_rooms::agents_rooms().await?)
+    }
+
+    async fn room_messages(
+        &self,
+        room_id: &str,
+        limit: usize,
+        before: Option<&str>,
+    ) -> Result<(Vec<Value>, bool), CommandError> {
+        let (room_id, before) = (room_id.to_string(), before.map(str::to_string));
+        // One past the page says whether older lines exist.
+        let (page, more) = tokio::task::spawn_blocking(move || {
+            let mut page = crate::agents::rooms::messages_page(
+                &room_id,
+                limit.saturating_add(1),
+                before.as_deref(),
+            )?;
+            let more = page.len() > limit;
+            if more {
+                page.drain(..page.len() - limit);
+            }
+            Ok::<_, CommandError>((page, more))
+        })
+        .await
+        .map_err(crate::agents::err_other)??;
+        Ok((page.into_iter().map(json).collect::<Result<_, _>>()?, more))
+    }
+
+    async fn room_send(
+        &self,
+        room_id: &str,
+        text: String,
+        send: RoomSend,
+    ) -> Result<Value, CommandError> {
+        json(
+            crate::commands::agent_rooms::agents_room_send(
+                self.app.clone(),
+                room_id.to_string(),
+                text,
+                Some(send.mentions),
+                Some(send.everyone),
+                send.client_id,
+            )
+            .await?,
+        )
+    }
+
+    async fn room_focus(&self, label: &str, room_id: Option<String>) -> Result<(), CommandError> {
+        crate::commands::agent_rooms::focus_room_as(&self.app, label, room_id)
+    }
+
     async fn mark_unread(&self, agent_id: &str) -> Result<(), CommandError> {
         cmd::agents_mark_unread(self.app.clone(), agent_id.to_string()).await
     }
@@ -321,15 +395,21 @@ impl Backend for DesktopBackend {
                 super::router::free_color(&taken).to_string()
             }
         };
+        // A ready-made agent brings its briefing; the role is what the phone sent.
+        let template = input
+            .template
+            .as_deref()
+            .and_then(crate::agents::templates::find);
         let input = cmd::CreateAgentInput {
             name: input.name,
             shape: None,
             color: Some(color),
             role: input.role,
-            instructions: String::new(),
+            instructions: template.map(|t| t.instructions()).unwrap_or_default(),
             engine: Some(engine.to_string()),
             model: None,
             project: None,
+            template: template.map(|t| t.id.clone()),
         };
         json(cmd::agents_create(self.app.clone(), input).await?)
     }

@@ -12,30 +12,39 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { AgentAvatar, Spinner } from '../../../components/agent';
 import { Icon, T } from '../../../components/ui';
 import { formatAgo } from '../../../lib/agents';
+import { roomsOffered } from '../../../lib/rooms';
 import { canCall, describeError, search } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
 import { avatarSize, fonts, iconSize, space } from '../../../lib/theme';
 import { useColors } from '../../../lib/appearance';
 
 interface Group {
-  agentId: string;
+  key: string;
   name: string;
   color: string;
+  /** A room's hits: drawn with the room mark, not one agent's badge. */
+  room: boolean;
   data: SearchHit[];
 }
 
-/** Hits arrive newest first; groups keep that order by their newest hit. */
-function groupHits(hits: SearchHit[]): Group[] {
+/**
+ * Hits arrive newest first; groups keep that order by their newest hit. A
+ * hit said in a room groups under the room (on a phone that shows rooms).
+ */
+function groupHits(hits: SearchHit[], rooms: boolean): Group[] {
   const groups = new Map<string, Group>();
   for (const h of hits) {
-    const g = groups.get(h.agentId) ?? {
-      agentId: h.agentId,
-      name: h.agentName,
+    if (h.roomId && !rooms) continue;
+    const key = h.roomId ? `room:${h.roomId}` : h.agentId;
+    const g = groups.get(key) ?? {
+      key,
+      name: h.roomId ? (h.roomName ?? 'Room') : h.agentName,
       color: h.agentColor,
+      room: !!h.roomId,
       data: [],
     };
     g.data.push(h);
-    groups.set(h.agentId, g);
+    groups.set(key, g);
   }
   return [...groups.values()];
 }
@@ -55,6 +64,7 @@ export default function Search() {
   const colors = useColors();
   const router = useRouter();
   const served = useApp((s) => canCall('agents.search', s.welcome));
+  const rooms = useApp((s) => roomsOffered(s.welcome));
   const [query, setQuery] = useState('');
   const [answer, setAnswer] = useState<{ q: string; hits?: SearchHit[]; error?: string } | null>(
     null
@@ -82,7 +92,7 @@ export default function Search() {
   const hits = active ? (answer?.hits ?? null) : null;
   const error = active && !busy ? (answer?.error ?? null) : null;
 
-  const sections = useMemo(() => groupHits(hits ?? []), [hits]);
+  const sections = useMemo(() => groupHits(hits ?? [], rooms), [hits, rooms]);
   const words = useMemo(() => query.trim().toLowerCase().split(/\s+/).filter(Boolean), [query]);
 
   return (
@@ -111,7 +121,11 @@ export default function Search() {
         contentContainerStyle={{ paddingBottom: space['2xl'] }}
         renderSectionHeader={({ section }) => (
           <View style={styles.group}>
-            <AgentAvatar name={section.name} color={section.color} size={avatarSize.group} />
+            {section.room ? (
+              <Icon name="person.2" size={iconSize.inline} color={colors.textSecondary} />
+            ) : (
+              <AgentAvatar name={section.name} color={section.color} size={avatarSize.group} />
+            )}
             <T
               variant="small"
               color={colors.textStrong}
@@ -128,6 +142,10 @@ export default function Search() {
           <Pressable
             accessibilityRole="button"
             onPress={() => {
+              if (item.roomId) {
+                router.push({ pathname: '/room/[id]', params: { id: item.roomId } });
+                return;
+              }
               router.push({
                 pathname: '/chat/[id]',
                 params: { id: item.agentId, at: item.messageId },
@@ -140,7 +158,9 @@ export default function Search() {
           >
             <View style={styles.hitTop}>
               <T variant="caption" color={colors.textMuted}>
-                {item.peerName ?? WHO[item.kind] ?? item.agentName}
+                {item.roomId
+                  ? item.agentName || 'You'
+                  : (item.peerName ?? WHO[item.kind] ?? item.agentName)}
               </T>
               <T variant="caption" color={colors.textMuted}>
                 {formatAgo(item.ts)}

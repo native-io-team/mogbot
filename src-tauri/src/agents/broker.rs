@@ -316,7 +316,10 @@ pub fn observe(app: &AppHandle, agent_id: &str, event: &Value) -> Option<&'stati
             );
             if NOTED.lock().unwrap_or_else(|e| e.into_inner()).insert(key) {
                 tracing::warn!(agent = agent_id, mode = ?init.permission_mode, "[Agents] unexpected permission mode");
-                let _ = runner::record(app, runner::new_message(agent_id, MessageKind::Note, text));
+                let _ = runner::record_in_turn(
+                    app,
+                    runner::new_message(agent_id, MessageKind::Note, text),
+                );
             }
             None
         }

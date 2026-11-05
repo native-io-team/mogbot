@@ -16,8 +16,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Spinner } from '../../../components/agent';
-import { ConnectionNotice, useNow } from '../../../components/ConnectionPill';
-import { SessionState, tabName } from '../../../components/session';
+import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
+import { SessionState, useTaskName } from '../../../components/session';
 import { choose } from '../../../components/menu';
 import { Button, Icon, useRipple, T } from '../../../components/ui';
 import { formatAgo } from '../../../lib/agents';
@@ -41,6 +41,7 @@ export default function Projects() {
   const colors = useColors();
   const styles = useStyles();
   const projects = useApp((s) => s.projects);
+  const live = useApp((s) => s.link.kind === 'connected');
   const served = useApp((s) => canCall('projects.list', s.welcome));
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +83,25 @@ export default function Projects() {
         }
       >
         <ConnectionNotice />
-        {!served ? (
+        {/* The link first: a Mac that's away isn't one that needs updating. */}
+        {!live ? (
+          projects == null ? (
+            <View style={styles.problem}>
+              <LinkProblem what="Your projects" macName={macName} />
+            </View>
+          ) : (
+            <>
+              <AsOf />
+              {sorted.length === 0 ? (
+                <T color={colors.textSecondary} style={styles.note}>
+                  No projects on {macName} when it was last seen.
+                </T>
+              ) : (
+                sorted.map((p) => <ProjectCard key={p.path} project={p} onError={setError} />)
+              )}
+            </>
+          )
+        ) : !served ? (
           <T color={colors.textSecondary} style={styles.note}>
             Update the app on {macName} to see its projects here.
           </T>
@@ -97,13 +116,27 @@ export default function Projects() {
         ) : (
           sorted.map((p) => <ProjectCard key={p.path} project={p} onError={setError} />)
         )}
-        {error && (
+        {error && live && (
           <T variant="small" color={colors.accentErrorLight} style={styles.note}>
             {error}
           </T>
         )}
       </ScrollView>
     </>
+  );
+}
+
+/** "PROJECTS · AS OF 4 MIN AGO": the saved copy, said the way the agents list says it. */
+function AsOf() {
+  const colors = useColors();
+  const styles = useStyles();
+  useNow(30_000);
+  const asOf = useApp((s) => (s.link.kind === 'reconnecting' ? s.link.lastSeenAt : s.syncedAt));
+  if (!asOf) return null;
+  return (
+    <T variant="caption" color={colors.textMuted} style={styles.asOf} accessibilityRole="header">
+      {`Projects · as of ${formatAgo(asOf)}`.toUpperCase()}
+    </T>
   );
 }
 
@@ -220,6 +253,7 @@ function SessionRow({
   const ripple = useRipple();
   const router = useRouter();
   const now = useNow(15_000);
+  const name = useTaskName(session.sessionId);
   return (
     <Animated.View entering={FadeIn.duration(200)}>
       <Pressable
@@ -232,7 +266,7 @@ function SessionRow({
               id: session.sessionId,
               project: project.name,
               path: project.path,
-              tab: tabName(session),
+              tab: name,
             },
           })
         }
@@ -245,7 +279,7 @@ function SessionRow({
         <View style={styles.sessionText}>
           <View style={styles.sessionTop}>
             <T variant="subhead" color={colors.textStrong} numberOfLines={1} style={{ flex: 1 }}>
-              {tabName(session)}
+              {name}
             </T>
             <T variant="caption" color={colors.textMuted}>
               {formatAgo(session.lastOutputAt, now)}
@@ -262,6 +296,8 @@ function SessionRow({
 const useStyles = makeStyles((colors) => ({
   content: { paddingBottom: space['2xl'], gap: space.md },
   note: { paddingHorizontal: space.lg, paddingVertical: space.md },
+  problem: { alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl },
+  asOf: { paddingHorizontal: space.lg, paddingTop: space.sm },
   card: {
     marginHorizontal: space.lg,
     borderRadius: radius.card,

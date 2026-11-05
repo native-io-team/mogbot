@@ -12,32 +12,39 @@ infrastructure where a good one exists.
    owner**: TestFlight needs the owner's Apple developer account, and
    approval to publish. Until then the install cards say "Not available
    yet" (see [mobile.md](mobile.md)).
-2. **Rooms.** Group chats with 2–6 agents, @one or @everyone. *In
-   progress*: built on a branch, not yet merged.
-3. **Phone: real-device verification.** The share extension, dictation's
+2. **Phone: real-device verification.** The share extension, dictation's
    real recognizer, notification click-through and Android hardware have
    only been tried in tests or the simulator ([mobile.md](mobile.md), "Not
    built").
-4. **"Take over" a browser tab.** Driving the agent's own session in a
+3. **"Take over" a browser tab.** Driving the agent's own session in a
    terminal is done; stepping into the Chrome tab it drives is not. Codex
    take-over is unverified on a real thread.
-5. **A first run that lands one real win.** Role templates, inline connect,
-   "drop a document" first task.
-6. **Global defaults for engine and model.** Settings → Agents states the
+4. **Global defaults for engine and model.** Settings → Agents states the
    rule and where to change it per agent; a real default needs a backend
    setting.
-7. **Watch claude.ai connectors.** Linear or Gmail set up as claude.ai
+5. **Watch claude.ai connectors.** Linear or Gmail set up as claude.ai
    connectors can't be watched by a "When…" check (the sealed call loads
    only apps configured in Claude Code itself), and connector checks are
    not yet verified on a live Linear or Gmail account
    ([agents.md](agents.md), "When… routines").
-8. **Results, the rest.** A PR straight from a non-copy result, and
+6. **Results, the rest.** A PR straight from a non-copy result, and
    recordings.
 
 Small wins: save-as-skill, sections in the agent list, duplicate agent,
 reply to a single message.
 
 ## Done
+
+- **Rooms** — group conversations with 2–6 agents: @one, @everyone, or the
+  room's lead; agents bring each other in with @Name, at most 8 agent turns
+  per message; cards, timelines and results inline under the agent; on the
+  phone for apps that say they show rooms ([agents.md](agents.md), "Rooms").
+- **A first run that lands one real win** — the Chief's starters summarise a
+  picked document or research a question (staged, sent by the user);
+  ready-made agents (Research assistant, Inbox triage, Weekly review) from the
+  Chief, New agent, ⌘K and the phone; Inbox's "Connect an app" only where it
+  is needed ([agents.md](agents.md), "A first real result"). Not yet tried on
+  live turns per template.
 
 - **Result cards you can review and send back** — one card per piece of
   work (files, links, before/after, "It says it checked", what wasn't

@@ -8,9 +8,9 @@
  * screen (iPad, or a big phone in landscape) the chat opens beside the list.
  */
 
-import type { Agent } from '@shipstudio/companion-protocol';
+import type { Agent, RoomView } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Platform,
   RefreshControl,
@@ -23,28 +23,32 @@ import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { AgentRow } from '../../../components/AgentRow';
-import { Spinner } from '../../../components/agent';
+import { RoomRow } from '../../../components/RoomRow';
+import { roomsOffered, sortRooms } from '../../../lib/rooms';
 import { ChatView } from '../../../components/ChatView';
 import { QuotaLines } from '../../../components/QuotaLines';
 import { useQuotaLines } from '../../../lib/quota';
 import { AgentAccent } from '../../../lib/accent';
-import { ConnectionNotice, useLinkState, useNow } from '../../../components/ConnectionPill';
+import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
 import { Button, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
 import {
   attentionCounts,
   formatAgo,
   needsAttention,
+  needsYou,
   nextNeedsYou,
+  pendingApproval,
   sortAgents,
 } from '../../../lib/agents';
-import { pill } from '../../../lib/connection';
 import { haptic } from '../../../lib/haptics';
 import {
   call,
   canCall,
   describeError,
+  loadLatest,
   markUnread,
+  refreshRooms,
   setAgentToggles,
   unpair,
 } from '../../../lib/session';
@@ -55,6 +59,7 @@ import { makeStyles, useColors } from '../../../lib/appearance';
 type Row =
   | { kind: 'header'; key: string; title: string }
   | { kind: 'agent'; key: string; agent: Agent }
+  | { kind: 'room'; key: string; room: RoomView }
   | { kind: 'hidden'; key: string; count: number };
 
 /** Wide enough for a list and a chat side by side. */
@@ -99,12 +104,29 @@ export default function Agents() {
     (s) =>
       s.link.kind === 'refused' && (s.link.reason === 'revoked' || s.link.reason === 'unauthorized')
   );
+  // A row that needs you says what for ("Needs your OK · Wants to edit
+  // Hero.tsx"), which only the chat knows: its newest page is read for any
+  // agent waiting on you whose saved chat doesn't hold the request yet.
+  const unsaid = useApp(
+    useShallow((s) =>
+      live
+        ? (s.overview?.agents ?? [])
+            .filter((a) => needsYou(a) && !pendingApproval(s.chats[a.id]?.messages))
+            .map((a) => `${a.id}:${a.pendingApprovals}`)
+        : []
+    )
+  );
+  useEffect(() => {
+    for (const key of unsaid) loadLatest(key.slice(0, key.lastIndexOf(':'))).catch(() => {});
+  }, [unsaid]);
   const caps = useApp(
     useShallow((s) => ({
       update: canCall('agents.update', s.welcome),
       markUnread: canCall('agents.markUnread', s.welcome),
     }))
   );
+  // Rooms only from a Mac that does them (`welcome.features`): an older one shows none.
+  const rooms = useApp((s) => (roomsOffered(s.welcome) ? s.rooms : null));
   const [showHidden, setShowHidden] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [undo, setUndo] = useState<{ text: string; run: () => void } | null>(null);
@@ -125,16 +147,21 @@ export default function Agents() {
       out.push({ kind: 'header', key: 'h-urgent', title: 'Needs you' });
       urgent.forEach(add);
       if (rest.length) out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
-    } else if (!live && rest.length) {
+    } else if ((!live || rooms?.length) && rest.length) {
+      // Offline (to say "as of"), or with Rooms below: the agents get their own label.
       out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
     }
     rest.forEach(add);
+    if (rooms?.length) {
+      out.push({ kind: 'header', key: 'h-rooms', title: 'Rooms' });
+      for (const room of sortRooms(rooms)) out.push({ kind: 'room', key: `room:${room.id}`, room });
+    }
     if (hidden.length) {
       out.push({ kind: 'hidden', key: 'hidden', count: hidden.length });
       if (showHidden) hidden.forEach(add);
     }
     return out;
-  }, [overview, showHidden, removed, live]);
+  }, [overview, showHidden, removed, live, rooms]);
 
   const flash = useCallback((text: string, run?: () => void) => {
     const entry = { text, run: run ?? (() => {}) };
@@ -175,6 +202,7 @@ export default function Agents() {
     setRefreshing(true);
     try {
       setApp({ overview: await call('agents.overview', {}) });
+      if (roomsOffered(useApp.getState().welcome)) await refreshRooms();
     } catch (e) {
       setError(describeError(e));
     } finally {
@@ -244,6 +272,8 @@ export default function Agents() {
               Hidden ({item.count})
             </T>
           </Pressable>
+        ) : item.kind === 'room' ? (
+          <RoomRow room={item.room} live={live} />
         ) : (
           <AgentRow
             agent={item.agent}
@@ -479,7 +509,6 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
-  const p = pill(useLinkState());
   const canCreate = useApp((s) => canCall('agents.create', s.welcome));
   if (hasOverview) {
     return (
@@ -507,22 +536,7 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
   }
   return (
     <Animated.View entering={FadeIn.delay(300)} style={styles.emptyCentered}>
-      {p.tone === 'problem' ? (
-        <>
-          <T variant="title" color={colors.textStrong} style={styles.centerText}>
-            {p.label}
-          </T>
-          <T color={colors.textSecondary} style={styles.centerText}>
-            Your agents are on {macName}. Once it answers, they’ll be here.
-          </T>
-          <Button title="What’s wrong?" onPress={() => router.push('/connection')} />
-        </>
-      ) : (
-        <View style={styles.connecting}>
-          <Spinner />
-          <T color={colors.textSecondary}>Connecting to {macName}…</T>
-        </View>
-      )}
+      <LinkProblem what="Your agents" macName={macName} />
     </Animated.View>
   );
 }
@@ -578,7 +592,6 @@ const useStyles = makeStyles((colors) => ({
     minHeight: 320,
   },
   centerText: { textAlign: 'center', maxWidth: 340 },
-  connecting: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   split: { flex: 1, flexDirection: 'row' },
   splitList: {

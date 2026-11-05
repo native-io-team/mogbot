@@ -12,31 +12,32 @@ import {
   type Agent,
   type AgentMessage,
 } from '@shipstudio/companion-protocol';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { type LayoutChangeEvent, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { engineName, failureLine, folderName, formatClock, sessionLabel } from '../lib/agents';
+import { engineName, failureLine, folderName, formatClock } from '../lib/agents';
 import { drivenWait } from '../lib/bars';
 import { haptic } from '../lib/haptics';
-import { discardPending, editPending, send } from '../lib/session';
+import { discardPending, editPending, resend } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
-import { composer, iconSize, space, type } from '../lib/theme';
+import { avatarSize, composer, fonts, iconSize, space, type } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Attachments } from './attachments';
 import { useReveal } from '../lib/reveal';
 import { Markdown } from './Markdown';
 import { Card, Line, TextAction } from './surfaces';
 import { Button, Icon, T } from './ui';
-import { Spinner } from './agent';
+import { AgentAvatar, Spinner } from './agent';
 import { ApprovalCard, ReviewOnMacCard } from './ApprovalCard';
 import { PromptCard } from './PromptCard';
 import { SecretCard } from './SecretCard';
+import { useTaskName } from './session';
 import { LiveWork, WorkLine } from './work';
 import { CopyCard } from './copy';
 import { ResultCardView, useCanRevise } from './result';
 import { setComposer } from '../lib/drafts';
-import { useApp } from '../lib/store';
+import { useApp, useServed } from '../lib/store';
 
 const enter = FadeInDown.duration(220).springify().damping(18);
 
@@ -46,6 +47,7 @@ export const MessageRow = memo(function MessageRow({
   queued,
   liveCopy,
   newestResult = true,
+  latestFailure = false,
   onError,
   onLongPress,
 }: {
@@ -56,6 +58,8 @@ export const MessageRow = memo(function MessageRow({
   liveCopy?: boolean;
   /** This message carries the newest version of its result card. */
   newestResult?: boolean;
+  /** The failure that ended the agent's last turn, nothing since. */
+  latestFailure?: boolean;
   onError: (text: string) => void;
   /** Copy, Quote, Select Text: words only, so only user and agent messages. */
   onLongPress?: (message: AgentMessage) => void;
@@ -86,13 +90,14 @@ export const MessageRow = memo(function MessageRow({
                   project: message.changes.project,
                   leftOut: message.changes.leftOut,
                   warning: message.changes.warning,
+                  stats: <ChangeStats message={message} />,
                   onError,
                 }
               : undefined
           }
           onError={onError}
         >
-          {message.changes && (newestResult || copy) && <SystemLine message={message} />}
+          {message.changes && !copy && newestResult && <SystemLine message={message} />}
         </ResultCardView>
         {message.work && <WorkLine message={message} work={message.work} onError={onError} />}
       </View>
@@ -152,12 +157,9 @@ export const MessageRow = memo(function MessageRow({
               onError={onError}
             />
           )}
-          {message.stopped && (
-            <T variant="caption" color={colors.textSecondary}>
-              Stopped
-            </T>
-          )}
           {message.work && <WorkLine message={message} work={message.work} onError={onError} />}
+          {/* A stopped turn ends in a Line, as every turn that didn't finish does. */}
+          {message.stopped && <Line text="Stopped" />}
         </Pressable>
       );
     case 'approval':
@@ -204,7 +206,7 @@ export const MessageRow = memo(function MessageRow({
       const row = limited ? (
         <Line text={words} icon="clock" />
       ) : (
-        <Card icon="exclamationmark.circle" tone="error" title={words} />
+        <FailureCard message={message} agent={agent} title={words} latest={latestFailure} />
       );
       if (!message.work) return row;
       return (
@@ -219,6 +221,10 @@ export const MessageRow = memo(function MessageRow({
     case 'note':
       // "Started fresh · memory kept", a take-over that closed: something that happened.
       return <Line text={message.text} />;
+    case 'sent_to_agent':
+    case 'from_agent':
+      if (message.peer) return <PeerRow message={message} />;
+      return <SystemLine message={message} />;
     case 'check_in':
       if (!message.work) return <Line text={checkInText(message)} />;
       return (
@@ -231,13 +237,13 @@ export const MessageRow = memo(function MessageRow({
       if (liveCopy && message.changes?.copy) {
         return (
           <View style={styles.agentRow}>
-            <SystemLine message={message} />
             <CopyCard
               agent={agent}
               copy={message.changes.copy}
               project={message.changes.project}
               leftOut={message.changes.leftOut}
               warning={message.changes.warning}
+              stats={<ChangeStats message={message} />}
               onError={onError}
             />
             {message.work && <WorkLine message={message} work={message.work} onError={onError} />}
@@ -305,13 +311,12 @@ function SessionCard({
   onError: (text: string) => void;
 }) {
   const colors = useColors();
-  const styles = useStyles();
   const router = useRouter();
   const mark = message.session!;
   const project = useApp(
     (s) => s.projects?.find((p) => p.path === mark.project)?.name ?? folderName(mark.project)
   );
-  const tab = sessionLabel(mark);
+  const tab = useTaskName(mark.sessionId);
   const open = mark.sessionId
     ? () => {
         router.push({
@@ -328,21 +333,14 @@ function SessionCard({
 
   if (mark.event === 'started' || mark.event === 'sent') {
     return (
-      <Pressable
-        disabled={!open}
+      <Line
+        icon="terminal"
+        text={
+          mark.event === 'started' ? `Started a task in ${project}` : `Sent to a task in ${project}`
+        }
         onPress={open}
-        accessibilityRole={open ? 'button' : undefined}
-        hitSlop={{ top: 10, bottom: 10 }}
-        style={({ pressed }) => [styles.sessionLine, pressed && { opacity: 0.6 }]}
-      >
-        <Icon name="terminal" size={iconSize.inline} color={colors.textMuted} />
-        <T variant="small" color={colors.textSecondary} numberOfLines={1} style={{ flexShrink: 1 }}>
-          {mark.event === 'started'
-            ? `Started a task in ${project}`
-            : `Sent to a task in ${project}`}
-        </T>
-        {open && <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />}
-      </Pressable>
+        pressHint={open ? 'Opens the task' : undefined}
+      />
     );
   }
 
@@ -350,9 +348,10 @@ function SessionCard({
   return (
     <Card
       icon={reply ? 'terminal' : 'photo'}
-      title={reply ? `${tab} in ${project}` : message.text || 'Preview'}
+      // What it is in the title, where in the source: the same as every card.
+      title={reply ? tab : message.text || 'Preview'}
       meta={formatClock(message.ts)}
-      source={reply ? undefined : `In ${project}`}
+      source={`In ${project}`}
       actions={open && <Button title={`Open in ${project}`} variant="outline" onPress={open} />}
     >
       {reply ? (
@@ -380,12 +379,14 @@ function checkInText(message: AgentMessage): string {
   return `${what} · ${message.text}`;
 }
 
-/** Notes, check-ins, delegation and session lines: one muted line each. A change opens its diff. */
+/** What changed, in a line of its own: "Changed 2 files in acme-site · +3 −1", opening the diff. */
 function SystemLine({ message }: { message: AgentMessage }) {
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
-  const canDiff = useApp((s) => !!s.welcome?.methods.includes('agents.changeDiff'));
+  // The Mac's last answer while it's away: offline it stays, disabled.
+  const canDiff = useServed('agents.changeDiff');
+  const online = useApp((s) => !!s.welcome);
   const changes = message.kind === 'changes' ? message.changes : undefined;
   const text = changes
     ? `Changed ${changes.fileCount} file${changes.fileCount === 1 ? '' : 's'} in ${
@@ -396,44 +397,189 @@ function SystemLine({ message }: { message: AgentMessage }) {
       : message.kind === 'from_agent' && message.peer
         ? `From ${message.peer.name}: ${message.text}`
         : message.text;
-  const opens = !!changes && canDiff;
+  const opens = !!changes && canDiff && online;
   // No clock of its own: the chat's time lines say when (and the long-press menu, exactly).
-  const line = (
-    <View style={styles.systemRow}>
-      {changes && <Icon name="doc.text" size={iconSize.inline} color={colors.textMuted} />}
-      <T variant="small" color={colors.textSecondary} numberOfLines={4} style={{ flexShrink: 1 }}>
-        {text}
-        {changes && (
+  return (
+    <Line
+      icon={changes ? 'doc.text' : undefined}
+      text={text}
+      trail={
+        changes && (
           <>
             {' · '}
-            <T variant="small" color={colors.diffAdd} style={styles.count}>
+            <T variant="caption" color={colors.diffAdd} style={styles.count}>
               +{changes.added}
             </T>{' '}
-            <T variant="small" color={colors.diffDel} style={styles.count}>
+            <T variant="caption" color={colors.diffDel} style={styles.count}>
               −{changes.removed}
             </T>
           </>
-        )}
+        )
+      }
+      onPress={
+        opens
+          ? () =>
+              router.push({
+                pathname: '/diff',
+                params: { agentId: message.agentId, messageId: message.id },
+              })
+          : undefined
+      }
+      pressHint={opens ? 'Shows what changed in each file' : undefined}
+    />
+  );
+}
+
+/**
+ * What changed, inside a copy's card (its note), so the card and a line above
+ * it don't say the same thing twice: "2 files · +3 −1", and Review changes.
+ */
+export function ChangeStats({ message }: { message: AgentMessage }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const router = useRouter();
+  // The Mac's last answer while it's away: offline it stays, disabled.
+  const canDiff = useServed('agents.changeDiff');
+  const online = useApp((s) => !!s.welcome);
+  const changes = message.changes;
+  if (!changes) return null;
+  return (
+    <View style={styles.stats}>
+      <T variant="caption" color={colors.textMuted} style={{ flexShrink: 1 }}>
+        {`${changes.fileCount} file${changes.fileCount === 1 ? '' : 's'} · `}
+        <T variant="caption" color={colors.diffAdd} style={styles.count}>
+          +{changes.added}
+        </T>{' '}
+        <T variant="caption" color={colors.diffDel} style={styles.count}>
+          −{changes.removed}
+        </T>
       </T>
-      {opens && <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />}
+      {canDiff && (
+        <TextAction
+          label="Review changes"
+          disabled={!online}
+          onPress={() =>
+            router.push({
+              pathname: '/diff',
+              params: { agentId: message.agentId, messageId: message.id },
+            })
+          }
+        />
+      )}
     </View>
   );
-  if (!opens) return line;
+}
+
+/**
+ * A real failure, on the card anatomy: what happened, what it ran on and
+ * where, the Mac's own words when they say more, and what to do about it.
+ */
+function FailureCard({
+  message,
+  agent,
+  title,
+  latest,
+}: {
+  message: AgentMessage;
+  agent: Agent;
+  title: string;
+  /** The agent's last turn: only then is "send a message" the way forward. */
+  latest: boolean;
+}) {
+  const colors = useColors();
+  const router = useRouter();
+  const signedOut = message.failure?.kind === 'signed_out';
+  const engine = engineName(agent);
+  const project = agent.project ? folderName(agent.project) : null;
+  // The Mac's words, when they say more than the title already does.
+  const said = message.text.trim();
+  const more = !!said && !title.includes(said.replace(/[.:!?]+$/, ''));
+  return (
+    <Card
+      icon="exclamationmark.circle"
+      tone="error"
+      title={title}
+      meta={formatClock(message.ts)}
+      // The message doesn't record what it ran on, and the agent may have
+      // switched engines since: only where, which doesn't change.
+      source={project ? `In ${project}` : undefined}
+      note={
+        !latest
+          ? undefined
+          : signedOut
+            ? `Sign in to ${engine} on your Mac, then send it again.`
+            : 'Send a message to try again.'
+      }
+      actions={
+        signedOut ? (
+          <Button
+            title="Connection details"
+            variant="outline"
+            onPress={() => router.push('/connection')}
+          />
+        ) : undefined
+      }
+    >
+      {!signedOut && more && (
+        <T variant="small" color={colors.textSecondary} numberOfLines={6}>
+          {said}
+        </T>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * One agent writing to another: set off from the conversation (the other
+ * agent's face, "To Ops" / "From Ops", the words under a rule), so it never
+ * reads as part of a reply to you. Long briefs fold to four lines.
+ */
+function PeerRow({ message }: { message: AgentMessage }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const peer = message.peer!;
+  const color = useApp(
+    (s) => s.overview?.agents.find((a) => a.id === peer.id)?.color ?? colors.textMuted
+  );
+  const [open, setOpen] = useState(false);
+  const to = message.kind === 'sent_to_agent';
+  const label = `${to ? 'To' : 'From'} ${peer.name}`;
+  const long = message.text.length > 220 || message.text.split('\n').length > 4;
   return (
     <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${text}. Review changes`}
-      accessibilityHint="Shows what changed in each file"
-      onPress={() =>
-        router.push({
-          pathname: '/diff',
-          params: { agentId: message.agentId, messageId: message.id },
-        })
-      }
-      hitSlop={{ top: 12, bottom: 12 }}
-      style={({ pressed }) => [styles.systemTap, pressed && { opacity: 0.6 }]}
+      disabled={!long}
+      onPress={() => setOpen((o) => !o)}
+      accessibilityRole={long ? 'button' : 'text'}
+      accessibilityLabel={`${label}: ${message.text}`}
+      accessibilityState={long ? { expanded: open } : undefined}
+      style={styles.peer}
+      testID="peer-row"
     >
-      {line}
+      <AgentAvatar name={peer.name} color={color} size={avatarSize.group} />
+      <View style={styles.peerBody}>
+        <View style={styles.peerHead}>
+          <Icon
+            name={to ? 'arrow.turn.up.right' : 'arrow.turn.down.left'}
+            size={iconSize.inline}
+            color={colors.textMuted}
+          />
+          <T variant="caption" color={colors.textSecondary} style={{ fontFamily: fonts.medium }}>
+            {label}
+          </T>
+        </View>
+        <T
+          variant="small"
+          color={colors.textSecondary}
+          numberOfLines={open || !long ? undefined : 4}
+        >
+          {message.text}
+        </T>
+        {long && (
+          <T variant="caption" color={colors.textMuted}>
+            {open ? 'Show less' : 'Show all'}
+          </T>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -489,14 +635,7 @@ export function PendingRow({ pending }: { pending: PendingSend }) {
                 label="Send"
                 onPress={() => {
                   haptic.light();
-                  void send(
-                    pending.agentId,
-                    pending.text,
-                    false,
-                    pending.clientId,
-                    pending.attachments,
-                    pending.mentions
-                  ).catch(() => {});
+                  void resend(pending).catch(() => {});
                 }}
               />
             )
@@ -611,24 +750,21 @@ const useStyles = makeStyles((colors) => ({
     marginRight: space.xs,
   },
   agentRow: { gap: space.sm },
-  systemRow: {
-    flexDirection: 'row',
-    gap: space.tight,
-    alignItems: 'center',
-  },
-  systemTap: { alignSelf: 'flex-start', paddingVertical: space.xs },
   count: { fontVariant: ['tabular-nums'] },
+  stats: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.md },
+  peer: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  peerBody: {
+    flex: 1,
+    gap: space['2xs'],
+    paddingLeft: space.sm,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.borderDefault,
+  },
+  peerHead: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   working: { gap: space.sm, paddingVertical: space.xs },
   workingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-  },
-  sessionLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.tight,
-    alignSelf: 'flex-start',
-    paddingVertical: space['2xs'],
   },
 }));

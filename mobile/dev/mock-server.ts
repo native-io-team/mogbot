@@ -30,6 +30,7 @@ import {
   type CheckIn,
   type ProjectSummary,
   type Repeat,
+  type RoomView,
   type SearchHit,
   type SessionScreen,
   type SharedFile,
@@ -51,13 +52,15 @@ import {
 } from '@shipstudio/companion-protocol';
 import {
   createHash,
+  createPrivateKey,
   generateKeyPairSync,
   randomBytes,
   randomUUID,
   sign as edSign,
   type KeyObject,
 } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import http from 'node:http';
 import https from 'node:https';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -107,6 +110,27 @@ export interface MockOptions {
   serverId?: string;
   /** A Mac from before protocol 2: closes a challenge without a word, no `/v1/identity`. */
   protocolOne?: boolean;
+  /**
+   * Keep the Mac's identity key here (PEM), so a restart is the same Mac and a
+   * paired phone stays paired, as the real Mac's `identity.rs` does.
+   */
+  identityFile?: string;
+  /**
+   * Stack three bars in the Chief's chat (an import, the Mac being driven, an
+   * engine that can't ask), so the "N more" fold is reachable.
+   */
+  bars?: boolean;
+  /** Answer CORS preflights and tag every response, for the web build (dev only). */
+  cors?: boolean;
+}
+
+/** The key in `file`, or a new one written there. */
+function persistentKey(file: string): KeyObject {
+  if (existsSync(file)) return createPrivateKey(readFileSync(file, 'utf8'));
+  const key = generateKeyPairSync('ed25519').privateKey;
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, key.export({ format: 'pem', type: 'pkcs8' }), { mode: 0o600 });
+  return key;
 }
 
 /** An Ed25519 identity, as the Mac's `identity.rs` keeps one. */
@@ -155,7 +179,7 @@ export function createMockServer(opts: MockOptions = {}) {
   /** The hosts it serves on, as it signs them; known once it listens. */
   let hosts: string[] = opts.hosts ?? [];
   // The key the pairing link names; `impostorKey` signs instead when set.
-  const identity = mockIdentity();
+  const identity = mockIdentity(opts.identityFile ? persistentKey(opts.identityFile) : undefined);
   const signer = opts.impostorKey ? mockIdentity(opts.impostorKey) : identity;
   let epoch = randomUUID();
   let seq = 0;
@@ -168,7 +192,10 @@ export function createMockServer(opts: MockOptions = {}) {
       : []
   );
   const saveDevices = () => {
-    if (opts.devicesFile) writeFileSync(opts.devicesFile, JSON.stringify([...devices]));
+    if (!opts.devicesFile) return;
+    // `--http` never made the certificate folder this lives in.
+    mkdirSync(path.dirname(opts.devicesFile), { recursive: true });
+    writeFileSync(opts.devicesFile, JSON.stringify([...devices]));
   };
   const clientIds = new Map<string, AgentMessage>();
   const conns = new Set<Conn>();
@@ -191,6 +218,15 @@ export function createMockServer(opts: MockOptions = {}) {
       // The protocol's `AgentTakeover`, as the Mac sends it (terminal id stripped).
       design.takeover = { since: now - 5 * 60_000, cli: 'claude-code' };
       design.status = { state: 'idle', activity: null, since: null };
+    }
+  }
+  if (opts.bars) {
+    // The Chief already has an import waiting; driving it on the Mac and an
+    // engine that can't ask make three bars, so the fold shows "1 more".
+    const chief = agents.find((a) => a.id === 'chief');
+    if (chief) {
+      chief.takeover = { since: now - 2 * 60_000, cli: 'claude-code' };
+      chief.status = { state: 'idle', activity: null, since: null };
     }
   }
   const messages = new Map<string, AgentMessage[]>(agents.map((a) => [a.id, seedMessages(a, now)]));
@@ -221,7 +257,9 @@ export function createMockServer(opts: MockOptions = {}) {
     routes: [],
   };
   const engines = (): AgentsOverview['engines'] => {
-    const list = structuredClone(real.agentsOverview.engines);
+    const list = structuredClone(real.agentsOverview.engines).map((e) =>
+      opts.bars && e.id === 'claude' ? { ...e, asks: false } : e
+    );
     if (!opts.codexOnly) return list;
     return list.map((e) =>
       e.id === 'claude'
@@ -629,6 +667,154 @@ export function createMockServer(opts: MockOptions = {}) {
     });
   }
 
+  // ---- Rooms --------------------------------------------------------------------------
+
+  /** Two rooms: one led by the Chief, one with no lead (so the phone asks who answers). */
+  const rooms: RoomView[] = [
+    {
+      id: 'launch',
+      name: 'Launch',
+      members: ['chief', 'site', 'design'],
+      lead: 'chief',
+      muted: false,
+      createdAt: now - 3 * 86_400_000,
+      lastActivityAt: now - 20 * 60_000,
+      preview: 'Designer: Hero is ready for review.',
+      unread: 1,
+      turnsUsed: 0,
+      turnCap: 8,
+      waiting: [],
+    },
+    {
+      id: 'monthend',
+      name: 'Month end',
+      members: ['fin', 'ops'],
+      muted: false,
+      createdAt: now - 7 * 86_400_000,
+      lastActivityAt: now - 3 * 3_600_000,
+      preview: 'Ops: Filed.',
+      unread: 0,
+      turnsUsed: 0,
+      turnCap: 8,
+      waiting: [],
+    },
+  ];
+  const roomLines = new Map<string, AgentMessage[]>([
+    [
+      'launch',
+      [
+        {
+          id: 'rl1',
+          agentId: '',
+          room: 'launch',
+          ts: now - 30 * 60_000,
+          kind: 'user',
+          text: '@everyone where are we on the launch page?',
+          mentions: [
+            { id: 'chief', name: 'Chief of Staff' },
+            { id: 'site', name: 'Acme Site' },
+            { id: 'design', name: 'Designer' },
+          ],
+        },
+        {
+          id: 'rl2',
+          agentId: 'chief',
+          room: 'launch',
+          ts: now - 29 * 60_000,
+          kind: 'agent',
+          text: 'Copy is final. I asked @Designer for the hero and @Acme Site to wire the pricing table.',
+        },
+        {
+          id: 'rl3',
+          agentId: 'site',
+          room: 'launch',
+          ts: now - 25 * 60_000,
+          kind: 'agent',
+          text: 'Pricing table is in on a copy of the site. **3 files** changed; preview looks right at all widths.',
+        },
+        {
+          id: 'rl4',
+          agentId: 'design',
+          room: 'launch',
+          ts: now - 21 * 60_000,
+          kind: 'approval',
+          text: '',
+          approval: {
+            requestId: 'rq_launch',
+            title: 'Run a command',
+            detail: 'npm run export-assets',
+            status: 'pending',
+          },
+        },
+        {
+          id: 'rl5',
+          agentId: 'design',
+          room: 'launch',
+          ts: now - 20 * 60_000,
+          kind: 'agent',
+          text: 'Hero is ready for review. Two variants, light and dark.',
+        },
+      ],
+    ],
+    [
+      'monthend',
+      structuredClone(real.roomsMessages.messages as AgentMessage[]).map((m) => ({
+        ...m,
+        room: 'monthend',
+        agentId: m.agentId === 'a1' ? 'fin' : m.agentId === 'a2' ? 'ops' : m.agentId,
+      })),
+    ],
+  ]);
+  const roomsChanged = () => emit({ type: 'rooms.changed', rooms: structuredClone(rooms) });
+  /** A line said in a room: in its thread, and (a member's) in the member's own chat. */
+  function putRoomLine(m: AgentMessage) {
+    const list = roomLines.get(m.room!) ?? [];
+    const at = list.findIndex((x) => x.id === m.id);
+    if (at === -1) list.push(m);
+    else list[at] = m;
+    roomLines.set(m.room!, list);
+    if (m.agentId) {
+      const own = messages.get(m.agentId) ?? [];
+      if (!own.some((x) => x.id === m.id)) own.push(m);
+      messages.set(m.agentId, own);
+    }
+    emit({ type: 'agents.message', message: m });
+    const r = rooms.find((x) => x.id === m.room)!;
+    r.lastActivityAt = m.ts;
+    const who = m.agentId ? agent(m.agentId)?.name : 'You';
+    if (m.text) r.preview = `${who}: ${m.text.split('\n')[0].slice(0, 100)}`;
+    roomsChanged();
+  }
+  /** Each asked member "replies" in turn: working in the room, then its line. */
+  function replyInRoom(roomId: string, asked: string[], text: string) {
+    const r = rooms.find((x) => x.id === roomId)!;
+    r.turnsUsed = asked.length;
+    asked.forEach((id, i) => {
+      const a = agent(id)!;
+      setTimeout(
+        () => {
+          a.status = { state: 'working', activity: 'Thinking', since: Date.now(), room: roomId };
+          emit({ type: 'agents.status', agentId: id, status: a.status });
+        },
+        300 + i * 900
+      );
+      setTimeout(
+        () => {
+          putRoomLine({
+            id: `rr_${randomUUID().slice(0, 8)}`,
+            agentId: id,
+            room: roomId,
+            ts: Date.now(),
+            kind: 'agent',
+            text: replyFor(text),
+          });
+          setStatus(id, 'idle', null);
+        },
+        1500 + i * 900
+      );
+    });
+  }
+
   // ---- Methods ------------------------------------------------------------------------
 
   function checkIn(p: Record<string, unknown>): CheckIn {
@@ -699,6 +885,57 @@ export function createMockServer(opts: MockOptions = {}) {
     // A Mac whose build has no push service, which is what a dev build is.
     'devices.setPush': () => ({ status: 'unavailable' }),
     'agents.overview': () => overview(),
+    'rooms.list': () => structuredClone(rooms),
+    'rooms.messages': (p) => {
+      const list = roomLines.get(String(p.roomId));
+      if (!list) return fail({ type: 'Other', message: 'That room no longer exists.' });
+      const limit = Number(p.limit ?? 50);
+      const end = p.before ? list.findIndex((m) => m.id === p.before) : list.length;
+      const stop = end === -1 ? 0 : end;
+      const start = Math.max(0, stop - limit);
+      return { messages: list.slice(start, stop), asOf: cursor(), more: start > 0 };
+    },
+    'rooms.send': (p) => {
+      const r = rooms.find((x) => x.id === p.roomId);
+      if (!r) return fail({ type: 'Other', message: 'That room no longer exists.' });
+      const clientId = String(p.clientId);
+      const known = clientIds.get(clientId);
+      if (known) return { message: known, asked: known.mentions ?? [] };
+      const named = r.members.filter((m) =>
+        ((p.mentions as string[] | undefined) ?? []).includes(m)
+      );
+      const asked = p.everyone ? r.members : named.length ? named : r.lead ? [r.lead] : [];
+      if (!asked.length) {
+        return fail({
+          type: 'Validation',
+          field: 'mentions',
+          reason: 'Who should answer? Mention someone, or @everyone.',
+        });
+      }
+      const refs = asked.map((id) => ({ id, name: agent(id)!.name }));
+      const m: AgentMessage = {
+        id: `ru_${randomUUID().slice(0, 8)}`,
+        agentId: '',
+        room: r.id,
+        ts: Date.now(),
+        kind: 'user',
+        text: String(p.text),
+        clientId,
+        mentions: refs,
+      };
+      clientIds.set(clientId, m);
+      putRoomLine(m);
+      replyInRoom(r.id, asked, String(p.text));
+      return { message: m, asked: refs };
+    },
+    'rooms.focus': (p) => {
+      const r = rooms.find((x) => x.id === p.roomId);
+      if (r?.unread) {
+        r.unread = 0;
+        roomsChanged();
+      }
+      return null;
+    },
     'agents.messages': (p) => {
       const list = messages.get(String(p.agentId)) ?? [];
       const limit = Number(p.limit ?? 50);
@@ -964,14 +1201,28 @@ export function createMockServer(opts: MockOptions = {}) {
         ...(session.state === 'finished' ? { reply: lastReply(screen) } : {}),
       } satisfies SessionScreen;
     },
-    // The router's rules (router.rs `check_new_agent`): a name, a role and a colour only.
+    // The ready-made agents, as the Mac serializes them.
+    'agents.templates': () => real.agentsTemplates,
+    // The router's rules (router.rs `check_new_agent`): a name, a role, a colour and a template only.
     'agents.create': (p, c) => {
       const input = (p.input ?? {}) as Record<string, unknown>;
-      if (Object.keys(input).some((k) => !['name', 'role', 'color'].includes(k))) {
+      if (Object.keys(input).some((k) => !['name', 'role', 'color', 'template'].includes(k))) {
         return fail({
           type: 'Protocol',
           code: 'bad_params',
-          message: 'From the phone, a new agent takes a name, what it should do and a colour.',
+          message:
+            'From the phone, a new agent takes a name, what it should do, a colour and a ready-made agent to start from.',
+        });
+      }
+      const template =
+        typeof input.template === 'string' && input.template.trim()
+          ? real.agentsTemplates.find((t) => t.id === String(input.template).trim())
+          : undefined;
+      if (typeof input.template === 'string' && input.template.trim() && !template) {
+        return fail({
+          type: 'Protocol',
+          code: 'bad_params',
+          message: `${input.template} isn't one of the ready-made agents.`,
         });
       }
       const text = (v: unknown) =>
@@ -1013,6 +1264,7 @@ export function createMockServer(opts: MockOptions = {}) {
         muted: false,
         status: { state: 'idle', activity: null, since: null },
         home: `/Users/you/ShipStudio/.agents/${id}`,
+        ...(template ? { template: template.id } : {}),
       };
       agents.push(made);
       messages.set(id, []);
@@ -1319,6 +1571,7 @@ export function createMockServer(opts: MockOptions = {}) {
           resume: canReplay ? 'replay' : 'snapshot',
           // What the real Mac advertises in P1, not what the mock happens to implement.
           methods: realWelcome.methods,
+          features: realWelcome.features,
           // The zone the mock's parser reads times in: this machine's own.
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
@@ -1379,6 +1632,17 @@ export function createMockServer(opts: MockOptions = {}) {
   // ---- HTTP: pairing ---------------------------------------------------------------------
 
   async function onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+    if (opts.cors) {
+      // The web build (`pnpm qa:web`) is another origin; the real Mac never needs this.
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Name');
+      res.setHeader('Access-Control-Max-Age', '600');
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204).end();
+        return;
+      }
+    }
     if (req.method === 'POST' && req.url === HTTP.identity && !opts.protocolOne) {
       const body = JSON.parse(await readBody(req)) as IdentityRequest;
       const n = negotiate(body.protocol, SUPPORTED);

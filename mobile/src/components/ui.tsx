@@ -153,6 +153,9 @@ const buttonColorsOf = (
   },
 });
 
+/** Every disabled control, filled or not. */
+export const DISABLED_OPACITY = 0.4;
+
 export function Button({
   title,
   variant = 'secondary',
@@ -182,12 +185,11 @@ export function Button({
   const filled = variant === 'primary' || variant === 'answer';
   const a = variant === 'answer' ? answer : accent;
   const off = !!disabled && !busy;
-  // A disabled primary is a plain grey control, not a faded accent: a
-  // half-transparent colour reads as muddy, and as almost-on.
+  // One disabled look for every variant: its own, faded. A filled answer that
+  // turned a solid grey slab while its outline sibling faded read as the live
+  // one of the pair (an offline Allow beside Deny).
   const c: ButtonColors = filled
-    ? off
-      ? { bg: colors.surfaceControl, pressed: colors.surfaceControl, fg: colors.textMuted }
-      : { bg: a.accent, pressed: a.pressed, fg: a.onAccent }
+    ? { bg: a.accent, pressed: a.pressed, fg: a.onAccent }
     : buttonColorsOf(colors)[variant];
   const height = size === 'large' ? 50 : size === 'compact' ? 32 : 44;
   return (
@@ -206,7 +208,7 @@ export function Button({
           paddingHorizontal: size === 'compact' ? space.md : space.lg,
           backgroundColor: pressed ? c.pressed : c.bg,
           borderColor: c.border ?? 'transparent',
-          opacity: off && !filled ? 0.4 : 1,
+          opacity: off ? DISABLED_OPACITY : 1,
           transform: [{ scale: pressed ? 0.98 : 1 }],
         },
         style,

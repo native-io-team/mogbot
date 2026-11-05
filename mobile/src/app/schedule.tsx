@@ -272,7 +272,7 @@ function Schedule() {
         <View style={styles.echo} accessibilityLiveRegion="polite">
           {when && (
             <T variant="subhead" color={colors.textStrong} maxFontSizeMultiplier={2}>
-              {routineEcho(when, note || '…', now, timeZone)}
+              {routineEcho(when, note, now, timeZone)}
             </T>
           )}
           {reading.kind === 'ok' ? (

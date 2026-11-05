@@ -1158,6 +1158,123 @@ export const agentsSend = {
     }
   ]
 } satisfies Result<'agents.send'>;
+export const roomsList = [
+  {
+    "createdAt": 1762280000000,
+    "id": "r1",
+    "lastActivityAt": 1762290004000,
+    "members": [
+      "a1",
+      "a2"
+    ],
+    "muted": false,
+    "name": "Month end",
+    "preview": "Ops: Filed.",
+    "turnCap": 8,
+    "turnsUsed": 2,
+    "unread": 1,
+    "waiting": [
+      "a2"
+    ]
+  }
+] satisfies Result<'rooms.list'>;
+export const roomsMessages = {
+  "asOf": {
+    "epoch": "epoch-test",
+    "seq": 1
+  },
+  "messages": [
+    {
+      "agentId": "",
+      "id": "rm1",
+      "kind": "user",
+      "mentions": [
+        {
+          "id": "a1",
+          "name": "Finance"
+        },
+        {
+          "id": "a2",
+          "name": "Ops"
+        }
+      ],
+      "room": "r1",
+      "text": "@everyone where are we on month end?",
+      "ts": 1762290001000
+    },
+    {
+      "agentId": "a1",
+      "id": "rm2",
+      "kind": "agent",
+      "room": "r1",
+      "text": "Invoices are reconciled. @Ops can you file them?",
+      "ts": 1762290002000
+    },
+    {
+      "agentId": "a2",
+      "approval": {
+        "detail": "npm run file",
+        "requestId": "rq1",
+        "status": "pending",
+        "title": "Run a command"
+      },
+      "id": "rm3",
+      "kind": "approval",
+      "room": "r1",
+      "text": "",
+      "ts": 1762290003000
+    },
+    {
+      "agentId": "a2",
+      "id": "rm4",
+      "kind": "agent",
+      "room": "r1",
+      "text": "Filed.",
+      "ts": 1762290004000
+    },
+    {
+      "agentId": "",
+      "id": "rm5",
+      "kind": "note",
+      "room": "r1",
+      "text": "8 replies for one message, so nobody else was asked. Mention someone to carry on.",
+      "ts": 1762290005000
+    }
+  ],
+  "more": false
+} satisfies Result<'rooms.messages'>;
+export const roomsSend = {
+  "asked": [
+    {
+      "id": "a1",
+      "name": "Finance"
+    },
+    {
+      "id": "a2",
+      "name": "Ops"
+    }
+  ],
+  "message": {
+    "agentId": "",
+    "clientId": "rc_fixture",
+    "id": "ru1",
+    "kind": "user",
+    "mentions": [
+      {
+        "id": "a1",
+        "name": "Finance"
+      },
+      {
+        "id": "a2",
+        "name": "Ops"
+      }
+    ],
+    "room": "r1",
+    "text": "Status?",
+    "ts": 1762290006000
+  }
+} satisfies Result<'rooms.send'>;
+export const roomsFocus = null satisfies Result<'rooms.focus'>;
 export const agentsStop = false satisfies Result<'agents.stop'>;
 export const agentsAnswerApproval = null satisfies Result<'agents.answerApproval'>;
 export const agentsSaveSecret = {
@@ -1914,6 +2031,32 @@ export const agentsCreate = {
   "unread": 0,
   "workDirectly": true
 } satisfies Result<'agents.create'>;
+export const agentsTemplates = [
+  {
+    "color": "blue",
+    "id": "research",
+    "name": "Research",
+    "needs": null,
+    "role": "Looks things up and comes back with a short brief, every claim linked to its source.",
+    "title": "Research assistant"
+  },
+  {
+    "color": "teal",
+    "id": "inbox",
+    "name": "Inbox",
+    "needs": "mail",
+    "role": "Goes through your email and tells you what needs you, what can wait and what is noise.",
+    "title": "Inbox triage"
+  },
+  {
+    "color": "amber",
+    "id": "weekly-review",
+    "name": "Weekly Review",
+    "needs": null,
+    "role": "Looks back at your week with you and lines up the next one.",
+    "title": "Weekly review"
+  }
+] satisfies Result<'agents.templates'>;
 export const sessionsSend = {
   "sessionId": "pty-1"
 } satisfies Result<'sessions.send'>;
@@ -1956,6 +2099,7 @@ export const frames = [
       "agents.markUnread",
       "agents.startFresh",
       "agents.create",
+      "agents.templates",
       "agents.update",
       "agents.revokePermission",
       "agents.instructions",
@@ -1976,6 +2120,10 @@ export const frames = [
       "agents.schedule.pause",
       "agents.schedule.cancel",
       "agents.schedule.runNow",
+      "rooms.list",
+      "rooms.messages",
+      "rooms.send",
+      "rooms.focus",
       "projects.list",
       "sessions.read",
       "sessions.send",
@@ -1986,7 +2134,8 @@ export const frames = [
     "timeZone": "America/New_York",
     "features": [
       "results.revise",
-      "routines.when"
+      "routines.when",
+      "rooms"
     ]
   },
   {
@@ -2527,6 +2676,33 @@ export const frames = [
           }
         ]
       }
+    }
+  },
+  {
+    "t": "evt",
+    "seq": 4,
+    "event": {
+      "type": "rooms.changed",
+      "rooms": [
+        {
+          "createdAt": 1762280000000,
+          "id": "r1",
+          "lastActivityAt": 1762290004000,
+          "members": [
+            "a1",
+            "a2"
+          ],
+          "muted": false,
+          "name": "Month end",
+          "preview": "Ops: Filed.",
+          "turnCap": 8,
+          "turnsUsed": 2,
+          "unread": 1,
+          "waiting": [
+            "a2"
+          ]
+        }
+      ]
     }
   },
   {

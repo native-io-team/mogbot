@@ -274,7 +274,7 @@ export const agentsResultsScenarios: Scenario[] = [
     id: 'agents-result-v2',
     title: 'Agents — the same result, revised to version 2',
     looksRightWhen:
-      'The first card is folded to one muted line with a chevron: “October invoice summary · v1 · a newer version is below”. Your message shows a quote bar “Changes to October invoice summary · v1” above “Use the rate on each invoice’s date…”. The newest card has a small “v2” badge beside the title and, under it, a muted line “Changes since v1: EUR invoices use the rate on each invoice’s date (Globex −$12.40, Initech +$3.10)”; its Not verified box now has one line; “It says it checked” has “Recomputed both EUR totals”. One Ask for changes, on the newest card only.',
+      'The first card is folded to one muted line with a chevron: “October invoice summary · v1 · earlier version”. Your message shows a quote bar “Changes to October invoice summary · v1” above “Use the rate on each invoice’s date…”. The newest card has a small “v2” badge beside the title and, under it, a muted line “Changes since v1: EUR invoices use the rate on each invoice’s date (Globex −$12.40, Initech +$3.10)”; its Not verified box now has one line; “It says it checked” has “Recomputed both EUR totals”. One Ask for changes, on the newest card only.',
     requires: '.agent-result-past',
     openSelector: AGENTS_TAB,
     steps: [open('finance')],

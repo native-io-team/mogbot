@@ -1,0 +1,407 @@
+/* Rooms: a thread shared by you and two to six agents (components/agents/RoomChat.tsx).
+   The room is neutral; each agent's run of lines carries its own colour under
+   its name. Everything else is the agent chat's own surfaces. */
+
+/* ------------------------------------------------------------ stacked badges */
+
+.agent-room-avatars {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.agent-room-avatars .agent-avatar {
+  /* A hairline of the surface between badges, so the stack reads as three. */
+  box-shadow: 0 0 0 var(--border-width-emphasis) var(--surface-panel);
+}
+
+.agent-room-avatars .agent-avatar + .agent-avatar,
+.agent-room-avatars .agent-avatar + .agent-room-avatars__more {
+  margin-left: calc(var(--spacing-xs) * -1);
+}
+
+/* In a row (the sidebar, the header) a room's badge is a pair, the first
+   two members, one over the other's corner: the footprint of one agent's
+   badge, so room rows line up with agent rows. */
+.agent-room-avatars--row {
+  position: relative;
+  width: var(--size-sidebar-project-shortcut);
+  height: var(--size-sidebar-project-shortcut);
+}
+
+.agent-room-avatars--row .agent-avatar {
+  --agent-avatar-size: calc(var(--size-sidebar-project-shortcut) * 0.6);
+  border-radius: var(--radius-sm);
+  position: absolute;
+  font-size: var(--font-size-caption);
+  letter-spacing: 0;
+}
+
+.agent-room-avatars--row .agent-avatar:first-child {
+  top: 0;
+  left: 0;
+}
+
+.agent-room-avatars--row .agent-avatar + .agent-avatar {
+  right: 0;
+  bottom: 0;
+  margin-left: 0;
+}
+
+.agent-room-avatars__more {
+  margin-left: calc(var(--spacing-xs) * -1);
+}
+
+/* In a row, the stack takes the place of one row badge: same footprint. */
+.agent-room-avatars--row {
+  width: var(--size-sidebar-project-shortcut);
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.agent-room-avatars--row .agent-avatar + .agent-avatar {
+  margin-left: calc(var(--spacing-sm) * -1);
+}
+
+.agent-room-avatars__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--spacing-lg) + var(--spacing-2xs));
+  height: calc(var(--spacing-lg) + var(--spacing-2xs));
+  padding: 0 var(--spacing-2xs);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+  background: var(--surface-control);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 var(--border-width-emphasis) var(--surface-panel);
+}
+
+.agents-list__row.is-current .agent-room-avatars .agent-avatar,
+.agents-list__row.is-current .agent-room-avatars__more {
+  box-shadow: 0 0 0 var(--border-width-emphasis) var(--surface-selected);
+}
+
+/* ------------------------------------------------------------ sidebar */
+
+.agents-list__section {
+  display: flex;
+  flex-direction: column;
+}
+
+.agents-list__section-title {
+  display: flex;
+  align-items: center;
+  height: var(--control-height-standard);
+  padding: var(--spacing-sm) var(--spacing-md) 0 var(--spacing-sm);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  color: var(--text-muted);
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+}
+
+.workspace-sidebar.is-hidden .agents-list__section-title {
+  display: none;
+}
+
+/* ------------------------------------------------------------ the room */
+
+.agent-room__title {
+  gap: var(--spacing-sm);
+}
+
+.agent-room__title .agent-room-avatars .agent-avatar {
+  box-shadow: 0 0 0 var(--border-width-emphasis) var(--surface-app);
+}
+
+.agent-room__heading {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.agent-room__name {
+  overflow: hidden;
+  font-size: var(--font-size-subhead);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-compact);
+  color: var(--text-primary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-room__members {
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* One agent's run of lines: its name once, in its colour, then what it said. */
+.agent-room__speaker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xl);
+}
+
+.agent-room__speaker[data-continued] {
+  margin-top: var(--spacing-md);
+}
+
+.agent-room__speaker-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: color-mix(in srgb, var(--agents-tint, var(--text-secondary)) 70%, var(--text-primary));
+}
+
+.agent-room__speaker > .agent-note {
+  align-self: flex-start;
+  text-align: left;
+}
+
+/* Your line, and who it was for, against the right edge. */
+.agent-room__user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--spacing-2xs);
+  margin-top: var(--spacing-xl);
+}
+
+.agent-room__user:first-child,
+.agent-chat__messages > .agent-room__speaker:first-child {
+  margin-top: 0;
+}
+
+.agent-room__to {
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
+.agent-chat__messages > .agent-note + .agent-room__speaker,
+.agent-chat__messages > .agent-room__speaker + .agent-note {
+  margin-top: var(--spacing-lg);
+}
+
+/* Who's replying now, each under its own name. */
+.agent-room__working {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.agent-room__working[data-leaving] {
+  animation: agents-room-fade-out var(--transition-interaction-fast) forwards;
+}
+
+.agent-room__working[data-entering] {
+  animation: agents-room-fade-in var(--transition-interaction-fast);
+}
+
+.agent-room__working .agent-chat__row--working {
+  margin-top: 0;
+}
+
+.agent-room__waiting {
+  margin-top: var(--spacing-md);
+}
+
+.agent-room__turns {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
+@keyframes agents-room-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes agents-room-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-room__working[data-leaving],
+  .agent-room__working[data-entering] {
+    animation: none;
+  }
+}
+
+/* "Who should answer?": a card's quiet cousin, right above the composer. */
+.agent-room__ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+  box-sizing: border-box;
+  width: calc(100% - (var(--spacing-xl) * 2));
+  max-width: var(--agents-chat-width);
+  margin: 0 auto var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.agent-room__ask-title {
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agent-room__ask-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.agent-room__ask-choices .agent-avatar {
+  margin-right: var(--spacing-2xs);
+}
+
+.agent-room__address {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-room-avatars--wide .agent-avatar {
+  --agent-avatar-size: var(--control-height-standard);
+  font-size: var(--font-size-body-sm);
+  border-radius: var(--radius-control);
+  box-shadow: 0 0 0 var(--border-width-emphasis) var(--surface-app);
+}
+
+/* In an agent's own chat: what it said in a room, as one line. */
+.agent-room-fold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+}
+
+.agent-room-fold__icon {
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------ editor */
+
+.agent-room-editor__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
+}
+
+.agent-room-editor__lead {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agent-room-editor__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agent-room-editor__count {
+  font-weight: var(--font-weight-body);
+  color: var(--text-muted);
+}
+
+.agent-room-editor__members {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(var(--control-height-standard) * 7);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.agent-room-editor__members li + li {
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-room-editor__member {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: var(--control-height-standard);
+  padding: var(--spacing-xs) var(--spacing-md);
+  cursor: pointer;
+}
+
+.agent-room-editor__member:hover {
+  background: var(--tint-subtle);
+}
+
+.agent-room-editor__member-name {
+  flex: 0 0 auto;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-primary);
+}
+
+.agent-room-editor__member-role {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-room-editor__leads {
+  flex-wrap: wrap;
+  align-self: flex-start;
+}
+
+.agent-room-editor__error {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--accent-error);
+}
+
+/* Each working member's line is short: never cut what it's doing. */
+.agent-room__working .agent-working {
+  max-width: none;
+}
+
+.agent-room__working .agent-working__activity {
+  flex: 0 0 auto;
+}
+
+.agent-room__working > .agent-room__speaker:first-child {
+  margin-top: var(--spacing-lg);
+}
+
+.agent-room__working .agent-room__turns {
+  align-self: center;
+}
+
+.modal-frame-content.agent-room-editor {
+  width: min(480px, 90vw);
+}

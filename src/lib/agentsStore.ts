@@ -30,6 +30,7 @@ import {
 } from './agents';
 import { asCommandError, formatCommandError } from './errors';
 import { logger } from './logger';
+import { getRoomMessages, getRooms, roomKey, ROOMS_EVENT, type Room } from './agentRooms';
 
 export interface AgentsState {
   agents: Agent[];
@@ -43,6 +44,10 @@ export interface AgentsState {
   older: Record<string, boolean>;
   /** The reply each agent is writing right now, if any. */
   drafts: Record<string, AgentMessage>;
+  /** Group conversations (`lib/agentRooms`); a room's thread is `messages[roomKey(id)]`. */
+  rooms: Room[];
+  /** The rooms have been read once (an open room that isn't there is gone). */
+  roomsLoaded: boolean;
 }
 
 let state: AgentsState = {
@@ -54,6 +59,8 @@ let state: AgentsState = {
   messages: {},
   older: {},
   drafts: {},
+  rooms: [],
+  roomsLoaded: false,
 };
 const listeners = new Set<() => void>();
 let unlistens: UnlistenFn[] = [];
@@ -103,6 +110,55 @@ function keepUnchanged(previous: Agent[], next: Agent[]): Agent[] {
     return agent;
   });
   return same ? previous : merged;
+}
+
+export async function refreshRooms(): Promise<void> {
+  try {
+    const rooms = await getRooms();
+    const same =
+      rooms.length === state.rooms.length &&
+      rooms.every((r, i) => JSON.stringify(r) === JSON.stringify(state.rooms[i]));
+    if (!same || !state.roomsLoaded) emit({ ...state, rooms, roomsLoaded: true });
+  } catch (error) {
+    logger.error('[Agents] rooms failed', { error: String(error) });
+  }
+}
+
+let roomsTimer: number | null = null;
+function scheduleRoomsRefresh() {
+  if (roomsTimer !== null) return;
+  roomsTimer = window.setTimeout(() => {
+    roomsTimer = null;
+    void refreshRooms();
+  }, 120);
+}
+
+/** (Re)load a room's newest page. */
+export async function loadRoomMessages(roomId: string): Promise<void> {
+  const key = roomKey(roomId);
+  try {
+    const messages = await getRoomMessages(roomId, MESSAGE_PAGE);
+    setMessages(key, messages, messages.length >= MESSAGE_PAGE);
+  } catch (error) {
+    logger.error('[Agents] room messages failed', { roomId, error: String(error) });
+    setMessages(key, state.messages[key] ?? [], false);
+  }
+}
+
+/** The page before the oldest room line loaded. */
+export async function loadOlderRoomMessages(roomId: string): Promise<void> {
+  const key = roomKey(roomId);
+  const loaded = state.messages[key];
+  if (!loaded || !state.older[key]) return;
+  try {
+    const page = await getRoomMessages(roomId, MESSAGE_PAGE, loaded[0]?.id);
+    const current = state.messages[key] ?? [];
+    const have = new Set(current.map((m) => m.id));
+    const fresh = page.filter((m) => !have.has(m.id));
+    setMessages(key, [...fresh, ...current], fresh.length > 0 && page.length >= MESSAGE_PAGE);
+  } catch (error) {
+    logger.error('[Agents] older room messages failed', { roomId, error: String(error) });
+  }
 }
 
 /** Coalesce bursts of registry events (every message bumps the row). */
@@ -181,16 +237,20 @@ function withoutDraft(agentId: string, id?: string): AgentsState['drafts'] {
  * that completes a draft replaces it in the same render, so nothing flickers.
  */
 export function upsertMessage(message: AgentMessage) {
-  const drafts = withoutDraft(message.agentId, message.id);
-  const existing = state.messages[message.agentId];
-  if (!existing) {
-    if (drafts !== state.drafts) emit({ ...state, drafts });
-    return;
+  const drafts = message.agentId ? withoutDraft(message.agentId, message.id) : state.drafts;
+  // A member's line said in a room is in both its own chat and the room's thread.
+  const keys = [message.agentId, message.room ? roomKey(message.room) : ''].filter(Boolean);
+  let messages = state.messages;
+  for (const key of keys) {
+    const existing = messages[key];
+    if (!existing) continue;
+    const index = existing.findIndex((m) => m.id === message.id);
+    const next =
+      index === -1 ? [...existing, message] : existing.map((m, i) => (i === index ? message : m));
+    messages = { ...messages, [key]: next };
   }
-  const index = existing.findIndex((m) => m.id === message.id);
-  const next =
-    index === -1 ? [...existing, message] : existing.map((m, i) => (i === index ? message : m));
-  emit({ ...state, drafts, messages: { ...state.messages, [message.agentId]: next } });
+  if (messages === state.messages && drafts === state.drafts) return;
+  emit({ ...state, drafts, messages });
 }
 
 /** A reply grew. Keeps the time it started, so it doesn't jump past a divider. */
@@ -235,15 +295,21 @@ function patchStatus(agentId: string, status: AgentStatus) {
 function start() {
   const mine = ++generation;
   void refreshAgents();
+  void refreshRooms();
   void Promise.all([
     listen<AgentMessage>(AGENT_EVENTS.message, (e) => upsertMessage(e.payload)),
     listen<{ agentId: string; status: AgentStatus }>(AGENT_EVENTS.status, (e) =>
       patchStatus(e.payload.agentId, e.payload.status)
     ),
-    listen(AGENT_EVENTS.registry, () => scheduleRefresh()),
+    listen(AGENT_EVENTS.registry, () => {
+      scheduleRefresh();
+      // A deleted agent leaves its rooms; a room's row follows its members.
+      scheduleRoomsRefresh();
+    }),
     listen<{ agentId: string; id: string; text: string }>(AGENT_EVENTS.draft, (e) =>
       updateDraft(e.payload.agentId, e.payload.id, e.payload.text)
     ),
+    listen(ROOMS_EVENT, () => scheduleRoomsRefresh()),
   ]).then((handles) => {
     if (mine !== generation) {
       handles.forEach((h) => h());
@@ -293,6 +359,8 @@ export function useAgentsSelector<T>(
 
 const selectAgents = (s: AgentsState) => s.agents;
 export const useAgentsList = () => useAgentsSelector(selectAgents);
+const selectRooms = (s: AgentsState) => s.rooms;
+export const useRoomsList = () => useAgentsSelector(selectRooms);
 
 /** What the Agents side wants from you: who is waiting on your OK, and how many have news. */
 export interface AgentsAttention {
@@ -331,6 +399,8 @@ export function __resetAgentsStore() {
     messages: {},
     older: {},
     drafts: {},
+    rooms: [],
+    roomsLoaded: false,
   };
   loadingOlder.clear();
 }

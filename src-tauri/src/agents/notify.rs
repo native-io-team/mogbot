@@ -360,6 +360,7 @@ mod tests {
             new_engine: false,
             context: None,
             routine_model: None,
+            template: None,
             muted,
             check_ins: Vec::new(),
             usage: Default::default(),
