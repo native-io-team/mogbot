@@ -1,0 +1,452 @@
+#!/usr/bin/env node
+/**
+ * Agents UI under load: the numbers behind the perf targets.
+ *
+ * Drives the `agents-stress` harness scenario (40 agents, a 2,000-line chat,
+ * `window.__stress` for live events) in headless Chrome over CDP and reports
+ * main-thread time, long tasks and React render counts for each situation the
+ * Agents view has to survive. It measures a *production* React build — the
+ * dev server's development React is several times slower and would measure
+ * React, not the app.
+ *
+ *   node scripts/perf-agents.mjs --build                 # build, serve, measure everything
+ *   node scripts/perf-agents.mjs --port 1805             # measure an already-served perf build
+ *   node scripts/perf-agents.mjs --build open,stream     # some phases only
+ *   node scripts/perf-agents.mjs --build --profile       # also write .cpuprofile files
+ *
+ * Phases: open, background, openEvents, stream, idle (default: all).
+ * Options: --port (served harness, default 1805), --cdp (debugging port,
+ * default 9711), --out (results directory, default $TMPDIR/perf-agents).
+ *
+ * Method and targets: docs/ui-harness.md, "Measuring performance".
+ * Chrome is not WKWebView: Chrome composites `filter` animations and WebKit
+ * does not, so animation costs here understate the app's.
+ */
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
+import { CHROME } from './headless-chrome.mjs';
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const argv = process.argv.slice(2);
+const flag = (name) => argv.includes(`--${name}`);
+const opt = (name, fallback) => {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
+};
+const PORT = Number(opt('port', 1805));
+const CDP_PORT = Number(opt('cdp', 9711));
+const OUT = opt('out', path.join(os.tmpdir(), 'perf-agents'));
+const VALUE_FLAGS = new Set(['--port', '--cdp', '--out']);
+const positional = argv.filter((a, i) => !a.startsWith('--') && !VALUE_FLAGS.has(argv[i - 1]));
+const PHASES = (positional[0] ?? 'all').split(',');
+const want = (p) => PHASES.includes('all') || PHASES.includes(p);
+const PROFILE = flag('profile');
+fs.mkdirSync(OUT, { recursive: true });
+
+const portFree = (port) =>
+  new Promise((resolve) => {
+    const s = net.createServer();
+    s.once('error', () => resolve(false));
+    s.listen(port, '127.0.0.1', () => s.close(() => resolve(true)));
+  });
+
+const children = [];
+let profileDir = null;
+const cleanup = () => {
+  if (profileDir) fs.rmSync(profileDir, { recursive: true, force: true });
+  for (const c of children) {
+    try {
+      process.kill(-c.pid, 'SIGTERM');
+    } catch {
+      /* already gone */
+    }
+  }
+};
+process.once('exit', cleanup);
+for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(s, () => process.exit(130));
+
+// ---------- the perf build, served
+if (flag('build')) {
+  if (!(await portFree(PORT))) throw new Error(`Port ${PORT} is taken; pick another with --port.`);
+  console.log('building the harness (production React, unminified)…');
+  await new Promise((resolve, reject) => {
+    const b = spawn(
+      'npx',
+      ['vite', 'build', '--config', 'vite.harness.config.ts', '--logLevel', 'warn'],
+      {
+        stdio: 'inherit',
+      }
+    );
+    b.on('exit', (code) =>
+      code === 0 ? resolve() : reject(new Error(`vite build exited ${code}`))
+    );
+  });
+  const preview = spawn('npx', ['vite', 'preview', '--config', 'vite.harness.config.ts'], {
+    stdio: 'ignore',
+    detached: true,
+    env: { ...process.env, SHIPSTUDIO_HARNESS_PORT: String(PORT) },
+  });
+  children.push(preview);
+  for (let i = 0; i < 100 && (await portFree(PORT)); i++) await sleep(100);
+}
+
+// ---------- Chrome
+if (!(await portFree(CDP_PORT)))
+  throw new Error(`CDP port ${CDP_PORT} is taken; pick another with --cdp.`);
+profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perf-agents-chrome-'));
+const chrome = spawn(
+  CHROME,
+  [
+    '--headless=new',
+    `--remote-debugging-port=${CDP_PORT}`,
+    '--window-size=1440,900',
+    '--force-device-scale-factor=2',
+    '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--enable-precise-memory-info',
+    `--user-data-dir=${profileDir}`,
+    'about:blank',
+  ],
+  { stdio: 'ignore', detached: true }
+);
+children.push(chrome);
+let targets = null;
+for (let i = 0; i < 100 && !targets; i++) {
+  try {
+    targets = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json`)).json();
+  } catch {
+    await sleep(100);
+  }
+}
+const ws = new WebSocket(targets.find((t) => t.type === 'page').webSocketDebuggerUrl);
+await new Promise((r) => ws.addEventListener('open', r));
+let seq = 0;
+const pending = new Map();
+ws.addEventListener('message', (ev) => {
+  const msg = JSON.parse(ev.data);
+  if (msg.id && pending.has(msg.id)) {
+    const { resolve, reject } = pending.get(msg.id);
+    pending.delete(msg.id);
+    if (msg.error) reject(new Error(JSON.stringify(msg.error)));
+    else resolve(msg.result);
+  } else if (msg.method === 'Runtime.exceptionThrown') {
+    console.log('page exception:', JSON.stringify(msg.params.exceptionDetails).slice(0, 300));
+  }
+});
+const send = (method, params = {}) =>
+  new Promise((resolve, reject) => {
+    const id = ++seq;
+    pending.set(id, { resolve, reject });
+    ws.send(JSON.stringify({ id, method, params }));
+  });
+const ev = async (expression) => {
+  const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+  if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 600));
+  return r.result.value;
+};
+
+/**
+ * Injected before any page script.
+ *
+ * Long tasks come from a PerformanceObserver. Render counts come from a
+ * stand-in DevTools hook: on each commit it walks only the subtrees React
+ * marked as having done work (`PerformedWork`, bubbled through
+ * `subtreeFlags`), so a bailed-out tree costs nothing to skip. Counting is
+ * off unless `__rcOn` is set, and CPU is measured with it off.
+ */
+const PRELUDE = `
+(() => {
+  const w = window;
+  w.__lt = [];
+  try {
+    new PerformanceObserver((l) => { for (const e of l.getEntries()) w.__lt.push({ s: e.startTime, d: e.duration }); })
+      .observe({ type: 'longtask', buffered: true });
+  } catch {}
+  w.__rc = {};
+  w.__rcOn = false;
+  const PERFORMED = 1;
+  // The bundler suffixes clashing names (Icon2); the suffix is not the component.
+  const name = (f) => { const t = f.type; const n = t && (t.displayName || t.name); return n ? n.replace(/[0-9]+$/, '') : null; };
+  const walk = (f) => {
+    while (f) {
+      if (f.flags & PERFORMED && (f.tag === 0 || f.tag === 1 || f.tag === 11 || f.tag === 15)) {
+        const n = name(f.tag === 11 ? { type: f.type.render } : f) || '(anon)';
+        w.__rc[n] = (w.__rc[n] || 0) + 1;
+      }
+      if (f.child && (f.subtreeFlags & PERFORMED)) walk(f.child);
+      f = f.sibling;
+    }
+  };
+  w.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+    supportsFiber: true, isDisabled: false, renderers: new Map(),
+    inject() { return 1; }, checkDCE() {},
+    onScheduleFiberRoot() {}, onCommitFiberUnmount() {}, onPostCommitFiberRoot() {},
+    onCommitFiberRoot(_id, root) { if (w.__rcOn) walk(root.current.child); },
+  };
+  w.__marks = {};
+})();
+`;
+await send('Page.enable');
+await send('Runtime.enable');
+await send('Performance.enable', { timeDomain: 'timeTicks' });
+await send('Page.addScriptToEvaluateOnNewDocument', { source: PRELUDE });
+
+const URL = `http://127.0.0.1:${PORT}/harness.html?scenario=agents-stress&chrome=off&freeze=off`;
+const metrics = async () =>
+  Object.fromEntries((await send('Performance.getMetrics')).metrics.map((m) => [m.name, m.value]));
+const pct = (a, z, key, secs) => +(((z[key] - a[key]) / secs) * 100).toFixed(1);
+const now = () => ev('performance.now()');
+// Any task still running at t0 counts: the click that starts a measurement
+// runs inside a task that began a moment earlier.
+const longTasksSince = (t0) =>
+  ev(`(() => { const l = window.__lt.filter(e => e.s + e.d >= ${t0});
+    return { count: l.length, max: Math.round(Math.max(0, ...l.map(e => e.d))) }; })()`);
+const rows = () => ev(`document.querySelectorAll('.agent-chat [data-message-ids]').length`);
+const renders = async (fn) => {
+  await ev('window.__rc = {}; window.__rcOn = true');
+  await fn();
+  const rc = await ev('(window.__rcOn = false, JSON.parse(JSON.stringify(window.__rc)))');
+  return Object.fromEntries(Object.entries(rc).sort((x, y) => y[1] - x[1]));
+};
+const pick = (rc, names) => Object.fromEntries(names.map((n) => [n, rc[n] ?? 0]));
+const WATCH = [
+  'AgentsModeView',
+  'AgentsSidebar',
+  'AgentChat',
+  'ResultCardView',
+  'ApprovalCard',
+  'WorkTimeline',
+  'Prose',
+  'CodeBlock',
+];
+
+async function load() {
+  await send('Page.navigate', { url: URL });
+  for (let i = 0; i < 200; i++) {
+    if (
+      await ev(
+        '!!window.__harnessReady && !!document.querySelector(".agent-chat [data-message-ids]")'
+      ).catch(() => false)
+    )
+      break;
+    await sleep(100);
+  }
+  await sleep(800);
+}
+async function loadAllRows() {
+  for (let p = 0; p < 25; p++) {
+    const n = await rows();
+    await ev(
+      `(() => { const el = document.querySelector('.agent-chat__scroll'); el.scrollTop = 0; el.dispatchEvent(new Event('scroll')); })()`
+    );
+    for (let i = 0; i < 30 && (await rows()) === n; i++) await sleep(50);
+    if ((await rows()) === n) break;
+  }
+  await ev(
+    `(() => { const el = document.querySelector('.agent-chat__scroll'); el.scrollTop = el.scrollHeight; })()`
+  );
+  await sleep(800);
+  return rows();
+}
+async function startProfile(interval = 200) {
+  if (!PROFILE) return;
+  await send('Profiler.enable');
+  await send('Profiler.setSamplingInterval', { interval });
+  await send('Profiler.start');
+}
+async function stopProfile(name) {
+  if (!PROFILE) return;
+  const { profile } = await send('Profiler.stop');
+  fs.writeFileSync(path.join(OUT, `${name}.cpuprofile`), JSON.stringify(profile));
+}
+/** Main-thread share of wall time while `fn` runs plus `secs` of settling. */
+async function cpu(label, fn, secs) {
+  const a = await metrics();
+  const t0 = await now();
+  await startProfile();
+  await fn();
+  await sleep(secs * 1000);
+  await stopProfile(label);
+  const z = await metrics();
+  const wall = ((await now()) - t0) / 1000;
+  return {
+    secs: +wall.toFixed(1),
+    mainThreadPct: pct(a, z, 'TaskDuration', wall),
+    scriptPct: pct(a, z, 'ScriptDuration', wall),
+    stylePct: pct(a, z, 'RecalcStyleDuration', wall),
+    layoutPct: pct(a, z, 'LayoutDuration', wall),
+    longTasks: await longTasksSince(t0),
+  };
+}
+
+const results = {};
+const report = (k, v) => {
+  results[k] = v;
+  console.log(`\n${k}\n${JSON.stringify(v, null, 1)}`);
+};
+const clickAndWait = (selector, until) =>
+  ev(`(async () => {
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) return { error: 'no ${selector}' };
+    const t0 = performance.now();
+    el.click();
+    const start = Date.now();
+    while (!(${until})) { await new Promise(r => setTimeout(r, 0)); if (Date.now() - start > 20000) return { error: 'timeout' }; }
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return { ms: Math.round(performance.now() - t0), t0 };
+  })()`);
+const OTHER = `[data-agent-id="a0"]`;
+const CHIEF = `[data-agent-id="chief"]`;
+const otherOpen = `document.querySelector('.agent-chat')?.getAttribute('aria-label')?.includes('Agent 01')`;
+
+// ---------- 1. opening the chat with 2,000 lines loaded
+if (want('open')) {
+  await load();
+  const n = await loadAllRows();
+  const runs = [];
+  for (let i = 0; i < 4; i++) {
+    await clickAndWait(OTHER, otherOpen);
+    await sleep(400);
+    if (i === 1) await startProfile(100);
+    const t = await clickAndWait(
+      CHIEF,
+      `document.querySelectorAll('.agent-chat [data-message-ids]').length >= ${n - 10}`
+    );
+    if (i === 1) await stopProfile('open-2000');
+    if (t.error) throw new Error(t.error);
+    await sleep(600);
+    runs.push({ ms: t.ms, maxLongTask: (await longTasksSince(t.t0)).max });
+  }
+  const warm = runs.slice(1);
+  report('open_2000', {
+    rows: n,
+    runs,
+    worstMs: Math.max(...warm.map((r) => r.ms)),
+    worstLongTask: Math.max(...warm.map((r) => r.maxLongTask)),
+  });
+}
+
+// ---------- 2. 10 status/s on other agents, chat open at 2,000 lines
+const STATUS_SECS = 20;
+if (want('background') || want('openEvents')) {
+  await load();
+  const n = await loadAllRows();
+  if (want('background')) {
+    const rc = await renders(async () => {
+      await ev(`window.__stress.start({ rate: 10, open: false })`);
+      await sleep(10_000);
+      await ev('window.__stress.stop()');
+    });
+    await sleep(500);
+    const c = await cpu(
+      'background-2000',
+      () => ev(`window.__stress.start({ rate: 10, open: false })`),
+      STATUS_SECS
+    );
+    await ev('window.__stress.stop()');
+    report('background_events_2000', {
+      rows: n,
+      ...c,
+      rendersIn10s: pick(rc, WATCH),
+      topRenders: Object.fromEntries(Object.entries(rc).slice(0, 12)),
+    });
+  }
+  if (want('openEvents')) {
+    await sleep(1000);
+    const rc = await renders(async () => {
+      await ev(`window.__stress.start({ rate: 10, open: true })`);
+      await sleep(10_000);
+      await ev('window.__stress.stop()');
+    });
+    await sleep(500);
+    const c = await cpu(
+      'open-events-2000',
+      () => ev(`window.__stress.start({ rate: 10, open: true })`),
+      STATUS_SECS
+    );
+    await ev('window.__stress.stop()');
+    report('open_chat_events_2000', { rows: await rows(), ...c, rendersIn10s: pick(rc, WATCH) });
+  }
+}
+
+// ---------- 3. a 3.5 KB reply streaming into the open chat at 2,000 lines
+if (want('stream')) {
+  await load();
+  const n = await loadAllRows();
+  let chars = 0;
+  const rc = await renders(async () => {
+    chars = await ev(`window.__stress.stream({ blocks: 12, every: 40 })`);
+  });
+  await sleep(1500);
+  const c = await cpu(
+    'stream-2000',
+    async () => {
+      await ev(`window.__stress.stream({ blocks: 12, every: 40 })`);
+    },
+    0.1
+  );
+  report('stream_2000', { rows: n, chars, ...c, renders: pick(rc, WATCH) });
+}
+
+// ---------- 4. nothing happening, six agents shown as working
+if (want('idle')) {
+  for (const all of [false, true]) {
+    await load();
+    const n = all ? await loadAllRows() : await rows();
+    // Six agents start working and then go quiet: their loaders keep running.
+    await ev(`window.__stress.start({ rate: 10 })`);
+    await sleep(1200);
+    await ev('window.__stress.stop()');
+    await sleep(2000);
+    const c = await cpu(`idle-working-${n}`, async () => {}, 20);
+    const anims = await ev(
+      `document.getAnimations().filter(a => a.playState === 'running').length`
+    );
+    report(`idle_six_working_${all ? 2000 : 150}`, { rows: n, runningAnimations: anims, ...c });
+  }
+}
+
+// ---------- the targets
+const T = [];
+const check = (name, value, ok) => T.push({ target: name, value, pass: ok });
+if (results.open_2000) {
+  const r = results.open_2000;
+  check('chat open at 2,000 lines < 100 ms', `${r.worstMs} ms`, r.worstMs < 100);
+  check('  … no long task > 50 ms', `${r.worstLongTask} ms`, r.worstLongTask <= 50);
+}
+if (results.background_events_2000) {
+  const r = results.background_events_2000;
+  check(
+    'other agents at 10/s: AgentChat renders',
+    r.rendersIn10s.AgentChat,
+    r.rendersIn10s.AgentChat === 0
+  );
+}
+if (results.open_chat_events_2000) {
+  const r = results.open_chat_events_2000;
+  check('open-chat events at 2,000 lines < 10%', `${r.mainThreadPct}%`, r.mainThreadPct < 10);
+}
+if (results.stream_2000) {
+  const r = results.stream_2000;
+  check('streaming at 2,000 lines < 15%', `${r.mainThreadPct}%`, r.mainThreadPct < 15);
+}
+for (const k of ['idle_six_working_150', 'idle_six_working_2000']) {
+  if (results[k])
+    check(
+      `idle, 6 working (${results[k].rows} lines) < 3%`,
+      `${results[k].mainThreadPct}%`,
+      results[k].mainThreadPct < 3
+    );
+}
+results.targets = T;
+console.log('\nTargets');
+for (const t of T) console.log(`  ${t.pass ? 'PASS' : 'FAIL'}  ${t.target}: ${t.value}`);
+const file = path.join(OUT, `perf-agents-${PHASES.join('_')}.json`);
+fs.writeFileSync(file, JSON.stringify(results, null, 2));
+console.log(`\nwrote ${file}`);
+ws.close();
+process.exit(0);
