@@ -183,6 +183,9 @@
   --button-success-surface-hover: color-mix(in srgb, var(--accent-success) 10%, transparent);
   --button-success-text: var(--accent-success);
   --button-surface-busy: var(--color-gray-900);
+  --button-strong-surface: var(--surface-inverse);
+  --button-strong-surface-hover: var(--surface-inverse-hover);
+  --button-strong-text: var(--text-on-inverse);
   --button-variable-surface: var(--color-purple-700);
   --button-variable-hover: var(--color-purple-600);
   --button-warning-surface: var(--surface-warning);
@@ -409,25 +412,30 @@
   --canvas-label-tracking: 0;
 }
 
+/* Progress and "working" indicators are status, never the accent: a red or
+   amber accent would make "in progress" read as an error or a warning. */
+:root {
+  --pixel-loader-color: var(--status-running);
+  --progress-track: var(--surface-selected);
+  --progress-indicator: var(--status-running);
+}
+
 /* Component roles derived from the accent. Declared on [data-accent-scope] as
    well as :root for the same reason as the accent block in
    tokens-semantic.css: a scoped accent must re-derive these, or a primary
    button inside an agent's conversation would keep the app's colour. */
 :root,
 [data-accent-scope] {
-  --pixel-loader-color: var(--accent-active);
-  --progress-track: color-mix(in srgb, var(--accent-active) 18%, var(--surface-control));
-  --progress-indicator: var(--accent-active);
-  --compact-topbar-pin-active-surface: color-mix(in srgb, var(--accent-active) 15%, transparent);
-  --compact-topbar-pin-active-border: color-mix(in srgb, var(--accent-active) 30%, transparent);
+  --compact-topbar-pin-active-surface: rgba(var(--accent-user-rgb), 0.15);
+  --compact-topbar-pin-active-border: rgba(var(--accent-user-rgb), 0.3);
   --drag-sort-target-indicator: var(--accent-active);
 
   /* The primary button: a shallow top-lit gradient of the accent itself. The
      steps are small on purpose — a deep gradient on a white accent reads as
      grey and dirty rather than lit. */
-  --button-primary-start: color-mix(in oklch, var(--accent-active) 90%, var(--color-black));
+  --button-primary-start: var(--accent-user-start);
   --button-primary-mid: var(--accent-active);
-  --button-primary-end: color-mix(in oklch, var(--accent-active) 92%, var(--color-white));
+  --button-primary-end: var(--accent-user-end);
   /* Busy fill for a control that is mid-action. Flat and darker than the
      idle gradient, and opaque: dimming with `opacity` let whatever sat
      behind the button show through it. */

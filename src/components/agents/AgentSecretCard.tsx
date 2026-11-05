@@ -116,7 +116,7 @@ export const SecretCard = memo(function SecretCard({
               <Button tabIndex={0} variant="secondary" disabled={busy} onClick={() => void deny()}>
                 Deny
               </Button>
-              <Button tabIndex={0} type="submit" variant="primary" disabled={!filled || busy}>
+              <Button tabIndex={0} type="submit" variant="strong" data-allow disabled={!filled || busy}>
                 Save
               </Button>
             </div>

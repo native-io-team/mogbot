@@ -65,6 +65,11 @@
      agent palette, src/styles/features/agents.css). src/lib/accent.ts mirrors
      it, and a unit test holds the three in sync. */
   --color-accent-default: #e6e6e6;
+  /* Its precomputed shades (accentVars('white') in accent.ts). */
+  --color-accent-default-hover: #c2c2c2;
+  --color-accent-default-strong: #949494;
+  --color-accent-default-start: #c8c8c8;
+  --color-accent-default-end: #e8e8e8;
 
   --color-swatch-blue: #007aff;
   --color-swatch-green: #34c759;

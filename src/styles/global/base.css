@@ -510,6 +510,20 @@ body.compact-mode-active html {
   border-color: var(--button-border-outline);
 }
 
+/* Neutral emphasis: the strongest button that carries no colour. Used where a
+   coloured fill would say something it shouldn't — Allow on an approval card
+   must not take the accent, which may be red. */
+.button--strong {
+  background: var(--button-strong-surface);
+  color: var(--button-strong-text);
+  border-color: transparent;
+}
+
+.button--strong:hover:not(:disabled) {
+  background: var(--button-strong-surface-hover);
+  color: var(--button-strong-text);
+}
+
 .button--danger {
   background: transparent;
   color: var(--accent-error-light);

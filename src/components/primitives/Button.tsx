@@ -3,6 +3,7 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 export type ButtonVariant =
   | 'default'
   | 'primary'
+  | 'strong'
   | 'secondary'
   | 'danger'
   | 'success'
@@ -48,7 +49,10 @@ export function buttonClassNames({
  * `"button"` so forms don't submit by accident.
  *
  * - `variant` — visual emphasis. `default` = neutral Figma solid,
- *   `secondary` = neutral outline, `primary` = green CTA, `danger` =
+ *   `secondary` = neutral outline, `primary` = the accent CTA (the Chief of
+ *   Staff's colour, or the scoped agent's), `strong` = the neutral emphasis
+ *   (near-white fill, dark ink) for answers that must never look like a
+ *   colour choice — Allow on an approval card is one, `danger` =
  *   red-tinted destructive action, `success` = green-tinted positive action,
  *   `ghost` = borderless low-emphasis action, `warning` = amber warning action,
  *   and `variable` = purple variable action.
