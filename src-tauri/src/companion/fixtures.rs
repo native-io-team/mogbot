@@ -429,6 +429,11 @@ async fn generate() -> String {
         call("agents.quota", json!({})).await,
     );
     out += &entry(
+        "agentsAccounts",
+        "Result<'agents.accounts'>",
+        call("agents.accounts", json!({})).await,
+    );
+    out += &entry(
         "agentsMessages",
         "Result<'agents.messages'>",
         call("agents.messages", json!({ "agentId": AGENT, "limit": 100 })).await,

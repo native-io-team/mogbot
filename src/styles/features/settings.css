@@ -373,3 +373,100 @@
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--spacing-xs);
 }
+
+/* Settings → Agents → Accounts (usage wallets): one Line per account, in
+   the order turns try them. */
+.agent-accounts__lead {
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  color: var(--text-muted);
+}
+
+.agent-accounts__engine {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
+
+.agent-accounts__engine-name {
+  font-size: var(--font-size-body-lg);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.agent-accounts__list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.agent-account {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.agent-account + .agent-account {
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-account__order {
+  flex: none;
+  width: var(--spacing-lg);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-account__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* css-ok: matches .settings-row-info's tight label/description pair */
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-account__name {
+  font-size: var(--font-size-body-md);
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-account__state,
+.agent-account__kind,
+.agent-account__confirm {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* Out of usage is a status, never the accent; told apart by words as well. */
+.agent-account--out .agent-account__state {
+  color: var(--accent-warning);
+}
+
+.agent-account__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.agent-account__name-field {
+  max-width: 220px; /* css-ok: a name field, not the row */
+}
+
+.agent-accounts__new {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}

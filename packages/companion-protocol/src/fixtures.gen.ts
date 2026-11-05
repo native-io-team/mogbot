@@ -405,6 +405,37 @@ export const agentsQuota = [
     ]
   }
 ] satisfies Result<'agents.quota'>;
+export const agentsAccounts = [
+  {
+    "engine": "claude",
+    "id": "default",
+    "name": "This Mac",
+    "out": false,
+    "signedIn": true,
+    "thisMac": true
+  },
+  {
+    "email": "me@work.example",
+    "engine": "claude",
+    "id": "a1work",
+    "limit": {
+      "at": 1762290000000,
+      "resetsAt": 1762300000000
+    },
+    "name": "Work",
+    "out": true,
+    "signedIn": true,
+    "thisMac": false
+  },
+  {
+    "engine": "codex",
+    "id": "default",
+    "name": "This Mac",
+    "out": false,
+    "signedIn": false,
+    "thisMac": true
+  }
+] satisfies Result<'agents.accounts'>;
 export const agentsMessages = {
   "asOf": {
     "epoch": "epoch-test",
@@ -2108,6 +2139,7 @@ export const frames = [
       "agents.memorySuggest",
       "agents.usage",
       "agents.quota",
+      "agents.accounts",
       "agents.changeDiff",
       "agents.keepCopy",
       "agents.discardCopy",

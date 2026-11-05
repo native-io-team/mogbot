@@ -36,6 +36,7 @@ import type {
   UpdateAgentInput,
   UsageSummary,
   Quota,
+  UsageAccount,
 } from './model';
 
 /** A file uploaded with `PUT /v1/blobs`, referenced by id. Replaces a desktop path. */
@@ -181,6 +182,12 @@ export interface Methods {
    */
   'agents.quota': { params: Record<string, never>; result: Quota[] };
   /**
+   * Each engine's usage accounts, in the order turns try them when one
+   * reaches its usage limit (`agents::wallet`). Read-only: they are added
+   * and signed in on the Mac. Newer Macs only.
+   */
+  'agents.accounts': { params: Record<string, never>; result: UsageAccount[] };
+  /**
    * The ready-made agents the phone's New agent sheet offers. `template` on
    * `agents.create` takes one's id, and the Mac fills in its briefing. A Mac
    * that lists this method accepts `template`. Newer Macs only.
@@ -301,6 +308,7 @@ export const READ_ONLY_METHODS = [
   'agents.memory',
   'agents.usage',
   'agents.quota',
+  'agents.accounts',
   'agents.templates',
   'agents.files',
   'agents.changeDiff',

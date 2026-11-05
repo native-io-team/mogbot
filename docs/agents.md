@@ -1266,6 +1266,126 @@ the same day. The wording lives once, in
 `packages/companion-protocol/src/quota.ts`, for the desk and the phone, and
 in `clock_phrase` for the Mac's own sentences.
 
+## Usage wallets (`agents/wallet.rs`)
+
+Answers: **when one subscription runs out, can the agents keep going on
+another?** Each engine has an ordered list of accounts (Settings → Agents →
+Accounts; ⌘K "Usage accounts…", "Add a Claude Code account…", "Add a Codex
+account…"). The first is always **This Mac**: the `claude` / `codex` login
+already on the machine (`id: "default"`), which every turn used before
+wallets and still uses while it is the only one. It can be renamed and moved
+down, not removed. Each added account is signed in into a folder of its own,
+reusing the isolation `commands/accounts.rs` already had for workspaces (an
+added account's id is a fresh one, never a workspace's):
+
+| | Claude Code | Codex |
+|---|---|---|
+| Folder | `CLAUDE_CONFIG_DIR=~/.<slug>/accounts/<id>/claude` | `CODEX_HOME=~/.<slug>/accounts/<id>/codex` |
+| Sign-in | `claude setup-token` in a backend PTY; the printed token is captured and redacted in Rust (`claude_connect_start`), checked against the API, kept in the Keychain, injected as `CLAUDE_CODE_OAUTH_TOKEN` | `codex login` under that `CODEX_HOME` (`workspace_connect_start`), done when it exits 0 |
+| Signed in means | a stored token whose recorded expiry (1 year) hasn't passed | its `auth.json` exists |
+
+Nothing else of the account isolation comes along: no `GH_CONFIG_DIR`, no
+workspace credentials, so an agent's `gh` and git identity are the user's
+own on every account. The folder gets symlinks to This Mac's
+`settings.json`, `CLAUDE.md`, `agents`, `commands`, `skills`, `plugins`
+(Claude Code) or `config.toml`, `AGENTS.md`, `prompts`, `skills`,
+`models_cache.json` (Codex), where it has none of its own, so an agent
+behaves the same on every account. **Not** shared: logins, history and
+Claude Code's `.claude.json`, which holds the signed-in account *and* the
+user-scope MCP servers. So MCP servers added with `claude mcp add --scope
+user` exist only on This Mac (a known difference, not papered over).
+
+**Failover** (`runner::run_on_accounts`, around `run_turn`):
+
+1. A turn runs on the first account, in order, that is signed in and not out
+   (`wallet::choose`). With one usable account there is nothing to choose:
+   it runs, and the engine says whether it can, exactly as before wallets.
+2. A turn that fails as the usage limit (`failure::describe_now` →
+   `FailureKind::UsageLimit`) marks its account out until the reset: the one
+   in the failure (from the message, or the engine's own
+   `rate_limit_event` / rate-limit snapshot read during the turn,
+   `failure::with_reported_reset`). A `rate_limit_event` whose window is
+   `rejected` marks it too, mid-turn (`wallet::reported_out`). No reset
+   reported: out for an hour (`UNKNOWN_OUT_MS`), then tried again; one failed
+   try is one quick refusal and re-marks it.
+3. The turn runs again on the next account, with the same request and one
+   bracketed line telling the model the last attempt stopped at a usage limit
+   and to carry on rather than start over (`continue_prompt`). At most
+   `MAX_SWITCHES` (4) per turn, and an account is never tried twice in one.
+4. The chat gets a quiet Note whenever a turn runs on another account than
+   the agent's last one: "Switched to Work: This Mac is out of usage until
+   10:00 AM." (only the reset the engine reported is named; "is out of usage"
+   without one). The phone shows the same Note as a Line.
+5. Nothing left (two or more signed-in accounts, all out): the turn ends on
+   one error line, tagged as the usage limit with the earliest reported reset
+   so the usual "Retry at …" is offered: "Both Claude Code accounts have
+   reached their usage limit. The first is back tomorrow at 10:00 AM." Never
+   silent, and never refused while a lone account could still try.
+6. Routines, check-ins and delegated turns go through the same path. Take
+   over drives the session on the account the agent's turns last ran on.
+
+**The conversation carries over.** Verified in Claude Code 2.1.318's own
+code: transcripts live at `$CLAUDE_CONFIG_DIR/projects/<cwd with every
+non-alphanumeric character as "-">/<session>.jsonl` (with a `<session>/`
+folder beside it for sub-agents and saved tool output), and the Agent SDK's
+own resume helper resumes a session by writing its transcript into another
+config dir, so a copied transcript is the supported mechanism. Codex 0.166:
+`$CODEX_HOME/sessions/YYYY/MM/DD/rollout-…-<thread>.jsonl`, found by id in
+its sqlite state first and by a filename scan when that misses (source,
+`rollout/src/list.rs`). So before a turn resumes on an account,
+`wallet::carry_session` copies the **newest** copy of the transcript among
+the engine's account folders into this one at the same relative path (mtime
+kept, so A → B → A carries B's newer copy back). If the engine still can't
+find it ("No conversation found", "no rollout found"), the existing fallback
+starts a new session with the recent visible conversation (`with_recap`).
+Claude Code itself handles thinking written under another organization: it
+says so and regenerates it (string in its binary), rather than failing.
+
+**What is observed vs assumed** (research 2026-11-05, Claude Code 2.1.318,
+Codex 0.166; sources: the installed binaries, openai/codex `main`,
+anthropics/claude-code#103820, #103253, #70697):
+
+- Claude Code's limit (observed in 2.1.304 output, #103820): a
+  `rate_limit_event` with `status: "rejected"`, `resetsAt` (epoch s) and
+  `rateLimitType`, then an assistant message and a `result` with
+  `api_error: "usage_limit_reached"` and the text "You've hit your weekly
+  limit · resets 11am (UTC)" (labels: 5-hour, weekly, Opus, Sonnet, Fable,
+  usage credit), exit 1. `resetsAt` is the machine-readable reset; the text's
+  time is display only. The old "Claude AI usage limit reached|<epoch>" is
+  gone from 2.1.318 (still parsed). A server-side 429 throttle says "not your
+  usage limit" and is not a switch. **Known gap:** #103820 reports long
+  sessions exiting 1 with none of those events on stdout (only in the
+  transcript); such a turn reads as an unfinished turn, not a limit, and
+  doesn't fail over.
+- Codex's limit (source): HTTP 429 `usage_limit_reached` with `resets_at`;
+  `codex exec --json` carries only text ("You’ve hit your usage limit … try
+  again at 3:15 PM.", with U+2019), app-server's `turn.error` carries
+  `codexErrorInfo: "usageLimitExceeded"`; the reset is read from
+  `account/rateLimits` when the text has none. Matched by text in both.
+- Keychain: Claude Code 2.1.318 keys its own login per config dir
+  (`Claude Code-credentials-<sha256 prefix>`); older builds shared one
+  (#70697). The setup-token path is kept because it works on both and is
+  already proven here.
+- **Not verified:** a real failover against a live exhausted account (no
+  exhausted account was available), resuming a copied transcript on a second
+  real account of either engine, and Codex's keyring-backed auth
+  (`cli_auth_credentials_store = "keyring"`), where `CODEX_HOME` isolation
+  depends on how the "Codex Auth" item is keyed. Unit tests cover detection
+  (real wordings), choosing, marking, the lines and the transcript copy.
+- Not built: falling back across engines (Claude Code → Codex). It would move
+  the agent to another model mid-conversation and lose its session; left out
+  rather than done half-way.
+
+The plan reading (`quota.json`) is one account's picture: when a turn on
+another account reports one, the old reading is cleared first
+(`wallet::reading_moves_to`), so Codex's sparse updates never merge two
+accounts' windows. The wallet itself is `<agents root>/wallet.json`: the
+ordered accounts with their last limit, which account each agent last ran on,
+and which account each engine's reading came from. Removing an account
+deletes its Keychain items and its folder (`accounts::forget_isolated_account`,
+which refuses any id a workspace uses). The phone reads the list read-only
+(`agents.accounts`) in its Settings, once an engine has more than one.
+
 ## Apps agents can use (`src-tauri/src/agents/apps.rs`)
 
 Every turn is a `claude` process, and Claude Code loads the user's MCP servers

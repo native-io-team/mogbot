@@ -43,6 +43,7 @@ pub const METHODS: &[&str] = &[
     "agents.memorySuggest",
     "agents.usage",
     "agents.quota",
+    "agents.accounts",
     "agents.changeDiff",
     "agents.keepCopy",
     "agents.discardCopy",
@@ -77,6 +78,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.memory",
     "agents.usage",
     "agents.quota",
+    "agents.accounts",
     "agents.templates",
     "agents.changeDiff",
     "agents.files",
@@ -374,6 +376,8 @@ pub trait Backend: Send + Sync + 'static {
     async fn usage(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_quota`: each engine's plan, as it last reported it.
     async fn quota(&self) -> Result<Value, CommandError>;
+    /// `agents_accounts`: each engine's usage accounts, read-only.
+    async fn accounts(&self) -> Result<Value, CommandError>;
     /// `agents_revoke_permission`: an "Always allow" rule taken back.
     async fn revoke_permission(&self, agent_id: &str, rule_id: &str) -> Result<(), CommandError>;
     /// `agents_change_diff`: one file of a change card.
@@ -1208,6 +1212,7 @@ async fn run(
             Ok(b.usage(&p.agent_id).await?)
         }
         "agents.quota" => Ok(b.quota().await?),
+        "agents.accounts" => Ok(b.accounts().await?),
         // The ready-made agents, without their briefings: the phone shows
         // the choice, the Mac fills the instructions in on create.
         "agents.templates" => Ok(templates_for_phone()),

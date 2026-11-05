@@ -8,6 +8,7 @@ import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from '
 import { Icon, Row, Section, T, tap } from '../components/ui';
 import { formatDate } from '../lib/agents';
 import { useQuotaLines } from '../lib/quota';
+import { useAccountLines } from '../lib/accounts';
 import { appInfo } from '../lib/pairing';
 import { setPref } from '../lib/prefs';
 import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
@@ -24,6 +25,10 @@ const APPEARANCE: { value: AppearancePref; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
 ];
+
+/** Accounts are added and signed in on the Mac; here they are only shown. */
+const ACCOUNTS_FOOTER =
+  'When one runs out of usage, agents carry on with the next. Add or reorder them on the Mac.';
 
 type UpdateState =
   | { kind: 'idle' }
@@ -106,6 +111,7 @@ export default function Settings() {
     );
 
   const quota = useQuotaLines();
+  const accounts = useAccountLines();
   const { version, build } = appInfo();
   const updateLabel =
     update.kind === 'checking'
@@ -141,6 +147,20 @@ export default function Settings() {
               // Amber from 90% and at the limit, as on the agents list.
               warning={line.tone !== 'calm'}
               last={i === quota.length - 1}
+            />
+          ))}
+        </Section>
+      )}
+
+      {accounts.length > 0 && (
+        <Section title="Accounts" footer={ACCOUNTS_FOOTER}>
+          {accounts.map((line, i) => (
+            <Row
+              key={line.key}
+              label={line.label}
+              detail={line.detail}
+              warning={line.out}
+              last={i === accounts.length - 1}
             />
           ))}
         </Section>

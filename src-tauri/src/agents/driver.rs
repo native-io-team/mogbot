@@ -77,6 +77,11 @@ impl Driver {
             .await
     }
 
+    /// [`Driver::ready`] for a turn on one account of the engine's wallet.
+    pub async fn ready_as(self, account: &super::wallet::Account) -> Result<(), CommandError> {
+        self.ready_if(|| super::wallet::signed_in(account)).await
+    }
+
     /// [`Driver::ready`], given how to ask whether Codex is signed in (only
     /// asked for a Codex turn).
     async fn ready_if<F>(self, codex_signed_in: impl FnOnce() -> F) -> Result<(), CommandError>

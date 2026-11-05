@@ -349,6 +349,47 @@ fn should_inject_claude_token(expires_at: Option<u64>, now: u64) -> bool {
     }
 }
 
+/// The Claude token to run an isolated account's turns with: the one its
+/// sign-in captured, while its recorded expiry hasn't passed. Used by usage
+/// wallets (`agents::wallet`), whose accounts reuse this isolation.
+pub fn claude_token_for(account_id: &str) -> Option<String> {
+    if account_id == DEFAULT_ACCOUNT_ID || validate_account_id(account_id).is_err() {
+        return None;
+    }
+    let token = read_from_keychain(account_id, CLAUDE_TOKEN_KEY)?;
+    should_inject_claude_token(read_claude_token_expiry(account_id), unix_now()).then_some(token)
+}
+
+/// The email given when an isolated account's Claude sign-in was made.
+pub fn claude_email_for(account_id: &str) -> Option<String> {
+    if account_id == DEFAULT_ACCOUNT_ID || validate_account_id(account_id).is_err() {
+        return None;
+    }
+    read_from_keychain(account_id, CLAUDE_EMAIL_KEY)
+}
+
+/// Remove an isolated account's sign-ins from this Mac: its Keychain items
+/// and its folder under `~/.<slug>/accounts/<id>/`. Refuses the Default
+/// account and any id a workspace uses (those are `delete_account`'s).
+pub fn forget_isolated_account(account_id: &str) {
+    if account_id == DEFAULT_ACCOUNT_ID || validate_account_id(account_id).is_err() {
+        return;
+    }
+    if read_app_state().accounts.iter().any(|a| a.id == account_id) {
+        tracing::warn!(
+            account_id,
+            "not removing a workspace's sign-ins from a usage account"
+        );
+        return;
+    }
+    delete_all_account_credentials(account_id);
+    if let Err(e) = std::fs::remove_dir_all(account_config_root(account_id)) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            tracing::warn!(account_id, error = %e, "couldn't remove a usage account's folder");
+        }
+    }
+}
+
 /// Read a workspace's stored Claude token expiry (unix seconds), if any.
 fn read_claude_token_expiry(account_id: &str) -> Option<u64> {
     read_from_keychain(account_id, CLAUDE_EXPIRES_KEY).and_then(|s| s.trim().parse::<u64>().ok())

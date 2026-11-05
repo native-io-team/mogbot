@@ -9,6 +9,8 @@
  *   `defaultEngine` decides it from the engines' real state, and what
  *   routines run on. Both are per agent; this says the rule and where to
  *   change it, and shows nothing it hasn't read.
+ * - **Accounts**: each engine's accounts, in the order turns try them when
+ *   one runs out of usage (`AgentAccounts`, `agents/wallet.rs`).
  * - **Notifications**: what notifies, and where to mute one agent.
  * - **Phone and other assistants**: the way into each.
  *
@@ -20,6 +22,7 @@
 import type { ReactNode } from 'react';
 import { Button } from '../primitives/Button';
 import { AgentsDesktopSettings } from './AgentsDesktopSettings';
+import { AgentAccounts } from './AgentAccounts';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { defaultEngine, ENGINE_LABEL, engineUnavailable, type EngineInfo } from '../../lib/agents';
@@ -153,6 +156,8 @@ export function AgentsSettings({
           </div>
         </section>
       )}
+
+      {engines.some((e) => e.installed) && <AgentAccounts engines={engines} />}
 
       <section className="settings-group" aria-labelledby="agents-settings-notify">
         <h3 className="settings-group__title" id="agents-settings-notify">

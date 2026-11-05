@@ -1506,3 +1506,78 @@ mod tests {
         });
     }
 }
+
+/* ------------------------------------------------------- usage wallets */
+
+/// Tell every window the accounts changed (Settings, the phone).
+const EVENT_ACCOUNTS: &str = "agents-accounts-changed";
+
+/// Every engine's accounts, in priority order, with whether each is signed
+/// in and the last usage limit a turn on it hit (`agents::wallet`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_accounts() -> Result<Vec<agents::wallet::AccountView>, CommandError> {
+    Ok(agents::wallet::views().await)
+}
+
+/// Add an account for an engine. It isn't signed in yet: Settings runs the
+/// sign-in into its own folder next (`claude_connect_start` /
+/// `workspace_connect_start` with this id).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_account_add(
+    app: AppHandle,
+    engine: String,
+    name: String,
+) -> Result<agents::wallet::Account, CommandError> {
+    let engine = Engine::parse(&engine)?;
+    let account = tokio::task::spawn_blocking(move || agents::wallet::add(engine, &name))
+        .await
+        .map_err(agents::err_other)??;
+    let _ = app.emit(EVENT_ACCOUNTS, ());
+    Ok(account)
+}
+
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_account_rename(
+    app: AppHandle,
+    engine: String,
+    id: String,
+    name: String,
+) -> Result<agents::wallet::Account, CommandError> {
+    let engine = Engine::parse(&engine)?;
+    let account = agents::wallet::rename(engine, &id, &name)?;
+    let _ = app.emit(EVENT_ACCOUNTS, ());
+    Ok(account)
+}
+
+/// Put an engine's accounts in this order (first is tried first).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_account_reorder(
+    app: AppHandle,
+    engine: String,
+    ids: Vec<String>,
+) -> Result<Vec<agents::wallet::Account>, CommandError> {
+    let engine = Engine::parse(&engine)?;
+    let accounts = agents::wallet::reorder(engine, &ids)?;
+    let _ = app.emit(EVENT_ACCOUNTS, ());
+    Ok(accounts)
+}
+
+/// Remove an added account and its sign-in from this Mac.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_account_remove(
+    app: AppHandle,
+    engine: String,
+    id: String,
+) -> Result<(), CommandError> {
+    let engine = Engine::parse(&engine)?;
+    tokio::task::spawn_blocking(move || agents::wallet::remove(engine, &id))
+        .await
+        .map_err(agents::err_other)??;
+    let _ = app.emit(EVENT_ACCOUNTS, ());
+    Ok(())
+}
