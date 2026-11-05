@@ -14,7 +14,11 @@ import { usePlugins } from './usePlugins';
 import type { PluginInfo } from '../lib/plugins';
 import type { PluginModule } from '../lib/plugin-loader';
 
-vi.mock('../lib/plugins', () => ({
+vi.mock('../lib/plugins', async () => ({
+  // The trust predicates are pure: the real ones decide what loads.
+  needsTrustDecision: (await vi.importActual<typeof import('../lib/plugins')>('../lib/plugins'))
+    .needsTrustDecision,
+  mayLoad: (await vi.importActual<typeof import('../lib/plugins')>('../lib/plugins')).mayLoad,
   listPlugins: vi.fn(),
   updatePlugin: vi.fn(),
   // The hook asks this whether a plugin has been replaced by a native feature
@@ -180,5 +184,44 @@ describe('usePlugins skips superseded plugins entirely (issues #386, #804)', () 
     expect(result.current.plugins).toHaveLength(0);
     expect(result.current.failures).toHaveLength(0);
     expect(mockLoadPluginModule).not.toHaveBeenCalled();
+  });
+});
+
+describe('usePlugins trust', () => {
+  const trust = (state: NonNullable<PluginInfo['trust']>['state']) => ({
+    state,
+    sha256: 'a'.repeat(64),
+    bundlePath: '/p/.shipstudio/plugins/x/dist/index.js',
+  });
+
+  it('loads only approved plugins; asks about new and changed ones; stays quiet otherwise', async () => {
+    const approved = makeInfo({ trust: trust('trusted') });
+    const fresh = makeInfo({
+      manifest: { ...makeInfo().manifest, id: 'fresh', name: 'Fresh' },
+      trust: trust('new'),
+    });
+    const changed = makeInfo({
+      manifest: { ...makeInfo().manifest, id: 'changed', name: 'Changed' },
+      trust: trust('changed'),
+    });
+    const declined = makeInfo({
+      manifest: { ...makeInfo().manifest, id: 'declined', name: 'Declined' },
+      trust: trust('declined'),
+    });
+    const dev = makeInfo({
+      manifest: { ...makeInfo().manifest, id: 'dev', name: 'Dev' },
+      is_dev: true,
+      trust: trust('devModeOff'),
+    });
+    mockListPlugins.mockResolvedValue([approved, fresh, changed, declined, dev]);
+    mockLoadPluginModule.mockResolvedValue(workingModule);
+
+    const { result } = renderHook(() => usePlugins('/p'));
+    await waitFor(() => expect(result.current.plugins).toHaveLength(1));
+
+    expect(mockLoadPluginModule).toHaveBeenCalledTimes(1);
+    expect(mockLoadPluginModule.mock.calls[0][1]).toBe('dependency-checker');
+    expect(result.current.pendingTrust.map((p) => p.manifest.id)).toEqual(['fresh', 'changed']);
+    expect(result.current.failures).toEqual([]);
   });
 });

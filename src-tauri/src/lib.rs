@@ -186,6 +186,9 @@ pub fn run() {
             // What the last run left mid-turn, noted before anything can
             // start a turn: those agents' turns wait for recovery below.
             agents::runner::prepare_recovery();
+            // Agent config files a crashed run left behind: their secrets are
+            // dead. Swept before recovery below can start a turn that writes one.
+            agents::reach::sweep();
             let badge_app = _app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let _ = tauri::async_runtime::spawn_blocking(agents::store::expire_stale_approvals)
@@ -203,8 +206,6 @@ pub fn run() {
             // launch so it's listening before any agent session spawns —
             // registrations from previous runs stay valid from second zero.
             {
-                // Agent config files a crashed run left behind: their secrets are dead.
-                agents::reach::sweep();
                 let handle = _app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     if let Err(e) = agent_bridge::start_global_agent_bridge(handle).await {
@@ -222,6 +223,8 @@ pub fn run() {
 
             // Dev-server approvals: owner-only, whatever an older build left.
             commands::projects::harden_dev_consent_store();
+            // Plugin approvals: owner-only, likewise.
+            commands::plugins::harden_plugin_trust_store();
 
             // Remote access: if the user left it on, bring it back — a Mac that
             // restarted overnight should be reachable again once it's logged in.
@@ -943,6 +946,10 @@ pub fn run() {
             commands::plugins::update_plugin,
             commands::plugins::check_plugin_update,
             commands::plugins::read_plugin_bundle,
+            commands::plugins::approve_plugin,
+            commands::plugins::decline_plugin,
+            commands::plugins::get_plugin_developer_mode,
+            commands::plugins::set_plugin_developer_mode,
             commands::plugins::read_plugin_manifest,
             commands::plugins::toggle_plugin,
             commands::plugins::exec_plugin_shell,

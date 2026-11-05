@@ -18,6 +18,8 @@ import {
   updatePlugin,
   isExpectedPluginFailure,
   supersededReason,
+  needsTrustDecision,
+  mayLoad,
   PluginInfo,
 } from '../lib/plugins';
 import { loadPluginModule, unloadPluginModule, PluginModule } from '../lib/plugin-loader';
@@ -111,6 +113,11 @@ export interface UsePluginsReturn {
   plugins: LoadedPlugin[];
   /** Plugins that failed to load (unsupported API version, bad bundle, list error) */
   failures: PluginFailure[];
+  /**
+   * Plugins the project's registry asks for that this app hasn't approved as
+   * they are now. Not loaded; the Plugins control asks about them.
+   */
+  pendingTrust: PluginInfo[];
   /** Get plugins registered for a specific UI slot */
   getSlotPlugins: (slotName: string) => LoadedPlugin[];
   /** Reload all plugins (call after install/uninstall) */
@@ -125,6 +132,7 @@ export function usePlugins(
 ): UsePluginsReturn {
   const [plugins, setPlugins] = useState<LoadedPlugin[]>([]);
   const [failures, setFailures] = useState<PluginFailure[]>([]);
+  const [pendingTrust, setPendingTrust] = useState<PluginInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const mountedRef = useRef(true);
   const currentPathRef = useRef(projectPath);
@@ -145,6 +153,7 @@ export function usePlugins(
       if (!path) {
         setPlugins([]);
         setFailures([]);
+        setPendingTrust([]);
         return;
       }
 
@@ -155,7 +164,12 @@ export function usePlugins(
         // merely not rendering one still runs its activation hook and its
         // background timers, which was most of what made the old hosting
         // integration expensive. The Plugin Manager explains the skip.
-        const enabled = installed.filter((p) => p.enabled && !supersededReason(p.manifest.id));
+        const wanted = installed.filter((p) => p.enabled && !supersededReason(p.manifest.id));
+        // A project's registry.json is a request, not permission: only what
+        // this app approved (by path and SHA-256) loads. The rest waits for
+        // the user's Allow, or stays quiet once declined (plugin_trust.rs).
+        const asking = wanted.filter(needsTrustDecision);
+        const enabled = wanted.filter(mayLoad);
         const failed: PluginFailure[] = [];
 
         // Skip plugins with unsupported API versions
@@ -225,6 +239,7 @@ export function usePlugins(
         if (mountedRef.current && currentPathRef.current === path) {
           setPlugins(loaded);
           setFailures(failed);
+          setPendingTrust(asking);
         }
       } catch (e) {
         // Full Disk Access / read-only volume / a project folder that's gone
@@ -236,6 +251,7 @@ export function usePlugins(
         });
         if (mountedRef.current && currentPathRef.current === path) {
           setPlugins([]);
+          setPendingTrust([]);
           setFailures([
             {
               id: null,
@@ -292,5 +308,5 @@ export function usePlugins(
     [plugins]
   );
 
-  return { plugins, failures, getSlotPlugins, reloadPlugins, isLoading };
+  return { plugins, failures, pendingTrust, getSlotPlugins, reloadPlugins, isLoading };
 }

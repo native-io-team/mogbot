@@ -45,6 +45,75 @@ export interface PluginInfo {
   source_url: string;
   is_dev: boolean;
   local_path: string;
+  /**
+   * Whether this app has agreed to run it in this project
+   * (`src-tauri/src/commands/plugins/plugin_trust.rs`). Filled in by
+   * `list_plugins`; the project's registry.json alone is never permission.
+   */
+  trust?: PluginTrust | null;
+}
+
+/**
+ * - `trusted`: approved here, these exact bytes at this path
+ * - `new`: never approved in this project
+ * - `changed`: approved before; the bundle changed since
+ * - `declined`: the user said "Don't load" to exactly this bundle
+ * - `devModeOff`: a dev plugin, and plugin developer mode is off
+ * - `missing`: no bundle on disk
+ */
+export type PluginTrustState =
+  | 'trusted'
+  | 'new'
+  | 'changed'
+  | 'declined'
+  | 'devModeOff'
+  | 'missing';
+
+export interface PluginTrust {
+  state: PluginTrustState;
+  /** SHA-256 of the bundle as it is now: approve exactly this. */
+  sha256: string | null;
+  /** The bundle the user would be approving. */
+  bundlePath: string;
+}
+
+/** Plugins the app should ask about: in the registry, not yet approved as they are now. */
+export function needsTrustDecision(info: PluginInfo): boolean {
+  const state = info.trust?.state;
+  return (state === 'new' || state === 'changed') && !!info.trust?.sha256;
+}
+
+/** Plugins the app may try to load. The backend checks again on read. */
+export function mayLoad(info: PluginInfo): boolean {
+  const state = info.trust?.state;
+  return state === undefined || state === 'trusted' || state === 'missing';
+}
+
+/** "Allow": approve exactly the bundle the user was shown. Fails if it changed since. */
+export async function approvePlugin(
+  projectPath: string,
+  pluginId: string,
+  sha256: string
+): Promise<void> {
+  return invoke('approve_plugin', { projectPath, pluginId, sha256 });
+}
+
+/** "Don't load": remembered for this exact bundle. */
+export async function declinePlugin(
+  projectPath: string,
+  pluginId: string,
+  sha256: string
+): Promise<void> {
+  return invoke('decline_plugin', { projectPath, pluginId, sha256 });
+}
+
+/** Plugin developer mode: dev-linked plugins load only while it's on. */
+export async function getPluginDeveloperMode(): Promise<boolean> {
+  return invoke<boolean>('get_plugin_developer_mode');
+}
+
+export async function setPluginDeveloperMode(enabled: boolean): Promise<void> {
+  return invoke('set_plugin_developer_mode', { enabled });
 }
 
 /** Result of checking for a plugin update */

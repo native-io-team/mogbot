@@ -424,6 +424,7 @@ function AppContents({ initialProjectPath }: AppProps) {
   const {
     plugins: loadedPlugins,
     failures: pluginFailures,
+    pendingTrust: pluginsPendingTrust,
     getSlotPlugins,
     reloadPlugins,
   } = usePlugins(currentProject?.path ?? null, {
@@ -1103,10 +1104,11 @@ function AppContents({ initialProjectPath }: AppProps) {
     () => ({
       loadedPlugins,
       pluginFailures,
+      pluginsPendingTrust,
       getSlotPlugins,
       reloadPlugins,
     }),
-    [loadedPlugins, pluginFailures, getSlotPlugins, reloadPlugins]
+    [loadedPlugins, pluginFailures, pluginsPendingTrust, getSlotPlugins, reloadPlugins]
   );
 
   // Shared configuration for the home-level

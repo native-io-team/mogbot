@@ -127,7 +127,9 @@ fn check_plugin_exists(plugin_id: &str, project_path: &str) -> Result<(), Comman
             "Plugin '{plugin_id}' not found"
         )));
     }
-    Ok(())
+    // A plugin that never loaded can't have asked for this; refuse anything
+    // naming one this app hasn't approved as it is now (`plugin_trust`).
+    super::require_trusted(project_path, plugin_id)
 }
 
 /// Join a plugin-supplied, project-relative path onto an already-validated
@@ -455,6 +457,10 @@ pub async fn link_dev_plugin(
 
     registry.plugins.push(entry);
     write_registry(&project_path, &registry)?;
+    // The developer picked this folder themselves: it's approved as it is
+    // now, and they are doing plugin development (`plugin_trust`).
+    super::enable_developer_mode()?;
+    super::record_installed(&project_path, &manifest.id)?;
 
     Ok(Some(PluginInfo {
         manifest,
@@ -463,6 +469,7 @@ pub async fn link_dev_plugin(
         source_url: String::new(),
         is_dev: true,
         local_path,
+        trust: None,
     }))
 }
 
@@ -490,6 +497,7 @@ pub fn unlink_dev_plugin(project_path: String, plugin_id: String) -> Result<(), 
     // Remove from registry (does not touch local files)
     registry.plugins.retain(|e| e.plugin_id != plugin_id);
     write_registry(&project_path, &registry)?;
+    super::forget(&project_path, &plugin_id);
 
     // Clean up storage.json in project plugins dir if it exists
     let plugins_dir = get_plugins_dir(&project_path)?;

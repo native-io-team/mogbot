@@ -391,6 +391,7 @@ pub fn list_plugins(project_path: String) -> Result<Vec<PluginInfo>, CommandErro
                     source_url: entry.source_url.clone(),
                     is_dev: entry.is_dev,
                     local_path: entry.local_path.clone(),
+                    trust: Some(super::trust_for_entry(&plugins_dir, entry)),
                 });
             }
             Err(e) => {
@@ -564,6 +565,8 @@ pub async fn install_plugin(
 
     registry.plugins.push(entry);
     write_registry(&project_path, &registry)?;
+    // The user asked for this exact repo: what it installed is approved.
+    super::record_installed(&project_path, &manifest.id)?;
 
     Ok(PluginInfo {
         manifest,
@@ -572,6 +575,7 @@ pub async fn install_plugin(
         source_url: repo_url,
         is_dev: false,
         local_path: String::new(),
+        trust: None,
     })
 }
 
@@ -607,6 +611,7 @@ pub fn uninstall_plugin(project_path: String, plugin_id: String) -> Result<(), C
     let mut registry = read_registry(&project_path)?;
     registry.plugins.retain(|e| e.plugin_id != plugin_id);
     write_registry(&project_path, &registry)?;
+    super::forget(&project_path, &plugin_id);
 
     Ok(())
 }
@@ -694,6 +699,8 @@ pub async fn update_plugin(
         entry.installed_commit = commit_hash;
     }
     write_registry(&project_path, &registry)?;
+    // Still approved if it was before; otherwise it asks like any other.
+    super::record_updated(&project_path, &plugin_id)?;
 
     Ok(PluginInfo {
         manifest,
@@ -702,6 +709,7 @@ pub async fn update_plugin(
         source_url,
         is_dev: false,
         local_path: String::new(),
+        trust: None,
     })
 }
 
