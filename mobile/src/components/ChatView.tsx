@@ -57,6 +57,8 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
 import { Composer } from './Composer';
+import { LinkProblem } from './ConnectionPill';
+import { Line } from './surfaces';
 import { PathContext } from './Markdown';
 import { PaneContext, type Pane } from './ApprovalCard';
 import { showActions } from './menu';
@@ -343,12 +345,15 @@ export function ChatView({
   );
 
   if (!agent) {
-    return hasOverview ? (
-      <Gone embedded={embedded} macName={macName} onBack={() => router.back()} />
-    ) : (
+    // Only a live overview can say an agent is gone; a saved one may predate it.
+    if (hasOverview && connected) {
+      return <Gone embedded={embedded} macName={macName} onBack={() => router.back()} />;
+    }
+    // Opened from an alert with nothing saved: say why it's empty, never a bare spinner.
+    return (
       <View style={styles.center}>
-        {!embedded && <Stack.Screen options={{ title: '' }} />}
-        <Spinner />
+        {!embedded && <Stack.Screen options={{ title: 'Conversation' }} />}
+        {connected ? <Spinner /> : <LinkProblem what="Your conversations" macName={macName} />}
       </View>
     );
   }
@@ -419,9 +424,15 @@ export function ChatView({
               maintainVisibleContentPosition={
                 scrolled || tall ? { minIndexForVisible: 1 } : undefined
               }
-              renderItem={({ item }) => (
+              renderItem={({ item, index }) => (
                 <ItemView
                   item={item}
+                  // Lines one after another sit at the Line gap, not a paragraph apart.
+                  afterLine={
+                    index + 1 < items.length
+                      ? isLineItem(items[index + 1])
+                      : !!chat?.loaded && !chat.more
+                  }
                   agent={agent}
                   liveCopyCard={liveCopyCard}
                   newestResult={newestResult}
@@ -471,17 +482,20 @@ export function ChatView({
               windowSize={13}
               ListFooterComponent={
                 chat?.loaded && !chat.more ? (
-                  <T variant="caption" color={colors.textSecondary} style={styles.start}>
-                    Start of your conversation with {agent.name}
-                  </T>
+                  <Line text={`Start of your conversation with ${agent.name}`} />
                 ) : chat?.loaded ? (
                   <View style={styles.start}>{loadingOlder && <Spinner />}</View>
                 ) : undefined
               }
               ListEmptyComponent={
-                chat?.loaded || !connected ? undefined : (
+                chat?.loaded ? undefined : (
                   <View style={[styles.start, { transform: [{ scaleY: -1 }] }]}>
-                    <Spinner />
+                    {connected ? (
+                      <Spinner />
+                    ) : (
+                      // Nothing saved for this chat and the Mac away: why, and what to do.
+                      <LinkProblem what="Your conversations" macName={macName} />
+                    )}
                   </View>
                 )
               }
@@ -582,7 +596,9 @@ function ItemView({
   onLongPress,
   onDraftHeight,
   lit,
+  afterLine,
 }: {
+  afterLine?: boolean;
   item: Item;
   agent: Agent;
   liveCopyCard?: string | null;
@@ -622,12 +638,45 @@ function ItemView({
     (item.message.kind === 'changes' ||
       (item.message.kind === 'session' &&
         (item.message.session?.event === 'started' || item.message.session?.event === 'sent')));
+  const tight = afterLine && isLineItem(item);
   return (
-    <View style={[styles.item, grouped && styles.itemGrouped, attached && styles.itemAttached]}>
+    <View
+      style={[
+        styles.item,
+        grouped && styles.itemGrouped,
+        attached && styles.itemAttached,
+        tight && styles.itemAfterLine,
+      ]}
+    >
       {lit && <Glow />}
       {body}
     </View>
   );
+}
+
+/**
+ * Whether a row is drawn as a Line (a time, a note, an answered card, a task
+ * that started): consecutive Lines collapse to the Line gap.
+ */
+function isLineItem(item: Item | undefined): boolean {
+  if (!item) return false;
+  if (item.kind === 'day') return true;
+  if (item.kind !== 'message') return false;
+  const m = item.message;
+  if (m.work || m.result) return false;
+  switch (m.kind) {
+    case 'note':
+    case 'check_in':
+      return true;
+    case 'session':
+      return m.session?.event === 'started' || m.session?.event === 'sent';
+    case 'approval':
+      return !!m.approval && m.approval.status !== 'pending';
+    case 'error':
+      return m.failure?.kind === 'usage_limit';
+    default:
+      return false;
+  }
 }
 
 /** The row a search hit opened on: lit, then fading back. */
@@ -713,6 +762,8 @@ const useStyles = makeStyles((colors) => ({
   item: { paddingTop: space.xl },
   itemGrouped: { paddingTop: space.md },
   itemAttached: { paddingTop: space.tight },
+  // A Line under a Line: their own padding is the gap.
+  itemAfterLine: { paddingTop: space.xs },
   glow: {
     position: 'absolute',
     top: 0,
@@ -721,7 +772,7 @@ const useStyles = makeStyles((colors) => ({
     right: -space.lg,
     backgroundColor: alpha(colors.accentFocus, 0.14),
   },
-  start: { alignItems: 'center', paddingVertical: space.xl, textAlign: 'center' },
+  start: { alignItems: 'center', paddingVertical: space.xl },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.sm, maxWidth: 260 },
   embeddedHeader: {
     flexDirection: 'row',

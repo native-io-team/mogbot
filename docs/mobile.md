@@ -405,16 +405,24 @@ sheet, files, a session, the diff and the photo viewer push over them. At
 - **Lines, cards and bars** (`components/surfaces.tsx`, the desk's
   `AgentCard.tsx`; docs/agents.md "Lines, cards and bars"). Everything in a
   chat that isn't something someone said is one of three. A **Line** is one
-  quiet centred sentence that wraps: a note ("Started fresh · memory kept", a
-  take-over that closed), a routine's run, a time between messages, a usage
-  limit. A **Card** is the one anatomy every request and result shares —
-  icon and title (a quiet meta such as "v2" at the right), a muted source
+  quiet centred sentence that wraps, never cut: a note ("Started fresh · memory
+  kept", a take-over that closed), a routine's run, a time between messages
+  (consecutive Lines sit at the Line gap), "Start of your conversation", a
+  usage limit, an answered card's outcome ("✓ Allowed · …", a tap unfolds what
+  it was about), "Started a task in …" and what changed (a tap opens them), an
+  older version of a result. One agent writing to another ("To Ops" / "From
+  Ops") is neither: the other agent's face and the words under a rule, so it
+  never reads as part of a reply. A **Card** is the one anatomy every request and result shares —
+  icon and title (a quiet meta such as "v2" or the time at the right, plain
+  text, never a chip), a muted source
   line ("Acme Site · in acme-site"), the body, a muted note, then the answers
   right-aligned with the single affirmative last, in the neutral `answer`
   style (never the agent's colour); the rest are `outline`. Approvals, a
   task's question, secrets, results, a copy's Keep / Discard, an import to
-  review on the Mac and a real failure all use it; answered, a card becomes
-  its outcome line. A **Bar** is this conversation's state, directly above
+  review on the Mac and a real failure (what it ran on, what to do) all use it;
+  answered, a card becomes its outcome line. Offline every card keeps its
+  answers, disabled, with one note (`OFFLINE_NOTE`), drawn from what the Mac
+  last said it serves (`served`, kept in the offline copy). A **Bar** is this conversation's state, directly above
   the composer in a fixed order (`lib/bars.ts`): the Mac out of reach, you
   driving the agent on your Mac, an import, "Changes to …" for the message
   being written, what the engine can't do. At most two show; the rest fold
@@ -708,6 +716,50 @@ on a fork's binary. For self-builders, Reinstall is the update.
   fake recognizer, including Android 12 and typing while it listens.
 - **Server:** `cargo test --lib companion::` (including the fixture drift
   check); **relay:** `pnpm test` in `services/push-relay`.
+
+### Phone screens without a simulator
+
+`pnpm qa:web` (in `mobile/`) renders the app with react-native-web against the
+mock Mac and screenshots a fixed list of screens, light and dark, at 402×874
+@3x, with headless Chrome over the DevTools Protocol (no Playwright; the same
+approach as the desktop's `scripts/harness-capture.mjs`). It starts the mock
+(`--http --cors`) and `expo start --web`, pairs through the real `/pair?d=`
+confirm screen, then walks the states only a Mac can cause by restarting or
+stopping the mock: a deep-linked chat offline with nothing saved, every screen
+live, the same chats offline from the saved copy, "This isn't your Mac"
+(`--impostor`), and the bar fold (`--bars`). Out: `mobile/qa-shots/` (PNGs and
+`report.md`, which lists each shot's route, what to check, console errors and
+any text cut off with an ellipsis). It exits non-zero when a screen failed or threw.
+
+```bash
+cd mobile && pnpm qa:web
+pnpm qa:web --only chat-fixtures --themes dark --out /tmp/shots
+pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681   # the defaults
+```
+
+The ports also read `QA_WEB_PORT`, `QA_MOCK_PORT` and `QA_CDP_PORT`; `--verbose`
+streams the mock's and Expo's output. The native-only modules (notifications,
+secure store, SF Symbols, the date picker, keyboard controller, file system) are
+swapped for stand-ins in `mobile/dev/web/` by `metro.config.js`, **only on the
+web platform**, so native builds, Expo Go and jest never see them.
+
+What the web build can't show, so don't file it:
+
+- The tab bar is a dark pill over the large title (NativeTabs draws the system
+  bar at the bottom on iOS).
+- No safe areas or status bar; headers are JS headers, so no iOS large titles,
+  no back buttons on deep-linked routes, and a small Settings title.
+- Images behind auth (screenshots, Before/After, the Phone and Preview cards)
+  are grey placeholders.
+- Icons are Material Symbols (the Android set), not SF Symbols.
+- Chrome's focus ring on a focused field; rn-web's Switch look and colour; the
+  "0.0.0 (0)" version, the device name "Macintosh" and a grey block for the
+  time picker.
+- The composer field is two lines tall, and the task header's title can sit off
+  centre: rn-web layout, check on a device.
+
+It says nothing about native-only surfaces (action sheets, Alerts, sheet detents,
+the share extension, the camera, real keyboard behaviour).
 
 ## Not built
 

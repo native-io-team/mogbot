@@ -20,6 +20,13 @@ export interface AppState extends SyncState {
   credentials: Credentials | null | undefined;
   link: LinkState;
   welcome: WelcomeFrame | null;
+  /**
+   * What this Mac last said it serves (its welcome's methods and features),
+   * kept in the offline copy. Only for drawing: an offline card keeps the
+   * answers the Mac offers, disabled, instead of changing shape. Never for
+   * deciding whether to call something; `welcome` is the live answer.
+   */
+  served: Served | null;
   refusal: RefusedFrame | null;
   /** NetInfo's view of this phone: null until it has answered. */
   phoneOnline: boolean | null;
@@ -32,6 +39,11 @@ export interface AppState extends SyncState {
   highContrast: boolean;
   /** Push, as the Mac last answered `devices.setPush`; null until it has. */
   push: PushStatus | null;
+}
+
+export interface Served {
+  methods: string[];
+  features: string[];
 }
 
 /** Light or dark: the system's (the default), or one this phone keeps whatever the system does. */
@@ -49,6 +61,7 @@ export const useApp = create<AppState>(() => ({
   credentials: undefined,
   link: { kind: 'connecting', attempt: 0 },
   welcome: null,
+  served: null,
   refusal: null,
   phoneOnline: null,
   openChat: null,
@@ -65,3 +78,15 @@ export const getApp = useApp.getState;
 export function update(fn: (s: SyncState) => SyncState) {
   useApp.setState((s) => fn(s));
 }
+
+/**
+ * Whether the Mac serves `method` (and, when given, `feature`), for drawing
+ * a card: live when connected, the Mac's last answer while it's away.
+ */
+export const useServed = (method: string, feature?: string) =>
+  useApp((s) => {
+    const served = s.welcome
+      ? { methods: s.welcome.methods as string[], features: s.welcome.features ?? [] }
+      : s.served;
+    return !!served?.methods.includes(method) && (!feature || served.features.includes(feature));
+  });

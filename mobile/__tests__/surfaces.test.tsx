@@ -262,6 +262,32 @@ describe('errors in the chat', () => {
     expect(screen.getByText('Didn’t finish: The tool crashed')).toBeTruthy();
   });
 
+  it('a real failure says what it ran on and what to do', async () => {
+    const m = {
+      ...msg('e3', 1),
+      kind: 'error',
+      text: '',
+      failure: { kind: 'signed_out' },
+    } as AgentMessage;
+    await render(<MessageRow message={m} agent={agent()} queued={false} onError={() => {}} />);
+    expect(screen.getByTestId('card-source').props.children).toBe('Claude Code · in site');
+    expect(screen.getByTestId('card-note')).toBeTruthy();
+    expect(screen.getByLabelText('Connection details')).toBeTruthy();
+  });
+
+  it('one agent writing to another is set off from the reply, not a line of prose', async () => {
+    const m = {
+      ...msg('p1', 1),
+      kind: 'sent_to_agent',
+      text: 'File these',
+      peer: { id: 'ops', name: 'Ops' },
+    } as AgentMessage;
+    await render(<MessageRow message={m} agent={agent()} queued={false} onError={() => {}} />);
+    expect(screen.getByTestId('peer-row')).toBeTruthy();
+    expect(screen.getByText('To Ops')).toBeTruthy();
+    expect(screen.getByText('File these')).toBeTruthy();
+  });
+
   it('a note (started fresh, a take-over that closed) is a line', async () => {
     const m = {
       ...msg('n1', 1),

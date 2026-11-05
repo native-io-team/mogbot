@@ -28,6 +28,7 @@ import { announce } from '../../lib/a11y';
 import { useQuotaLines } from '../../lib/quota';
 import { useNow } from '../../components/ConnectionPill';
 import { choose } from '../../components/menu';
+import { TextAction } from '../../components/surfaces';
 import { Button, Icon, InsetDivider, Row, SectionTitle, SheetPage, T } from '../../components/ui';
 import { SheetTitle } from '../../components/SheetTitle';
 import {
@@ -456,12 +457,10 @@ function PermissionRow({
           {describeScope(rule, agent.name, false)}
         </T>
       </View>
-      <Button
-        title="Revoke"
-        size="compact"
-        variant="ghost"
-        busy={busy}
-        disabled={!enabled}
+      {/* A text action, so it ends on the same edge as every row's value. */}
+      <TextAction
+        label={busy ? 'Revoking…' : 'Revoke'}
+        disabled={!enabled || busy}
         onPress={revoke}
       />
       {!last && <InsetDivider />}

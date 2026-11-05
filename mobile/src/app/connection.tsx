@@ -10,7 +10,7 @@ import { ScrollView, View } from 'react-native';
 import { useLinkState, useNow } from '../components/ConnectionPill';
 import { Button, Dot, Section, T, useToneColor, SheetPage, InsetDivider } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
-import { engineName, formatAgo } from '../lib/agents';
+import { engineName, formatAgo, formatDate } from '../lib/agents';
 import { layers, pill } from '../lib/connection';
 import { appInfo, openTailscale } from '../lib/pairing';
 import { currentTransport, deviceSelf } from '../lib/session';
@@ -105,9 +105,7 @@ export default function Connection() {
           <Info label="Name" value={device?.name ?? 'Unknown until connected'} />
           <Info
             label="Paired"
-            value={
-              state.credentials ? new Date(state.credentials.pairedAt).toLocaleDateString() : '—'
-            }
+            value={state.credentials ? formatDate(state.credentials.pairedAt) : '—'}
           />
           <Info label="App" value={`${appInfo().version} (${appInfo().build})`} last />
         </Section>

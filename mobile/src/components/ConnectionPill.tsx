@@ -6,14 +6,16 @@
 
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useShallow } from 'zustand/react/shallow';
-import { pill } from '../lib/connection';
+import { pill, problemBody } from '../lib/connection';
+import { retryNow } from '../lib/session';
 import { useApp } from '../lib/store';
 import { chromeScale, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
-import { Dot, T, useToneColor } from './ui';
+import { Spinner } from './agent';
+import { Button, Dot, T, useToneColor } from './ui';
 
 /** Re-render every `ms` while mounted, for "last seen 2 min ago". */
 export function useNow(ms = 15_000) {
@@ -92,6 +94,48 @@ export function ConnectionNotice() {
 }
 
 /**
+ * A screen with nothing to show because the Mac isn't answering (the Agents
+ * list, a chat opened from an alert with nothing saved): what's wrong in the
+ * pill's words, what that means here, and what to do. Never a bare spinner:
+ * while it's still connecting it says so, and past that it says why.
+ */
+export function LinkProblem({ what, macName }: { what: string; macName: string }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const router = useRouter();
+  const state = useLinkState();
+  const p = pill(state, useNow());
+  if (p.tone !== 'problem') {
+    return (
+      <View style={styles.connecting}>
+        <Spinner />
+        <T color={colors.textSecondary}>Connecting to {macName}…</T>
+      </View>
+    );
+  }
+  const refused = state.link.kind === 'refused';
+  return (
+    <View style={styles.problem}>
+      <T variant="title" color={colors.textStrong} style={styles.center}>
+        {p.label}
+      </T>
+      <T color={colors.textSecondary} style={styles.center}>
+        {problemBody(state.link, macName, what)}
+      </T>
+      <View style={styles.problemActions}>
+        <Button
+          title="What’s wrong?"
+          variant="outline"
+          onPress={() => router.push('/connection')}
+        />
+        {/* A refusal is final until someone acts: trying again only asks the same question. */}
+        {!refused && <Button title="Try again" onPress={() => retryNow()} />}
+      </View>
+    </View>
+  );
+}
+
+/**
  * How long a link may be down before the chat's bar says so
  * (`ConversationBars`), unless it's plainly a problem: coming back to the app reconnects in about a second, and an amber
  * "Connecting…" flashing on every return said something was wrong when it wasn't.
@@ -99,6 +143,15 @@ export function ConnectionNotice() {
 export const BANNER_GRACE_MS = 2000;
 
 const useStyles = makeStyles((colors) => ({
+  connecting: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  problem: { alignItems: 'center', gap: space.md, maxWidth: 360 },
+  problemActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: space.sm,
+  },
+  center: { textAlign: 'center' },
   notice: { paddingHorizontal: space.lg, paddingBottom: space.sm, alignItems: 'flex-start' },
   pill: {
     flexDirection: 'row',

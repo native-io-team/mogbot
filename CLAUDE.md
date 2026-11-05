@@ -290,6 +290,19 @@ pnpm harness &
 node scripts/harness-capture.mjs <scenario>
 ```
 
+### Phone screens without a simulator
+
+`cd mobile && pnpm qa:web` renders the companion app with react-native-web
+against the mock Mac and captures a fixed list of phone screens, light and dark,
+at 402×874 @3x into `mobile/qa-shots/` with a `report.md` (console errors and
+text cut off, per shot). It pairs through the real confirm screen and reaches
+offline, "This isn't your Mac" and the bar fold by restarting the mock. Ports:
+`--web-port 8098 --mock-port 47498 --cdp-port 9681`; `--only <prefix>`,
+`--themes dark`, `--out <dir>`. The web stand-ins for native modules are swapped
+in on the web platform only. Tab-bar position, safe areas, Material icons and
+grey images are web artifacts: see docs/mobile.md, "Phone screens without a
+simulator", for the full list.
+
 ### Frontend Tests (Vitest + React Testing Library)
 ```bash
 pnpm test:run     # Run all tests once

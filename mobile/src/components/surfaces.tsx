@@ -119,15 +119,14 @@ export function Card({
               {title}
             </T>
             {!!meta && (
-              <View style={styles.meta}>
-                <T
-                  variant="caption"
-                  color={colors.textSecondary}
-                  maxFontSizeMultiplier={chromeScale}
-                >
-                  {meta}
-                </T>
-              </View>
+              <T
+                variant="caption"
+                color={colors.textMuted}
+                maxFontSizeMultiplier={chromeScale}
+                style={styles.meta}
+              >
+                {meta}
+              </T>
             )}
           </View>
           {!!source && (
@@ -184,42 +183,118 @@ export const ACTION = { flexGrow: 1, flexBasis: 96 } as const;
 export const ACTION_ROW = { flexGrow: 1, flexBasis: '100%' } as const;
 
 /**
+ * The one sentence every card offline carries in its note slot, with its
+ * answers still drawn and disabled: a card keeps its shape when the Mac goes.
+ */
+export const OFFLINE_NOTE = 'Answer it once your Mac is back. It stays open until then.';
+
+/**
  * One quiet centred sentence: a note, where a new conversation began, a time
- * between messages. Wraps; at most one text action.
+ * between messages, an answered card's outcome, a task that started. Wraps
+ * (never cut); at most one text action. It can open something (`onPress`,
+ * with a chevron) or unfold what it was about in place (`detail`).
  */
 export function Line({
   text,
+  lead,
   icon,
   tone,
   action,
+  onPress,
+  pressHint,
+  detail,
+  trail,
   header = false,
   testID,
 }: {
   text: string;
+  /** A first word set off from the rest, in the line's tone ("Allowed · …"). */
+  lead?: string;
   icon?: SFName;
-  /** A failure that's still a line (a usage limit is not an error). */
-  tone?: 'warning';
+  /**
+   * `warning`: a failure that's still a line (a usage limit is not an error).
+   * `success`: only the icon and the lead word take it ("✓ Allowed").
+   */
+  tone?: 'warning' | 'success';
   action?: { label: string; onPress: () => void; hint?: string };
+  /** The whole line opens something (a task, a diff). */
+  onPress?: () => void;
+  pressHint?: string;
+  /** What it was about, unfolded under the line by a tap. */
+  detail?: ReactNode;
+  /** Inline after the words (a diff's +/− counts). */
+  trail?: ReactNode;
   /** A time between messages: a header to VoiceOver, so it can jump by them. */
   header?: boolean;
   testID?: string;
 }) {
   const colors = useColors();
   const styles = useLineStyles();
+  const [open, setOpen] = useState(false);
   const ink = tone === 'warning' ? colors.accentWarning : colors.textMuted;
+  const mark =
+    tone === 'success' ? colors.accentSuccess : tone === 'warning' ? colors.accentWarning : ink;
+  const label = lead ? `${lead}. ${text}` : text;
+  const press = detail ? () => setOpen((o) => !o) : onPress;
+  const chevron = detail
+    ? open
+      ? 'chevron.down'
+      : 'chevron.right'
+    : onPress
+      ? 'chevron.right'
+      : null;
+  const words = (
+    <View style={styles.lineText}>
+      {icon && <Icon name={icon} size={iconSize.inline} color={mark} />}
+      <T
+        variant="caption"
+        color={ink}
+        maxFontSizeMultiplier={header ? chromeScale : CARD_TITLE_SCALE}
+        style={styles.lineWords}
+      >
+        {!!lead && (
+          <T variant="caption" color={mark} style={{ fontFamily: fonts.medium }}>
+            {lead}
+            {' · '}
+          </T>
+        )}
+        {text}
+        {trail}
+      </T>
+      {chevron && <Icon name={chevron} size={iconSize.inline} color={colors.textMuted} />}
+    </View>
+  );
+  const hint =
+    pressHint ?? (detail ? (open ? 'Hides the detail' : 'Shows what it was about') : undefined);
   return (
     <View style={styles.line} testID={testID ?? 'line'}>
-      <View style={styles.lineText} accessible accessibilityRole={header ? 'header' : 'text'}>
-        {icon && <Icon name={icon} size={iconSize.inline} color={ink} />}
-        <T
-          variant="caption"
-          color={ink}
-          maxFontSizeMultiplier={header ? chromeScale : CARD_TITLE_SCALE}
-          style={styles.lineWords}
+      {press ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityState={detail ? { expanded: open } : undefined}
+          accessibilityHint={hint}
+          hitSlop={{ top: 10, bottom: 10 }}
+          onPress={press}
+          style={({ pressed }) => [styles.linePress, pressed && { opacity: 0.6 }]}
         >
-          {text}
-        </T>
-      </View>
+          {words}
+        </Pressable>
+      ) : (
+        <View
+          style={styles.linePress}
+          accessible
+          accessibilityLabel={label}
+          accessibilityRole={header ? 'header' : 'text'}
+        >
+          {words}
+        </View>
+      )}
+      {open && !!detail && (
+        <Animated.View entering={FadeIn.duration(150)} style={styles.lineDetail}>
+          {detail}
+        </Animated.View>
+      )}
       {action && <TextAction {...action} />}
     </View>
   );
@@ -231,11 +306,13 @@ export function TextAction({
   onPress,
   hint,
   muted,
+  disabled = false,
 }: {
   label: string;
   onPress: () => void;
   hint?: string;
   muted?: boolean;
+  disabled?: boolean;
 }) {
   const colors = useColors();
   const ripple = useRipple();
@@ -244,10 +321,12 @@ export function TextAction({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={hint}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
       android_ripple={{ ...ripple, borderless: true }}
       onPress={onPress}
-      style={({ pressed }) => pressed && { opacity: 0.6 }}
+      style={({ pressed }) => [pressed && { opacity: 0.6 }, disabled && { opacity: 0.4 }]}
     >
       <T
         variant="caption"
@@ -423,12 +502,8 @@ export const useCardStyles = makeStyles((colors) => ({
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.tight },
   // The 12pt glyph centred on the headline's first line.
   icon: { height: lineHeight(type.subhead, 1.375), justifyContent: 'center' },
-  meta: {
-    paddingHorizontal: space.tight,
-    borderRadius: radius.sm,
-    borderWidth: StyleSheet.hairlineWidth * 2,
-    borderColor: colors.borderDefault,
-  },
+  // Quiet text, not a chip: a bordered box on a card reads as a control.
+  meta: { fontVariant: ['tabular-nums'], lineHeight: lineHeight(type.subhead, 1.375) },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -445,6 +520,7 @@ const useLineStyles = makeStyles(() => ({
     paddingVertical: space.xs,
     paddingHorizontal: space.xl,
   },
+  linePress: { maxWidth: '100%' },
   lineText: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -452,6 +528,8 @@ const useLineStyles = makeStyles(() => ({
     gap: space.tight,
     maxWidth: '100%',
   },
+  // What a line was about: the card's own words, as written.
+  lineDetail: { alignSelf: 'stretch', gap: space.sm, paddingTop: space.xs },
   lineWords: { textAlign: 'center', letterSpacing: 0.2, flexShrink: 1 },
 }));
 

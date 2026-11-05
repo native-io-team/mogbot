@@ -63,8 +63,8 @@ import {
 import { admit, pickDocuments, pickPhotos, takePhoto, type PickedFile } from '../lib/files';
 import { haptic } from '../lib/haptics';
 import { OUTBOX_WAIT_MS } from '../lib/outbox';
-import { canCall, describeError, send, stop, upload } from '../lib/session';
-import { getApp, useApp } from '../lib/store';
+import { describeError, send, stop, upload } from '../lib/session';
+import { getApp, useApp, useServed } from '../lib/store';
 import {
   avatarSize,
   chromeScale,
@@ -113,7 +113,8 @@ export function Composer({
   const { fontScale } = useWindowDimensions();
   const draft = useComposerDraft(agent.id);
   const [staged, setStaged] = useState<Staged[]>([]);
-  const canAttach = useApp((s) => canCall('agents.files', s.welcome));
+  // The Mac's last answer while it's away: "+" stays, disabled, so the field doesn't jump.
+  const canAttach = useServed('agents.files');
   const team = useApp((s) => s.overview?.agents ?? NONE);
   const seq = useRef(0);
   const input = useRef<ComponentRef<typeof TextInput>>(null);

@@ -10,7 +10,7 @@
 
 import type { Agent } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Platform,
   RefreshControl,
@@ -23,27 +23,28 @@ import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { AgentRow } from '../../../components/AgentRow';
-import { Spinner } from '../../../components/agent';
 import { ChatView } from '../../../components/ChatView';
 import { QuotaLines } from '../../../components/QuotaLines';
 import { useQuotaLines } from '../../../lib/quota';
 import { AgentAccent } from '../../../lib/accent';
-import { ConnectionNotice, useLinkState, useNow } from '../../../components/ConnectionPill';
+import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
 import { Button, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
 import {
   attentionCounts,
   formatAgo,
   needsAttention,
+  needsYou,
   nextNeedsYou,
+  pendingApproval,
   sortAgents,
 } from '../../../lib/agents';
-import { pill } from '../../../lib/connection';
 import { haptic } from '../../../lib/haptics';
 import {
   call,
   canCall,
   describeError,
+  loadLatest,
   markUnread,
   setAgentToggles,
   unpair,
@@ -99,6 +100,21 @@ export default function Agents() {
     (s) =>
       s.link.kind === 'refused' && (s.link.reason === 'revoked' || s.link.reason === 'unauthorized')
   );
+  // A row that needs you says what for ("Needs your OK · Wants to edit
+  // Hero.tsx"), which only the chat knows: its newest page is read for any
+  // agent waiting on you whose saved chat doesn't hold the request yet.
+  const unsaid = useApp(
+    useShallow((s) =>
+      live
+        ? (s.overview?.agents ?? [])
+            .filter((a) => needsYou(a) && !pendingApproval(s.chats[a.id]?.messages))
+            .map((a) => `${a.id}:${a.pendingApprovals}`)
+        : []
+    )
+  );
+  useEffect(() => {
+    for (const key of unsaid) loadLatest(key.slice(0, key.lastIndexOf(':'))).catch(() => {});
+  }, [unsaid]);
   const caps = useApp(
     useShallow((s) => ({
       update: canCall('agents.update', s.welcome),
@@ -479,7 +495,6 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
   const colors = useColors();
   const styles = useStyles();
   const router = useRouter();
-  const p = pill(useLinkState());
   const canCreate = useApp((s) => canCall('agents.create', s.welcome));
   if (hasOverview) {
     return (
@@ -507,22 +522,7 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
   }
   return (
     <Animated.View entering={FadeIn.delay(300)} style={styles.emptyCentered}>
-      {p.tone === 'problem' ? (
-        <>
-          <T variant="title" color={colors.textStrong} style={styles.centerText}>
-            {p.label}
-          </T>
-          <T color={colors.textSecondary} style={styles.centerText}>
-            Your agents are on {macName}. Once it answers, they’ll be here.
-          </T>
-          <Button title="What’s wrong?" onPress={() => router.push('/connection')} />
-        </>
-      ) : (
-        <View style={styles.connecting}>
-          <Spinner />
-          <T color={colors.textSecondary}>Connecting to {macName}…</T>
-        </View>
-      )}
+      <LinkProblem what="Your agents" macName={macName} />
     </Animated.View>
   );
 }
@@ -578,7 +578,6 @@ const useStyles = makeStyles((colors) => ({
     minHeight: 320,
   },
   centerText: { textAlign: 'center', maxWidth: 340 },
-  connecting: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   split: { flex: 1, flexDirection: 'row' },
   splitList: {

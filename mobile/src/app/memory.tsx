@@ -257,7 +257,7 @@ function Memory() {
               value={adding}
               onChangeText={setAdding}
               maxLength={MAX}
-              placeholder={`Something ${name} should remember`}
+              placeholder="Something to remember"
               placeholderTextColor={colors.textMuted}
               editable={connected && !busy}
               keyboardAppearance={appearance}
