@@ -30,7 +30,7 @@ function deployment(
 }
 
 const SITE = 'https://pepper-cayenne-accessories.vercel.app';
-const BUILD = 'https://pepper-cayenne-accessories-myos1awic-juliangalluzzo.vercel.app';
+const BUILD = 'https://pepper-cayenne-accessories-abc123xyz-sams-projects.vercel.app';
 
 describe('HostingUrls', () => {
   it('names the addresses the way Vercel names them', () => {

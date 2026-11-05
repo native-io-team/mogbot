@@ -303,7 +303,7 @@ mod tests {
             name: "Julian’s MacBook Pro".into(),
             routes: vec![wire::Route {
                 kind: wire::RouteKind::Tailscale,
-                url: "https://julians-macbook-pro.tailc1f170.ts.net:47443".into(),
+                url: "https://julians-macbook-pro.tail1234.ts.net:47443".into(),
                 pin: None,
             }],
             fingerprint: "Zmh6rfhivXdsj8GLjp-OIA".into(),

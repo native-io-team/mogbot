@@ -87,15 +87,14 @@ if ! grep -q "## What's New in v${NEW_VERSION}" RELEASE_NOTES.md; then
   exit 1
 fi
 
-# Bump version in all 3 files
+# package.json is the version's one source: tauri.conf.json reads it
+# ("version": "../package.json") and Cargo.toml carries a copy that
+# `pnpm check:brand` holds to it.
 echo "Bumping version in package.json..."
-sed -i '' "s/\"version\": \"${CURRENT_VERSION}\"/\"version\": \"${NEW_VERSION}\"/" package.json
+sed -i '' "1,10s/\"version\": \"${CURRENT_VERSION}\"/\"version\": \"${NEW_VERSION}\"/" package.json
 
 echo "Bumping version in src-tauri/Cargo.toml..."
 sed -i '' "s/^version = \"${CURRENT_VERSION}\"/version = \"${NEW_VERSION}\"/" src-tauri/Cargo.toml
-
-echo "Bumping version in src-tauri/tauri.conf.json..."
-sed -i '' "s/\"version\": \"${CURRENT_VERSION}\"/\"version\": \"${NEW_VERSION}\"/" src-tauri/tauri.conf.json
 
 # Update Cargo.lock
 echo "Updating Cargo.lock..."
