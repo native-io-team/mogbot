@@ -454,7 +454,12 @@ pub struct Stub {
     pub secrets_saved: AtomicUsize,
     /// `memorySuggest("slow")` calls that ran to the end.
     pub slow_done: AtomicUsize,
+    /// What `serve_hosts` answers: the Tailscale route's host by default.
+    pub hosts: Mutex<Vec<String>>,
 }
+
+/// The host the stub Mac serves on (its Tailscale route's).
+pub const HOST: &str = "julians-macbook-pro.tail1234.ts.net";
 
 impl Stub {
     pub fn companion() -> (Arc<Companion>, Arc<Stub>) {
@@ -478,6 +483,7 @@ impl Stub {
             copies: Mutex::new(Vec::new()),
             secrets_saved: AtomicUsize::new(0),
             slow_done: AtomicUsize::new(0),
+            hosts: Mutex::new(vec![HOST.into()]),
         });
         let c = Arc::new(Companion::with_epoch(registry, stub.clone(), epoch.into()));
         let _ = stub.companion.set(Arc::downgrade(&c));
@@ -508,6 +514,10 @@ fn status(state: &'static str) -> Value {
 
 #[async_trait]
 impl Backend for Stub {
+    fn serve_hosts(&self) -> Vec<String> {
+        self.hosts.lock().unwrap().clone()
+    }
+
     async fn overview(&self) -> Result<Value, CommandError> {
         Ok(overview())
     }

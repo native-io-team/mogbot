@@ -187,6 +187,19 @@ pub async fn companion_pair_start(app: AppHandle) -> Result<PairingCode, Command
             "Your phone can't reach this Mac yet. Turn on phone access and wait for Tailscale.",
         ));
     }
+    // The phone pins this key for good: only offer it once it's kept where
+    // the next launch will find it (and after any reset that changes the id).
+    let identity = c
+        .registry
+        .identity()
+        .filter(|_| c.registry.identity_is_durable());
+    let Some(identity) = identity else {
+        return Err(CommandError::expected(
+            "This Mac can't keep its identity key in the Keychain, so it can't pair a phone safely. Unlock the Keychain (or check Keychain Access) and try again.",
+        ));
+    };
+    // Exactly one route: the host the phone shows is the only one it tries.
+    let routes = routes.into_iter().take(1).collect();
     let (code, expires_at) = c.pairing.start(now_ms());
     let link = wire::PairingLink {
         v: 1,
@@ -194,7 +207,7 @@ pub async fn companion_pair_start(app: AppHandle) -> Result<PairingCode, Command
         server_id: c.registry.server_id(),
         name: c.backend.server_name(),
         routes,
-        fingerprint: c.registry.identity().fingerprint(),
+        fingerprint: identity.fingerprint(),
     }
     .format();
     let qr = qr_matrix(&link)?;

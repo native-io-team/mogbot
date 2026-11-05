@@ -21,7 +21,14 @@ export type LinkState =
   /** The Mac said no for good: re-pair (revoked) or update a side. */
   | {
       kind: 'refused';
-      reason: 'revoked' | 'unauthorized' | 'update_app' | 'update_mac' | 'not_your_mac';
+      reason:
+        | 'revoked'
+        | 'unauthorized'
+        | 'update_app'
+        | 'update_mac'
+        | 'not_your_mac'
+        | 'mac_reset'
+        | 'pair_again';
     };
 
 export interface Transport {

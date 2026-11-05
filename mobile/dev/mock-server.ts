@@ -11,8 +11,9 @@
 
 import {
   formatPairingLink,
+  hostOf,
+  macProofMessage,
   pairProofMessage,
-  welcomeProofMessage,
   negotiate,
   HEARTBEAT_MS,
   HTTP,
@@ -34,6 +35,8 @@ import {
   type SharedFile,
   type ClientFrame,
   type CompanionEvent,
+  type IdentityRequest,
+  type IdentityResponse,
   type Cursor,
   type Device,
   type JournaledEvent,
@@ -91,10 +94,19 @@ export interface MockOptions {
    */
   takeover?: boolean;
   /**
-   * Sign pairing answers and welcomes with this key instead of the mock's
+   * Sign its proofs and pairing answers with this key instead of the mock's
    * own: a server that *says* it's the Mac but isn't (tests).
    */
   impostorKey?: KeyObject;
+  /**
+   * The hosts it signs as its own (default: its own URL's). A relay test
+   * points the phone at another host and lets this one say where it is.
+   */
+  hosts?: string[];
+  /** The id it answers with (default `srv_mock`): a Mac that started over. */
+  serverId?: string;
+  /** A Mac from before protocol 2: closes a challenge without a word, no `/v1/identity`. */
+  protocolOne?: boolean;
 }
 
 /** An Ed25519 identity, as the Mac's `identity.rs` keeps one. */
@@ -139,7 +151,9 @@ export function createMockServer(opts: MockOptions = {}) {
     // eslint-disable-next-line no-console -- a dev server talks on stdout
     if (!opts.quiet) console.log('[mock]', ...a);
   };
-  const serverId = 'srv_mock';
+  const serverId = opts.serverId ?? 'srv_mock';
+  /** The hosts it serves on, as it signs them; known once it listens. */
+  let hosts: string[] = opts.hosts ?? [];
   // The key the pairing link names; `impostorKey` signs instead when set.
   const identity = mockIdentity();
   const signer = opts.impostorKey ? mockIdentity(opts.impostorKey) : identity;
@@ -1236,6 +1250,9 @@ export function createMockServer(opts: MockOptions = {}) {
 
   function onConnection(ws: WebSocket) {
     let conn: Conn | null = null;
+    /** The protocol version, once this socket's challenge was answered. */
+    let proven = 0;
+    const send_ = (frame: ServerFrame) => ws.send(JSON.stringify(frame));
     ws.on('message', (raw) => {
       let frame: ClientFrame;
       try {
@@ -1244,8 +1261,6 @@ export function createMockServer(opts: MockOptions = {}) {
         return;
       }
       if (!conn) {
-        if (frame.t !== 'hello') return ws.close();
-        const entry = [...devices.values()].find((d) => d.token === frame.token);
         const refuse = (
           reason: 'unauthorized' | 'revoked' | 'update_app' | 'update_mac',
           message: string
@@ -1253,14 +1268,30 @@ export function createMockServer(opts: MockOptions = {}) {
           ws.send(JSON.stringify({ t: 'refused', reason, message } satisfies ServerFrame));
           ws.close();
         };
+        // The Mac proves itself first: a challenge in, its signed identity out.
+        if (!proven) {
+          if (frame.t !== 'challenge' || opts.protocolOne) return ws.close();
+          const n = negotiate(frame.protocol, SUPPORTED);
+          if (!n.ok) {
+            return n.update === 'app'
+              ? refuse('update_app', realRefusal('update_app'))
+              : refuse('update_mac', realRefusal('update_mac'));
+          }
+          proven = n.version;
+          send_({
+            t: 'identity',
+            protocol: n.version,
+            serverId,
+            hosts,
+            identity: signer.prove(macProofMessage(frame.challenge, serverId, hosts)),
+          });
+          return;
+        }
+        if (frame.t !== 'hello') return ws.close();
+        const entry = [...devices.values()].find((d) => d.token === frame.token);
         if (!entry) return refuse('unauthorized', realRefusal('unauthorized'));
         if (entry.revoked) return refuse('revoked', realRefusal('revoked'));
-        const n = negotiate(frame.protocol, SUPPORTED);
-        if (!n.ok) {
-          return n.update === 'app'
-            ? refuse('update_app', realRefusal('update_app'))
-            : refuse('update_mac', realRefusal('update_mac'));
-        }
+        const n = { version: proven };
         conn = {
           ws,
           deviceId: entry.device.id,
@@ -1290,13 +1321,6 @@ export function createMockServer(opts: MockOptions = {}) {
           methods: realWelcome.methods,
           // The zone the mock's parser reads times in: this machine's own.
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          ...(frame.challenge
-            ? {
-                identity: signer.prove(
-                  welcomeProofMessage(frame.challenge, serverId, entry.device.id)
-                ),
-              }
-            : {}),
         });
         if (canReplay) {
           for (const e of compact(journal.filter((j) => j.seq > resume.seq))) {
@@ -1355,6 +1379,25 @@ export function createMockServer(opts: MockOptions = {}) {
   // ---- HTTP: pairing ---------------------------------------------------------------------
 
   async function onRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+    if (req.method === 'POST' && req.url === HTTP.identity && !opts.protocolOne) {
+      const body = JSON.parse(await readBody(req)) as IdentityRequest;
+      const n = negotiate(body.protocol, SUPPORTED);
+      const answer: IdentityResponse = n.ok
+        ? {
+            ok: true,
+            protocol: n.version,
+            serverId,
+            hosts,
+            identity: signer.prove(macProofMessage(body.challenge, serverId, hosts)),
+          }
+        : {
+            ok: false,
+            reason: n.update === 'app' ? 'update_app' : 'update_mac',
+            message: realRefusal(n.update === 'app' ? 'update_app' : 'update_mac'),
+          };
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(answer));
+      return;
+    }
     if (req.method === 'POST' && req.url === HTTP.pair) {
       const body = JSON.parse(await readBody(req)) as PairRequest;
       if (!codes.has(body.code)) {
@@ -1372,9 +1415,8 @@ export function createMockServer(opts: MockOptions = {}) {
         token,
         serverId,
         serverPublicKey: 'mock',
-        ...(body.challenge
-          ? { identity: signer.prove(pairProofMessage(body.challenge, serverId)) }
-          : {}),
+        hosts,
+        identity: signer.prove(pairProofMessage(body.challenge, serverId, hosts, deviceId)),
       };
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(answer));
       return;
@@ -1509,6 +1551,7 @@ export function createMockServer(opts: MockOptions = {}) {
           const { port } = server.address() as { port: number };
           const own = `${opts.tls ? 'https' : 'http'}://localhost:${port}`;
           status.routes = [{ kind: 'tailscale', url: opts.publicUrl ?? own }];
+          if (!opts.hosts) hosts = [hostOf(opts.publicUrl ?? own) ?? 'localhost'];
           resolve(own);
         });
       }),

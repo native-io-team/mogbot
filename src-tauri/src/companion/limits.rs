@@ -22,6 +22,14 @@ use std::sync::{Arc, Mutex};
 pub const MAX_CONNECTIONS: usize = 64;
 /// Requests in flight from one source (an open WebSocket counts as one).
 pub const MAX_PER_SOURCE: usize = 32;
+/// Connections that haven't proved anything yet (a socket before its
+/// `hello` checks out, a plain request), across all sources. The rest of
+/// [`MAX_CONNECTIONS`] is kept for sockets that have authenticated, so a
+/// flood of strangers can't keep a paired phone out.
+pub const MAX_UNAUTHENTICATED: usize = MAX_CONNECTIONS - super::MAX_SOCKETS;
+/// Sockets from one source still before their `hello`: a phone opens one at
+/// a time, and a few cover a reconnect racing an old socket.
+pub const MAX_PREHELLO_PER_SOURCE: usize = 4;
 /// Uploads in flight from one device.
 pub const MAX_UPLOADS_PER_DEVICE: usize = 3;
 /// Thumbnails being decoded at once, across every phone.
@@ -75,6 +83,115 @@ impl Counter {
     pub fn in_flight(&self, key: &str) -> usize {
         let counts = self.counts.lock().unwrap_or_else(|e| e.into_inner());
         counts.get(key).copied().unwrap_or(0)
+    }
+}
+
+/// Every open TCP connection, and whether it has authenticated. When a new
+/// one arrives with [`MAX_UNAUTHENTICATED`] strangers already open, the
+/// oldest stranger is told to go ([`Ticket::evicted`]); an authenticated
+/// socket never is. Past [`MAX_CONNECTIONS`] with nobody to evict, the new
+/// one is closed.
+#[derive(Default)]
+pub struct Gate {
+    inner: Mutex<GateInner>,
+}
+
+#[derive(Default)]
+struct GateInner {
+    next: u64,
+    open: HashMap<u64, Entry>,
+}
+
+struct Entry {
+    authenticated: bool,
+    /// Told to go and on its way out: no longer counted, never told twice.
+    leaving: bool,
+    evict: tokio::sync::watch::Sender<bool>,
+}
+
+/// One connection's place at the [`Gate`], given back on drop.
+pub struct Ticket {
+    gate: Arc<Gate>,
+    id: u64,
+    evicted: tokio::sync::watch::Receiver<bool>,
+}
+
+impl Gate {
+    /// A place for a new connection, making room by evicting the oldest
+    /// unauthenticated one if need be. `None`: full of authenticated ones.
+    pub fn admit(self: &Arc<Self>) -> Option<Ticket> {
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let staying = |g: &GateInner, auth: Option<bool>| {
+            g.open
+                .values()
+                .filter(|e| !e.leaving && auth.is_none_or(|a| e.authenticated == a))
+                .count()
+        };
+        if staying(&g, Some(false)) >= MAX_UNAUTHENTICATED || staying(&g, None) >= MAX_CONNECTIONS {
+            // Ids only grow, so the smallest is the oldest.
+            let oldest = g
+                .open
+                .iter()
+                .filter(|(_, e)| !e.authenticated && !e.leaving)
+                .map(|(id, _)| *id)
+                .min();
+            match oldest {
+                Some(id) => {
+                    if let Some(e) = g.open.get_mut(&id) {
+                        e.leaving = true;
+                        let _ = e.evict.send(true);
+                    }
+                }
+                None => return None,
+            }
+        }
+        let id = g.next;
+        g.next += 1;
+        let (evict, evicted) = tokio::sync::watch::channel(false);
+        g.open.insert(
+            id,
+            Entry {
+                authenticated: false,
+                leaving: false,
+                evict,
+            },
+        );
+        Some(Ticket {
+            gate: self.clone(),
+            id,
+            evicted,
+        })
+    }
+
+    /// (authenticated, unauthenticated) still open and not leaving.
+    pub fn counts(&self) -> (usize, usize) {
+        let g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let staying = g.open.values().filter(|e| !e.leaving);
+        let auth = staying.clone().filter(|e| e.authenticated).count();
+        (auth, staying.count() - auth)
+    }
+}
+
+impl Ticket {
+    /// This connection proved who it is: never evicted from now on.
+    pub fn authenticated(&self) {
+        let mut g = self.gate.inner.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(e) = g.open.get_mut(&self.id) {
+            e.authenticated = true;
+        }
+    }
+
+    /// Resolves when the gate tells this connection to go.
+    pub async fn evicted(&self) {
+        let mut rx = self.evicted.clone();
+        let _ = rx.wait_for(|gone| *gone).await;
+    }
+}
+
+impl Drop for Ticket {
+    fn drop(&mut self) {
+        let mut g = self.gate.inner.lock().unwrap_or_else(|e| e.into_inner());
+        g.open.remove(&self.id);
     }
 }
 
@@ -265,6 +382,58 @@ mod tests {
         drop(a);
         assert_eq!(c.in_flight("x"), 1);
         assert!(c.try_take("x", 2).is_some());
+    }
+
+    #[tokio::test]
+    async fn strangers_are_evicted_oldest_first_and_authenticated_sockets_never() {
+        let gate = Arc::new(Gate::default());
+        let phones: Vec<Ticket> = (0..crate::companion::MAX_SOCKETS)
+            .map(|_| {
+                let t = gate.admit().unwrap();
+                t.authenticated();
+                t
+            })
+            .collect();
+        let strangers: Vec<Ticket> = (0..MAX_UNAUTHENTICATED)
+            .map(|_| gate.admit().unwrap())
+            .collect();
+        assert_eq!(
+            gate.counts(),
+            (crate::companion::MAX_SOCKETS, MAX_UNAUTHENTICATED)
+        );
+        // Full: the next one gets in, and the oldest stranger is told to go.
+        let newcomer = gate.admit().expect("room is made");
+        tokio::time::timeout(std::time::Duration::from_secs(1), strangers[0].evicted())
+            .await
+            .expect("the oldest stranger is evicted");
+        assert_eq!(
+            gate.counts(),
+            (crate::companion::MAX_SOCKETS, MAX_UNAUTHENTICATED)
+        );
+        // No phone was told anything.
+        for p in &phones {
+            assert!(!*p.evicted.borrow());
+        }
+        // Once the newcomer authenticates, it's safe too.
+        newcomer.authenticated();
+        let _again = gate.admit().unwrap();
+        assert!(!*newcomer.evicted.borrow());
+        assert!(*strangers[1].evicted.borrow());
+        drop(strangers);
+        assert_eq!(gate.counts().1, 1);
+    }
+
+    #[test]
+    fn a_gate_full_of_phones_closes_the_next_one() {
+        let gate = Arc::new(Gate::default());
+        let _all: Vec<Ticket> = (0..MAX_CONNECTIONS)
+            .map(|_| {
+                let t = gate.admit().unwrap();
+                t.authenticated();
+                t
+            })
+            .collect();
+        assert!(gate.admit().is_none());
     }
 
     #[test]

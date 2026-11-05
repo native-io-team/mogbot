@@ -3,15 +3,20 @@
 //! A link or QR code is untrusted input: anyone can make one that names
 //! "Julian's MacBook Pro" and points at their own server, and a Tailscale
 //! Funnel host has a valid `*.ts.net` certificate too. So the Mac has an
-//! Ed25519 key of its own (kept in `companion.json`, 0600). The pairing link
-//! carries a fingerprint of its public half; the phone pins that fingerprint,
-//! and every pairing answer and every `welcome` signs a fresh challenge the
-//! phone chose. A server that can't sign for the pinned key isn't this Mac,
-//! whatever its name, host or certificate, and the phone stops there.
+//! Ed25519 key of its own (in the login Keychain, `keystore.rs`). The pairing
+//! link carries a fingerprint of its public half and the phone pins it.
 //!
-//! The signed messages are spelled out in `pairing.ts`
-//! (`pairProofMessage`, `welcomeProofMessage`); both sides must agree byte
-//! for byte.
+//! The Mac proves itself first. Before the phone sends a pairing code
+//! (`POST /v1/identity`) or a device token (the socket's `challenge` →
+//! `identity` frames), the Mac signs a challenge the phone chose together
+//! with its server id and the host names it serves itself on. The phone goes
+//! on only when the signature is the pinned key's *and* the host it actually
+//! reached is one of those names, so a server that relays the Mac's answers
+//! from somewhere else gets nothing. The pairing answer signs the same, plus
+//! the device it made.
+//!
+//! The signed messages are spelled out in `pairing.ts` (`macProofMessage`,
+//! `pairProofMessage`); both sides must agree byte for byte.
 
 use base64::Engine;
 use ring::rand::SystemRandom;
@@ -58,7 +63,7 @@ impl Identity {
         Some((Identity { key }, B64.encode(doc.as_ref())))
     }
 
-    /// The key kept in `companion.json`, or `None` if it isn't one.
+    /// A kept key (PKCS#8, base64url), or `None` if it isn't one.
     pub fn from_stored(pkcs8_b64: &str) -> Option<Identity> {
         let bytes = B64.decode(pkcs8_b64.trim()).ok()?;
         Ed25519KeyPair::from_pkcs8_maybe_unchecked(&bytes)
@@ -82,22 +87,34 @@ impl Identity {
         }
     }
 
-    /// The answer to `PairRequest.challenge`, or `None` for no usable challenge.
-    pub fn prove_pair(&self, challenge: Option<&str>, server_id: &str) -> Option<IdentityProof> {
-        let challenge = usable_challenge(challenge)?;
-        Some(self.prove(&pair_message(challenge, server_id)))
+    /// The proof the Mac gives first (the `identity` frame and
+    /// `POST /v1/identity`), or `None` for no usable challenge.
+    pub fn prove_mac(
+        &self,
+        challenge: &str,
+        server_id: &str,
+        hosts: &[String],
+    ) -> Option<IdentityProof> {
+        let challenge = usable_challenge(Some(challenge))?;
+        Some(self.prove(&mac_message(challenge, server_id, hosts)))
     }
 
-    /// The answer to `hello.challenge`, or `None` for no usable challenge.
-    pub fn prove_welcome(
+    /// The answer to `PairRequest.challenge`, or `None` for no usable challenge.
+    pub fn prove_pair(
         &self,
         challenge: Option<&str>,
         server_id: &str,
+        hosts: &[String],
         device_id: &str,
     ) -> Option<IdentityProof> {
         let challenge = usable_challenge(challenge)?;
-        Some(self.prove(&welcome_message(challenge, server_id, device_id)))
+        Some(self.prove(&pair_message(challenge, server_id, hosts, device_id)))
     }
+}
+
+/// 16 to 64 random bytes, base64url: the only challenges the Mac signs.
+pub fn is_usable_challenge(challenge: &str) -> bool {
+    usable_challenge(Some(challenge)).is_some()
 }
 
 fn usable_challenge(challenge: Option<&str>) -> Option<&str> {
@@ -115,14 +132,44 @@ pub fn fingerprint_of(public_key: &[u8]) -> String {
     B64.encode(&Sha256::digest(public_key)[..16])
 }
 
-/// `pairProofMessage` in pairing.ts.
-pub fn pair_message(challenge: &str, server_id: &str) -> String {
-    format!("{PAIRING_SCHEME}:pair:v1\n{challenge}\n{server_id}")
+/// A route URL's host as both sides sign it: lowercase, no port, no path
+/// (`hostOf` in pairing.ts). `None` for anything that isn't `scheme://host…`.
+pub fn host_of(url: &str) -> Option<String> {
+    let rest = url.split_once("://")?.1;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    if authority.contains('@') || authority.starts_with('[') {
+        return None;
+    }
+    let host = authority.split(':').next()?.to_ascii_lowercase();
+    let ok = !host.is_empty()
+        && host
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.');
+    ok.then_some(host)
 }
 
-/// `welcomeProofMessage` in pairing.ts.
-pub fn welcome_message(challenge: &str, server_id: &str, device_id: &str) -> String {
-    format!("{PAIRING_SCHEME}:welcome:v1\n{challenge}\n{server_id}\n{device_id}")
+/// The hosts as one signed line: lowercase, sorted, comma separated (a host
+/// name holds neither a comma nor a newline, so it reads only one way).
+fn host_line(hosts: &[String]) -> String {
+    let mut hosts: Vec<String> = hosts.iter().map(|h| h.to_ascii_lowercase()).collect();
+    hosts.sort();
+    hosts.join(",")
+}
+
+/// `macProofMessage` in pairing.ts.
+pub fn mac_message(challenge: &str, server_id: &str, hosts: &[String]) -> String {
+    format!(
+        "{PAIRING_SCHEME}:identity:v2\n{challenge}\n{server_id}\n{}",
+        host_line(hosts)
+    )
+}
+
+/// `pairProofMessage` in pairing.ts.
+pub fn pair_message(challenge: &str, server_id: &str, hosts: &[String], device_id: &str) -> String {
+    format!(
+        "{PAIRING_SCHEME}:pair:v2\n{challenge}\n{server_id}\n{}\n{device_id}",
+        host_line(hosts)
+    )
 }
 
 #[cfg(test)]
@@ -150,25 +197,38 @@ mod tests {
         assert!(Identity::from_stored("not a key").is_none());
     }
 
+    fn hosts(h: &[&str]) -> Vec<String> {
+        h.iter().map(|s| s.to_string()).collect()
+    }
+
     #[test]
     fn proofs_verify_only_for_their_own_message() {
         let (id, _) = Identity::generate().unwrap();
-        let pair = id.prove_pair(Some(CHALLENGE), "srv_1").unwrap();
-        assert!(verify(&pair, &pair_message(CHALLENGE, "srv_1")));
-        assert!(!verify(&pair, &pair_message(CHALLENGE, "srv_2")));
-        // A pairing answer can't be replayed as a welcome, or the reverse.
+        let mac_hosts = hosts(&["mac.tail1.ts.net"]);
+        let mac = id.prove_mac(CHALLENGE, "srv_1", &mac_hosts).unwrap();
+        assert!(verify(&mac, &mac_message(CHALLENGE, "srv_1", &mac_hosts)));
+        assert!(!verify(&mac, &mac_message(CHALLENGE, "srv_2", &mac_hosts)));
+        // The host is part of what's signed: a relay elsewhere can't reuse it.
+        assert!(!verify(
+            &mac,
+            &mac_message(CHALLENGE, "srv_1", &hosts(&["attacker.tail9.ts.net"]))
+        ));
+        let pair = id
+            .prove_pair(Some(CHALLENGE), "srv_1", &mac_hosts, "dev_1")
+            .unwrap();
+        assert!(verify(
+            &pair,
+            &pair_message(CHALLENGE, "srv_1", &mac_hosts, "dev_1")
+        ));
         assert!(!verify(
             &pair,
-            &welcome_message(CHALLENGE, "srv_1", "dev_1")
+            &pair_message(CHALLENGE, "srv_1", &mac_hosts, "dev_2")
         ));
-        let welcome = id.prove_welcome(Some(CHALLENGE), "srv_1", "dev_1").unwrap();
-        assert!(verify(
-            &welcome,
-            &welcome_message(CHALLENGE, "srv_1", "dev_1")
-        ));
+        // A pairing answer can't be replayed as the socket's proof, or the reverse.
+        assert!(!verify(&pair, &mac_message(CHALLENGE, "srv_1", &mac_hosts)));
         assert!(!verify(
-            &welcome,
-            &welcome_message(CHALLENGE, "srv_1", "dev_2")
+            &mac,
+            &pair_message(CHALLENGE, "srv_1", &mac_hosts, "")
         ));
         // Another Mac's key never matches this one's fingerprint.
         let (other, _) = Identity::generate().unwrap();
@@ -178,12 +238,27 @@ mod tests {
     #[test]
     fn junk_challenges_get_no_signature() {
         let (id, _) = Identity::generate().unwrap();
-        assert!(id.prove_pair(None, "s").is_none());
-        assert!(id.prove_pair(Some("short"), "s").is_none());
-        assert!(id.prove_pair(Some(&"A".repeat(200)), "s").is_none());
+        let h = hosts(&["m.ts.net"]);
+        assert!(id.prove_pair(None, "s", &h, "d").is_none());
+        assert!(id.prove_mac("short", "s", &h).is_none());
+        assert!(id.prove_mac(&"A".repeat(200), "s", &h).is_none());
         assert!(id
-            .prove_pair(Some("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nX"), "s")
+            .prove_mac("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nX", "s", &h)
             .is_none());
+    }
+
+    #[test]
+    fn hosts_are_read_the_way_the_phone_reads_them() {
+        assert_eq!(
+            host_of("https://Mac.Tail1.ts.net:47443/").as_deref(),
+            Some("mac.tail1.ts.net")
+        );
+        assert_eq!(
+            host_of("http://localhost:1234").as_deref(),
+            Some("localhost")
+        );
+        assert_eq!(host_of("https://user@mac.ts.net"), None);
+        assert_eq!(host_of("mac.ts.net"), None);
     }
 
     /// The exact bytes pairing.ts signs and checks: a change here must change
@@ -191,12 +266,12 @@ mod tests {
     #[test]
     fn the_messages_are_the_protocols() {
         assert_eq!(
-            pair_message("c", "srv"),
-            format!("{PAIRING_SCHEME}:pair:v1\nc\nsrv")
+            mac_message("c", "srv", &hosts(&["B.ts.net", "a.ts.net"])),
+            format!("{PAIRING_SCHEME}:identity:v2\nc\nsrv\na.ts.net,b.ts.net")
         );
         assert_eq!(
-            welcome_message("c", "srv", "dev"),
-            format!("{PAIRING_SCHEME}:welcome:v1\nc\nsrv\ndev")
+            pair_message("c", "srv", &hosts(&["a.ts.net"]), "dev"),
+            format!("{PAIRING_SCHEME}:pair:v2\nc\nsrv\na.ts.net\ndev")
         );
         // Known vector: fingerprint of 32 zero bytes.
         assert_eq!(fingerprint_of(&[0u8; 32]), "Zmh6rfhivXdsj8GLjp-OIA");

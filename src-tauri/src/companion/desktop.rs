@@ -580,6 +580,14 @@ impl Backend for DesktopBackend {
         computer_name()
     }
 
+    fn serve_hosts(&self) -> Vec<String> {
+        routes()
+            .iter()
+            .filter(|r| r.kind == RouteKind::Tailscale)
+            .filter_map(|r| super::identity::host_of(&r.url))
+            .collect()
+    }
+
     fn app_version(&self) -> String {
         self.app.package_info().version.to_string()
     }

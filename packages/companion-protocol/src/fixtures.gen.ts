@@ -2,7 +2,14 @@
 // actually serializes. Do not edit: rewrite it with UPDATE_FIXTURES=1.
 // `tsc -p packages/companion-protocol` checks every value against the protocol.
 
-import type { Device, PairingLink, PairResponse, Result, ServerFrame } from './index';
+import type {
+  Device,
+  IdentityResponse,
+  PairingLink,
+  PairResponse,
+  Result,
+  ServerFrame,
+} from './index';
 
 export const systemStatus = {
   "appVersion": "1.7.0",
@@ -1669,8 +1676,20 @@ export const sessionsSend = {
 } satisfies Result<'sessions.send'>;
 export const frames = [
   {
+    "t": "identity",
+    "protocol": 2,
+    "serverId": "srv_0123456789abcdef",
+    "hosts": [
+      "julians-macbook-pro.tail1234.ts.net"
+    ],
+    "identity": {
+      "publicKey": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "signature": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
+    }
+  },
+  {
     "t": "welcome",
-    "protocol": 1,
+    "protocol": 2,
     "server": {
       "id": "srv_0123456789abcdef",
       "name": "Julian’s MacBook Pro",
@@ -1721,10 +1740,6 @@ export const frames = [
       "preview.screenshot"
     ],
     "timeZone": "America/New_York",
-    "identity": {
-      "publicKey": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
-      "signature": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
-    },
     "features": [
       "results.revise"
     ]
@@ -1753,6 +1768,11 @@ export const frames = [
     "t": "refused",
     "reason": "too_many_connections",
     "message": "Too many connections from this phone."
+  },
+  {
+    "t": "refused",
+    "reason": "unavailable",
+    "message": "Your Mac can't read its identity key from the Keychain right now."
   },
   {
     "t": "res",
@@ -2634,6 +2654,9 @@ export const pairResponses = [
     "token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "serverId": "srv_0123456789abcdef",
     "serverPublicKey": "",
+    "hosts": [
+      "julians-macbook-pro.tail1234.ts.net"
+    ],
     "identity": {
       "publicKey": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
       "signature": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
@@ -2679,12 +2702,36 @@ export const pairingLink = {
     {
       "kind": "tailscale",
       "url": "https://julians-macbook-pro.tail1234.ts.net:47443"
-    },
-    {
-      "kind": "lan",
-      "url": "https://192.168.1.20:47444",
-      "pin": "q2v0bQyR3m8b0f4Jc1lT8wq9s1nC3kq8H1cX0p9yQ2A"
     }
   ],
   "fingerprint": "Zmh6rfhivXdsj8GLjp-OIA"
 } satisfies PairingLink;
+export const identityResponses = [
+  {
+    "ok": true,
+    "protocol": 2,
+    "serverId": "srv_0123456789abcdef",
+    "hosts": [
+      "julians-macbook-pro.tail1234.ts.net"
+    ],
+    "identity": {
+      "publicKey": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "signature": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012345"
+    }
+  },
+  {
+    "ok": false,
+    "reason": "update_app",
+    "message": "What happened, for the user."
+  },
+  {
+    "ok": false,
+    "reason": "update_mac",
+    "message": "What happened, for the user."
+  },
+  {
+    "ok": false,
+    "reason": "unavailable",
+    "message": "What happened, for the user."
+  }
+] satisfies IdentityResponse[];

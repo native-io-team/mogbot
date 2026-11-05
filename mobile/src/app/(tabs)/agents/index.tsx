@@ -427,6 +427,9 @@ function Refused() {
   if (link.kind !== 'refused') return null;
   const removed = link.reason === 'revoked' || link.reason === 'unauthorized';
   const impostor = link.reason === 'not_your_mac';
+  // The phone's own reasons to pair again: the Mac started over with a new
+  // identity, or this pairing predates identity checks.
+  const repair = link.reason === 'mac_reset' || link.reason === 'pair_again';
   // Not paired any more is a state, not an accusation: the phone can't tell
   // whether someone removed it or the Mac's pairings were reset, so it says
   // what's true and both ways it happens, not the Mac's own wording too.
@@ -435,11 +438,13 @@ function Refused() {
       <T variant="headline" color={impostor ? colors.accentErrorLight : colors.textStrong}>
         {impostor
           ? 'This isn’t your Mac'
-          : removed
-            ? `Not paired with ${name} any more`
-            : link.reason === 'update_app'
-              ? 'Update this app'
-              : `Update the app on ${name}`}
+          : repair
+            ? `Pair again with ${name}`
+            : removed
+              ? `Not paired with ${name} any more`
+              : link.reason === 'update_app'
+                ? 'Update this app'
+                : `Update the app on ${name}`}
       </T>
       {removed ? (
         <T color={colors.textSecondary}>
@@ -449,7 +454,7 @@ function Refused() {
       ) : refusal?.message ? (
         <T color={colors.textSecondary}>{refusal.message}</T>
       ) : null}
-      {(removed || impostor) && (
+      {(removed || impostor || repair) && (
         <Button
           title="Pair again"
           variant="primary"

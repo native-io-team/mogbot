@@ -4,7 +4,7 @@
  */
 
 import { formatPairingLink, type PairingLink } from '@shipstudio/companion-protocol';
-import { cleanName, linkHost, pairPlan, parseLink } from '../src/lib/pairing';
+import { cleanName, linkHost, linkProblem, pairPlan, parseLink } from '../src/lib/pairing';
 
 const link: PairingLink = {
   v: 1,
@@ -22,8 +22,24 @@ describe('pairing links', () => {
     expect(parseLink(formatPairingLink(evil as PairingLink))).toBeNull();
   });
 
-  it('show the host the phone would talk to', () => {
+  it('show the host the phone would talk to, the only one it will try', () => {
     expect(linkHost(link)).toBe('julians-mbp.tail1234.ts.net:47443');
+    // A second route the confirm screen wouldn't show: no link at all.
+    const two = {
+      ...link,
+      routes: [...link.routes, { kind: 'tailscale', url: 'https://attacker.tail9.ts.net' }],
+    } as PairingLink;
+    expect(parseLink(formatPairingLink(two))).toBeNull();
+  });
+
+  // A new phone, an old Mac: say what to do, not "that isn't a link".
+  it('say to update the Mac when its link carries no identity', () => {
+    const { fingerprint: _, ...old } = link;
+    expect(parseLink(formatPairingLink(old as PairingLink))).toBeNull();
+    expect(linkProblem(formatPairingLink(old as PairingLink))).toMatch(
+      /^Update the app on your Mac to pair/
+    );
+    expect(linkProblem('hello')).toMatch(/isn’t a pairing code/);
   });
 
   it('show names without invisible or reordering characters', () => {
@@ -52,10 +68,14 @@ describe('pairPlan', () => {
     });
   });
 
-  it('pairs the same Mac again', () => {
+  it('pairs the same Mac again only when the key matches the pinned one', () => {
     expect(pairPlan(link, current)).toEqual({ kind: 'again' });
-    // Paired before identity keys: nothing pinned to contradict.
-    expect(pairPlan(link, { ...current, fingerprint: undefined })).toEqual({ kind: 'again' });
+    // Paired before identity keys: nothing pinned, so nothing to vouch for
+    // the link. It isn't called "already paired", just a replacement.
+    expect(pairPlan(link, { ...current, fingerprint: undefined })).toEqual({
+      kind: 'replace',
+      current: 'Julian’s MacBook Pro',
+    });
   });
 
   // The paired Mac's id with a different key: a look-alike, refused outright.

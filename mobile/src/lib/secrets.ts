@@ -15,9 +15,9 @@ import type { DirectTransport } from './transport';
 /**
  * Why a secret can't go over this connection, or null when it can. The token
  * rides every route, but a secret outlives the pairing, so it goes only over
- * HTTPS on Tailscale, and only on a connection whose `welcome` was signed by
- * the identity key pinned at pairing (`identityVerified`). A link that named
- * your Mac and pointed somewhere else never gets one.
+ * HTTPS on Tailscale, and only on a connection where the Mac proved the
+ * identity key pinned at pairing before the token went (`identityVerified`).
+ * A link that named your Mac and pointed somewhere else never gets one.
  */
 export function secretRouteProblem(
   route: Pick<Route, 'kind' | 'url'> | null,
@@ -28,7 +28,7 @@ export function secretRouteProblem(
     return 'Secrets only go over Tailscale, which encrypts them all the way to your Mac. Connect over Tailscale, or save it at your desk.';
   }
   if (!identityVerified) {
-    return 'This connection hasn’t proved it’s the Mac you paired with, so secrets stay here. Update the app on your Mac, or save it at your desk.';
+    return 'This connection hasn’t proved it’s the Mac you paired with, so secrets stay here. Save it at your desk instead.';
   }
   return null;
 }

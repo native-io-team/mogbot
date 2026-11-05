@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { createMockServer } from '../dev/mock-server';
-import { until } from './helpers';
+import { provenBy, until } from './helpers';
 
 // What would reach the disk: every write captured instead.
 const written: string[] = [];
@@ -31,15 +31,12 @@ jest.mock('../src/lib/persist', () => ({
 }));
 
 // jest.mock is hoisted above these, so they load with it in place.
-import { toCache } from '../src/lib/cache';
+import { toCache, toOutbox } from '../src/lib/cache';
 import { flushDrafts } from '../src/lib/drafts';
 import { secretRouteProblem, sendSecret } from '../src/lib/secrets';
 import { getApp } from '../src/lib/store';
 import { applyEvent, emptySync } from '../src/lib/sync';
 import { DirectTransport } from '../src/lib/transport';
-import { checkWelcome } from '../src/lib/pin';
-import { newChallenge } from '../src/lib/identity';
-import { randomBytes } from 'node:crypto';
 
 jest.setTimeout(20_000);
 
@@ -122,8 +119,7 @@ class SelfSignedOk extends WebSocket {
   beforeAll(async () => {
     const url = await mock.listen();
     expect(url).toMatch(/^https:/);
-    const { token, deviceId } = mock.issueToken();
-    const pinned = { fingerprint: mock.fingerprint, serverId: mock.serverId, deviceId };
+    const { token } = mock.issueToken();
     t = new DirectTransport({
       routes: [{ kind: 'tailscale', url }],
       token,
@@ -131,8 +127,7 @@ class SelfSignedOk extends WebSocket {
       getResume: () => state.cursor ?? undefined,
       foreground: true,
       WebSocketImpl: SelfSignedOk as unknown as typeof globalThis.WebSocket,
-      challenge: () => newChallenge((n) => new Uint8Array(randomBytes(n))),
-      checkWelcome: (w, challenge) => checkWelcome(pinned, w, challenge).verdict,
+      ...provenBy(mock),
     });
     t.onEvent((e: CompanionEvent, c?: Cursor) => {
       frames.push(JSON.stringify(e));
@@ -207,6 +202,7 @@ class SelfSignedOk extends WebSocket {
     await flushDrafts();
     const kept = [
       JSON.stringify(toCache(state)),
+      JSON.stringify(toOutbox(state)),
       JSON.stringify(state.pending),
       JSON.stringify(getApp()),
       ...written,

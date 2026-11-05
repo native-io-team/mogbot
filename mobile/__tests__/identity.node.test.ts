@@ -1,31 +1,52 @@
 /**
- * The Mac's identity, pinned: a server that can't sign for the key the
- * pairing link named gets nothing, whatever it calls itself. Against the
- * mock Mac (honest, and one signing with another key), through the app's
- * real transport.
+ * The Mac's identity, pinned: before the phone sends a pairing code or its
+ * token, the Mac proves who it is, for the host the phone reached. A server
+ * that can't, whatever it calls itself and however it got its answers, gets
+ * nothing. Against the mock Mac (honest, with another key, and behind a
+ * relay on another host), through the app's real transport and pairing flow.
  */
 
 import {
+  formatPairingLink,
+  macProofMessage,
   pairProofMessage,
-  welcomeProofMessage,
+  parsePairingLink,
+  type ClientFrame,
   type LinkState,
-  type WelcomeFrame,
 } from '@shipstudio/companion-protocol';
-import { generateKeyPairSync, randomBytes } from 'node:crypto';
-import { WebSocket } from 'ws';
+import { generateKeyPairSync } from 'node:crypto';
+import http from 'node:http';
+import { WebSocket, WebSocketServer } from 'ws';
 import { createMockServer, mockIdentity } from '../dev/mock-server';
-import { fingerprintOf, fromBase64Url, newChallenge, proves } from '../src/lib/identity';
-import { checkWelcome } from '../src/lib/pin';
+import {
+  checkMac,
+  checkPairAnswer,
+  fingerprintOf,
+  fromBase64Url,
+  newChallenge,
+  proves,
+} from '../src/lib/identity';
+import { pairWith, PairError } from '../src/lib/pairFlow';
 import { DirectTransport } from '../src/lib/transport';
-import { until } from './helpers';
+import { provenBy, random, until } from './helpers';
 
 jest.setTimeout(20_000);
-
-const random = (n: number) => new Uint8Array(randomBytes(n));
 
 describe('identity proofs', () => {
   const mac = mockIdentity();
   const challenge = newChallenge(random);
+  const hosts = ['julians-mbp.tail1.ts.net'];
+  const pinned = { fingerprint: mac.fingerprint, serverId: 'srv_1' };
+  const answer = (over: Partial<{ serverId: string; hosts: string[]; key: typeof mac }> = {}) => {
+    const serverId = over.serverId ?? 'srv_1';
+    const h = over.hosts ?? hosts;
+    return {
+      serverId,
+      hosts: h,
+      identity: (over.key ?? mac).prove(macProofMessage(challenge, serverId, h)),
+    };
+  };
+  const reached = 'https://julians-mbp.tail1.ts.net:47443';
 
   it('fingerprint the way the Mac does', () => {
     // identity.rs: fingerprint_of([0; 32]).
@@ -34,47 +55,128 @@ describe('identity proofs', () => {
   });
 
   it('verify only for the pinned key and the exact message', () => {
-    const proof = mac.prove(pairProofMessage(challenge, 'srv_1'));
-    expect(proves(proof, pairProofMessage(challenge, 'srv_1'), mac.fingerprint)).toBe(true);
-    expect(proves(proof, pairProofMessage(challenge, 'srv_2'), mac.fingerprint)).toBe(false);
-    expect(proves(proof, pairProofMessage(newChallenge(random), 'srv_1'), mac.fingerprint)).toBe(
-      false
-    );
+    const message = macProofMessage(challenge, 'srv_1', hosts);
+    const proof = mac.prove(message);
+    expect(proves(proof, message, mac.fingerprint)).toBe(true);
+    expect(proves(proof, macProofMessage(challenge, 'srv_2', hosts), mac.fingerprint)).toBe(false);
+    expect(
+      proves(proof, macProofMessage(newChallenge(random), 'srv_1', hosts), mac.fingerprint)
+    ).toBe(false);
     // Someone else's key, however valid its signature.
-    const other = mockIdentity();
-    const forged = other.prove(pairProofMessage(challenge, 'srv_1'));
-    expect(proves(forged, pairProofMessage(challenge, 'srv_1'), mac.fingerprint)).toBe(false);
-    // A pairing answer isn't a welcome.
-    expect(proves(proof, welcomeProofMessage(challenge, 'srv_1', 'dev'), mac.fingerprint)).toBe(
+    const forged = mockIdentity().prove(message);
+    expect(proves(forged, message, mac.fingerprint)).toBe(false);
+    // The socket's proof isn't a pairing answer.
+    expect(proves(proof, pairProofMessage(challenge, 'srv_1', hosts, ''), mac.fingerprint)).toBe(
       false
     );
     expect(proves(undefined, 'x', mac.fingerprint)).toBe(false);
     expect(proves({ publicKey: 'junk!', signature: '' }, 'x', mac.fingerprint)).toBe(false);
   });
 
-  it('pins on the first signed welcome of a pairing made before identity keys', () => {
-    const w = (identity?: WelcomeFrame['identity'], deviceId = 'dev_1') =>
-      ({ server: { id: 'srv_1' }, deviceId, identity }) as WelcomeFrame;
-    const signed = mac.prove(welcomeProofMessage(challenge, 'srv_1', 'dev_1'));
-    const unpinned = { serverId: 'srv_1', deviceId: 'dev_1' };
-    expect(checkWelcome(unpinned, w(signed), challenge)).toEqual({
-      verdict: 'ok',
-      pin: mac.fingerprint,
+  it('hold the Mac to its key, its id and the host the phone reached', () => {
+    expect(checkMac(answer(), pinned, challenge, reached)).toBe('ok');
+    // Host names are compared without case or port.
+    expect(checkMac(answer(), pinned, challenge, 'https://JULIANS-MBP.tail1.ts.net')).toBe('ok');
+    // Another key, with the paired Mac's id: an impostor.
+    expect(checkMac(answer({ key: mockIdentity() }), pinned, challenge, reached)).toBe(
+      'not_your_mac'
+    );
+    // The real Mac's proof, reached somewhere it doesn't serve: a relay.
+    expect(checkMac(answer(), pinned, challenge, 'https://attacker.tail9.ts.net:47443')).toBe(
+      'not_your_mac'
+    );
+    // A relay can't add its own host: the signature covers the list.
+    const relayed = answer();
+    expect(
+      checkMac(
+        { ...relayed, hosts: [...hosts, 'attacker.tail9.ts.net'] },
+        pinned,
+        challenge,
+        'https://attacker.tail9.ts.net'
+      )
+    ).toBe('not_your_mac');
+    // A different Mac id: the Mac started over (or it isn't the Mac): pair again.
+    expect(checkMac(answer({ serverId: 'srv_new' }), pinned, challenge, reached)).toBe('mac_reset');
+    // Nothing, or a stale challenge.
+    expect(checkMac(undefined, pinned, challenge, reached)).toBe('not_your_mac');
+    expect(checkMac(answer(), pinned, newChallenge(random), reached)).toBe('not_your_mac');
+  });
+
+  it('check a pairing answer for the device it made and the host it came from', () => {
+    const signed = (deviceId: string) => ({
+      serverId: 'srv_1',
+      deviceId,
+      hosts,
+      identity: mac.prove(pairProofMessage(challenge, 'srv_1', hosts, deviceId)),
     });
-    expect(checkWelcome(unpinned, w(undefined), challenge)).toEqual({ verdict: 'unproven' });
-    const pinned = { ...unpinned, fingerprint: mac.fingerprint };
-    expect(checkWelcome(pinned, w(signed), challenge).verdict).toBe('ok');
-    // Once pinned, nothing unsigned or signed by another key gets through.
-    expect(checkWelcome(pinned, w(undefined), challenge).verdict).toBe('mismatch');
-    const other = mockIdentity().prove(welcomeProofMessage(challenge, 'srv_1', 'dev_1'));
-    expect(checkWelcome(pinned, w(other), challenge).verdict).toBe('mismatch');
-    // A welcome for another device can't be replayed at this one.
-    expect(checkWelcome(pinned, w(signed, 'dev_2'), challenge).verdict).toBe('mismatch');
+    expect(checkPairAnswer(signed('dev_1'), pinned, challenge, reached)).toBe(true);
+    expect(
+      checkPairAnswer({ ...signed('dev_1'), deviceId: 'dev_2' }, pinned, challenge, reached)
+    ).toBe(false);
+    expect(
+      checkPairAnswer(signed('dev_1'), pinned, challenge, 'https://attacker.tail9.ts.net')
+    ).toBe(false);
   });
 });
 
+/**
+ * A server on another host that passes everything to the Mac and back:
+ * HTTP and the socket. `seen` records what the phone sent through it.
+ */
+function relayTo(target: string) {
+  const seen: { paths: string[]; frames: ClientFrame[] } = { paths: [], frames: [] };
+  const server = http.createServer((req, res) => {
+    seen.paths.push(req.url ?? '');
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => chunks.push(c));
+    req.on('end', () => {
+      const out = http.request(
+        target + (req.url ?? ''),
+        { method: req.method, headers: { 'content-type': 'application/json' } },
+        (up) => {
+          res.writeHead(up.statusCode ?? 502, { 'content-type': 'application/json' });
+          up.pipe(res);
+        }
+      );
+      out.end(Buffer.concat(chunks));
+    });
+  });
+  const wss = new WebSocketServer({ server });
+  wss.on('connection', (phone) => {
+    const mac = new WebSocket(target.replace(/^http/, 'ws') + '/v1/ws');
+    const queue: string[] = [];
+    phone.on('message', (raw) => {
+      const text = (raw as Buffer).toString();
+      seen.frames.push(JSON.parse(text) as ClientFrame);
+      if (mac.readyState === WebSocket.OPEN) mac.send(text);
+      else queue.push(text);
+    });
+    mac.on('open', () => queue.splice(0).forEach((q) => mac.send(q)));
+    mac.on('message', (raw) => phone.send((raw as Buffer).toString()));
+    mac.on('close', () => phone.close());
+    phone.on('close', () => mac.close());
+  });
+  return {
+    seen,
+    /** On 127.0.0.1: a different host from the Mac's `localhost`. */
+    listen: () =>
+      new Promise<string>((resolve) =>
+        server.listen(0, '127.0.0.1', () => {
+          const { port } = server.address() as { port: number };
+          resolve(`http://127.0.0.1:${port}`);
+        })
+      ),
+    close: () =>
+      new Promise<void>((resolve) => {
+        wss.clients.forEach((c) => c.terminate());
+        wss.close();
+        server.close(() => resolve());
+      }),
+  };
+}
+
 describe('against a server', () => {
-  const open = (url: string, token: string, pinned: Parameters<typeof checkWelcome>[0]) =>
+  const open = (url: string, token: string, mac: { fingerprint: string; serverId: string }) =>
     new DirectTransport({
       routes: [{ kind: 'tailscale', url }],
       token,
@@ -82,19 +184,14 @@ describe('against a server', () => {
       getResume: () => undefined,
       foreground: true,
       WebSocketImpl: WebSocket as unknown as typeof globalThis.WebSocket,
-      challenge: () => newChallenge(random),
-      checkWelcome: (w, c) => checkWelcome(pinned, w, c).verdict,
+      ...provenBy(mac),
     });
 
-  it('the paired Mac is verified', async () => {
+  it('the paired Mac proves itself, and only then gets the token', async () => {
     const mock = createMockServer({ quiet: true, allowAfterMs: 0 });
     const url = await mock.listen();
-    const { token, deviceId } = mock.issueToken();
-    const t = open(url, token, {
-      fingerprint: mock.fingerprint,
-      serverId: mock.serverId,
-      deviceId,
-    });
+    const { token } = mock.issueToken();
+    const t = open(url, token, mock);
     await until(() => t.state.kind === 'connected');
     expect(t.identityVerified).toBe(true);
     t.close();
@@ -102,8 +199,8 @@ describe('against a server', () => {
   });
 
   // The audit's attack: a server with the paired Mac's name and id, and its
-  // own key. The phone stops at the welcome and sends it nothing.
-  it('a server that says it is the Mac but signs with another key is refused for good', async () => {
+  // own key. The phone stops at the proof, before the token.
+  it('a server that says it is the Mac but signs with another key gets nothing', async () => {
     const real = createMockServer({ quiet: true, allowAfterMs: 0 });
     const impostor = createMockServer({
       quiet: true,
@@ -111,11 +208,18 @@ describe('against a server', () => {
       impostorKey: generateKeyPairSync('ed25519').privateKey,
     });
     const url = await impostor.listen();
-    const { token, deviceId } = impostor.issueToken();
-    const t = open(url, token, {
-      fingerprint: real.fingerprint,
-      serverId: real.serverId,
-      deviceId,
+    const { token } = impostor.issueToken();
+    const relay = relayTo(url);
+    const via = await relay.listen();
+    // Through a recording relay on the impostor's own host name.
+    const t = new DirectTransport({
+      routes: [{ kind: 'tailscale', url: via }],
+      token,
+      app: { version: '0.1.0', runtimeVersion: 'test' },
+      getResume: () => undefined,
+      foreground: true,
+      WebSocketImpl: WebSocket as unknown as typeof globalThis.WebSocket,
+      ...provenBy(real),
     });
     const states: LinkState[] = [];
     t.onState((s) => states.push(s));
@@ -124,11 +228,135 @@ describe('against a server', () => {
     expect(t.refusal?.message).toMatch(/This isn’t your Mac/);
     expect(t.identityVerified).toBe(false);
     expect(states.some((s) => s.kind === 'connected')).toBe(false);
+    // What it sent: one challenge. No hello, no token.
+    expect(relay.seen.frames.map((f) => f.t)).toEqual(['challenge']);
+    expect(JSON.stringify(relay.seen.frames)).not.toContain(token);
     await expect(t.request('agents.overview', {})).rejects.toThrow(/Not connected/);
     // And it doesn't keep trying on its own.
     await new Promise((r) => setTimeout(r, 1500));
     expect(t.state.kind).toBe('refused');
     t.close();
+    await relay.close();
     await impostor.close();
+  });
+
+  // The relay attack: every signature is the real Mac's, passed through a
+  // server on another host. The Mac signs where it serves; the phone
+  // reached somewhere else, and stops before its token goes.
+  it('the real Mac behind a relay on another host gets no token', async () => {
+    const mock = createMockServer({ quiet: true, allowAfterMs: 0 });
+    const url = await mock.listen();
+    const { token } = mock.issueToken();
+    const relay = relayTo(url);
+    const via = await relay.listen();
+    const t = open(via, token, mock);
+    await until(() => t.state.kind === 'refused');
+    expect(t.state).toEqual({ kind: 'refused', reason: 'not_your_mac' });
+    expect(relay.seen.frames.map((f) => f.t)).toEqual(['challenge']);
+    expect(JSON.stringify(relay.seen.frames)).not.toContain(token);
+    t.close();
+    await relay.close();
+    await mock.close();
+  });
+
+  it('a Mac that started over with a new id is told apart, and still gets nothing', async () => {
+    const reset = createMockServer({ quiet: true, allowAfterMs: 0, serverId: 'srv_new' });
+    const url = await reset.listen();
+    const { token } = reset.issueToken();
+    const t = open(url, token, { fingerprint: 'AAAAAAAAAAAAAAAAAAAAAA', serverId: 'srv_mock' });
+    await until(() => t.state.kind === 'refused');
+    expect(t.state).toEqual({ kind: 'refused', reason: 'mac_reset' });
+    expect(t.refusal?.message).toMatch(/Pair again/);
+    t.close();
+    await reset.close();
+  });
+
+  it('a Mac from before protocol 2 is named, not retried forever', async () => {
+    const old = createMockServer({ quiet: true, allowAfterMs: 0, protocolOne: true });
+    const url = await old.listen();
+    const t = open(url, old.issueToken().token, old);
+    await until(() => t.state.kind === 'refused');
+    expect(t.state).toEqual({ kind: 'refused', reason: 'update_mac' });
+    expect(t.refusal?.message).toMatch(/Update it on the Mac/);
+    t.close();
+    await old.close();
+  });
+});
+
+describe('pairing', () => {
+  const deps = {
+    fetch,
+    random,
+    device: {
+      name: 'Test Phone',
+      platform: 'ios' as const,
+      appVersion: '0.1.0',
+      build: 'self' as const,
+    },
+    publicKey: 'pk',
+    diagnose: () => Promise.resolve({ kind: 'mac_unreachable' as const }),
+  };
+  const failure = (p: Promise<unknown>) =>
+    p.then(
+      () => null,
+      (e: unknown) => (e instanceof PairError ? e.failure.kind : String(e))
+    );
+
+  it('pairs with the Mac the link names, keeping only the route that answered', async () => {
+    const mock = createMockServer({ quiet: true, allowAfterMs: 0 });
+    await mock.listen();
+    const link = parsePairingLink(mock.pairingLink(), { allowHost: () => true })!;
+    const paired = await pairWith(link, deps);
+    expect(paired.fingerprint).toBe(mock.fingerprint);
+    expect(paired.route).toEqual(link.routes[0]);
+    await mock.close();
+  });
+
+  it('sends a relay neither the code nor anything else, and keeps no token', async () => {
+    const mock = createMockServer({ quiet: true, allowAfterMs: 0 });
+    const url = await mock.listen();
+    const relay = relayTo(url);
+    const via = await relay.listen();
+    const real = parsePairingLink(mock.pairingLink(), { allowHost: () => true })!;
+    // The Mac's own link with the relay's address in it.
+    const link = { ...real, routes: [{ kind: 'tailscale' as const, url: via }] };
+    expect(await failure(pairWith(link, deps))).toBe('not_your_mac');
+    expect(relay.seen.paths).toEqual(['/v1/identity']);
+    // The code was never spent: the real Mac still takes it.
+    expect((await pairWith(real, deps)).serverId).toBe(mock.serverId);
+    await relay.close();
+    await mock.close();
+  });
+
+  it('a link with another key is refused before the code goes', async () => {
+    const mock = createMockServer({ quiet: true, allowAfterMs: 0 });
+    await mock.listen();
+    const link = parsePairingLink(mock.pairingLink(), { allowHost: () => true })!;
+    const forged = { ...link, fingerprint: mockIdentity().fingerprint };
+    expect(await failure(pairWith(forged, deps))).toBe('not_your_mac');
+    expect((await pairWith(link, deps)).deviceId).toMatch(/^dev_/);
+    await mock.close();
+  });
+
+  it('an old Mac is told apart: update it to pair', async () => {
+    const old = createMockServer({ quiet: true, allowAfterMs: 0, protocolOne: true });
+    await old.listen();
+    const link = parsePairingLink(old.pairingLink(), { allowHost: () => true })!;
+    const err = await pairWith(link, deps).catch((e: PairError) => e.failure);
+    expect(err).toMatchObject({ kind: 'refused', reason: 'update_mac' });
+    await old.close();
+  });
+
+  it('round-trips a link with exactly one route', () => {
+    const mock = createMockServer({ quiet: true });
+    const text = formatPairingLink({
+      v: 1,
+      code: 'C',
+      serverId: 's',
+      name: 'n',
+      routes: [{ kind: 'tailscale', url: 'https://m.tail1.ts.net' }],
+      fingerprint: mock.fingerprint,
+    });
+    expect(parsePairingLink(text)?.routes).toHaveLength(1);
   });
 });

@@ -2,6 +2,7 @@
 
 import type { Agent, AgentMessage } from '@shipstudio/companion-protocol';
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
+import { newChallenge } from '../src/lib/identity';
 
 const base = real.agentsOverview.agents[0] as Agent;
 
@@ -31,3 +32,15 @@ export async function until(check: () => boolean, ms = 8000) {
     await new Promise((r) => setTimeout(r, 20));
   }
 }
+
+/** Random bytes, as the phone's `Crypto.getRandomBytes` gives them. */
+export const random = (n: number) => crypto.getRandomValues(new Uint8Array(n));
+
+/**
+ * What a transport needs to hold the mock Mac to its identity: the key and
+ * id its pairing links name, and a fresh challenge per connection.
+ */
+export const provenBy = (mac: { fingerprint: string; serverId: string }) => ({
+  pinned: { fingerprint: mac.fingerprint, serverId: mac.serverId },
+  challenge: () => newChallenge(random),
+});

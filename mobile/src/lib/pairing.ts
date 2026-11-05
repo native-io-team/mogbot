@@ -7,16 +7,13 @@
 import { x25519 } from '@noble/curves/ed25519.js';
 import {
   HTTP,
-  SUPPORTED,
-  pairProofMessage,
-  parsePairingLink,
+  readPairingLink,
   toBase64Url,
-  type PairRequest,
-  type PairResponse,
+  type ParsedLink,
   type PairingLink,
   type Route,
 } from '@shipstudio/companion-protocol';
-import { newChallenge, proves } from './identity';
+import { pairWith, PairError, type PairFailure } from './pairFlow';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
@@ -35,24 +32,40 @@ export interface Credentials {
   secretKey: string;
   pairedAt: number;
   /**
-   * The Mac's identity key, fingerprinted (from the pairing link, proven in
-   * the pairing answer). Every `welcome` must be signed by it. Absent only
-   * for a pairing made before identity keys: the first signed welcome pins it.
+   * The Mac's identity key, fingerprinted (from the pairing link, proven
+   * before the code went and in the pairing answer). Every connection must
+   * be proven by it before the token goes. Absent only from a pairing made
+   * before identity keys, which is never used: it has to be made again.
    */
   fingerprint?: string;
 }
+
+export { PairError, type PairFailure };
 
 /**
  * A pairing link from a scan, a paste or another app, or null. Tailscale
  * routes only on a `*.ts.net` host; a development build also takes the mock
  * Mac on this machine (`pnpm mock`).
  */
-export function parseLink(text: string): PairingLink | null {
-  return parsePairingLink(text, {
+export function readLink(text: string): ParsedLink {
+  return readPairingLink(text, {
     allowHost: __DEV__
       ? (url) => /^https?:\/\/(localhost|127\.0\.0\.1):\d+\/?$/.test(url)
       : undefined,
   });
+}
+
+export function parseLink(text: string): PairingLink | null {
+  const read = readLink(text);
+  return read.ok ? read.link : null;
+}
+
+/** What to say about text that isn't a link this app can pair from. */
+export function linkProblem(text: string): string {
+  const read = readLink(text);
+  return !read.ok && read.problem === 'old_mac'
+    ? 'Update the app on your Mac to pair. This code comes from an older version that can’t prove it’s your Mac; once it’s updated, make a new code there.'
+    : 'That isn’t a pairing code. Make one on your Mac: Settings → Phone → Pair a phone.';
 }
 
 /**
@@ -79,7 +92,7 @@ export function cleanName(raw: string): string {
 export type PairPlan =
   /** No Mac yet. */
   | { kind: 'new' }
-  /** The same Mac (same id, same key): pairing again replaces this phone's old pairing. */
+  /** The same Mac (same id, same pinned key): pairing again replaces this phone's old pairing. */
   | { kind: 'again' }
   /** A different Mac: it replaces the one paired now. */
   | { kind: 'replace'; current: string }
@@ -92,16 +105,19 @@ export function pairPlan(
 ): PairPlan {
   if (!current) return { kind: 'new' };
   if (current.serverId === link.serverId) {
-    return current.fingerprint && current.fingerprint !== link.fingerprint
-      ? { kind: 'impostor', current: current.name }
-      : { kind: 'again' };
+    // "Already paired with" is only said when the key matches the one this
+    // phone pinned: a link can copy a Mac's name and id, not its key.
+    if (!current.fingerprint) return { kind: 'replace', current: current.name };
+    return current.fingerprint === link.fingerprint
+      ? { kind: 'again' }
+      : { kind: 'impostor', current: current.name };
   }
   return { kind: 'replace', current: current.name };
 }
 
-/** The host a link would pair with, as the confirm screen shows it. */
+/** The host a link would pair with, as the confirm screen shows it: its only route's. */
 export function linkHost(link: PairingLink): string {
-  const route = usableRoutes(link.routes)[0] ?? link.routes[0];
+  const route = link.routes[0];
   try {
     return new URL(route.url).host;
   } catch {
@@ -129,38 +145,22 @@ export const forgetCredentials = () => SecureStore.deleteItemAsync(KEY, STORE_OP
  */
 export const usableRoutes = (routes: Route[]) => routes.filter((r) => r.kind === 'tailscale');
 
-export type PairFailure =
-  | { kind: 'lan_only' }
-  /** The answer wasn't signed by the key the link named. */
-  | { kind: 'not_your_mac' }
-  | { kind: 'tailscale_off' }
-  | { kind: 'mac_unreachable' }
-  | { kind: 'refused'; reason: Extract<PairResponse, { ok: false }>['reason']; message: string }
-  | { kind: 'expired' }
-  | { kind: 'other'; message: string };
-
-export class PairError extends Error {
-  constructor(readonly failure: PairFailure) {
-    super(failure.kind);
-  }
-}
-
 export const appInfo = () => ({
   version: Application.nativeApplicationVersion ?? '0.0.0',
   build: Application.nativeBuildVersion ?? '0',
 });
 
 /**
- * Ask the Mac to pair. The request stays open while someone at the desk
- * decides (up to 120 s), so the caller shows "Allow on your Mac…" meanwhile.
+ * Ask the Mac to pair: it proves itself first, then the code goes, and the
+ * answer is checked before its token is kept. The request stays open while
+ * someone at the desk decides (up to 120 s), so the caller shows "Allow on
+ * your Mac…" meanwhile.
  */
 export async function pair(link: PairingLink, signal?: AbortSignal): Promise<Credentials> {
-  const routes = usableRoutes(link.routes);
-  if (!routes.length) throw new PairError({ kind: 'lan_only' });
   const secret = Crypto.getRandomBytes(32);
-  const challenge = newChallenge((n) => Crypto.getRandomBytes(n));
-  const body: PairRequest = {
-    code: link.code,
+  const paired = await pairWith(link, {
+    fetch,
+    random: (n) => Crypto.getRandomBytes(n),
     device: {
       name: Device.deviceName ?? Device.modelName ?? 'Phone',
       platform: Platform.OS === 'android' ? 'android' : 'ios',
@@ -168,53 +168,20 @@ export async function pair(link: PairingLink, signal?: AbortSignal): Promise<Cre
       appVersion: appInfo().version,
       build: Constants.expoConfig?.extra?.official ? 'official' : 'self',
     },
-    protocol: SUPPORTED,
     publicKey: toBase64Url(x25519.getPublicKey(secret)),
-    challenge,
+    signal,
+    diagnose,
+  });
+  return {
+    fingerprint: paired.fingerprint,
+    serverId: paired.serverId,
+    name: cleanName(link.name),
+    routes: [paired.route],
+    deviceId: paired.deviceId,
+    token: paired.token,
+    secretKey: toBase64Url(secret),
+    pairedAt: Date.now(),
   };
-
-  let lastNetworkFailure: PairFailure = { kind: 'mac_unreachable' };
-  for (const route of routes) {
-    let res: Response;
-    try {
-      res = await fetch(route.url.replace(/\/$/, '') + HTTP.pair, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal,
-      });
-    } catch (error) {
-      if (signal?.aborted) throw error;
-      lastNetworkFailure = await diagnose(route.url);
-      continue;
-    }
-    // A wrong, used or expired code is a bare 404 (the Mac says nothing more).
-    if (res.status === 404) throw new PairError({ kind: 'expired' });
-    if (!res.ok) throw new PairError({ kind: 'other', message: `The Mac answered ${res.status}.` });
-    const answer = (await res.json()) as PairResponse;
-    if (!answer.ok) {
-      throw new PairError({ kind: 'refused', reason: answer.reason, message: answer.message });
-    }
-    // The answer must come from the key the link named, for the Mac it named:
-    // a token from anyone else is thrown away, not kept.
-    if (
-      answer.serverId !== link.serverId ||
-      !proves(answer.identity, pairProofMessage(challenge, link.serverId), link.fingerprint)
-    ) {
-      throw new PairError({ kind: 'not_your_mac' });
-    }
-    return {
-      fingerprint: link.fingerprint,
-      serverId: answer.serverId,
-      name: cleanName(link.name),
-      routes,
-      deviceId: answer.deviceId,
-      token: answer.token,
-      secretKey: toBase64Url(secret),
-      pairedAt: Date.now(),
-    };
-  }
-  throw new PairError(lastNetworkFailure);
 }
 
 /**

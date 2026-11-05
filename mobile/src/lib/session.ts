@@ -57,8 +57,8 @@ import { registerPush } from './push';
 import { sendSecret } from './secrets';
 export { secretRouteProblem } from './secrets';
 import { DirectTransport, WireFailure } from './transport';
-import { checkWelcome } from './pin';
-import { newChallenge } from './identity';
+import { newChallenge, PAIR_AGAIN } from './identity';
+import { forgetSettledBy, withForget, withoutForget } from './forgets';
 
 const PAGE = 50;
 let transport: DirectTransport | null = null;
@@ -89,6 +89,18 @@ export async function boot() {
   if (credentials) connect(credentials);
 }
 
+/**
+ * A pairing from before identity keys pins nothing, so there's nothing to
+ * hold a server to: it isn't used at all. The phone says so and asks for a
+ * new pairing rather than sending its token to whoever answers.
+ */
+function refuseUnpinned() {
+  setApp({
+    link: { kind: 'refused', reason: 'pair_again' },
+    refusal: { t: 'refused', reason: 'pair_again', message: PAIR_AGAIN },
+  });
+}
+
 export async function adopt(credentials: Credentials) {
   await saveCredentials(credentials);
   setApp({ ...emptySync(), credentials, refusal: null, welcome: null, composer: {}, push: null });
@@ -96,7 +108,11 @@ export async function adopt(credentials: Credentials) {
   connect(credentials);
 }
 
-const transportFor = (c: Credentials, getResume?: () => ReturnType<typeof getApp>['cursor']) =>
+/** Only for a pairing with a pinned key (`Credentials.fingerprint`). */
+const transportFor = (
+  c: Credentials & { fingerprint: string },
+  getResume?: () => ReturnType<typeof getApp>['cursor']
+) =>
   new DirectTransport({
     routes: usableRoutes(c.routes),
     token: c.token,
@@ -109,17 +125,7 @@ const transportFor = (c: Credentials, getResume?: () => ReturnType<typeof getApp
     foreground: AppState.currentState === 'active',
     http,
     challenge: () => newChallenge((n) => Crypto.getRandomBytes(n)),
-    checkWelcome: (welcome, challenge) => {
-      const result = checkWelcome(c, welcome, challenge);
-      // Paired before identity keys: the first signed welcome pins the key,
-      // and every one after must match it.
-      if (result.pin && getApp().credentials?.serverId === c.serverId) {
-        c.fingerprint = result.pin;
-        void saveCredentials(c);
-        setApp({ credentials: { ...c } });
-      }
-      return result.verdict;
-    },
+    pinned: { fingerprint: c.fingerprint, serverId: c.serverId },
   });
 
 /** Replayed events are history, not news: nothing is announced until caught up. */
@@ -127,9 +133,11 @@ let caughtUp = false;
 
 function connect(c: Credentials) {
   transport?.close();
+  transport = null;
+  if (!c.fingerprint) return refuseUnpinned();
   // The store is in memory, so a cold start has no cursor and gets a
   // snapshot; within a run, every reconnect resumes where it left off.
-  const t = transportFor(c, () => getApp().cursor);
+  const t = transportFor({ ...c, fingerprint: c.fingerprint }, () => getApp().cursor);
   t.onState((link) => {
     // "As of" for everything shown while it's away: the moment it stopped being live.
     const was = getApp().link.kind;
@@ -605,7 +613,8 @@ export async function unpair(): Promise<'removed' | 'queued'> {
   }
   transport?.close();
   transport = null;
-  if (credentials && !removed) await queueForget(credentials);
+  // A pairing that pinned nothing is never offered to a server to revoke.
+  if (credentials?.fingerprint && !removed) await queueForget(credentials);
   const serverId = credentials?.serverId;
   await forgetCredentials();
   await clearCache().catch(() => {});
@@ -642,46 +651,59 @@ const saveForgets = (list: Credentials[]) =>
     : SecureStore.deleteItemAsync(FORGET_KEY, FORGET_OPTS);
 
 async function queueForget(c: Credentials) {
-  const list = (await queuedForgets()).filter((x) => x.serverId !== c.serverId);
-  await saveForgets([...list, c]).catch(() => {});
+  await saveForgets(withForget(await queuedForgets(), c)).catch(() => {});
 }
 
 let finishing = false;
 
 /**
  * Tell each Mac forgotten offline to revoke this phone's token, over a
- * short-lived connection of its own. Done once the Mac confirms, or says
- * the token is already gone.
+ * short-lived connection of its own. Done once the Mac confirms, says the
+ * token is already gone, or turns out not to be the Mac that pairing was
+ * with (`forgetSettledBy`). Each entry is one pairing (Mac and device), so
+ * an old forget never touches a newer pairing with the same Mac.
  */
 export async function finishForgets() {
   if (finishing) return;
   finishing = true;
   try {
     for (const c of await queuedForgets()) {
-      if (!usableRoutes(c.routes).length) continue;
-      const done = await new Promise<boolean>((resolve) => {
-        const t = transportFor(c);
-        const end = (ok: boolean) => {
-          clearTimeout(timer);
-          t.close();
-          resolve(ok);
-        };
-        const timer = setTimeout(() => end(false), 20_000);
-        t.onRefused((r) => end(r.reason === 'revoked' || r.reason === 'unauthorized'));
-        t.onWelcome(() => {
-          t.request('devices.unpairSelf', {}).then(
-            () => end(true),
-            () => end(false)
-          );
-        });
-      });
-      if (done) {
-        await saveForgets((await queuedForgets()).filter((x) => x.serverId !== c.serverId));
-      }
+      const { fingerprint } = c;
+      // A pairing that pinned nothing can't be held to anything: its token
+      // isn't offered to whoever answers. Remove it on the Mac instead.
+      const done = !fingerprint
+        ? true
+        : !usableRoutes(c.routes).length
+          ? false
+          : await finishOne({ ...c, fingerprint });
+      if (done) await saveForgets(withoutForget(await queuedForgets(), c));
     }
   } finally {
     finishing = false;
   }
+}
+
+/**
+ * One forget, over a short-lived connection of its own that never touches
+ * the current pairing: nothing here saves credentials or changes the store.
+ */
+function finishOne(c: Credentials & { fingerprint: string }): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    const t = transportFor(c);
+    const end = (ok: boolean) => {
+      clearTimeout(timer);
+      t.close();
+      resolve(ok);
+    };
+    const timer = setTimeout(() => end(false), 20_000);
+    t.onRefused((r) => end(forgetSettledBy(r.reason)));
+    t.onWelcome(() => {
+      t.request('devices.unpairSelf', {}).then(
+        () => end(true),
+        () => end(false)
+      );
+    });
+  });
 }
 
 // ---- Notifications --------------------------------------------------------------

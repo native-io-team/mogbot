@@ -241,6 +241,11 @@ const MAX_SECRET_CHARS: usize = 8_192;
 /// `desktop.rs`; tests use a stub agent.
 #[async_trait]
 pub trait Backend: Send + Sync + 'static {
+    /// The host names `tailscale serve` publishes this Mac on, as
+    /// `identity::host_of` reads them: what the Mac signs before a phone
+    /// sends anything secret, so the phone can tell it reached the Mac
+    /// itself and not something relaying it.
+    fn serve_hosts(&self) -> Vec<String>;
     async fn overview(&self) -> Result<Value, CommandError>;
     /// A page of messages, oldest first, ending just before `before` (or at
     /// the newest). The flag: older ones exist.

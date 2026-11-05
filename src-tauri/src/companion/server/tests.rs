@@ -26,10 +26,32 @@ async fn start(c: Arc<Companion>) -> u16 {
     port
 }
 
-async fn connect(port: u16) -> Ws {
+/// A socket with nothing said on it yet.
+async fn connect_raw(port: u16) -> Ws {
     let (ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/v1/ws"))
         .await
         .unwrap();
+    ws
+}
+
+const CHALLENGE: &str = "c2lnbiBtZSBwbGVhc2UsIGEgcGhvbmUgY2hvc2UgbWU";
+
+fn challenge() -> Value {
+    json!({ "t": "challenge", "protocol": { "min": 2, "max": 2 }, "challenge": CHALLENGE })
+}
+
+/// The phone's first move: a challenge, and the Mac's signed identity back.
+async fn prove(ws: &mut Ws) -> Value {
+    send(ws, challenge()).await;
+    let identity = next(ws).await;
+    assert_eq!(identity["t"], "identity", "{identity}");
+    identity
+}
+
+/// A socket the Mac has proved itself on, ready for a hello.
+async fn connect(port: u16) -> Ws {
+    let mut ws = connect_raw(port).await;
+    prove(&mut ws).await;
     ws
 }
 
@@ -54,7 +76,7 @@ async fn next(ws: &mut Ws) -> Value {
 fn hello(token: &str, resume: Option<Value>) -> Value {
     let mut h = json!({
         "t": "hello",
-        "protocol": { "min": 1, "max": 1 },
+        "protocol": { "min": 2, "max": 2 },
         "token": token,
         "app": { "version": "1.0.0", "runtimeVersion": "1" },
         "foreground": true
@@ -123,8 +145,9 @@ fn pair_body(code: &str) -> Value {
     json!({
         "code": code,
         "device": { "name": "Test Phone", "platform": "ios", "model": "iPhone 16", "appVersion": "1.0.0", "build": "official" },
-        "protocol": { "min": 1, "max": 1 },
-        "publicKey": "pk"
+        "protocol": { "min": 2, "max": 2 },
+        "publicKey": "pk",
+        "challenge": CHALLENGE
     })
 }
 
@@ -187,7 +210,7 @@ async fn pair_chat_resume_and_audit_end_to_end() {
     let (mut ws, welcome, catch_up, cursor0) = open(port, &token, None).await;
     assert_eq!(welcome["resume"], "snapshot");
     assert_eq!(welcome["deviceId"], device_id.as_str());
-    assert_eq!(welcome["protocol"], 1);
+    assert_eq!(welcome["protocol"], 2);
     assert!(welcome["methods"]
         .as_array()
         .unwrap()
@@ -420,10 +443,11 @@ async fn unknown_tokens_and_old_versions_are_refused() {
     send(&mut ws, hello(&"0".repeat(64), None)).await;
     assert_eq!(next(&mut ws).await["reason"], "unauthorized");
 
-    let mut ws = connect(port).await;
-    let mut h = hello(&token, None);
-    h["protocol"] = json!({ "min": 2, "max": 3 });
-    send(&mut ws, h).await;
+    // Versions are settled by the challenge, before anything else.
+    let mut ws = connect_raw(port).await;
+    let mut ch = challenge();
+    ch["protocol"] = json!({ "min": 3, "max": 4 });
+    send(&mut ws, ch).await;
     let f = next(&mut ws).await;
     assert_eq!(f["reason"], "update_mac");
     assert_eq!(
@@ -431,13 +455,25 @@ async fn unknown_tokens_and_old_versions_are_refused() {
         format!("Update {} on Julian’s MacBook Pro.", crate::brand::NAME)
     );
 
-    let mut ws = connect(port).await;
+    let mut ws = connect_raw(port).await;
+    let mut ch = challenge();
+    ch["protocol"] = json!({ "min": 0, "max": 0 });
+    send(&mut ws, ch).await;
+    assert_eq!(next(&mut ws).await["reason"], "update_app");
+
+    // An app from protocol 1 sends its token first: told to update, and the
+    // token isn't so much as looked at.
+    let mut ws = connect_raw(port).await;
     let mut h = hello(&token, None);
-    h["protocol"] = json!({ "min": 0, "max": 0 });
+    h["protocol"] = json!({ "min": 1, "max": 1 });
     send(&mut ws, h).await;
     assert_eq!(next(&mut ws).await["reason"], "update_app");
 
-    // Not a hello first: closed without a word.
+    // Not a challenge first: closed without a word.
+    let mut ws = connect_raw(port).await;
+    send(&mut ws, json!({ "t": "ping" })).await;
+    assert_eq!(next(&mut ws).await["t"], "closed");
+    // Nor a hello after the proof.
     let mut ws = connect(port).await;
     send(&mut ws, json!({ "t": "ping" })).await;
     assert_eq!(next(&mut ws).await["t"], "closed");
@@ -848,49 +884,216 @@ fn b64(s: &str) -> Vec<u8> {
 fn verifies(c: &Companion, proof: &Value, message: &str) -> bool {
     let key = b64(proof["publicKey"].as_str().unwrap());
     let sig = b64(proof["signature"].as_str().unwrap());
-    crate::companion::identity::fingerprint_of(&key) == c.registry.identity().fingerprint()
+    crate::companion::identity::fingerprint_of(&key) == c.registry.identity().unwrap().fingerprint()
         && UnparsedPublicKey::new(&ED25519, key)
             .verify(message.as_bytes(), &sig)
             .is_ok()
 }
 
-const CHALLENGE: &str = "c2lnbiBtZSBwbGVhc2UsIGEgcGhvbmUgY2hvc2UgbWU";
+fn hosts(v: &Value) -> Vec<String> {
+    serde_json::from_value(v["hosts"].clone()).unwrap()
+}
 
 #[tokio::test]
-async fn pairing_and_every_welcome_are_signed_by_the_pinned_identity() {
+async fn the_mac_proves_itself_before_any_secret_is_sent() {
+    use crate::companion::identity::{mac_message, pair_message};
     let (c, _) = Stub::companion();
     let port = start(c.clone()).await;
+    let server_id = c.registry.server_id();
+
+    // Before pairing: who it is, and where it serves, signed over the challenge.
+    let res: Value = reqwest::Client::new()
+        .post(format!("http://127.0.0.1:{port}/v1/identity"))
+        .json(&json!({ "protocol": { "min": 2, "max": 2 }, "challenge": CHALLENGE }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(res["ok"], true, "{res}");
+    assert_eq!(
+        hosts(&res),
+        vec![crate::companion::testkit::HOST.to_string()]
+    );
+    assert!(verifies(
+        &c,
+        &res["identity"],
+        &mac_message(CHALLENGE, &server_id, &hosts(&res))
+    ));
+
+    // The pairing answer signs the hosts and the device it made.
     let (code, _) = c.pairing.start(now_ms());
     desk(&c, true);
-    let mut body = pair_body(&code);
-    body["challenge"] = json!(CHALLENGE);
-    let paired: Value = post_pair(port, &body).await.json().await.unwrap();
+    let paired: Value = post_pair(port, &pair_body(&code))
+        .await
+        .json()
+        .await
+        .unwrap();
     assert_eq!(paired["ok"], true, "{paired}");
-    let server_id = c.registry.server_id();
+    let device_id = paired["deviceId"].as_str().unwrap();
     assert!(verifies(
         &c,
         &paired["identity"],
-        &crate::companion::identity::pair_message(CHALLENGE, &server_id)
+        &pair_message(CHALLENGE, &server_id, &hosts(&paired), device_id)
     ));
-    let token = paired["token"].as_str().unwrap();
-    let device_id = paired["deviceId"].as_str().unwrap();
-
-    let mut ws = connect(port).await;
-    let mut h = hello(token, None);
-    h["challenge"] = json!(CHALLENGE);
-    send(&mut ws, h).await;
-    let welcome = next(&mut ws).await;
-    assert!(verifies(
-        &c,
-        &welcome["identity"],
-        &crate::companion::identity::welcome_message(CHALLENGE, &server_id, device_id)
-    ));
-    // Not replayable as another device's welcome.
     assert!(!verifies(
         &c,
-        &welcome["identity"],
-        &crate::companion::identity::welcome_message(CHALLENGE, &server_id, "dev_other")
+        &paired["identity"],
+        &pair_message(CHALLENGE, &server_id, &hosts(&paired), "dev_other")
     ));
+
+    // On a socket: the proof comes before the token, and isn't a pairing proof.
+    let mut ws = connect_raw(port).await;
+    let identity = prove(&mut ws).await;
+    assert_eq!(identity["serverId"], server_id.as_str());
+    assert_eq!(identity["protocol"], 2);
+    assert!(verifies(
+        &c,
+        &identity["identity"],
+        &mac_message(CHALLENGE, &server_id, &hosts(&identity))
+    ));
+    assert!(!verifies(
+        &c,
+        &identity["identity"],
+        &pair_message(CHALLENGE, &server_id, &hosts(&identity), device_id)
+    ));
+    send(&mut ws, hello(paired["token"].as_str().unwrap(), None)).await;
+    let welcome = next(&mut ws).await;
+    assert_eq!(welcome["t"], "welcome");
+    assert!(welcome.get("identity").is_none(), "proved once, first");
+
+    // A challenge that isn't one gets no signature, and no socket.
+    let mut ws = connect_raw(port).await;
+    let mut ch = challenge();
+    ch["challenge"] = json!("short");
+    send(&mut ws, ch).await;
+    assert_eq!(next(&mut ws).await["t"], "closed");
+}
+
+/// The relay attack: someone with their own `*.ts.net` name passes the
+/// phone's frames to the real Mac and back. Every signature is real, but it
+/// names the Mac's own host, never the relay's, so a phone that checks the
+/// host it reached sends the relay nothing.
+#[tokio::test]
+async fn a_relay_on_another_host_cant_pass_the_macs_proof_off_as_its_own() {
+    use crate::companion::identity::mac_message;
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let server_id = c.registry.server_id();
+    let mut ws = connect_raw(port).await;
+    let relayed = prove(&mut ws).await;
+    let relay_host = "attacker.tail9.ts.net".to_string();
+    // What the phone checks: the pinned key signed this, for the host it reached.
+    let phone_accepts = |reached: &str| {
+        hosts(&relayed).iter().any(|h| h == reached)
+            && verifies(
+                &c,
+                &relayed["identity"],
+                &mac_message(CHALLENGE, &server_id, &hosts(&relayed)),
+            )
+    };
+    assert!(phone_accepts(crate::companion::testkit::HOST));
+    assert!(!phone_accepts(&relay_host));
+    // And the relay can't swap its own host in without breaking the signature.
+    assert!(!verifies(
+        &c,
+        &relayed["identity"],
+        &mac_message(CHALLENGE, &server_id, &[relay_host])
+    ));
+}
+
+#[tokio::test]
+async fn a_mac_that_cant_read_its_key_says_so_and_offers_no_pairing() {
+    let keys = Arc::new(crate::companion::keystore::Memory::default());
+    keys.fail_load
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let dir = tempfile::tempdir().unwrap();
+    let registry =
+        crate::companion::Registry::load_with(dir.path().join("companion.json"), Box::new(keys));
+    let (c, _) = Stub::companion_with(registry, "epoch-test");
+    let port = start(c.clone()).await;
+    let mut ws = connect_raw(port).await;
+    send(&mut ws, challenge()).await;
+    let f = next(&mut ws).await;
+    assert_eq!(f["reason"], "unavailable", "{f}");
+    let (code, _) = c.pairing.start(now_ms());
+    let res: Value = post_pair(port, &pair_body(&code))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(res["ok"], false, "{res}");
+    assert!(c.pairing.view(now_ms()).active, "the code survives");
+}
+
+#[tokio::test]
+async fn strangers_cant_hold_every_socket_from_one_source() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    // Sockets that never say a word, all from one tailnet user.
+    let mut held = Vec::new();
+    let open_as = |login: &'static str| async move {
+        let mut req =
+            tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
+                format!("ws://127.0.0.1:{port}/v1/ws"),
+            )
+            .unwrap();
+        req.headers_mut()
+            .insert("Tailscale-User-Login", login.parse().unwrap());
+        tokio_tungstenite::connect_async(req).await
+    };
+    for _ in 0..crate::companion::limits::MAX_PREHELLO_PER_SOURCE {
+        held.push(open_as("mallory@example.com").await.unwrap().0);
+    }
+    assert!(
+        open_as("mallory@example.com").await.is_err(),
+        "one more from the same source is turned away"
+    );
+    // The paired phone, from its own user, still gets in.
+    let (_, token, _) = c
+        .registry
+        .add(
+            &phone(),
+            String::new(),
+            1,
+            &[],
+            Some("julian@example.com".into()),
+        )
+        .unwrap();
+    let (mut ws, _) = open_as("julian@example.com").await.unwrap();
+    prove(&mut ws).await;
+    send(&mut ws, hello(&token, None)).await;
+    assert_eq!(next(&mut ws).await["t"], "welcome");
+    // A socket that authenticated gives its stranger's place back.
+    assert_eq!(c.prehello.in_flight("user:julian@example.com"), 0);
+}
+
+#[tokio::test]
+async fn a_token_from_a_users_phone_needs_that_user_every_time() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (_, token, _) = c
+        .registry
+        .add(
+            &phone(),
+            String::new(),
+            1,
+            &[],
+            Some("julian@example.com".into()),
+        )
+        .unwrap();
+    // No login header at all (a tagged node holding a stolen token).
+    let mut ws = connect(port).await;
+    send(&mut ws, hello(&token, None)).await;
+    assert_eq!(next(&mut ws).await["reason"], "unauthorized");
+    let res = reqwest::Client::new()
+        .get(format!("http://127.0.0.1:{port}/v1/blobs/x"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 401);
 }
 
 #[tokio::test]
@@ -954,6 +1157,7 @@ async fn pairing_takes_json_only_and_browsers_are_refused() {
         format!("http://127.0.0.1:{port}").parse().unwrap(),
     );
     let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
+    prove(&mut ws).await;
     send(&mut ws, hello(&token, None)).await;
     assert_eq!(next(&mut ws).await["t"], "welcome");
 }
@@ -1034,26 +1238,20 @@ async fn connections_are_capped_overall_and_per_source() {
     assert_eq!(other.status(), 404, "another source still gets in");
     drop(held);
 
-    // Past the overall cap, a connection is closed as soon as it's accepted.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Strangers past their share: the oldest is closed to make room, and
+    // the newcomer (maybe the paired phone) is served.
     let mut idle = Vec::new();
-    for _ in 0..crate::companion::limits::MAX_CONNECTIONS {
+    for _ in 0..crate::companion::limits::MAX_UNAUTHENTICATED {
         idle.push(
             tokio::net::TcpStream::connect(("127.0.0.1", port))
                 .await
                 .unwrap(),
         );
+        // In order, so "oldest" means the first.
+        tokio::time::sleep(Duration::from_millis(2)).await;
     }
-    tokio::time::sleep(Duration::from_millis(200)).await;
-    let mut extra = tokio::net::TcpStream::connect(("127.0.0.1", port))
-        .await
-        .unwrap();
-    let mut buf = [0u8; 16];
-    let n = tokio::time::timeout(Duration::from_secs(2), extra.read(&mut buf))
-        .await
-        .expect("closed at once")
-        .unwrap_or(0);
-    assert_eq!(n, 0);
-    drop(idle);
     tokio::time::sleep(Duration::from_millis(200)).await;
     let ok = reqwest::Client::new()
         .post(format!("http://127.0.0.1:{port}/v1/pair"))
@@ -1061,7 +1259,13 @@ async fn connections_are_capped_overall_and_per_source() {
         .send()
         .await
         .unwrap();
-    assert_eq!(ok.status(), 404, "room again once they close");
+    assert_eq!(ok.status(), 404, "the newcomer is answered");
+    let mut buf = [0u8; 16];
+    let n = tokio::time::timeout(Duration::from_secs(2), idle[0].read(&mut buf))
+        .await
+        .expect("the oldest stranger is closed")
+        .unwrap_or(0);
+    assert_eq!(n, 0);
 }
 
 #[tokio::test]
@@ -1282,6 +1486,7 @@ async fn a_token_used_by_another_tailnet_user_is_refused() {
         "mallory@example.com".parse().unwrap(),
     );
     let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
+    prove(&mut ws).await;
     send(&mut ws, hello(&token, None)).await;
     assert_eq!(next(&mut ws).await["reason"], "unauthorized");
     // The same user is let in.

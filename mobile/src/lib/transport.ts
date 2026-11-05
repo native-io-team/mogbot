@@ -18,6 +18,7 @@ import {
   type CompanionEvent,
   type Cursor,
   type HelloFrame,
+  type IdentityFrame,
   type LinkState,
   type MethodName,
   type Params,
@@ -29,7 +30,7 @@ import {
   type WelcomeFrame,
   type WireError,
 } from '@shipstudio/companion-protocol';
-import { NOT_YOUR_MAC } from './identity';
+import { checkMac, MAC_RESET, NOT_YOUR_MAC, UPDATE_MAC, type Pinned } from './identity';
 
 /** A request that failed, carrying the Mac's (or our) structured error. */
 export class WireFailure extends Error {
@@ -74,16 +75,22 @@ export interface DirectTransportOptions {
   requestTimeoutMs?: number;
   /** File bytes over HTTP (`files.ts` on the phone; `fetch` and `fs` in tests). */
   http?: HttpAdapter;
-  /** A fresh challenge for each connection's `hello`, for the Mac to sign. */
-  challenge?: () => string;
   /**
-   * Whether this `welcome` came from the Mac this phone pinned: `'ok'`
-   * (signed by the pinned key), `'unproven'` (an older Mac that signs
-   * nothing, while no key is pinned yet) or `'mismatch'`, which ends the
-   * link for good ("This isn't your Mac"). Without it, every welcome is
-   * `'unproven'`.
+   * The Mac this phone pinned at pairing. Each connection's first frame is
+   * a fresh `challenge`; the token goes only after the Mac's `identity`
+   * answer checks out against this (`checkMac`), for the host this socket
+   * actually reached. Anything else ends the link for good.
    */
-  checkWelcome?: (welcome: WelcomeFrame, challenge: string) => 'ok' | 'unproven' | 'mismatch';
+  pinned: Pinned;
+  /** A fresh challenge for each connection (32 random bytes, base64url). */
+  challenge: () => string;
+  /**
+   * Asked once when a socket closes before the Mac says anything: a Mac
+   * from before protocol 2 closes on the challenge without a word. Resolves
+   * the HTTP status of `POST /v1/identity` (404 there means that Mac), or
+   * rejects when the request itself fails. Defaults to `fetch`.
+   */
+  probe?: (url: string) => Promise<number>;
 }
 
 /**
@@ -151,11 +158,15 @@ export class DirectTransport implements Transport {
   welcome: WelcomeFrame | null = null;
   refusal: RefusedFrame | null = null;
   /**
-   * This socket's `welcome` was signed by the key pinned at pairing. Secrets
-   * go only while this is true (`secrets.ts`).
+   * The Mac proved itself on this socket (`identity`, before the token
+   * went). Secrets go only while this is true (`secrets.ts`).
    */
   identityVerified = false;
   private challenge = '';
+  /** This socket opened and the Mac hasn't said anything on it yet. */
+  private silent = false;
+  /** An old-Mac probe already ran (once per transport is plenty). */
+  private probed = false;
 
   constructor(private readonly opts: DirectTransportOptions) {
     this.foreground = opts.foreground;
@@ -294,21 +305,14 @@ export class DirectTransport implements Transport {
     this.ws = ws;
     ws.onopen = () => {
       this.armDeadTimer();
-      const resume = this.opts.getResume();
-      this.challenge = this.opts.challenge?.() ?? '';
-      this.send({
-        t: 'hello',
-        protocol: SUPPORTED,
-        token: this.opts.token,
-        app: this.opts.app,
-        ...(resume ? { resume } : {}),
-        foreground: this.foreground,
-        features: [FEATURES.liveWork],
-        ...(this.challenge ? { challenge: this.challenge } : {}),
-      });
+      // Nothing private until the Mac proves itself: just a challenge.
+      this.challenge = this.opts.challenge();
+      this.silent = true;
+      this.send({ t: 'challenge', protocol: SUPPORTED, challenge: this.challenge });
     };
     ws.onmessage = (ev) => {
       if (ws !== this.ws) return;
+      this.silent = false;
       this.lastSeenAt = Date.now();
       this.armDeadTimer();
       let frame: ServerFrame;
@@ -325,26 +329,53 @@ export class DirectTransport implements Transport {
     };
   }
 
+  /** Stop for good with a refusal of the phone's own: nothing more is said to this server. */
+  private refuseLocally(reason: 'not_your_mac' | 'mac_reset' | 'update_mac', message: string) {
+    const refusal: RefusedFrame = { t: 'refused', reason, message };
+    this.refusal = refusal;
+    this.refused = true;
+    this.teardown();
+    this.setState({ kind: 'refused', reason });
+    this.refusedListeners.forEach((l) => l(refusal));
+  }
+
+  /** The Mac's proof: only if it checks out does the token go. */
+  private onIdentity(frame: IdentityFrame) {
+    if (this.identityVerified) return;
+    const verdict = checkMac(frame, this.opts.pinned, this.challenge, this.route.url);
+    if (verdict !== 'ok') {
+      this.refuseLocally(verdict, verdict === 'mac_reset' ? MAC_RESET : NOT_YOUR_MAC);
+      return;
+    }
+    this.identityVerified = true;
+    const resume = this.opts.getResume();
+    this.send({
+      t: 'hello',
+      protocol: SUPPORTED,
+      token: this.opts.token,
+      app: this.opts.app,
+      ...(resume ? { resume } : {}),
+      foreground: this.foreground,
+      features: [FEATURES.liveWork],
+    });
+  }
+
   private handle(frame: ServerFrame) {
+    // Before the Mac has proved itself, only its proof means anything, or a
+    // refusal that can come first (versions, a locked Keychain). "Removed"
+    // and "not paired" from a server that hasn't proved it's the Mac would
+    // be a stranger talking this phone into forgetting its Mac.
+    if (!this.identityVerified) {
+      const early =
+        frame.t === 'identity' ||
+        (frame.t === 'refused' && frame.reason !== 'revoked' && frame.reason !== 'unauthorized');
+      if (!early) return;
+    }
     switch (frame.t) {
+      case 'identity':
+        this.onIdentity(frame);
+        return;
       case 'welcome': {
-        const identity = this.opts.checkWelcome?.(frame, this.challenge) ?? 'unproven';
-        if (identity === 'mismatch') {
-          // Not the Mac this phone paired with: say nothing more to it, and
-          // don't try again on our own.
-          const refusal: RefusedFrame = {
-            t: 'refused',
-            reason: 'not_your_mac',
-            message: NOT_YOUR_MAC,
-          };
-          this.refusal = refusal;
-          this.refused = true;
-          this.teardown();
-          this.setState({ kind: 'refused', reason: 'not_your_mac' });
-          this.refusedListeners.forEach((l) => l(refusal));
-          return;
-        }
-        this.identityVerified = identity === 'ok';
         this.ready = true;
         this.everConnected = true;
         this.attempt = 0;
@@ -358,7 +389,8 @@ export class DirectTransport implements Transport {
       case 'refused': {
         this.refusal = frame;
         this.refusedListeners.forEach((l) => l(frame));
-        if (frame.reason === 'too_many_connections') return; // close follows; retry with backoff
+        // Close follows; retry with backoff.
+        if (frame.reason === 'too_many_connections' || frame.reason === 'unavailable') return;
         this.refused = true;
         this.setState({ kind: 'refused', reason: frame.reason });
         this.teardown();
@@ -394,8 +426,10 @@ export class DirectTransport implements Transport {
 
   /** The socket closed or went silent: fail what's in flight and retry with backoff. */
   private lost() {
+    const unanswered = this.silent;
     this.teardown();
     if (this.closed || this.refused) return;
+    if (unanswered && !this.probed) void this.probeOldMac(this.route.url);
     // A route that failed before ever answering hands over to the next one.
     if (!this.ready) this.routeIndex = (this.routeIndex + 1) % this.opts.routes.length;
     const base = BACKOFF_MS[Math.min(this.attempt, BACKOFF_MS.length - 1)];
@@ -409,9 +443,32 @@ export class DirectTransport implements Transport {
     this.retryTimer = setTimeout(() => this.connect(), delay);
   }
 
+  /**
+   * A socket that opened and closed without a word: a Mac from before
+   * protocol 2 does that to a challenge. It has no `/v1/identity` either,
+   * so a 404 there says which, and the user hears to update the Mac rather
+   * than watching it reconnect forever.
+   */
+  private async probeOldMac(url: string) {
+    this.probed = true;
+    const probe =
+      this.opts.probe ??
+      ((u: string) =>
+        fetch(u.replace(/\/$/, '') + HTTP.identity, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ protocol: SUPPORTED, challenge: this.opts.challenge() }),
+        }).then((r) => r.status));
+    const status = await probe(url).catch(() => null);
+    if (status === 404 && !this.closed && !this.refused && !this.ready) {
+      this.refuseLocally('update_mac', UPDATE_MAC);
+    }
+  }
+
   private teardown() {
     this.ready = false;
     this.identityVerified = false;
+    this.silent = false;
     if (this.pingTimer) clearInterval(this.pingTimer);
     if (this.deadTimer) clearTimeout(this.deadTimer);
     if (this.retryTimer) clearTimeout(this.retryTimer);

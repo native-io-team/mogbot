@@ -25,6 +25,7 @@ pub mod files;
 mod fixtures;
 pub mod hub;
 pub mod identity;
+pub mod keystore;
 pub mod limits;
 pub mod pairing;
 pub mod projects;
@@ -204,14 +205,16 @@ impl DeviceRecord {
         self.name == d.name && self.platform == d.platform && self.model == d.model
     }
 
-    /// Whether a request that came with `login` may use this record. Only a
-    /// different user is refused: a request that names nobody (the header is
-    /// absent for tagged nodes and for loopback callers) is let through, and
-    /// the token still has to match.
+    /// Whether a request that came with `login` may use this record. A
+    /// phone paired by a tailnet user is that user's on every request: the
+    /// header must name the same user, and a request naming nobody (a tagged
+    /// node, or a local process) is refused, even with the right token. A
+    /// phone paired with no login (over loopback) takes any.
     pub fn login_matches(&self, login: Option<&str>) -> bool {
         match (&self.tailnet_login, login) {
             (Some(paired), Some(now)) => paired.eq_ignore_ascii_case(now),
-            _ => true,
+            (Some(_), None) => false,
+            (None, _) => true,
         }
     }
 }
@@ -229,8 +232,9 @@ pub struct Stored {
     pub revoked: Vec<String>,
     /// Phone notifications through the push relay (`push.rs`).
     pub push: push::PushConfig,
-    /// This Mac's Ed25519 identity key, PKCS#8 in base64url
-    /// (`identity.rs`). Never leaves this file.
+    /// Where this Mac's Ed25519 identity key was kept before the Keychain
+    /// (PKCS#8, base64url). Read once to move it there, then emptied.
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub identity_key: String,
 }
 
@@ -246,61 +250,182 @@ pub struct Registry {
     /// `None` keeps it in memory (tests).
     path: Option<PathBuf>,
     stored: Mutex<Stored>,
-    identity: std::sync::OnceLock<Arc<identity::Identity>>,
+    /// Where the identity key is kept (the Keychain; memory in tests).
+    keys: Box<dyn keystore::KeyStore>,
+    /// The identity once it's known. Not set while the Keychain won't answer,
+    /// so the next caller asks again.
+    identity: Mutex<Option<Kept>>,
+}
+
+#[derive(Clone)]
+struct Kept {
+    id: Arc<identity::Identity>,
+    /// It will be the same key next launch. A pairing code is only offered
+    /// when it is: a phone must never pin a key the Mac is about to lose.
+    durable: bool,
+}
+
+/// The real Keychain in the app; a memory store under test, so no test can
+/// ever touch (or replace) the user's real key.
+fn default_keys() -> Box<dyn keystore::KeyStore> {
+    #[cfg(not(test))]
+    {
+        Box::new(keystore::Keychain::app())
+    }
+    #[cfg(test)]
+    {
+        Box::new(Arc::new(keystore::Memory::default()))
+    }
 }
 
 impl Registry {
     pub fn load(path: PathBuf) -> Self {
+        Self::load_with(path, default_keys())
+    }
+
+    /// [`Registry::load`] with the identity key kept in `keys`.
+    pub fn load_with(path: PathBuf, keys: Box<dyn keystore::KeyStore>) -> Self {
         let stored = std::fs::read_to_string(&path)
             .ok()
             .and_then(|raw| serde_json::from_str(&raw).ok())
             .unwrap_or_default();
-        let r = Registry {
-            path: Some(path),
-            stored: Mutex::new(stored),
-            identity: std::sync::OnceLock::new(),
-        };
-        r.ensure_server_id();
-        r
+        Self::new(Some(path), stored, keys)
     }
 
     pub fn in_memory() -> Self {
+        Self::new(None, Stored::default(), default_keys())
+    }
+
+    fn new(path: Option<PathBuf>, stored: Stored, keys: Box<dyn keystore::KeyStore>) -> Self {
         let r = Registry {
-            path: None,
-            stored: Mutex::new(Stored::default()),
-            identity: std::sync::OnceLock::new(),
+            path,
+            stored: Mutex::new(stored),
+            keys,
+            identity: Mutex::new(None),
         };
         r.ensure_server_id();
+        // Settled now, before any phone is added or shown: a key that was
+        // lost resets the paired phones here, not halfway through a pairing.
+        r.kept();
         r
     }
 
-    /// This Mac's identity key, made (and saved) the first time it's needed.
-    /// A stored key that no longer parses is replaced: phones that pinned the
-    /// old one refuse this Mac until they pair again, which is the point.
-    pub fn identity(&self) -> Arc<identity::Identity> {
-        self.identity
-            .get_or_init(|| {
-                let stored = self.read(|s| s.identity_key.clone());
-                if let Some(id) = identity::Identity::from_stored(&stored) {
-                    return Arc::new(id);
+    /// This Mac's identity key, or `None` while the Keychain won't give it
+    /// (locked, or refusing): then nothing can be proven and every phone is
+    /// told to try again, rather than a new key quietly replacing the one
+    /// they pinned.
+    pub fn identity(&self) -> Option<Arc<identity::Identity>> {
+        self.kept().map(|k| k.id)
+    }
+
+    /// The key will survive a restart (it is in the Keychain, or still in
+    /// the old file waiting to move). No pairing code is offered otherwise.
+    pub fn identity_is_durable(&self) -> bool {
+        self.kept().is_some_and(|k| k.durable)
+    }
+
+    fn kept(&self) -> Option<Kept> {
+        let mut slot = self.identity.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.is_none() {
+            *slot = self.resolve_identity();
+        }
+        slot.clone()
+    }
+
+    fn resolve_identity(&self) -> Option<Kept> {
+        let old = self.read(|s| s.identity_key.clone());
+        let old_key = (!old.is_empty())
+            .then(|| identity::Identity::from_stored(&old))
+            .flatten();
+        match self.keys.load() {
+            Ok(Some(doc)) => {
+                if let Some(id) = identity::Identity::from_stored(&doc) {
+                    if !old.is_empty() {
+                        let _ = self.write(|s| s.identity_key.clear());
+                    }
+                    return Some(Kept {
+                        id: Arc::new(id),
+                        durable: true,
+                    });
                 }
-                // As for pairing codes: no RNG, no safe key.
-                #[allow(clippy::expect_used)]
-                let (id, doc) = identity::Identity::generate()
-                    .expect("the OS random number generator is unavailable");
-                if let Err(e) = self.write(|s| s.identity_key = doc) {
-                    tracing::error!("[Companion] Could not save the Mac's identity key: {}", e);
+                tracing::error!("[Companion] The identity key in the Keychain doesn't parse");
+                Some(self.fresh_identity())
+            }
+            Ok(None) => match old_key {
+                // Kept in companion.json by an earlier build: move it, and
+                // empty the file's copy only once the Keychain gives it back.
+                Some(id) => {
+                    let moved = self.keys.save(&old).is_ok()
+                        && self.keys.load().ok().flatten().as_deref() == Some(old.as_str());
+                    if moved {
+                        if let Err(e) = self.write(|s| s.identity_key.clear()) {
+                            tracing::warn!("[Companion] Moved the identity key, but couldn't clear the old copy: {}", e);
+                        }
+                    } else {
+                        tracing::warn!("[Companion] Couldn't move the identity key to the Keychain; keeping it where it was");
+                    }
+                    Some(Kept {
+                        id: Arc::new(id),
+                        durable: true,
+                    })
                 }
-                Arc::new(id)
-            })
-            .clone()
+                None => Some(self.fresh_identity()),
+            },
+            Err(e) => {
+                tracing::warn!("[Companion] Couldn't read the identity key: {}", e);
+                old_key.map(|id| Kept {
+                    id: Arc::new(id),
+                    durable: true,
+                })
+            }
+        }
+    }
+
+    /// A new key. If phones were paired, they pinned the key that's gone:
+    /// this is a different Mac to them now, so it gets a new server id and
+    /// every phone is removed. They hear "this Mac was set up again, pair
+    /// again" rather than "this isn't your Mac".
+    fn fresh_identity(&self) -> Kept {
+        // As for pairing codes: no RNG, no safe key.
+        #[allow(clippy::expect_used)]
+        let (id, doc) =
+            identity::Identity::generate().expect("the OS random number generator is unavailable");
+        let durable = match self.keys.save(&doc) {
+            Ok(()) => self.keys.load().ok().flatten().as_deref() == Some(doc.as_str()),
+            Err(e) => {
+                tracing::error!(
+                    "[Companion] Couldn't keep the identity key in the Keychain: {}",
+                    e
+                );
+                false
+            }
+        };
+        let had_phones = self.read(|s| !s.devices.is_empty());
+        let result = self.write(|s| {
+            s.identity_key.clear();
+            if had_phones {
+                s.server_id = new_server_id();
+                for d in std::mem::take(&mut s.devices) {
+                    remember_revoked(s, d.token_hash);
+                }
+            }
+        });
+        if had_phones {
+            tracing::warn!("[Companion] New identity key with phones paired: they were removed and must pair again");
+        }
+        if let Err(e) = result {
+            tracing::error!("[Companion] Couldn't save the reset: {}", e);
+        }
+        Kept {
+            id: Arc::new(id),
+            durable,
+        }
     }
 
     fn ensure_server_id(&self) {
         let missing = self.read(|s| s.server_id.is_empty());
         if missing {
-            let id = format!("srv_{}", &uuid::Uuid::new_v4().simple().to_string()[..16]);
-            let _ = self.write(|s| s.server_id = id);
+            let _ = self.write(|s| s.server_id = new_server_id());
         }
     }
 
@@ -449,6 +574,10 @@ impl Registry {
     }
 }
 
+fn new_server_id() -> String {
+    format!("srv_{}", &uuid::Uuid::new_v4().simple().to_string()[..16])
+}
+
 fn remember_revoked(s: &mut Stored, hash: String) {
     s.revoked.push(hash);
     let excess = s.revoked.len().saturating_sub(REVOKED_KEPT);
@@ -482,6 +611,8 @@ pub struct Companion {
     last_status: Mutex<Option<wire::MacStatus>>,
     /// Requests in flight per source (`limits::source_of`).
     pub sources: limits::Counter,
+    /// Sockets per source that haven't said a good hello yet.
+    pub prehello: limits::Counter,
     /// Uploads in flight per device.
     pub uploads: limits::Counter,
     /// `agents.memorySuggest` runs in flight (one key: all phones).
@@ -523,6 +654,7 @@ impl Companion {
             creates: Mutex::new(HashMap::new()),
             last_status: Mutex::new(None),
             sources: limits::Counter::default(),
+            prehello: limits::Counter::default(),
             uploads: limits::Counter::default(),
             suggests: limits::Counter::default(),
             refusals: limits::RefusalLog::default(),
@@ -784,28 +916,132 @@ mod tests {
             .add(&phone("A"), String::new(), 1, &[], Some("j@x.com".into()))
             .unwrap();
         assert!(rec.login_matches(Some("J@x.com")));
-        assert!(rec.login_matches(None), "no header: the token decides");
+        assert!(
+            !rec.login_matches(None),
+            "paired by a user: a request naming nobody is refused, token or not"
+        );
         assert!(!rec.login_matches(Some("someone@else.com")));
         let (anon, _, _) = r.add(&phone("B"), String::new(), 1, &[], None).unwrap();
         assert!(anon.login_matches(Some("anyone@x.com")));
     }
 
+    use keystore::Memory;
+    use std::sync::atomic::Ordering;
+
+    fn with_keys(path: &std::path::Path, keys: &Arc<Memory>) -> Registry {
+        Registry::load_with(path.to_path_buf(), Box::new(keys.clone()))
+    }
+
+    fn fingerprint(r: &Registry) -> String {
+        r.identity().unwrap().fingerprint()
+    }
+
     #[test]
-    fn the_identity_key_is_made_once_and_kept() {
+    fn the_identity_key_is_made_once_and_kept_in_the_keychain_not_the_file() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("companion.json");
-        let first = Registry::load(path.clone()).identity().fingerprint();
-        let again = Registry::load(path.clone()).identity().fingerprint();
-        assert_eq!(first, again);
+        let keys = Arc::new(Memory::default());
+        let r = with_keys(&path, &keys);
+        let first = fingerprint(&r);
+        assert!(r.identity_is_durable());
+        assert_eq!(fingerprint(&with_keys(&path, &keys)), first);
+        assert!(keys.key.lock().unwrap().is_some());
         let raw = std::fs::read_to_string(&path).unwrap();
-        assert!(raw.contains("identityKey"));
+        assert!(!raw.contains("identityKey"), "never in companion.json");
+    }
+
+    #[test]
+    fn a_key_in_the_old_file_moves_to_the_keychain_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("companion.json");
+        let (old, doc) = identity::Identity::generate().unwrap();
+        let stored = Stored {
+            server_id: "srv_old".into(),
+            identity_key: doc.clone(),
+            ..Stored::default()
+        };
+        std::fs::write(&path, serde_json::to_string(&stored).unwrap()).unwrap();
+
+        // The Keychain refuses the move: the key is kept where it was.
+        let refusing = Arc::new(Memory::default());
+        refusing.fail_save.store(true, Ordering::SeqCst);
+        let r = with_keys(&path, &refusing);
+        assert_eq!(fingerprint(&r), old.fingerprint());
+        assert!(r.identity_is_durable(), "still in the file, so still kept");
+        assert!(std::fs::read_to_string(&path).unwrap().contains(&doc));
+
+        // It takes it: moved, and the file's copy is gone.
+        let keys = Arc::new(Memory::default());
+        let r = with_keys(&path, &keys);
+        assert_eq!(fingerprint(&r), old.fingerprint());
+        assert_eq!(keys.key.lock().unwrap().as_deref(), Some(doc.as_str()));
+        assert!(!std::fs::read_to_string(&path).unwrap().contains(&doc));
+        assert_eq!(r.server_id(), "srv_old", "the same Mac");
+        assert_eq!(fingerprint(&with_keys(&path, &keys)), old.fingerprint());
+    }
+
+    #[test]
+    fn a_keychain_that_wont_answer_never_means_a_new_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("companion.json");
+        let keys = Arc::new(Memory::default());
+        let r = with_keys(&path, &keys);
+        let first = fingerprint(&r);
+        r.add(&phone("A"), String::new(), 1, &[], None).unwrap();
+
+        keys.fail_load.store(true, Ordering::SeqCst);
+        let locked = with_keys(&path, &keys);
+        assert!(locked.identity().is_none(), "nothing to prove with");
+        assert!(!locked.identity_is_durable());
+        assert_eq!(locked.devices().len(), 1, "and nobody removed");
+        // Unlocked: the same key, asked again rather than remembered as missing.
+        keys.fail_load.store(false, Ordering::SeqCst);
+        assert_eq!(fingerprint(&locked), first);
+    }
+
+    #[test]
+    fn a_lost_key_with_phones_paired_starts_this_mac_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("companion.json");
+        let keys = Arc::new(Memory::default());
+        let r = with_keys(&path, &keys);
+        let first = fingerprint(&r);
+        let server_id = r.server_id();
+        let (_, token, _) = r.add(&phone("A"), String::new(), 1, &[], None).unwrap();
+
+        // The key is gone (the item was deleted): a new one, a new id, and
+        // the phones that pinned the old key are removed.
+        *keys.key.lock().unwrap() = None;
+        let again = with_keys(&path, &keys);
+        assert_ne!(fingerprint(&again), first);
+        assert_ne!(again.server_id(), server_id);
+        assert!(again.devices().is_empty());
+        assert!(matches!(again.authenticate(&token), Auth::Revoked));
+        // Kept, so the next launch is the same Mac again.
+        let next = with_keys(&path, &keys);
+        assert_eq!(fingerprint(&next), fingerprint(&again));
+        assert_eq!(next.server_id(), again.server_id());
+    }
+
+    #[test]
+    fn a_key_the_keychain_wont_keep_is_never_offered_for_pairing() {
+        let keys = Arc::new(Memory::default());
+        keys.fail_save.store(true, Ordering::SeqCst);
+        let dir = tempfile::tempdir().unwrap();
+        let r = with_keys(&dir.path().join("companion.json"), &keys);
+        assert!(
+            r.identity().is_some(),
+            "it can still answer for this launch"
+        );
+        assert!(!r.identity_is_durable());
     }
 
     #[test]
     fn the_registry_file_is_owner_only_and_survives_a_reload() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("companion.json");
-        let r = Registry::load(path.clone());
+        let keys = Arc::new(Memory::default());
+        let r = with_keys(&path, &keys);
         let server_id = r.server_id();
         let (record, token, _) = r.add(&phone("A"), String::new(), 1, &[], None).unwrap();
         #[cfg(unix)]
@@ -814,7 +1050,7 @@ mod tests {
             let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
             assert_eq!(mode, 0o600);
         }
-        let again = Registry::load(path);
+        let again = with_keys(&path, &keys);
         assert_eq!(again.server_id(), server_id, "the server id is stable");
         assert!(matches!(again.authenticate(&token), Auth::Device(d) if d.id == record.id));
     }

@@ -24,6 +24,7 @@ import {
   openTailscale,
   pair,
   PairError,
+  linkProblem,
   pairPlan,
   parseLink,
   type PairFailure,
@@ -115,7 +116,7 @@ export default function Pair() {
     const text = (await Clipboard.getStringAsync()).trim();
     const link = parseLink(text);
     if (link) review(link);
-    else setPhase({ kind: 'start', error: notALink });
+    else setPhase({ kind: 'start', error: linkProblem(text) });
   };
 
   const finish = useCallback(() => router.replace('/agents'), [router]);
@@ -149,10 +150,10 @@ export default function Pair() {
 
       {phase.kind === 'start' && (
         <Animated.View entering={FadeIn.duration(200)} style={styles.block}>
-          {(phase.error ?? (incoming && !incomingLink ? notALink : null)) && (
+          {(phase.error ?? (incoming && !incomingLink ? linkProblem(incoming) : null)) && (
             <Animated.View entering={FadeInDown.duration(200)}>
               <T variant="small" color={colors.accentErrorLight}>
-                {phase.error ?? notALink}
+                {phase.error ?? (incoming ? linkProblem(incoming) : null)}
               </T>
             </Animated.View>
           )}
@@ -282,9 +283,6 @@ export default function Pair() {
   );
 }
 
-const notALink =
-  'That isn’t a pairing link. Make one on your Mac: Settings → Phone → Pair a phone.';
-
 const codeEnd = (link: PairingLink) => link.code.slice(-4);
 
 /**
@@ -390,7 +388,7 @@ function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
       case 'not_your_mac':
         return [
           'This isn’t your Mac',
-          `The server that answered couldn’t prove it’s ${mac}, so this phone didn’t keep what it sent. Make a new code on your Mac and scan it there.`,
+          `The server at this address couldn’t prove it’s ${mac}, so this phone didn’t send it your code or anything else. Make a new code on your Mac and scan it there.`,
         ];
       case 'lan_only':
         return [
@@ -408,9 +406,13 @@ function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
             ? `${mac} said no`
             : failure.reason === 'timeout'
               ? 'Nobody answered on the Mac'
-              : failure.reason === 'update_app' || failure.reason === 'update_mac'
-                ? 'Update needed'
-                : 'This code can’t be used',
+              : failure.reason === 'update_mac'
+                ? `Update the app on ${mac} to pair`
+                : failure.reason === 'update_app'
+                  ? 'Update this app to pair'
+                  : failure.reason === 'unavailable'
+                    ? `${mac} can’t prove who it is right now`
+                    : 'This code can’t be used',
           failure.message,
         ];
       case 'other':

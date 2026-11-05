@@ -7,7 +7,7 @@
 import type { CompanionEvent, Cursor } from '@shipstudio/companion-protocol';
 import { WebSocket } from 'ws';
 import { createMockServer } from '../dev/mock-server';
-import { until } from './helpers';
+import { until, provenBy } from './helpers';
 import { applyEvent, emptySync, mergePage, type SyncState } from '../src/lib/sync';
 import { DirectTransport } from '../src/lib/transport';
 
@@ -32,6 +32,7 @@ describe('DirectTransport against the mock Mac', () => {
       getResume: () => state.cursor ?? undefined,
       foreground: true,
       WebSocketImpl: WebSocket as unknown as typeof globalThis.WebSocket,
+      ...provenBy(mock),
     });
     transport.onEvent((event: CompanionEvent, cursor?: Cursor) => {
       events.push(event);

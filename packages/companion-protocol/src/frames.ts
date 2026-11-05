@@ -1,15 +1,18 @@
 /**
  * What goes over the WebSocket (`GET /v1/ws`): JSON text frames, one object each.
  *
- * Order on connect: the phone sends `hello`; the Mac answers `welcome` (or
- * `refused` and closes); then replayed or snapshot events, `sync.caughtUp`,
- * and live traffic. Responses and events share the socket, so an event caused
+ * Order on connect: the phone sends `challenge` (no token); the Mac answers
+ * `identity`, signed, naming the hosts it serves on. Only if that is signed by
+ * the key pinned at pairing, for the Mac it paired with, and the host the
+ * phone reached is among them does the phone send `hello` with its token.
+ * The Mac answers `welcome` (or `refused` and closes); then replayed or
+ * snapshot events, `sync.caughtUp`, and live traffic. Responses and events share the socket, so an event caused
  * by a request is never overtaken by that request's response.
  */
 
 import type { CompanionEvent } from './events';
 import type { MethodName, Params, Result } from './methods';
-import type { IdentityProof } from './pairing';
+import type { MacIdentity } from './pairing';
 import type { ProtocolRange } from './version';
 
 /**
@@ -52,6 +55,18 @@ export type WireError = CommandError | ProtocolError;
 
 // ---- Phone → Mac ------------------------------------------------------------
 
+/**
+ * The first frame on every socket, before anything secret: a challenge for
+ * the Mac to sign (`IdentityFrame`). A Mac older than protocol 2 doesn't know
+ * it and closes the socket without a word (see `HTTP.identity`).
+ */
+export interface ChallengeFrame {
+  t: 'challenge';
+  protocol: ProtocolRange;
+  /** 32 random bytes, base64url, fresh for this connection. */
+  challenge: string;
+}
+
 export interface HelloFrame {
   t: 'hello';
   protocol: ProtocolRange;
@@ -73,11 +88,6 @@ export interface HelloFrame {
    * only what it will use. An older app sends none. See `FEATURES`.
    */
   features?: Feature[];
-  /**
-   * 32 random bytes, base64url, fresh for this connection: the Mac signs it
-   * in `welcome.identity`, so the phone knows it reached the Mac it pinned.
-   */
-  challenge?: string;
 }
 
 /** Optional things an app can say it shows (`hello.features`). */
@@ -105,9 +115,19 @@ export interface PingFrame {
   t: 'ping';
 }
 
-export type ClientFrame = HelloFrame | RequestFrame | PresenceFrame | PingFrame;
+export type ClientFrame = ChallengeFrame | HelloFrame | RequestFrame | PresenceFrame | PingFrame;
 
 // ---- Mac → phone ------------------------------------------------------------
+
+/**
+ * The answer to `challenge`: who this Mac is, signed
+ * (`macProofMessage(challenge, serverId, hosts)`).
+ */
+export interface IdentityFrame extends MacIdentity {
+  t: 'identity';
+  /** The version both sides speak, from `negotiate`. */
+  protocol: number;
+}
 
 export interface WelcomeFrame {
   t: 'welcome';
@@ -130,12 +150,6 @@ export interface WelcomeFrame {
    * `agents.schedule.update` has an empty `when` (a note-only edit).
    */
   timeZone?: string;
-  /**
-   * The Mac's signature over `hello.challenge` (`welcomeProofMessage`). The
-   * phone checks it against the key it pinned at pairing before it trusts
-   * anything on this socket, and sends secrets only on one that passed.
-   */
-  identity?: IdentityProof;
   /** What this Mac does beyond its methods (`MAC_FEATURES`). Older Macs send none. */
   features?: MacFeature[];
 }
@@ -157,11 +171,24 @@ export interface RefusedFrame {
     /** The Mac is older than the phone supports: update Ship Studio. */
     | 'update_mac'
     | 'too_many_connections'
+    /** The Mac can't read its identity key right now (Keychain locked): try again later. */
+    | 'unavailable'
     /**
-     * Never sent by a Mac: the phone's own, when the server's `welcome`
-     * isn't signed by the identity it pinned at pairing.
+     * Never sent by a Mac: the phone's own, when the server couldn't prove
+     * it's the Mac this phone pinned (wrong key, or a host it doesn't serve).
      */
-    | 'not_your_mac';
+    | 'not_your_mac'
+    /**
+     * Never sent by a Mac: the phone's own, when the Mac this phone pinned
+     * now answers with a new id and key (its key was lost and it started
+     * over, revoking every phone). Pair again.
+     */
+    | 'mac_reset'
+    /**
+     * Never sent by a Mac: the phone's own, for a pairing it can't use (made
+     * before identity keys, so it pins nothing). Pair again.
+     */
+    | 'pair_again';
   message: string;
 }
 
@@ -189,7 +216,13 @@ export interface PongFrame {
   t: 'pong';
 }
 
-export type ServerFrame = WelcomeFrame | RefusedFrame | ResponseFrame | EventFrame | PongFrame;
+export type ServerFrame =
+  | IdentityFrame
+  | WelcomeFrame
+  | RefusedFrame
+  | ResponseFrame
+  | EventFrame
+  | PongFrame;
 
 /** The Mac sends a heartbeat `pong` every 15 s; no frame for this long means the link is dead. */
 export const HEARTBEAT_MS = 15_000;

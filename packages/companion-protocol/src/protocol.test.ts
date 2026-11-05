@@ -4,9 +4,11 @@ import {
   isTailnetUrl,
   negotiate,
   PAIRING_SCHEME,
+  hostOf,
+  macProofMessage,
   pairProofMessage,
   parsePairingLink,
-  welcomeProofMessage,
+  readPairingLink,
   type PairingLink,
 } from './index';
 
@@ -28,10 +30,7 @@ describe('pairing links', () => {
     code: 'K7Q2MZX4A9PL3WRT8NBV6YHC5D',
     serverId: 'srv_1',
     name: 'Julian’s MacBook Pro',
-    routes: [
-      { kind: 'tailscale', url: 'https://mac.tail1234.ts.net:47443' },
-      { kind: 'lan', url: 'https://192.168.1.20:47444', pin: 'b64pin' },
-    ],
+    routes: [{ kind: 'tailscale', url: 'https://mac.tail1234.ts.net:47443' }],
     fingerprint: 'Zmh6rfhivXdsj8GLjp-OIA',
   };
   const withRoute = (url: string) =>
@@ -69,18 +68,51 @@ describe('pairing links', () => {
     ).not.toBeNull();
   });
 
-  it('needs the Mac’s identity fingerprint', () => {
+  it('needs the Mac’s identity fingerprint, and says when the Mac is too old to have one', () => {
     const { fingerprint: _, ...without } = link;
     expect(parsePairingLink(formatPairingLink(without as PairingLink))).toBeNull();
-    expect(parsePairingLink(formatPairingLink({ ...link, fingerprint: 'short' }))).toBeNull();
+    expect(readPairingLink(formatPairingLink(without as PairingLink))).toEqual({
+      ok: false,
+      problem: 'old_mac',
+    });
+    expect(readPairingLink(formatPairingLink({ ...link, fingerprint: 'short' }))).toEqual({
+      ok: false,
+      problem: 'invalid',
+    });
+    // An old Mac's link that is broken in some other way is just broken.
+    expect(
+      readPairingLink(formatPairingLink({ ...without, routes: [] } as unknown as PairingLink))
+    ).toEqual({ ok: false, problem: 'invalid' });
   });
 
-  // The same bytes as the Mac's `identity::pair_message` / `welcome_message`
+  // The confirm screen shows one host: a second, unshown route could be anyone's.
+  it('carries exactly one route', () => {
+    const two = {
+      ...link,
+      routes: [
+        { kind: 'tailscale', url: 'https://julians-mbp.tail1.ts.net:47443' },
+        { kind: 'tailscale', url: 'https://attacker.tail9.ts.net:47443' },
+      ],
+    } as PairingLink;
+    expect(parsePairingLink(formatPairingLink(two))).toBeNull();
+    expect(parsePairingLink(formatPairingLink({ ...link, routes: [] }))).toBeNull();
+  });
+
+  // The same bytes as the Mac's `identity::mac_message` / `pair_message`
   // (their Rust test spells out the same strings).
   it('signs exactly what the Mac signs', () => {
-    expect(pairProofMessage('c', 'srv')).toBe(`${PAIRING_SCHEME}:pair:v1\nc\nsrv`);
-    expect(welcomeProofMessage('c', 'srv', 'dev')).toBe(
-      `${PAIRING_SCHEME}:welcome:v1\nc\nsrv\ndev`
+    expect(macProofMessage('c', 'srv', ['B.ts.net', 'a.ts.net'])).toBe(
+      `${PAIRING_SCHEME}:identity:v2\nc\nsrv\na.ts.net,b.ts.net`
     );
+    expect(pairProofMessage('c', 'srv', ['a.ts.net'], 'dev')).toBe(
+      `${PAIRING_SCHEME}:pair:v2\nc\nsrv\na.ts.net\ndev`
+    );
+    // Different purposes never sign the same bytes.
+    expect(macProofMessage('c', 'srv', [])).not.toBe(pairProofMessage('c', 'srv', [], ''));
+  });
+
+  it('reads a route’s host the way the Mac signs it', () => {
+    expect(hostOf('https://Mac.Tail1.ts.net:47443/')).toBe('mac.tail1.ts.net');
+    expect(hostOf('not a url')).toBeNull();
   });
 });

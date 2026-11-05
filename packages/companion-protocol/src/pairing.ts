@@ -20,9 +20,10 @@ export const PAIRING_CODE_TTL_MS = 5 * 60 * 1000;
  * A link is untrusted input: anyone can make one that says "Julian's MacBook
  * Pro" and points at their own server, and a Tailscale Funnel host has a
  * valid `*.ts.net` certificate too. So the phone asks before pairing from
- * any link, and pins `fingerprint`: the pairing answer and every `welcome`
- * after it must be signed by the key it names (`IdentityProof`), or the
- * phone stops ("This isn't your Mac").
+ * any link, and pins `fingerprint`: before the pairing code goes, and on
+ * every connection before the token goes, the Mac must sign a fresh
+ * challenge with the key it names, along with the host the phone reached
+ * (`MacIdentity`). Anything else and the phone stops ("This isn't your Mac").
  */
 export interface PairingLink {
   /** Link format version, independent of the protocol version. */
@@ -33,6 +34,7 @@ export interface PairingLink {
   serverId: string;
   /** The Mac's name, for "Pair with Julian's MacBook Pro?". */
   name: string;
+  /** Exactly one: the host the confirm screen shows is the only one tried. */
   routes: Route[];
   /**
    * The Mac's identity key: the first 16 bytes of SHA-256 over its Ed25519
@@ -45,17 +47,63 @@ export interface PairingLink {
 export interface IdentityProof {
   /** Ed25519 public key, base64url (32 bytes). Its fingerprint must be the pinned one. */
   publicKey: string;
-  /** Ed25519 signature, base64url (64 bytes), over `pairProofMessage` or `welcomeProofMessage`. */
+  /** Ed25519 signature, base64url (64 bytes), over `macProofMessage` or `pairProofMessage`. */
   signature: string;
 }
 
-/** What `PairResponse.identity` signs. The Mac's `identity::pair_message`, byte for byte. */
-export const pairProofMessage = (challenge: string, serverId: string) =>
-  `${PAIRING_SCHEME}:pair:v1\n${challenge}\n${serverId}`;
+/**
+ * The Mac proving who it is before the phone says anything secret: the
+ * `identity` frame on the socket and `POST /v1/identity` before pairing.
+ * `hosts` are the names the Mac serves itself on (`tailscale serve`), and
+ * the phone goes on only if the host it actually reached is one of them,
+ * so a server that merely relays the Mac's answers can't pass it on.
+ */
+export interface MacIdentity {
+  serverId: string;
+  /** Lowercase host names, no port (`hostOf`). */
+  hosts: string[];
+  /** Over `macProofMessage(challenge, serverId, hosts)`. */
+  identity: IdentityProof;
+}
 
-/** What `welcome.identity` signs. The Mac's `identity::welcome_message`, byte for byte. */
-export const welcomeProofMessage = (challenge: string, serverId: string, deviceId: string) =>
-  `${PAIRING_SCHEME}:welcome:v1\n${challenge}\n${serverId}\n${deviceId}`;
+/**
+ * The hosts as a signed line: lowercase, sorted, comma separated. A host
+ * name can't hold a comma or a newline, so the line can't be read two ways.
+ */
+const hostLine = (hosts: string[]) =>
+  [...hosts]
+    .map((h) => h.toLowerCase())
+    .sort()
+    .join(',');
+
+/**
+ * What `MacIdentity.identity` signs. The Mac's `identity::mac_message`, byte
+ * for byte. Each signed message starts with its own `<scheme>:<kind>:v2`
+ * line, so a signature made for one purpose is never valid for another.
+ */
+export const macProofMessage = (challenge: string, serverId: string, hosts: string[]) =>
+  `${PAIRING_SCHEME}:identity:v2\n${challenge}\n${serverId}\n${hostLine(hosts)}`;
+
+/**
+ * What `PairResponse.identity` signs: the challenge, the Mac, the hosts it
+ * serves on, and the device it just made. The Mac's `identity::pair_message`.
+ */
+export const pairProofMessage = (
+  challenge: string,
+  serverId: string,
+  hosts: string[],
+  deviceId: string
+) => `${PAIRING_SCHEME}:pair:v2\n${challenge}\n${serverId}\n${hostLine(hosts)}\n${deviceId}`;
+
+/** A route URL's host as the Mac signs it: lowercase, no port. Null for no URL. */
+export function hostOf(url: string): string | null {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host || null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * A Tailscale route's URL as only `tailscale serve` makes it:
@@ -79,23 +127,35 @@ export function formatPairingLink(link: PairingLink): string {
   return `${PAIRING_SCHEME}://pair?d=${toBase64Url(JSON.stringify(link))}`;
 }
 
+/** Why a pasted or scanned text isn't a link this app can pair from. */
+export type LinkProblem =
+  /** Not a pairing link at all, or one that can't be used. */
+  | 'invalid'
+  /**
+   * A pairing link from a Mac too old to prove who it is (no identity
+   * fingerprint): the Mac's app needs updating before this phone pairs.
+   */
+  | 'old_mac';
+
+export type ParsedLink = { ok: true; link: PairingLink } | { ok: false; problem: LinkProblem };
+
 /**
- * The link's contents, or null for anything that isn't a well-formed v1
- * pairing link: a fingerprint, and Tailscale routes only on a `*.ts.net` host.
+ * The link's contents, or why not. A usable link is v1 with exactly one
+ * route (so the host the confirm screen shows is the only one the phone
+ * will try), a Tailscale route only on a `*.ts.net` host, and the Mac's
+ * identity fingerprint.
  */
-export function parsePairingLink(text: string, options: ParseOptions = {}): PairingLink | null {
+export function readPairingLink(text: string, options: ParseOptions = {}): ParsedLink {
+  const invalid = { ok: false, problem: 'invalid' } as const;
   const match = new RegExp(`^${PAIRING_SCHEME}://pair\\?d=([A-Za-z0-9_-]+)$`).exec(text.trim());
-  if (!match) return null;
+  if (!match) return invalid;
   try {
     const link = JSON.parse(fromBase64Url(match[1])) as Partial<PairingLink>;
     if (link.v !== 1 || typeof link.code !== 'string' || typeof link.serverId !== 'string') {
-      return null;
+      return invalid;
     }
-    if (typeof link.name !== 'string' || !Array.isArray(link.routes) || !link.routes.length) {
-      return null;
-    }
-    if (typeof link.fingerprint !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(link.fingerprint)) {
-      return null;
+    if (typeof link.name !== 'string' || !Array.isArray(link.routes) || link.routes.length !== 1) {
+      return invalid;
     }
     const routesOk = link.routes.every(
       (r) =>
@@ -106,11 +166,39 @@ export function parsePairingLink(text: string, options: ParseOptions = {}): Pair
           : // A LAN route is only usable with its certificate pin.
             r.url.startsWith('https://') && typeof r.pin === 'string')
     );
-    return routesOk ? (link as PairingLink) : null;
+    if (!routesOk) return invalid;
+    // Everything else is right and there's no fingerprint: a Mac from
+    // before identity keys. Never paired with, but worth saying why.
+    if (link.fingerprint === undefined) return { ok: false, problem: 'old_mac' };
+    if (typeof link.fingerprint !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(link.fingerprint)) {
+      return invalid;
+    }
+    return { ok: true, link: link as PairingLink };
   } catch {
-    return null;
+    return invalid;
   }
 }
+
+/** `readPairingLink`'s link, or null for anything that can't be paired from. */
+export function parsePairingLink(text: string, options: ParseOptions = {}): PairingLink | null {
+  const read = readPairingLink(text, options);
+  return read.ok ? read.link : null;
+}
+
+/** `POST /v1/identity`: the Mac proves who it is before the phone sends a pairing code. */
+export interface IdentityRequest {
+  protocol: ProtocolRange;
+  /** 32 random bytes, base64url, fresh for this request. */
+  challenge: string;
+}
+
+export type IdentityResponse =
+  | ({ ok: true; protocol: number } & MacIdentity)
+  | {
+      ok: false;
+      reason: 'update_app' | 'update_mac' | 'unavailable';
+      message: string;
+    };
 
 /** `POST /v1/pair`. Held open until the user allows or denies it on the Mac (at most 120 s). */
 export interface PairRequest {
@@ -129,7 +217,7 @@ export interface PairRequest {
    */
   publicKey: string;
   /** 32 random bytes, base64url, for the Mac to sign (`PairResponse.identity`). */
-  challenge?: string;
+  challenge: string;
 }
 
 export type PairResponse =
@@ -141,8 +229,10 @@ export type PairResponse =
       serverId: string;
       /** For the future relay. Empty until a Mac issues one (P1 doesn't). */
       serverPublicKey: string;
-      /** The Mac's signature over `PairRequest.challenge`. Absent from a Mac before identity keys. */
-      identity?: IdentityProof;
+      /** The hosts the Mac serves on, as signed (`hostOf`). */
+      hosts: string[];
+      /** Over `pairProofMessage(PairRequest.challenge, serverId, hosts, deviceId)`. */
+      identity: IdentityProof;
     }
   | {
       ok: false;
@@ -155,6 +245,8 @@ export type PairResponse =
  * Big files stay off the socket so a 25 MB upload never holds up a message.
  */
 export const HTTP = {
+  /** POST `IdentityRequest`, unauthenticated; answers `IdentityResponse`. */
+  identity: '/v1/identity',
   pair: '/v1/pair',
   ws: '/v1/ws',
   /** PUT, raw body; `X-Name` header (URI-encoded) and `Content-Type`. Answers a `BlobRef`. Staged for 1 hour. */

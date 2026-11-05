@@ -13,8 +13,11 @@ use crate::errors::CommandError;
 
 // ---- Versions ---------------------------------------------------------------
 
-pub const PROTOCOL_VERSION: u32 = 1;
-pub const MIN_PROTOCOL_VERSION: u32 = 1;
+/// 2: the Mac proves who it is before the phone sends its token
+/// (`challenge` → `identity` → `hello`), and pairing signs the hosts. Nothing
+/// shipped on 1, so it isn't answered any more (version.ts).
+pub const PROTOCOL_VERSION: u32 = 2;
+pub const MIN_PROTOCOL_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProtocolRange {
@@ -207,8 +210,36 @@ pub struct PairRequest {
     #[serde(default)]
     pub public_key: String,
     /// Random bytes, base64url, for the Mac to sign (`PairResponse.identity`).
+    /// Optional here only so an app on protocol 1 is told to update rather
+    /// than turned away as malformed; protocol 2 requires it.
     #[serde(default)]
     pub challenge: Option<String>,
+}
+
+/// `IdentityRequest` (`POST /v1/identity`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct IdentityRequest {
+    pub protocol: ProtocolRange,
+    pub challenge: String,
+}
+
+/// `IdentityResponse`: the Mac proving who it is before a pairing code is sent.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(untagged)]
+pub enum IdentityResponse {
+    #[serde(rename_all = "camelCase")]
+    Proven {
+        ok: bool,
+        protocol: u32,
+        server_id: String,
+        hosts: Vec<String>,
+        identity: super::identity::IdentityProof,
+    },
+    Refused {
+        ok: bool,
+        reason: RefusedReason,
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -235,10 +266,11 @@ pub enum PairResponse {
         /// use it and P1 issues no server key, so it is empty rather than a
         /// key nothing holds the private half of.
         server_public_key: String,
-        /// The Mac's signature over the request's challenge, by the key
-        /// the pairing link's fingerprint names.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        identity: Option<super::identity::IdentityProof>,
+        /// The hosts this Mac serves on (`identity::host_of`), as signed.
+        hosts: Vec<String>,
+        /// `identity::pair_message` signed by the key the pairing link's
+        /// fingerprint names.
+        identity: super::identity::IdentityProof,
     },
     Refused {
         ok: bool,
@@ -283,9 +315,6 @@ pub struct HelloFrame {
     /// frames.ts). An older app sends none.
     #[serde(default)]
     pub features: Vec<String>,
-    /// Random bytes, base64url, for the Mac to sign in `welcome.identity`.
-    #[serde(default)]
-    pub challenge: Option<String>,
 }
 
 /// `hello.features`: the app shows a running turn's steps (`status.work`).
@@ -302,6 +331,11 @@ pub const MAC_FEATURES: &[&str] = &[MAC_FEATURE_REVISE_RESULTS];
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "t", rename_all = "lowercase")]
 pub enum ClientFrame {
+    /// The first frame of protocol 2: sign this before I say anything.
+    Challenge {
+        protocol: ProtocolRange,
+        challenge: String,
+    },
     Hello(HelloFrame),
     Req {
         id: u64,
@@ -330,6 +364,9 @@ pub enum RefusedReason {
     UpdateApp,
     UpdateMac,
     TooManyConnections,
+    /// The identity key can't be read right now (Keychain locked or
+    /// refusing): nothing can be proven, so try again later.
+    Unavailable,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -406,6 +443,14 @@ impl Serialize for WireError {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "t", rename_all = "lowercase", rename_all_fields = "camelCase")]
 pub enum ServerFrame {
+    /// The answer to `challenge`: who this Mac is, signed
+    /// (`identity::mac_message`), before the phone sends its token.
+    Identity {
+        protocol: u32,
+        server_id: String,
+        hosts: Vec<String>,
+        identity: super::identity::IdentityProof,
+    },
     Welcome {
         protocol: u32,
         server: ServerInfo,
@@ -418,10 +463,6 @@ pub enum ServerFrame {
         /// is empty.
         #[serde(skip_serializing_if = "Option::is_none")]
         time_zone: Option<String>,
-        /// The Mac's signature over `hello.challenge`: the phone checks it
-        /// against the key it pinned at pairing before trusting anything.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        identity: Option<super::identity::IdentityProof>,
         /// What this Mac does beyond its methods (`MAC_FEATURES`), so a newer
         /// app offers only what it can carry out. Older Macs send none.
         #[serde(skip_serializing_if = "Vec::is_empty")]
