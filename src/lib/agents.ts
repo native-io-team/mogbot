@@ -427,6 +427,8 @@ export interface PermissionScope {
   value: string;
   /** The value in words: "npm test", "example.com", "Send an email · Gmail". */
   label: string;
+  /** The user's own words, when it was remembered from what they said in chat rather than chosen on a card. */
+  said?: string;
 }
 
 export interface PermissionRule extends PermissionScope {
@@ -610,11 +612,22 @@ export interface AgentMessage {
   room?: string;
   /** On an admin's message: other agents' requests only you can decide, answered in place. */
   decide?: DecideItem[];
+  /** On a note: a rule the agent remembered from what you said, with Undo while it is in force. */
+  remembered?: RememberedRule;
   /**
    * Links in the reply to a server on this Mac, taken out of its text by the
    * Mac: one it knows serves a project offers Preview; any other is a chip.
    */
   localLinks?: LocalLink[];
+}
+
+/** "Remembered: Lead Gen can always …": the rule behind the line (`agents/remember.rs`). */
+export interface RememberedRule {
+  ruleId: string;
+  /** For every agent, not just this one. */
+  team?: boolean;
+  /** Still in force; false once undone, here or on the phone. */
+  active: boolean;
 }
 
 /** Mirrors `admin::DecideItem`: another agent's card, brought to you by an admin. */

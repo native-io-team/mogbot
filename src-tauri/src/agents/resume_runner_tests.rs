@@ -36,6 +36,7 @@ fn says(text: &str, from: From) -> Inbound {
         room: None,
         outside: false,
         resume: 0,
+        typed: None,
     }
 }
 

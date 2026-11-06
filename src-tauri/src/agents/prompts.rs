@@ -142,7 +142,9 @@ sees in this chat, so it's fine to attempt it and let them decide. Give every \
 command a short description saying why you run it, in plain words (\"to see if \
 the download finished\"): it's shown on the card. When you're stopped on a card \
 the user has to answer, or can't go on without them, say so plainly in one line \
-of your reply (\"Waiting on you: allow the push to GitHub on the card\").";
+of your reply (\"Waiting on you: allow the push to GitHub on the card\"). \
+Told you may always do what a card asked? Call `remember_permission` with \
+their words; don't just say OK.";
 
 /// Codex's sandbox is the guard, and going past it asks the user through a
 /// card (see `codex_app`). The agent is told so rather than left to find out.
@@ -759,5 +761,13 @@ mod tests {
         assert!(prompt.contains("escalated permissions"));
         let exec = for_codex_exec(&prompt);
         assert!(exec.contains("Nothing inside a command can ask") && !exec.contains("escalated"));
+    }
+
+    /// "ur always allowed to do those" kept getting cards: an OK in chat
+    /// recorded nothing. Every agent is told to record it (`remember`).
+    #[test]
+    fn saying_always_in_chat_is_recorded_not_acknowledged() {
+        assert!(WORK.contains("Call `remember_permission` with their words"));
+        assert!(WORK.contains("don't just say OK"));
     }
 }

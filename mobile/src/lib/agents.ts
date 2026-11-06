@@ -678,7 +678,10 @@ export function cardOutcome(approval: Approval): string {
     const why = approval.setAside.replace(/^Set aside:\s*/i, '');
     return `Set aside · ${why.charAt(0).toUpperCase()}${why.slice(1)}`;
   }
-  if (approval.alwaysAllowed && approval.always) return `Always allowed · ${approval.always.label}`;
+  if (approval.alwaysAllowed && approval.always) {
+    const how = approval.always.said ? 'Allowed by your rule' : 'Always allowed';
+    return `${how} · ${approval.always.label}`;
+  }
   if (approval.status === 'denied' && approval.note) return `Declined · “${approval.note}”`;
   const label = OUTCOME[approval.status];
   if (approval.choice && approval.status !== 'expired') return `${label} · ${approval.choice}`;

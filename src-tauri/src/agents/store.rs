@@ -631,6 +631,11 @@ pub struct AgentMessage {
     /// the text (`agents/local_links.rs`). Older builds show the text alone.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub local_links: Vec<super::local_links::LocalLink>,
+    /// On a `note`: "Remembered: Lead Gen can always …", a rule the agent
+    /// recorded from what the user said (`remember_permission`), with Undo
+    /// while it is in force. Older builds show the note alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remembered: Option<super::remember::Remembered>,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -2319,6 +2324,7 @@ mod tests {
                     room: None,
                     decide: Vec::new(),
                     local_links: Vec::new(),
+                    remembered: None,
                 })
                 .unwrap();
             }
@@ -2609,6 +2615,7 @@ mod tests {
                 room: None,
                 decide: Vec::new(),
                 local_links: Vec::new(),
+                remembered: None,
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -2657,6 +2664,7 @@ mod tests {
             room: None,
             decide: Vec::new(),
             local_links: Vec::new(),
+            remembered: None,
         }
     }
 

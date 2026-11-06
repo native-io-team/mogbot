@@ -34,6 +34,18 @@ pub struct Scope {
     pub value: String,
     /// The value in words: "npm test", "example.com", "Send an email · Gmail".
     pub label: String,
+    /// The user's own words, when the rule was remembered from what they
+    /// said in chat (`remember`) rather than chosen on a card. Such a rule
+    /// never covers what Go hard's floor keeps asking (`go_hard::floor`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub said: Option<String>,
+}
+
+impl Scope {
+    /// The same rule, whoever recorded it and however.
+    pub fn same_rule(&self, other: &Scope) -> bool {
+        self.kind == other.kind && self.value == other.value
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -154,6 +166,7 @@ fn command_scope(command: &str) -> Option<Scope> {
         kind,
         label: value.clone(),
         value,
+        said: None,
     })
 }
 
@@ -193,16 +206,19 @@ pub fn suggest(tool: &str, input: &Value) -> Option<Scope> {
             kind: RuleKind::Domain,
             label: host.clone(),
             value: host,
+            said: None,
         }),
         "WebSearch" => Some(Scope {
             kind: RuleKind::Tool,
             value: tool.to_string(),
             label: "web searches".to_string(),
+            said: None,
         }),
         _ if is_scopable_tool(tool) => Some(Scope {
             kind: RuleKind::Tool,
             value: tool.to_string(),
             label: super::mcp::describe_request(tool, input).0,
+            said: None,
         }),
         _ => None,
     }
@@ -337,6 +353,7 @@ mod tests {
             kind: RuleKind::CommandPrefix,
             value: "rm".into(),
             label: "rm".into(),
+            said: None,
         };
         assert!(!allows(&rule, "rm -rf ~"));
     }
@@ -399,6 +416,7 @@ mod tests {
             kind: RuleKind::Tool,
             value: "Bash".into(),
             label: "Bash".into(),
+            said: None,
         };
         assert!(!blanket.matches("Bash", &bash("ls")));
     }
@@ -418,6 +436,7 @@ mod tests {
                 kind: RuleKind::Tool,
                 value: tool.into(),
                 label: "Click on the page".into(),
+                said: None,
             };
             assert!(!kept.matches(tool, &click), "{tool}");
         }

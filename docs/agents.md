@@ -1335,6 +1335,43 @@ covers (`mcp::covered_by`), through the same path as Allow: a live waiter is
 woken, and a card nobody waits on any more gets a late Allow that wakes the
 agent.
 
+**Said in chat** (`agents/remember.rs`). A user who typed "ur always allowed
+to do those" kept getting the same cards: only Always on a card recorded a
+rule. Now every agent is told (prompts.rs, Work) to call
+`remember_permission { tool_or_pattern, scope: "this agent" | "team", quote }`
+instead of only saying OK. Rust decides, not the prompt:
+
+- **Provenance.** Only in a live turn (`broker::is_live`) whose latest input
+  is a message the user typed in this agent's own chat, desk or phone
+  (`runner::enqueue_typed` from `agents_send`; `runner::typed_input`). Another
+  agent's message, a routine, a room, outside text (or a turn tainted by it),
+  a notice the app queues "from the user" (late Allow, declined login) and a
+  message the app writes from a button ("Say hi") carry no typed words, so an
+  admin answering for another agent can't either. `quote` must be whole words
+  of what they typed.
+- **Only a card they saw.** The rule is the `always` scope a card in this
+  chat offered, found by tool name, command, host or label. Nothing broader.
+- **Never the floor** (`go_hard::floor`): Go hard's ask list for commands and
+  files (push, publish, deploy, send, `sudo`, deleting outside the work
+  folders, credentials, system files), every browser action, and every
+  connector call Go hard asks for (`connector_asks`: sends or posts, pays,
+  deletes, deploys, code-host and database writes) plus payouts, wipes and
+  credentials (`remembered_floor`). A rule for one is refused; a call on the floor still asks
+  whatever a remembered rule says (`remember::covering`). Updating the
+  user's own records (`upsertSocialPosts`) is off the floor. Rules chosen on a
+  card are unchanged; choosing Always on a card for a remembered rule makes it
+  the card's.
+
+A remembered rule is a `Rule` whose scope has `said` (the quote); "team"
+rules live in `remembered-permissions.json` in the agents folder and cover
+every agent, always under the floor. Recorded, it leaves one note,
+"Remembered: Lead Gen can always … · Undo" (`AgentMessage.remembered`, whose
+`active` is read from the rules on every read), and answers the open cards in
+that chat it covers, which read "Allowed by your rule · …". Undo, desk or
+phone, is `agents_revoke_permission` (`agents.revokePermission`), which also
+takes team rules back and re-emits the line as "Undone". Team rules show only
+on their line: there is no settings list for them yet.
+
 ## Admins (`src-tauri/src/agents/admin.rs`)
 
 "All of the agents are begging me for something, I open them and I don't even

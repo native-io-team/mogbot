@@ -22,6 +22,7 @@ fn direct(text: &str) -> Inbound {
         room: None,
         outside: false,
         resume: 0,
+        typed: None,
     }
 }
 

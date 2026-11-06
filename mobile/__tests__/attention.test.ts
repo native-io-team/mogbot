@@ -327,14 +327,21 @@ describe('engines, slots and decision cards', () => {
     );
   });
 
+  it('marks a card a rule from chat allowed as by the user’s rule, as the desk does', () => {
+    const base = { requestId: 'q', title: 'Use a tool', detail: '', status: 'allowed' as const };
+    const always = { kind: 'tool' as const, value: 'mcp__x__upsertPosts', label: 'Upsert posts' };
+    expect(cardOutcome({ ...base, alwaysAllowed: true, always })).toBe(
+      'Always allowed · Upsert posts'
+    );
+    expect(
+      cardOutcome({ ...base, alwaysAllowed: true, always: { ...always, said: 'always do those' } })
+    ).toBe('Allowed by your rule · Upsert posts');
+  });
+
   it('words an expired card as the desk does, and never as waiting', () => {
     const base = { requestId: 'q', title: 'Run a command', detail: 'npm test' };
-    expect(cardOutcome({ ...base, status: 'expired', expiry: 'moved_on' })).toBe(
-      'Expired'
-    );
-    expect(cardOutcome({ ...base, status: 'expired', expiry: 'no_answer' })).toBe(
-      'No answer'
-    );
+    expect(cardOutcome({ ...base, status: 'expired', expiry: 'moved_on' })).toBe('Expired');
+    expect(cardOutcome({ ...base, status: 'expired', expiry: 'no_answer' })).toBe('No answer');
     expect(cardOutcome({ ...base, status: 'expired', expiry: 'maybe_later' })).toBe('Maybe later');
     expect(
       pendingApproval([

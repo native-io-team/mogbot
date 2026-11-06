@@ -674,6 +674,7 @@ mod tests {
             room: None,
             decide: Vec::new(),
             local_links: Vec::new(),
+            remembered: None,
         };
         let request_id = store::new_id();
         card.approval = Some(Approval {

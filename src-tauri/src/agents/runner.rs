@@ -138,6 +138,12 @@ struct Inbound {
     /// in the same session, told to carry on, never from scratch.
     #[serde(default, skip_serializing_if = "is_zero")]
     resume: u8,
+    /// What the user typed themselves, in this agent's own chat (desk or
+    /// phone): only [`enqueue_typed`] sets it. A notice the app queues "from
+    /// the user" (a late Allow, a declined login) never has it. What
+    /// `remember_permission` checks the user's words against (`remember`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    typed: Option<String>,
 }
 
 fn is_zero(n: &u8) -> bool {
@@ -243,6 +249,9 @@ struct Runtime {
     /// (`share_text::labels_only_note`). Unlike `interrupted` it outlasts the
     /// worker going idle: the user's next message is when it is read.
     nudge: Option<String>,
+    /// The turn in progress answers, last, what the user typed in this chat
+    /// ([`typed_of`]): their words. `None` for anything else.
+    typed: Option<String>,
 }
 
 /// Why a take-over can't start now.
@@ -1148,6 +1157,7 @@ fn resume_inbounds(took: &[Inbound], resume: u8, note: String) -> Vec<Inbound> {
             room: None,
             outside: false,
             resume,
+            typed: None,
         });
     }
     out[0].text = note;
@@ -1533,6 +1543,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         room: None,
         decide: Vec::new(),
         local_links: Vec::new(),
+        remembered: None,
     }
 }
 
@@ -1552,8 +1563,63 @@ pub fn enqueue(app: &AppHandle, agent_id: &str, text: String, from: From) {
             room: None,
             outside: false,
             resume: 0,
+            typed: None,
         },
     );
+}
+
+/// [`enqueue`] for a message the user typed in this agent's own chat, on
+/// the desk or the phone (`agents_send`): `said` is their words as typed,
+/// without what the app adds to the prompt.
+pub fn enqueue_typed(app: &AppHandle, agent_id: &str, text: String, said: String) {
+    push(app, agent_id, typed_inbound(text, said));
+}
+
+fn typed_inbound(text: String, said: String) -> Inbound {
+    Inbound {
+        id: String::new(),
+        text,
+        from: From::User,
+        reply: false,
+        routine: false,
+        ticket: None,
+        room: None,
+        outside: false,
+        resume: 0,
+        typed: Some(said),
+    }
+}
+
+/// The user's own words when the latest of what a turn answers is a message
+/// they typed in this chat: never another agent's message, a routine, a
+/// room, outside text or a notice the app queued. Every typed message in
+/// the batch counts ("Always a lot to do with those" / "you're always
+/// allowed to do those"), but only when the last one is typed.
+fn typed_of(batch: &[Inbound], outside: bool) -> Option<String> {
+    let plain =
+        |m: &Inbound| matches!(m.from, From::User) && !m.routine && !m.outside && m.room.is_none();
+    let last = batch.last()?;
+    if outside || !plain(last) || last.typed.is_none() {
+        return None;
+    }
+    let said: Vec<&str> = batch
+        .iter()
+        .filter(|m| plain(m))
+        .filter_map(|m| m.typed.as_deref())
+        .collect();
+    Some(said.join("\n"))
+}
+
+/// What the user typed that the agent's turn in progress answers, when that
+/// is the latest thing it answers ([`typed_of`]). `remember_permission` is
+/// refused without it.
+pub fn typed_input(agent_id: &str) -> Option<String> {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .filter(|r| r.running && !r.outside)
+        .and_then(|r| r.typed.clone())
 }
 
 /// Queue the turn a check-in wakes the agent for: one of its routines
@@ -1579,6 +1645,7 @@ pub fn enqueue_scheduled(
             room: None,
             outside: false,
             resume: 0,
+            typed: None,
         },
     );
 }
@@ -1599,6 +1666,7 @@ pub fn enqueue_from_outside(app: &AppHandle, agent_id: &str, text: String, ticke
             room: None,
             outside: true,
             resume: 0,
+            typed: None,
         },
     );
 }
@@ -1630,6 +1698,7 @@ fn room_inbound(text: String, room: super::rooms::RoomRef, outside: bool) -> Inb
         room: Some(room),
         outside,
         resume: 0,
+        typed: None,
     }
 }
 
@@ -1782,6 +1851,7 @@ fn agent_inbound(text: String, sender: AgentRef, hop: u8, reply: bool, outside: 
         room: None,
         outside,
         resume: 0,
+        typed: None,
     }
 }
 
@@ -2541,6 +2611,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     runtime.turn_mixed |= !routine;
     // Outside text taints the turn, and the turn that replaces it.
     runtime.outside |= batch.iter().any(|m| m.outside);
+    runtime.typed = typed_of(&batch, runtime.outside);
     let request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
     let user_said = batch
         .iter()
@@ -2676,6 +2747,7 @@ fn finish_if_idle(agent_id: &str) -> Option<Idle> {
     runtime.turn_usage = super::usage::UsageTotals::default();
     runtime.turn_mixed = false;
     runtime.outside = false;
+    runtime.typed = None;
     Some(Idle {
         owed: std::mem::take(&mut runtime.owed),
         tickets: std::mem::take(&mut runtime.tickets),
@@ -2797,6 +2869,7 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     runtime.turn_usage = super::usage::UsageTotals::default();
     runtime.turn_mixed = false;
     runtime.outside = false;
+    runtime.typed = None;
     // What is recorded from now on is the agent's own, not the dead turn's room's.
     let room = runtime.room.take().map(|r| r.room_id);
     runtime.status = Some(Status::idle());
@@ -5012,6 +5085,7 @@ mod tests {
             room: None,
             outside: false,
             resume: 0,
+            typed: None,
         }
     }
 
@@ -5060,6 +5134,7 @@ mod tests {
                 room: None,
                 outside: false,
                 resume: 0,
+                typed: None,
             }),
             Ok(false)
         ));
@@ -5161,6 +5236,7 @@ mod tests {
                 room: None,
                 outside: false,
                 resume: 0,
+                typed: None,
             },
             Inbound {
                 id: String::new(),
@@ -5178,6 +5254,7 @@ mod tests {
                 room: None,
                 outside: false,
                 resume: 0,
+                typed: None,
             },
         ];
         let prompt = compose(&batch);
@@ -5428,6 +5505,7 @@ mod tests {
                 room: None,
                 outside: false,
                 resume: 0,
+                typed: None,
             },
             Inbound {
                 id: String::new(),
@@ -5445,6 +5523,7 @@ mod tests {
                 room: None,
                 outside: false,
                 resume: 0,
+                typed: None,
             },
         ]
         .into();
@@ -5594,6 +5673,7 @@ mod tests {
                     room: None,
                     outside: false,
                     resume: 0,
+                    typed: None,
                 });
             let err = begin_fresh_as(&a.id, super::super::tidy::LINE, true)
                 .unwrap_err()
@@ -5652,6 +5732,7 @@ mod tests {
                     room: None,
                     outside: false,
                     resume: 0,
+                    typed: None,
                 });
             }
             assert!(begin_fresh(&a.id).is_err());
@@ -5898,3 +5979,7 @@ mod share_text_runner_tests;
 #[cfg(test)]
 #[path = "prompt_budget_tests.rs"]
 mod prompt_budget_tests;
+
+#[cfg(test)]
+#[path = "remember_runner_tests.rs"]
+mod remember_runner_tests;

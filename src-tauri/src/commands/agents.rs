@@ -161,6 +161,8 @@ pub async fn agents_messages(
         crate::agents::logins::apply(&mut page);
         // Every card in plain words; an admin's batch as it is now.
         crate::agents::admin::apply(&mut page);
+        // A remembered rule's line: still in force, or undone.
+        crate::agents::remember::apply(&agent_id, &mut page);
         Ok(page)
     })
     .await
@@ -177,7 +179,36 @@ pub async fn agents_send(
     client_id: Option<String>,
     revises: Option<String>,
 ) -> Result<store::AgentMessage, CommandError> {
+    send_as(
+        app,
+        agent_id,
+        text,
+        attachments,
+        mentions,
+        client_id,
+        revises,
+        true,
+    )
+    .await
+}
+
+/// [`agents_send`]. `typed`: the user typed it in this chat (the desk's or
+/// the phone's composer), so the turn carries their words
+/// (`runner::enqueue_typed`); a message the app writes for them from a
+/// button ("Say hi", "what the agents are missing") doesn't.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn send_as(
+    app: AppHandle,
+    agent_id: String,
+    text: String,
+    attachments: Option<Vec<attachments::OutgoingAttachment>>,
+    mentions: Option<Vec<String>>,
+    client_id: Option<String>,
+    revises: Option<String>,
+    typed: bool,
+) -> Result<store::AgentMessage, CommandError> {
     let text = text.trim().to_string();
+    let said = text.clone();
     let incoming = attachments.unwrap_or_default();
     if text.is_empty() && incoming.is_empty() {
         return Err(agents::err_invalid("text", "Type a message first."));
@@ -250,7 +281,8 @@ pub async fn agents_send(
     .filter(|part| !part.is_empty())
     .collect::<Vec<_>>()
     .join("\n\n");
-    let typed_yes = says_yes && message.attachments.is_empty() && message.revises.is_none();
+    let typed_yes =
+        typed && says_yes && message.attachments.is_empty() && message.revises.is_none();
     let message = runner::record(&app, message)?;
     // "Approve it", typed by the user into a chat with one open card: that
     // card is allowed as their answer (`typed_answer`). Only this, the user's
@@ -276,7 +308,11 @@ pub async fn agents_send(
             }
         }
     }
-    runner::enqueue(&app, &agent_id, prompt, runner::From::User);
+    if typed {
+        runner::enqueue_typed(&app, &agent_id, prompt, said);
+    } else {
+        runner::enqueue(&app, &agent_id, prompt, runner::From::User);
+    }
     agents::tray::mark_used(&app);
     Ok(message)
 }
@@ -1376,7 +1412,9 @@ pub async fn agents_revoke_secret(
 /// A "Deny with note…" is a steer, not an essay.
 const MAX_DENY_NOTE: usize = 500;
 
-/// Take back an "Always allow" rule: matching calls ask again.
+/// Take back an "Always allow" rule: matching calls ask again. Also the
+/// Undo on a "Remembered: …" line, whose rule may be the team's
+/// (`agents::remember`); that line then reads as undone, desk and phone.
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_revoke_permission(
@@ -1384,7 +1422,8 @@ pub async fn agents_revoke_permission(
     agent_id: String,
     rule_id: String,
 ) -> Result<(), CommandError> {
-    store::update(&agent_id, |a| a.permissions.retain(|r| r.id != rule_id))?;
+    let handle = app.clone();
+    blocking(move || agents::remember::forget_and_show(&handle, &agent_id, &rule_id)).await?;
     emit_registry(&app);
     Ok(())
 }
@@ -2236,7 +2275,7 @@ pub async fn agents_team_setup_hello(
         )));
     }
     let text = agents::team_setup::hello_text(&agent.name);
-    let sent = agents_send(app.clone(), agent_id, text, None, None, None, None).await?;
+    let sent = send_as(app.clone(), agent_id, text, None, None, None, None, false).await?;
     agents::team_setup::emit(&app);
     Ok(sent)
 }
@@ -2256,7 +2295,7 @@ pub async fn agents_team_setup_missing(
     let text = agents::team_setup::missing_text(&view)
         .ok_or_else(|| CommandError::expected("Nobody said they're missing anything."))?;
     let chief = blocking(agents::ensure_main).await?;
-    let sent = agents_send(app.clone(), chief.id, text, None, None, None, None).await?;
+    let sent = send_as(app.clone(), chief.id, text, None, None, None, None, false).await?;
     blocking(|| {
         agents::team_setup::set_step(
             agents::team_setup::StepId::Missing,

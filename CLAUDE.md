@@ -148,7 +148,7 @@ these without updating that doc.
   to production or a protected branch, and system persistence ask. A turn answering outside text at "Go hard" also asks for any network write and for
   packages fetched by name. Each
   auto-answer leaves a line in "What it did" ("How much agents do on their own"). Secrets go
-  into the Keychain through a masked card, never the chat ("Secrets")
+  into the Keychain through a masked card, never the chat ("Secrets"). "You can always do those" in chat becomes a rule only through `remember_permission` (`agents/remember.rs`): a live turn whose latest input the user typed in that chat, the scope of a card it showed, and never Go hard's floor (`go_hard::floor`) ("Said in chat")
 - **"Go hard" hardening.** No request goes through on its own with a secret in its address, query
   or headers (`agents/egress.rs`). After a turn reads outside content (web pages and search
   results, issue/PR comments, mail and chat through connections, other sites in the browser),
