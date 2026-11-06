@@ -685,6 +685,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
                 format!("catch up on {n}'s chat"),
             )
         }
+        "search_my_chat" => act(
+            StepKind::Read,
+            "Looked back through the chat",
+            "Looking back through the chat",
+            "look back through the chat",
+        ),
         "team_requests" => act(
             StepKind::Message,
             "Looked at what the team is asking for",

@@ -425,7 +425,7 @@ async fn open(
     // The terminal drives the session on the account its turns last ran on.
     let account = super::wallet::last_account(agent.engine, &agent.id);
     super::wallet::prepare(&account);
-    super::wallet::carry_session(&account, session);
+    super::transcript::ensure(&account, &layout.cwd, &home, session);
     let account_env = super::wallet::env_for(&account);
     let spawn = spawn_for(&Context {
         engine: agent.engine,
