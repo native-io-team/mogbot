@@ -15,7 +15,7 @@
  *
  *   pnpm qa:web                          # everything, into qa-shots/
  *   pnpm qa:web --only chat-,composer-   # shots whose name starts with chat- or composer-
- *   pnpm qa:web --phases heavy           # only these phases (fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,torture)
+ *   pnpm qa:web --phases heavy           # only these phases (fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,engine,torture)
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --out /tmp/shots
  *   pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681
@@ -52,7 +52,7 @@ const MAX_MS = Number(opt('--max-ms', 'QA_MAX_MS', 30 * 60 * 1000));
 const PHASES = opt(
   '--phases',
   'QA_PHASES',
-  'fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,torture'
+  'fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,engine,torture'
 ).split(',');
 const phase = (name) => PHASES.includes(name);
 // Ports other tools in this repo own: the desktop app, its harness, the phone's Metro.
@@ -1660,6 +1660,75 @@ const topOf = (page, text) =>
     const el = [...document.querySelectorAll('body *')].filter((e) => e.children.length === 0 && e.textContent.includes(${JSON.stringify(text)})).pop();
     return el ? el.getBoundingClientRect().top : null;
   })()`);
+// The composer on a narrow and a wide phone, and the engine chip's picker.
+const resize = (page, width) =>
+  page.send('Emulation.setDeviceMetricsOverride', { ...VIEWPORT, width });
+const tapChip = (page) =>
+  page.clickWhere(
+    `() => [...document.querySelectorAll('[aria-label]')].find((e) => e.getAttribute('aria-label').startsWith('Runs on'))`,
+    'the engine chip'
+  );
+const ENGINE = [
+  ...[320, 360, 430].map((width) => ({
+    name: `composer-empty-${width}`,
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await resize(page, width);
+      await sleep(600);
+    },
+    check: `Empty at ${width}pt wide: one capsule, the placeholder on one line (clipped with an ellipsis if it doesn't fit)`,
+    after: async (page) => resize(page, VIEWPORT.width),
+  })),
+  {
+    name: 'composer-engine-picker',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await page.type('Can you pull last week’s numbers together for the Monday review, and flag anything that moved more than ten percent?');
+      await sleep(700);
+      await tapChip(page);
+      await sleep(600);
+    },
+    check:
+      'The engine chip (Claude Code, with a small chevron) opened a sheet: the engine’s other models, then “Switch to Codex…”, then Cancel',
+    after: async (page) => {
+      await page.eval(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
+      await clearField(page);
+    },
+  },
+  {
+    name: 'composer-engine-switched',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await page.type('Can you pull last week’s numbers together for the Monday review, and flag anything that moved more than ten percent?');
+      await sleep(700);
+      await tapChip(page);
+      await sleep(500);
+      await page.clickText('Switch to Codex…');
+      await sleep(500);
+      await page.clickText('GPT-5 Codex');
+      await sleep(900);
+    },
+    check:
+      'The chip reads Codex GPT-5 Codex and the line over the field says “Now on Codex · GPT-5 Codex. It has the conversation so far.”',
+    after: clearField,
+  },
+  {
+    name: 'composer-engine-busy',
+    route: '/chat/ops',
+    ready: 'Ops',
+    act: async (page) => {
+      await page.type('and then the weekly summary');
+      await sleep(500);
+      await tapChip(page);
+      await sleep(500);
+    },
+    check: 'Ops is mid-turn: the chip is dimmed and the line over the field says to switch when the turn ends',
+    after: clearField,
+  },
+];
 const TORTURE = [
   {
     name: 'torture-chat',
@@ -1985,6 +2054,13 @@ async function main() {
     await page.goto(`${WEB}/agents`);
     await sleep(4000);
     await each(TEAM_SETUP);
+  }
+
+  if (phase('engine')) {
+    await startMock('--both-engines');
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await each(ENGINE);
   }
 
   if (phase('torture')) {

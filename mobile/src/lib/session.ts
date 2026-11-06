@@ -14,6 +14,7 @@ import type {
   ResultRef,
   TeamSetupStepId,
   TeamSetupStepState,
+  AgentEngine,
   AgentLook,
 } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
@@ -599,6 +600,34 @@ export async function setAgentToggles(
     }));
     throw error;
   }
+}
+
+/**
+ * Move an agent to another engine, or another model of its own, from a Mac
+ * listing `MAC_FEATURES.engine`. The Mac checks the engine is ready and, on a
+ * new engine, starts a new session that carries the conversation over as a
+ * recap. Shown once the Mac has said yes, never before: it can refuse (the
+ * agent being driven, an engine signed out since).
+ */
+export async function setAgentEngine(
+  agentId: string,
+  input: { engine?: AgentEngine; model?: string }
+) {
+  const stored = await call('agents.update', { agentId, input });
+  setApp((s) =>
+    s.overview
+      ? {
+          overview: {
+            ...s.overview,
+            agents: s.overview.agents.map((a) =>
+              a.id === agentId
+                ? { ...a, engine: stored.engine ?? a.engine, model: stored.model ?? null }
+                : a
+            ),
+          },
+        }
+      : {}
+  );
 }
 
 /**
