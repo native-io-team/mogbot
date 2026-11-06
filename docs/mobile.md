@@ -647,9 +647,12 @@ before is drawn.
 The phone can start work as well as answer it. Each piece is gated by
 `welcome.methods`, so an older Mac shows less instead of failing.
 
-- **Import agents** (the download mark beside New agent on Agents;
+- **Import agents** (the ⋯ menu beside New agent on Agents, or the home's
+  one-time "Bring your agents from another assistant?" card while the Mac
+  says it's undecided and serves `agents.setImportChoice`;
   `app/import.tsx`, on a Mac that serves `agents.import.status`). Three
-  steps, polled every 3 s while open: (1) Remote access on and the
+  steps, one screen at a time (`lib/importChoice.ts`, "Step n of 3"),
+  polled every 3 s while open: (1) Remote access on and the
   assistant connected, ticked from what the Mac reports
   (`remoteAccess.enabled|funnelOn|everConnected`); when it isn't, the screen
   says exactly what to do **at the Mac**, once: turn on Remote access (this

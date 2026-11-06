@@ -1976,6 +1976,19 @@ to the user and asks what's missing, then every connector import ends on one
 review card in the Chief's chat, and the user imports what they keep
 (`agents/harvest.rs`, `agents/review.rs`).
 
+**Asked once, then in the background.** Onboarding's last step asks
+everyone new "Bring your agents from Grok, ChatGPT or another assistant, or
+start fresh?" (its import path is three screens: Remote access on, the link
+in the assistant, the message). An install from before that question gets
+one card at the top of the Chief's chat (`ImportChoiceCard`) and on the
+phone's home, asking once. The answer is the Mac's
+(`agents::import_choice`, `import-choice.json` beside the agents; carried on
+the overview as `importChoice`, set by `agents_set_import_choice` /
+`agents.setImportChoice`); any import that brings something across sets it
+to `imported`. Afterwards there is no Import row in the sidebar: import is
+⌘K "Import agents…", the Chief, Settings → Agents → Import, and the phone's
+⋯ menu.
+
 **Import agents** lists **From another assistant** first, and opens there;
 **From Ship Studio** is the second segment, opened when asked for (⌘K
 "Import agents from Ship Studio…"), since few people have agents there. ⌘K

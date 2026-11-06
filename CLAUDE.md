@@ -400,9 +400,15 @@ Onboarding is critical — it's the first thing every new user sees, and it ends
 
 **What it asks for: one engine Agents can run on** (Claude Code or Codex), installed and signed in. Nothing else. `OnboardingRouter` → `AgentOnboardingScreen` (`src/components/setup/agent-led/`):
 
-1. A short "how it works" (talk to your Chief of Staff; it builds a team; risky things wait for your Allow) and two engine cards. Only engines `agents::engine` can run are offered.
-2. The chosen card's install → sign-in rows (Codex first gets Node.js and the package manager, since it installs through npm). The next step starts on its own.
-3. The hand-off screen ("You're all set — Claude Code is connected. Your Chief of Staff is waiting"), then Agents with the Chief open on its stored greeting (`CHIEF_GREETING`, written by `agents::ensure_main`; no model turn runs until the user replies) and three starters.
+One straight line of one-question screens (`lib/onboardingFlow.ts`, `components/setup/flow/`): a progress bar, Back, one big button, one sentence each. The step is saved (`shipstudio.onboarding.flow`), and a launch with an unfinished onboarding reopens it (`postSetupViewFor`).
+
+1. **Welcome** — one line on what this is.
+2. **Engine** — Claude Code or Codex (only engines `agents::engine` can run are offered), then each install / sign-in its own screen (Codex first gets the package manager and Node.js); each starts on its own and ticks from the app's checks.
+3. **Independence** — how much agents do on their own (Skip keeps the default).
+4. **Your phone** (skippable) — Tailscale on this Mac; Tailscale on the phone on the same account (App Store QR, `companion_tailnet_phones`); the phone app (TestFlight when there is one, else the guided build, or "I already have it"); scan and Allow.
+5. **Ready** — "Bring your agents, or start fresh?" Importing is three screens (Remote access on, the link in the assistant, the message), ending in the Chief's chat; Start fresh lands on the Chief's greeting (`CHIEF_GREETING`, written by `agents::ensure_main`; no model turn runs until the user replies). Either answer is the Mac's (`agents::import_choice`), so the Chief's one-time card and the phone's stop asking.
+
+Every check says **Done** when it passes (and moves on by itself if it passed on that screen) or **Not done yet** with the one fix and the page that does it; Check again always answers with when it checked. Never a silent reload.
 
 The app verifies; nothing self-certifies: an engine counts when `get_full_setup_status` says it is installed and signed in. Backend `allReady` means exactly that (`has_agents_engine` in `commands/setup/status.rs`), and the background check after launch only logs — it never sends a user back to onboarding.
 
@@ -414,7 +420,7 @@ The classic step-by-step wizard and its "Try classic onboarding" toggle were rem
 
 #### Looking at it
 
-- `pnpm harness` scenarios: `onboarding-fresh`, `onboarding-codex-prereqs`, `onboarding-handoff` (celebration → Agents with the Chief), `launch-returning` (launch lands on Agents), `project-tools` and `project-tools-running`.
+- `pnpm harness` scenarios: every screen and failure state is an `onboarding-*` scenario (`src/harness/scenarios/onboardingFlow.ts`; `onboarding-fresh` is the welcome, `onboarding-handoff` the last step, `onboarding-end-to-agents` Start fresh → Agents), `launch-returning` (launch lands on Agents), `project-tools` and `project-tools-running`.
 - `SHIPSTUDIO_FORCE_SETUP=fresh pnpm tauri dev` — mock backend; install/connect buttons flip mock state after a visible beat, and the Project tools dialog plays the scripted `DemoAgentTerminal`. Nothing touches the host machine. Also `auth-only` (engines installed, none signed in). Note that `both-agents`, `codex-only` and `almost-done` have a ready engine, so mock `allReady` is true and launch **skips onboarding entirely** (straight to Agents); use them to look at the post-setup app, not the hand-off.
 - `SHIPSTUDIO_FORCE_ONBOARDING=1 pnpm tauri dev` — real checks, onboarding forced open, the pick phase always shown even on a set-up machine; `mark_setup_complete` is in-memory only.
 
@@ -433,7 +439,9 @@ VM login is admin/admin; the DMG appears under "My Shared Files → dmg". Locall
 
 - [ ] Claude Code card: installs via terminal, sign-in completes, hand-off screen names it
 - [ ] Codex card on a bare machine: package manager and Node.js install first, then Codex, then sign-in
-- [ ] Hand-off lands on Agents with the Chief's greeting and starters; the Chief runs on the engine chosen
+- [ ] Each phone screen ticks Done by itself (Tailscale here, the phone on the tailnet, paired); HTTPS certificates off says Not done yet with the admin page
+- [ ] Start fresh lands on Agents with the Chief's greeting and starters; the Chief runs on the engine chosen
+- [ ] Quit mid-way (e.g. on the phone screens) and relaunch: it reopens on that screen
 - [ ] Re-launch lands on Agents, not onboarding (setup_complete persisted)
 - [ ] New project: the Project tools dialog lists what's missing, the agent installs it, the checklist turns green, the new-project flow opens
 - [ ] A project window (opened from a project) still goes straight to the workspace
