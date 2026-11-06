@@ -64,7 +64,7 @@ pub fn asks(tool: &str, input: &Value, ctx: &Ctx, outside: bool) -> bool {
             !raw.is_empty() && resolve(raw, ctx).is_some_and(|p| secret_to_read(&p, ctx))
         }
         t if t.starts_with(super::browser_gate::SERVER) => false,
-        t if t.starts_with("mcp__") => connector_writes(t),
+        t if t.starts_with("mcp__") => connector_asks(t, outside),
         // Claude Code's and Codex's own tools (web search, todo lists, tasks).
         _ => false,
     }
@@ -1282,10 +1282,9 @@ fn string_literals(code: &str) -> Vec<String> {
 
 /* ------------------------------------------------------------ connectors */
 
-/// A connector tool whose name says it writes, sends or spends.
-fn connector_writes(tool: &str) -> bool {
+/// The words of a connector tool's own name (camelCase and snake_case split).
+fn tool_words(tool: &str) -> Vec<String> {
     let name = tool.rsplit("__").next().unwrap_or(tool);
-    // camelCase and snake_case into words.
     let mut spaced = String::new();
     for (n, c) in name.chars().enumerate() {
         if c.is_ascii_uppercase() && n > 0 {
@@ -1293,18 +1292,46 @@ fn connector_writes(tool: &str) -> bool {
         }
         spaced.push(c.to_ascii_lowercase());
     }
-    let words: Vec<&str> = spaced
+    spaced
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|w| !w.is_empty())
-        .collect();
-    const WRITES: &[&str] = &[
-        "send", "reply", "forward", "post", "publish", "share", "invite", "submit", "create",
-        "update", "edit", "write", "delete", "remove", "archive", "trash", "move", "add", "set",
-        "insert", "upload", "charge", "refund", "pay", "transfer", "cancel", "merge", "deploy",
-        "comment", "draft", "schedule", "book", "approve", "assign", "close", "upsert", "patch",
-        "put", "modify", "rename", "import", "execute", "run", "mutate", "complete", "react",
+        .map(str::to_string)
+        .collect()
+}
+
+/// At Go hard a connector asks only when its name says it sends or publishes as
+/// the user, spends, deletes, or deploys. Creating and updating records in the
+/// user's own tools (an upsert into their dashboard, a task, a page) just runs:
+/// asking for those is the "asks for everything" the owner rejected. A turn
+/// answering outside text still asks for any write.
+fn connector_asks(tool: &str, outside: bool) -> bool {
+    let words = tool_words(tool);
+    let has = |list: &[&str]| words.iter().any(|w| list.contains(&w.as_str()));
+    const SENDS_SPENDS_DELETES: &[&str] = &[
+        "send", "reply", "forward", "post", "publish", "share", "invite", "submit", "tweet",
+        "comment", "react", "charge", "refund", "pay", "payment",
+        "transfer", "purchase", "buy", "order", "book", "subscribe", "cancel", "delete",
+        "remove", "trash", "destroy", "purge", "deploy", "merge", "approve",
     ];
-    words.iter().any(|w| WRITES.contains(w))
+    // A read named after what it reads ("get_post", "list_comments") is a read.
+    const READS: &[&str] = &["get", "list", "search", "fetch", "read", "find", "query", "view", "count"];
+    if words.first().is_some_and(|w| READS.contains(&w.as_str())) {
+        return false;
+    }
+    if has(SENDS_SPENDS_DELETES) {
+        return true;
+    }
+    outside && connector_writes(&words)
+}
+
+/// A connector tool whose name says it writes anything at all.
+fn connector_writes(words: &[String]) -> bool {
+    const WRITES: &[&str] = &[
+        "create", "update", "edit", "write", "archive", "move", "add", "set", "insert",
+        "upload", "draft", "schedule", "assign", "close", "upsert", "patch", "put", "modify",
+        "rename", "import", "execute", "run", "mutate", "complete",
+    ];
+    words.iter().any(|w| WRITES.contains(&w.as_str()))
 }
 
 #[cfg(test)]

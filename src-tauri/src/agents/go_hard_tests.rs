@@ -192,13 +192,29 @@ fn files_and_connectors_at_go_hard() {
     for tool in [
         "mcp__gmail__send_email",
         "mcp__stripe__create_refund",
-        "mcp__notion__updatePage",
+        "mcp__slack__post_message",
+        "mcp__linear__deleteIssue",
+        "mcp__vercel__deploy_to_vercel",
     ] {
         assert!(asks(tool, &json!({}), &c, false), "{tool}");
+        assert!(asks(tool, &json!({}), &c, true), "{tool} (outside)");
+    }
+    // Records in the user's own tools just get updated at Go hard...
+    for tool in [
+        "mcp__notion__updatePage",
+        "mcp__fictional-os__upsertSocialPosts",
+        "mcp__fictional-os__upsertFollowerCounts",
+        "mcp__linear__create_issue",
+    ] {
+        assert!(!asks(tool, &json!({}), &c, false), "{tool}");
+        // ...but not in a turn answering outside text.
+        assert!(asks(tool, &json!({}), &c, true), "{tool} (outside)");
     }
     for tool in [
         "mcp__gmail__search_threads",
         "mcp__notion__fetch",
+        "mcp__fictional__get_post",
+        "mcp__fictional__listComments",
         "WebSearch",
         "TodoWrite",
     ] {
