@@ -330,10 +330,10 @@ describe('engines, slots and decision cards', () => {
   it('words an expired card as the desk does, and never as waiting', () => {
     const base = { requestId: 'q', title: 'Run a command', detail: 'npm test' };
     expect(cardOutcome({ ...base, status: 'expired', expiry: 'moved_on' })).toBe(
-      'Expired — the agent moved on'
+      'Expired'
     );
     expect(cardOutcome({ ...base, status: 'expired', expiry: 'no_answer' })).toBe(
-      'No answer — ask again later if it still matters'
+      'No answer'
     );
     expect(cardOutcome({ ...base, status: 'expired', expiry: 'maybe_later' })).toBe('Maybe later');
     expect(

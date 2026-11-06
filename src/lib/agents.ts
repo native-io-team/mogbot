@@ -511,9 +511,9 @@ export type CardExpiry = 'moved_on' | 'no_answer' | 'maybe_later';
 export function expiryLine(approval: Pick<Approval, 'title' | 'expiry'>): string | null {
   switch (approval.expiry) {
     case 'moved_on':
-      return `Expired — the agent moved on · ${approval.title}`;
+      return `Expired · ${approval.title}`;
     case 'no_answer':
-      return `No answer — ask again later if it still matters · ${approval.title}`;
+      return `No answer · ${approval.title}`;
     case 'maybe_later':
       return `Maybe later · ${approval.title}`;
     default:
