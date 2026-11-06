@@ -47,9 +47,12 @@ const selectEngines = (s: { engines: EngineInfo[] }) => s.engines;
 export function AgentsSettings({
   onOpenPhone,
   onOpenRemote,
+  onImport,
 }: {
   onOpenPhone: () => void;
   onOpenRemote: () => void;
+  /** Import agents: always here, once the first-run question is answered too. */
+  onImport: () => void;
 }) {
   const { state: stayOn, change } = useStayOn();
   const engines = useAgentsSelector(selectEngines);
@@ -144,6 +147,14 @@ export function AgentsSettings({
           <Row label="Phone" description="Talk to your agents and answer them from your phone.">
             <Button variant="secondary" data-settings-open="phone" onClick={onOpenPhone}>
               Open
+            </Button>
+          </Row>
+          <Row
+            label="Import agents"
+            description="Bring the agents another assistant runs for you, with their memory and routines."
+          >
+            <Button variant="secondary" data-settings-open="import" onClick={onImport}>
+              Import…
             </Button>
           </Row>
           <Row

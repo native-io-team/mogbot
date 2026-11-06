@@ -20,9 +20,8 @@ const tomorrowAt = (hour: number, minute = 0) => {
   return d.getTime();
 };
 
-/** The first-run way into import: the sidebar note's link, or with no sidebar the Chief's starter. */
-const IMPORT_STARTER =
-  '.agents-import-nudge__action, .agents-list__import, .agent-chat__starters > button:last-child';
+/** The way into import while it's undecided: the one-time card at the top of the Chief's chat. */
+const IMPORT_STARTER = '[data-import-choice-bring]';
 
 /** A reply Grok Bot might paste back: prose around two numbered blocks. */
 const PASTED_REPLY = [
@@ -1012,6 +1011,9 @@ export const overview = (agents = TEAM, engineReady = true, defaults = DEFAULTS)
   engines: ENGINES,
   defaults,
 });
+
+/** Never answered "bring your agents, or start fresh?": the Chief's chat asks, once. */
+const UNDECIDED = { agents_overview: { ...overview(), importChoice: 'undecided' } };
 
 /** Research runs on Codex: same chat, its own model in the header. */
 const CODEX_TEAM = [
@@ -2540,7 +2542,7 @@ export const agentsScenarios: Scenario[] = [
       { click: PASTE_LINK },
       { click: '.agents-import-message__copy' },
     ],
-    commands: {},
+    commands: { ...UNDECIDED },
   },
   {
     id: 'agents-import-paste-preview',
@@ -2557,7 +2559,10 @@ export const agentsScenarios: Scenario[] = [
       { click: PASTE_LINK },
       { fill: '.agents-import__paste', value: PASTED_REPLY },
     ],
-    commands: { agents_import_paste_preview: PASTE_PREVIEW },
+    commands: {
+      ...UNDECIDED,
+      agents_import_paste_preview: PASTE_PREVIEW,
+    },
   },
   {
     id: 'agents-import-paste-expanded',
@@ -2573,7 +2578,10 @@ export const agentsScenarios: Scenario[] = [
       { fill: '.agents-import__paste', value: PASTED_REPLY },
       { click: '.agents-import-agent:nth-child(2) .agents-import-agent__row' },
     ],
-    commands: { agents_import_paste_preview: PASTE_PREVIEW },
+    commands: {
+      ...UNDECIDED,
+      agents_import_paste_preview: PASTE_PREVIEW,
+    },
   },
   {
     id: 'agents-import-long',
@@ -2588,7 +2596,10 @@ export const agentsScenarios: Scenario[] = [
       { click: PASTE_LINK },
       { fill: '.agents-import__paste', value: PASTED_REPLY },
     ],
-    commands: { agents_import_paste_preview: LONG_PREVIEW },
+    commands: {
+      ...UNDECIDED,
+      agents_import_paste_preview: LONG_PREVIEW,
+    },
   },
   {
     id: 'agents-import-paste-problems',
@@ -2604,6 +2615,7 @@ export const agentsScenarios: Scenario[] = [
       { fill: '.agents-import__paste', value: '```json\n{"agents":[{"name":"Finance",},]}\n```' },
     ],
     commands: {
+      ...UNDECIDED,
       agents_import_paste_preview: {
         ...PASTE_PREVIEW,
         agents: PASTE_PREVIEW.agents.slice(0, 2),
@@ -2629,7 +2641,11 @@ export const agentsScenarios: Scenario[] = [
       { fill: '.agents-import__paste', value: PASTED_REPLY },
       { click: IMPORT_BUTTON },
     ],
-    commands: { agents_import_paste_preview: PASTE_PREVIEW, agents_import_paste: IMPORTED },
+    commands: {
+      ...UNDECIDED,
+      agents_import_paste_preview: PASTE_PREVIEW,
+      agents_import_paste: IMPORTED,
+    },
   },
   {
     id: 'agents-import-done-refused',
@@ -2646,6 +2662,7 @@ export const agentsScenarios: Scenario[] = [
       { click: IMPORT_BUTTON },
     ],
     commands: {
+      ...UNDECIDED,
       agents_import_paste_preview: PASTE_PREVIEW,
       agents_import_paste: {
         ...IMPORTED,
@@ -2679,7 +2696,10 @@ export const agentsScenarios: Scenario[] = [
       { click: IMPORT_STARTER },
       { click: '.agents-import__tabs [role="tab"]:nth-of-type(2)' },
     ],
-    commands: { agents_other_app_preview: OTHER_APP_PREVIEW },
+    commands: {
+      ...UNDECIDED,
+      agents_other_app_preview: OTHER_APP_PREVIEW,
+    },
   },
   {
     id: 'agents-import-other-app-detail',
@@ -2695,7 +2715,10 @@ export const agentsScenarios: Scenario[] = [
       { click: '.agents-import__tabs [role="tab"]:nth-of-type(2)' },
       { click: '.agents-import-agent:nth-child(2) .agents-import-agent__row' },
     ],
-    commands: { agents_other_app_preview: OTHER_APP_PREVIEW },
+    commands: {
+      ...UNDECIDED,
+      agents_other_app_preview: OTHER_APP_PREVIEW,
+    },
   },
   {
     id: 'agents-import-other-app-done',
@@ -2711,6 +2734,7 @@ export const agentsScenarios: Scenario[] = [
       { click: IMPORT_BUTTON },
     ],
     commands: {
+      ...UNDECIDED,
       agents_other_app_preview: OTHER_APP_PREVIEW,
       agents_other_app_import: {
         created: ['Finance', 'Travel'],
@@ -2778,7 +2802,7 @@ export const agentsScenarios: Scenario[] = [
     requires: '.agents-import__paste',
     clipSelector: '.agents-import',
     steps: [{ click: IMPORT_STARTER }, { click: PASTE_LINK }],
-    commands: {},
+    commands: { ...UNDECIDED },
   },
   {
     id: 'agents-import-consent',
@@ -2935,15 +2959,17 @@ export const agentsScenarios: Scenario[] = [
     },
   },
   {
-    id: 'agents-import-nudge',
-    title: 'Agents — the import note at the foot of the agent list',
+    id: 'agents-import-choice',
+    title: 'Agents — an install that never decided about importing',
     looksRightWhen:
-      'Under the last row, on the rows’ grid: a neutral icon tile in the badge column, then a short bold-ish title, one muted line, and a green “Import agents →” text action, all starting where the names above start. A faint × at the top right. A hairline under it like a row’s; no card, no fill. New agent and Import agents follow.',
+      'At the top of the Chief’s chat, one calm card: a download icon, “Bring your agents from another assistant?”, one muted line (Grok, ChatGPT, Claude…; nothing is created until you say so), then “No thanks, start fresh” and a neutral “Bring my agents” on the right. The sidebar has New agent and no Import agents row.',
     openSelector: AGENTS_TAB,
-    requires: '.agents-import-nudge',
-    clipSelector: '.agents-list',
+    requires: '[data-testid="agent-import-choice"]',
     commands: {
-      agents_overview: overview([TEAM[0], TEAM.find((a) => a.id === 'finance') ?? TEAM[1]]),
+      agents_overview: {
+        ...overview([TEAM[0], TEAM.find((a) => a.id === 'finance') ?? TEAM[1]]),
+        importChoice: 'undecided',
+      },
       agents_messages: messagesFor,
     },
   },

@@ -30,7 +30,6 @@ import {
   BellOffIcon,
   ChevronRightIcon,
   CollaboratorsIcon,
-  DownloadIcon,
   PinIcon,
 } from '@/components/icons';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../primitives/ContextMenu';
@@ -40,9 +39,6 @@ import { AgentWorkingLine } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { AgentsSearchResults } from './AgentsSearchResults';
-import { ImportNudge, useImportNudge } from './ImportNudge';
-import { useImportGate } from './ImportConnectorPanel';
-import { talkIsLive } from '../../lib/agents';
 import { AgentMark } from './AgentSwitcher';
 import { RoomRow, type RoomActions } from './AgentRoomParts';
 import { sortRooms, type Room } from '../../lib/agentRooms';
@@ -50,7 +46,6 @@ import { useFlipReorder } from './useAgentMotion';
 import { useAttentionOrder } from './useAttentionOrder';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import {
-  engineIsReady,
   failedTurn,
   failureLine,
   needsYou,
@@ -71,8 +66,6 @@ interface AgentsSidebarProps {
   onToggleShowHidden: () => void;
   onSelect: (agentId: string) => void;
   onNew: () => void;
-  /** Opens Import agents (paste from Grok Bot or any assistant). */
-  onImport: () => void;
   /** The top field's query; while there is one, its results replace the list. */
   query: string;
   searchRef: RefObject<HTMLInputElement | null>;
@@ -195,7 +188,6 @@ export function AgentsSidebar({
   onToggleShowHidden,
   onSelect,
   onNew,
-  onImport,
   query,
   searchRef,
   onOpenHit,
@@ -210,21 +202,6 @@ export function AgentsSidebar({
   onNewRoom,
 }: AgentsSidebarProps) {
   const searching = query.trim().length > 0;
-  // Bringing agents over is for someone whose agents can run: never while
-  // nothing can (signed out, nothing installed), when it would compete with
-  // the one thing they have to do.
-  const engineWorks = useAgentsSelector((s) =>
-    s.engines.length > 0
-      ? s.engines.some((e) => engineIsReady(e.id, s.engines, s.engineReady))
-      : s.engineReady
-  );
-  const nudge = useImportNudge(
-    agents.length,
-    agents.some((a) => a.isMain && a.sessionId !== null)
-  );
-  const importing = talkIsLive(useImportGate().talk);
-  // An import already going needs no pitch for one.
-  const showNudge = nudge.visible && engineWorks && !importing;
   // By attention (waiting on you, working, recent), held still while the
   // list is in use so a row never moves under the pointer.
   const listRef = useRef<HTMLDivElement>(null);
@@ -320,7 +297,6 @@ export function AgentsSidebar({
             </button>
           )}
           {showHidden && hidden.map(row)}
-          {showNudge && <ImportNudge onImport={onImport} onDismiss={nudge.dismiss} />}
           <div className="workspace-sidebar-active-actions">
             <Button
               variant="ghost"
@@ -342,20 +318,6 @@ export function AgentsSidebar({
               >
                 <CollaboratorsIcon size={16} />
                 <span>New room</span>
-              </Button>
-            )}
-            {/* Here for good once the note above is gone: people decide to
-                bring their agents over after they've tried it. While the note
-                shows, it is the way in, and a second button would only echo it. */}
-            {engineWorks && !nudge.visible && (
-              <Button
-                variant="ghost"
-                width="fill"
-                className="workspace-sidebar-add-project agents-list__import"
-                onClick={onImport}
-              >
-                <DownloadIcon size={16} />
-                <span>Import agents</span>
               </Button>
             )}
           </div>

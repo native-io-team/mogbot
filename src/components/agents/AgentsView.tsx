@@ -869,7 +869,6 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onToggleShowHidden={toggleShowHidden}
                 onSelect={setSelectedId}
                 onNew={() => openNew()}
-                onImport={openImport}
                 needsYouCount={needsYouCount}
                 inFlightOpen={teamOpen}
                 onOpenInFlight={openInFlight}

@@ -362,7 +362,16 @@ export interface AgentsOverview {
   defaults?: NewAgentDefaults;
   /** How much agents do on their own (`agents::independence`). */
   independence?: AgentIndependence;
+  /** "Bring your agents from another assistant, or start fresh?" (`agents::import_choice`). */
+  importChoice?: ImportChoice;
 }
+
+/** Mirrors `agents::import_choice::Choice`. */
+export type ImportChoice = 'undecided' | 'imported' | 'declined';
+
+/** Answer "bring your agents, or start fresh?" (an import sets `imported` itself). */
+export const setImportChoice = (choice: ImportChoice) =>
+  invoke<ImportChoice>('agents_set_import_choice', { choice });
 
 /** Mirrors `agents::independence::Level`; worded in `lib/agentIndependence`. */
 export type AgentIndependence = 'often' | 'judgement' | 'go_hard';
