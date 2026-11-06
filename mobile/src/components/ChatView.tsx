@@ -104,6 +104,9 @@ import { TeamSetupCard } from './TeamSetupCard';
 import { PathContext } from './Markdown';
 import { GalleryContext, chatGallery } from '../lib/gallery';
 import { PaneContext, type Pane } from './ApprovalCard';
+import { UsageRing } from './usage';
+import { useQuotas } from '../lib/quota';
+import { ringPercent } from '../lib/usageSheet';
 import { showActions } from './menu';
 import { SelectSheet } from './SelectSheet';
 import { Button, Dot, Icon, IconButton, useRipple, T } from './ui';
@@ -193,6 +196,9 @@ export function ChatView({
   const insets = useSafeAreaInsets();
   const accent = useAccent();
   const agent = useApp((s) => s.overview?.agents.find((a) => a.id === id));
+  // The header's ring: the current 5-hour window, as the engine reported it. None without a reading.
+  const { quotas, now: quotaNow } = useQuotas();
+  const ring = agent ? ringPercent(quotas, agent.engine, quotaNow) : null;
   const hasOverview = useApp((s) => !!s.overview);
   const chat = useApp((s) => s.chats[id]);
   const draft = useApp((s) => s.drafts[id]);
@@ -494,6 +500,10 @@ export function ChatView({
 
   const header = <Header agent={agent} />;
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
+  const openUsage = () => router.push({ pathname: '/usage', params: { id } });
+  const usageRing = ring && (
+    <UsageRing percent={ring.percent} tone={ring.tone} onPress={openUsage} />
+  );
   const urgentBelow =
     !follow.pinned &&
     (needsYouHere(agent, chat?.messages) || asking) &&
@@ -511,6 +521,7 @@ export function ChatView({
           >
             {header}
           </Pressable>
+          {usageRing}
           <IconButton name="info.circle" label={`About ${agent.name}`} onPress={openSheet} />
         </View>
       ) : (
@@ -534,12 +545,15 @@ export function ChatView({
               ? {}
               : {
                   headerRight: () => (
-                    <IconButton
-                      name="info.circle"
-                      label={`About ${agent.name}`}
-                      fallback="ⓘ"
-                      onPress={openSheet}
-                    />
+                    <View style={styles.headerRight}>
+                      {usageRing}
+                      <IconButton
+                        name="info.circle"
+                        label={`About ${agent.name}`}
+                        fallback="ⓘ"
+                        onPress={openSheet}
+                      />
+                    </View>
                   ),
                 }),
           }}
@@ -547,6 +561,10 @@ export function ChatView({
       )}
       {!embedded && NATIVE_HEADER_BUTTONS && (
         <Stack.Toolbar placement="right">
+          {/* Left of ⓘ: the ring, only once an engine has reported the window. */}
+          <Stack.Toolbar.View hidden={!ring} hidesSharedBackground>
+            {usageRing || <View />}
+          </Stack.Toolbar.View>
           <Stack.Toolbar.Button
             icon="info.circle"
             accessibilityLabel={`About ${agent.name}`}
@@ -1025,6 +1043,7 @@ const useStyles = makeStyles((colors) => ({
   },
   start: { alignItems: 'center', paddingVertical: space.xl },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.sm, maxWidth: 260 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   embeddedHeader: {
     flexDirection: 'row',
     alignItems: 'center',

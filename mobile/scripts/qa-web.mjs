@@ -633,6 +633,20 @@ const LIVE = [
     check: 'A request: what it said, the capped card, Allow (neutral) · Deny over Chat · Next',
   },
   {
+    name: 'usage-ring',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: () => sleep(1200),
+    check: 'Header: the usage ring left of ⓘ, 38% of the 5-hour window',
+  },
+  {
+    name: 'usage-sheet',
+    route: '/usage?id=site',
+    ready: 'Usage',
+    act: () => sleep(1500),
+    check: 'Usage: context 90%, 5-hour, weekly (All models, Opus), every account; no pace line',
+  },
+  {
     name: 'catchup-done',
     route: '/catch-up',
     ready: 'Catch up',

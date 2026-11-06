@@ -186,6 +186,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "Your Mac couldn’t tell whether you’re signed in. If you are, hand it over anyway.",
   "Your Mac didn’t accept this phone. Pair again.",
   "Your Mac didn’t answer in time.",
+  "Your Mac is away. Usage shows once it’s back.",
   "Your Mac isn’t connected right now. Try again when it is.",
   "Your Mac keeps the sign-in; this phone keeps nothing. This card updates when it’s done.",
   "Your conversations",
@@ -209,6 +210,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "… · in your Mac’s Keychain. …",
   "…: hand it back first.",
   "…running on your Mac at …",
+  "…’s conversation",
   "…’s sign-in opens in the agents’ own Chrome on your Mac and shows here: you sign in by touch, and nothing you type is kept. Your agents then use it signed in.",
 ]
 `;

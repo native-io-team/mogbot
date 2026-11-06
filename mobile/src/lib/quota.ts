@@ -12,12 +12,15 @@ import { call, canCall } from './session';
 import { useApp } from './store';
 import { usePolling } from './usePolling';
 
-/** The lines to show now; empty until (and unless) an engine has reported. */
-export function useQuotaLines(): QuotaLine[] {
+/**
+ * The readings themselves, re-read every minute while on screen, and `now`
+ * (a window whose reset passes goes away without waiting for the next read).
+ * Null until read, and always on a Mac that doesn't serve them.
+ */
+export function useQuotas(): { quotas: Quota[] | null; now: number; read: () => Promise<void> } {
   const welcome = useApp((s) => s.welcome);
   const serves = canCall('agents.quota', welcome);
   const [quotas, setQuotas] = useState<Quota[] | null>(null);
-  // A window whose reset passes goes away without waiting for the next read.
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60_000);
@@ -33,5 +36,11 @@ export function useQuotaLines(): QuotaLine[] {
     }
   }, [serves]);
   usePolling(read, 60_000);
-  return serves && quotas ? quotaLines(quotas, now) : [];
+  return { quotas: serves ? quotas : null, now, read };
+}
+
+/** The lines to show now; empty until (and unless) an engine has reported. */
+export function useQuotaLines(): QuotaLine[] {
+  const { quotas, now } = useQuotas();
+  return quotas ? quotaLines(quotas, now) : [];
 }
