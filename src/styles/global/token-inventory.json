@@ -5492,7 +5492,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 173
+      "consumerCount": 174
     },
     {
       "name": "--border-strong",
@@ -5528,7 +5528,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 273
+      "consumerCount": 274
     },
     {
       "name": "--border-width-emphasis",
@@ -6005,7 +6005,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 80
+      "consumerCount": 82
     },
     {
       "name": "--line-height-help",
@@ -6149,7 +6149,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 85
+      "consumerCount": 84
     },
     {
       "name": "--spacing-2xs",
@@ -6158,7 +6158,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 285
+      "consumerCount": 284
     },
     {
       "name": "--spacing-xs",
@@ -6167,7 +6167,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 661
+      "consumerCount": 662
     },
     {
       "name": "--spacing-sm",
@@ -6851,7 +6851,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 173
+      "consumerCount": 174
     },
     {
       "name": "--border-strong",
