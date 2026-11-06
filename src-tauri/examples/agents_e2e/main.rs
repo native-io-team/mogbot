@@ -22,7 +22,8 @@
 //! `codex`, runner, bridge, resume) but not a model's judgement.
 //! `AGENTS_E2E_CODEX=real|scripted|skip` forces one. `behaviour` (opt-in,
 //! not part of the default run) checks how agents behave rather than whether
-//! the plumbing works; see `behaviour.rs`.
+//! the plumbing works; see `behaviour.rs`. `core` (opt-in too) runs the core
+//! jobs at the independence levels people pick; see `core_jobs.rs`.
 
 // A test driver: a failed unwrap is a failed run, and `pgrep`/re-exec are the point.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::disallowed_methods)]
@@ -41,6 +42,7 @@ use store::{AgentMessage, MessageKind};
 use tauri::{AppHandle, Listener};
 
 mod behaviour;
+mod core_jobs;
 
 type Check = Result<(), String>;
 
@@ -2007,6 +2009,8 @@ fn main() {
     };
     let mut scripted_model = codex_setup(codex, &real_home, &home);
     std::env::set_var("HOME", &home);
+    // Never a banner or a sound from the suite (debug builds read this).
+    std::env::set_var("SHIPSTUDIO_AGENTS_SILENT", "1");
     for (key, _) in std::env::vars_os() {
         let key = key.to_string_lossy().to_string();
         if key == "CLAUDECODE" || key.starts_with("CLAUDE_CODE_") {
@@ -2093,6 +2097,20 @@ fn main() {
                 "slots" => slots(&h).await,
                 "session-prompt" => session_prompt(&h).await,
                 "behaviour" => behaviour::suite(&h).await,
+                "core" => {
+                    let mut failed = Vec::new();
+                    for name in core_jobs::ALL {
+                        if let Err(e) = core_jobs::run(&h, name).await {
+                            failed.push(format!("{name}: {e}"));
+                        }
+                    }
+                    if failed.is_empty() {
+                        Ok(())
+                    } else {
+                        Err(failed.join(" | "))
+                    }
+                }
+                n if n.starts_with("core-") => core_jobs::run(&h, n).await,
                 other => Err(format!("unknown scenario {other}")),
             };
             let took = t.elapsed().as_secs();

@@ -239,6 +239,12 @@ pub fn turn_ended(app: &AppHandle, agent_id: &str) {
 fn post(app: &AppHandle, alert: &Alert, kind: PushKind) {
     // A paired phone that can't see it gets a content-free push (companion/push.rs).
     crate::companion::push::raise(&alert.agent_id, kind);
+    // The real end-to-end suite (debug builds only): never a banner or a
+    // sound, even for an agent the Chief made mid-run that nobody muted.
+    #[cfg(debug_assertions)]
+    if std::env::var_os("SHIPSTUDIO_AGENTS_SILENT").is_some() {
+        return;
+    }
     if !LIMITER
         .lock()
         .unwrap_or_else(|e| e.into_inner())
