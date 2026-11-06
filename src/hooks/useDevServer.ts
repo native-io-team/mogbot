@@ -91,6 +91,7 @@ import { stripAnsi } from '../lib/ansi';
 import { extractAnnouncedPort } from '../lib/ports';
 import { asCommandError, formatCommandError, isProjectFolderGoneError } from '../lib/errors';
 import { useOptionalToast } from '../contexts/ToastContext';
+import { reportDevServerExit } from '../lib/devServerExits';
 import {
   approveDevServer,
   devServerConsentStore,
@@ -574,6 +575,12 @@ export function useDevServer(currentProjectPath: string | null) {
           // filters both out above. Record it so the Preview pane can offer
           // a real process restart instead of a poll-only Retry.
           current.unexpectedExit = { exitCode: exitCode ?? null, at: Date.now() };
+          // Before the re-render, so a pane showing it still counts as open.
+          reportDevServerExit({
+            projectPath,
+            exitCode: exitCode ?? null,
+            output: current.outputBuffer.slice(-8000),
+          });
           bump();
           bumpServerLifecycle();
         });

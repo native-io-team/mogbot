@@ -165,6 +165,20 @@
   color: var(--text-secondary);
 }
 
+/* Why it stopped, under the line saying who is on it. */
+.agent-preview__status-detail {
+  max-width: 360px; /* css-ok: reading width */
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
+/* The workspace, once an agent is the way to fix it: a quiet second way. */
+.agent-preview__status-link {
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
 .agent-preview__frame-wrap {
   display: flex;
   flex: 1;

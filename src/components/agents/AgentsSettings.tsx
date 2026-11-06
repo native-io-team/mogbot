@@ -4,7 +4,8 @@
  * - **On this Mac**: the menu-bar icon and quick message
  *   (`AgentsDesktopSettings`), and what keeps agents going (keep awake, keep
  *   running when closed, open at login — `useStayOn`, read back from the
- *   thing itself).
+ *   thing itself), and whether a stopped preview wakes its agent
+ *   (`AgentPreviewFixSetting`).
  * - **Agents' browser**: the team's own Chrome on this Mac (on by default),
  *   and the two permissions a phone sign-in to Google needs
  *   (`AgentsBrowserSettings`, `agent_browser/`).
@@ -42,6 +43,7 @@ import { AgentAdminSettings } from './AgentAdmin';
 import { Row, Toggle } from './AgentSettingsRows';
 import { AgentTeamPolicySettings } from './AgentTeamPolicySettings';
 import { AgentsBrowserSettings } from './AgentsBrowserSettings';
+import { AgentPreviewFixSetting } from './AgentPreviewFixSetting';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
@@ -99,6 +101,9 @@ export function AgentsSettings({
             )}
           </div>
         )}
+        <div className="settings-section">
+          <AgentPreviewFixSetting />
+        </div>
       </section>
 
       <AgentsBrowserSettings />

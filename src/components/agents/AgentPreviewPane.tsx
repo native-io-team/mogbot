@@ -10,6 +10,10 @@
  *   mode), with a smaller toolbar: Back, the address, Reload, and a width.
  * - The dev server starts through the window's own dev-server owner, so the
  *   install and "run this project's commands?" gates are the same ones.
+ * - A site that stops by itself is the agent's to fix (`lib/agentPreviewFix.ts`):
+ *   "<Agent> is fixing it…" while its turn runs, then the frame comes back
+ *   with the server; "Ask <Agent> to fix it" when nobody was woken. A site no
+ *   agent owns keeps the workspace line.
  * - The address takes paths on this site only (`parsePreviewAddress` refuses
  *   other hosts). What the page itself loads is up to the page, as in the
  *   workspace preview.
@@ -37,6 +41,7 @@ import {
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { SegmentedControl } from '../primitives/SegmentedControl';
+import { TextButton } from '../primitives/TextButton';
 import { Spinner } from '../primitives/Spinner';
 import { AgentActivityOverlay } from '../preview/AgentActivityOverlay';
 import { DevServerConsentPrompt } from '../preview/DevServerConsentPrompt';
@@ -67,6 +72,17 @@ import {
   type TestStep,
 } from '../../lib/agentPreview';
 import type { ViewportPreset } from '../../lib/agentBridge';
+import {
+  FIX_GRACE_MS,
+  OWNER_WAIT_MS,
+  askToFixPreview,
+  onPreviewFix,
+  previewFixState,
+  registerPreviewPane,
+  stoppedView,
+  type PreviewFix,
+  type StoppedView,
+} from '../../lib/agentPreviewFix';
 
 import type { PreviewRequest } from './AgentPreviewContext';
 export {
@@ -185,6 +201,35 @@ export function AgentPreviewPane({
   const where = target ? (target.copy ? `A copy of ${name}` : name) : null;
   const openInWorkspace =
     target && onOpenInWorkspace ? () => onOpenInWorkspace(target.path) : undefined;
+
+  // This pane shows the folder: a server that stops by itself is this agent's to fix.
+  const targetPath = target?.path ?? null;
+  useEffect(
+    () => (targetPath ? registerPreviewPane(targetPath, agent.id) : undefined),
+    [targetPath, agent.id]
+  );
+  const fix = usePreviewFix(targetPath, state.kind === 'stopped');
+  const stopped: StoppedView | null =
+    state.kind !== 'stopped'
+      ? null
+      : fix.stoppedAt === null
+        ? { kind: 'waiting' }
+        : stoppedView({
+            fix: fix.fix,
+            ownerWorking: fix.fix?.agentId === agent.id && agent.status.state !== 'idle',
+            stoppedAt: fix.stoppedAt,
+            now: fix.now,
+          });
+  const fixOwner = fix.fix?.agentId ?? null;
+  const setFix = fix.set;
+  const askToFix = useCallback(async () => {
+    if (!fixOwner || !targetPath) return;
+    try {
+      setFix(await askToFixPreview(fixOwner, targetPath));
+    } catch (e) {
+      showToast(formatCommandError(asCommandError(e)), 'error');
+    }
+  }, [fixOwner, targetPath, setFix, showToast]);
 
   // The test, as the backend has it: started here or picked up mid-run.
   const run = useAgentRun(agent.id, target);
@@ -308,6 +353,8 @@ export function AgentPreviewPane({
               state={state}
               where={name}
               consent={target && consent ? { path: target.path, pending: consent } : null}
+              stopped={stopped}
+              onAskToFix={() => void askToFix()}
               onOpenInWorkspace={openInWorkspace}
             />
           )}
@@ -343,12 +390,81 @@ function useAgentRun(agentId: string, target: PreviewTarget | null): PreviewRun 
   return run;
 }
 
+/**
+ * Who is fixing the folder's stopped server, as the backend has it
+ * (`lib/agentPreviewFix.ts`), and a clock for the two timed turns in what
+ * the pane says: waiting to hear who owns it, and a woken agent's start.
+ */
+function usePreviewFix(path: string | null, stopped: boolean) {
+  const [fix, setFix] = useState<PreviewFix | null>(null);
+  const [stoppedAt, setStoppedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  // A new stop (or none): start from nothing, during render rather than in an effect.
+  const episode = path && stopped ? path : null;
+  const [seen, setSeen] = useState<string | null>(null);
+  if (seen !== episode) {
+    setSeen(episode);
+    setFix(null);
+    setStoppedAt(null);
+  }
+
+  useEffect(() => {
+    if (!episode) return;
+    let live = true;
+    let off: (() => void) | null = null;
+    const read = () =>
+      void previewFixState(episode)
+        .then((f) => {
+          if (!live) return;
+          const at = Date.now();
+          setFix(f);
+          setStoppedAt((s) => s ?? at);
+          setNow(at);
+        })
+        .catch(() => {
+          if (live) setStoppedAt((s) => s ?? Date.now());
+        });
+    read();
+    // The event's path is the backend's spelling of the folder: read ours again.
+    void onPreviewFix(read).then((fn) => {
+      if (live) off = fn;
+      else fn();
+    });
+    return () => {
+      live = false;
+      off?.();
+    };
+  }, [episode]);
+
+  // Wake once at the next moment what the pane says can change by time alone.
+  const due =
+    !episode || stoppedAt === null
+      ? null
+      : !fix
+        ? stoppedAt + OWNER_WAIT_MS
+        : fix.phase === 'fixing'
+          ? fix.at + FIX_GRACE_MS
+          : null;
+  useEffect(() => {
+    if (due === null) return;
+    const wait = due - Date.now();
+    if (wait <= 0) return;
+    const timer = setTimeout(() => setNow(Date.now()), wait + 50);
+    return () => clearTimeout(timer);
+  }, [due]);
+
+  return { fix, set: setFix, stoppedAt, now };
+}
+
 // ----------------------------------------------------------------- states
 
 function PaneStatus({
   state,
   where,
   consent,
+  stopped,
+  onAskToFix,
   onOpenInWorkspace,
 }: {
   state: ReturnType<typeof paneState>;
@@ -357,6 +473,9 @@ function PaneStatus({
     path: string;
     pending: NonNullable<ReturnType<typeof usePendingDevServerConsent>>;
   } | null;
+  /** A stopped site an agent owns: who is fixing it, or whether to ask. */
+  stopped?: StoppedView | null;
+  onAskToFix?: () => void;
   onOpenInWorkspace?: () => void;
 }) {
   if (state.kind === 'consent' && consent) {
@@ -364,6 +483,11 @@ function PaneStatus({
       <div className="agent-preview__status agent-preview__status--consent">
         <DevServerConsentPrompt projectPath={consent.path} pending={consent.pending} />
       </div>
+    );
+  }
+  if (state.kind === 'stopped' && stopped && stopped.kind !== 'workspace') {
+    return (
+      <StoppedStatus view={stopped} onAsk={onAskToFix} onOpenInWorkspace={onOpenInWorkspace} />
     );
   }
   const open = onOpenInWorkspace && (
@@ -406,6 +530,70 @@ function PaneStatus({
       <span className="agent-preview__status-icon">{body.icon}</span>
       <p className="agent-preview__status-line">{body.line}</p>
       {body.action}
+    </div>
+  );
+}
+
+/** The site stopped by itself and an agent owns it: the agent on it, not the workspace. */
+function StoppedStatus({
+  view,
+  onAsk,
+  onOpenInWorkspace,
+}: {
+  view: Exclude<StoppedView, { kind: 'workspace' }>;
+  onAsk?: () => void;
+  onOpenInWorkspace?: () => void;
+}) {
+  const quiet = onOpenInWorkspace && (
+    <TextButton className="agent-preview__status-link" onClick={onOpenInWorkspace}>
+      Open in workspace
+    </TextButton>
+  );
+  const ask = (label: string) =>
+    onAsk && (
+      <Button variant="strong" size="compact" onClick={onAsk}>
+        {label}
+      </Button>
+    );
+  const body = (() => {
+    switch (view.kind) {
+      case 'waiting':
+        return {
+          icon: <WarningIcon size={16} />,
+          line: 'The site stopped running.',
+          detail: null,
+          action: null,
+        };
+      case 'fixing':
+        return {
+          icon: <Spinner size="sm" />,
+          line: `${view.agentName} is fixing it…`,
+          detail: `The site stopped: ${view.reason}.`,
+          action: null,
+        };
+      case 'ask':
+        return {
+          icon: <WarningIcon size={16} />,
+          line: `The site stopped: ${view.reason}.`,
+          detail: null,
+          action: ask(`Ask ${view.agentName} to fix it`),
+        };
+      case 'gave-up':
+        return {
+          icon: <WarningIcon size={16} />,
+          line: `The site keeps stopping: ${view.reason}.`,
+          detail: `${view.agentName} tried twice and it still won’t stay up.`,
+          action: ask(`Ask ${view.agentName} again`),
+        };
+    }
+  })();
+  return (
+    <div className="agent-preview__status" role="status" data-stopped={view.kind}>
+      <span className="agent-preview__status-icon">{body.icon}</span>
+      <p className="agent-preview__status-line">{body.line}</p>
+      {body.detail && <p className="agent-preview__status-detail">{body.detail}</p>}
+      {body.action}
+      {quiet}
     </div>
   );
 }

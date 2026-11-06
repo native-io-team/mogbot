@@ -4403,7 +4403,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 48
+      "consumerCount": 50
     },
     {
       "name": "--tracking-micro",
@@ -4531,7 +4531,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 903
+      "consumerCount": 905
     },
     {
       "name": "--text-faint",
@@ -5747,7 +5747,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 903
+      "consumerCount": 905
     },
     {
       "name": "--text-faint",

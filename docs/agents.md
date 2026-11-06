@@ -4501,6 +4501,29 @@ and asks the agent (`test_prompt`) to click through the site while you watch.
   harness against a fictional site); a report staged in the same turn as a
   `share_result` replaces it.
 
+### A preview that stops by itself (`agents/preview_fix.rs`)
+
+- **Seen where it happens.** `useDevServer`'s exit watcher reports every exit
+  the app didn't ask for (`lib/devServerExits.ts`) with the agent whose pane
+  shows that folder (`agents_dev_server_exited`). Owner: that pane's agent,
+  else the agent that last ran `preview_start` on it while it's working or the
+  folder is its copy. No owner: the pane keeps "The workspace shows why".
+- **The agent fixes it.** A note from the app (not the user): "Your preview for
+  <project> stopped: <reason>. Fix it and restart it with preview_start", with
+  the last 60 lines it printed. The reason reads the log first (port in use,
+  missing module, compile error), then the exit code.
+- **No loop.** At most one automatic wake per folder per 10 minutes; every fix,
+  woken or asked, counts; a server that stops again after 2 fixes gets one
+  plain error line in the agent's chat instead, then silence until a fix holds
+  30 minutes or the user asks again. Settings → Agents → "Fix stopped previews"
+  turns the wake off (the pane then offers to ask).
+- **The pane** shows "<Agent> is fixing it…" while that turn runs (15s grace for
+  it to start), the frame back once the server is; otherwise "Ask <Agent> to fix
+  it", with "Open in workspace" as a quiet link.
+- Not verified: a real crash → wake → restart round trip in the running app (the
+  decisions and prompt are unit-tested; the pane is seen in the harness with a
+  stub PTY that exits).
+
 ## Showing the work (`agents/narration.rs`, `agents/local_links.rs`, `agents/dev_servers.rs`)
 
 Visual work is shown, early and on one card, without being asked. The rules
