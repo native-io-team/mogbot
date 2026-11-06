@@ -13,8 +13,8 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
   getPhoneSignin,
-  PHONE_SIGNIN_DETAIL,
   PHONE_SIGNIN_EVENT,
+  phoneSigninDetail,
   phoneSigninTitle,
   stopPhoneSignin,
   type PhoneSignin,
@@ -45,7 +45,7 @@ export function PhoneSigninBar() {
       role="alert"
       data-testid="phone-signin-bar"
       title={phoneSigninTitle(live)}
-      detail={PHONE_SIGNIN_DETAIL}
+      detail={phoneSigninDetail(live)}
       actions={
         <Button
           size="compact"

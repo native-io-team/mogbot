@@ -341,6 +341,29 @@ export const baseCommands: CommandMap = {
   agents_focus: null,
   agents_phone_signin_status: null,
   agents_phone_signin_stop: null,
+  // The agents' own browser: on, Chrome here, the phone's Google sign-in
+  // permissions not yet given (`AgentsBrowserSettings`).
+  agents_agent_browser_status: {
+    compiled: true,
+    enabled: true,
+    chromeInstalled: true,
+    running: false,
+    permissions: { screenRecording: false, accessibility: false },
+  },
+  agents_agent_browser_set_enabled: {
+    compiled: true,
+    enabled: false,
+    chromeInstalled: true,
+    running: false,
+    permissions: { screenRecording: false, accessibility: false },
+  },
+  agents_agent_browser_permission: {
+    compiled: true,
+    enabled: true,
+    chromeInstalled: true,
+    running: false,
+    permissions: { screenRecording: true, accessibility: false },
+  },
   // Rooms: none until someone makes one (`./agentsRooms`).
   agents_rooms: [],
   agents_room_focus: null,
